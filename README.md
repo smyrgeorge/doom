@@ -1,4 +1,4 @@
-# .doom.d
+# doom
 
 This repository represents my emacs configuration, which is based on **Doom** emacs.
 
