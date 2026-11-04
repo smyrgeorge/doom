@@ -94,6 +94,40 @@
 ;; EVIL
 (add-hook! 'after-save-hook #'evil-normal-state)
 
+;; NEOTREE (IntelliJ-like project view)
+(defun +my/neotree-reveal (file)
+  "Show FILE in neotree without leaving the current window.
+Re-roots neotree to FILE's project if FILE is outside the current root."
+  (require 'neotree)
+  (save-selected-window
+    (unless (neo-global--file-in-root-p file)
+      (neotree-dir (or (doom-project-root (file-name-directory file))
+                       (file-name-directory file))))
+    (neo-global--with-window
+      (neo-buffer--select-file-node file t))))
+
+;; 1. SPC p p: pick a file first, then open the project tree on that file.
+;;    Cancelling the file picker (C-g) leaves neotree closed.
+(setq +workspaces-switch-project-function
+      (lambda (dir)
+        (doom-project-find-file dir)
+        (let ((file buffer-file-name))
+          (save-selected-window (neotree-dir dir))
+          (when file (+my/neotree-reveal file)))))
+
+;; 2. Follow the current buffer: highlight its file in neotree (if open).
+(defun +my/neotree-follow-h (&rest _)
+  (when-let* (((featurep 'neotree))
+              ((neo-global--window-exists-p))
+              (file (buffer-file-name (window-buffer (selected-window))))
+              ((not (equal file (neo-global--with-buffer
+                                  (neo-buffer--get-filename-current-line))))))
+    (condition-case err
+        (+my/neotree-reveal file)
+      (error (message "neotree follow: %s" (error-message-string err))))))
+(add-hook 'window-buffer-change-functions #'+my/neotree-follow-h)
+(add-hook 'window-selection-change-functions #'+my/neotree-follow-h)
+
 ;; PROJECTILE
 ;; Discover projects using 'projectile-discover-projects-in-search-path'
 (setq projectile-project-search-path '("~/dev"))
