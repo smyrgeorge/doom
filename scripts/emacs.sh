@@ -1,21 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install emacs from emacs-plus formule.
+# Remove the terminal-only core formula (conflicts with emacs-plus).
+brew uninstall emacs 2>/dev/null || true
+
+# Install emacs from emacs-plus formula.
 brew tap d12frosted/emacs-plus
+brew install emacs-plus
 
-# VERSION 28
-brew install emacs-plus@28 --with-xwidgets --with-modern-doom3-icon --with-native-comp
+# Rebuild Doom against the new Emacs (native-comp).
+~/.config/emacs/bin/doom sync --rebuild
 
-# VERSION 29
-brew install emacs-plus@29 --with-xwidgets --with-modern-doom3-icon --with-native-comp
-
-# If you wish to re-install, please uninstall first.
-brew uninstall emacs-plus@28
-brew uninstall emacs-plus@29
-
-# NOTE: alternatively try to build from:
-# https://github.com/jimeh/build-emacs-for-macos
-# ./build-emacs-for-macos feature/native-comp --native-full-aot
-# Also check for working commits:
-# https://github.com/jimeh/build-emacs-for-macos/issues/6
+# To re-install, uninstall first:
+# brew uninstall emacs-plus
