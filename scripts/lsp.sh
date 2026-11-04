@@ -15,14 +15,18 @@ brew install shfmt
 echo -e "\nInstalling docker:"
 npm i -g dockerfile-language-server-nodejs
 
+# web (html/css)
+echo -e "\nInstalling web:"
+npm i -g vscode-langservers-extracted js-beautify
+
 # rust
 echo -e "\nInstalling rust:"
 brew install rust-analyzer
 
 # kotlin
 echo -e "\nInstalling kotlin:"
-# NOTE: also you need to install kotlin-language-server manually (also add to PATH).
-# https://github.com/fwcd/kotlin-language-server
+# JetBrains' official Kotlin LSP (accept its EULA on first launch).
+brew install --cask kotlin-lsp
 brew install ktlint
 
 # c

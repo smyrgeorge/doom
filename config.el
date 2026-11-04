@@ -152,6 +152,22 @@ Re-roots neotree to FILE's project if FILE is outside the current root."
 (add-hook 'window-buffer-change-functions #'+my/neotree-follow-h)
 (add-hook 'window-selection-change-functions #'+my/neotree-follow-h)
 
+;; MAGIT
+;; Render diffs with git-delta (brew install git-delta).
+(use-package! magit-delta
+  :hook (magit-mode . magit-delta-mode))
+
+;; KOTLIN
+;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
+;; lsp-mode's default kotlin-language-server.
+(after! lsp-mode
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("kotlin-lsp" "--stdio"))
+    :major-modes '(kotlin-mode kotlin-ts-mode)
+    :priority 1                         ; win over kotlin-ls (-1)
+    :server-id 'kotlin-lsp)))
+
 ;; PROJECTILE
 ;; Discover projects using 'projectile-discover-projects-in-search-path'
 (setq projectile-project-search-path '("~/dev"))

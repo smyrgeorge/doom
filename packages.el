@@ -51,3 +51,6 @@
 ;; (unpin! pinned-package another-pinned-package)
 ;; ...Or *all* packages (NOT RECOMMENDED; will likely break things)
 ;; (unpin! t)
+
+;; Use git-delta (syntax highlighting, word diffs) for diffs in magit.
+(package! magit-delta)
