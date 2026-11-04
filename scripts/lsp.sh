@@ -19,6 +19,10 @@ npm i -g dockerfile-language-server-nodejs
 echo -e "\nInstalling web:"
 npm i -g vscode-langservers-extracted js-beautify
 
+# markdown
+echo -e "\nInstalling markdown:"
+brew install marksman
+
 # rust
 echo -e "\nInstalling rust:"
 brew install rust-analyzer
