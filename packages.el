@@ -1,5 +1,4 @@
-;; -*- no-byte-compile: t; -*-
-;;; $DOOMDIR/packages.el
+;;; $DOOMDIR/packages.el -*- lexical-binding: t; no-byte-compile: t -*-
 
 ;; To install a package:
 ;;

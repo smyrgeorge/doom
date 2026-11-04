@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# python
+# python (uv)
 echo -e "Installing python:"
 npm i -g pyright
-pip install black
+uv tool install black
 
 # bash
 echo -e "\nInstalling bash:"
 npm i -g bash-language-server
+brew install shfmt
 
 # docker
 echo -e "\nInstalling docker:"
@@ -26,7 +27,7 @@ brew install ktlint
 
 # c
 echo -e "\nInstalling c:"
-brew install glslang
+brew install glslang clang-format
 
 # latex
 echo -e "\nInstalling latex:"
@@ -34,4 +35,4 @@ brew install texlab
 
 # godot
 echo -e "\nInstalling godot:"
-pip install gdtoolkit
+uv tool install gdtoolkit
