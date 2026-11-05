@@ -122,6 +122,15 @@
 (after! neotree
   (setq neo-theme 'nerd-icons))         ; file/folder icons (Doom default: 'nerd)
 
+;; Highlight the whole selected line instead of showing a cursor.
+(add-hook! 'neotree-mode-hook
+  (defun +my/neotree-line-cursor-h ()
+    (setq-local evil-normal-state-cursor (list nil)
+                evil-motion-state-cursor (list nil)
+                evil-emacs-state-cursor  (list nil)
+                cursor-type nil)
+    (hl-line-mode +1)))
+
 (defun +my/neotree-reveal (file)
   "Show FILE in neotree without leaving the current window.
 Re-roots neotree to FILE's project if FILE is outside the current root."
