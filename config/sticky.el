@@ -10,6 +10,7 @@
 ;; shows the file's path in the project. Nested scopes come from tree-sitter
 ;; where the major mode uses it; other modes get the enclosing defun only.
 ;; The header row is always there, so the text doesn't shift when it changes.
+;; Files with very long lines (`so-long-mode') show the path only.
 (defvar +my/sticky-separator " › "
   "Between the scopes in the header.")
 
@@ -73,7 +74,10 @@ leaving out those that begin on that line or below."
       (string-trim-right (buffer-substring beg end)))))
 
 (defun +my/sticky--compute (start)
-  (if-let* ((starts (+my/sticky--scope-starts start)))
+  ;; Files with very long lines (`so-long-mode'): only the path (their "scopes"
+  ;; would be lines thousands of characters long).
+  (if-let* ((starts (and (not (derived-mode-p 'so-long-mode))
+                         (+my/sticky--scope-starts start))))
       (mapconcat #'+my/sticky--line starts
                  (propertize +my/sticky-separator 'face 'shadow))
     (propertize (if-let* ((root (doom-project-root)))
@@ -108,3 +112,7 @@ leaving out those that begin on that line or below."
     (+my/sticky-header-mode 1)))
 
 (add-hook 'prog-mode-hook #'+my/sticky-header-maybe-h)
+
+;; Files with very long lines open in `so-long-mode' instead (config/smooth.el):
+;; the path still shows.
+(add-hook 'so-long-mode-hook #'+my/sticky-header-maybe-h)

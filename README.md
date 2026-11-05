@@ -187,18 +187,21 @@ Files with lines over 5,000 characters (`+my/long-line-threshold`; Doom keeps Em
 open in `so-long-mode`: plain, without highlighting, ligatures or LSP. Otherwise, e.g. an HTML report with
 7,000-character SVG lines stayed in `web-mode`, where redisplay walks each such line character by character (~6 ms a
 line a pass) and scrolling stalled for seconds. They don't wrap either: wrapped, such a line fills screens of rows and
-every scroll step lays it out again (~60 ms, a visible stutter; ~15-20 ms unwrapped). A notice at the top says so, with
-**Wrap lines** and **Open normally** (the file's own mode back) actions (see below).
+every scroll step lays it out again (~60 ms, a visible stutter; ~15-20 ms unwrapped). Two notices at the top say so:
+lines aren't wrapped (**Wrap lines**), highlighting is off (**Highlight anyway**: the file's own mode back) (see below).
+The header line still shows the file's path there.
 
-### Notices bar
+### Notices
 
-`config/banner.el` shows notices at the top of a window, like IntelliJ's editor notifications: a bar in the header line
-(it stays put while scrolling) with an icon and colour for its type (info blue, warning yellow, error red), the message,
-actions to click, and `✕` to close it. Several notices show one at a time (the bar says how many more); while there are
-any they take the header line's place (e.g. the sticky header), which comes back once they're closed. Code adds one
-with `(+my/banner-show ID TEXT :type 'warning :actions '(("Label" . function)))`; `M-x +my/banner-close` closes the
-shown one. Notices so far: (warning) files with very long lines shown plain and unwrapped (**Wrap lines**, **Open
-normally**).
+`config/banner.el` shows notices at the top of a window, under the tabs, like IntelliJ's editor notifications: a row
+each, with an icon and colour for its type (info blue, warning yellow, error red), the message, actions to click, and
+`✕` to close it. They stay put while scrolling, and the header line (the path, or the sticky scopes) stays under them.
+A header line is one row of text, so it grows a row per notice (an invisible tall image) and a small borderless child
+frame lays the notices over those rows; each window showing the buffer gets its own. In a terminal the header line
+shows the first notice instead (and how many more). Code adds one with
+`(+my/banner-show ID TEXT :type 'warning :actions '(("Label" . function)))`; `M-x +my/banner-close` closes the first.
+Notices so far, in files with very long lines (warnings): lines aren't wrapped (**Wrap lines**), highlighting is off
+(**Highlight anyway**).
 
 ### Usages peek
 
@@ -257,7 +260,8 @@ second, parallel session.
   with `zg` or Option+Enter still go to the personal dictionary.
 - **Sticky header:** the header line of code windows shows the classes/functions the top visible line is inside, once
   their first lines have scrolled out of view, like IntelliJ's sticky lines (e.g. `class Api { › fun call(x: Int) {`);
-  otherwise the file's path. Nested scopes via tree-sitter (Kotlin, Python, Rust, ...), the enclosing defun elsewhere.
+  otherwise the file's path. Nested scopes via tree-sitter (Kotlin, Python, Rust, ...), the enclosing defun elsewhere;
+  files with very long lines (`so-long-mode`) show the path only.
 - **Rainbow brackets:** `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
 - **Code lenses:** what the language server offers at the end of the line: rust-analyzer's "▶ Run", implementations
   and reference counts; references/implementations for TypeScript/JavaScript. (Rust's "Debug" lens is off until a
