@@ -39,3 +39,11 @@
       (set-frame-parameter frame 'menu-bar-lines 0))))
 (add-hook 'after-make-frame-functions #'+my/tty-no-menu-bar-h)
 (add-hook 'tty-setup-hook #'+my/tty-no-menu-bar-h) ; emacs -nw: the first frame
+
+;; TOOLTIPS
+;; Hover help (e.g. a warning's message on its text) shows in the echo area,
+;; never in a tooltip: Doom turns tooltips off. But it also turns on
+;; `tty-tip-mode' (tips in a small child frame) when a terminal frame opens,
+;; and that mode is global: after an `emacsclient -t', GUI frames drew their
+;; tips the terminal's way, at the frame's top-left corner. Not anywhere.
+(remove-hook 'tty-setup-hook #'tty-tip-mode)

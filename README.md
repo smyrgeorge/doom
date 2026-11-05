@@ -272,6 +272,9 @@ second, parallel session.
   (OSC 11) and restored on exit (OSC 111).
 - **No menu bar in the terminal:** macOS GUI frames keep theirs (it lives in the system's menu bar); terminal frames
   don't get a "File Edit Options ..." row.
+- **Hover help in the echo area, never in a tooltip:** e.g. a warning's message when hovering its text, as Doom has
+  it. Doom also turned on `tty-tip-mode` (tips in a small child frame) when a terminal frame opened; that mode is
+  global, so after an `emacsclient -t` GUI frames drew their tips at the frame's top-left corner. Not anymore.
 - **`M-[` / `M-]`** switch buffers in the GUI only; in a terminal they would swallow mouse/focus escape sequences.
 - **Spelling in code:** besides English and your personal dictionary, spell-fu knows ~40k programming words
   (`rect`, `rgba`, `async`, `kotlin`, `stdout`, ...) from `dict/tech.txt`, built by `scripts/dict.sh` from
