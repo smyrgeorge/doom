@@ -121,6 +121,13 @@ non-nil (see above)."
   ;; when it stopped: they flickered. Keep them on.
   (remove-hook 'ultra-scroll-hide-functions #'hl-todo-mode)
 
+  ;; Doom also has it freeze the mode line during scrolls, by pushing onto
+  ;; `mode-line-format'. In a buffer whose mode line is a string (Doom's popups,
+  ;; e.g. *Messages*) that made it an invalid list: evil, which updates the mode
+  ;; line on every state change, then failed, so Esc couldn't close the popup;
+  ;; and its cleanup timer failed when the window was gone. Leave it alone.
+  (setq ultra-scroll-throttle-mode-line nil)
+
   (defadvice! +my/smooth-scroll-glide-a (fn event &optional arg)
     "Spread big wheel steps (mouse wheels) over a few frames; see above for the
 minibuffer."
