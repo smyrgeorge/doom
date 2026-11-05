@@ -65,6 +65,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `packages.el`         | Extra packages: `magit-delta`, `agent-shell` (+ `acp`, `shell-maker`).            |
 | `config.el`           | Main configuration; small sections inline, big ones loaded from `config/`.        |
 | `config/stripe.el`    | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
+| `config/sticky.el`    | Sticky header: the classes/functions around the top visible line.                |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
@@ -189,6 +190,9 @@ second, parallel session.
   [cspell](https://github.com/streetsidesoftware/cspell-dicts)'s MIT-licensed dictionaries (only words English lacks).
   CamelCase identifiers are checked word by word (`AgreementController` = `Agreement` + `Controller`). Words you add
   with `zg` or Option+Enter still go to the personal dictionary.
+- **Sticky header:** the header line of code windows shows the classes/functions the top visible line is inside, once
+  their first lines have scrolled out of view, like IntelliJ's sticky lines (e.g. `class Api { › fun call(x: Int) {`);
+  otherwise the file's path. Nested scopes via tree-sitter (Kotlin, Python, Rust, ...), the enclosing defun elsewhere.
 - **Rainbow brackets:** `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
 - **Code lenses:** what the language server offers at the end of the line: rust-analyzer's "▶ Run", implementations
   and reference counts; references/implementations for TypeScript/JavaScript. (Rust's "Debug" lens is off until a

@@ -106,6 +106,9 @@
 ;; ERROR STRIPE (IntelliJ-like marks for git changes and errors at the right edge)
 (load! "config/stripe")
 
+;; STICKY HEADER (the functions/classes around the top visible line)
+(load! "config/sticky")
+
 ;; TERMINAL
 (load! "config/terminal")
 
