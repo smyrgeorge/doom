@@ -144,8 +144,9 @@ window height, like the marks on IntelliJ's scrollbar:
 - where several fall on the same row, the most important wins: error > warning > deleted > changed > added;
 - a light band marks the part of the file on screen, like a scrollbar thumb.
 
-When the end of the file is on screen, the strip covers only the rows with text (the whole file mapped onto them);
-the empty rows below keep Emacs' usual `~`.
+Like IntelliJ's default (no "virtual space at file bottom"), windows with the strip don't scroll past the end of a file:
+once the last line reaches the bottom, scrolling stops, so the strip always spans the window
+(`+my/stripe-scroll-past-end` turns that off). Files shorter than the window get one strip row per line.
 
 Click the strip to jump to that part of the file; the mouse wheel scrolls as usual. Info-level hints are left out
 (`+my/stripe-diagnostic-levels`). Doom's `smooth-scroll` module is off: scrolling by pixels moves the margin with the

@@ -20,6 +20,13 @@
 (defvar +my/stripe-diagnostic-levels '(error warning)
   "Flycheck levels shown in the stripe; add `info' to also show hints.")
 
+;; A margin can't draw below the end of a buffer, so a window scrolled past
+;; the end would leave the stripe short. Like IntelliJ's default (no "virtual
+;; space at file bottom"), windows with the stripe stop scrolling once the last
+;; line reaches the bottom: the stripe always spans the window.
+(defvar +my/stripe-scroll-past-end nil
+  "Non-nil to let windows with the stripe scroll past the end of the buffer.")
+
 (defvar +my/stripe-margin-map
   (let ((map (make-sparse-keymap)))
     (define-key map [right-margin mouse-1] #'+my/stripe-jump)
@@ -223,13 +230,42 @@ errors or the diff-hl highlights change."
 ;; every kind of scrolling, including the animated ones (good-scroll and
 ;; ultra-scroll move the window from timers, which `window-scroll-functions'
 ;; doesn't reliably see), before the stale stripe can be drawn.
+(defun +my/stripe--past-end-p (window)
+  "Non-nil if WINDOW shows empty rows below the end of its buffer."
+  (save-excursion
+    (goto-char (window-start window))
+    ;; A full window shows its first line plus ROWS - 1 more.
+    (let ((more (1- (window-body-height window))))
+      (< (vertical-motion more window) more))))
+
+(defun +my/stripe--clamp-start (window)
+  "Scroll WINDOW back so the last line sits at the bottom, not above empty rows."
+  (when (and (not +my/stripe-scroll-past-end)
+             (> (window-start window) (point-min))
+             (+my/stripe--past-end-p window))
+    (let ((start (save-excursion
+                   (goto-char (point-max))
+                   (vertical-motion (- 1 (window-body-height window)) window)
+                   (point))))
+      (when (< start (window-start window))
+        (set-window-start window start t)))))
+
 (defun +my/stripe--pre-redisplay (window)
-  (when (and (bound-and-true-p +my/stripe-mode)
-             (windowp window)
-             (let ((old (window-parameter window '+my/stripe-key)))
-               ;; `eq' per part: the error list is compared by identity.
-               (not (and old (cl-every #'eq old (+my/stripe--key window))))))
-    (+my/stripe--render window)))
+  (when (and (bound-and-true-p +my/stripe-mode) (windowp window))
+    (+my/stripe--clamp-start window)
+    (let ((old (window-parameter window '+my/stripe-key)))
+      ;; `eq' per part: the error list is compared by identity.
+      (unless (and old (cl-every #'eq old (+my/stripe--key window)))
+        (+my/stripe--render window)))))
+
+(defun +my/stripe--after-scroll (window _start)
+  "When redisplay itself scrolled WINDOW past the end, scroll back right after."
+  (when (and (not +my/stripe-scroll-past-end)
+             (+my/stripe--past-end-p window))
+    (run-at-time 0 nil (lambda ()
+                         (when (window-live-p window)
+                           (with-current-buffer (window-buffer window)
+                             (+my/stripe--clamp-start window)))))))
 
 (add-hook 'pre-redisplay-functions #'+my/stripe--pre-redisplay)
 
@@ -265,6 +301,7 @@ errors or the diff-hl highlights change."
         ;; Scrolls that redisplay itself decides on (point left the window);
         ;; everything else is caught by `+my/stripe--pre-redisplay'.
         (add-hook 'window-scroll-functions #'+my/stripe--render nil t)
+        (add-hook 'window-scroll-functions #'+my/stripe--after-scroll nil t)
         (add-hook 'after-change-functions #'+my/stripe--after-change nil t)
         (dolist (window (get-buffer-window-list nil nil t))
           (set-window-margins window (car (window-margins window)) 1)
@@ -274,6 +311,7 @@ errors or the diff-hl highlights change."
           +my/stripe--cache nil)
     (kill-local-variable 'right-margin-width)
     (remove-hook 'window-scroll-functions #'+my/stripe--render t)
+    (remove-hook 'window-scroll-functions #'+my/stripe--after-scroll t)
     (remove-hook 'after-change-functions #'+my/stripe--after-change t)
     (dolist (window (get-buffer-window-list nil nil t))
       (set-window-margins window (car (window-margins window)) nil))))
