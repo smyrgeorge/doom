@@ -66,3 +66,23 @@ list its usages instead (IntelliJ's Go to Declaration or Usages)."
   (call-interactively (if (+my/at-declaration-p)
                           #'+lookup/references
                         #'+lookup/definition)))
+
+;; TREE-SITTER
+;; Every check that a grammar is available, and every parser made, loads its
+;; library again (dlopen), and with this many libraries loaded (each natively
+;; compiled package is one) that takes ~10 ms on macOS. Opening a Markdown file
+;; checked its grammars ~9 times (a missing one: 36 paths tried each time).
+;; Remember the answers (cleared when a grammar gets installed).
+(defvar +my/treesit--available (make-hash-table :test #'equal)
+  "LANGUAGE -> its `treesit-language-available-p' answer with DETAIL.")
+
+(defadvice! +my/treesit-remember-available-a (fn language &optional detail)
+  :around #'treesit-language-available-p
+  (let ((answer (or (gethash language +my/treesit--available)
+                    (puthash language (funcall fn language t) +my/treesit--available))))
+    (if detail answer (car answer))))
+
+(defadvice! +my/treesit-forget-available-a (&rest _)
+  :after #'treesit-install-language-grammar
+  (clrhash +my/treesit--available))
+

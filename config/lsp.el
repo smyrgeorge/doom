@@ -58,6 +58,21 @@
   (pcase-let ((`(,files ,dirs) (funcall fn workspace-root)))
     (list files (append dirs (+my/lsp-gitignored-directories workspace-root)))))
 
+;; CODE LENSES, CHEAPER
+;; Placing each lens, lsp-mode works out the indentation that lenses above the
+;; line need, even with them at the end of the line (here): it finds where the
+;; line starts on screen, which highlights that part of the file first. In
+;; Markdown that means a tree-sitter parser per paragraph, ~10 ms each (see
+;; config/editor.el, TREE-SITTER): opening a file froze for half a second when
+;; its lenses arrived. At the end of the line, just put them there.
+(defadvice! +my/lsp-lens-end-of-line-a (fn ov)
+  :around #'lsp-lens--update
+  (if (eq lsp-lens-place-position 'end-of-line)
+      (let ((str (overlay-get ov 'lsp--lens-contents)))
+        (overlay-put ov 'after-string (propertize (concat " " str) 'cursor t))
+        (overlay-put ov 'lsp-original str))
+    (funcall fn ov)))
+
 ;; KOTLIN
 ;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
 ;; lsp-mode's default kotlin-language-server.

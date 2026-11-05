@@ -125,6 +125,34 @@ three times this.")
 
 (add-hook 'pre-redisplay-functions #'+my/smooth--limit-h)
 
+;; GOOD-SCROLL, ONLY WHEN SCROLLING
+;; good-scroll (Doom's +interpolate: it animates keyboard scrolling, C-d, C-v...)
+;; runs a timer every 20 ms forever, even with nothing to scroll. Each tick made
+;; Emacs redraw, ~50 times a second, and on macOS that took time from
+;; everything else (opening a file too); Doom's own docs warn about it. Its
+;; timer now runs only while a scroll is animating.
+(defun +my/good-scroll-stop-timer ()
+  (when (timerp (bound-and-true-p good-scroll--timer))
+    (cancel-timer good-scroll--timer))
+  (setq good-scroll--timer nil))
+
+(after! good-scroll
+  (add-hook 'good-scroll-mode-hook
+            (defun +my/good-scroll-idle-h ()
+              (when good-scroll-mode (+my/good-scroll-stop-timer))))
+  (when good-scroll-mode (+my/good-scroll-stop-timer))
+
+  (defadvice! +my/good-scroll-start-timer-a (&rest _)
+    :after #'good-scroll-move
+    (when (and good-scroll-mode (not (timerp good-scroll--timer)))
+      (setq good-scroll--timer
+            (run-at-time 0 good-scroll-render-rate #'good-scroll--render))))
+
+  (defadvice! +my/good-scroll-stop-when-done-a (&rest _)
+    :after #'good-scroll--render
+    (when (zerop good-scroll-destination)
+      (+my/good-scroll-stop-timer))))
+
 ;; THE MINIBUFFER
 ;; The echo area / minibuffer window always fits what it shows, so scrolling it
 ;; only made it jump and come back. The wheel leaves it alone; with a

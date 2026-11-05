@@ -620,6 +620,15 @@ before, or on both."
             ((> next (1+ pos)) (1- next))
             (t pos)))))
 
+(defun +my/stripe--scrolled (window start)
+  "Redisplay scrolled WINDOW to START: redraw the stripe there. Not when the
+window was just given the buffer (`set-window-buffer' runs this too, before
+e.g. the saved place moves point): the redraw right before it's displayed
+does it, at its final position. Drawing measures the rows, which highlights
+them: done twice, opening a file took longer."
+  (when (eq (car-safe (window-parameter window '+my/stripe-key)) (window-buffer window))
+    (+my/stripe--render window start)))
+
 (defun +my/stripe--note-line-edit (beg end &rest _)
   "Before/after a change: count it if BEG..END holds a line break, i.e. lines
 are being removed (before) or added (after)."
@@ -749,7 +758,7 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
         (setq-local right-margin-width 1)
         ;; Scrolls that redisplay itself decides on (point left the window);
         ;; everything else is caught by `+my/stripe--pre-redisplay'.
-        (add-hook 'window-scroll-functions #'+my/stripe--render nil t)
+        (add-hook 'window-scroll-functions #'+my/stripe--scrolled nil t)
         (add-hook 'window-scroll-functions #'+my/stripe--after-scroll nil t)
         (add-hook 'before-change-functions #'+my/stripe--note-line-edit nil t)
         (add-hook 'after-change-functions #'+my/stripe--note-line-edit nil t)
@@ -768,7 +777,7 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
           (+my/stripe--render window)))
     (remove-overlays (point-min) (point-max) '+my/stripe t)
     (setq +my/stripe--cache nil)
-    (remove-hook 'window-scroll-functions #'+my/stripe--render t)
+    (remove-hook 'window-scroll-functions #'+my/stripe--scrolled t)
     (remove-hook 'window-scroll-functions #'+my/stripe--after-scroll t)
     (remove-hook 'before-change-functions #'+my/stripe--note-line-edit t)
     (remove-hook 'after-change-functions #'+my/stripe--note-line-edit t)

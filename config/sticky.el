@@ -108,14 +108,34 @@ scroll step took ~6% of the time spent scrolling).")
                  (propertize +my/sticky-separator 'face 'shadow))
     (+my/sticky--path)))
 
+(defun +my/sticky--indent (window)
+  "Spaces as wide as the line numbers in WINDOW, to line the header up with the
+code. Worked out the way Emacs does (the widest number that can show: at least
+`display-line-numbers-width' digits, plus 2), not with `line-number-display-width'
+as `header-line-indent-mode' did: that lays the window out, which highlights it
+first, on every scroll and before every redraw (~100 ms more to open a Markdown
+file). Relative numbers aren't sized like that: those ask Emacs."
+  (make-string
+   (cond ((not display-line-numbers) 0)
+         ((eq display-line-numbers t)
+          (let ((last (+ (line-number-at-pos (window-start window) t)
+                         (window-body-height window) -1)))
+            (+ 2 (max (or display-line-numbers-width 0)
+                      (length (number-to-string (max 1 last)))))))
+         (t (with-selected-window window
+              (truncate (line-number-display-width 'columns)))))
+   ?\s))
+
 (defun +my/sticky-header ()
   "The header line text of the window being displayed (cached per scroll position)."
   (let* ((window (selected-window))      ; the window whose header is drawn
-         (key (list (current-buffer) (window-start window) (buffer-chars-modified-tick)))
+         (key (list (current-buffer) (window-start window) (buffer-chars-modified-tick)
+                    (window-body-height window) display-line-numbers))
          (cache (window-parameter window '+my/sticky)))
     (if (equal (car cache) key)
         (cdr cache)
-      (let ((text (or (ignore-errors (+my/sticky--compute (window-start window))) "")))
+      (let ((text (concat (+my/sticky--indent window)
+                          (or (ignore-errors (+my/sticky--compute (window-start window))) ""))))
         (set-window-parameter window '+my/sticky (cons key text))
         text))))
 
@@ -123,15 +143,12 @@ scroll step took ~6% of the time spent scrolling).")
   "Show the scopes of the top visible line in the header line."
   :lighter nil
   (if +my/sticky-header-mode
-      (progn
-        (header-line-indent-mode 1)       ; line the text up with the code
-        (setq-local header-line-format
-                    ;; The header line starts at the window's edge, the text
-                    ;; after the fringe: skip to where the text starts, then
-                    ;; past the line numbers.
-                    '("" (:propertize " " display (space :align-to 0))
-                      header-line-indent (:eval (+my/sticky-header)))))
-    (header-line-indent-mode -1)
+      (setq-local header-line-format
+                  ;; The header line starts at the window's edge, the text after
+                  ;; the fringe: skip to where the text starts; the line
+                  ;; numbers are skipped by the header's own text (see above).
+                  '("" (:propertize " " display (space :align-to 0))
+                    (:eval (+my/sticky-header))))
     (kill-local-variable 'header-line-format)))
 
 (defun +my/sticky--supported-p ()

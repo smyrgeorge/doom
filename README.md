@@ -190,7 +190,9 @@ mouse wheel reports a few lines per notch, so it still jumped; `config/smooth.el
 (about 0.15 s, fast at first then slowing down), and notches in quick succession add to what's left without
 restarting it. A frame per refresh of the display (60 Hz), each covering a share of what's left that depends on the
 time since the last frame, so a late frame catches up instead of slowing the glide down
-(`+my/smooth-scroll-min-step`, `-frame`, `-time-constant`). The module also pauses some modes while scrolling; hl-todo is
+(`+my/smooth-scroll-min-step`, `-frame`, `-time-constant`). good-scroll (the `+interpolate` flag: it animates keyboard
+scrolling, `C-d`, `C-v`...) runs its 20 ms timer only while a scroll animates: always on, it made Emacs redraw ~50 times
+a second, which on macOS took time from everything else. The module also pauses some modes while scrolling; hl-todo is
 kept on, otherwise TODO/NOTE/FIXME lose their highlight during a scroll and flicker. Its mode-line freeze during scrolls
 is off: in popups like `*Messages*` it broke the mode line, and with it Esc (which then couldn't close the popup). The wheel doesn't scroll the
 minibuffer / echo area (it always fits what it shows, so it only jumped and came back); with a completion list open,
@@ -260,6 +262,11 @@ second, parallel session.
   `magit-display-buffer-function`: the diff opened in the same window) and call the package's macros as functions
   (`invalid-function treemacs-run-in-every-buffer`); so such functions go back to their source and are compiled again
   once the package loads.
+- **Opening files faster:** tree-sitter grammar checks are remembered (each one loaded the grammar's library again,
+  ~10 ms on macOS with this many native-compiled libraries loaded; a Markdown file made ~9); garbage collection while
+  idle waits for 32 MB instead of gcmh's 800 KB (the language server's replies and redraws after opening a file
+  collected every few redraws, ~70 ms each). With the lens, sticky header and stripe changes, opening a Markdown file
+  went from ~1 s of pauses to ~0.35 s.
 - **Font:** JetBrains Mono with ligatures.
 - **Mode line:** a space after its last item on the right (e.g. flycheck's checkmark), which touched the window's
   edge; in every doom-modeline layout (`config/modeline.el`).
@@ -296,11 +303,13 @@ second, parallel session.
   otherwise the file's path. Nested scopes via tree-sitter (Kotlin, Python, Rust, ...), the enclosing defun elsewhere.
   In Markdown (`markdown-ts-mode`) the headings: `# Guide › ## Setup › ### Install`. Only where scopes can be told:
   files whose mode has no notion of them (HTML in `web-mode`, files with very long lines in `so-long-mode`) get no
-  header row.
+  header row. It lines up with the code past the line numbers by working out their width the way Emacs does, not with
+  `header-line-indent-mode`, which laid the window out (highlighting it first) on every scroll and before every redraw.
 - **Rainbow brackets:** `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
 - **Code lenses:** what the language server offers at the end of the line: rust-analyzer's "▶ Run", implementations
   and reference counts; references/implementations for TypeScript/JavaScript. (Rust's "Debug" lens is off until a
-  debugger is set up.)
+  debugger is set up.) Placing them no longer measures the line on screen first (needed only for lenses above the
+  line): that highlighted the file around each lens, ~0.5 s when a Markdown file's lenses arrived.
 - **LSP project import:** opening a file in a project starts its language server in the project root (the git
   repository) without the "import project root?" prompt, like Zed. Files outside any project still ask, so a stray
   file in `~` never makes a server scan your home folder (`config/lsp.el`).
