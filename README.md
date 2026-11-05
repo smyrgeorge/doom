@@ -221,8 +221,8 @@ second, parallel session.
   of ASCII, with the author and the date (`2026-11-04 09:58`) in the margin.
 - **File diff pane:** `SPC g d` shows the current file's changes vs `HEAD` (delta-rendered) in a pane on the right and
   moves the cursor there, onto the hunk of the line you were on. It refreshes on save and switches to another file
-  when pressed there. In the pane: `s`/`u`/`x` stage/unstage/discard a hunk, `RET` jumps to the line, `SPC g d` or
-  `q` closes it. Opening it saves the buffer.
+  when pressed there. In the pane: `s`/`u`/`x` stage/unstage/discard a hunk, `RET` jumps to the line, `SPC g d`,
+  `q` or `Esc` closes it. Opening it saves the buffer.
 - **Tabs:** same-named files get the shortest distinguishing path as their tab label (`crate-a/src/lib.rs` vs
   `crate-b/src/lib.rs`) instead of `lib.rs<2>`. Buffer names are untouched, since workspaces disable uniquify.
 - **Terminal background:** in terminal Emacs, the strip below the echo area is painted with the theme background
@@ -266,7 +266,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `SPC s a`                   | Search Everywhere: classes, files, symbols, actions (IntelliJ's double Shift) |
 | `Cmd+Shift+F` (GUI)         | Find in files: search the project with ripgrep (selected text is the query) |
 | `Cmd+B`                     | Go to declaration, or on the declaration list its usages (IntelliJ's Go to Declaration or Usages) |
-| `SPC g d`                   | Current file's git diff in a pane on the right (again in the pane: close) |
+| `SPC g d`                   | Current file's git diff in a pane on the right (in the pane: `SPC g d`, `q` or `Esc` close) |
 | `SPC o c`                   | Start Claude Code (agent-shell)                        |
 | `SPC o C`                   | Pick / switch agent shell                              |
 | `SPC m p` (Markdown)        | Toggle live preview inside Emacs                       |

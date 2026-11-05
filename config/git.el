@@ -5,13 +5,18 @@
 
 (map! :leader :desc "Diff file (side pane)" "g d" #'+my/git-diff-pane)
 
+;; Esc closes the pane too (like q).
+(map! :after magit-diff
+      :map magit-diff-mode-map
+      :n [escape] #'+my/git-diff-pane-escape)
+
 ;; ====== CODE ======
 
 ;; GIT DIFF PANE
 ;; SPC g d: show the current file's changes (working tree vs HEAD) in a pane on
 ;; the right, rendered with delta like every magit diff, and move the cursor
 ;; there, onto the hunk of the line you were on. From another file it switches
-;; the pane to that file; in the pane, SPC g d (or q) closes it. The pane
+;; the pane to that file; in the pane, SPC g d, q or Esc closes it. The pane
 ;; refreshes when the file is saved. In the pane: s / u / x stage, unstage or
 ;; discard a hunk, RET jumps to the line.
 ;; Opening it saves the buffer first (magit diffs the file on disk).
@@ -55,6 +60,13 @@ In the pane itself, close it."
           (ignore-errors
             (magit-diff--goto-file-position file line column magit-root-section))
           (set-window-point pane (point)))))))
+
+(defun +my/git-diff-pane-escape ()
+  "Esc in the diff pane: close it. In other magit diffs, Esc as usual."
+  (interactive)
+  (if (eq (selected-window) (+my/git-diff-pane--window))
+      (+my/git-diff-pane)
+    (call-interactively #'doom/escape)))
 
 (defun +my/git-diff-pane-refresh-h ()
   "Refresh the diff pane after saving the file it shows."
