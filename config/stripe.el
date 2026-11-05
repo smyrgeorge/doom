@@ -315,6 +315,7 @@ the end of the buffer."
       (save-excursion
         (goto-char beg)
         (let* ((more (and (= (vertical-motion 1 window) 1)
+                          (> (point) beg)
                           ;; Without a final newline the end is on the last
                           ;; line (it only looks like a row of its own when
                           ;; the filler, see `+my/stripe--filler', follows).
@@ -439,9 +440,9 @@ repeats the empty-line `~', and the cursor stays on the last line."
             "\n"
             (propertize " " 'display `(space :width (1) :height (,height) :ascent 100))
             (when tilde
-              (propertize " " 'display `(left-fringe ,tilde ,(if (facep 'vi-tilde-fringe-face)
-                                                                  'vi-tilde-fringe-face
-                                                                'fringe))))
+              ;; Emacs draws its own `~' in the fringe face (vi-tilde-fringe
+              ;; doesn't give its bitmap a face).
+              (propertize " " 'display `(left-fringe ,tilde fringe)))
             (unless (string-blank-p pixels)
               (apply #'propertize " "
                      'display `((margin right-margin)
@@ -464,6 +465,13 @@ down: use the plain face meanwhile. The last line is usually empty, unnumbered."
           ((and (not want) +my/stripe--number-cookie)
            (face-remap-remove-relative +my/stripe--number-cookie)
            (setq +my/stripe--number-cookie nil)))))
+
+(defun +my/stripe--hide-filler (window)
+  "Take WINDOW's filler out while rows are counted or measured: Emacs counts
+it as a row of the last line (`vertical-motion') and in that line's height."
+  (when-let* ((ov (window-parameter window '+my/stripe-filler)))
+    (when (overlay-buffer ov)
+      (overlay-put ov 'before-string nil))))
 
 (defun +my/stripe--set-filler (window string)
   "Show STRING after the end of the buffer in WINDOW (nil: nothing)."
@@ -500,11 +508,7 @@ down: use the plain face meanwhile. The last line is usually empty, unnumbered."
                        (`(,strings . ,filler)
                         (if (display-graphic-p (window-frame window))
                             (progn
-                              ;; Measure the rows without the filler: Emacs
-                              ;; counts it in the height of the last line.
-                              (when-let* ((ov (window-parameter window '+my/stripe-filler)))
-                                (when (overlay-buffer ov)
-                                  (overlay-put ov 'before-string nil)))
+                              (+my/stripe--hide-filler window)
                               (+my/stripe--image-rows window start lines marks))
                           (list (+my/stripe--cell-rows window start lines marks))))
                        (old nil))
@@ -586,22 +590,29 @@ are being removed (before) or added (after)."
 ;; stripe can be drawn. Also limits scrolling past the end (`+my/stripe-overscroll').
 (defun +my/stripe--pre-redisplay (window)
   (when (and (bound-and-true-p +my/stripe-mode) (windowp window))
-    (+my/stripe--clamp-start window)
     (let ((old (window-parameter window '+my/stripe-key)))
       ;; `eq' per part: the error list is compared by identity.
       (unless (and old (cl-every #'eq old (+my/stripe--key window)))
+        ;; Scrolled (or edited...): hold the window within the limit before
+        ;; this frame is drawn, then redraw the strip (and the filler).
+        (+my/stripe--hide-filler window)
+        (+my/stripe--clamp-start window)
         (+my/stripe--render window)))))
 
-(defun +my/stripe--after-scroll (window _start)
-  "When redisplay itself scrolled WINDOW past the end, scroll back right after."
+(defun +my/stripe--after-scroll (window start)
+  "When redisplay itself scrolled WINDOW (e.g. to follow the cursor), maybe past
+the end, check it right after (the filler can't be taken out mid-redisplay)."
   (when (and (not (eq +my/stripe-overscroll t))
              (window-live-p window)
-             (with-current-buffer (window-buffer window)
-               (+my/stripe--past-end-p window)))
+             (<= (count-lines start (point-max)) (window-body-height window)))
     (run-at-time 0 nil (lambda ()
                          (when (window-live-p window)
                            (with-current-buffer (window-buffer window)
-                             (+my/stripe--clamp-start window)))))))
+                             (when (bound-and-true-p +my/stripe-mode)
+                               (+my/stripe--hide-filler window)
+                               (+my/stripe--clamp-start window)
+                               ;; Redraw before the next frame (filler too).
+                               (set-window-parameter window '+my/stripe-key nil))))))))
 
 (add-hook 'pre-redisplay-functions #'+my/stripe--pre-redisplay)
 
