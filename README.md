@@ -99,6 +99,8 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - **Reachable like any window**: `SPC w w` cycles into it and it gets a window number (`SPC w 1`, as the leftmost
   window).
 - `h`/`←` collapse, `l`/`→` expand or open.
+- `zR` / `zM` (`M-x treemacs-expand-all` / `treemacs-collapse-all`): expand every folder of the project, or collapse
+  them all (the project stays open at its top level). Expanding asks first in projects with more than 300 folders.
 - With `+lsp`: structure view (`SPC c S`), project errors (`SPC c X`) and call hierarchy (`SPC c y` / `SPC c Y`).
 
 ### Live Markdown preview
@@ -216,6 +218,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `SPC m P` (Markdown)        | Preview in the browser                                 |
 | `SPC o p` / `SPC o P`       | Toggle treemacs / reveal current file in treemacs      |
 | `h` `←` / `l` `→` (treemacs) | Collapse / expand or open                              |
+| `zR` / `zM` (treemacs)      | Expand / collapse all folders                          |
 | `M-[` / `M-]` (GUI)         | Previous / next buffer                                 |
 | `s-[` / `s-]`               | Jump back / forward (better-jumper)                    |
 
