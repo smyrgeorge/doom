@@ -83,6 +83,11 @@
 ;; CUSTOM CONFIG ;;
 (setq default-directory "~")
 
+;; Maximum line length: where the right margin's line is drawn and where gq /
+;; M-q wrap text (config/editor.el). A project's .editorconfig overrides it with
+;; max_line_length. `setq-default', not `setq': each buffer has its own.
+(setq-default fill-column 120)
+
 ;; ====== KEY BINDINGS ======
 
 ;; CUSTOM KEY BINDINGS

@@ -77,7 +77,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/modeline.el`  | Mode line: a space after its last item on the right.                             |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: commit graph (like tig), git-delta diffs, TODOs in the status buffer. |
-| `config/editor.el`    | Editing helpers: `SPC c ~` cycles the case style of a word; rainbow brackets.     |
+| `config/editor.el`    | Editing helpers: `SPC c ~` cycles the case style of a word; rainbow brackets; right margin. |
 | `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
 | `config/spell.el`     | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary.  |
 | `dict/tech.txt`       | ~40k programming words for the spell checker (built by `scripts/dict.sh`).        |
@@ -315,6 +315,10 @@ second, parallel session.
   header row. It lines up with the code past the line numbers by working out their width the way Emacs does, not with
   `header-line-indent-mode`, which laid the window out (highlighting it first) on every scroll and before every redraw.
 - **Rainbow brackets:** `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
+- **Right margin:** a thin vertical line at the maximum line length, like IntelliJ's, in files of code, text and
+  configuration: at `fill-column`, set in `config.el` (120; also where `gq` / `M-q` wrap text; commit messages 72). A
+  project's `.editorconfig` moves it with `max_line_length` (e.g. `100` for Kotlin with ktfmt) or removes it with
+  `max_line_length = off` (e.g. for `*.md`). As faint as the line numbers; a line that runs past it covers it.
 - **Code lenses:** what the language server offers at the end of the line: rust-analyzer's "▶ Run", implementations
   and reference counts; references/implementations for TypeScript/JavaScript. (Rust's "Debug" lens is off until a
   debugger is set up.) Placing them no longer measures the line on screen first (needed only for lenses above the
