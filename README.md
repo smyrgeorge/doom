@@ -226,9 +226,9 @@ definitions:
 - usages don't include the declaration itself;
 - the preview has line numbers, with the usage's line highlighted, and shows non-ASCII text (`–`, Greek) as such:
   lsp-ui read files that aren't open without decoding them (`\342\200\223`);
-- it stands out from the code: an empty row above and below, tinted with the theme's blue, and a panel clearly darker
-  than the editor (the preview more than the list); softer colours for the selection and the matches, and only as
-  tall as the list needs.
+- it stands out from the code: an empty row above and below in the colour of its top and bottom bars, and a panel
+  clearly darker than the editor (the preview more than the list), all following the theme; softer colours for the
+  selection and the matches, and only as tall as the list needs.
 
 ### Search Everywhere (`SPC s a`)
 

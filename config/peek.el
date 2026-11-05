@@ -29,8 +29,9 @@
 ;;; Colours
 
 ;; The peek stands out from the code around it: an empty row above and below,
-;; tinted with the theme's blue, and a panel clearly darker than the editor
-;; (the preview more than the list). Doom's themes made it barely darker.
+;; in the colour of its own top and bottom bars (the theme's peek header), and
+;; a panel clearly darker than the editor (the preview more than the list).
+;; Doom's themes made it barely darker. All from the theme, on every change.
 (defface +my/peek-separator '((t :inherit lsp-ui-peek-header))
   "The rows above and below the peek.")
 
@@ -44,7 +45,10 @@ bright blue in Doom's themes)."
         (set-face-attribute 'lsp-ui-peek-peek nil :background (doom-darken editor 0.2))
         (set-face-attribute 'lsp-ui-peek-list nil :background (doom-darken editor 0.12))
         (set-face-attribute '+my/peek-separator nil :inherit 'unspecified
-                            :background (doom-blend (doom-color 'blue) editor 0.25)
+                            :background (let ((bar (face-background 'lsp-ui-peek-header nil t)))
+                                          (if (and (stringp bar) (string-prefix-p "#" bar))
+                                              bar
+                                            (doom-darken editor 0.3)))
                             :extend t)))
     (let ((bg (face-background 'lsp-ui-peek-list nil t)))
       (when (and (stringp bg) (string-prefix-p "#" bg))
