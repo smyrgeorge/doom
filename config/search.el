@@ -140,3 +140,9 @@ Classes and Symbols requests would cancel each other."
      :sort nil)))
 
 (map! :leader :desc "Search everywhere" "s a" #'+my/search-everywhere)
+
+;; FIND IN FILES
+;; Cmd+Shift+F: search the project's files (ripgrep, through Doom's SPC s p),
+;; next to Cmd+F for the current buffer. With text selected, it searches for
+;; that text, like IntelliJ's Find in Files.
+(map! "s-F" #'+default/search-project)
