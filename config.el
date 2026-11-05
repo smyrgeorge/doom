@@ -125,6 +125,9 @@
   :commands string-inflection-all-cycle)
 (map! :leader :desc "Cycle case style" "c ~" #'string-inflection-all-cycle)
 
+;; CONTEXT ACTIONS (Option+Enter, like JetBrains' Alt+Enter)
+(load! "config/actions")
+
 ;; KOTLIN
 ;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
 ;; lsp-mode's default kotlin-language-server.

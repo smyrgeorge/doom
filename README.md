@@ -67,6 +67,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
+| `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions).                   |
 | `config/terminal.el`  | Terminal Emacs: paint the terminal background with the theme colour.              |
 | `scripts/emacs.sh`    | Installs Emacs (emacs-plus cask) and runs `doom sync`.                            |
 | `scripts/tools.sh`    | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), pdf-tools build deps, the `claude-agent-acp` bridge. |
@@ -100,6 +101,19 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 
 Requires `pandoc`. Styles are loaded from a CDN, so the preview is unstyled offline.
 
+### Context actions (Option+Enter)
+
+`config/actions.el` gives `M-RET` (Option+Enter) one menu with everything that applies at point, like Alt+Enter in
+JetBrains IDEs:
+
+- **Spelling** (when the word at point is underlined): the top aspell suggestions and "Add to dictionary".
+- **Code actions**: the LSP server's quick fixes and refactors for the point or the active region (same list as
+  `SPC c a`).
+
+Each section comes from a provider function listed in `+my/context-action-providers`; new kinds of actions (e.g. AI)
+are added by writing another provider. Org keeps `M-RET` for "new heading/item"; in Markdown a new list item is
+`C-c C-j` or `M-*`.
+
 ### Claude Code in Emacs
 
 [`agent-shell`](https://github.com/xenodium/agent-shell) runs Claude Code (via the Agent Client Protocol) in a native
@@ -126,6 +140,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 
 | Key                         | Action                                                 |
 |-----------------------------|--------------------------------------------------------|
+| `M-RET` (Option+Enter)      | Context actions at point (spelling, code actions)      |
 | `SPC o c`                   | Start Claude Code (agent-shell)                        |
 | `SPC o C`                   | Pick / switch agent shell                              |
 | `SPC m p` (Markdown)        | Toggle live preview inside Emacs                       |
