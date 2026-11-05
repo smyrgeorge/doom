@@ -803,8 +803,10 @@ session), it's done when a graphical window first shows the buffer."
                                                     (not (frame-parent f))))
                                    (cons (selected-frame) (frame-list))))))
     (let ((pad (* columns (frame-char-width frame))))
+      ;; The right one may be padded already (config/window.el, FRINGES).
       (setq-local left-fringe-width (+ (or (frame-parameter frame 'left-fringe) 8) pad)
-                  right-fringe-width (+ (or (frame-parameter frame 'right-fringe) 8) pad)))))
+                  right-fringe-width (max (or (frame-parameter frame 'right-fringe) 8)
+                                          (+ 8 pad))))))
 
 (defun +my/stripe--maybe-enable ()
   ;; `so-long-mode' (files with very long lines) replaces their mode and isn't

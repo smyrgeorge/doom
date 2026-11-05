@@ -263,6 +263,9 @@ second, parallel session.
 - **Font:** JetBrains Mono with ligatures.
 - **Mode line:** a space after its last item on the right (e.g. flycheck's checkmark), which touched the window's
   edge; in every doom-modeline layout (`config/modeline.el`).
+- **Right fringe:** a character wider in every window (16 px instead of Doom's 8), so the arrows of lines cut off at
+  the window's edge (e.g. long names in treemacs) don't touch the text (`+my/right-fringe-padding`,
+  `config/window.el`). File windows get the same on the left too (see Error stripe).
 - **Kotlin:** JetBrains' official [`kotlin-lsp`](https://github.com/Kotlin/kotlin-lsp) instead of the community
   `kotlin-language-server`; with `format +lsp`, Kotlin is formatted by IntelliJ's formatter.
 - **Magit:** diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `magit-delta`.
