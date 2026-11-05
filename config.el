@@ -193,6 +193,30 @@
       :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code
       :desc "Agent shell"               "o C" #'agent-shell)
 
+;; MARKDOWN
+;; Live preview inside Emacs (re-renders on save). GUI: real WebKit via
+;; xwidgets; terminal: eww.
+(defun +my/markdown-live-preview-window (file)
+  (if (and (display-graphic-p) (featurep 'xwidget-internal))
+      (progn
+        (require 'xwidget)
+        (xwidget-webkit-browse-url (concat "file://" file))
+        (xwidget-buffer (xwidget-webkit-current-session)))
+    (markdown-live-preview-window-eww file)))
+(after! markdown-mode
+  (setq markdown-live-preview-window-function #'+my/markdown-live-preview-window))
+;; Both maps: with +tree-sitter, .md files open in markdown-ts-mode.
+(map! :after markdown-mode
+      :map markdown-mode-map
+      :localleader
+      :desc "Live preview (in Emacs)" "p" #'markdown-live-preview-mode
+      :desc "Preview in browser"      "P" #'markdown-preview)
+(map! :after markdown-ts-mode
+      :map markdown-ts-mode-map
+      :localleader
+      :desc "Live preview (in Emacs)" "p" #'markdown-live-preview-mode
+      :desc "Preview in browser"      "P" #'markdown-preview)
+
 ;; PROJECTILE
 ;; Discover projects using 'projectile-discover-projects-in-search-path'
 (setq projectile-project-search-path '("~/dev"))
