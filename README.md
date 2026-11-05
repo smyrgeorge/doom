@@ -267,7 +267,9 @@ second, parallel session.
   ~10 ms on macOS with this many native-compiled libraries loaded; a Markdown file made ~9); garbage collection while
   idle waits for 32 MB instead of gcmh's 800 KB (the language server's replies and redraws after opening a file
   collected every few redraws, ~70 ms each). With the lens, sticky header and stripe changes, opening a Markdown file
-  went from ~1 s of pauses to ~0.35 s.
+  went from ~1 s of pauses to ~0.35 s. And a file just opened shows first, plain, and gets its colours right after
+  (~0.1 s to see it instead of ~0.4 s): highlighting waits for its first display, like jit-lock's own deferral but only
+  then, so scrolling never shows plain text (`config/editor.el`).
 - **Font:** JetBrains Mono with ligatures.
 - **Mode line:** a space after its last item on the right (e.g. flycheck's checkmark), which touched the window's
   edge; in every doom-modeline layout (`config/modeline.el`).
