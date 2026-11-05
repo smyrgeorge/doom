@@ -26,6 +26,22 @@
 
 (defvar treemacs-silent-refresh)
 
+;; Edits to files from outside Emacs (Claude Code, a terminal...) don't touch
+;; .git, and macOS's file notifications don't report changes to a file's
+;; contents: treemacs only caught up when Emacs lost and regained focus. So
+;; while Emacs has focus and treemacs is shown, check each of its projects'
+;; `git status' every few seconds, in the background, and refresh when it
+;; changed. (--no-optional-locks: it never writes to .git, so no loop, and no
+;; clash with a commit running at the same time.)
+(defvar +my/treemacs-git-poll-interval 3
+  "Seconds between checks of the shown projects' git status (nil: none).")
+
+(defvar +my/treemacs--git-poll-state (make-hash-table :test #'equal)
+  "Each project's last `git status' output.")
+
+(defvar +my/treemacs--git-poll-running (make-hash-table :test #'equal)
+  "Projects whose check is still running.")
+
 ;; EXPAND / COLLAPSE ALL
 ;; `treemacs-expand-all' (zR in treemacs) opens every folder of the project(s)
 ;; in the sidebar; `treemacs-collapse-all' (zM) closes them all again but keeps
@@ -159,6 +175,58 @@
              +my/treemacs--git-watches)))
 
 (add-hook 'window-buffer-change-functions #'+my/treemacs-watch-git-h)
+
+(defun +my/treemacs--git-poll-project (root)
+  "Compare ROOT's `git status' with the last one; refresh treemacs if it changed."
+  (unless (gethash root +my/treemacs--git-poll-running)
+    (puthash root t +my/treemacs--git-poll-running)
+    (let ((output (generate-new-buffer " *treemacs-git-poll*")))
+      (condition-case nil
+          (make-process
+           :name "treemacs-git-poll" :buffer output :noquery t
+           :connection-type 'pipe
+           :command (list "git" "--no-optional-locks" "-C" root
+                          "status" "--porcelain" "-z")
+           :sentinel
+           (lambda (process _event)
+             (unless (process-live-p process)
+               (remhash root +my/treemacs--git-poll-running)
+               (let ((status (and (zerop (process-exit-status process))
+                                  (buffer-live-p output)
+                                  (with-current-buffer output (buffer-string))))
+                     (old (gethash root +my/treemacs--git-poll-state 'none)))
+                 (when (buffer-live-p output) (kill-buffer output))
+                 (when status
+                   (puthash root status +my/treemacs--git-poll-state)
+                   (unless (or (eq old 'none) (equal old status))
+                     ;; Not `+my/treemacs-schedule-refresh': its cooldown
+                     ;; would drop a change right after another refresh.
+                     (when (timerp +my/treemacs--refresh-timer)
+                       (cancel-timer +my/treemacs--refresh-timer))
+                     (setq +my/treemacs--refresh-timer
+                           (run-with-timer 0.3 nil #'+my/treemacs-refresh-all))))))))
+        (error (remhash root +my/treemacs--git-poll-running)
+               (kill-buffer output))))))
+
+(defun +my/treemacs--git-poll ()
+  (when (and (featurep 'treemacs)
+             (frame-focus-state)          ; focusing Emacs refreshes anyway
+             (eq (treemacs-current-visibility) 'visible))
+    (dolist (project (ignore-errors
+                       (treemacs-workspace->projects (treemacs-current-workspace))))
+      (let ((root (treemacs-project->path project)))
+        (when (file-directory-p root)
+          (+my/treemacs--git-poll-project root))))))
+
+(defvar +my/treemacs--git-poll-timer nil)
+
+(when (timerp +my/treemacs--git-poll-timer)  ; reloading this file
+  (cancel-timer +my/treemacs--git-poll-timer))
+
+(setq +my/treemacs--git-poll-timer
+      (and +my/treemacs-git-poll-interval
+           (run-with-timer +my/treemacs-git-poll-interval +my/treemacs-git-poll-interval
+                           #'+my/treemacs--git-poll)))
 
 (defun +my/treemacs-focus-refresh ()
   (when (frame-focus-state) (+my/treemacs-schedule-refresh)))

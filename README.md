@@ -100,7 +100,9 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - **Follows the current buffer**: highlights the open file and switches to the buffer's project, right after every
   buffer or window switch (treemacs' own project follow waits for 1.5 s without any input).
 - **Git status** colours for files and folders, computed asynchronously. Saving a file refreshes its status (macOS's
-  kqueue file notifications miss in-place edits, so this is done explicitly on save).
+  kqueue file notifications miss in-place edits, so this is done explicitly on save). Changes made outside Emacs
+  (Claude Code, a terminal, git) show up within a few seconds: while Emacs has focus, the shown projects' `git status`
+  is checked every 3 s in the background (`+my/treemacs-git-poll-interval`), and treemacs refreshes when it changed.
 - **Reachable like any window**: `SPC w w` cycles into it and it gets a window number (`SPC w 1`, as the leftmost
   window).
 - `h`/`←` collapse, `l`/`→` expand or open. A **single click** opens a file or expands/collapses a folder (treemacs'
