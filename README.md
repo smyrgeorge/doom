@@ -70,6 +70,11 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: git-delta diffs, TODOs in the status buffer.                       |
+| `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
+| `config/spell.el`     | Spell checking: creates the personal dictionary if it's missing.                  |
+| `config/agent-shell.el` | Claude Code in Emacs (agent-shell): login, default agent, `SPC o c` / `SPC o C`. |
+| `config/lsp.el`       | Language servers: JetBrains' `kotlin-lsp` for Kotlin.                             |
+| `config/projectile.el` | Projects under `~/dev`; project file list without a cache.                      |
 | `config/git.el`       | `SPC g d`: the current file's git diff in a side pane.                            |
 | `config/terminal.el`  | Terminal Emacs: paint the terminal background with the theme colour.              |
 | `scripts/emacs.sh`    | Installs Emacs (emacs-plus cask) and runs `doom sync`.                            |

@@ -97,8 +97,8 @@
 ;; TERMINAL
 (load! "config/terminal")
 
-;; EVIL
-(add-hook! 'after-save-hook #'evil-normal-state)
+;; EVIL (back to normal state on save)
+(load! "config/evil")
 
 ;; TREEMACS (IntelliJ-like project view)
 (load! "config/treemacs")
@@ -116,56 +116,23 @@
   :commands string-inflection-all-cycle)
 (map! :leader :desc "Cycle case style" "c ~" #'string-inflection-all-cycle)
 
-;; SPELL
-;; spell-fu ignores the personal dictionary until its file exists, so adding a
-;; word (zg / Option+Enter) fails with "Cannot add ... to any active dictionary".
-;; Create Doom's default one (under ~/.config/emacs/.local/etc/ispell/) if missing.
-(after! ispell
-  (when (and ispell-personal-dictionary
-             (not (file-exists-p ispell-personal-dictionary)))
-    (make-directory (file-name-directory ispell-personal-dictionary) t)
-    (with-temp-file ispell-personal-dictionary
-      (insert "personal_ws-1.1 en 0\n"))))
+;; SPELL (create the personal dictionary if missing)
+(load! "config/spell")
 
 ;; CONTEXT ACTIONS (Option+Enter, like JetBrains' Alt+Enter)
 (load! "config/actions")
 
-;; KOTLIN
-;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
-;; lsp-mode's default kotlin-language-server.
-(after! lsp-mode
-  (lsp-register-client
-   (make-lsp-client
-    :new-connection (lsp-stdio-connection '("kotlin-lsp" "--stdio"))
-    :major-modes '(kotlin-mode kotlin-ts-mode)
-    :priority 1                         ; win over kotlin-ls (-1)
-    :server-id 'kotlin-lsp)))
+;; LSP (Kotlin: JetBrains' kotlin-lsp)
+(load! "config/lsp")
 
-;; AGENT-SHELL (Claude Code via ACP)
-;; Uses the Claude CLI login (run `claude` once in a terminal to log in).
-(use-package! agent-shell
-  :commands (agent-shell agent-shell-anthropic-start-claude-code)
-  :config
-  (setq agent-shell-anthropic-authentication
-        (agent-shell-anthropic-make-authentication :login t)
-        ;; New shells (e.g. from the Option+Enter Claude actions) start Claude
-        ;; Code without asking which agent to use.
-        agent-shell-preferred-agent-config 'claude-code))
-
-(map! :leader
-      :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code
-      :desc "Agent shell"               "o C" #'agent-shell)
+;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
+(load! "config/agent-shell")
 
 ;; MARKDOWN
 (load! "config/markdown")
 
-;; PROJECTILE
-;; Discover projects using 'projectile-discover-projects-in-search-path'
-(setq projectile-project-search-path '("~/dev"))
-;; List project files fresh on every SPC SPC (fd / git ls-files are fast) instead
-;; of Doom's persistent cache, which misses files created outside Emacs (CLI,
-;; Claude Code, git checkout) until `SPC p i'.
-(setq projectile-enable-caching nil)
+;; PROJECTILE (projects under ~/dev, no file cache)
+(load! "config/projectile")
 
 ;; TABS
 (load! "config/tabs")
