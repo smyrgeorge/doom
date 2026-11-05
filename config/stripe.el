@@ -49,6 +49,15 @@ none (the last line stops at the bottom), or t for no limit.")
 (defvar +my/stripe-padding 1
   "Columns of space added to each fringe of file windows (nil: none).")
 
+;; In fringes 16 px wide flycheck switches to its big (16 px) markers: keep the
+;; small ones, in the middle (Doom's slim arrow for errors and warnings).
+(after! flycheck
+  (when (fboundp 'define-fringe-bitmap)
+    (define-fringe-bitmap 'flycheck-fringe-bitmap-double-arrow-hi-res
+      [16 48 112 240 112 48 16] nil nil 'center)
+    (define-fringe-bitmap 'flycheck-fringe-bitmap-fixable-hi-res
+      flycheck-fringe-bitmap-fixable nil nil 'center)))
+
 (defvar +my/stripe-margin-map
   (let ((map (make-sparse-keymap)))
     (define-key map [right-margin mouse-1] #'+my/stripe-jump)

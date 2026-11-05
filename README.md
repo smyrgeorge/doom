@@ -155,7 +155,8 @@ It's on in code, text and config files, and in files with very long lines (`so-l
 edge, the fringe (e.g. the arrows of lines cut off at the window edge) between it and the text: Doom's vc-gutter puts
 fringes outside the margins for the git gutter's sake, which with no left margin only matters on the right.
 File windows also get a character's width of space more on each side of the text (`+my/stripe-padding`): their
-fringes are 16 px instead of 8, with the git gutter, flycheck's marks and the arrows in the middle. The sticky header
+fringes are 16 px instead of 8, with the git gutter, flycheck's marks and the arrows in the middle (flycheck keeps
+its small markers there; in fringes that wide it would switch to big 16 px ones). The sticky header
 lines up with the text past the fringe.
 
 In the GUI the strip is drawn to the pixel: each screen row shows its slice of the strip as a small image in the right
