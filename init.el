@@ -199,6 +199,3 @@
        :config
        ;;literate
        (default +bindings +smartparens))
-
-;; Avoid the "flash of white Emacs" on startup (doom-one background).
-(add-to-list 'initial-frame-alist '(background-color . "#282c34"))
