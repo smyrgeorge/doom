@@ -72,7 +72,8 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: git-delta diffs, TODOs in the status buffer.                       |
 | `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
-| `config/spell.el`     | Spell checking: creates the personal dictionary if it's missing.                  |
+| `config/spell.el`     | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary.  |
+| `dict/tech.txt`       | ~40k programming words for the spell checker (built by `scripts/dict.sh`).        |
 | `config/agent-shell.el` | Claude Code in Emacs (agent-shell): login, default agent, `SPC o c` / `SPC o C`. |
 | `config/lsp.el`       | Language servers: projects imported without asking; JetBrains' `kotlin-lsp`.      |
 | `config/projectile.el` | Projects under `~/dev`; project file list without a cache.                      |
@@ -82,6 +83,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `scripts/emacs.sh`    | Installs Emacs (emacs-plus cask) and runs `doom sync`.                            |
 | `scripts/tools.sh`    | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), pdf-tools build deps, the `claude-agent-acp` bridge. |
 | `scripts/lsp.sh`      | Language servers, formatters and linters.                                         |
+| `scripts/dict.sh`     | Rebuilds `dict/tech.txt` from cspell's word lists (needs `npm`, `aspell`).        |
 
 ## Highlights
 
@@ -175,6 +177,11 @@ second, parallel session.
 - **Terminal background:** in terminal Emacs, the strip below the echo area is painted with the theme background
   (OSC 11) and restored on exit (OSC 111).
 - **`M-[` / `M-]`** switch buffers in the GUI only; in a terminal they would swallow mouse/focus escape sequences.
+- **Spelling in code:** besides English and your personal dictionary, spell-fu knows ~40k programming words
+  (`rect`, `rgba`, `async`, `kotlin`, `stdout`, ...) from `dict/tech.txt`, built by `scripts/dict.sh` from
+  [cspell](https://github.com/streetsidesoftware/cspell-dicts)'s MIT-licensed dictionaries (only words English lacks).
+  CamelCase identifiers are checked word by word (`AgreementController` = `Agreement` + `Controller`). Words you add
+  with `zg` or Option+Enter still go to the personal dictionary.
 - **LSP project import:** opening a file in a project starts its language server in the project root (the git
   repository) without the "import project root?" prompt, like Zed. Files outside any project still ask, so a stray
   file in `~` never makes a server scan your home folder (`config/lsp.el`).
