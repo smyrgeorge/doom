@@ -135,9 +135,12 @@ Works in visual state too, on the selection. Each section comes from a provider 
 window height, like the marks on IntelliJ's scrollbar:
 
 - errors (red) and warnings (yellow) from flycheck / the language server;
-- git changes (diff-hl), in the gutter's colours: red deleted, orange changed, green added;
+- git changes (diff-hl), in the gutter's colors: red deleted, orange changed, green added;
 - where several fall on the same row, the most important wins: error > warning > deleted > changed > added;
 - a light band marks the part of the file on screen, like a scrollbar thumb.
+
+When the end of the file is on screen, the strip covers only the rows with text (the whole file mapped onto them);
+the empty rows below keep Emacs' usual `~`.
 
 Click the strip to jump to that part of the file; the mouse wheel scrolls as usual. Info-level hints are left out
 (`+my/stripe-diagnostic-levels`). Doom's `smooth-scroll` module is off: scrolling by pixels moves the margin with the
@@ -162,7 +165,7 @@ Emacs can't see a lone Shift key press on macOS, so it's on `SPC s a` instead of
 Emacs buffer — evil keys, search and copy work as usual. It uses the Claude CLI login. `C-u M-x agent-shell` starts a
 second, parallel session.
 
-### Other customisations
+### Other customizations
 
 - **Font:** JetBrains Mono with ligatures.
 - **Kotlin:** JetBrains' official [`kotlin-lsp`](https://github.com/Kotlin/kotlin-lsp) instead of the community

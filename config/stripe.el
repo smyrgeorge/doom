@@ -18,6 +18,14 @@
 (defvar +my/stripe-diagnostic-levels '(error warning)
   "Flycheck levels shown in the stripe; add `info' to also show hints.")
 
+(defvar +my/stripe-margin-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [right-margin mouse-1] #'+my/stripe-jump)
+    (define-key map [right-margin down-mouse-1] #'ignore)
+    map)
+  "Keymap on the stripe's margin strings. A keymap on the clicked text wins
+over mode keymaps, e.g. outline-minor-mode's margin buttons (outline-cycle).")
+
 (defvar-local +my/stripe--overlays nil "Overlays drawing the stripe.")
 (defvar-local +my/stripe--cache nil "(KEY LINES . MARKS) for `+my/stripe--marks'.")
 (defvar-local +my/stripe--diff-hl-tick 0 "Bumped whenever diff-hl redraws.")
@@ -122,8 +130,16 @@ errors or the diff-hl highlights change."
                             +my/stripe--overlays))
         (set-window-parameter window '+my/stripe-key (+my/stripe--key window start))
         (pcase-let* ((`(,lines . ,marks) (+my/stripe--marks))
-                     (rows (max 1 (window-body-height window)))
                      (start (or start (window-start window)))
+                     (window-rows (max 1 (window-body-height window)))
+                     ;; Margin strings need text to hang on, so the stripe is
+                     ;; drawn next to text only; the rows below the end of the
+                     ;; buffer keep Emacs' usual empty-line `~'. When the end is
+                     ;; on screen, map the whole file onto the rows with text,
+                     ;; so no mark (or the band) falls on the empty rows.
+                     (rows (save-excursion
+                             (goto-char start)
+                             (1+ (vertical-motion (1- window-rows) window))))
                      (cells (make-vector rows nil))
                      (thumb-color (+my/stripe--thumb-color))
                      (thumb nil))
@@ -140,8 +156,9 @@ errors or the diff-hl highlights change."
           (when (> lines rows)
             (let ((first (line-number-at-pos start t)))
               (setq thumb (cons (+my/stripe--line-to-row first lines rows)
-                                (+my/stripe--line-to-row (min lines (+ first rows -1))
+                                (+my/stripe--line-to-row (min lines (+ first window-rows -1))
                                                          lines rows)))))
+          (set-window-parameter window '+my/stripe-rows rows) ; for clicks
           ;; One margin string per screen row. Each carries its row, for clicks.
           (cl-flet ((margin (row)
                       (let* ((kind (aref cells row))
@@ -155,33 +172,20 @@ errors or the diff-hl highlights change."
                          `((margin right-margin)
                            ,(propertize " "
                                         'face (and color (list :background color))
-                                        '+my/stripe-row row)))))
-                    (place (pos string &optional priority)
+                                        '+my/stripe-row row
+                                        'keymap +my/stripe-margin-map
+                                        'pointer 'hand
+                                        'help-echo "mouse-1: jump to this part of the file")))))
+                    (place (pos string)
                       (let ((ov (make-overlay pos pos)))
                         (overlay-put ov 'window window)
                         (overlay-put ov 'before-string string)
-                        (when priority (overlay-put ov 'priority priority))
                         (push ov +my/stripe--overlays))))
             (save-excursion
               (goto-char start)
-              (let ((last (cl-loop for row below rows
-                                   do (place (point) (margin row))
-                                   while (= (vertical-motion 1 window) 1)
-                                   finally return row)))
-                ;; Past the end of the buffer there is no text to hang margin
-                ;; strings on: add the remaining rows as empty display-only
-                ;; lines after the last one, so the stripe stays whole. A
-                ;; before-string with a higher priority comes after the last
-                ;; row's own string when the last line is the empty one at
-                ;; `point-max' (an after-string would come first and push that
-                ;; line down); `cursor' keeps the cursor on the real last line.
-                (when (< last (1- rows))
-                  (place (point-max)
-                         (concat (propertize "\n" 'cursor t)
-                                 (mapconcat #'margin
-                                            (number-sequence (1+ last) (1- rows))
-                                            "\n"))
-                         100)))))))))))
+              (cl-loop for row below rows
+                       do (place (point) (margin row))
+                       while (= (vertical-motion 1 window) 1))))))))))
 
 (defun +my/stripe--render-buffer ()
   "Redraw the stripe in every window showing the current buffer."
@@ -231,8 +235,10 @@ errors or the diff-hl highlights change."
                                              (car string)))))
     (when (and row (window-live-p window))
       (select-window window)
-      (let ((line (+my/stripe--row-to-line row (car (+my/stripe--marks))
-                                           (max 1 (window-body-height window)))))
+      (let ((line (+my/stripe--row-to-line
+                   row (car (+my/stripe--marks))
+                   (or (window-parameter window '+my/stripe-rows)
+                       (max 1 (window-body-height window))))))
         (when (fboundp 'better-jumper-set-jump)
           (better-jumper-set-jump))
         (goto-char (point-min))
