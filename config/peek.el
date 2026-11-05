@@ -61,7 +61,8 @@
 
 (defadvice! +my/peek-remember-symbol-a (input &rest _)
   :before #'lsp-ui-peek--find-xrefs
-  (setq +my/peek--symbol (and input (format "%s" input))))
+  ;; Plain: in Markdown the word came with its heading's face, in the title.
+  (setq +my/peek--symbol (and input (substring-no-properties (format "%s" input)))))
 
 ;;; Height
 
@@ -123,6 +124,18 @@ assigns or declares (e.g. a constant holding a big literal), if any."
                                                    (or (treesit-node-type (treesit-node-parent n)) ""))))
                             nil nil 4))))
         (treesit-node-text id t)))))
+
+;; lsp-ui reads the files with usages that aren't open without decoding them
+;; (`insert-file-contents-literally'): in the preview an en dash showed as
+;; \342\200\223, and any non-ASCII text (Greek...) as octal escapes. Read them as
+;; Emacs opens files.
+(defadvice! +my/peek-decode-files-a (fn file)
+  "Read the files decoded (see above)."
+  :around #'lsp-ui-peek--get-xrefs-in-file
+  (cl-letf (((symbol-function 'insert-file-contents-literally)
+             (lambda (filename &rest args)
+               (apply #'insert-file-contents filename args))))
+    (funcall fn file)))
 
 ;; lsp-ui reads each file with usages into a temporary buffer, without a major
 ;; mode (unless it fontifies everything): give it its mode, without hooks (no

@@ -224,7 +224,8 @@ definitions:
 - each usage shows the function/class it's in, grouped: the name on the first usage of each, with a count (`×21`);
   outside functions, the top-level variable it's in (e.g. a constant holding a big literal);
 - usages don't include the declaration itself;
-- the preview has line numbers, with the usage's line highlighted;
+- the preview has line numbers, with the usage's line highlighted, and shows non-ASCII text (`–`, Greek) as such:
+  lsp-ui read files that aren't open without decoding them (`\342\200\223`);
 - softer colours for the selection and the matches, and only as tall as the list needs.
 
 ### Search Everywhere (`SPC s a`)
@@ -310,7 +311,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `M-RET` (Option+Enter)      | Context actions at point (spelling, code actions, Claude) |
 | `SPC s a`                   | Search Everywhere: classes, files, symbols, actions (IntelliJ's double Shift) |
 | `Cmd+Shift+F` (GUI)         | Find in files: search the project with ripgrep (selected text is the query) |
-| `Cmd+B`                     | Go to declaration, or on the declaration list its usages (IntelliJ's Go to Declaration or Usages) |
+| `Cmd+B`                     | Go to declaration, or on the declaration list its usages (IntelliJ's Go to Declaration or Usages); with a language server, also where it knows no declaration (e.g. a Markdown heading: the links to it) |
 | `SPC g d`                   | Current file's git diff in a pane on the right (in the pane: `SPC g d`, `q` or `Esc` close) |
 | `SPC o c`                   | Start Claude Code (agent-shell)                        |
 | `SPC o C`                   | Pick / switch agent shell                              |

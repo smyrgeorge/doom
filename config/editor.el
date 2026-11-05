@@ -27,24 +27,35 @@
 ;; GO TO DECLARATION OR USAGES
 ;; Where the symbol is declared comes from xref: the language server in LSP
 ;; buffers, Emacs itself in Emacs Lisp. The jump and the usages list are Doom's
-;; lookup (`gd' / `gD'), with its fallbacks where there's no server.
+;; lookup (`gd' / `gD'), with its fallbacks where there's no server. When the
+;; language server knows no declaration to jump to, e.g. on a Markdown heading
+;; (links point to it, marksman's lens counts them), it lists the usages too:
+;; the jump fell back to searching the project for the word.
 (defun +my/at-declaration-p ()
-  "Non-nil if point is on the declaration of the symbol there."
+  "Non-nil if point is on the declaration of the symbol there, or (with a
+language server) on one it knows no declaration of."
   (when-let* ((bounds (bounds-of-thing-at-point 'symbol))
               (backend (xref-find-backend))
               (id (xref-backend-identifier-at-point backend)))
-    (cl-some (lambda (item)
-               (let ((location (xref-item-location item)))
-                 ;; Only look closer at declarations on this line of this file
-                 ;; (getting the position of others would open their files).
-                 (and (equal (ignore-errors (expand-file-name (xref-location-group location)))
-                             buffer-file-name)
-                      (eql (ignore-errors (xref-location-line location))
-                           (line-number-at-pos))
-                      (when-let* ((marker (ignore-errors (xref-location-marker location))))
-                        (and (eq (marker-buffer marker) (current-buffer))
-                             (<= (car bounds) marker (cdr bounds)))))))
-             (ignore-errors (xref-backend-definitions backend id)))))
+    (let ((definitions (ignore-errors (xref-backend-definitions backend id))))
+      (if (and (null definitions) (eq backend 'xref-lsp))
+          t
+        (+my/at-declaration--here-p bounds definitions)))))
+
+(defun +my/at-declaration--here-p (bounds definitions)
+  "Non-nil if one of DEFINITIONS (xref items) is the symbol at BOUNDS."
+  (cl-some (lambda (item)
+             (let ((location (xref-item-location item)))
+               ;; Only look closer at declarations on this line of this file
+               ;; (getting the position of others would open their files).
+               (and (equal (ignore-errors (expand-file-name (xref-location-group location)))
+                           buffer-file-name)
+                    (eql (ignore-errors (xref-location-line location))
+                         (line-number-at-pos))
+                    (when-let* ((marker (ignore-errors (xref-location-marker location))))
+                      (and (eq (marker-buffer marker) (current-buffer))
+                           (<= (car bounds) marker (cdr bounds)))))))
+           definitions))
 
 (defun +my/goto-declaration-or-usages ()
   "Jump to the declaration of the symbol at point; on the declaration itself,
