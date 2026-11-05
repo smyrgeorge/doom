@@ -1,6 +1,34 @@
 ;;; $DOOMDIR/config/magit.el -*- lexical-binding: t; -*-
 ;; Magit add-ons. Loaded from config.el.
 
+;; ====== VARIABLES ======
+
+;; COMMIT GRAPH
+;; Commits are shown as a tree, like tig: in the log (l l) and in the status
+;; buffer's commit sections (SPC g g: open, 20 commits), each branch's lane in
+;; its own colour, drawn with box-drawing lines instead of ASCII (`*' `|' `/'
+;; `\'), with the date and author in the margin.
+(defvar +my/magit-graph-glyphs
+  '((?* . "●") (?| . "│") (?/ . "╱") (?\\ . "╲") (?- . "─"))
+  "How the characters of git's graph are drawn.")
+
+(after! magit-log
+  (put 'magit-log-mode 'magit-log-default-arguments
+       '("--graph" "--color" "-n256" "--decorate"))
+  (setq magit-log-margin '(t "%Y-%m-%d %H:%M " magit-log-margin-width t 18)))
+
+(after! magit-status
+  ;; The status buffer's commit sections (recent, unpushed, unpulled): open
+  ;; (magit folds "Recent commits"), with more of them.
+  (put 'magit-status-mode 'magit-log-default-arguments
+       '("--graph" "--color" "-n256" "--decorate"))
+  (setq magit-status-margin '(t "%Y-%m-%d %H:%M " magit-log-margin-width t 18)
+        magit-log-section-commit-count 20)
+  (add-to-list 'magit-section-initial-visibility-alist '(recent . show))
+  (add-to-list 'magit-section-initial-visibility-alist '(unpushed . show)))
+
+;; ====== CODE ======
+
 ;; MAGIT
 ;; Render diffs with git-delta (brew install git-delta).
 (use-package! magit-delta
@@ -10,3 +38,27 @@
 (use-package! magit-todos
   :after magit
   :config (magit-todos-mode +1))
+
+;; With --color, magit marks the graph's characters with the lane colours (or
+;; `magit-log-graph'): only those are redrawn, never the commit messages.
+(defun +my/magit--graph-face-p (face)
+  (or (and (consp face) (keywordp (car face))) ; a lane's colour, (:foreground ..)
+      (cl-some (lambda (f)
+                 (or (eq f 'magit-log-graph)
+                     (and (symbolp f) (string-prefix-p "ansi-color-" (symbol-name f)))
+                     (and (consp f) (keywordp (car f)))))
+               (ensure-list face))))
+
+(defun +my/magit-pretty-graph-h ()
+  "Draw the commit graph with box-drawing characters."
+  (when (derived-mode-p 'magit-log-mode 'magit-status-mode)
+    (with-silent-modifications
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "[*|/\\\\-]" nil t)
+          (let ((pos (match-beginning 0)))
+            (when (+my/magit--graph-face-p (get-text-property pos 'font-lock-face))
+              (put-text-property pos (1+ pos) 'display
+                                 (alist-get (char-after pos) +my/magit-graph-glyphs)))))))))
+
+(add-hook 'magit-refresh-buffer-hook #'+my/magit-pretty-graph-h)

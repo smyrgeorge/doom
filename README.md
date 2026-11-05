@@ -73,7 +73,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
-| `config/magit.el`     | Magit add-ons: git-delta diffs, TODOs in the status buffer.                       |
+| `config/magit.el`     | Magit add-ons: commit graph (like tig), git-delta diffs, TODOs in the status buffer. |
 | `config/editor.el`    | Editing helpers: `SPC c ~` cycles the case style of a word; rainbow brackets.     |
 | `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
 | `config/spell.el`     | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary.  |
@@ -216,6 +216,9 @@ second, parallel session.
 - **Kotlin:** JetBrains' official [`kotlin-lsp`](https://github.com/Kotlin/kotlin-lsp) instead of the community
   `kotlin-language-server`; with `format +lsp`, Kotlin is formatted by IntelliJ's formatter.
 - **Magit:** diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `magit-delta`.
+- **Commit graph, like tig:** the log (`l l`) and the status buffer's commits (`SPC g g`: "Recent commits" open,
+  20 of them) show the branch tree, each lane in its own colour, drawn with box-drawing lines (`●` `│` `╱` `╲`) instead
+  of ASCII, with the author and the date (`2026-11-04 09:58`) in the margin.
 - **File diff pane:** `SPC g d` shows the current file's changes vs `HEAD` (delta-rendered) in a pane on the right and
   moves the cursor there, onto the hunk of the line you were on. It refreshes on save and switches to another file
   when pressed there. In the pane: `s`/`u`/`x` stage/unstage/discard a hunk, `RET` jumps to the line, `SPC g d` or
