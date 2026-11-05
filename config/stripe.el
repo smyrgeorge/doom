@@ -590,8 +590,9 @@ it as a row of the last line (`vertical-motion') and in that line's height."
                              (not (eq (window-buffer win) (current-buffer))))
                          (delete-overlay ov))))))
             (pcase-dolist (`(,pos . ,string) strings)
-              (let ((ov (or (pop old) (make-overlay pos pos))))
-                (move-overlay ov pos pos)
+              (let* ((at (+my/stripe--anchor pos))
+                     (ov (or (pop old) (make-overlay at at))))
+                (move-overlay ov at at)
                 (overlay-put ov '+my/stripe t)
                 (overlay-put ov '+my/stripe-row t)
                 (overlay-put ov 'window window)
@@ -600,6 +601,19 @@ it as a row of the last line (`vertical-motion') and in that line's height."
             (+my/stripe--set-filler window filler)
             (when (eq window (selected-window))
               (+my/stripe--plain-last-number))))))))
+
+(defun +my/stripe--anchor (pos)
+  "Where to hang the string of the row starting at POS. On a row that
+continues a wrapped line (visual-line-mode, e.g. Markdown), after its first
+character: hung at the very start of such a row, Emacs draws the margin
+string at the end of the row before (it takes no room there) and leaves this
+row's margin empty, a gap in the strip."
+  (if (and (> pos (point-min))
+           (< pos (point-max))
+           (not (eq (char-before pos) ?\n))
+           (not (eq (char-after pos) ?\n)))
+      (1+ pos)
+    pos))
 
 (defun +my/stripe--note-line-edit (beg end &rest _)
   "Before/after a change: count it if BEG..END holds a line break, i.e. lines

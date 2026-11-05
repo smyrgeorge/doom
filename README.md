@@ -162,7 +162,9 @@ lines up with the text past the fringe.
 In the GUI the strip is drawn to the pixel: each screen row shows its slice of the strip as a small image in the right
 margin. Rows are measured (an emoji, or a glyph rising above the font like indent-bars' `│` on the top row, makes a
 row taller), and smooth scrolling, which moves the rows by part of a line, shifts the slices back by as much, so the
-marks stay still while the text glides. In a terminal each row is a coloured cell.
+marks stay still while the text glides. Wrapped lines (Markdown, `visual-line-mode`) get a slice on each of their
+rows, hung after the row's first character: Emacs would otherwise draw a continuation row's slice on the row
+before, leaving gaps. In a terminal each row is a coloured cell.
 
 Windows with the strip scroll past the end of the file only a bit: at most a quarter of the window
 (`+my/stripe-overscroll`: a fraction, a number of rows, `0` for none, `t` for no limit). The strip maps the file plus
