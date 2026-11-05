@@ -12,3 +12,9 @@
 ;; PascalCase, camelCase and kebab-case.
 (use-package! string-inflection
   :commands string-inflection-all-cycle)
+
+;; RAINBOW BRACKETS
+;; Color (), [] and {} by nesting depth in code, like IntelliJ's Rainbow
+;; Brackets plugin, so matching pairs are easy to spot.
+(use-package! rainbow-delimiters
+  :hook (prog-mode . rainbow-delimiters-mode))

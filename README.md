@@ -71,7 +71,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: git-delta diffs, TODOs in the status buffer.                       |
-| `config/editor.el`    | Editing helpers: `SPC c ~` cycles the case style of the word at point.            |
+| `config/editor.el`    | Editing helpers: `SPC c ~` cycles the case style of a word; rainbow brackets.     |
 | `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
 | `config/spell.el`     | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary.  |
 | `dict/tech.txt`       | ~40k programming words for the spell checker (built by `scripts/dict.sh`).        |
@@ -189,6 +189,7 @@ second, parallel session.
   [cspell](https://github.com/streetsidesoftware/cspell-dicts)'s MIT-licensed dictionaries (only words English lacks).
   CamelCase identifiers are checked word by word (`AgreementController` = `Agreement` + `Controller`). Words you add
   with `zg` or Option+Enter still go to the personal dictionary.
+- **Rainbow brackets:** `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
 - **Code lenses:** what the language server offers at the end of the line: rust-analyzer's "▶ Run", implementations
   and reference counts; references/implementations for TypeScript/JavaScript. (Rust's "Debug" lens is off until a
   debugger is set up.)

@@ -66,3 +66,6 @@
 
 ;; Cycle snake_case / camelCase / PascalCase / UPPER_CASE / kebab-case.
 (package! string-inflection)
+
+;; Rainbow brackets: color (), [] and {} by nesting depth.
+(package! rainbow-delimiters)
