@@ -44,7 +44,7 @@
        ophints           ; highlight the region an operation acts on
        (popup +defaults)   ; tame sudden yet inevitable temporary windows
        (smooth-scroll +interpolate) ; So butter (mouse wheel: config/smooth.el)
-       tabs              ; a tab bar for Emacs
+       ;;tabs            ; a tab bar for Emacs (centaur-tabs; per-window tabs instead: config/tabs.el)
        (treemacs +lsp)   ; a project drawer, like neotree but cooler
        ;;unicode           ; extended unicode support for various languages
        (vc-gutter +pretty) ; vcs diff in the fringe

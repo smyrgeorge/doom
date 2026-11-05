@@ -1,11 +1,50 @@
 ;;; $DOOMDIR/config/tabs.el -*- lexical-binding: t; -*-
-;; Tab bar (centaur-tabs) labels. Loaded from config.el.
+;; Tabs per window (Emacs's tab line). Loaded from config.el.
 
-;; TABS
+;; ====== VARIABLES ======
+
+;; TABS PER WINDOW
+;; Each window has its own tabs, like IntelliJ's split editors: the buffers
+;; shown in it, in the order they first were (Emacs's tab line, instead of
+;; Doom's centaur-tabs, whose tab groups were per project and shared by every
+;; window). A split starts with one tab, the buffer it shows. Files, Claude
+;; sessions, dired and magit get tabs; other buffers only while shown.
+;; Closing a tab (its ✕, a middle click) takes it off that window, which goes
+;; back to the tab it showed before; a file is closed too once no window has
+;; it as a tab any more (asking first if it has unsaved changes). A Claude
+;; session only leaves the tab line: close it with its own commands.
+;; Tabs look as they did: an icon, a bar on the current one, • when unsaved.
+(defvar +my/tabs-height 22
+  "Height of the tab row in graphical frames, in pixels.")
+
+(defvar +my/tabs-bar-width 2
+  "Width of the bar marking the current tab, in pixels.")
+
+;; ====== KEY BINDINGS ======
+
+(map! :n "gt" #'tab-line-switch-to-next-tab
+      :n "gT" #'tab-line-switch-to-prev-tab)
+
+;; ====== CODE ======
+
+(defun +my/tabs-p (buffer)
+  "Non-nil if BUFFER keeps a tab when it isn't shown (see above)."
+  (with-current-buffer buffer
+    (or buffer-file-name
+        (derived-mode-p 'agent-shell-mode 'dired-mode)
+        (doom-real-buffer-p buffer))))
+
+(defun +my/tabs-window-buffers ()
+  "The selected window's tabs (see above)."
+  (let ((current (window-buffer)))
+    (seq-filter (lambda (buffer) (or (eq buffer current) (+my/tabs-p buffer)))
+                (tab-line-tabs-fixed-window-buffers))))
+
+;; LABELS
 ;; Workspaces disable uniquify, so same-named files get buffer names like
 ;; lib.rs, lib.rs<2>, even when they're in different projects. Label file tabs
 ;; with the file name instead of the buffer name, and when two tabs in the same
-;; tab group share a file name, with the shortest distinguishing path, e.g.
+;; window share a file name, with the shortest distinguishing path, e.g.
 ;; crate-a/src/lib.rs.
 (defun +my/tabs-unique-label (file others)
   "Return the shortest trailing part of FILE's path not shared by OTHERS."
@@ -19,82 +58,118 @@
       (setq n (1+ n)))
     (string-join (reverse (seq-take parts n)) "/")))
 
-(defadvice! +my/tabs-label-with-path-a (fn tab)
-  :around #'centaur-tabs-buffer-tab-label
-  (let* ((buf (car tab))
-         (file (and (not centaur-tabs--buffer-show-groups) (buffer-file-name buf))))
-    (if (not file)
-        (funcall fn tab)                ; non-file buffers: the buffer name
+(defun +my/tabs-label (buffer buffers)
+  "BUFFER's tab label among BUFFERS (see above)."
+  (if-let* ((file (buffer-file-name buffer)))
       (let* ((name (file-name-nondirectory file))
-             (others
-              (delq nil (mapcar (lambda (b)
-                                  (let ((f (buffer-file-name b)))
-                                    (and f (not (eq b buf))
-                                         (equal (file-name-nondirectory f) name)
-                                         f)))
-                                (centaur-tabs-tab-values (centaur-tabs-tab-tabset tab)))))
-             (label (if others (+my/tabs-unique-label file others) name)))
-        (format " %s" (if (> centaur-tabs-label-fixed-length 0)
-                          (centaur-tabs-truncate-string centaur-tabs-label-fixed-length label)
-                        label))))))
+             (others (delq nil (mapcar (lambda (b)
+                                         (let ((f (and (not (eq b buffer))
+                                                       (buffer-file-name b))))
+                                           (and f (equal (file-name-nondirectory f) name)
+                                                f)))
+                                       buffers))))
+        (if others (+my/tabs-unique-label file others) name))
+    (buffer-name buffer)))
 
-;; CLAUDE AND ITS PROJECT IN ONE TAB GROUP
-;; Each window's tab bar shows the tabs of its buffer's group: a file's
-;; project, else "Common". The Claude buffer (agent-shell) visits no file, so
-;; it sat alone in "Common", while what it links to (its charts saved in the
-;; project, `path:line' references) opens in the project's group: clicking an
-;; image swapped the whole tab bar for the project's, like another workspace.
-;; Claude buffers now join their project's group, and a file opened from one
-;; that belongs to no project (e.g. a pasted screenshot in agent-shell's cache)
-;; joins Claude's group: either way it opens as a tab next to Claude.
-(defvar-local +my/tabs-group nil
-  "This buffer's tab group, when it was opened from a Claude buffer (above).")
+;; THE BAR
+;; An image as tall as the tab row: in the accent colour on the current tab,
+;; in the tab's own colour on the others (it makes the row that tall).
+(defvar +my/tabs--bars (make-hash-table :test #'equal))
 
-(defadvice! +my/tabs-agent-shell-project-a (fn)
-  :around #'centaur-tabs-project-name
-  (or (funcall fn)
-      (and (derived-mode-p 'agent-shell-mode)
-           (when-let* ((project (project-current nil default-directory)))
-             (format "Project: %s"
-                     (expand-file-name (project-root project)))))))
+(defun +my/tabs-bar (color)
+  "An image +my/tabs-bar-width wide and +my/tabs-height tall, in COLOR."
+  (let ((key (list color +my/tabs-bar-width +my/tabs-height)))
+    (or (gethash key +my/tabs--bars)
+        (puthash key
+                 (propertize
+                  " " 'display
+                  (create-image (concat (format "P1\n%d %d\n" +my/tabs-bar-width
+                                                +my/tabs-height)
+                                        (make-string (* +my/tabs-bar-width
+                                                        +my/tabs-height)
+                                                     ?1))
+                                'pbm t :foreground color :background color
+                                :ascent 'center))
+                 +my/tabs--bars))))
 
-(defadvice! +my/tabs-own-group-a (fn)
-  :around #'centaur-tabs-buffer-groups
-  (if +my/tabs-group (list +my/tabs-group) (funcall fn)))
+(defun +my/tabs-format (tab tabs)
+  "TAB's text in the tab line (see above), for `tab-line-tab-name-format-function'."
+  (let* ((selected (eq tab (window-buffer)))
+         (face (cond ((not selected) 'tab-line-tab-inactive)
+                     ((mode-line-window-selected-p) 'tab-line-tab-current)
+                     (t 'tab-line-tab)))
+         (icon (and (display-graphic-p) (fboundp 'nerd-icons-icon-for-buffer)
+                    (with-current-buffer tab
+                      (ignore-errors (nerd-icons-icon-for-buffer)))))
+         (text (concat " "
+                       (if (stringp icon) (concat icon " ") "")
+                       (+my/tabs-label tab tabs)
+                       (if (and (buffer-file-name tab) (buffer-modified-p tab))
+                           " •" "")
+                       " "))
+         (close (copy-sequence tab-line-close-button))
+         (bar (and (display-graphic-p)
+                   (+my/tabs-bar (if selected
+                                     (face-background 'highlight nil t)
+                                   (face-background face nil t))))))
+    ;; Appended, so the icon keeps its own colour.
+    (add-face-text-property 0 (length text) face t text)
+    (add-face-text-property 0 (length close) face t close)
+    (propertize (concat (or bar "")
+                        (propertize text
+                                    'keymap tab-line-tab-map
+                                    'help-echo (if selected "Current tab"
+                                                 "Click to select tab")
+                                    'follow-link 'ignore)
+                        close
+                        (propertize " " 'face face))
+                'tab tab
+                'selected selected
+                'mouse-face 'tab-line-highlight)))
 
-(defadvice! +my/tabs-follow-claude-a (fn &rest args)
-  :around #'agent-shell-markdown-visit-file
-  (let* ((group (and (bound-and-true-p centaur-tabs-mode)
-                     (car (centaur-tabs-buffer-groups))))
-         (window (apply fn args))
-         (buffer (and (window-live-p window) (window-buffer window))))
-    (when (and group buffer)
-      (with-current-buffer buffer
-        (unless (or +my/tabs-group (centaur-tabs-project-name))
-          (setq +my/tabs-group group)
-          (centaur-tabs-buffer-update-groups)
-          (centaur-tabs-display-update))))
-    window))
+;; CLOSING A TAB (see above)
+(defun +my/tabs-held-p (buffer)
+  "Non-nil if a window shows BUFFER or has it as a tab."
+  (seq-some (lambda (window)
+              (or (eq (window-buffer window) buffer)
+                  (assq buffer (window-prev-buffers window))))
+            (window-list-1 nil 'nomini t)))
 
-;; CLOSING A TAB
-;; Closing the shown tab showed the next one in its group (centaur-tabs), not
-;; the one you came from: close an image opened from Claude and another file
-;; came up. It goes back to the tab this window showed before now, if that's
-;; in the same group; otherwise to the next one, as before.
-(defadvice! +my/tabs-close-back-a (fn)
-  :around #'centaur-tabs-buffer-track-killed
-  (let* ((buffer (current-buffer))
-         (window (selected-window))
-         (group (car (centaur-tabs-buffer-groups)))
-         (tabs (and (eq buffer (window-buffer window))
-                    (funcall centaur-tabs-buffer-list-function)))
-         (previous
-          (seq-find (lambda (b)
-                      (and (buffer-live-p b) (not (eq b buffer)) (memq b tabs)
-                           (equal (with-current-buffer b
-                                    (car (centaur-tabs-buffer-groups)))
-                                  group)))
-                    (mapcar #'car (window-prev-buffers window)))))
-    (if previous
-        (save-current-buffer (switch-to-buffer previous))
-      (funcall fn))))
+(defun +my/tabs-close (tab)
+  "Take TAB off the selected window's tabs, and close its file if no window
+has it any more (see above)."
+  (let ((buffer (if (bufferp tab) tab (cdr (assq 'buffer tab)))))
+    (if (eq buffer (window-buffer))
+        (bury-buffer)                   ; back to the tab shown before
+      (set-window-prev-buffers nil (assq-delete-all buffer (window-prev-buffers)))
+      (set-window-next-buffers nil (delq buffer (window-next-buffers))))
+    (set-window-parameter nil 'tab-line-buffers
+                          (delq buffer (window-parameter nil 'tab-line-buffers)))
+    (when (and (buffer-live-p buffer) (buffer-file-name buffer)
+               (not (+my/tabs-held-p buffer)))
+      (kill-buffer buffer))))
+
+;; No tab line where Doom had none: popups (help, *Messages*...), the dashboard,
+;; side panels (treemacs' and LSP's lists).
+(defun +my/tabs-off-h ()
+  (setq-local tab-line-exclude t)
+  (when (bound-and-true-p tab-line-mode)
+    (tab-line-mode -1)))
+
+(add-hook '+popup-buffer-mode-hook
+          (defun +my/tabs-popup-h ()
+            (when +popup-buffer-mode (+my/tabs-off-h))))
+
+(add-hook '+doom-dashboard-mode-hook #'+my/tabs-off-h)
+
+(after! tab-line
+  (setq tab-line-tabs-function #'+my/tabs-window-buffers
+        tab-line-tab-name-format-function #'+my/tabs-format
+        tab-line-close-tab-function #'+my/tabs-close
+        tab-line-close-button-show t
+        tab-line-new-button-show nil      ; new buffers come from the usual commands
+        tab-line-switch-cycling t)
+  (dolist (mode '(treemacs-mode +doom-dashboard-mode))
+    (add-to-list 'tab-line-exclude-modes mode)))
+
+(add-hook 'doom-first-buffer-hook #'global-tab-line-mode)

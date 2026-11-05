@@ -75,7 +75,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/cheatsheet.el` | Tips panel under treemacs, from `cheatsheet.org` (disabled for now, see `config.el`). |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
-| `config/tabs.el`      | Tab labels with a path for same-named files; Claude in its project's tabs; closing a tab goes back. |
+| `config/tabs.el`      | Tabs per window (Emacs's tab line), like IntelliJ's split editors.               |
 | `config/modeline.el`  | Mode line: a space after its last item on the right.                             |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: commit graph (like tig), git-delta diffs, TODOs in the status buffer. |
@@ -320,12 +320,15 @@ smaller ones at their own size; `{width=100%}` after an image link sizes one ima
   moves the cursor there, onto the hunk of the line you were on. It refreshes on save and switches to another file
   when pressed there. In the pane: `s`/`u`/`x` stage/unstage/discard a hunk, `RET` jumps to the line, `SPC g d`,
   `q` or `Esc` closes it. Opening it saves the buffer.
-- **Tabs:** same-named files get the shortest distinguishing path as their tab label (`crate-a/src/lib.rs` vs
-  `crate-b/src/lib.rs`) instead of `lib.rs<2>`. Buffer names are untouched, since workspaces disable uniquify.
-  Claude buffers are in their project's tab group (they visit no file, so they sat alone in "Common"), and a file opened
-  from one that belongs to no project (a pasted screenshot in agent-shell's cache) joins it: images and `path:line`
-  links open as tabs next to Claude instead of swapping the tab bar for another group. Closing the shown tab goes back
-  to the tab the window showed before, if it's in the same group, instead of the next one.
+- **Tabs per window**, like IntelliJ's split editors (Emacs's tab line instead of Doom's centaur-tabs, whose tab
+  groups were per project and shared by every window): each window's tabs are the buffers shown in it, in the order
+  they first were. A split starts with one tab, the buffer it shows. Files, Claude sessions, dired and magit keep tabs;
+  other buffers only while shown; popups, the dashboard and side panels have no tab line. Closing a tab (its ✕, a
+  middle click) takes it off that window, which goes back to the tab it showed before; a file is closed too once no
+  window has it as a tab any more (asking first if it has unsaved changes), a Claude session only leaves the tab line.
+  `gt` / `gT`: next / previous tab. Tabs show the file's icon, a bar on the current one (`+my/tabs-height`), `•` when
+  unsaved, and same-named files get the shortest distinguishing path as their label (`crate-a/src/lib.rs` vs
+  `crate-b/src/lib.rs`) instead of `lib.rs<2>`, since workspaces disable uniquify.
 - **Terminal background:** in terminal Emacs, the strip below the echo area is painted with the theme background
   (OSC 11) and restored on exit (OSC 111).
 - **No menu bar in the terminal:** macOS GUI frames keep theirs (it lives in the system's menu bar); terminal frames
@@ -398,6 +401,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `SPC m p` (Markdown)        | Toggle live preview inside Emacs                       |
 | `SPC m P` (Markdown)        | Preview in the browser                                 |
 | `SPC o p` / `SPC o P`       | Toggle treemacs / reveal current file in treemacs      |
+| `gt` / `gT`                 | Next / previous tab of the window                      |
 | `SPC t ?`                   | Hide / show the tips panel (when enabled)              |
 | `←` / `→` (treemacs, LSP lists) | Collapse or go to parent / expand, into, or open    |
 | `zR` / `zM` (treemacs)      | Expand / collapse all folders                          |
@@ -411,7 +415,7 @@ See `init.el` for the full list. Notable choices:
 | Group         | Modules                                                                                                   |
 |---------------|-----------------------------------------------------------------------------------------------------------|
 | `:completion` | `(corfu +orderless +icons)`, `(vertico +icons)`                                                            |
-| `:ui`         | `dashboard`, `indent-guides`, `ligatures`, `(smooth-scroll +interpolate)`, `tabs`, `(treemacs +lsp)`, `(vc-gutter +pretty)`, `(window-select +numbers)`, `workspaces` |
+| `:ui`         | `dashboard`, `indent-guides`, `ligatures`, `(smooth-scroll +interpolate)`, `(treemacs +lsp)`, `(vc-gutter +pretty)`, `(window-select +numbers)`, `workspaces` |
 | `:editor`     | `(evil +everywhere)`, `(format +onsave +lsp)`, `multiple-cursors`, `snippets`, `(whitespace +guess +trim)`  |
 | `:emacs`      | `(dired +dirvish +icons)`, `(ibuffer +icons)`, `undo`, `vc`                                                |
 | `:term`       | `(ghostel +everywhere)`                                                                                   |
