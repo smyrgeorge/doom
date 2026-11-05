@@ -1,5 +1,7 @@
 ;;; $DOOMDIR/config.el -*- lexical-binding: t; -*-
 
+;; ====== VARIABLES ======
+
 ;; Place your private configuration here! Remember, you do not need to run 'doom
 ;; sync' after modifying this file!
 
@@ -26,6 +28,7 @@
 ;;
 ;; JetBrains Mono (brew install --cask font-jetbrains-mono): has ligatures.
 (setq doom-font (font-spec :family "JetBrains Mono" :size 13))
+
 ;;
 ;; If you or Emacs can't find your font, use 'M-x describe-font' to look them
 ;; up, `M-x eval-region' to execute elisp code, and 'M-x doom/reload-font' to
@@ -44,7 +47,6 @@
 ;; If you use `org' and don't want your org files in the default location below,
 ;; change `org-directory'. It must be set before org loads!
 (setq org-directory "~/dev/org/")
-
 
 ;; Whenever you reconfigure a package, make sure to wrap your config in an
 ;; `after!' block, otherwise Doom's defaults may override your settings. E.g.
@@ -81,15 +83,22 @@
 ;; CUSTOM CONFIG ;;
 (setq default-directory "~")
 
+;; ====== KEY BINDINGS ======
+
 ;; CUSTOM KEY BINDINGS
 ;; GUI only: in a terminal, M-[ / M-] are ESC [ / ESC ], the prefixes of
 ;; escape sequences (mouse, focus, OSC), so binding them flips buffers.
 (defun +my/gui-only (cmd)
   `(menu-item "" ,cmd :filter ,(lambda (c) (when (display-graphic-p) c))))
+
 (map! "M-[" (+my/gui-only #'previous-buffer)
       "M-]" (+my/gui-only #'next-buffer))
+
 (map! "s-[" #'better-jumper-jump-backward)
+
 (map! "s-]" #'better-jumper-jump-forward)
+
+;; ====== CODE ======
 
 ;; WINDOW (maximized frame; new windows get focus)
 (load! "config/window")

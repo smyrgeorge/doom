@@ -2,6 +2,8 @@
 ;; Context actions on Option+Enter (M-RET), like Alt+Enter in JetBrains IDEs.
 ;; Loaded from config.el.
 
+;; ====== VARIABLES ======
+
 ;; CONTEXT ACTIONS
 ;; One menu (grouped, in vertico) with everything that applies at point:
 ;; - Spelling: suggestions and "add to dictionary", when spell-fu flagged the
@@ -26,6 +28,16 @@ The menu shows groups in this order.")
   "How many spelling suggestions to show (aspell lists the likeliest first).")
 
 (defvar +spell-correct-interface)       ; Doom's :checkers spell
+
+;; ====== KEY BINDINGS ======
+
+;; Visual state too: code actions and Claude actions work on the selection.
+(map! :nvi "M-RET" #'+my/context-actions)
+
+;; Org keeps M-RET for "new heading/item".
+(map! :after org :map org-mode-map :ni "M-RET" #'org-meta-return)
+
+;; ====== CODE ======
 
 (defun +my/context-actions--spell-suggestions ()
   "Return aspell's suggestions for the word at point."
@@ -164,8 +176,3 @@ the prompt is queued and sent when it finishes."
                  (complete-with-action action table string pred)))
              nil t)))
       (funcall (nth 2 (cdr (assoc choice table)))))))
-
-;; Visual state too: code actions and Claude actions work on the selection.
-(map! :nvi "M-RET" #'+my/context-actions)
-;; Org keeps M-RET for "new heading/item".
-(map! :after org :map org-mode-map :ni "M-RET" #'org-meta-return)

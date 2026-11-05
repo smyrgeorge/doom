@@ -1,6 +1,8 @@
 ;;; $DOOMDIR/config/search.el -*- lexical-binding: t; -*-
 ;; Search Everywhere (IntelliJ's double Shift) on SPC s a. Loaded from config.el.
 
+;; ====== VARIABLES ======
+
 ;; SEARCH EVERYWHERE
 ;; One list with the tabs of IntelliJ's Search Everywhere: Classes, Files,
 ;; Symbols and Actions. Typing searches all of them at once; to show one tab,
@@ -16,6 +18,18 @@
 
 (defconst +my/search-everywhere--class-kinds '(5 10 11 19 23)
   "LSP SymbolKinds listed under Classes: Class, Enum, Interface, Object, Struct.")
+
+;; ====== KEY BINDINGS ======
+
+(map! :leader :desc "Search everywhere" "s a" #'+my/search-everywhere)
+
+;; FIND IN FILES
+;; Cmd+Shift+F: search the project's files (ripgrep, through Doom's SPC s p),
+;; next to Cmd+F for the current buffer. With text selected, it searches for
+;; that text, like IntelliJ's Find in Files.
+(map! "s-F" #'+default/search-project)
+
+;; ====== CODE ======
 
 (defun +my/search-everywhere--lsp-async (workspaces token classes)
   "Async source of WORKSPACES' symbols, queried as the input changes.
@@ -138,11 +152,3 @@ Classes and Symbols requests would cancel each other."
      :prompt "Search everywhere: "
      :require-match t
      :sort nil)))
-
-(map! :leader :desc "Search everywhere" "s a" #'+my/search-everywhere)
-
-;; FIND IN FILES
-;; Cmd+Shift+F: search the project's files (ripgrep, through Doom's SPC s p),
-;; next to Cmd+F for the current buffer. With text selected, it searches for
-;; that text, like IntelliJ's Find in Files.
-(map! "s-F" #'+default/search-project)

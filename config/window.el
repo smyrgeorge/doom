@@ -1,14 +1,14 @@
 ;;; $DOOMDIR/config/window.el -*- lexical-binding: t; -*-
 ;; Frame and window behaviour. Loaded from config.el.
 
-;; WINDOW
-(add-hook 'window-setup-hook #'toggle-frame-maximized)
+;; ====== VARIABLES ======
 
 ;; New windows get focus.
 ;; Splits (SPC w s / SPC w v): Doom always splits below/right; these only decide
 ;; which window gets the cursor. SPC w S / SPC w V now split and stay.
 (setq evil-split-window-below t
       evil-vsplit-window-right t)
+
 ;; Anything else a command shows in a newly created window (diffs, file
 ;; previews, other-window commands...) is selected too. Not affected: side
 ;; windows (Doom popups follow their own :select rules; treemacs, which-key and
@@ -17,6 +17,11 @@
 ;; `+my/focus-new-windows' to nil (e.g. the live Markdown preview).
 (defvar +my/focus-new-windows t
   "When non-nil, select windows that `display-buffer' creates for a command.")
+
+;; ====== CODE ======
+
+;; WINDOW
+(add-hook 'window-setup-hook #'toggle-frame-maximized)
 
 (defadvice! +my/focus-new-window-a (fn buffer &rest args)
   :around #'display-buffer

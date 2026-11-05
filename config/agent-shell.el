@@ -1,6 +1,14 @@
 ;;; $DOOMDIR/config/agent-shell.el -*- lexical-binding: t; -*-
 ;; Claude Code inside Emacs (agent-shell, via ACP). Loaded from config.el.
 
+;; ====== KEY BINDINGS ======
+
+(map! :leader
+      :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code
+      :desc "Agent shell"               "o C" #'agent-shell)
+
+;; ====== CODE ======
+
 ;; AGENT-SHELL (Claude Code via ACP)
 ;; Uses the Claude CLI login (run `claude` once in a terminal to log in).
 (use-package! agent-shell
@@ -11,7 +19,3 @@
         ;; New shells (e.g. from the Option+Enter Claude actions) start Claude
         ;; Code without asking which agent to use.
         agent-shell-preferred-agent-config 'claude-code))
-
-(map! :leader
-      :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code
-      :desc "Agent shell"               "o C" #'agent-shell)

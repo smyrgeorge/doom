@@ -1,14 +1,19 @@
 ;;; $DOOMDIR/config/markdown.el -*- lexical-binding: t; -*-
 ;; Markdown live preview inside Emacs. Loaded from config.el.
 
+;; ====== VARIABLES ======
+
 ;; MARKDOWN
 ;; Live preview inside Emacs (GUI, xwidget WebKit): re-renders as you type and
 ;; scrolls to the cursor line. pandoc's `sourcepos' tags each element with its
 ;; source line (data-pos="L:C-L:C"), which the scroll script uses.
 ;; Terminal: falls back to markdown-mode's eww preview (updates on save).
 (defvar-local +md-preview--xwidget nil)
+
 (defvar-local +md-preview--timer nil)
+
 (defvar-local +md-preview--line nil)
+
 (defvar-local +md-preview--file nil)
 
 (defconst +md-preview--highlight-js
@@ -17,6 +22,37 @@
      if(l && c.className.indexOf('language-')<0) c.classList.add('language-'+l);
      if(window.hljs && !c.dataset.highlighted) hljs.highlightElement(c);
    });")
+
+(defconst +md-preview--scroll-js
+  "(function(line){
+     var best=null, bestLine=-1;
+     document.querySelectorAll('[data-pos]:not([data-wrapper])').forEach(function(el){
+       var m=/^(\\d+):/.exec(el.getAttribute('data-pos')); if(!m) return;
+       var l=+m[1]; if(l<=line && l>=bestLine){best=el; bestLine=l;}
+     });
+     if(best) window.scrollTo(0, best.getBoundingClientRect().top + window.scrollY - window.innerHeight/3);
+   })(%d);")
+
+;; Hide marksman's false "Ambiguous link" warnings (see MARKSMAN DIAGNOSTICS).
+(after! lsp-mode
+  (setq lsp-diagnostic-filter #'+md--drop-false-ambiguous-links))
+
+;; ====== KEY BINDINGS ======
+
+;; Both maps: with +tree-sitter, .md files open in markdown-ts-mode.
+(map! :after markdown-mode
+      :map markdown-mode-map
+      :localleader
+      :desc "Live preview (in Emacs)" "p" #'+my/markdown-preview-toggle
+      :desc "Preview in browser"      "P" #'markdown-preview)
+
+(map! :after markdown-ts-mode
+      :map markdown-ts-mode-map
+      :localleader
+      :desc "Live preview (in Emacs)" "p" #'+my/markdown-preview-toggle
+      :desc "Preview in browser"      "P" #'markdown-preview)
+
+;; ====== CODE ======
 
 (defun +md-preview--fragment ()
   "Render the current buffer to an HTML fragment with pandoc (source lines kept).
@@ -50,16 +86,6 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
    "<script>document.addEventListener('DOMContentLoaded',function(){"
    +md-preview--highlight-js "});</script>"
    "</head><body class='markdown-body'>" fragment "</body></html>"))
-
-(defconst +md-preview--scroll-js
-  "(function(line){
-     var best=null, bestLine=-1;
-     document.querySelectorAll('[data-pos]:not([data-wrapper])').forEach(function(el){
-       var m=/^(\\d+):/.exec(el.getAttribute('data-pos')); if(!m) return;
-       var l=+m[1]; if(l<=line && l>=bestLine){best=el; bestLine=l;}
-     });
-     if(best) window.scrollTo(0, best.getBoundingClientRect().top + window.scrollY - window.innerHeight/3);
-   })(%d);")
 
 (defun +md-preview--live-p ()
   (and +md-preview--xwidget (xwidget-live-p +md-preview--xwidget)))
@@ -133,18 +159,6 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
       (+md-preview-mode 'toggle)
     (markdown-live-preview-mode 'toggle)))
 
-;; Both maps: with +tree-sitter, .md files open in markdown-ts-mode.
-(map! :after markdown-mode
-      :map markdown-mode-map
-      :localleader
-      :desc "Live preview (in Emacs)" "p" #'+my/markdown-preview-toggle
-      :desc "Preview in browser"      "P" #'markdown-preview)
-(map! :after markdown-ts-mode
-      :map markdown-ts-mode-map
-      :localleader
-      :desc "Live preview (in Emacs)" "p" #'+my/markdown-preview-toggle
-      :desc "Preview in browser"      "P" #'markdown-preview)
-
 ;; MARKSMAN DIAGNOSTICS
 ;; marksman (the Markdown language server) takes every top-level `#' heading of
 ;; a document as its title, so a link to a file with more than one, e.g.
@@ -171,6 +185,3 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
                                   dir)))))
                        (lsp:publish-diagnostics-params-diagnostics params)))))))
   params)
-
-(after! lsp-mode
-  (setq lsp-diagnostic-filter #'+md--drop-false-ambiguous-links))

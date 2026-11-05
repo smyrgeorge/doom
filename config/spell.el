@@ -1,16 +1,7 @@
 ;;; $DOOMDIR/config/spell.el -*- lexical-binding: t; -*-
 ;; Spell checking (spell-fu + aspell). Loaded from config.el.
 
-;; SPELL
-;; spell-fu ignores the personal dictionary until its file exists, so adding a
-;; word (zg / Option+Enter) fails with "Cannot add ... to any active dictionary".
-;; Create Doom's default one (under ~/.config/emacs/.local/etc/ispell/) if missing.
-(after! ispell
-  (when (and ispell-personal-dictionary
-             (not (file-exists-p ispell-personal-dictionary)))
-    (make-directory (file-name-directory ispell-personal-dictionary) t)
-    (with-temp-file ispell-personal-dictionary
-      (insert "personal_ws-1.1 en 0\n"))))
+;; ====== VARIABLES ======
 
 ;; CAMELCASE
 ;; Check identifiers like AgreementController as Agreement + Controller (as
@@ -25,7 +16,21 @@
 ;; personal dictionary. It's read-only, so zg / "Add to dictionary" still go to
 ;; the personal dictionary without asking which one.
 (defvar +my/spell-tech-words-file (expand-file-name "dict/tech.txt" doom-user-dir))
+
 (defvar +my/spell-tech-dictionary nil)
+
+;; ====== CODE ======
+
+;; SPELL
+;; spell-fu ignores the personal dictionary until its file exists, so adding a
+;; word (zg / Option+Enter) fails with "Cannot add ... to any active dictionary".
+;; Create Doom's default one (under ~/.config/emacs/.local/etc/ispell/) if missing.
+(after! ispell
+  (when (and ispell-personal-dictionary
+             (not (file-exists-p ispell-personal-dictionary)))
+    (make-directory (file-name-directory ispell-personal-dictionary) t)
+    (with-temp-file ispell-personal-dictionary
+      (insert "personal_ws-1.1 en 0\n"))))
 
 (add-hook! 'spell-fu-mode-hook
   (defun +my/spell-add-tech-words-h ()

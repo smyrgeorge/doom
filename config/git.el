@@ -1,6 +1,12 @@
 ;;; $DOOMDIR/config/git.el -*- lexical-binding: t; -*-
 ;; Git diff of the current file in a side pane. Loaded from config.el.
 
+;; ====== KEY BINDINGS ======
+
+(map! :leader :desc "Diff file (side pane)" "g d" #'+my/git-diff-pane)
+
+;; ====== CODE ======
+
 ;; GIT DIFF PANE
 ;; SPC g d: show the current file's changes (working tree vs HEAD) in a pane on
 ;; the right, rendered with delta like every magit diff, and move the cursor
@@ -57,6 +63,5 @@ In the pane itself, close it."
     (with-current-buffer (window-buffer win)
       (when (equal magit-buffer-diff-files (list file))
         (magit-refresh)))))
-(add-hook 'after-save-hook #'+my/git-diff-pane-refresh-h)
 
-(map! :leader :desc "Diff file (side pane)" "g d" #'+my/git-diff-pane)
+(add-hook 'after-save-hook #'+my/git-diff-pane-refresh-h)

@@ -2,6 +2,8 @@
 ;; IntelliJ-like error stripe at the right edge of file windows. Loaded from
 ;; config.el.
 
+;; ====== VARIABLES ======
+
 ;; ERROR STRIPE
 ;; A one-column strip in the right margin that maps the whole file onto the
 ;; window height, like the marks on IntelliJ's scrollbar:
@@ -27,7 +29,9 @@
 over mode keymaps, e.g. outline-minor-mode's margin buttons (outline-cycle).")
 
 (defvar-local +my/stripe--overlays nil "Overlays drawing the stripe.")
+
 (defvar-local +my/stripe--cache nil "(KEY LINES . MARKS) for `+my/stripe--marks'.")
+
 (defvar-local +my/stripe--diff-hl-tick 0 "Bumped whenever diff-hl redraws.")
 
 (defconst +my/stripe--kinds
@@ -38,6 +42,10 @@ over mode keymaps, e.g. outline-minor-mode's margin buttons (outline-cycle).")
     (change  3 diff-hl-change)
     (insert  2 diff-hl-insert)
     (info    1 flycheck-fringe-info)))
+
+(defvar-local +my/stripe--edit-timer nil)
+
+;; ====== CODE ======
 
 (defun +my/stripe--level (err)
   "The stripe kind of flycheck error ERR: `error', `warning' or `info'."
@@ -192,7 +200,6 @@ errors or the diff-hl highlights change."
   (dolist (window (get-buffer-window-list nil nil t))
     (+my/stripe--render window)))
 
-(defvar-local +my/stripe--edit-timer nil)
 (defun +my/stripe--after-change (&rest _)
   "Redraw shortly after edits (lines added or removed shift the stripe)."
   (unless (timerp +my/stripe--edit-timer)
@@ -223,6 +230,7 @@ errors or the diff-hl highlights change."
                ;; `eq' per part: the error list is compared by identity.
                (not (and old (cl-every #'eq old (+my/stripe--key window))))))
     (+my/stripe--render window)))
+
 (add-hook 'pre-redisplay-functions #'+my/stripe--pre-redisplay)
 
 (defun +my/stripe-jump (event)
@@ -276,6 +284,7 @@ errors or the diff-hl highlights change."
 
 (define-globalized-minor-mode +my/stripe-global-mode +my/stripe-mode
   +my/stripe--maybe-enable)
+
 (+my/stripe-global-mode 1)
 
 ;; diff-hl redraws its highlights asynchronously; bumping the tick makes the
@@ -283,7 +292,9 @@ errors or the diff-hl highlights change."
 (defun +my/stripe--after-diff-hl-a (&rest _)
   (when (bound-and-true-p +my/stripe-mode)
     (cl-incf +my/stripe--diff-hl-tick)))
+
 (advice-add 'diff-hl--update-overlays :after #'+my/stripe--after-diff-hl-a)
+
 (advice-add 'diff-hl-remove-overlays :after #'+my/stripe--after-diff-hl-a)
 
 (add-hook 'doom-load-theme-hook #'+my/stripe--render-all)
