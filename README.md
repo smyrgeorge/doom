@@ -64,6 +64,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `init.el`             | Enabled Doom modules and their flags (`doom sync` after editing).                |
 | `packages.el`         | Extra packages: `magit-delta`, `agent-shell` (+ `acp`, `shell-maker`).            |
 | `config.el`           | Main configuration; small sections inline, big ones loaded from `config/`.        |
+| `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
@@ -140,6 +141,9 @@ second, parallel session.
   (OSC 11) and restored on exit (OSC 111).
 - **`M-[` / `M-]`** switch buffers in the GUI only; in a terminal they would swallow mouse/focus escape sequences.
 - **Evil:** saving a buffer returns to normal state.
+- **New windows get focus:** splits (`SPC w s` / `SPC w v`) and any new window a command opens (diff pane, other-window
+  commands...) move the cursor there. Side windows (Doom popups, treemacs, which-key, transient menus) keep their own
+  behaviour, as do windows opened in the background; the live Markdown preview opts out with `+my/focus-new-windows`.
 - **Projectile:** projects are discovered under `~/dev`. The file cache is off, so `SPC SPC` also lists files created
   outside Emacs (CLI, Claude Code, `git checkout`).
 

@@ -104,8 +104,10 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
           (xwidget-webkit-browse-url (concat "file://" file) t))
         (let ((xw-buf xwidget-webkit-last-session-buffer))
           (setq +md-preview--xwidget (with-current-buffer xw-buf (xwidget-webkit-current-session)))
-          (display-buffer xw-buf '(display-buffer-in-direction
-                                   (direction . right) (window-width . 0.5))))
+          ;; Keep the cursor in the Markdown buffer: the preview follows it.
+          (let ((+my/focus-new-windows nil))
+            (display-buffer xw-buf '(display-buffer-in-direction
+                                     (direction . right) (window-width . 0.5)))))
         (add-hook 'after-change-functions #'+md-preview--after-change-h nil t)
         (add-hook 'post-command-hook #'+md-preview--post-command-h nil t)
         (add-hook 'kill-buffer-hook (lambda () (+md-preview-mode -1)) nil t)
