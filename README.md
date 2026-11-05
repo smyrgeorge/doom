@@ -74,7 +74,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
 | `config/spell.el`     | Spell checking: creates the personal dictionary if it's missing.                  |
 | `config/agent-shell.el` | Claude Code in Emacs (agent-shell): login, default agent, `SPC o c` / `SPC o C`. |
-| `config/lsp.el`       | Language servers: JetBrains' `kotlin-lsp` for Kotlin.                             |
+| `config/lsp.el`       | Language servers: projects imported without asking; JetBrains' `kotlin-lsp`.      |
 | `config/projectile.el` | Projects under `~/dev`; project file list without a cache.                      |
 | `config/search.el`    | `SPC s a`: Search Everywhere (classes, files, symbols, actions), like IntelliJ.   |
 | `config/git.el`       | `SPC g d`: the current file's git diff in a side pane.                            |
@@ -175,6 +175,9 @@ second, parallel session.
 - **Terminal background:** in terminal Emacs, the strip below the echo area is painted with the theme background
   (OSC 11) and restored on exit (OSC 111).
 - **`M-[` / `M-]`** switch buffers in the GUI only; in a terminal they would swallow mouse/focus escape sequences.
+- **LSP project import:** opening a file in a project starts its language server in the project root (the git
+  repository) without the "import project root?" prompt, like Zed. Files outside any project still ask, so a stray
+  file in `~` never makes a server scan your home folder (`config/lsp.el`).
 - **Markdown links:** marksman calls a link "ambiguous" when the linked file has more than one top-level `#` heading;
   `config/markdown.el` hides that warning when the link is a path to an existing file (genuinely ambiguous links,
   like `[[README]]` matching several files, are still reported).
