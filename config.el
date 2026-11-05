@@ -170,6 +170,25 @@ Re-roots neotree to FILE's project if FILE is outside the current root."
 (add-hook 'window-buffer-change-functions #'+my/neotree-follow-h)
 (add-hook 'window-selection-change-functions #'+my/neotree-follow-h)
 
+;; 3. Workspaces (SPC TAB): keep neotree out of saved layouts, and if it was
+;;    open, reopen it on the new workspace's project and current file.
+(defvar +my/neotree--reopen nil)
+(add-hook! 'persp-before-deactivate-functions
+  (defun +my/neotree-hide-before-switch-h (&rest _)
+    (setq +my/neotree--reopen (and (featurep 'neotree) (neo-global--window-exists-p)))
+    (when +my/neotree--reopen (neotree-hide))))
+(add-hook! 'persp-activated-functions
+  (defun +my/neotree-show-after-switch-h (&rest _)
+    (when +my/neotree--reopen
+      (setq +my/neotree--reopen nil)
+      ;; Skip non-file buffers (e.g. a fresh SPC p p workspace's dashboard);
+      ;; the project switch opens neotree itself after a file is picked.
+      (let ((file (buffer-file-name (window-buffer (selected-window)))))
+        (when (or file (derived-mode-p 'dired-mode))
+          (save-selected-window
+            (neotree-dir (or (doom-project-root) default-directory)))
+          (when file (+my/neotree-reveal file)))))))
+
 ;; MAGIT
 ;; Render diffs with git-delta (brew install git-delta).
 (use-package! magit-delta
