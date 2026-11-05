@@ -146,7 +146,7 @@ See `init.el` for the full list. Notable choices:
 | `:editor`     | `(evil +everywhere)`, `(format +onsave +lsp)`, `multiple-cursors`, `snippets`, `(whitespace +guess +trim)`  |
 | `:emacs`      | `(dired +dirvish +icons)`, `(ibuffer +icons)`, `undo`, `vc`                                                |
 | `:term`       | `(ghostel +everywhere)`                                                                                   |
-| `:checkers`   | `(syntax +childframe +icons)`, `(spell +flyspell +everywhere)`                                            |
+| `:checkers`   | `(syntax +childframe +icons)`, `(spell +everywhere)`                                                      |
 | `:tools`      | `(lsp +peek)`, `tree-sitter`, `magit`, `(debugger +lsp)`, `(docker +lsp +tree-sitter)`, `pdf`, `make`     |
 | `:os`         | `macos`, `(tty +osc)`                                                                                     |
 
