@@ -28,9 +28,24 @@
 
 ;;; Colours
 
+;; The peek stands out from the code around it: an empty row above and below,
+;; tinted with the theme's blue, and a panel clearly darker than the editor
+;; (the preview more than the list). Doom's themes made it barely darker.
+(defface +my/peek-separator '((t :inherit lsp-ui-peek-header))
+  "The rows above and below the peek.")
+
 (defun +my/peek-faces-h ()
-  "Soft selection and match colours (they're bright blue in Doom's themes)."
-  (when (and (facep 'lsp-ui-peek-selection) (fboundp 'doom-blend) (fboundp 'doom-color))
+  "The peek's colours (see above); soft selection and match colours (they're
+bright blue in Doom's themes)."
+  (when (and (facep 'lsp-ui-peek-selection) (fboundp 'doom-blend) (fboundp 'doom-color)
+             (fboundp 'doom-darken))
+    (let ((editor (face-background 'default nil t)))
+      (when (and (stringp editor) (string-prefix-p "#" editor))
+        (set-face-attribute 'lsp-ui-peek-peek nil :background (doom-darken editor 0.2))
+        (set-face-attribute 'lsp-ui-peek-list nil :background (doom-darken editor 0.12))
+        (set-face-attribute '+my/peek-separator nil :inherit 'unspecified
+                            :background (doom-blend (doom-color 'blue) editor 0.25)
+                            :extend t)))
     (let ((bg (face-background 'lsp-ui-peek-list nil t)))
       (when (and (stringp bg) (string-prefix-p "#" bg))
         (set-face-attribute 'lsp-ui-peek-selection nil
@@ -277,6 +292,23 @@ highlighted, cut to the peek's height around it."
                 (propertize " " 'face 'lsp-ui-peek-footer
                             'display '(space :align-to (- right-fringe 0)))
                 (propertize "\n" 'face 'lsp-ui-peek-footer))))
+
+;;; Separators
+
+(defun +my/peek--separator ()
+  "An empty row across the window (see Colours)."
+  (concat (propertize " " 'face '+my/peek-separator
+                      'display '(space :align-to (- right-fringe 1)))
+          (propertize "\n" 'face '+my/peek-separator)))
+
+(defadvice! +my/peek-separators-a (&rest _)
+  "An empty row above and below the peek (built anew for each move in it)."
+  :after #'lsp-ui-peek--peek-new
+  (when (overlayp lsp-ui-peek--overlay)
+    (overlay-put lsp-ui-peek--overlay 'after-string
+                 (concat (+my/peek--separator)
+                         (overlay-get lsp-ui-peek--overlay 'after-string)
+                         (+my/peek--separator)))))
 
 ;;; Fix
 
