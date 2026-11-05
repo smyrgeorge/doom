@@ -93,6 +93,11 @@
 
 ;; WINDOW
 (add-hook 'window-setup-hook #'toggle-frame-maximized)
+;; Move the cursor into the new window after a split (SPC w s / SPC w v).
+;; Doom always splits below/right; these only decide which window gets focus.
+;; SPC w S / SPC w V now do the opposite (split and stay).
+(setq evil-split-window-below t
+      evil-vsplit-window-right t)
 
 ;; TERMINAL
 (load! "config/terminal")
