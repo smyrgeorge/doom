@@ -104,7 +104,8 @@
 (load! "config/window")
 
 ;; SCROLL (mouse scrolling leaves the caret where it is, like IntelliJ)
-(load! "config/scroll")
+;; Disabled for now: Emacs' default scrolling; uncomment to try it again.
+;;(load! "config/scroll")
 
 ;; ERROR STRIPE (IntelliJ-like marks for git changes and errors at the right edge)
 (load! "config/stripe")
