@@ -68,6 +68,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/sticky.el`    | Sticky header: the classes/functions around the top visible line.                |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
 | `config/smooth.el`    | Mouse-wheel notches glide (on top of Doom's pixel scrolling).                     |
+| `config/pdf.el`       | PDF zoom like macOS apps: Cmd+= / Cmd+- / Cmd+0 and Cmd+scroll.                   |
 | `config/peek.el`      | LSP peek (usages, definitions): calmer, with functions, line numbers, key hints.  |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
@@ -271,6 +272,8 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `SPC g d`                   | Current file's git diff in a pane on the right (in the pane: `SPC g d`, `q` or `Esc` close) |
 | `SPC o c`                   | Start Claude Code (agent-shell)                        |
 | `SPC o C`                   | Pick / switch agent shell                              |
+| `Cmd+=` / `Cmd+-` / `Cmd+0` (PDF) | Zoom in / out / actual size (elsewhere: font size) |
+| `Cmd+scroll` (PDF)          | Zoom in (up) / out (down)                              |
 | `SPC m p` (Markdown)        | Toggle live preview inside Emacs                       |
 | `SPC m P` (Markdown)        | Preview in the browser                                 |
 | `SPC o p` / `SPC o P`       | Toggle treemacs / reveal current file in treemacs      |

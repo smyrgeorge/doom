@@ -156,6 +156,9 @@
 ;; MARKDOWN
 (load! "config/markdown")
 
+;; PDF (Cmd+= / Cmd+- / Cmd+0 and Cmd+scroll zoom)
+(load! "config/pdf")
+
 ;; PROJECTILE (projects under ~/dev, no file cache)
 (load! "config/projectile")
 
