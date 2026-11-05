@@ -65,7 +65,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `packages.el`         | Extra packages: `magit-delta`, `agent-shell` (+ `acp`, `shell-maker`).            |
 | `config.el`           | Main configuration; small sections inline, big ones loaded from `config/`.        |
 | `config/stripe.el`    | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
-| `config/sticky.el`    | Sticky header: the classes/functions around the top visible line.                |
+| `config/sticky.el`    | Sticky header: the classes/functions (Markdown: headings) around the top line.    |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
 | `config/banner.el`    | Notices at the top of a window (IntelliJ's editor notifications), with actions and ✕. |
 | `config/smooth.el`    | Mouse-wheel notches glide (on top of Doom's pixel scrolling).                     |
@@ -188,8 +188,7 @@ open in `so-long-mode`: plain, without highlighting, ligatures or LSP. Otherwise
 7,000-character SVG lines stayed in `web-mode`, where redisplay walks each such line character by character (~6 ms a
 line a pass) and scrolling stalled for seconds. They don't wrap either: wrapped, such a line fills screens of rows and
 every scroll step lays it out again (~60 ms, a visible stutter; ~15-20 ms unwrapped). A notice at the top says so, with
-**Wrap lines** and **Open normally** (the file's own mode back) actions (see below). The header line still shows the
-file's path there.
+**Wrap lines** and **Open normally** (the file's own mode back) actions (see below).
 
 ### Notices
 
@@ -259,8 +258,10 @@ second, parallel session.
   with `zg` or Option+Enter still go to the personal dictionary.
 - **Sticky header:** the header line of code windows shows the classes/functions the top visible line is inside, once
   their first lines have scrolled out of view, like IntelliJ's sticky lines (e.g. `class Api { › fun call(x: Int) {`);
-  otherwise the file's path. Nested scopes via tree-sitter (Kotlin, Python, Rust, ...), the enclosing defun elsewhere;
-  files with very long lines (`so-long-mode`) show the path only.
+  otherwise the file's path. Nested scopes via tree-sitter (Kotlin, Python, Rust, ...), the enclosing defun elsewhere.
+  In Markdown (`markdown-ts-mode`) the headings: `# Guide › ## Setup › ### Install`. Only where scopes can be told:
+  files whose mode has no notion of them (HTML in `web-mode`, files with very long lines in `so-long-mode`) get no
+  header row.
 - **Rainbow brackets:** `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
 - **Code lenses:** what the language server offers at the end of the line: rust-analyzer's "▶ Run", implementations
   and reference counts; references/implementations for TypeScript/JavaScript. (Rust's "Debug" lens is off until a

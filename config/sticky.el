@@ -9,23 +9,37 @@
 ;; IntelliJ's sticky lines: e.g. "class Foo › def bar(self):". Otherwise it
 ;; shows the file's path in the project. Nested scopes come from tree-sitter
 ;; where the major mode uses it; other modes get the enclosing defun only.
+;; In Markdown (markdown-ts-mode) the scopes are the headings: "# Guide › ## Setup".
 ;; The header row is always there, so the text doesn't shift when it changes.
-;; Files with very long lines (`so-long-mode') show the path only.
+;; Only where scopes can be told (e.g. not in HTML: web-mode has no notion of
+;; them): elsewhere there's no header row.
 (defvar +my/sticky-separator " › "
   "Between the scopes in the header.")
 
 (defvar +my/sticky-defun-types
-  '((kotlin . "\\`\\(class\\|object\\|function\\)_declaration\\'\\|\\`companion_object\\'"))
+  '((kotlin . "\\`\\(class\\|object\\|function\\)_declaration\\'\\|\\`companion_object\\'")
+    (markdown . "\\`section\\'"))        ; a heading and what's under it
   "Tree-sitter node types of classes/functions, for languages whose mode doesn't
-declare them (kotlin-ts-mode); the others come from the major mode.")
+declare them (kotlin-ts-mode, markdown-ts-mode); the others come from the major
+mode.")
 
 ;; ====== CODE ======
+
+(defun +my/sticky--language ()
+  "The tree-sitter language whose scopes to show at point: the buffer's own if
+we know its scopes (in Markdown, not that of the text or code block at point),
+else the one at point."
+  (let ((host (and (bound-and-true-p treesit-primary-parser)
+                   (treesit-parser-language treesit-primary-parser))))
+    (if (and host (alist-get host +my/sticky-defun-types))
+        host
+      (treesit-language-at (point)))))
 
 (defun +my/sticky--treesit-p ()
   "Non-nil if we know which tree-sitter nodes are defuns in this buffer."
   (and (fboundp 'treesit-parser-list)
        (treesit-parser-list)
-       (let ((language (treesit-language-at (point))))
+       (let ((language (+my/sticky--language)))
          (or (alist-get language +my/sticky-defun-types)
              (bound-and-true-p treesit-defun-type-regexp) ; older ts modes
              (and (fboundp 'treesit-thing-defined-p)       ; Emacs 30+: `defun' thing
@@ -49,7 +63,7 @@ leaving out those that begin on that line or below."
     (skip-chars-forward " \t")
     (let ((bol (line-beginning-position)))
       (if (+my/sticky--treesit-p)
-          (let ((node (treesit-node-at (point))) starts)
+          (let ((node (treesit-node-at (point) (+my/sticky--language))) starts)
             (while node
               (when (and (+my/sticky--defun-node-p node)
                          (< (treesit-node-start node) bol))
@@ -74,10 +88,7 @@ leaving out those that begin on that line or below."
       (string-trim-right (buffer-substring beg end)))))
 
 (defun +my/sticky--compute (start)
-  ;; Files with very long lines (`so-long-mode'): only the path (their "scopes"
-  ;; would be lines thousands of characters long).
-  (if-let* ((starts (and (not (derived-mode-p 'so-long-mode))
-                         (+my/sticky--scope-starts start))))
+  (if-let* ((starts (+my/sticky--scope-starts start)))
       (mapconcat #'+my/sticky--line starts
                  (propertize +my/sticky-separator 'face 'shadow))
     (propertize (if-let* ((root (doom-project-root)))
@@ -107,12 +118,16 @@ leaving out those that begin on that line or below."
     (header-line-indent-mode -1)
     (kill-local-variable 'header-line-format)))
 
+(defun +my/sticky--supported-p ()
+  "Non-nil if the scopes of this buffer's lines can be told."
+  (or (+my/sticky--treesit-p)
+      beginning-of-defun-function       ; the mode says how to find its defuns
+      (derived-mode-p 'lisp-data-mode))) ; or they're the usual "(" in column 0
+
 (defun +my/sticky-header-maybe-h ()
-  (when buffer-file-name
+  (when (and buffer-file-name (+my/sticky--supported-p))
     (+my/sticky-header-mode 1)))
 
 (add-hook 'prog-mode-hook #'+my/sticky-header-maybe-h)
 
-;; Files with very long lines open in `so-long-mode' instead (config/smooth.el):
-;; the path still shows.
-(add-hook 'so-long-mode-hook #'+my/sticky-header-maybe-h)
+(add-hook 'markdown-ts-mode-hook #'+my/sticky-header-maybe-h)
