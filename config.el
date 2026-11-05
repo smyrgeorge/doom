@@ -147,7 +147,9 @@
 (defun +my/neotree-refresh-vc-h (&rest _)
   (when (and (featurep 'neotree) (neo-global--window-exists-p))
     (let ((file (buffer-file-name (window-buffer (selected-window)))))
-      (neo-global--with-buffer (neo-buffer--refresh t))
+      ;; neo-buffer--refresh selects the neotree window; keep focus here.
+      (save-selected-window
+        (neo-global--with-buffer (neo-buffer--refresh t)))
       (when file (+my/neotree-reveal file)))))
 (add-hook 'after-save-hook #'+my/neotree-refresh-vc-h)
 (add-hook 'magit-post-refresh-hook #'+my/neotree-refresh-vc-h)
