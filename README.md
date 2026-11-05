@@ -297,9 +297,11 @@ second, parallel session.
 - **LSP file watchers:** lsp-mode watches every directory under the project root but doesn't read `.gitignore`;
   `config/lsp.el` also skips what git ignores, so a root with big ignored folders (e.g. repositories cloned inside
   it) needs a few dozen watches instead of thousands, without the "watch N directories?" prompt.
-- **Markdown links:** marksman calls a link "ambiguous" when the linked file has more than one top-level `#` heading;
-  `config/markdown.el` hides that warning when the link is a path to an existing file (genuinely ambiguous links,
-  like `[[README]]` matching several files, are still reported).
+- **Markdown links:** two false warnings from marksman are hidden when the link is a path to an existing file
+  (`config/markdown.el`): "Ambiguous link to document", when the linked file has more than one top-level `#` heading
+  (genuinely ambiguous links, like `[[README]]` matching several files, are still reported); and "Link to non-existent
+  document", for files git ignores, which marksman doesn't index (links to files that are really missing are still
+  reported).
 - **Evil:** saving a buffer returns to normal state.
 - **New windows get focus:** splits (`SPC w s` / `SPC w v`) and any new window a command opens (diff pane, other-window
   commands...) move the cursor there. Side windows (Doom popups, treemacs, which-key, transient menus) keep their own
