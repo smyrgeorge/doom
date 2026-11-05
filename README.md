@@ -178,6 +178,9 @@ second, parallel session.
 - **LSP project import:** opening a file in a project starts its language server in the project root (the git
   repository) without the "import project root?" prompt, like Zed. Files outside any project still ask, so a stray
   file in `~` never makes a server scan your home folder (`config/lsp.el`).
+- **LSP file watchers:** lsp-mode watches every directory under the project root but doesn't read `.gitignore`;
+  `config/lsp.el` also skips what git ignores, so a root with big ignored folders (e.g. repositories cloned inside
+  it) needs a few dozen watches instead of thousands, without the "watch N directories?" prompt.
 - **Markdown links:** marksman calls a link "ambiguous" when the linked file has more than one top-level `#` heading;
   `config/markdown.el` hides that warning when the link is a path to an existing file (genuinely ambiguous links,
   like `[[README]]` matching several files, are still reported).

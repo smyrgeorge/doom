@@ -13,6 +13,33 @@
          (lsp-auto-guess-root (and (doom-project-root) t)))
     (funcall fn session file-name)))
 
+;; FILE WATCHERS
+;; To tell the server about files changed outside Emacs, lsp-mode watches every
+;; directory under the project root, skipping only those matching
+;; `lsp-file-watch-ignored-directories' (node_modules, build dirs...); it
+;; doesn't read .gitignore. A root that ignores big folders, e.g. pas-workspace
+;; with the 17 repositories cloned inside it, then needs ~8000 watches instead
+;; of ~30: hence the "watch N directories?" prompt and the lag (on macOS each
+;; watch is an open file). Also skip the directories git ignores in the root.
+(defun +my/lsp-gitignored-directories (root)
+  "Regexps matching the directories under ROOT that git ignores."
+  (let ((default-directory (file-name-as-directory (file-truename root))))
+    (with-temp-buffer
+      (when (eql 0 (ignore-errors
+                     (call-process "git" nil t nil "ls-files" "-z" "--others"
+                                   "--ignored" "--exclude-standard" "--directory")))
+        (cl-loop for entry in (split-string (buffer-string) "\0" t)
+                 when (string-suffix-p "/" entry) ; directories only
+                 collect (concat "\\`"
+                                 (regexp-quote (directory-file-name
+                                                (expand-file-name entry)))
+                                 "\\'"))))))
+
+(defadvice! +my/lsp-watch-skip-gitignored-a (fn workspace-root)
+  :around #'lsp--get-ignored-regexes-for-workspace-root
+  (pcase-let ((`(,files ,dirs) (funcall fn workspace-root)))
+    (list files (append dirs (+my/lsp-gitignored-directories workspace-root)))))
+
 ;; KOTLIN
 ;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
 ;; lsp-mode's default kotlin-language-server.
