@@ -242,6 +242,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `M-RET` (Option+Enter)      | Context actions at point (spelling, code actions, Claude) |
 | `SPC s a`                   | Search Everywhere: classes, files, symbols, actions (IntelliJ's double Shift) |
 | `Cmd+Shift+F` (GUI)         | Find in files: search the project with ripgrep (selected text is the query) |
+| `Cmd+B`                     | Go to declaration, or on the declaration list its usages (IntelliJ's Go to Declaration or Usages) |
 | `SPC g d`                   | Current file's git diff in a pane on the right (again in the pane: close) |
 | `SPC o c`                   | Start Claude Code (agent-shell)                        |
 | `SPC o C`                   | Pick / switch agent shell                              |
