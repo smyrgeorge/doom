@@ -78,7 +78,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/modeline.el`  | Mode line: a space after its last item on the right.                             |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: commit graph (like tig), git-delta diffs, TODOs in the status buffer. |
-| `config/editor.el`    | Editing helpers: `SPC c ~` cycles the case style of a word; rainbow brackets; right margin. |
+| `config/editor.el`    | Editing and navigation: Cmd+B, Cmd+[ / Cmd+], `M-[` / `M-]`, `SPC c ~`; rainbow brackets; right margin. |
 | `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
 | `config/spell.el`     | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary.  |
 | `dict/tech.txt`       | ~40k programming words for the spell checker (built by `scripts/dict.sh`).        |

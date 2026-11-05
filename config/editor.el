@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/editor.el -*- lexical-binding: t; -*-
-;; General editing helpers. Loaded from config.el.
+;; Editing and navigation helpers. Loaded from config.el.
 
 ;; ====== KEY BINDINGS ======
 
@@ -9,6 +9,23 @@
 ;; Cmd+B on a symbol, like IntelliJ: on a use, jump to its declaration; on the
 ;; declaration itself, list its usages (Enter opens one). Cmd+[ goes back.
 (map! "s-b" #'+my/goto-declaration-or-usages)
+
+;; BACK / FORWARD
+;; Cmd+[ / Cmd+]: back / forward through the places the cursor jumped from and
+;; to (better-jumper), like IntelliJ's Back / Forward.
+(map! "s-[" #'better-jumper-jump-backward)
+
+(map! "s-]" #'better-jumper-jump-forward)
+
+;; PREVIOUS / NEXT BUFFER
+;; M-[ / M-], GUI only: in a terminal, M-[ / M-] are ESC [ / ESC ], the
+;; prefixes of escape sequences (mouse, focus, OSC), so binding them flips
+;; buffers. (Defined here: the bindings call it as this file loads.)
+(defun +my/gui-only (cmd)
+  `(menu-item "" ,cmd :filter ,(lambda (c) (when (display-graphic-p) c))))
+
+(map! "M-[" (+my/gui-only #'previous-buffer)
+      "M-]" (+my/gui-only #'next-buffer))
 
 ;; ====== CODE ======
 

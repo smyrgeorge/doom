@@ -88,21 +88,6 @@
 ;; max_line_length. `setq-default', not `setq': each buffer has its own.
 (setq-default fill-column 120)
 
-;; ====== KEY BINDINGS ======
-
-;; CUSTOM KEY BINDINGS
-;; GUI only: in a terminal, M-[ / M-] are ESC [ / ESC ], the prefixes of
-;; escape sequences (mouse, focus, OSC), so binding them flips buffers.
-(defun +my/gui-only (cmd)
-  `(menu-item "" ,cmd :filter ,(lambda (c) (when (display-graphic-p) c))))
-
-(map! "M-[" (+my/gui-only #'previous-buffer)
-      "M-]" (+my/gui-only #'next-buffer))
-
-(map! "s-[" #'better-jumper-jump-backward)
-
-(map! "s-]" #'better-jumper-jump-forward)
-
 ;; ====== CODE ======
 
 ;; EMACS (garbage collection)
