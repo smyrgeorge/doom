@@ -73,6 +73,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/pdf.el`       | PDF zoom like macOS apps: Cmd+= / Cmd+- / Cmd+0 and Cmd+scroll.                   |
 | `config/peek.el`      | LSP peek (usages, definitions): calmer, with functions, line numbers, key hints.  |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
+| `config/cheatsheet.el` | Tips panel under treemacs, from `cheatsheet.org` (disabled for now, see `config.el`). |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
 | `config/modeline.el`  | Mode line: a space after its last item on the right.                             |
@@ -120,6 +121,11 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
   them all (the project stays open at its top level). Expanding asks first in projects with more than 300 folders.
 - With `+lsp`: structure view (`SPC c S`), project errors (`SPC c X`) and call hierarchy (`SPC c y` / `SPC c Y`).
   The structure view and the error list open with the cursor in them, on their first line (it stayed in the code).
+- **Tips panel** (disabled for now: uncomment `(load! "config/cheatsheet")` in `config.el`) below the sidebar,
+  whenever it's open: a few tips from `cheatsheet.org` (this config's keys, Doom's, Vim's), two per section, changing
+  every 5 minutes, so over time you see them all. In the panel `n` shows the next tips, `e` opens the whole
+  cheatsheet, `q` hides it; `SPC t ?` hides / shows it. Edit `cheatsheet.org` to change the tips (one `- ` line each,
+  under a `*` heading); the panel picks them up on save (`config/cheatsheet.el`).
 
 ### Live Markdown preview
 
@@ -360,6 +366,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `SPC m p` (Markdown)        | Toggle live preview inside Emacs                       |
 | `SPC m P` (Markdown)        | Preview in the browser                                 |
 | `SPC o p` / `SPC o P`       | Toggle treemacs / reveal current file in treemacs      |
+| `SPC t ?`                   | Hide / show the tips panel (when enabled)              |
 | `←` / `→` (treemacs, LSP lists) | Collapse or go to parent / expand, into, or open    |
 | `zR` / `zM` (treemacs)      | Expand / collapse all folders                          |
 | `M-[` / `M-]` (GUI)         | Previous / next buffer                                 |

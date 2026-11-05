@@ -8,6 +8,7 @@ that make sense on their own (the panel doesn't show the subheadings).
 
 * This config
 - =M-RET= actions at point (⌥↩)
+- =s-b= declaration, or its usages (⌘B)
 - =SPC s a= search everywhere
 - =s-F= find in files (⌘⇧F)
 - =s-f= search this buffer (⌘F)
