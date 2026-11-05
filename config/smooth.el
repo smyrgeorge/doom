@@ -95,6 +95,20 @@ three times this.")
           (run-at-time +my/smooth-scroll-frame +my/smooth-scroll-frame
                        #'+my/smooth--frame))))
 
+;; NOTHING HEAVY MID-GLIDE
+;; A glide runs from a timer, so meanwhile Emacs counts as idle: gcmh's garbage
+;; collection when idle (~80 ms with this heap) or treemacs' refresh after a
+;; git change (~130 ms) could start in the middle of one and freeze it for a
+;; few frames. They wait until the glide ends.
+(defun +my/smooth--after-glide-a (fn &rest args)
+  "Run FN now, or once the glide in progress ends."
+  (if (timerp +my/smooth--timer)
+      (run-at-time 0.1 nil (lambda () (apply #'+my/smooth--after-glide-a fn args)))
+    (apply fn args)))
+
+(advice-add 'gcmh-idle-garbage-collect :around #'+my/smooth--after-glide-a)
+(advice-add '+my/treemacs-refresh-all :around #'+my/smooth--after-glide-a)
+
 ;; SCROLL LIMIT
 ;; ultra-scroll lets a window scroll until its last line is at the top; past
 ;; that, each wheel notch went a bit further and bounced back. Like file windows

@@ -193,7 +193,9 @@ restarting it. A frame per refresh of the display (60 Hz), each covering a share
 time since the last frame, so a late frame catches up instead of slowing the glide down
 (`+my/smooth-scroll-min-step`, `-frame`, `-time-constant`). good-scroll (the `+interpolate` flag: it animates keyboard
 scrolling, `C-d`, `C-v`...) runs its 20 ms timer only while a scroll animates: always on, it made Emacs redraw ~50 times
-a second, which on macOS took time from everything else. The module also pauses some modes while scrolling; hl-todo is
+a second, which on macOS took time from everything else. Heavy jobs that run when Emacs is idle (gcmh's garbage
+collection, ~80 ms; treemacs' refresh after a git change, ~130 ms) wait until a glide ends: a glide runs from a timer,
+so Emacs counted as idle and they froze it for a few frames. The module also pauses some modes while scrolling; hl-todo is
 kept on, otherwise TODO/NOTE/FIXME lose their highlight during a scroll and flicker. Its mode-line freeze during scrolls
 is off: in popups like `*Messages*` it broke the mode line, and with it Esc (which then couldn't close the popup). The wheel doesn't scroll the
 minibuffer / echo area (it always fits what it shows, so it only jumped and came back); with a completion list open,
