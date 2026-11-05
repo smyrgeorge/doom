@@ -67,6 +67,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/stripe.el`    | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
 | `config/sticky.el`    | Sticky header: the classes/functions around the top visible line.                |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
+| `config/smooth.el`    | Mouse-wheel notches glide (on top of Doom's pixel scrolling).                     |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
@@ -141,17 +142,28 @@ window height, like the marks on IntelliJ's scrollbar:
 
 - errors (red) and warnings (yellow) from flycheck / the language server;
 - git changes (diff-hl), in the gutter's colors: red deleted, orange changed, green added;
-- where several fall on the same row, the most important wins: error > warning > deleted > changed > added;
+- where several overlap, the most important wins: error > warning > deleted > changed > added;
 - a light band marks the part of the file on screen, like a scrollbar thumb.
 
-A margin can't draw below the end of a file, so when the window shows empty rows past the end the strip covers only
-the rows with text (the whole file mapped onto them). Windows with the strip therefore scroll past the end only a
-bit: at most a quarter of the window (`+my/stripe-overscroll`: a fraction, a number of rows, `0` for none, `t` for no
-limit). Files shorter than the window get one strip row per line.
+In the GUI the strip is drawn to the pixel: each screen row shows its slice of the strip as a small image in the right
+margin. Rows are measured (an emoji, or a glyph rising above the font like indent-bars' `│` on the top row, makes a
+row taller), and smooth scrolling, which moves the rows by part of a line, shifts the slices back by as much, so the
+marks stay still while the text glides. In a terminal each row is a coloured cell.
+
+A margin can't draw below the end of a file, so when the window shows empty space past the end the strip covers only
+the part with text (the whole file mapped onto it). Windows with the strip therefore scroll past the end only a bit:
+at most a quarter of the window (`+my/stripe-overscroll`: a fraction, a number of rows, `0` for none, `t` for no
+limit). Files shorter than the window get one line height per line.
 
 Click the strip to jump to that part of the file; the mouse wheel scrolls as usual. Info-level hints are left out
-(`+my/stripe-diagnostic-levels`). Doom's `smooth-scroll` module is off: scrolling by pixels moves the margin with the
-text, which made the strip wobble; scrolling whole lines keeps it still.
+(`+my/stripe-diagnostic-levels`); marks are at least `+my/stripe-mark-height` pixels tall.
+
+### Smooth scrolling
+
+Doom's `smooth-scroll` module scrolls by pixels (ultra-scroll), which suits a trackpad's stream of small steps. A
+mouse wheel reports a few lines per notch, so it still jumped; `config/smooth.el` spreads bigger steps over a few
+frames (about 0.1 s, fast at first then slowing down), and notches in quick succession add up
+(`+my/smooth-scroll-min-step`, `-frame`, `-fraction`).
 
 ### Search Everywhere (`SPC s a`)
 
@@ -242,7 +254,7 @@ See `init.el` for the full list. Notable choices:
 | Group         | Modules                                                                                                   |
 |---------------|-----------------------------------------------------------------------------------------------------------|
 | `:completion` | `(corfu +orderless +icons)`, `(vertico +icons)`                                                            |
-| `:ui`         | `dashboard`, `indent-guides`, `ligatures`, `tabs`, `(treemacs +lsp)`, `(vc-gutter +pretty)`, `(window-select +numbers)`, `workspaces` |
+| `:ui`         | `dashboard`, `indent-guides`, `ligatures`, `(smooth-scroll +interpolate)`, `tabs`, `(treemacs +lsp)`, `(vc-gutter +pretty)`, `(window-select +numbers)`, `workspaces` |
 | `:editor`     | `(evil +everywhere)`, `(format +onsave +lsp)`, `multiple-cursors`, `snippets`, `(whitespace +guess +trim)`  |
 | `:emacs`      | `(dired +dirvish +icons)`, `(ibuffer +icons)`, `undo`, `vc`                                                |
 | `:term`       | `(ghostel +everywhere)`                                                                                   |

@@ -103,6 +103,9 @@
 ;; WINDOW (maximized frame; new windows get focus)
 (load! "config/window")
 
+;; SMOOTH SCROLL (mouse-wheel notches glide instead of jumping)
+(load! "config/smooth")
+
 ;; SCROLL (mouse scrolling leaves the caret where it is, like IntelliJ)
 ;; Disabled for now: Emacs' default scrolling; uncomment to try it again.
 ;;(load! "config/scroll")
