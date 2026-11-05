@@ -563,6 +563,9 @@ it as a row of the last line (`vertical-motion') and in that line's height."
                        (`(,strings . ,filler)
                         (if (display-graphic-p (window-frame window))
                             (progn
+                              (when (and +my/stripe-padding (null left-fringe-width))
+                                (+my/stripe--pad (window-frame window))
+                                (+my/stripe--set-fringes window))
                               (+my/stripe--hide-filler window)
                               (+my/stripe--image-rows window start lines marks))
                           (list (+my/stripe--cell-rows window start lines marks))))
@@ -708,6 +711,10 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map [right-margin mouse-1] #'+my/stripe-jump)
             (define-key map [right-margin down-mouse-1] #'ignore)
+            ;; The fringe next to the strip (see PADDING): a click there,
+            ;; just short of the strip, does nothing (not "is undefined").
+            (define-key map [right-fringe mouse-1] #'ignore)
+            (define-key map [right-fringe down-mouse-1] #'ignore)
             map)
   (if +my/stripe-mode
       (progn
@@ -726,9 +733,7 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
         ;; margins, for the git gutter's sake (at the left edge); without a
         ;; left margin, as in file windows, that changes nothing on the left.
         (setq-local fringes-outside-margins nil)
-        (when +my/stripe-padding
-          (setq-local left-fringe-width (+my/stripe--fringe-width 'left-fringe)
-                      right-fringe-width (+my/stripe--fringe-width 'right-fringe)))
+        (+my/stripe--pad)
         (dolist (window (get-buffer-window-list nil nil t))
           (set-window-margins window (car (window-margins window)) 1)
           (+my/stripe--set-fringes window)
@@ -760,15 +765,18 @@ buffer)."
   (set-window-fringes window left-fringe-width right-fringe-width
                       fringes-outside-margins))
 
-(defun +my/stripe--fringe-width (side)
-  "The width of the fringe on SIDE (`left-fringe', `right-fringe') with
-`+my/stripe-padding' added, in pixels; from a graphical frame (a terminal's
-have none)."
-  (let ((frame (or (seq-find (lambda (f) (and (display-graphic-p f) (not (frame-parent f))))
-                             (cons (selected-frame) (frame-list)))
-                   (selected-frame))))
-    (+ (or (frame-parameter frame side) 8)
-       (* +my/stripe-padding (frame-char-width frame)))))
+(defun +my/stripe--pad (&optional frame)
+  "Widen the current buffer's fringes by `+my/stripe-padding' columns, as
+measured in FRAME or else any graphical frame. With none yet (a terminal
+session), it's done when a graphical window first shows the buffer."
+  (when-let* ((columns +my/stripe-padding)
+              (frame (or frame
+                         (seq-find (lambda (f) (and (display-graphic-p f)
+                                                    (not (frame-parent f))))
+                                   (cons (selected-frame) (frame-list))))))
+    (let ((pad (* columns (frame-char-width frame))))
+      (setq-local left-fringe-width (+ (or (frame-parameter frame 'left-fringe) 8) pad)
+                  right-fringe-width (+ (or (frame-parameter frame 'right-fringe) 8) pad)))))
 
 (defun +my/stripe--maybe-enable ()
   ;; `so-long-mode' (files with very long lines) replaces their mode and isn't

@@ -116,6 +116,17 @@
       (apply fn args)
     (wrong-type-argument nil)))
 
+;; Same race for the follow timer with two frames on different workspaces (e.g.
+;; a terminal client next to the GUI): one frame's treemacs switched projects,
+;; and the follow looked for a file in a tree not redrawn yet: "Error running
+;; timer `treemacs--follow': (wrong-type-argument arrayp nil)". The next
+;; follow finds it.
+(defadvice! +my/treemacs-follow-guard-a (fn &rest args)
+  :around #'treemacs--follow
+  (condition-case nil
+      (apply fn args)
+    (wrong-type-argument nil)))
+
 ;; Update the saved file's git status in treemacs. macOS uses kqueue for file
 ;; notifications, which doesn't report in-place edits, so filewatch misses them.
 (defun +my/treemacs-git-update-on-save-h ()

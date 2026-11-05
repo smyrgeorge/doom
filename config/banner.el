@@ -140,11 +140,24 @@ header line (a terminal's), else on a row of the notices' frame."
             glyph))
         (propertize "!" 'face face))))
 
-(defun +my/banner--row (notice buffer &optional header more)
+(defun +my/banner--row (notice buffer &optional header more width)
   "NOTICE's row, its actions run in BUFFER: on the notices' frame, or in the
-header line if HEADER (then MORE: how many other notices to mention)."
+header line if HEADER (then MORE: how many other notices to mention). If the
+row is WIDTH columns, the message is cut short (…) so that the actions and ✕
+still fit (a narrow window, a terminal)."
   (pcase-let* ((`(,id ,text ,actions ,type) notice)
                (face (+my/banner--face type))
+               (more-text (and more (> more 0) (format "    (%d more)" more)))
+               (room (and width
+                          (- width
+                             6          ; "  " icon "  "
+                             (cl-loop for action in actions
+                                      sum (+ 4 (string-width (car action))))
+                             (string-width (or more-text ""))
+                             6)))       ; a gap, then " ✕ " 4 from the edge
+               (text (if (and room (> (string-width text) room))
+                         (truncate-string-to-width text (max 1 room) nil nil "…")
+                       text))
                (plain (lambda (string &rest props)
                         (apply #'propertize string 'face face
                                (append props (unless header
@@ -159,8 +172,8 @@ header line if HEADER (then MORE: how many other notices to mention)."
                   (concat (funcall plain "    ")
                           (+my/banner--button (car action) (cdr action) face buffer header)))
                 actions "")
-     (when (and more (> more 0))
-       (propertize (format "    (%d more)" more) 'face `(shadow ,face)))
+     (when more-text
+       (propertize more-text 'face `(shadow ,face)))
      (funcall plain " " 'display '(space :align-to (- right 4)))
      (+my/banner--button " ✕ " (lambda () (+my/banner-close id)) face buffer header
                          "mouse-1: close")
@@ -214,7 +227,8 @@ the first one, which takes the whole row)."
     (if (display-graphic-p)
         (+my/banner--spacer (length +my/banner--list) (null +my/banner--saved-header))
       (+my/banner--row (car +my/banner--list) (current-buffer) t
-                       (length (cdr +my/banner--list))))))
+                       (length (cdr +my/banner--list))
+                       (window-body-width (selected-window))))))
 
 ;;; The notices' frames
 
@@ -302,7 +316,11 @@ lays them over its header line, KEY is what it shows.")
       (setq +my/banner--frames
             (cons entry (cl-remove window +my/banner--frames :key #'car))))
     (let* ((frame (nth 1 entry))
-           (key (list buffer notices +my/banner--theme))
+           (columns (/ (- (window-pixel-width window)
+                          (window-right-divider-width window)
+                          (window-scroll-bar-width window))
+                       (frame-char-width (window-frame window))))
+           (key (list buffer notices +my/banner--theme columns))
            ;; From the frame's native edges, like the frame's own position.
            (edges (window-pixel-edges window))
            (left (nth 0 edges))
@@ -317,7 +335,8 @@ lays them over its header line, KEY is what it shows.")
         (with-current-buffer (window-buffer (frame-root-window frame))
           (let ((inhibit-read-only t))
             (erase-buffer)
-            (insert (mapconcat (lambda (notice) (+my/banner--row notice buffer)) notices "\n"))
+            (insert (mapconcat (lambda (notice) (+my/banner--row notice buffer nil nil columns))
+                               notices "\n"))
             (goto-char (point-min))))
         (set-frame-parameter frame 'background-color
                              (face-background (+my/banner--face (nth 3 (car notices))) nil t))
