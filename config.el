@@ -108,6 +108,18 @@
 (use-package! magit-delta
   :hook (magit-mode . magit-delta-mode))
 
+;; List TODO/FIXME/... comments of the repo in the magit status buffer (uses rg).
+(use-package! magit-todos
+  :after magit
+  :config (magit-todos-mode +1))
+
+;; EDITING
+;; SPC c ~: cycle the word at point through snake_case, UPPER_CASE,
+;; PascalCase, camelCase and kebab-case.
+(use-package! string-inflection
+  :commands string-inflection-all-cycle)
+(map! :leader :desc "Cycle case style" "c ~" #'string-inflection-all-cycle)
+
 ;; KOTLIN
 ;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
 ;; lsp-mode's default kotlin-language-server.

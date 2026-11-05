@@ -60,3 +60,9 @@
 (package! shell-maker)
 (package! acp)
 (package! agent-shell)
+
+;; Git: TODOs in magit status.
+(package! magit-todos)
+
+;; Cycle snake_case / camelCase / PascalCase / UPPER_CASE / kebab-case.
+(package! string-inflection)
