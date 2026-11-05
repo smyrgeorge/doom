@@ -113,6 +113,9 @@
 (use-package! magit-delta
   :hook (magit-mode . magit-delta-mode))
 
+;; SPC g d: the current file's diff in a pane on the right.
+(load! "config/git")
+
 ;; List TODO/FIXME/... comments of the repo in the magit status buffer (uses rg).
 (use-package! magit-todos
   :after magit

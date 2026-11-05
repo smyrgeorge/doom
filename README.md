@@ -68,6 +68,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
+| `config/git.el`       | `SPC g d`: the current file's git diff in a side pane.                            |
 | `config/terminal.el`  | Terminal Emacs: paint the terminal background with the theme colour.              |
 | `scripts/emacs.sh`    | Installs Emacs (emacs-plus cask) and runs `doom sync`.                            |
 | `scripts/tools.sh`    | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), pdf-tools build deps, the `claude-agent-acp` bridge. |
@@ -129,6 +130,10 @@ second, parallel session.
 - **Kotlin:** JetBrains' official [`kotlin-lsp`](https://github.com/Kotlin/kotlin-lsp) instead of the community
   `kotlin-language-server`; with `format +lsp`, Kotlin is formatted by IntelliJ's formatter.
 - **Magit:** diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `magit-delta`.
+- **File diff pane:** `SPC g d` shows the current file's changes vs `HEAD` (delta-rendered) in a pane on the right and
+  moves the cursor there, onto the hunk of the line you were on. It refreshes on save and switches to another file
+  when pressed there. In the pane: `s`/`u`/`x` stage/unstage/discard a hunk, `RET` jumps to the line, `SPC g d` or
+  `q` closes it. Opening it saves the buffer.
 - **Tabs:** same-named files get the shortest distinguishing path as their tab label (`crate-a/src/lib.rs` vs
   `crate-b/src/lib.rs`) instead of `lib.rs<2>`. Buffer names are untouched, since workspaces disable uniquify.
 - **Terminal background:** in terminal Emacs, the strip below the echo area is painted with the theme background
@@ -145,6 +150,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | Key                         | Action                                                 |
 |-----------------------------|--------------------------------------------------------|
 | `M-RET` (Option+Enter)      | Context actions at point (spelling, code actions, Claude) |
+| `SPC g d`                   | Current file's git diff in a pane on the right (again in the pane: close) |
 | `SPC o c`                   | Start Claude Code (agent-shell)                        |
 | `SPC o C`                   | Pick / switch agent shell                              |
 | `SPC m p` (Markdown)        | Toggle live preview inside Emacs                       |
