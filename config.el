@@ -103,18 +103,11 @@
 ;; TREEMACS (IntelliJ-like project view)
 (load! "config/treemacs")
 
-;; MAGIT
-;; Render diffs with git-delta (brew install git-delta).
-(use-package! magit-delta
-  :hook (magit-mode . magit-delta-mode))
+;; MAGIT (git-delta diffs, TODOs in the status buffer)
+(load! "config/magit")
 
 ;; SPC g d: the current file's diff in a pane on the right.
 (load! "config/git")
-
-;; List TODO/FIXME/... comments of the repo in the magit status buffer (uses rg).
-(use-package! magit-todos
-  :after magit
-  :config (magit-todos-mode +1))
 
 ;; EDITING
 ;; SPC c ~: cycle the word at point through snake_case, UPPER_CASE,
