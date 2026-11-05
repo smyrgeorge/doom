@@ -164,8 +164,10 @@ In the GUI the strip is drawn to the pixel: each screen row shows its slice of t
 margin. Rows are measured (an emoji, or a glyph rising above the font like indent-bars' `│` on the top row, makes a
 row taller), and smooth scrolling, which moves the rows by part of a line, shifts the slices back by as much, so the
 marks stay still while the text glides. Wrapped lines (Markdown, `visual-line-mode`) get a slice on each of their
-rows, hung after the row's first character: Emacs would otherwise draw a continuation row's slice on the row
-before, leaving gaps. In a terminal each row is a coloured cell.
+rows; a continuation row's slice hangs on its last character (the space it wraps at, or the newline). Laying out
+the row before, Emacs looks ahead into the next row's first word, and draws a margin string it meets there on that
+row too: hung at a row's start, slices showed on the wrong row (gaps) or on two rows (an extra mark). In a terminal
+each row is a coloured cell.
 
 Windows with the strip scroll past the end of the file only a bit: at most a quarter of the window
 (`+my/stripe-overscroll`: a fraction, a number of rows, `0` for none, `t` for no limit). The strip maps the file plus
