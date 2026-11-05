@@ -103,6 +103,9 @@
 ;; WINDOW (maximized frame; new windows get focus)
 (load! "config/window")
 
+;; BANNERS (notices at the top of a window, like IntelliJ's editor notifications)
+(load! "config/banner")
+
 ;; SMOOTH SCROLL (mouse-wheel notches glide instead of jumping)
 (load! "config/smooth")
 

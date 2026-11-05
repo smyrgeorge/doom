@@ -67,6 +67,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/stripe.el`    | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
 | `config/sticky.el`    | Sticky header: the classes/functions around the top visible line.                |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
+| `config/banner.el`    | Notices at the top of a window (IntelliJ's editor notifications), with actions and ✕. |
 | `config/smooth.el`    | Mouse-wheel notches glide (on top of Doom's pixel scrolling).                     |
 | `config/pdf.el`       | PDF zoom like macOS apps: Cmd+= / Cmd+- / Cmd+0 and Cmd+scroll.                   |
 | `config/peek.el`      | LSP peek (usages, definitions): calmer, with functions, line numbers, key hints.  |
@@ -150,6 +151,8 @@ window height, like the marks on IntelliJ's scrollbar:
 - where several overlap, the most important wins: error > warning > deleted > changed > added;
 - a light band marks the part of the file on screen, like a scrollbar thumb.
 
+It's on in code, text and config files, and in files with very long lines (`so-long-mode`).
+
 In the GUI the strip is drawn to the pixel: each screen row shows its slice of the strip as a small image in the right
 margin. Rows are measured (an emoji, or a glyph rising above the font like indent-bars' `│` on the top row, makes a
 row taller), and smooth scrolling, which moves the rows by part of a line, shifts the slices back by as much, so the
@@ -180,6 +183,22 @@ minibuffer / echo area (it always fits what it shows, so it only jumped and came
 it moves through the candidates instead. Every window (`*Messages*`, help, magit... not just files) stops scrolling
 with at most a quarter of it empty below the last line (`+my/stripe-overscroll`), instead of going on until the last
 line reaches the top and bouncing back at each further notch; images, PDFs and terminals are left alone.
+Files with lines over 5,000 characters (`+my/long-line-threshold`; Doom keeps Emacs's 10,000 in native-comp builds)
+open in `so-long-mode`: plain, without highlighting, ligatures or LSP. Otherwise, e.g. an HTML report with
+7,000-character SVG lines stayed in `web-mode`, where redisplay walks each such line character by character (~6 ms a
+line a pass) and scrolling stalled for seconds. They don't wrap either: wrapped, such a line fills screens of rows and
+every scroll step lays it out again (~60 ms, a visible stutter; ~15-20 ms unwrapped). A notice at the top says so, with
+**Wrap lines** and **Open normally** (the file's own mode back) actions (see below).
+
+### Notices bar
+
+`config/banner.el` shows notices at the top of a window, like IntelliJ's editor notifications: a bar in the header line
+(it stays put while scrolling) with an icon and colour for its type (info blue, warning yellow, error red), the message,
+actions to click, and `✕` to close it. Several notices show one at a time (the bar says how many more); while there are
+any they take the header line's place (e.g. the sticky header), which comes back once they're closed. Code adds one
+with `(+my/banner-show ID TEXT :type 'warning :actions '(("Label" . function)))`; `M-x +my/banner-close` closes the
+shown one. Notices so far: (warning) files with very long lines shown plain and unwrapped (**Wrap lines**, **Open
+normally**).
 
 ### Usages peek
 

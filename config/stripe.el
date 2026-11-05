@@ -15,7 +15,7 @@
 ;;   (error > warning > deleted > changed > added > info);
 ;; - a light band marks the part of the file on screen, like a scrollbar thumb.
 ;; Click the strip to jump to that part of the file; the wheel scrolls as usual.
-;; On in every file buffer in prog, text and conf modes.
+;; On in every file buffer in prog, text and conf modes (and so-long-mode).
 ;;
 ;; In graphical frames the strip is a column of small images in the right
 ;; margin, drawn to the pixel: each screen row shows its slice of the strip.
@@ -733,7 +733,10 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
       (set-window-margins window (car (window-margins window)) nil))))
 
 (defun +my/stripe--maybe-enable ()
-  (when (and buffer-file-name (derived-mode-p 'prog-mode 'text-mode 'conf-mode))
+  ;; `so-long-mode' (files with very long lines) replaces their mode and isn't
+  ;; derived from any of these.
+  (when (and buffer-file-name
+             (derived-mode-p 'prog-mode 'text-mode 'conf-mode 'so-long-mode))
     (+my/stripe-mode 1)))
 
 (define-globalized-minor-mode +my/stripe-global-mode +my/stripe-mode
