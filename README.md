@@ -75,7 +75,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/cheatsheet.el` | Tips panel under treemacs, from `cheatsheet.org` (disabled for now, see `config.el`). |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
-| `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
+| `config/tabs.el`      | Tab labels with a path for same-named files; Claude in its project's tabs; closing a tab goes back. |
 | `config/modeline.el`  | Mode line: a space after its last item on the right.                             |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: commit graph (like tig), git-delta diffs, TODOs in the status buffer. |
@@ -322,6 +322,10 @@ smaller ones at their own size; `{width=100%}` after an image link sizes one ima
   `q` or `Esc` closes it. Opening it saves the buffer.
 - **Tabs:** same-named files get the shortest distinguishing path as their tab label (`crate-a/src/lib.rs` vs
   `crate-b/src/lib.rs`) instead of `lib.rs<2>`. Buffer names are untouched, since workspaces disable uniquify.
+  Claude buffers are in their project's tab group (they visit no file, so they sat alone in "Common"), and a file opened
+  from one that belongs to no project (a pasted screenshot in agent-shell's cache) joins it: images and `path:line`
+  links open as tabs next to Claude instead of swapping the tab bar for another group. Closing the shown tab goes back
+  to the tab the window showed before, if it's in the same group, instead of the next one.
 - **Terminal background:** in terminal Emacs, the strip below the echo area is painted with the theme background
   (OSC 11) and restored on exit (OSC 111).
 - **No menu bar in the terminal:** macOS GUI frames keep theirs (it lives in the system's menu bar); terminal frames
