@@ -15,6 +15,10 @@ brew tap d12frosted/emacs-plus
 brew trust d12frosted/emacs-plus
 brew install --cask emacs-plus-app
 
+# Doom's modules live in a git submodule (sources/doom+). `doom install`
+# fetches it but `doom sync` doesn't; without it only Doom's core is installed.
+git -C ~/.config/emacs submodule update --init --recursive
+
 # Rebuild Doom against the new Emacs (native-comp).
 ~/.config/emacs/bin/doom sync --rebuild
 

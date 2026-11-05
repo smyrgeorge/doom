@@ -1,31 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# prerequisites (npm and uv install most of the servers below)
+echo -e "Installing prerequisites:"
+brew install node uv
+
 # python (uv)
-echo -e "Installing python:"
+echo -e "\nInstalling python:"
 npm i -g pyright
-uv tool install black
+uv tool install --upgrade black
+uv tool install --upgrade isort # import sorting (py-isort)
 
 # bash
 echo -e "\nInstalling bash:"
 npm i -g bash-language-server
-brew install shfmt
+brew install shellcheck shfmt # shellcheck: bash-language-server's linter
 
 # docker
 echo -e "\nInstalling docker:"
 npm i -g dockerfile-language-server-nodejs
 
-# web (html/css)
+# javascript / typescript
+echo -e "\nInstalling javascript:"
+npm i -g typescript typescript-language-server
+
+# web (html/css/json)
 echo -e "\nInstalling web:"
 npm i -g vscode-langservers-extracted js-beautify
+# Format-on-save fallback (js/css/html/json/yaml/markdown) when the LSP server
+# doesn't format.
+npm i -g prettier
+
+# yaml
+echo -e "\nInstalling yaml:"
+npm i -g yaml-language-server
 
 # markdown
 echo -e "\nInstalling markdown:"
 brew install marksman
+brew install pandoc # live preview (config/markdown.el)
 
 # rust
 echo -e "\nInstalling rust:"
-brew install rust-analyzer
+# Prefer rustup's component: rustup puts a rust-analyzer proxy in ~/.cargo/bin
+# that errors out unless the component is installed.
+if command -v rustup >/dev/null; then
+  rustup component add rust-analyzer rustfmt
+else
+  brew install rust-analyzer
+fi
 
 # kotlin
 echo -e "\nInstalling kotlin:"
@@ -43,4 +66,4 @@ brew install texlab
 
 # godot
 echo -e "\nInstalling godot:"
-uv tool install gdtoolkit
+uv tool install --upgrade gdtoolkit

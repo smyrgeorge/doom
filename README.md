@@ -28,12 +28,12 @@ Requirements: macOS (Apple Silicon), [Homebrew](https://brew.sh), `git`, `node`/
 
 ```sh
 # 1. This config
-git clone git@github.com:smyrgeorge/.doom.d.git ~/.config/doom
+git clone git@github.com:smyrgeorge/doom.git ~/.config/doom
 
-# 2. Doom itself
-git clone --depth 1 https://github.com/doomemacs/core ~/.config/emacs
+# 2. Doom itself (its modules are a git submodule)
+git clone --depth 1 --recurse-submodules https://github.com/doomemacs/core ~/.config/emacs
 
-# 3. Emacs (prebuilt emacs-plus Emacs.app) + `doom sync`
+# 3. Emacs (prebuilt emacs-plus Emacs.app) + `doom sync` (also fetches Doom's modules)
 ~/.config/doom/scripts/emacs.sh
 
 # 4. CLI tools, fonts, language servers
@@ -69,7 +69,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
 | `config/terminal.el`  | Terminal Emacs: paint the terminal background with the theme colour.              |
 | `scripts/emacs.sh`    | Installs Emacs (emacs-plus cask) and runs `doom sync`.                            |
-| `scripts/tools.sh`    | CLI tools, JetBrains Mono font, the `claude-agent-acp` bridge.                    |
+| `scripts/tools.sh`    | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), pdf-tools build deps, the `claude-agent-acp` bridge. |
 | `scripts/lsp.sh`      | Language servers, formatters and linters.                                         |
 
 ## Highlights
@@ -159,16 +159,16 @@ the rest are installed by lsp-mode itself, which offers to do so the first time 
 | Language              | Module flags                         | Language server / tools                                  |
 |-----------------------|--------------------------------------|----------------------------------------------------------|
 | Rust                  | `+lsp +tree-sitter`                  | `rust-analyzer`                                          |
-| Python                | `+lsp +pyright +uv +tree-sitter`     | `pyright`, `black`, virtualenvs via `uv`                 |
+| Python                | `+lsp +pyright +uv +tree-sitter`     | `pyright`, `black`, `isort`, virtualenvs via `uv`        |
 | Kotlin                | `+lsp +tree-sitter`                  | `kotlin-lsp` (JetBrains), `ktlint`                       |
-| JavaScript/TypeScript | `+lsp +tree-sitter`                  | `typescript-language-server` (installed by lsp-mode)     |
+| JavaScript/TypeScript | `+lsp +tree-sitter`                  | `typescript-language-server`, `prettier`                 |
 | C/C++                 | `+lsp +tree-sitter`                  | `clangd` (Xcode CLT), `clang-format`, `glslang`          |
-| Shell                 | `+lsp`                               | `bash-language-server`, `shfmt`                          |
-| Web (HTML/CSS)        | `+lsp +tree-sitter`                  | `vscode-langservers-extracted`, `js-beautify`            |
+| Shell                 | `+lsp`                               | `bash-language-server`, `shellcheck`, `shfmt`            |
+| Web (HTML/CSS)        | `+lsp +tree-sitter`                  | `vscode-langservers-extracted`, `js-beautify`, `prettier` |
 | Markdown              | `+lsp +tree-sitter`                  | `marksman` (pulls in .NET), `pandoc` for previews        |
 | Docker                | `+lsp +tree-sitter`                  | `dockerfile-language-server-nodejs`                      |
 | GDScript (Godot)      | `+lsp +tree-sitter`                  | Godot's LSP, `gdformat` (`gdtoolkit`)                    |
-| JSON / YAML           | `+lsp +tree-sitter`                  | JSON: `vscode-langservers-extracted`; YAML: lsp-mode     |
+| JSON / YAML           | `+lsp +tree-sitter`                  | `vscode-langservers-extracted`, `yaml-language-server`   |
 | Org                   | `+pretty`                            | —                                                        |
 | REST                  | `+jq`                                | `jq`                                                     |
 | CSV / XML             | `data`                               | —                                                        |
