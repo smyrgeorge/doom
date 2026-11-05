@@ -136,11 +136,3 @@
 
 ;; TABS
 (load! "config/tabs")
-
-;; UNIQUIFY
-;; Meaningful names for buffers with the same name.
-(after! uniquify
-  (setq uniquify-buffer-name-style 'post-forward-angle-brackets
-        uniquify-separator "/"
-        uniquify-after-kill-buffer-p t
-        uniquify-ignore-buffers-re "^\\*"))
