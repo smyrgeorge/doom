@@ -110,11 +110,15 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - **Reachable like any window**: `SPC w w` cycles into it and it gets a window number (`SPC w 1`, as the leftmost
   window).
 - **No mode line**: it only said "Treemacs" and the workspace.
-- `h`/`←` collapse, `l`/`→` expand or open. A **single click** opens a file or expands/collapses a folder (treemacs'
-  default is a double click).
+- **Arrows, like IntelliJ's trees**: `←` collapses a node, or goes to its parent; `→` expands a closed node, goes to
+  the first child of an open one, and opens a file (in the error list, jumps to the error). `↑`/`↓` move a line, like
+  `k`/`j`. The same in the LSP lists (`SPC c X`, `SPC c S`), where `←`/`→` didn't expand or collapse anything.
+  `h`/`l` keep treemacs' own collapse / open. A **single click** opens a file or expands/collapses a folder
+  (treemacs' default is a double click).
 - `zR` / `zM` (`M-x treemacs-expand-all` / `treemacs-collapse-all`): expand every folder of the project, or collapse
   them all (the project stays open at its top level). Expanding asks first in projects with more than 300 folders.
 - With `+lsp`: structure view (`SPC c S`), project errors (`SPC c X`) and call hierarchy (`SPC c y` / `SPC c Y`).
+  The structure view and the error list open with the cursor in them, on their first line (it stayed in the code).
 
 ### Live Markdown preview
 
@@ -351,7 +355,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `SPC m p` (Markdown)        | Toggle live preview inside Emacs                       |
 | `SPC m P` (Markdown)        | Preview in the browser                                 |
 | `SPC o p` / `SPC o P`       | Toggle treemacs / reveal current file in treemacs      |
-| `h` `←` / `l` `→` (treemacs) | Collapse / expand or open                              |
+| `←` / `→` (treemacs, LSP lists) | Collapse or go to parent / expand, into, or open    |
 | `zR` / `zM` (treemacs)      | Expand / collapse all folders                          |
 | `M-[` / `M-]` (GUI)         | Previous / next buffer                                 |
 | `s-[` / `s-]`               | Jump back / forward (better-jumper)                    |
