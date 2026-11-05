@@ -270,8 +270,11 @@ second, parallel session.
 
 Claude is told it runs inside Emacs, in an agent-shell buffer rather than a terminal, and that images show inline
 there: a Markdown image link to a local file (`![chart](/tmp/chart.png)`) or an image's path alone on a line, so it shows
-charts and screenshots that way. The text (`+my/agent-shell-claude-context`) is appended to Claude Code's own system
-prompt in every session it starts or resumes.
+charts and screenshots that way. A report with diagrams or graphs comes as Markdown in the reply, with only the
+diagrams rendered as images (not the whole report as one image or a web page), so it reads inside the editor. The text (`+my/agent-shell-claude-context`) is appended to Claude Code's own system
+prompt in every session it starts or resumes. Images show as wide as the window (agent-shell shrinks them to 40% of it;
+`agent-shell-markdown-image-max-width` 1.0), smaller ones at their own size; `{width=100%}` after an image link sizes one
+image, `M-x agent-shell-markdown-image-scale-increase` / `-decrease` resize the ones on screen.
 
 ### Other customizations
 
