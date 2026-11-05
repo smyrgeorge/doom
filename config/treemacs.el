@@ -44,3 +44,44 @@
         (save-selected-window
           (treemacs-add-and-display-current-project-exclusively))))))
 (add-hook 'window-buffer-change-functions #'+my/treemacs-auto-open-h)
+
+;; Refresh git colors when a repo changes outside a save in Emacs, e.g. a commit
+;; from the CLI or Claude Code. Watch each project's .git directory: git updates
+;; its index/HEAD via lock-file renames, which kqueue does report. Also refresh
+;; when Emacs regains focus, and re-check a file after it is reverted (edited
+;; outside Emacs). Debounced; a short cooldown avoids a loop when `git status'
+;; itself rewrites the index.
+(defvar +my/treemacs--git-watches (make-hash-table :test #'equal))
+(defvar +my/treemacs--refresh-timer nil)
+(defvar +my/treemacs--last-refresh 0)
+
+(defun +my/treemacs-refresh-all ()
+  (when (featurep 'treemacs)
+    (setq +my/treemacs--last-refresh (float-time))
+    (treemacs-run-in-every-buffer
+     (ignore-errors
+       (treemacs-without-recenter
+        (treemacs--do-refresh (current-buffer) 'all))))))
+
+(defun +my/treemacs-schedule-refresh (&rest _)
+  (when (> (- (float-time) +my/treemacs--last-refresh) 3)
+    (when (timerp +my/treemacs--refresh-timer)
+      (cancel-timer +my/treemacs--refresh-timer))
+    (setq +my/treemacs--refresh-timer
+          (run-with-timer 1 nil #'+my/treemacs-refresh-all))))
+
+(defun +my/treemacs-watch-git-h (&rest _)
+  (when-let* ((buf (window-buffer (selected-window)))
+              ((buffer-file-name buf))
+              (root (with-current-buffer buf (doom-project-root)))
+              (git (expand-file-name ".git" root))
+              ((file-directory-p git))
+              ((not (gethash git +my/treemacs--git-watches))))
+    (puthash git (file-notify-add-watch git '(change) #'+my/treemacs-schedule-refresh)
+             +my/treemacs--git-watches)))
+(add-hook 'window-buffer-change-functions #'+my/treemacs-watch-git-h)
+
+(defun +my/treemacs-focus-refresh ()
+  (when (frame-focus-state) (+my/treemacs-schedule-refresh)))
+(add-function :after after-focus-change-function #'+my/treemacs-focus-refresh)
+(add-hook 'after-revert-hook #'+my/treemacs-git-update-on-save-h)

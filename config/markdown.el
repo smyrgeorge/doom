@@ -35,7 +35,7 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
    "<!doctype html><html><head><meta charset='utf-8'>"
    (format "<base href='file://%s'>"
            (file-name-directory (or buffer-file-name default-directory)))
-   (format "<title>%s</title>" (buffer-name))
+   (format "<title>Preview: %s</title>" (buffer-name))
    "<meta name='viewport' content='width=device-width, initial-scale=1'>"
    ;; github-markdown-css follows the OS light/dark setting, but highlight.js's
    ;; github theme is light-only; pick its light or dark variant to match.
