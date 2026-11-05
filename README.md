@@ -254,7 +254,10 @@ second, parallel session.
 - **Compiled config:** Doom loads `config/*.el` as source, so its functions ran interpreted, several times slower (the
   stripe's redraw on each frame of a scroll: 1.5 ms instead of 0.2). Once Emacs has been idle for 2 s they're
   byte-compiled in place, stopping at the first key press; again after anything loads (`after!` blocks define
-  functions when their package loads). No `.elc` files are written, so nothing gets stale (`config/compile.el`).
+  functions when their package loads). No `.elc` files are written, so nothing gets stale (`config/compile.el`). A
+  function that binds a package's variable with `let` (e.g. `SPC g d` binding `magit-display-buffer-function`), if
+  compiled before that package loaded, would bind a local instead; so such functions go back to their source and are
+  compiled again once the package loads.
 - **Font:** JetBrains Mono with ligatures.
 - **Kotlin:** JetBrains' official [`kotlin-lsp`](https://github.com/Kotlin/kotlin-lsp) instead of the community
   `kotlin-language-server`; with `format +lsp`, Kotlin is formatted by IntelliJ's formatter.
