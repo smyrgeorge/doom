@@ -12,3 +12,7 @@ brew install aspell bat curl editorconfig eza git-delta jq
 brew install --cask font-jetbrains-mono
 brew install inetutils git vim qemu ripgrep wget k9s
 
+
+# agent-shell (Claude Code in Emacs via ACP)
+echo -e "\nInstalling agent-shell bridge:"
+npm install -g @agentclientprotocol/claude-agent-acp

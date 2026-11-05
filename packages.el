@@ -56,7 +56,7 @@
 (package! magit-delta)
 
 ;; agent-shell: Claude Code (and other ACP agents) in a native Emacs buffer.
-;; Needs: npm install -g @agentclientprotocol/claude-agent-acp
+;; Needs: npm install -g @agentclientprotocol/claude-agent-acp (scripts/tools.sh)
 (package! shell-maker)
 (package! acp)
 (package! agent-shell)
