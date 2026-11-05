@@ -29,10 +29,13 @@
 (defvar +my/stripe-mark-height 4
   "Minimum height of a mark, in pixels (graphical frames).")
 
-;; Margins can't draw below the end of a buffer: when a window
-;; shows empty space past the end, the stripe covers only the part with text
-;; (the whole file mapped onto it). So windows with the stripe may scroll past
-;; the end only a bit: at most this much empty space below the last line.
+;; Windows with the stripe may scroll past the end of the file only a bit: at
+;; most this much empty space below the last line. In graphical frames the
+;; strip maps the file plus this space onto the whole window height (like
+;; IntelliJ's scrollbar), so it never shrinks: the marks stay put as the end
+;; comes into view, and the band reaches the bottom when the window can't
+;; scroll further. Below the last line it's drawn on an extra row (margins
+;; need text to hang on). In a terminal it covers only the rows with text.
 (defvar +my/stripe-overscroll 0.25
   "How far windows with the stripe may scroll past the end of the buffer:
 a fraction of the window height (float), a number of rows (integer), 0 for
@@ -45,8 +48,6 @@ none (the last line stops at the bottom), or t for no limit.")
     map)
   "Keymap on the stripe's margin strings (terminal). A keymap on the clicked
 text wins over mode keymaps, e.g. outline-minor-mode's margin buttons.")
-
-(defvar-local +my/stripe--overlays nil "Overlays drawing the stripe.")
 
 (defvar-local +my/stripe--cache nil "(KEY LINES . MARKS) for `+my/stripe--marks'.")
 
@@ -65,6 +66,9 @@ text wins over mode keymaps, e.g. outline-minor-mode's margin buttons.")
   "Bumped by edits that add or remove line breaks: they move the strings of
 the strip (which hang on lines) up or down, so it must be redrawn before the
 next redisplay, not after a pause.")
+
+(defvar-local +my/stripe--number-cookie nil
+  "Face remapping that keeps the filler's line-number column plain.")
 
 (defvar +my/stripe--images (make-hash-table :test #'equal)
   "Row images by (PIXELS . WIDTH): many rows look alike.")
@@ -221,29 +225,31 @@ errors or the diff-hl highlights change."
                    collect (cons (+ ?0 priority)
                                  (or (+my/stripe--kind-color kind) "None")))))
 
-(defun +my/stripe--image (pixels width palette)
+(defun +my/stripe--image (pixels width palette &optional ascent)
   "An image WIDTH pixels wide whose pixel rows have the colours of PIXELS
-(a string of palette characters, one per pixel row)."
+(a string of palette characters, one per pixel row). ASCENT as for images:
+`center' by default (on the text's middle line)."
   (unless (equal palette +my/stripe--palette) ; new theme
     (setq +my/stripe--palette palette)
     (clrhash +my/stripe--images))
-  (let ((key (cons pixels width)))
+  (let* ((ascent (or ascent 'center))
+         (key (list pixels width ascent)))
     (or (gethash key +my/stripe--images)
         (progn
           (when (>= (hash-table-count +my/stripe--images) 3000)
             (clrhash +my/stripe--images))
           (puthash
            key
-           `(image :type xpm :scale 1 :ascent center
-                   :data ,(concat
-                           "/* XPM */\nstatic char *stripe[] = {\n"
-                           (format "\"%d %d %d 1\",\n" width (length pixels) (length palette))
-                           (mapconcat (lambda (entry)
-                                        (format "\"%c c %s\",\n" (car entry) (cdr entry)))
-                                      palette "")
-                           (mapconcat (lambda (char) (format "\"%s\"" (make-string width char)))
-                                      pixels ",\n")
-                           "};"))
+           `(image :type xpm :scale 1 :ascent ,ascent
+             :data ,(concat
+                     "/* XPM */\nstatic char *stripe[] = {\n"
+                     (format "\"%d %d %d 1\",\n" width (length pixels) (length palette))
+                     (mapconcat (lambda (entry)
+                                  (format "\"%c c %s\",\n" (car entry) (cdr entry)))
+                                palette "")
+                     (mapconcat (lambda (char) (format "\"%s\"" (make-string width char)))
+                                pixels ",\n")
+                     "};"))
            +my/stripe--images)))))
 
 (defun +my/stripe--pixel-rank (char)
@@ -308,7 +314,11 @@ the end of the buffer."
   (or (gethash beg cache)
       (save-excursion
         (goto-char beg)
-        (let* ((more (= (vertical-motion 1 window) 1))
+        (let* ((more (and (= (vertical-motion 1 window) 1)
+                          ;; Without a final newline the end is on the last
+                          ;; line (it only looks like a row of its own when
+                          ;; the filler, see `+my/stripe--filler', follows).
+                          (or (< (point) (point-max)) (eq (char-before) ?\n))))
                (height (- (cdr (window-text-pixel-size window beg (point) nil nil nil more))
                           offset)))
           (puthash beg (cons (and more (point)) (if (> height 0) height font-height))
@@ -329,6 +339,7 @@ the end of the buffer."
          ;; of the text area, negative when smooth scrolling hides part of the
          ;; first row. A row's image is a line high and sits on the baseline,
          ;; at IMAGE-TOP: lower than TOP in taller rows.
+         (ended nil)                    ; reached the end of the buffer
          (rows (let ((top (- vscroll)) (beg start) rows)
                  (while (and beg (< top body))
                    (pcase-let* ((`(,next . ,height) (+my/stripe--row window cache beg offset font-height))
@@ -338,22 +349,30 @@ the end of the buffer."
                      (push (list beg top (+ height rise) image-top) rows)
                      (setq top (+ top height rise)
                            beg next)))
+                 (setq ended (null beg))
                  (nreverse rows)))
          (last (car (last rows)))
-         ;; Next to text only: when the end of the buffer is on screen, the
-         ;; strip stops at the bottom of the last line.
-         (height (max 1 (min (window-body-height window t) (+ (nth 1 last) (nth 2 last)))))
-         (scale (min (float font-height) (/ (float height) lines))) ; pixels per line
+         (text-bottom (+ (nth 1 last) (nth 2 last)))
+         ;; The strip spans the window, and maps onto it the file plus the
+         ;; empty space windows may scroll past its end: so the marks don't
+         ;; move as the end comes into view, and the band reaches the bottom
+         ;; when the window can't scroll further.
+         (height (max 1 body))
+         (overscroll (let ((window-rows (window-body-height window)))
+                       (if (eq +my/stripe-overscroll t)
+                           (1- window-rows)
+                         (- window-rows (+my/stripe--text-rows-wanted window)))))
+         (scale (min (float font-height)    ; pixels per line
+                     (/ (float height) (+ lines overscroll))))
          (pixels (make-string height ?\s))
          (palette (+my/stripe--palette)))
-    ;; Band (long files only): from the top of the window, the hidden part of
-    ;; the first row included, down by as many lines as fit.
+    ;; Band (when the window can scroll): from the top of the window, the
+    ;; hidden part of the first row included, down by as many lines as fit.
     (when (< scale font-height)
       (let* ((first (line-number-at-pos start t))
              (top (* scale (+ (1- first) (/ (float vscroll) (nth 2 (car rows))))))
-             (shown (/ (* (float (window-body-height window t))
-                          (1+ (- (line-number-at-pos (car last) t) first)))
-                       (+ (nth 1 last) (nth 2 last) vscroll)))
+             (shown (/ (* (float body) (1+ (- (line-number-at-pos (car last) t) first)))
+                       (+ text-bottom vscroll)))
              (bottom (min height (+ top (* scale shown)))))
         (cl-loop for y from (max 0 (floor top)) below (min height (max 1 (round bottom)))
                  do (aset pixels y ?t))))
@@ -369,23 +388,102 @@ the end of the buffer."
                    when (> priority (+my/stripe--pixel-rank (aref pixels y)))
                    do (aset pixels y char)))))
     (set-window-parameter window '+my/stripe-geometry (list 'pixels scale lines)) ; for clicks
-    ;; Each row's image: its slice of the strip (rows with nothing to show
-    ;; get no image).
-    (cl-loop for (beg _top _height image-top) in rows
-             for slice = (cl-loop with slice = (make-string font-height ?\s)
-                                  for i below font-height
-                                  for y = (+ image-top i)
-                                  when (and (>= y 0) (< y height))
-                                  do (aset slice i (aref pixels y))
-                                  finally return slice)
-             unless (string-blank-p slice)
-             collect (cons beg
-                           (propertize " " 'display
-                                       `((margin right-margin)
-                                         ,(+my/stripe--image slice width palette))
-                                       'keymap +my/stripe-margin-map
-                                       'pointer 'hand
-                                       'help-echo "mouse-1: jump to this part of the file")))))
+    (let ((click (list 'keymap +my/stripe-margin-map
+                       'pointer 'hand
+                       'help-echo "mouse-1: jump to this part of the file")))
+      (cons
+       ;; Each row's image: its slice of the strip (rows with nothing to
+       ;; show get no image).
+       (cl-loop for (beg _top _height image-top) in rows
+                for slice = (cl-loop with slice = (make-string font-height ?\s)
+                                     for i below font-height
+                                     for y = (+ image-top i)
+                                     when (and (>= y 0) (< y height))
+                                     do (aset slice i (aref pixels y))
+                                     finally return slice)
+                unless (string-blank-p slice)
+                collect (cons beg
+                              (apply #'propertize " "
+                                     'display `((margin right-margin)
+                                                ,(+my/stripe--image slice width palette))
+                                     click)))
+       ;; Below the end of the buffer: the rest of the strip.
+       (when (and ended (< text-bottom body))
+         (+my/stripe--filler (substring pixels (max 0 text-bottom))
+                             (- body text-bottom) width palette font-height click))))))
+
+(defun +my/stripe--tilde (period)
+  "A fringe bitmap repeating vi-tilde-fringe's `~' every PERIOD pixels (where
+Emacs marks empty lines past the end), or nil."
+  (when (and indicate-empty-lines (boundp 'vi-tilde-fringe-bitmap-array))
+    (let ((name (intern (format "+my/stripe--tilde-%d" period))))
+      (unless (fringe-bitmap-p name)
+        (let* ((bits vi-tilde-fringe-bitmap-array)
+               (pad (/ (- period (length bits)) 2)) ; centred, as Emacs does
+               (vector (make-vector period 0)))
+          (dotimes (i (length bits))
+            (when (< -1 (+ pad i) period)
+              (aset vector (+ pad i) (aref bits i))))
+          (define-fringe-bitmap name vector period 8 '(top t)))) ; t: repeated
+      name)))
+
+(defun +my/stripe--filler (pixels height width palette font-height click)
+  "What follows the end of the buffer: a row HEIGHT pixels high (the rest of
+the window) showing PIXELS of the strip in the margin. Margins need text to
+hang on, and Emacs' own empty rows past the end have none. The row also
+repeats the empty-line `~', and the cursor stays on the last line."
+  (let ((tilde (+my/stripe--tilde font-height)))
+    ;; At the end of the buffer Emacs puts the cursor after this string, on
+    ;; the tall row: draw it on a space on the last line instead.
+    (concat (propertize " " 'cursor t)
+            "\n"
+            (propertize " " 'display `(space :width (1) :height (,height) :ascent 100))
+            (when tilde
+              (propertize " " 'display `(left-fringe ,tilde ,(if (facep 'vi-tilde-fringe-face)
+                                                                  'vi-tilde-fringe-face
+                                                                'fringe))))
+            (unless (string-blank-p pixels)
+              (apply #'propertize " "
+                     'display `((margin right-margin)
+                                ,(+my/stripe--image pixels width palette 100))
+                     click)))))
+
+(defun +my/stripe--plain-last-number ()
+  "The filler row belongs to the last line, so with the cursor there its
+line-number column would take the current line's (darker) face all the way
+down: use the plain face meanwhile. The last line is usually empty, unnumbered."
+  (let* ((ov (window-parameter (selected-window) '+my/stripe-filler))
+         (want (and ov (eq (overlay-buffer ov) (current-buffer))
+                    (overlay-get ov 'before-string)
+                    (bound-and-true-p display-line-numbers)
+                    (>= (point) (save-excursion (goto-char (point-max))
+                                                (line-beginning-position))))))
+    (cond ((and want (not +my/stripe--number-cookie))
+           (setq +my/stripe--number-cookie
+                 (face-remap-add-relative 'line-number-current-line 'line-number)))
+          ((and (not want) +my/stripe--number-cookie)
+           (face-remap-remove-relative +my/stripe--number-cookie)
+           (setq +my/stripe--number-cookie nil)))))
+
+(defun +my/stripe--set-filler (window string)
+  "Show STRING after the end of the buffer in WINDOW (nil: nothing)."
+  (let ((ov (window-parameter window '+my/stripe-filler)))
+    (when (and ov (not (eq (overlay-buffer ov) (current-buffer))))
+      (delete-overlay ov)
+      (setq ov nil))
+    (cond (string
+           (unless ov
+             ;; Front-advance: stays after text typed at the end.
+             (setq ov (make-overlay (point-max) (point-max) nil t nil))
+             (overlay-put ov 'priority 100) ; after the last row's own string
+             (overlay-put ov 'window window)
+             (overlay-put ov '+my/stripe t)
+             (set-window-parameter window '+my/stripe-filler ov))
+           (move-overlay ov (point-max) (point-max))
+           (overlay-put ov 'before-string string))
+          (ov
+           (delete-overlay ov)
+           (set-window-parameter window '+my/stripe-filler nil)))))
 
 ;;; Drawing
 
@@ -399,29 +497,38 @@ the end of the buffer."
           (set-window-parameter window '+my/stripe-key (+my/stripe--key window start))
           (pcase-let* ((`(,lines . ,marks) (+my/stripe--marks))
                        (start (or start (window-start window)))
-                       (strings (if (display-graphic-p (window-frame window))
-                                    (+my/stripe--image-rows window start lines marks)
-                                  (+my/stripe--cell-rows window start lines marks)))
+                       (`(,strings . ,filler)
+                        (if (display-graphic-p (window-frame window))
+                            (progn
+                              ;; Measure the rows without the filler: Emacs
+                              ;; counts it in the height of the last line.
+                              (when-let* ((ov (window-parameter window '+my/stripe-filler)))
+                                (when (overlay-buffer ov)
+                                  (overlay-put ov 'before-string nil)))
+                              (+my/stripe--image-rows window start lines marks))
+                          (list (+my/stripe--cell-rows window start lines marks))))
                        (old nil))
-            ;; Reuse this window's overlays; drop those of windows that no
-            ;; longer show this buffer.
-            (setq +my/stripe--overlays
-                  (cl-delete-if (lambda (ov)
-                                  (let ((win (overlay-get ov 'window)))
-                                    (cond ((eq win window) (push ov old) t)
-                                          ((or (not (window-live-p win))
-                                               (not (eq (window-buffer win) (current-buffer))))
-                                           (delete-overlay ov)
-                                           t))))
-                                +my/stripe--overlays))
+            ;; Reuse this window's row overlays; drop those of windows that
+            ;; no longer show this buffer. Found by their property, not kept
+            ;; in a variable: reverting the buffer would lose track of them.
+            (dolist (ov (overlays-in (point-min) (point-max)))
+              (when (overlay-get ov '+my/stripe-row)
+                (let ((win (overlay-get ov 'window)))
+                  (cond ((eq win window) (push ov old))
+                        ((or (not (window-live-p win))
+                             (not (eq (window-buffer win) (current-buffer))))
+                         (delete-overlay ov))))))
             (pcase-dolist (`(,pos . ,string) strings)
               (let ((ov (or (pop old) (make-overlay pos pos))))
                 (move-overlay ov pos pos)
                 (overlay-put ov '+my/stripe t)
+                (overlay-put ov '+my/stripe-row t)
                 (overlay-put ov 'window window)
-                (overlay-put ov 'before-string string)
-                (push ov +my/stripe--overlays)))
-            (mapc #'delete-overlay old)))))))
+                (overlay-put ov 'before-string string)))
+            (mapc #'delete-overlay old)
+            (+my/stripe--set-filler window filler)
+            (when (eq window (selected-window))
+              (+my/stripe--plain-last-number))))))))
 
 (defun +my/stripe--note-line-edit (beg end &rest _)
   "Before/after a change: count it if BEG..END holds a line break, i.e. lines
@@ -544,16 +651,20 @@ are being removed (before) or added (after)."
         (add-hook 'window-scroll-functions #'+my/stripe--after-scroll nil t)
         (add-hook 'before-change-functions #'+my/stripe--note-line-edit nil t)
         (add-hook 'after-change-functions #'+my/stripe--note-line-edit nil t)
+        (add-hook 'post-command-hook #'+my/stripe--plain-last-number nil t)
         (dolist (window (get-buffer-window-list nil nil t))
           (set-window-margins window (car (window-margins window)) 1)
           (+my/stripe--render window)))
-    (mapc #'delete-overlay +my/stripe--overlays)
-    (setq +my/stripe--overlays nil
-          +my/stripe--cache nil)
+    (remove-overlays (point-min) (point-max) '+my/stripe t)
+    (setq +my/stripe--cache nil)
     (remove-hook 'window-scroll-functions #'+my/stripe--render t)
     (remove-hook 'window-scroll-functions #'+my/stripe--after-scroll t)
     (remove-hook 'before-change-functions #'+my/stripe--note-line-edit t)
     (remove-hook 'after-change-functions #'+my/stripe--note-line-edit t)
+    (remove-hook 'post-command-hook #'+my/stripe--plain-last-number t)
+    (when +my/stripe--number-cookie
+      (face-remap-remove-relative +my/stripe--number-cookie)
+      (setq +my/stripe--number-cookie nil))
     (kill-local-variable 'right-margin-width)
     (dolist (window (get-buffer-window-list nil nil t))
       (set-window-margins window (car (window-margins window)) nil))))

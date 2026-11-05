@@ -150,10 +150,12 @@ margin. Rows are measured (an emoji, or a glyph rising above the font like inden
 row taller), and smooth scrolling, which moves the rows by part of a line, shifts the slices back by as much, so the
 marks stay still while the text glides. In a terminal each row is a coloured cell.
 
-A margin can't draw below the end of a file, so when the window shows empty space past the end the strip covers only
-the part with text (the whole file mapped onto it). Windows with the strip therefore scroll past the end only a bit:
-at most a quarter of the window (`+my/stripe-overscroll`: a fraction, a number of rows, `0` for none, `t` for no
-limit). Files shorter than the window get one line height per line.
+Windows with the strip scroll past the end of the file only a bit: at most a quarter of the window
+(`+my/stripe-overscroll`: a fraction, a number of rows, `0` for none, `t` for no limit). The strip maps the file plus
+that space onto the whole window height, like IntelliJ's scrollbar, so it never shrinks: marks stay put as the end comes
+into view, and the band reaches the bottom when the window can't scroll further. Margins need text to hang on, so below
+the last line the strip is drawn on one extra row after the end of the buffer (which also repeats the empty-line `~`).
+In a terminal the strip covers only the rows with text. Files shorter than the window get one line height per line.
 
 Click the strip to jump to that part of the file; the mouse wheel scrolls as usual. Info-level hints are left out
 (`+my/stripe-diagnostic-levels`); marks are at least `+my/stripe-mark-height` pixels tall.
