@@ -67,6 +67,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/stripe.el`    | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
 | `config/sticky.el`    | Sticky header: the classes/functions around the top visible line.                |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
+| `config/scroll.el`    | Mouse scrolling leaves the caret where it is, like IntelliJ.                     |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
@@ -212,6 +213,12 @@ second, parallel session.
 - **New windows get focus:** splits (`SPC w s` / `SPC w v`) and any new window a command opens (diff pane, other-window
   commands...) move the cursor there. Side windows (Doom popups, treemacs, which-key, transient menus) keep their own
   behaviour, as do windows opened in the background; the live Markdown preview opts out with `+my/focus-new-windows`.
+- **Scrolling leaves the caret where it is**, like IntelliJ (`config/scroll.el`): the mouse wheel/trackpad doesn't move
+  it, even off-screen. Emacs needs point inside the window, so while the caret's line is out of view the cursor is
+  hidden (the line highlight stays on the caret's line). Scroll back and it reappears; press a key and the key acts on
+  the caret, scrolling back to it (keys that leave the caret alone, like saving, `M-x` or switching windows, keep the
+  view); click in the text and the caret goes there. File buffers only, not while selecting; keyboard scrolling
+  (`C-e`, `C-d`...) stays Vim's. Off with `M-x +my/scroll-keep-caret-mode`.
 - **Projectile:** projects are discovered under `~/dev`. The file cache is off, so `SPC SPC` also lists files created
   outside Emacs (CLI, Claude Code, `git checkout`).
 
