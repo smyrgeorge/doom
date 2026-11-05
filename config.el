@@ -119,6 +119,9 @@
 (add-hook! 'after-save-hook #'evil-normal-state)
 
 ;; NEOTREE (IntelliJ-like project view)
+(after! neotree
+  (setq neo-theme 'nerd-icons))         ; file/folder icons (Doom default: 'nerd)
+
 (defun +my/neotree-reveal (file)
   "Show FILE in neotree without leaving the current window.
 Re-roots neotree to FILE's project if FILE is outside the current root."
