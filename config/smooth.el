@@ -47,6 +47,11 @@
           (error (+my/smooth--stop)))))))
 
 (after! ultra-scroll
+  ;; Doom's module pauses hl-todo during scrolls (`ultra-scroll-hide-functions'),
+  ;; so TODO/NOTE/FIXME lost their highlight while scrolling and got it back
+  ;; when it stopped: they flickered. Keep them on.
+  (remove-hook 'ultra-scroll-hide-functions #'hl-todo-mode)
+
   (defadvice! +my/smooth-scroll-glide-a (fn event &optional arg)
     "Spread big wheel steps (mouse wheels) over a few frames."
     :around #'ultra-scroll

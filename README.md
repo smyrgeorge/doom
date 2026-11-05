@@ -168,7 +168,8 @@ Click the strip to jump to that part of the file; the mouse wheel scrolls as usu
 Doom's `smooth-scroll` module scrolls by pixels (ultra-scroll), which suits a trackpad's stream of small steps. A
 mouse wheel reports a few lines per notch, so it still jumped; `config/smooth.el` spreads bigger steps over a few
 frames (about 0.1 s, fast at first then slowing down), and notches in quick succession add up
-(`+my/smooth-scroll-min-step`, `-frame`, `-fraction`).
+(`+my/smooth-scroll-min-step`, `-frame`, `-fraction`). The module also pauses some modes while scrolling; hl-todo is
+kept on, otherwise TODO/NOTE/FIXME lose their highlight during a scroll and flicker.
 
 ### Search Everywhere (`SPC s a`)
 
