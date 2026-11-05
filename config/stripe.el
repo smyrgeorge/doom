@@ -713,8 +713,14 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
         (add-hook 'post-command-hook #'+my/stripe--plain-last-number nil t)
         (add-hook 'pre-command-hook #'+my/stripe--note-point nil t)
         (add-hook 'post-command-hook #'+my/stripe--leave-phantom-line nil t)
+        ;; The stripe at the very edge, the fringe (line truncation arrows)
+        ;; between it and the text. Doom's vc-gutter puts fringes outside the
+        ;; margins, for the git gutter's sake (at the left edge); without a
+        ;; left margin, as in file windows, that changes nothing on the left.
+        (setq-local fringes-outside-margins nil)
         (dolist (window (get-buffer-window-list nil nil t))
           (set-window-margins window (car (window-margins window)) 1)
+          (+my/stripe--set-fringes window)
           (+my/stripe--render window)))
     (remove-overlays (point-min) (point-max) '+my/stripe t)
     (setq +my/stripe--cache nil)
@@ -729,8 +735,16 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
       (face-remap-remove-relative +my/stripe--number-cookie)
       (setq +my/stripe--number-cookie nil))
     (kill-local-variable 'right-margin-width)
+    (kill-local-variable 'fringes-outside-margins)
     (dolist (window (get-buffer-window-list nil nil t))
-      (set-window-margins window (car (window-margins window)) nil))))
+      (set-window-margins window (car (window-margins window)) nil)
+      (+my/stripe--set-fringes window))))
+
+(defun +my/stripe--set-fringes (window)
+  "Apply the buffer's `fringes-outside-margins' to WINDOW, which shows it
+already (windows take it when they start showing a buffer)."
+  (pcase-let ((`(,left ,right ,_ ,persistent) (window-fringes window)))
+    (set-window-fringes window left right fringes-outside-margins persistent)))
 
 (defun +my/stripe--maybe-enable ()
   ;; `so-long-mode' (files with very long lines) replaces their mode and isn't

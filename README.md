@@ -151,7 +151,9 @@ window height, like the marks on IntelliJ's scrollbar:
 - where several overlap, the most important wins: error > warning > deleted > changed > added;
 - a light band marks the part of the file on screen, like a scrollbar thumb.
 
-It's on in code, text and config files, and in files with very long lines (`so-long-mode`).
+It's on in code, text and config files, and in files with very long lines (`so-long-mode`). The strip is at the very
+edge, the fringe (e.g. the arrows of lines cut off at the window edge) between it and the text: Doom's vc-gutter puts
+fringes outside the margins for the git gutter's sake, which with no left margin only matters on the right.
 
 In the GUI the strip is drawn to the pixel: each screen row shows its slice of the strip as a small image in the right
 margin. Rows are measured (an emoji, or a glyph rising above the font like indent-bars' `│` on the top row, makes a
