@@ -74,6 +74,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
+| `config/modeline.el`  | Mode line: a space after its last item on the right.                             |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: commit graph (like tig), git-delta diffs, TODOs in the status buffer. |
 | `config/editor.el`    | Editing helpers: `SPC c ~` cycles the case style of a word; rainbow brackets.     |
@@ -260,6 +261,8 @@ second, parallel session.
   (`invalid-function treemacs-run-in-every-buffer`); so such functions go back to their source and are compiled again
   once the package loads.
 - **Font:** JetBrains Mono with ligatures.
+- **Mode line:** a space after its last item on the right (e.g. flycheck's checkmark), which touched the window's
+  edge; in every doom-modeline layout (`config/modeline.el`).
 - **Kotlin:** JetBrains' official [`kotlin-lsp`](https://github.com/Kotlin/kotlin-lsp) instead of the community
   `kotlin-language-server`; with `format +lsp`, Kotlin is formatted by IntelliJ's formatter.
 - **Magit:** diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `magit-delta`.

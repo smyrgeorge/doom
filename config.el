@@ -171,5 +171,8 @@
 ;; TABS
 (load! "config/tabs")
 
+;; MODE LINE (a space after its last item on the right)
+(load! "config/modeline")
+
 ;; COMPILE (byte-compile this config's functions when Emacs is idle; load last)
 (load! "config/compile")
