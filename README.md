@@ -99,7 +99,8 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
   kqueue file notifications miss in-place edits, so this is done explicitly on save).
 - **Reachable like any window**: `SPC w w` cycles into it and it gets a window number (`SPC w 1`, as the leftmost
   window).
-- `h`/`←` collapse, `l`/`→` expand or open.
+- `h`/`←` collapse, `l`/`→` expand or open. A **single click** opens a file or expands/collapses a folder (treemacs'
+  default is a double click).
 - `zR` / `zM` (`M-x treemacs-expand-all` / `treemacs-collapse-all`): expand every folder of the project, or collapse
   them all (the project stays open at its top level). Expanding asks first in projects with more than 300 folders.
 - With `+lsp`: structure view (`SPC c S`), project errors (`SPC c X`) and call hierarchy (`SPC c y` / `SPC c Y`).

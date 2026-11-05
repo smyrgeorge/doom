@@ -151,3 +151,11 @@
       :map evil-treemacs-state-map
       "zR" #'treemacs-expand-all
       "zM" #'treemacs-collapse-all)
+
+;; SINGLE CLICK
+;; Open files and expand/collapse folders with one click (treemacs' default is
+;; a double click). A double click then counts as one click, so it doesn't open
+;; a folder and close it again.
+(after! treemacs
+  (define-key treemacs-mode-map [mouse-1] #'treemacs-single-click-expand-action)
+  (define-key treemacs-mode-map [double-mouse-1] #'ignore))
