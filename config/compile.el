@@ -13,13 +13,18 @@
 ;; Again after anything loads: functions in `after!' blocks are defined when
 ;; their package loads.
 ;;
-;; A catch: a `let' binding a package's variable, e.g. SPC g d's
-;; (let ((magit-display-buffer-function ...)) ...), compiled before the package
-;; loaded, binds a local instead (the compiler can't tell it's the package's):
-;; the package never sees it, and SPC g d opened the diff in the same window.
-;; So the variables a function binds that aren't known yet are noted, and when
-;; one becomes known (its package loaded), the function goes back to its
-;; source and is compiled again.
+;; A catch: compiled before a package loaded, code using it can go wrong,
+;; where the interpreter (which looks at things as it runs) didn't:
+;; - a `let' binding the package's variable, e.g. SPC g d's
+;;   (let ((magit-display-buffer-function ...)) ...), binds a local instead
+;;   (the compiler can't tell it's the package's): magit never saw it, and
+;;   SPC g d opened the diff in the same window;
+;; - a call to the package's macro, e.g. treemacs-run-in-every-buffer, is
+;;   compiled as a function call: "Error running timer
+;;   `+my/treemacs-refresh-all': (invalid-function ...)".
+;; So the variables a function binds and the functions it calls that aren't
+;; known yet are noted, and when one becomes a special variable or a macro (its
+;; package loaded), the function goes back to its source and is compiled again.
 (defvar +my/compile-idle-delay 2
   "Seconds of idleness before this config's functions get compiled.")
 
@@ -30,8 +35,9 @@
 (defvar +my/compile--timer nil)
 
 (defvar +my/compile--watch (make-hash-table :test #'eq)
-  "FUNCTION -> (SOURCE COMPILED VARIABLES): compiled while VARIABLES, which it
-binds with `let', weren't known special variables (see above).")
+  "FUNCTION -> (SOURCE COMPILED VARIABLES CALLS): compiled while VARIABLES,
+which it binds with `let', weren't special variables, and CALLS, which it
+calls, weren't defined (see above).")
 
 (defun +my/compile--interpreted-p (symbol)
   (and (fboundp symbol)
@@ -56,36 +62,43 @@ binds with `let', weren't known special variables (see above).")
             (push (cdr item) fns)))))
     (delete-dups fns)))
 
-(defun +my/compile--unknown-bindings (source)
-  "The symbols SOURCE (an interpreted function) binds with `let' or `let*'
-that aren't special variables now; `error' if its body can't be expanded."
+(defun +my/compile--unknowns (source)
+  "(VARIABLES . CALLS) for SOURCE (an interpreted function), its body's macros
+expanded: the symbols it binds with `let' or `let*' that aren't special
+variables, and those it calls that aren't defined; `error' if the body can't
+be expanded."
   (let ((body (if (consp source) (nthcdr 3 source) (aref source 1)))
-        (symbols nil))
+        (variables nil)
+        (calls nil))
     (cl-labels ((walk (form)
-                  (when (consp form)
-                    (when (and (memq (car form) '(let let*)) (listp (cadr form)))
-                      (dolist (binding (cadr form))
-                        (let ((symbol (if (consp binding) (car binding) binding)))
-                          (when (and symbol (symbolp symbol)
-                                     (not (special-variable-p symbol)))
-                            (push symbol symbols)))))
+                  (when (and (consp form) (not (eq (car form) 'quote)))
+                    (let ((head (car form)))
+                      (when (and (memq head '(let let*)) (listp (cadr form)))
+                        (dolist (binding (cadr form))
+                          (let ((symbol (if (consp binding) (car binding) binding)))
+                            (when (and symbol (symbolp symbol)
+                                       (not (special-variable-p symbol)))
+                              (push symbol variables)))))
+                      (when (and head (symbolp head) (not (fboundp head)))
+                        (push head calls)))
                     (while (consp form)
                       (walk (car form))
                       (setq form (cdr form))))))
       (condition-case nil
-          (walk (macroexpand-all (cons 'progn body)))
-        (error (setq symbols 'error))))
-    (if (eq symbols 'error) 'error (delete-dups symbols))))
+          (progn (walk (macroexpand-all (cons 'progn body)))
+                 (cons (delete-dups variables) (delete-dups calls)))
+        (error 'error)))))
 
 (defun +my/compile--function (fn)
-  "Byte-compile FN in place, noting the variables it binds that aren't known."
+  "Byte-compile FN in place, noting what it uses that isn't known yet."
   (let* ((source (symbol-function fn))
-         (unknown (+my/compile--unknown-bindings source)))
-    (unless (eq unknown 'error)          ; left interpreted
+         (unknowns (+my/compile--unknowns source)))
+    (unless (eq unknowns 'error)          ; left interpreted
       (byte-compile fn)
       (let ((compiled (symbol-function fn)))
-        (if (and unknown (not (eq compiled source)))
-            (puthash fn (list source compiled unknown) +my/compile--watch)
+        (if (and (or (car unknowns) (cdr unknowns)) (not (eq compiled source)))
+            (puthash fn (list source compiled (car unknowns) (cdr unknowns))
+                     +my/compile--watch)
           (remhash fn +my/compile--watch))))))
 
 (defun +my/compile-config-functions-h ()
@@ -98,13 +111,14 @@ that aren't special variables now; `error' if its body can't be expanded."
       (setq +my/compile--pending (and fns t)))))
 
 (defun +my/compile--recheck ()
-  "Functions compiled before a variable they bind became known: back to their
-source, to be compiled again."
+  "Functions compiled before a variable they bind or a macro they call became
+known: back to their source, to be compiled again."
   (maphash (lambda (fn entry)
-             (pcase-let ((`(,source ,compiled ,unknown) entry))
+             (pcase-let ((`(,source ,compiled ,variables ,calls) entry))
                (cond ((not (eq (symbol-function fn) compiled)) ; redefined since
                       (remhash fn +my/compile--watch))
-                     ((seq-some #'special-variable-p unknown)
+                     ((or (seq-some #'special-variable-p variables)
+                          (seq-some #'macrop calls))
                       (fset fn source)
                       (remhash fn +my/compile--watch)))))
            +my/compile--watch))
