@@ -58,6 +58,17 @@
   (pcase-let ((`(,files ,dirs) (funcall fn workspace-root)))
     (list files (append dirs (+my/lsp-gitignored-directories workspace-root)))))
 
+;; PEEK
+;; Closing lsp-ui's peek (usages: gD, Cmd+B on a declaration) hides it twice,
+;; the second time with its overlay already gone, and Doom's indent-guides
+;; module redraws the bars under that overlay without checking: "Error running
+;; timer `lsp-ui-peek--disable': (wrong-type-argument overlayp nil)". Only redraw
+;; while there's an overlay.
+(defadvice! +my/indent-guides-peek-guard-a (fn &rest args)
+  :around #'+indent-guides--restore-after-lsp-ui-peek-a
+  (when (overlayp (bound-and-true-p lsp-ui-peek--overlay))
+    (apply fn args)))
+
 ;; KOTLIN
 ;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
 ;; lsp-mode's default kotlin-language-server.

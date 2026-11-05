@@ -89,6 +89,17 @@
 
 (add-hook 'window-selection-change-functions #'+my/treemacs-follow-project-soon)
 
+;; An expanded folder gets its git colours a moment later; if the tree is
+;; redrawn meanwhile (a project switch, a refresh), that folder's button is gone:
+;; "Error running timer `treemacs--apply-annotations-deferred':
+;; (wrong-type-argument number-or-marker-p nil)". The redrawn tree gets its own
+;; colours, so skip that (the git status is still cached first).
+(defadvice! +my/treemacs-stale-annotations-a (fn &rest args)
+  :around #'treemacs--apply-annotations-deferred
+  (condition-case nil
+      (apply fn args)
+    (wrong-type-argument nil)))
+
 ;; Update the saved file's git status in treemacs. macOS uses kqueue for file
 ;; notifications, which doesn't report in-place edits, so filewatch misses them.
 (defun +my/treemacs-git-update-on-save-h ()
