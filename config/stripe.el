@@ -20,12 +20,14 @@
 (defvar +my/stripe-diagnostic-levels '(error warning)
   "Flycheck levels shown in the stripe; add `info' to also show hints.")
 
-;; A margin can't draw below the end of a buffer, so a window scrolled past
-;; the end would leave the stripe short. Like IntelliJ's default (no "virtual
-;; space at file bottom"), windows with the stripe stop scrolling once the last
-;; line reaches the bottom: the stripe always spans the window.
-(defvar +my/stripe-scroll-past-end nil
-  "Non-nil to let windows with the stripe scroll past the end of the buffer.")
+;; A margin can't draw below the end of a buffer: when a window shows empty
+;; rows past the end, the stripe covers only the rows with text (the whole file
+;; mapped onto them). So windows with the stripe may scroll past the end only a
+;; bit: at most this much empty space below the last line.
+(defvar +my/stripe-overscroll 0.25
+  "How far windows with the stripe may scroll past the end of the buffer:
+a fraction of the window height (float), a number of rows (integer), 0 for
+none (the last line stops at the bottom), or t for no limit.")
 
 (defvar +my/stripe-margin-map
   (let ((map (make-sparse-keymap)))
@@ -50,7 +52,10 @@ over mode keymaps, e.g. outline-minor-mode's margin buttons (outline-cycle).")
     (insert  2 diff-hl-insert)
     (info    1 flycheck-fringe-info)))
 
-(defvar-local +my/stripe--edit-timer nil)
+(defvar-local +my/stripe--line-edits 0
+  "Bumped by edits that add or remove line breaks: they move the margin
+strings (which hang on lines) up or down, so the stripe must be redrawn
+before the next redisplay, not after a pause.")
 
 ;; ====== CODE ======
 
@@ -118,12 +123,13 @@ errors or the diff-hl highlights change."
         "gray30")))
 
 (defun +my/stripe--key (window &optional start)
-  "What WINDOW's stripe depends on, except edits (those redraw after a pause)."
+  "What WINDOW's stripe depends on. Edits within a line don't move it."
   (list (current-buffer)
         (or start (window-start window))
         (window-body-height window)
         (bound-and-true-p flycheck-current-errors)
-        +my/stripe--diff-hl-tick))
+        +my/stripe--diff-hl-tick
+        +my/stripe--line-edits))
 
 (defun +my/stripe--render (window &optional start)
   "Redraw the stripe of WINDOW, whose text starts at START."
@@ -131,125 +137,122 @@ errors or the diff-hl highlights change."
     (with-current-buffer (window-buffer window)
       ;; Runs from redisplay hooks: never let an error escape into them.
       (with-demoted-errors "Stripe: %S"
-       (when (bound-and-true-p +my/stripe-mode)
-        ;; Drop this window's old strings, and those of windows that no longer
-        ;; show this buffer.
-        (setq +my/stripe--overlays
-              (cl-delete-if (lambda (ov)
-                              (let ((win (overlay-get ov 'window)))
-                                (when (or (eq win window)
-                                          (not (window-live-p win))
-                                          (not (eq (window-buffer win) (current-buffer))))
-                                  (delete-overlay ov)
-                                  t)))
-                            +my/stripe--overlays))
-        (set-window-parameter window '+my/stripe-key (+my/stripe--key window start))
-        (pcase-let* ((`(,lines . ,marks) (+my/stripe--marks))
-                     (start (or start (window-start window)))
-                     (window-rows (max 1 (window-body-height window)))
-                     ;; Margin strings need text to hang on, so the stripe is
-                     ;; drawn next to text only; the rows below the end of the
-                     ;; buffer keep Emacs' usual empty-line `~'. When the end is
-                     ;; on screen, map the whole file onto the rows with text,
-                     ;; so no mark (or the band) falls on the empty rows.
-                     (rows (save-excursion
-                             (goto-char start)
-                             (1+ (vertical-motion (1- window-rows) window))))
-                     (cells (make-vector rows nil))
-                     (thumb-color (+my/stripe--thumb-color))
-                     (thumb nil))
-          ;; Marks: in each row, the highest-priority kind wins.
-          (pcase-dolist (`(,beg ,end ,kind) marks)
-            (when-let* ((priority (car (alist-get kind +my/stripe--kinds))))
-              (cl-loop for row from (+my/stripe--line-to-row beg lines rows)
-                       to (+my/stripe--line-to-row (min end lines) lines rows)
-                       for old = (aref cells row)
-                       when (or (null old)
-                                (> priority (car (alist-get old +my/stripe--kinds))))
-                       do (aset cells row kind))))
-          ;; Thumb: the rows covering the lines on screen (long files only).
-          (when (> lines rows)
-            (let ((first (line-number-at-pos start t)))
-              (setq thumb (cons (+my/stripe--line-to-row first lines rows)
-                                (+my/stripe--line-to-row (min lines (+ first window-rows -1))
-                                                         lines rows)))))
-          (set-window-parameter window '+my/stripe-rows rows) ; for clicks
-          ;; One margin string per screen row. Each carries its row, for clicks.
-          (cl-flet ((margin (row)
-                      (let* ((kind (aref cells row))
-                             (face (cadr (alist-get kind +my/stripe--kinds)))
-                             (color (if (and kind (facep face))
-                                        (face-foreground face nil t)
-                                      (and thumb (<= (car thumb) row (cdr thumb))
-                                           thumb-color))))
-                        (propertize
-                         " " 'display
-                         `((margin right-margin)
-                           ,(propertize " "
-                                        'face (and color (list :background color))
-                                        '+my/stripe-row row
-                                        'keymap +my/stripe-margin-map
-                                        'pointer 'hand
-                                        'help-echo "mouse-1: jump to this part of the file")))))
-                    (place (pos string)
-                      (let ((ov (make-overlay pos pos)))
-                        (overlay-put ov 'window window)
-                        (overlay-put ov 'before-string string)
-                        (push ov +my/stripe--overlays))))
-            (save-excursion
-              (goto-char start)
-              (cl-loop for row below rows
-                       do (place (point) (margin row))
-                       while (= (vertical-motion 1 window) 1))))))))))
+        (when (bound-and-true-p +my/stripe-mode)
+          ;; Drop this window's old strings, and those of windows that no longer
+          ;; show this buffer.
+          (setq +my/stripe--overlays
+                (cl-delete-if (lambda (ov)
+                                (let ((win (overlay-get ov 'window)))
+                                  (when (or (eq win window)
+                                            (not (window-live-p win))
+                                            (not (eq (window-buffer win) (current-buffer))))
+                                    (delete-overlay ov)
+                                    t)))
+                              +my/stripe--overlays))
+          (set-window-parameter window '+my/stripe-key (+my/stripe--key window start))
+          (pcase-let* ((`(,lines . ,marks) (+my/stripe--marks))
+                       (start (or start (window-start window)))
+                       (window-rows (max 1 (window-body-height window)))
+                       ;; Margin strings need text to hang on, so the stripe is
+                       ;; drawn next to text only; the rows below the end of the
+                       ;; buffer keep Emacs' usual empty-line `~'. When the end is
+                       ;; on screen, map the whole file onto the rows with text,
+                       ;; so no mark (or the band) falls on the empty rows.
+                       (last-row (save-excursion ; (ROWS . LAST LINE ON SCREEN)
+                                   (goto-char start)
+                                   (cons (1+ (vertical-motion (1- window-rows) window))
+                                         (line-number-at-pos (point) t))))
+                       (rows (car last-row))
+                       (cells (make-vector rows nil))
+                       (thumb-color (+my/stripe--thumb-color))
+                       (thumb nil))
+            ;; Marks: in each row, the highest-priority kind wins.
+            (pcase-dolist (`(,beg ,end ,kind) marks)
+              (when-let* ((priority (car (alist-get kind +my/stripe--kinds))))
+                (cl-loop for row from (+my/stripe--line-to-row beg lines rows)
+                         to (+my/stripe--line-to-row (min end lines) lines rows)
+                         for old = (aref cells row)
+                         when (or (null old)
+                                  (> priority (car (alist-get old +my/stripe--kinds))))
+                         do (aset cells row kind))))
+            ;; Thumb: the rows covering the lines on screen (long files only),
+            ;; from the first line to the one on the last row (wrapped lines
+            ;; take several rows, so that's not always FIRST + ROWS - 1).
+            (when (> lines rows)
+              (setq thumb (cons (+my/stripe--line-to-row (line-number-at-pos start t) lines rows)
+                                (+my/stripe--line-to-row (min lines (cdr last-row)) lines rows))))
+            (set-window-parameter window '+my/stripe-rows rows) ; for clicks
+            ;; One margin string per screen row. Each carries its row, for clicks.
+            (cl-flet ((margin (row)
+                        (let* ((kind (aref cells row))
+                               (face (cadr (alist-get kind +my/stripe--kinds)))
+                               (color (if (and kind (facep face))
+                                          (face-foreground face nil t)
+                                        (and thumb (<= (car thumb) row (cdr thumb))
+                                             thumb-color))))
+                          (propertize
+                           " " 'display
+                           `((margin right-margin)
+                             ,(propertize " "
+                                          'face (and color (list :background color))
+                                          '+my/stripe-row row
+                                          'keymap +my/stripe-margin-map
+                                          'pointer 'hand
+                                          'help-echo "mouse-1: jump to this part of the file")))))
+                      (place (pos string)
+                        (let ((ov (make-overlay pos pos)))
+                          (overlay-put ov 'window window)
+                          (overlay-put ov 'before-string string)
+                          (push ov +my/stripe--overlays))))
+              (save-excursion
+                (goto-char start)
+                (cl-loop for row below rows
+                         do (place (point) (margin row))
+                         while (= (vertical-motion 1 window) 1))))))))))
 
-(defun +my/stripe--render-buffer ()
-  "Redraw the stripe in every window showing the current buffer."
-  (dolist (window (get-buffer-window-list nil nil t))
-    (+my/stripe--render window)))
-
-(defun +my/stripe--after-change (&rest _)
-  "Redraw shortly after edits (lines added or removed shift the stripe)."
-  (unless (timerp +my/stripe--edit-timer)
-    (let ((buffer (current-buffer)))
-      (setq +my/stripe--edit-timer
-            (run-with-idle-timer
-             0.2 nil
-             (lambda ()
-               (when (buffer-live-p buffer)
-                 (with-current-buffer buffer
-                   (setq +my/stripe--edit-timer nil)
-                   (+my/stripe--render-buffer)))))))))
+(defun +my/stripe--note-line-edit (beg end &rest _)
+  "Before/after a change: count it if BEG..END holds a line break, i.e. lines
+are being removed (before) or added (after)."
+  (when (and (< beg end)
+             (save-excursion (goto-char beg) (search-forward "\n" end t)))
+    (cl-incf +my/stripe--line-edits)))
 
 (defun +my/stripe--render-all ()
   "Redraw the stripe in every window (e.g. after a theme change)."
   (dolist (window (window-list-1 nil 'nomini t))
     (+my/stripe--render window)))
 
-;; Redraw right before a window is displayed whenever what it shows changed
-;; (scroll position, size, buffer, diagnostics, git highlights). This catches
-;; every kind of scrolling, including the animated ones (good-scroll and
-;; ultra-scroll move the window from timers, which `window-scroll-functions'
-;; doesn't reliably see), before the stale stripe can be drawn.
+(defun +my/stripe--text-rows-wanted (window)
+  "How many of WINDOW's rows must show text: all but the allowed overscroll."
+  (let ((rows (window-body-height window)))
+    (max 1 (- rows (if (floatp +my/stripe-overscroll)
+                       (floor (* rows +my/stripe-overscroll))
+                     +my/stripe-overscroll)))))
+
 (defun +my/stripe--past-end-p (window)
-  "Non-nil if WINDOW shows empty rows below the end of its buffer."
+  "Non-nil if WINDOW shows more empty rows below the end than allowed."
   (save-excursion
     (goto-char (window-start window))
-    ;; A full window shows its first line plus ROWS - 1 more.
-    (let ((more (1- (window-body-height window))))
+    ;; N rows of text = the first line plus N - 1 more.
+    (let ((more (1- (+my/stripe--text-rows-wanted window))))
       (< (vertical-motion more window) more))))
 
 (defun +my/stripe--clamp-start (window)
-  "Scroll WINDOW back so the last line sits at the bottom, not above empty rows."
-  (when (and (not +my/stripe-scroll-past-end)
+  "Scroll WINDOW back so it doesn't show more empty rows past the end than allowed."
+  (when (and (not (eq +my/stripe-overscroll t))
              (> (window-start window) (point-min))
              (+my/stripe--past-end-p window))
     (let ((start (save-excursion
                    (goto-char (point-max))
-                   (vertical-motion (- 1 (window-body-height window)) window)
+                   (vertical-motion (- 1 (+my/stripe--text-rows-wanted window)) window)
                    (point))))
       (when (< start (window-start window))
         (set-window-start window start t)))))
 
+;; Redraw right before a window is displayed whenever what it shows changed
+;; (scroll position, size, buffer, diagnostics, git highlights, lines added or
+;; removed): every kind of scrolling and editing is caught before a stale
+;; stripe can be drawn. Also limits scrolling past the end (`+my/stripe-overscroll').
 (defun +my/stripe--pre-redisplay (window)
   (when (and (bound-and-true-p +my/stripe-mode) (windowp window))
     (+my/stripe--clamp-start window)
@@ -260,8 +263,10 @@ errors or the diff-hl highlights change."
 
 (defun +my/stripe--after-scroll (window _start)
   "When redisplay itself scrolled WINDOW past the end, scroll back right after."
-  (when (and (not +my/stripe-scroll-past-end)
-             (+my/stripe--past-end-p window))
+  (when (and (not (eq +my/stripe-overscroll t))
+             (window-live-p window)
+             (with-current-buffer (window-buffer window)
+               (+my/stripe--past-end-p window)))
     (run-at-time 0 nil (lambda ()
                          (when (window-live-p window)
                            (with-current-buffer (window-buffer window)
@@ -302,7 +307,8 @@ errors or the diff-hl highlights change."
         ;; everything else is caught by `+my/stripe--pre-redisplay'.
         (add-hook 'window-scroll-functions #'+my/stripe--render nil t)
         (add-hook 'window-scroll-functions #'+my/stripe--after-scroll nil t)
-        (add-hook 'after-change-functions #'+my/stripe--after-change nil t)
+        (add-hook 'before-change-functions #'+my/stripe--note-line-edit nil t)
+        (add-hook 'after-change-functions #'+my/stripe--note-line-edit nil t)
         (dolist (window (get-buffer-window-list nil nil t))
           (set-window-margins window (car (window-margins window)) 1)
           (+my/stripe--render window)))
@@ -312,7 +318,8 @@ errors or the diff-hl highlights change."
     (kill-local-variable 'right-margin-width)
     (remove-hook 'window-scroll-functions #'+my/stripe--render t)
     (remove-hook 'window-scroll-functions #'+my/stripe--after-scroll t)
-    (remove-hook 'after-change-functions #'+my/stripe--after-change t)
+    (remove-hook 'before-change-functions #'+my/stripe--note-line-edit t)
+    (remove-hook 'after-change-functions #'+my/stripe--note-line-edit t)
     (dolist (window (get-buffer-window-list nil nil t))
       (set-window-margins window (car (window-margins window)) nil))))
 
