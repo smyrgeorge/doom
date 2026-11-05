@@ -68,6 +68,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/sticky.el`    | Sticky header: the classes/functions around the top visible line.                |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
 | `config/smooth.el`    | Mouse-wheel notches glide (on top of Doom's pixel scrolling).                     |
+| `config/peek.el`      | LSP peek (usages, definitions): calmer, with functions, line numbers, key hints.  |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
@@ -176,6 +177,19 @@ minibuffer / echo area (it always fits what it shows, so it only jumped and came
 it moves through the candidates instead. Every window (`*Messages*`, help, magit... not just files) stops scrolling
 with at most a quarter of it empty below the last line (`+my/stripe-overscroll`), instead of going on until the last
 line reaches the top and bouncing back at each further notch; images, PDFs and terminals are left alone.
+
+### Usages peek
+
+`config/peek.el` reworks lsp-ui's peek, the inline panel that lists usages (`gD`, or `Cmd+B` on a declaration) and
+definitions:
+
+- a header that says what's listed (`Usages of HOLD1 · 22 in 1 file`) and a footer with the keys (`j`/`k`, `C-j`/`C-k`
+  file, `RET` open, `M-RET` other window, `Esc` close);
+- each usage shows the function/class it's in, grouped: the name on the first usage of each, with a count (`×21`);
+  outside functions, the top-level variable it's in (e.g. a constant holding a big literal);
+- usages don't include the declaration itself;
+- the preview has line numbers, with the usage's line highlighted;
+- softer colours for the selection and the matches, and only as tall as the list needs.
 
 ### Search Everywhere (`SPC s a`)
 

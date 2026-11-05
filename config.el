@@ -147,6 +147,9 @@
 ;; LSP (Kotlin: JetBrains' kotlin-lsp)
 (load! "config/lsp")
 
+;; PEEK (lsp-ui's usages/definitions peek: calmer, with functions and line numbers)
+(load! "config/peek")
+
 ;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
 (load! "config/agent-shell")
 
