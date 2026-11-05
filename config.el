@@ -134,5 +134,8 @@
 ;; PROJECTILE (projects under ~/dev, no file cache)
 (load! "config/projectile")
 
+;; SEARCH EVERYWHERE (IntelliJ's double Shift: classes, files, symbols, actions)
+(load! "config/search")
+
 ;; TABS
 (load! "config/tabs")

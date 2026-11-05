@@ -75,6 +75,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/agent-shell.el` | Claude Code in Emacs (agent-shell): login, default agent, `SPC o c` / `SPC o C`. |
 | `config/lsp.el`       | Language servers: JetBrains' `kotlin-lsp` for Kotlin.                             |
 | `config/projectile.el` | Projects under `~/dev`; project file list without a cache.                      |
+| `config/search.el`    | `SPC s a`: Search Everywhere (classes, files, symbols, actions), like IntelliJ.   |
 | `config/git.el`       | `SPC g d`: the current file's git diff in a side pane.                            |
 | `config/terminal.el`  | Terminal Emacs: paint the terminal background with the theme colour.              |
 | `scripts/emacs.sh`    | Installs Emacs (emacs-plus cask) and runs `doom sync`.                            |
@@ -125,6 +126,19 @@ Works in visual state too, on the selection. Each section comes from a provider 
 `+my/context-action-providers`; new kinds of actions are added by writing another provider. Org keeps `M-RET` for "new heading/item"; in Markdown a new list item is
 `C-c C-j` or `M-*`.
 
+### Search Everywhere (`SPC s a`)
+
+`config/search.el` emulates IntelliJ's double Shift: one list with **Classes**, **Files**, **Symbols** and
+**Actions**. Typing searches all of them (words in any order, case-insensitive); to show one tab, type its key and
+`SPC` — `c`, `f`, `s` or `a` — and `<<` (or `DEL` on an empty input) to go back to all.
+
+- **Classes / Symbols:** the language server's workspace symbols, queried as you type (from 2 characters; only in
+  buffers with an LSP server). Classes are classes, interfaces/traits, structs, enums and objects.
+- **Files:** the project's files, recently opened ones first.
+- **Actions:** every command (what `M-x` runs), recently used ones first, with key bindings and docs.
+
+Emacs can't see a lone Shift key press on macOS, so it's on `SPC s a` instead of double Shift.
+
 ### Claude Code in Emacs
 
 [`agent-shell`](https://github.com/xenodium/agent-shell) runs Claude Code (via the Agent Client Protocol) in a native
@@ -160,6 +174,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | Key                         | Action                                                 |
 |-----------------------------|--------------------------------------------------------|
 | `M-RET` (Option+Enter)      | Context actions at point (spelling, code actions, Claude) |
+| `SPC s a`                   | Search Everywhere: classes, files, symbols, actions (IntelliJ's double Shift) |
 | `SPC g d`                   | Current file's git diff in a pane on the right (again in the pane: close) |
 | `SPC o c`                   | Start Claude Code (agent-shell)                        |
 | `SPC o C`                   | Pick / switch agent shell                              |
