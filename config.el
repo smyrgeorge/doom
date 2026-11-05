@@ -170,3 +170,6 @@
 
 ;; TABS
 (load! "config/tabs")
+
+;; COMPILE (byte-compile this config's functions when Emacs is idle; load last)
+(load! "config/compile")

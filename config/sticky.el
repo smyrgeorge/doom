@@ -87,14 +87,26 @@ leaving out those that begin on that line or below."
       (font-lock-ensure beg end)
       (string-trim-right (buffer-substring beg end)))))
 
+(defvar-local +my/sticky--path-cache nil
+  "(FILE . TEXT): the path shown for FILE (finding the project root on every
+scroll step took ~6% of the time spent scrolling).")
+
+(defun +my/sticky--path ()
+  "The file's path in its project, as shown."
+  (unless (equal (car +my/sticky--path-cache) buffer-file-name)
+    (setq +my/sticky--path-cache
+          (cons buffer-file-name
+                (propertize (if-let* ((root (doom-project-root)))
+                                (file-relative-name buffer-file-name root)
+                              (abbreviate-file-name buffer-file-name))
+                            'face 'shadow))))
+  (cdr +my/sticky--path-cache))
+
 (defun +my/sticky--compute (start)
   (if-let* ((starts (+my/sticky--scope-starts start)))
       (mapconcat #'+my/sticky--line starts
                  (propertize +my/sticky-separator 'face 'shadow))
-    (propertize (if-let* ((root (doom-project-root)))
-                    (file-relative-name buffer-file-name root)
-                  (abbreviate-file-name buffer-file-name))
-                'face 'shadow)))
+    (+my/sticky--path)))
 
 (defun +my/sticky-header ()
   "The header line text of the window being displayed (cached per scroll position)."

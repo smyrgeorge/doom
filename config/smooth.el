@@ -7,16 +7,20 @@
 ;; Doom's smooth-scroll module (ultra-scroll) scrolls by the pixels each wheel
 ;; event reports, all at once: right for a trackpad's stream of small steps,
 ;; but a mouse wheel reports a few lines per notch (51 px here), so it still
-;; moved in jumps. Bigger steps now glide over a few frames, fast at first
-;; and slowing down (ease-out); notches in quick succession add up.
+;; moved in jumps. Bigger steps now glide, fast at first and slowing down
+;; (ease-out); notches in quick succession add to what's left, without a
+;; restart. A frame per refresh of the display (60 Hz), each covering a share
+;; of what's left that depends on the time since the last one: a late frame
+;; catches up instead of slowing the glide down.
 (defvar +my/smooth-scroll-min-step 20
   "Wheel steps bigger than this many pixels glide; smaller ones (trackpads) don't.")
 
-(defvar +my/smooth-scroll-frame 0.012
-  "Seconds between the frames of a glide.")
+(defvar +my/smooth-scroll-frame (/ 1.0 60)
+  "Seconds between the frames of a glide: the display's refresh (60 Hz).")
 
-(defvar +my/smooth-scroll-fraction 0.3
-  "How much of the remaining distance each frame of a glide covers.")
+(defvar +my/smooth-scroll-time-constant 0.05
+  "Seconds in which a glide covers ~63% of what's left; it ends after about
+three times this.")
 
 ;; LONG LINES
 ;; Files with very long lines (e.g. an HTML report embedding its data as one
@@ -42,6 +46,8 @@
 
 (defvar +my/smooth--remaining 0 "Pixels left to scroll (negative: down).")
 
+(defvar +my/smooth--last 0 "When the last frame was (`float-time').")
+
 (defvar +my/smooth--timer nil)
 
 (defun +my/smooth--stop ()
@@ -51,18 +57,43 @@
         +my/smooth--remaining 0))
 
 (defun +my/smooth--frame ()
-  "Scroll part of what's left of the glide."
+  "Scroll the share of what's left that's due since the last frame."
   (let ((window +my/smooth--window))
     (if (or (not (window-live-p window))
             (zerop +my/smooth--remaining))
         (+my/smooth--stop)
-      (let ((step (round (* +my/smooth--remaining +my/smooth-scroll-fraction))))
+      (let* ((now (float-time))
+             (share (- 1 (exp (/ (- +my/smooth--last now)
+                                 +my/smooth-scroll-time-constant))))
+             (step (round (* +my/smooth--remaining share))))
+        (setq +my/smooth--last now)
+        ;; The last few pixels in one go (no crawl at the end), and at least
+        ;; one each frame.
+        (when (< (abs (- +my/smooth--remaining step)) 4)
+          (setq step +my/smooth--remaining))
         (when (zerop step)
           (setq step (if (> +my/smooth--remaining 0) 1 -1)))
         (setq +my/smooth--remaining (- +my/smooth--remaining step))
         (condition-case nil
             (ultra-scroll--scroll step window)
           (error (+my/smooth--stop)))))))
+
+(defun +my/smooth--glide (window delta)
+  "Add DELTA pixels to WINDOW's glide, or start one."
+  ;; Another window, or the other way: drop the rest of the glide.
+  (when (or (not (eq window +my/smooth--window))
+            (< (* delta +my/smooth--remaining) 0))
+    (+my/smooth--stop))
+  (ultra-scroll--prepare-to-scroll window)
+  (setq +my/smooth--window window
+        +my/smooth--remaining (+ +my/smooth--remaining delta))
+  (unless +my/smooth--timer
+    ;; From rest: the first frame right away, as if one had just passed.
+    (setq +my/smooth--last (- (float-time) +my/smooth-scroll-frame))
+    (+my/smooth--frame)
+    (setq +my/smooth--timer
+          (run-at-time +my/smooth-scroll-frame +my/smooth-scroll-frame
+                       #'+my/smooth--frame))))
 
 ;; SCROLL LIMIT
 ;; ultra-scroll lets a window scroll until its last line is at the top; past
@@ -156,16 +187,4 @@ minibuffer."
        ((not (and delta (> (abs delta) +my/smooth-scroll-min-step)))
         (funcall fn event arg))
        (t
-        (let ((window (mwheel-event-window event)))
-          ;; Another window, or the other way: drop the rest of the glide.
-          (when (or (not (eq window +my/smooth--window))
-                    (< (* delta +my/smooth--remaining) 0))
-            (+my/smooth--stop))
-          (ultra-scroll--prepare-to-scroll window)
-          (setq +my/smooth--window window
-                +my/smooth--remaining (+ +my/smooth--remaining delta))
-          (unless +my/smooth--timer
-            (+my/smooth--frame)         ; the first frame right away
-            (setq +my/smooth--timer
-                  (run-at-time +my/smooth-scroll-frame +my/smooth-scroll-frame
-                               #'+my/smooth--frame)))))))))
+        (+my/smooth--glide (mwheel-event-window event) delta))))))

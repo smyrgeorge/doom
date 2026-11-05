@@ -86,6 +86,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/search.el`    | `SPC s a`: Search Everywhere, like IntelliJ; `Cmd+Shift+F`: find in files (rg).   |
 | `config/git.el`       | `SPC g d`: the current file's git diff in a side pane.                            |
 | `config/terminal.el`  | Terminal Emacs: paint the terminal background with the theme colour.              |
+| `config/compile.el`   | Byte-compiles this config's functions when Emacs is idle (they load as source).   |
 | `scripts/emacs.sh`    | Installs Emacs (emacs-plus cask) and runs `doom sync`.                            |
 | `scripts/tools.sh`    | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), pdf-tools build deps, the `claude-agent-acp` bridge. |
 | `scripts/lsp.sh`      | Language servers, formatters and linters.                                         |
@@ -182,9 +183,11 @@ Click the strip to jump to that part of the file; the mouse wheel scrolls as usu
 ### Smooth scrolling
 
 Doom's `smooth-scroll` module scrolls by pixels (ultra-scroll), which suits a trackpad's stream of small steps. A
-mouse wheel reports a few lines per notch, so it still jumped; `config/smooth.el` spreads bigger steps over a few
-frames (about 0.1 s, fast at first then slowing down), and notches in quick succession add up
-(`+my/smooth-scroll-min-step`, `-frame`, `-fraction`). The module also pauses some modes while scrolling; hl-todo is
+mouse wheel reports a few lines per notch, so it still jumped; `config/smooth.el` spreads bigger steps over a glide
+(about 0.15 s, fast at first then slowing down), and notches in quick succession add to what's left without
+restarting it. A frame per refresh of the display (60 Hz), each covering a share of what's left that depends on the
+time since the last frame, so a late frame catches up instead of slowing the glide down
+(`+my/smooth-scroll-min-step`, `-frame`, `-time-constant`). The module also pauses some modes while scrolling; hl-todo is
 kept on, otherwise TODO/NOTE/FIXME lose their highlight during a scroll and flicker. Its mode-line freeze during scrolls
 is off: in popups like `*Messages*` it broke the mode line, and with it Esc (which then couldn't close the popup). The wheel doesn't scroll the
 minibuffer / echo area (it always fits what it shows, so it only jumped and came back); with a completion list open,
@@ -243,6 +246,10 @@ second, parallel session.
 
 ### Other customizations
 
+- **Compiled config:** Doom loads `config/*.el` as source, so its functions ran interpreted, several times slower (the
+  stripe's redraw on each frame of a scroll: 1.5 ms instead of 0.2). Once Emacs has been idle for 2 s they're
+  byte-compiled in place, stopping at the first key press; again after anything loads (`after!` blocks define
+  functions when their package loads). No `.elc` files are written, so nothing gets stale (`config/compile.el`).
 - **Font:** JetBrains Mono with ligatures.
 - **Kotlin:** JetBrains' official [`kotlin-lsp`](https://github.com/Kotlin/kotlin-lsp) instead of the community
   `kotlin-language-server`; with `format +lsp`, Kotlin is formatted by IntelliJ's formatter.

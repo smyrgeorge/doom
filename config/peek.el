@@ -53,6 +53,7 @@
 ;; Usages without the declaration. (lsp-ui hands its first argument to
 ;; lsp-mode as the "exclude" flag, so ask lsp-mode directly.)
 (defadvice! +my/peek-usages-a (&optional _include-declaration extra)
+  "Find usages, the declaration left out (see above)."
   :override #'lsp-ui-peek-find-references
   (interactive)
   (lsp-ui-peek--find-xrefs (symbol-at-point) "textDocument/references"
