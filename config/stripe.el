@@ -650,35 +650,43 @@ are being removed (before) or added (after)."
                        (floor (* rows +my/stripe-overscroll))
                      +my/stripe-overscroll)))))
 
-(defun +my/stripe--past-end-p (window)
-  "Non-nil if WINDOW shows more empty rows below the end than allowed."
-  ;; N rows of text = the first line plus N - 1 more; smooth scrolling (a
-  ;; fraction of the first row hidden above) needs one more.
-  (let ((more (+ (1- (+my/stripe--text-rows-wanted window))
-                 (if (> (window-vscroll window t) 0) 1 0))))
-    ;; Each line takes at least a row: enough lines left settles it fast
-    ;; (`vertical-motion' is slow, and this runs as windows scroll).
-    (save-excursion
-      (goto-char (window-start window))
-      (and (progn (forward-line more) (eobp))
-           (progn (goto-char (window-start window))
-                  (< (vertical-motion more window) more))))))
+;; Measured in pixels, not rows: a row showing an image (e.g. a screenshot in
+;; an agent-shell reply) is as tall as many lines. Counted as one, the limit
+;; came out far above the end: scrolling down to an image near the end,
+;; ultra-scroll went on past it (within the image) and the limit then
+;; snapped the window back up, by screens.
+(defun +my/stripe--end-pixels-wanted (window)
+  "How far below the top of WINDOW the end of its buffer must at least be, in
+pixels: `+my/stripe--text-rows-wanted' rows, the empty line after a final
+newline counting as one."
+  (let ((lh (window-default-line-height window)))
+    (- (* (+my/stripe--text-rows-wanted window) lh)
+       (if (and (> (point-max) (point-min)) (eq (char-before (point-max)) ?\n))
+           lh
+         0))))
+
+(defun +my/stripe--end-limit (window)
+  "(START . VSCROLL): as far as WINDOW may scroll toward the end, the row the
+allowed distance above it and how much of that row goes above the window's top
+\(as ultra-scroll scrolls). Measured up from the end, as far as needed."
+  (pcase-let* ((wanted (+my/stripe--end-pixels-wanted window))
+               (`(,_ ,height ,start)
+                (window-text-pixel-size window (cons (point-max) (- wanted))
+                                        (point-max))))
+    (and start (cons start (max 0 (- height wanted))))))
 
 (defun +my/stripe--clamp-start (window)
-  "Scroll WINDOW back so it doesn't show more empty rows past the end than allowed."
-  (when (and (not (eq +my/stripe-overscroll t))
-             (or (> (window-start window) (point-min))
-                 (> (window-vscroll window t) 0))
-             (+my/stripe--past-end-p window))
-    (let ((start (save-excursion
-                   (goto-char (point-max))
-                   (vertical-motion (- 1 (+my/stripe--text-rows-wanted window)) window)
-                   (point))))
-      (when (or (< start (window-start window))
-                (and (= start (window-start window))
-                     (> (window-vscroll window t) 0)))
-        (set-window-start window start t)
-        (set-window-vscroll window 0 t)))))
+  "Scroll WINDOW back so it doesn't show more empty space past the end than allowed."
+  (unless (eq +my/stripe-overscroll t)
+    (let ((start (window-start window))
+          (vscroll (window-vscroll window t)))
+      (when (or (> start (point-min)) (> vscroll 0))
+        (pcase (+my/stripe--end-limit window)
+          ((and `(,limit . ,limit-vscroll)
+                (guard (or (> start limit)
+                           (and (= start limit) (> vscroll limit-vscroll)))))
+           (set-window-start window limit t)
+           (set-window-vscroll window limit-vscroll t t)))))))
 
 ;; Redraw right before a window is displayed whenever what it shows changed
 ;; (scroll position, size, buffer, diagnostics, git highlights, lines added or
