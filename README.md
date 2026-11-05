@@ -71,6 +71,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: git-delta diffs, TODOs in the status buffer.                       |
+| `config/editor.el`    | Editing helpers: `SPC c ~` cycles the case style of the word at point.            |
 | `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
 | `config/spell.el`     | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary.  |
 | `dict/tech.txt`       | ~40k programming words for the spell checker (built by `scripts/dict.sh`).        |

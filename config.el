@@ -112,12 +112,8 @@
 ;; SPC g d: the current file's diff in a pane on the right.
 (load! "config/git")
 
-;; EDITING
-;; SPC c ~: cycle the word at point through snake_case, UPPER_CASE,
-;; PascalCase, camelCase and kebab-case.
-(use-package! string-inflection
-  :commands string-inflection-all-cycle)
-(map! :leader :desc "Cycle case style" "c ~" #'string-inflection-all-cycle)
+;; EDITOR (SPC c ~: cycle case style)
+(load! "config/editor")
 
 ;; SPELL (create the personal dictionary if missing)
 (load! "config/spell")
