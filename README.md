@@ -64,6 +64,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `init.el`             | Enabled Doom modules and their flags (`doom sync` after editing).                |
 | `packages.el`         | Extra packages: `magit-delta`, `agent-shell` (+ `acp`, `shell-maker`).            |
 | `config.el`           | Main configuration; small sections inline, big ones loaded from `config/`.        |
+| `config/scroll.el`    | Smooth scrolling without TODO / spelling highlights flickering.                   |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |

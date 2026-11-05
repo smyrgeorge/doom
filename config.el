@@ -94,6 +94,9 @@
 ;; WINDOW (maximized frame; new windows get focus)
 (load! "config/window")
 
+;; SCROLL (no TODO / spelling highlight flicker while scrolling)
+(load! "config/scroll")
+
 ;; TERMINAL
 (load! "config/terminal")
 
