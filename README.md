@@ -122,7 +122,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 
 - **Updates as you type** (≈0.3 s after you stop), swapping the page content without reloading.
 - **Scrolls to the cursor line**, using pandoc's `sourcepos` extension to map each element back to its source line.
-- **GitHub look**: github-markdown-css plus highlight.js, following the macOS light/dark setting.
+- **GitHub look**: github-markdown-css plus highlight.js, following the macOS light/dark setting; as wide as the pane.
 - Math is rendered as MathML; relative image links work.
 - In terminal Emacs it falls back to markdown-mode's `eww` preview (updates on save).
 

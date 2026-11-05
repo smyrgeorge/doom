@@ -81,7 +81,10 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
               "")
    "<link rel='stylesheet' media='(prefers-color-scheme: light)' href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github.min.css'>"
    "<link rel='stylesheet' media='(prefers-color-scheme: dark)' href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github-dark.min.css'>"
-   "<style>body{box-sizing:border-box;max-width:740px;width:100%;margin:40px auto;padding:0 10px;}</style>"
+   ;; As wide as the pane. (GitHub's stylesheet sets `.markdown-body''s margin,
+   ;; which beat a plain `body' rule: the text stayed in a 740 px column on the
+   ;; left, empty space on the right.)
+   "<style>body.markdown-body{box-sizing:border-box;max-width:none;width:100%;margin:0;padding:24px 28px;}</style>"
    "<script src='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/highlight.min.js'></script>"
    "<script>document.addEventListener('DOMContentLoaded',function(){"
    +md-preview--highlight-js "});</script>"
