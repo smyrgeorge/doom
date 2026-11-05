@@ -266,6 +266,11 @@ Emacs can't see a lone Shift key press on macOS, so it's on `SPC s a` instead of
 Emacs buffer — evil keys, search and copy work as usual. It uses the Claude CLI login. `C-u M-x agent-shell` starts a
 second, parallel session.
 
+Claude is told it runs inside Emacs, in an agent-shell buffer rather than a terminal, and that images show inline
+there: a Markdown image link to a local file (`![chart](/tmp/chart.png)`) or an image's path alone on a line, so it shows
+charts and screenshots that way. The text (`+my/agent-shell-claude-context`) is appended to Claude Code's own system
+prompt in every session it starts or resumes.
+
 ### Other customizations
 
 - **Compiled config:** Doom loads `config/*.el` as source, so its functions ran interpreted, several times slower (the
