@@ -354,6 +354,11 @@ the end of the buffer."
                  (nreverse rows)))
          (last (car (last rows)))
          (text-bottom (+ (nth 1 last) (nth 2 last)))
+         ;; The empty line after the final newline (where the end of the
+         ;; buffer is): shown as part of the filler, not as a line of its own.
+         (phantom (and ended (= (car last) (point-max)) (> (point-max) (point-min))
+                       (eq (char-before (point-max)) ?\n)))
+         (filler-top (if phantom (nth 1 last) text-bottom))
          ;; The strip spans the window, and maps onto it the file plus the
          ;; empty space windows may scroll past its end: so the marks don't
          ;; move as the end comes into view, and the band reaches the bottom
@@ -402,16 +407,21 @@ the end of the buffer."
                                      when (and (>= y 0) (< y height))
                                      do (aset slice i (aref pixels y))
                                      finally return slice)
-                unless (string-blank-p slice)
+                unless (or (string-blank-p slice)
+                           (and phantom (= beg (point-max)))) ; in the filler
                 collect (cons beg
                               (apply #'propertize " "
                                      'display `((margin right-margin)
                                                 ,(+my/stripe--image slice width palette))
                                      click)))
        ;; Below the end of the buffer: the rest of the strip.
-       (when (and ended (< text-bottom body))
-         (+my/stripe--filler (substring pixels (max 0 text-bottom))
-                             (- body text-bottom) width palette font-height click))))))
+       (when (and ended (< filler-top body))
+         (+my/stripe--filler (substring pixels (max 0 filler-top))
+                             (- body filler-top) width palette font-height click
+                             (and phantom
+                                  (if-let* ((font (ignore-errors (font-at start window))))
+                                      (aref (query-font font) 4)
+                                    (- font-height 4)))))))))
 
 (defun +my/stripe--tilde (period)
   "A fringe bitmap repeating vi-tilde-fringe's `~' every PERIOD pixels (where
@@ -428,17 +438,20 @@ Emacs marks empty lines past the end), or nil."
           (define-fringe-bitmap name vector period 8 '(top t)))) ; t: repeated
       name)))
 
-(defun +my/stripe--filler (pixels height width palette font-height click)
-  "What follows the end of the buffer: a row HEIGHT pixels high (the rest of
-the window) showing PIXELS of the strip in the margin. Margins need text to
-hang on, and Emacs' own empty rows past the end have none. The row also
-repeats the empty-line `~', and the cursor stays on the last line."
-  (let ((tilde (+my/stripe--tilde font-height)))
-    ;; At the end of the buffer Emacs puts the cursor after this string, on
-    ;; the tall row: draw it on a space on the last line instead.
-    (concat (propertize " " 'cursor t)
-            "\n"
-            (propertize " " 'display `(space :width (1) :height (,height) :ascent 100))
+(defun +my/stripe--filler (pixels height width palette font-height click &optional ascent)
+  "What follows the last line: a row HEIGHT pixels high (the rest of the
+window) showing PIXELS of the strip in the margin. Margins need text to hang
+on, and Emacs' own empty rows past the end have none. The row repeats the
+empty-line `~' too. With ASCENT (the font's), it takes the place of the empty
+line after the final newline, as in Vim: then its baseline is ASCENT pixels
+down, where the cursor shows if it gets there (insert state). Otherwise it
+starts after the last line, and the cursor stays on that line."
+  (let* ((tilde (+my/stripe--tilde font-height))
+         ;; How much of the row is above the baseline, in percent.
+         (above (if ascent (max 1 (min 100 (ceiling (* 100.0 ascent) height))) 100)))
+    (concat (propertize " " 'cursor t) ; else Emacs puts it after the string
+            (unless ascent "\n")
+            (propertize " " 'display `(space :width (1) :height (,height) :ascent ,above))
             (when tilde
               ;; Emacs draws its own `~' in the fringe face (vi-tilde-fringe
               ;; doesn't give its bitmap a face).
@@ -446,8 +459,42 @@ repeats the empty-line `~', and the cursor stays on the last line."
             (unless (string-blank-p pixels)
               (apply #'propertize " "
                      'display `((margin right-margin)
-                                ,(+my/stripe--image pixels width palette 100))
+                                ,(+my/stripe--image pixels width palette above))
                      click)))))
+
+;; Like Vim, the cursor doesn't go to the empty line after the final newline
+;; (it's shown as `~', part of the filler): a click below the text lands on
+;; the last line, at the clicked column; `j' there stays put; `G' and the like
+;; go to the last line. Insert state may go there, to add at the end.
+(defvar-local +my/stripe--point-before nil "Point before the current command.")
+
+(defun +my/stripe--note-point ()
+  (setq +my/stripe--point-before (point)))
+
+(defun +my/stripe--leave-phantom-line ()
+  (when (and (eobp) (bolp) (not (bobp))
+             (or (mouse-event-p last-input-event)
+                 (not (memq (bound-and-true-p evil-state) '(insert replace emacs)))))
+    (let ((posn (and (mouse-event-p last-input-event) (event-end last-input-event)))
+          (before +my/stripe--point-before))
+      (forward-line -1)
+      (cond ((and posn (eq (posn-window posn) (selected-window)) (posn-x-y posn))
+             ;; Clicked below the text: that column of the last line. (Posns
+             ;; count y from the text; `posn-at-x-y' from the window's top.)
+             (when-let* ((row (posn-at-point (point)))
+                         (pos (posn-point (posn-at-x-y (car (posn-x-y posn))
+                                                       (+ (cdr (posn-x-y row))
+                                                          (window-tab-line-height)
+                                                          (window-header-line-height))))))
+               (when (<= (point) pos (line-end-position))
+                 (goto-char pos)
+                 ;; Normal state: on the last character, not after it.
+                 (when (and (eolp) (not (bolp))
+                            (memq (bound-and-true-p evil-state) '(normal motion)))
+                   (backward-char)))))
+            ((and before (>= before (point)) (< before (point-max)))
+             (goto-char before))          ; was on the last line: stay
+            (t (back-to-indentation))))))
 
 (defun +my/stripe--plain-last-number ()
   "The filler row belongs to the last line, so with the cursor there its
@@ -663,6 +710,8 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
         (add-hook 'before-change-functions #'+my/stripe--note-line-edit nil t)
         (add-hook 'after-change-functions #'+my/stripe--note-line-edit nil t)
         (add-hook 'post-command-hook #'+my/stripe--plain-last-number nil t)
+        (add-hook 'pre-command-hook #'+my/stripe--note-point nil t)
+        (add-hook 'post-command-hook #'+my/stripe--leave-phantom-line nil t)
         (dolist (window (get-buffer-window-list nil nil t))
           (set-window-margins window (car (window-margins window)) 1)
           (+my/stripe--render window)))
@@ -673,6 +722,8 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
     (remove-hook 'before-change-functions #'+my/stripe--note-line-edit t)
     (remove-hook 'after-change-functions #'+my/stripe--note-line-edit t)
     (remove-hook 'post-command-hook #'+my/stripe--plain-last-number t)
+    (remove-hook 'pre-command-hook #'+my/stripe--note-point t)
+    (remove-hook 'post-command-hook #'+my/stripe--leave-phantom-line t)
     (when +my/stripe--number-cookie
       (face-remap-remove-relative +my/stripe--number-cookie)
       (setq +my/stripe--number-cookie nil))

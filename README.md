@@ -154,7 +154,10 @@ Windows with the strip scroll past the end of the file only a bit: at most a qua
 (`+my/stripe-overscroll`: a fraction, a number of rows, `0` for none, `t` for no limit). The strip maps the file plus
 that space onto the whole window height, like IntelliJ's scrollbar, so it never shrinks: marks stay put as the end comes
 into view, and the band reaches the bottom when the window can't scroll further. Margins need text to hang on, so below
-the last line the strip is drawn on one extra row after the end of the buffer (which also repeats the empty-line `~`).
+the last line the strip is drawn on one extra row after the end of the buffer, which also repeats the empty-line `~` and
+takes the place of the empty, unnumbered line after the final newline: as in Vim, the `~` start right after the last
+line. The cursor stays off that line in normal state (`j` on the last line stays put, `G` goes to the last line), and a
+click below the text puts it on the last line at the clicked column; insert state can go there, to add at the end.
 In a terminal the strip covers only the rows with text. Files shorter than the window get one line height per line.
 
 Click the strip to jump to that part of the file; the mouse wheel scrolls as usual. Info-level hints are left out
