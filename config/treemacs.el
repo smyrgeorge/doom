@@ -62,6 +62,33 @@
   (treemacs-follow-mode +1)             ; highlight the current file (Doom: off)
   (treemacs-project-follow-mode +1))    ; show the current buffer's project
 
+;; PROJECT FOLLOW, RIGHT AWAY
+;; `treemacs-project-follow-mode' switches to the current buffer's project only
+;; after 1.5 s without any input (an idle timer): switch buffers or windows and
+;; keep typing or scrolling, and treemacs went on showing the old project. Now it
+;; follows a moment after every switch (several switches in a row: one update).
+(defvar +my/treemacs--follow-timer nil)
+
+(defun +my/treemacs-follow-project-soon (&rest _)
+  (when (timerp +my/treemacs--follow-timer)
+    (cancel-timer +my/treemacs--follow-timer))
+  (setq +my/treemacs--follow-timer
+        (run-at-time
+         0.1 nil
+         (lambda ()
+           (setq +my/treemacs--follow-timer nil)
+           (let ((buffer (window-buffer (selected-window))))
+             (when (and (bound-and-true-p treemacs-project-follow-mode)
+                        (not (minibufferp buffer))) ; e.g. M-x: stay
+               ;; Treemacs itself (selected) and the home directory are
+               ;; skipped there, like other buffers without a project.
+               (with-current-buffer buffer
+                 (ignore-errors (treemacs--do-follow-project)))))))))
+
+(add-hook 'window-buffer-change-functions #'+my/treemacs-follow-project-soon)
+
+(add-hook 'window-selection-change-functions #'+my/treemacs-follow-project-soon)
+
 ;; Update the saved file's git status in treemacs. macOS uses kqueue for file
 ;; notifications, which doesn't report in-place edits, so filewatch misses them.
 (defun +my/treemacs-git-update-on-save-h ()

@@ -96,7 +96,8 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 
 - **Opens automatically** the first time a project file is shown in a workspace (`SPC p p`, `SPC SPC`, `SPC f r`, the
   dashboard...). Close it with `SPC o p` and it stays closed for that workspace.
-- **Follows the current buffer**: highlights the open file and switches to the buffer's project.
+- **Follows the current buffer**: highlights the open file and switches to the buffer's project, right after every
+  buffer or window switch (treemacs' own project follow waits for 1.5 s without any input).
 - **Git status** colours for files and folders, computed asynchronously. Saving a file refreshes its status (macOS's
   kqueue file notifications miss in-place edits, so this is done explicitly on save).
 - **Reachable like any window**: `SPC w w` cycles into it and it gets a window number (`SPC w 1`, as the leftmost
