@@ -121,95 +121,39 @@
 ;; EVIL
 (add-hook! 'after-save-hook #'evil-normal-state)
 
-;; NEOTREE (IntelliJ-like project view)
-(after! neotree
-  (setq neo-theme 'nerd-icons           ; file/folder icons (Doom default: 'nerd)
-        neo-vc-integration '(face)))    ; color file names by git status
+;; TREEMACS (IntelliJ-like project view)
+(setq +treemacs-git-mode 'deferred)     ; async git status, incl. folders (python3)
+(after! treemacs
+  (setq treemacs-is-never-other-window nil) ; reachable with SPC w w (Doom: t)
+  (treemacs-follow-mode +1)             ; highlight the current file (Doom: off)
+  (treemacs-project-follow-mode +1))    ; show the current buffer's project
+;; Arrows mirror h/l (treemacs-evil binds h/l but leaves ←/→ as char motions).
+(map! :after treemacs-evil
+      :map evil-treemacs-state-map
+      [left]  #'treemacs-COLLAPSE-action
+      [right] #'treemacs-RET-action)
+;; Treemacs hides its window from winum; number it (leftmost => SPC w 1).
+(after! (treemacs winum)
+  (setq winum-ignored-buffers-regexp
+        (remove (regexp-quote treemacs-buffer-name-prefix)
+                winum-ignored-buffers-regexp)))
 
-;; h/← collapse folder (or go to parent), l/→ expand folder or open file.
-;; Doom binds h/l only in motion state, where evil's h/l (char motions) win.
-(map! :after neotree
-      :map neotree-mode-map
-      :nm "h"     #'+neotree/collapse-or-up
-      :nm "l"     #'+neotree/expand-or-open
-      :nm [left]  #'+neotree/collapse-or-up
-      :nm [right] #'+neotree/expand-or-open)
-
-;; Highlight the whole selected line instead of showing a cursor.
-(add-hook! 'neotree-mode-hook
-  (defun +my/neotree-line-cursor-h ()
-    (setq-local evil-normal-state-cursor (list nil)
-                evil-motion-state-cursor (list nil)
-                evil-emacs-state-cursor  (list nil)
-                cursor-type nil
-                hl-line-sticky-flag t)  ; keep it visible from other windows
-    (face-remap-add-relative 'hl-line 'region) ; stronger than doom-one's hl-line
-    (hl-line-mode +1)))
-
-;; Refresh git colors after saving a file or after magit changes things.
-(defun +my/neotree-refresh-vc-h (&rest _)
-  (when (and (featurep 'neotree) (neo-global--window-exists-p))
-    (let ((file (buffer-file-name (window-buffer (selected-window)))))
-      ;; neo-buffer--refresh selects the neotree window; keep focus here.
-      (save-selected-window
-        (neo-global--with-buffer (neo-buffer--refresh t)))
-      (when file (+my/neotree-reveal file)))))
-(add-hook 'after-save-hook #'+my/neotree-refresh-vc-h)
-(add-hook 'magit-post-refresh-hook #'+my/neotree-refresh-vc-h)
-
-(defun +my/neotree-reveal (file)
-  "Show FILE in neotree without leaving the current window.
-Re-roots neotree to FILE's project if FILE is outside the current root."
-  (require 'neotree)
-  (save-selected-window
-    (unless (neo-global--file-in-root-p file)
-      (neotree-dir (or (doom-project-root (file-name-directory file))
-                       (file-name-directory file))))
-    (neo-global--with-window
-      (neo-buffer--select-file-node file t)
-      ;; hl-line only updates after commands in its own buffer; move it now.
-      (when (bound-and-true-p hl-line-mode) (hl-line-highlight)))))
-
-;; 1. SPC p p: pick a file first, then open the project tree on that file.
-;;    Cancelling the file picker (C-g) leaves neotree closed.
-(setq +workspaces-switch-project-function
-      (lambda (dir)
-        (doom-project-find-file dir)
-        (let ((file buffer-file-name))
-          (save-selected-window (neotree-dir dir))
-          (when file (+my/neotree-reveal file)))))
-
-;; 2. Follow the current buffer: highlight its file in neotree (if open).
-(defun +my/neotree-follow-h (&rest _)
-  (when-let* (((featurep 'neotree))
-              ((neo-global--window-exists-p))
-              (file (buffer-file-name (window-buffer (selected-window))))
-              ((not (equal file (neo-global--with-buffer
-                                  (neo-buffer--get-filename-current-line))))))
-    (condition-case err
-        (+my/neotree-reveal file)
-      (error (message "neotree follow: %s" (error-message-string err))))))
-(add-hook 'window-buffer-change-functions #'+my/neotree-follow-h)
-(add-hook 'window-selection-change-functions #'+my/neotree-follow-h)
-
-;; 3. Workspaces (SPC TAB): keep neotree out of saved layouts, and if it was
-;;    open, reopen it on the new workspace's project and current file.
-(defvar +my/neotree--reopen nil)
-(add-hook! 'persp-before-deactivate-functions
-  (defun +my/neotree-hide-before-switch-h (&rest _)
-    (setq +my/neotree--reopen (and (featurep 'neotree) (neo-global--window-exists-p)))
-    (when +my/neotree--reopen (neotree-hide))))
-(add-hook! 'persp-activated-functions
-  (defun +my/neotree-show-after-switch-h (&rest _)
-    (when +my/neotree--reopen
-      (setq +my/neotree--reopen nil)
-      ;; Skip non-file buffers (e.g. a fresh SPC p p workspace's dashboard);
-      ;; the project switch opens neotree itself after a file is picked.
-      (let ((file (buffer-file-name (window-buffer (selected-window)))))
-        (when (or file (derived-mode-p 'dired-mode))
-          (save-selected-window
-            (neotree-dir (or (doom-project-root) default-directory)))
-          (when file (+my/neotree-reveal file)))))))
+;; Open treemacs the first time a project file is shown in each workspace
+;; (SPC p p, SPC SPC, SPC f r, dashboard, ...). If you close it afterwards
+;; (SPC o p) it stays closed for that workspace.
+(defun +my/treemacs-auto-open-h (&rest _)
+  (when-let* ((buf (window-buffer (selected-window)))
+              ((buffer-file-name buf))
+              ((with-current-buffer buf (doom-project-root)))
+              (persp (and (bound-and-true-p persp-mode) (get-current-persp)))
+              ((not (persp-parameter '+my/treemacs-opened persp))))
+    (set-persp-parameter '+my/treemacs-opened t persp)
+    (require 'treemacs)
+    (when (eq (treemacs-current-visibility) 'none)
+      (with-current-buffer buf
+        (save-selected-window
+          (treemacs-add-and-display-current-project-exclusively))))))
+(add-hook 'window-buffer-change-functions #'+my/treemacs-auto-open-h)
 
 ;; MAGIT
 ;; Render diffs with git-delta (brew install git-delta).
