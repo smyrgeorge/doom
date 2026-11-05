@@ -55,13 +55,17 @@
 (defvar +my/treemacs--refresh-timer nil)
 (defvar +my/treemacs--last-refresh 0)
 
+(defvar treemacs-silent-refresh)
 (defun +my/treemacs-refresh-all ()
   (when (featurep 'treemacs)
     (setq +my/treemacs--last-refresh (float-time))
-    (treemacs-run-in-every-buffer
-     (ignore-errors
-       (treemacs-without-recenter
-        (treemacs--do-refresh (current-buffer) 'all))))))
+    ;; Quietly: no "[Treemacs] Refresh complete." on every focus / git change
+    ;; (a manual refresh, g in treemacs, still says it).
+    (let ((treemacs-silent-refresh t))
+      (treemacs-run-in-every-buffer
+       (ignore-errors
+         (treemacs-without-recenter
+          (treemacs--do-refresh (current-buffer) 'all)))))))
 
 (defun +my/treemacs-schedule-refresh (&rest _)
   (when (> (- (float-time) +my/treemacs--last-refresh) 3)
