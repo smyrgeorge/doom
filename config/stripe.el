@@ -41,6 +41,14 @@
 a fraction of the window height (float), a number of rows (integer), 0 for
 none (the last line stops at the bottom), or t for no limit.")
 
+;; PADDING
+;; File windows (those with the stripe) get a character's width of space more
+;; on each side of the text: their fringes are that much wider (8 -> 16 px).
+;; What's drawn in them sits in the middle: the git gutter on the left, the
+;; arrows of lines cut off at the edge and flycheck's on the right.
+(defvar +my/stripe-padding 1
+  "Columns of space added to each fringe of file windows (nil: none).")
+
 (defvar +my/stripe-margin-map
   (let ((map (make-sparse-keymap)))
     (define-key map [right-margin mouse-1] #'+my/stripe-jump)
@@ -718,6 +726,9 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
         ;; margins, for the git gutter's sake (at the left edge); without a
         ;; left margin, as in file windows, that changes nothing on the left.
         (setq-local fringes-outside-margins nil)
+        (when +my/stripe-padding
+          (setq-local left-fringe-width (+my/stripe--fringe-width 'left-fringe)
+                      right-fringe-width (+my/stripe--fringe-width 'right-fringe)))
         (dolist (window (get-buffer-window-list nil nil t))
           (set-window-margins window (car (window-margins window)) 1)
           (+my/stripe--set-fringes window)
@@ -736,15 +747,28 @@ the end, check it right after (the filler can't be taken out mid-redisplay)."
       (setq +my/stripe--number-cookie nil))
     (kill-local-variable 'right-margin-width)
     (kill-local-variable 'fringes-outside-margins)
+    (kill-local-variable 'left-fringe-width)
+    (kill-local-variable 'right-fringe-width)
     (dolist (window (get-buffer-window-list nil nil t))
       (set-window-margins window (car (window-margins window)) nil)
       (+my/stripe--set-fringes window))))
 
 (defun +my/stripe--set-fringes (window)
-  "Apply the buffer's `fringes-outside-margins' to WINDOW, which shows it
-already (windows take it when they start showing a buffer)."
-  (pcase-let ((`(,left ,right ,_ ,persistent) (window-fringes window)))
-    (set-window-fringes window left right fringes-outside-margins persistent)))
+  "Apply the buffer's fringe settings (`fringes-outside-margins', widths) to
+WINDOW, which shows it already (windows take them when they start showing a
+buffer)."
+  (set-window-fringes window left-fringe-width right-fringe-width
+                      fringes-outside-margins))
+
+(defun +my/stripe--fringe-width (side)
+  "The width of the fringe on SIDE (`left-fringe', `right-fringe') with
+`+my/stripe-padding' added, in pixels; from a graphical frame (a terminal's
+have none)."
+  (let ((frame (or (seq-find (lambda (f) (and (display-graphic-p f) (not (frame-parent f))))
+                             (cons (selected-frame) (frame-list)))
+                   (selected-frame))))
+    (+ (or (frame-parameter frame side) 8)
+       (* +my/stripe-padding (frame-char-width frame)))))
 
 (defun +my/stripe--maybe-enable ()
   ;; `so-long-mode' (files with very long lines) replaces their mode and isn't

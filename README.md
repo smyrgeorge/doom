@@ -154,6 +154,9 @@ window height, like the marks on IntelliJ's scrollbar:
 It's on in code, text and config files, and in files with very long lines (`so-long-mode`). The strip is at the very
 edge, the fringe (e.g. the arrows of lines cut off at the window edge) between it and the text: Doom's vc-gutter puts
 fringes outside the margins for the git gutter's sake, which with no left margin only matters on the right.
+File windows also get a character's width of space more on each side of the text (`+my/stripe-padding`): their
+fringes are 16 px instead of 8, with the git gutter, flycheck's marks and the arrows in the middle. The sticky header
+lines up with the text past the fringe.
 
 In the GUI the strip is drawn to the pixel: each screen row shows its slice of the strip as a small image in the right
 margin. Rows are measured (an emoji, or a glyph rising above the font like indent-bars' `│` on the top row, makes a

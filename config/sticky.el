@@ -114,7 +114,11 @@ leaving out those that begin on that line or below."
       (progn
         (header-line-indent-mode 1)       ; line the text up with the code
         (setq-local header-line-format
-                    '("" header-line-indent (:eval (+my/sticky-header)))))
+                    ;; The header line starts at the window's edge, the text
+                    ;; after the fringe: skip to where the text starts, then
+                    ;; past the line numbers.
+                    '("" (:propertize " " display (space :align-to 0))
+                      header-line-indent (:eval (+my/sticky-header)))))
     (header-line-indent-mode -1)
     (kill-local-variable 'header-line-format)))
 
