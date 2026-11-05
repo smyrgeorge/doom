@@ -122,6 +122,12 @@
 (after! neotree
   (setq neo-theme 'nerd-icons))         ; file/folder icons (Doom default: 'nerd)
 
+;; Arrow keys mirror h/l: ← collapse folder (or go to parent), → expand/open.
+(map! :after neotree
+      :map neotree-mode-map
+      :nm [left]  #'+neotree/collapse-or-up
+      :nm [right] #'+neotree/expand-or-open)
+
 ;; Highlight the whole selected line instead of showing a cursor.
 (add-hook! 'neotree-mode-hook
   (defun +my/neotree-line-cursor-h ()
