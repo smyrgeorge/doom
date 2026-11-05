@@ -64,7 +64,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `init.el`             | Enabled Doom modules and their flags (`doom sync` after editing).                |
 | `packages.el`         | Extra packages: `magit-delta`, `agent-shell` (+ `acp`, `shell-maker`).            |
 | `config.el`           | Main configuration; small sections inline, big ones loaded from `config/`.        |
-| `config/scroll.el`    | Smooth scrolling without TODO / spelling highlights flickering.                   |
+| `config/stripe.el`    | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
@@ -126,6 +126,20 @@ JetBrains IDEs:
 Works in visual state too, on the selection. Each section comes from a provider function listed in
 `+my/context-action-providers`; new kinds of actions are added by writing another provider. Org keeps `M-RET` for "new heading/item"; in Markdown a new list item is
 `C-c C-j` or `M-*`.
+
+### Error stripe
+
+`config/stripe.el` draws a one-column strip at the right edge of every file window that maps the whole file onto the
+window height, like the marks on IntelliJ's scrollbar:
+
+- errors (red) and warnings (yellow) from flycheck / the language server;
+- git changes (diff-hl), in the gutter's colours: red deleted, orange changed, green added;
+- where several fall on the same row, the most important wins: error > warning > deleted > changed > added;
+- a light band marks the part of the file on screen, like a scrollbar thumb.
+
+Click the strip to jump to that part of the file; the mouse wheel scrolls as usual. Info-level hints are left out
+(`+my/stripe-diagnostic-levels`). Doom's `smooth-scroll` module is off: scrolling by pixels moves the margin with the
+text, which made the strip wobble; scrolling whole lines keeps it still.
 
 ### Search Everywhere (`SPC s a`)
 
@@ -196,7 +210,7 @@ See `init.el` for the full list. Notable choices:
 | Group         | Modules                                                                                                   |
 |---------------|-----------------------------------------------------------------------------------------------------------|
 | `:completion` | `(corfu +orderless +icons)`, `(vertico +icons)`                                                            |
-| `:ui`         | `dashboard`, `indent-guides`, `ligatures`, `(smooth-scroll +interpolate)`, `tabs`, `(treemacs +lsp)`, `(vc-gutter +pretty)`, `(window-select +numbers)`, `workspaces` |
+| `:ui`         | `dashboard`, `indent-guides`, `ligatures`, `tabs`, `(treemacs +lsp)`, `(vc-gutter +pretty)`, `(window-select +numbers)`, `workspaces` |
 | `:editor`     | `(evil +everywhere)`, `(format +onsave +lsp)`, `multiple-cursors`, `snippets`, `(whitespace +guess +trim)`  |
 | `:emacs`      | `(dired +dirvish +icons)`, `(ibuffer +icons)`, `undo`, `vc`                                                |
 | `:term`       | `(ghostel +everywhere)`                                                                                   |

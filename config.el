@@ -94,8 +94,8 @@
 ;; WINDOW (maximized frame; new windows get focus)
 (load! "config/window")
 
-;; SCROLL (no TODO / spelling highlight flicker while scrolling)
-(load! "config/scroll")
+;; ERROR STRIPE (IntelliJ-like marks for git changes and errors at the right edge)
+(load! "config/stripe")
 
 ;; TERMINAL
 (load! "config/terminal")
