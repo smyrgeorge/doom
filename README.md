@@ -80,7 +80,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/magit.el`     | Magit add-ons: commit graph (like tig), git-delta diffs, TODOs in the status buffer. |
 | `config/editor.el`    | Editing and navigation: Cmd+B, Cmd+[ / Cmd+], `M-[` / `M-]`, `SPC c ~`; rainbow brackets; right margin. |
-| `config/evil.el`      | Evil tweaks: saving returns to normal state.                                      |
+| `config/evil.el`      | Evil tweaks: saving returns to normal state; `q` closes transient menus.          |
 | `config/spell.el`     | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary.  |
 | `dict/tech.txt`       | ~40k programming words for the spell checker (built by `scripts/dict.sh`).        |
 | `config/agent-shell.el` | Claude Code in Emacs (agent-shell): login, default agent, `SPC o c` / `SPC o C`. |
@@ -345,6 +345,9 @@ smaller ones at their own size; `{width=100%}` after an image link sizes one ima
 - **Current line across wrapped rows:** a long line wraps onto rows indented like it (Doom's word wrap, e.g. two spaces
   in a Markdown table), and the current line's highlight left that indentation out: Emacs draws a line's wrap prefix
   without the faces of the overlays on it. hl-line's overlay now carries a copy of the prefix in its face.
+- **`q` closes transient menus** (agent-shell's help and drawing menus, magit's...), as Esc (Doom) and `C-g` do: it
+  only said "Unbound suffix: q". A menu that uses `q` for something of its own keeps it (magit's dispatch: bury the
+  buffer; blame, git-timemachine: quit them); `transient-bind-q-to-quit` would move such keys to `Q`, not done.
 - **Rainbow brackets:** `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
 - **Right margin:** a thin vertical line at the maximum line length, like IntelliJ's, in files of code, text and
   configuration: at `fill-column`, set in `config.el` (120; also where `gq` / `M-q` wrap text; commit messages 72). A
