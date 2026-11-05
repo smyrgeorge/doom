@@ -64,6 +64,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `init.el`             | Enabled Doom modules and their flags (`doom sync` after editing).                |
 | `packages.el`         | Extra packages: `magit-delta`, `agent-shell` (+ `acp`, `shell-maker`).            |
 | `config.el`           | Main configuration; small sections inline, big ones loaded from `config/`.        |
+| `config/emacs.el`     | Emacs itself: garbage collection (32 MB while idle instead of gcmh's 800 KB).      |
 | `config/stripe.el`    | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
 | `config/sticky.el`    | Sticky header: the classes/functions (Markdown: headings) around the top line.    |
 | `config/window.el`    | Maximized frame; new windows (splits, panes) get focus.                           |
