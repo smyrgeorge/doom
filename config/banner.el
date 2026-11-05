@@ -16,10 +16,11 @@
 ;; notices over the rows above. In a terminal the header line shows the first
 ;; notice instead, saying how many more there are.)
 ;;
-;; Notices so far, in files with very long lines (`so-long-mode', see
-;; config/smooth.el), both warnings that can make scrolling slow again:
-;; - lines aren't wrapped: "Wrap lines" wraps them;
-;; - highlighting is off: "Highlight anyway" goes back to the file's own mode.
+;; Notices so far:
+;; - long lines (warning): files with very long lines open in `so-long-mode',
+;;   plain and unwrapped (see config/smooth.el); "Wrap lines" wraps them again,
+;;   "Open normally" goes back to the file's own mode (both can make scrolling
+;;   slow again).
 (defvar +my/banner-types
   '((info    "nf-cod-info"    blue)
     (warning "nf-cod-warning" yellow)
@@ -392,7 +393,7 @@ that no longer have any."
 
 (add-hook 'doom-load-theme-hook #'+my/banner-faces-h)
 
-;;; Notices (warnings): very long lines aren't wrapped, nor highlighted
+;;; Notice (warning): very long lines aren't wrapped nor highlighted
 
 (defun +my/banner--group-digits (n)
   "N with thousands separators: 51997 -> \"51,997\"."
@@ -402,26 +403,23 @@ that no longer have any."
     s))
 
 (defun +my/banner-long-lines-h ()
-  "In `so-long-mode' (very long lines), say lines aren't wrapped nor highlighted."
+  "In `so-long-mode' (very long lines), say the file is shown plain and unwrapped."
   (when (derived-mode-p 'so-long-mode)
-    (when truncate-lines
-      (+my/banner-show
-       'long-lines-wrap
-       (format "Lines aren't wrapped: this file has very long lines (up to %s characters)."
-               (+my/banner--group-digits (cadr (buffer-line-statistics))))
-       :type 'warning
-       :actions '(("Wrap lines" . +my/banner--wrap-lines))))
     (+my/banner-show
-     'long-lines-highlight
-     "Highlighting is off, to keep scrolling smooth with lines this long."
+     'long-lines
+     (format "This file has very long lines (up to %s characters): shown without highlighting%s, to keep scrolling smooth."
+             (+my/banner--group-digits (cadr (buffer-line-statistics)))
+             (if truncate-lines " and unwrapped" ""))
      :type 'warning
-     :actions '(("Highlight anyway" . +my/banner--highlight-anyway)))))
+     :actions `(,@(and truncate-lines '(("Wrap lines" . +my/banner--wrap-lines)))
+                ("Open normally" . +my/banner--open-normally)))))
 
 (defun +my/banner--wrap-lines ()
   (setq-local truncate-lines nil)
-  (+my/banner-close 'long-lines-wrap))
+  ;; Same notice, without the part about wrapping.
+  (+my/banner-long-lines-h))
 
-(defun +my/banner--highlight-anyway ()
+(defun +my/banner--open-normally ()
   ;; Back to the file's own mode. Not `so-long-revert': Doom's action keeps
   ;; what to undo in a buffer-local variable that entering `so-long-mode'
   ;; wipes, so it did nothing.

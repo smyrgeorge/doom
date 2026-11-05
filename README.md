@@ -187,9 +187,9 @@ Files with lines over 5,000 characters (`+my/long-line-threshold`; Doom keeps Em
 open in `so-long-mode`: plain, without highlighting, ligatures or LSP. Otherwise, e.g. an HTML report with
 7,000-character SVG lines stayed in `web-mode`, where redisplay walks each such line character by character (~6 ms a
 line a pass) and scrolling stalled for seconds. They don't wrap either: wrapped, such a line fills screens of rows and
-every scroll step lays it out again (~60 ms, a visible stutter; ~15-20 ms unwrapped). Two notices at the top say so:
-lines aren't wrapped (**Wrap lines**), highlighting is off (**Highlight anyway**: the file's own mode back) (see below).
-The header line still shows the file's path there.
+every scroll step lays it out again (~60 ms, a visible stutter; ~15-20 ms unwrapped). A notice at the top says so, with
+**Wrap lines** and **Open normally** (the file's own mode back) actions (see below). The header line still shows the
+file's path there.
 
 ### Notices
 
@@ -200,8 +200,7 @@ A header line is one row of text, so it grows a row per notice (an invisible tal
 frame lays the notices over those rows; each window showing the buffer gets its own. In a terminal the header line
 shows the first notice instead (and how many more). Code adds one with
 `(+my/banner-show ID TEXT :type 'warning :actions '(("Label" . function)))`; `M-x +my/banner-close` closes the first.
-Notices so far, in files with very long lines (warnings): lines aren't wrapped (**Wrap lines**), highlighting is off
-(**Highlight anyway**).
+Notices so far: (warning) files with very long lines shown plain and unwrapped (**Wrap lines**, **Open normally**).
 
 ### Usages peek
 
