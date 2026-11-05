@@ -132,6 +132,16 @@
       :map evil-treemacs-state-map
       [left]  #'treemacs-COLLAPSE-action
       [right] #'treemacs-RET-action)
+;; Update the saved file's git status in treemacs. macOS uses kqueue for file
+;; notifications, which doesn't report in-place edits, so filewatch misses them.
+(defun +my/treemacs-git-update-on-save-h ()
+  (when-let* ((file buffer-file-name)
+              ((featurep 'treemacs)))
+    (dolist (win (window-list))
+      (when (with-current-buffer (window-buffer win) (derived-mode-p 'treemacs-mode))
+        (with-selected-window win
+          (ignore-errors (treemacs-update-single-file-git-state file)))))))
+(add-hook 'after-save-hook #'+my/treemacs-git-update-on-save-h)
 ;; Treemacs hides its window from winum; number it (leftmost => SPC w 1).
 (after! (treemacs winum)
   (setq winum-ignored-buffers-regexp
