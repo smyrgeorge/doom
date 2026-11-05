@@ -123,7 +123,8 @@
 
 ;; NEOTREE (IntelliJ-like project view)
 (after! neotree
-  (setq neo-theme 'nerd-icons))         ; file/folder icons (Doom default: 'nerd)
+  (setq neo-theme 'nerd-icons           ; file/folder icons (Doom default: 'nerd)
+        neo-vc-integration '(face)))    ; color file names by git status
 
 ;; Arrow keys mirror h/l: ← collapse folder (or go to parent), → expand/open.
 (map! :after neotree
@@ -137,8 +138,19 @@
     (setq-local evil-normal-state-cursor (list nil)
                 evil-motion-state-cursor (list nil)
                 evil-emacs-state-cursor  (list nil)
-                cursor-type nil)
+                cursor-type nil
+                hl-line-sticky-flag t)  ; keep it visible from other windows
+    (face-remap-add-relative 'hl-line 'region) ; stronger than doom-one's hl-line
     (hl-line-mode +1)))
+
+;; Refresh git colors after saving a file or after magit changes things.
+(defun +my/neotree-refresh-vc-h (&rest _)
+  (when (and (featurep 'neotree) (neo-global--window-exists-p))
+    (let ((file (buffer-file-name (window-buffer (selected-window)))))
+      (neo-global--with-buffer (neo-buffer--refresh t))
+      (when file (+my/neotree-reveal file)))))
+(add-hook 'after-save-hook #'+my/neotree-refresh-vc-h)
+(add-hook 'magit-post-refresh-hook #'+my/neotree-refresh-vc-h)
 
 (defun +my/neotree-reveal (file)
   "Show FILE in neotree without leaving the current window.
@@ -149,7 +161,9 @@ Re-roots neotree to FILE's project if FILE is outside the current root."
       (neotree-dir (or (doom-project-root (file-name-directory file))
                        (file-name-directory file))))
     (neo-global--with-window
-      (neo-buffer--select-file-node file t))))
+      (neo-buffer--select-file-node file t)
+      ;; hl-line only updates after commands in its own buffer; move it now.
+      (when (bound-and-true-p hl-line-mode) (hl-line-highlight)))))
 
 ;; 1. SPC p p: pick a file first, then open the project tree on that file.
 ;;    Cancelling the file picker (C-g) leaves neotree closed.
