@@ -126,9 +126,12 @@
   (setq neo-theme 'nerd-icons           ; file/folder icons (Doom default: 'nerd)
         neo-vc-integration '(face)))    ; color file names by git status
 
-;; Arrow keys mirror h/l: ← collapse folder (or go to parent), → expand/open.
+;; h/← collapse folder (or go to parent), l/→ expand folder or open file.
+;; Doom binds h/l only in motion state, where evil's h/l (char motions) win.
 (map! :after neotree
       :map neotree-mode-map
+      :nm "h"     #'+neotree/collapse-or-up
+      :nm "l"     #'+neotree/expand-or-open
       :nm [left]  #'+neotree/collapse-or-up
       :nm [right] #'+neotree/expand-or-open)
 
