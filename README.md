@@ -132,7 +132,8 @@ second, parallel session.
   (OSC 11) and restored on exit (OSC 111).
 - **`M-[` / `M-]`** switch buffers in the GUI only; in a terminal they would swallow mouse/focus escape sequences.
 - **Evil:** saving a buffer returns to normal state.
-- **Projectile:** projects are discovered under `~/dev`.
+- **Projectile:** projects are discovered under `~/dev`. The file cache is off, so `SPC SPC` also lists files created
+  outside Emacs (CLI, Claude Code, `git checkout`).
 
 ## Custom key bindings
 
