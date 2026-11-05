@@ -74,6 +74,52 @@
 
 (add-hook 'doom-load-theme-hook #'+my/right-margin-face-h)
 
+;; CURRENT LINE ACROSS WRAPPED ROWS
+;; A long line wraps onto rows indented like it (Doom's word wrap: e.g. two
+;; spaces in a Markdown table), and the current line's highlight left that
+;; indentation out: Emacs draws a line's wrap prefix (and line prefix) without
+;; the faces of the overlays on it, so a strip of plain background stayed at
+;; the start of each continuation row. hl-line's overlay now carries copies of
+;; the line's prefixes in its face (an overlay's prefix wins over the text's).
+(defun +my/hl-line--prefix (prefix face)
+  "PREFIX (a `wrap-prefix' or `line-prefix' value) drawn in FACE too."
+  (cond ((null prefix) nil)
+        ((stringp prefix)
+         (let ((copy (copy-sequence prefix)))
+           (add-face-text-property 0 (length copy) face nil copy)
+           copy))
+        ;; A display spec, e.g. (space :width 4).
+        (t (propertize " " 'display prefix 'face face))))
+
+(defun +my/hl-line-prefixes (overlay)
+  "Give hl-line's OVERLAY its line's prefixes, in its face (see above)."
+  (when (and (overlayp overlay) (overlay-buffer overlay))
+    (with-current-buffer (overlay-buffer overlay)
+      (let* ((pos (overlay-start overlay))
+             (face (overlay-get overlay 'face))
+             (wrap (or (get-text-property pos 'wrap-prefix) wrap-prefix))
+             (line (or (get-text-property pos 'line-prefix) line-prefix))
+             (key (overlay-get overlay '+my/prefixes)))
+        ;; Only when the line, its prefixes or the face changed (this runs
+        ;; before every redisplay).
+        (unless (and key (eq (nth 0 key) wrap) (eq (nth 1 key) line)
+                     (equal (nth 2 key) face) (eql (nth 3 key) pos))
+          (overlay-put overlay '+my/prefixes (list wrap line face pos))
+          (overlay-put overlay 'wrap-prefix
+                       (+my/hl-line--prefix wrap face))
+          (overlay-put overlay 'line-prefix
+                       (+my/hl-line--prefix line face)))))))
+
+;; `global-hl-line-sticky-flag' `window' (Doom's): an overlay per window, kept
+;; in a window parameter; otherwise one moved by `hl-line-move'.
+(defadvice! +my/hl-line-window-prefixes-a (window)
+  :after #'global-hl-line-window-redisplay
+  (+my/hl-line-prefixes (window-parameter window 'hl-line-overlay)))
+
+(defadvice! +my/hl-line-move-prefixes-a (overlay)
+  :after #'hl-line-move
+  (+my/hl-line-prefixes overlay))
+
 ;; GO TO DECLARATION OR USAGES
 ;; Where the symbol is declared comes from xref: the language server in LSP
 ;; buffers, Emacs itself in Emacs Lisp. The jump and the usages list are Doom's

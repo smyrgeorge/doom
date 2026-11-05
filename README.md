@@ -331,6 +331,9 @@ image, `M-x agent-shell-markdown-image-scale-increase` / `-decrease` resize the 
   files whose mode has no notion of them (HTML in `web-mode`, files with very long lines in `so-long-mode`) get no
   header row. It lines up with the code past the line numbers by working out their width the way Emacs does, not with
   `header-line-indent-mode`, which laid the window out (highlighting it first) on every scroll and before every redraw.
+- **Current line across wrapped rows:** a long line wraps onto rows indented like it (Doom's word wrap, e.g. two spaces
+  in a Markdown table), and the current line's highlight left that indentation out: Emacs draws a line's wrap prefix
+  without the faces of the overlays on it. hl-line's overlay now carries a copy of the prefix in its face.
 - **Rainbow brackets:** `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
 - **Right margin:** a thin vertical line at the maximum line length, like IntelliJ's, in files of code, text and
   configuration: at `fill-column`, set in `config.el` (120; also where `gq` / `M-q` wrap text; commit messages 72). A
