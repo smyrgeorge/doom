@@ -67,7 +67,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/treemacs.el`  | Treemacs sidebar behaviour (auto-open, follow, git status, window keys).          |
 | `config/markdown.el`  | Live Markdown preview inside Emacs.                                               |
 | `config/tabs.el`      | Tab labels that show the path when two open files share a name.                  |
-| `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions).                   |
+| `config/actions.el`   | Option+Enter context-actions menu (spelling, LSP code actions, Claude).           |
 | `config/terminal.el`  | Terminal Emacs: paint the terminal background with the theme colour.              |
 | `scripts/emacs.sh`    | Installs Emacs (emacs-plus cask) and runs `doom sync`.                            |
 | `scripts/tools.sh`    | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), pdf-tools build deps, the `claude-agent-acp` bridge. |
@@ -109,9 +109,12 @@ JetBrains IDEs:
 - **Spelling** (when the word at point is underlined): the top aspell suggestions and "Add to dictionary".
 - **Code actions**: the LSP server's quick fixes and refactors for the point or the active region (same list as
   `SPC c a`).
+- **Claude** (agent-shell): *Fix / Explain error with Claude* for the error at point and *Explain selection with
+  Claude* are sent straight away (queued if Claude is busy, a Claude Code shell is started if the project has none);
+  *Add selection / file to Claude prompt* puts the context in the prompt for you to finish.
 
-Each section comes from a provider function listed in `+my/context-action-providers`; new kinds of actions (e.g. AI)
-are added by writing another provider. Org keeps `M-RET` for "new heading/item"; in Markdown a new list item is
+Works in visual state too, on the selection. Each section comes from a provider function listed in
+`+my/context-action-providers`; new kinds of actions are added by writing another provider. Org keeps `M-RET` for "new heading/item"; in Markdown a new list item is
 `C-c C-j` or `M-*`.
 
 ### Claude Code in Emacs
@@ -141,7 +144,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 
 | Key                         | Action                                                 |
 |-----------------------------|--------------------------------------------------------|
-| `M-RET` (Option+Enter)      | Context actions at point (spelling, code actions)      |
+| `M-RET` (Option+Enter)      | Context actions at point (spelling, code actions, Claude) |
 | `SPC o c`                   | Start Claude Code (agent-shell)                        |
 | `SPC o C`                   | Pick / switch agent shell                              |
 | `SPC m p` (Markdown)        | Toggle live preview inside Emacs                       |

@@ -156,7 +156,10 @@
   :commands (agent-shell agent-shell-anthropic-start-claude-code)
   :config
   (setq agent-shell-anthropic-authentication
-        (agent-shell-anthropic-make-authentication :login t)))
+        (agent-shell-anthropic-make-authentication :login t)
+        ;; New shells (e.g. from the Option+Enter Claude actions) start Claude
+        ;; Code without asking which agent to use.
+        agent-shell-preferred-agent-config 'claude-code))
 
 (map! :leader
       :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code

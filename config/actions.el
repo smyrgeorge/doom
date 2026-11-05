@@ -8,13 +8,17 @@
 ;;   word at point.
 ;; - Code actions: the LSP server's quick fixes and refactors for the point or
 ;;   the active region (same list as SPC c a).
+;; - Claude: send the error at point or the selection to Claude Code
+;;   (agent-shell), either as a ready prompt (fix / explain) or into the prompt
+;;   for you to finish.
 ;;
 ;; Each section comes from a provider: a function that returns a list of
-;; (GROUP LABEL FUNCTION). To add more (e.g. AI actions), write a provider and
+;; (GROUP LABEL FUNCTION). To add more, write a provider and
 ;; (add-to-list '+my/context-action-providers #'my-provider t).
 (defvar +my/context-action-providers
   '(+my/context-actions-spelling
-    +my/context-actions-lsp)
+    +my/context-actions-lsp
+    +my/context-actions-claude)
   "Functions returning the actions available at point, as (GROUP LABEL FUNCTION).
 The menu shows groups in this order.")
 
@@ -59,6 +63,72 @@ The menu shows groups in this order.")
                     (lambda () (lsp-execute-code-action action))))
             (append (ignore-errors (lsp-code-actions-at-point)) nil))))
 
+(defun +my/context-actions--error-at-point-p ()
+  "Non-nil if flycheck or flymake reports an error/warning at point."
+  (or (and (bound-and-true-p flycheck-mode)
+           (fboundp 'flycheck-overlay-errors-at)
+           (flycheck-overlay-errors-at (point)))
+      (and (bound-and-true-p flymake-mode)
+           (flymake-diagnostics (point)))))
+
+(defun +my/context-actions--with-region (bounds fn)
+  "Call FN with the region BOUNDS (BEG . END) active, as when the menu opened."
+  (save-excursion
+    (goto-char (cdr bounds))
+    (set-mark (car bounds))
+    (activate-mark)
+    (funcall fn)))
+
+(defun +my/claude-ask (instruction context-fn)
+  "Submit INSTRUCTION plus the context from CONTEXT-FN to Claude Code.
+CONTEXT-FN runs in the current buffer with the project directory as argument
+and returns agent-shell's context text (a file:line link plus the code or the
+diagnostic). Starts a Claude shell if the project has none; if Claude is busy,
+the prompt is queued and sent when it finishes."
+  (require 'agent-shell)
+  (let* ((context (or (funcall context-fn (agent-shell-cwd))
+                      (user-error "Nothing to send")))
+         (text (concat instruction "\n\n" context))
+         (shell (agent-shell-shell-buffer)))
+    (if (with-current-buffer shell (shell-maker-busy))
+        (with-current-buffer shell
+          (agent-shell-prompt-queue text)
+          (message "Claude is busy: prompt queued"))
+      (agent-shell-insert :text text :submit t :shell-buffer shell))))
+
+(defun +my/context-actions-claude ()
+  "Claude Code (agent-shell) actions for the error or selection at point."
+  (when (fboundp 'agent-shell)
+    (let ((region (and (region-active-p) (cons (region-beginning) (region-end))))
+          (error-context (lambda (_cwd) (agent-shell--get-error-context)))
+          (items nil))
+      (when (+my/context-actions--error-at-point-p)
+        (push (list "Claude" "Fix error with Claude"
+                    (lambda () (+my/claude-ask "Fix this error:" error-context)))
+              items)
+        (push (list "Claude" "Explain error with Claude"
+                    (lambda () (+my/claude-ask "Explain this error and how to fix it. Don't change any files."
+                                               error-context)))
+              items))
+      (if region
+          (let ((region-context
+                 (lambda (cwd)
+                   (+my/context-actions--with-region
+                    region (lambda () (agent-shell--get-region-context
+                                       :deactivate t :no-error t :agent-cwd cwd))))))
+            (push (list "Claude" "Explain selection with Claude"
+                        (lambda () (+my/claude-ask "Explain this code. Don't change any files."
+                                                   region-context)))
+                  items)
+            (push (list "Claude" "Add selection to Claude prompt"
+                        (lambda () (+my/context-actions--with-region
+                                    region #'agent-shell-send-region)))
+                  items))
+        (when buffer-file-name
+          (push (list "Claude" "Add file to Claude prompt" #'agent-shell-send-file)
+                items)))
+      (nreverse items))))
+
 (defun +my/context-actions--collect ()
   "Return all actions at point, from `+my/context-action-providers'."
   (mapcan (lambda (provider) (copy-sequence (funcall provider)))
@@ -95,6 +165,7 @@ The menu shows groups in this order.")
              nil t)))
       (funcall (nth 2 (cdr (assoc choice table)))))))
 
-(map! :ni "M-RET" #'+my/context-actions)
+;; Visual state too: code actions and Claude actions work on the selection.
+(map! :nvi "M-RET" #'+my/context-actions)
 ;; Org keeps M-RET for "new heading/item".
 (map! :after org :map org-mode-map :ni "M-RET" #'org-meta-return)
