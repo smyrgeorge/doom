@@ -1,6 +1,24 @@
 ;;; $DOOMDIR/config/lsp.el -*- lexical-binding: t; -*-
 ;; Language server setup. Loaded from config.el.
 
+;; ====== VARIABLES ======
+
+;; CODE LENSES
+;; lsp-mode shows the code lenses a server sends, at the end of the line:
+;; rust-analyzer's "▶ Run" and implementations, and now also reference counts
+;; (IntelliJ's usages) for Rust and TypeScript/JavaScript. Pyright sends none.
+;; rust-analyzer's "Debug" lens needs a debugger set up (dap), so it's off.
+(setq lsp-rust-analyzer-lens-references-method-enable t
+      lsp-rust-analyzer-lens-references-adt-enable t
+      lsp-rust-analyzer-lens-references-trait-enable t
+      lsp-rust-analyzer-lens-references-enum-variant-enable t
+      lsp-rust-analyzer-lens-debug-enable nil
+      lsp-typescript-references-code-lens-enabled t
+      lsp-typescript-implementations-code-lens-enabled t
+      lsp-javascript-references-code-lens-enabled t)
+
+;; ====== CODE ======
+
 ;; PROJECT IMPORT
 ;; Start the language server in the file's project (its git repository, as
 ;; projectile sees it) without the "import project root?" prompt, like Zed or

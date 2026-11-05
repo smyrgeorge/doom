@@ -76,7 +76,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 | `config/spell.el`     | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary.  |
 | `dict/tech.txt`       | ~40k programming words for the spell checker (built by `scripts/dict.sh`).        |
 | `config/agent-shell.el` | Claude Code in Emacs (agent-shell): login, default agent, `SPC o c` / `SPC o C`. |
-| `config/lsp.el`       | Language servers: projects imported without asking; JetBrains' `kotlin-lsp`.      |
+| `config/lsp.el`       | Language servers: code lenses; projects imported without asking; `kotlin-lsp`.    |
 | `config/projectile.el` | Projects under `~/dev`; project file list without a cache.                      |
 | `config/search.el`    | `SPC s a`: Search Everywhere, like IntelliJ; `Cmd+Shift+F`: find in files (rg).   |
 | `config/git.el`       | `SPC g d`: the current file's git diff in a side pane.                            |
@@ -189,6 +189,9 @@ second, parallel session.
   [cspell](https://github.com/streetsidesoftware/cspell-dicts)'s MIT-licensed dictionaries (only words English lacks).
   CamelCase identifiers are checked word by word (`AgreementController` = `Agreement` + `Controller`). Words you add
   with `zg` or Option+Enter still go to the personal dictionary.
+- **Code lenses:** what the language server offers at the end of the line: rust-analyzer's "▶ Run", implementations
+  and reference counts; references/implementations for TypeScript/JavaScript. (Rust's "Debug" lens is off until a
+  debugger is set up.)
 - **LSP project import:** opening a file in a project starts its language server in the project root (the git
   repository) without the "import project root?" prompt, like Zed. Files outside any project still ask, so a stray
   file in `~` never makes a server scan your home folder (`config/lsp.el`).
