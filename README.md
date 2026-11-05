@@ -170,7 +170,11 @@ Doom's `smooth-scroll` module scrolls by pixels (ultra-scroll), which suits a tr
 mouse wheel reports a few lines per notch, so it still jumped; `config/smooth.el` spreads bigger steps over a few
 frames (about 0.1 s, fast at first then slowing down), and notches in quick succession add up
 (`+my/smooth-scroll-min-step`, `-frame`, `-fraction`). The module also pauses some modes while scrolling; hl-todo is
-kept on, otherwise TODO/NOTE/FIXME lose their highlight during a scroll and flicker.
+kept on, otherwise TODO/NOTE/FIXME lose their highlight during a scroll and flicker. The wheel doesn't scroll the
+minibuffer / echo area (it always fits what it shows, so it only jumped and came back); with a completion list open,
+it moves through the candidates instead. Every window (`*Messages*`, help, magit... not just files) stops scrolling
+with at most a quarter of it empty below the last line (`+my/stripe-overscroll`), instead of going on until the last
+line reaches the top and bouncing back at each further notch; images, PDFs and terminals are left alone.
 
 ### Search Everywhere (`SPC s a`)
 

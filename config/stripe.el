@@ -609,11 +609,12 @@ are being removed (before) or added (after)."
   (let ((more (+ (1- (+my/stripe--text-rows-wanted window))
                  (if (> (window-vscroll window t) 0) 1 0))))
     ;; Each line takes at least a row: enough lines left settles it fast
-    ;; (`vertical-motion' is slow, and this runs before every redisplay).
-    (and (<= (count-lines (window-start window) (point-max)) more)
-         (save-excursion
-           (goto-char (window-start window))
-           (< (vertical-motion more window) more)))))
+    ;; (`vertical-motion' is slow, and this runs as windows scroll).
+    (save-excursion
+      (goto-char (window-start window))
+      (and (progn (forward-line more) (eobp))
+           (progn (goto-char (window-start window))
+                  (< (vertical-motion more window) more))))))
 
 (defun +my/stripe--clamp-start (window)
   "Scroll WINDOW back so it doesn't show more empty rows past the end than allowed."
