@@ -115,6 +115,10 @@
 ;; TREEMACS (IntelliJ-like project view)
 (load! "config/treemacs")
 
+;; CHEATSHEET (tips panel under treemacs: Vim, Doom and this config's keys)
+;; Disabled for now; uncomment to try it again.
+;;(load! "config/cheatsheet")
+
 ;; MAGIT (git-delta diffs, TODOs in the status buffer)
 (load! "config/magit")
 

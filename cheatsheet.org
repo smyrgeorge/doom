@@ -1,0 +1,117 @@
+#+title: Cheatsheet
+#+startup: showall
+
+The panel under treemacs shows a few of these tips at a time (2 per section,
+changing every 5 minutes). In the panel: =n= next tips, =e= this file, =q= hide;
+=SPC t ?= hides/shows it. One tip per line: "- " then the keys and a few words
+that make sense on their own (the panel doesn't show the subheadings).
+
+* This config
+- =M-RET= actions at point (⌥↩)
+- =SPC s a= search everywhere
+- =s-F= find in files (⌘⇧F)
+- =s-f= search this buffer (⌘F)
+- =SPC g d= git diff of this file
+- =SPC c ~= cycle case style of a word
+- =SPC o c= start Claude Code
+- =SPC m p= Markdown live preview
+- =M-[= =M-]= previous/next buffer
+- =s-[= =s-]= jump back/forward
+- =zg= add a word to the dictionary
+- ~z=~ spelling suggestions
+- =]s= =[s= next/previous typo
+- =zR= =zM= treemacs: open/close all
+- click in treemacs opens a file
+- click the right stripe to jump
+
+* Doom
+** Files & projects
+- =SPC SPC= find file in project
+- =SPC .= find file
+- =SPC f r= recent files
+- =SPC p p= switch project
+- =SPC o p= show/hide treemacs
+** Buffers & windows
+- =SPC ,= switch buffer
+- =SPC `= previous buffer
+- =SPC b k= kill buffer
+- =SPC w v= =SPC w s= split right/below
+- =SPC w d= close window
+- =SPC w w= next window
+- =SPC w m m= maximize window
+** Workspaces
+- =SPC TAB TAB= list workspaces
+- =SPC TAB [= =]= prev/next workspace
+- =SPC TAB n= new workspace
+** Code
+- =gd= go to definition
+- =gD= find references
+- =K= show documentation
+- =SPC c a= code actions
+- =SPC c r= rename symbol
+- =SPC c f= format code
+- =SPC c x= list errors
+- =]e= =[e= next/previous error
+** Search
+- =SPC s s= search in buffer
+- =SPC /= search in project
+- =SPC s i= symbols in buffer
+** Git
+- =SPC g g= magit status
+- =SPC g B= git blame
+- =SPC g t= git time machine
+- =]d= =[d= next/previous git hunk
+- =SPC g s= stage git hunk
+- =SPC g r= revert git hunk
+** Help
+- =SPC h b b= list all key bindings
+- =SPC h k= what does a key do
+- =SPC h f= describe a function
+- =SPC h v= describe a variable
+- =SPC := run a command (M-x)
+- =SPC q r= restart Emacs
+
+* Vim
+** Move
+- =w= =b= =e= word forward/back/end
+- =0= =^= =$= line start/text/end
+- =gg= =G= top/bottom of file
+- ={= =}= previous/next paragraph
+- =%= matching bracket
+- =fx= =tx= to/before next x
+- =;= =,= repeat f/t forward/back
+- =C-d= =C-u= half page down/up
+- =zz= center this line
+- =gs /= jump to a char (avy)
+- =C-o= jump back
+** Edit: operator + motion
+- =d= =c= =y= delete/change/yank
+- =dd= =cc= =yy= the whole line
+- =ciw= change word
+- =ci"= =ci(= change inside "" or ()
+- =cit= change inside HTML tag
+- =dap= delete paragraph
+- =>>= =<<= indent/outdent line
+- =gU= =gu= upper/lower case
+- =gc= comment, =gcc= a line
+- =x= delete char
+- =r= replace char
+- =J= join lines
+- =o= =O= new line below/above
+- =p= =P= paste after/before
+- =u= =C-r= undo/redo
+- =.= repeat last change
+** Search
+- =/= =?= search forward/back
+- =n= =N= next/previous match
+- =*= =#= search word under cursor
+- =:%s/a/b/g= replace a with b
+** Visual
+- =v= =V= =C-v= select char/line/block
+- =o= go to other end (visual)
+** More
+- =qa= … =q= record macro a
+- =@a= =@@= play macro / again
+- =ma= ='a= set mark a / go to it
+- ="ay= yank into register a
+- =za= =zc= =zo= toggle/close/open fold
