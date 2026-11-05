@@ -208,6 +208,18 @@ Re-roots neotree to FILE's project if FILE is outside the current root."
     :priority 1                         ; win over kotlin-ls (-1)
     :server-id 'kotlin-lsp)))
 
+;; AGENT-SHELL (Claude Code via ACP)
+;; Uses the Claude CLI login (run `claude` once in a terminal to log in).
+(use-package! agent-shell
+  :commands (agent-shell agent-shell-anthropic-start-claude-code)
+  :config
+  (setq agent-shell-anthropic-authentication
+        (agent-shell-anthropic-make-authentication :login t)))
+
+(map! :leader
+      :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code
+      :desc "Agent shell"               "o C" #'agent-shell)
+
 ;; PROJECTILE
 ;; Discover projects using 'projectile-discover-projects-in-search-path'
 (setq projectile-project-search-path '("~/dev"))
