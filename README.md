@@ -109,6 +109,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
   is checked every 3 s in the background (`+my/treemacs-git-poll-interval`), and treemacs refreshes when it changed.
 - **Reachable like any window**: `SPC w w` cycles into it and it gets a window number (`SPC w 1`, as the leftmost
   window).
+- **No mode line**: it only said "Treemacs" and the workspace.
 - `h`/`←` collapse, `l`/`→` expand or open. A **single click** opens a file or expands/collapses a folder (treemacs'
   default is a double click).
 - `zR` / `zM` (`M-x treemacs-expand-all` / `treemacs-collapse-all`): expand every folder of the project, or collapse

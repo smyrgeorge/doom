@@ -73,6 +73,10 @@
 
 ;; ====== CODE ======
 
+;; No mode line in the sidebar: it only said "Treemacs" and the workspace
+;; ("Perspective pas-workspace").
+(setq treemacs-user-mode-line-format 'none)
+
 (after! treemacs
   (setq treemacs-is-never-other-window nil) ; reachable with SPC w w (Doom: t)
   (treemacs-follow-mode +1)             ; highlight the current file (Doom: off)
