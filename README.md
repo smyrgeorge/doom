@@ -342,9 +342,10 @@ smaller ones at their own size; `{width=100%}` after an image link sizes one ima
   files whose mode has no notion of them (HTML in `web-mode`, files with very long lines in `so-long-mode`) get no
   header row. It lines up with the code past the line numbers by working out their width the way Emacs does, not with
   `header-line-indent-mode`, which laid the window out (highlighting it first) on every scroll and before every redraw.
-- **Current line across wrapped rows:** a long line wraps onto rows indented like it (Doom's word wrap, e.g. two spaces
-  in a Markdown table), and the current line's highlight left that indentation out: Emacs draws a line's wrap prefix
-  without the faces of the overlays on it. hl-line's overlay now carries a copy of the prefix in its face.
+- **Current line and selection across wrapped rows:** a long line wraps onto rows indented like it (Doom's word wrap,
+  e.g. two spaces in a Markdown table), and the current line's highlight, and the selection's, left that indentation
+  out: Emacs draws a line's wrap prefix without the faces of the overlays on it. hl-line's overlay now carries a copy of
+  the prefix in its face; a selection gets one per line on screen, over its part of the selection.
 - **`q` closes transient menus** (agent-shell's help and drawing menus, magit's...), as Esc (Doom) and `C-g` do: it
   only said "Unbound suffix: q". A menu that uses `q` for something of its own keeps it (magit's dispatch: bury the
   buffer; blame, git-timemachine: quit them); `transient-bind-q-to-quit` would move such keys to `Q`, not done.
