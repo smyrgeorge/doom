@@ -161,6 +161,9 @@ second, parallel session.
 - **Terminal background:** in terminal Emacs, the strip below the echo area is painted with the theme background
   (OSC 11) and restored on exit (OSC 111).
 - **`M-[` / `M-]`** switch buffers in the GUI only; in a terminal they would swallow mouse/focus escape sequences.
+- **Markdown links:** marksman calls a link "ambiguous" when the linked file has more than one top-level `#` heading;
+  `config/markdown.el` hides that warning when the link is a path to an existing file (genuinely ambiguous links,
+  like `[[README]]` matching several files, are still reported).
 - **Evil:** saving a buffer returns to normal state.
 - **New windows get focus:** splits (`SPC w s` / `SPC w v`) and any new window a command opens (diff pane, other-window
   commands...) move the cursor there. Side windows (Doom popups, treemacs, which-key, transient menus) keep their own

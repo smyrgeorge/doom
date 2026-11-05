@@ -144,3 +144,33 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
       :localleader
       :desc "Live preview (in Emacs)" "p" #'+my/markdown-preview-toggle
       :desc "Preview in browser"      "P" #'markdown-preview)
+
+;; MARKSMAN DIAGNOSTICS
+;; marksman (the Markdown language server) takes every top-level `#' heading of
+;; a document as its title, so a link to a file with more than one, e.g.
+;; [README](the-game/README.md), gets "Ambiguous link to document" even though
+;; it names exactly one file (and following it works). Drop that diagnostic
+;; when the link is a path to an existing file; genuinely ambiguous links (e.g.
+;; [[README]] matching several files) are still reported.
+(defun +md--drop-false-ambiguous-links (params workspace)
+  "Filter for `lsp-diagnostic-filter': see the comment above."
+  (when (eq (lsp--workspace-server-id workspace) 'marksman)
+    (let ((dir (file-name-directory
+                (lsp--uri-to-path (lsp:publish-diagnostics-params-uri params)))))
+      (setq params
+            (lsp-put params :diagnostics
+                     (vconcat
+                      (seq-remove
+                       (lambda (diagnostic)
+                         (let ((message (lsp:diagnostic-message diagnostic)))
+                           (and (string-match "\\`Ambiguous link to document '\\(.+\\)'\\'" message)
+                                (file-regular-p
+                                 (expand-file-name
+                                  (url-unhex-string ; %20 etc.
+                                   (car (split-string (match-string 1 message) "#")))
+                                  dir)))))
+                       (lsp:publish-diagnostics-params-diagnostics params)))))))
+  params)
+
+(after! lsp-mode
+  (setq lsp-diagnostic-filter #'+md--drop-false-ambiguous-links))
