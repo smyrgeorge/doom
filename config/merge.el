@@ -74,6 +74,10 @@
 (defface +my/merge-button '((t :inherit (bold link) :underline nil))
   "The buttons in the margins and the bar.")
 
+(defvar +my/merge-finished-functions nil
+  "Functions called with a merge's session once it's closed (done, aborted,
+a pane closed).")
+
 (defvar +my/merge-mode-map (make-sparse-keymap)
   "Keys in the three panes (see `+my/merge-mode').")
 
@@ -240,11 +244,14 @@ from the base needs."
                         (apply #'call-process ediff-diff3-program nil t nil files))
                       1)
             (error "diff3 failed: %s" (with-current-buffer output (buffer-string))))
+          ;; `dlet': Ediff's own variables (its buffers) whatever the compiler
+          ;; knew; compiled before Ediff loaded (config/compile.el), a `let'
+          ;; bound locals Ediff never saw, the first time (Ediff loads above).
           (with-temp-buffer
-            (let ((ediff-buffer-A (+my/merge-yours session))
-                  (ediff-buffer-B (+my/merge-base session))
-                  (ediff-buffer-C (+my/merge-theirs session))
-                  (ediff-ancestor-buffer nil))
+            (dlet ((ediff-buffer-A (+my/merge-yours session))
+                   (ediff-buffer-B (+my/merge-base session))
+                   (ediff-buffer-C (+my/merge-theirs session))
+                   (ediff-ancestor-buffer nil))
               (cdr (ediff-extract-diffs3 output nil t)))))
       (mapc #'delete-file files)
       (kill-buffer output))))
@@ -872,13 +879,16 @@ folder) in three panes."
 config/merge.el); Magit's Ediff for what they can't show."
   (interactive (progn (require 'magit) (list (magit-read-unmerged-file))))
   (require 'magit)
-  (magit-with-toplevel
-    (let* ((path (file-relative-name (expand-file-name file) default-directory))
-           (why (+my/merge--why-not path)))
-      (cond ((not why) (+my/merge--start path))
-            ((equal why "Not in conflict") (user-error "%s has no conflict" path))
-            (t (message "%s: %s, so Ediff" path why)
-               (magit-ediff-resolve-rest path))))))
+  ;; Magit's functions, not its macros (`magit-with-toplevel'): compiled
+  ;; before Magit loaded (config/compile.el), a macro is a call to nothing the
+  ;; first time.
+  (let* ((default-directory (or (magit-toplevel) (user-error "Not in a Git repository")))
+         (path (file-relative-name (expand-file-name file) default-directory))
+         (why (+my/merge--why-not path)))
+    (cond ((not why) (+my/merge--start path))
+          ((equal why "Not in conflict") (user-error "%s has no conflict" path))
+          (t (message "%s: %s, so Ediff" path why)
+             (magit-ediff-resolve-rest path)))))
 
 ;; CLOSING
 (defun +my/merge--session ()
@@ -899,7 +909,8 @@ config/merge.el); Magit's Ediff for what they can't show."
           (kill-buffer buffer))))
     (when (fboundp 'magit-refresh-all)
       (let ((default-directory (+my/merge-toplevel session)))
-        (ignore-errors (magit-refresh-all))))))
+        (ignore-errors (magit-refresh-all))))
+    (run-hook-with-args '+my/merge-finished-functions session)))
 
 (defun +my/merge--killed-h ()
   "A pane closed (Cmd+W, say): the merge with it, aborted."

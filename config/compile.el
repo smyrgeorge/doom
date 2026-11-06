@@ -25,6 +25,10 @@
 ;; So the variables a function binds and the functions it calls that aren't
 ;; known yet are noted, and when one becomes a special variable or a macro (its
 ;; package loaded), the function goes back to its source and is compiled again.
+;; For its next call: a function that loads the package itself, then uses it,
+;; runs compiled to its end the first time. Such a function binds the package's
+;; variables with `dlet' and calls its functions, not its macros (see
+;; config/merge.el).
 (defvar +my/compile-idle-delay 2
   "Seconds of idleness before this config's functions get compiled.")
 

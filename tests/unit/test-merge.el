@@ -14,6 +14,24 @@
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
 (+test-load "config/merge")
+
+;; As config/compile.el does once Emacs is idle a moment after it started:
+;; the functions byte-compiled before Magit, Ediff or smerge loaded. A
+;; function loading its package then using the package's macro or binding its
+;; variable, compiled so, failed the first time it ran (compile.el puts a
+;; function back to its source once the package loads, for its next call
+;; only): the merge example's first run, "You have killed a vital Ediff
+;; buffer".
+(defconst +test-merge--packages-before (list (featurep 'magit) (featurep 'ediff) (featurep 'smerge-mode))
+  "Magit, Ediff, smerge loaded as the functions were compiled (none).")
+
+(let ((byte-compile-warnings nil)
+      (inhibit-message t))
+  (mapatoms (lambda (symbol)
+              (when (and (string-prefix-p "+my/merge" (symbol-name symbol))
+                         (interpreted-function-p (symbol-function symbol)))
+                (byte-compile symbol)))))
+
 (require 'magit)
 (require 'magit-ediff)
 
@@ -156,6 +174,13 @@ feature merged into main: in conflict."
             (lambda (a b) (< (car a) (car b)))))))
 
 ;; ====== OPENING ======
+
+(ert-deftest merge/compiled-before-its-packages ()
+  "The functions were compiled before Magit, Ediff and smerge loaded, as
+config/compile.el may (the other tests run them so)."
+  (should (equal +test-merge--packages-before '(nil nil nil)))
+  (should (byte-code-function-p (symbol-function '+my/merge--diff3)))
+  (should (byte-code-function-p (symbol-function '+my/merge))))
 
 (ert-deftest merge/magits-e-resolves-with-it ()
   (should (eq magit-ediff-dwim-resolve-function #'+my/merge)))

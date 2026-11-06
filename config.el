@@ -138,6 +138,9 @@
 ;; MERGE (conflicts resolved in three panes, like IntelliJ's: e on a conflicted file in Magit)
 (load! "config/merge")
 
+;; EXAMPLES (M-x +my/example: a feature shown on files of its own, e.g. a merge in conflict)
+(load! "config/examples")
+
 ;; EDITOR (SPC c ~: cycle case style)
 (load! "config/editor")
 

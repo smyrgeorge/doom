@@ -10,7 +10,11 @@ functions when their package loads). No `.elc` files are written, so nothing get
 before a package loaded, a function would bind a local instead of the package's variable (`SPC g d` binding
 `magit-display-buffer-function`: the diff opened in the same window) and call the package's macros as functions
 (`invalid-function treemacs-run-in-every-buffer`); so such functions go back to their source and are compiled again
-once the package loads.
+once the package loads. That's for their next call: a function that loads the package itself and then uses it runs
+compiled to its end the first time. So such a function binds the package's variables with `dlet` (dynamic whatever
+the compiler knew) and calls its functions, not its macros: the merge example's first run after a start failed with
+"You have killed a vital Ediff buffer" (its `let` of Ediff's buffers bound locals). `tests/unit/test-merge.el` runs
+the merge's functions compiled before Magit, Ediff and smerge load.
 
 ## Opening files faster
 

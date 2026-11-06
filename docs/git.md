@@ -23,6 +23,9 @@ when pressed there. In the pane: `s`/`u`/`x` stage/unstage/discard a hunk, `RET`
 
 ## Resolving conflicts
 
+To try it: `M-x +my/example-merge` opens it on a temp repository in conflict every way it handles (see
+[Examples](examples.md)).
+
 `e` on a conflicted file in Magit (its status, under Unmerged) opens it in three panes, like IntelliJ's merge window
 (`config/merge.el`): **Yours** on the left, the **Result** in the middle (focused), **Theirs** on the right, under a bar.
 Yours is your side: the branch you're on in a merge or a cherry-pick, what you're rebasing onto in a rebase. Theirs is

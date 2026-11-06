@@ -41,6 +41,8 @@
 | `config/terminal.el` | Terminal Emacs: paint the terminal background with the theme colour; no menu bar in terminal frames; hover help stays in the echo area. |
 | `config/compile.el` | Byte-compiles this config's functions when Emacs is idle (they load as source). |
 | `tests/` | Tests of this config's features (`tests/run.sh`; see [Tests](tests.md)): never loaded by Doom. |
+| `config/examples.el` | `M-x +my/example` and a `+my/example-NAME` command for each example (see [Examples](examples.md)). |
+| `examples/` | Examples of the features, each on files of its own in the temp folder (`merge.el`: a repository in conflict); loaded only when run. |
 | `scripts/emacs.sh` | Installs Emacs (emacs-plus cask) and runs `doom sync`. |
 | `scripts/tools.sh` | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), BasicTeX, the `claude-agent-acp` bridge. |
 | `scripts/lsp.sh` | Language servers, formatters and linters. |
