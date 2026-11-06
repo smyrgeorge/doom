@@ -10,9 +10,11 @@
 ;; window). A split starts with one tab, the buffer it shows. Files, Claude
 ;; sessions, dired and magit get tabs; other buffers only while shown.
 ;; Closing a tab (its ✕, a middle click) takes it off that window, which goes
-;; back to the tab it showed before; a file is closed too once no window has
-;; it as a tab any more (asking first if it has unsaved changes). A Claude
-;; session only leaves the tab line: close it with its own commands.
+;; back to the tab it showed before; closing its last tab closes the window
+;; (the frame's only one, beside side panels, shows Doom's dashboard instead).
+;; A file is closed too once no window has it as a tab any more (asking first
+;; if it has unsaved changes). A Claude session only leaves the tab line: close
+;; it with its own commands.
 ;; Tabs look as they did: an icon, a bar on the current one, • when unsaved.
 (defvar +my/tabs-height 22
   "Height of the tab row in graphical frames, in pixels.")
@@ -137,14 +139,25 @@
 
 (defun +my/tabs-close (tab)
   "Take TAB off the selected window's tabs, and close its file if no window
-has it any more (see above)."
-  (let ((buffer (if (bufferp tab) tab (cdr (assq 'buffer tab)))))
-    (if (eq buffer (window-buffer))
-        (bury-buffer)                   ; back to the tab shown before
-      (set-window-prev-buffers nil (assq-delete-all buffer (window-prev-buffers)))
-      (set-window-next-buffers nil (delq buffer (window-next-buffers))))
-    (set-window-parameter nil 'tab-line-buffers
-                          (delq buffer (window-parameter nil 'tab-line-buffers)))
+has it any more (see above). Its last tab closes the window, unless it's the
+frame's only one (beside side panels), which shows Doom's dashboard instead."
+  (let* ((buffer (if (bufferp tab) tab (cdr (assq 'buffer tab))))
+         (window (selected-window))
+         (last (equal (+my/tabs-window-buffers) (list buffer))))
+    (cond ((and last (eq (window-deletable-p window) t))
+           (delete-window window))
+          (last
+           (switch-to-buffer (doom-fallback-buffer) nil t)
+           (set-window-prev-buffers nil nil)
+           (set-window-next-buffers nil nil)
+           (set-window-parameter nil 'tab-line-buffers nil))
+          (t
+           (if (eq buffer (window-buffer))
+               (bury-buffer)            ; back to the tab shown before
+             (set-window-prev-buffers nil (assq-delete-all buffer (window-prev-buffers)))
+             (set-window-next-buffers nil (delq buffer (window-next-buffers))))
+           (set-window-parameter nil 'tab-line-buffers
+                                 (delq buffer (window-parameter nil 'tab-line-buffers)))))
     (when (and (buffer-live-p buffer) (buffer-file-name buffer)
                (not (+my/tabs-held-p buffer)))
       (kill-buffer buffer))))
