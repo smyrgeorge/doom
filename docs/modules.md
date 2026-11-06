@@ -15,15 +15,18 @@ See `init.el` for the full list. Notable choices:
 | `:tools` | `(lsp +peek)`, `tree-sitter`, `magit`, `(debugger +lsp)`, `(docker +lsp +tree-sitter)`, `pdf`, `make` |
 | `:os` | `macos`, `(tty +osc)` |
 
+Not enabled: `tabs` (centaur-tabs), replaced by [tabs per window](editor.md#tabs-per-window) (`config/tabs.el`);
+`nav-flash`, which blinked the cursor line after every buffer or window switch.
+
 ## Languages and tooling
 
-All languages use LSP and tree-sitter where available. Most servers and formatters are installed by `scripts/lsp.sh`;
-the rest are installed by lsp-mode itself, which offers to do so the first time you open such a file
-(`M-x lsp-install-server`).
+All languages use LSP and tree-sitter where available. The servers and formatters come from `scripts/lsp.sh`, except
+`clangd` (Xcode Command Line Tools) and GDScript's server, which is the Godot editor itself (keep it open on the
+project). The scripts also install LaTeX tools (`basictex`, `texlab`), though `:lang latex` is off.
 
 | Language | Module flags | Language server / tools |
 |---|---|---|
-| Rust | `+lsp +tree-sitter` | `rust-analyzer` |
+| Rust | `+lsp +tree-sitter` | `rust-analyzer`, `rustfmt` |
 | Python | `+lsp +pyright +uv +tree-sitter` | `pyright`, `black`, `isort`, virtualenvs via `uv` |
 | Kotlin | `+lsp +tree-sitter` | `kotlin-lsp` (JetBrains), `ktlint` |
 | JavaScript/TypeScript | `+lsp +tree-sitter` | `typescript-language-server`, `prettier` |
@@ -34,6 +37,7 @@ the rest are installed by lsp-mode itself, which offers to do so the first time 
 | Docker | `+lsp +tree-sitter` | `dockerfile-language-server-nodejs` |
 | GDScript (Godot) | `+lsp +tree-sitter` | Godot's LSP, `gdformat` (`gdtoolkit`) |
 | JSON / YAML | `+lsp +tree-sitter` | `vscode-langservers-extracted`, `yaml-language-server` |
+| Emacs Lisp | — | Emacs itself |
 | Org | `+pretty` | — |
 | REST | `+jq` | `jq` |
 | CSV / XML | `data` | — |

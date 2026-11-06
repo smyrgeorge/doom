@@ -2,15 +2,18 @@
 
 ## Live Markdown preview
 
-`config/markdown.el` renders Markdown in a WebKit side window (xwidgets) **inside Emacs**:
+`config/markdown.el` renders Markdown in a WebKit side window (xwidgets) **inside Emacs**. `SPC m p` toggles it: it
+opens on the right, half the window's width, and the cursor stays in the file; it closes with `SPC m p` again or when
+the file is closed. `SPC m P` previews in the browser instead.
 
 - **Updates as you type** (≈0.3 s after you stop), swapping the page content without reloading.
 - **Scrolls to the cursor line**, using pandoc's `sourcepos` extension to map each element back to its source line.
 - **GitHub look**: github-markdown-css plus highlight.js, following the macOS light/dark setting; as wide as the pane.
 - Math is rendered as MathML; relative image links work.
-- In terminal Emacs it falls back to markdown-mode's `eww` preview (updates on save).
 
-Requires `pandoc`. Styles are loaded from a CDN, so the preview is unstyled offline.
+Needs `pandoc` (`scripts/lsp.sh` installs it) and an Emacs with xwidgets (emacs-plus has them); otherwise, and in
+terminal Emacs, `SPC m p` falls back to markdown-mode's `eww` preview (updates on save). Styles are loaded from a CDN,
+so the preview is unstyled offline.
 
 ## Markdown links
 

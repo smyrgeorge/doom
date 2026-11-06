@@ -7,16 +7,15 @@ window height, like the marks on IntelliJ's scrollbar:
 
 - errors (red) and warnings (yellow) from flycheck / the language server;
 - git changes (diff-hl), in the gutter's colors: red deleted, orange changed, green added;
-- where several overlap, the most important wins: error > warning > deleted > changed > added;
+- where several overlap, the most important wins: error > warning > deleted > changed > added > info;
 - a light band marks the part of the file on screen, like a scrollbar thumb.
 
 It's on in code, text and config files, and in files with very long lines (`so-long-mode`). The strip is at the very
 edge, the fringe (e.g. the arrows of lines cut off at the window edge) between it and the text: Doom's vc-gutter puts
 fringes outside the margins for the git gutter's sake, which with no left margin only matters on the right.
-File windows also get a character's width of space more on each side of the text (`+my/stripe-padding`): their
-fringes are 16 px instead of 8, with the git gutter, flycheck's marks and the arrows in the middle (flycheck keeps
-its small markers there; in fringes that wide it would switch to big 16 px ones). The sticky header
-lines up with the text past the fringe.
+File windows also get a character's width of space more on each side of the text (`+my/stripe-padding`: columns per
+side, `nil` for none; GUI only): their fringes are 16 px instead of 8, with the git gutter, flycheck's marks and the
+arrows in the middle (flycheck keeps its small markers there; in fringes that wide it would switch to big 16 px ones).
 
 In the GUI the strip is drawn to the pixel: each screen row shows its slice of the strip as a small image in the right
 margin. Rows are measured (an emoji, or a glyph rising above the font like indent-bars' `│` on the top row, makes a
@@ -27,39 +26,56 @@ the row before, Emacs looks ahead into the next row's first word, and draws a ma
 row too: hung at a row's start, slices showed on the wrong row (gaps) or on two rows (an extra mark). In a terminal
 each row is a coloured cell.
 
-Windows with the strip scroll past the end of the file only a bit: at most a quarter of the window
-(`+my/stripe-overscroll`: a fraction, a number of rows, `0` for none, `t` for no limit). The strip maps the file plus
-that space onto the whole window height, like IntelliJ's scrollbar, so it never shrinks: marks stay put as the end comes
-into view, and the band reaches the bottom when the window can't scroll further. Margins need text to hang on, so below
-the last line the strip is drawn on one extra row after the end of the buffer, which also repeats the empty-line `~` and
-takes the place of the empty, unnumbered line after the final newline: as in Vim, the `~` start right after the last
-line. The cursor stays off that line in normal state (`j` on the last line stays put, `G` goes to the last line), and a
-click below the text puts it on the last line at the clicked column; insert state can go there, to add at the end.
-In a terminal the strip covers only the rows with text. Files shorter than the window get one line height per line.
+Every window scrolls past the end of its buffer only a bit (see [Smooth
+scrolling](scrolling.md#scrolling-past-the-end)): at most a quarter of it (`+my/stripe-overscroll`: a fraction, a number
+of rows, `0` for none, `t` for no limit). The strip maps the file plus that space onto the whole window height, like
+IntelliJ's scrollbar, so it never shrinks: marks stay put as the end comes into view, and the band reaches the bottom
+when the window can't scroll further. Margins need text to hang on, so below the last line the strip is drawn on one
+extra row after the end of the buffer, which also repeats the empty-line `~` and takes the place of the empty,
+unnumbered line after the final newline: as in Vim, the `~` start right after the last line. The cursor stays off that
+line in normal state (`j` on the last line stays put, `G` goes to the last line), and a click below the text puts it on
+the last line at the clicked column; insert state can go there, to add at the end. In a terminal the strip covers only
+the rows with text. Files shorter than the window get one line height per line.
 
-Click the strip to jump to that part of the file; the mouse wheel scrolls as usual. Info-level hints are left out
-(`+my/stripe-diagnostic-levels`); marks are at least `+my/stripe-mark-height` pixels tall.
+Click the strip to jump to that part of the file: the line lands in the middle of the window, and `C-o` (`Cmd+[`)
+jumps back; the mouse wheel scrolls as usual. Info-level hints are left out: add `info` to
+`+my/stripe-diagnostic-levels` (default `'(error warning)`) to show them, below every other mark. Marks are at least
+4 px tall (`+my/stripe-mark-height`). `M-x +my/stripe-mode` turns the strip off in a buffer (margin and fringes back to
+normal), `M-x +my/stripe-global-mode` everywhere.
 
 ## Notices
 
 `config/banner.el` shows notices at the top of a window, under the tabs, like IntelliJ's editor notifications: a row
 each, with an icon and colour for its type (info blue, warning yellow, error red), the message, actions to click, and
 `✕` to close it. They stay put while scrolling, and the header line (the path, or the sticky scopes) stays under them.
-A header line is one row of text, so it grows a row per notice (an invisible tall image) and a small borderless child
-frame lays the notices over those rows; each window showing the buffer gets its own. In a terminal the header line
-shows the first notice instead (and how many more). Code adds one with
-`(+my/banner-show ID TEXT :type 'warning :actions '(("Label" . function)))`; `M-x +my/banner-close` closes the first.
-Notices so far: (warning) files with very long lines shown plain and unwrapped (**Wrap lines**, **Open normally**).
+In narrow windows the message is cut short with `…` so the actions and `✕` still fit. A header line is one row of
+text, so it grows a row per notice (an invisible tall image) and a small borderless child frame lays the notices over
+those rows; each window showing the buffer gets its own. In a terminal the header line shows the first notice instead
+(and how many more).
+
+Notices so far: (warning) files with very long lines shown plain and unwrapped. **Wrap lines** wraps them (the notice
+stays, without that action); **Open normally** goes back to the file's own mode, and the notice goes. Both can make
+scrolling slow again (see [Very long lines](scrolling.md#very-long-lines)). A buffer's notices go when its major mode
+changes.
+
+From code: `(+my/banner-show ID TEXT :type 'warning :actions '(("Label" . function)))` (`:type` defaults to `info`;
+the actions run in the notice's buffer). Showing an ID again replaces that notice in place; `(+my/banner-close ID)`
+closes one, `M-x +my/banner-close` the first. Each type's icon and colour: `+my/banner-types` (a codicon name and a
+theme colour, which also tints the row).
 
 ## Sticky header
 
 The header line of code windows shows the classes/functions the top visible line is inside, once
 their first lines have scrolled out of view, like IntelliJ's sticky lines (e.g. `class Api { › fun call(x: Int) {`);
-otherwise the file's path. Nested scopes via tree-sitter (Kotlin, Python, Rust, ...), the enclosing defun elsewhere.
-In Markdown (`markdown-ts-mode`) the headings: `# Guide › ## Setup › ### Install`. Only where scopes can be told:
-files whose mode has no notion of them (HTML in `web-mode`, files with very long lines in `so-long-mode`) get no
-header row. It lines up with the code past the line numbers by working out their width the way Emacs does, not with
-`header-line-indent-mode`, which laid the window out (highlighting it first) on every scroll and before every redraw.
+otherwise the file's path in its project, dimmed (`~/…` outside a project). The header row is always there, so the
+code doesn't shift as it changes. Nested scopes via tree-sitter (Kotlin, Python, Rust, ...), the enclosing defun
+elsewhere. In Markdown (`markdown-ts-mode`) the headings: `# Guide › ## Setup › ### Install`. Only where scopes can be
+told: files whose mode has no notion of them (HTML in `web-mode`, files with very long lines in `so-long-mode`) get no
+header row. It lines up with the code, past the fringe and the line numbers.
+
+For a tree-sitter mode that doesn't declare its classes/functions, add `(LANGUAGE . NODE-TYPE-REGEXP)` to
+`+my/sticky-defun-types` (Kotlin's and Markdown's are there). `+my/sticky-separator` is the ` › ` between scopes.
+`M-x +my/sticky-header-mode` turns it off (or on) in a buffer.
 
 ## Tabs per window
 
@@ -69,9 +85,13 @@ they first were. A split starts with one tab, the buffer it shows. Files, Claude
 other buffers only while shown; popups, the dashboard and side panels have no tab line. Closing a tab (its ✕, a
 middle click) takes it off that window, which goes back to the tab it showed before; a file is closed too once no
 window has it as a tab any more (asking first if it has unsaved changes), a Claude session only leaves the tab line.
-`gt` / `gT`: next / previous tab. Tabs show the file's icon, a bar on the current one (`+my/tabs-height`), `•` when
-unsaved, and same-named files get the shortest distinguishing path as their label (`crate-a/src/lib.rs` vs
-`crate-b/src/lib.rs`) instead of `lib.rs<2>`, since workspaces disable uniquify.
+`SPC b k` still kills the buffer, in every window.
+
+`gt` / `gT`: next / previous tab, wrapping around. Doom used them for workspaces: those are `]w` / `[w` or
+`SPC TAB ]` / `SPC TAB [`. Tabs show the file's icon, a bar on the current one (`+my/tabs-bar-width`, 2 px; the tab row
+is `+my/tabs-height`, 22 px, tall; icon and bar in the GUI only), `•` when unsaved, and same-named files get the
+shortest distinguishing path as their label (`crate-a/src/lib.rs` vs `crate-b/src/lib.rs`) instead of `lib.rs<2>`,
+since workspaces disable uniquify.
 
 ## Current line and selection across wrapped rows
 
@@ -98,9 +118,22 @@ the window's edge (e.g. long names in treemacs) don't touch the text (`+my/right
 
 `()`, `[]` and `{}` colored by nesting depth in code (`rainbow-delimiters`).
 
-## Font
+## Case style
 
-JetBrains Mono with ligatures.
+`SPC c ~` cycles the word at point through snake_case, UPPER_CASE, PascalCase, camelCase and kebab-case
+(`string-inflection`).
+
+## Font and theme
+
+JetBrains Mono 13 (`doom-font` in `config.el`; `scripts/tools.sh` installs it) with ligatures (Doom's `ligatures`
+module); the `doom-one` theme; absolute line numbers. The frame opens maximized.
+
+## PDF zoom
+
+In PDFs (pdf-tools), `Cmd+=` (or `Cmd++`) / `Cmd+-` zoom in / out and `Cmd+0` shows the actual size, as in Preview
+(`P` fits the page again; pdf-tools' own `+` `-` `0` `W` `H` `P` still work). `Cmd+scroll` zooms one step
+(`+my/pdf-wheel-zoom-step`, ×1.1) per wheel notch, or per `+my/pdf-wheel-zoom-pixels` (40) of trackpad scrolling.
+Elsewhere `Cmd+=` / `Cmd+-` still change the font size (`config/pdf.el`).
 
 ## Mode line
 
@@ -110,8 +143,10 @@ edge; in every doom-modeline layout (`config/modeline.el`).
 ## New windows get focus
 
 Splits (`SPC w s` / `SPC w v`) and any new window a command opens (diff pane, other-window
-commands...) move the cursor there. Side windows (Doom popups, treemacs, which-key, transient menus) keep their own
-behaviour, as do windows opened in the background; the live Markdown preview opts out with `+my/focus-new-windows`.
+commands...) move the cursor there; `SPC w S` / `SPC w V` split and leave it where it was. Side windows (Doom popups,
+treemacs, which-key, transient menus) keep their own behaviour, as do windows opened in the background. Set
+`+my/focus-new-windows` to `nil` to stop selecting the windows commands open (the live Markdown preview does, for its
+own).
 
 ## Evil
 
@@ -122,13 +157,3 @@ Saving a buffer returns to normal state.
 **`q` closes transient menus** (agent-shell's help and drawing menus, magit's...), as Esc (Doom) and `C-g` do: it
 only said "Unbound suffix: q". A menu that uses `q` for something of its own keeps it (magit's dispatch: bury the
 buffer; blame, git-timemachine: quit them); `transient-bind-q-to-quit` would move such keys to `Q`, not done.
-
-## `M-[` / `M-]`
-
-**`M-[` / `M-]`** switch buffers in the GUI only; in a terminal they would swallow mouse/focus escape sequences.
-
-## Hover help in the echo area, never in a tooltip
-
-E.g. a warning's message when hovering its text, as Doom has
-it. Doom also turned on `tty-tip-mode` (tips in a small child frame) when a terminal frame opened; that mode is
-global, so after an `emacsclient -t` GUI frames drew their tips at the frame's top-left corner. Not anymore.

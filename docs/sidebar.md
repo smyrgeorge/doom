@@ -9,7 +9,9 @@
 - **Git status** colours for files and folders, computed asynchronously. Saving a file refreshes its status (macOS's
   kqueue file notifications miss in-place edits, so this is done explicitly on save). Changes made outside Emacs
   (Claude Code, a terminal, git) show up within a few seconds: while Emacs has focus, the shown projects' `git status`
-  is checked every 3 s in the background (`+my/treemacs-git-poll-interval`), and treemacs refreshes when it changed.
+  is checked every 3 s in the background (`+my/treemacs-git-poll-interval`; only while the sidebar is shown, `nil`
+  turns it off), and treemacs refreshes when it changed. Switching back to Emacs, a change under a project's `.git` (a
+  commit, a checkout) and a file reloaded from disk refresh it too. Folder colours need `python3`.
 - **Reachable like any window**: `SPC w w` cycles into it and it gets a window number (`SPC w 1`, as the leftmost
   window).
 - **No mode line**: it only said "Treemacs" and the workspace.
@@ -18,12 +20,17 @@
   `k`/`j`. The same in the LSP lists (`SPC c X`, `SPC c S`), where `←`/`→` didn't expand or collapse anything.
   `h`/`l` keep treemacs' own collapse / open. A **single click** opens a file or expands/collapses a folder
   (treemacs' default is a double click).
-- `zR` / `zM` (`M-x treemacs-expand-all` / `treemacs-collapse-all`): expand every folder of the project, or collapse
-  them all (the project stays open at its top level). Expanding asks first in projects with more than 300 folders.
+- `zR` / `zM` (`M-x treemacs-expand-all` / `treemacs-collapse-all`): expand every folder of the projects shown, or
+  collapse them all (each project stays open at its top level). Expanding asks first above 300 folders
+  (`+my/treemacs-expand-all-warn`).
 - With `+lsp`: structure view (`SPC c S`), project errors (`SPC c X`) and call hierarchy (`SPC c y` / `SPC c Y`).
   The structure view and the error list open with the cursor in them, on their first line (it stayed in the code).
-- **Tips panel** (disabled for now: uncomment `(load! "config/cheatsheet")` in `config.el`) below the sidebar,
-  whenever it's open: a few tips from `cheatsheet.org` (this config's keys, Doom's, Vim's), two per section, changing
-  every 5 minutes, so over time you see them all. In the panel `n` shows the next tips, `e` opens the whole
-  cheatsheet, `q` hides it; `SPC t ?` hides / shows it. Edit `cheatsheet.org` to change the tips (one `- ` line each,
-  under a `*` heading); the panel picks them up on save (`config/cheatsheet.el`).
+
+## Tips panel (disabled)
+
+Disabled for now: uncomment `(load! "config/cheatsheet")` in `config.el`. Below the sidebar, whenever it's open: a few
+tips from `cheatsheet.org` (this config's keys, Doom's, Vim's), two per section (`+my/cheatsheet-tips-per-section`),
+changing every 5 minutes (`+my/cheatsheet-rotate-seconds`), so over time you see them all. In the panel `n` shows the
+next tips, `e` opens the whole cheatsheet, `q` hides it; `SPC t ?` hides / shows it (`+my/cheatsheet-enabled` nil
+starts it hidden). Edit `cheatsheet.org` (`+my/cheatsheet-file`) to change the tips (one `- ` line each, under a `*`
+heading); the panel picks them up on save (`config/cheatsheet.el`).

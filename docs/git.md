@@ -2,13 +2,14 @@
 
 ## Magit
 
-Diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `magit-delta`.
+Diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `magit-delta`. The status buffer
+lists the repository's TODO/FIXME/... comments (`magit-todos`, using `rg`).
 
 ## Commit graph, like tig
 
 The log (`l l`) and the status buffer's commits (`SPC g g`: "Recent commits" open,
-20 of them) show the branch tree, each lane in its own colour, drawn with box-drawing lines (`●` `│` `╱` `╲`) instead
-of ASCII, with the author and the date (`2026-11-04 09:58`) in the margin.
+20 of them) show the branch tree, each lane in its own colour, drawn with box-drawing lines (`●` `│` `╱` `╲` `─`,
+`+my/magit-graph-glyphs`) instead of ASCII, with the author and the date (`2026-11-04 09:58`) in the margin.
 
 ## File diff pane
 

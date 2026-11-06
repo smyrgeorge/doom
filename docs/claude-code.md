@@ -1,8 +1,12 @@
 # Claude Code in Emacs
 
 [`agent-shell`](https://github.com/xenodium/agent-shell) runs Claude Code (via the Agent Client Protocol) in a native
-Emacs buffer — evil keys, search and copy work as usual. It uses the Claude CLI login. `C-u M-x agent-shell` starts a
-second, parallel session.
+Emacs buffer — evil keys, search and copy work as usual. It uses the Claude CLI login.
+
+`SPC o c` starts a new Claude Code session (another one each time). `SPC o C` goes to the project's session, starting
+one if there's none (Claude Code, without asking which agent); `C-u SPC o C` starts a new one, `C-u C-u SPC o C` picks
+among the open ones. From code, Option+Enter (`M-RET`) sends the error at point or the selection to Claude (fix /
+explain), or adds the selection or file to the prompt (see [Context actions](code.md#context-actions-optionenter)).
 
 Claude is told where it runs and what that allows (`+my/agent-shell-claude-context`, appended to Claude Code's own
 system prompt in every session it starts or resumes):
@@ -16,7 +20,8 @@ system prompt in every session it starts or resumes):
   whole report as one image or a web page), so they read inside the editor.
 - **The editor:** Emacs runs a server, so Claude can ask it (`emacsclient --eval`) what you're looking at (buffers,
   file and line, region, diagnostics) or open a file for you: quickly, never waiting for input, changing nothing unless
-  asked, and checking a file's buffer has no unsaved changes before editing it.
+  asked, and checking a file's buffer has no unsaved changes before editing it. (In GUI sessions; see
+  [Terminal usage](terminal.md) for `emacs -nw`.)
 - **The theme's colours**, read when the session starts, so the images it draws suit them (dark here).
 
 Images show as wide as the window (agent-shell shrinks them to 40% of it; `agent-shell-markdown-image-max-width` 1.0),

@@ -22,10 +22,11 @@ git clone git@github.com:smyrgeorge/doom.git ~/.config/doom
 # 2. Doom itself (its modules are a git submodule)
 git clone --depth 1 --recurse-submodules https://github.com/doomemacs/core ~/.config/emacs
 
-# 3. Emacs (prebuilt emacs-plus Emacs.app) + `doom sync` (also fetches Doom's modules)
+# 3. Emacs (prebuilt emacs-plus Emacs.app; macOS 15+, replaces Homebrew's `emacs` formula) + `doom sync`
+#    (also fetches Doom's modules)
 ~/.config/doom/scripts/emacs.sh
 
-# 4. CLI tools, fonts, language servers
+# 4. CLI tools, fonts, BasicTeX (its installer asks for an admin password), language servers
 ~/.config/doom/scripts/tools.sh
 ~/.config/doom/scripts/lsp.sh
 
@@ -41,24 +42,27 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 
 **One-time manual steps**
 
-- **Claude login:** run `claude` once in a terminal and log in; `agent-shell` reuses that login.
+- **Claude Code:** install the `claude` CLI (the scripts don't), run it once in a terminal and log in; `agent-shell`
+  reuses that login.
 - **Kotlin LSP EULA:** read it with `kotlin-lsp --show-eula`, then run `kotlin-lsp --stdio` once and accept.
 - **iTerm (terminal Emacs):** in *Settings → Profiles → Text*, use a Nerd Font (e.g. *JetBrainsMono Nerd Font*) for
-  icons and tick *Use ligatures*.
+  icons and tick *Use ligatures*; in *Profiles → Keys*, set the left Option key to *Esc+* so `M-` keys (e.g. `M-RET`)
+  work.
 
 ## Documentation
 
 - [The editor](docs/editor.md): error stripe, notices, sticky header, tabs per window, current line, right margin,
-  fringes, mode line, evil.
+  fringes, case style, font and theme, PDF zoom, mode line, evil.
 - [Project sidebar](docs/sidebar.md): treemacs that follows the current file, git status, IntelliJ-like arrows, LSP
   panels.
 - [Smooth scrolling](docs/scrolling.md): mouse-wheel glide, scroll limit past the end, long lines.
 - [Performance](docs/performance.md): compiled config, opening files faster.
-- [Code](docs/code.md): Option+Enter actions, usages peek, code lenses, language servers, Kotlin, spelling in code.
+- [Code](docs/code.md): Cmd+B, Option+Enter actions, usages peek, code lenses, language servers, Kotlin, spelling in
+  code.
 - [Search](docs/search.md): Search Everywhere (`SPC s a`), find in files, projects.
 - [Markdown](docs/markdown.md): live preview inside Emacs, Markdown links.
 - [Git](docs/git.md): Magit, commit graph, file diff pane.
-- [Claude Code in Emacs](docs/claude.md): agent-shell, what Claude is told about Emacs, images.
+- [Claude Code in Emacs](docs/claude-code.md): starting sessions, what Claude is told about Emacs, images.
 - [Terminal usage](docs/terminal.md): running in a terminal (`emacs -nw`).
 - [Key bindings](docs/keybindings.md): this config's own keys.
 - [Modules and languages](docs/modules.md): enabled Doom modules, languages and tooling, known `doom doctor` warnings.
