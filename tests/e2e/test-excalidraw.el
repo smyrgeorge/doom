@@ -458,6 +458,127 @@ goes nowhere; then killed."
       (should (string-match-p "saving replaces the file" (nth 1 (assq 'excalidraw +my/banner--list))))
       (should-not (buffer-modified-p)))))
 
+;; ====== LIBRARIES ======
+
+(defconst +test-exd--library
+  "{\"type\":\"excalidrawlib\",\"version\":2,\"source\":\"test\",\"libraryItems\":[{\"id\":\"box\",\"status\":\"published\",\"created\":1,\"name\":\"Box\",\"elements\":[{\"id\":\"r1\",\"type\":\"rectangle\",\"x\":0,\"y\":0,\"width\":100,\"height\":50,\"angle\":0,\"strokeColor\":\"#1e1e1e\",\"backgroundColor\":\"transparent\",\"fillStyle\":\"solid\",\"strokeWidth\":2,\"strokeStyle\":\"solid\",\"roughness\":1,\"opacity\":100,\"groupIds\":[],\"frameId\":null,\"roundness\":null,\"seed\":1,\"version\":1,\"versionNonce\":1,\"isDeleted\":false,\"boundElements\":null,\"updated\":1,\"link\":null,\"locked\":false}]}]}"
+  "A library of one item, a box.")
+
+(defun +test-exd--library-file ()
+  "A library file (see `+test-exd--library'); its name."
+  (let ((file (+test-exd--file "box.excalidrawlib")))
+    (with-temp-file file (insert +test-exd--library))
+    file))
+
+(defun +test-exd--library-items (&optional window)
+  "The names of WINDOW's page's library's items."
+  (let* ((answer (+test-exd--js "exd.library()" window))
+         (json (json-parse-string (substring answer (1+ (string-search "\n" answer)))
+                                  :object-type 'alist :array-type 'list)))
+    (mapcar (lambda (item) (alist-get 'name item)) (alist-get 'libraryItems json))))
+
+(defun +test-exd--kept-library ()
+  "The names of the library file's items."
+  (when (file-exists-p +my/excalidraw-library-file)
+    (mapcar (lambda (item) (alist-get 'name item))
+            (alist-get 'libraryItems (json-parse-string (+test-exd--file-text +my/excalidraw-library-file)
+                                                        :object-type 'alist :array-type 'list)))))
+
+(defmacro +test-exd--with-library-file (&rest body)
+  "BODY with a library file of its own (none yet)."
+  (declare (indent 0))
+  `(let ((+my/excalidraw-library-file (expand-file-name "library.excalidrawlib" (+test-exd--file "library"))))
+     ,@body))
+
+(ert-deftest e2e-exd/a-library-from-a-link-kept-for-every-drawing ()
+  "libraries.excalidraw.com's \"Add to Excalidraw\" link, as the browser got
+it: the library added in the drawing (its panel open), kept in the file, shown
+in the drawings open and in the ones opened next."
+  (+test-exd
+    (+test-exd--with-library-file
+      (let* ((a (+test-exd--open (+test-exd--file "a.excalidraw.svg")))
+             (left (selected-window))
+             (right (split-window-right))
+             (b (+test-exd--open (+test-exd--file "b.excalidraw.svg") right))
+             (link (concat "file:///private/var/folders/x/excalidraw-1/index.html#addLibrary="
+                           (url-hexify-string (+my/webkit-file-url (+test-exd--library-file)))
+                           "&token=abc")))
+        (should (equal (+test-exd--library-items left) nil))
+        (select-window left)
+        (+my/excalidraw-add-library link)
+        (should (+test-wait-for (lambda () (equal (+test-exd--library-items left) '("Box"))) 5))
+        (should (equal (+test-exd--js "String(exd.api().getAppState().openSidebar && exd.api().getAppState().openSidebar.tab)" left)
+                       "library"))
+        ;; Kept, and in the other drawing open.
+        (should (+test-wait-for (lambda () (equal (+test-exd--kept-library) '("Box"))) 5))
+        (should (+test-wait-for (lambda () (equal (+test-exd--library-items right) '("Box"))) 5))
+        ;; Not changes of the drawings.
+        (should (eql (plist-get (+test-exd--state right) :version) 1))
+        ;; A drawing opened next starts with it.
+        (with-current-buffer b (set-buffer-modified-p nil))
+        (kill-buffer b)
+        (delete-window right)
+        (+test-exd--open (+test-exd--file "c.excalidraw.svg"))
+        (should (equal (+test-exd--library-items) '("Box")))
+        (ignore a)))))
+
+(defun +test-exd--site (library)
+  "A stand-in for libraries.excalidraw.com (no download): an \"Add to
+Excalidraw\" link as the site's, to the address of no site with LIBRARY (a
+file) in it, opening a new window. Its file:// URL."
+  (let ((site (+test-exd--file "site.html")))
+    (with-temp-file site
+      (insert (format "<!doctype html><title>Libraries</title><body><div class=\"library\"><a class=\"btn primary install-library\" href=\"%s#addLibrary=%s&token=emacs\" target=\"_blank\">Add to Excalidraw</a></div></body>"
+                      +my/excalidraw--library-return (url-hexify-string (+my/webkit-file-url library)))))
+    (+my/webkit-file-url site)))
+
+(defun +test-exd--site-xwidget ()
+  (seq-find (lambda (xwidget) (eq (xwidget-get xwidget 'callback) #'+my/excalidraw--libraries-callback))
+            xwidget-list))
+
+(ert-deftest e2e-exd/browse-libraries-and-add-one ()
+  "The libraries' site (here a stand-in, no download) in Emacs, in the
+drawing's window, a notice above it: its \"Add to Excalidraw\" (followed in
+its own window, on its way to the address of no site, with the library in it)
+adds the library, closes the site, shows the drawing again."
+  (+test-exd
+    (+test-exd--with-library-file
+      (let* ((drawing (+test-exd--open (+test-exd--file "browse.excalidraw.svg")))
+             (window (selected-window))
+             (site (+my/excalidraw-browse-libraries (+test-exd--site (+test-exd--library-file)) drawing)))
+        (should-not (eq (window-buffer window) drawing))
+        (should (assq 'excalidraw-libraries (buffer-local-value '+my/banner--list (window-buffer window))))
+        ;; Told to say the link clicked in its title once loaded; the link clicked.
+        (should (+test-wait-for (lambda () (equal (ignore-errors (+test-js site "String(window.exdLibraries === true)"))
+                                                  "true"))
+                                10))
+        (xwidget-webkit-execute-script site "document.querySelector('.install-library').click()")
+        (should (+test-wait-for (lambda () (eq (window-buffer window) drawing)) 10))
+        (should (+test-exd--ready window))
+        (should (+test-wait-for (lambda () (equal (+test-exd--library-items window) '("Box"))) 5))
+        (should (+test-wait-for (lambda () (equal (+test-exd--kept-library) '("Box"))) 5))
+        ;; The site's gone.
+        (should-not (seq-some (lambda (buffer) (eq (buffer-local-value 'major-mode buffer) 'xwidget-webkit-mode))
+                              (buffer-list)))))))
+
+(ert-deftest e2e-exd/browse-libraries-and-go-back ()
+  "The notice's Back to the drawing: the site closed, the drawing shown, no
+library added."
+  (+test-exd
+    (+test-exd--with-library-file
+      (let* ((drawing (+test-exd--open (+test-exd--file "back.excalidraw.svg")))
+             (window (selected-window)))
+        (+my/excalidraw-browse-libraries (+test-exd--site (+test-exd--library-file)) drawing)
+        (should (+test-wait-for #'+test-exd--site-xwidget 5))
+        (+test-sleep 0.5)
+        (with-current-buffer (window-buffer window)
+          (funcall (cdr (assoc "Back to the drawing" (nth 2 (assq 'excalidraw-libraries +my/banner--list))))))
+        (should (eq (window-buffer window) drawing))
+        (should-not (+test-exd--site-xwidget))
+        (+test-sleep 0.5)
+        (should (equal (+test-exd--library-items window) nil))
+        (should-not (file-exists-p +my/excalidraw-library-file))))))
+
 ;; ====== POINTER ======
 
 (ert-deftest e2e-exd/pointer-the-page-wants ()

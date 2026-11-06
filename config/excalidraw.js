@@ -5,7 +5,8 @@
 // says in its title ("exd {json}"): whether it's ready, the version of the
 // drawing (one more at each change), the version its latest export (the
 // file's text as it would be saved) is of, the mouse pointer it wants, the
-// theme, an error.
+// theme, an error, and its library's version (one more at each change of
+// the shapes kept to reuse, which Emacs keeps in a file for all drawings).
 (function () {
   'use strict';
 
@@ -23,7 +24,8 @@
   // default names a version "undefined".
   window.EXCALIDRAW_ASSET_PATH = options.fonts;
 
-  const state = { ready: false, version: 0, exported: 0, cursor: 'arrow', dark: !!options.dark, error: null };
+  const state = { ready: false, version: 0, exported: 0, cursor: 'arrow', dark: !!options.dark, error: null,
+                  library: 0 };
   let api = null;
   let content = null;        // the latest export (its version: state.exported)
   let lastSignature = null;  // the drawing's, as last seen
@@ -32,6 +34,8 @@
   let exportTimer = null;
   let exporting = null;      // the export running (a promise)
   let shown = 0;             // one more each time another drawing is shown
+  let libraryItems = [];     // the library as it is
+  let knownLibrary = null;   // ... as Emacs has it (JSON)
 
   function publish() {
     document.title = 'exd ' + JSON.stringify(state);
@@ -53,6 +57,47 @@
   }
 
   const blank = (text) => !text || !text.trim();
+
+  // A library from an .excalidrawlib's text (version 1 or 2): its items.
+  async function libraryOf(base64) {
+    const text = decode(base64);
+    if (blank(text)) return [];
+    return L.loadLibraryFromBlob(new Blob([text], { type: 'application/json' }), 'published');
+  }
+
+  // The library changed here (shapes added to it, removed): one more version,
+  // for Emacs to keep. Not when it's the library Emacs gave.
+  function onLibraryChange(items) {
+    libraryItems = items;
+    const json = L.serializeLibraryAsJSON(items);
+    if (json === knownLibrary) return;
+    knownLibrary = json;
+    if (!state.ready || (settling && !acted)) return;
+    state.library += 1;
+    publish();
+  }
+
+  // The library from Emacs (another drawing's change): not a change here.
+  async function setLibrary(base64) {
+    if (!api) return;
+    const items = await libraryOf(base64);
+    knownLibrary = L.serializeLibraryAsJSON(items);
+    await api.updateLibrary({ libraryItems: items, merge: false });
+  }
+
+  // A library to add (from libraries.excalidraw.com, a file): merged into
+  // this one, the library panel opened on it; a change, for Emacs to keep.
+  async function addLibrary(base64) {
+    if (!api) return;
+    acted = true;
+    try {
+      const items = await libraryOf(base64);
+      await api.updateLibrary({ libraryItems: items, merge: true, openLibraryMenu: true });
+    } catch (e) {
+      state.error = 'Library: ' + (e && e.message ? e.message : e);
+      publish();
+    }
+  }
   const empty = () => ({ elements: [], appState: {}, files: {} });
 
   // A drawing from its file's text: empty if blank (a new file).
@@ -166,8 +211,14 @@
     }
   }
 
-  async function open(base64) {
+  async function open(base64, libraryBase64) {
     const text = decode(base64);
+    try {
+      libraryItems = await libraryOf(libraryBase64);
+    } catch (e) {
+      libraryItems = [];
+    }
+    knownLibrary = L.serializeLibraryAsJSON(libraryItems);
     let scene;
     try {
       scene = await sceneOf(text);
@@ -189,7 +240,13 @@
           settle(() => { if (state.version !== state.exported) scheduleExport(); });
         }, 0);
       },
-      initialData: { elements: scene.elements, appState, files: scene.files, scrollToContent: true },
+      initialData: { elements: scene.elements, appState, files: scene.files, scrollToContent: true,
+                     libraryItems },
+      // Browse libraries: libraries.excalidraw.com sends the one chosen to this
+      // address (Emacs opens the site and takes it from there, see
+      // config/excalidraw.el).
+      libraryReturnUrl: options.libraryReturn,
+      onLibraryChange,
       langCode: 'en',
       autoFocus: true,
       // Keys come from Emacs (see config/excalidraw.el), sent to the
@@ -285,13 +342,15 @@
   }
 
   window.exd = {
-    open, replace, key, copy, cut, paste, set,
+    open, replace, key, copy, cut, paste, set, setLibrary, addLibrary,
     // Export now: a save waits for the version the drawing is at.
     flush: () => { noticeChange(); exportNow(); return String(state.version); },
     // The latest export, the file's text as it would be saved, after the
     // version it's of and a line break (Emacs asks for it: WebKit doesn't
     // answer with nothing).
     answer: () => state.exported + '\n' + (content || ''),
+    // The library, after its version and a line break.
+    library: () => state.library + '\n' + L.serializeLibraryAsJSON(libraryItems),
     state: () => JSON.stringify(state),
     // Changes are counted (see settle).
     settled: () => !settling,

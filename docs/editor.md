@@ -230,6 +230,7 @@ keys and gives them to the page, so Excalidraw's work as at excalidraw.com (its 
 | `Cmd+C` / `Cmd+X` | Copy / cut the selection: Emacs's kill ring and the clipboard, in Excalidraw's format (it pastes back here or at excalidraw.com) |
 | `Cmd+V` | Paste: shapes copied so, or text (a text element) |
 | `SPC m d` | Dark canvas, for all drawings (`+my/excalidraw-theme`: `auto` follows Emacs's theme) |
+| `SPC m l` | Excalidraw's libraries (libraries.excalidraw.com), in Emacs (see below) |
 | `SPC m r` | Read the file again |
 
 The buffer has the file's text, under the page: a moment after each change (`+my/excalidraw-export-delay`, 300 ms),
@@ -241,6 +242,17 @@ Split, each pane shows the drawing (a WebKit view per window, as for PDFs), and 
 A drawing changed on disk (git, say) is shown anew (`revert-buffer`, so also Doom's auto-revert); one changed here is
 only read again after asking. A file that isn't a drawing (a plain SVG named so) opens blank, under a notice saying
 that saving replaces it with what you draw.
+
+**Libraries.** Excalidraw's library (its panel: shapes kept to reuse, drawn or added from
+[libraries.excalidraw.com](https://libraries.excalidraw.com)) is the same in every drawing, kept in
+`+my/excalidraw-library-file` (Doom's `.local/etc/excalidraw-library.excalidrawlib`) across Emacs sessions: a change in
+one drawing shows in the others open, and the next ones start with it. The panel's **Browse libraries** (or `SPC m l`)
+opens the libraries' site in Emacs, in the drawing's pane, under a notice whose **Back to the drawing** (or `Cmd+W`)
+closes it; a library's **Add to Excalidraw** downloads it, adds it (the panel opens on it), closes the site and shows
+the drawing again. (In the browser, the site sent the library to the drawing page's `file://` address, where Emacs
+never saw it; inside Emacs, its links open a new window, which a click didn't do there, so the site is told to put the
+link clicked in its title, which Emacs reads while it's open.) `M-x +my/excalidraw-add-library` adds one from its URL or file, or from a
+link with `addLibrary=` in it, such as that `file://` one (the kill ring's latest is offered).
 
 From Markdown or Org, `Option+Enter` (the [actions menu](code.md#context-actions-optionenter)) has **Insert a new
 drawing** (`M-x +my/excalidraw-insert`): it asks for a name (`drawing.excalidraw.svg` by default, `.excalidraw.svg`

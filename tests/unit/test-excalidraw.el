@@ -138,6 +138,8 @@ test's; from one window on *scratch*, and again after."
             (+my/webkit--tidy-timer nil)
             (+my/excalidraw-dir (+test-exd--fake-excalidraw))
             (+my/excalidraw-theme 'light)
+            (+my/excalidraw-library-file
+             (expand-file-name "library.excalidrawlib" (+test-exd--new-dir "library")))
             (kill-ring nil)
             (kill-ring-yank-pointer nil)
             (interprogram-cut-function nil)
@@ -368,7 +370,7 @@ mode, and why."
         (let ((page (+my/excalidraw--page))
               (assets (+my/webkit-file-url (file-name-as-directory +my/excalidraw-dir))))
           ;; The drawing: the buffer's text, UTF-8, as base64.
-          (should (string-match-p (regexp-quote (format "exd.open(\"%s\")" (+test-exd--base64 text))) page))
+          (should (string-match-p (regexp-quote (format "exd.open(\"%s\", \"\")" (+test-exd--base64 text))) page))
           (should (equal (decode-coding-string (base64-decode-string (+test-exd--base64 text)) 'utf-8) text))
           ;; Excalidraw's files, React first; then the script.
           (should (string-match-p (regexp-quote (format "window.EXCALIDRAW_ASSET_PATH = \"%s\";" assets)) page))
@@ -383,7 +385,8 @@ mode, and why."
           (should (string-match-p "background:#ffffff" page))
           (should (equal (+test-exd--page-options page)
                          '(:kind "svg" :dark nil :exportDelay 300
-                           :fonts "https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw@0.17.6"))))))))
+                           :fonts "https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw@0.17.6"
+                           :libraryReturn "https://excalidraw.emacs.invalid/"))))))))
 
 (ert-deftest exd/page-of-a-json-drawing-on-a-dark-canvas ()
   (+test-exd
@@ -1039,6 +1042,289 @@ line); Esc, Enter, Tab, Delete, the arrows; its Cmd and Option keys."
       (should (eq +my/excalidraw-theme 'light))
       (should (equal (+test-exd--run-in xa) '("window.exd && exd.set({dark: false})\n;void 0")))
       (should (= (+test-messages "^Dark canvas off$") 1)))))
+
+;; ====== LIBRARIES ======
+
+(defconst +test-exd--library
+  "{\"type\":\"excalidrawlib\",\"version\":2,\"source\":\"test\",\"libraryItems\":[{\"id\":\"box\",\"status\":\"published\",\"elements\":[]}]}"
+  "An .excalidrawlib's text, as far as Emacs knows.")
+
+(defconst +test-exd--users-link
+  "file:///var/folders/v7/T/excalidraw-B86b1Y/index.html#addLibrary=https%3A%2F%2Flibraries.excalidraw.com%2Flibraries%2Fyouritjang%2Fsoftware-architecture.excalidrawlib&token=uyLOdhnI3kDdaV1riWrNf"
+  "Where libraries.excalidraw.com's \"Add to Excalidraw\" sent a library, in the browser.")
+
+(ert-deftest exd/versioned-answers ()
+  (should (equal (+my/excalidraw--versioned "3\n{}") '(3 . "{}")))
+  (should (equal (+my/excalidraw--versioned "12\n") '(12 . "")))
+  (should (equal (+my/excalidraw--versioned "0\na\nb") '(0 . "a\nb")))
+  (dolist (odd '("x\n{}" "\n{}" "3" "" nil 42 "-1\n{}"))
+    (should-not (+my/excalidraw--versioned odd))))
+
+(ert-deftest exd/library-in-a-link ()
+  (should (equal (+my/excalidraw--library-in +test-exd--users-link)
+                 "https://libraries.excalidraw.com/libraries/youritjang/software-architecture.excalidrawlib"))
+  (should (equal (+my/excalidraw--library-in "https://excalidraw.emacs.invalid/#addLibrary=file%3A%2F%2F%2Ftmp%2Fa.excalidrawlib")
+                 "file:///tmp/a.excalidrawlib"))
+  (should (equal (+my/excalidraw--library-in "https://x/?addLibrary=https%3A%2F%2Fa%2Fb.excalidrawlib&token=1")
+                 "https://a/b.excalidrawlib"))
+  (dolist (none '("https://libraries.excalidraw.com/?target=_excalidraw&referrer=x" "a.excalidrawlib" nil))
+    (should-not (+my/excalidraw--library-in none))))
+
+(ert-deftest exd/library-p ()
+  (should (+my/excalidraw--library-p +test-exd--library))
+  (should (+my/excalidraw--library-p "{\"type\":\"excalidrawlib\",\"version\":1,\"library\":[[]]}"))
+  (dolist (other '("{\"type\":\"excalidraw\",\"elements\":[]}" "[1,2]" "garbage" ""))
+    (should-not (+my/excalidraw--library-p other))))
+
+(defmacro +test-exd--with-web (responses &rest body)
+  "BODY with `url-retrieve-synchronously' answering from RESPONSES, ((URL . HTTP-TEXT)...);
+the URLs asked for in `fetched'."
+  (declare (indent 1))
+  `(let ((fetched nil))
+     (cl-letf (((symbol-function 'url-retrieve-synchronously)
+                (lambda (url &rest _)
+                  (push url fetched)
+                  (when-let* ((response (cdr (assoc url ,responses))))
+                    (let ((buffer (generate-new-buffer " *http*")))
+                      (with-current-buffer buffer
+                        (set-buffer-multibyte nil)
+                        (insert (encode-coding-string response 'utf-8)))
+                      buffer)))))
+       ,@body)))
+
+(ert-deftest exd/fetch-a-library ()
+  (+test-exd--with-web `(("https://ok/a.excalidrawlib" . ,(concat "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"name\":\"ü\"}"))
+                         ("https://gone/a.excalidrawlib" . "HTTP/1.1 404 Not Found\r\n\r\nNo"))
+    (should (equal (+my/excalidraw--fetch "https://ok/a.excalidrawlib") "{\"name\":\"ü\"}"))
+    (should (equal fetched '("https://ok/a.excalidrawlib")))
+    (let ((err (should-error (+my/excalidraw--fetch "https://gone/a.excalidrawlib") :type 'user-error)))
+      (should (string-match-p "404 Not Found" (cadr err))))
+    (should-error (+my/excalidraw--fetch "https://offline/a.excalidrawlib") :type 'user-error))
+  ;; A file, by its name or file:// URL.
+  (let ((file (expand-file-name "my lib.excalidrawlib" (+test-exd--new-dir "fetch"))))
+    (with-temp-file file (insert "{\"library\":[]}"))
+    (should (equal (+my/excalidraw--fetch file) "{\"library\":[]}"))
+    (should (equal (+my/excalidraw--fetch (+my/webkit-file-url file)) "{\"library\":[]}"))
+    (should-error (+my/excalidraw--fetch (concat file ".missing")) :type 'user-error)))
+
+(ert-deftest exd/add-a-library-to-an-open-drawing ()
+  "The user's link (libraries.excalidraw.com's, in the browser): its library
+downloaded, merged in the drawing's page."
+  (+test-exd
+    (let* ((buffer (+test-exd--open (+test-exd--file "lib.excalidraw.svg" +test-exd--svg)))
+           (xw (+test-exd--xw buffer)))
+      (+test-exd--with-web `(("https://libraries.excalidraw.com/libraries/youritjang/software-architecture.excalidrawlib"
+                              . ,(concat "HTTP/1.1 200 OK\r\n\r\n" +test-exd--library)))
+        (with-temp-buffer                 ; from anywhere: the drawing on screen
+          (+my/excalidraw-add-library (concat "  " +test-exd--users-link "\n"))))
+      (should (equal (+test-exd--run-in xw)
+                     (list (format "window.exd && exd.addLibrary(\"%s\")\n;void 0"
+                                   (+test-exd--base64 +test-exd--library))))))))
+
+(ert-deftest exd/add-a-library-needs-a-drawing-and-a-library ()
+  (+test-exd
+    (let ((file (expand-file-name "not.excalidrawlib" (+test-exd--new-dir "notlib"))))
+      (with-temp-file file (insert "{\"type\":\"excalidraw\"}"))
+      (should-error (+my/excalidraw-add-library file) :type 'user-error)   ; no drawing
+      (+test-exd--open (+test-exd--file "need.excalidraw.svg" +test-exd--svg))
+      (let ((err (should-error (+my/excalidraw-add-library file) :type 'user-error)))
+        (should (string-match-p "Not an Excalidraw library" (cadr err))))
+      (should-not (+test-exd--run-in (car +test-exd--made))))
+    (should (commandp #'+my/excalidraw-add-library))))
+
+(ert-deftest exd/add-a-library-guesses-from-the-kill-ring ()
+  (let ((kill-ring nil) (kill-ring-yank-pointer nil) (interprogram-paste-function nil))
+    (should-not (+my/excalidraw--library-guess))
+    (kill-new "some words")
+    (should-not (+my/excalidraw--library-guess))
+    (kill-new (concat +test-exd--users-link "\n"))
+    (should (equal (+my/excalidraw--library-guess) +test-exd--users-link))
+    (kill-new "https://x/y.excalidrawlib")
+    (should (equal (+my/excalidraw--library-guess) "https://x/y.excalidrawlib"))))
+
+(ert-deftest exd/a-library-change-is-kept-and-shown-in-every-drawing ()
+  "A page's library changed: asked for, kept in the file, given to the other
+pages (this drawing's, the others'), not the one it came from."
+  (+test-exd
+    (let* ((a (+test-exd--open (+test-exd--file "a.excalidraw.svg" +test-exd--svg)))
+           (w2 (split-window nil nil 'right))
+           (b (+test-exd--open (+test-exd--file "b.excalidraw.svg" +test-exd--svg) w2))
+           (xa (+test-exd--xw a (frame-first-window)))
+           (xb (+test-exd--xw b w2))
+           (xa2 (+test-exd--xw a (+test-exd--show a (split-window w2 nil 'below)))))
+      (+test-exd--say xa :ready t :version 0 :exported 0 :library 2)
+      (with-current-buffer a (+my/excalidraw--sync xa))
+      (should (equal (+test-exd--asked xa)
+                     '(("window.exd ? exd.library() : '0\\n'" +my/excalidraw--library-received))))
+      (setq +test-exd--scripts nil)
+      (+test-exd--answer xa '+my/excalidraw--library-received (concat "2\n" +test-exd--library))
+      (should (equal (+test-exd--text +my/excalidraw-library-file) +test-exd--library))
+      (should (eql (xwidget-get xa 'library) 2))
+      (let ((script (format "window.exd && exd.setLibrary(\"%s\")\n;void 0" (+test-exd--base64 +test-exd--library))))
+        (should (equal (+test-exd--run-in xb) (list script)))
+        (should (equal (+test-exd--run-in xa2) (list script)))
+        (should-not (+test-exd--run-in xa)))
+      ;; Had: not asked again; the same library again, or an older one: nothing.
+      (setq +test-exd--scripts nil)
+      (with-current-buffer a (+my/excalidraw--sync xa))
+      (should-not +test-exd--scripts)
+      (+test-exd--answer xb '+my/excalidraw--library-received (concat "1\n" +test-exd--library))
+      (+test-exd--answer xa '+my/excalidraw--library-received "1\n{\"older\":true}")
+      (should-not +test-exd--scripts)
+      (should (equal (+test-exd--text +my/excalidraw-library-file) +test-exd--library))
+      ;; A page reloaded starts at 0.
+      (with-current-buffer a (+my/excalidraw--loaded xa))
+      (should (eql (xwidget-get xa 'library) 0)))))
+
+(ert-deftest exd/pages-start-with-the-library ()
+  (+test-exd
+    (make-directory (file-name-directory +my/excalidraw-library-file) t)
+    (with-temp-file +my/excalidraw-library-file (insert +test-exd--library))
+    (with-current-buffer (+test-exd--open (+test-exd--file "start.excalidraw.svg" +test-exd--svg))
+      (should (string-search (format ", \"%s\");" (+test-exd--base64 +test-exd--library))
+                             (+my/excalidraw--page))))))
+
+(ert-deftest exd/libraries-site-in-emacs ()
+  "A link out of the page to libraries.excalidraw.com (Browse libraries): the
+site in Emacs, in the drawing's window; others: the browser."
+  (+test-exd
+    (let* ((buffer (+test-exd--open (+test-exd--file "browse.excalidraw.svg" +test-exd--svg)))
+           (+test-browsed nil))
+      (with-current-buffer buffer
+        (+my/excalidraw--link-out "https://libraries.excalidraw.com/?target=_blank&referrer=x")
+        (+my/excalidraw--link-out "https://example.com/elsewhere"))
+      (should (equal +test-browsed '("https://example.com/elsewhere")))
+      (let ((timer (car (+test-exd--timers #'+my/excalidraw-browse-libraries))))
+        (should (equal (timer--args timer)
+                       (list "https://libraries.excalidraw.com/?target=_blank&referrer=x" buffer)))))))
+
+(ert-deftest exd/libraries-url ()
+  (let ((+my/excalidraw-theme 'dark))
+    (should (equal (+my/excalidraw--libraries-url)
+                   "https://libraries.excalidraw.com/?target=_excalidraw&referrer=https%3A%2F%2Fexcalidraw.emacs.invalid%2F&useHash=true&token=emacs&theme=dark&version=2"))))
+
+(ert-deftest exd/browse-libraries-watches-the-site ()
+  (+test-exd
+    (let* ((buffer (+test-exd--open (+test-exd--file "site.excalidraw.svg" +test-exd--svg)))
+           (window (selected-window))
+           (site (+test-exd--xw-new :buffer (get-buffer-create "*site*")))
+           (opened nil))
+      (cl-letf (((symbol-function 'xwidget-webkit-new-session)
+                 (lambda (url) (push url opened) (switch-to-buffer (+test-exd--xw-buffer site))))
+                ((symbol-function 'xwidget-webkit-current-session) (lambda () site)))
+        (should-error (with-temp-buffer (+my/excalidraw-browse-libraries)) :type 'user-error)
+        (with-current-buffer buffer
+          (should (eq (+my/excalidraw-browse-libraries) site))))
+      (should (equal opened (list (+my/excalidraw--libraries-url))))
+      (should (eq (xwidget-get site 'callback) #'+my/excalidraw--libraries-callback))
+      (should (eq (xwidget-get site '+my/excalidraw-drawing) buffer))
+      (should (eq (xwidget-get site '+my/excalidraw-window) window))
+      ;; Its title watched (see LIBRARIES).
+      (let ((timer (xwidget-get site '+my/excalidraw-watch)))
+        (should (timerp timer))
+        (should (eq (timer--function timer) #'+my/excalidraw--libraries-watch))
+        (should (equal (timer--args timer) (list site))))
+      (should (eq (window-buffer window) (get-buffer "*site*")))
+      ;; A notice above it says what to do, and goes back.
+      (should (equal (car +test-exd--notices)
+                     (list 'show 'excalidraw-libraries
+                           "Pick a library: its \"Add to Excalidraw\" adds it to your drawings' library"
+                           nil (get-buffer "*site*"))))
+      (should (eq (lookup-key (evil-get-auxiliary-keymap +my/excalidraw-mode-map 'normal) (kbd "SPC m l"))
+                  #'+my/excalidraw-browse-libraries)))))
+
+(ert-deftest exd/libraries-site-told-to-say-the-link-clicked ()
+  "Once the site has loaded (each time): told to say its Add to Excalidraw
+link clicked in its title."
+  (+test-exd
+    (let ((site (+test-exd--xw-new :buffer (get-buffer-create "*site*") :uri "https://libraries.excalidraw.com/")))
+      (cl-letf (((symbol-function 'xwidget-webkit-callback) #'ignore))
+        (dolist (status '("load-started" "load-committed"))
+          (let ((last-input-event (list 'xwidget-event 'load-changed site status)))
+            (+my/excalidraw--libraries-callback site 'load-changed)))
+        (should-not +test-exd--scripts)
+        (dotimes (_ 2)
+          (let ((last-input-event (list 'xwidget-event 'load-changed site "load-finished")))
+            (+my/excalidraw--libraries-callback site 'load-changed))))
+      (should (equal +test-exd--scripts (list (list site +my/excalidraw--libraries-script nil)
+                                              (list site +my/excalidraw--libraries-script nil)))))))
+
+(ert-deftest exd/libraries-site-title-watched ()
+  "The site's title says a link clicked: the library added after this event,
+once, the watch stopped; the site closed: the watch stopped."
+  (+test-exd
+    (let* ((site (+test-exd--xw-new :buffer (get-buffer-create "*site*") :title "Excalidraw Libraries"))
+           (timer (run-with-timer 60 60 #'ignore)))
+      (xwidget-put site '+my/excalidraw-watch timer)
+      (+my/excalidraw--libraries-watch site)
+      (should (memq timer timer-list))
+      (should-not (+test-exd--timers #'+my/excalidraw--library-chosen))
+      (setf (+test-exd--xw-title site)
+            "exd-library https://excalidraw.emacs.invalid/#addLibrary=https%3A%2F%2Flibraries.excalidraw.com%2Flibraries%2Fa%2Fb.excalidrawlib&token=x")
+      (+my/excalidraw--libraries-watch site)
+      (+my/excalidraw--libraries-watch site)
+      (should-not (memq timer timer-list))
+      (let ((chosen (+test-exd--timers #'+my/excalidraw--library-chosen)))
+        (should (= (length chosen) 1))
+        (should (equal (timer--args (car chosen))
+                       (list site "https://libraries.excalidraw.com/libraries/a/b.excalidrawlib")))))
+    ;; Closed meanwhile.
+    (let* ((buffer (get-buffer-create "*closed site*"))
+           (site (+test-exd--xw-new :buffer buffer :title "Excalidraw Libraries"))
+           (timer (run-with-timer 60 60 #'ignore)))
+      (xwidget-put site '+my/excalidraw-watch timer)
+      (kill-buffer buffer)
+      (+my/excalidraw--libraries-watch site)
+      (should-not (memq timer timer-list)))))
+
+(ert-deftest exd/libraries-site-back-to-the-drawing ()
+  (+test-exd
+    (let* ((buffer (+test-exd--open (+test-exd--file "back.excalidraw.svg" +test-exd--svg)))
+           (window (selected-window))
+           (site-buffer (get-buffer-create "*site*"))
+           (site (+test-exd--xw-new :buffer site-buffer)))
+      (xwidget-put site '+my/excalidraw-drawing buffer)
+      (xwidget-put site '+my/excalidraw-window window)
+      (set-window-buffer window site-buffer)
+      (xwidget-put site '+my/excalidraw-watch (run-with-timer 60 60 #'ignore))
+      (cl-letf (((symbol-function 'xwidget-webkit-current-session) (lambda () site)))
+        (with-current-buffer site-buffer
+          (should (commandp #'+my/excalidraw-libraries-back))
+          (+my/excalidraw-libraries-back)))
+      (should-not (memq (xwidget-get site '+my/excalidraw-watch) timer-list))
+      (should (eq (window-buffer window) buffer))
+      (should-not (buffer-live-p site-buffer))
+      (should-not (+test-exd--timers #'+my/excalidraw--library-chosen)))))
+
+(ert-deftest exd/libraries-site-add-to-excalidraw ()
+  "The site on its way to a library to add: stopped, back to the drawing, the
+site closed, the library added (once); its other events as usual."
+  (+test-exd
+    (let* ((buffer (+test-exd--open (+test-exd--file "added.excalidraw.svg" +test-exd--svg)))
+           (window (selected-window))
+           (site-buffer (get-buffer-create "*site*"))
+           (site (+test-exd--xw-new :buffer site-buffer :uri "https://libraries.excalidraw.com/"))
+           (usual nil) (stopped nil) (added nil))
+      (xwidget-put site '+my/excalidraw-drawing buffer)
+      (xwidget-put site '+my/excalidraw-window window)
+      (set-window-buffer window site-buffer)
+      (cl-letf (((symbol-function 'xwidget-webkit-callback) (lambda (xw type) (push (list xw type) usual)))
+                ((symbol-function 'xwidget-webkit-stop-loading) (lambda (xw) (push xw stopped)))
+                ((symbol-function '+my/excalidraw-add-library)
+                 (lambda (source) (push (list source (current-buffer)) added))))
+        (+my/excalidraw--libraries-callback site 'load-changed)
+        (should (equal usual (list (list site 'load-changed))))
+        (setf (+test-exd--xw-uri site)
+              "https://excalidraw.emacs.invalid/#addLibrary=https%3A%2F%2Flibraries.excalidraw.com%2Flibraries%2Fa%2Fb.excalidrawlib&token=emacs")
+        (+my/excalidraw--libraries-callback site 'load-changed)
+        (+my/excalidraw--libraries-callback site 'load-changed)
+        (should (= (length usual) 1))
+        (should (memq site stopped))
+        (should (= (+test-exd--fire #'+my/excalidraw--library-chosen) 1))
+        (should (equal added (list (list "https://libraries.excalidraw.com/libraries/a/b.excalidrawlib" buffer)))))
+      (should (eq (window-buffer window) buffer))
+      (should (eq (selected-window) window))
+      (should-not (buffer-live-p site-buffer)))))
 
 ;; ====== INSERTING ======
 

@@ -17,7 +17,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `C-o` / `C-i`, `Option+Enter`, `SPC m p`, `Cmd+P` (PDF) | Back / forward, actions on the selection, Open in Preview, Print |
 | `r` `o` `a` `t` `Delete` `Cmd+Z` `Cmd+A`... (drawing) | Excalidraw's keys, before Evil's: see [Drawings](editor.md#drawings-excalidraw) |
 | `Cmd+C` / `Cmd+X` / `Cmd+V` (drawing) | Copy / cut / paste the selection through the kill ring |
-| `SPC m d` / `SPC m r` (drawing) | Dark canvas / read the file again |
+| `SPC m d` / `SPC m l` / `SPC m r` (drawing) | Dark canvas / Excalidraw's libraries / read the file again |
 | `Option+Enter` (Markdown, Org) | Also: insert a new drawing, linked as an image; on a drawing's link, edit it |
 | `SPC m p` (Markdown) | Toggle live preview inside Emacs |
 | `SPC m P` (Markdown) | Preview in the browser |

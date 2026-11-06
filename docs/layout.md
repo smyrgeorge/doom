@@ -16,7 +16,7 @@
 | `config/webkit.el` | Web pages inside Emacs (xwidget WebKit), for the PDF viewer, the Markdown preview and drawings: a view per window (splits), no white flash, links out, JavaScript (answers awaited safely), the page's title read, mouse pointer, clicks, scroll / copy keys, a file's text from its page, downloads checked by SHA-256. |
 | `config/pdf.el` | PDFs in WebKit inside the file's tab, drawn by PDF.js (downloaded once); Evil keys, search, copy, zoom, outline, dark pages, back / forward, places kept, Option+Enter actions, Preview, print; splits (on `config/webkit.el`). |
 | `config/pdf.js` | The PDF's page: PDF.js's viewer, toolbar and sidebar (outline, thumbnails), driven from Emacs through `window.pdfx`. |
-| `config/excalidraw.el` | Drawings (`*.excalidraw.svg`, `*.excalidraw`) in Excalidraw inside the file's tab (downloaded once): saved as any file, Excalidraw's keys before Evil's, copy / paste, dark canvas, splits, reverts; inserted from Markdown / Org (on `config/webkit.el`). |
+| `config/excalidraw.el` | Drawings (`*.excalidraw.svg`, `*.excalidraw`) in Excalidraw inside the file's tab (downloaded once): saved as any file, Excalidraw's keys before Evil's, copy / paste, dark canvas, splits, reverts, a library shared and kept (libraries.excalidraw.com in Emacs); inserted from Markdown / Org (on `config/webkit.el`). |
 | `config/excalidraw.js` | A drawing's page: Excalidraw, driven from Emacs through `window.exd`; exports the drawing after each change. |
 | `config/peek.el` | LSP peek (usages, definitions): calmer, with functions, line numbers, key hints. |
 | `config/treemacs.el` | Treemacs sidebar behaviour (auto-open, follow, git status, window keys). |
