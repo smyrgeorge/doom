@@ -754,7 +754,9 @@ terminal's 80 columns)."
     (+my/merge--bar-button "Done" #'+my/merge-done
                            "Save the file, and stage it if no change is left")
     (insert "  ")
-    (+my/merge--bar-button "Abort" #'+my/merge-abort "Close, the file left as it was")))
+    (+my/merge--bar-button "Abort" #'+my/merge-abort "Close, the file left as it was")
+    ;; Not a button last: Emacs drew its highlight on to the window's edge.
+    (insert " ")))
 
 (defun +my/merge--render-bar (session &optional width)
   "Show SESSION's bar: its buttons and what's left, with short labels if the

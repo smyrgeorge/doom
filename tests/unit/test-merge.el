@@ -437,10 +437,14 @@ config/compile.el may (the other tests run them so)."
   (+test-merge
     (let ((text (lambda () (with-current-buffer (+my/merge-bar session) (buffer-string)))))
       (+my/merge--render-bar session 200)
-      (should (string-match-p "\\` Accept Left  Accept Right  ✨ Apply non-conflicting   6 changes left, 1 conflict   Done  Abort\\'"
+      (should (string-match-p "\\` Accept Left  Accept Right  ✨ Apply non-conflicting   6 changes left, 1 conflict   Done  Abort \\'"
                               (funcall text)))
+      ;; Not a button last: its highlight went on to the window's edge.
+      (with-current-buffer (+my/merge-bar session)
+        (should-not (get-char-property (1- (point-max)) 'mouse-face))
+        (should-not (button-at (1- (point-max)))))
       (+my/merge--render-bar session 80)
-      (should (equal (funcall text) " Left  Right  ✨ Non-conflicting   6 left, 1 conflict   Done  Abort"))
+      (should (equal (funcall text) " Left  Right  ✨ Non-conflicting   6 left, 1 conflict   Done  Abort "))
       (should (<= (string-width (funcall text)) 80))
       (+my/merge-accept-left)
       (+my/merge--render-bar session 80)
