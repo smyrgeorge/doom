@@ -8,6 +8,13 @@
   buffer or window switch (treemacs' own project follow waits for 1.5 s without any input). Only buffers that belong
   to a project switch it (files, dired, magit): popups and logs (e.g. `doom/reload`'s, in Doom's `~/.config/emacs`)
   switched it back and forth, and once left the old project's root drawn next to the new one ("doom emacs").
+- **The open file stays selected; scrolling is yours**: scroll the sidebar away from the open file and it stays where
+  you left it, the file still selected (highlighted, the arrow in the fringe) out of view. It's shown again when the
+  window's buffer changes: a file opened, closed or switched to, a project switched to. Clicking back into the same
+  file, a popup (`SPC`'s menu), a refresh don't move it. Treemacs's own follow ran a moment after any change to
+  Emacs's buffer list (every few seconds, from the git status check), and as soon as scrolling stopped it scrolled the
+  sidebar back to the file. Keys pressed in the sidebar act on the selection, as in IntelliJ (`j` after scrolling away
+  goes to the next file after the open one, back in view); a click selects what it clicks.
 - **Git status** colours for files and folders, computed asynchronously. Saving a file refreshes its status (macOS's
   kqueue file notifications miss in-place edits, so this is done explicitly on save). Changes made outside Emacs
   (Claude Code, a terminal, git) show up within a few seconds: while Emacs has focus, the shown projects' `git status`

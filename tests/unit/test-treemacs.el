@@ -568,6 +568,243 @@ switches in a row: one follow."
         (+test-treemacs--fire-follow)
         (should-not +my/treemacs--follow-timer)))))
 
+;; ====== SELECTION: SCROLL AWAY, FOLLOW ON A BUFFER CHANGE ======
+
+(defun +test-treemacs--long-project ()
+  "A project with 30 files, a.txt first: its root."
+  (apply #'+test-treemacs--project "long" "README.md"
+         (mapcar (lambda (i) (format "f%02d.txt" i)) (number-sequence 1 30))))
+
+(defun +test-treemacs--sidebar ()
+  (treemacs-get-local-buffer))
+
+(defun +test-treemacs--selected ()
+  "The sidebar's selected path."
+  (car (buffer-local-value '+my/treemacs--selection (+test-treemacs--sidebar))))
+
+(defun +test-treemacs--line-label (pos)
+  "The label on POS's line in the sidebar."
+  (with-current-buffer (+test-treemacs--sidebar)
+    (save-excursion
+      (goto-char pos)
+      (string-trim (buffer-substring-no-properties (line-beginning-position) (line-end-position))))))
+
+(defun +test-treemacs--highlighted ()
+  "The label on the line the sidebar would highlight."
+  (with-current-buffer (+test-treemacs--sidebar)
+    (+test-treemacs--line-label (car (funcall hl-line-range-function)))))
+
+(defmacro +test-treemacs-selecting (&rest body)
+  "BODY with a long project in the sidebar, f01.txt open and followed (so
+selected): ROOT bound."
+  (declare (indent 0))
+  `(+test-treemacs
+     (let* ((treemacs-follow-mode t)
+            (root (+test-treemacs--long-project)))
+       (+test-treemacs--show-project root "f01.txt")
+       (set-frame-parameter nil '+my/treemacs-followed nil)
+       (+my/treemacs--follow-file (current-buffer))
+       ,@body)))
+
+(ert-deftest treemacs/no-follow-on-any-buffer-list-change ()
+  "Treemacs's own trigger (any change to the buffer list: a temp buffer, the
+git poll's) follows no more: it scrolled the sidebar back to the file."
+  (let ((treemacs--follow-timer nil)
+        (treemacs--ready-to-follow t))
+    (treemacs--follow-after-buffer-list-update)
+    (generate-new-buffer " *any*")
+    (should-not treemacs--follow-timer)))
+
+(ert-deftest treemacs/follow-file-once-per-buffer ()
+  "The file is shown when the selected window's buffer is new since the last
+time: not again for the same buffer (back from the sidebar, a popup)."
+  (+test-treemacs
+    (let ((treemacs-follow-mode t)
+          (follows nil))
+      (set-frame-parameter nil '+my/treemacs-followed nil)
+      (+test-treemacs-with-original treemacs--follow () (push (current-buffer) follows)
+        (let ((a (find-file-noselect (+test-file "sel/a.txt" "a\n")))
+              (b (find-file-noselect (+test-file "sel/b.txt" "b\n"))))
+          (+my/treemacs--follow-file a)
+          (+my/treemacs--follow-file a)
+          (should (equal follows (list a)))
+          (+my/treemacs--follow-file b)
+          (+my/treemacs--follow-file a)
+          (should (equal follows (list a b a)))
+          ;; Not a file: no follow, and the next file still counts as new.
+          (+my/treemacs--follow-file (get-buffer-create "*scratch*"))
+          (should (eq (frame-parameter nil '+my/treemacs-followed) a))
+          (let ((dir (dired-noselect (+test-tmp-file "sel/"))))
+            (+my/treemacs--follow-file dir)
+            (should (eq (car follows) dir)))
+          ;; Follow mode off: nothing followed.
+          (let ((treemacs-follow-mode nil))
+            (+my/treemacs--follow-file b))
+          (should (= (length follows) 4)))))))
+
+(ert-deftest treemacs/follow-soon-shows-the-file ()
+  "A moment after a switch, the selected window's file is shown too."
+  (+test-treemacs
+    (+test-treemacs-following
+      (let ((shown nil))
+        (cl-letf (((symbol-function '+my/treemacs--follow-file)
+                   (lambda (buffer) (push buffer shown))))
+          (let ((file (find-file (+test-file "sel/c.txt" "c\n"))))
+            (+my/treemacs-follow-project-soon)
+            (+test-treemacs--fire-follow)
+            (should (equal shown (list file)))
+            ;; Also with project follow off.
+            (let ((treemacs-project-follow-mode nil))
+              (+my/treemacs-follow-project-soon)
+              (+test-treemacs--fire-follow))
+            (should (equal shown (list file file)))))))))
+
+(ert-deftest treemacs/scroll-commands ()
+  (dolist (command '(mwheel-scroll ultra-scroll ultra-scroll-mac pixel-scroll-precision
+                     evil-scroll-down evil-scroll-up scroll-up-command scroll-down-command))
+    (should (+my/treemacs--scroll-command-p command)))
+  (dolist (command '(treemacs-next-line treemacs-previous-line evil-next-line
+                     treemacs-RET-action +my/treemacs-left nil "scroll" (lambda ())))
+    (should-not (+my/treemacs--scroll-command-p command))))
+
+(ert-deftest treemacs/the-followed-file-is-selected ()
+  (+test-treemacs-selecting
+    (should (equal (+test-treemacs--selected) (expand-file-name "f01.txt" root)))
+    (should (equal (+test-treemacs--highlighted) "f01.txt"))
+    (with-current-buffer (+test-treemacs--sidebar)
+      (should (eq hl-line-range-function #'+my/treemacs--highlight-range))
+      (should (memq #'+my/treemacs--select-h post-command-hook))
+      (should (memq #'+my/treemacs--to-selection-h pre-command-hook)))))
+
+(ert-deftest treemacs/scrolling-keeps-the-selection ()
+  "Point moved off the file (as a scroll moves it, Emacs keeping it on screen):
+the file stays selected and highlighted; a scroll command doesn't change it."
+  (+test-treemacs-selecting
+    (with-current-buffer (+test-treemacs--sidebar)
+      (goto-char (point-max))
+      (forward-line -1)
+      (should-not (equal (+test-treemacs--line-label (point)) "f01.txt"))
+      (should (equal (+test-treemacs--highlighted) "f01.txt"))
+      (let ((this-command 'ultra-scroll))
+        (+my/treemacs--select-h))
+      (should (equal (+test-treemacs--selected) (expand-file-name "f01.txt" root)))
+      ;; hl-line draws it there.
+      (hl-line-highlight)
+      (should (equal (+test-treemacs--line-label (overlay-start hl-line-overlay)) "f01.txt")))))
+
+(ert-deftest treemacs/navigating-selects ()
+  "A command that moves in the sidebar (keys, a click) selects where it went."
+  (+test-treemacs-selecting
+    (with-current-buffer (+test-treemacs--sidebar)
+      (let ((this-command 'treemacs-next-line)
+            (last-input-event ?j))
+        (+test-treemacs--goto "f04.txt")
+        (+my/treemacs--to-selection-h)    ; back to f01.txt (the selection)
+        (+test-treemacs--goto "f05.txt")  ; the command went to f05.txt
+        (+my/treemacs--select-h))
+      (should (equal (+test-treemacs--selected) (expand-file-name "f05.txt" root)))
+      (should (equal (+test-treemacs--highlighted) "f05.txt"))
+      ;; A click: where it clicked (its pre-command ran in another buffer).
+      (+test-treemacs--goto "f09.txt")
+      (let ((this-command 'treemacs-single-click-expand-action)
+            (last-input-event (list 'mouse-1 (list (selected-window) (point) '(0 . 0) 0))))
+        (+my/treemacs--select-h))
+      (should (equal (+test-treemacs--selected) (expand-file-name "f09.txt" root))))))
+
+(ert-deftest treemacs/a-command-that-went-nowhere-keeps-it ()
+  "Emacs runs `post-command-hook' again as its command loop restarts (after
+C-g, an error) with no command before: nothing's selected then. Nor by a
+command that left point where it was."
+  (+test-treemacs-selecting
+    (with-current-buffer (+test-treemacs--sidebar)
+      (+test-treemacs--goto "f20.txt")     ; where a scroll left point
+      (let ((this-command 'keyboard-quit)
+            (last-input-event ?\C-g))
+        (+my/treemacs--select-h))
+      (should (equal (+test-treemacs--selected) (expand-file-name "f01.txt" root)))
+      (let ((this-command 'treemacs-TAB-action)
+            (last-input-event ?\t))
+        (+my/treemacs--to-selection-h)
+        (+my/treemacs--select-h))
+      (should (equal (+test-treemacs--selected) (expand-file-name "f01.txt" root))))))
+
+(ert-deftest treemacs/keys-act-on-the-selection ()
+  "Scrolled away, a key's command starts from the selection; a scroll or a
+click doesn't move point there."
+  (+test-treemacs-selecting
+    (with-current-buffer (+test-treemacs--sidebar)
+      (let ((away (progn (+test-treemacs--goto "f20.txt") (point))))
+        (let ((this-command 'ultra-scroll))
+          (+my/treemacs--to-selection-h))
+        (should (= (point) away))
+        (let ((this-command 'treemacs-RET-action)
+              (last-input-event (aref (kbd "<mouse-1>") 0)))
+          (cl-letf (((symbol-function 'mouse-event-p) (lambda (_) t)))
+            (+my/treemacs--to-selection-h)))
+        (should (= (point) away))
+        (let ((this-command 'treemacs-next-line)
+              (last-input-event ?j))
+          (+my/treemacs--to-selection-h))
+        (should (equal (+test-treemacs--line-label (point)) "f01.txt"))))))
+
+(ert-deftest treemacs/the-selection-survives-a-redraw ()
+  "The tree drawn anew (a refresh, a folder opened above): the selection is
+found again by its path."
+  (+test-treemacs-selecting
+    (with-current-buffer (+test-treemacs--sidebar)
+      (+test-treemacs--goto "f30.txt")
+      (let ((inhibit-message t))
+        (treemacs--do-refresh (current-buffer) 'all))
+      (should (equal (+test-treemacs--highlighted) "f01.txt"))
+      ;; Its marker moved there.
+      (should (equal (+test-treemacs--line-label (cdr +my/treemacs--selection)) "f01.txt")))))
+
+(ert-deftest treemacs/no-selection-drawn-highlights-point ()
+  "The selection isn't drawn (its folder closed): point's line is highlighted."
+  (+test-treemacs-selecting
+    (with-current-buffer (+test-treemacs--sidebar)
+      (setq +my/treemacs--selection (cons (expand-file-name "gone/x.txt" root)
+                                          (copy-marker (point-min))))
+      (+test-treemacs--goto "f07.txt")
+      (should-not (+my/treemacs--selection-start))
+      (should (equal (+test-treemacs--highlighted) "f07.txt"))
+      (setq +my/treemacs--selection nil)
+      (should (equal (+test-treemacs--highlighted) "f07.txt")))))
+
+(ert-deftest treemacs/the-fringe-arrow-on-the-selection ()
+  (+test-treemacs-selecting
+    (with-current-buffer (+test-treemacs--sidebar)
+      (unless treemacs--fringe-indicator-overlay
+        (treemacs--enable-fringe-indicator))
+      (+test-treemacs--goto "f12.txt")
+      (treemacs--move-fringe-indicator-to-point)
+      (should (equal (+test-treemacs--line-label (overlay-start treemacs--fringe-indicator-overlay))
+                     "f01.txt"))
+      ;; No selection drawn: on point, as treemacs does.
+      (setq +my/treemacs--selection nil)
+      (treemacs--move-fringe-indicator-to-point)
+      (should (equal (+test-treemacs--line-label (overlay-start treemacs--fringe-indicator-overlay))
+                     "f12.txt")))))
+
+(ert-deftest treemacs/a-new-buffer-shows-its-file ()
+  "Another file switched to: it's shown (point on it) and selected."
+  (+test-treemacs-selecting
+    (with-current-buffer (+test-treemacs--sidebar)
+      (+test-treemacs--goto "f02.txt"))
+    (select-window (get-buffer-window (get-file-buffer (expand-file-name "f01.txt" root))))
+    (find-file (expand-file-name "f25.txt" root))
+    (+my/treemacs--follow-file (current-buffer))
+    (should (equal (+test-treemacs--selected) (expand-file-name "f25.txt" root)))
+    (should (equal (+test-treemacs--line-label (window-point (treemacs-get-local-window))) "f25.txt"))))
+
+(ert-deftest treemacs/only-the-sidebar-gets-a-selection ()
+  "lsp-treemacs' lists (treemacs buffers too) keep treemacs's own highlight."
+  (with-current-buffer (get-buffer-create "*LSP Test List*")
+    (treemacs-mode)
+    (should-not (local-variable-p 'hl-line-range-function))
+    (should-not (memq #'+my/treemacs--select-h post-command-hook))
+    (kill-buffer)))
+
 ;; ====== FOLLOW: PROJECT BUFFERS ONLY ======
 
 (ert-deftest treemacs/follow-only-project-buffers ()
