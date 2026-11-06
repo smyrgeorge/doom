@@ -9,6 +9,8 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `Cmd+Shift+F` (GUI) | Find in files: search the project with ripgrep (selected text is the query) |
 | `Cmd+B` (GUI) | Go to declaration, or on the declaration list its usages (IntelliJ's Go to Declaration or Usages); with a language server, also where it knows no declaration (e.g. a Markdown heading: the links to it) |
 | `SPC g d` | Current file's git diff in a pane on the right (in the pane: `SPC g d`, `q` or `Esc` close) |
+| `e` (Magit, on a conflicted file) | Resolve its conflicts in three panes: see [Resolving conflicts](git.md#resolving-conflicts) |
+| `]c` / `[c`, `SPC m l` / `SPC m r` / `SPC m x`, `C-c C-c` / `C-c C-k` (merge) | Next / previous change; the change at point from Yours / Theirs / ignored; Done / Abort |
 | `SPC o c` | Start a new Claude Code session (agent-shell) |
 | `SPC o C` | The project's Claude Code session, started if none (`C-u`: a new one, `C-u C-u`: pick an open one) |
 | `Cmd+=` (or `Cmd++`) / `Cmd+-` / `Cmd+0` (PDF) | Zoom in / out / 100% (elsewhere: font size) |

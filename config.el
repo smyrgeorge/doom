@@ -135,6 +135,9 @@
 ;; SPC g d: the current file's diff in a pane on the right.
 (load! "config/git")
 
+;; MERGE (conflicts resolved in three panes, like IntelliJ's: e on a conflicted file in Magit)
+(load! "config/merge")
+
 ;; EDITOR (SPC c ~: cycle case style)
 (load! "config/editor")
 
