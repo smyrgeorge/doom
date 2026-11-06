@@ -56,6 +56,16 @@ echo -e "\nInstalling kotlin:"
 brew install --cask kotlin-lsp
 brew install ktlint
 
+# java
+echo -e "\nInstalling java:"
+# lsp-java downloads Eclipse's language server (jdtls) itself, the first time
+# a Java file opens (M-x lsp-install-server to update it); it needs a JDK.
+/usr/libexec/java_home >/dev/null 2>&1 || brew install --cask temurin
+
+# lua
+echo -e "\nInstalling lua:"
+brew install lua-language-server
+
 # c
 echo -e "\nInstalling c:"
 brew install glslang clang-format

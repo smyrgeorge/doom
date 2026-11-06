@@ -30,6 +30,8 @@ project). The scripts also install LaTeX tools (`basictex`, `texlab`), though `:
 | Rust | `+lsp +tree-sitter` | `rust-analyzer`, `rustfmt` |
 | Python | `+lsp +pyright +uv +tree-sitter` | `pyright`, `black`, `isort`, virtualenvs via `uv` |
 | Kotlin | `+lsp +tree-sitter` | `kotlin-lsp` (JetBrains), `ktlint` |
+| Java | `+lsp +tree-sitter` | Eclipse's `jdtls` (lsp-java downloads it the first time a Java file opens), a JDK |
+| Lua | `+lsp +tree-sitter` | `lua-language-server` |
 | JavaScript/TypeScript | `+lsp +tree-sitter` | `typescript-language-server`, `prettier` |
 | C/C++ | `+lsp +tree-sitter` | `clangd` (Xcode CLT), `clang-format`, `glslang` |
 | Shell | `+lsp` | `bash-language-server`, `shellcheck`, `shfmt` |
