@@ -27,7 +27,12 @@ all of them."
       (+my/examples)))
 
 (defun +my/screenshots--setup ()
-  "This config's look."
+  "This config's look. Doom's frame too, which `emacs -Q' hasn't: no tool bar
+\(its icons were in the title bar), no scroll bars, no cursor in the windows
+not selected (a hollow box in the panes)."
+  (tool-bar-mode -1)
+  (scroll-bar-mode -1)
+  (setq-default cursor-in-non-selected-windows nil)
   (let ((build (file-name-directory
                 (directory-file-name (file-name-directory (locate-library "magit"))))))
     (dolist (package '("magit" "magit-section"))

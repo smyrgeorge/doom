@@ -51,6 +51,27 @@
   (let ((process-environment (cons "SCREENSHOT_EXAMPLES=merge  other" process-environment)))
     (should (equal (+my/screenshots--names) '("merge" "other")))))
 
+;; ====== THE LOOK ======
+
+(ert-deftest screenshots/doom-s-frame ()
+  "As Doom has it, not as `emacs -Q': no tool bar, no scroll bars, no cursor
+in the windows not selected; the theme."
+  (let ((tool-bar (bound-and-true-p tool-bar-mode))
+        (scroll-bar (bound-and-true-p scroll-bar-mode))
+        (cursor (default-value 'cursor-in-non-selected-windows)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'doom-modeline-mode) #'ignore)
+                  ((symbol-function 'global-tab-line-mode) #'ignore))
+          (+my/screenshots--setup)
+          (should-not (bound-and-true-p tool-bar-mode))
+          (should-not scroll-bar-mode)
+          (should-not (default-value 'cursor-in-non-selected-windows))
+          (should (memq 'doom-one custom-enabled-themes)))
+      (when (fboundp 'tool-bar-mode) (tool-bar-mode (if tool-bar 1 -1)))
+      (when (fboundp 'scroll-bar-mode) (scroll-bar-mode (if scroll-bar 1 -1)))
+      (setq-default cursor-in-non-selected-windows cursor)
+      (mapc #'disable-theme custom-enabled-themes))))
+
 ;; ====== THE CAPTURE ======
 
 (ert-deftest screenshots/capture-the-frames-rectangle ()
