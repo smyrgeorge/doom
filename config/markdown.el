@@ -77,11 +77,12 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
   "Wrap FRAGMENT in a page styled like Doom's markdown preview (GitHub look)."
   (concat
    "<!doctype html><html><head><meta charset='utf-8'>"
-   ;; Before GitHub's stylesheet arrives (a CDN), the page is the buffer's
-   ;; colour in dark mode, not WebKit's white.
+   ;; In dark mode the whole page is GitHub's dark background, also before its
+   ;; stylesheet arrives (a CDN; not WebKit's white) and below the text (the
+   ;; stylesheet colours only the body, as tall as the text).
    "<meta name='color-scheme' content='light dark'>"
    (format "<style>@media (prefers-color-scheme: dark){html{background:%s}}</style>"
-           (face-background 'default nil t))
+           (+md-preview--page-color 'dark))
    (format "<base href='file://%s'>"
            (file-name-directory (or buffer-file-name default-directory)))
    (format "<title>Preview: %s</title>" (buffer-name))
@@ -132,11 +133,26 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
       (setq +md-preview--line line)
       (+md-preview--scroll))))
 
+(defun +md-preview--page-color (&optional mode)
+  "The preview page's background: GitHub's dark or light one, following the
+system's setting (MODE: `dark' or `light' to choose)."
+  (pcase (or mode (bound-and-true-p ns-system-appearance)
+             (frame-parameter nil 'background-mode))
+    ('light "#ffffff")
+    (_ "#0d1117")))
+
+(defun +md-preview--fit-h (window)
+  "Make the preview's WebKit view as big as WINDOW (see `+md-preview-mode')."
+  (with-current-buffer (window-buffer window)
+    (when-let* ((xwidget (xwidget-webkit-current-session)))
+      (when (xwidget-live-p xwidget)
+        (xwidget-webkit-adjust-size-to-window xwidget window)))))
+
 ;; NO WHITE FLASH
 ;; WebKit's view is white until its page has loaded (GitHub's stylesheet, from
 ;; a CDN, included): the preview flashed white before its colours appeared.
 ;; Its window opens at once (WebKit only loads while on screen) under a
-;; borderless frame in the editor's background colour, like the notices'
+;; borderless frame in the page's background colour, like the notices'
 ;; (config/banner.el), which goes once WebKit says the page has loaded, or
 ;; after 2 s (e.g. offline). No JavaScript is run to ask the page instead:
 ;; closing a preview while such a call was pending crashed Emacs.
@@ -153,14 +169,14 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
        (+my/banner--delete-frame frame)))))
 
 (defun +md-preview--cover-window (window)
-  "Cover WINDOW in the editor's background colour, for 2 s at most (see above)."
+  "Cover WINDOW in the page's background colour, for 2 s at most (see above)."
   (+md-preview--uncover)
   (when (and (window-live-p window) (display-graphic-p (window-frame window))
              (fboundp '+my/banner--make-frame))
     (let ((frame (+my/banner--make-frame (window-frame window)))
           (edges (window-pixel-edges window))
           (frame-resize-pixelwise t))
-      (set-frame-parameter frame 'background-color (face-background 'default nil t))
+      (set-frame-parameter frame 'background-color (+md-preview--page-color))
       (set-frame-size frame (- (nth 2 edges) (nth 0 edges))
                       (- (nth 3 edges) (nth 1 edges)) t)
       (set-frame-position frame (nth 0 edges) (nth 1 edges))
@@ -213,7 +229,22 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
                   ;; `*xwidget-webkit: ...*').
                   (setq-local xwidget-webkit-buffer-name-format "%T")
                   (rename-buffer (format "Preview: %s" (buffer-name src)) t)
+                  ;; The tab bar, which skipped the buffer: named like its
+                  ;; placeholder at first, starting with a space.
+                  (when (bound-and-true-p global-tab-line-mode)
+                    (tab-line-mode 1))
+                  ;; No "WebKit: TITLE" row: the tab says it.
+                  (setq-local header-line-format nil)
+                  ;; The pane filled with the page, edge to edge: no fringes,
+                  ;; WebKit's view as big as the window (it keeps the size it
+                  ;; was made with), and what it doesn't cover in its colour.
+                  (setq-local left-fringe-width 0
+                              right-fringe-width 0)
+                  (face-remap-add-relative 'default :background (+md-preview--page-color))
+                  (add-hook 'window-size-change-functions #'+md-preview--fit-h nil t)
                   (xwidget-webkit-current-session)))
+          (set-window-fringes window 0 0)
+          (+md-preview--fit-h window)
           (+md-preview--watch +md-preview--xwidget))
         (add-hook 'after-change-functions #'+md-preview--after-change-h nil t)
         (add-hook 'post-command-hook #'+md-preview--post-command-h nil t)
