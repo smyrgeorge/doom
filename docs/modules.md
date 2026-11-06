@@ -12,11 +12,12 @@ See `init.el` for the full list. Notable choices:
 | `:emacs` | `(dired +dirvish +icons)`, `(ibuffer +icons)`, `undo`, `vc` |
 | `:term` | `(ghostel +everywhere)` |
 | `:checkers` | `(syntax +childframe +icons)`, `(spell +everywhere)` |
-| `:tools` | `(lsp +peek)`, `tree-sitter`, `magit`, `(debugger +lsp)`, `(docker +lsp +tree-sitter)`, `pdf`, `make` |
+| `:tools` | `(lsp +peek)`, `tree-sitter`, `magit`, `(debugger +lsp)`, `(docker +lsp +tree-sitter)`, `make` |
 | `:os` | `macos`, `(tty +osc)` |
 
 Not enabled: `tabs` (centaur-tabs), replaced by [tabs per window](editor.md#tabs-per-window) (`config/tabs.el`);
-`nav-flash`, which blinked the cursor line after every buffer or window switch.
+`nav-flash`, which blinked the cursor line after every buffer or window switch; `pdf` (pdf-tools), replaced by
+[PDFs in WebKit](editor.md#pdfs-in-webkit) (`config/pdf-xwidget.el`).
 
 ## Languages and tooling
 

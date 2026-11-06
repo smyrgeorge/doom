@@ -132,12 +132,39 @@ the window's edge (e.g. long names in treemacs) don't touch the text (`+my/right
 JetBrains Mono 13 (`doom-font` in `config.el`; `scripts/tools.sh` installs it) with ligatures (Doom's `ligatures`
 module); the `doom-one` theme; absolute line numbers. The frame opens maximized.
 
-## PDF zoom
+## PDFs in WebKit
 
-In PDFs (pdf-tools), `Cmd+=` (or `Cmd++`) / `Cmd+-` zoom in / out and `Cmd+0` shows the actual size, as in Preview
-(`P` fits the page again; pdf-tools' own `+` `-` `0` `W` `H` `P` still work). `Cmd+scroll` zooms one step
-(`+my/pdf-wheel-zoom-step`, ×1.1) per wheel notch, or per `+my/pdf-wheel-zoom-pixels` (40) of trackpad scrolling.
-Elsewhere `Cmd+=` / `Cmd+-` still change the font size (`config/pdf.el`).
+PDFs open inside the file's tab as a web page in WebKit, like the [Markdown preview](markdown.md#live-markdown-preview),
+drawn by [PDF.js](https://mozilla.github.io/pdf.js/) (Mozilla's PDF renderer, Firefox's): pages sharp at any zoom,
+smooth trackpad scrolling, text selectable with the mouse (`config/pdf-xwidget.el`, the page's script
+`config/pdf-xwidget.js`). Emacs drives the page with JavaScript, so the keys are Evil's:
+
+| Key | Action |
+|---|---|
+| `j` / `k`, `h` / `l` | Scroll (`+my/pdf-xwidget-scroll-step`, 60 px) |
+| `C-d` / `C-u`, `C-f` / `C-b` | Half a screen / a screen |
+| `gg` / `G` | Top / bottom; with a count, that page (`5G`) |
+| `J` / `K` | Next / previous page |
+| `/` / `?` | Search forward / backward (case-sensitive with a capital); `n` / `N` next / previous match; `Esc` ends it |
+| `y` or `Cmd+C` | Copy the selected text (kill ring and clipboard) |
+| `Cmd+=` / `Cmd+-` (or `+` / `-`) | Zoom in / out (`+my/pdf-xwidget-zoom-step`, ×1.25); also `Cmd+scroll` |
+| `Cmd+0` / `W` / `P` | 100% / fit the width (as it opens) / fit the page |
+| `q` | Close the PDF |
+
+The page shows the page number while it changes, and the search's matches. Links out of the PDF open in the browser.
+A PDF changed on disk (e.g. rebuilt by LaTeX) is shown anew, where it was. It opens without a white flash: covered in
+the theme's background colour until WebKit has loaded it (2 s at most), the space around the pages in that colour too.
+
+PDF.js (`pdfjs-dist` 3.11.174: newer versions only ship ES modules, which a `file://` page may not load) is downloaded
+once, from jsdelivr, into Doom's `.local/etc/`, each file checked against its SHA-256 in `+my/pdf-js-files`;
+`M-x +my/pdf-js-install` downloads it again. Without it (e.g. offline the first time), PDFs show in WebKit's own
+viewer, trackpad only. Not that viewer by default: on macOS Emacs takes every key, so none reached it, and its buttons
+and text selection didn't work inside Emacs. In a terminal, or an Emacs without xwidgets, PDFs open in doc-view,
+Emacs's own viewer.
+
+Doom's pdf module (pdf-tools) is off in `init.el`. Its setup is kept in `config/pdf.el`, not loaded: `Cmd+=` / `Cmd+-`
+/ `Cmd+0` zoom as in Preview, and `Cmd+scroll` a step (×1.1) per wheel notch. To go back to it, turn `pdf` on in
+`init.el`, load `config/pdf.el` instead of `config/pdf-xwidget.el` in `config.el`, and run `doom sync`.
 
 ## Mode line
 
