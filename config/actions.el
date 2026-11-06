@@ -13,6 +13,8 @@
 ;; - Claude: send the error at point or the selection to Claude Code
 ;;   (agent-shell), either as a ready prompt (fix / explain) or into the prompt
 ;;   for you to finish.
+;; - PDF: in a PDF (config/pdf-xwidget.el, which adds its provider first), for
+;;   the selected text: copy, search the PDF or the web, Claude; Preview, print.
 ;;
 ;; Each section comes from a provider: a function that returns a list of
 ;; (GROUP LABEL FUNCTION). To add more, write a provider and

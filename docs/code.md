@@ -20,6 +20,8 @@ JetBrains IDEs:
 - **Claude** (agent-shell): *Fix / Explain error with Claude* for the error or warning at point and *Explain selection
   with Claude* are sent straight away (queued if Claude is busy, a Claude Code shell is started if the project has
   none); *Add selection / file to Claude prompt* puts the context in the prompt for you to finish.
+- **PDF** (in a [PDF](editor.md#pdfs-in-webkit), first): for the text selected in it, *Copy*, *Search the PDF for it*,
+  *Search the web for it*, and the Claude actions on it (quoted, with the file and page); *Open in Preview*, *Print*.
 
 Works in visual state too, on the selection. Each section comes from a provider function listed in
 `+my/context-action-providers`; new kinds of actions are added by writing another provider. Org keeps `M-RET` for "new

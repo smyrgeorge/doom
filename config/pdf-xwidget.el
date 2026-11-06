@@ -20,16 +20,31 @@
 ;;   y or Cmd+C     copy the selected text (kill ring and clipboard)
 ;;   Cmd+= / Cmd+-  zoom (also + / -, Cmd+scroll), Cmd+0 100%, W fit the
 ;;                  width (as it opens), P the page
+;;   C-o / C-i      back / forward: where jumps (links, the outline,
+;;                  thumbnails, gg / G, a new search) left from; also Cmd+[ /
+;;                  Cmd+], and the toolbar's ← →
 ;;   o (SPC m o)    go to a heading of the outline, picked in the minibuffer
-;;   O (SPC m O)    the outline sidebar: headings, their pages, the current
-;;                  one marked; click to go there, ▸ / ▾ to open / close
+;;   O (SPC m O)    the sidebar: the outline (headings, their pages, the
+;;                  current one marked; ▸ / ▾ open / close) or the pages'
+;;                  thumbnails; click one to go there
 ;;   SPC m d        dark pages: inverted to dark greys, hues kept (as
 ;;                  pdf-tools' midnight mode)
-;;   SPC m t        the toolbar: outline, page (n / N), zoom, fit, dark pages
+;;   SPC m t        the toolbar: sidebar, back / forward, page, zoom, fit, dark
+;;                  pages, Preview, print
+;;   Option+Enter   the actions menu (config/actions.el): for the selected
+;;                  text, copy, search the PDF or the web, explain it with
+;;                  Claude or add it to Claude's prompt (with the file and
+;;                  page); Preview, print
+;;   SPC m p        open it in macOS's Preview (to sign, annotate...)
+;;   Cmd+P          print it, in Preview's print dialog
 ;;   q              close
-;; A new PDF opens with the toolbar, sidebar and dark pages as the last one
-;; (the page says them in its title, which Emacs reads without JavaScript);
-;; the variables below are for the first one.
+;; A PDF opens where it was when last closed (page, place, zoom), kept in
+;; `+my/pdf-xwidget-places-file' across Emacs sessions, and with the toolbar,
+;; sidebar and dark pages as the last one; the variables below are for the
+;; first one. The mode line shows its page (P3/12).
+;; The page can't call Emacs: it says its settings, page and place, the mouse
+;; pointer it wants and the toolbar's requests (Preview, print) in its title,
+;; which Emacs reads every 0.1 s, without JavaScript, while a PDF is on screen.
 ;; The page shows the search's matches, and the page number while it changes
 ;; when the toolbar (which shows it) is off.
 ;; Links out of the PDF open in the browser. A PDF changed on disk (e.g.
@@ -41,8 +56,8 @@
 ;; Without it (e.g. offline), WebKit's own viewer: trackpad only. In a
 ;; terminal, or an Emacs without xwidgets: doc-view, Emacs's own viewer.
 ;; JavaScript runs without waiting for answers, except the selection (y,
-;; Cmd+C) and the outline (o): closing a WebKit view while an answer was
-;; pending crashed Emacs (see config/markdown.el).
+;; Cmd+C, Option+Enter) and the outline (o): closing a WebKit view while an
+;; answer was pending crashed Emacs (see config/markdown.el).
 (defvar +my/pdf-xwidget-toolbar t
   "Show the toolbar in the first PDF opened (see above).")
 
@@ -50,7 +65,13 @@
   "Dark pages in the first PDF opened (see above).")
 
 (defvar +my/pdf-xwidget-outline-sidebar nil
-  "Show the outline sidebar in the first PDF opened (see above).")
+  "Show the sidebar (outline, pages) in the first PDF opened (see above).")
+
+(defvar +my/pdf-xwidget-places-file (expand-file-name "pdf-places" doom-state-dir)
+  "Where each PDF's place (page, position, zoom) is kept between sessions.")
+
+(defvar +my/pdf-xwidget-places-max 300
+  "How many PDFs' places to keep (the most recently closed).")
 
 (defvar +my/pdf-xwidget-scroll-step 60
   "Pixels j / k / h / l scroll a PDF.")
@@ -87,6 +108,13 @@
       "s--"      #'+my/pdf-xwidget-zoom-out
       "s-0"      #'+my/pdf-xwidget-actual-size
       "s-c"      #'+my/pdf-xwidget-copy
+      "s-["      #'+my/pdf-xwidget-back
+      "s-]"      #'+my/pdf-xwidget-forward
+      "s-p"      #'+my/pdf-xwidget-print
+      :nm "C-o"     #'+my/pdf-xwidget-back
+      :nm "C-i"     #'+my/pdf-xwidget-forward
+      :nm "<tab>"   #'+my/pdf-xwidget-forward
+      :nm "M-RET"   #'+my/pdf-xwidget-actions
       :nm "j"       #'+my/pdf-xwidget-scroll-down
       :nm "k"       #'+my/pdf-xwidget-scroll-up
       :nm "h"       #'+my/pdf-xwidget-scroll-left
@@ -134,9 +162,11 @@
 (map! :map +my/pdf-xwidget-mode-map
       :localleader
       :desc "Outline: go to a heading" "o" #'+my/pdf-xwidget-outline
-      :desc "Outline sidebar"          "O" #'+my/pdf-xwidget-toggle-sidebar
+      :desc "Sidebar (outline, pages)" "O" #'+my/pdf-xwidget-toggle-sidebar
       :desc "Dark pages"               "d" #'+my/pdf-xwidget-toggle-dark
-      :desc "Toolbar"                  "t" #'+my/pdf-xwidget-toggle-toolbar)
+      :desc "Toolbar"                  "t" #'+my/pdf-xwidget-toggle-toolbar
+      :desc "Open in Preview"          "p" #'+my/pdf-xwidget-open-in-preview
+      :desc "Print"                    "P" #'+my/pdf-xwidget-print)
 
 ;; ====== CODE ======
 
@@ -313,8 +343,8 @@ names), FALLBACK without one."
 ;; SETTINGS: the toolbar, the outline sidebar, dark pages (see above). The
 ;; page says them, and its page, in its title: "pdfx {json}".
 (defun +my/pdf-xwidget--state (&optional buffer)
-  "BUFFER's page's settings and page, a plist (:dark :toolbar :sidebar
-:outline :page :pages), or nil before it has said them."
+  "BUFFER's page's settings and page, a plist (:dark :toolbar :sidebar :view
+:outline :page :pages :place :cursor :action), or nil before it has said them."
   (with-current-buffer (or buffer (current-buffer))
     (when-let* ((xwidget (+my/pdf-xwidget--xwidget))
                 (title (ignore-errors (xwidget-webkit-title xwidget)))
@@ -325,8 +355,11 @@ names), FALLBACK without one."
 
 (defun +my/pdf-xwidget--options ()
   "The settings a page starts with (JSON): its own when it's written anew,
-else the last PDF's looked at, else the variables above."
-  (let* ((last (or (+my/pdf-xwidget--state)
+else the last PDF's looked at, else the variables above; and its place, its
+own or the one kept from last time (see PLACES)."
+  (require 'json)
+  (let* ((own (+my/pdf-xwidget--state))
+         (last (or own
                    (seq-some (lambda (buffer)
                                (and (not (eq buffer (current-buffer)))
                                     (eq (buffer-local-value 'major-mode buffer)
@@ -334,54 +367,131 @@ else the last PDF's looked at, else the variables above."
                                     (+my/pdf-xwidget--state buffer)))
                              (buffer-list))))
          (get (lambda (key default) (if last (plist-get last key) default)))
-         (bool (lambda (value) (if value "true" "false"))))
-    (format "{\"dark\":%s,\"toolbar\":%s,\"sidebar\":%s,\"zoomStep\":%s}"
+         (bool (lambda (value) (if value "true" "false")))
+         (place (or (plist-get own :place) (+my/pdf-xwidget--kept-place))))
+    (format "{\"dark\":%s,\"toolbar\":%s,\"sidebar\":%s,\"view\":%s,\"place\":%s,\"zoomStep\":%s}"
             (funcall bool (funcall get :dark +my/pdf-xwidget-dark-pages))
             (funcall bool (funcall get :toolbar +my/pdf-xwidget-toolbar))
             (funcall bool (funcall get :sidebar +my/pdf-xwidget-outline-sidebar))
+            (json-encode (or (funcall get :view nil) "outline"))
+            (if place (json-encode place) "null")
             +my/pdf-xwidget-zoom-step)))
 
+;; PLACES
+;; Each PDF's place (page, position on it, zoom) when it's closed or Emacs
+;; quits, in `+my/pdf-xwidget-places-file', for the next time it opens.
+(defvar +my/pdf-xwidget--places 'unread
+  "The places kept: ((FILE . PLACE)...), the latest first.")
+
+(defun +my/pdf-xwidget--read-places ()
+  "The places kept (see above), read from their file the first time."
+  (when (eq +my/pdf-xwidget--places 'unread)
+    (setq +my/pdf-xwidget--places
+          (and (file-readable-p +my/pdf-xwidget-places-file)
+               (ignore-errors
+                 (with-temp-buffer
+                   (insert-file-contents +my/pdf-xwidget-places-file)
+                   (read (current-buffer)))))))
+  +my/pdf-xwidget--places)
+
+(defun +my/pdf-xwidget--kept-place ()
+  "This PDF's place, from when it was last closed."
+  (when buffer-file-name
+    (cdr (assoc (abbreviate-file-name buffer-file-name) (+my/pdf-xwidget--read-places)))))
+
+(defun +my/pdf-xwidget--keep-place (place)
+  "Keep PLACE as this PDF's (see above)."
+  (when (and place buffer-file-name)
+    (let ((file (abbreviate-file-name buffer-file-name)))
+      (setq +my/pdf-xwidget--places
+            (seq-take (cons (cons file place)
+                            (seq-remove (lambda (entry) (equal (car entry) file))
+                                        (+my/pdf-xwidget--read-places)))
+                      +my/pdf-xwidget-places-max))
+      (ignore-errors
+        (make-directory (file-name-directory +my/pdf-xwidget-places-file) t)
+        (let ((print-length nil)
+              (print-level nil))
+          (with-temp-file +my/pdf-xwidget-places-file
+            (prin1 +my/pdf-xwidget--places (current-buffer))))))))
+
 (defun +my/pdf-xwidget--remember ()
-  "Keep this page's settings for the next PDF (see above)."
+  "Keep this page's settings for the next PDF, and its place (see above)."
   (when-let* ((state (+my/pdf-xwidget--state)))
     (setq +my/pdf-xwidget-dark-pages (plist-get state :dark)
           +my/pdf-xwidget-toolbar (plist-get state :toolbar)
-          +my/pdf-xwidget-outline-sidebar (plist-get state :sidebar))))
+          +my/pdf-xwidget-outline-sidebar (plist-get state :sidebar))
+    (+my/pdf-xwidget--keep-place (plist-get state :place))))
 
-;; THE MOUSE POINTER
+;; WATCHING THE PAGES ON SCREEN
+;; Every 0.1 s, for each PDF on screen, from its title (no JavaScript): its
+;; page in the mode line, the toolbar's requests, and the mouse pointer.
 ;; Emacs draws its own pointer over the page, the text I-beam everywhere, so
-;; CSS cursors never show (WebKit's hand over a button). The page says in its
-;; title which one it wants under the mouse: hand (buttons, headings, links),
-;; text (the PDF's text) or arrow. While the mouse is over a PDF, Emacs reads
-;; it every 0.1 s (no JavaScript) into the `pointer' text property under the
-;; page, which Emacs's pointer follows after the redisplay that brings.
+;; CSS cursors never show (WebKit's hand over a button): the page says which
+;; one it wants under the mouse (hand: buttons, headings, thumbnails, links;
+;; text: the PDF's text; arrow), which goes into the `pointer' text property
+;; under the page, which Emacs's pointer follows after the redisplay that
+;; brings.
 (defvar-local +my/pdf-xwidget--pointer nil
   "The pointer shape the page's text has (see above).")
 
-(defvar +my/pdf-xwidget--pointer-timer nil)
+(defvar-local +my/pdf-xwidget--answered 0
+  "The number of the toolbar's last request Emacs has seen (see above).")
 
-(defun +my/pdf-xwidget--pointer-tick ()
-  "Give the pointer over a PDF the shape its page wants (see above); stop
-once no PDF is open."
+(defvar +my/pdf-xwidget--watch-timer nil)
+
+(defun +my/pdf-xwidget--show-page (state)
+  "The page of STATE in the mode line (doom-modeline's PDF line)."
+  (let* ((page (plist-get state :page))
+         (pages (plist-get state :pages))
+         (text (and (natnump pages) (> pages 0) (natnump page)
+                    (format "  P%d/%d " page pages))))
+    (unless (equal text (bound-and-true-p doom-modeline--pdf-pages))
+      (setq-local doom-modeline--pdf-pages text)
+      (force-mode-line-update))))
+
+(defun +my/pdf-xwidget--answer (state)
+  "Run the toolbar's request in STATE, once (see above)."
+  (let* ((action (plist-get state :action))
+         (n (or (plist-get action :n) 0)))
+    (unless (eql n +my/pdf-xwidget--answered)
+      (setq +my/pdf-xwidget--answered n)
+      (when (> n 0)
+        (pcase (plist-get action :name)
+          ("preview" (+my/pdf-xwidget-open-in-preview))
+          ("print" (+my/pdf-xwidget-print)))))))
+
+(defun +my/pdf-xwidget--point (state)
+  "Give the pointer over the page the shape STATE wants (see above)."
+  (let ((shape (pcase (plist-get state :cursor)
+                 ("hand" 'hand) ("text" 'text) (_ 'arrow))))
+    (unless (eq shape +my/pdf-xwidget--pointer)
+      (setq +my/pdf-xwidget--pointer shape)
+      (with-silent-modifications
+        (put-text-property (point-min) (point-max) 'pointer shape)))))
+
+(defun +my/pdf-xwidget--watch ()
+  "Watch the PDFs on screen (see above); stop once no PDF is open."
   (if (not (seq-some (lambda (buffer)
                        (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode))
                      (buffer-list)))
-      (progn (cancel-timer +my/pdf-xwidget--pointer-timer)
-             (setq +my/pdf-xwidget--pointer-timer nil))
+      (progn (cancel-timer +my/pdf-xwidget--watch-timer)
+             (setq +my/pdf-xwidget--watch-timer nil))
     (let* ((mouse (mouse-pixel-position))
-           (window (and (frame-live-p (car mouse)) (numberp (cadr mouse))
-                        (window-at-x-y (cadr mouse) (cddr mouse) (car mouse)))))
-      (when (and (windowp window)
-                 (eq (buffer-local-value 'major-mode (window-buffer window))
-                     '+my/pdf-xwidget-mode))
-        (with-current-buffer (window-buffer window)
-          (when-let* ((state (+my/pdf-xwidget--state))
-                      (shape (pcase (plist-get state :cursor)
-                               ("hand" 'hand) ("text" 'text) (_ 'arrow)))
-                      ((not (eq shape +my/pdf-xwidget--pointer))))
-            (setq +my/pdf-xwidget--pointer shape)
-            (with-silent-modifications
-              (put-text-property (point-min) (point-max) 'pointer shape))))))))
+           (under (and (frame-live-p (car mouse)) (numberp (cadr mouse))
+                       (window-at-x-y (cadr mouse) (cddr mouse) (car mouse))))
+           (seen nil))
+      (dolist (window (window-list-1 nil 'nomini 'visible))
+        (let ((buffer (window-buffer window)))
+          (when (and (not (memq buffer seen))
+                     (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode))
+            (push buffer seen)
+            (with-current-buffer buffer
+              (when-let* ((state (+my/pdf-xwidget--state)))
+                (+my/pdf-xwidget--show-page state)
+                (+my/pdf-xwidget--answer state)
+                (when (and (windowp under) (eq (window-buffer under) buffer))
+                  (+my/pdf-xwidget--point state))))))))))
 
 (defun +my/pdf-xwidget--write-page (data)
   "Write the page's index.html, reading the PDF from DATA (a data-N.js)."
@@ -413,7 +523,7 @@ PDF.js, the PDF's own (WebKit's viewer)."
 
 (defun +my/pdf-xwidget--xwidget ()
   "This buffer's WebKit view, once it has one."
-  (xwidget-at (point-min)))
+  (and (fboundp 'xwidget-at) (xwidget-at (point-min))))
 
 (defun +my/pdf-xwidget--js (script)
   "Run SCRIPT in the page, not waiting for an answer (see above)."
@@ -532,9 +642,10 @@ it renames the buffer after the page)."
                  (with-silent-modifications
                    (put-text-property (point-min) (point-max)
                                       'display (list 'xwidget :xwidget xwidget)))
-                 (unless (timerp +my/pdf-xwidget--pointer-timer)
-                   (setq +my/pdf-xwidget--pointer-timer
-                         (run-with-timer 0.1 0.1 #'+my/pdf-xwidget--pointer-tick)))
+                 (setq +my/pdf-xwidget--answered 0)
+                 (unless (timerp +my/pdf-xwidget--watch-timer)
+                   (setq +my/pdf-xwidget--watch-timer
+                         (run-with-timer 0.1 0.1 #'+my/pdf-xwidget--watch)))
                  (xwidget-webkit-goto-uri xwidget +my/pdf-xwidget--home))))))))
 
 (defun +my/pdf-xwidget--shown-h (window)
@@ -573,11 +684,14 @@ killed)."
     (delete-directory +my/pdf-xwidget--dir t))
   (setq +my/pdf-xwidget--dir nil))
 
-;; Quitting Emacs kills no buffers: the pages' folders (a copy of each PDF)
-;; would stay.
+;; Quitting Emacs kills no buffers: the open PDFs' places would be lost, and
+;; the pages' folders (a copy of each PDF) would stay.
 (add-hook 'kill-emacs-hook
           (defun +my/pdf-xwidget--cleanup-h ()
             (dolist (buffer (buffer-list))
+              (when (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode)
+                (with-current-buffer buffer
+                  (ignore-errors (+my/pdf-xwidget--remember))))
               (when-let* ((dir (buffer-local-value '+my/pdf-xwidget--dir buffer)))
                 (ignore-errors (delete-directory dir t))))))
 
@@ -668,16 +782,32 @@ killed)."
   (interactive "p")
   (+my/pdf-xwidget--js (format "page(%d)" (- (or count 1)))))
 
+(defun +my/pdf-xwidget-back ()
+  "C-o / Cmd+[: back to where the last jump left from (see above)."
+  (interactive)
+  (+my/pdf-xwidget--js "back()"))
+
+(defun +my/pdf-xwidget-forward ()
+  "C-i / Cmd+]: forward again, after going back (see above)."
+  (interactive)
+  (+my/pdf-xwidget--js "forward()"))
+
+(defun +my/pdf-xwidget--find (query &optional backward)
+  "Search the PDF for QUERY (its spaces and line breaks as single spaces);
+BACKWARD towards its start. An empty QUERY ends the search."
+  (require 'json)
+  (let ((query (string-trim (replace-regexp-in-string "[ \t\n\r]+" " " query))))
+    (setq +my/pdf-xwidget--searching (not (string-empty-p query)))
+    (+my/pdf-xwidget--js (format "find(%s, %s)" (json-encode query)
+                                 (if backward "true" "false")))))
+
 (defun +my/pdf-xwidget-search (&optional backward)
   "/: search the PDF (case-sensitive with a capital), from where it shows;
 BACKWARD (?) towards its start. Esc ends the search."
   (interactive)
-  (require 'json)
-  (let ((query (read-string (if backward "Search backward: " "Search: ")
-                            nil '+my/pdf-xwidget--search-history)))
-    (setq +my/pdf-xwidget--searching (not (string-empty-p query)))
-    (+my/pdf-xwidget--js (format "find(%s, %s)" (json-encode query)
-                                 (if backward "true" "false")))))
+  (+my/pdf-xwidget--find (read-string (if backward "Search backward: " "Search: ")
+                                      nil '+my/pdf-xwidget--search-history)
+                         backward))
 
 (defun +my/pdf-xwidget-search-backward ()
   "?: search the PDF towards its start (see `+my/pdf-xwidget-search')."
@@ -743,12 +873,127 @@ and say so, NAME being what it is; return whether it's on."
   (setq +my/pdf-xwidget-toolbar (+my/pdf-xwidget--toggle "toolbar" "Toolbar")))
 
 (defun +my/pdf-xwidget-toggle-sidebar ()
-  "O: the outline sidebar on or off (see above)."
+  "O: the sidebar (outline, pages) on or off (see above)."
   (interactive)
-  (if (eql (plist-get (+my/pdf-xwidget--state) :outline) 0)
-      (message "This PDF has no outline")
-    (setq +my/pdf-xwidget-outline-sidebar
-          (+my/pdf-xwidget--toggle "sidebar" "Outline sidebar"))))
+  (setq +my/pdf-xwidget-outline-sidebar (+my/pdf-xwidget--toggle "sidebar" "Sidebar")))
+
+;; PREVIEW AND PRINT
+(defun +my/pdf-xwidget-open-in-preview ()
+  "SPC m p: the PDF in macOS's Preview (to sign, annotate...)."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Not a file"))
+  (call-process "open" nil 0 nil "-a" "Preview" (expand-file-name buffer-file-name)))
+
+(defun +my/pdf-xwidget-print ()
+  "Cmd+P: print the PDF, in Preview's print dialog (macOS asks once to let
+Emacs control Preview)."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Not a file"))
+  (make-process
+   :name "pdf-print"
+   :noquery t
+   :command (list "osascript"
+                  "-e" "on run argv"
+                  "-e" "tell application \"Preview\""
+                  "-e" "activate"
+                  "-e" "print ((POSIX file (item 1 of argv)) as alias) with print dialog"
+                  "-e" "end tell"
+                  "-e" "end run"
+                  (expand-file-name buffer-file-name))
+   :sentinel (lambda (process _event)
+               (when (and (eq (process-status process) 'exit)
+                          (/= (process-exit-status process) 0))
+                 (message "Couldn't print through Preview: SPC m p opens it there, then Cmd+P")))))
+
+;; OPTION+ENTER (config/actions.el)
+;; The menu's PDF actions, for the text selected in the page, which Emacs asks
+;; the page for (an answer awaited, its function a symbol, as for copying)
+;; before showing the menu.
+(defvar-local +my/pdf-xwidget--selection nil
+  "The page's selected text while the actions menu is up.")
+
+(defvar +my/pdf-xwidget--actions-for nil
+  "The PDF whose selection was asked for: WebKit's answer doesn't say.")
+
+(defun +my/pdf-xwidget-actions ()
+  "Option+Enter: the actions menu, with the PDF's for its selected text."
+  (interactive)
+  (let ((xwidget (+my/pdf-xwidget--xwidget)))
+    (setq +my/pdf-xwidget--actions-for (current-buffer))
+    (if (or (not xwidget) +my/pdf-xwidget--native)
+        (+my/pdf-xwidget--actions-menu (current-buffer) nil)
+      (xwidget-webkit-execute-script
+       xwidget "window.pdfx ? pdfx.selection() : ''"
+       #'+my/pdf-xwidget--selection-received))))
+
+(defun +my/pdf-xwidget--selection-received (text)
+  "WebKit's answer to `+my/pdf-xwidget-actions': the menu after this event,
+not inside it."
+  (run-at-time 0 nil #'+my/pdf-xwidget--actions-menu +my/pdf-xwidget--actions-for text))
+
+(defun +my/pdf-xwidget--actions-menu (buffer text)
+  "The actions menu for BUFFER's PDF, TEXT selected in it."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (setq +my/pdf-xwidget--selection (and (stringp text) (not (string-blank-p text)) text))
+      (unwind-protect (+my/context-actions)
+        (setq +my/pdf-xwidget--selection nil)))))
+
+(defun +my/pdf-xwidget--claude-context (text)
+  "For `+my/claude-ask': TEXT quoted, after the PDF's file and page."
+  (let ((file buffer-file-name)
+        (page (plist-get (+my/pdf-xwidget--state) :page)))
+    (lambda (cwd)
+      (let ((relative (and cwd file (file-relative-name file cwd))))
+        (format "From %s%s:\n\n%s"
+                (if (and relative (not (string-prefix-p ".." relative)))
+                    relative
+                  (abbreviate-file-name (or file (buffer-name))))
+                (if (natnump page) (format ", page %d" page) "")
+                (replace-regexp-in-string "^" "> " (string-trim text)))))))
+
+(defun +my/context-actions-pdf ()
+  "In a PDF: for its selected text, copy, search the PDF or the web, Claude;
+always Preview and print."
+  (when (derived-mode-p '+my/pdf-xwidget-mode)
+    (let ((text +my/pdf-xwidget--selection)
+          (buffer (current-buffer)))
+      (append
+       (when text
+         (list (list "PDF" "Copy" (lambda () (+my/pdf-xwidget--copied text)))
+               (list "PDF" "Search the PDF for it"
+                     (lambda () (with-current-buffer buffer (+my/pdf-xwidget--find text))))
+               (list "PDF" "Search the web for it"
+                     (lambda ()
+                       (require 'url-util)
+                       (browse-url (concat "https://www.google.com/search?q="
+                                           (url-hexify-string (string-trim text))))))
+               (list "Claude" "Explain selection with Claude"
+                     (lambda ()
+                       (with-current-buffer buffer
+                         (+my/claude-ask "Explain this passage. Don't change any files."
+                                         (+my/pdf-xwidget--claude-context text)))))
+               (list "Claude" "Add selection to Claude prompt"
+                     (lambda ()
+                       (with-current-buffer buffer
+                         (require 'agent-shell)
+                         (agent-shell-insert
+                          :text (funcall (+my/pdf-xwidget--claude-context text) (agent-shell-cwd))
+                          :shell-buffer (agent-shell-shell-buffer)))))))
+       (list (list "PDF" "Open in Preview"
+                   (lambda () (with-current-buffer buffer (+my/pdf-xwidget-open-in-preview))))
+             (list "PDF" "Print..."
+                   (lambda () (with-current-buffer buffer (+my/pdf-xwidget-print)))))))))
+
+;; First in the menu (config/actions.el is loaded before this file).
+(when (boundp '+my/context-action-providers)
+  (add-to-list '+my/context-action-providers #'+my/context-actions-pdf))
+
+;; The mode line: doom-modeline's PDF line, with the page (see WATCHING).
+(after! doom-modeline
+  (add-to-list 'doom-modeline-mode-alist '(+my/pdf-xwidget-mode . pdf)))
 
 ;; THE OUTLINE IN THE MINIBUFFER (o)
 ;; The page's headings, as `parent › heading' with their page, in their order.

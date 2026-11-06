@@ -14,6 +14,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `Cmd+=` (or `Cmd++`) / `Cmd+-` / `Cmd+0` (PDF) | Zoom in / out / 100% (elsewhere: font size) |
 | `j` `k` `gg` `G` `J` `K` `/` `n` `y` `o` `O` `q`... (PDF) | Scroll, pages, search, copy, outline, close: see [PDFs in WebKit](editor.md#pdfs-in-webkit) |
 | `SPC m d` / `SPC m t` (PDF) | Dark pages / the toolbar |
+| `C-o` / `C-i`, `Option+Enter`, `SPC m p`, `Cmd+P` (PDF) | Back / forward, actions on the selection, Open in Preview, Print |
 | `SPC m p` (Markdown) | Toggle live preview inside Emacs |
 | `SPC m P` (Markdown) | Preview in the browser |
 | `SPC o p` / `SPC o P` | Toggle treemacs / reveal current file in treemacs |

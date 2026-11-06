@@ -153,23 +153,33 @@ smooth trackpad scrolling, text selectable with the mouse (`config/pdf-xwidget.e
 | `y` or `Cmd+C` | Copy the selected text (kill ring and clipboard) |
 | `Cmd+=` / `Cmd+-` (or `+` / `-`) | Zoom in / out (`+my/pdf-xwidget-zoom-step`, ×1.25); also `Cmd+scroll` |
 | `Cmd+0` / `W` / `P` | 100% / fit the width (as it opens) / fit the page |
+| `C-o` / `C-i` (or `Cmd+[` / `Cmd+]`) | Back / forward: where jumps (links, the outline, thumbnails, `gg` / `G`, a new search) left from |
 | `o` (`SPC m o`) | Go to a heading of the outline, picked in the minibuffer (`Chapter 1 › Section 1.1`, with its page) |
-| `O` (`SPC m O`) | The outline sidebar |
+| `O` (`SPC m O`) | The sidebar: outline or pages |
+| `Option+Enter` | The actions menu: for the selected text, copy, search the PDF or the web, explain it with Claude or add it to Claude's prompt (quoted, with the file and page); Open in Preview, Print |
+| `SPC m p` | Open it in macOS's Preview (to sign, annotate...) |
+| `Cmd+P` (`SPC m P`) | Print it, in Preview's print dialog (macOS asks once to let Emacs control Preview) |
 | `SPC m d` | Dark pages |
 | `SPC m t` | The toolbar |
 | `q` | Close the PDF |
 
-**Toolbar** (at the top, in the theme's colours): the outline sidebar, previous / next page with `3 / 12`, zoom out / in
-with its percentage, fit the width, fit the page, dark pages. **Outline sidebar** (left): the PDF's headings with their
-pages; click one to go there, `▸` / `▾` to open / close its sub-headings (an outline of over 100 headings opens with
-its first level only); the current one, the last before the page shown, is marked. **Dark pages**: the pages inverted
-to dark greys with their hues kept, like pdf-tools' midnight mode. A new PDF opens with the toolbar, sidebar and dark
-pages as the last one you looked at; `+my/pdf-xwidget-toolbar` (on), `+my/pdf-xwidget-outline-sidebar` and
-`+my/pdf-xwidget-dark-pages` (off) are for the first one.
+**Toolbar** (at the top, in the theme's colours): the sidebar, back / forward, previous / next page with `3 / 12`, zoom
+out / in with its percentage, fit the width, fit the page, dark pages, Open in Preview, Print. **Sidebar** (left), two
+tabs: **Outline**, the PDF's headings with their pages (click one to go there, `▸` / `▾` to open / close its
+sub-headings; an outline of over 100 headings opens with its first level only), the current one, the last before the
+page shown, marked; **Pages**, the pages' thumbnails, drawn as they scroll into view, the current one marked. **Dark
+pages**: the pages (and thumbnails) inverted to dark greys with their hues kept, like pdf-tools' midnight mode.
 
-The mouse pointer is the hand over the buttons, headings and links, the I-beam over the PDF's text, the arrow
-elsewhere. Emacs draws its own pointer over the page (the I-beam everywhere), so a page's CSS cursor never shows: the
-page tells Emacs which one it wants, in its title, read every 0.1 s while the mouse is over a PDF.
+A PDF opens where it was when last closed (page, place on it, zoom), even after Emacs restarted: kept in
+`+my/pdf-xwidget-places-file` (Doom's `.local/state/pdf-places`) for the last 300 closed. It opens with the toolbar,
+sidebar and dark pages as the last one you looked at; `+my/pdf-xwidget-toolbar` (on), `+my/pdf-xwidget-outline-sidebar`
+and `+my/pdf-xwidget-dark-pages` (off) are for the first one. The mode line shows the page (`P3/12`, doom-modeline's
+PDF line).
+
+The page can't call Emacs: it says its settings, page and place, the mouse pointer it wants, and the toolbar's requests
+(Preview, Print) in its title, which Emacs reads every 0.1 s, without JavaScript, while a PDF is on screen. The mouse
+pointer is the hand over the buttons, headings, thumbnails and links, the I-beam over the PDF's text, the arrow
+elsewhere: Emacs draws its own pointer over the page (the I-beam everywhere), so a page's CSS cursor never shows.
 
 The page shows the search's matches, and, without the toolbar, the page number while it changes. Links out of the PDF
 open in the browser.
