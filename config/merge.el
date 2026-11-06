@@ -18,6 +18,8 @@
 ;;   x         ignore the change (the Result keeps what it has there).
 ;; A change is done when each side that changed is in or ignored; it then
 ;; turns grey. The words that changed are highlighted too (smerge's).
+;; A conflict whose sides changed different words gets a ✨ wand in the
+;; Result's margin: it merges them, word by word (see THE WAND).
 ;; The bar, across the top:
 ;;   Accept Left / Accept Right   Yours / Theirs for every change not done yet
 ;;   ✨ Apply non-conflicting      every change only one side made (or both
@@ -32,7 +34,8 @@
 ;; smooth scrolling's glides; sideways too).
 ;; The Result can be edited as any file; u undoes the buttons too (and C-r
 ;; redoes them). Keys in the panes: ]c / [c next / previous change; SPC m l /
-;; SPC m r the change at point from Yours / Theirs, SPC m x ignore it, SPC m L
+;; SPC m r the change at point from Yours / Theirs, SPC m x ignore it, SPC m w
+;; the wand, SPC m L
 ;; / SPC m R accept left / right, SPC m a apply non-conflicting; C-c C-c (or
 ;; Cmd+S) done, C-c C-k abort.
 ;; The three versions are Git's, from its index (stages :1: the base, :2:
@@ -92,6 +95,7 @@
       :desc "Change at point from Yours"  "l" #'+my/merge-take-left
       :desc "Change at point from Theirs" "r" #'+my/merge-take-right
       :desc "Ignore change at point"      "x" #'+my/merge-ignore
+      :desc "Merge the words (wand)"      "w" #'+my/merge-wand
       :desc "Accept Left"                 "L" #'+my/merge-accept-left
       :desc "Accept Right"                "R" #'+my/merge-accept-right
       :desc "Apply non-conflicting"       "a" #'+my/merge-apply-non-conflicting
@@ -117,7 +121,8 @@
   kind                                  ; conflict, yours, theirs, same
   yours theirs result                   ; overlays in those buffers
   base                                  ; the base's text there
-  yours-state theirs-state              ; nil, applied, ignored
+  yours-state theirs-state              ; nil, applied, ignored, merged
+  wand                                  ; the sides' words merged, if they can be
   order                                 ; the sides applied, first first
   buttons)                              ; overlays of its margin buttons
 
@@ -311,7 +316,8 @@ made none."
   (let ((applied (seq-filter (lambda (side)
                                (eq (if (eq side 'yours) yours-state theirs-state) 'applied))
                              order)))
-    (cond ((null applied) (+my/merge-chunk-base chunk))
+    (cond ((and (eq yours-state 'merged) (eq theirs-state 'merged)) (+my/merge-chunk-wand chunk))
+          ((null applied) (+my/merge-chunk-base chunk))
           ((eq (+my/merge-chunk-kind chunk) 'same) (+my/merge--side-text chunk 'yours))
           (t (mapconcat (lambda (side)
                           (let ((text (+my/merge--side-text chunk side)))
@@ -352,7 +358,13 @@ TEXT: one step of the Result's undo, which undoes (and redoes) them all."
     (+my/merge--render-bar (buffer-local-value '+my/merge--session (overlay-buffer ov)))))
 
 (defun +my/merge--decide (chunk side decision)
-  "SIDE's change in CHUNK (yours, theirs): DECISION applied or ignored."
+  "SIDE's change in CHUNK (yours, theirs): DECISION applied or ignored. SIDE
+both and DECISION merged: the wand (see THE WAND)."
+  (if (eq decision 'merged)
+      (+my/merge--merge-words-in chunk)
+    (+my/merge--decide-side chunk side decision)))
+
+(defun +my/merge--decide-side (chunk side decision)
   (when (and (+my/merge--changed-p chunk side)
              (not (eq (+my/merge--state chunk side) decision)))
     (with-current-buffer (overlay-buffer (+my/merge-chunk-result chunk))
@@ -366,6 +378,60 @@ TEXT: one step of the Result's undo, which undoes (and redoes) them all."
                       (+my/merge--result-of chunk yours theirs order))
       (with-current-buffer (overlay-buffer (+my/merge-chunk-result chunk))
         (+my/merge--align +my/merge--session)))))
+
+;; THE WAND
+;; A conflict's sides may have changed different words of the same lines
+;; (Git's merges are by lines). Each version (the base, Yours, Theirs) split
+;; into words, runs of spaces, newlines and other characters, one a line (a
+;; newline written \n), and merged by git merge-file: no conflict there, the
+;; words joined again are the conflict merged.
+(defun +my/merge--words (text)
+  "TEXT as git merge-file can merge it by words: a token a line (see
+above)."
+  (let ((pos 0) (lines nil))
+    (while (string-match "[[:alnum:]_]+\\|[ \t]+\\|\n\\|." text pos)
+      (let ((token (match-string 0 text)))
+        (push (if (equal token "\n") "\\n" token) lines)
+        (setq pos (match-end 0))))
+    (mapconcat (lambda (line) (concat line "\n")) (nreverse lines) "")))
+
+(defun +my/merge--unwords (lines)
+  "LINES (from `+my/merge--words') as the text again."
+  (mapconcat (lambda (line) (if (equal line "\\n") "\n" line))
+             (split-string lines "\n" t) ""))
+
+(defun +my/merge--merge-words (base yours theirs)
+  "YOURS and THEIRS (texts changed from BASE) merged word by word, or nil if
+the same words changed (see above)."
+  (let ((files (mapcar (lambda (text)
+                         (let ((file (make-temp-file "merge-words-"))
+                               (coding-system-for-write 'utf-8-unix))
+                           (write-region (+my/merge--words text) nil file nil 'silent)
+                           file))
+                       (list yours base theirs))))
+    (unwind-protect
+        (when-let* ((out (apply #'+my/merge--git "merge-file" "-p" "--quiet" files)))
+          (+my/merge--unwords (decode-coding-string out 'utf-8)))
+      (mapc #'delete-file files))))
+
+(defun +my/merge--wand-of (chunk)
+  "CHUNK's conflict merged word by word, or nil."
+  (when (eq (+my/merge-chunk-kind chunk) 'conflict)
+    (let ((merged (+my/merge--merge-words (+my/merge-chunk-base chunk)
+                                          (+my/merge--side-text chunk 'yours)
+                                          (+my/merge--side-text chunk 'theirs))))
+      (and merged
+           (not (equal merged (+my/merge--side-text chunk 'yours)))
+           (not (equal merged (+my/merge--side-text chunk 'theirs)))
+           merged))))
+
+(defun +my/merge--merge-words-in (chunk)
+  "The wand on CHUNK: its sides' words merged, in the Result (done)."
+  (when-let* ((text (+my/merge-chunk-wand chunk)))
+    (with-current-buffer (overlay-buffer (+my/merge-chunk-result chunk))
+      (undo-boundary)
+      (+my/merge--put chunk 'merged 'merged nil text)
+      (+my/merge--align +my/merge--session))))
 
 ;; PANES
 ;; The sides' changes highlighted, with their buttons in the margin by the
@@ -406,9 +472,10 @@ TEXT: one step of the Result's undo, which undoes (and redoes) them all."
   (let ((other (+my/merge--other side)))
     (cond ((not (+my/merge--changed-p chunk side)) nil)
           ((+my/merge--state chunk side)
-           (propertize (if (eq (+my/merge--state chunk side) 'applied)
-                           (+my/merge--icon "nf-cod-check" "ok")
-                         " ")
+           (propertize (pcase (+my/merge--state chunk side)
+                         ('applied (+my/merge--icon "nf-cod-check" "ok"))
+                         ('merged (+my/merge--icon "nf-cod-wand" "*"))
+                         (_ " "))
                        'face '+my/merge-done))
           (t
            (let ((apply (+my/merge--button
@@ -438,6 +505,17 @@ TEXT: one step of the Result's undo, which undoes (and redoes) them all."
                      (propertize " " 'display `((margin ,(if (eq side 'yours) 'right-margin 'left-margin))
                                                 ,text)))
         (push ov (+my/merge-chunk-buttons chunk)))))
+  ;; The wand, in the Result's margin, while it can merge.
+  (when (and (+my/merge-chunk-wand chunk) (not (+my/merge--resolved-p chunk)))
+    (let* ((region (+my/merge-chunk-result chunk))
+           (ov (make-overlay (overlay-start region) (overlay-start region) (overlay-buffer region))))
+      (overlay-put ov 'before-string
+                   (propertize " " 'display
+                               `((margin left-margin)
+                                 ,(+my/merge--button (+my/merge--icon "nf-cod-wand" "*")
+                                                     'merged chunk 'both
+                                                     "Merge the words both sides changed (wand)"))))
+      (push ov (+my/merge-chunk-buttons chunk))))
   ;; A change with nothing in the Result: a mark in its fringe.
   (let ((region (+my/merge-chunk-result chunk)))
     (overlay-put region 'before-string
@@ -721,7 +799,7 @@ Theirs."
                                                    (,middle ,(+my/merge-result session) nil)
                                                    (,right ,(+my/merge-theirs session) left)))
         (set-window-buffer window buffer)
-        (set-window-margins window (and (eq margin 'left) 5) (and (eq margin 'right) 5))
+        (set-window-margins window (pcase margin ('left 5) ('nil 2)) (and (eq margin 'right) 5))
         (set-window-start window (point-min))
         (set-window-prev-buffers window nil))
       (select-window middle)
@@ -775,6 +853,7 @@ folder) in three panes."
       (setq buffer-undo-list nil))
     (+my/merge--refine session)
     (seq-doseq (chunk (+my/merge-chunks session))
+      (setf (+my/merge-chunk-wand chunk) (+my/merge--wand-of chunk))
       (+my/merge--render-chunk chunk))
     (with-current-buffer (+my/merge-result session)
       (let ((buffer-undo-list t))
@@ -937,6 +1016,14 @@ ask first, and save them as conflict markers, not staged."
     (dolist (side '(yours theirs))
       (unless (+my/merge--state chunk side)
         (+my/merge--decide chunk side 'ignored)))))
+
+(defun +my/merge-wand ()
+  "SPC m w: the wand on the conflict at point: its sides' words merged."
+  (interactive)
+  (let ((chunk (+my/merge--chunk-here)))
+    (unless (+my/merge-chunk-wand chunk)
+      (user-error "No wand here: the sides changed the same words, or it's no conflict"))
+    (+my/merge--merge-words-in chunk)))
 
 (defun +my/merge--accept (side)
   "SIDE for every change not done yet (the other side's ignored)."

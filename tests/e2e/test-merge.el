@@ -229,6 +229,8 @@ height on screen."
       (+my/smooth--glide yours -600)
       (while (and +my/smooth--timer (< frames 200))
         (+test--pump 0.01)
+        ;; As drawn: a frame's timer may have run after the last redisplay.
+        (redisplay t)
         (cl-incf frames)
         (should (+test-merge--together-p session)))
       (should-not +my/smooth--timer))
@@ -257,3 +259,36 @@ height on screen."
       (should (+test-merge--together-p session))
       ;; The Result stays the selected pane.
       (should (eq (selected-window) result)))))
+
+;; ====== THE WAND ======
+
+(ert-deftest e2e-merge/the-wand-clicked-where-it-shows ()
+  (+test-merge-conflict-of
+      (+test-merge--lines "start" "call(first, second);" "end")
+      (+test-merge--lines "start" "call(FIRST, second);" "end")
+      (+test-merge--lines "start" "invoke(first, second);" "end")
+    (let* ((session (+test-merge--e))
+           (result (get-buffer-window (+my/merge-result session)))
+           (chunk (aref (+my/merge-chunks session) 0)))
+      (redisplay t)
+      (should (equal (window-margins result) '(2)))
+      ;; Down the Result's left margin (frame pixels): the row showing the
+      ;; wand, the conflict's.
+      (let* ((edges (window-pixel-edges result))
+             (posn (seq-some (lambda (y)
+                               (let ((posn (posn-at-x-y (+ (nth 0 edges) 3) y (window-frame result))))
+                                 (and (eq (posn-window posn) result)
+                                      (eq (posn-area posn) 'left-margin)
+                                      (car (posn-string posn))
+                                      (get-text-property (cdr (posn-string posn)) '+my/merge-action
+                                                         (car (posn-string posn)))
+                                      posn)))
+                             (number-sequence (nth 1 edges) (+ (nth 1 edges) 200) 3))))
+        (should posn)
+        (should (= (cdr (posn-col-row posn))
+                   (with-current-buffer (+my/merge-result session)
+                     (1- (line-number-at-pos (overlay-start (+my/merge-chunk-result chunk)))))))
+        (+my/merge-click (list 'mouse-1 posn)))
+      (should (equal (with-current-buffer (+my/merge-result session) (+my/merge--result-text session))
+                     (+test-merge--lines "start" "invoke(FIRST, second);" "end")))
+      (should (+my/merge--resolved-p chunk)))))

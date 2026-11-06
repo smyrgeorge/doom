@@ -654,6 +654,95 @@ up again after the command, in the same step of its undo."
       (should (= (funcall first-line theirs) 4))
       (should (memq #'+my/merge--sync-h (default-value 'pre-redisplay-functions))))))
 
+;; ====== THE WAND ======
+
+(ert-deftest merge/words-one-a-line ()
+  (should (equal (+my/merge--words "foo(a, b);\n")
+                 "foo\n(\na\n,\n \nb\n)\n;\n\\n\n"))
+  (dolist (text '("" "a" "a\nb  c\t(d)\n\n é" "back\\slash \\n literal\n" "  lead\n\n\ntrail  "
+                  "αβγ δ_ε 12.5e-3"))
+    (should (equal (+my/merge--unwords (+my/merge--words text)) text))))
+
+(ert-deftest merge/words-merged ()
+  (should (equal (+my/merge--merge-words "foo(a, b);\n" "foo(a, c);\n" "bar(a, b);\n") "bar(a, c);\n"))
+  ;; Lines next to each other (a conflict for Git): merged.
+  (should (equal (+my/merge--merge-words "x = 1\ny = 2\n" "x = 10\ny = 2\n" "x = 1\ny = 20\n")
+                 "x = 10\ny = 20\n"))
+  ;; The same word changed: no.
+  (should-not (+my/merge--merge-words "a b\n" "a c\n" "a d\n"))
+  ;; A side that removed it all, the other that changed it: no.
+  (should-not (+my/merge--merge-words "a b\n" "" "a c\n")))
+
+(defconst +test-merge--wand-base
+  (+test-merge--lines "start" "call(first, second);" "x = 1" "y = 2" "end"))
+
+(defmacro +test-merge-wand (&rest body)
+  "BODY with w.txt in conflict, its merge open as `session': a conflict
+whose sides changed different words (call/first; x, y), one whose sides
+changed the same word."
+  (declare (indent 0))
+  `(+test-merge-with-repo
+     (+test-merge--conflict "w.txt" +test-merge--wand-base
+                            (+test-merge--lines "start" "call(FIRST, second);" "x = 10" "y = 2" "end")
+                            (+test-merge--lines "start" "invoke(first, second);" "x = 1" "y = 20" "end"))
+     (let ((session (+test-merge--open "w.txt")))
+       (unwind-protect (progn ,@body)
+         (+my/merge--finish session)))))
+
+(ert-deftest merge/the-wand-merges-the-words ()
+  (+test-merge-wand
+    (let ((chunk (+test-merge--chunk session 0)))
+      (should (eq (+my/merge-chunk-kind chunk) 'conflict))
+      (should (equal (+my/merge-chunk-wand chunk) "invoke(FIRST, second);\nx = 10\ny = 20\n"))
+      ;; In the Result's margin.
+      (should (equal (window-margins (get-buffer-window (+my/merge-result session))) '(2)))
+      (with-current-buffer (+my/merge-result session)
+        (let* ((ov (seq-find (lambda (ov) (overlay-get ov 'before-string))
+                             (overlays-in (overlay-start (+my/merge-chunk-result chunk))
+                                          (1+ (overlay-start (+my/merge-chunk-result chunk))))))
+               (display (get-text-property 0 'display (overlay-get ov 'before-string))))
+          (should (equal (car display) '(margin left-margin)))
+          (should (equal (get-text-property 0 '+my/merge-action (cadr display)) (list chunk 'both 'merged)))
+          (should (string-match-p "wand" (get-text-property 0 'help-echo (cadr display))))))
+      (+my/merge--decide chunk 'both 'merged)
+      (should (equal (+test-merge--result session)
+                     (+test-merge--lines "start" "invoke(FIRST, second);" "x = 10" "y = 20" "end")))
+      (should (+my/merge--resolved-p chunk))
+      (should (equal (+my/merge--counts session) '(0 . 0)))
+      (should (+test-merge--lined-up-p session))
+      ;; Done: no wand; the sides marked.
+      (with-current-buffer (+my/merge-result session)
+        (should-not (seq-find (lambda (ov) (overlay-get ov 'before-string))
+                              (overlays-in (point-min) (point-max)))))
+      (should (equal (cdar (+test-merge--margin session 'yours)) "*"))
+      ;; Undone: as it was.
+      (with-current-buffer (+my/merge-result session)
+        (undo-boundary)
+        (let ((last-command nil)) (undo))
+        (+my/merge--post-command-h))
+      (should (equal (+test-merge--result session) +test-merge--wand-base))
+      (should-not (+my/merge-chunk-yours-state chunk))
+      (should (+test-merge--lined-up-p session)))))
+
+(ert-deftest merge/the-wand-at-point ()
+  (+test-merge-wand
+    (with-current-buffer (+my/merge-result session)
+      (goto-char (overlay-start (+my/merge-chunk-result (+test-merge--chunk session 0))))
+      (+my/merge-wand)
+      (should (string-match-p "invoke(FIRST" (+test-merge--result session)))))
+  ;; No wand where the same words changed.
+  (+test-merge
+    (with-current-buffer (+my/merge-result session)
+      (goto-char (overlay-start (+my/merge-chunk-result (+test-merge--chunk session 2))))
+      (should-not (+my/merge-chunk-wand (+test-merge--chunk session 2)))
+      (should-error (+my/merge-wand) :type 'user-error)
+      (should-not (seq-find (lambda (chunk) (+my/merge-chunk-wand chunk))
+                            (+my/merge-chunks session))))))
+
+(ert-deftest merge/the-wand-key ()
+  (should (eq (lookup-key (evil-get-auxiliary-keymap +my/merge-mode-map 'normal) (kbd "SPC m w"))
+              #'+my/merge-wand)))
+
 ;; ====== OTHER CONFLICTS ======
 
 (ert-deftest merge/a-rebase ()

@@ -39,8 +39,15 @@ GUI, `>>` / `<<` / `x` in a terminal):
 | `>>` (Yours) / `<<` (Theirs) | Put the change in the Result. In a conflict whose other side is in already, add it after that one (keep both) |
 | `x` | Ignore the change: the Result keeps what it has there |
 
-A change is done when each side that changed is in or ignored; it then turns grey (a check by the side put in). The
-bar, across the top:
+A change is done when each side that changed is in or ignored; it then turns grey (a check by the side put in).
+
+A conflict whose sides changed different words of the same lines (Git merges by lines) gets a **✨ wand** in the
+Result's margin (`SPC m w` at point): it merges them, word by word, e.g. `call(first)` → `call(FIRST)` on one side
+and `invoke(first)` on the other give `invoke(FIRST)`. Each version (the base, Yours, Theirs) is split into words,
+runs of spaces, newlines and other characters, one a line, and merged by `git merge-file`: with no conflict there,
+the words joined again are the merge. Undo takes it back as any button.
+
+The bar, across the top:
 
 | Bar | Action |
 |---|---|
@@ -57,7 +64,8 @@ start inside an overlay's text, which pixel scrolling can't move into either; in
 each command that changed it, in the same step of its undo.
 
 The Result can be edited as any file, and `u` undoes the buttons too (`C-r` redoes them). Keys in the panes: `]c` / `[c`
-next / previous change; `SPC m l` / `SPC m r` the change at point from Yours / Theirs, `SPC m x` ignore it, `SPC m L` /
+next / previous change; `SPC m l` / `SPC m r` the change at point from Yours / Theirs, `SPC m x` ignore it, `SPC m w`
+the wand, `SPC m L` /
 `SPC m R` accept left / right, `SPC m a` apply non-conflicting; `C-c C-c` (or `Cmd+S`) Done, `C-c C-k` Abort.
 Closing a pane aborts. Done writes the file as is (no save hooks, such as formatting) and shows it in its buffer if
 one is open (asking first if that one has changes not saved).
