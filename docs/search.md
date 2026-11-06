@@ -29,3 +29,12 @@ also lists files created outside Emacs (CLI, Claude Code, `git checkout`) (`conf
 Picking a project in `SPC p p` opens its README straight away when it has one at its root, instead of asking for a
 file; otherwise it asks, as Doom does. Several READMEs: Markdown first, then Org, reStructuredText, AsciiDoc, text, one
 without an extension (`+my/project-readme-extensions`); any case (`readme.md` too).
+
+Each workspace remembers its project. What an empty workspace shows is Doom's dashboard, shared by the workspaces, which
+moves to each one's last project as you switch; but leaving a workspace recorded the project of whatever it showed, the
+dashboard too, still in the previous workspace's project. A workspace whose files were all closed took on another's:
+there `SPC SPC` listed the other project's files and the sidebar followed it. And the dashboard's reload put it back in
+the folder of the last file visited in any workspace (`+dashboard-pwd-policy`). Now the dashboard is always in the
+current workspace's project: the one it was made for (`SPC p p`); for a workspace made without one, that of the last
+file shown in it (the file in its window, not the previous workspace's, still current right after a switch), or `~`
+before any.

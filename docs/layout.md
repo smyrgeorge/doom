@@ -28,7 +28,7 @@
 | `dict/tech.txt` | ~40k programming words for the spell checker (built by `scripts/dict.sh`). |
 | `config/agent-shell.el` | Claude Code in Emacs (agent-shell): login, default agent, `SPC o c` / `SPC o C`, what Claude is told about Emacs, image width. |
 | `config/lsp.el` | Language servers: code lenses; projects imported without asking; file watchers skip git-ignored folders; `kotlin-lsp`. |
-| `config/projectile.el` | Projects under `~/dev`; project file list without a cache; a project opens on its README. |
+| `config/projectile.el` | Projects under `~/dev`; project file list without a cache; a project opens on its README; each workspace remembers its project. |
 | `config/search.el` | `SPC s a`: Search Everywhere, like IntelliJ; `Cmd+Shift+F`: find in files (rg). |
 | `config/git.el` | `SPC g d`: the current file's git diff in a side pane. |
 | `config/terminal.el` | Terminal Emacs: paint the terminal background with the theme colour; no menu bar in terminal frames; hover help stays in the echo area. |
