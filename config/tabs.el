@@ -16,6 +16,9 @@
 ;; if it has unsaved changes). A Claude session only leaves the tab line: close
 ;; it with its own commands.
 ;; Tabs look as they did: an icon, a bar on the current one, • when unsaved.
+;; Right-clicking a tab: Emacs's Close and Close other tabs, and IntelliJ's
+;; Split Vertically (a pane on the right) and Split Horizontally (below): the
+;; new pane has only that tab and takes focus; the tab stays where it was too.
 (defvar +my/tabs-height 22
   "Height of the tab row in graphical frames, in pixels.")
 
@@ -44,6 +47,10 @@
 ;; workspace with its last window); where there are no tabs (popups, side
 ;; panels), the window, as before.
 (map! "s-w" #'+my/tabs-close-current)
+
+;; The tab menu (right click, see above).
+(after! tab-line
+  (keymap-set tab-line-tab-map "<tab-line> <down-mouse-3>" #'+my/tabs-context-menu))
 
 ;; ====== CODE ======
 
@@ -204,6 +211,53 @@ tabs, switch to the Nth workspace, as Doom's Cmd+N did."
   (if (bound-and-true-p tab-line-mode)
       (+my/tabs-close (window-buffer))
     (call-interactively (or (command-remapping #'delete-window) #'delete-window))))
+
+;; THE TAB MENU (see above)
+(defun +my/tabs-split (event side)
+  "Show the tab EVENT is on in a new pane on SIDE (`right', `below') of its
+own, which takes focus."
+  (let* ((posn (tab-line-event-start event))
+         (window (posn-window posn))
+         (tab (and (posn-string posn)
+                   (tab-line--get-tab-property 'tab (car (posn-string posn)))))
+         (buffer (if (bufferp tab) tab (cdr (assq 'buffer tab)))))
+    (when (and (window-live-p window) (buffer-live-p buffer))
+      (let ((new (split-window window nil side)))
+        (set-window-buffer new buffer)
+        ;; Only that tab: the split showed the old pane's buffer first, which
+        ;; `set-window-buffer' left in the new pane's history, so its tabs.
+        (set-window-prev-buffers new nil)
+        (set-window-next-buffers new nil)
+        (set-window-parameter new 'tab-line-buffers nil)
+        (select-window new)))))
+
+(defun +my/tabs-split-right (&optional event)
+  "Split Vertically: show this tab in a new pane on the right."
+  (interactive (list last-nonmenu-event))
+  (+my/tabs-split event 'right))
+
+(defun +my/tabs-split-below (&optional event)
+  "Split Horizontally: show this tab in a new pane below."
+  (interactive (list last-nonmenu-event))
+  (+my/tabs-split event 'below))
+
+(defun +my/tabs-context-menu (&optional event)
+  "The menu of the tab EVENT is on (see above)."
+  (interactive "e")
+  (let ((menu (make-sparse-keymap (propertize "Context Menu" 'hide t))))
+    (define-key-after menu [close]
+      '(menu-item "Close" tab-line-close-tab :help "Close the tab"))
+    (define-key-after menu [close-other]
+      '(menu-item "Close other tabs" tab-line-close-other-tabs
+                  :help "Close all other tabs"))
+    (define-key-after menu [split-separator] menu-bar-separator)
+    (define-key-after menu [split-right]
+      '(menu-item "Split Vertically" +my/tabs-split-right
+                  :help "Show this tab in a new pane on the right"))
+    (define-key-after menu [split-below]
+      '(menu-item "Split Horizontally" +my/tabs-split-below
+                  :help "Show this tab in a new pane below"))
+    (popup-menu menu event)))
 
 ;; No tab line where Doom had none: popups (help, *Messages*...), the dashboard,
 ;; side panels (treemacs' and LSP's lists).

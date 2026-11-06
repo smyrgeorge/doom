@@ -89,6 +89,10 @@ frame's only one, beside the sidebar, shows Doom's dashboard instead). A file is
 tab any more (asking first if it has unsaved changes); a Claude session only leaves the tab line. `SPC b k` still kills
 the buffer, in every window.
 
+Right-clicking a tab opens its menu: **Close**, **Close other tabs**, and, as in IntelliJ, **Split Vertically** (a new
+pane on the right) and **Split Horizontally** (a new pane below). The new pane has only that tab and takes focus; the
+tab stays in its own pane too.
+
 `gt` / `gT`: next / previous tab, wrapping around. Doom used them for workspaces: those are `]w` / `[w` or
 `SPC TAB ]` / `SPC TAB [`. `Cmd+1`..`Cmd+8` show the pane's tabs 1-8, `Cmd+9` its last, as in browsers (Doom's
 workspaces 1-9 are on `M-1`..`M-9` and `SPC TAB 1`..`9`; in a pane without tabs, e.g. the sidebar, `Cmd+N` still
