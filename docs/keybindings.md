@@ -17,6 +17,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `C-o` / `C-i`, `Option+Enter`, `SPC m p`, `Cmd+P` (PDF) | Back / forward, actions on the selection, Open in Preview, Print |
 | `SPC m p` (Markdown) | Toggle live preview inside Emacs |
 | `SPC m P` (Markdown) | Preview in the browser |
+| `j` `k` `C-d` `C-u` `gg` `G` `y` `q` (Markdown preview) | Scroll, copy the selection, close the preview |
 | `SPC o p` / `SPC o P` | Toggle treemacs / reveal current file in treemacs |
 | `Cmd+W` (GUI) | Close the current tab, like its ✕ (without tabs, e.g. popups: the window) |
 | `Cmd+1`..`Cmd+8` / `Cmd+9` (GUI) | Tab 1-8 / last tab of the pane (workspaces: `M-1`..`M-9`, `SPC TAB 1`..`9`) |

@@ -7,6 +7,11 @@
 ;; Live preview inside Emacs (GUI, xwidget WebKit): re-renders as you type and
 ;; scrolls to the cursor line. pandoc's `sourcepos' tags each element with its
 ;; source line (data-pos="L:C-L:C"), which the scroll script uses.
+;; Its pane is a WebKit page (config/webkit.el): split, each pane shows the
+;; preview, following the cursor; it opens without a white flash; links to
+;; files open them in Emacs, in the file's pane, other links in the browser, links to a
+;; heading (#install) scroll there. In it, j / k, C-d / C-u, C-f / C-b, gg / G
+;; scroll, y or Cmd+C copies the selected text, q closes it (as SPC m p).
 ;; Terminal: falls back to markdown-mode's eww preview (updates on save).
 ;; PREVIEW NOTICE
 ;; A Markdown file opens with a notice at the top (config/banner.el) offering
@@ -16,7 +21,11 @@
 (defvar +my/markdown-preview-notice t
   "Offer the live preview in a notice when a Markdown file opens.")
 
-(defvar-local +md-preview--xwidget nil)
+(defvar-local +md-preview--buffer nil
+  "In a Markdown buffer: its preview's buffer (see `+md-preview-page-mode').")
+
+(defvar-local +md-preview--source nil
+  "In a preview's buffer: its Markdown buffer.")
 
 (defvar-local +md-preview--timer nil)
 
@@ -29,6 +38,17 @@
      var l=(c.parentElement.className||'').split(' ')[0];
      if(l && c.className.indexOf('language-')<0) c.classList.add('language-'+l);
      if(window.hljs && !c.dataset.highlighted) hljs.highlightElement(c);
+   });")
+
+;; Links to a heading of the page (#install): scrolled there, not followed (the
+;; page's <base> is the file's folder: WebKit would go to the folder).
+(defconst +md-preview--anchors-js
+  "document.addEventListener('click',function(e){
+     var a=e.target.closest && e.target.closest('a[href^=\"#\"]'); if(!a) return;
+     e.preventDefault();
+     var id=decodeURIComponent(a.getAttribute('href').slice(1));
+     var t=document.getElementById(id)||document.getElementsByName(id)[0];
+     if(t) t.scrollIntoView();
    });")
 
 (defconst +md-preview--scroll-js
@@ -59,6 +79,32 @@
       :localleader
       :desc "Live preview (in Emacs)" "p" #'+my/markdown-preview-toggle
       :desc "Preview in browser"      "P" #'markdown-preview)
+
+;; The preview's pane (see above): keys of a WebKit page (config/webkit.el).
+(defvar +md-preview-page-mode-map (make-sparse-keymap)
+  "Keys of a Markdown preview's pane (see `+md-preview-page-mode').")
+
+(map! :map +md-preview-page-mode-map
+      "s-c"         #'+my/webkit-copy
+      :nm "j"       #'+my/webkit-scroll-down
+      :nm "k"       #'+my/webkit-scroll-up
+      :nm "<down>"  #'+my/webkit-scroll-down
+      :nm "<up>"    #'+my/webkit-scroll-up
+      :nm "C-d"     #'+my/webkit-half-screen-down
+      :nm "C-u"     #'+my/webkit-half-screen-up
+      :nm "C-f"     #'+my/webkit-screen-down
+      :nm "C-b"     #'+my/webkit-screen-up
+      :nm "<next>"  #'+my/webkit-screen-down
+      :nm "<prior>" #'+my/webkit-screen-up
+      :nm "gg"      #'+my/webkit-top
+      :nm "G"       #'+my/webkit-bottom
+      :nm "<home>"  #'+my/webkit-top
+      :nm "<end>"   #'+my/webkit-bottom
+      :nm "y"       #'+my/webkit-copy
+      :gnm "q"      #'kill-current-buffer)
+
+;; Clicks are WebKit's: Emacs only selects the window (config/webkit.el).
+(+my/webkit-bind-clicks +md-preview-page-mode-map)
 
 ;; ====== CODE ======
 
@@ -100,27 +146,37 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
    ;; left, empty space on the right.)
    "<style>body.markdown-body{box-sizing:border-box;max-width:none;width:100%;margin:0;padding:24px 28px;}</style>"
    "<script src='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/highlight.min.js'></script>"
-   "<script>document.addEventListener('DOMContentLoaded',function(){"
+   "<script>" +md-preview--anchors-js
+   "document.addEventListener('DOMContentLoaded',function(){"
    +md-preview--highlight-js "});</script>"
    "</head><body class='markdown-body'>" fragment "</body></html>"))
 
 (defun +md-preview--live-p ()
-  (and +md-preview--xwidget (xwidget-live-p +md-preview--xwidget)))
+  "Non-nil while this Markdown buffer's preview is open."
+  (buffer-live-p +md-preview--buffer))
+
+(defun +md-preview--run (script)
+  "Run SCRIPT in the preview, in each of its views (one per window showing it,
+config/webkit.el)."
+  (when (+md-preview--live-p)
+    (with-current-buffer +md-preview--buffer
+      (+my/webkit-execute script t))))
 
 (defun +md-preview--scroll ()
-  (when (+md-preview--live-p)
-    (xwidget-webkit-execute-script
-     +md-preview--xwidget (format +md-preview--scroll-js (line-number-at-pos)))))
+  (+md-preview--run (format +md-preview--scroll-js (line-number-at-pos))))
+
+(defun +md-preview--update-script ()
+  "JavaScript showing the Markdown as it is now, at the cursor's line, in a
+page as it was (swapping its content, not reloading it)."
+  (concat "document.body.innerHTML=" (json-encode (+md-preview--fragment)) ";"
+          +md-preview--highlight-js
+          (format +md-preview--scroll-js (line-number-at-pos))))
 
 (defun +md-preview--update (buf)
   (when (buffer-live-p buf)
     (with-current-buffer buf
       (when (+md-preview--live-p)
-        (xwidget-webkit-execute-script
-         +md-preview--xwidget
-         (concat "document.body.innerHTML=" (json-encode (+md-preview--fragment)) ";"
-                 +md-preview--highlight-js
-                 (format +md-preview--scroll-js (line-number-at-pos))))))))
+        (+md-preview--run (+md-preview--update-script))))))
 
 (defun +md-preview--after-change-h (&rest _)
   (when (timerp +md-preview--timer) (cancel-timer +md-preview--timer))
@@ -141,135 +197,119 @@ system's setting (MODE: `dark' or `light' to choose)."
     ('light "#ffffff")
     (_ "#0d1117")))
 
-(defun +md-preview--fit-h (window)
-  "Make the preview's WebKit view as big as WINDOW (see `+md-preview-mode')."
-  (with-current-buffer (window-buffer window)
-    (when-let* ((xwidget (xwidget-webkit-current-session)))
-      (when (xwidget-live-p xwidget)
-        (xwidget-webkit-adjust-size-to-window xwidget window)))))
+;; THE PREVIEW'S PANE
+;; A WebKit page (config/webkit.el) in the page's colour (also its cover while
+;; a view loads: its stylesheet comes from a CDN), each new view written anew
+;; from the Markdown as it is, then scrolled to the cursor's line.
+(defun +md-preview--url (_window)
+  "The page a new view of the preview loads (see VIEWS in config/webkit.el),
+written anew: the Markdown as it is now."
+  (let ((src +md-preview--source))
+    (when (buffer-live-p src)
+      (with-current-buffer src
+        (let ((page (+md-preview--page (+md-preview--fragment))))
+          (with-temp-file +md-preview--file
+            (insert page)))
+        (+my/webkit-file-url +md-preview--file)))))
 
-;; NO WHITE FLASH
-;; WebKit's view is white until its page has loaded (GitHub's stylesheet, from
-;; a CDN, included): the preview flashed white before its colours appeared.
-;; Its window opens at once (WebKit only loads while on screen) under a
-;; borderless frame in the page's background colour, like the notices'
-;; (config/banner.el), which goes once WebKit says the page has loaded, or
-;; after 2 s (e.g. offline). No JavaScript is run to ask the page instead:
-;; closing a preview while such a call was pending crashed Emacs.
-(defvar +md-preview--cover nil
-  "(XWIDGET FRAME TIMER): the frame over a preview whose page is loading.")
+(defun +md-preview--loaded (xwidget)
+  "XWIDGET's page has loaded: the Markdown as it is now (back from a link,
+WebKit loads the page's file again, as it was written), at the cursor's
+line."
+  (let ((src +md-preview--source))
+    (when (buffer-live-p src)
+      (+my/webkit-execute (with-current-buffer src (+md-preview--update-script))
+                          xwidget))))
 
-(defun +md-preview--uncover (&optional xwidget)
-  "Take the cover off XWIDGET's preview (any preview's, by default)."
-  (pcase +md-preview--cover
-    (`(,covered ,frame ,timer)
-     (when (or (null xwidget) (eq covered xwidget))
-       (setq +md-preview--cover nil)
-       (when (timerp timer) (cancel-timer timer))
-       (+my/banner--delete-frame frame)))))
+(defun +md-preview--follow (url)
+  "A link out of the preview, to URL: a file opens in Emacs, in the Markdown
+file's pane (else beside the preview); anything else in the browser."
+  (if (not (string-prefix-p "file:" url))
+      (browse-url url)
+    (let ((file (+my/webkit-url-file url))
+          (window (and (buffer-live-p +md-preview--source)
+                       (get-buffer-window +md-preview--source))))
+      (if (not window)
+          (find-file-other-window file)
+        (select-window window)
+        (find-file file)))))
 
-(defun +md-preview--cover-window (window)
-  "Cover WINDOW in the page's background colour, for 2 s at most (see above)."
-  (+md-preview--uncover)
-  (when (and (window-live-p window) (display-graphic-p (window-frame window))
-             (fboundp '+my/banner--make-frame))
-    (let ((frame (+my/banner--make-frame (window-frame window)))
-          (edges (window-pixel-edges window))
-          (frame-resize-pixelwise t))
-      (set-frame-parameter frame 'background-color (+md-preview--page-color))
-      (set-frame-size frame (- (nth 2 edges) (nth 0 edges))
-                      (- (nth 3 edges) (nth 1 edges)) t)
-      (set-frame-position frame (nth 0 edges) (nth 1 edges))
-      (make-frame-visible frame)
-      (setq +md-preview--cover
-            (list nil frame (run-at-time 2 nil #'+md-preview--uncover))))))
+(defvar +md-preview-mode)               ; below
 
-(defun +md-preview--watch (xwidget)
-  "Take the cover off once XWIDGET's page has loaded."
-  (when +md-preview--cover
-    (setf (car +md-preview--cover) xwidget)))
+(defun +md-preview--closed-h ()
+  "The preview's pane closed (q, its tab's ✕...): its Markdown buffer's
+preview off."
+  (let ((preview (current-buffer))
+        (src +md-preview--source))
+    (when (buffer-live-p src)
+      (with-current-buffer src
+        (when (and +md-preview-mode (eq +md-preview--buffer preview))
+          (setq +md-preview--buffer nil)  ; it's going already
+          (+md-preview-mode -1))))))
 
-(defadvice! +md-preview--loaded-a (xwidget event-type)
-  :after #'xwidget-webkit-callback
-  (when (and (eq event-type 'load-changed)
-             (equal (nth 3 last-input-event) "load-finished")
-             (eq (car +md-preview--cover) xwidget))
-    ;; A moment for WebKit to paint it.
-    (run-at-time 0.05 nil #'+md-preview--uncover xwidget)))
+(define-derived-mode +md-preview-page-mode +my/webkit-mode "Preview"
+  "A Markdown buffer's live preview, in WebKit (see `+md-preview-mode').
+
+\\{+md-preview-page-mode-map}"
+  (setq-local +my/webkit-url-function #'+md-preview--url
+              +my/webkit-background #'+md-preview--page-color
+              +my/webkit-link-function #'+md-preview--follow)
+  (add-hook '+my/webkit-load-functions #'+md-preview--loaded nil t)
+  ;; What the views don't cover, in the page's colour.
+  (face-remap-add-relative 'default :background (+md-preview--page-color))
+  (add-hook 'kill-buffer-hook #'+md-preview--closed-h nil t))
+
+(after! evil
+  (evil-set-initial-state '+md-preview-page-mode 'normal))
+
+(defvar +my/focus-new-windows)          ; config/window.el
+
+(defun +md-preview--off-h ()
+  "The Markdown buffer killed: its preview goes too."
+  (+md-preview-mode -1))
 
 (define-minor-mode +md-preview-mode
-  "Live, cursor-following markdown preview in an xwidget WebKit side window."
+  "Live, cursor-following markdown preview in a WebKit pane beside the file."
   :lighter " MdPrev"
   (if +md-preview-mode
       (let ((src (current-buffer))
-            (file (make-temp-file "md-preview-" nil ".html")))
-        (require 'xwidget)
-        (with-temp-file file
-          (insert (with-current-buffer src (+md-preview--page (+md-preview--fragment)))))
-        (setq +md-preview--file file)
-        ;; The preview's window first, beside the file, covered (see NO WHITE
-        ;; FLASH), then WebKit in it: made elsewhere and shown there after, its
-        ;; page never answered (or said it had loaded). The cursor stays in the
-        ;; Markdown buffer: the preview follows it. Half of the file's window
-        ;; (a float would be half the frame's: in a narrow window the file was
-        ;; left a few columns).
-        (let* ((+my/focus-new-windows nil)
-               (window (display-buffer
-                        (get-buffer-create " *md-preview*")
-                        `(display-buffer-in-direction
-                          (direction . right)
-                          (window-width . ,(/ (window-total-width) 2))))))
-          (+md-preview--cover-window window)
-          (with-selected-window window
-            (xwidget-webkit-browse-url (concat "file://" file) t))
-          (setq +md-preview--xwidget
-                (with-current-buffer xwidget-webkit-last-session-buffer
-                  ;; Its tab's name: the page's title, `Preview: FILE' (it was
-                  ;; made from the placeholder's, hidden, then
-                  ;; `*xwidget-webkit: ...*').
-                  (setq-local xwidget-webkit-buffer-name-format "%T")
-                  (rename-buffer (format "Preview: %s" (buffer-name src)) t)
-                  ;; The tab bar, which skipped the buffer: named like its
-                  ;; placeholder at first, starting with a space.
-                  (when (bound-and-true-p global-tab-line-mode)
-                    (tab-line-mode 1))
-                  ;; No "WebKit: TITLE" row: the tab says it.
-                  (setq-local header-line-format nil)
-                  ;; The pane filled with the page, edge to edge: no fringes,
-                  ;; WebKit's view as big as the window (it keeps the size it
-                  ;; was made with), and what it doesn't cover in its colour.
-                  (setq-local left-fringe-width 0
-                              right-fringe-width 0)
-                  (face-remap-add-relative 'default :background (+md-preview--page-color))
-                  (add-hook 'window-size-change-functions #'+md-preview--fit-h nil t)
-                  (xwidget-webkit-current-session)))
-          (set-window-fringes window 0 0)
-          (+md-preview--fit-h window)
-          (+md-preview--watch +md-preview--xwidget))
+            (preview (generate-new-buffer (format "Preview: %s" (buffer-name)))))
+        (setq +md-preview--file (make-temp-file "md-preview-" nil ".html")
+              +md-preview--buffer preview)
+        (with-current-buffer preview
+          (+md-preview-page-mode)
+          (setq +md-preview--source src))
+        ;; Beside the file, half its window's width (a float would be half the
+        ;; frame's: in a narrow window the file was left a few columns). The
+        ;; cursor stays in the Markdown buffer: the preview follows it.
+        (let ((+my/focus-new-windows nil))
+          (display-buffer preview
+                          `(display-buffer-in-direction
+                            (direction . right)
+                            (window-width . ,(/ (window-total-width) 2)))))
         (add-hook 'after-change-functions #'+md-preview--after-change-h nil t)
         (add-hook 'post-command-hook #'+md-preview--post-command-h nil t)
-        (add-hook 'kill-buffer-hook (lambda () (+md-preview-mode -1)) nil t)
-        (run-with-timer 0.6 nil (lambda (b) (when (buffer-live-p b)
-                                              (with-current-buffer b (+md-preview--scroll))))
-                        src))
-    (when +md-preview--xwidget
-      (+md-preview--uncover +md-preview--xwidget))
+        (add-hook 'kill-buffer-hook #'+md-preview--off-h nil t))
     (remove-hook 'after-change-functions #'+md-preview--after-change-h t)
     (remove-hook 'post-command-hook #'+md-preview--post-command-h t)
+    (remove-hook 'kill-buffer-hook #'+md-preview--off-h t)
     (when (timerp +md-preview--timer) (cancel-timer +md-preview--timer))
     (when (+md-preview--live-p)
-      (let ((buf (xwidget-buffer +md-preview--xwidget)))
-        (when (buffer-live-p buf)
-          (mapc #'delete-window (get-buffer-window-list buf nil t))
-          (let ((kill-buffer-query-functions nil)) (kill-buffer buf)))))
+      (let ((preview +md-preview--buffer))
+        (setq +md-preview--buffer nil)
+        (dolist (window (get-buffer-window-list preview nil t))
+          ;; The frame's only window: it shows another buffer once the
+          ;; preview is gone.
+          (ignore-errors (delete-window window)))
+        (let ((kill-buffer-query-functions nil))
+          (kill-buffer preview))))
     (when (and +md-preview--file (file-exists-p +md-preview--file))
       (delete-file +md-preview--file))
-    (setq +md-preview--xwidget nil +md-preview--file nil +md-preview--line nil)))
+    (setq +md-preview--file nil +md-preview--line nil)))
 
 (defun +my/markdown-preview-live-p ()
   "Non-nil if the live preview works here (GUI, xwidgets, pandoc)."
-  (and (display-graphic-p) (featurep 'xwidget-internal)
-       (executable-find "pandoc")))
+  (and (+my/webkit-p) (executable-find "pandoc")))
 
 (defun +my/markdown-preview-toggle ()
   "SPC m p: live preview in Emacs (WebKit in GUI, eww in a terminal)."

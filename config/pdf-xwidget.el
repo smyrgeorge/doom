@@ -43,8 +43,10 @@
 ;; sidebar and dark pages as the last one; the variables below are for the
 ;; first one. The mode line shows its page (P3/12).
 ;; Split (SPC w v, SPC w SPC, the tab's menu...), each pane shows the PDF on
-;; its own: scrolled, zoomed and searched apart, its page in its mode line
-;; (see VIEWS).
+;; its own: scrolled, zoomed and searched apart, its page in its mode line (a
+;; WebKit view per window, see VIEWS in config/webkit.el). Keys act on the
+;; selected pane; the settings (dark pages, the toolbar, the sidebar), Esc and
+;; reverts on all of the PDF's.
 ;; The page can't call Emacs: it says its settings, page and place, the mouse
 ;; pointer it wants and the toolbar's requests (Preview, print) in its title,
 ;; which Emacs reads every 0.1 s, without JavaScript, while a PDF is on screen.
@@ -59,8 +61,9 @@
 ;; Without it (e.g. offline), WebKit's own viewer: trackpad only. In a
 ;; terminal, or an Emacs without xwidgets: doc-view, Emacs's own viewer.
 ;; JavaScript runs without waiting for answers, except the selection (y,
-;; Cmd+C, Option+Enter) and the outline (o): closing a WebKit view while an
-;; answer was pending crashed Emacs (see config/markdown.el).
+;; Cmd+C, Option+Enter) and the outline (o) (see JAVASCRIPT in
+;; config/webkit.el, which has what WebKit pages share: a view per window, no
+;; white flash, links out, the title read, the pointer, clicks).
 (defvar +my/pdf-xwidget-toolbar t
   "Show the toolbar in the first PDF opened (see above).")
 
@@ -110,7 +113,7 @@
       "s-+"      #'+my/pdf-xwidget-zoom-in
       "s--"      #'+my/pdf-xwidget-zoom-out
       "s-0"      #'+my/pdf-xwidget-actual-size
-      "s-c"      #'+my/pdf-xwidget-copy
+      "s-c"      #'+my/webkit-copy
       "s-["      #'+my/pdf-xwidget-back
       "s-]"      #'+my/pdf-xwidget-forward
       "s-p"      #'+my/pdf-xwidget-print
@@ -142,7 +145,7 @@
       :nm "?"       #'+my/pdf-xwidget-search-backward
       :nm "n"       #'+my/pdf-xwidget-search-next
       :nm "N"       #'+my/pdf-xwidget-search-previous
-      :nm "y"       #'+my/pdf-xwidget-copy
+      :nm "y"       #'+my/webkit-copy
       :nm "+"       #'+my/pdf-xwidget-zoom-in
       :nm "="       #'+my/pdf-xwidget-zoom-in
       :nm "-"       #'+my/pdf-xwidget-zoom-out
@@ -150,17 +153,10 @@
       :nm "P"       #'+my/pdf-xwidget-fit-page
       :nm "o"       #'+my/pdf-xwidget-outline
       :nm "O"       #'+my/pdf-xwidget-toggle-sidebar
-      :gnm "q"      #'kill-current-buffer    ; as Doom's pdf-tools did
-      ;; Clicks are WebKit's (selecting text, links): Emacs only selects the
-      ;; window, instead of starting a selection of its own (Evil's visual
-      ;; state, where the keys above don't apply).
-      :gnmv [down-mouse-1]        #'+my/pdf-xwidget-mouse-select
-      :gnmv [mouse-1]             #'ignore
-      :gnmv [drag-mouse-1]        #'ignore
-      :gnmv [double-down-mouse-1] #'ignore
-      :gnmv [double-mouse-1]      #'ignore
-      :gnmv [triple-down-mouse-1] #'ignore
-      :gnmv [triple-mouse-1]      #'ignore)
+      :gnm "q"      #'kill-current-buffer)  ; as Doom's pdf-tools did
+
+;; Clicks are WebKit's: Emacs only selects the window (config/webkit.el).
+(+my/webkit-bind-clicks +my/pdf-xwidget-mode-map)
 
 (map! :map +my/pdf-xwidget-mode-map
       :localleader
@@ -173,10 +169,6 @@
 
 ;; ====== CODE ======
 
-(defvar-local +my/pdf-xwidget--views nil
-  "This PDF's WebKit views, overlays, the one latest looked at first (see
-VIEWS).")
-
 (defvar-local +my/pdf-xwidget--dir nil
   "The page's folder: index.html and the PDF's data, as base64.")
 
@@ -187,10 +179,7 @@ VIEWS).")
   "Non-nil if WebKit's own viewer shows the PDF (no PDF.js).")
 
 (defvar-local +my/pdf-xwidget--home nil
-  "The URL WebKit was given: anywhere else is a link out of the PDF.")
-
-(defvar-local +my/pdf-xwidget--followed nil
-  "(URL . TIME): the link out of the PDF last opened in the browser.")
+  "The page's URL (see `+my/pdf-xwidget--url').")
 
 (defvar-local +my/pdf-xwidget--searching nil
   "Non-nil while a search shows its matches (Esc ends it).")
@@ -235,7 +224,7 @@ name (JSON).")
   "Non-nil if this buffer's PDF can show in WebKit: a local file, in the GUI,
 in an Emacs with xwidgets."
   (and buffer-file-name (not (file-remote-p buffer-file-name))
-       (display-graphic-p) (featurep 'xwidget-internal)))
+       (+my/webkit-p)))
 
 (defun +my/pdf-xwidget-mode-maybe ()
   "PDFs' major mode: WebKit where it works, doc-view otherwise (see above)."
@@ -295,12 +284,6 @@ in an Emacs with xwidgets."
                nil))))
 
 ;; THE PAGE (see config/pdf-xwidget.js)
-(defun +my/pdf-xwidget--file-url (file)
-  "FILE's file:// URL. Spaces and such encoded: Emacs's macOS WebKit doesn't
-check that a URL is valid."
-  (require 'url-util)
-  (concat "file://" (url-hexify-string (expand-file-name file) url-path-allowed-chars)))
-
 (defun +my/pdf-xwidget--write-data ()
   "Write the PDF, as base64, to the page's next data-N.js; return its name."
   (let* ((name (format "data-%d.js" (setq +my/pdf-xwidget--data (1+ +my/pdf-xwidget--data))))
@@ -345,14 +328,9 @@ names), FALLBACK without one."
 ;; page says them, and its page, in its title: "pdfx {json}".
 (defun +my/pdf-xwidget--state (&optional xwidget)
   "XWIDGET's page's settings and page (default: this buffer's view, see
-`+my/pdf-xwidget--xwidget'), a plist (:dark :toolbar :sidebar :view :outline
+`+my/webkit-xwidget'), a plist (:dark :toolbar :sidebar :view :outline
 :page :pages :place :cursor :action), or nil before it has said them."
-  (when-let* ((xwidget (or xwidget (+my/pdf-xwidget--xwidget)))
-              (title (ignore-errors (xwidget-webkit-title xwidget)))
-              ((string-prefix-p "pdfx " title)))
-    (ignore-errors
-      (json-parse-string (substring title 5) :object-type 'plist
-                         :false-object nil :null-object nil))))
+  (+my/webkit-title-json (or xwidget (+my/webkit-xwidget)) "pdfx "))
 
 (defun +my/pdf-xwidget--options ()
   "The settings a page starts with (JSON): this PDF's (a page written anew,
@@ -428,19 +406,9 @@ PLACES)."
 
 ;; WATCHING THE PAGES ON SCREEN
 ;; Every 0.1 s, for each window showing a PDF, from its view's title (no
-;; JavaScript): its page in the window's mode line, the toolbar's requests,
-;; and the mouse pointer.
-;; Emacs draws its own pointer over the page, the text I-beam everywhere, so
-;; CSS cursors never show (WebKit's hand over a button): the page says which
-;; one it wants under the mouse (hand: buttons, headings, thumbnails, links;
-;; text: the PDF's text; arrow), which goes into the `pointer' text property
-;; under the page, which Emacs's pointer follows after the redisplay that
-;; brings.
-(defvar-local +my/pdf-xwidget--pointer nil
-  "The pointer shape the page's text has (see above).")
-
-(defvar +my/pdf-xwidget--watch-timer nil)
-
+;; JavaScript, see WATCHING in config/webkit.el): its page in the window's
+;; mode line, the toolbar's requests, and the mouse pointer the page wants
+;; (hand: buttons, headings, thumbnails, links; text: the PDF's text; arrow).
 (defun +my/pdf-xwidget--show-page (window state)
   "The page of STATE in WINDOW's mode line (doom-modeline's PDF line, through
 `+my/pdf-xwidget--page')."
@@ -475,37 +443,14 @@ window's view has its own). The window is the selected one meanwhile."
           ("preview" (+my/pdf-xwidget-open-in-preview))
           ("print" (+my/pdf-xwidget-print)))))))
 
-(defun +my/pdf-xwidget--point (state)
-  "Give the pointer over the page the shape STATE wants (see above)."
-  (let ((shape (pcase (plist-get state :cursor)
-                 ("hand" 'hand) ("text" 'text) (_ 'arrow))))
-    (unless (eq shape +my/pdf-xwidget--pointer)
-      (setq +my/pdf-xwidget--pointer shape)
-      (with-silent-modifications
-        (put-text-property (point-min) (point-max) 'pointer shape)))))
-
-(defun +my/pdf-xwidget--watch ()
-  "Watch the PDFs on screen (see above); stop once no PDF is open."
-  (if (not (seq-some (lambda (buffer)
-                       (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode))
-                     (buffer-list)))
-      (progn (cancel-timer +my/pdf-xwidget--watch-timer)
-             (setq +my/pdf-xwidget--watch-timer nil))
-    (let* ((mouse (mouse-pixel-position))
-           (under (and (frame-live-p (car mouse)) (numberp (cadr mouse))
-                       (window-at-x-y (cadr mouse) (cddr mouse) (car mouse)))))
-      (dolist (window (window-list-1 nil 'nomini 'visible))
-        (let ((buffer (window-buffer window)))
-          (when (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode)
-            (with-current-buffer buffer
-              (when (eq window (selected-window))
-                (+my/pdf-xwidget--looked-at window))
-              (when-let* ((xwidget (+my/pdf-xwidget--xwidget window))
-                          (state (+my/pdf-xwidget--state xwidget)))
-                (+my/pdf-xwidget--show-page window state)
-                (+my/pdf-xwidget--answer xwidget state)
-                (when (eq window under)
-                  (+my/pdf-xwidget--point state))))))))))
+(defun +my/pdf-xwidget--watch (window xwidget)
+  "WINDOW shows XWIDGET's view of the PDF: its page, the toolbar's requests,
+the pointer (see above)."
+  (when-let* ((state (+my/pdf-xwidget--state xwidget)))
+    (+my/pdf-xwidget--show-page window state)
+    (+my/pdf-xwidget--answer xwidget state)
+    (+my/webkit-pointer window (pcase (plist-get state :cursor)
+                                 ("hand" 'hand) ("text" 'text) (_ 'arrow)))))
 
 (defun +my/pdf-xwidget--write-page (data)
   "Write the page's index.html, reading the PDF from DATA (a data-N.js)."
@@ -516,8 +461,8 @@ window's view has its own). The window is the selected one meanwhile."
                  (?c . ,(if (eq (frame-parameter nil 'background-mode) 'light) "light" "dark"))
                  (?v . ,(+my/pdf-xwidget--css-variables))
                  (?o . ,(+my/pdf-xwidget--options))
-                 (?p . ,(+my/pdf-xwidget--file-url (file-name-as-directory +my/pdf-js-dir)))
-                 (?j . ,(+my/pdf-xwidget--file-url
+                 (?p . ,(+my/webkit-file-url (file-name-as-directory +my/pdf-js-dir)))
+                 (?j . ,(+my/webkit-file-url
                          (expand-file-name "config/pdf-xwidget.js" doom-user-dir)))
                  (?d . ,(json-encode data))))))
     (with-temp-file (expand-file-name "index.html" +my/pdf-xwidget--dir)
@@ -528,273 +473,35 @@ window's view has its own). The window is the selected one meanwhile."
 PDF.js, the PDF's own (WebKit's viewer)."
   (if (not (+my/pdf-js-ensure))
       (progn (setq +my/pdf-xwidget--native t)
-             (+my/pdf-xwidget--file-url buffer-file-name))
+             (+my/webkit-file-url buffer-file-name))
     (setq +my/pdf-xwidget--native nil
           +my/pdf-xwidget--dir (make-temp-file "pdf-xwidget-" t)
           +my/pdf-xwidget--data 0)
     (+my/pdf-xwidget--write-page (+my/pdf-xwidget--write-data))
-    (+my/pdf-xwidget--file-url (expand-file-name "index.html" +my/pdf-xwidget--dir))))
+    (+my/webkit-file-url (expand-file-name "index.html" +my/pdf-xwidget--dir))))
 
-;; VIEWS
-;; A WebKit view is drawn in one window only: on macOS, Emacs says "You can't
-;; share an xwidget (webkit2) among windows" and leaves the others empty. So
-;; each window showing the PDF has a view of its own (a page of its own,
-;; PDF.js and all), shown in that window alone by an overlay over the buffer
-;; whose `window' property is that window (as doc-view and pdf-tools show a
-;; page per window): split, both panes show the PDF, scrolled apart. A new
-;; window's view starts where the PDF shows in the view latest looked at, with
-;; its settings. A window gets the view of a closed window first (the panes
-;; tiling lays out anew, a workspace switched back to), else of a window
-;; showing another buffer, else a new one: a window that shows another buffer
-;; keeps its view for when it shows the PDF again (a tab away and back) only
-;; while no other window needs it. A second after windows come or go, views of
-;; closed windows are closed, but for the PDF's last one (for its next window).
-;; Commands act on the selected window's view; the settings (dark pages, the
-;; toolbar, the sidebar), Esc and reverts on all of the PDF's.
-(defun +my/pdf-xwidget--view-xwidget (view)
-  "VIEW's xwidget, while it's open: closed, its overlay is out of the buffer
-(`xwidget-live-p' stays t for a killed xwidget, in Emacs 31 on macOS)."
-  (and (overlay-buffer view) (overlay-get view '+my/pdf-xwidget)))
-
-(defun +my/pdf-xwidget--view (window)
-  "This buffer's view (an overlay) for WINDOW, if it has one open."
-  (seq-find (lambda (view)
-              (and (eq (overlay-get view 'window) window)
-                   (+my/pdf-xwidget--view-xwidget view)))
-            +my/pdf-xwidget--views))
-
-(defun +my/pdf-xwidget--xwidget (&optional window)
-  "This buffer's WebKit view for WINDOW; without WINDOW, the selected
-window's, else the one latest looked at. Nil before there's one."
-  (when-let* ((view (if window
-                        (+my/pdf-xwidget--view window)
-                      (or (+my/pdf-xwidget--view (selected-window))
-                          (seq-find #'+my/pdf-xwidget--view-xwidget
-                                    +my/pdf-xwidget--views)))))
-    (+my/pdf-xwidget--view-xwidget view)))
-
-(defun +my/pdf-xwidget--xwidgets ()
-  "This buffer's WebKit views, all of them."
-  (delq nil (mapcar #'+my/pdf-xwidget--view-xwidget +my/pdf-xwidget--views)))
-
-(defun +my/pdf-xwidget--looked-at (window)
-  "WINDOW's view first: the one latest looked at (see above)."
-  (when-let* ((view (+my/pdf-xwidget--view window)))
-    (unless (eq view (car +my/pdf-xwidget--views))
-      (setq +my/pdf-xwidget--views (cons view (delq view +my/pdf-xwidget--views))))))
-
-(defun +my/pdf-xwidget--close (view)
-  "Close VIEW: its xwidget, its overlay (see above)."
-  (when-let* ((xwidget (+my/pdf-xwidget--view-xwidget view)))
-    (+my/pdf-xwidget--uncover xwidget)
-    (when (xwidget-live-p xwidget)
-      (kill-xwidget xwidget)))
-  (delete-overlay view))
-
-(defvar +my/pdf-xwidget--tidy-timer nil)
-
-(defun +my/pdf-xwidget--tidy ()
-  "Close the views of closed windows, but for each PDF's last (see above)."
-  (setq +my/pdf-xwidget--tidy-timer nil)
-  (dolist (buffer (buffer-list))
-    (when (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode)
-      (with-current-buffer buffer
-        (let* ((open (seq-filter #'+my/pdf-xwidget--view-xwidget +my/pdf-xwidget--views))
-               (closed (seq-remove (lambda (view) (window-live-p (overlay-get view 'window)))
-                                   open))
-               ;; All closed: the latest looked at stays, for the next window.
-               (kept (and (= (length closed) (length open)) (car open))))
-          (dolist (view +my/pdf-xwidget--views)
-            (when (or (not (memq view open))
-                      (and (memq view closed) (not (eq view kept))))
-              (+my/pdf-xwidget--close view)))
-          (setq +my/pdf-xwidget--views (seq-filter #'overlay-buffer +my/pdf-xwidget--views)))))))
-
-(defun +my/pdf-xwidget--tidy-h (_frame)
-  "Windows came or went: close the views of closed windows in a second (see
-above), not at once: an answer may still be on its way (see the top)."
-  (when (and +my/pdf-xwidget--watch-timer (not +my/pdf-xwidget--tidy-timer))
-    (setq +my/pdf-xwidget--tidy-timer (run-at-time 1 nil #'+my/pdf-xwidget--tidy))))
-
-(add-hook 'window-buffer-change-functions #'+my/pdf-xwidget--tidy-h)
-
-(defun +my/pdf-xwidget--js (script &optional all)
-  "Run SCRIPT in the selected window's page (ALL: in each of the PDF's views),
-not waiting for an answer (see above)."
-  (let ((xwidgets (if all
-                      (+my/pdf-xwidget--xwidgets)
-                    (ensure-list (+my/pdf-xwidget--xwidget)))))
-    (cond ((not xwidgets))
-          (+my/pdf-xwidget--native
-           (message "No PDF.js here: M-x +my/pdf-js-install, then open the PDF again"))
-          ;; `void': nothing comes back (a Promise, say, made WebKit log an
-          ;; error about its type).
-          (t (dolist (xwidget xwidgets)
-               (xwidget-webkit-execute-script
-                xwidget (concat "window.pdfx && void pdfx." script)))))))
-
-;; NO WHITE FLASH
-;; WebKit's view is white until its page has loaded. A view only starts once
-;; its window shows the PDF (nothing shown until then, in the theme's colour),
-;; under a borderless frame in the theme's background colour, like the
-;; Markdown preview's: it goes once WebKit says the page has loaded, or after
-;; 2 s. The page is in the theme's colour too, around the pages.
-(defun +my/pdf-xwidget--uncover (xwidget)
-  "Take the cover off XWIDGET's view."
-  (when-let* ((cover (xwidget-get xwidget 'cover)))
-    (xwidget-put xwidget 'cover nil)
-    (when (timerp (cdr cover)) (cancel-timer (cdr cover)))
-    (+my/banner--delete-frame (car cover))))
-
-(defun +my/pdf-xwidget--cover (window xwidget)
-  "Cover WINDOW's text area in the theme's background colour while XWIDGET
-loads there (see above)."
-  (when (fboundp '+my/banner--make-frame)
-    (let ((frame (+my/banner--make-frame (window-frame window)))
-          (edges (window-inside-pixel-edges window))
-          (frame-resize-pixelwise t))
-      (set-frame-parameter frame 'background-color (face-background 'default nil t))
-      (set-frame-size frame (- (nth 2 edges) (nth 0 edges))
-                      (- (nth 3 edges) (nth 1 edges)) t)
-      (set-frame-position frame (nth 0 edges) (nth 1 edges))
-      (make-frame-visible frame)
-      (xwidget-put xwidget 'cover
-                   (cons frame (run-at-time 2 nil #'+my/pdf-xwidget--uncover xwidget))))))
-
-;; LINKS OUT OF THE PDF
-;; PDF.js makes them plain links: WebKit would leave the PDF for the page.
-;; Its first step (load-started) is stopped and the link opened in the
-;; browser; had it gone further, WebKit goes back to the PDF.
-(defun +my/pdf-xwidget--url-file (url)
-  "The file a file:// URL names."
-  (require 'url-parse)
-  (decode-coding-string (url-unhex-string (url-filename (url-generic-parse-url url)))
-                        'utf-8))
-
-(defun +my/pdf-xwidget--elsewhere-p (url)
-  "Non-nil if WebKit at URL has left the PDF's page (by the file, not the URL
-text: WebKit may encode it otherwise)."
-  (and (stringp url) +my/pdf-xwidget--home
-       (or (string-match-p "\\`\\(?:https?\\|ftp\\|mailto\\):" url)
-           (and (string-prefix-p "file:" url)
-                (not (equal (file-truename (+my/pdf-xwidget--url-file url))
-                            (file-truename (+my/pdf-xwidget--url-file
-                                            +my/pdf-xwidget--home))))))))
-
-(defun +my/pdf-xwidget--link-out (xwidget url status)
-  "WebKit is following a link out of the PDF, to URL (see above)."
-  (unless (and (equal (car +my/pdf-xwidget--followed) url)
-               (< (float-time (time-since (cdr +my/pdf-xwidget--followed))) 5))
-    (setq +my/pdf-xwidget--followed (cons url (current-time)))
-    (browse-url url))
-  (if (equal status "load-started")
-      (ignore-errors (xwidget-webkit-stop-loading xwidget))
-    (when (equal status "load-committed")
-      (xwidget-webkit-goto-history xwidget -1))))
-
-(defun +my/pdf-xwidget--callback (xwidget event-type)
-  "WebKit's events: the page has loaded (see NO WHITE FLASH), links out of
-the PDF (see above); others as usual (not `xwidget-webkit-callback' for loads:
-it renames the buffer after the page)."
-  (let ((buffer (xwidget-buffer xwidget)))
-    (cond ((not (eq event-type 'load-changed))
-           (xwidget-webkit-callback xwidget event-type))
-          ((buffer-live-p buffer)
-           (with-current-buffer buffer
-             (let ((status (nth 3 last-input-event))
-                   (url (xwidget-webkit-uri xwidget)))
-               (cond ((+my/pdf-xwidget--elsewhere-p url)
-                      (+my/pdf-xwidget--link-out xwidget url status))
-                     ((equal status "load-finished")
-                      ;; A moment for WebKit to paint it.
-                      (run-at-time 0.05 nil #'+my/pdf-xwidget--uncover xwidget)))))))))
-
-(defun +my/pdf-xwidget--new-view (window)
-  "Open a WebKit view of the PDF for WINDOW, covered while it loads; it starts
-as the view latest looked at is (see VIEWS)."
-  ;; First, as it may download PDF.js (the cover only lasts 2 s).
+(defun +my/pdf-xwidget--url (_window)
+  "The page a new view of the PDF loads (see VIEWS in config/webkit.el): made
+the first time; written anew after, to start as the view latest looked at is
+(settings, place)."
   (cond ((not +my/pdf-xwidget--home)
          (setq +my/pdf-xwidget--home (+my/pdf-xwidget--page-url)))
         ((not +my/pdf-xwidget--native)
-         ;; Written anew: settings and place as the other view's.
          (+my/pdf-xwidget--write-page (format "data-%d.js" +my/pdf-xwidget--data))))
-  (let ((xwidget (make-xwidget 'webkit (buffer-name)
-                               (xwidget-window-inside-pixel-width window)
-                               (xwidget-window-inside-pixel-height window)
-                               nil (current-buffer)))
-        (view (make-overlay (point-min) (point-max))))
-    ;; Closing the tab doesn't ask "Buffer has xwidgets; kill it?".
-    (set-xwidget-query-on-exit-flag xwidget nil)
-    (xwidget-put xwidget 'callback #'+my/pdf-xwidget--callback)
-    ;; The number of the toolbar's last request seen (see WATCHING).
-    (xwidget-put xwidget 'answered 0)
-    (overlay-put view '+my/pdf-xwidget xwidget)
-    (overlay-put view 'window window)
-    (overlay-put view 'display (list 'xwidget :xwidget xwidget))
-    ;; Last: the one latest looked at stays first until this one is.
-    (setq +my/pdf-xwidget--views (append +my/pdf-xwidget--views (list view)))
-    (+my/pdf-xwidget--cover window xwidget)
-    (xwidget-webkit-goto-uri xwidget +my/pdf-xwidget--home)))
+  +my/pdf-xwidget--home)
 
-(defun +my/pdf-xwidget--start (buffer window)
-  "Give WINDOW a view of BUFFER's PDF if it still shows it: a spare one, else
-a new one (see VIEWS)."
-  (when (and (buffer-live-p buffer) (window-live-p window)
-             (eq (window-buffer window) buffer))
-    (with-current-buffer buffer
-      (when (and (derived-mode-p '+my/pdf-xwidget-mode)
-                 (not (+my/pdf-xwidget--view window)))
-        ;; Edge to edge: no fringes (also buffer-local, for other windows).
-        (set-window-fringes window 0 0)
-        (let* ((open (seq-filter #'+my/pdf-xwidget--view-xwidget +my/pdf-xwidget--views))
-               (spare (or (seq-find (lambda (view)
-                                      (not (window-live-p (overlay-get view 'window))))
-                                    open)
-                          (seq-find (lambda (view)
-                                      (not (eq (window-buffer (overlay-get view 'window))
-                                               buffer)))
-                                    open))))
-          (if (not spare)
-              (+my/pdf-xwidget--new-view window)
-            (overlay-put spare 'window window)
-            (xwidget-webkit-adjust-size-to-window
-             (+my/pdf-xwidget--view-xwidget spare) window)))
-        (unless (timerp +my/pdf-xwidget--watch-timer)
-          (setq +my/pdf-xwidget--watch-timer
-                (run-with-timer 0.1 0.1 #'+my/pdf-xwidget--watch)))))))
-
-(defun +my/pdf-xwidget--fit-h (window)
-  "Make WINDOW's WebKit view as big as it (a view keeps the size it was made
-with)."
-  (with-current-buffer (window-buffer window)
-    (when-let* ((xwidget (+my/pdf-xwidget--xwidget window)))
-      (xwidget-webkit-adjust-size-to-window xwidget window))))
-
-(defun +my/pdf-xwidget--shown-h (window)
-  "WINDOW shows the PDF: its view, fitted to it; or one for it after this
-redisplay (the cover is a frame, not made during redisplay; see VIEWS)."
-  (with-current-buffer (window-buffer window)
-    (if (+my/pdf-xwidget--view window)
-        (+my/pdf-xwidget--fit-h window)
-      (run-at-time 0 nil #'+my/pdf-xwidget--start (current-buffer) window))))
-
-(defun +my/pdf-xwidget--home-h ()
-  "Keep point and the window's start at the buffer's start, where WebKit is:
-moved, the window scrolled it away."
-  (unless (= (point) (point-min))
-    (goto-char (point-min)))
-  (unless (or (not (eq (window-buffer) (current-buffer)))
-              (= (window-start) (point-min)))
-    (set-window-start nil (point-min))))
+(defun +my/pdf-xwidget--js (script &optional all)
+  "Run pdfx.SCRIPT in the selected window's page (ALL: in each of the PDF's
+views), not waiting for an answer (see above)."
+  (cond ((not (+my/webkit-xwidget)))
+        (+my/pdf-xwidget--native
+         (message "No PDF.js here: M-x +my/pdf-js-install, then open the PDF again"))
+        (t (+my/webkit-execute (concat "window.pdfx && pdfx." script) all))))
 
 (defun +my/pdf-xwidget--stop ()
-  "Close this buffer's WebKit views and their page (another mode, the buffer
-killed)."
+  "Keep the PDF's place, delete its page's folder (another mode, the buffer
+killed); its views close after (config/webkit.el)."
   (+my/pdf-xwidget--remember)
-  (mapc #'+my/pdf-xwidget--close +my/pdf-xwidget--views)
-  (setq +my/pdf-xwidget--views nil)
-  (with-silent-modifications
-    (remove-text-properties (point-min) (point-max) '(display nil)))
   (when (and +my/pdf-xwidget--dir (file-directory-p +my/pdf-xwidget--dir))
     (delete-directory +my/pdf-xwidget--dir t))
   (setq +my/pdf-xwidget--dir nil))
@@ -813,7 +520,7 @@ killed)."
 (defun +my/pdf-xwidget--revert (&rest _)
   "Show the PDF anew from its file, where it was (see above)."
   (set-visited-file-modtime)
-  (when-let* ((xwidgets (+my/pdf-xwidget--xwidgets)))
+  (when-let* ((xwidgets (+my/webkit-xwidgets)))
     (if (or +my/pdf-xwidget--native (not +my/pdf-xwidget--dir))
         (dolist (xwidget xwidgets)
           (xwidget-webkit-goto-uri xwidget +my/pdf-xwidget--home))
@@ -824,13 +531,6 @@ killed)."
         (+my/pdf-xwidget--js (format "reload(%s)" (json-encode data)) t)))))
 
 ;; COMMANDS (see above)
-(defun +my/pdf-xwidget-mouse-select (event)
-  "A click on the PDF: select its window (the click itself is WebKit's)."
-  (interactive "e")
-  (let ((window (posn-window (event-start event))))
-    (when (window-live-p window)
-      (select-window window))))
-
 (defun +my/pdf-xwidget--scroll (dx dy)
   (+my/pdf-xwidget--js (format "scroll(%d, %d)" dx dy)))
 
@@ -949,29 +649,11 @@ BACKWARD (?) towards its start. Esc ends the search."
 
 (add-hook 'doom-escape-hook #'+my/pdf-xwidget--escape-h)
 
-(defun +my/pdf-xwidget--copied (text)
-  "Put TEXT, the PDF's selection, in the kill ring (and the clipboard)."
-  (if (and (stringp text) (not (string-blank-p text)))
-      (progn (kill-new text)
-             (message "Copied %d characters" (length text)))
-    (message "No text selected")))
-
-(defun +my/pdf-xwidget-copy ()
-  "y / Cmd+C: copy the text selected in the PDF."
-  (interactive)
-  (when-let* ((xwidget (+my/pdf-xwidget--xwidget)))
-    ;; The one call waiting for an answer (see above). Its function is a
-    ;; symbol: nothing on the macOS side keeps it from the garbage collector
-    ;; until WebKit answers, and a closure could be gone by then.
-    (xwidget-webkit-execute-script
-     xwidget "window.pdfx ? pdfx.selection() : String(window.getSelection())"
-     #'+my/pdf-xwidget--copied)))
-
 (defun +my/pdf-xwidget--toggle (setting name)
   "Turn the page's SETTING (\"dark\", \"toolbar\", \"sidebar\") on or off,
 as the selected window's is, in all of the PDF's views (see VIEWS), and say so,
 NAME being what it is; return whether it's on."
-  (if (or (not (+my/pdf-xwidget--xwidget)) +my/pdf-xwidget--native)
+  (if (or (not (+my/webkit-xwidget)) +my/pdf-xwidget--native)
       (progn (message "No PDF.js here: M-x +my/pdf-js-install, then open the PDF again")
              nil)
     (let ((on (not (plist-get (+my/pdf-xwidget--state) (intern (concat ":" setting))))))
@@ -1037,13 +719,11 @@ Emacs control Preview)."
 (defun +my/pdf-xwidget-actions ()
   "Option+Enter: the actions menu, with the PDF's for its selected text."
   (interactive)
-  (let ((xwidget (+my/pdf-xwidget--xwidget)))
-    (setq +my/pdf-xwidget--actions-for (current-buffer))
-    (if (or (not xwidget) +my/pdf-xwidget--native)
-        (+my/pdf-xwidget--actions-menu (current-buffer) nil)
-      (xwidget-webkit-execute-script
-       xwidget "window.pdfx ? pdfx.selection() : ''"
-       #'+my/pdf-xwidget--selection-received))))
+  (setq +my/pdf-xwidget--actions-for (current-buffer))
+  (unless (and (not +my/pdf-xwidget--native)
+               (+my/webkit-ask "window.pdfx ? pdfx.selection() : ''"
+                               #'+my/pdf-xwidget--selection-received))
+    (+my/pdf-xwidget--actions-menu (current-buffer) nil)))
 
 (defun +my/pdf-xwidget--selection-received (text)
   "WebKit's answer to `+my/pdf-xwidget-actions': the menu after this event,
@@ -1079,7 +759,7 @@ always Preview and print."
           (buffer (current-buffer)))
       (append
        (when text
-         (list (list "PDF" "Copy" (lambda () (+my/pdf-xwidget--copied text)))
+         (list (list "PDF" "Copy" (lambda () (+my/webkit-copied text)))
                (list "PDF" "Search the PDF for it"
                      (lambda () (with-current-buffer buffer (+my/pdf-xwidget--find text))))
                (list "PDF" "Search the web for it"
@@ -1120,15 +800,12 @@ always Preview and print."
 (defun +my/pdf-xwidget-outline ()
   "o: go to a heading of the PDF's outline, picked in the minibuffer."
   (interactive)
-  (let ((xwidget (+my/pdf-xwidget--xwidget)))
-    (if (or (not xwidget) +my/pdf-xwidget--native)
-        (message "No outline here (no PDF.js)")
-      (setq +my/pdf-xwidget--outline-for (current-buffer))
-      ;; An answer awaited, its function a symbol, as for copying (see
-      ;; `+my/pdf-xwidget-copy').
-      (xwidget-webkit-execute-script
-       xwidget "window.pdfx ? pdfx.outlineList() : '[]'"
-       #'+my/pdf-xwidget--outline-received))))
+  (setq +my/pdf-xwidget--outline-for (current-buffer))
+  ;; An answer awaited (see JAVASCRIPT in config/webkit.el).
+  (unless (and (not +my/pdf-xwidget--native)
+               (+my/webkit-ask "window.pdfx ? pdfx.outlineList() : '[]'"
+                               #'+my/pdf-xwidget--outline-received))
+    (message "No outline here (no PDF.js)")))
 
 (defun +my/pdf-xwidget--outline-received (json)
   "WebKit's answer to `+my/pdf-xwidget-outline': the minibuffer after this
@@ -1204,35 +881,22 @@ event, not inside it."
   (interactive)
   (+my/pdf-xwidget--js "fit('page-fit')"))
 
-(define-derived-mode +my/pdf-xwidget-mode special-mode "PDF"
-  "A PDF in WebKit, drawn by PDF.js (see config/pdf-xwidget.el).
-The file's bytes stay in the buffer, unchanged: WebKit is shown over them.
+(define-derived-mode +my/pdf-xwidget-mode +my/webkit-mode "PDF"
+  "A PDF in WebKit, drawn by PDF.js (see config/pdf-xwidget.el), a view per
+window (config/webkit.el). The file's bytes stay in the buffer, unchanged:
+WebKit is shown over them.
 
 \\{+my/pdf-xwidget-mode-map}"
-  (require 'xwidget)
-  (setq-local buffer-read-only t
-              cursor-type nil
-              ;; (list nil): see Doom's pdf module, emacs-evil/evil#2016.
-              evil-normal-state-cursor (list nil)
-              evil-motion-state-cursor (list nil)
-              font-lock-defaults '(nil t)  ; nothing to colour in a PDF's bytes
-              left-fringe-width 0
-              right-fringe-width 0
+  (setq-local font-lock-defaults '(nil t)  ; nothing to colour in a PDF's bytes
               revert-buffer-function #'+my/pdf-xwidget--revert
+              +my/webkit-url-function #'+my/pdf-xwidget--url
+              +my/webkit-watch-function #'+my/pdf-xwidget--watch
+              +my/webkit-selection-script
+              "window.pdfx ? pdfx.selection() : String(window.getSelection())"
               ;; Each window's page (see WATCHING).
               doom-modeline--pdf-pages '(:eval (+my/pdf-xwidget--page)))
-  ;; Nothing shown but the windows' views (see VIEWS, NO WHITE FLASH).
-  (with-silent-modifications
-    (put-text-property (point-min) (point-max) 'display ""))
-  (add-hook 'window-buffer-change-functions #'+my/pdf-xwidget--shown-h nil t)
-  (add-hook 'window-size-change-functions #'+my/pdf-xwidget--fit-h nil t)
-  (add-hook 'post-command-hook #'+my/pdf-xwidget--home-h nil t)
   (add-hook 'change-major-mode-hook #'+my/pdf-xwidget--stop nil t)
-  (add-hook 'kill-buffer-hook #'+my/pdf-xwidget--stop nil t)
-  ;; Already on screen (the mode turned on in a shown buffer): no window will
-  ;; change buffer to start it.
-  (dolist (window (get-buffer-window-list nil 'nomini 'visible))
-    (+my/pdf-xwidget--shown-h window)))
+  (add-hook 'kill-buffer-hook #'+my/pdf-xwidget--stop nil t))
 
 ;; Evil keys (see above) in normal state.
 (after! evil

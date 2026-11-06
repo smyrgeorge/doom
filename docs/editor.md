@@ -182,7 +182,9 @@ searched apart, each mode line with its pane's page. A WebKit view is drawn in o
 own, starting where the PDF shows in the pane you came from. `SPC m d` / `SPC m t` / `O`, `Esc` and a reload from disk
 apply to all of the PDF's panes; the other keys to the selected one. A pane that shows another tab keeps its view
 for when it comes back (unless another pane needs one first); a closed pane's view goes a second later, but for the
-PDF's last one.
+PDF's last one. What a web page inside Emacs needs (a view per window, no white flash, links out, the title read every
+0.1 s, the mouse pointer, clicks) is in `config/webkit.el`, shared with the
+[Markdown preview](markdown.md#live-markdown-preview).
 
 The page can't call Emacs: it says its settings, page and place, the mouse pointer it wants, and the toolbar's requests
 (Preview, Print) in its title, which Emacs reads every 0.1 s, without JavaScript, while a PDF is on screen. The mouse

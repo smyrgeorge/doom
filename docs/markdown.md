@@ -13,6 +13,13 @@ buffer (only where the live preview works; `+my/markdown-preview-notice` nil tur
 
 - **Updates as you type** (≈0.3 s after you stop), swapping the page content without reloading.
 - **Scrolls to the cursor line**, using pandoc's `sourcepos` extension to map each element back to its source line.
+- **Splits**: split its pane (`SPC w s`, `SPC w SPC`, the tab's menu...) and each half shows the preview, both following
+  the cursor (a WebKit view per window, `config/webkit.el`, as for PDFs).
+- **Links**: to a heading of the file (`#install`), it scrolls there; to a file, it opens in Emacs, in the Markdown
+  file's pane; anything else opens in the browser. The preview stays on its page.
+- **Keys** in its pane: `j` / `k`, `C-d` / `C-u`, `C-f` / `C-b`, `gg` / `G` scroll, `y` or `Cmd+C` copies the selected
+  text, `q` closes it (as `SPC m p`; so does its tab's `✕`). A click only selects the pane; selecting text and
+  following links are WebKit's.
 - **GitHub look**: github-markdown-css plus highlight.js, following the macOS light/dark setting; as wide as the pane.
 - Math is rendered as MathML; relative image links work.
 

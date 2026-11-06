@@ -156,6 +156,9 @@
 ;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
 (load! "config/agent-shell")
 
+;; WEBKIT (web pages inside Emacs: what the PDF viewer and Markdown preview share)
+(load! "config/webkit")
+
 ;; MARKDOWN
 (load! "config/markdown")
 
