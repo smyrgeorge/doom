@@ -25,3 +25,7 @@ searches ignored and hidden files (`config/search.el`).
 Projects are discovered under `~/dev`: its direct subfolders are added to `SPC p p` the first time the project list
 is used in a session (`M-x projectile-discover-projects-in-search-path` rescans). The file cache is off, so `SPC SPC`
 also lists files created outside Emacs (CLI, Claude Code, `git checkout`) (`config/projectile.el`).
+
+Picking a project in `SPC p p` opens its README straight away when it has one at its root, instead of asking for a
+file; otherwise it asks, as Doom does. Several READMEs: Markdown first, then Org, reStructuredText, AsciiDoc, text, one
+without an extension (`+my/project-readme-extensions`); any case (`readme.md` too).
