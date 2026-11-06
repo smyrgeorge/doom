@@ -153,9 +153,22 @@ smooth trackpad scrolling, text selectable with the mouse (`config/pdf-xwidget.e
 | `y` or `Cmd+C` | Copy the selected text (kill ring and clipboard) |
 | `Cmd+=` / `Cmd+-` (or `+` / `-`) | Zoom in / out (`+my/pdf-xwidget-zoom-step`, ×1.25); also `Cmd+scroll` |
 | `Cmd+0` / `W` / `P` | 100% / fit the width (as it opens) / fit the page |
+| `o` (`SPC m o`) | Go to a heading of the outline, picked in the minibuffer (`Chapter 1 › Section 1.1`, with its page) |
+| `O` (`SPC m O`) | The outline sidebar |
+| `SPC m d` | Dark pages |
+| `SPC m t` | The toolbar |
 | `q` | Close the PDF |
 
-The page shows the page number while it changes, and the search's matches. Links out of the PDF open in the browser.
+**Toolbar** (at the top, in the theme's colours): the outline sidebar, previous / next page with `3 / 12`, zoom out / in
+with its percentage, fit the width, fit the page, dark pages. **Outline sidebar** (left): the PDF's headings with their
+pages; click one to go there, `▸` / `▾` to open / close its sub-headings (an outline of over 100 headings opens with
+its first level only); the current one, the last before the page shown, is marked. **Dark pages**: the pages inverted
+to dark greys with their hues kept, like pdf-tools' midnight mode. A new PDF opens with the toolbar, sidebar and dark
+pages as the last one you looked at; `+my/pdf-xwidget-toolbar` (on), `+my/pdf-xwidget-outline-sidebar` and
+`+my/pdf-xwidget-dark-pages` (off) are for the first one.
+
+The page shows the search's matches, and, without the toolbar, the page number while it changes. Links out of the PDF
+open in the browser.
 A PDF changed on disk (e.g. rebuilt by LaTeX) is shown anew, where it was. It opens without a white flash: covered in
 the theme's background colour until WebKit has loaded it (2 s at most), the space around the pages in that colour too.
 

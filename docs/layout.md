@@ -12,8 +12,8 @@
 | `config/window.el` | Maximized frame; new windows (splits, panes) get focus; a wider right fringe. |
 | `config/banner.el` | Notices at the top of a window (IntelliJ's editor notifications), with actions and ✕. |
 | `config/smooth.el` | Mouse-wheel notches glide (on top of Doom's pixel scrolling); scroll limit past the end; files with very long lines shown plain. |
-| `config/pdf-xwidget.el` | PDFs in WebKit inside the file's tab, drawn by PDF.js (downloaded once); Evil keys, search, copy, zoom. |
-| `config/pdf-xwidget.js` | The PDF's page: PDF.js's viewer, driven from Emacs through `window.pdfx`. |
+| `config/pdf-xwidget.el` | PDFs in WebKit inside the file's tab, drawn by PDF.js (downloaded once); Evil keys, search, copy, zoom, outline, dark pages. |
+| `config/pdf-xwidget.js` | The PDF's page: PDF.js's viewer, toolbar and outline sidebar, driven from Emacs through `window.pdfx`. |
 | `config/pdf.el` | pdf-tools' zoom like macOS apps: Cmd+= / Cmd+- / Cmd+0 and Cmd+scroll (not loaded: Doom's pdf module is off, see `config.el`). |
 | `config/peek.el` | LSP peek (usages, definitions): calmer, with functions, line numbers, key hints. |
 | `config/treemacs.el` | Treemacs sidebar behaviour (auto-open, follow, git status, window keys). |

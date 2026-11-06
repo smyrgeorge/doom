@@ -12,7 +12,8 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `SPC o c` | Start a new Claude Code session (agent-shell) |
 | `SPC o C` | The project's Claude Code session, started if none (`C-u`: a new one, `C-u C-u`: pick an open one) |
 | `Cmd+=` (or `Cmd++`) / `Cmd+-` / `Cmd+0` (PDF) | Zoom in / out / 100% (elsewhere: font size) |
-| `j` `k` `gg` `G` `J` `K` `/` `n` `y` `q`... (PDF) | Scroll, pages, search, copy, close: see [PDFs in WebKit](editor.md#pdfs-in-webkit) |
+| `j` `k` `gg` `G` `J` `K` `/` `n` `y` `o` `O` `q`... (PDF) | Scroll, pages, search, copy, outline, close: see [PDFs in WebKit](editor.md#pdfs-in-webkit) |
+| `SPC m d` / `SPC m t` (PDF) | Dark pages / the toolbar |
 | `SPC m p` (Markdown) | Toggle live preview inside Emacs |
 | `SPC m P` (Markdown) | Preview in the browser |
 | `SPC o p` / `SPC o P` | Toggle treemacs / reveal current file in treemacs |

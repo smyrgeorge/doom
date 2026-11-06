@@ -20,8 +20,18 @@
 ;;   y or Cmd+C     copy the selected text (kill ring and clipboard)
 ;;   Cmd+= / Cmd+-  zoom (also + / -, Cmd+scroll), Cmd+0 100%, W fit the
 ;;                  width (as it opens), P the page
+;;   o (SPC m o)    go to a heading of the outline, picked in the minibuffer
+;;   O (SPC m O)    the outline sidebar: headings, their pages, the current
+;;                  one marked; click to go there, ▸ / ▾ to open / close
+;;   SPC m d        dark pages: inverted to dark greys, hues kept (as
+;;                  pdf-tools' midnight mode)
+;;   SPC m t        the toolbar: outline, page (n / N), zoom, fit, dark pages
 ;;   q              close
-;; The page shows the page number while it changes, and the search's matches.
+;; A new PDF opens with the toolbar, sidebar and dark pages as the last one
+;; (the page says them in its title, which Emacs reads without JavaScript);
+;; the variables below are for the first one.
+;; The page shows the search's matches, and the page number while it changes
+;; when the toolbar (which shows it) is off.
 ;; Links out of the PDF open in the browser. A PDF changed on disk (e.g.
 ;; rebuilt by LaTeX) is shown anew, where it was: `revert-buffer', so also
 ;; Doom's auto-revert.
@@ -31,8 +41,17 @@
 ;; Without it (e.g. offline), WebKit's own viewer: trackpad only. In a
 ;; terminal, or an Emacs without xwidgets: doc-view, Emacs's own viewer.
 ;; JavaScript runs without waiting for answers, except the selection (y,
-;; Cmd+C): closing a WebKit view while an answer was pending crashed Emacs
-;; (see config/markdown.el).
+;; Cmd+C) and the outline (o): closing a WebKit view while an answer was
+;; pending crashed Emacs (see config/markdown.el).
+(defvar +my/pdf-xwidget-toolbar t
+  "Show the toolbar in the first PDF opened (see above).")
+
+(defvar +my/pdf-xwidget-dark-pages nil
+  "Dark pages in the first PDF opened (see above).")
+
+(defvar +my/pdf-xwidget-outline-sidebar nil
+  "Show the outline sidebar in the first PDF opened (see above).")
+
 (defvar +my/pdf-xwidget-scroll-step 60
   "Pixels j / k / h / l scroll a PDF.")
 
@@ -98,6 +117,8 @@
       :nm "-"       #'+my/pdf-xwidget-zoom-out
       :nm "W"       #'+my/pdf-xwidget-fit-width
       :nm "P"       #'+my/pdf-xwidget-fit-page
+      :nm "o"       #'+my/pdf-xwidget-outline
+      :nm "O"       #'+my/pdf-xwidget-toggle-sidebar
       :gnm "q"      #'kill-current-buffer    ; as Doom's pdf-tools did
       ;; Clicks are WebKit's (selecting text, links): Emacs only selects the
       ;; window, instead of starting a selection of its own (Evil's visual
@@ -109,6 +130,13 @@
       :gnmv [double-mouse-1]      #'ignore
       :gnmv [triple-down-mouse-1] #'ignore
       :gnmv [triple-mouse-1]      #'ignore)
+
+(map! :map +my/pdf-xwidget-mode-map
+      :localleader
+      :desc "Outline: go to a heading" "o" #'+my/pdf-xwidget-outline
+      :desc "Outline sidebar"          "O" #'+my/pdf-xwidget-toggle-sidebar
+      :desc "Dark pages"               "d" #'+my/pdf-xwidget-toggle-dark
+      :desc "Toolbar"                  "t" #'+my/pdf-xwidget-toggle-toolbar)
 
 ;; ====== CODE ======
 
@@ -143,6 +171,7 @@
 <html><head><meta charset=\"utf-8\">
 <link rel=\"stylesheet\" href=\"%ppdf_viewer.css\">
 <style>
+:root{%v}
 html,body{margin:0;height:100%%;overflow:hidden;background:%b;color-scheme:%c}
 #viewerContainer{position:absolute;inset:0;overflow:auto}
 .pdfViewer.removePageBorders .page{margin:10px auto;box-shadow:0 1px 6px rgba(0,0,0,.45)}
@@ -158,6 +187,7 @@ html,body{margin:0;height:100%%;overflow:hidden;background:%b;color-scheme:%c}
 <script src=\"%ppdf.min.js\"></script>
 <script src=\"%ppdf.worker.min.js\"></script>
 <script src=\"%ppdf_viewer.js\"></script>
+<script>window.PDFX_OPTIONS = %o;</script>
 <script src=\"%j\"></script>
 <script>
 if (window.pdfx) pdfx.open(%d);
@@ -166,8 +196,9 @@ else { var b = document.getElementById('find'); b.textContent = 'PDF.js did not 
 </body></html>
 "
   "A PDF's page (see config/pdf-xwidget.js), for `format-spec': %b the
-background, %c the colour scheme, %p PDF.js's folder, %j the script, %d the
-data file's name (JSON).")
+background, %c the colour scheme, %v the theme's colours (CSS variables), %o
+the settings (JSON), %p PDF.js's folder, %j the script, %d the data file's
+name (JSON).")
 
 (defun +my/pdf-xwidget-p ()
   "Non-nil if this buffer's PDF can show in WebKit: a local file, in the GUI,
@@ -259,6 +290,64 @@ check that a URL is valid."
       (delete-file old))
     name))
 
+(defun +my/pdf-xwidget--color (face attribute fallback)
+  "FACE's ATTRIBUTE colour as #rrggbb (CSS doesn't know Emacs's colour
+names), FALLBACK without one."
+  (require 'color)
+  (let ((color (face-attribute face attribute nil t)))
+    (or (and (stringp color) (color-defined-p color)
+             (apply #'color-rgb-to-hex (append (color-name-to-rgb color) '(2))))
+        fallback)))
+
+(defun +my/pdf-xwidget--css-variables ()
+  "The theme's colours, for the toolbar and the sidebar (CSS variables)."
+  (format "--bg:%s;--bar:%s;--fg:%s;--dim:%s;--hover:%s;--accent:%s;--border:%s"
+          (+my/pdf-xwidget--color 'default :background "#282c34")
+          (+my/pdf-xwidget--color 'mode-line :background "#1d2026")
+          (+my/pdf-xwidget--color 'default :foreground "#bbc2cf")
+          (+my/pdf-xwidget--color 'shadow :foreground "#5b6268")
+          (+my/pdf-xwidget--color 'region :background "#3f444a")
+          (+my/pdf-xwidget--color 'link :foreground "#51afef")
+          (+my/pdf-xwidget--color 'vertical-border :foreground "#191b20")))
+
+;; SETTINGS: the toolbar, the outline sidebar, dark pages (see above). The
+;; page says them, and its page, in its title: "pdfx {json}".
+(defun +my/pdf-xwidget--state (&optional buffer)
+  "BUFFER's page's settings and page, a plist (:dark :toolbar :sidebar
+:outline :page :pages), or nil before it has said them."
+  (with-current-buffer (or buffer (current-buffer))
+    (when-let* ((xwidget (+my/pdf-xwidget--xwidget))
+                (title (ignore-errors (xwidget-webkit-title xwidget)))
+                ((string-prefix-p "pdfx " title)))
+      (ignore-errors
+        (json-parse-string (substring title 5) :object-type 'plist
+                           :false-object nil :null-object nil)))))
+
+(defun +my/pdf-xwidget--options ()
+  "The settings a page starts with (JSON): its own when it's written anew,
+else the last PDF's looked at, else the variables above."
+  (let* ((last (or (+my/pdf-xwidget--state)
+                   (seq-some (lambda (buffer)
+                               (and (not (eq buffer (current-buffer)))
+                                    (eq (buffer-local-value 'major-mode buffer)
+                                        '+my/pdf-xwidget-mode)
+                                    (+my/pdf-xwidget--state buffer)))
+                             (buffer-list))))
+         (get (lambda (key default) (if last (plist-get last key) default)))
+         (bool (lambda (value) (if value "true" "false"))))
+    (format "{\"dark\":%s,\"toolbar\":%s,\"sidebar\":%s,\"zoomStep\":%s}"
+            (funcall bool (funcall get :dark +my/pdf-xwidget-dark-pages))
+            (funcall bool (funcall get :toolbar +my/pdf-xwidget-toolbar))
+            (funcall bool (funcall get :sidebar +my/pdf-xwidget-outline-sidebar))
+            +my/pdf-xwidget-zoom-step)))
+
+(defun +my/pdf-xwidget--remember ()
+  "Keep this page's settings for the next PDF (see above)."
+  (when-let* ((state (+my/pdf-xwidget--state)))
+    (setq +my/pdf-xwidget-dark-pages (plist-get state :dark)
+          +my/pdf-xwidget-toolbar (plist-get state :toolbar)
+          +my/pdf-xwidget-outline-sidebar (plist-get state :sidebar))))
+
 (defun +my/pdf-xwidget--write-page (data)
   "Write the page's index.html, reading the PDF from DATA (a data-N.js)."
   (require 'json)
@@ -266,6 +355,8 @@ check that a URL is valid."
                +my/pdf-xwidget--page-template
                `((?b . ,(face-background 'default nil t))
                  (?c . ,(if (eq (frame-parameter nil 'background-mode) 'light) "light" "dark"))
+                 (?v . ,(+my/pdf-xwidget--css-variables))
+                 (?o . ,(+my/pdf-xwidget--options))
                  (?p . ,(+my/pdf-xwidget--file-url (file-name-as-directory +my/pdf-js-dir)))
                  (?j . ,(+my/pdf-xwidget--file-url
                          (expand-file-name "config/pdf-xwidget.js" doom-user-dir)))
@@ -435,6 +526,7 @@ moved, the window scrolled it away."
   "Close this buffer's WebKit view and its page (another mode, the buffer
 killed)."
   (+my/pdf-xwidget--uncover (current-buffer))
+  (+my/pdf-xwidget--remember)
   (when-let* ((xwidget (+my/pdf-xwidget--xwidget)))
     (kill-xwidget xwidget))
   (with-silent-modifications
@@ -590,6 +682,102 @@ BACKWARD (?) towards its start. Esc ends the search."
     (xwidget-webkit-execute-script
      xwidget "window.pdfx ? pdfx.selection() : String(window.getSelection())"
      #'+my/pdf-xwidget--copied)))
+
+(defun +my/pdf-xwidget--toggle (setting name)
+  "Turn the page's SETTING (\"dark\", \"toolbar\", \"sidebar\") on or off
+and say so, NAME being what it is; return whether it's on."
+  (if (or (not (+my/pdf-xwidget--xwidget)) +my/pdf-xwidget--native)
+      (progn (message "No PDF.js here: M-x +my/pdf-js-install, then open the PDF again")
+             nil)
+    (let ((on (not (plist-get (+my/pdf-xwidget--state) (intern (concat ":" setting))))))
+      (+my/pdf-xwidget--js (format "set({%s: %s})" setting (if on "true" "false")))
+      (message "%s %s" name (if on "on" "off"))
+      on)))
+
+(defun +my/pdf-xwidget-toggle-dark ()
+  "SPC m d: dark pages on or off (see above)."
+  (interactive)
+  (setq +my/pdf-xwidget-dark-pages (+my/pdf-xwidget--toggle "dark" "Dark pages")))
+
+(defun +my/pdf-xwidget-toggle-toolbar ()
+  "SPC m t: the toolbar on or off (see above)."
+  (interactive)
+  (setq +my/pdf-xwidget-toolbar (+my/pdf-xwidget--toggle "toolbar" "Toolbar")))
+
+(defun +my/pdf-xwidget-toggle-sidebar ()
+  "O: the outline sidebar on or off (see above)."
+  (interactive)
+  (if (eql (plist-get (+my/pdf-xwidget--state) :outline) 0)
+      (message "This PDF has no outline")
+    (setq +my/pdf-xwidget-outline-sidebar
+          (+my/pdf-xwidget--toggle "sidebar" "Outline sidebar"))))
+
+;; THE OUTLINE IN THE MINIBUFFER (o)
+;; The page's headings, as `parent › heading' with their page, in their order.
+(defvar +my/pdf-xwidget--outline-for nil
+  "The PDF whose outline was asked for: WebKit's answer doesn't say.")
+
+(defun +my/pdf-xwidget-outline ()
+  "o: go to a heading of the PDF's outline, picked in the minibuffer."
+  (interactive)
+  (let ((xwidget (+my/pdf-xwidget--xwidget)))
+    (if (or (not xwidget) +my/pdf-xwidget--native)
+        (message "No outline here (no PDF.js)")
+      (setq +my/pdf-xwidget--outline-for (current-buffer))
+      ;; An answer awaited, its function a symbol, as for copying (see
+      ;; `+my/pdf-xwidget-copy').
+      (xwidget-webkit-execute-script
+       xwidget "window.pdfx ? pdfx.outlineList() : '[]'"
+       #'+my/pdf-xwidget--outline-received))))
+
+(defun +my/pdf-xwidget--outline-received (json)
+  "WebKit's answer to `+my/pdf-xwidget-outline': the minibuffer after this
+event, not inside it."
+  (run-at-time 0 nil #'+my/pdf-xwidget--outline-pick +my/pdf-xwidget--outline-for json))
+
+(defun +my/pdf-xwidget--outline-pick (buffer json)
+  "Pick one of the headings in JSON, BUFFER's page's, and go there."
+  (let ((headings (and (stringp json)
+                       (ignore-errors
+                         (json-parse-string json :array-type 'list :object-type 'plist
+                                            :null-object nil))))
+        (separator (if (boundp '+my/sticky-separator) +my/sticky-separator " › "))
+        (seen (make-hash-table :test #'equal))
+        candidates)
+    (if (not headings)
+        (message "This PDF has no outline")
+      (let ((index 0))
+        (dolist (heading headings)
+          (let* ((titles (plist-get heading :t))
+                 (parents (butlast titles))
+                 (name (concat (if parents
+                                   (propertize (concat (string-join parents separator) separator)
+                                               'face 'shadow)
+                                 "")
+                               (car (last titles))))
+                 (count (puthash name (1+ (gethash name seen 0)) seen)))
+            ;; Same names (two "Introduction"s) told apart.
+            (when (> count 1)
+              (setq name (concat name (propertize (format " (%d)" count) 'face 'shadow))))
+            (push (list name index (plist-get heading :p)) candidates)
+            (setq index (1+ index)))))
+      (setq candidates (nreverse candidates))
+      (let* ((annotate (lambda (name)
+                         (when-let* ((page (nth 2 (assoc name candidates))))
+                           (propertize (format "  p. %d" page) 'face 'completions-annotations))))
+             (choice (completing-read
+                      "Outline: "
+                      (lambda (string predicate action)
+                        (if (eq action 'metadata)
+                            `(metadata (display-sort-function . identity)
+                                       (cycle-sort-function . identity)
+                                       (annotation-function . ,annotate))
+                          (complete-with-action action candidates string predicate)))
+                      nil t))
+             (index (nth 1 (assoc choice candidates))))
+        (when (and index (buffer-live-p buffer))
+          (with-current-buffer buffer
+            (+my/pdf-xwidget--js (format "outlineGo(%d)" index))))))))
 
 (defun +my/pdf-xwidget-zoom-in ()
   "Cmd+=: zoom the PDF in."
