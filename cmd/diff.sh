@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Resolve Git conflicts in this config's three-pane merge (config/merge.el), in
+# Emacs, from the shell. See docs/cmd.md.
+#
+#   cmd/diff.sh                  each conflicted file of the repository here, one
+#                                after the other
+#   cmd/diff.sh FILE...          those files (a file named example: ./example)
+#   cmd/diff.sh example          the merge example (examples/merge.el), on a temp
+#                                repository
+#
+# Options:
+#   -g, --gui           a GUI frame instead of this terminal
+#   -n, --new           a new Emacs (Doom), even if one runs as a server
+#   -s, --socket NAME   the Emacs server to use (emacsclient -s NAME)
+#   -l, --list          list the conflicted files, and exit
+#   -h, --help          this help
+#
+# It uses the Emacs running as a server if there is one (a new frame of it:
+# quick, your session), else starts Emacs and quits it after. Done or Abort
+# in the merge moves on to the next file; closing the frame (or quitting the
+# Emacs it started) stops. As `git mergetool`:
+#   git config mergetool.doom.cmd '~/.config/doom/cmd/diff.sh "$MERGED"'
+#   git config mergetool.doom.trustExitCode true
+#   git mergetool -t doom
+#
+# Exit status: 0 every file resolved (and staged), 1 some still in conflict,
+# 2 a wrong use (an option, not in a repository...).
+#
+# EMACS (default: emacs), EMACSCLIENT (default: emacsclient) and EMACS_ARGS
+# (more arguments for a new Emacs) say which Emacs to run.
+
+set -u
+
+usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p;}' "$0"; }
+
+die() { echo "diff.sh: $*" >&2; exit 2; }
+
+gui=0 new=0 list=0 socket="" files=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    -g|--gui) gui=1 ;;
+    -n|--new) new=1 ;;
+    -l|--list) list=1 ;;
+    -s|--socket) [ $# -ge 2 ] || die "$1 needs a server name"; socket=$2; shift ;;
+    --) shift; files+=("$@"); break ;;
+    -*) echo "diff.sh: unknown option $1" >&2; usage >&2; exit 2 ;;
+    *) files+=("$1") ;;
+  esac
+  shift
+done
+
+EMACS=${EMACS:-emacs}
+EMACSCLIENT=${EMACSCLIENT:-emacsclient}
+example=0
+if [ ${#files[@]} -eq 1 ] && [ "${files[0]}" = example ]; then
+  example=1
+fi
+
+# A string for Emacs Lisp: its backslashes and quotes escaped.
+lisp_string() { printf '"%s"' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"; }
+
+# FILE's absolute name.
+absolute() {
+  local dir base
+  dir=$(cd "$(dirname "$1")" 2>/dev/null && pwd -P) || return 1
+  base=$(basename "$1")
+  printf '%s/%s' "$dir" "$base"
+}
+
+if [ $example -eq 0 ]; then
+  top=$(git rev-parse --show-toplevel 2>/dev/null) || die "not in a Git repository"
+  if [ ${#files[@]} -eq 0 ]; then
+    while IFS= read -r file; do
+      files+=("$top/$file")
+    done < <(git -C "$top" diff --name-only --diff-filter=U)
+  else
+    for i in "${!files[@]}"; do
+      [ -e "${files[$i]}" ] || die "no such file: ${files[$i]}"
+      files[i]=$(absolute "${files[$i]}")
+    done
+  fi
+  if [ $list -eq 1 ]; then
+    for file in "${files[@]}"; do
+      git -C "$(dirname "$file")" ls-files -u -- "$file" | grep -q . && echo "${file#"$top"/}"
+    done
+    exit 0
+  fi
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "No conflicts here"
+    exit 0
+  fi
+fi
+
+# The Emacs: its server's (a new frame), or a new one.
+client=("$EMACSCLIENT")
+[ -n "$socket" ] && client+=(-s "$socket")
+use_server=0
+if [ $new -eq 0 ] && "${client[@]}" -a false -e t >/dev/null 2>&1; then
+  use_server=1
+elif [ -n "$socket" ] && [ $new -eq 0 ]; then
+  die "no Emacs server $socket"
+fi
+
+# What it runs: the merges, then the frame closed (server) or Emacs quit.
+if [ $use_server -eq 1 ]; then
+  finish='(lambda (&rest _) (when (frame-live-p frame) (delete-frame frame t)))'
+else
+  finish='(lambda (&rest _) (kill-emacs 0))'
+fi
+if [ $example -eq 1 ]; then
+  run="(+my/merge-then (+my/example-merge) $finish)"
+else
+  list_lisp=""
+  for file in "${files[@]}"; do
+    list_lisp+=" $(lisp_string "$file")"
+  done
+  run="(+my/merge-files (list$list_lisp) $finish)"
+fi
+expr="(let ((frame (selected-frame))) $run)"
+
+if [ $use_server -eq 1 ]; then
+  if [ $gui -eq 1 ]; then
+    "${client[@]}" -c -e "$expr" >/dev/null
+  else
+    "${client[@]}" -t -e "$expr"
+  fi
+else
+  # shellcheck disable=SC2086 # EMACS_ARGS: several arguments
+  if [ $gui -eq 1 ]; then
+    "$EMACS" ${EMACS_ARGS:-} --eval "$expr"
+  else
+    "$EMACS" -nw ${EMACS_ARGS:-} --eval "$expr"
+  fi
+fi
+
+# What's left.
+[ $example -eq 1 ] && exit 0
+left=()
+for file in "${files[@]}"; do
+  git -C "$(dirname "$file")" ls-files -u -- "$file" | grep -q . && left+=("${file#"$top"/}")
+done
+if [ ${#left[@]} -gt 0 ]; then
+  echo "Still in conflict: ${left[*]}"
+  exit 1
+fi
+echo "Resolved: ${#files[@]} file$([ ${#files[@]} -eq 1 ] || echo s)"
+exit 0

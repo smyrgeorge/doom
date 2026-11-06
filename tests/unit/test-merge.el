@@ -98,6 +98,13 @@ global gitconfig; one window on *scratch*, and again after."
            (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (error "Asked: %s" prompt)))
                      ((symbol-function 'yes-or-no-p) (lambda (prompt) (error "Asked: %s" prompt))))
              ,@body)
+         ;; A merge left open (the test failed): closed, none to come, so the
+         ;; tests after start clean.
+         (setq +my/merge--then nil)
+         (dolist (buffer (buffer-list))
+           (when-let* ((session (buffer-local-value '+my/merge--session buffer)))
+             (+my/merge--finish session)))
+         (+test-merge--fire #'+my/merge--finish)
          (dolist (buffer (buffer-list))
            (with-current-buffer buffer
              (when (and buffer-file-name (string-prefix-p repo buffer-file-name))
@@ -801,6 +808,109 @@ changed the same word."
 (ert-deftest merge/the-wand-key ()
   (should (eq (lookup-key (evil-get-auxiliary-keymap +my/merge-mode-map 'normal) (kbd "SPC m w"))
               #'+my/merge-wand)))
+
+;; ====== ONE FILE AFTER THE OTHER ======
+
+(defun +test-merge--session-open ()
+  "The merge open, if one is."
+  (seq-some (lambda (buffer) (buffer-local-value '+my/merge--session buffer)) (buffer-list)))
+
+(defun +test-merge--two-conflicts ()
+  "a.txt and b.txt in conflict (feature merged into main)."
+  (dolist (file '("a.txt" "b.txt"))
+    (+test-merge--write file (+test-merge--lines "one" "two" "three")))
+  (+test-merge--git "add" ".")
+  (+test-merge--git "commit" "-qm" "base")
+  (+test-merge--git "checkout" "-qb" "feature")
+  (dolist (file '("a.txt" "b.txt"))
+    (+test-merge--write file (+test-merge--lines "one" "theirs" "three")))
+  (+test-merge--git "commit" "-qam" "theirs")
+  (+test-merge--git "checkout" "-q" "main")
+  (dolist (file '("a.txt" "b.txt"))
+    (+test-merge--write file (+test-merge--lines "one" "yours" "three")))
+  (+test-merge--git "commit" "-qam" "yours")
+  (+test-merge--git-may-fail "merge" "-q" "feature"))
+
+(ert-deftest merge/files-one-after-the-other ()
+  "Each file's merge once the last one's closed (done, aborted); then the
+function given, with the files still in conflict."
+  (+test-merge-with-repo
+    (+test-merge--two-conflicts)
+    (+test-merge--write "clean.txt" "clean\n")
+    (let ((left 'not-yet))
+      (+my/merge-files (list "a.txt" "clean.txt" "b.txt") (lambda (files) (setq left files)))
+      (let ((session (+test-merge--session-open)))
+        (should (equal (+my/merge-path session) "a.txt"))
+        (with-current-buffer (+my/merge-result session)
+          (+my/merge-accept-right)
+          (+my/merge-done)))
+      (sleep-for 0.1)                     ; the next after this one's closed
+      (let ((session (+test-merge--session-open)))
+        (should (equal (+my/merge-path session) "b.txt"))
+        ;; Its panes where you are, the Result selected.
+        (should (eq (window-buffer (selected-window)) (+my/merge-result session)))
+        (should (eq left 'not-yet))
+        (with-current-buffer (+my/merge-result session)
+          (+my/merge-abort)))
+      (sleep-for 0.1)
+      (should-not (+test-merge--session-open))
+      (should (equal left (list (expand-file-name "b.txt"))))
+      ;; The file not in conflict, skipped, said why.
+      (should (= (+test-messages "^Skipped: clean\\.txt (Not in conflict)") 1)))))
+
+(ert-deftest merge/files-the-panes-cant-show-skipped ()
+  (+test-merge-with-repo
+    (+test-merge--conflict "b.bin" "a\0b\n" "a\0yours\n" "a\0theirs\n")
+    (let ((left 'not-yet)
+          (ediffed nil))
+      (cl-letf (((symbol-function 'magit-ediff-resolve-rest) (lambda (file) (push file ediffed))))
+        (+my/merge-files (list "b.bin") (lambda (files) (setq left files))))
+      ;; Not Ediff (it'd hold up the files after): skipped.
+      (should-not ediffed)
+      (should (equal left (list (expand-file-name "b.bin"))))
+      (should (= (+test-messages "^Skipped: b\\.bin (A binary file)") 1)))))
+
+(ert-deftest merge/all-of-the-repository ()
+  (+test-merge-with-repo
+    (+test-merge--two-conflicts)
+    (+my/merge-all)
+    (dotimes (_ 2)
+      (let ((session (+test-merge--session-open)))
+        (should session)
+        (with-current-buffer (+my/merge-result session)
+          (+my/merge-accept-left)
+          (+my/merge-done)))
+      (sleep-for 0.1))
+    (should-not (+test-merge--session-open))
+    (should (string-empty-p (+test-merge--git "ls-files" "-u")))
+    (should (= (+test-messages "^All conflicts resolved$") 1))
+    (should-error (+my/merge-all) :type 'user-error)
+    (should (commandp #'+my/merge-all))))
+
+(ert-deftest merge/then-once-closed ()
+  (+test-merge
+    (let ((called 0))
+      (+my/merge-then session (lambda () (cl-incf called)))
+      (should (= called 0))
+      (+my/merge-abort)
+      (sleep-for 0.05)
+      (should (= called 1))
+      (should-not (assq session +my/merge--then)))))
+
+(ert-deftest merge/its-frame-closed-aborts-it ()
+  "The frame a merge is in deleted (a terminal's, cmd/diff.sh's): aborted,
+no windows put back (they're gone)."
+  (+test-merge
+    (should (eq (+my/merge-frame session) (selected-frame)))
+    (should (memq #'+my/merge--frame-deleted-h delete-frame-functions))
+    (let ((restored nil))
+      (cl-letf (((symbol-function 'set-window-configuration) (lambda (&rest _) (setq restored t))))
+        (+my/merge--frame-deleted-h 'another-frame)
+        (should-not (+my/merge-finished session))
+        (+my/merge--frame-deleted-h (selected-frame)))
+      (should (+my/merge-finished session))
+      (should-not restored)
+      (should-not (buffer-live-p (+my/merge-result session))))))
 
 ;; ====== OTHER CONFLICTS ======
 

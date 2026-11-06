@@ -24,7 +24,8 @@ when pressed there. In the pane: `s`/`u`/`x` stage/unstage/discard a hunk, `RET`
 ## Resolving conflicts
 
 To try it: `M-x +my/example-merge` opens it on a temp repository in conflict every way it handles (see
-[Examples](examples.md)).
+[Examples](examples.md)). From the shell, `cmd/diff.sh` opens each conflicted file in it, in the terminal, and works
+as `git mergetool` too (see [Shell commands](cmd.md)); `M-x +my/merge-all` does the same in Emacs.
 
 `e` on a conflicted file in Magit (its status, under Unmerged) opens it in three panes, like IntelliJ's merge window
 (`config/merge.el`): **Yours** on the left, the **Result** in the middle (focused), **Theirs** on the right, under a bar.

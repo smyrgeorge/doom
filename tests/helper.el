@@ -216,6 +216,8 @@ binds keys (Doom's does nothing in batch mode)."
         (ignore-errors (delete-window window)))))
   (select-window (frame-first-window))
   (delete-other-windows)
+  ;; The window left may be one only its buffer goes in (a merge's bar...).
+  (set-window-dedicated-p nil nil)
   (switch-to-buffer (get-buffer-create "*scratch*"))
   (dolist (buffer (buffer-list))
     ;; Killing one can kill others (a page's covers, a preview...).

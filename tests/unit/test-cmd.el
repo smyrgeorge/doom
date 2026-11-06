@@ -1,0 +1,192 @@
+;;; tests/unit/test-cmd.el -*- lexical-binding: t; -*-
+;; cmd/diff.sh: Git conflicts resolved in the merge's panes from the shell.
+;; The script really runs, in a pseudo-terminal (`script'), its Emacs a test
+;; one (tests/diff-sh-emacs.el: each merge then done by itself), new (--new)
+;; or a test server (--socket): never the user's Emacs. Real git in temp repos,
+;; a temp HOME and global gitconfig.
+
+(defconst +test-cmd--script (expand-file-name "cmd/diff.sh" +test-root))
+
+(defconst +test-cmd--emacs (expand-file-name invocation-name invocation-directory)
+  "This Emacs's binary (the GUI app's: -nw in a terminal).")
+
+(defun +test-cmd--emacs-args (home)
+  "Arguments for the script's Emacs: a test one (see above); no spaces in
+them (the script splits EMACS_ARGS on spaces)."
+  (format "-Q --init-directory=%s -l %s"
+          (expand-file-name "init" home)
+          (expand-file-name "diff-sh-emacs.el" +test-dir)))
+
+(defmacro +test-cmd-with-repo (&rest body)
+  "BODY in a new repo (`default-directory') where a.txt and b.txt are in
+conflict (feature merged into main), `home' a temp HOME (and the script's
+Emacs's), `log' where its merges are noted."
+  (declare (indent 0))
+  `(let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "cmd-home-") t)))
+          (repo (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "cmd-repo-") t))))
+          (log (expand-file-name "merges.log" home))
+          (process-environment
+           (append (list (concat "HOME=" home)
+                         (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
+                         "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "GIT_EDITOR=true"
+                         "TERM=xterm-256color"
+                         ;; Doom's own folder: HOME is another.
+                         (concat "DOOM_EMACS_DIR=" +test-doom-emacs-dir)
+                         (concat "TEST_TMP=" (expand-file-name "emacs-tmp" home))
+                         (concat "DIFF_TEST_LOG=" log)
+                         (concat "EMACS=" +test-cmd--emacs)
+                         (concat "EMACS_ARGS=" (+test-cmd--emacs-args home)))
+                   process-environment))
+          (default-directory repo))
+     (with-temp-file (expand-file-name ".gitconfig" home)
+       (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
+               "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
+     (+test-cmd--git "init" "-q")
+     (dolist (file '("a.txt" "b.txt"))
+       (with-temp-file file (insert "one\ntwo\nthree\n")))
+     (+test-cmd--git "add" ".")
+     (+test-cmd--git "commit" "-qm" "base")
+     (+test-cmd--git "checkout" "-qb" "feature")
+     (dolist (file '("a.txt" "b.txt"))
+       (with-temp-file file (insert "one\ntheirs\nthree\n")))
+     (+test-cmd--git "commit" "-qam" "theirs")
+     (+test-cmd--git "checkout" "-q" "main")
+     (dolist (file '("a.txt" "b.txt"))
+       (with-temp-file file (insert "one\nyours\nthree\n")))
+     (+test-cmd--git "commit" "-qam" "yours")
+     (with-temp-buffer (call-process "git" nil t nil "merge" "-q" "feature"))
+     ,@body))
+
+(defun +test-cmd--git (&rest args)
+  (with-temp-buffer
+    (unless (zerop (apply #'call-process "git" nil t nil args))
+      (error "git %s: %s" (string-join args " ") (buffer-string)))
+    (buffer-string)))
+
+(defun +test-cmd--run (&rest args)
+  "Run cmd/diff.sh with ARGS in a pseudo-terminal: (STATUS . OUTPUT); killed
+after 90 s (STATUS then `timeout')."
+  (with-temp-buffer
+    (let* ((buffer (current-buffer))
+           ;; The terminal a size, as a real one has (with nothing attached,
+           ;; script's has none: a server's frame there was too small).
+           (process (make-process :name "diff.sh" :buffer buffer :connection-type 'pipe
+                                  :command (append (list "script" "-q" "/dev/null" "bash" "-c"
+                                                         "stty cols 120 rows 40 2>/dev/null; exec bash \"$0\" \"$@\""
+                                                         +test-cmd--script)
+                                                   args)))
+           (end (+ (float-time) 90)))
+      (process-send-eof process)
+      (while (and (process-live-p process) (< (float-time) end))
+        (accept-process-output process 0.1))
+      (if (process-live-p process)
+          (progn (kill-process process) (cons 'timeout (buffer-string)))
+        (cons (process-exit-status process) (buffer-string))))))
+
+(defun +test-cmd--log (log)
+  (and (file-exists-p log)
+       (split-string (with-temp-buffer (insert-file-contents log) (buffer-string)) "\n" t)))
+
+(defun +test-cmd--unmerged ()
+  (split-string (+test-cmd--git "diff" "--name-only" "--diff-filter=U") "\n" t))
+
+;; ====== USE ======
+
+(ert-deftest cmd/help-and-wrong-uses ()
+  (let ((help (+test-cmd--run "--help")))
+    (should (= (car help) 0))
+    (should (string-match-p "cmd/diff.sh FILE\\.\\.\\." (cdr help)))
+    (should (string-match-p "-g, --gui" (cdr help))))
+  (let ((wrong (+test-cmd--run "--bogus")))
+    (should (= (car wrong) 2))
+    (should (string-match-p "unknown option --bogus" (cdr wrong))))
+  (let* ((default-directory (file-name-as-directory (make-temp-file (+test-tmp-file "not-a-repo-") t)))
+         (outside (+test-cmd--run "--new")))
+    (should (= (car outside) 2))
+    (should (string-match-p "not in a Git repository" (cdr outside))))
+  (should (= (car (+test-cmd--run "--socket")) 2)))
+
+(ert-deftest cmd/list-and-nothing-to-do ()
+  (+test-cmd-with-repo
+    (let ((listed (+test-cmd--run "--list")))
+      (should (= (car listed) 0))
+      ;; (script echoes the end of its input: ^D and backspaces.)
+      (should (equal (delq nil (mapcar (lambda (line)
+                                         (and (string-match "\\([[:alnum:]_./-]+\\.txt\\)" line)
+                                              (match-string 1 line)))
+                                       (split-string (cdr listed) "[\r\n]+" t)))
+                     '("a.txt" "b.txt"))))
+    (should (= (car (+test-cmd--run "--new" "missing.txt")) 2))
+    (+test-cmd--git "checkout" "--theirs" "--" "a.txt" "b.txt")
+    (+test-cmd--git "add" "a.txt" "b.txt")
+    (let ((none (+test-cmd--run "--new")))
+      (should (= (car none) 0))
+      (should (string-match-p "No conflicts here" (cdr none))))))
+
+;; ====== A NEW EMACS ======
+
+(ert-deftest cmd/each-conflict-one-after-the-other ()
+  (+test-cmd-with-repo
+    (let* ((process-environment (cons "DIFF_TEST_ACTION=right" process-environment))
+           (run (+test-cmd--run "--new")))
+      (should (= (car run) 0))
+      (should (string-match-p "Resolved: 2 files" (cdr run)))
+      ;; In a terminal, one after the other.
+      (should (equal (+test-cmd--log log) '("a.txt tty" "b.txt tty")))
+      (should-not (+test-cmd--unmerged))
+      (should (equal (with-temp-buffer (insert-file-contents "a.txt") (buffer-string)) "one\ntheirs\nthree\n")))))
+
+(ert-deftest cmd/the-files-given ()
+  (+test-cmd-with-repo
+    (make-directory "sub")
+    (let* ((process-environment (cons "DIFF_TEST_ACTION=right" process-environment))
+           (default-directory (expand-file-name "sub/"))
+           (run (+test-cmd--run "--new" "../b.txt")))
+      (should (= (car run) 0))
+      (should (equal (+test-cmd--log log) '("b.txt tty"))))
+    (should (equal (+test-cmd--unmerged) '("a.txt")))))
+
+(ert-deftest cmd/aborted-still-in-conflict ()
+  (+test-cmd-with-repo
+    (let* ((process-environment (cons "DIFF_TEST_ACTION=abort" process-environment))
+           (run (+test-cmd--run "--new")))
+      (should (= (car run) 1))
+      (should (string-match-p "Still in conflict: a.txt b.txt" (cdr run)))
+      ;; Aborted, the next one all the same.
+      (should (equal (+test-cmd--log log) '("a.txt tty" "b.txt tty")))
+      (should (equal (+test-cmd--unmerged) '("a.txt" "b.txt"))))))
+
+(ert-deftest cmd/the-example ()
+  (+test-cmd-with-repo
+    (let* ((process-environment (cons "DIFF_TEST_ACTION=right" process-environment))
+           (run (+test-cmd--run "--new" "example")))
+      (should (= (car run) 0))
+      (should (equal (+test-cmd--log log) '("orders.py tty")))
+      ;; Its repository gone.
+      (should-not (directory-files (expand-file-name "emacs-tmp/tmp/" home) nil "merge-example-")))))
+
+;; ====== A SERVER ======
+
+(ert-deftest cmd/a-running-emacs ()
+  "An Emacs server running (here a test one, --socket): a new frame of it, in
+this terminal; the server still running after."
+  (+test-cmd-with-repo
+    ;; A name, not a path: a socket's path has at most ~104 characters, the
+    ;; test's folders more. In Emacs's socket folder (the user's server's has
+    ;; another name).
+    (let* ((socket (format "doom-test-diff-%d-%d" (emacs-pid) (random 100000)))
+           (process-environment (cons "DIFF_TEST_ACTION=right" process-environment)))
+      (apply #'call-process +test-cmd--emacs nil nil nil
+             (concat "--daemon=" socket)
+             (split-string (+test-cmd--emacs-args home)))
+      (unwind-protect
+          (progn
+            (should (zerop (call-process "emacsclient" nil nil nil "-s" socket "-e" "t")))
+            (let ((run (+test-cmd--run "--socket" socket)))
+              (should (= (car run) 0))
+              (should (string-match-p "Resolved: 2 files" (cdr run))))
+            (should (equal (+test-cmd--log log) '("a.txt tty" "b.txt tty")))
+            (should-not (+test-cmd--unmerged))
+            ;; Still running, its frame gone.
+            (should (zerop (call-process "emacsclient" nil nil nil "-s" socket "-e" "t"))))
+        (call-process "emacsclient" nil nil nil "-s" socket "-e" "(kill-emacs)")))))

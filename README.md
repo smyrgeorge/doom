@@ -69,3 +69,5 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Repository layout](docs/layout.md): what each file is for.
 - [Tests](docs/tests.md): unit and end-to-end tests of this config's features (`tests/run.sh`).
 - [Examples](docs/examples.md): features shown on files of their own (`M-x +my/example`), e.g. a merge in conflict.
+- [Shell commands](docs/cmd.md): `cmd/diff.sh`, Git's conflicts resolved in the three panes from the shell (also as
+  `git mergetool`).

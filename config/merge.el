@@ -44,6 +44,9 @@
 ;; says which side changed each region, or both), without its windows. Binary files, files added on
 ;; both sides or deleted on one, submodules and links open in Magit's usual
 ;; Ediff instead (each version isn't a text with a common base).
+;; M-x +my/merge-all resolves each conflicted file of the repository, one
+;; after the other; from the shell, cmd/diff.sh does (in this terminal, see
+;; docs/cmd.md).
 (defvar +my/merge-refine-max-lines 200
   "Changes longer than this (lines) on a side aren't refined word by word.")
 
@@ -114,7 +117,7 @@ a pane closed).")
 
 (cl-defstruct (+my/merge (:constructor +my/merge--make) (:copier nil))
   "A file being resolved."
-  path toplevel coding labels
+  path toplevel coding labels frame
   yours base theirs result bar          ; buffers
   chunks                                ; vector of `+my/merge-chunk'
   winconf finished)
@@ -846,7 +849,7 @@ folder) in three panes."
          (texts (mapcar (lambda (b) (decode-coding-string b coding)) bytes))
          (labels (+my/merge--labels))
          (session (+my/merge--make :path path :toplevel default-directory :coding coding
-                                   :labels labels
+                                   :labels labels :frame (selected-frame)
                                    :winconf (current-window-configuration))))
     (setf (+my/merge-base session) (+my/merge--pane (format " *merge base: %s*" path) (nth 0 texts) path)
           (+my/merge-yours session) (+my/merge--pane (format "Yours: %s" path) (nth 1 texts) path)
@@ -915,6 +918,79 @@ config/merge.el); Magit's Ediff for what they can't show."
           (t (message "%s: %s, so Ediff" path why)
              (magit-ediff-resolve-rest path)))))
 
+;; ONE FILE AFTER THE OTHER
+(defvar +my/merge--then nil
+  "((SESSION . FUNCTION)...): FUNCTION to call once SESSION is closed.")
+
+(defun +my/merge-then (session function)
+  "Call FUNCTION (no arguments) once SESSION's merge is closed (done,
+aborted)."
+  (push (cons session function) +my/merge--then)
+  (add-hook '+my/merge-finished-functions #'+my/merge--then-h))
+
+(defun +my/merge--then-h (session)
+  (when-let* ((entry (assq session +my/merge--then)))
+    (setq +my/merge--then (delq entry +my/merge--then))
+    ;; After the merge's windows are back, not inside its closing.
+    (run-at-time 0 nil (cdr entry))))
+
+(defun +my/merge-files (files &optional then)
+  "Resolve FILES' conflicts in the panes, one after the other, each in its own
+repository; then THEN, a function of the files still in conflict. Files the
+panes can't show (not in conflict, binary...) are skipped, said why."
+  (require 'magit)
+  (let ((queue (mapcar #'expand-file-name files))
+        (frame (selected-frame))
+        (skipped nil))
+    (cl-labels
+        ((left ()
+           (seq-filter (lambda (file)
+                         (let ((default-directory (file-name-directory file)))
+                           (and (magit-toplevel)
+                                (+my/merge--stages (file-relative-name file (magit-toplevel))))))
+                       (mapcar #'expand-file-name files)))
+         (next ()
+           ;; Its frame closed: no more.
+           (unless (frame-live-p frame)
+             (setq queue nil))
+           (when (frame-live-p frame)
+             (select-frame frame))
+           (if (null queue)
+               (progn (when skipped
+                        (message "Skipped: %s" (string-join (nreverse skipped) "; ")))
+                      (when then (funcall then (left))))
+             (let* ((file (pop queue))
+                    (default-directory (file-name-directory file))
+                    (top (magit-toplevel))
+                    (why (if top
+                             (+my/merge--why-not (file-relative-name file top))
+                           "Not in a Git repository")))
+               (if why
+                   (progn (push (format "%s (%s)" (file-name-nondirectory file) why) skipped)
+                          (next))
+                 (condition-case err
+                     (+my/merge-then (+my/merge file) #'next)
+                   (error (push (format "%s (%s)" (file-name-nondirectory file) (error-message-string err))
+                                skipped)
+                          (next))))))))
+      (next))))
+
+(defun +my/merge-all ()
+  "Resolve each conflicted file of the repository in the panes, one after the
+other (see `+my/merge-files')."
+  (interactive)
+  (require 'magit)
+  (let* ((default-directory (or (magit-toplevel) (user-error "Not in a Git repository")))
+         (files (magit-unmerged-files)))
+    (unless files
+      (user-error "No conflicts here"))
+    (+my/merge-files (mapcar #'expand-file-name files)
+                     (lambda (left)
+                       (message "%s" (if left
+                                         (format "Still in conflict: %s"
+                                                 (string-join (mapcar #'file-relative-name left) ", "))
+                                       "All conflicts resolved"))))))
+
 ;; CLOSING
 (defun +my/merge--session ()
   (or +my/merge--session (user-error "Not in a merge")))
@@ -923,7 +999,8 @@ config/merge.el); Magit's Ediff for what they can't show."
   "Close SESSION: its panes, the windows as they were."
   (unless (+my/merge-finished session)
     (setf (+my/merge-finished session) t)
-    (ignore-errors (set-window-configuration (+my/merge-winconf session)))
+    (when (+my/merge-winconf session)
+      (ignore-errors (set-window-configuration (+my/merge-winconf session))))
     (dolist (buffer (list (+my/merge-yours session) (+my/merge-theirs session)
                           (+my/merge-result session) (+my/merge-base session)
                           (+my/merge-bar session)))
@@ -936,6 +1013,17 @@ config/merge.el); Magit's Ediff for what they can't show."
       (let ((default-directory (+my/merge-toplevel session)))
         (ignore-errors (magit-refresh-all))))
     (run-hook-with-args '+my/merge-finished-functions session)))
+
+(defun +my/merge--frame-deleted-h (frame)
+  "FRAME deleted (a terminal's frame closed): its merges, aborted."
+  (dolist (buffer (buffer-list))
+    (when-let* ((session (buffer-local-value '+my/merge--session buffer))
+                ((eq (+my/merge-frame session) frame))
+                ((not (+my/merge-finished session))))
+      (setf (+my/merge-winconf session) nil)    ; its windows are gone
+      (+my/merge--finish session))))
+
+(add-hook 'delete-frame-functions #'+my/merge--frame-deleted-h)
 
 (defun +my/merge--killed-h ()
   "A pane closed (Cmd+W, say): the merge with it, aborted."

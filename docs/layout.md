@@ -43,6 +43,7 @@
 | `tests/` | Tests of this config's features (`tests/run.sh`; see [Tests](tests.md)): never loaded by Doom. |
 | `config/examples.el` | `M-x +my/example` and a `+my/example-NAME` command for each example (see [Examples](examples.md)). |
 | `examples/` | Examples of the features, each on files of its own in the temp folder (`merge.el`: a repository in conflict); loaded only when run. |
+| `cmd/diff.sh` | Git's conflicts resolved in the three panes from the shell, in the terminal or a GUI frame, one file after the other; `diff.sh example` runs the merge example (see [Shell commands](cmd.md)). |
 | `scripts/emacs.sh` | Installs Emacs (emacs-plus cask) and runs `doom sync`. |
 | `scripts/tools.sh` | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), BasicTeX, the `claude-agent-acp` bridge. |
 | `scripts/lsp.sh` | Language servers, formatters and linters. |
