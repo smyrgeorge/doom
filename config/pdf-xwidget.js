@@ -59,6 +59,7 @@
       background: none; color: var(--fg);
     }
     #toolbar button:hover { background: var(--hover); }
+    #toolbar button:not(:disabled), #sidebar .item, #sidebar .caret { cursor: pointer; }
     #toolbar button.on { color: var(--accent); background: var(--hover); }
     #toolbar button:disabled { opacity: .35; background: none; }
     #toolbar .info { min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -178,8 +179,28 @@
       outline: outline.length,
       page: doc ? viewer.currentPageNumber : 0,
       pages: doc ? doc.numPages : 0,
+      cursor,
     });
   }
+
+  // THE MOUSE POINTER: Emacs draws its own over the whole page (CSS cursors
+  // never show), so the page says in its title which one it wants under the
+  // mouse, for Emacs to show: hand (buttons, headings, links), text (the
+  // PDF's text) or arrow.
+  let cursor = 'arrow';
+  document.addEventListener('mousemove', (e) => {
+    const target = e.target instanceof Element ? e.target : null;
+    let next = 'arrow';
+    if (target) {
+      const css = getComputedStyle(target).cursor;
+      if (css === 'pointer' || target.closest('a[href]')) next = 'hand';
+      else if (css === 'text') next = 'text';
+    }
+    if (next !== cursor) {
+      cursor = next;
+      publish();
+    }
+  }, { passive: true });
 
   function apply() {
     const body = document.body;

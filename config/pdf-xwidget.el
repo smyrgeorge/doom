@@ -348,6 +348,41 @@ else the last PDF's looked at, else the variables above."
           +my/pdf-xwidget-toolbar (plist-get state :toolbar)
           +my/pdf-xwidget-outline-sidebar (plist-get state :sidebar))))
 
+;; THE MOUSE POINTER
+;; Emacs draws its own pointer over the page, the text I-beam everywhere, so
+;; CSS cursors never show (WebKit's hand over a button). The page says in its
+;; title which one it wants under the mouse: hand (buttons, headings, links),
+;; text (the PDF's text) or arrow. While the mouse is over a PDF, Emacs reads
+;; it every 0.1 s (no JavaScript) into the `pointer' text property under the
+;; page, which Emacs's pointer follows after the redisplay that brings.
+(defvar-local +my/pdf-xwidget--pointer nil
+  "The pointer shape the page's text has (see above).")
+
+(defvar +my/pdf-xwidget--pointer-timer nil)
+
+(defun +my/pdf-xwidget--pointer-tick ()
+  "Give the pointer over a PDF the shape its page wants (see above); stop
+once no PDF is open."
+  (if (not (seq-some (lambda (buffer)
+                       (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode))
+                     (buffer-list)))
+      (progn (cancel-timer +my/pdf-xwidget--pointer-timer)
+             (setq +my/pdf-xwidget--pointer-timer nil))
+    (let* ((mouse (mouse-pixel-position))
+           (window (and (frame-live-p (car mouse)) (numberp (cadr mouse))
+                        (window-at-x-y (cadr mouse) (cddr mouse) (car mouse)))))
+      (when (and (windowp window)
+                 (eq (buffer-local-value 'major-mode (window-buffer window))
+                     '+my/pdf-xwidget-mode))
+        (with-current-buffer (window-buffer window)
+          (when-let* ((state (+my/pdf-xwidget--state))
+                      (shape (pcase (plist-get state :cursor)
+                               ("hand" 'hand) ("text" 'text) (_ 'arrow)))
+                      ((not (eq shape +my/pdf-xwidget--pointer))))
+            (setq +my/pdf-xwidget--pointer shape)
+            (with-silent-modifications
+              (put-text-property (point-min) (point-max) 'pointer shape))))))))
+
 (defun +my/pdf-xwidget--write-page (data)
   "Write the page's index.html, reading the PDF from DATA (a data-N.js)."
   (require 'json)
@@ -497,6 +532,9 @@ it renames the buffer after the page)."
                  (with-silent-modifications
                    (put-text-property (point-min) (point-max)
                                       'display (list 'xwidget :xwidget xwidget)))
+                 (unless (timerp +my/pdf-xwidget--pointer-timer)
+                   (setq +my/pdf-xwidget--pointer-timer
+                         (run-with-timer 0.1 0.1 #'+my/pdf-xwidget--pointer-tick)))
                  (xwidget-webkit-goto-uri xwidget +my/pdf-xwidget--home))))))))
 
 (defun +my/pdf-xwidget--shown-h (window)

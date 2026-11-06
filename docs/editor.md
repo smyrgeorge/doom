@@ -167,6 +167,10 @@ to dark greys with their hues kept, like pdf-tools' midnight mode. A new PDF ope
 pages as the last one you looked at; `+my/pdf-xwidget-toolbar` (on), `+my/pdf-xwidget-outline-sidebar` and
 `+my/pdf-xwidget-dark-pages` (off) are for the first one.
 
+The mouse pointer is the hand over the buttons, headings and links, the I-beam over the PDF's text, the arrow
+elsewhere. Emacs draws its own pointer over the page (the I-beam everywhere), so a page's CSS cursor never shows: the
+page tells Emacs which one it wants, in its title, read every 0.1 s while the mouse is over a PDF.
+
 The page shows the search's matches, and, without the toolbar, the page number while it changes. Links out of the PDF
 open in the browser.
 A PDF changed on disk (e.g. rebuilt by LaTeX) is shown anew, where it was. It opens without a white flash: covered in
