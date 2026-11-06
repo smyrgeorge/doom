@@ -162,12 +162,8 @@
 ;; MARKDOWN
 (load! "config/markdown")
 
-;; PDF (pdf-tools: Cmd+= / Cmd+- / Cmd+0 and Cmd+scroll zoom)
-;; Off with Doom's pdf module (init.el): PDFs open in WebKit instead (below).
-;;(load! "config/pdf")
-
-;; PDF IN WEBKIT (macOS's own PDF viewer, inside the file's tab)
-(load! "config/pdf-xwidget")
+;; PDF (PDFs in WebKit, drawn by PDF.js, inside the file's tab)
+(load! "config/pdf")
 
 ;; PROJECTILE (projects under ~/dev, no file cache)
 (load! "config/projectile")

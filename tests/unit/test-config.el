@@ -98,26 +98,24 @@ until something is used."
     (should (equal loads (delete-dups (copy-sequence loads))))))
 
 (ert-deftest config/disabled-files-not-loaded ()
-  "config/cheatsheet and config/pdf exist but are commented out: not loaded."
+  "config/cheatsheet exists but is commented out: not loaded."
   (let ((text (with-temp-buffer
                 (insert-file-contents (expand-file-name "config.el" +test-root))
                 (buffer-string)))
         (loaded (+test-config--loaded)))
-    (dolist (name '("config/cheatsheet" "config/pdf"))
+    (dolist (name '("config/cheatsheet"))
       (should (file-exists-p (+test-config--file name)))
       (should-not (member name (+test-config--loads)))
       (should-not (member (+test-config--file name) loaded))
       (should (string-match-p (format "^;;(load! \"%s\")$" (regexp-quote name)) text))))
-  ;; Nothing they define is there.
-  (should-not (boundp '+my/cheatsheet-file))
-  (should-not (boundp '+my/pdf-wheel-zoom-step))
-  (should-not (fboundp '+my/pdf-wheel-zoom)))
+  ;; Nothing it defines is there.
+  (should-not (boundp '+my/cheatsheet-file)))
 
-(ert-deftest config/pdf-module-off-like-config-pdf ()
-  "config/pdf (pdf-tools zoom) is off because Doom's pdf module is: PDFs open in
-WebKit (config/pdf-xwidget)."
+(ert-deftest config/pdf-module-off-our-pdf-on ()
+  "Doom's pdf module (pdf-tools) is off: PDFs are this config's own viewer
+(config/pdf, WebKit), loaded; pdf-tools' old setup is gone."
   (should-not (+test-module-p :tools 'pdf))
-  (should (member "config/pdf-xwidget" (+test-config--loads))))
+  (should (member "config/pdf" (+test-config--loads))))
 
 (ert-deftest config/every-config-file-accounted-for ()
   "Each config/*.el is loaded or one of the disabled ones: none forgotten."
@@ -125,12 +123,12 @@ WebKit (config/pdf-xwidget)."
     (dolist (file (directory-files (expand-file-name "config/" +test-root) nil "\\.el\\'"))
       (let ((name (concat "config/" (file-name-sans-extension file))))
         (should (or (member name loads)
-                    (member name '("config/cheatsheet" "config/pdf"))))))))
+                    (member name '("config/cheatsheet"))))))))
 
 (ert-deftest config/files-are-lexical-and-say-so ()
   "Every config file uses lexical binding (compile.el relies on it) and its
 header says config.el loads it."
-  (dolist (name (append (+test-config--loads) '("config/cheatsheet" "config/pdf")))
+  (dolist (name (append (+test-config--loads) '("config/cheatsheet")))
     (with-temp-buffer
       (insert-file-contents (+test-config--file name))
       (goto-char (point-min))
@@ -219,14 +217,14 @@ it (config/markdown.el binds its clicks as it loads)."
   (should (< (+test-config--load-position "config/webkit")
              (+test-config--load-position "config/markdown")))
   (should (< (+test-config--load-position "config/webkit")
-             (+test-config--load-position "config/pdf-xwidget")))
+             (+test-config--load-position "config/pdf")))
   (should (eq (lookup-key +md-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select)))
 
 (ert-deftest config/order-actions-before-pdf ()
-  "config/actions.el before config/pdf-xwidget.el, which puts its provider
+  "config/actions.el before config/pdf.el, which puts its provider
 first in the Option+Enter menu."
   (should (< (+test-config--load-position "config/actions")
-             (+test-config--load-position "config/pdf-xwidget")))
+             (+test-config--load-position "config/pdf")))
   (should (eq (car +my/context-action-providers) '+my/context-actions-pdf))
   (should (equal (cdr +my/context-action-providers)
                  '(+my/context-actions-spelling +my/context-actions-lsp +my/context-actions-claude))))

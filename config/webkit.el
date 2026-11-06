@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/webkit.el -*- lexical-binding: t; -*-
 ;; Web pages inside Emacs, in WebKit (xwidgets): what the PDF viewer
-;; (config/pdf-xwidget.el) and the Markdown preview (config/markdown.el)
+;; (config/pdf.el) and the Markdown preview (config/markdown.el)
 ;; share. Loaded from config.el, before them.
 
 ;; ====== VARIABLES ======

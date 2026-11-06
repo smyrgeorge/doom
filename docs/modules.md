@@ -17,7 +17,7 @@ See `init.el` for the full list. Notable choices:
 
 Not enabled: `tabs` (centaur-tabs), replaced by [tabs per window](editor.md#tabs-per-window) (`config/tabs.el`);
 `nav-flash`, which blinked the cursor line after every buffer or window switch; `pdf` (pdf-tools), replaced by
-[PDFs in WebKit](editor.md#pdfs-in-webkit) (`config/pdf-xwidget.el`).
+[PDFs in WebKit](editor.md#pdfs-in-webkit) (`config/pdf.el`).
 
 ## Languages and tooling
 

@@ -1,10 +1,10 @@
 ;;; tests/e2e/test-pdf.el -*- lexical-binding: t; -*-
-;; config/pdf-xwidget.el in a GUI Emacs: real PDFs in WebKit, drawn by PDF.js
+;; config/pdf.el in a GUI Emacs: real PDFs in WebKit, drawn by PDF.js
 ;; (a copy of Doom's, never downloaded here). Pages, splits, settings,
 ;; outline, history, search, zoom, copy, Option+Enter, the toolbar's
 ;; requests, places, links out, revert, no PDF.js, closing.
 
-(+test-load "config/banner" "config/window" "config/actions" "config/webkit" "config/pdf-xwidget")
+(+test-load "config/banner" "config/window" "config/actions" "config/webkit" "config/pdf")
 
 ;; ====== SETUP ======
 
@@ -46,7 +46,7 @@
 (defun +test-pdf--state (&optional window)
   (let ((window (or window (selected-window))))
     (with-current-buffer (window-buffer window)
-      (+my/pdf-xwidget--state (+my/webkit-xwidget window)))))
+      (+my/pdf--state (+my/webkit-xwidget window)))))
 
 (defun +test-pdf--page (&optional window)
   (plist-get (+test-pdf--state window) :page))
@@ -74,7 +74,7 @@ text."
 (defun +test-pdf--open (file)
   "FILE opened in the selected window, ready."
   (find-file file)
-  (should (derived-mode-p '+my/pdf-xwidget-mode))
+  (should (derived-mode-p '+my/pdf-mode))
   (should (+test-pdf--ready))
   (current-buffer))
 
@@ -104,14 +104,14 @@ text."
      (+test-with-reset
        (setq +test-browsed nil
              +test-pdf--outside nil
-             +my/pdf-xwidget-dark-pages nil
-             +my/pdf-xwidget-toolbar t
-             +my/pdf-xwidget-outline-sidebar nil)
+             +my/pdf-dark-pages nil
+             +my/pdf-toolbar t
+             +my/pdf-outline-sidebar nil)
        ;; No place kept from another test (closing a PDF keeps its place:
        ;; the reset closed the last test's).
-       (setq +my/pdf-xwidget--places nil)
-       (when (file-exists-p +my/pdf-xwidget-places-file)
-         (delete-file +my/pdf-xwidget-places-file))
+       (setq +my/pdf--places nil)
+       (when (file-exists-p +my/pdf-places-file)
+         (delete-file +my/pdf-places-file))
        (+test-clear-messages)
        ,@body
        (+test-sleep 0.2))))
@@ -121,10 +121,10 @@ text."
 (ert-deftest e2e-pdf/opens-in-webkit-with-pdfjs ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (should (eq major-mode '+my/pdf-xwidget-mode))
-    (should-not +my/pdf-xwidget--native)
-    (should (string-suffix-p "/index.html" +my/pdf-xwidget--home))
-    (should (file-exists-p (expand-file-name "data-1.js" +my/pdf-xwidget--dir)))
+    (should (eq major-mode '+my/pdf-mode))
+    (should-not +my/pdf--native)
+    (should (string-suffix-p "/index.html" +my/pdf--home))
+    (should (file-exists-p (expand-file-name "data-1.js" +my/pdf--dir)))
     (let ((state (+test-pdf--state)))
       (should (eql (plist-get state :pages) 3))
       (should (eql (plist-get state :page) 1))
@@ -149,11 +149,11 @@ text."
                  (lambda () (error "Offline"))))
         (find-file file)
         (should (+test-wait-for (lambda () (+my/webkit-xwidget (selected-window))) 10))
-        (should +my/pdf-xwidget--native)
-        (should (equal +my/pdf-xwidget--home (+my/webkit-file-url file)))
+        (should +my/pdf--native)
+        (should (equal +my/pdf--home (+my/webkit-file-url file)))
         (should (> (+test-messages "own viewer: Offline") 0)) ; WebKit’s: `message' curls it
         ;; Keys that need PDF.js say so.
-        (+my/pdf-xwidget-next-page)
+        (+my/pdf-next-page)
         (should (> (+test-messages "No PDF.js here") 0))))))
 
 ;; ====== PAGES ======
@@ -161,23 +161,23 @@ text."
 (ert-deftest e2e-pdf/pages-and-scrolling ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-next-page)
+    (+my/pdf-next-page)
     (should (+test-pdf--wait-page 2))
-    (+my/pdf-xwidget-next-page)
+    (+my/pdf-next-page)
     (should (+test-pdf--wait-page 3))
-    (+my/pdf-xwidget-previous-page 2)
+    (+my/pdf-previous-page 2)
     (should (+test-pdf--wait-page 1))
-    (+my/pdf-xwidget-bottom)
+    (+my/pdf-bottom)
     (should (+test-pdf--wait-page 3))
-    (+my/pdf-xwidget-top)
+    (+my/pdf-top)
     (should (+test-pdf--wait-page 1))
-    (+my/pdf-xwidget-top 2)                ; 2gg: page 2
+    (+my/pdf-top 2)                ; 2gg: page 2
     (should (+test-pdf--wait-page 2))
     (should (+test-wait-for (lambda () (equal (+test-pdf--mode-line (selected-window)) "P2/3")) 3))
-    (+my/pdf-xwidget-top)
+    (+my/pdf-top)
     (should (+test-pdf--wait-page 1))
     (let ((y (string-to-number (+test-pdf--js "String(document.getElementById('viewerContainer').scrollTop)"))))
-      (+my/pdf-xwidget-scroll-down 3)
+      (+my/pdf-scroll-down 3)
       (should (+test-wait-for
                (lambda () (> (string-to-number (+test-pdf--js "String(document.getElementById('viewerContainer').scrollTop)"))
                              y))
@@ -188,17 +188,17 @@ text."
     (+test-pdf--open +test-pdf--book)
     (let ((scale (lambda () (plist-get (plist-get (+test-pdf--state) :place) :s))))
       (should (equal (funcall scale) "page-width"))
-      (+my/pdf-xwidget-actual-size)
+      (+my/pdf-actual-size)
       (should (+test-wait-for (lambda () (equal (funcall scale) "page-actual")) 3))
-      (+my/pdf-xwidget-zoom-in)
+      (+my/pdf-zoom-in)
       (should (+test-wait-for (lambda () (numberp (funcall scale))) 3))
       (let ((zoomed (funcall scale)))
         (should (> zoomed 100))
-        (+my/pdf-xwidget-zoom-out)
+        (+my/pdf-zoom-out)
         (should (+test-wait-for (lambda () (let ((s (funcall scale))) (and (numberp s) (< s zoomed)))) 3)))
-      (+my/pdf-xwidget-fit-page)
+      (+my/pdf-fit-page)
       (should (+test-wait-for (lambda () (equal (funcall scale) "page-fit")) 3))
-      (+my/pdf-xwidget-fit-width)
+      (+my/pdf-fit-width)
       (should (+test-wait-for (lambda () (equal (funcall scale) "page-width")) 3)))))
 
 ;; ====== SPLITS ======
@@ -211,7 +211,7 @@ text."
       (should (+test-pdf--ready right))
       (should (= (+test-messages "share an xwidget") 0))
       (select-window right)
-      (+my/pdf-xwidget-bottom)
+      (+my/pdf-bottom)
       (should (+test-pdf--wait-page 3 right))
       (should (eql (+test-pdf--page left) 1))
       ;; Each mode line its pane's page.
@@ -222,7 +222,7 @@ text."
 (ert-deftest e2e-pdf/a-new-pane-starts-where-the-pdf-was ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-bottom)
+    (+my/pdf-bottom)
     (should (+test-pdf--wait-page 3))
     (+test-sleep 0.3)                     ; its place said in its title
     (let ((right (split-window-right)))
@@ -235,18 +235,18 @@ text."
     (let* ((left (selected-window))
            (right (split-window-right)))
       (should (+test-pdf--ready right))
-      (+my/pdf-xwidget-toggle-dark)
-      (should +my/pdf-xwidget-dark-pages)
+      (+my/pdf-toggle-dark)
+      (should +my/pdf-dark-pages)
       (should (+test-wait-for (lambda () (and (plist-get (+test-pdf--state left) :dark)
                                               (plist-get (+test-pdf--state right) :dark)))
                               3))
-      (+my/pdf-xwidget-toggle-toolbar)
-      (should-not +my/pdf-xwidget-toolbar)
+      (+my/pdf-toggle-toolbar)
+      (should-not +my/pdf-toolbar)
       (should (+test-wait-for (lambda () (not (or (plist-get (+test-pdf--state left) :toolbar)
                                                   (plist-get (+test-pdf--state right) :toolbar))))
                               3))
-      (+my/pdf-xwidget-toggle-sidebar)
-      (should +my/pdf-xwidget-outline-sidebar)
+      (+my/pdf-toggle-sidebar)
+      (should +my/pdf-outline-sidebar)
       (should (+test-wait-for (lambda () (and (plist-get (+test-pdf--state left) :sidebar)
                                               (plist-get (+test-pdf--state right) :sidebar)))
                               3)))))
@@ -254,7 +254,7 @@ text."
 (ert-deftest e2e-pdf/the-next-pdf-opens-with-the-last-settings ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-toggle-dark)
+    (+my/pdf-toggle-dark)
     (should (+test-wait-for (lambda () (plist-get (+test-pdf--state) :dark)) 3))
     (+test-pdf--open (+test-pdf--file "second.pdf" :pages 1))
     (should (plist-get (+test-pdf--state) :dark))))
@@ -269,47 +269,47 @@ text."
                  (lambda (_prompt collection &rest _)
                    (setq offered (all-completions "" collection))
                    "Chapter 2")))
-        (+my/pdf-xwidget-outline)
+        (+my/pdf-outline)
         (should (+test-pdf--wait-page 3)))
       (should (equal (mapcar #'substring-no-properties offered) '("Chapter 1" "Chapter 2"))))))
 
 (ert-deftest e2e-pdf/back-and-forward ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget--js "outlineGo(1)")  ; Chapter 2, a jump
+    (+my/pdf--js "outlineGo(1)")  ; Chapter 2, a jump
     (should (+test-pdf--wait-page 3))
-    (+my/pdf-xwidget-back)
+    (+my/pdf-back)
     (should (+test-pdf--wait-page 1))
-    (+my/pdf-xwidget-forward)
+    (+my/pdf-forward)
     (should (+test-pdf--wait-page 3))))
 
 (ert-deftest e2e-pdf/search ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget--find "page   3\n text")   ; spaces and lines as one space
-    (should +my/pdf-xwidget--searching)
+    (+my/pdf--find "page   3\n text")   ; spaces and lines as one space
+    (should +my/pdf--searching)
     (should (+test-pdf--wait-page 3))
     (should (+test-wait-for (lambda () (> (string-to-number
                                            (+test-pdf--js "String(document.querySelectorAll('.highlight').length)"))
                                           0))
                             5))
     ;; Esc ends it: the highlights go.
-    (should (+my/pdf-xwidget--escape-h))
-    (should-not +my/pdf-xwidget--searching)
+    (should (+my/pdf--escape-h))
+    (should-not +my/pdf--searching)
     (should (+test-wait-for (lambda () (equal (+test-pdf--js "String(document.querySelectorAll('.highlight.selected').length)")
                                               "0"))
                             5))
-    (should-not (+my/pdf-xwidget--escape-h))))
+    (should-not (+my/pdf--escape-h))))
 
 (ert-deftest e2e-pdf/search-is-case-sensitive-with-a-capital ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-bottom)
+    (+my/pdf-bottom)
     (should (+test-pdf--wait-page 3))
-    (+my/pdf-xwidget--find "PAGE 1")         ; no match: stays
+    (+my/pdf--find "PAGE 1")         ; no match: stays
     (+test-sleep 0.8)
     (should (eql (+test-pdf--page) 3))
-    (+my/pdf-xwidget--find "page 1")         ; lower case: any case
+    (+my/pdf--find "page 1")         ; lower case: any case
     (should (+test-pdf--wait-page 1))))
 
 ;; ====== SIDEBAR ======
@@ -317,7 +317,7 @@ text."
 (ert-deftest e2e-pdf/thumbnails ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget--js "set({sidebar: true, view: 'pages'})")
+    (+my/pdf--js "set({sidebar: true, view: 'pages'})")
     (should (+test-wait-for (lambda () (equal (+test-pdf--js "String(document.querySelectorAll('#sidebar .thumb canvas').length)")
                                               "3"))
                             10))
@@ -328,7 +328,7 @@ text."
 (ert-deftest e2e-pdf/the-outline-sidebar ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget--js "set({sidebar: true, view: 'outline'})")
+    (+my/pdf--js "set({sidebar: true, view: 'outline'})")
     (should (+test-wait-for (lambda () (equal (+test-pdf--js "String(document.querySelectorAll('#sidebar .item').length)")
                                               "2"))
                             5))
@@ -358,7 +358,7 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
     (cl-letf (((symbol-function '+my/context-actions)
                (lambda () (setq shown (mapcar (lambda (a) (list (nth 0 a) (nth 1 a)))
                                               (+my/context-actions-pdf))))))
-      (+my/pdf-xwidget-actions)
+      (+my/pdf-actions)
       (+test-wait-for (lambda () shown) 3))
     shown))
 
@@ -386,9 +386,9 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
 (ert-deftest e2e-pdf/claude-is-told-the-file-and-page ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-next-page)
+    (+my/pdf-next-page)
     (should (+test-pdf--wait-page 2))
-    (let ((text (funcall (+my/pdf-xwidget--claude-context "Some  quoted\ntext ")
+    (let ((text (funcall (+my/pdf--claude-context "Some  quoted\ntext ")
                          (file-name-directory +test-pdf--book))))
       (should (equal text "From book.pdf, page 2:\n\n> Some  quoted\n> text")))))
 
@@ -413,7 +413,7 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
 (ert-deftest e2e-pdf/a-link-in-the-pdf-opens-in-the-browser ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-next-page)
+    (+my/pdf-next-page)
     (should (+test-pdf--wait-page 2))
     (should (+test-wait-for (lambda () (equal (+test-pdf--js "String(!!document.querySelector('.annotationLayer a[href^=\"https\"]'))")
                                               "true"))
@@ -430,12 +430,12 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
 (ert-deftest e2e-pdf/a-pdf-opens-where-it-was-closed ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-next-page)
+    (+my/pdf-next-page)
     (should (+test-pdf--wait-page 2))
     (+test-sleep 0.3)
     (kill-buffer (current-buffer))
-    (should (file-exists-p +my/pdf-xwidget-places-file))
-    (should (assoc (abbreviate-file-name +test-pdf--book) (+my/pdf-xwidget--read-places)))
+    (should (file-exists-p +my/pdf-places-file))
+    (should (assoc (abbreviate-file-name +test-pdf--book) (+my/pdf--read-places)))
     (+test-pdf--open +test-pdf--book)
     (should (+test-pdf--wait-page 2))))
 
@@ -443,45 +443,45 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
   "Kept in the places file: read anew (as after a restart) they're there."
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-bottom)
+    (+my/pdf-bottom)
     (should (+test-pdf--wait-page 3))
     (+test-sleep 0.3)
     (kill-buffer (current-buffer))
-    (setq +my/pdf-xwidget--places 'unread)
+    (setq +my/pdf--places 'unread)
     (should (eql (plist-get (cdr (assoc (abbreviate-file-name +test-pdf--book)
-                                        (+my/pdf-xwidget--read-places)))
+                                        (+my/pdf--read-places)))
                             :p)
                  3))))
 
 (ert-deftest e2e-pdf/quitting-emacs-keeps-places-and-cleans-up ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+my/pdf-xwidget-next-page)
+    (+my/pdf-next-page)
     (should (+test-pdf--wait-page 2))
     (+test-sleep 0.3)
-    (setq +my/pdf-xwidget--places nil)
-    (let ((dir +my/pdf-xwidget--dir))
-      (+my/pdf-xwidget--cleanup-h)
+    (setq +my/pdf--places nil)
+    (let ((dir +my/pdf--dir))
+      (+my/pdf--cleanup-h)
       (should-not (file-directory-p dir))
-      (should (assoc (abbreviate-file-name +test-pdf--book) +my/pdf-xwidget--places)))))
+      (should (assoc (abbreviate-file-name +test-pdf--book) +my/pdf--places)))))
 
 (ert-deftest e2e-pdf/a-changed-pdf-is-shown-anew-where-it-was ()
   (+test-pdf
     (let ((file (+test-pdf--file "changing.pdf" :pages 3)))
       (+test-pdf--open file)
-      (+my/pdf-xwidget-next-page)
+      (+my/pdf-next-page)
       (should (+test-pdf--wait-page 2))
       (+test-make-pdf file :pages 5)
       (revert-buffer t t)
       (should (+test-wait-for (lambda () (eql (plist-get (+test-pdf--state) :pages) 5)) 10))
       (should (eql (+test-pdf--page) 2))
-      (should (file-exists-p (expand-file-name "data-2.js" +my/pdf-xwidget--dir)))
-      (should-not (file-exists-p (expand-file-name "data-1.js" +my/pdf-xwidget--dir))))))
+      (should (file-exists-p (expand-file-name "data-2.js" +my/pdf--dir)))
+      (should-not (file-exists-p (expand-file-name "data-1.js" +my/pdf--dir))))))
 
 (ert-deftest e2e-pdf/closing-deletes-the-page-s-folder ()
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (let ((dir +my/pdf-xwidget--dir)
+    (let ((dir +my/pdf--dir)
           (xwidget (+my/webkit-xwidget (selected-window))))
       (should (file-directory-p dir))
       (+test-sleep 0.2)

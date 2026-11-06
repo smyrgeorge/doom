@@ -139,18 +139,18 @@ module); the `doom-one` theme; absolute line numbers. The frame opens maximized.
 
 PDFs open inside the file's tab as a web page in WebKit, like the [Markdown preview](markdown.md#live-markdown-preview),
 drawn by [PDF.js](https://mozilla.github.io/pdf.js/) (Mozilla's PDF renderer, Firefox's): pages sharp at any zoom,
-smooth trackpad scrolling, text selectable with the mouse (`config/pdf-xwidget.el`, the page's script
-`config/pdf-xwidget.js`). Emacs drives the page with JavaScript, so the keys are Evil's:
+smooth trackpad scrolling, text selectable with the mouse (`config/pdf.el`, the page's script
+`config/pdf.js`). Emacs drives the page with JavaScript, so the keys are Evil's:
 
 | Key | Action |
 |---|---|
-| `j` / `k`, `h` / `l` | Scroll (`+my/pdf-xwidget-scroll-step`, 60 px) |
+| `j` / `k`, `h` / `l` | Scroll (`+my/pdf-scroll-step`, 60 px) |
 | `C-d` / `C-u`, `C-f` / `C-b` | Half a screen / a screen |
 | `gg` / `G` | Top / bottom; with a count, that page (`5G`) |
 | `J` / `K` | Next / previous page |
 | `/` / `?` | Search forward / backward (case-sensitive with a capital); `n` / `N` next / previous match; `Esc` ends it |
 | `y` or `Cmd+C` | Copy the selected text (kill ring and clipboard) |
-| `Cmd+=` / `Cmd+-` (or `+` / `-`) | Zoom in / out (`+my/pdf-xwidget-zoom-step`, ×1.25); also `Cmd+scroll` |
+| `Cmd+=` / `Cmd+-` (or `+` / `-`) | Zoom in / out (`+my/pdf-zoom-step`, ×1.25); also `Cmd+scroll` |
 | `Cmd+0` / `W` / `P` | 100% / fit the width (as it opens) / fit the page |
 | `C-o` / `C-i` (or `Cmd+[` / `Cmd+]`) | Back / forward: where jumps (links, the outline, thumbnails, `gg` / `G`, a new search) left from |
 | `o` (`SPC m o`) | Go to a heading of the outline, picked in the minibuffer (`Chapter 1 › Section 1.1`, with its page) |
@@ -170,9 +170,9 @@ page shown, marked; **Pages**, the pages' thumbnails, drawn as they scroll into 
 pages**: the pages (and thumbnails) inverted to dark greys with their hues kept, like pdf-tools' midnight mode.
 
 A PDF opens where it was when last closed (page, place on it, zoom), even after Emacs restarted: kept in
-`+my/pdf-xwidget-places-file` (Doom's `.local/state/pdf-places`) for the last 300 closed. It opens with the toolbar,
-sidebar and dark pages as the last one you looked at; `+my/pdf-xwidget-toolbar` (on), `+my/pdf-xwidget-outline-sidebar`
-and `+my/pdf-xwidget-dark-pages` (off) are for the first one. The mode line shows the page (`P3/12`, doom-modeline's
+`+my/pdf-places-file` (Doom's `.local/state/pdf-places`) for the last 300 closed. It opens with the toolbar,
+sidebar and dark pages as the last one you looked at; `+my/pdf-toolbar` (on), `+my/pdf-outline-sidebar`
+and `+my/pdf-dark-pages` (off) are for the first one. The mode line shows the page (`P3/12`, doom-modeline's
 PDF line).
 
 Split (`SPC w v`, `SPC w SPC`, the tab's right-click menu...), each pane shows the PDF on its own: scrolled, zoomed and
@@ -202,9 +202,8 @@ viewer, trackpad only. Not that viewer by default: on macOS Emacs takes every ke
 and text selection didn't work inside Emacs. In a terminal, or an Emacs without xwidgets, PDFs open in doc-view,
 Emacs's own viewer.
 
-Doom's pdf module (pdf-tools) is off in `init.el`. Its setup is kept in `config/pdf.el`, not loaded: `Cmd+=` / `Cmd+-`
-/ `Cmd+0` zoom as in Preview, and `Cmd+scroll` a step (×1.1) per wheel notch. To go back to it, turn `pdf` on in
-`init.el`, load `config/pdf.el` instead of `config/pdf-xwidget.el` in `config.el`, and run `doom sync`.
+Doom's pdf module (pdf-tools) is off in `init.el`: PDFs are this config's own viewer (`config/pdf.el`, its page
+`config/pdf.js`).
 
 ## Mode line
 

@@ -14,9 +14,8 @@
 | `config/banner.el` | Notices at the top of a window (IntelliJ's editor notifications), with actions and ✕. |
 | `config/smooth.el` | Mouse-wheel notches glide (on top of Doom's pixel scrolling); scroll limit past the end; files with very long lines shown plain. |
 | `config/webkit.el` | Web pages inside Emacs (xwidget WebKit), for the PDF viewer and the Markdown preview: a view per window (splits), no white flash, links out, JavaScript, the page's title read, mouse pointer, clicks, scroll / copy keys. |
-| `config/pdf-xwidget.el` | PDFs in WebKit inside the file's tab, drawn by PDF.js (downloaded once); Evil keys, search, copy, zoom, outline, dark pages, back / forward, places kept, Option+Enter actions, Preview, print; splits (on `config/webkit.el`). |
-| `config/pdf-xwidget.js` | The PDF's page: PDF.js's viewer, toolbar and sidebar (outline, thumbnails), driven from Emacs through `window.pdfx`. |
-| `config/pdf.el` | pdf-tools' zoom like macOS apps: Cmd+= / Cmd+- / Cmd+0 and Cmd+scroll (not loaded: Doom's pdf module is off, see `config.el`). |
+| `config/pdf.el` | PDFs in WebKit inside the file's tab, drawn by PDF.js (downloaded once); Evil keys, search, copy, zoom, outline, dark pages, back / forward, places kept, Option+Enter actions, Preview, print; splits (on `config/webkit.el`). |
+| `config/pdf.js` | The PDF's page: PDF.js's viewer, toolbar and sidebar (outline, thumbnails), driven from Emacs through `window.pdfx`. |
 | `config/peek.el` | LSP peek (usages, definitions): calmer, with functions, line numbers, key hints. |
 | `config/treemacs.el` | Treemacs sidebar behaviour (auto-open, follow, git status, window keys). |
 | `config/cheatsheet.el` | Tips panel under treemacs, from `cheatsheet.org` (disabled for now, see `config.el`). |
@@ -40,6 +39,6 @@
 | `config/compile.el` | Byte-compiles this config's functions when Emacs is idle (they load as source). |
 | `tests/` | Tests of this config's features (`tests/run.sh`; see [Tests](tests.md)): never loaded by Doom. |
 | `scripts/emacs.sh` | Installs Emacs (emacs-plus cask) and runs `doom sync`. |
-| `scripts/tools.sh` | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), BasicTeX, pdf-tools build deps, the `claude-agent-acp` bridge. |
+| `scripts/tools.sh` | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), BasicTeX, the `claude-agent-acp` bridge. |
 | `scripts/lsp.sh` | Language servers, formatters and linters. |
 | `scripts/dict.sh` | Rebuilds `dict/tech.txt` from cspell's word lists (needs `npm`, `aspell`). |

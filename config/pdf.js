@@ -1,5 +1,5 @@
-// $DOOMDIR/config/pdf-xwidget.js
-// The page of a PDF in WebKit (config/pdf-xwidget.el): PDF.js's viewer
+// $DOOMDIR/config/pdf.js
+// The page of a PDF in WebKit (config/pdf.el): PDF.js's viewer
 // (pdfjs-dist 3.11, its plain-script builds) over the PDF's bytes, which a
 // data-N.js written by Emacs holds as base64 (a file:// page can't fetch other
 // files), with a toolbar and a sidebar (outline, page thumbnails).

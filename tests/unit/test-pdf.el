@@ -1,5 +1,5 @@
-;;; tests/unit/test-pdf-xwidget.el -*- lexical-binding: t; -*-
-;; config/pdf-xwidget.el: PDFs in WebKit, drawn by PDF.js (on config/webkit.el):
+;;; tests/unit/test-pdf.el -*- lexical-binding: t; -*-
+;; config/pdf.el: PDFs in WebKit, drawn by PDF.js (on config/webkit.el):
 ;; the mode and its doc-view fallback, no large-file prompt, PDF.js's install
 ;; (SHA-256 checked), the page (data-N.js, index.html, its settings), places
 ;; kept across sessions, the state read from the title (mode line, toolbar
@@ -13,7 +13,7 @@
 
 (require 'xwidget)                      ; before faking its functions
 (require 'json)
-(+test-load "config/actions" "config/webkit" "config/pdf-xwidget")
+(+test-load "config/actions" "config/webkit" "config/pdf")
 
 (defvar +my/sticky-separator)           ; config/sticky.el's, when loaded
 
@@ -168,15 +168,15 @@ again after."
             (+my/webkit--watch-timer nil)
             (+my/webkit--tidy-timer nil)
             (+my/pdf-js-dir (+test-pdf--fake-pdfjs))
-            (+my/pdf-xwidget-places-file
+            (+my/pdf-places-file
              (expand-file-name "pdf-places" (+test-pdf--new-dir "state")))
-            (+my/pdf-xwidget--places 'unread)
-            (+my/pdf-xwidget-toolbar t)
-            (+my/pdf-xwidget-dark-pages nil)
-            (+my/pdf-xwidget-outline-sidebar nil)
-            (+my/pdf-xwidget--search-history nil)
-            (+my/pdf-xwidget--actions-for nil)
-            (+my/pdf-xwidget--outline-for nil)
+            (+my/pdf--places 'unread)
+            (+my/pdf-toolbar t)
+            (+my/pdf-dark-pages nil)
+            (+my/pdf-outline-sidebar nil)
+            (+my/pdf--search-history nil)
+            (+my/pdf--actions-for nil)
+            (+my/pdf--outline-for nil)
             (+test-browsed nil)
             (kill-ring nil)
             (kill-ring-yank-pointer nil)
@@ -213,7 +213,7 @@ redisplay would; return WINDOW."
   (setf (+test-pdf--xw-title xw) (concat "pdfx " json)))
 
 (defun +test-pdf--pdfx (script)
-  "What `+my/pdf-xwidget--js' runs for SCRIPT."
+  "What `+my/pdf--js' runs for SCRIPT."
   (concat "window.pdfx && pdfx." script "\n;void 0"))
 
 (defun +test-pdf--scripts-of (function &rest args)
@@ -224,11 +224,11 @@ redisplay would; return WINDOW."
 
 (defun +test-pdf--options ()
   "The settings a page of the current buffer would start with, parsed."
-  (json-parse-string (+my/pdf-xwidget--options) :object-type 'plist
+  (json-parse-string (+my/pdf--options) :object-type 'plist
                      :false-object nil :null-object nil))
 
 (defun +test-pdf--page-html (buffer)
-  (+test-pdf--text (expand-file-name "index.html" (buffer-local-value '+my/pdf-xwidget--dir buffer))))
+  (+test-pdf--text (expand-file-name "index.html" (buffer-local-value '+my/pdf--dir buffer))))
 
 (defconst +test-pdf--no-pdf-js
   "No PDF.js here: M-x +my/pdf-js-install, then open the PDF again")
@@ -236,15 +236,15 @@ redisplay would; return WINDOW."
 ;; ====== SETTINGS ======
 
 (ert-deftest pdf/settings ()
-  (should (eq (default-value '+my/pdf-xwidget-toolbar) t))
-  (should-not (default-value '+my/pdf-xwidget-dark-pages))
-  (should-not (default-value '+my/pdf-xwidget-outline-sidebar))
-  (should (= +my/pdf-xwidget-places-max 300))
-  (should (= +my/pdf-xwidget-scroll-step 60))
-  (should (= +my/pdf-xwidget-zoom-step 1.25))
+  (should (eq (default-value '+my/pdf-toolbar) t))
+  (should-not (default-value '+my/pdf-dark-pages))
+  (should-not (default-value '+my/pdf-outline-sidebar))
+  (should (= +my/pdf-places-max 300))
+  (should (= +my/pdf-scroll-step 60))
+  (should (= +my/pdf-zoom-step 1.25))
   (should (equal +my/pdf-js-version "3.11.174"))
   ;; Doom's folders (the test's temp ones here), not the config's.
-  (should (equal +my/pdf-xwidget-places-file (expand-file-name "pdf-places" doom-state-dir)))
+  (should (equal +my/pdf-places-file (expand-file-name "pdf-places" doom-state-dir)))
   (should (equal +my/pdf-js-dir (expand-file-name "pdfjs-3.11.174/" doom-data-dir))))
 
 (ert-deftest pdf/pdf-js-files ()
@@ -254,8 +254,8 @@ redisplay would; return WINDOW."
     (should (string-match-p "\\`[0-9a-f]\\{64\\}\\'" (cdr file)))
     ;; The page loads each one, from PDF.js's folder.
     (should (string-match-p (regexp-quote (concat "%p" (file-name-nondirectory (car file))))
-                            +my/pdf-xwidget--page-template)))
-  (should (file-exists-p (expand-file-name "config/pdf-xwidget.js" +test-root))))
+                            +my/pdf--page-template)))
+  (should (file-exists-p (expand-file-name "config/pdf.js" +test-root))))
 
 (ert-deftest pdf/pdf-js-checksums-are-pdf-js-3-11-174s ()
   "The SHA-256s listed are those of Doom's copy of PDF.js (when there's one)."
@@ -270,20 +270,20 @@ redisplay would; return WINDOW."
 
 (ert-deftest pdf/pdfs-open-in-the-mode-by-name ()
   (dolist (name '("a.pdf" "B.PDF" "c.Pdf" "/tmp/with space/ü #1.pdf"))
-    (should (eq (assoc-default name auto-mode-alist #'string-match) '+my/pdf-xwidget-mode-maybe)))
+    (should (eq (assoc-default name auto-mode-alist #'string-match) '+my/pdf-mode-maybe)))
   (dolist (name '("a.pdf.txt" "pdf" "a.pdfx"))
-    (should-not (eq (assoc-default name auto-mode-alist #'string-match) '+my/pdf-xwidget-mode-maybe)))
+    (should-not (eq (assoc-default name auto-mode-alist #'string-match) '+my/pdf-mode-maybe)))
   ;; Ahead of doc-view's (and pdf-tools'): the first that matches.
   (should (eq (cdr (seq-find (lambda (entry) (and (stringp (car entry)) (string-match-p (car entry) "x.pdf")))
                              auto-mode-alist))
-              '+my/pdf-xwidget-mode-maybe))
-  (should (eq (cdr (assoc "%PDF" magic-mode-alist)) '+my/pdf-xwidget-mode-maybe)))
+              '+my/pdf-mode-maybe))
+  (should (eq (cdr (assoc "%PDF" magic-mode-alist)) '+my/pdf-mode-maybe)))
 
 (ert-deftest pdf/pdfs-open-in-webkit ()
   (+test-pdf
     (let ((buffer (find-file-noselect (+test-pdf--pdf "open.pdf"))))
       (with-current-buffer buffer
-        (should (eq major-mode '+my/pdf-xwidget-mode))
+        (should (eq major-mode '+my/pdf-mode))
         (should (derived-mode-p '+my/webkit-mode))
         ;; The file's bytes stay, unchanged: WebKit is shown over them.
         (should (string-prefix-p "%PDF-1.4" (buffer-substring-no-properties (point-min) (point-max))))
@@ -294,7 +294,7 @@ redisplay would; return WINDOW."
   "magic-mode-alist: a PDF without .pdf in its name (%PDF at its start)."
   (+test-pdf
     (let ((buffer (find-file-noselect (+test-make-pdf (+test-tmp-file "pdfs/no-extension") :pages 1))))
-      (should (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode)))))
+      (should (eq (buffer-local-value 'major-mode buffer) '+my/pdf-mode)))))
 
 (ert-deftest pdf/terminal-falls-back-to-doc-view ()
   (+test-pdf
@@ -304,19 +304,19 @@ redisplay would; return WINDOW."
                  (lambda () (push (current-buffer) called) (fundamental-mode))))
         (let ((buffer (find-file-noselect (+test-pdf--pdf "terminal.pdf"))))
           (should (equal called (list buffer)))
-          (should-not (eq (buffer-local-value 'major-mode buffer) '+my/pdf-xwidget-mode)))))))
+          (should-not (eq (buffer-local-value 'major-mode buffer) '+my/pdf-mode)))))))
 
 (ert-deftest pdf/p-a-local-file-in-webkit ()
   (+test-pdf
     (with-temp-buffer
-      (should-not (+my/pdf-xwidget-p))                    ; no file
+      (should-not (+my/pdf-p))                    ; no file
       (setq buffer-file-name "/tmp/x.pdf")
-      (should (+my/pdf-xwidget-p))
+      (should (+my/pdf-p))
       (setq buffer-file-name "/ssh:host:/tmp/x.pdf")
-      (should-not (+my/pdf-xwidget-p))                    ; remote
+      (should-not (+my/pdf-p))                    ; remote
       (setq buffer-file-name "/tmp/x.pdf")
       (cl-letf (((symbol-function '+my/webkit-p) #'ignore))
-        (should-not (+my/pdf-xwidget-p)))                 ; terminal
+        (should-not (+my/pdf-p)))                 ; terminal
       (setq buffer-file-name nil))))
 
 (ert-deftest pdf/no-large-file-prompt-for-pdfs ()
@@ -341,7 +341,7 @@ redisplay would; return WINDOW."
         (setq asked nil)
         (should-not (abort-if-file-too-large 10 "open" text))
         (should-not asked))))
-  (should (advice-member-p #'+my/pdf-xwidget-no-large-file-prompt-a #'abort-if-file-too-large)))
+  (should (advice-member-p #'+my/pdf-no-large-file-prompt-a #'abort-if-file-too-large)))
 
 ;; ====== PDF.JS ======
 
@@ -457,14 +457,14 @@ by their path in the npm package; others missing (an error)."
           (dir (+test-pdf--new-dir "data")))
       (with-temp-buffer
         (setq buffer-file-name file)
-        (setq-local +my/pdf-xwidget--dir dir)
-        (should (equal (+my/pdf-xwidget--write-data) "data-1.js"))
+        (setq-local +my/pdf--dir dir)
+        (should (equal (+my/pdf--write-data) "data-1.js"))
         (let ((js (+test-pdf--bytes (expand-file-name "data-1.js" dir))))
           (should (string-match "\\`window\\.PDFX_DATA=\"\\([A-Za-z0-9+/=]*\\)\";\n\\'" js))
           (should (equal (base64-decode-string (match-string 1 js)) (+test-pdf--bytes file))))
         ;; The next one: the one before deleted (the page has read it).
-        (should (equal (+my/pdf-xwidget--write-data) "data-2.js"))
-        (should (= +my/pdf-xwidget--data 2))
+        (should (equal (+my/pdf--write-data) "data-2.js"))
+        (should (= +my/pdf--data 2))
         (should (equal (directory-files dir nil "\\`[^.]") '("data-2.js")))
         (setq buffer-file-name nil)))))
 
@@ -473,12 +473,12 @@ by their path in the npm package; others missing (an error)."
   (with-temp-buffer
     (let ((face (make-symbol "test-face")))
       (make-empty-face face)
-      (should (equal (+my/pdf-xwidget--color face :background "#123456") "#123456"))
+      (should (equal (+my/pdf--color face :background "#123456") "#123456"))
       (set-face-attribute face nil :background "red" :foreground "#00ff00")
-      (should (equal (+my/pdf-xwidget--color face :background "#123456") "#ff0000"))
-      (should (equal (+my/pdf-xwidget--color face :foreground "#123456") "#00ff00"))
+      (should (equal (+my/pdf--color face :background "#123456") "#ff0000"))
+      (should (equal (+my/pdf--color face :foreground "#123456") "#00ff00"))
       (set-face-attribute face nil :background "no-such-colour")
-      (should (equal (+my/pdf-xwidget--color face :background "#123456") "#123456")))))
+      (should (equal (+my/pdf--color face :background "#123456") "#123456")))))
 
 (defmacro +test-pdf--with-theme (colours &rest body)
   "BODY with faces' colours as COLOURS ((FACE ATTRIBUTE . COLOUR)...)."
@@ -499,11 +499,11 @@ by their path in the npm package; others missing (an error)."
 
 (ert-deftest pdf/theme-colours-as-css-variables ()
   (+test-pdf--with-theme +test-pdf--theme
-    (should (equal (+my/pdf-xwidget--css-variables)
+    (should (equal (+my/pdf--css-variables)
                    "--bg:#000000;--bar:#ff0000;--fg:#ffffff;--dim:#00ff00;--hover:#0000ff;--accent:#ffff00;--border:#ff00ff")))
   ;; Without colours (batch's unspecified ones): doom-one's.
   (+test-pdf--with-theme (mapcar (lambda (c) (cons (car c) (cons (cadr c) 'unspecified))) +test-pdf--theme)
-    (should (equal (+my/pdf-xwidget--css-variables)
+    (should (equal (+my/pdf--css-variables)
                    "--bg:#282c34;--bar:#1d2026;--fg:#bbc2cf;--dim:#5b6268;--hover:#3f444a;--accent:#51afef;--border:#191b20"))))
 
 (ert-deftest pdf/page-made-in-a-folder-of-its-own ()
@@ -512,16 +512,16 @@ by their path in the npm package; others missing (an error)."
            (buffer (+test-pdf--open file))
            (xw (+test-pdf--xw buffer)))
       (with-current-buffer buffer
-        (should-not +my/pdf-xwidget--native)
-        (should (file-directory-p +my/pdf-xwidget--dir))
-        (should (string-prefix-p (expand-file-name "pdf-xwidget-" temporary-file-directory)
-                                 +my/pdf-xwidget--dir))
-        (should (= +my/pdf-xwidget--data 1))
-        (should (equal (directory-files +my/pdf-xwidget--dir nil "\\`[^.]") '("data-1.js" "index.html")))
-        (should (equal +my/pdf-xwidget--home
-                       (+my/webkit-file-url (expand-file-name "index.html" +my/pdf-xwidget--dir))))
-        (should (equal (+test-pdf--xw-uri xw) +my/pdf-xwidget--home))
-        (should (equal (xwidget-get xw 'home) +my/pdf-xwidget--home))))))
+        (should-not +my/pdf--native)
+        (should (file-directory-p +my/pdf--dir))
+        (should (string-prefix-p (expand-file-name "pdf-" temporary-file-directory)
+                                 +my/pdf--dir))
+        (should (= +my/pdf--data 1))
+        (should (equal (directory-files +my/pdf--dir nil "\\`[^.]") '("data-1.js" "index.html")))
+        (should (equal +my/pdf--home
+                       (+my/webkit-file-url (expand-file-name "index.html" +my/pdf--dir))))
+        (should (equal (+test-pdf--xw-uri xw) +my/pdf--home))
+        (should (equal (xwidget-get xw 'home) +my/pdf--home))))))
 
 (ert-deftest pdf/page-html ()
   (+test-pdf
@@ -532,16 +532,16 @@ by their path in the npm package; others missing (an error)."
       (with-current-buffer buffer
         (dolist (part (list "<!doctype html>"
                             "html,body{margin:0;height:100%;overflow:hidden;" ; %% is %
-                            (format "background:%s;" (+my/pdf-xwidget--color 'default :background "#282c34"))
+                            (format "background:%s;" (+my/pdf--color 'default :background "#282c34"))
                             "color-scheme:dark}"                             ; batch: dark
-                            (format ":root{%s}" (+my/pdf-xwidget--css-variables))
+                            (format ":root{%s}" (+my/pdf--css-variables))
                             (format "<link rel=\"stylesheet\" href=\"%spdf_viewer.css\">" pdfjs)
                             (format "<script src=\"%spdf.min.js\"></script>" pdfjs)
                             (format "<script src=\"%spdf.worker.min.js\"></script>" pdfjs)
                             (format "<script src=\"%spdf_viewer.js\"></script>" pdfjs)
-                            (format "<script>window.PDFX_OPTIONS = %s;</script>" (+my/pdf-xwidget--options))
+                            (format "<script>window.PDFX_OPTIONS = %s;</script>" (+my/pdf--options))
                             (format "<script src=\"%s\"></script>"
-                                    (+my/webkit-file-url (expand-file-name "config/pdf-xwidget.js" doom-user-dir)))
+                                    (+my/webkit-file-url (expand-file-name "config/pdf.js" doom-user-dir)))
                             "if (window.pdfx) pdfx.open(\"data-1.js\");"
                             "b.textContent = 'PDF.js did not load'"))
           (should (string-search part html)))))))
@@ -583,13 +583,13 @@ say so."
            (buffer (+test-pdf--open file))
            (xw (+test-pdf--xw buffer)))
       (with-current-buffer buffer
-        (should +my/pdf-xwidget--native)
-        (should-not +my/pdf-xwidget--dir)
-        (should (equal +my/pdf-xwidget--home (+my/webkit-file-url file)))
+        (should +my/pdf--native)
+        (should-not +my/pdf--dir)
+        (should (equal +my/pdf--home (+my/webkit-file-url file)))
         (should (equal (+my/webkit-url-file (+test-pdf--xw-uri xw)) file))
         (+test-clear-messages)
-        (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget-scroll-down))
-        (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget-toggle-dark))
+        (should-not (+test-pdf--scripts-of #'+my/pdf-scroll-down))
+        (should-not (+test-pdf--scripts-of #'+my/pdf-toggle-dark))
         (should (= (+test-messages (concat "^" (regexp-quote +test-pdf--no-pdf-js) " \\[2 times\\]$")) 1))))))
 
 (ert-deftest pdf/new-view-starts-where-the-pdf-is-looked-at ()
@@ -604,9 +604,9 @@ latest looked at; the same page, its data not written again."
              (x2 (+test-pdf--xw buffer w2)))
         (should-not (eq x1 x2))
         (with-current-buffer buffer
-          (should (equal (+test-pdf--xw-uri x2) +my/pdf-xwidget--home))
-          (should (= +my/pdf-xwidget--data 1))
-          (should (equal (directory-files +my/pdf-xwidget--dir nil "\\`[^.]") '("data-1.js" "index.html"))))
+          (should (equal (+test-pdf--xw-uri x2) +my/pdf--home))
+          (should (= +my/pdf--data 1))
+          (should (equal (directory-files +my/pdf--dir nil "\\`[^.]") '("data-1.js" "index.html"))))
         (let ((html (+test-pdf--page-html buffer)))
           (should (string-search "pdfx.open(\"data-1.js\")" html))
           (should (string-search "window.PDFX_OPTIONS = {\"dark\":true,\"toolbar\":false,\"sidebar\":true,\"view\":\"thumbnails\",\"place\":{\"page\":5,\"top\":0.25,\"zoom\":\"page-width\"},\"zoomStep\":1.25};" html)))))))
@@ -617,7 +617,7 @@ latest looked at; the same page, its data not written again."
            (buffer (+test-pdf--open (+test-pdf--pdf "native split.pdf")))
            (w2 (+test-pdf--show buffer (split-window nil nil 'right))))
       (should (equal (+test-pdf--xw-uri (+test-pdf--xw buffer w2))
-                     (buffer-local-value '+my/pdf-xwidget--home buffer))))))
+                     (buffer-local-value '+my/pdf--home buffer))))))
 
 ;; SETTINGS A PAGE STARTS WITH
 
@@ -629,27 +629,27 @@ latest looked at; the same page, its data not written again."
            (x1 (+test-pdf--xw buffer w1))
            (x2 (+test-pdf--xw buffer w2)))
       (with-current-buffer buffer
-        (should-not (+my/pdf-xwidget--state))          ; nothing said yet
+        (should-not (+my/pdf--state))          ; nothing said yet
         (setf (+test-pdf--xw-title x1) "state.pdf")    ; WebKit's own title
-        (should-not (+my/pdf-xwidget--state))
+        (should-not (+my/pdf--state))
         (+test-pdf--say x1 "{\"dark\":true,\"page\":2,\"pages\":9,\"cursor\":\"text\",\"action\":null}")
         (+test-pdf--say x2 "{\"dark\":false,\"page\":8}")
         (select-window w1)
-        (should (equal (+my/pdf-xwidget--state) '(:dark t :page 2 :pages 9 :cursor "text" :action nil)))
-        (should (equal (+my/pdf-xwidget--state x2) '(:dark nil :page 8)))
+        (should (equal (+my/pdf--state) '(:dark t :page 2 :pages 9 :cursor "text" :action nil)))
+        (should (equal (+my/pdf--state x2) '(:dark nil :page 8)))
         (select-window w2)
         (set-buffer buffer)
-        (should (equal (+my/pdf-xwidget--state) '(:dark nil :page 8)))))))
+        (should (equal (+my/pdf--state) '(:dark nil :page 8)))))))
 
 (ert-deftest pdf/options-of-the-first-pdf-from-the-variables ()
   (+test-pdf
     (with-current-buffer (find-file-noselect (+test-pdf--pdf "first.pdf"))
       (should (equal (+test-pdf--options)
                      '(:dark nil :toolbar t :sidebar nil :view "outline" :place nil :zoomStep 1.25)))
-      (let ((+my/pdf-xwidget-dark-pages t)
-            (+my/pdf-xwidget-toolbar nil)
-            (+my/pdf-xwidget-outline-sidebar t)
-            (+my/pdf-xwidget-zoom-step 1.5))
+      (let ((+my/pdf-dark-pages t)
+            (+my/pdf-toolbar nil)
+            (+my/pdf-outline-sidebar t)
+            (+my/pdf-zoom-step 1.5))
         (should (equal (+test-pdf--options)
                        '(:dark t :toolbar nil :sidebar t :view "outline" :place nil :zoomStep 1.5)))))))
 
@@ -658,7 +658,7 @@ latest looked at; the same page, its data not written again."
     (let* ((buffer (+test-pdf--open (+test-pdf--pdf "own.pdf"))))
       (+test-pdf--say (+test-pdf--xw buffer)
                       "{\"dark\":true,\"toolbar\":false,\"sidebar\":false,\"view\":\"thumbnails\",\"place\":{\"page\":2}}")
-      (let ((+my/pdf-xwidget-toolbar t))
+      (let ((+my/pdf-toolbar t))
         (with-current-buffer buffer
           (should (equal (+test-pdf--options)
                          '(:dark t :toolbar nil :sidebar nil :view "thumbnails" :place (:page 2) :zoomStep 1.25))))))))
@@ -686,49 +686,49 @@ latest looked at; the same page, its data not written again."
   (+test-pdf
     (with-temp-buffer
       (setq buffer-file-name (+test-tmp-file "pdfs/kept ü #1.pdf"))
-      (should-not (+my/pdf-xwidget--kept-place))           ; no file yet
-      (should-not (file-exists-p +my/pdf-xwidget-places-file))
-      (+my/pdf-xwidget--keep-place '(:page 3 :top 0.5 :zoom "page-width"))
-      (should (file-exists-p +my/pdf-xwidget-places-file))
-      (should (equal (+my/pdf-xwidget--kept-place) '(:page 3 :top 0.5 :zoom "page-width")))
+      (should-not (+my/pdf--kept-place))           ; no file yet
+      (should-not (file-exists-p +my/pdf-places-file))
+      (+my/pdf--keep-place '(:page 3 :top 0.5 :zoom "page-width"))
+      (should (file-exists-p +my/pdf-places-file))
+      (should (equal (+my/pdf--kept-place) '(:page 3 :top 0.5 :zoom "page-width")))
       ;; By the file's (abbreviated) name.
-      (should (equal (caar (+my/pdf-xwidget--read-places)) (abbreviate-file-name buffer-file-name)))
+      (should (equal (caar (+my/pdf--read-places)) (abbreviate-file-name buffer-file-name)))
       ;; Emacs started again: read from the file.
-      (setq +my/pdf-xwidget--places 'unread)
-      (should (equal (+my/pdf-xwidget--kept-place) '(:page 3 :top 0.5 :zoom "page-width")))
+      (setq +my/pdf--places 'unread)
+      (should (equal (+my/pdf--kept-place) '(:page 3 :top 0.5 :zoom "page-width")))
       (setq buffer-file-name nil)
-      (should-not (+my/pdf-xwidget--kept-place)))))
+      (should-not (+my/pdf--kept-place)))))
 
 (ert-deftest pdf/places-read-once ()
   (+test-pdf
     (+test-file "places-once" "((\"/a.pdf\" :page 1))")
-    (let ((+my/pdf-xwidget-places-file (+test-tmp-file "places-once")))
-      (should (equal (+my/pdf-xwidget--read-places) '(("/a.pdf" :page 1))))
+    (let ((+my/pdf-places-file (+test-tmp-file "places-once")))
+      (should (equal (+my/pdf--read-places) '(("/a.pdf" :page 1))))
       (+test-file "places-once" "((\"/b.pdf\" :page 2))")
-      (should (equal (+my/pdf-xwidget--read-places) '(("/a.pdf" :page 1)))))))
+      (should (equal (+my/pdf--read-places) '(("/a.pdf" :page 1)))))))
 
 (ert-deftest pdf/places-for-the-latest-closed-only ()
   (+test-pdf
-    (let ((+my/pdf-xwidget-places-max 3))
+    (let ((+my/pdf-places-max 3))
       (with-temp-buffer
         (dolist (n '(1 2 3 4 5))
           (setq buffer-file-name (format "/tmp/pdf-%d.pdf" n))
-          (+my/pdf-xwidget--keep-place (list :page n)))
-        (should (equal (mapcar #'car (+my/pdf-xwidget--read-places))
+          (+my/pdf--keep-place (list :page n)))
+        (should (equal (mapcar #'car (+my/pdf--read-places))
                        '("/tmp/pdf-5.pdf" "/tmp/pdf-4.pdf" "/tmp/pdf-3.pdf")))
         ;; Closed again: first, once.
         (setq buffer-file-name "/tmp/pdf-3.pdf")
-        (+my/pdf-xwidget--keep-place '(:page 30))
-        (should (equal (+my/pdf-xwidget--read-places)
+        (+my/pdf--keep-place '(:page 30))
+        (should (equal (+my/pdf--read-places)
                        '(("/tmp/pdf-3.pdf" :page 30) ("/tmp/pdf-5.pdf" :page 5) ("/tmp/pdf-4.pdf" :page 4))))
         ;; No place, no file: nothing.
-        (+my/pdf-xwidget--keep-place nil)
+        (+my/pdf--keep-place nil)
         (setq buffer-file-name nil)
-        (+my/pdf-xwidget--keep-place '(:page 1))
-        (should (= (length (+my/pdf-xwidget--read-places)) 3))
+        (+my/pdf--keep-place '(:page 1))
+        (should (= (length (+my/pdf--read-places)) 3))
         ;; The file says the same.
-        (setq +my/pdf-xwidget--places 'unread)
-        (should (equal (mapcar #'car (+my/pdf-xwidget--read-places))
+        (setq +my/pdf--places 'unread)
+        (should (equal (mapcar #'car (+my/pdf--read-places))
                        '("/tmp/pdf-3.pdf" "/tmp/pdf-5.pdf" "/tmp/pdf-4.pdf")))))))
 
 (ert-deftest pdf/places-file-written-whole ()
@@ -739,64 +739,64 @@ latest looked at; the same page, its data not written again."
             (print-level 1))
         (dolist (n '(1 2 3 4))
           (setq buffer-file-name (format "/tmp/whole-%d.pdf" n))
-          (+my/pdf-xwidget--keep-place (list :page n :top 0.5 :zoom "auto"))))
+          (+my/pdf--keep-place (list :page n :top 0.5 :zoom "auto"))))
       (setq buffer-file-name nil)
-      (setq +my/pdf-xwidget--places 'unread)
-      (should (= (length (+my/pdf-xwidget--read-places)) 4))
-      (should (equal (cdar (+my/pdf-xwidget--read-places)) '(:page 4 :top 0.5 :zoom "auto"))))))
+      (setq +my/pdf--places 'unread)
+      (should (= (length (+my/pdf--read-places)) 4))
+      (should (equal (cdar (+my/pdf--read-places)) '(:page 4 :top 0.5 :zoom "auto"))))))
 
 (ert-deftest pdf/places-file-broken-or-not-writable ()
   (+test-pdf
     (with-temp-buffer
       (setq buffer-file-name "/tmp/broken.pdf")
       ;; Broken: none kept, and it's written anew.
-      (+test-pdf--write-bytes +my/pdf-xwidget-places-file "((\"/x.pdf\" :page")
-      (should-not (+my/pdf-xwidget--read-places))
-      (+my/pdf-xwidget--keep-place '(:page 2))
-      (setq +my/pdf-xwidget--places 'unread)
-      (should (equal (+my/pdf-xwidget--read-places) '(("/tmp/broken.pdf" :page 2))))
+      (+test-pdf--write-bytes +my/pdf-places-file "((\"/x.pdf\" :page")
+      (should-not (+my/pdf--read-places))
+      (+my/pdf--keep-place '(:page 2))
+      (setq +my/pdf--places 'unread)
+      (should (equal (+my/pdf--read-places) '(("/tmp/broken.pdf" :page 2))))
       ;; Not writable (its folder can't be made): no error, kept for the session.
-      (let ((+my/pdf-xwidget-places-file
+      (let ((+my/pdf-places-file
              (expand-file-name "sub/pdf-places" (+test-file "places-not-a-folder" "a file"))))
-        (+my/pdf-xwidget--keep-place '(:page 9))
-        (should (equal (+my/pdf-xwidget--kept-place) '(:page 9))))
+        (+my/pdf--keep-place '(:page 9))
+        (should (equal (+my/pdf--kept-place) '(:page 9))))
       (setq buffer-file-name nil))))
 
 (ert-deftest pdf/places-file-made-with-its-folder ()
   (+test-pdf
-    (let ((+my/pdf-xwidget-places-file (expand-file-name "a/b/pdf-places" (+test-pdf--new-dir "deep"))))
+    (let ((+my/pdf-places-file (expand-file-name "a/b/pdf-places" (+test-pdf--new-dir "deep"))))
       (with-temp-buffer
         (setq buffer-file-name "/tmp/deep.pdf")
-        (+my/pdf-xwidget--keep-place '(:page 1))
+        (+my/pdf--keep-place '(:page 1))
         (setq buffer-file-name nil))
-      (should (file-exists-p +my/pdf-xwidget-places-file)))))
+      (should (file-exists-p +my/pdf-places-file)))))
 
 (ert-deftest pdf/remember-the-settings-and-the-place ()
   (+test-pdf
     (let ((buffer (+test-pdf--open (+test-pdf--pdf "remember.pdf"))))
       (with-current-buffer buffer
         ;; Nothing said yet: nothing kept.
-        (+my/pdf-xwidget--remember)
-        (should (eq +my/pdf-xwidget-toolbar t))
-        (should-not (+my/pdf-xwidget--read-places))
+        (+my/pdf--remember)
+        (should (eq +my/pdf-toolbar t))
+        (should-not (+my/pdf--read-places))
         (+test-pdf--say (+test-pdf--xw buffer)
                         "{\"dark\":true,\"toolbar\":false,\"sidebar\":true,\"place\":{\"page\":4,\"top\":0.1}}")
-        (+my/pdf-xwidget--remember)
-        (should (eq +my/pdf-xwidget-dark-pages t))
-        (should-not +my/pdf-xwidget-toolbar)
-        (should (eq +my/pdf-xwidget-outline-sidebar t))
-        (should (equal (+my/pdf-xwidget--kept-place) '(:page 4 :top 0.1)))))))
+        (+my/pdf--remember)
+        (should (eq +my/pdf-dark-pages t))
+        (should-not +my/pdf-toolbar)
+        (should (eq +my/pdf-outline-sidebar t))
+        (should (equal (+my/pdf--kept-place) '(:page 4 :top 0.1)))))))
 
 (ert-deftest pdf/closing-a-pdf-keeps-its-place-for-next-time ()
   (+test-pdf
     (let* ((file (+test-pdf--pdf "closed.pdf"))
            (buffer (+test-pdf--open file))
-           (dir (buffer-local-value '+my/pdf-xwidget--dir buffer)))
+           (dir (buffer-local-value '+my/pdf--dir buffer)))
       (+test-pdf--say (+test-pdf--xw buffer) "{\"dark\":false,\"place\":{\"page\":6,\"top\":0.75}}")
       (kill-buffer buffer)
       (should-not (file-exists-p dir))                     ; its page deleted
       (should (seq-every-p #'+test-pdf--xw-killed +test-pdf--made))
-      (setq +my/pdf-xwidget--places 'unread)                ; even after a restart
+      (setq +my/pdf--places 'unread)                ; even after a restart
       (let ((again (+test-pdf--open file)))
         (with-current-buffer again
           (should (equal (plist-get (+test-pdf--options) :place) '(:page 6 :top 0.75)))
@@ -805,33 +805,33 @@ latest looked at; the same page, its data not written again."
 (ert-deftest pdf/another-mode-keeps-the-place-and-deletes-the-page ()
   (+test-pdf
     (let* ((buffer (+test-pdf--open (+test-pdf--pdf "mode.pdf")))
-           (dir (buffer-local-value '+my/pdf-xwidget--dir buffer)))
+           (dir (buffer-local-value '+my/pdf--dir buffer)))
       (+test-pdf--say (+test-pdf--xw buffer) "{\"place\":{\"page\":2}}")
       (with-current-buffer buffer
         (fundamental-mode)
         (should-not (file-exists-p dir))
-        (should (equal (+my/pdf-xwidget--kept-place) '(:page 2)))
+        (should (equal (+my/pdf--kept-place) '(:page 2)))
         (should-not +my/webkit--views)))))
 
 (ert-deftest pdf/quitting-emacs-keeps-places-and-deletes-pages ()
-  (should (memq #'+my/pdf-xwidget--cleanup-h kill-emacs-hook))
+  (should (memq #'+my/pdf--cleanup-h kill-emacs-hook))
   (+test-pdf
     (let* ((a (+test-pdf--open (+test-pdf--pdf "quit-a.pdf")))
            (b (+test-pdf--open (+test-pdf--pdf "quit-b.pdf") (split-window nil nil 'right)))
-           (dirs (list (buffer-local-value '+my/pdf-xwidget--dir a)
-                       (buffer-local-value '+my/pdf-xwidget--dir b)))
-           (keep (symbol-function '+my/pdf-xwidget--keep-place)))
+           (dirs (list (buffer-local-value '+my/pdf--dir a)
+                       (buffer-local-value '+my/pdf--dir b)))
+           (keep (symbol-function '+my/pdf--keep-place)))
       (+test-pdf--say (+test-pdf--xw a (get-buffer-window a)) "{\"place\":{\"page\":1}}")
       (+test-pdf--say (+test-pdf--xw b (get-buffer-window b)) "{\"place\":{\"page\":2}}")
       ;; One failing doesn't stop the others.
-      (cl-letf (((symbol-function '+my/pdf-xwidget--keep-place)
+      (cl-letf (((symbol-function '+my/pdf--keep-place)
                  (lambda (place)
                    (when (eq (current-buffer) a) (error "Disk full"))
                    (funcall keep place))))
-        (+my/pdf-xwidget--cleanup-h))
+        (+my/pdf--cleanup-h))
       (should-not (seq-some #'file-exists-p dirs))
       (with-current-buffer b
-        (should (equal (+my/pdf-xwidget--kept-place) '(:page 2)))))))
+        (should (equal (+my/pdf--kept-place) '(:page 2)))))))
 
 ;; ====== WATCHING ======
 
@@ -844,15 +844,15 @@ latest looked at; the same page, its data not written again."
       (+test-pdf--say (+test-pdf--xw buffer w2) "{\"page\":7,\"pages\":12}")
       (+my/webkit--watch)
       (with-selected-window w1
-        (should (equal (+my/pdf-xwidget--page) "  P3/12 ")))
+        (should (equal (+my/pdf--page) "  P3/12 ")))
       (with-selected-window w2
-        (should (equal (+my/pdf-xwidget--page) "  P7/12 ")))
+        (should (equal (+my/pdf--page) "  P7/12 ")))
       ;; Another buffer in the window: not its page.
       (with-selected-window w1
         (with-current-buffer "*scratch*"
-          (should-not (+my/pdf-xwidget--page))))
+          (should-not (+my/pdf--page))))
       ;; doom-modeline's PDF line shows it.
-      (should (equal (buffer-local-value 'doom-modeline--pdf-pages buffer) '(:eval (+my/pdf-xwidget--page))))
+      (should (equal (buffer-local-value 'doom-modeline--pdf-pages buffer) '(:eval (+my/pdf--page))))
       (should (get 'doom-modeline--pdf-pages 'risky-local-variable)))))
 
 (ert-deftest pdf/mode-line-redrawn-only-when-the-page-changes ()
@@ -862,16 +862,16 @@ latest looked at; the same page, its data not written again."
           (redraws 0))
       (cl-letf (((symbol-function 'force-mode-line-update) (lambda (&rest _) (setq redraws (1+ redraws)))))
         (with-current-buffer buffer
-          (+my/pdf-xwidget--show-page window '(:page 3 :pages 12))
-          (+my/pdf-xwidget--show-page window '(:page 3 :pages 12))
+          (+my/pdf--show-page window '(:page 3 :pages 12))
+          (+my/pdf--show-page window '(:page 3 :pages 12))
           (should (= redraws 1))
-          (should (equal (window-parameter window '+my/pdf-xwidget-page) (cons buffer "  P3/12 ")))
-          (+my/pdf-xwidget--show-page window '(:page 4 :pages 12))
+          (should (equal (window-parameter window '+my/pdf-page) (cons buffer "  P3/12 ")))
+          (+my/pdf--show-page window '(:page 4 :pages 12))
           (should (= redraws 2))
           ;; Not known yet: nothing shown.
           (dolist (state '((:pages 0 :page 1) (:page "x" :pages 3) (:page 1) nil))
-            (+my/pdf-xwidget--show-page window state)
-            (should (equal (window-parameter window '+my/pdf-xwidget-page) (cons buffer nil))))
+            (+my/pdf--show-page window state)
+            (should (equal (window-parameter window '+my/pdf-page) (cons buffer nil))))
           (should (= redraws 3)))))))
 
 (ert-deftest pdf/toolbar-requests-answered-once ()
@@ -880,16 +880,16 @@ latest looked at; the same page, its data not written again."
            (buffer (+test-pdf--open file))
            (xw (+test-pdf--xw buffer)))
       (with-current-buffer buffer
-        (+my/pdf-xwidget--answer xw '(:action (:name "preview" :n 0)))
+        (+my/pdf--answer xw '(:action (:name "preview" :n 0)))
         (should-not +test-pdf--opened)
-        (+my/pdf-xwidget--answer xw '(:action (:name "preview" :n 1)))
-        (+my/pdf-xwidget--answer xw '(:action (:name "preview" :n 1)))
+        (+my/pdf--answer xw '(:action (:name "preview" :n 1)))
+        (+my/pdf--answer xw '(:action (:name "preview" :n 1)))
         (should (= (length +test-pdf--opened) 1))
-        (+my/pdf-xwidget--answer xw '(:action (:name "print" :n 2)))
-        (+my/pdf-xwidget--answer xw '(:action (:name "print" :n 2)))
+        (+my/pdf--answer xw '(:action (:name "print" :n 2)))
+        (+my/pdf--answer xw '(:action (:name "print" :n 2)))
         (should (= (length +test-pdf--processes) 1))
-        (+my/pdf-xwidget--answer xw '(:action (:name "unknown" :n 3)))
-        (+my/pdf-xwidget--answer xw '(:page 1))             ; no request
+        (+my/pdf--answer xw '(:action (:name "unknown" :n 3)))
+        (+my/pdf--answer xw '(:page 1))             ; no request
         (should (= (length +test-pdf--opened) 1))
         (should (= (length +test-pdf--processes) 1))
         (should (eql (xwidget-get xw 'answered) 0))))))
@@ -914,13 +914,13 @@ latest looked at; the same page, its data not written again."
       (cl-letf (((symbol-function '+my/webkit-pointer)
                  (lambda (w shape) (should (eq w window)) (push shape shapes))))
         (with-current-buffer buffer
-          (+my/pdf-xwidget--watch window xw)                 ; nothing said yet
+          (+my/pdf--watch window xw)                 ; nothing said yet
           (should-not shapes)
           (dolist (cursor '("hand" "text" "arrow" "grab"))
             (+test-pdf--say xw (format "{\"cursor\":%S}" cursor))
-            (+my/pdf-xwidget--watch window xw))
+            (+my/pdf--watch window xw))
           (+test-pdf--say xw "{\"page\":1}")
-          (+my/pdf-xwidget--watch window xw))
+          (+my/pdf--watch window xw))
         (should (equal (nreverse shapes) '(hand text arrow arrow arrow)))))))
 
 (ert-deftest pdf/pointer-into-the-text ()
@@ -944,14 +944,14 @@ latest looked at; the same page, its data not written again."
            (x1 (+test-pdf--xw buffer w1))
            (x2 (+test-pdf--xw buffer w2)))
       (select-window w2)
-      (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget--js "top()") (list (+test-pdf--pdfx "top()"))))
+      (should (equal (+test-pdf--scripts-of #'+my/pdf--js "top()") (list (+test-pdf--pdfx "top()"))))
       (should (eq (caar +test-pdf--scripts) x2))
-      (+test-pdf--scripts-of #'+my/pdf-xwidget--js "endFind()" t)
+      (+test-pdf--scripts-of #'+my/pdf--js "endFind()" t)
       (should (seq-set-equal-p (mapcar #'car +test-pdf--scripts) (list x1 x2)))
       ;; No view: nothing, quietly.
       (with-current-buffer (find-file-noselect (+test-pdf--pdf "js-hidden.pdf"))
         (+test-clear-messages)
-        (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget--js "top()"))
+        (should-not (+test-pdf--scripts-of #'+my/pdf--js "top()"))
         (should (= (+test-messages "No PDF.js") 0))))))
 
 ;; ====== REVERT ======
@@ -965,8 +965,8 @@ place), the page written for views to come."
            (w1 (selected-window))
            (w2 (+test-pdf--show buffer (split-window w1 nil 'right))))
       (with-current-buffer buffer
-        (should (eq revert-buffer-function #'+my/pdf-xwidget--revert))
-        (setq +my/pdf-xwidget--searching t)
+        (should (eq revert-buffer-function #'+my/pdf--revert))
+        (setq +my/pdf--searching t)
         (+test-make-pdf file :pages 5)
         (set-file-times file (time-add nil 10))
         (should-not (verify-visited-file-modtime))
@@ -974,9 +974,9 @@ place), the page written for views to come."
         (revert-buffer t t)
         (should (verify-visited-file-modtime))
         (should-not (buffer-modified-p))
-        (should-not +my/pdf-xwidget--searching)
-        (should (equal (directory-files +my/pdf-xwidget--dir nil "\\`[^.]") '("data-2.js" "index.html")))
-        (let ((js (+test-pdf--bytes (expand-file-name "data-2.js" +my/pdf-xwidget--dir))))
+        (should-not +my/pdf--searching)
+        (should (equal (directory-files +my/pdf--dir nil "\\`[^.]") '("data-2.js" "index.html")))
+        (let ((js (+test-pdf--bytes (expand-file-name "data-2.js" +my/pdf--dir))))
           (string-match "PDFX_DATA=\"\\([^\"]*\\)\"" js)
           (should (equal (base64-decode-string (match-string 1 js)) (+test-pdf--bytes file))))
         (should (string-search "pdfx.open(\"data-2.js\")" (+test-pdf--page-html buffer)))
@@ -991,7 +991,7 @@ place), the page written for views to come."
     (let* ((+my/pdf-js-dir (+test-pdf--new-dir "no-pdfjs"))
            (buffer (+test-pdf--open (+test-pdf--pdf "revert native.pdf")))
            (w2 (+test-pdf--show buffer (split-window nil nil 'right)))
-           (home (buffer-local-value '+my/pdf-xwidget--home buffer)))
+           (home (buffer-local-value '+my/pdf--home buffer)))
       (setq +test-pdf--log nil)
       (with-current-buffer buffer (revert-buffer t t))
       (should (seq-set-equal-p (+test-pdf--calls 'goto-uri)
@@ -1006,7 +1006,7 @@ place), the page written for views to come."
         (set-file-times file (time-add nil 10))
         (revert-buffer t t)
         (should (verify-visited-file-modtime))
-        (should-not +my/pdf-xwidget--dir)
+        (should-not +my/pdf--dir)
         (should-not +test-pdf--scripts)))))
 
 ;; ====== COMMANDS ======
@@ -1016,47 +1016,47 @@ place), the page written for views to come."
     (let ((buffer (+test-pdf--open (+test-pdf--pdf "commands.pdf"))))
       (with-current-buffer buffer
         (pcase-dolist (`(,script ,command . ,args)
-                       '(("scroll(0, 60)" +my/pdf-xwidget-scroll-down)
-                         ("scroll(0, 180)" +my/pdf-xwidget-scroll-down 3)
-                         ("scroll(0, -60)" +my/pdf-xwidget-scroll-up)
-                         ("scroll(0, -120)" +my/pdf-xwidget-scroll-up 2)
-                         ("scroll(60, 0)" +my/pdf-xwidget-scroll-right)
-                         ("scroll(-60, 0)" +my/pdf-xwidget-scroll-left)
-                         ("scroll(-240, 0)" +my/pdf-xwidget-scroll-left 4)
-                         ("screen(0.5)" +my/pdf-xwidget-half-screen-down)
-                         ("screen(-0.5)" +my/pdf-xwidget-half-screen-up)
-                         ("screen(0.9)" +my/pdf-xwidget-screen-down)
-                         ("screen(-0.9)" +my/pdf-xwidget-screen-up)
-                         ("top()" +my/pdf-xwidget-top)
-                         ("goto(5)" +my/pdf-xwidget-top 5)
-                         ("goto(4)" +my/pdf-xwidget-top (4))
-                         ("bottom()" +my/pdf-xwidget-bottom)
-                         ("goto(12)" +my/pdf-xwidget-bottom 12)
-                         ("page(1)" +my/pdf-xwidget-next-page)
-                         ("page(3)" +my/pdf-xwidget-next-page 3)
-                         ("page(-1)" +my/pdf-xwidget-previous-page)
-                         ("page(-2)" +my/pdf-xwidget-previous-page 2)
-                         ("back()" +my/pdf-xwidget-back)
-                         ("forward()" +my/pdf-xwidget-forward)
-                         ("zoom(1.25)" +my/pdf-xwidget-zoom-in)
-                         ("zoom(0.8)" +my/pdf-xwidget-zoom-out)
-                         ("fit('page-actual')" +my/pdf-xwidget-actual-size)
-                         ("fit('page-width')" +my/pdf-xwidget-fit-width)
-                         ("fit('page-fit')" +my/pdf-xwidget-fit-page)
-                         ("again(false)" +my/pdf-xwidget-search-next)
-                         ("again(true)" +my/pdf-xwidget-search-previous)))
+                       '(("scroll(0, 60)" +my/pdf-scroll-down)
+                         ("scroll(0, 180)" +my/pdf-scroll-down 3)
+                         ("scroll(0, -60)" +my/pdf-scroll-up)
+                         ("scroll(0, -120)" +my/pdf-scroll-up 2)
+                         ("scroll(60, 0)" +my/pdf-scroll-right)
+                         ("scroll(-60, 0)" +my/pdf-scroll-left)
+                         ("scroll(-240, 0)" +my/pdf-scroll-left 4)
+                         ("screen(0.5)" +my/pdf-half-screen-down)
+                         ("screen(-0.5)" +my/pdf-half-screen-up)
+                         ("screen(0.9)" +my/pdf-screen-down)
+                         ("screen(-0.9)" +my/pdf-screen-up)
+                         ("top()" +my/pdf-top)
+                         ("goto(5)" +my/pdf-top 5)
+                         ("goto(4)" +my/pdf-top (4))
+                         ("bottom()" +my/pdf-bottom)
+                         ("goto(12)" +my/pdf-bottom 12)
+                         ("page(1)" +my/pdf-next-page)
+                         ("page(3)" +my/pdf-next-page 3)
+                         ("page(-1)" +my/pdf-previous-page)
+                         ("page(-2)" +my/pdf-previous-page 2)
+                         ("back()" +my/pdf-back)
+                         ("forward()" +my/pdf-forward)
+                         ("zoom(1.25)" +my/pdf-zoom-in)
+                         ("zoom(0.8)" +my/pdf-zoom-out)
+                         ("fit('page-actual')" +my/pdf-actual-size)
+                         ("fit('page-width')" +my/pdf-fit-width)
+                         ("fit('page-fit')" +my/pdf-fit-page)
+                         ("again(false)" +my/pdf-search-next)
+                         ("again(true)" +my/pdf-search-previous)))
           (should (equal (apply #'+test-pdf--scripts-of command args) (list (+test-pdf--pdfx script))))
           (should (commandp command)))
-        (let ((+my/pdf-xwidget-scroll-step 10)
-              (+my/pdf-xwidget-zoom-step 2))
-          (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget-scroll-down 2) (list (+test-pdf--pdfx "scroll(0, 20)"))))
-          (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget-zoom-in) (list (+test-pdf--pdfx "zoom(2)"))))
-          (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget-zoom-out) (list (+test-pdf--pdfx "zoom(0.5)")))))
+        (let ((+my/pdf-scroll-step 10)
+              (+my/pdf-zoom-step 2))
+          (should (equal (+test-pdf--scripts-of #'+my/pdf-scroll-down 2) (list (+test-pdf--pdfx "scroll(0, 20)"))))
+          (should (equal (+test-pdf--scripts-of #'+my/pdf-zoom-in) (list (+test-pdf--pdfx "zoom(2)"))))
+          (should (equal (+test-pdf--scripts-of #'+my/pdf-zoom-out) (list (+test-pdf--pdfx "zoom(0.5)")))))
         ;; A count (5G, 3j) as Evil gives it.
         (let ((current-prefix-arg 5))
-          (should (equal (+test-pdf--scripts-of #'call-interactively #'+my/pdf-xwidget-bottom)
+          (should (equal (+test-pdf--scripts-of #'call-interactively #'+my/pdf-bottom)
                          (list (+test-pdf--pdfx "goto(5)"))))
-          (should (equal (+test-pdf--scripts-of #'call-interactively #'+my/pdf-xwidget-scroll-down)
+          (should (equal (+test-pdf--scripts-of #'call-interactively #'+my/pdf-scroll-down)
                          (list (+test-pdf--pdfx "scroll(0, 300)")))))))))
 
 ;; SEARCH
@@ -1066,21 +1066,21 @@ place), the page written for views to come."
     (let ((buffer (+test-pdf--open (+test-pdf--pdf "search.pdf"))))
       (with-current-buffer buffer
         ;; Its spaces and line breaks as single spaces (text copied from the PDF).
-        (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget--find "  two\twords\n across \r\n lines ")
+        (should (equal (+test-pdf--scripts-of #'+my/pdf--find "  two\twords\n across \r\n lines ")
                        (list (+test-pdf--pdfx "find(\"two words across lines\", false)"))))
-        (should +my/pdf-xwidget--searching)
-        (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget--find "back" t)
+        (should +my/pdf--searching)
+        (should (equal (+test-pdf--scripts-of #'+my/pdf--find "back" t)
                        (list (+test-pdf--pdfx "find(\"back\", true)"))))
         ;; Quoted as JavaScript.
         (let* ((query "say \"hi\" \\ ünï ' </script>")
-               (script (car (+test-pdf--scripts-of #'+my/pdf-xwidget--find query))))
+               (script (car (+test-pdf--scripts-of #'+my/pdf--find query))))
           (should (string-match "pdfx\\.find(\\(.*\\), false)" script))
           (should (equal (json-parse-string (match-string 1 script)) query)))
         ;; Empty: the search ends.
         (dolist (query '("" "  \n "))
-          (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget--find query)
+          (should (equal (+test-pdf--scripts-of #'+my/pdf--find query)
                          (list (+test-pdf--pdfx "find(\"\", false)"))))
-          (should-not +my/pdf-xwidget--searching))))))
+          (should-not +my/pdf--searching))))))
 
 (ert-deftest pdf/search-reads-the-query ()
   (+test-pdf
@@ -1091,33 +1091,33 @@ place), the page written for views to come."
                    (push (list prompt initial history) asked)
                    "Theorem 2")))
         (with-current-buffer buffer
-          (should (equal (+test-pdf--scripts-of #'call-interactively #'+my/pdf-xwidget-search)
+          (should (equal (+test-pdf--scripts-of #'call-interactively #'+my/pdf-search)
                          (list (+test-pdf--pdfx "find(\"Theorem 2\", false)"))))
-          (should (equal (+test-pdf--scripts-of #'call-interactively #'+my/pdf-xwidget-search-backward)
+          (should (equal (+test-pdf--scripts-of #'call-interactively #'+my/pdf-search-backward)
                          (list (+test-pdf--pdfx "find(\"Theorem 2\", true)"))))))
       (should (equal (nreverse asked)
-                     '(("Search: " nil +my/pdf-xwidget--search-history)
-                       ("Search backward: " nil +my/pdf-xwidget--search-history)))))))
+                     '(("Search: " nil +my/pdf--search-history)
+                       ("Search backward: " nil +my/pdf--search-history)))))))
 
 (ert-deftest pdf/escape-ends-the-search-in-all-views ()
-  (should (memq #'+my/pdf-xwidget--escape-h doom-escape-hook))
+  (should (memq #'+my/pdf--escape-h doom-escape-hook))
   (+test-pdf
     (let* ((buffer (+test-pdf--open (+test-pdf--pdf "escape.pdf")))
            (w2 (+test-pdf--show buffer (split-window nil nil 'right))))
       (with-current-buffer buffer
-        (+my/pdf-xwidget--find "word")
+        (+my/pdf--find "word")
         (setq +test-pdf--scripts nil)
         (should (run-hook-with-args-until-success 'doom-escape-hook))
-        (should-not +my/pdf-xwidget--searching)
+        (should-not +my/pdf--searching)
         (should (= (length +test-pdf--scripts) 2))
         (should (memq (+test-pdf--xw buffer w2) (mapcar #'car +test-pdf--scripts)))
         (should (seq-every-p (lambda (run) (equal (cadr run) (+test-pdf--pdfx "endFind()"))) +test-pdf--scripts))
         ;; Not searching: Esc is someone else's.
         (setq +test-pdf--scripts nil)
-        (should-not (+my/pdf-xwidget--escape-h))
+        (should-not (+my/pdf--escape-h))
         (should-not +test-pdf--scripts))
       (with-current-buffer "*scratch*"
-        (should-not (+my/pdf-xwidget--escape-h))))))
+        (should-not (+my/pdf--escape-h))))))
 
 ;; TOGGLES
 
@@ -1133,9 +1133,9 @@ place), the page written for views to come."
       (select-window w1)
       (+test-clear-messages)
       (pcase-dolist (`(,command ,variable ,script ,message ,value)
-                     '((+my/pdf-xwidget-toggle-dark +my/pdf-xwidget-dark-pages "set({dark: true})" "Dark pages on" t)
-                       (+my/pdf-xwidget-toggle-toolbar +my/pdf-xwidget-toolbar "set({toolbar: false})" "Toolbar off" nil)
-                       (+my/pdf-xwidget-toggle-sidebar +my/pdf-xwidget-outline-sidebar "set({sidebar: true})" "Sidebar on" t)))
+                     '((+my/pdf-toggle-dark +my/pdf-dark-pages "set({dark: true})" "Dark pages on" t)
+                       (+my/pdf-toggle-toolbar +my/pdf-toolbar "set({toolbar: false})" "Toolbar off" nil)
+                       (+my/pdf-toggle-sidebar +my/pdf-outline-sidebar "set({sidebar: true})" "Sidebar on" t)))
         (let ((scripts (+test-pdf--scripts-of #'call-interactively command)))
           (should (equal scripts (list (+test-pdf--pdfx script) (+test-pdf--pdfx script))))
           (should (seq-set-equal-p (mapcar #'car +test-pdf--scripts) (list x1 x2)))
@@ -1144,33 +1144,33 @@ place), the page written for views to come."
           (should (= (+test-messages (concat "^" message "$")) 1))))
       ;; As the selected window's view is.
       (select-window w2)
-      (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget-toggle-dark)
+      (should (equal (+test-pdf--scripts-of #'+my/pdf-toggle-dark)
                      (list (+test-pdf--pdfx "set({dark: false})") (+test-pdf--pdfx "set({dark: false})"))))
-      (should-not +my/pdf-xwidget-dark-pages)
+      (should-not +my/pdf-dark-pages)
       ;; Not said yet: on.
       (+test-pdf--say x2 "")
-      (should (equal (car (+test-pdf--scripts-of #'+my/pdf-xwidget-toggle-sidebar)) (+test-pdf--pdfx "set({sidebar: true})"))))))
+      (should (equal (car (+test-pdf--scripts-of #'+my/pdf-toggle-sidebar)) (+test-pdf--pdfx "set({sidebar: true})"))))))
 
 (ert-deftest pdf/toggles-without-pdf-js-change-nothing ()
   "No PDF.js (or no view): said, and the settings for the next PDF stay."
   (+test-pdf
     (let* ((+my/pdf-js-dir (+test-pdf--new-dir "no-pdfjs"))
            (buffer (+test-pdf--open (+test-pdf--pdf "toggle native.pdf")))
-           (+my/pdf-xwidget-dark-pages t)
-           (+my/pdf-xwidget-toolbar t)
-           (+my/pdf-xwidget-outline-sidebar t))
+           (+my/pdf-dark-pages t)
+           (+my/pdf-toolbar t)
+           (+my/pdf-outline-sidebar t))
       (with-current-buffer buffer
         (+test-clear-messages)
-        (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget-toggle-dark))
-        (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget-toggle-toolbar))
-        (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget-toggle-sidebar))
+        (should-not (+test-pdf--scripts-of #'+my/pdf-toggle-dark))
+        (should-not (+test-pdf--scripts-of #'+my/pdf-toggle-toolbar))
+        (should-not (+test-pdf--scripts-of #'+my/pdf-toggle-sidebar))
         (should (= (+test-messages (regexp-quote +test-pdf--no-pdf-js)) 1)))  ; [3 times]
-      (should (eq +my/pdf-xwidget-dark-pages t))
-      (should (eq +my/pdf-xwidget-toolbar t))
-      (should (eq +my/pdf-xwidget-outline-sidebar t))
+      (should (eq +my/pdf-dark-pages t))
+      (should (eq +my/pdf-toolbar t))
+      (should (eq +my/pdf-outline-sidebar t))
       (with-current-buffer (find-file-noselect (+test-pdf--pdf "toggle hidden.pdf"))
-        (+my/pdf-xwidget-toggle-toolbar))
-      (should (eq +my/pdf-xwidget-toolbar t)))))
+        (+my/pdf-toggle-toolbar))
+      (should (eq +my/pdf-toolbar t)))))
 
 ;; PREVIEW AND PRINT
 
@@ -1179,11 +1179,11 @@ place), the page written for views to come."
     (let* ((file (+test-pdf--pdf "preview it's ü #1.pdf"))
            (buffer (+test-pdf--open file)))
       (with-current-buffer buffer
-        (call-interactively #'+my/pdf-xwidget-open-in-preview))
+        (call-interactively #'+my/pdf-open-in-preview))
       ;; Not waited for (BUFFER 0); the file as one argument.
       (should (equal +test-pdf--opened (list (list nil 0 nil "-a" "Preview" file))))
       (with-temp-buffer
-        (should-error (+my/pdf-xwidget-open-in-preview) :type 'user-error))
+        (should-error (+my/pdf-open-in-preview) :type 'user-error))
       (should (= (length +test-pdf--opened) 1)))))
 
 (ert-deftest pdf/print-through-previews-dialog ()
@@ -1191,7 +1191,7 @@ place), the page written for views to come."
     (let* ((file (+test-pdf--pdf "print \"me\".pdf"))
            (buffer (+test-pdf--open file)))
       (with-current-buffer buffer
-        (call-interactively #'+my/pdf-xwidget-print))
+        (call-interactively #'+my/pdf-print))
       (let ((process (car +test-pdf--processes)))
         (should (= (length +test-pdf--processes) 1))
         (should (equal (plist-get process :name) "pdf-print"))
@@ -1216,7 +1216,7 @@ place), the page written for views to come."
             (funcall sentinel 'fake-process "run\n")
             (should (= (+test-messages "^Couldn.t print through Preview: SPC m p opens it there, then Cmd\\+P$") 1)))))
       (with-temp-buffer
-        (should-error (+my/pdf-xwidget-print) :type 'user-error))
+        (should-error (+my/pdf-print) :type 'user-error))
       (should (= (length +test-pdf--processes) 1)))))
 
 ;; ====== OPTION+ENTER ======
@@ -1230,26 +1230,26 @@ place), the page written for views to come."
            (xw (+test-pdf--xw buffer))
            (menus nil))
       (cl-letf (((symbol-function '+my/context-actions)
-                 (lambda () (push (list (current-buffer) +my/pdf-xwidget--selection) menus))))
+                 (lambda () (push (list (current-buffer) +my/pdf--selection) menus))))
         (with-current-buffer buffer
-          (+my/pdf-xwidget-actions))
+          (+my/pdf-actions))
         ;; Asked, its answer awaited (to a symbol).
         (should (equal +test-pdf--scripts
-                       (list (list xw "window.pdfx ? pdfx.selection() : ''" '+my/pdf-xwidget--selection-received))))
+                       (list (list xw "window.pdfx ? pdfx.selection() : ''" '+my/pdf--selection-received))))
         (should-not menus)
-        (should (eq +my/pdf-xwidget--actions-for buffer))
+        (should (eq +my/pdf--actions-for buffer))
         ;; The answer (WebKit's doesn't say whose): the menu after this event.
         (with-current-buffer "*scratch*"
-          (+my/pdf-xwidget--selection-received " some text "))
+          (+my/pdf--selection-received " some text "))
         (should-not menus)
-        (should (= (+test-pdf--fire #'+my/pdf-xwidget--actions-menu) 1))
+        (should (= (+test-pdf--fire #'+my/pdf--actions-menu) 1))
         (should (equal menus (list (list buffer " some text "))))
-        (should-not (buffer-local-value '+my/pdf-xwidget--selection buffer))
+        (should-not (buffer-local-value '+my/pdf--selection buffer))
         ;; Nothing selected.
         (dolist (answer '("" "  \n" nil :null))
           (setq menus nil)
-          (+my/pdf-xwidget--selection-received answer)
-          (+test-pdf--fire #'+my/pdf-xwidget--actions-menu)
+          (+my/pdf--selection-received answer)
+          (+test-pdf--fire #'+my/pdf--actions-menu)
           (should (equal menus (list (list buffer nil)))))))))
 
 (ert-deftest pdf/actions-without-pdf-js-at-once ()
@@ -1258,16 +1258,16 @@ place), the page written for views to come."
            (buffer (+test-pdf--open (+test-pdf--pdf "actions native.pdf")))
            (menus nil))
       (cl-letf (((symbol-function '+my/context-actions)
-                 (lambda () (push (list (current-buffer) +my/pdf-xwidget--selection) menus))))
+                 (lambda () (push (list (current-buffer) +my/pdf--selection) menus))))
         (with-current-buffer buffer
-          (+my/pdf-xwidget-actions))
+          (+my/pdf-actions))
         (should-not +test-pdf--scripts)
         (should (equal menus (list (list buffer nil))))
         ;; No view either.
         (setq menus nil)
         (let ((hidden (find-file-noselect (+test-pdf--pdf "actions hidden.pdf"))))
           (with-current-buffer hidden
-            (+my/pdf-xwidget-actions))
+            (+my/pdf-actions))
           (should (equal menus (list (list hidden nil)))))))))
 
 (ert-deftest pdf/actions-menu-of-a-closed-pdf ()
@@ -1275,19 +1275,19 @@ place), the page written for views to come."
     (let ((buffer (+test-pdf--open (+test-pdf--pdf "actions closed.pdf")))
           (menus nil))
       (cl-letf (((symbol-function '+my/context-actions) (lambda () (push t menus))))
-        (with-current-buffer buffer (+my/pdf-xwidget-actions))
-        (+my/pdf-xwidget--selection-received "text")
+        (with-current-buffer buffer (+my/pdf-actions))
+        (+my/pdf--selection-received "text")
         (kill-buffer buffer)
-        (+test-pdf--fire #'+my/pdf-xwidget--actions-menu))
+        (+test-pdf--fire #'+my/pdf--actions-menu))
       (should-not menus))))
 
 (ert-deftest pdf/actions-menu-quit-forgets-the-selection ()
   (+test-pdf
     (let ((buffer (+test-pdf--open (+test-pdf--pdf "actions quit.pdf"))))
       (cl-letf (((symbol-function '+my/context-actions) (lambda () (signal 'quit nil))))
-        (should (eq (condition-case nil (+my/pdf-xwidget--actions-menu buffer "text") (quit 'quit))
+        (should (eq (condition-case nil (+my/pdf--actions-menu buffer "text") (quit 'quit))
                     'quit)))
-      (should-not (buffer-local-value '+my/pdf-xwidget--selection buffer)))))
+      (should-not (buffer-local-value '+my/pdf--selection buffer)))))
 
 (ert-deftest pdf/actions-in-the-menu ()
   (+test-pdf
@@ -1297,18 +1297,18 @@ place), the page written for views to come."
       (with-current-buffer buffer
         (should (equal (mapcar #'butlast (+my/context-actions-pdf))
                        '(("PDF" "Open in Preview") ("PDF" "Print..."))))
-        (setq-local +my/pdf-xwidget--selection "some text")
+        (setq-local +my/pdf--selection "some text")
         (should (equal (mapcar #'butlast (+my/context-actions-pdf))
                        '(("PDF" "Copy") ("PDF" "Search the PDF for it") ("PDF" "Search the web for it")
                          ("Claude" "Explain selection with Claude") ("Claude" "Add selection to Claude prompt")
                          ("PDF" "Open in Preview") ("PDF" "Print..."))))
         (should (seq-every-p (lambda (action) (functionp (nth 2 action))) (+my/context-actions-pdf)))
-        (setq-local +my/pdf-xwidget--selection nil)))))
+        (setq-local +my/pdf--selection nil)))))
 
 (defun +test-pdf--choose (buffer text label)
   "Pick LABEL in BUFFER's Option+Enter menu, TEXT selected in its page."
   (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) label)))
-    (+my/pdf-xwidget--actions-menu buffer text)))
+    (+my/pdf--actions-menu buffer text)))
 
 (ert-deftest pdf/actions-do-what-they-say ()
   (+test-pdf
@@ -1337,7 +1337,7 @@ place), the page written for views to come."
           (+test-pdf--choose buffer text "Search the PDF for it")
           (should (equal (cadr (car (last +test-pdf--scripts)))
                          (+test-pdf--pdfx "find(\"two words & ü\", false)")))
-          (should (buffer-local-value '+my/pdf-xwidget--searching buffer))
+          (should (buffer-local-value '+my/pdf--searching buffer))
           (+test-pdf--choose buffer (concat "  " text "\n") "Search the web for it")
           (should (equal (car +test-browsed) "https://www.google.com/search?q=two%20words%20%26%20%C3%BC"))
           (+test-pdf--choose buffer text "Explain selection with Claude")
@@ -1360,7 +1360,7 @@ place), the page written for views to come."
            (xw (+test-pdf--xw buffer)))
       (+test-pdf--say xw "{\"page\":12}")
       (with-current-buffer buffer
-        (let ((context (+my/pdf-xwidget--claude-context "  first line\nsecond line \n\n")))
+        (let ((context (+my/pdf--claude-context "  first line\nsecond line \n\n")))
           ;; The page when asked, not later.
           (+test-pdf--say xw "{\"page\":1}")
           (should (equal (funcall context root) "From docs/notes ü.pdf, page 12:\n\n> first line\n> second line"))
@@ -1371,13 +1371,13 @@ place), the page written for views to come."
                          (format "From %s, page 12:\n\n> first line\n> second line" (abbreviate-file-name file)))))
         ;; No page said.
         (+test-pdf--say xw "{}")
-        (should (equal (funcall (+my/pdf-xwidget--claude-context "x") root) "From docs/notes ü.pdf:\n\n> x"))
+        (should (equal (funcall (+my/pdf--claude-context "x") root) "From docs/notes ü.pdf:\n\n> x"))
         (+test-pdf--say xw "{\"page\":null}")
-        (should (equal (funcall (+my/pdf-xwidget--claude-context "x\n\ny") root)
+        (should (equal (funcall (+my/pdf--claude-context "x\n\ny") root)
                        "From docs/notes ü.pdf:\n\n> x\n> \n> y")))
       (with-temp-buffer
         (rename-buffer "not a file" t)
-        (should (equal (funcall (+my/pdf-xwidget--claude-context "x") root)
+        (should (equal (funcall (+my/pdf--claude-context "x") root)
                        (format "From %s:\n\n> x" (buffer-name))))))))
 
 ;; ====== THE OUTLINE (o) ======
@@ -1389,14 +1389,14 @@ place), the page written for views to come."
   (+test-pdf
     (let* ((buffer (+test-pdf--open (+test-pdf--pdf "outline.pdf")))
            (xw (+test-pdf--xw buffer)))
-      (with-current-buffer buffer (+my/pdf-xwidget-outline))
+      (with-current-buffer buffer (+my/pdf-outline))
       (should (equal +test-pdf--scripts
-                     (list (list xw "window.pdfx ? pdfx.outlineList() : '[]'" '+my/pdf-xwidget--outline-received))))
-      (should (eq +my/pdf-xwidget--outline-for buffer))
+                     (list (list xw "window.pdfx ? pdfx.outlineList() : '[]'" '+my/pdf--outline-received))))
+      (should (eq +my/pdf--outline-for buffer))
       ;; The answer: the minibuffer after this event, for that PDF.
       (with-current-buffer "*scratch*"
-        (+my/pdf-xwidget--outline-received "[]"))
-      (let ((timers (+test-pdf--timers #'+my/pdf-xwidget--outline-pick)))
+        (+my/pdf--outline-received "[]"))
+      (let ((timers (+test-pdf--timers #'+my/pdf--outline-pick)))
         (should (= (length timers) 1))
         (should (equal (timer--args (car timers)) (list buffer "[]")))))))
 
@@ -1405,9 +1405,9 @@ place), the page written for views to come."
     (let* ((+my/pdf-js-dir (+test-pdf--new-dir "no-pdfjs"))
            (buffer (+test-pdf--open (+test-pdf--pdf "outline native.pdf"))))
       (+test-clear-messages)
-      (with-current-buffer buffer (+my/pdf-xwidget-outline))
+      (with-current-buffer buffer (+my/pdf-outline))
       (with-current-buffer (find-file-noselect (+test-pdf--pdf "outline hidden.pdf"))
-        (+my/pdf-xwidget-outline))
+        (+my/pdf-outline))
       (should-not +test-pdf--scripts)
       (should (= (+test-messages "^No outline here (no PDF\\.js)") 1)))))
 
@@ -1420,7 +1420,7 @@ place), the page written for views to come."
                    (setq got (list prompt collection predicate require-match))
                    "Introduction (2)")))
         (with-current-buffer "*scratch*"
-          (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget--outline-pick buffer +test-pdf--outline)
+          (should (equal (+test-pdf--scripts-of #'+my/pdf--outline-pick buffer +test-pdf--outline)
                          (list (+test-pdf--pdfx "outlineGo(3)"))))))
       (should (eq (caar +test-pdf--scripts) (+test-pdf--xw buffer)))
       (pcase-let ((`(,prompt ,collection ,_ ,require-match) got))
@@ -1451,7 +1451,7 @@ place), the page written for views to come."
                  (lambda (_prompt collection &rest _)
                    (setq names (all-completions "" collection))
                    "A / B / C ü")))
-        (should (equal (+test-pdf--scripts-of #'+my/pdf-xwidget--outline-pick buffer +test-pdf--outline)
+        (should (equal (+test-pdf--scripts-of #'+my/pdf--outline-pick buffer +test-pdf--outline)
                        (list (+test-pdf--pdfx "outlineGo(4)")))))
       (should (member "Chapter 1 / Section 1.1" names)))))
 
@@ -1462,7 +1462,7 @@ place), the page written for views to come."
       (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) (setq asked t) "")))
         (+test-clear-messages)
         (dolist (json '("[]" "not json" nil))
-          (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget--outline-pick buffer json))))
+          (should-not (+test-pdf--scripts-of #'+my/pdf--outline-pick buffer json))))
       (should-not asked)
       (should (>= (+test-messages "^This PDF has no outline") 1)))))
 
@@ -1471,10 +1471,10 @@ place), the page written for views to come."
     (let ((buffer (+test-pdf--open (+test-pdf--pdf "outline closed.pdf")))
           (choice ""))
       (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) choice)))
-        (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget--outline-pick buffer +test-pdf--outline))
+        (should-not (+test-pdf--scripts-of #'+my/pdf--outline-pick buffer +test-pdf--outline))
         (setq choice "Chapter 1")
         (kill-buffer buffer)
-        (should-not (+test-pdf--scripts-of #'+my/pdf-xwidget--outline-pick buffer +test-pdf--outline))))))
+        (should-not (+test-pdf--scripts-of #'+my/pdf--outline-pick buffer +test-pdf--outline))))))
 
 ;; ====== THE MODE ======
 
@@ -1484,21 +1484,21 @@ place), the page written for views to come."
       (with-current-buffer buffer
         (should (derived-mode-p '+my/webkit-mode))
         (should (equal font-lock-defaults '(nil t)))
-        (should (eq revert-buffer-function #'+my/pdf-xwidget--revert))
-        (should (eq +my/webkit-url-function #'+my/pdf-xwidget--url))
-        (should (eq +my/webkit-watch-function #'+my/pdf-xwidget--watch))
+        (should (eq revert-buffer-function #'+my/pdf--revert))
+        (should (eq +my/webkit-url-function #'+my/pdf--url))
+        (should (eq +my/webkit-watch-function #'+my/pdf--watch))
         (should (equal +my/webkit-selection-script
                        "window.pdfx ? pdfx.selection() : String(window.getSelection())"))
-        (should (eq (current-local-map) +my/pdf-xwidget-mode-map))
+        (should (eq (current-local-map) +my/pdf-mode-map))
         (dolist (hook '(change-major-mode-hook kill-buffer-hook))
-          (should (memq #'+my/pdf-xwidget--stop (symbol-value hook)))
-          (should-not (memq #'+my/pdf-xwidget--stop (default-value hook))))
+          (should (memq #'+my/pdf--stop (symbol-value hook)))
+          (should-not (memq #'+my/pdf--stop (default-value hook))))
         (should (eq evil-state 'normal))))
-    (should (eq (evil-initial-state '+my/pdf-xwidget-mode) 'normal))))
+    (should (eq (evil-initial-state '+my/pdf-mode) 'normal))))
 
 (ert-deftest pdf/doom-modeline-pdf-line ()
   (require 'doom-modeline)
-  (should (eq (alist-get '+my/pdf-xwidget-mode doom-modeline-mode-alist) 'pdf)))
+  (should (eq (alist-get '+my/pdf-mode doom-modeline-mode-alist) 'pdf)))
 
 (ert-deftest pdf/copy-asks-for-the-pdfs-selection ()
   (+test-pdf
@@ -1511,44 +1511,44 @@ place), the page written for views to come."
 ;; ====== KEYS ======
 
 (defun +test-pdf--key (state key)
-  (lookup-key (evil-get-auxiliary-keymap +my/pdf-xwidget-mode-map state) (kbd key)))
+  (lookup-key (evil-get-auxiliary-keymap +my/pdf-mode-map state) (kbd key)))
 
 (ert-deftest pdf/keys ()
   (pcase-dolist (`(,key . ,command)
-                 '(("C-o" . +my/pdf-xwidget-back) ("C-i" . +my/pdf-xwidget-forward)
-                   ("<tab>" . +my/pdf-xwidget-forward) ("M-RET" . +my/pdf-xwidget-actions)
-                   ("j" . +my/pdf-xwidget-scroll-down) ("k" . +my/pdf-xwidget-scroll-up)
-                   ("h" . +my/pdf-xwidget-scroll-left) ("l" . +my/pdf-xwidget-scroll-right)
-                   ("<down>" . +my/pdf-xwidget-scroll-down) ("<up>" . +my/pdf-xwidget-scroll-up)
-                   ("<left>" . +my/pdf-xwidget-scroll-left) ("<right>" . +my/pdf-xwidget-scroll-right)
-                   ("C-d" . +my/pdf-xwidget-half-screen-down) ("C-u" . +my/pdf-xwidget-half-screen-up)
-                   ("C-f" . +my/pdf-xwidget-screen-down) ("C-b" . +my/pdf-xwidget-screen-up)
-                   ("<next>" . +my/pdf-xwidget-screen-down) ("<prior>" . +my/pdf-xwidget-screen-up)
-                   ("gg" . +my/pdf-xwidget-top) ("G" . +my/pdf-xwidget-bottom)
-                   ("<home>" . +my/pdf-xwidget-top) ("<end>" . +my/pdf-xwidget-bottom)
-                   ("J" . +my/pdf-xwidget-next-page) ("K" . +my/pdf-xwidget-previous-page)
-                   ("/" . +my/pdf-xwidget-search) ("?" . +my/pdf-xwidget-search-backward)
-                   ("n" . +my/pdf-xwidget-search-next) ("N" . +my/pdf-xwidget-search-previous)
-                   ("y" . +my/webkit-copy) ("+" . +my/pdf-xwidget-zoom-in) ("=" . +my/pdf-xwidget-zoom-in)
-                   ("-" . +my/pdf-xwidget-zoom-out) ("W" . +my/pdf-xwidget-fit-width)
-                   ("P" . +my/pdf-xwidget-fit-page) ("o" . +my/pdf-xwidget-outline)
-                   ("O" . +my/pdf-xwidget-toggle-sidebar) ("q" . kill-current-buffer)))
+                 '(("C-o" . +my/pdf-back) ("C-i" . +my/pdf-forward)
+                   ("<tab>" . +my/pdf-forward) ("M-RET" . +my/pdf-actions)
+                   ("j" . +my/pdf-scroll-down) ("k" . +my/pdf-scroll-up)
+                   ("h" . +my/pdf-scroll-left) ("l" . +my/pdf-scroll-right)
+                   ("<down>" . +my/pdf-scroll-down) ("<up>" . +my/pdf-scroll-up)
+                   ("<left>" . +my/pdf-scroll-left) ("<right>" . +my/pdf-scroll-right)
+                   ("C-d" . +my/pdf-half-screen-down) ("C-u" . +my/pdf-half-screen-up)
+                   ("C-f" . +my/pdf-screen-down) ("C-b" . +my/pdf-screen-up)
+                   ("<next>" . +my/pdf-screen-down) ("<prior>" . +my/pdf-screen-up)
+                   ("gg" . +my/pdf-top) ("G" . +my/pdf-bottom)
+                   ("<home>" . +my/pdf-top) ("<end>" . +my/pdf-bottom)
+                   ("J" . +my/pdf-next-page) ("K" . +my/pdf-previous-page)
+                   ("/" . +my/pdf-search) ("?" . +my/pdf-search-backward)
+                   ("n" . +my/pdf-search-next) ("N" . +my/pdf-search-previous)
+                   ("y" . +my/webkit-copy) ("+" . +my/pdf-zoom-in) ("=" . +my/pdf-zoom-in)
+                   ("-" . +my/pdf-zoom-out) ("W" . +my/pdf-fit-width)
+                   ("P" . +my/pdf-fit-page) ("o" . +my/pdf-outline)
+                   ("O" . +my/pdf-toggle-sidebar) ("q" . kill-current-buffer)))
     (dolist (state '(normal motion))
       (should (eq (+test-pdf--key state key) command))))
   ;; Cmd keys, in any state.
   (pcase-dolist (`(,key . ,command)
-                 '(("s-=" . +my/pdf-xwidget-zoom-in) ("s-+" . +my/pdf-xwidget-zoom-in)
-                   ("s--" . +my/pdf-xwidget-zoom-out) ("s-0" . +my/pdf-xwidget-actual-size)
-                   ("s-c" . +my/webkit-copy) ("s-[" . +my/pdf-xwidget-back)
-                   ("s-]" . +my/pdf-xwidget-forward) ("s-p" . +my/pdf-xwidget-print)
+                 '(("s-=" . +my/pdf-zoom-in) ("s-+" . +my/pdf-zoom-in)
+                   ("s--" . +my/pdf-zoom-out) ("s-0" . +my/pdf-actual-size)
+                   ("s-c" . +my/webkit-copy) ("s-[" . +my/pdf-back)
+                   ("s-]" . +my/pdf-forward) ("s-p" . +my/pdf-print)
                    ("q" . kill-current-buffer)))
-    (should (eq (lookup-key +my/pdf-xwidget-mode-map (kbd key)) command)))
+    (should (eq (lookup-key +my/pdf-mode-map (kbd key)) command)))
   ;; SPC m.
   (pcase-dolist (`(,key . ,command)
-                 '(("o" . +my/pdf-xwidget-outline) ("O" . +my/pdf-xwidget-toggle-sidebar)
-                   ("d" . +my/pdf-xwidget-toggle-dark) ("t" . +my/pdf-xwidget-toggle-toolbar)
-                   ("p" . +my/pdf-xwidget-open-in-preview) ("P" . +my/pdf-xwidget-print)))
+                 '(("o" . +my/pdf-outline) ("O" . +my/pdf-toggle-sidebar)
+                   ("d" . +my/pdf-toggle-dark) ("t" . +my/pdf-toggle-toolbar)
+                   ("p" . +my/pdf-open-in-preview) ("P" . +my/pdf-print)))
     (should (eq (+test-pdf--key 'normal (concat "SPC m " key)) command)))
   ;; Clicks are WebKit's.
-  (should (eq (lookup-key +my/pdf-xwidget-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
+  (should (eq (lookup-key +my/pdf-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
   (should (eq (+test-pdf--key 'normal "<drag-mouse-1>") #'ignore)))

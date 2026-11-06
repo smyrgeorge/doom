@@ -809,7 +809,7 @@ change those."
 
 (ert-deftest actions/added-providers ()
   "A provider added as the comments say (at the end) comes last; one added in
-front (PDFs' provider, config/pdf-xwidget.el) first."
+front (PDFs' provider, config/pdf.el) first."
   (let ((+my/context-action-providers (list (lambda () (list (list "Mine" "m" #'ignore))))))
     (add-to-list '+my/context-action-providers (lambda () (list (list "Last" "l" #'ignore))) t)
     (add-to-list '+my/context-action-providers (lambda () (list (list "First" "f" #'ignore))))
