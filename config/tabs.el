@@ -27,6 +27,19 @@
 (map! :n "gt" #'tab-line-switch-to-next-tab
       :n "gT" #'tab-line-switch-to-prev-tab)
 
+;; Cmd+1..8 show the window's tabs 1-8, Cmd+9 its last, as in browsers (Doom
+;; had them switch workspaces: M-1..9 and SPC TAB 1..9 still do); where there
+;; are no tabs (side panels, popups), they switch workspaces, as before.
+(map! :gn "s-1" #'+my/tabs-select-1
+      :gn "s-2" #'+my/tabs-select-2
+      :gn "s-3" #'+my/tabs-select-3
+      :gn "s-4" #'+my/tabs-select-4
+      :gn "s-5" #'+my/tabs-select-5
+      :gn "s-6" #'+my/tabs-select-6
+      :gn "s-7" #'+my/tabs-select-7
+      :gn "s-8" #'+my/tabs-select-8
+      :gn "s-9" #'+my/tabs-select-9)
+
 ;; Cmd+W closes the current tab, like its ✕ (Doom's closed the window, or the
 ;; workspace with its last window); where there are no tabs (popups, side
 ;; panels), the window, as before.
@@ -166,6 +179,24 @@ frame's only one (beside side panels), which shows Doom's dashboard instead."
     (when (and (buffer-live-p buffer) (buffer-file-name buffer)
                (not (+my/tabs-held-p buffer)))
       (kill-buffer buffer))))
+
+(defun +my/tabs-select (n)
+  "Show the selected window's Nth tab, its last for 9 (see above); without
+tabs, switch to the Nth workspace, as Doom's Cmd+N did."
+  (if (bound-and-true-p tab-line-mode)
+      (let ((tabs (+my/tabs-window-buffers)))
+        (when-let* ((buffer (if (= n 9) (car (last tabs)) (nth (1- n) tabs))))
+          (switch-to-buffer buffer nil t)))
+    (call-interactively (if (= n 9)
+                            #'+workspace/switch-to-final
+                          (intern (format "+workspace/switch-to-%d" (1- n)))))))
+
+(dotimes (i 9)
+  (let ((n (1+ i)))
+    (defalias (intern (format "+my/tabs-select-%d" n))
+      (lambda () (interactive) (+my/tabs-select n))
+      (format "Show the window's %s tab (`+my/tabs-select')."
+              (if (= n 9) "last" (format "%d." n))))))
 
 (defun +my/tabs-close-current ()
   "Close the current tab (see above); without tabs, the window, as Doom does."

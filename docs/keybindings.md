@@ -17,6 +17,7 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `SPC m P` (Markdown) | Preview in the browser |
 | `SPC o p` / `SPC o P` | Toggle treemacs / reveal current file in treemacs |
 | `Cmd+W` (GUI) | Close the current tab, like its ✕ (without tabs, e.g. popups: the window) |
+| `Cmd+1`..`Cmd+8` / `Cmd+9` (GUI) | Tab 1-8 / last tab of the pane (workspaces: `M-1`..`M-9`, `SPC TAB 1`..`9`) |
 | `gt` / `gT` | Next / previous tab of the window, wrapping around (workspaces: `]w` / `[w`) |
 | `SPC t ?` | Hide / show the tips panel (disabled: uncomment `config/cheatsheet` in `config.el`) |
 | `←` / `→` (treemacs, LSP lists) | Collapse or go to parent / expand, into, or open |

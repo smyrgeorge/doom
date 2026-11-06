@@ -90,7 +90,9 @@ tab any more (asking first if it has unsaved changes); a Claude session only lea
 the buffer, in every window.
 
 `gt` / `gT`: next / previous tab, wrapping around. Doom used them for workspaces: those are `]w` / `[w` or
-`SPC TAB ]` / `SPC TAB [`. Tabs show the file's icon, a bar on the current one (`+my/tabs-bar-width`, 2 px; the tab row
+`SPC TAB ]` / `SPC TAB [`. `Cmd+1`..`Cmd+8` show the pane's tabs 1-8, `Cmd+9` its last, as in browsers (Doom's
+workspaces 1-9 are on `M-1`..`M-9` and `SPC TAB 1`..`9`; in a pane without tabs, e.g. the sidebar, `Cmd+N` still
+switches workspaces). Tabs show the file's icon, a bar on the current one (`+my/tabs-bar-width`, 2 px; the tab row
 is `+my/tabs-height`, 22 px, tall; icon and bar in the GUI only), `•` when unsaved, and same-named files get the
 shortest distinguishing path as their label (`crate-a/src/lib.rs` vs `crate-b/src/lib.rs`) instead of `lib.rs<2>`,
 since workspaces disable uniquify.
