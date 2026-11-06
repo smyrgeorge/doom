@@ -30,9 +30,16 @@
 ;; ====== CODE ======
 
 ;; MAGIT
-;; Render diffs with git-delta (brew install git-delta).
+;; Render diffs with git-delta (brew install git-delta), without the delta
+;; settings of ~/.gitconfig (--no-gitconfig): they're for the terminal (line
+;; numbers, side by side), and delta applies line numbers even in
+;; magit-delta's --color-only mode, writing them into the diff's text
+;; ("  1 ⋮  1 │ a"), which staging or discarding a hunk (s, x) sends to git:
+;; "corrupt patch".
 (use-package! magit-delta
-  :hook (magit-mode . magit-delta-mode))
+  :hook (magit-mode . magit-delta-mode)
+  :config
+  (add-to-list 'magit-delta-delta-args "--no-gitconfig" t))
 
 ;; List TODO/FIXME/... comments of the repo in the magit status buffer (uses rg).
 (use-package! magit-todos

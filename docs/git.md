@@ -2,8 +2,11 @@
 
 ## Magit
 
-Diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `magit-delta`. The status buffer
-lists the repository's TODO/FIXME/... comments (`magit-todos`, using `rg`).
+Diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `magit-delta`, ignoring the delta
+settings in `~/.gitconfig` (`--no-gitconfig`): those are for the terminal, and delta applies `line-numbers` even in
+magit-delta's colour-only mode, writing line numbers into the diff's text, so that staging or discarding a hunk (`s`,
+`x`) failed with "corrupt patch". The status buffer lists the repository's TODO/FIXME/... comments (`magit-todos`,
+using `rg`).
 
 ## Commit graph, like tig
 
