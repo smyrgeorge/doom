@@ -1,7 +1,7 @@
 ;;; $DOOMDIR/config/webkit.el -*- lexical-binding: t; -*-
 ;; Web pages inside Emacs, in WebKit (xwidgets): what the PDF viewer
-;; (config/pdf.el) and the Markdown preview (config/markdown.el)
-;; share. Loaded from config.el, before them.
+;; (config/pdf.el), the Markdown preview (config/markdown.el) and drawings
+;; (config/excalidraw.el) share. Loaded from config.el, before them.
 
 ;; ====== VARIABLES ======
 
@@ -19,7 +19,10 @@
 ;;   Emacs (see WATCHING), e.g. the mouse pointer it wants (see POINTER);
 ;; - clicks are WebKit's (selecting text, links): Emacs only selects the
 ;;   window (see CLICKS);
-;; - scrolling and copying for pages with no keys of their own (see COMMANDS).
+;; - scrolling and copying for pages with no keys of their own (see COMMANDS);
+;; - a file's new text, from a page that edits it, under the views, to be
+;;   saved as any (see THE BUFFER'S TEXT);
+;; - the libraries a page needs, downloaded and checked (see DOWNLOADS).
 ;; A mode derived from it sets, in its body, the variables below (buffer-local).
 (defvar-local +my/webkit-url-function nil
   "Function of the window a new view is for (see VIEWS), returning the URL the
@@ -52,6 +55,9 @@ every 0.1 s while the window is on screen (see WATCHING).")
 
 (defvar +my/webkit--watch-timer nil
   "Every 0.1 s while a page is open (see WATCHING).")
+
+(defvar-local +my/webkit--pointer nil
+  "The pointer shape the buffer's text has (see POINTER).")
 
 (defun +my/webkit-p ()
   "Non-nil if WebKit pages can show here: the GUI, an Emacs with xwidgets."
@@ -118,12 +124,39 @@ else the one latest looked at. Nil before there's one."
     (unless (eq view (car +my/webkit--views))
       (setq +my/webkit--views (cons view (delq view +my/webkit--views))))))
 
+(defvar +my/webkit--killed nil
+  "Views killed lately, kept from the garbage collector a while (see
+JAVASCRIPT): (XWIDGET . TIME)...")
+
+(defun +my/webkit--kill-now (xwidget)
+  "Kill XWIDGET's view (once), kept referenced for 10 s after (see
+JAVASCRIPT)."
+  (unless (xwidget-get xwidget '+my/webkit-killed)
+    (xwidget-put xwidget '+my/webkit-killed t)
+    (let ((now (float-time)))
+      (setq +my/webkit--killed
+            (cons (cons xwidget now)
+                  (seq-filter (lambda (killed) (< (- now (cdr killed)) 10))
+                              +my/webkit--killed))))
+    (when (xwidget-live-p xwidget)
+      (kill-xwidget xwidget))))
+
+(defun +my/webkit--kill (xwidget)
+  "Kill XWIDGET's view; while an answer from its page is on its way, once it
+has come, 5 s at most (see JAVASCRIPT), the view in a buffer of its own
+meanwhile (killing a buffer kills its views)."
+  (cond ((not (and (+my/webkit--asked-p xwidget) (fboundp 'set-xwidget-buffer)))
+         (+my/webkit--kill-now xwidget))
+        ((not (xwidget-get xwidget '+my/webkit-closing))
+         (xwidget-put xwidget '+my/webkit-closing t)
+         (set-xwidget-buffer xwidget (get-buffer-create " *webkit-closing*"))
+         (run-at-time 5 nil #'+my/webkit--kill-now xwidget))))
+
 (defun +my/webkit--close (view)
   "Close VIEW: its xwidget, its overlay (see above)."
   (when-let* ((xwidget (+my/webkit--view-xwidget view)))
     (+my/webkit--uncover xwidget)
-    (when (xwidget-live-p xwidget)
-      (kill-xwidget xwidget)))
+    (+my/webkit--kill xwidget))
   (delete-overlay view))
 
 (defvar +my/webkit--tidy-timer nil)
@@ -237,6 +270,56 @@ are: moved, the window scrolled them away."
   (with-silent-modifications
     (remove-text-properties (point-min) (point-max) '(display nil pointer nil))))
 
+;; THE BUFFER'S TEXT
+;; The views are shown over all of the buffer's text (point kept at its
+;; start): a page whose buffer visits a file it edits (a drawing, see
+;; config/excalidraw.el) puts the file's new text there, to be saved as any.
+(defun +my/webkit-set-text (text)
+  "Make TEXT (not empty) the buffer's text, under its views (see above); the
+buffer is then modified."
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert text)
+    (goto-char (point-min))
+    (put-text-property (point-min) (point-max) 'display "")
+    (when +my/webkit--pointer
+      (put-text-property (point-min) (point-max) 'pointer +my/webkit--pointer))
+    ;; Emptied, the views' overlays were left with nothing in them.
+    (dolist (view +my/webkit--views)
+      (when (overlay-buffer view)
+        (move-overlay view (point-min) (point-max))))
+    (dolist (window (get-buffer-window-list nil 'nomini t))
+      (set-window-point window (point-min))
+      (set-window-start window (point-min) t))))
+
+;; DOWNLOADS
+;; What a page needs (a library's files) is downloaded once, each file checked
+;; against its SHA-256.
+(defun +my/webkit-installed-p (files dir)
+  "Non-nil if FILES, ((FILE URL SHA256)...), are all in DIR."
+  (seq-every-p (lambda (file) (file-exists-p (expand-file-name (car file) dir)))
+               files))
+
+(defun +my/webkit-install (name version files dir)
+  "Download NAME's VERSION into DIR: FILES, ((FILE URL SHA256)...), FILE in
+DIR (in folders of its own maybe) from URL, checked against its SHA-256."
+  (require 'url)
+  (pcase-dolist (`(,path ,url ,sha256) files)
+    (let* ((file (expand-file-name path dir))
+           (part (concat file ".part")))
+      (make-directory (file-name-directory file) t)
+      (message "Downloading %s: %s..." name path)
+      (url-copy-file url part t)
+      (unless (equal (with-temp-buffer
+                       (set-buffer-multibyte nil)
+                       (insert-file-contents-literally part)
+                       (secure-hash 'sha256 (current-buffer)))
+                     sha256)
+        (delete-file part)
+        (error "%s: %s isn't the file expected (SHA-256 differs), not installed" name url))
+      (rename-file part file t)))
+  (message "%s %s installed in %s" name version dir))
+
 ;; NO WHITE FLASH
 ;; WebKit's view is white until its page has loaded. A view only starts once
 ;; its window shows the page (nothing shown until then, in the theme's colour),
@@ -310,7 +393,9 @@ WebKit may encode it otherwise)."
 (not `xwidget-webkit-callback' for loads: it renames the buffer after the
 page)."
   (let ((buffer (xwidget-buffer xwidget)))
-    (cond ((not (eq event-type 'load-changed))
+    (cond ((eq event-type 'javascript-callback)
+           (+my/webkit--answered xwidget (nth 3 last-input-event) (nth 4 last-input-event)))
+          ((not (eq event-type 'load-changed))
            (xwidget-webkit-callback xwidget event-type))
           ((buffer-live-p buffer)
            (with-current-buffer buffer
@@ -325,10 +410,53 @@ page)."
 
 ;; JAVASCRIPT
 ;; Run without waiting for an answer, but where one is needed (the selection,
-;; say): closing a view while an answer was pending crashed Emacs, so views of
-;; closed windows go a second later (see VIEWS), and the function awaiting it
-;; is a symbol: nothing on the macOS side keeps it from the garbage collector
-;; until WebKit answers, and a closure could be gone by then.
+;; a drawing's file text, say): closing a view while an answer was pending
+;; crashed Emacs. So views of closed windows go a second later (see VIEWS); a
+;; view closed while an answer is on its way is killed once it has come, 5 s
+;; at most (WebKit never answers a script that failed, or whose value is
+;; null), its function not called; a killed view stays referenced for 10 s
+;; (an answer to a view the garbage collector took would be Emacs's end); and
+;; the function awaiting an answer is a symbol: nothing on the macOS side
+;; keeps it from the garbage collector until WebKit answers, and a closure
+;; could be gone by then. It runs with `+my/webkit-answering' the view that
+;; answered, in the view's buffer.
+(defvar +my/webkit-answering nil
+  "The view (an xwidget) whose answer a `+my/webkit-ask' function runs for.")
+
+(defun +my/webkit--asked-p (xwidget)
+  "Non-nil if an answer from XWIDGET's page is on its way (see above)."
+  (> (or (xwidget-get xwidget 'asked) 0) 0))
+
+(defun +my/webkit--answered (xwidget function value)
+  "XWIDGET's page answered VALUE: FUNCTION with it, but if its view was
+closed meanwhile (see above)."
+  (xwidget-put xwidget 'asked (max 0 (1- (or (xwidget-get xwidget 'asked) 1))))
+  (cond ((xwidget-get xwidget '+my/webkit-closing)
+         (unless (+my/webkit--asked-p xwidget)
+           (run-at-time 0 nil #'+my/webkit--kill-now xwidget)))
+        ((buffer-live-p (xwidget-buffer xwidget))
+         (with-current-buffer (xwidget-buffer xwidget)
+           (let ((+my/webkit-answering xwidget))
+             (funcall function value))))))
+
+(defun +my/webkit-wait (predicate seconds)
+  "Wait until PREDICATE returns non-nil, SECONDS at most, WebKit's answers and
+titles coming in meanwhile (keys typed meanwhile are kept for after); return
+its value."
+  (let ((end (+ (float-time) seconds))
+        (typed nil)
+        value)
+    (while (and (not (setq value (funcall predicate)))
+                (< (float-time) end))
+      (if noninteractive
+          (sleep-for 0.02)
+        ;; WebKit's events come with the input; not a keyboard macro's keys.
+        (when-let* ((event (let ((executing-kbd-macro nil))
+                             (read-event nil nil 0.02))))
+          (push event typed))))
+    (setq unread-command-events (append unread-command-events (nreverse typed)))
+    value))
+
 (defun +my/webkit-execute (script &optional where)
   "Run SCRIPT in the selected window's view; WHERE t: in each of the buffer's
 views, an xwidget: in that one. Nothing comes back (`void 0' last: a Promise,
@@ -338,10 +466,12 @@ say, made WebKit log an error about its type)."
                          (t (ensure-list (+my/webkit-xwidget)))))
     (xwidget-webkit-execute-script xwidget (concat script "\n;void 0"))))
 
-(defun +my/webkit-ask (script callback)
-  "Run SCRIPT in the selected window's view, then CALLBACK, a symbol (see
-above), with its value. Nil if there's no view."
-  (when-let* ((xwidget (+my/webkit-xwidget)))
+(defun +my/webkit-ask (script callback &optional xwidget)
+  "Run SCRIPT in XWIDGET's view (default: the selected window's), then
+CALLBACK, a symbol (see above), with its value: SCRIPT always has one (not
+null, no error). Nil if there's no view."
+  (when-let* ((xwidget (or xwidget (+my/webkit-xwidget))))
+    (xwidget-put xwidget 'asked (1+ (or (xwidget-get xwidget 'asked) 0)))
     (xwidget-webkit-execute-script xwidget script callback)
     t))
 
@@ -388,9 +518,6 @@ until it has said it."
 ;; watch function with `+my/webkit-pointer': into the `pointer' text property
 ;; under the views, which Emacs's pointer follows after the redisplay that
 ;; brings.
-(defvar-local +my/webkit--pointer nil
-  "The pointer shape the buffer's text has (see above).")
-
 (defun +my/webkit-pointer (window shape)
   "The mouse pointer SHAPE (`hand', `text', `arrow') over WINDOW's view, if
 the mouse is over it (see above)."

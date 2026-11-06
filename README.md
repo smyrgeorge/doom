@@ -52,7 +52,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 ## Documentation
 
 - [The editor](docs/editor.md): error stripe, notices, sticky header, tabs per window, current line, right margin,
-  fringes, case style, font and theme, PDFs in WebKit, mode line, evil.
+  fringes, case style, font and theme, PDFs in WebKit, drawings (Excalidraw), mode line, evil.
 - [Project sidebar](docs/sidebar.md): treemacs that follows the current file, git status, IntelliJ-like arrows, LSP
   panels.
 - [Smooth scrolling](docs/scrolling.md): mouse-wheel glide, scroll limit past the end, long lines.

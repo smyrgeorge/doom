@@ -90,6 +90,11 @@ name (macOS's /var is a link to /private/var): buffers visit files by theirs
 ;; process: slow, and a process a test didn't start.
 (setq native-comp-enable-subr-trampolines nil)
 
+;; Nor packages compiled to native code as they load, in Emacs processes of
+;; their own: a test's reset killed their log buffer, their sentinels failed
+;; on it, and the bell rang (macOS's alert sound) in each GUI test Emacs.
+(setq native-comp-jit-compilation nil)
+
 ;; ====== DOOM ======
 
 ;; `modulep!': the modules (and flags) init.el's `doom!' block enables.
@@ -161,6 +166,32 @@ name (macOS's /var is a link to /private/var): buffers visit files by theirs
 (advice-add 'browse-url :override
             (lambda (url &rest _) (push url +test-browsed))
             '((name . +test-no-browser)))
+
+;; ====== NO SOUND ======
+
+;; Emacs's bell (macOS's alert sound, in the GUI Emacs of the end-to-end
+;; tests) is silent: each ring is said on stderr instead, with the test it
+;; rang in and how it came (an error a command signalled, say: worth a look).
+(defvar +test-bells nil
+  "The tests the bell rang in, the latest first.")
+
+(defun +test--bell ()
+  (let* ((test (and (fboundp 'ert-running-test) (ert-running-test)))
+         (name (and test (ert-test-name test))))
+    (push name +test-bells)
+    (princ (format "BELL in %s:\n%s\n" (or name "no test")
+                   (mapconcat (lambda (frame) (format "  %S" (cadr frame)))
+                              (seq-take (backtrace-frames) 12) "\n"))
+           #'external-debugging-output)))
+
+(setq ring-bell-function #'+test--bell
+      visible-bell nil)
+
+(add-function :before command-error-function
+              (lambda (data context _caller)
+                (princ (format "COMMAND ERROR %S %S (last event %S)\n" data context last-input-event)
+                       #'external-debugging-output))
+              '((name . +test-command-errors)))
 
 ;; ====== LOADING THE CONFIG ======
 
@@ -309,6 +340,17 @@ downloaded by a test); nil if Doom has none."
     (cond ((file-directory-p copy) copy)
           ((file-directory-p real) (copy-directory real copy nil t t) copy))))
 
+;; DRAWINGS
+(defun +test-excalidraw-dir ()
+  "A copy of Excalidraw in the temp Doom's data folder, from the real one
+(never downloaded by a test); nil if Doom has none."
+  (let* ((version (if (boundp '+my/excalidraw-version) +my/excalidraw-version "0.17.6"))
+         (name (format "excalidraw-%s" version))
+         (real (expand-file-name (concat ".local/etc/" name) +test-doom-emacs-dir))
+         (copy (expand-file-name name doom-data-dir)))
+    (cond ((file-directory-p copy) copy)
+          ((file-directory-p real) (copy-directory real copy nil t t) copy))))
+
 ;; ====== END TO END (GUI) ======
 
 (defun +test--pump (seconds)
@@ -367,14 +409,20 @@ report), and exit with their status."
   (run-at-time
    0.5 nil
    (lambda ()
-     ;; On top of other windows while the tests run: macOS takes a frame
-     ;; covered by other windows as invisible, and Emacs doesn't redisplay
-     ;; it, so no WebKit view would start there (nor PDF.js render).
+     ;; On top of other windows while the tests run: macOS takes a window
+     ;; covered by others as hidden, and WebKit doesn't draw there (PDF.js
+     ;; renders no page). Out of the way all the same: off the screen but for
+     ;; its top left corner, at the bottom right of the screen's work area
+     ;; (above the Dock), not taking the keyboard. E2E_WINDOW=front: all of
+     ;; it on screen, focused (to watch the tests).
      (set-frame-parameter nil 'z-group 'above)
      (set-frame-parameter nil 'fullscreen nil) ; config/window.el maximizes
-     (set-frame-position nil 60 60)
      (set-frame-size nil 1000 700 t)
-     (select-frame-set-input-focus (selected-frame))
+     (if (equal (getenv "E2E_WINDOW") "front")
+         (progn (set-frame-position nil 60 60)
+                (select-frame-set-input-focus (selected-frame)))
+       (pcase-let ((`(,x ,y ,width ,height) (frame-monitor-workarea)))
+         (set-frame-position nil (+ x width -24) (+ y height -24))))
      (+test-wait-for (lambda () (frame-visible-p (selected-frame))) 5)
      (+test-sleep 0.3)
      (let ((status 1))

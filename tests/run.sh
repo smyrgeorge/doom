@@ -10,7 +10,8 @@
 #
 # EMACS (default: emacs) runs the unit tests, EMACS_GUI (default: the
 # emacs-plus app) the end-to-end ones; E2E_TIMEOUT (default 180) seconds per
-# end-to-end file. Exits 1 if a test failed.
+# end-to-end file; E2E_WINDOW=front shows their frame whole, focused (by
+# default it's off the screen but for a corner). Exits 1 if a test failed.
 
 
 TESTS=$(cd "$(dirname "$0")" && pwd)

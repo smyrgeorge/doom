@@ -245,34 +245,23 @@ in an Emacs with xwidgets."
     (funcall fn size op-type filename offer-raw)))
 
 ;; PDF.JS
+(defun +my/pdf--js-files ()
+  "PDF.js's files, as `+my/webkit-install' takes them."
+  (mapcar (lambda (file)
+            (list (file-name-nondirectory (car file))
+                  (format "https://cdn.jsdelivr.net/npm/pdfjs-dist@%s/%s"
+                          +my/pdf-js-version (car file))
+                  (cdr file)))
+          +my/pdf-js-files))
+
 (defun +my/pdf-js-installed-p ()
   "Non-nil if PDF.js is in `+my/pdf-js-dir'."
-  (seq-every-p (lambda (file)
-                 (file-exists-p (expand-file-name (file-name-nondirectory (car file))
-                                                  +my/pdf-js-dir)))
-               +my/pdf-js-files))
+  (+my/webkit-installed-p (+my/pdf--js-files) +my/pdf-js-dir))
 
 (defun +my/pdf-js-install ()
   "Download PDF.js into `+my/pdf-js-dir', checking each file's SHA-256."
   (interactive)
-  (require 'url)
-  (make-directory +my/pdf-js-dir t)
-  (pcase-dolist (`(,path . ,sha256) +my/pdf-js-files)
-    (let* ((url (format "https://cdn.jsdelivr.net/npm/pdfjs-dist@%s/%s"
-                        +my/pdf-js-version path))
-           (file (expand-file-name (file-name-nondirectory path) +my/pdf-js-dir))
-           (part (concat file ".part")))
-      (message "Downloading PDF.js: %s..." path)
-      (url-copy-file url part t)
-      (unless (equal (with-temp-buffer
-                       (set-buffer-multibyte nil)
-                       (insert-file-contents-literally part)
-                       (secure-hash 'sha256 (current-buffer)))
-                     sha256)
-        (delete-file part)
-        (error "PDF.js: %s isn't the file expected (SHA-256 differs), not installed" url))
-      (rename-file part file t)))
-  (message "PDF.js %s installed in %s" +my/pdf-js-version +my/pdf-js-dir))
+  (+my/webkit-install "PDF.js" +my/pdf-js-version (+my/pdf--js-files) +my/pdf-js-dir))
 
 (defun +my/pdf-js-ensure ()
   "Non-nil if PDF.js is there, downloaded now if need be (see above)."

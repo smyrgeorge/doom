@@ -54,6 +54,10 @@
                ((symbol-function 'kill-xwidget)
                 (lambda (xw) (setf (+test-webkit--xw-killed xw) t) (+test-webkit--log 'kill-xwidget xw)))
                ((symbol-function 'xwidget-buffer) #'+test-webkit--xw-buffer)
+               ((symbol-function 'set-xwidget-buffer)
+                (lambda (xw buffer)
+                  (setf (+test-webkit--xw-buffer xw) buffer)
+                  (+test-webkit--log 'set-buffer xw buffer)))
                ((symbol-function 'set-xwidget-query-on-exit-flag)
                 (lambda (xw flag) (+test-webkit--log 'query-on-exit xw flag)))
                ((symbol-function 'xwidget-webkit-goto-uri)
@@ -1120,9 +1124,9 @@ mode has said what its page is."
   (+test-webkit
     (let* ((page (+test-webkit--page))
            (xw (progn (+test-webkit--show page) (car +test-webkit--made))))
-      (+my/webkit--callback xw 'javascript-callback)
+      (+my/webkit--callback xw 'decide-policy)
       (should (equal (+test-webkit--calls 'xwidget-webkit-callback)
-                     (list (list xw 'javascript-callback)))))))
+                     (list (list xw 'decide-policy)))))))
 
 (ert-deftest webkit/callback-of-a-killed-buffer ()
   (+test-webkit
@@ -1183,6 +1187,257 @@ mode has said what its page is."
       (with-current-buffer (+test-webkit--page "no view")
         (should-not (+my/webkit-ask "1 + 1" #'ignore))
         (should (= (length +test-webkit--scripts) 1))))))
+
+(ert-deftest webkit/ask-a-given-view ()
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (w1 (+test-webkit--show page))
+           (w2 (+test-webkit--show page (split-window w1 nil 'right)))
+           (x1 (+test-webkit--xw page w1))
+           (x2 (+test-webkit--xw page w2)))
+      (with-current-buffer page
+        (select-window w1)
+        (should (+my/webkit-ask "a()" #'ignore x2))
+        (should (+my/webkit-ask "b()" #'ignore x2))
+        (should (equal +test-webkit--scripts (list (list x2 "a()" #'ignore) (list x2 "b()" #'ignore))))
+        ;; Answers awaited, counted per view.
+        (should (= (xwidget-get x2 'asked) 2))
+        (should (+my/webkit--asked-p x2))
+        (should-not (+my/webkit--asked-p x1))))))
+
+(defvar +test-webkit--answers nil "(VALUE BUFFER ANSWERING) of each answer, latest first.")
+
+(defun +test-webkit--answer-function (value)
+  (push (list value (current-buffer) +my/webkit-answering) +test-webkit--answers))
+
+(defun +test-webkit--answer (xw value &optional function)
+  "WebKit answers VALUE from XW's page (as its event comes in)."
+  (let ((last-input-event (list 'xwidget-event 'javascript-callback xw
+                                (or function #'+test-webkit--answer-function) value)))
+    (+my/webkit--callback xw 'javascript-callback)))
+
+(ert-deftest webkit/answer-runs-in-the-views-buffer ()
+  "An answer: its function with the value, in the view's buffer, knowing the
+view that answered; one fewer awaited (never below none)."
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (xw (+test-webkit--xw page (+test-webkit--show page)))
+           (+test-webkit--answers nil))
+      (with-current-buffer page
+        (+my/webkit-ask "a()" '+test-webkit--answer-function)
+        (+my/webkit-ask "b()" '+test-webkit--answer-function))
+      (with-temp-buffer
+        (+test-webkit--answer xw "first")
+        (should (equal +test-webkit--answers (list (list "first" page xw))))
+        (should (= (xwidget-get xw 'asked) 1))
+        (+test-webkit--answer xw "second")
+        (+test-webkit--answer xw "unasked")         ; a script run by `+test-js', say
+        (should (= (xwidget-get xw 'asked) 0))
+        (should (= (length +test-webkit--answers) 3)))
+      ;; Not `xwidget-webkit-callback''s (it calls the function as is).
+      (should-not (+test-webkit--calls 'xwidget-webkit-callback))
+      (should-not +my/webkit-answering))))
+
+(ert-deftest webkit/answer-to-a-killed-buffer ()
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (xw (+test-webkit--xw page (+test-webkit--show page)))
+           (+test-webkit--answers nil))
+      (kill-buffer page)
+      (+test-webkit--answer xw "late")
+      (should-not +test-webkit--answers))))
+
+(ert-deftest webkit/view-closed-while-an-answer-is-on-its-way ()
+  "The page's buffer killed while an answer is awaited: the view isn't killed
+(it crashed Emacs) until the answer has come, in a buffer of its own meanwhile
+(killing its buffer would kill it), and the answer goes nowhere."
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (xw (+test-webkit--xw page (+test-webkit--show page)))
+           (+test-webkit--answers nil))
+      (with-current-buffer page
+        (+my/webkit-ask "slow()" '+test-webkit--answer-function))
+      (kill-buffer page)
+      (should-not (+test-webkit--xw-killed xw))
+      (should (equal (+test-webkit--calls 'set-buffer)
+                     (list (list xw (get-buffer " *webkit-closing*")))))
+      (should (buffer-live-p (xwidget-buffer xw)))
+      ;; At most 5 s.
+      (let ((timer (car (+test-webkit--timers #'+my/webkit--kill-now))))
+        (should timer)
+        (should (< 4 (+test-webkit--due timer) 5.1)))
+      (+test-webkit--answer xw "done")
+      (should-not +test-webkit--answers)
+      (should-not (+test-webkit--xw-killed xw))
+      ;; Killed after this event, once.
+      (should (= (+test-webkit--fire #'+my/webkit--kill-now) 2))
+      (should (+test-webkit--xw-killed xw))
+      (should (= (length (+test-webkit--calls 'kill-xwidget)) 1)))))
+
+(ert-deftest webkit/view-closed-answer-never-comes ()
+  "WebKit doesn't answer a script that failed: the view is killed 5 s later."
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (xw (+test-webkit--xw page (+test-webkit--show page))))
+      (with-current-buffer page
+        (+my/webkit-ask "throw 1" #'ignore))
+      (with-current-buffer page
+        (fundamental-mode))                 ; another mode: closed too
+      (should-not (+test-webkit--xw-killed xw))
+      (should (= (+test-webkit--fire #'+my/webkit--kill-now) 1))
+      (should (+test-webkit--xw-killed xw)))))
+
+(ert-deftest webkit/closed-window-view-waits-for-its-answer-too ()
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (w1 (+test-webkit--show page))
+           (w2 (+test-webkit--show page (split-window w1 nil 'right)))
+           (x2 (+test-webkit--xw page w2)))
+      (with-current-buffer page
+        (+my/webkit-ask "slow()" #'ignore x2))
+      (delete-window w2)
+      (+my/webkit--tidy)
+      (should-not (+test-webkit--xw-killed x2))
+      (should-not (memq x2 (with-current-buffer page (+my/webkit-xwidgets))))
+      (+test-webkit--answer x2 "done")
+      (+test-webkit--fire #'+my/webkit--kill-now)
+      (should (+test-webkit--xw-killed x2)))))
+
+(ert-deftest webkit/killed-views-kept-referenced-a-while ()
+  "A killed view stays referenced for 10 s (an answer to one the garbage
+collector took would crash Emacs), then not."
+  (+test-webkit
+    (let* ((+my/webkit--killed nil)
+           (page (+test-webkit--page))
+           (xw (+test-webkit--xw page (+test-webkit--show page)))
+           (old (+test-webkit--xw-new)))
+      (push (cons old (- (float-time) 11)) +my/webkit--killed)
+      (kill-buffer page)
+      (should (+test-webkit--xw-killed xw))
+      (should (assq xw +my/webkit--killed))
+      (should-not (assq old +my/webkit--killed))
+      ;; Once.
+      (+my/webkit--kill-now xw)
+      (should (= (length (+test-webkit--calls 'kill-xwidget)) 1))
+      (should (= (length +my/webkit--killed) 1)))))
+
+(ert-deftest webkit/wait ()
+  (let ((n 0))
+    (should (eq (+my/webkit-wait (lambda () (and (> (cl-incf n) 3) 'done)) 5) 'done))
+    (should (= n 4)))
+  (let ((start (float-time)))
+    (should-not (+my/webkit-wait #'ignore 0.2))
+    (should (< 0.15 (- (float-time) start) 1))))
+
+;; ====== THE BUFFER'S TEXT ======
+
+(ert-deftest webkit/set-text-under-the-views ()
+  (+test-webkit
+    (let* ((page (+test-webkit--page "page" "old text"))
+           (w1 (+test-webkit--show page))
+           (w2 (+test-webkit--show page (split-window w1 nil 'right))))
+      (with-current-buffer page
+        (setq +my/webkit--pointer 'hand)
+        (with-silent-modifications
+          (let ((inhibit-read-only t))
+            (put-text-property (point-min) (point-max) 'pointer 'hand)))
+        (should-not (buffer-modified-p))
+        (+my/webkit-set-text "a longer, new text\nover two lines")
+        (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                       "a longer, new text\nover two lines"))
+        ;; Hidden, the pointer kept, all of it under each view.
+        (should-not (text-property-not-all (point-min) (point-max) 'display ""))
+        (should-not (text-property-not-all (point-min) (point-max) 'pointer 'hand))
+        (dolist (view +my/webkit--views)
+          (should (= (overlay-start view) (point-min)))
+          (should (= (overlay-end view) (point-max))))
+        (should (= (point) (point-min)))
+        (dolist (window (list w1 w2))
+          (should (= (window-start window) (point-min)))
+          (should (= (window-point window) (point-min))))
+        (should (buffer-modified-p))
+        (should buffer-read-only)
+        ;; Shorter: still all of it.
+        (+my/webkit-set-text "x")
+        (dolist (view +my/webkit--views)
+          (should (= (overlay-end view) 2)))
+        (should (equal (get-text-property 1 'display) ""))))))
+
+(ert-deftest webkit/set-text-without-a-pointer-yet ()
+  (+test-webkit
+    (with-current-buffer (+test-webkit--page "page" "old")
+      (+my/webkit-set-text "new")
+      (should-not (get-text-property 1 'pointer))
+      (should (equal (get-text-property 1 'display) "")))))
+
+;; ====== DOWNLOADS ======
+
+(defmacro +test-webkit--with-cdn (files &rest body)
+  "BODY with `url-copy-file' copying from a fake CDN of FILES ((URL . BYTES)...);
+the URLs asked for in `downloads', oldest first."
+  (declare (indent 1))
+  `(let ((downloads nil))
+     (cl-letf (((symbol-function 'url-copy-file)
+                (lambda (url newname &optional ok-if-already-exists &rest _)
+                  (setq downloads (append downloads (list url)))
+                  (let ((bytes (cdr (assoc url ,files))))
+                    (unless bytes (signal 'file-error (list "Not found" url)))
+                    (when (and (file-exists-p newname) (not ok-if-already-exists))
+                      (signal 'file-already-exists (list newname)))
+                    (let ((coding-system-for-write 'no-conversion))
+                      (with-temp-file newname
+                        (set-buffer-multibyte nil)
+                        (insert bytes)))
+                    t))))
+       ,@body)))
+
+(defun +test-webkit--sha256 (bytes)
+  (secure-hash 'sha256 bytes))
+
+(ert-deftest webkit/install-checks-each-file-into-its-folder ()
+  (let* ((dir (file-name-as-directory (+test-tmp-file "install/lib-1.0")))
+         (binary (apply #'unibyte-string (number-sequence 0 255)))
+         (files `(("lib.js" "https://cdn.example/lib.js" ,(+test-webkit--sha256 "var lib;"))
+                  ("assets/font.woff2" "https://cdn.example/assets/font.woff2"
+                   ,(+test-webkit--sha256 binary)))))
+    (should-not (+my/webkit-installed-p files dir))
+    (+test-clear-messages)
+    (+test-webkit--with-cdn `(("https://cdn.example/lib.js" . "var lib;")
+                              ("https://cdn.example/assets/font.woff2" . ,binary))
+      (+my/webkit-install "Lib" "1.0" files dir)
+      (should (equal downloads '("https://cdn.example/lib.js" "https://cdn.example/assets/font.woff2"))))
+    (should (+my/webkit-installed-p files dir))
+    (should (equal (with-temp-buffer
+                     (set-buffer-multibyte nil)
+                     (insert-file-contents-literally (expand-file-name "assets/font.woff2" dir))
+                     (buffer-string))
+                   binary))
+    (should-not (directory-files-recursively dir "\\.part\\'"))
+    (should (= (+test-messages "^Downloading Lib: lib\\.js\\.\\.\\.$") 1))
+    (should (= (+test-messages "^Downloading Lib: assets/font\\.woff2\\.\\.\\.$") 1))
+    (should (= (+test-messages (concat "^Lib 1\\.0 installed in " (regexp-quote dir) "$")) 1))
+    ;; Again: replaced.
+    (+test-webkit--with-cdn `(("https://cdn.example/lib.js" . "var lib;")
+                              ("https://cdn.example/assets/font.woff2" . ,binary))
+      (+my/webkit-install "Lib" "1.0" files dir)
+      (should (= (length downloads) 2)))))
+
+(ert-deftest webkit/install-refuses-a-wrong-file ()
+  (let* ((dir (file-name-as-directory (+test-tmp-file "install/wrong")))
+         (files `(("a.js" "https://cdn.example/a.js" ,(+test-webkit--sha256 "var a;"))
+                  ("b/c.js" "https://cdn.example/c.js" ,(+test-webkit--sha256 "var c;")))))
+    (+test-webkit--with-cdn '(("https://cdn.example/a.js" . "var a;")
+                              ("https://cdn.example/c.js" . "var evil;"))
+      (let ((err (should-error (+my/webkit-install "Lib" "1" files dir))))
+        (should (string-match-p
+                 "\\`Lib: https://cdn\\.example/c\\.js isn.t the file expected (SHA-256 differs), not installed\\'"
+                 (error-message-string err)))))
+    (should-not (file-exists-p (expand-file-name "b/c.js" dir)))
+    (should-not (file-exists-p (expand-file-name "b/c.js.part" dir)))
+    (should-not (+my/webkit-installed-p files dir))
+    ;; Offline: the download's error.
+    (+test-webkit--with-cdn nil
+      (should-error (+my/webkit-install "Lib" "1" files dir) :type 'file-error))))
 
 (ert-deftest webkit/title-json ()
   (let ((xw (+test-webkit--xw-new)))

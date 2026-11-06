@@ -156,7 +156,8 @@
 ;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
 (load! "config/agent-shell")
 
-;; WEBKIT (web pages inside Emacs: what the PDF viewer and Markdown preview share)
+;; WEBKIT (web pages inside Emacs: what the PDF viewer, the Markdown preview and
+;; drawings share)
 (load! "config/webkit")
 
 ;; MARKDOWN
@@ -164,6 +165,9 @@
 
 ;; PDF (PDFs in WebKit, drawn by PDF.js, inside the file's tab)
 (load! "config/pdf")
+
+;; DRAWINGS (*.excalidraw.svg, *.excalidraw: Excalidraw in WebKit, in the file's tab)
+(load! "config/excalidraw")
 
 ;; PROJECTILE (projects under ~/dev, no file cache)
 (load! "config/projectile")

@@ -13,9 +13,11 @@
 | `config/tiling.el` | Tiling like a tiling window manager: `SPC w SPC` opens a pane where the strategy (tall) puts it, `SPC w a` arranges. |
 | `config/banner.el` | Notices at the top of a window (IntelliJ's editor notifications), with actions and ✕. |
 | `config/smooth.el` | Mouse-wheel notches glide (on top of Doom's pixel scrolling); scroll limit past the end; files with very long lines shown plain. |
-| `config/webkit.el` | Web pages inside Emacs (xwidget WebKit), for the PDF viewer and the Markdown preview: a view per window (splits), no white flash, links out, JavaScript, the page's title read, mouse pointer, clicks, scroll / copy keys. |
+| `config/webkit.el` | Web pages inside Emacs (xwidget WebKit), for the PDF viewer, the Markdown preview and drawings: a view per window (splits), no white flash, links out, JavaScript (answers awaited safely), the page's title read, mouse pointer, clicks, scroll / copy keys, a file's text from its page, downloads checked by SHA-256. |
 | `config/pdf.el` | PDFs in WebKit inside the file's tab, drawn by PDF.js (downloaded once); Evil keys, search, copy, zoom, outline, dark pages, back / forward, places kept, Option+Enter actions, Preview, print; splits (on `config/webkit.el`). |
 | `config/pdf.js` | The PDF's page: PDF.js's viewer, toolbar and sidebar (outline, thumbnails), driven from Emacs through `window.pdfx`. |
+| `config/excalidraw.el` | Drawings (`*.excalidraw.svg`, `*.excalidraw`) in Excalidraw inside the file's tab (downloaded once): saved as any file, Excalidraw's keys before Evil's, copy / paste, dark canvas, splits, reverts; inserted from Markdown / Org (on `config/webkit.el`). |
+| `config/excalidraw.js` | A drawing's page: Excalidraw, driven from Emacs through `window.exd`; exports the drawing after each change. |
 | `config/peek.el` | LSP peek (usages, definitions): calmer, with functions, line numbers, key hints. |
 | `config/treemacs.el` | Treemacs sidebar behaviour (auto-open, follow, git status, window keys). |
 | `config/cheatsheet.el` | Tips panel under treemacs, from `cheatsheet.org` (disabled for now, see `config.el`). |
@@ -23,7 +25,7 @@
 | `config/markdown.el` | Live Markdown preview inside Emacs (on `config/webkit.el`: splits, links, keys); marksman's false link warnings dropped. |
 | `config/tabs.el` | Tabs per window (Emacs's tab line), like IntelliJ's split editors. |
 | `config/modeline.el` | Mode line: a space after its last item on the right. |
-| `config/actions.el` | Option+Enter context-actions menu (spelling, LSP code actions, Claude; PDFs add theirs). |
+| `config/actions.el` | Option+Enter context-actions menu (spelling, LSP code actions, Claude; PDFs and drawings add theirs). |
 | `config/magit.el` | Magit add-ons: commit graph (like tig), git-delta diffs, TODOs in the status buffer. |
 | `config/editor.el` | Editing and navigation: Cmd+B, Cmd+[ / Cmd+], `M-[` / `M-]`, `SPC c ~`; rainbow brackets; right margin; current line and selection across wrapped rows; tree-sitter cache; highlighting after the first display. |
 | `config/evil.el` | Evil tweaks: saving returns to normal state; `q` closes transient menus. |

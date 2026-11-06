@@ -61,6 +61,8 @@ osascript recorded (not run)."
                ((symbol-function 'kill-xwidget)
                 (lambda (xw) (setf (+test-pdf--xw-killed xw) t) (+test-pdf--log 'kill-xwidget xw)))
                ((symbol-function 'xwidget-buffer) #'+test-pdf--xw-buffer)
+               ((symbol-function 'set-xwidget-buffer)
+                (lambda (xw buffer) (setf (+test-pdf--xw-buffer xw) buffer)))
                ((symbol-function 'set-xwidget-query-on-exit-flag) #'ignore)
                ((symbol-function 'xwidget-webkit-goto-uri)
                 (lambda (xw uri) (setf (+test-pdf--xw-uri xw) uri) (+test-pdf--log 'goto-uri xw uri)))
@@ -386,7 +388,7 @@ by their path in the npm package; others missing (an error)."
       (should (equal (+test-pdf--bytes (expand-file-name "a.min.js" +my/pdf-js-dir)) "var a;"))
       (should (equal (+test-pdf--bytes (expand-file-name "b.css" +my/pdf-js-dir)) +test-pdf--binary))
       (should (+my/pdf-js-installed-p))
-      (should (= (+test-messages "^Downloading PDF.js: build/a.min.js\\.\\.\\.") 1))
+      (should (= (+test-messages "^Downloading PDF.js: a.min.js\\.\\.\\.") 1))
       (should (= (+test-messages (concat "^PDF.js 3.11.174 installed in " (regexp-quote +my/pdf-js-dir))) 1))
       ;; Again (M-x +my/pdf-js-install): replaced.
       (+test-pdf--with-cdn `(("build/a.min.js" . "var a;") ("web/b.css" . ,+test-pdf--binary))

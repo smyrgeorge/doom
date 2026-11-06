@@ -48,6 +48,8 @@
                ((symbol-function 'xwidget-live-p) #'+test-md--xw-p)
                ((symbol-function 'kill-xwidget) (lambda (xw) (setf (+test-md--xw-killed xw) t)))
                ((symbol-function 'xwidget-buffer) #'+test-md--xw-buffer)
+               ((symbol-function 'set-xwidget-buffer)
+                (lambda (xw buffer) (setf (+test-md--xw-buffer xw) buffer)))
                ((symbol-function 'set-xwidget-query-on-exit-flag) #'ignore)
                ((symbol-function 'xwidget-webkit-goto-uri)
                 (lambda (xw uri) (setf (+test-md--xw-uri xw) uri)))

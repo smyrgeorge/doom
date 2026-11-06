@@ -23,6 +23,8 @@ buffer (only where the live preview works; `+my/markdown-preview-notice` nil tur
   following links are WebKit's.
 - **GitHub look**: github-markdown-css plus highlight.js, following the macOS light/dark setting; as wide as the pane.
 - Math is rendered as MathML; relative image links work.
+- **Drawings**: `Option+Enter` > *Insert a new drawing* links a new [Excalidraw drawing](editor.md#drawings-excalidraw)
+  (`*.excalidraw.svg`, an image) at point and opens it beside; the preview shows it as any image.
 
 Needs `pandoc` (`scripts/lsp.sh` installs it) and an Emacs with xwidgets (emacs-plus has them); otherwise, and in
 terminal Emacs, `SPC m p` falls back to markdown-mode's `eww` preview (updates on save). Styles are loaded from a CDN,

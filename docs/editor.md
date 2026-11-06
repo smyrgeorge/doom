@@ -183,7 +183,7 @@ apply to all of the PDF's panes; the other keys to the selected one. A pane that
 for when it comes back (unless another pane needs one first); a closed pane's view goes a second later, but for the
 PDF's last one. What a web page inside Emacs needs (a view per window, no white flash, links out, the title read every
 0.1 s, the mouse pointer, clicks) is in `config/webkit.el`, shared with the
-[Markdown preview](markdown.md#live-markdown-preview).
+[Markdown preview](markdown.md#live-markdown-preview) and [drawings](#drawings-excalidraw).
 
 The page can't call Emacs: it says its settings, page and place, the mouse pointer it wants, and the toolbar's requests
 (Preview, Print) in its title, which Emacs reads every 0.1 s, without JavaScript, while a PDF is on screen. The mouse
@@ -204,6 +204,61 @@ Emacs's own viewer.
 
 Doom's pdf module (pdf-tools) is off in `init.el`: PDFs are this config's own viewer (`config/pdf.el`, its page
 `config/pdf.js`).
+
+## Drawings (Excalidraw)
+
+Files named `*.excalidraw.svg` or `*.excalidraw` open in the file's tab as a drawing in
+[Excalidraw](https://excalidraw.com) (excalidraw.com's editor: shapes, arrows, lines, text, freehand, images), a web
+page in WebKit like [PDFs](#pdfs-in-webkit) (`config/excalidraw.el`, the page's script `config/excalidraw.js`):
+
+- **`*.excalidraw.svg`**: an SVG image with the drawing in it. Markdown and Org show it as any image (the
+  [preview](markdown.md#live-markdown-preview), GitHub...), and it opens here again to edit, as at excalidraw.com. Its
+  fonts are named at the CDN (jsdelivr), so it looks the same elsewhere; it's always saved light.
+- **`*.excalidraw`**: Excalidraw's own JSON (what excalidraw.com saves).
+
+A new file is a blank drawing. Draw with the mouse or the trackpad (two fingers pan, pinching zooms). Emacs takes the
+keys and gives them to the page, so Excalidraw's work as at excalidraw.com (its `?` lists them): the tools (`v` `r`
+`d` `o` `a` `l` `p` `t` `e` `h` `k`, `1`-`0`), `Delete`, `Esc`, `Enter`, the arrows (`Shift`: further), `Shift+1`
+(fit), `Cmd+Z` / `Cmd+Shift+Z` (undo / redo), `Cmd+A`, `Cmd+D`, `Cmd+G` / `Cmd+Shift+G`, `Cmd+=` / `Cmd+-` / `Cmd+0`
+(zoom), `Cmd+'` (grid), `Cmd+Option+[` / `]` (backward / forward)... They come before Evil's (and evil-snipe's `f`,
+`t`, `s`). Text is typed straight into the page: double-click, or `t` then click. Emacs keeps `SPC` (the leader),
+`:` (Evil's command line) and its keys that Excalidraw has none for (`Cmd+S`, `Cmd+W`, `Cmd+1`..`9`, `M-x`, `C-x`,
+`C-g`, `Option+Enter`...). Also:
+
+| Key | Action |
+|---|---|
+| `Cmd+C` / `Cmd+X` | Copy / cut the selection: Emacs's kill ring and the clipboard, in Excalidraw's format (it pastes back here or at excalidraw.com) |
+| `Cmd+V` | Paste: shapes copied so, or text (a text element) |
+| `SPC m d` | Dark canvas, for all drawings (`+my/excalidraw-theme`: `auto` follows Emacs's theme) |
+| `SPC m r` | Read the file again |
+
+The buffer has the file's text, under the page: a moment after each change (`+my/excalidraw-export-delay`, 300 ms),
+the page exports the drawing and Emacs puts it there, marked modified, so a drawing is saved as any file (`Cmd+S`,
+`:w`, Emacs asking when it's closed), and its tab shows it's changed. Saving first asks the page for the drawing as it
+is and waits for it (5 s at most), so a change made just before is saved too. Undo is Excalidraw's.
+
+Split, each pane shows the drawing (a WebKit view per window, as for PDFs), and a change in one shows in the others.
+A drawing changed on disk (git, say) is shown anew (`revert-buffer`, so also Doom's auto-revert); one changed here is
+only read again after asking. A file that isn't a drawing (a plain SVG named so) opens blank, under a notice saying
+that saving replaces it with what you draw.
+
+From Markdown or Org, `Option+Enter` (the [actions menu](code.md#context-actions-optionenter)) has **Insert a new
+drawing** (`M-x +my/excalidraw-insert`): it asks for a name (`drawing.excalidraw.svg` by default, `.excalidraw.svg`
+added if left out), links it at point as an image (`![](fig.excalidraw.svg)`, `[[file:fig.excalidraw.svg]]`),
+opens it beside, taking focus, and saves it blank at once so the link shows. On a link to a drawing, **Edit the
+drawing** opens it beside.
+
+The page can't call Emacs: it says in its title whether it's ready, the drawing's version (one more at each change),
+the version its latest export is of, the mouse pointer it wants (the hand over buttons and what can be moved, the
+I-beam over text, the arrow elsewhere) and an error; Emacs reads it every 0.1 s while a drawing is on screen, and asks
+the page for an export when there's a new one (an answer awaited: a view closed meanwhile is kept until the answer
+has come, 5 s at most, as one closed with an answer pending crashed Emacs; see `config/webkit.el`).
+
+Excalidraw 0.17.6 (its plain-script build, on React 18; newer versions only ship ES modules, which a `file://` page
+may not load) is downloaded once, from jsdelivr, into Doom's `.local/etc/excalidraw-0.17.6/`, each file checked
+against its SHA-256 in `+my/excalidraw-files`; `M-x +my/excalidraw-install` downloads it again. Without it (e.g.
+offline the first time), in a terminal, or in an Emacs without xwidgets, a drawing opens in its file's own mode: the
+SVG as an image (as XML in a terminal), the JSON as JSON.
 
 ## Mode line
 

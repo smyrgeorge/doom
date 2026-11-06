@@ -212,22 +212,28 @@ header says config.el loads it."
              (+test-config--position '(load! "config/editor")))))
 
 (ert-deftest config/order-webkit-before-its-pages ()
-  "config/webkit.el, before the Markdown preview and the PDF viewer built on
-it (config/markdown.el binds its clicks as it loads)."
+  "config/webkit.el, before the Markdown preview, the PDF viewer and drawings
+built on it (config/markdown.el binds its clicks as it loads)."
   (should (< (+test-config--load-position "config/webkit")
              (+test-config--load-position "config/markdown")))
   (should (< (+test-config--load-position "config/webkit")
              (+test-config--load-position "config/pdf")))
+  (should (< (+test-config--load-position "config/webkit")
+             (+test-config--load-position "config/excalidraw")))
+  (should (eq (lookup-key +my/excalidraw-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
   (should (eq (lookup-key +md-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select)))
 
 (ert-deftest config/order-actions-before-pdf ()
   "config/actions.el before config/pdf.el, which puts its provider
-first in the Option+Enter menu."
+first in the Option+Enter menu, and config/excalidraw.el, which puts its last."
   (should (< (+test-config--load-position "config/actions")
              (+test-config--load-position "config/pdf")))
+  (should (< (+test-config--load-position "config/actions")
+             (+test-config--load-position "config/excalidraw")))
   (should (eq (car +my/context-action-providers) '+my/context-actions-pdf))
   (should (equal (cdr +my/context-action-providers)
-                 '(+my/context-actions-spelling +my/context-actions-lsp +my/context-actions-claude))))
+                 '(+my/context-actions-spelling +my/context-actions-lsp +my/context-actions-claude
+                   +my/context-actions-excalidraw))))
 
 (ert-deftest config/order-window-before-tiling ()
   "Window behaviour (new windows get focus) is set up before tiling uses it."
@@ -250,5 +256,5 @@ first in the Option+Enter menu."
   "A command from each part of the config is there after loading."
   (dolist (fn '(+my/tiling-split +my/goto-declaration-or-usages +my/context-actions
                 +my/agent-shell-claude-theme +my/lsp-gitignored-directories
-                +my/peek--title +my/compile-config-functions-h))
+                +my/peek--title +my/compile-config-functions-h +my/excalidraw-insert))
     (should (fboundp fn))))
