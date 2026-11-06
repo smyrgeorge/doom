@@ -42,10 +42,12 @@
 | `config/compile.el` | Byte-compiles this config's functions when Emacs is idle (they load as source). |
 | `tests/` | Tests of this config's features (`tests/run.sh`; see [Tests](tests.md)): never loaded by Doom. |
 | `config/examples.el` | `M-x +my/example` and a `+my/example-NAME` command for each example (see [Examples](examples.md)). |
-| `examples/` | Examples of the features, each on files of its own in the temp folder (`merge.el`: a repository in conflict); loaded only when run. |
+| `examples/` | Examples of the features, each on files of its own in the temp folder (`merge.el`: a repository in conflict); loaded only when run. `NAME.png`: its screenshot (`scripts/screenshots.sh`). |
 | `cmd/xterm-24bit.terminfo` | `xterm-256color` with 24-bit colour, for an Emacs server's terminal frames (`cmd/diff.sh` compiles it into `~/.terminfo`). |
 | `cmd/diff.sh` | Git's conflicts resolved in the three panes from the shell, in the terminal or a GUI frame, one file after the other; `diff.sh example` runs the merge example (see [Shell commands](cmd.md)). |
 | `scripts/emacs.sh` | Installs Emacs (emacs-plus cask) and runs `doom sync`. |
 | `scripts/tools.sh` | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), BasicTeX, the `claude-agent-acp` bridge. |
 | `scripts/lsp.sh` | Language servers, formatters and linters. |
+| `scripts/screenshots.sh` | Screenshots of the examples (`examples/NAME.png`): each opened in a GUI Emacs of its own with this config's look, its frame captured with `screencapture` (see [Examples](examples.md#screenshots)). |
+| `scripts/screenshots.el` | What `scripts/screenshots.sh` runs in that Emacs: the look, the frame on top, each example opened, captured, closed. |
 | `scripts/dict.sh` | Rebuilds `dict/tech.txt` from cspell's word lists (needs `npm`, `aspell`). |
