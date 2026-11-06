@@ -217,6 +217,29 @@ taking the margins' clicks on (dap-mode's breakpoints did, in code)."
                                                                              (car (posn-string posn)))))
                     'ignored))))))
 
+(ert-deftest e2e-merge/line-numbers-on-screen ()
+  "Each pane's lines numbered on screen: jit-lock put them on what's shown,
+each drawn left of its line; the current line's in its own face."
+  (+test-merge-conflict
+    (let ((session (+test-merge--e)))
+      (redisplay t)
+      (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
+        (let ((window (get-buffer-window buffer)))
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (forward-line 4)                ; five
+            (should (= (string-to-number (get-text-property (point) 'line-prefix)) 5))
+            ;; Left of the line's text, on its row: the number's string.
+            (let* ((xy (pos-visible-in-window-p (point) window t))
+                   (posn (posn-at-x-y (- (car xy) (* 2 (frame-char-width))) (cadr xy) window)))
+              (should (stringp (car (posn-string posn))))
+              (should (= (string-to-number (car (posn-string posn))) 5)))
+            ;; The current line's, in the window.
+            (let ((ov (alist-get window +my/merge--current-numbers)))
+              (should ov)
+              (should (eq (get-text-property 1 'face (overlay-get ov 'line-prefix))
+                          'line-number-current-line)))))))))
+
 (ert-deftest e2e-merge/done-stages-and-magit-shows-it ()
   (+test-merge-conflict
     (let ((session (+test-merge--e)))

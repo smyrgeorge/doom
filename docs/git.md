@@ -71,7 +71,11 @@ The bar, across the top:
 | **Abort** | Close, the file left as it was |
 
 The panes line up: each change takes as many rows in each, the shorter padded with grey filler lines (not text: not
-saved, not copied, the cursor skips them). They scroll together, whatever scrolls one: the wheel, the trackpad, the
+saved, not copied, the cursor skips them). Each pane's lines are numbered as in its own version, the fillers left
+blank, so the same row can read 16 in Yours and 18 in Theirs. These are the merge's own numbers (a `line-prefix` on
+each line, put on as lines are shown), because Emacs's `display-line-numbers-mode` would count the fillers. The current
+line's number is in Doom's `line-number-current-line` face, all three use the same width, and the Result is numbered
+again after an edit changes its lines. Copies and the saved file don't include them. They scroll together, whatever scrolls one: the wheel, the trackpad, the
 keys, smooth scrolling's glides (`config/smooth.el`), sideways too. The fillers are real lines, as a window can't
 start inside an overlay's text, which pixel scrolling can't move into either; in the Result they're made again after
 each command that changed it, in the same step of its undo.

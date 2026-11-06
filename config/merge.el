@@ -702,7 +702,8 @@ against each other, another change against the base."
                sides heights)))
   (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
     (with-current-buffer buffer
-      (setq +my/merge--dirty nil))))
+      (setq +my/merge--dirty nil)))
+  (+my/merge--renumber session))
 
 (defun +my/merge--changed-h (&rest _)
   "The pane changed: its fillers made again after this command."
@@ -735,6 +736,114 @@ an undo)."
   (prog1 (+my/merge--clean beg end)
     (when delete
       (delete-region beg end))))
+
+;; LINE NUMBERS
+;; Each pane's lines numbered as in its version, as Doom numbers a file's:
+;; Emacs's own (`display-line-numbers-mode') would count the fillers. A
+;; `line-prefix' on each line with its number (blank on fillers), put by
+;; jit-lock on what's shown, the same width in the three; the current line's
+;; in `line-number-current-line', by an overlay of its window's. The Result's
+;; numbered again when an edit changed its lines. Copies and the saved file
+;; are without them (`+my/merge--clean' takes no properties).
+(defvar-local +my/merge--number-width 3
+  "Digits of the panes' line numbers (the same in the three).")
+
+(defvar-local +my/merge--number-lines nil
+  "The pane's line count when it was last numbered.")
+
+(defvar-local +my/merge--current-numbers nil
+  "((WINDOW . OVERLAY)...): the current line's number in each window.")
+
+(defun +my/merge--fillers-before (pos)
+  "How many filler lines there are before POS (each a newline)."
+  (let ((n 0)
+        (p (point-min)))
+    (while (< p pos)
+      (let ((next (next-single-property-change p '+my/merge-filler nil pos)))
+        (when (get-text-property p '+my/merge-filler)
+          (cl-incf n (- next p)))
+        (setq p next)))
+    n))
+
+(defun +my/merge--line-at (pos)
+  "The number, in the pane's version, of POS's line; on a filler, of the next
+line that isn't one."
+  (save-excursion
+    (goto-char pos)
+    (forward-line 0)
+    (- (line-number-at-pos) (+my/merge--fillers-before (point)))))
+
+(defun +my/merge--number-string (n face)
+  "Line number N as a line prefix, in FACE (N nil: blank, a filler's)."
+  (let ((width +my/merge--number-width))
+    (if n
+        (propertize (format (format " %%%dd " width) n) 'face face)
+      (make-string (+ width 2) ?\s))))
+
+(defun +my/merge--number (start end)
+  "Number the lines from START to END (jit-lock's, see above)."
+  (save-excursion
+    (goto-char start)
+    (forward-line 0)
+    (let ((from (point))
+          (n (+my/merge--line-at (point))))
+      (with-silent-modifications
+        (while (and (< (point) end) (not (eobp)))
+          (let ((bol (point))
+                (next (line-beginning-position 2)))
+            (if (get-text-property bol '+my/merge-filler)
+                (put-text-property bol next 'line-prefix (+my/merge--number-string nil nil))
+              (put-text-property bol next 'line-prefix (+my/merge--number-string n 'line-number))
+              (cl-incf n))
+            (goto-char next))))
+      `(jit-lock-bounds ,from . ,(point)))))
+
+(defun +my/merge--renumber (session)
+  "SESSION's panes numbered again where needed: the width, the same in the
+three, changed (all of them); a pane's lines did (that pane, from the top)."
+  (let* ((panes (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
+         (lines (mapcar (lambda (buffer) (with-current-buffer buffer (+my/merge--line-at (point-max))))
+                        panes))
+         (width (max 3 (length (number-to-string (apply #'max lines))))))
+    (cl-mapc (lambda (buffer count)
+               (with-current-buffer buffer
+                 (unless (and (eql count +my/merge--number-lines) (eql width +my/merge--number-width))
+                   (setq +my/merge--number-lines count
+                         +my/merge--number-width width)
+                   (jit-lock-refontify))))
+             panes lines)))
+
+(defun +my/merge--current-number-h (&optional window)
+  "Before a redisplay: the current line's number in WINDOW (a pane's), in
+`line-number-current-line', above the one jit-lock put (see above)."
+  (dolist (window (if window (list window) (window-list nil 'nomini)))
+    (when-let* (((window-live-p window))
+                (buffer (window-buffer window))
+                (session (buffer-local-value '+my/merge--session buffer))
+                ((not (+my/merge-finished session)))
+                ((memq buffer (list (+my/merge-yours session) (+my/merge-result session)
+                                    (+my/merge-theirs session)))))
+      (with-current-buffer buffer
+        (let* ((bol (save-excursion (goto-char (window-point window)) (line-beginning-position)))
+               (eol (save-excursion (goto-char bol) (line-beginning-position 2)))
+               (entry (assq window +my/merge--current-numbers))
+               (ov (cdr entry))
+               (key (list bol (buffer-modified-tick) +my/merge--number-width)))
+          (unless (and ov (overlay-buffer ov) (equal (overlay-get ov '+my/merge-key) key))
+            (unless (and ov (overlay-buffer ov))
+              (setq ov (make-overlay bol eol))
+              (overlay-put ov 'window window)
+              ;; Above hl-line's (which copies the line's prefix in its face).
+              (overlay-put ov 'priority 1)
+              (setf (alist-get window +my/merge--current-numbers) ov))
+            (move-overlay ov bol eol)
+            (overlay-put ov '+my/merge-key key)
+            (overlay-put ov 'line-prefix
+                         (and (< bol eol) (not (get-text-property bol '+my/merge-filler))
+                              (+my/merge--number-string (+my/merge--line-at bol)
+                                                        'line-number-current-line)))))))))
+
+(add-hook 'pre-redisplay-functions #'+my/merge--current-number-h)
 
 ;; SCROLLING TOGETHER
 ;; Lined up, the panes' rows are their lines: the pane scrolled (its first
@@ -869,6 +978,9 @@ hooks not run: no language server, linter...), read-only unless EDITABLE."
         (delay-mode-hooks
           (ignore-errors (set-auto-mode))))
       (font-lock-mode 1)
+      ;; Its own line numbers (see LINE NUMBERS), not Emacs's.
+      (display-line-numbers-mode -1)
+      (jit-lock-register #'+my/merge--number)
       (set-buffer-modified-p nil)
       (setq buffer-read-only (not editable))
       ;; The margins (buttons, the wand) by the code, the fringes at the

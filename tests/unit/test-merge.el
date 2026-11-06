@@ -951,6 +951,116 @@ changed the same word."
   (should (eq (lookup-key (evil-get-auxiliary-keymap +my/merge-mode-map 'normal) (kbd "SPC m w"))
               #'+my/merge-wand)))
 
+;; ====== LINE NUMBERS ======
+
+(defun +test-merge--numbers (buffer)
+  "BUFFER's lines, numbered first: each one's number as its prefix shows it,
+nil for a blank one (a filler)."
+  (with-current-buffer buffer
+    (+my/merge--number (point-min) (point-max))
+    (save-excursion
+      (goto-char (point-min))
+      (let (numbers)
+        (while (not (eobp))
+          (let ((prefix (get-text-property (point) 'line-prefix)))
+            (should prefix)
+            (push (and (not (string-blank-p prefix)) (string-to-number prefix)) numbers))
+          (forward-line 1))
+        (nreverse numbers)))))
+
+(ert-deftest merge/line-numbers-of-each-version ()
+  "Each pane's lines numbered as in its version, the fillers not counted
+(blank), the same width in the three; Emacs's own numbers off."
+  (+test-merge
+    (pcase-dolist (`(,buffer . ,text) (list (cons (+my/merge-yours session) +test-merge--yours)
+                                            (cons (+my/merge-result session) +test-merge--base)
+                                            (cons (+my/merge-theirs session) +test-merge--theirs)))
+      (let ((numbers (+test-merge--numbers buffer)))
+        (should (equal (remq nil numbers) (number-sequence 1 (length (split-string text "\n" t)))))
+        (with-current-buffer buffer
+          (should (= (seq-count #'null numbers) (+my/merge--fillers-before (point-max))))
+          (should (= +my/merge--number-width 3))
+          (should (equal (get-text-property 1 'face (get-text-property (point-min) 'line-prefix))
+                         'line-number))
+          (should-not (bound-and-true-p display-line-numbers-mode))
+          (should (memq #'+my/merge--number jit-lock-functions)))))
+    ;; Yours and the Result have fillers (Theirs' thirteen; Yours' ten, removed).
+    (should (memq nil (+test-merge--numbers (+my/merge-yours session))))
+    (should (memq nil (+test-merge--numbers (+my/merge-result session))))
+    ;; A row: Yours' eleven is its 10th line (ten removed), the Result's 11th.
+    (dolist (spec (list (list (+my/merge-yours session) "eleven" 10)
+                        (list (+my/merge-result session) "eleven" 11)
+                        (list (+my/merge-theirs session) "thirteen" 13)))
+      (with-current-buffer (nth 0 spec)
+        (goto-char (point-min))
+        (search-forward (nth 1 spec))
+        (should (= (+my/merge--line-at (point)) (nth 2 spec)))
+        (should (= (string-to-number (get-text-property (line-beginning-position) 'line-prefix))
+                   (nth 2 spec)))))))
+
+(ert-deftest merge/the-current-line-number ()
+  "The current line's number, in each pane's window, in
+`line-number-current-line', above the line's own (hl-line copies that one)."
+  (+test-merge
+    (let ((window (get-buffer-window (+my/merge-yours session))))
+      (with-current-buffer (+my/merge-yours session)
+        (set-window-point window (save-excursion (goto-char (point-min)) (search-forward "eleven") (point)))
+        (+my/merge--current-number-h window)
+        (let* ((ov (alist-get window +my/merge--current-numbers))
+               (prefix (overlay-get ov 'line-prefix)))
+          (should (eq (overlay-get ov 'window) window))
+          (should (> (overlay-get ov 'priority) 0))
+          (should (= (string-to-number prefix) 10))
+          (should (eq (get-text-property 1 'face prefix) 'line-number-current-line))
+          ;; Moved with point, the same overlay.
+          (set-window-point window (point-min))
+          (+my/merge--current-number-h window)
+          (should (eq (alist-get window +my/merge--current-numbers) ov))
+          (should (= (string-to-number (overlay-get ov 'line-prefix)) 1))
+          (should (= (overlay-start ov) (point-min))))))
+    ;; Not in the bar.
+    (with-current-buffer (+my/merge-bar session)
+      (+my/merge--current-number-h (get-buffer-window (current-buffer)))
+      (should-not +my/merge--current-numbers))))
+
+(ert-deftest merge/the-result-renumbered-after-an-edit ()
+  "An edit that changes the Result's lines: it's numbered again (jit-lock,
+when shown), not the others."
+  (+test-merge
+    (let ((refontified nil))
+      (cl-letf (((symbol-function 'jit-lock-refontify)
+                 (lambda (&rest _) (push (current-buffer) refontified))))
+        (with-current-buffer (+my/merge-result session)
+          (goto-char (point-min))
+          (insert "zero\n")
+          (+my/merge--post-command-h)))
+      (should (equal refontified (list (+my/merge-result session))))
+      (should (equal (remq nil (+test-merge--numbers (+my/merge-result session))) (number-sequence 1 13))))))
+
+(ert-deftest merge/line-numbers-as-wide-in-the-three ()
+  "A pane with 1000 lines or more: four digits in each of the three."
+  (+test-merge
+    (let ((refontified nil))
+      (cl-letf (((symbol-function 'jit-lock-refontify)
+                 (lambda (&rest _) (push (current-buffer) refontified)))
+                ((symbol-function '+my/merge--line-at)
+                 (let ((real (symbol-function '+my/merge--line-at)))
+                   (lambda (pos) (if (eq (current-buffer) (+my/merge-result session)) 1200 (funcall real pos))))))
+        (+my/merge--renumber session))
+      (should (= (length refontified) 3))
+      (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
+        (with-current-buffer buffer
+          (should (= +my/merge--number-width 4))
+          (should (equal (+my/merge--number-string 7 'line-number) "    7 ")))))))
+
+(ert-deftest merge/copies-without-line-numbers ()
+  (+test-merge
+    (with-current-buffer (+my/merge-result session)
+      (+test-merge--numbers (current-buffer))
+      (let ((copy (filter-buffer-substring (point-min) (point-max))))
+        (should (equal copy +test-merge--base))
+        (should-not (text-property-not-all 0 (length copy) 'line-prefix nil copy))))))
+
 ;; ====== ONE FILE AFTER THE OTHER ======
 
 (defun +test-merge--session-open ()
