@@ -8,6 +8,14 @@
 ;; scrolls to the cursor line. pandoc's `sourcepos' tags each element with its
 ;; source line (data-pos="L:C-L:C"), which the scroll script uses.
 ;; Terminal: falls back to markdown-mode's eww preview (updates on save).
+;; PREVIEW NOTICE
+;; A Markdown file opens with a notice at the top (config/banner.el) offering
+;; the live preview: it goes once the preview opens (SPC m p, or its button) or
+;; with its ✕, and doesn't come back for that buffer. Only where the live
+;; preview works (GUI, xwidgets, pandoc), and for files.
+(defvar +my/markdown-preview-notice t
+  "Offer the live preview in a notice when a Markdown file opens.")
+
 (defvar-local +md-preview--xwidget nil)
 
 (defvar-local +md-preview--timer nil)
@@ -134,9 +142,12 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
         (let ((xw-buf xwidget-webkit-last-session-buffer))
           (setq +md-preview--xwidget (with-current-buffer xw-buf (xwidget-webkit-current-session)))
           ;; Keep the cursor in the Markdown buffer: the preview follows it.
+          ;; Half of the file's window (a float would be half the frame's
+          ;; width: in a narrow window the file was left a few columns).
           (let ((+my/focus-new-windows nil))
-            (display-buffer xw-buf '(display-buffer-in-direction
-                                     (direction . right) (window-width . 0.5)))))
+            (display-buffer xw-buf `(display-buffer-in-direction
+                                     (direction . right)
+                                     (window-width . ,(/ (window-total-width) 2))))))
         (add-hook 'after-change-functions #'+md-preview--after-change-h nil t)
         (add-hook 'post-command-hook #'+md-preview--post-command-h nil t)
         (add-hook 'kill-buffer-hook (lambda () (+md-preview-mode -1)) nil t)
@@ -155,12 +166,37 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
       (delete-file +md-preview--file))
     (setq +md-preview--xwidget nil +md-preview--file nil +md-preview--line nil)))
 
+(defun +my/markdown-preview-live-p ()
+  "Non-nil if the live preview works here (GUI, xwidgets, pandoc)."
+  (and (display-graphic-p) (featurep 'xwidget-internal)
+       (executable-find "pandoc")))
+
 (defun +my/markdown-preview-toggle ()
   "SPC m p: live preview in Emacs (WebKit in GUI, eww in a terminal)."
   (interactive)
-  (if (and (display-graphic-p) (featurep 'xwidget-internal) (executable-find "pandoc"))
+  (if (+my/markdown-preview-live-p)
       (+md-preview-mode 'toggle)
     (markdown-live-preview-mode 'toggle)))
+
+;; PREVIEW NOTICE (see above)
+(defun +my/markdown-preview-notice-h ()
+  (when (and +my/markdown-preview-notice
+             buffer-file-name
+             (not (bound-and-true-p +md-preview-mode))
+             (+my/markdown-preview-live-p))
+    (+my/banner-show
+     'markdown-preview
+     "See this file rendered next to it, updated as you type (SPC m p)."
+     :actions '(("Open preview" . +my/markdown-preview-toggle)))))
+
+(add-hook 'markdown-mode-hook #'+my/markdown-preview-notice-h)
+
+(add-hook 'markdown-ts-mode-hook #'+my/markdown-preview-notice-h)
+
+(add-hook '+md-preview-mode-hook
+          (defun +my/markdown-preview-notice-close-h ()
+            (when +md-preview-mode
+              (+my/banner-close 'markdown-preview))))
 
 ;; MARKSMAN DIAGNOSTICS
 ;; Two false warnings from marksman (the Markdown language server) about links

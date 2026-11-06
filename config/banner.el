@@ -108,14 +108,30 @@ it in place."
   (when-let* ((parent (frame-parent (selected-frame))))
     (select-frame-set-input-focus parent)))
 
+(defun +my/banner--clicked-window ()
+  "The window whose notice was clicked: the one under the notices' frame
+selected by the click, or (a terminal's header line) the one clicked."
+  (or (car (seq-find (lambda (entry) (eq (nth 1 entry) (selected-frame)))
+                     +my/banner--frames))
+      (let ((window (and (mouse-event-p last-input-event)
+                         (posn-window (event-start last-input-event)))))
+        (and (window-live-p window) window))
+      (selected-window)))
+
 (defun +my/banner--button (label function face buffer header &optional help)
   "LABEL (of FACE) calling FUNCTION in BUFFER when clicked. HEADER: it's in the
-header line (a terminal's), else on a row of the notices' frame."
+header line (a terminal's), else on a row of the notices' frame. FUNCTION runs
+in the window the notice is about, the notices' frame left: run from there, an
+action opening a window (e.g. Markdown's preview, beside the file) opened it
+in the wrong place."
   (let ((map (make-sparse-keymap))
         (command (lambda () (interactive)
-                   (when (buffer-live-p buffer)
-                     (with-current-buffer buffer (funcall function)))
-                   (+my/banner--refocus))))
+                   (let ((window (+my/banner--clicked-window)))
+                     (+my/banner--refocus)
+                     (when (window-live-p window)
+                       (select-window window))
+                     (when (buffer-live-p buffer)
+                       (with-current-buffer buffer (funcall function)))))))
     (if header
         (define-key map [header-line mouse-1] command)
       (set-keymap-parent map +my/banner--row-map)

@@ -53,15 +53,16 @@ text, so it grows a row per notice (an invisible tall image) and a small borderl
 those rows; each window showing the buffer gets its own. In a terminal the header line shows the first notice instead
 (and how many more).
 
-Notices so far: (warning) files with very long lines shown plain and unwrapped. **Wrap lines** wraps them (the notice
+Notices so far: (info) Markdown files offer the live preview (see [Markdown](markdown.md#live-markdown-preview)),
+until it opens; (warning) files with very long lines shown plain and unwrapped. **Wrap lines** wraps them (the notice
 stays, without that action); **Open normally** goes back to the file's own mode, and the notice goes. Both can make
 scrolling slow again (see [Very long lines](scrolling.md#very-long-lines)). A buffer's notices go when its major mode
 changes.
 
-From code: `(+my/banner-show ID TEXT :type 'warning :actions '(("Label" . function)))` (`:type` defaults to `info`;
-the actions run in the notice's buffer). Showing an ID again replaces that notice in place; `(+my/banner-close ID)`
-closes one, `M-x +my/banner-close` the first. Each type's icon and colour: `+my/banner-types` (a codicon name and a
-theme colour, which also tints the row).
+From code: `(+my/banner-show ID TEXT :type 'warning :actions '(("Label" . function)))` (`:type` defaults to `info`; the
+actions run in the window and buffer the notice is about). Showing an ID again replaces that notice in place;
+`(+my/banner-close ID)` closes one, `M-x +my/banner-close` the first. Each type's icon and colour: `+my/banner-types` (a
+codicon name and a theme colour, which also tints the row).
 
 ## Sticky header
 
