@@ -14,7 +14,7 @@ uv tool install --upgrade isort # import sorting (py-isort)
 # bash
 echo -e "\nInstalling bash:"
 npm i -g bash-language-server
-brew install shellcheck shfmt # shellcheck: bash-language-server's linter
+brew install shellcheck shfmt # bash-language-server's linter
 
 # docker
 echo -e "\nInstalling docker:"
@@ -45,9 +45,9 @@ echo -e "\nInstalling rust:"
 # Prefer rustup's component: rustup puts a rust-analyzer proxy in ~/.cargo/bin
 # that errors out unless the component is installed.
 if command -v rustup >/dev/null; then
-  rustup component add rust-analyzer rustfmt
+    rustup component add rust-analyzer rustfmt
 else
-  brew install rust-analyzer
+    brew install rust-analyzer
 fi
 
 # kotlin
