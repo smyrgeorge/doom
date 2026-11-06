@@ -471,7 +471,9 @@ the same words changed (see above)."
     (add-text-properties 0 (length label)
                          (list '+my/merge-action (list chunk side action)
                                'mouse-face 'highlight 'help-echo help
-                               ;; The hand over it (else the margin's arrow).
+                               ;; The hand, should Emacs show it there: its
+                               ;; mouse code puts the arrow back over a margin
+                               ;; (xdisp.c, Bug#16647); the bar's show it.
                                'pointer 'hand)
                          label)
     label))
@@ -726,37 +728,54 @@ an undo)."
       (select-window window))
     (call-interactively command)))
 
-(defun +my/merge--render-bar (session)
-  "Show SESSION's bar: its buttons and what's left."
+(defun +my/merge--bar-text (session short)
+  "SESSION's bar's content; SHORT: with short labels (a narrow frame, a
+terminal's 80 columns)."
+  (let ((counts (+my/merge--counts session)))
+    (insert " ")
+    (+my/merge--bar-button (if short "Left" "Accept Left") #'+my/merge-accept-left
+                           "Accept Left: Yours for every change not done yet")
+    (insert "  ")
+    (+my/merge--bar-button (if short "Right" "Accept Right") #'+my/merge-accept-right
+                           "Accept Right: Theirs for every change not done yet")
+    (insert "  ")
+    (+my/merge--bar-button (if short "✨ Non-conflicting" "✨ Apply non-conflicting")
+                           #'+my/merge-apply-non-conflicting
+                           "Apply every change only one side made, not done yet")
+    (insert "   "
+            (propertize
+             (cond ((zerop (car counts)) (if short "All done" "All changes done"))
+                   (t (format "%d%s left, %d conflict%s"
+                              (car counts)
+                              (cond (short "") ((= (car counts) 1) " change") (t " changes"))
+                              (cdr counts) (if (= (cdr counts) 1) "" "s"))))
+             'face (if (zerop (car counts)) 'success 'warning))
+            "   ")
+    (+my/merge--bar-button "Done" #'+my/merge-done
+                           "Save the file, and stage it if no change is left")
+    (insert "  ")
+    (+my/merge--bar-button "Abort" #'+my/merge-abort "Close, the file left as it was")))
+
+(defun +my/merge--render-bar (session &optional width)
+  "Show SESSION's bar: its buttons and what's left, with short labels if the
+long ones don't fit in WIDTH columns (default: its window's)."
   (when-let* ((bar (and session (+my/merge-bar session)))
               ((buffer-live-p bar)))
     (with-current-buffer bar
       (let ((inhibit-read-only t)
-            (counts (+my/merge--counts session)))
+            (width (or width
+                       (and (get-buffer-window bar t) (window-max-chars-per-line (get-buffer-window bar t)))
+                       (frame-width))))
         (erase-buffer)
-        (insert " ")
-        (+my/merge--bar-button "Accept Left" #'+my/merge-accept-left
-                               "Yours for every change not done yet")
-        (insert "  ")
-        (+my/merge--bar-button "Accept Right" #'+my/merge-accept-right
-                               "Theirs for every change not done yet")
-        (insert "  ")
-        (+my/merge--bar-button "✨ Apply non-conflicting" #'+my/merge-apply-non-conflicting
-                               "Every change only one side made, not done yet")
-        (insert "   "
-                (propertize
-                 (if (zerop (car counts))
-                     "All changes done"
-                   (format "%d change%s left, %d conflict%s"
-                           (car counts) (if (= (car counts) 1) "" "s")
-                           (cdr counts) (if (= (cdr counts) 1) "" "s")))
-                 'face (if (zerop (car counts)) 'success 'warning))
-                "   ")
-        (+my/merge--bar-button "Done" #'+my/merge-done
-                               "Save the file, and stage it if no change is left")
-        (insert "  ")
-        (+my/merge--bar-button "Abort" #'+my/merge-abort "Close, the file left as it was")
+        (+my/merge--bar-text session nil)
+        (when (> (string-width (buffer-string)) width)
+          (erase-buffer)
+          (+my/merge--bar-text session t))
         (goto-char (point-min))))))
+
+(defun +my/merge--bar-resized-h (window)
+  "The bar's window resized: its labels to fit."
+  (+my/merge--render-bar (buffer-local-value '+my/merge--session (window-buffer window))))
 
 (define-derived-mode +my/merge-bar-mode special-mode "Merge"
   "The bar above a merge's panes (see config/merge.el)."
@@ -843,7 +862,8 @@ folder) in three panes."
     (with-current-buffer (+my/merge-bar session)
       (+my/merge-bar-mode)
       (setq +my/merge--session session)
-      (add-hook 'kill-buffer-hook #'+my/merge--killed-h nil t))
+      (add-hook 'kill-buffer-hook #'+my/merge--killed-h nil t)
+      (add-hook 'window-size-change-functions #'+my/merge--bar-resized-h nil t))
     (pcase-dolist (`(,buffer ,title) `((,(+my/merge-yours session) ,(concat "Yours: " (car labels)))
                                        (,(+my/merge-result session) ,(concat "Result: " path))
                                        (,(+my/merge-theirs session) ,(concat "Theirs: " (cdr labels)))))
@@ -868,8 +888,8 @@ folder) in three panes."
     (with-current-buffer (+my/merge-result session)
       (let ((buffer-undo-list t))
         (+my/merge--align session)))
-    (+my/merge--render-bar session)
     (+my/merge--layout session)
+    (+my/merge--render-bar session)
     ;; At the first change.
     (when-let* ((first (seq-first (+my/merge-chunks session))))
       (+my/merge--goto first))

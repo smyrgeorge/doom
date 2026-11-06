@@ -230,6 +230,7 @@ config/compile.el may (the other tests run them so)."
                    '("two\n" "FOUR\n" "six theirs\n" "EIGHT\n" "ten\n" "thirteen\n")))
     (should (equal (+my/merge--counts session) '(6 . 1)))
     ;; The bar says so.
+    (+my/merge--render-bar session 200)
     (should (string-match-p "6 changes left, 1 conflict"
                             (with-current-buffer (+my/merge-bar session) (buffer-string))))))
 
@@ -297,6 +298,7 @@ config/compile.el may (the other tests run them so)."
                    (+test-merge--lines "one" "TWO" "three" "FOUR" "five" "six" "seven" "eight" "nine"
                                        "eleven" "twelve" "thirteen")))
     (should (equal (+my/merge--counts session) '(2 . 1)))
+    (+my/merge--render-bar session 200)
     (should (string-match-p "2 changes left, 1 conflict"
                             (with-current-buffer (+my/merge-bar session) (buffer-string))))
     ;; The Result's regions follow their text.
@@ -417,6 +419,7 @@ config/compile.el may (the other tests run them so)."
     (+my/merge-accept-left)
     (should (equal (+test-merge--result session) +test-merge--yours))
     (should (equal (+my/merge--counts session) '(0 . 0)))
+    (+my/merge--render-bar session 200)
     (should (string-match-p "All changes done" (with-current-buffer (+my/merge-bar session) (buffer-string)))))
   (+test-merge
     (+my/merge-accept-right)
@@ -429,8 +432,26 @@ config/compile.el may (the other tests run them so)."
     (should (string-match-p "five\nsix theirs\nseven" (+test-merge--result session)))
     (should (string-prefix-p "one\nTWO\n" (+test-merge--result session)))))
 
+(ert-deftest merge/bar-fits ()
+  "Long labels where they fit, short ones else (a terminal's 80 columns)."
+  (+test-merge
+    (let ((text (lambda () (with-current-buffer (+my/merge-bar session) (buffer-string)))))
+      (+my/merge--render-bar session 200)
+      (should (string-match-p "\\` Accept Left  Accept Right  ✨ Apply non-conflicting   6 changes left, 1 conflict   Done  Abort\\'"
+                              (funcall text)))
+      (+my/merge--render-bar session 80)
+      (should (equal (funcall text) " Left  Right  ✨ Non-conflicting   6 left, 1 conflict   Done  Abort"))
+      (should (<= (string-width (funcall text)) 80))
+      (+my/merge-accept-left)
+      (+my/merge--render-bar session 80)
+      (should (string-match-p "All done" (funcall text)))
+      ;; Its window resized: redrawn to fit.
+      (should (memq #'+my/merge--bar-resized-h
+                    (buffer-local-value 'window-size-change-functions (+my/merge-bar session)))))))
+
 (ert-deftest merge/bar-buttons ()
   (+test-merge
+    (+my/merge--render-bar session 200)
     (with-current-buffer (+my/merge-bar session)
       (let ((labels nil))
         (goto-char (point-min))

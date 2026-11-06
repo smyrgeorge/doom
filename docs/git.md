@@ -70,7 +70,9 @@ The Result can be edited as any file, and `u` undoes the buttons too (`C-r` redo
 next / previous change; `SPC m l` / `SPC m r` the change at point from Yours / Theirs, `SPC m x` ignore it, `SPC m w`
 the wand, `SPC m L` /
 `SPC m R` accept left / right, `SPC m a` apply non-conflicting; `C-c C-c` (or `Cmd+S`) Done, `C-c C-k` Abort.
-Closing a pane aborts. Done writes the file as is (no save hooks, such as formatting) and shows it in its buffer if
+Closing a pane aborts. In a terminal it works the same, with plain `>>` / `<<` / `x` / `*` buttons
+(clicked only with the terminal's mouse on, `xterm-mouse-mode`, which isn't: the keys then), and the bar's labels
+short (`Left`, `Right`, `✨ Non-conflicting`, `8 left, 3 conflicts`) when the long ones don't fit, as in 80 columns. Done writes the file as is (no save hooks, such as formatting) and shows it in its buffer if
 one is open (asking first if that one has changes not saved).
 
 The three versions are Git's, from its index (stages `:1:` the base, `:2:` yours, `:3:` theirs), so merges, rebases,
