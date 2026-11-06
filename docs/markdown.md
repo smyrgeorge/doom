@@ -3,10 +3,13 @@
 ## Live Markdown preview
 
 `config/markdown.el` renders Markdown in a WebKit side window (xwidgets) **inside Emacs**. `SPC m p` toggles it: it
-opens on the right, half the window's width, and the cursor stays in the file; it closes with `SPC m p` again or when
-the file is closed. `SPC m P` previews in the browser instead. A Markdown file opens with a notice at the top offering
-the preview (**Open preview**); it goes once the preview opens or with its `✕`, and doesn't come back for that buffer
-(only where the live preview works; `+my/markdown-preview-notice` nil turns it off).
+opens on the right, half the window's width, as its own tab (`Preview: FILE`), and the cursor stays in the file; it
+closes with `SPC m p` again or when the file is closed. It opens without a white flash: WebKit's view is white until its
+page has loaded (its stylesheet comes from a CDN), so until then the pane is covered in the editor's background colour
+(2 s at most), and the page itself starts in that colour in dark mode. `SPC m P` previews in the browser instead. A
+Markdown file opens with a notice at the top offering the preview (**Open preview**); it goes once the preview opens or
+with its `✕`, and doesn't come back for that buffer (only where the live preview works; `+my/markdown-preview-notice`
+nil turns it off).
 
 - **Updates as you type** (≈0.3 s after you stop), swapping the page content without reloading.
 - **Scrolls to the cursor line**, using pandoc's `sourcepos` extension to map each element back to its source line.

@@ -77,6 +77,11 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
   "Wrap FRAGMENT in a page styled like Doom's markdown preview (GitHub look)."
   (concat
    "<!doctype html><html><head><meta charset='utf-8'>"
+   ;; Before GitHub's stylesheet arrives (a CDN), the page is the buffer's
+   ;; colour in dark mode, not WebKit's white.
+   "<meta name='color-scheme' content='light dark'>"
+   (format "<style>@media (prefers-color-scheme: dark){html{background:%s}}</style>"
+           (face-background 'default nil t))
    (format "<base href='file://%s'>"
            (file-name-directory (or buffer-file-name default-directory)))
    (format "<title>Preview: %s</title>" (buffer-name))
@@ -127,6 +132,55 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
       (setq +md-preview--line line)
       (+md-preview--scroll))))
 
+;; NO WHITE FLASH
+;; WebKit's view is white until its page has loaded (GitHub's stylesheet, from
+;; a CDN, included): the preview flashed white before its colours appeared.
+;; Its window opens at once (WebKit only loads while on screen) under a
+;; borderless frame in the editor's background colour, like the notices'
+;; (config/banner.el), which goes once WebKit says the page has loaded, or
+;; after 2 s (e.g. offline). No JavaScript is run to ask the page instead:
+;; closing a preview while such a call was pending crashed Emacs.
+(defvar +md-preview--cover nil
+  "(XWIDGET FRAME TIMER): the frame over a preview whose page is loading.")
+
+(defun +md-preview--uncover (&optional xwidget)
+  "Take the cover off XWIDGET's preview (any preview's, by default)."
+  (pcase +md-preview--cover
+    (`(,covered ,frame ,timer)
+     (when (or (null xwidget) (eq covered xwidget))
+       (setq +md-preview--cover nil)
+       (when (timerp timer) (cancel-timer timer))
+       (+my/banner--delete-frame frame)))))
+
+(defun +md-preview--cover-window (window)
+  "Cover WINDOW in the editor's background colour, for 2 s at most (see above)."
+  (+md-preview--uncover)
+  (when (and (window-live-p window) (display-graphic-p (window-frame window))
+             (fboundp '+my/banner--make-frame))
+    (let ((frame (+my/banner--make-frame (window-frame window)))
+          (edges (window-pixel-edges window))
+          (frame-resize-pixelwise t))
+      (set-frame-parameter frame 'background-color (face-background 'default nil t))
+      (set-frame-size frame (- (nth 2 edges) (nth 0 edges))
+                      (- (nth 3 edges) (nth 1 edges)) t)
+      (set-frame-position frame (nth 0 edges) (nth 1 edges))
+      (make-frame-visible frame)
+      (setq +md-preview--cover
+            (list nil frame (run-at-time 2 nil #'+md-preview--uncover))))))
+
+(defun +md-preview--watch (xwidget)
+  "Take the cover off once XWIDGET's page has loaded."
+  (when +md-preview--cover
+    (setf (car +md-preview--cover) xwidget)))
+
+(defadvice! +md-preview--loaded-a (xwidget event-type)
+  :after #'xwidget-webkit-callback
+  (when (and (eq event-type 'load-changed)
+             (equal (nth 3 last-input-event) "load-finished")
+             (eq (car +md-preview--cover) xwidget))
+    ;; A moment for WebKit to paint it.
+    (run-at-time 0.05 nil #'+md-preview--uncover xwidget)))
+
 (define-minor-mode +md-preview-mode
   "Live, cursor-following markdown preview in an xwidget WebKit side window."
   :lighter " MdPrev"
@@ -137,23 +191,38 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
         (with-temp-file file
           (insert (with-current-buffer src (+md-preview--page (+md-preview--fragment)))))
         (setq +md-preview--file file)
-        (save-window-excursion
-          (xwidget-webkit-browse-url (concat "file://" file) t))
-        (let ((xw-buf xwidget-webkit-last-session-buffer))
-          (setq +md-preview--xwidget (with-current-buffer xw-buf (xwidget-webkit-current-session)))
-          ;; Keep the cursor in the Markdown buffer: the preview follows it.
-          ;; Half of the file's window (a float would be half the frame's
-          ;; width: in a narrow window the file was left a few columns).
-          (let ((+my/focus-new-windows nil))
-            (display-buffer xw-buf `(display-buffer-in-direction
-                                     (direction . right)
-                                     (window-width . ,(/ (window-total-width) 2))))))
+        ;; The preview's window first, beside the file, covered (see NO WHITE
+        ;; FLASH), then WebKit in it: made elsewhere and shown there after, its
+        ;; page never answered (or said it had loaded). The cursor stays in the
+        ;; Markdown buffer: the preview follows it. Half of the file's window
+        ;; (a float would be half the frame's: in a narrow window the file was
+        ;; left a few columns).
+        (let* ((+my/focus-new-windows nil)
+               (window (display-buffer
+                        (get-buffer-create " *md-preview*")
+                        `(display-buffer-in-direction
+                          (direction . right)
+                          (window-width . ,(/ (window-total-width) 2))))))
+          (+md-preview--cover-window window)
+          (with-selected-window window
+            (xwidget-webkit-browse-url (concat "file://" file) t))
+          (setq +md-preview--xwidget
+                (with-current-buffer xwidget-webkit-last-session-buffer
+                  ;; Its tab's name: the page's title, `Preview: FILE' (it was
+                  ;; made from the placeholder's, hidden, then
+                  ;; `*xwidget-webkit: ...*').
+                  (setq-local xwidget-webkit-buffer-name-format "%T")
+                  (rename-buffer (format "Preview: %s" (buffer-name src)) t)
+                  (xwidget-webkit-current-session)))
+          (+md-preview--watch +md-preview--xwidget))
         (add-hook 'after-change-functions #'+md-preview--after-change-h nil t)
         (add-hook 'post-command-hook #'+md-preview--post-command-h nil t)
         (add-hook 'kill-buffer-hook (lambda () (+md-preview-mode -1)) nil t)
         (run-with-timer 0.6 nil (lambda (b) (when (buffer-live-p b)
                                               (with-current-buffer b (+md-preview--scroll))))
                         src))
+    (when +md-preview--xwidget
+      (+md-preview--uncover +md-preview--xwidget))
     (remove-hook 'after-change-functions #'+md-preview--after-change-h t)
     (remove-hook 'post-command-hook #'+md-preview--post-command-h t)
     (when (timerp +md-preview--timer) (cancel-timer +md-preview--timer))
