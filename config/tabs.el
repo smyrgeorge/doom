@@ -27,6 +27,11 @@
 (map! :n "gt" #'tab-line-switch-to-next-tab
       :n "gT" #'tab-line-switch-to-prev-tab)
 
+;; Cmd+W closes the current tab, like its ✕ (Doom's closed the window, or the
+;; workspace with its last window); where there are no tabs (popups, side
+;; panels), the window, as before.
+(map! "s-w" #'+my/tabs-close-current)
+
 ;; ====== CODE ======
 
 (defun +my/tabs-p (buffer)
@@ -161,6 +166,13 @@ frame's only one (beside side panels), which shows Doom's dashboard instead."
     (when (and (buffer-live-p buffer) (buffer-file-name buffer)
                (not (+my/tabs-held-p buffer)))
       (kill-buffer buffer))))
+
+(defun +my/tabs-close-current ()
+  "Close the current tab (see above); without tabs, the window, as Doom does."
+  (interactive)
+  (if (bound-and-true-p tab-line-mode)
+      (+my/tabs-close (window-buffer))
+    (call-interactively (or (command-remapping #'delete-window) #'delete-window))))
 
 ;; No tab line where Doom had none: popups (help, *Messages*...), the dashboard,
 ;; side panels (treemacs' and LSP's lists).

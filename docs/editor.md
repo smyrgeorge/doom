@@ -80,14 +80,14 @@ For a tree-sitter mode that doesn't declare its classes/functions, add `(LANGUAG
 
 ## Tabs per window
 
-**Tabs per window**, like IntelliJ's split editors (Emacs's tab line instead of Doom's centaur-tabs, whose tab
-groups were per project and shared by every window): each window's tabs are the buffers shown in it, in the order
-they first were. A split starts with one tab, the buffer it shows. Files, Claude sessions, dired and magit keep tabs;
-other buffers only while shown; popups, the dashboard and side panels have no tab line. Closing a tab (its ✕, a
-middle click) takes it off that window, which goes back to the tab it showed before; closing its last tab closes the
-window (the frame's only one, beside the sidebar, shows Doom's dashboard instead). A file is closed too once no window
-has it as a tab any more (asking first if it has unsaved changes); a Claude session only leaves the tab line.
-`SPC b k` still kills the buffer, in every window.
+**Tabs per window**, like IntelliJ's split editors (Emacs's tab line instead of Doom's centaur-tabs, whose tab groups
+were per project and shared by every window): each window's tabs are the buffers shown in it, in the order they first
+were. A split starts with one tab, the buffer it shows. Files, Claude sessions, dired and magit keep tabs; other buffers
+only while shown; popups, the dashboard and side panels have no tab line. Closing a tab (its ✕, a middle click, `Cmd+W`)
+takes it off that window, which goes back to the tab it showed before; closing its last tab closes the window (the
+frame's only one, beside the sidebar, shows Doom's dashboard instead). A file is closed too once no window has it as a
+tab any more (asking first if it has unsaved changes); a Claude session only leaves the tab line. `SPC b k` still kills
+the buffer, in every window.
 
 `gt` / `gT`: next / previous tab, wrapping around. Doom used them for workspaces: those are `]w` / `[w` or
 `SPC TAB ]` / `SPC TAB [`. Tabs show the file's icon, a bar on the current one (`+my/tabs-bar-width`, 2 px; the tab row
