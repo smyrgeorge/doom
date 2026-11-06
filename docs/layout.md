@@ -37,7 +37,7 @@
 | `config/projectile.el` | Projects under `~/dev`; project file list without a cache; a project opens on its README; each workspace remembers its project. |
 | `config/search.el` | `SPC s a`: Search Everywhere, like IntelliJ; `Cmd+Shift+F`: find in files (rg). |
 | `config/git.el` | `SPC g d`: the current file's git diff in a side pane. |
-| `config/merge.el` | Conflicts resolved in three panes like IntelliJ's (Yours, Result, Theirs, under a bar): `e` on a conflicted file in Magit; the versions from Git's index, the changes from Ediff's diff3 parser. |
+| `config/merge.el` | Conflicts resolved in three panes like IntelliJ's (Yours, Result, Theirs, under a bar): `e` on a conflicted file in Magit; the versions from Git's index, the changes from Ediff's diff3 parser; the panes lined up (filler lines) and scrolling together. |
 | `config/terminal.el` | Terminal Emacs: paint the terminal background with the theme colour; no menu bar in terminal frames; hover help stays in the echo area. |
 | `config/compile.el` | Byte-compiles this config's functions when Emacs is idle (they load as source). |
 | `tests/` | Tests of this config's features (`tests/run.sh`; see [Tests](tests.md)): never loaded by Doom. |

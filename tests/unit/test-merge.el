@@ -132,8 +132,12 @@ feature merged into main: in conflict."
     (+my/merge--decide chunk 'theirs 'applied)))
 
 (defun +test-merge--result (session)
-  (with-current-buffer (+my/merge-result session)
-    (buffer-substring-no-properties (point-min) (point-max))))
+  "SESSION's Result as it'll be saved (without fillers)."
+  (+my/merge--result-text session))
+
+(defun +test-merge--clean (buffer)
+  (with-current-buffer buffer
+    (+my/merge--clean (point-min) (point-max))))
 
 (defun +test-merge--chunk (session n)
   (aref (+my/merge-chunks session) n))
@@ -173,8 +177,8 @@ feature merged into main: in conflict."
       (should (equal (window-margins right) '(5)))
       (should (window-parameter bar 'no-other-window)))
     ;; The versions: Git's.
-    (should (equal (with-current-buffer (+my/merge-yours session) (buffer-string)) +test-merge--yours))
-    (should (equal (with-current-buffer (+my/merge-theirs session) (buffer-string)) +test-merge--theirs))
+    (should (equal (+test-merge--clean (+my/merge-yours session)) +test-merge--yours))
+    (should (equal (+test-merge--clean (+my/merge-theirs session)) +test-merge--theirs))
     (should (equal (+test-merge--result session) +test-merge--base))
     ;; What they are.
     (should (equal (+my/merge-labels session) (cons "main" "feature")))
@@ -510,6 +514,146 @@ feature merged into main: in conflict."
       (should (equal (+test-merge--result session) "a\nyours\ntheirs"))
       (+my/merge--finish session))))
 
+;; ====== LINING UP ======
+
+(defun +test-merge--rows (session)
+  "Each change's first row in Yours, the Result, Theirs: ((Y R T)...)."
+  (mapcar (lambda (chunk)
+            (mapcar (lambda (side)
+                      (let ((ov (+my/merge--overlay chunk side)))
+                        (with-current-buffer (overlay-buffer ov)
+                          (line-number-at-pos (overlay-start ov)))))
+                    '(yours result theirs)))
+          (+my/merge-chunks session)))
+
+(defun +test-merge--lined-up-p (session)
+  "Non-nil if SESSION's panes line up: each change on the same row in all
+three, the same number of rows."
+  (and (seq-every-p (lambda (rows) (= (car rows) (nth 1 rows) (nth 2 rows)))
+                    (+test-merge--rows session))
+       (apply #'= (mapcar (lambda (buffer) (with-current-buffer buffer
+                                             (count-lines (point-min) (point-max))))
+                          (list (+my/merge-yours session) (+my/merge-result session)
+                                (+my/merge-theirs session))))))
+
+(defun +test-merge--fillers (buffer)
+  "The filler lines in BUFFER: (LINE . COUNT)..."
+  (with-current-buffer buffer
+    (let ((pos (point-min)) fillers)
+      (while (< pos (point-max))
+        (let ((next (next-single-property-change pos '+my/merge-filler nil (point-max))))
+          (when (get-text-property pos '+my/merge-filler)
+            (push (cons (line-number-at-pos pos) (- next pos)) fillers))
+          (setq pos next)))
+      (nreverse fillers))))
+
+(ert-deftest merge/panes-line-up ()
+  (+test-merge
+    (should (+test-merge--lined-up-p session))
+    ;; Where Yours removed ten (a row for it), and where Theirs added
+    ;; thirteen (a row in Yours and the Result).
+    (should (equal (+test-merge--fillers (+my/merge-yours session)) '((10 . 1) (13 . 1))))
+    (should (equal (+test-merge--fillers (+my/merge-result session)) '((13 . 1))))
+    (should-not (+test-merge--fillers (+my/merge-theirs session)))
+    ;; Changes into the Result: still.
+    (+my/merge--decide (+test-merge--chunk session 5) 'theirs 'applied)
+    (should (equal (+test-merge--fillers (+my/merge-result session)) nil))
+    (should (+test-merge--lined-up-p session))
+    (let ((chunk (+test-merge--chunk session 2)))
+      (+my/merge--decide chunk 'yours 'applied)
+      (+my/merge--decide chunk 'theirs 'applied)
+      ;; Two lines in the Result: a row more in the sides.
+      (should (equal (+test-merge--fillers (+my/merge-yours session)) '((7 . 1) (11 . 1) (14 . 1))))
+      (should (+test-merge--lined-up-p session)))
+    (+my/merge-accept-left)
+    (should (+test-merge--lined-up-p session))
+    (should (equal (+test-merge--result session)
+                   (+test-merge--lines "one" "TWO" "three" "four" "five" "six yours" "six theirs" "seven"
+                                       "EIGHT" "nine" "eleven" "twelve" "thirteen")))))
+
+(ert-deftest merge/lined-up-after-editing-the-result ()
+  "An edit of the Result (lines added in a change, removed): the panes line
+up again after the command, in the same step of its undo."
+  (+test-merge
+    (with-current-buffer (+my/merge-result session)
+      (goto-char (overlay-start (+my/merge-chunk-result (+test-merge--chunk session 2))))
+      (insert "added 1\nadded 2\n")
+      (+my/merge--post-command-h)
+      (should (+test-merge--lined-up-p session))
+      (should (string-match-p "five\nadded 1\nadded 2\nsix\nseven" (+test-merge--result session)))
+      ;; Undone: the lines and the fillers.
+      (undo-boundary)
+      (let ((last-command nil)) (undo))
+      (+my/merge--post-command-h)
+      (should (equal (+test-merge--result session) +test-merge--base))
+      (should (+test-merge--lined-up-p session))
+      (should (equal (+test-merge--fillers (+my/merge-yours session)) '((10 . 1) (13 . 1)))))))
+
+(ert-deftest merge/fillers-are-not-text ()
+  "Fillers: read-only, the cursor skips them, not copied, not saved."
+  (+test-merge
+    (with-current-buffer (+my/merge-result session)
+      (let ((filler (save-excursion (goto-char (point-min)) (forward-line 12) (point))))
+        (should (get-text-property filler '+my/merge-filler))
+        (should (get-text-property filler 'cursor-intangible))
+        (should (eq (get-text-property filler 'face) '+my/merge-filler))
+        (should cursor-intangible-mode)
+        (should-error (let ((inhibit-read-only nil))
+                        (goto-char (1+ filler))
+                        (delete-char -1))
+                      :type 'text-read-only)
+        ;; Typed after them: not read-only.
+        (let ((kill-ring nil) (kill-ring-yank-pointer nil) (interprogram-cut-function nil))
+          (copy-region-as-kill (point-min) (point-max))
+          (should (equal (car kill-ring) +test-merge--base)))
+        (should truncate-lines)))
+    (should (equal (+test-merge--result session) +test-merge--base))))
+
+(ert-deftest merge/side-panes-have-no-undo ()
+  (+test-merge
+    (should (eq (buffer-local-value 'buffer-undo-list (+my/merge-yours session)) t))
+    (should (eq (buffer-local-value 'buffer-undo-list (+my/merge-theirs session)) t))
+    (should-not (eq (buffer-local-value 'buffer-undo-list (+my/merge-result session)) t))))
+
+;; ====== SCROLLING TOGETHER ======
+
+(ert-deftest merge/the-pane-scrolled-scrolls-the-others ()
+  (+test-merge
+    (let ((yours (get-buffer-window (+my/merge-yours session)))
+          (result (get-buffer-window (+my/merge-result session)))
+          (theirs (get-buffer-window (+my/merge-theirs session)))
+          (first-line (lambda (window)
+                        (with-current-buffer (window-buffer window)
+                          (line-number-at-pos (window-start window))))))
+      ;; Nothing scrolled: nothing done.
+      (+my/merge--sync-h)
+      (should (= (funcall first-line result) 1))
+      ;; Theirs scrolled to its line 6: the others to theirs.
+      (set-window-start theirs (with-current-buffer (+my/merge-theirs session)
+                                 (save-excursion (goto-char (point-min)) (forward-line 5) (point))))
+      (set-window-hscroll theirs 3)
+      (+my/merge--sync-h theirs)
+      (should (= (funcall first-line yours) 6))
+      (should (= (funcall first-line result) 6))
+      (should (= (window-hscroll yours) 3))
+      (should (= (window-hscroll result) 3))
+      ;; Each pane's text there: the same row (lined up).
+      (should (equal (with-current-buffer (+my/merge-result session)
+                       (buffer-substring-no-properties (window-start result) (+ (window-start result) 3)))
+                     "six"))
+      ;; The Result then: it leads.
+      (set-window-start result (with-current-buffer (+my/merge-result session)
+                                 (save-excursion (goto-char (point-min)) (forward-line 1) (point))))
+      (+my/merge--sync-h)
+      (should (= (funcall first-line yours) 2))
+      (should (= (funcall first-line theirs) 2))
+      ;; Without a window: all the merge's.
+      (set-window-start yours (with-current-buffer (+my/merge-yours session)
+                                (save-excursion (goto-char (point-min)) (forward-line 3) (point))))
+      (+my/merge--sync-h nil)
+      (should (= (funcall first-line theirs) 4))
+      (should (memq #'+my/merge--sync-h (default-value 'pre-redisplay-functions))))))
+
 ;; ====== OTHER CONFLICTS ======
 
 (ert-deftest merge/a-rebase ()
@@ -529,7 +673,7 @@ feature merged into main: in conflict."
       ;; In a rebase, :2: is what's rebased onto, :3: the commit replayed.
       (should (string-match-p "(rebasing onto)" (car (+my/merge-labels session))))
       (should (string-match-p "Their change (being rebased)" (cdr (+my/merge-labels session))))
-      (should (equal (with-current-buffer (+my/merge-theirs session) (buffer-string)) +test-merge--theirs))
+      (should (equal (+test-merge--clean (+my/merge-theirs session)) +test-merge--theirs))
       (+my/merge-accept-right)
       (+my/merge-done))
     (should (string-empty-p (+test-merge--git "ls-files" "-u")))))

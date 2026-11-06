@@ -26,6 +26,10 @@
 ;;   Done    save the file, and stage it (git add) if no change is left; with
 ;;           some left, ask first, and save them as conflict markers, unstaged
 ;;   Abort   close, the file left as it was
+;; The panes line up: each change takes as many rows in each, the shorter
+;; padded with grey filler lines (not text: not saved, not copied, the cursor
+;; skips them); and they scroll together (the wheel, the trackpad, the keys,
+;; smooth scrolling's glides; sideways too).
 ;; The Result can be edited as any file; u undoes the buttons too (and C-r
 ;; redoes them). Keys in the panes: ]c / [c next / previous change; SPC m l /
 ;; SPC m r the change at point from Yours / Theirs, SPC m x ignore it, SPC m L
@@ -57,6 +61,9 @@
 
 (defface +my/merge-done '((t :inherit shadow))
   "A side's change once done (in the Result, or ignored).")
+
+(defface +my/merge-filler '((t :inherit fringe :extend t))
+  "The filler lines that line the panes up (see `+my/merge-faces-h').")
 
 (defface +my/merge-refined '((t :inherit smerge-refined-changed))
   "The words a change changed.")
@@ -116,6 +123,10 @@
 
 (defvar-local +my/merge--session nil
   "The merge the buffer is part of (all its panes and the bar).")
+
+(defvar +my/merge--aligning nil
+  "Non-nil while fillers are made (not changes to line up after, see LINING
+UP).")
 
 (define-minor-mode +my/merge-mode
   "A pane of a merge (see config/merge.el).
@@ -325,8 +336,10 @@ TEXT: one step of the Result's undo, which undoes (and redoes) them all."
                       (+my/merge-chunk-order chunk) old)
                 buffer-undo-list))
         (unless (equal old text)
+          (setq +my/merge--dirty t)
           (let ((buffer-undo-list t)
-                (inhibit-read-only t))
+                (inhibit-read-only t)
+                (+my/merge--aligning t))
             (save-excursion
               (goto-char start)
               (insert text)
@@ -350,7 +363,9 @@ TEXT: one step of the Result's undo, which undoes (and redoes) them all."
            (order (append (remq side (+my/merge-chunk-order chunk))
                           (and (eq decision 'applied) (list side)))))
       (+my/merge--put chunk yours theirs order
-                      (+my/merge--result-of chunk yours theirs order)))))
+                      (+my/merge--result-of chunk yours theirs order))
+      (with-current-buffer (overlay-buffer (+my/merge-chunk-result chunk))
+        (+my/merge--align +my/merge--session)))))
 
 ;; PANES
 ;; The sides' changes highlighted, with their buttons in the margin by the
@@ -473,6 +488,144 @@ against each other, another change against the base."
                   (smerge-refine-regions one-start one-end two-start two-end
                                          '((face . +my/merge-refined) (+my/merge-refined . t))))))))))))
 
+;; LINING UP
+;; Each change takes as many rows in each pane: after it, the shorter ones get
+;; filler lines (the most of the three, less their own). They're text, so that
+;; any row can be scrolled to (a window can't start inside an overlay's
+;; string, which can't be scrolled into either): newlines marked
+;; `+my/merge-filler', read-only, skipped by the cursor, left out of what's
+;; saved or copied. In the Result, they're made again after each command that
+;; changed it, in the same step of its undo.
+(defvar-local +my/merge--dirty nil
+  "Non-nil if the pane changed since its fillers were made.")
+
+(defun +my/merge--filler (n)
+  "N filler lines."
+  (propertize (make-string n ?\n)
+              '+my/merge-filler t 'face '+my/merge-filler 'read-only t
+              'cursor-intangible t 'rear-nonsticky t))
+
+(defun +my/merge--height (ov)
+  "The lines of OV's region (a last one without its newline counts)."
+  (with-current-buffer (overlay-buffer ov)
+    (count-lines (overlay-start ov) (overlay-end ov))))
+
+(defun +my/merge--fillers-at (pos)
+  "The end of the fillers at POS in the current buffer (POS if none)."
+  (if (and (< pos (point-max)) (get-text-property pos '+my/merge-filler))
+      (next-single-property-change pos '+my/merge-filler nil (point-max))
+    pos))
+
+(defun +my/merge--fill (ov n)
+  "N filler lines after OV's region, in its buffer."
+  (with-current-buffer (overlay-buffer ov)
+    (let* ((pos (overlay-end ov))
+           (end (+my/merge--fillers-at pos))
+           (have (- end pos)))
+      (unless (= have n)
+        (let ((inhibit-read-only t)
+              (+my/merge--aligning t))
+          (save-excursion
+            (if (> have n)
+                (delete-region (+ pos n) end)
+              (goto-char end)
+              (insert (+my/merge--filler (- n have))))))))))
+
+(defun +my/merge--align (session)
+  "Line SESSION's panes up (see above)."
+  (seq-doseq (chunk (+my/merge-chunks session))
+    (let* ((sides (list (+my/merge-chunk-yours chunk) (+my/merge-chunk-result chunk)
+                        (+my/merge-chunk-theirs chunk)))
+           (heights (mapcar #'+my/merge--height sides))
+           (most (apply #'max heights)))
+      (cl-mapc (lambda (ov height) (+my/merge--fill ov (- most height)))
+               sides heights)))
+  (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
+    (with-current-buffer buffer
+      (setq +my/merge--dirty nil))))
+
+(defun +my/merge--changed-h (&rest _)
+  "The pane changed: its fillers made again after this command."
+  (unless +my/merge--aligning
+    (setq +my/merge--dirty t)))
+
+(defun +my/merge--post-command-h ()
+  "After a command: the panes lined up again if the Result changed (an edit,
+an undo)."
+  (when-let* ((session +my/merge--session)
+              ((not (+my/merge-finished session)))
+              ((buffer-live-p (+my/merge-result session)))
+              ((buffer-local-value '+my/merge--dirty (+my/merge-result session))))
+    (with-current-buffer (+my/merge-result session)
+      (+my/merge--align session))))
+
+(defun +my/merge--clean (start end)
+  "The text from START to END of the current buffer, without fillers."
+  (let ((pos start)
+        (parts nil))
+    (while (< pos end)
+      (let ((next (min end (next-single-property-change pos '+my/merge-filler nil end))))
+        (unless (get-text-property pos '+my/merge-filler)
+          (push (buffer-substring-no-properties pos next) parts))
+        (setq pos next)))
+    (apply #'concat (nreverse parts))))
+
+(defun +my/merge--filter-substring (beg end &optional delete)
+  "`filter-buffer-substring-function' of the panes: copies without fillers."
+  (prog1 (+my/merge--clean beg end)
+    (when delete
+      (delete-region beg end))))
+
+;; SCROLLING TOGETHER
+;; Lined up, the panes' rows are their lines: the pane scrolled (its first
+;; line, the pixels of it scrolled off, its columns scrolled sideways) gives
+;; the others theirs, before each redisplay; so whatever scrolled it: keys, the
+;; wheel, the trackpad, a glide of config/smooth.el's (its frames are timers,
+;; each followed by a redisplay).
+(defun +my/merge--view (window)
+  "WINDOW's view: (FIRST-LINE VSCROLL HSCROLL)."
+  (list (with-current-buffer (window-buffer window)
+          (line-number-at-pos (window-start window)))
+        (window-vscroll window t)
+        (window-hscroll window)))
+
+(defun +my/merge--sync-h (&optional window)
+  "Before a redisplay: a pane that scrolled scrolls the others (see above)."
+  (dolist (window (if window (list window) (window-list nil 'nomini)))
+    (when-let* ((session (and (window-live-p window)
+                              (buffer-local-value '+my/merge--session (window-buffer window))))
+                ((not (+my/merge-finished session)))
+                ((not (eq (window-buffer window) (+my/merge-bar session))))
+                (view (+my/merge--view window))
+                ((not (equal view (window-parameter window '+my/merge-view)))))
+      (pcase-let ((`(,line ,vscroll ,hscroll) view))
+        (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session)
+                              (+my/merge-theirs session)))
+          (dolist (other (get-buffer-window-list buffer 'nomini))
+            (unless (eq other window)
+              (set-window-start other (with-current-buffer buffer
+                                        (save-excursion
+                                          (goto-char (point-min))
+                                          (forward-line (1- line))
+                                          (point))))
+              ;; Kept through redisplay (as ultra-scroll does), and point off
+              ;; a first line scrolled partly off: redisplay would scroll
+              ;; back to show it.
+              (set-window-vscroll other vscroll t t)
+              (when (> vscroll 0)
+                (let ((second (with-current-buffer buffer
+                                (save-excursion
+                                  (goto-char (window-start other))
+                                  (forward-line 1)
+                                  (point)))))
+                  (when (< (window-point other) second)
+                    (set-window-point other second))))
+              (set-window-hscroll other hscroll)
+              (set-window-parameter other '+my/merge-view (+my/merge--view other)))))
+        (set-window-parameter window '+my/merge-view view)))))
+
+(add-hook 'pre-redisplay-functions #'+my/merge--sync-h)
+
 ;; THE BAR
 (defun +my/merge--bar-button (label command help)
   (insert-text-button label 'action (lambda (_) (+my/merge--from-bar command))
@@ -538,6 +691,9 @@ hooks not run: no language server, linter...), read-only unless EDITABLE."
       (font-lock-mode 1)
       (set-buffer-modified-p nil)
       (setq buffer-read-only (not editable))
+      ;; Only the Result's edits are undone (the others' are fillers).
+      (unless editable
+        (buffer-disable-undo))
       (when (fboundp '+my/tabs-off-h)
         (+my/tabs-off-h)))
     buffer))
@@ -569,6 +725,8 @@ Theirs."
         (set-window-start window (point-min))
         (set-window-prev-buffers window nil))
       (select-window middle)
+      (dolist (window (list left middle right))
+        (set-window-parameter window '+my/merge-view (+my/merge--view window)))
       (list left middle right bar))))
 
 (defun +my/merge--start (path)
@@ -602,13 +760,25 @@ folder) in three panes."
                                        (,(+my/merge-result session) ,(concat "Result: " path))
                                        (,(+my/merge-theirs session) ,(concat "Theirs: " (cdr labels)))))
       (with-current-buffer buffer
-        (setq-local header-line-format (concat " " (propertize title 'face 'bold)))
+        ;; First: turned off, it puts back the buffer's `truncate-lines'.
+        (when (bound-and-true-p visual-line-mode)
+          (visual-line-mode -1))
+        (setq-local header-line-format (concat " " (propertize title 'face 'bold))
+                    ;; A row a line: lined up (see LINING UP).
+                    truncate-lines t
+                    filter-buffer-substring-function #'+my/merge--filter-substring)
+        (cursor-intangible-mode 1)
+        (add-hook 'after-change-functions #'+my/merge--changed-h nil t)
+        (add-hook 'post-command-hook #'+my/merge--post-command-h nil t)
         (+my/merge-mode 1)))
     (with-current-buffer (+my/merge-result session)
       (setq buffer-undo-list nil))
     (+my/merge--refine session)
     (seq-doseq (chunk (+my/merge-chunks session))
       (+my/merge--render-chunk chunk))
+    (with-current-buffer (+my/merge-result session)
+      (let ((buffer-undo-list t))
+        (+my/merge--align session)))
     (+my/merge--render-bar session)
     (+my/merge--layout session)
     ;; At the first change.
@@ -661,22 +831,29 @@ config/merge.el); Magit's Ediff for what they can't show."
 (defun +my/merge--markers (session)
   "SESSION's Result, the changes not done as conflict markers (Git's)."
   (with-current-buffer (+my/merge-result session)
-    (let ((text (buffer-substring-no-properties (point-min) (point-max)))
-          (labels (+my/merge-labels session)))
-      ;; From the last, so earlier positions hold.
-      (dolist (chunk (reverse (append (+my/merge-chunks session) nil)))
+    (let ((labels (+my/merge-labels session))
+          (line (lambda (text) (if (or (string-empty-p text) (string-suffix-p "\n" text))
+                                   text (concat text "\n"))))
+          (pos (point-min))
+          (parts nil))
+      (seq-doseq (chunk (+my/merge-chunks session))
         (unless (+my/merge--resolved-p chunk)
-          (let* ((ov (+my/merge-chunk-result chunk))
-                 (line (lambda (text) (if (or (string-empty-p text) (string-suffix-p "\n" text))
-                                          text (concat text "\n")))))
-            (setq text (concat (substring text 0 (1- (overlay-start ov)))
-                               "<<<<<<< " (car labels) "\n"
-                               (funcall line (+my/merge--side-text chunk 'yours))
-                               "=======\n"
-                               (funcall line (+my/merge--side-text chunk 'theirs))
-                               ">>>>>>> " (cdr labels) "\n"
-                               (substring text (1- (overlay-end ov))))))))
-      text)))
+          (let ((ov (+my/merge-chunk-result chunk)))
+            (push (+my/merge--clean pos (overlay-start ov)) parts)
+            (push (concat "<<<<<<< " (car labels) "\n"
+                          (funcall line (+my/merge--side-text chunk 'yours))
+                          "=======\n"
+                          (funcall line (+my/merge--side-text chunk 'theirs))
+                          ">>>>>>> " (cdr labels) "\n")
+                  parts)
+            (setq pos (overlay-end ov)))))
+      (push (+my/merge--clean pos (point-max)) parts)
+      (apply #'concat (nreverse parts)))))
+
+(defun +my/merge--result-text (session)
+  "SESSION's Result, as it'll be saved (without fillers)."
+  (with-current-buffer (+my/merge-result session)
+    (+my/merge--clean (point-min) (point-max))))
 
 (defun +my/merge--write (session text)
   "Write TEXT to SESSION's file, as is (no save hooks: formatting...); a
@@ -700,8 +877,7 @@ ask first, and save them as conflict markers, not staged."
   (let* ((session (+my/merge--session))
          (left (car (+my/merge--counts session))))
     (cond ((zerop left)
-           (+my/merge--write session (with-current-buffer (+my/merge-result session)
-                                       (buffer-substring-no-properties (point-min) (point-max))))
+           (+my/merge--write session (+my/merge--result-text session))
            (let ((default-directory (+my/merge-toplevel session)))
              (+my/merge--git "add" "--" (+my/merge-path session)))
            (+my/merge--finish session)
@@ -839,7 +1015,8 @@ same), not done yet."
         (pcase-dolist (`(,face ,colour ,amount) '((+my/merge-changed blue 0.25)
                                                    (+my/merge-added green 0.25)
                                                    (+my/merge-removed base5 0.35)
-                                                   (+my/merge-conflict red 0.25)))
+                                                   (+my/merge-conflict red 0.25)
+                                                   (+my/merge-filler base5 0.12)))
           (when-let* ((tint (doom-color colour))
                       ((stringp tint)))
             (set-face-attribute face nil :inherit nil :extend t

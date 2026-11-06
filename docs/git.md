@@ -50,6 +50,12 @@ bar, across the top:
 | **Done** | Save the file, and stage it (`git add`) if no change is left. With some left, it asks first, and saves those as Git's conflict markers, not staged |
 | **Abort** | Close, the file left as it was |
 
+The panes line up: each change takes as many rows in each, the shorter padded with grey filler lines (not text: not
+saved, not copied, the cursor skips them). They scroll together, whatever scrolls one: the wheel, the trackpad, the
+keys, smooth scrolling's glides (`config/smooth.el`), sideways too. The fillers are real lines, as a window can't
+start inside an overlay's text, which pixel scrolling can't move into either; in the Result they're made again after
+each command that changed it, in the same step of its undo.
+
 The Result can be edited as any file, and `u` undoes the buttons too (`C-r` redoes them). Keys in the panes: `]c` / `[c`
 next / previous change; `SPC m l` / `SPC m r` the change at point from Yours / Theirs, `SPC m x` ignore it, `SPC m L` /
 `SPC m R` accept left / right, `SPC m a` apply non-conflicting; `C-c C-c` (or `Cmd+S`) Done, `C-c C-k` Abort.

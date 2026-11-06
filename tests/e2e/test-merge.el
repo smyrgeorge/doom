@@ -8,9 +8,10 @@
   (dolist (package '("magit" "magit-section"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
-(+test-load "config/window" "config/tabs" "config/merge")
+(+test-load "config/window" "config/tabs" "config/smooth" "config/merge")
 (require 'magit)
 (require 'magit-ediff)
+(require 'ultra-scroll)
 (global-tab-line-mode 1)
 
 ;; ====== HELPERS ======
@@ -28,9 +29,26 @@
 (defun +test-merge--lines (&rest lines)
   (mapconcat (lambda (line) (concat line "\n")) lines ""))
 
+(defun +test-merge--long (changes)
+  "200 lines, \"line N\", but CHANGES: ((N . LINES)...), LINES instead of
+line N."
+  (mapconcat (lambda (n)
+               (let ((change (assq n changes)))
+                 (if change (apply #'+test-merge--lines (cdr change)) (format "line %d\n" n))))
+             (number-sequence 1 200) ""))
+
 (defmacro +test-merge-conflict (&rest body)
   "BODY in a repo where a.txt is in conflict (merging feature into main)."
   (declare (indent 0))
+  `(+test-merge-conflict-of (+test-merge--lines "one" "two" "three" "four" "five" "six" "seven")
+                            (+test-merge--lines "one" "TWO" "three" "four" "five" "six yours" "seven")
+                            (+test-merge--lines "one" "two" "three" "FOUR" "five" "six theirs" "seven")
+     ,@body))
+
+(defmacro +test-merge-conflict-of (base yours theirs &rest body)
+  "BODY in a repo where a.txt (BASE) is in conflict: YOURS on main, THEIRS
+on feature, feature merged into main."
+  (declare (indent 3))
   `(+test-with-reset
      (let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "merge-home-") t)))
             (repo (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "merge-repo-") t))))
@@ -44,14 +62,14 @@
          (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
                  "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
        (+test-merge--git "init" "-q")
-       (+test-merge--write "a.txt" (+test-merge--lines "one" "two" "three" "four" "five" "six" "seven"))
+       (+test-merge--write "a.txt" ,base)
        (+test-merge--git "add" ".")
        (+test-merge--git "commit" "-qm" "base")
        (+test-merge--git "checkout" "-qb" "feature")
-       (+test-merge--write "a.txt" (+test-merge--lines "one" "two" "three" "FOUR" "five" "six theirs" "seven"))
+       (+test-merge--write "a.txt" ,theirs)
        (+test-merge--git "commit" "-qam" "theirs")
        (+test-merge--git "checkout" "-q" "main")
-       (+test-merge--write "a.txt" (+test-merge--lines "one" "TWO" "three" "four" "five" "six yours" "seven"))
+       (+test-merge--write "a.txt" ,yours)
        (+test-merge--git "commit" "-qam" "yours")
        (with-temp-buffer (call-process "git" nil t nil "merge" "-q" "feature"))
        (unwind-protect (progn ,@body)
@@ -133,3 +151,109 @@
       ;; Back in Magit's status, without the file in Unmerged.
       (should (derived-mode-p 'magit-status-mode))
       (should-not (save-excursion (goto-char (point-min)) (re-search-forward "^Unmerged" nil t))))))
+
+;; ====== LINED UP, SCROLLING TOGETHER ======
+
+(defmacro +test-merge-long (&rest body)
+  "BODY with a 200-line a.txt in conflict, its merge open (`session', and
+the panes' windows `yours', `result', `theirs'): Yours added lines at 20,
+Theirs removed 3 at 60, both changed 100 (one line, four), Theirs 150."
+  (declare (indent 0))
+  `(+test-merge-conflict-of
+       (+test-merge--long nil)
+       (+test-merge--long '((20 "line 20" "y1" "y2" "y3" "y4" "y5") (100 "yours 100")))
+       (+test-merge--long '((60) (61) (62) (100 "t1" "t2" "t3" "t4") (150 "THEIRS 150")))
+     (let* ((session (+test-merge--e))
+            (yours (get-buffer-window (+my/merge-yours session)))
+            (result (get-buffer-window (+my/merge-result session)))
+            (theirs (get-buffer-window (+my/merge-theirs session))))
+       (ignore yours result theirs)
+       ,@body)))
+
+(defun +test-merge--first-line (window)
+  (with-current-buffer (window-buffer window)
+    (line-number-at-pos (window-start window))))
+
+(defun +test-merge--together-p (session)
+  "Non-nil if SESSION's panes show the same rows: their first line, the
+pixels of it scrolled off, sideways."
+  (let ((views (mapcar (lambda (buffer)
+                         (let ((window (get-buffer-window buffer)))
+                           (list (+test-merge--first-line window) (window-vscroll window t)
+                                 (window-hscroll window))))
+                       (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))))
+    (or (and (equal (car views) (nth 1 views)) (equal (nth 1 views) (nth 2 views)))
+        (progn (message "APART %S" views) nil))))
+
+(defun +test-merge--row-heights (window)
+  "The pixel heights of WINDOW's rows on screen."
+  (let (heights)
+    (dotimes (row (window-body-height window))
+      (when-let* ((height (window-line-height row window)))
+        (push (car height) heights)))
+    heights))
+
+(ert-deftest e2e-merge/rows-line-up-on-screen ()
+  "Each change's first row: the same row of the three panes, and every row
+as tall in each (the margins' icons don't make theirs taller): at the same
+height on screen."
+  (+test-merge-long
+    (seq-doseq (chunk (+my/merge-chunks session))
+      (with-current-buffer (+my/merge-result session)
+        (+my/merge--goto chunk))
+      (redisplay t)
+      (+test-sleep 0.05)
+      (let ((rows (mapcar (lambda (side)
+                            (let* ((ov (+my/merge--overlay chunk side))
+                                   (window (get-buffer-window (overlay-buffer ov))))
+                              (cdr (posn-col-row (posn-at-point (overlay-start ov) window)))))
+                          '(yours result theirs))))
+        (should (car rows))
+        (should (apply #'= rows)))
+      (dolist (window (list yours result theirs))
+        (should (seq-every-p (lambda (height) (= height (frame-char-height)))
+                             (+test-merge--row-heights window)))))))
+
+(ert-deftest e2e-merge/scrolling-together ()
+  (+test-merge-long
+    ;; Pixel by pixel (ultra-scroll, as the trackpad), from a side pane.
+    (dotimes (_ 25)
+      (ultra-scroll--scroll -37 theirs)
+      (redisplay t))
+    (+test-sleep 0.05)
+    (should (> (+test-merge--first-line theirs) 10))
+    (should (+test-merge--together-p session))
+    ;; A glide (config/smooth.el's, as a mouse wheel's notch): together at
+    ;; each frame.
+    (let ((frames 0))
+      (+my/smooth--glide yours -600)
+      (while (and +my/smooth--timer (< frames 200))
+        (+test--pump 0.01)
+        (cl-incf frames)
+        (should (+test-merge--together-p session)))
+      (should-not +my/smooth--timer))
+    (should (> (+test-merge--first-line result) 40))
+    ;; Keys in the Result.
+    (with-selected-window result
+      (forward-line 120)
+      (recenter 0))
+    (redisplay t)
+    (+test-sleep 0.05)
+    (should (+test-merge--together-p session))
+    ;; Sideways.
+    (set-window-hscroll yours 4)
+    (redisplay t)
+    (+test-sleep 0.05)
+    (should (= (window-hscroll theirs) 4))))
+
+(ert-deftest e2e-merge/the-wheel-over-a-pane ()
+  (+test-merge-long
+    (let ((start (+test-merge--first-line result)))
+      (dotimes (_ 5)
+        (execute-kbd-macro (vector (list 'wheel-down (posn-at-x-y 40 40 theirs))))
+        (+test--pump 0.05))
+      (+test-sleep 0.6)
+      (should (> (+test-merge--first-line theirs) start))
+      (should (+test-merge--together-p session))
+      ;; The Result stays the selected pane.
+      (should (eq (selected-window) result)))))
