@@ -176,6 +176,14 @@ sidebar and dark pages as the last one you looked at; `+my/pdf-xwidget-toolbar` 
 and `+my/pdf-xwidget-dark-pages` (off) are for the first one. The mode line shows the page (`P3/12`, doom-modeline's
 PDF line).
 
+Split (`SPC w v`, `SPC w SPC`, the tab's right-click menu...), each pane shows the PDF on its own: scrolled, zoomed and
+searched apart, each mode line with its pane's page. A WebKit view is drawn in one window only (Emacs on macOS said
+"You can't share an xwidget (webkit2) among windows" and left the new pane empty), so each window gets a view of its
+own, starting where the PDF shows in the pane you came from. `SPC m d` / `SPC m t` / `O`, `Esc` and a reload from disk
+apply to all of the PDF's panes; the other keys to the selected one. A pane that shows another tab keeps its view
+for when it comes back (unless another pane needs one first); a closed pane's view goes a second later, but for the
+PDF's last one.
+
 The page can't call Emacs: it says its settings, page and place, the mouse pointer it wants, and the toolbar's requests
 (Preview, Print) in its title, which Emacs reads every 0.1 s, without JavaScript, while a PDF is on screen. The mouse
 pointer is the hand over the buttons, headings, thumbnails and links, the I-beam over the PDF's text, the arrow
