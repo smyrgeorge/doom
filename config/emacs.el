@@ -4,7 +4,7 @@
 ;; ====== VARIABLES ======
 
 ;; GARBAGE COLLECTION
-;; gcmh (Doom) lets garbage pile up to 128 MB while you work, collects once
+;; gcmh (Doom) lets garbage pile up to 64 MB while you work, collects once
 ;; you've been idle a moment, then drops the limit to 800 KB until the next
 ;; command. But work keeps happening "idle" (a language server's replies,
 ;; highlighting, redraws after opening a file), and at 800 KB it collected

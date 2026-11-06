@@ -38,6 +38,7 @@
 | `config/git.el` | `SPC g d`: the current file's git diff in a side pane. |
 | `config/terminal.el` | Terminal Emacs: paint the terminal background with the theme colour; no menu bar in terminal frames; hover help stays in the echo area. |
 | `config/compile.el` | Byte-compiles this config's functions when Emacs is idle (they load as source). |
+| `tests/` | Tests of this config's features (`tests/run.sh`; see [Tests](tests.md)): never loaded by Doom. |
 | `scripts/emacs.sh` | Installs Emacs (emacs-plus cask) and runs `doom sync`. |
 | `scripts/tools.sh` | CLI tools, fonts (JetBrains Mono, Nerd Font symbols), BasicTeX, pdf-tools build deps, the `claude-agent-acp` bridge. |
 | `scripts/lsp.sh` | Language servers, formatters and linters. |

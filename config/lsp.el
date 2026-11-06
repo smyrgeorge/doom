@@ -48,9 +48,11 @@
                                    "--ignored" "--exclude-standard" "--directory")))
         (cl-loop for entry in (split-string (buffer-string) "\0" t)
                  when (string-suffix-p "/" entry) ; directories only
+                 ;; Relative to the root, as git prints it: `concat', as
+                 ;; `expand-file-name' takes a folder named ~ for home.
                  collect (concat "\\`"
                                  (regexp-quote (directory-file-name
-                                                (expand-file-name entry)))
+                                                (concat default-directory entry)))
                                  "\\'"))))))
 
 (defadvice! +my/lsp-watch-skip-gitignored-a (fn workspace-root)

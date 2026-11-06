@@ -129,8 +129,9 @@ Math becomes MathML (rendered natively by WebKit); code is left for highlight.js
    "<meta name='color-scheme' content='light dark'>"
    (format "<style>@media (prefers-color-scheme: dark){html{background:%s}}</style>"
            (+md-preview--page-color 'dark))
-   (format "<base href='file://%s'>"
-           (file-name-directory (or buffer-file-name default-directory)))
+   ;; Encoded: a folder named C# would otherwise end at its #.
+   (format "<base href=\"%s\">"
+           (+my/webkit-file-url (file-name-directory (or buffer-file-name default-directory))))
    (format "<title>Preview: %s</title>" (buffer-name))
    "<meta name='viewport' content='width=device-width, initial-scale=1'>"
    ;; github-markdown-css follows the OS light/dark setting, but highlight.js's
@@ -265,7 +266,8 @@ preview off."
 (defvar +my/focus-new-windows)          ; config/window.el
 
 (defun +md-preview--off-h ()
-  "The Markdown buffer killed: its preview goes too."
+  "The Markdown buffer killed, or its mode set again (its variables, this mode's
+too, gone): its preview goes too."
   (+md-preview-mode -1))
 
 (define-minor-mode +md-preview-mode
@@ -289,10 +291,12 @@ preview off."
                             (window-width . ,(/ (window-total-width) 2)))))
         (add-hook 'after-change-functions #'+md-preview--after-change-h nil t)
         (add-hook 'post-command-hook #'+md-preview--post-command-h nil t)
-        (add-hook 'kill-buffer-hook #'+md-preview--off-h nil t))
+        (add-hook 'kill-buffer-hook #'+md-preview--off-h nil t)
+        (add-hook 'change-major-mode-hook #'+md-preview--off-h nil t))
     (remove-hook 'after-change-functions #'+md-preview--after-change-h t)
     (remove-hook 'post-command-hook #'+md-preview--post-command-h t)
     (remove-hook 'kill-buffer-hook #'+md-preview--off-h t)
+    (remove-hook 'change-major-mode-hook #'+md-preview--off-h t)
     (when (timerp +md-preview--timer) (cancel-timer +md-preview--timer))
     (when (+md-preview--live-p)
       (let ((preview +md-preview--buffer))

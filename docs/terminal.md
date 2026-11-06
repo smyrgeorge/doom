@@ -30,7 +30,8 @@ What changes in a terminal:
 ## Terminal background
 
 In terminal Emacs, the strip below the echo area is painted with the theme background
-(OSC 11) and restored on exit (OSC 111), or when an `emacsclient -t` frame closes.
+(OSC 11) and restored on exit (OSC 111), or when an `emacsclient -t` frame closes (the terminal's last one: another
+frame there still shows the theme).
 
 ## No menu bar in the terminal
 

@@ -266,7 +266,8 @@ highlighted, cut to the peek's height around it."
       (let* ((index (- usage first))
              (start (max 0 (min (- index (/ rows 2)) (- (length lines) rows))))
              (shown (seq-take (nthcdr start lines) rows))
-             (width (length (number-to-string (+ first start (length shown)))))
+             ;; As wide as the last line shown's number.
+             (width (length (number-to-string (+ first start (length shown) -1))))
              (current (face-background 'hl-line nil t)))
         (cons (concat " " (lsp-ui--workspace-path (plist-get xref :file))
                       ":" (number-to-string usage))

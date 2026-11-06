@@ -102,16 +102,20 @@ Classes and Symbols requests would cancel each other."
 
 (defun +my/search-everywhere--commands ()
   "Names of all commands M-x would offer here, recently used ones first."
-  (let ((buffer (current-buffer))
-        (all nil))
+  (let* ((buffer (current-buffer))
+         (offered-p (lambda (sym)
+                      (and (commandp sym)
+                           (or (null read-extended-command-predicate)
+                               (funcall read-extended-command-predicate sym buffer)))))
+         (all nil))
     (mapatoms
      (lambda (sym)
-       (when (and (commandp sym)
-                  (or (null read-extended-command-predicate)
-                      (funcall read-extended-command-predicate sym buffer)))
+       (when (funcall offered-p sym)
          (push (symbol-name sym) all))))
     (delete-dups
-     (append (seq-filter (lambda (name) (commandp (intern-soft name)))
+     ;; Recently used ones only where M-x offers them too: a mode's commands
+     ;; (e.g. dired's) used there aren't listed in other buffers.
+     (append (seq-filter (lambda (name) (funcall offered-p (intern-soft name)))
                          extended-command-history)
              (sort all #'string<)))))
 

@@ -117,8 +117,11 @@ tree-sitter modes that bring theirs when loaded, as Doom does on first use."
                             (format-time-string "%F %T")
                             (mapconcat #'symbol-name grammars " ") out-dir))))
         ;; A plain Emacs (-Q), its own empty init directory: it mustn't make
-        ;; ~/.emacs.d, which would take over from Doom's.
-        (let ((process
+        ;; ~/.emacs.d, which would take over from Doom's. Started from there
+        ;; too: the current buffer's folder may be gone (deleted outside
+        ;; Emacs), and the process couldn't start.
+        (let* ((default-directory (file-name-as-directory init-dir))
+               (process
                (make-process
                 :name "tree-sitter-grammars"
                 :buffer +my/tree-sitter-buffer

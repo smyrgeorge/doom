@@ -154,6 +154,27 @@
                 'selected selected
                 'mouse-face 'tab-line-highlight)))
 
+;; THE CACHE
+;; Tab-line draws a window's tabs again only when its cache key changes, and
+;; that key watches the current tab alone for unsaved changes: saving the
+;; others (save all, magit saving the repository's files) left their • on, and
+;; changes made elsewhere (another window, a rename by the language server)
+;; didn't show one. The key watches every file tab.
+(defun +my/tabs-cache-key (tabs)
+  "TABS' cache key (`tab-line-cache-key-function'): tab-line's own, and which
+of them have unsaved changes."
+  (cons (mapcar (lambda (tab) (and (bufferp tab) (buffer-file-name tab) (buffer-modified-p tab)))
+                tabs)
+        (tab-line-cache-key-default tabs)))
+
+;; A theme loaded: every window's tabs drawn again. Their bars are images in
+;; the old theme's colours, which the cache kept (their text, in faces,
+;; follows by itself).
+(add-hook 'doom-load-theme-hook
+          (defun +my/tabs-theme-h ()
+            (when (fboundp 'tab-line-force-update)
+              (tab-line-force-update t))))
+
 ;; CLOSING A TAB (see above)
 (defun +my/tabs-held-p (buffer)
   "Non-nil if a window shows BUFFER or has it as a tab."
@@ -275,6 +296,7 @@ own, which takes focus."
 (after! tab-line
   (setq tab-line-tabs-function #'+my/tabs-window-buffers
         tab-line-tab-name-format-function #'+my/tabs-format
+        tab-line-cache-key-function #'+my/tabs-cache-key
         tab-line-close-tab-function #'+my/tabs-close
         tab-line-close-button-show t
         tab-line-new-button-show nil      ; new buffers come from the usual commands

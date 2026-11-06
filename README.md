@@ -67,3 +67,4 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Key bindings](docs/keybindings.md): this config's own keys.
 - [Modules and languages](docs/modules.md): enabled Doom modules, languages and tooling, known `doom doctor` warnings.
 - [Repository layout](docs/layout.md): what each file is for.
+- [Tests](docs/tests.md): unit and end-to-end tests of this config's features (`tests/run.sh`).

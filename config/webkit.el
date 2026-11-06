@@ -59,9 +59,12 @@ every 0.1 s while the window is on screen (see WATCHING).")
 
 (defun +my/webkit-file-url (file)
   "FILE's file:// URL. Spaces and such encoded: Emacs's macOS WebKit doesn't
-check that a URL is valid."
+check that a URL is valid. A `%' too: in a file's name it's not an escape
+(\"a%20b.pdf\" isn't \"a b.pdf\")."
   (require 'url-util)
-  (concat "file://" (url-hexify-string (expand-file-name file) url-path-allowed-chars)))
+  (let ((allowed (copy-sequence url-path-allowed-chars)))
+    (aset allowed ?% nil)
+    (concat "file://" (url-hexify-string (expand-file-name file) allowed))))
 
 (defun +my/webkit-url-file (url)
   "The file a file:// URL names (without its #fragment)."
@@ -493,10 +496,12 @@ is (`+my/webkit-url-function'...)."
               left-fringe-width 0
               right-fringe-width 0)
   (with-silent-modifications
-    ;; Some text for the views to be shown over.
+    ;; Some text for the views to be shown over (point stays at its start,
+    ;; see `+my/webkit--home-h').
     (when (= (point-min) (point-max))
       (let ((inhibit-read-only t))
-        (insert " ")))
+        (insert " ")
+        (goto-char (point-min))))
     ;; Nothing shown but the views (see VIEWS, NO WHITE FLASH).
     (put-text-property (point-min) (point-max) 'display ""))
   (add-hook 'window-buffer-change-functions #'+my/webkit--shown-h nil t)

@@ -1,0 +1,498 @@
+;;; tests/e2e/test-pdf.el -*- lexical-binding: t; -*-
+;; config/pdf-xwidget.el in a GUI Emacs: real PDFs in WebKit, drawn by PDF.js
+;; (a copy of Doom's, never downloaded here). Pages, splits, settings,
+;; outline, history, search, zoom, copy, Option+Enter, the toolbar's
+;; requests, places, links out, revert, no PDF.js, closing.
+
+(+test-load "config/banner" "config/window" "config/actions" "config/webkit" "config/pdf-xwidget")
+
+;; ====== SETUP ======
+
+;; PDF.js: Doom's, copied into the temp data folder (`+my/pdf-js-dir' is
+;; there already: `doom-data-dir' is the temp one).
+(defvar +test-pdf--pdfjs (+test-pdfjs-dir))
+
+;; Nothing opens outside Emacs: Preview (open -a Preview) and the print
+;; dialog (osascript) are recorded instead.
+(defvar +test-pdf--outside nil
+  "The commands that would have run outside Emacs, the latest first.")
+
+(advice-add 'call-process :around
+            (lambda (fn program &rest args)
+              (if (equal program "open")
+                  (progn (push (cons program args) +test-pdf--outside) 0)
+                (apply fn program args)))
+            '((name . +test-pdf-no-open)))
+
+(advice-add 'make-process :around
+            (lambda (fn &rest args)
+              (let ((command (plist-get args :command)))
+                (if (equal (car command) "osascript")
+                    (progn (push command +test-pdf--outside) nil)
+                  (apply fn args))))
+            '((name . +test-pdf-no-osascript)))
+
+(defun +test-pdf--file (name &rest args)
+  "A PDF NAME in the temp folder (see `+test-make-pdf' for ARGS)."
+  (apply #'+test-make-pdf (+test-tmp-file (concat "pdfs/" name)) args))
+
+(defvar +test-pdf--book
+  (+test-pdf--file "book.pdf" :pages 3
+                   :outline '(("Chapter 1" . 1) ("Chapter 2" . 3))
+                   :links '((2 . "https://example.com/pdf-link"))))
+
+;; ====== HELPERS ======
+
+(defun +test-pdf--state (&optional window)
+  (let ((window (or window (selected-window))))
+    (with-current-buffer (window-buffer window)
+      (+my/pdf-xwidget--state (+my/webkit-xwidget window)))))
+
+(defun +test-pdf--page (&optional window)
+  (plist-get (+test-pdf--state window) :page))
+
+(defun +test-pdf--wait-page (page &optional window)
+  (+test-wait-for (lambda () (eql (+test-pdf--page window) page)) 5))
+
+(defun +test-pdf--ready (&optional window)
+  "WINDOW's view of its PDF, once PDF.js has opened it and drawn page 1's
+text."
+  (let ((window (or window (selected-window))))
+    (+test-wait-for
+     (lambda ()
+       (with-current-buffer (window-buffer window)
+         (let ((xwidget (+my/webkit-xwidget window)))
+           (and xwidget
+                (xwidget-view-lookup xwidget window)
+                (natnump (plist-get (+test-pdf--state window) :pages))
+                (> (plist-get (+test-pdf--state window) :pages) 0)
+                (equal (+test-js xwidget "String(document.querySelectorAll('.textLayer span').length > 0)")
+                       "true")
+                xwidget))))
+     15)))
+
+(defun +test-pdf--open (file)
+  "FILE opened in the selected window, ready."
+  (find-file file)
+  (should (derived-mode-p '+my/pdf-xwidget-mode))
+  (should (+test-pdf--ready))
+  (current-buffer))
+
+(defun +test-pdf--js (script &optional window)
+  "SCRIPT's value in WINDOW's page (waited for)."
+  (let ((window (or window (selected-window))))
+    (with-current-buffer (window-buffer window)
+      (+test-js (+my/webkit-xwidget window) script))))
+
+(defun +test-pdf--mode-line (window)
+  "WINDOW's mode line's page, as doom-modeline's PDF line shows it."
+  (with-current-buffer (window-buffer window)
+    (string-trim (format-mode-line '("" doom-modeline--pdf-pages) nil window))))
+
+(defun +test-pdf--click (title &optional window)
+  "Click the toolbar button whose title starts with TITLE."
+  (+test-pdf--js (format "[...document.querySelectorAll('#toolbar button')].find(b => b.title.startsWith(%S)).click(); 'ok'"
+                         title)
+                 window))
+
+(defmacro +test-pdf (&rest body)
+  "BODY with PDF.js there, from one window; the PDFs closed after."
+  (declare (indent 0))
+  `(progn
+     (unless +test-pdf--pdfjs
+       (ert-skip "No PDF.js in Doom's data folder (open a PDF in Emacs once)"))
+     (+test-with-reset
+       (setq +test-browsed nil
+             +test-pdf--outside nil
+             +my/pdf-xwidget-dark-pages nil
+             +my/pdf-xwidget-toolbar t
+             +my/pdf-xwidget-outline-sidebar nil)
+       ;; No place kept from another test (closing a PDF keeps its place:
+       ;; the reset closed the last test's).
+       (setq +my/pdf-xwidget--places nil)
+       (when (file-exists-p +my/pdf-xwidget-places-file)
+         (delete-file +my/pdf-xwidget-places-file))
+       (+test-clear-messages)
+       ,@body
+       (+test-sleep 0.2))))
+
+;; ====== OPENING ======
+
+(ert-deftest e2e-pdf/opens-in-webkit-with-pdfjs ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (should (eq major-mode '+my/pdf-xwidget-mode))
+    (should-not +my/pdf-xwidget--native)
+    (should (string-suffix-p "/index.html" +my/pdf-xwidget--home))
+    (should (file-exists-p (expand-file-name "data-1.js" +my/pdf-xwidget--dir)))
+    (let ((state (+test-pdf--state)))
+      (should (eql (plist-get state :pages) 3))
+      (should (eql (plist-get state :page) 1))
+      (should (plist-get state :toolbar))
+      (should-not (plist-get state :dark)))
+    (should (+test-wait-for (lambda () (equal (+test-pdf--mode-line (selected-window)) "P1/3")) 3))
+    ;; The page's text, selectable.
+    (should (string-match-p "Page 1 text"
+                            (+test-pdf--js "document.querySelector('.textLayer').textContent")))))
+
+(ert-deftest e2e-pdf/a-file-name-with-spaces-and-a-hash ()
+  (+test-pdf
+    (let ((file (+test-pdf--file "my file #1 é.pdf" :pages 2)))
+      (+test-pdf--open file)
+      (should (eql (plist-get (+test-pdf--state) :pages) 2)))))
+
+(ert-deftest e2e-pdf/without-pdfjs-webkit-s-own-viewer ()
+  (+test-pdf
+    (let ((+my/pdf-js-dir (+test-tmp-file "no-pdfjs/"))
+          (file (+test-pdf--file "native.pdf" :pages 1)))
+      (cl-letf (((symbol-function '+my/pdf-js-install)
+                 (lambda () (error "Offline"))))
+        (find-file file)
+        (should (+test-wait-for (lambda () (+my/webkit-xwidget (selected-window))) 10))
+        (should +my/pdf-xwidget--native)
+        (should (equal +my/pdf-xwidget--home (+my/webkit-file-url file)))
+        (should (> (+test-messages "own viewer: Offline") 0)) ; WebKit’s: `message' curls it
+        ;; Keys that need PDF.js say so.
+        (+my/pdf-xwidget-next-page)
+        (should (> (+test-messages "No PDF.js here") 0))))))
+
+;; ====== PAGES ======
+
+(ert-deftest e2e-pdf/pages-and-scrolling ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-next-page)
+    (should (+test-pdf--wait-page 2))
+    (+my/pdf-xwidget-next-page)
+    (should (+test-pdf--wait-page 3))
+    (+my/pdf-xwidget-previous-page 2)
+    (should (+test-pdf--wait-page 1))
+    (+my/pdf-xwidget-bottom)
+    (should (+test-pdf--wait-page 3))
+    (+my/pdf-xwidget-top)
+    (should (+test-pdf--wait-page 1))
+    (+my/pdf-xwidget-top 2)                ; 2gg: page 2
+    (should (+test-pdf--wait-page 2))
+    (should (+test-wait-for (lambda () (equal (+test-pdf--mode-line (selected-window)) "P2/3")) 3))
+    (+my/pdf-xwidget-top)
+    (should (+test-pdf--wait-page 1))
+    (let ((y (string-to-number (+test-pdf--js "String(document.getElementById('viewerContainer').scrollTop)"))))
+      (+my/pdf-xwidget-scroll-down 3)
+      (should (+test-wait-for
+               (lambda () (> (string-to-number (+test-pdf--js "String(document.getElementById('viewerContainer').scrollTop)"))
+                             y))
+               3)))))
+
+(ert-deftest e2e-pdf/zoom-and-fit ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (let ((scale (lambda () (plist-get (plist-get (+test-pdf--state) :place) :s))))
+      (should (equal (funcall scale) "page-width"))
+      (+my/pdf-xwidget-actual-size)
+      (should (+test-wait-for (lambda () (equal (funcall scale) "page-actual")) 3))
+      (+my/pdf-xwidget-zoom-in)
+      (should (+test-wait-for (lambda () (numberp (funcall scale))) 3))
+      (let ((zoomed (funcall scale)))
+        (should (> zoomed 100))
+        (+my/pdf-xwidget-zoom-out)
+        (should (+test-wait-for (lambda () (let ((s (funcall scale))) (and (numberp s) (< s zoomed)))) 3)))
+      (+my/pdf-xwidget-fit-page)
+      (should (+test-wait-for (lambda () (equal (funcall scale) "page-fit")) 3))
+      (+my/pdf-xwidget-fit-width)
+      (should (+test-wait-for (lambda () (equal (funcall scale) "page-width")) 3)))))
+
+;; ====== SPLITS ======
+
+(ert-deftest e2e-pdf/split-panes-show-the-pdf-apart ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (let* ((left (selected-window))
+           (right (split-window-right)))
+      (should (+test-pdf--ready right))
+      (should (= (+test-messages "share an xwidget") 0))
+      (select-window right)
+      (+my/pdf-xwidget-bottom)
+      (should (+test-pdf--wait-page 3 right))
+      (should (eql (+test-pdf--page left) 1))
+      ;; Each mode line its pane's page.
+      (should (+test-wait-for (lambda () (and (equal (+test-pdf--mode-line right) "P3/3")
+                                              (equal (+test-pdf--mode-line left) "P1/3")))
+                              3)))))
+
+(ert-deftest e2e-pdf/a-new-pane-starts-where-the-pdf-was ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-bottom)
+    (should (+test-pdf--wait-page 3))
+    (+test-sleep 0.3)                     ; its place said in its title
+    (let ((right (split-window-right)))
+      (should (+test-pdf--ready right))
+      (should (+test-pdf--wait-page 3 right)))))
+
+(ert-deftest e2e-pdf/settings-apply-to-all-panes ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (let* ((left (selected-window))
+           (right (split-window-right)))
+      (should (+test-pdf--ready right))
+      (+my/pdf-xwidget-toggle-dark)
+      (should +my/pdf-xwidget-dark-pages)
+      (should (+test-wait-for (lambda () (and (plist-get (+test-pdf--state left) :dark)
+                                              (plist-get (+test-pdf--state right) :dark)))
+                              3))
+      (+my/pdf-xwidget-toggle-toolbar)
+      (should-not +my/pdf-xwidget-toolbar)
+      (should (+test-wait-for (lambda () (not (or (plist-get (+test-pdf--state left) :toolbar)
+                                                  (plist-get (+test-pdf--state right) :toolbar))))
+                              3))
+      (+my/pdf-xwidget-toggle-sidebar)
+      (should +my/pdf-xwidget-outline-sidebar)
+      (should (+test-wait-for (lambda () (and (plist-get (+test-pdf--state left) :sidebar)
+                                              (plist-get (+test-pdf--state right) :sidebar)))
+                              3)))))
+
+(ert-deftest e2e-pdf/the-next-pdf-opens-with-the-last-settings ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-toggle-dark)
+    (should (+test-wait-for (lambda () (plist-get (+test-pdf--state) :dark)) 3))
+    (+test-pdf--open (+test-pdf--file "second.pdf" :pages 1))
+    (should (plist-get (+test-pdf--state) :dark))))
+
+;; ====== OUTLINE, HISTORY, SEARCH ======
+
+(ert-deftest e2e-pdf/the-outline-in-the-minibuffer ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (let (offered)
+      (cl-letf (((symbol-function 'completing-read)
+                 (lambda (_prompt collection &rest _)
+                   (setq offered (all-completions "" collection))
+                   "Chapter 2")))
+        (+my/pdf-xwidget-outline)
+        (should (+test-pdf--wait-page 3)))
+      (should (equal (mapcar #'substring-no-properties offered) '("Chapter 1" "Chapter 2"))))))
+
+(ert-deftest e2e-pdf/back-and-forward ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget--js "outlineGo(1)")  ; Chapter 2, a jump
+    (should (+test-pdf--wait-page 3))
+    (+my/pdf-xwidget-back)
+    (should (+test-pdf--wait-page 1))
+    (+my/pdf-xwidget-forward)
+    (should (+test-pdf--wait-page 3))))
+
+(ert-deftest e2e-pdf/search ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget--find "page   3\n text")   ; spaces and lines as one space
+    (should +my/pdf-xwidget--searching)
+    (should (+test-pdf--wait-page 3))
+    (should (+test-wait-for (lambda () (> (string-to-number
+                                           (+test-pdf--js "String(document.querySelectorAll('.highlight').length)"))
+                                          0))
+                            5))
+    ;; Esc ends it: the highlights go.
+    (should (+my/pdf-xwidget--escape-h))
+    (should-not +my/pdf-xwidget--searching)
+    (should (+test-wait-for (lambda () (equal (+test-pdf--js "String(document.querySelectorAll('.highlight.selected').length)")
+                                              "0"))
+                            5))
+    (should-not (+my/pdf-xwidget--escape-h))))
+
+(ert-deftest e2e-pdf/search-is-case-sensitive-with-a-capital ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-bottom)
+    (should (+test-pdf--wait-page 3))
+    (+my/pdf-xwidget--find "PAGE 1")         ; no match: stays
+    (+test-sleep 0.8)
+    (should (eql (+test-pdf--page) 3))
+    (+my/pdf-xwidget--find "page 1")         ; lower case: any case
+    (should (+test-pdf--wait-page 1))))
+
+;; ====== SIDEBAR ======
+
+(ert-deftest e2e-pdf/thumbnails ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget--js "set({sidebar: true, view: 'pages'})")
+    (should (+test-wait-for (lambda () (equal (+test-pdf--js "String(document.querySelectorAll('#sidebar .thumb canvas').length)")
+                                              "3"))
+                            10))
+    (+test-pdf--js "document.querySelectorAll('#sidebar .thumb')[2].click(); 'ok'")
+    (should (+test-pdf--wait-page 3))
+    (should (equal (+test-pdf--js "document.querySelector('#sidebar .thumb.current .num').textContent") "3"))))
+
+(ert-deftest e2e-pdf/the-outline-sidebar ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget--js "set({sidebar: true, view: 'outline'})")
+    (should (+test-wait-for (lambda () (equal (+test-pdf--js "String(document.querySelectorAll('#sidebar .item').length)")
+                                              "2"))
+                            5))
+    (+test-pdf--js "document.querySelectorAll('#sidebar .item')[1].click(); 'ok'")
+    (should (+test-pdf--wait-page 3))))
+
+;; ====== COPY, OPTION+ENTER ======
+
+(defun +test-pdf--select-page-text (&optional window)
+  (+test-pdf--js "var r = document.createRange();
+r.selectNodeContents(document.querySelector('.textLayer'));
+var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
+                 window))
+
+(ert-deftest e2e-pdf/copy-the-selection ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (let ((kill-ring nil))
+      (should (string-match-p "Page 1 text" (+test-pdf--select-page-text)))
+      (+my/webkit-copy)
+      (should (+test-wait-for (lambda () kill-ring) 3))
+      (should (string-match-p "Page 1 text" (car kill-ring))))))
+
+(defun +test-pdf--actions ()
+  "The Option+Enter menu's actions, as (GROUP NAME), from the PDF's page."
+  (let (shown)
+    (cl-letf (((symbol-function '+my/context-actions)
+               (lambda () (setq shown (mapcar (lambda (a) (list (nth 0 a) (nth 1 a)))
+                                              (+my/context-actions-pdf))))))
+      (+my/pdf-xwidget-actions)
+      (+test-wait-for (lambda () shown) 3))
+    shown))
+
+(ert-deftest e2e-pdf/option-enter-with-a-selection ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+test-pdf--select-page-text)
+    (let ((actions (+test-pdf--actions)))
+      (should (member '("PDF" "Copy") actions))
+      (should (member '("PDF" "Search the PDF for it") actions))
+      (should (member '("PDF" "Search the web for it") actions))
+      (should (member '("Claude" "Explain selection with Claude") actions))
+      (should (member '("Claude" "Add selection to Claude prompt") actions))
+      (should (member '("PDF" "Open in Preview") actions))
+      (should (member '("PDF" "Print...") actions)))
+    ;; The provider comes first in the menu (config/actions.el).
+    (should (eq (car +my/context-action-providers) #'+my/context-actions-pdf))))
+
+(ert-deftest e2e-pdf/option-enter-without-a-selection ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (should (equal (+test-pdf--actions)
+                   '(("PDF" "Open in Preview") ("PDF" "Print..."))))))
+
+(ert-deftest e2e-pdf/claude-is-told-the-file-and-page ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-next-page)
+    (should (+test-pdf--wait-page 2))
+    (let ((text (funcall (+my/pdf-xwidget--claude-context "Some  quoted\ntext ")
+                         (file-name-directory +test-pdf--book))))
+      (should (equal text "From book.pdf, page 2:\n\n> Some  quoted\n> text")))))
+
+;; ====== PREVIEW, PRINT ======
+
+(ert-deftest e2e-pdf/the-toolbar-s-preview-and-print ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+test-pdf--click "Open in Preview")
+    (should (+test-wait-for (lambda () +test-pdf--outside) 3))
+    (should (equal (car +test-pdf--outside) (list "open" nil 0 nil "-a" "Preview" +test-pdf--book)))
+    (+test-pdf--click "Print")
+    (should (+test-wait-for (lambda () (= (length +test-pdf--outside) 2)) 3))
+    (should (equal (car (car +test-pdf--outside)) "osascript"))
+    (should (equal (car (last (car +test-pdf--outside))) +test-pdf--book))
+    ;; Each request runs once.
+    (+test-sleep 0.5)
+    (should (= (length +test-pdf--outside) 2))))
+
+;; ====== LINKS OUT ======
+
+(ert-deftest e2e-pdf/a-link-in-the-pdf-opens-in-the-browser ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-next-page)
+    (should (+test-pdf--wait-page 2))
+    (should (+test-wait-for (lambda () (equal (+test-pdf--js "String(!!document.querySelector('.annotationLayer a[href^=\"https\"]'))")
+                                              "true"))
+                            5))
+    (+test-pdf--js "document.querySelector('.annotationLayer a[href^=\"https\"]').click(); 'ok'")
+    (should (+test-wait-for (lambda () +test-browsed) 5))
+    (should (equal +test-browsed '("https://example.com/pdf-link")))
+    ;; Still the PDF, where it was.
+    (should (+test-pdf--ready))
+    (should (string-suffix-p "/index.html" (xwidget-webkit-uri (+my/webkit-xwidget (selected-window)))))))
+
+;; ====== PLACES, REVERT, CLOSING ======
+
+(ert-deftest e2e-pdf/a-pdf-opens-where-it-was-closed ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-next-page)
+    (should (+test-pdf--wait-page 2))
+    (+test-sleep 0.3)
+    (kill-buffer (current-buffer))
+    (should (file-exists-p +my/pdf-xwidget-places-file))
+    (should (assoc (abbreviate-file-name +test-pdf--book) (+my/pdf-xwidget--read-places)))
+    (+test-pdf--open +test-pdf--book)
+    (should (+test-pdf--wait-page 2))))
+
+(ert-deftest e2e-pdf/places-survive-a-restart ()
+  "Kept in the places file: read anew (as after a restart) they're there."
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-bottom)
+    (should (+test-pdf--wait-page 3))
+    (+test-sleep 0.3)
+    (kill-buffer (current-buffer))
+    (setq +my/pdf-xwidget--places 'unread)
+    (should (eql (plist-get (cdr (assoc (abbreviate-file-name +test-pdf--book)
+                                        (+my/pdf-xwidget--read-places)))
+                            :p)
+                 3))))
+
+(ert-deftest e2e-pdf/quitting-emacs-keeps-places-and-cleans-up ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+my/pdf-xwidget-next-page)
+    (should (+test-pdf--wait-page 2))
+    (+test-sleep 0.3)
+    (setq +my/pdf-xwidget--places nil)
+    (let ((dir +my/pdf-xwidget--dir))
+      (+my/pdf-xwidget--cleanup-h)
+      (should-not (file-directory-p dir))
+      (should (assoc (abbreviate-file-name +test-pdf--book) +my/pdf-xwidget--places)))))
+
+(ert-deftest e2e-pdf/a-changed-pdf-is-shown-anew-where-it-was ()
+  (+test-pdf
+    (let ((file (+test-pdf--file "changing.pdf" :pages 3)))
+      (+test-pdf--open file)
+      (+my/pdf-xwidget-next-page)
+      (should (+test-pdf--wait-page 2))
+      (+test-make-pdf file :pages 5)
+      (revert-buffer t t)
+      (should (+test-wait-for (lambda () (eql (plist-get (+test-pdf--state) :pages) 5)) 10))
+      (should (eql (+test-pdf--page) 2))
+      (should (file-exists-p (expand-file-name "data-2.js" +my/pdf-xwidget--dir)))
+      (should-not (file-exists-p (expand-file-name "data-1.js" +my/pdf-xwidget--dir))))))
+
+(ert-deftest e2e-pdf/closing-deletes-the-page-s-folder ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (let ((dir +my/pdf-xwidget--dir)
+          (xwidget (+my/webkit-xwidget (selected-window))))
+      (should (file-directory-p dir))
+      (+test-sleep 0.2)
+      (kill-buffer (current-buffer))
+      (should-not (file-directory-p dir))
+      (should-not (memq xwidget (bound-and-true-p xwidget-list))))))
+
+(ert-deftest e2e-pdf/q-closes ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (let ((buffer (current-buffer)))
+      (+test-sleep 0.2)
+      (execute-kbd-macro "q")
+      (should-not (buffer-live-p buffer)))))

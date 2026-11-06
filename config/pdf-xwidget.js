@@ -549,8 +549,11 @@
     publish();
   });
 
+  // The zoom is part of the place (kept on close, a new pane's): said anew,
+  // not only once a scroll happens to follow (at a page's top, none did).
   bus.on('scalechanging', (e) => {
     zoomInfo.textContent = Math.round(e.scale * 100) + '%';
+    publishSoon();
   });
 
   // The place, while scrolling (not PDF.js's updateviewarea: see here()).

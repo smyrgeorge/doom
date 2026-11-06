@@ -100,7 +100,11 @@ and returns agent-shell's context text (a file:line link plus the code or the
 diagnostic). Starts a Claude shell if the project has none; if Claude is busy,
 the prompt is queued and sent when it finishes."
   (require 'agent-shell)
-  (let* ((context (or (funcall context-fn (agent-shell-cwd))
+  ;; The project's true name, as the buffer's file has (Doom's
+  ;; `find-file-visit-truename'): through a link, the file's path relative to
+  ;; it was ../../../private/var/...
+  (let* ((cwd (agent-shell-cwd))
+         (context (or (funcall context-fn (and cwd (file-truename cwd)))
                       (user-error "Nothing to send")))
          (text (concat instruction "\n\n" context))
          (shell (agent-shell-shell-buffer)))
@@ -177,4 +181,7 @@ the prompt is queued and sent when it finishes."
                            (if transform cand (get-text-property 0 '+my/group cand)))))
                  (complete-with-action action table string pred)))
              nil t)))
-      (funcall (nth 2 (cdr (assoc choice table)))))))
+      ;; An empty answer (in vertico, M-RET again exits with the input as
+      ;; typed) picks nothing.
+      (when-let* ((action (cdr (assoc choice table))))
+        (funcall (nth 2 action))))))

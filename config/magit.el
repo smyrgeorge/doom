@@ -42,9 +42,14 @@
   (add-to-list 'magit-delta-delta-args "--no-gitconfig" t))
 
 ;; List TODO/FIXME/... comments of the repo in the magit status buffer (uses rg).
+;; rg runs on a pty there, so it coloured its output whenever TERM allowed it
+;; (terminal Emacs, or one started from a shell) and magit-todos found none in
+;; it: never in colour.
 (use-package! magit-todos
   :after magit
-  :config (magit-todos-mode +1))
+  :config
+  (setq magit-todos-rg-extra-args '("--color=never"))
+  (magit-todos-mode +1))
 
 ;; With --color, magit marks the graph's characters with the lane colours (or
 ;; `magit-log-graph'): only those are redrawn, never the commit messages.

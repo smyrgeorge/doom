@@ -4,7 +4,8 @@
 
 `config/markdown.el` renders Markdown in a WebKit side window (xwidgets) **inside Emacs**. `SPC m p` toggles it: it
 opens on the right, half the window's width, as its own tab (`Preview: FILE`; no "WebKit: TITLE" row above the page),
-and the cursor stays in the file; it closes with `SPC m p` again or when the file is closed. The page fills the pane,
+and the cursor stays in the file; it closes with `SPC m p` again or when the file is closed (or its mode set again,
+e.g. `M-x normal-mode`: nothing left behind). The page fills the pane,
 edge to edge, in its own background (GitHub's dark `#0d1117` or white, following macOS). It opens without a white flash:
 WebKit's view is white until its page has loaded (its stylesheet comes from a CDN), so until then the pane is covered in
 that background (2 s at most). `SPC m P` previews in the browser instead. A Markdown file opens with a notice at the top

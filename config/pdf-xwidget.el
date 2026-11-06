@@ -457,7 +457,7 @@ the pointer (see above)."
   (require 'json)
   (let ((page (format-spec
                +my/pdf-xwidget--page-template
-               `((?b . ,(face-background 'default nil t))
+               `((?b . ,(+my/pdf-xwidget--color 'default :background "#282c34"))
                  (?c . ,(if (eq (frame-parameter nil 'background-mode) 'light) "light" "dark"))
                  (?v . ,(+my/pdf-xwidget--css-variables))
                  (?o . ,(+my/pdf-xwidget--options))
@@ -649,13 +649,14 @@ BACKWARD (?) towards its start. Esc ends the search."
 
 (add-hook 'doom-escape-hook #'+my/pdf-xwidget--escape-h)
 
-(defun +my/pdf-xwidget--toggle (setting name)
+(defun +my/pdf-xwidget--toggle (setting name was)
   "Turn the page's SETTING (\"dark\", \"toolbar\", \"sidebar\") on or off,
 as the selected window's is, in all of the PDF's views (see VIEWS), and say so,
-NAME being what it is; return whether it's on."
+NAME being what it is; return whether it's on, WAS (as it was for the next PDF)
+if it can't."
   (if (or (not (+my/webkit-xwidget)) +my/pdf-xwidget--native)
       (progn (message "No PDF.js here: M-x +my/pdf-js-install, then open the PDF again")
-             nil)
+             was)
     (let ((on (not (plist-get (+my/pdf-xwidget--state) (intern (concat ":" setting))))))
       (+my/pdf-xwidget--js (format "set({%s: %s})" setting (if on "true" "false")) t)
       (message "%s %s" name (if on "on" "off"))
@@ -664,17 +665,20 @@ NAME being what it is; return whether it's on."
 (defun +my/pdf-xwidget-toggle-dark ()
   "SPC m d: dark pages on or off (see above)."
   (interactive)
-  (setq +my/pdf-xwidget-dark-pages (+my/pdf-xwidget--toggle "dark" "Dark pages")))
+  (setq +my/pdf-xwidget-dark-pages (+my/pdf-xwidget--toggle "dark" "Dark pages"
+                                                             +my/pdf-xwidget-dark-pages)))
 
 (defun +my/pdf-xwidget-toggle-toolbar ()
   "SPC m t: the toolbar on or off (see above)."
   (interactive)
-  (setq +my/pdf-xwidget-toolbar (+my/pdf-xwidget--toggle "toolbar" "Toolbar")))
+  (setq +my/pdf-xwidget-toolbar (+my/pdf-xwidget--toggle "toolbar" "Toolbar"
+                                                         +my/pdf-xwidget-toolbar)))
 
 (defun +my/pdf-xwidget-toggle-sidebar ()
   "O: the sidebar (outline, pages) on or off (see above)."
   (interactive)
-  (setq +my/pdf-xwidget-outline-sidebar (+my/pdf-xwidget--toggle "sidebar" "Sidebar")))
+  (setq +my/pdf-xwidget-outline-sidebar (+my/pdf-xwidget--toggle "sidebar" "Sidebar"
+                                                                 +my/pdf-xwidget-outline-sidebar)))
 
 ;; PREVIEW AND PRINT
 (defun +my/pdf-xwidget-open-in-preview ()

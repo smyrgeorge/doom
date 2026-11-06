@@ -6,7 +6,7 @@ Diffs rendered with [`git-delta`](https://github.com/dandavison/delta) through `
 settings in `~/.gitconfig` (`--no-gitconfig`): those are for the terminal, and delta applies `line-numbers` even in
 magit-delta's colour-only mode, writing line numbers into the diff's text, so that staging or discarding a hunk (`s`,
 `x`) failed with "corrupt patch". The status buffer lists the repository's TODO/FIXME/... comments (`magit-todos`,
-using `rg`).
+using `rg`, told never to colour its output: in terminal Emacs it did, and none were listed).
 
 ## Commit graph, like tig
 

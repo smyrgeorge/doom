@@ -34,7 +34,11 @@
 
 (add-hook! 'spell-fu-mode-hook
   (defun +my/spell-add-tech-words-h ()
-    (when (file-exists-p +my/spell-tech-words-file)
+    ;; Turning on only: the hook runs when it's turned off too, and in a
+    ;; buffer where it never was on the tech words were then its only
+    ;; dictionary (spell-fu adds English only to an empty list).
+    (when (and (bound-and-true-p spell-fu-mode)
+               (file-exists-p +my/spell-tech-words-file))
       (unless +my/spell-tech-dictionary
         (setq +my/spell-tech-dictionary
               (spell-fu--dictionary-create

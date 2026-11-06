@@ -21,10 +21,15 @@
 (add-hook 'kill-emacs-hook #'+my/tty-reset-bg-h)
 ;; emacsclient -t: restore the terminal when its frame is closed. When the
 ;; terminal itself went away (its window closed), the frame is already dead
-;; here: nothing to restore.
+;; here: nothing to restore. Nor while another frame of that terminal stays
+;; (C-x 5 0 of one of two): it still shows the theme's background.
 (add-hook 'delete-frame-functions
           (defun +my/tty-reset-frame-bg-h (frame)
-            (when (and (frame-live-p frame) (eq (framep frame) t))
+            (when (and (frame-live-p frame) (eq (framep frame) t)
+                       (not (seq-some (lambda (other)
+                                        (and (not (eq other frame))
+                                             (eq (frame-terminal other) (frame-terminal frame))))
+                                      (frame-list))))
               (ignore-errors
                 (send-string-to-terminal "\e]111\a" (frame-terminal frame))))))
 

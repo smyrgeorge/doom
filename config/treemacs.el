@@ -275,7 +275,10 @@ those say closed too."
   "Compare ROOT's `git status' with the last one; refresh treemacs if it changed."
   (unless (gethash root +my/treemacs--git-poll-running)
     (puthash root t +my/treemacs--git-poll-running)
-    (let ((output (generate-new-buffer " *treemacs-git-poll*")))
+    (let ((output (generate-new-buffer " *treemacs-git-poll*"))
+          ;; Started from the project: the current buffer's folder may be gone
+          ;; (deleted outside Emacs), and git couldn't start there.
+          (default-directory root))
       (condition-case nil
           (make-process
            :name "treemacs-git-poll" :buffer output :noquery t

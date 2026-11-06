@@ -210,18 +210,27 @@ language server) on one it knows no declaration of."
 
 (defun +my/at-declaration--here-p (bounds definitions)
   "Non-nil if one of DEFINITIONS (xref items) is the symbol at BOUNDS."
-  (cl-some (lambda (item)
-             (let ((location (xref-item-location item)))
-               ;; Only look closer at declarations on this line of this file
-               ;; (getting the position of others would open their files).
-               (and (equal (ignore-errors (expand-file-name (xref-location-group location)))
-                           buffer-file-name)
-                    (eql (ignore-errors (xref-location-line location))
-                         (line-number-at-pos))
-                    (when-let* ((marker (ignore-errors (xref-location-marker location))))
-                      (and (eq (marker-buffer marker) (current-buffer))
-                           (<= (car bounds) marker (cdr bounds)))))))
-           definitions))
+  (let ((here (line-number-at-pos)))
+    (cl-some (lambda (item)
+               (let* ((location (xref-item-location item))
+                      (line (ignore-errors (xref-location-line location))))
+                 ;; Only look closer at declarations in this file, on this
+                 ;; line when the location says which (getting the position of
+                 ;; others would open their files). Emacs Lisp's don't say:
+                 ;; theirs is the start of the line that declares the symbol
+                 ;; (and finding it moves point, so put it back).
+                 ;; The same file, whatever links its path goes through (the
+                 ;; buffer's is its true name, Doom's `find-file-visit-truename').
+                 (and (ignore-errors (file-equal-p (xref-location-group location)
+                                                   buffer-file-name))
+                      (or (null line) (eql line here))
+                      (when-let* ((marker (save-excursion
+                                            (ignore-errors (xref-location-marker location)))))
+                        (and (eq (marker-buffer marker) (current-buffer))
+                             (if line
+                                 (<= (car bounds) marker (cdr bounds))
+                               (= (line-number-at-pos marker) here)))))))
+             definitions)))
 
 (defun +my/goto-declaration-or-usages ()
   "Jump to the declaration of the symbol at point; on the declaration itself,

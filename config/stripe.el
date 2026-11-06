@@ -148,7 +148,11 @@ errors or the diff-hl highlights change."
   "The line a click on stripe ROW jumps to (the middle of its range)."
   (if (<= lines rows)
       (min lines (1+ row))
-    (min lines (1+ (floor (* (+ row 0.5) lines) rows)))))
+    ;; The lines ROW shows (see `+my/stripe--line-to-row'): the middle of the
+    ;; row's span can fall on a line of the row above when few lines share it.
+    (let ((first (1+ (ceiling (* row lines) rows)))
+          (last (ceiling (* (1+ row) lines) rows)))
+      (min lines (/ (+ first last 1) 2)))))
 
 (defun +my/stripe--thumb-color ()
   "A colour slightly lighter (or darker) than the background."
@@ -545,8 +549,9 @@ it as a row of the last line (`vertical-motion') and in that line's height."
       (setq ov nil))
     (cond (string
            (unless ov
-             ;; Front-advance: stays after text typed at the end.
-             (setq ov (make-overlay (point-max) (point-max) nil t nil))
+             ;; Front- and rear-advance: stays after text typed at the end
+             ;; (an empty overlay that only front-advances stays before it).
+             (setq ov (make-overlay (point-max) (point-max) nil t t))
              (overlay-put ov 'priority 100) ; after the last row's own string
              (overlay-put ov 'window window)
              (overlay-put ov '+my/stripe t)
