@@ -98,9 +98,17 @@
   (when (and (overlayp overlay) (overlay-buffer overlay))
     (with-current-buffer (overlay-buffer overlay)
       (let* ((pos (overlay-start overlay))
+             ;; Only where the highlight is the whole line, across the window:
+             ;; a mode that highlights part of it (Doom's dashboard: the menu
+             ;; item, its line centred by a prefix) keeps that look.
+             (whole (= (overlay-end overlay)
+                       (save-excursion (goto-char pos)
+                                       (line-beginning-position 2))))
              (face (overlay-get overlay 'face))
-             (wrap (or (get-text-property pos 'wrap-prefix) wrap-prefix))
-             (line (or (get-text-property pos 'line-prefix) line-prefix))
+             (wrap (and whole (or (get-text-property pos 'wrap-prefix)
+                                  wrap-prefix)))
+             (line (and whole (or (get-text-property pos 'line-prefix)
+                                  line-prefix)))
              (key (overlay-get overlay '+my/prefixes)))
         ;; Only when the line, its prefixes or the face changed (this runs
         ;; before every redisplay).

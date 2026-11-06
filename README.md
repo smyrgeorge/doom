@@ -352,7 +352,8 @@ smaller ones at their own size; `{width=100%}` after an image link sizes one ima
 - **Current line and selection across wrapped rows:** a long line wraps onto rows indented like it (Doom's word wrap,
   e.g. two spaces in a Markdown table), and the current line's highlight, and the selection's, left that indentation
   out: Emacs draws a line's wrap prefix without the faces of the overlays on it. hl-line's overlay now carries a copy of
-  the prefix in its face; a selection gets one per line on screen, over its part of the selection.
+  the prefix in its face; a selection gets one per line on screen, over its part of the selection. Only where the
+  highlight is the whole line: Doom's dashboard highlights just the menu item, its line centred by a prefix.
 - **`q` closes transient menus** (agent-shell's help and drawing menus, magit's...), as Esc (Doom) and `C-g` do: it
   only said "Unbound suffix: q". A menu that uses `q` for something of its own keeps it (magit's dispatch: bury the
   buffer; blame, git-timemachine: quit them); `transient-bind-q-to-quit` would move such keys to `Q`, not done.
