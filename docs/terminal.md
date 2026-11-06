@@ -33,9 +33,21 @@ What changes in a terminal:
 
 ## Terminal background
 
-In terminal Emacs, the strip below the echo area is painted with the theme background
-(OSC 11) and restored on exit (OSC 111), or when an `emacsclient -t` frame closes (the terminal's last one: another
-frame there still shows the theme).
+In terminal Emacs, the strip below the echo area is painted with the theme background (`OSC 11`). The terminal gets
+its own background back on exit, or when an `emacsclient -t` frame closes (the terminal's last one: another frame
+there still shows the theme). That includes `cmd/diff.sh`, in both its kinds: a new Emacs, or a frame of the running
+one.
+
+- **The color given back:** before the first paint, Emacs asks the terminal for its background (`OSC 11 ?`, answered
+  in order, so before the paint), and sets exactly that color back with `OSC 11`. Only a terminal that doesn't answer
+  gets the generic reset (`OSC 111`), which iTerm2 ignores: the theme's color used to stay there.
+- **When it paints:** only once the terminal is set up, since the query needs `term/xterm.el`. `emacs -nw` loads Doom's
+  theme before that, and `tty-setup-hook` paints it then.
+- **Closing a server's frame:** the restore runs first in `delete-frame-functions`. The server's own handler closes the
+  client's terminal, and nothing sent after it arrives.
+
+A terminal tab still showing the theme's color from before this fix reports that color as its own. Open a new tab
+once.
 
 ## No menu bar in the terminal
 
