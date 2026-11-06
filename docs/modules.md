@@ -21,6 +21,14 @@ Not enabled: `tabs` (centaur-tabs), replaced by [tabs per window](editor.md#tabs
 
 ## Languages and tooling
 
+**Tree-sitter grammars are built ahead of time** (`config/tree-sitter.el`): the first file of a language no longer asks
+"Missing tree-sitter grammars: ... Install now?". Once Emacs has started and been idle 10 s
+(`+my/tree-sitter-install-delay`), every grammar the enabled languages need that isn't there yet is downloaded and built,
+with Doom's recipes, into `.local/etc/tree-sitter`, in the background (another Emacs, `emacs --batch`, does it: here it
+would freeze Emacs for minutes); its output is in `*tree-sitter grammars*`, and a message says when it starts and ends. A
+language enabled later (`init.el`, `doom sync`) gets its grammars at the next start; `M-x
++my/tree-sitter-install-grammars` builds the missing ones now.
+
 All languages use LSP and tree-sitter where available. The servers and formatters come from `scripts/lsp.sh`, except
 `clangd` (Xcode Command Line Tools) and GDScript's server, which is the Godot editor itself (keep it open on the
 project). The scripts also install LaTeX tools (`basictex`, `texlab`), though `:lang latex` is off.

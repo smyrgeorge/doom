@@ -29,6 +29,7 @@
 | `config/spell.el` | Spell checking: tech-words dictionary, camelCase splitting, personal dictionary. |
 | `dict/tech.txt` | ~40k programming words for the spell checker (built by `scripts/dict.sh`). |
 | `config/agent-shell.el` | Claude Code in Emacs (agent-shell): login, default agent, `SPC o c` / `SPC o C`, what Claude is told about Emacs, image width. |
+| `config/tree-sitter.el` | The enabled languages' tree-sitter grammars, built in the background after startup instead of asked for on first use. |
 | `config/lsp.el` | Language servers: code lenses; projects imported without asking; file watchers skip git-ignored folders; `kotlin-lsp`. |
 | `config/projectile.el` | Projects under `~/dev`; project file list without a cache; a project opens on its README; each workspace remembers its project. |
 | `config/search.el` | `SPC s a`: Search Everywhere, like IntelliJ; `Cmd+Shift+F`: find in files (rg). |
