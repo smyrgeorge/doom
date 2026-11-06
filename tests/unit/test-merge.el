@@ -264,7 +264,10 @@ config/compile.el may (the other tests run them so)."
                        (list (+test-merge--chunk session 0) 'yours 'applied)))
         (should (equal (get-text-property 3 '+my/merge-action text)
                        (list (+test-merge--chunk session 0) 'yours 'ignored)))
-        (should (get-text-property 0 'mouse-face text))))
+        (should (get-text-property 0 'mouse-face text))
+        ;; The hand over the buttons.
+        (should (eq (get-text-property 0 'pointer text) 'hand))
+        (should (eq (get-text-property 3 'pointer text) 'hand))))
     ;; Done: a check (applied), nothing (ignored).
     (+my/merge--decide (+test-merge--chunk session 0) 'yours 'applied)
     (+my/merge--decide (+test-merge--chunk session 1) 'theirs 'ignored)
@@ -435,7 +438,12 @@ config/compile.el may (the other tests run them so)."
           (push (button-label button) labels)
           (goto-char (button-end button)))
         (should (equal (nreverse labels)
-                       '("Accept Left" "Accept Right" "✨ Apply non-conflicting" "Done" "Abort"))))
+                       '("Accept Left" "Accept Right" "✨ Apply non-conflicting" "Done" "Abort")))
+        ;; The hand over them.
+        (goto-char (point-min))
+        (while-let ((button (next-button (point))))
+          (should (eq (get-text-property (button-start button) 'pointer) 'hand))
+          (goto-char (button-end button))))
       ;; Pressed from the bar: as from the Result.
       (goto-char (point-min))
       (push-button (next-button (point-min) t))
@@ -728,6 +736,7 @@ changed the same word."
                (display (get-text-property 0 'display (overlay-get ov 'before-string))))
           (should (equal (car display) '(margin left-margin)))
           (should (equal (get-text-property 0 '+my/merge-action (cadr display)) (list chunk 'both 'merged)))
+          (should (eq (get-text-property 0 'pointer (cadr display)) 'hand))
           (should (string-match-p "wand" (get-text-property 0 'help-echo (cadr display))))))
       (+my/merge--decide chunk 'both 'merged)
       (should (equal (+test-merge--result session)

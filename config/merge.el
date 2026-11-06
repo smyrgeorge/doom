@@ -470,7 +470,9 @@ the same words changed (see above)."
     (add-face-text-property 0 (length label) '+my/merge-button t label)
     (add-text-properties 0 (length label)
                          (list '+my/merge-action (list chunk side action)
-                               'mouse-face 'highlight 'help-echo help)
+                               'mouse-face 'highlight 'help-echo help
+                               ;; The hand over it (else the margin's arrow).
+                               'pointer 'hand)
                          label)
     label))
 
@@ -714,7 +716,8 @@ an undo)."
 ;; THE BAR
 (defun +my/merge--bar-button (label command help)
   (insert-text-button label 'action (lambda (_) (+my/merge--from-bar command))
-                      'face '+my/merge-button 'follow-link t 'help-echo help))
+                      'face '+my/merge-button 'follow-link t 'help-echo help
+                      'pointer 'hand))
 
 (defun +my/merge--from-bar (command)
   "A button of the bar: COMMAND, from the Result's pane."
