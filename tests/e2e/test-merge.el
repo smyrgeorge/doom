@@ -14,7 +14,53 @@
 (require 'ultra-scroll)
 (global-tab-line-mode 1)
 
+;; A mode that takes clicks in the margins, as dap-mode does in code buffers
+;; (Doom's debugger: a breakpoint): made after the merge's, its keymap comes
+;; first. It took Theirs' buttons and the wand's.
+(defvar +test-merge--taken 0 "Clicks the margin thief took.")
+
+(define-minor-mode +test-merge-margin-thief-mode
+  "Takes the margins' clicks (as dap-mode's breakpoints do)."
+  :keymap (let ((map (make-sparse-keymap))
+                (take (lambda () (interactive) (cl-incf +test-merge--taken))))
+            (dolist (area '(left-margin right-margin))
+              (define-key map (vector area 'mouse-1) take)
+              (define-key map (vector area 'down-mouse-1) take))
+            map))
+
 ;; ====== HELPERS ======
+
+(defun +test-merge--thieves (session)
+  "The margin thief on in SESSION's panes."
+  (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
+    (with-current-buffer buffer (+test-merge-margin-thief-mode 1))))
+
+(defun +test-merge--click (posn)
+  "A click at POSN, run as Emacs would: by what the click is bound to there
+(its area's keys, the clicked string's keymap first)."
+  (let* ((area (posn-area posn))
+         (down (key-binding (vector area 'down-mouse-1) nil nil posn))
+         (command (key-binding (vector area 'mouse-1) nil nil posn)))
+    (should (eq command #'+my/merge-click))
+    (should (eq down #'ignore))
+    (funcall command (list 'mouse-1 posn))
+    (should (= +test-merge--taken 0))))
+
+(defun +test-merge--margin-posn (window area action)
+  "Where WINDOW's AREA (left-margin, right-margin) shows a button doing ACTION
+\=(applied, ignored, merged), scanning its frame's pixels: its position."
+  (let ((edges (window-pixel-edges window)))
+    (catch 'found
+      (dolist (y (number-sequence (nth 1 edges) (min (nth 3 edges) (+ (nth 1 edges) 300)) 3))
+        (dolist (x (number-sequence (nth 0 edges) (1- (nth 2 edges)) 2))
+          (let* ((posn (posn-at-x-y x y (window-frame window)))
+                 (string (posn-string posn)))
+            (when (and (eq (posn-window posn) window)
+                       (eq (posn-area posn) area)
+                       (car string) (cdr string)
+                       (eq (nth 2 (get-text-property (cdr string) '+my/merge-action (car string)))
+                           action))
+              (throw 'found posn))))))))
 
 (defun +test-merge--git (&rest args)
   (with-temp-buffer
@@ -112,7 +158,7 @@ on feature, feature merged into main."
         (should (string-match-p "Yours: main" (with-current-buffer (window-buffer yours)
                                                  (format-mode-line header-line-format nil yours))))
         ;; The margins with the buttons, shown.
-        (should (equal (window-margins yours) '(nil . 5)))
+        (should (equal (window-margins yours) '(nil . 6)))   ; a column more: the icons
         (should (equal (window-margins theirs) '(5)))))))
 
 (ert-deftest e2e-merge/a-margin-button-clicked-where-it-shows ()
@@ -121,20 +167,55 @@ on feature, feature merged into main."
            (window (get-buffer-window (+my/merge-yours session)))
            (chunk (aref (+my/merge-chunks session) 0)))
       (redisplay t)
-      ;; The button by TWO (line 2): the right margin's first column there,
-      ;; past the text and the right fringe (margins are outside fringes).
-      (let* ((line-y (+ (nth 1 (pos-visible-in-window-p (overlay-end (+my/merge-chunk-yours chunk))
-                                                         window t))
-                        (- (/ (with-current-buffer (+my/merge-yours session) (default-line-height)) 2))))
-             (edges (window-body-pixel-edges window))
-             (x (+ (- (nth 2 edges) (nth 0 edges)) (nth 1 (window-fringes window)) 2))
-             (posn (posn-at-x-y x line-y window)))
-        (should (eq (posn-area posn) 'right-margin))
+      ;; The button by TWO (line 2), in the right margin.
+      (let ((posn (+test-merge--margin-posn window 'right-margin 'applied)))
+        (should posn)
         (should (= (cdr (posn-col-row posn)) 1))
-        (should (posn-string posn))
-        (+my/merge-click (list 'mouse-1 posn))
+        ;; The buttons in the margin, after its space: off the code, the x
+        ;; whole (the margin's wide enough).
+        (let ((string (posn-string posn)))
+          (should (> (cdr string) 0))
+          (should-not (get-text-property 0 '+my/merge-action (car string)))
+          (let* ((x-index (cl-loop for i from (cdr string) below (length (car string))
+                                   when (eq (nth 2 (get-text-property i '+my/merge-action (car string))) 'ignored)
+                                   return i))
+                 (margin-px (* (cdr (window-margins window)) (frame-char-width)))
+                 (text-px (with-current-buffer (+my/merge-yours session)
+                            (string-pixel-width (substring (car string) 0 (1+ x-index))))))
+            (should x-index)
+            (should (<= text-px margin-px))))
+        (+test-merge--thieves session)
+        (+test-merge--click posn)
         (should (eq (+my/merge-chunk-yours-state chunk) 'applied))
         (should (string-prefix-p "one\nTWO\n" (with-current-buffer (+my/merge-result session) (buffer-string))))))))
+
+(ert-deftest e2e-merge/theirs-buttons-clicked-where-they-show ()
+  "Theirs' buttons, in its left margin, clicked where they show, a mode
+taking the margins' clicks on (dap-mode's breakpoints did, in code)."
+  (+test-merge-conflict
+    (let* ((session (+test-merge--e))
+           (window (get-buffer-window (+my/merge-theirs session)))
+           (chunk (aref (+my/merge-chunks session) 1)))   ; FOUR, Theirs'
+      (+test-merge--thieves session)
+      (redisplay t)
+      (let ((posn (+test-merge--margin-posn window 'left-margin 'applied)))
+        (should posn)
+        (should (eq (nth 0 (get-text-property (cdr (posn-string posn)) '+my/merge-action
+                                              (car (posn-string posn))))
+                    chunk))
+        (+test-merge--click posn))
+      (should (eq (+my/merge-chunk-theirs-state chunk) 'applied))
+      (should (string-match-p "three\nFOUR\nfive" (with-current-buffer (+my/merge-result session)
+                                                      (buffer-string))))
+      ;; Its x, on the next one (six theirs: a conflict).
+      (redisplay t)
+      (let ((posn (+test-merge--margin-posn window 'left-margin 'ignored)))
+        (should posn)
+        (+test-merge--click posn)
+        (should (eq (+my/merge-chunk-theirs-state (nth 0 (get-text-property (cdr (posn-string posn))
+                                                                             '+my/merge-action
+                                                                             (car (posn-string posn)))))
+                    'ignored))))))
 
 (ert-deftest e2e-merge/done-stages-and-magit-shows-it ()
   (+test-merge-conflict
@@ -272,23 +353,14 @@ height on screen."
            (chunk (aref (+my/merge-chunks session) 0)))
       (redisplay t)
       (should (equal (window-margins result) '(2)))
-      ;; Down the Result's left margin (frame pixels): the row showing the
-      ;; wand, the conflict's.
-      (let* ((edges (window-pixel-edges result))
-             (posn (seq-some (lambda (y)
-                               (let ((posn (posn-at-x-y (+ (nth 0 edges) 3) y (window-frame result))))
-                                 (and (eq (posn-window posn) result)
-                                      (eq (posn-area posn) 'left-margin)
-                                      (car (posn-string posn))
-                                      (get-text-property (cdr (posn-string posn)) '+my/merge-action
-                                                         (car (posn-string posn)))
-                                      posn)))
-                             (number-sequence (nth 1 edges) (+ (nth 1 edges) 200) 3))))
+      ;; In the Result's left margin, where it shows: the conflict's row.
+      (let ((posn (+test-merge--margin-posn result 'left-margin 'merged)))
         (should posn)
         (should (= (cdr (posn-col-row posn))
                    (with-current-buffer (+my/merge-result session)
                      (1- (line-number-at-pos (overlay-start (+my/merge-chunk-result chunk)))))))
-        (+my/merge-click (list 'mouse-1 posn)))
+        (+test-merge--thieves session)
+        (+test-merge--click posn))
       (should (equal (with-current-buffer (+my/merge-result session) (+my/merge--result-text session))
                      (+test-merge--lines "start" "invoke(FIRST, second);" "end")))
       (should (+my/merge--resolved-p chunk)))))

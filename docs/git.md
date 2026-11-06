@@ -43,7 +43,16 @@ GUI, `>>` / `<<` / `x` in a terminal):
 | `>>` (Yours) / `<<` (Theirs) | Put the change in the Result. In a conflict whose other side is in already, add it after that one (keep both) |
 | `x` | Ignore the change: the Result keeps what it has there |
 
-A change is done when each side that changed is in or ignored; it then turns grey (a check by the side put in).
+A change is done when each side that changed is in or ignored; it then turns grey (a check by the side put in). A
+change with nothing in the Result yet (lines a side added) has a blue ▶ in the Result's fringe where it would go (red
+for a conflict).
+
+The buttons sit a little off the code on both sides: Yours' after a space, in a margin one column wider in the GUI
+(icons are wider than a column), and Theirs' in the room the icons leave. The panes keep their fringes at the
+windows' outer edges (`fringes-outside-margins`, as Doom's `vc-gutter` sets it), so the margins stay next to the code.
+Clicks on the buttons and the wand are bound on the buttons themselves (a keymap on their text). That comes before
+any mode's keys: Doom's debugger (`dap-mode`) binds a click in the left margin of code buffers to set a breakpoint, and
+it had taken Theirs' buttons and the wand.
 
 A conflict whose sides changed different words of the same lines (Git merges by lines) gets a **✨ wand** in the
 Result's margin (`SPC m w` at point): it merges them, word by word, e.g. `call(first)` → `call(FIRST)` on one side

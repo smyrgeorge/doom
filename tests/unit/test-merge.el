@@ -257,6 +257,61 @@ config/compile.el may (the other tests run them so)."
       (should (eq (funcall face 0 'yours) '+my/merge-done))
       (should (null (funcall face 0 'result))))))
 
+(ert-deftest merge/a-mark-where-an-added-change-goes ()
+  "A change with nothing in the Result (thirteen, Theirs' added): a triangle
+in the Result's fringe where it goes, in the accent's colour (the change's
+tint made a blur of it); a conflict's in red; none once done."
+  (+test-merge
+    (let* ((chunk (+test-merge--chunk session 5))
+           (region (+my/merge-chunk-result chunk)))
+      (should (= (overlay-start region) (overlay-end region)))
+      (should (equal (get-text-property 0 'display (overlay-get region 'before-string))
+                     '(left-fringe right-triangle +my/merge-mark)))
+      (should (eq (face-attribute '+my/merge-mark :inherit) 'link))
+      (should (eq (face-attribute '+my/merge-mark-conflict :inherit) 'error))
+      (+my/merge--decide chunk 'theirs 'ignored)
+      (should-not (overlay-get region 'before-string)))))
+
+(define-minor-mode +test-merge-margin-thief-mode
+  "Takes the margins' clicks, as dap-mode does in code buffers (Doom's
+debugger: a breakpoint). Made after the merge's mode: its keymap first."
+  :keymap (let ((map (make-sparse-keymap)))
+            (dolist (area '(left-margin right-margin))
+              (define-key map (vector area 'mouse-1) #'+test-merge--taken)
+              (define-key map (vector area 'down-mouse-1) #'+test-merge--taken))
+            map))
+
+(defun +test-merge--taken ()
+  (interactive))
+
+(ert-deftest merge/margin-clicks-before-other-modes ()
+  "A mode binding clicks in the margins on in the panes, its keymap before
+the merge's (dap-mode's took Theirs' buttons and the wand's): a click on a
+button or the wand is still the merge's; elsewhere, that mode's."
+  (+test-merge-wand
+    (let ((panes (list (cons (+my/merge-yours session) 'right-margin)
+                       (cons (+my/merge-theirs session) 'left-margin)
+                       (cons (+my/merge-result session) 'left-margin))))
+      (pcase-dolist (`(,buffer . ,area) panes)
+        (with-current-buffer buffer
+          (+test-merge-margin-thief-mode 1)
+          (let* ((window (get-buffer-window buffer))
+                 (ov (seq-find (lambda (ov)
+                                 (eq (car-safe (car-safe (get-text-property
+                                                          0 'display (or (overlay-get ov 'before-string) " "))))
+                                     'margin))
+                               (overlays-in (point-min) (point-max))))
+                 (text (cadr (get-text-property 0 'display (overlay-get ov 'before-string))))
+                 (index (cl-loop for i below (length text)
+                                 when (get-text-property i '+my/merge-action text) return i))
+                 (posn (list window area '(0 . 0) 0 (cons text index) nil '(0 . 0) nil '(0 . 0) '(1 . 1)))
+                 (bare (list window area '(0 . 0) 0 nil nil '(0 . 0) nil '(0 . 0) '(1 . 1))))
+            (should (get-text-property index '+my/merge-action text))
+            (should (eq (key-binding (vector area 'mouse-1) nil nil posn) #'+my/merge-click))
+            (should (eq (key-binding (vector area 'down-mouse-1) nil nil posn) #'ignore))
+            ;; Not on a string of the merge's: the mode's, as anywhere.
+            (should (eq (key-binding (vector area 'mouse-1) nil nil bare) #'+test-merge--taken))))))))
+
 (ert-deftest merge/buttons-in-the-margins-by-the-result ()
   (+test-merge
     ;; Yours' changes: lines 2 (two), 6, 8, and where ten was (eleven's line).
@@ -285,15 +340,26 @@ config/compile.el may (the other tests run them so)."
     (should (equal (assq 2 (+test-merge--margin session 'yours)) '(2 . " ok")))
     (should (equal (assq 4 (+test-merge--margin session 'theirs)) '(4 . " ")))))
 
-(ert-deftest merge/right-margin-padded-in-a-terminal ()
-  "A click on a right margin's first column comes (xterm-mouse-mode,
-posn-at-x-y) as one on the text: Yours' buttons start after it in a terminal,
-at once in the GUI."
+(ert-deftest merge/right-margin-padded ()
+  "Yours' buttons after a space: off the code, as Theirs' are; in a terminal
+also off the margin's first column (a click there comes as one on the text,
+xterm-mouse-mode). The margin fits it: in a terminal its 5 columns; in the
+GUI, where an icon is wider than a column, one more."
   (should (equal (+my/merge--right-margin-text ">> x") " >> x"))
+  (should (= (string-width (+my/merge--right-margin-text ">> x")) (+my/merge--yours-margin-columns) 5))
   (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
-    (should (equal (+my/merge--right-margin-text ">> x") ">> x")))
-  ;; It fits: the margin's 5 columns.
-  (should (<= (string-width (+my/merge--right-margin-text ">> x")) 5)))
+    (should (equal (+my/merge--right-margin-text "»x") " »x"))
+    (should (= (+my/merge--yours-margin-columns) 6))))
+
+(ert-deftest merge/fringes-outside-the-margins ()
+  "The panes' margins (buttons, the wand) by the code, their fringes at the
+window's edges, whatever the default (Doom's vc-gutter sets it so)."
+  (let ((fringes-outside-margins nil))
+    (+test-merge
+      (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
+        (with-current-buffer buffer
+          (should (local-variable-p 'fringes-outside-margins))
+          (should (eq fringes-outside-margins t)))))))
 
 (ert-deftest merge/no-current-line-over-a-change ()
   "Doom's current line, in every window, over a change's colour: not on a

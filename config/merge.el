@@ -77,6 +77,13 @@
 (defface +my/merge-button '((t :inherit (bold link) :underline nil))
   "The buttons in the margins and the bar.")
 
+(defface +my/merge-mark '((t :inherit link :underline nil))
+  "A ▶ in the Result's fringe where a change with nothing there goes (a side's
+added lines): the accent's colour, not the change's tint (a blur there).")
+
+(defface +my/merge-mark-conflict '((t :inherit error))
+  "The same, for a conflict.")
+
 (defvar +my/merge-finished-functions nil
   "Functions called with a merge's session once it's closed (done, aborted,
 a pane closed).")
@@ -524,11 +531,39 @@ the same words changed (see above)."
                                             'ignored chunk side "Ignore")))
              (if (eq side 'yours) (concat apply " " ignore) (concat ignore " " apply)))))))
 
+(defvar +my/merge-margin-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [left-margin mouse-1] #'+my/merge-click)
+    (define-key map [right-margin mouse-1] #'+my/merge-click)
+    (define-key map [left-margin down-mouse-1] #'ignore)
+    (define-key map [right-margin down-mouse-1] #'ignore)
+    map)
+  "Clicks on the margins' strings (the buttons, the wand). On the strings
+themselves: a keymap there comes before every mode's (minor modes', Evil's),
+and Doom's debugger's dap-mode binds a click in the left margin (a
+breakpoint) in code buffers, which took Theirs' buttons and the wand's.")
+
+(defun +my/merge--margin-string (text)
+  "TEXT for a margin, its clicks the merge's (see `+my/merge-margin-map')."
+  (propertize text 'keymap +my/merge-margin-map))
+
+(defconst +my/merge--margin-columns 5
+  "The width of Theirs' margin (its buttons'), in columns; Yours' in a
+terminal (see `+my/merge--yours-margin-columns').")
+
+(defun +my/merge--yours-margin-columns ()
+  "The width of Yours' (right) margin, in columns: Theirs', and in the GUI
+one more for the space before the buttons (see
+`+my/merge--right-margin-text'), the icons being wider than a column."
+  (if (display-graphic-p) (1+ +my/merge--margin-columns) +my/merge--margin-columns))
+
 (defun +my/merge--right-margin-text (text)
-  "TEXT for a right margin. In a terminal, after a space: a click on a right
-margin's first column comes as one on the text (posn-at-x-y, Emacs 31), so a
-button there would be dead there."
-  (if (display-graphic-p) text (concat " " text)))
+  "TEXT for Yours' (right) margin: after a space. Left-aligned in the margin,
+the buttons touched the code, where Theirs' are a few pixels from it. In a
+terminal it also keeps the margin's first column blank: a click there comes
+as one on the text (posn-at-x-y, Emacs 31). A space, not a narrower stretch:
+a space display spec in a margin's string is drawn a column wide."
+  (concat " " text))
 
 (defun +my/merge--render-chunk (chunk)
   "Show CHUNK's state in the three panes."
@@ -543,8 +578,9 @@ button there would be dead there."
         (overlay-put ov 'before-string
                      (propertize " " 'display
                                  (if (eq side 'yours)
-                                     `((margin right-margin) ,(+my/merge--right-margin-text text))
-                                   `((margin left-margin) ,text))))
+                                     `((margin right-margin)
+                                       ,(+my/merge--margin-string (+my/merge--right-margin-text text)))
+                                   `((margin left-margin) ,(+my/merge--margin-string text)))))
         (push ov (+my/merge-chunk-buttons chunk)))))
   ;; The wand, in the Result's margin, while it can merge.
   (when (and (+my/merge-chunk-wand chunk) (not (+my/merge--resolved-p chunk)))
@@ -553,16 +589,21 @@ button there would be dead there."
       (overlay-put ov 'before-string
                    (propertize " " 'display
                                `((margin left-margin)
-                                 ,(+my/merge--button (+my/merge--icon "nf-cod-wand" "*")
-                                                     'merged chunk 'both
-                                                     "Merge the words both sides changed (wand)"))))
+                                 ,(+my/merge--margin-string
+                                   (+my/merge--button (+my/merge--icon "nf-cod-wand" "*")
+                                                      'merged chunk 'both
+                                                      "Merge the words both sides changed (wand)")))))
       (push ov (+my/merge-chunk-buttons chunk))))
   ;; A change with nothing in the Result: a mark in its fringe.
   (let ((region (+my/merge-chunk-result chunk)))
     (overlay-put region 'before-string
                  (and (= (overlay-start region) (overlay-end region))
                       (not (+my/merge--resolved-p chunk))
-                      (propertize " " 'display `(left-fringe right-triangle ,(+my/merge--face chunk 'result)))))))
+                      (propertize " " 'display
+                                  `(left-fringe right-triangle
+                                                ,(if (eq (+my/merge-chunk-kind chunk) 'conflict)
+                                                     '+my/merge-mark-conflict
+                                                   '+my/merge-mark)))))))
 
 (defun +my/merge--counts (session)
   "(CHANGES-LEFT . CONFLICTS-LEFT) of SESSION."
@@ -830,6 +871,10 @@ hooks not run: no language server, linter...), read-only unless EDITABLE."
       (font-lock-mode 1)
       (set-buffer-modified-p nil)
       (setq buffer-read-only (not editable))
+      ;; The margins (buttons, the wand) by the code, the fringes at the
+      ;; window's edges: each side's buttons as far from its code (Doom's
+      ;; vc-gutter makes it so everywhere; not everyone has it).
+      (setq-local fringes-outside-margins t)
       ;; Only the Result's edits are undone (the others' are fillers).
       (unless editable
         (buffer-disable-undo))
@@ -860,7 +905,8 @@ Theirs."
                                                    (,middle ,(+my/merge-result session) nil)
                                                    (,right ,(+my/merge-theirs session) left)))
         (set-window-buffer window buffer)
-        (set-window-margins window (pcase margin ('left 5) ('nil 2)) (and (eq margin 'right) 5))
+        (set-window-margins window (pcase margin ('left +my/merge--margin-columns) ('nil 2))
+                            (and (eq margin 'right) (+my/merge--yours-margin-columns)))
         (set-window-start window (point-min))
         (set-window-prev-buffers window nil))
       (select-window middle)
