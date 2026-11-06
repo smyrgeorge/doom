@@ -88,6 +88,11 @@
 ;; max_line_length. `setq-default', not `setq': each buffer has its own.
 (setq-default fill-column 120)
 
+;; Tiling strategy: where SPC w SPC opens a new pane, like a tiling window
+;; manager (config/tiling.el). `tall': a main pane on the left, the others
+;; stacked on the right (Amethyst's Tall).
+(setq +my/tiling-strategy 'tall)
+
 ;; ====== CODE ======
 
 ;; EMACS (garbage collection)
@@ -95,6 +100,9 @@
 
 ;; WINDOW (maximized frame; new windows get focus)
 (load! "config/window")
+
+;; TILING (SPC w SPC: a new pane where the tiling strategy puts it)
+(load! "config/tiling")
 
 ;; BANNERS (notices at the top of a window, like IntelliJ's editor notifications)
 (load! "config/banner")

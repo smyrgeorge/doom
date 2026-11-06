@@ -28,4 +28,5 @@ Everything else is Doom's default (`SPC h b b` lists all bindings).
 | `Cmd+[` / `Cmd+]` (GUI) | Back / forward through where the cursor jumped (IntelliJ's Back / Forward) |
 | `SPC c ~` | Cycle the word at point: snake_case → UPPER_CASE → PascalCase → camelCase → kebab-case |
 | `SPC w S` / `SPC w V` | Split below / right, the cursor stays (`SPC w s` / `SPC w v` move it) |
+| `SPC w SPC` / `SPC w a` | New pane where the tiling strategy puts it (tall: main left, stack right) / arrange the panes so |
 | `q` (transient menus) | Close the menu, like Esc / `C-g` (menus that use `q` keep it) |

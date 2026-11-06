@@ -10,6 +10,7 @@
 | `config/stripe.el` | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
 | `config/sticky.el` | Sticky header: the classes/functions (Markdown: headings) around the top line. |
 | `config/window.el` | Maximized frame; new windows (splits, panes) get focus; a wider right fringe. |
+| `config/tiling.el` | Tiling like a tiling window manager: `SPC w SPC` opens a pane where the strategy (tall) puts it, `SPC w a` arranges. |
 | `config/banner.el` | Notices at the top of a window (IntelliJ's editor notifications), with actions and ✕. |
 | `config/smooth.el` | Mouse-wheel notches glide (on top of Doom's pixel scrolling); scroll limit past the end; files with very long lines shown plain. |
 | `config/pdf-xwidget.el` | PDFs in WebKit inside the file's tab, drawn by PDF.js (downloaded once); Evil keys, search, copy, zoom, outline, dark pages, back / forward, places kept, Option+Enter actions, Preview, print. |

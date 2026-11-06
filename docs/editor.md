@@ -202,6 +202,21 @@ Doom's pdf module (pdf-tools) is off in `init.el`. Its setup is kept in `config/
 A space after its last item on the right (e.g. flycheck's checkmark), which touched the window's
 edge; in every doom-modeline layout (`config/modeline.el`).
 
+## Tiling (`SPC w SPC`)
+
+Like a tiling window manager ([Amethyst](https://github.com/ianyh/Amethyst)'s layouts): `SPC w SPC` opens a new pane
+where the tiling strategy puts it, showing the current buffer (its only tab, as `SPC w v`), and moves the cursor there;
+`SPC w a` arranges the panes as the strategy lays them out (e.g. after splits of your own). The usual splits (`SPC w v`,
+`SPC w s`...) and the other window keys don't change. The strategy is chosen in `config.el`
+(`(setq +my/tiling-strategy 'tall)`, also the default; `config/tiling.el`). Panes are the frame's windows besides its
+side panels (treemacs, popups), which stay as they are.
+
+- **tall** (Amethyst's Tall): the first pane is the main one, on the left (half the width, `+my/tiling-tall-ratio`), the
+  others stacked on the right at equal heights. The second pane opens on the right; the next ones at the bottom of the
+  stack, from whichever pane. Panes laid out otherwise are arranged tall first.
+
+More strategies can be added to `+my/tiling-strategies`: a name, a function that opens a pane, one that arranges them.
+
 ## New windows get focus
 
 Splits (`SPC w s` / `SPC w v`) and any new window a command opens (diff pane, other-window
