@@ -178,6 +178,17 @@ those say closed too."
 
 (add-hook 'window-selection-change-functions #'+my/treemacs-follow-project-soon)
 
+;; FOLLOW PROJECT BUFFERS ONLY
+;; The follow (above, and treemacs's own idle one) switched the sidebar to the
+;; directory of any buffer selected: popups and logs too, e.g. `doom/reload''s,
+;; in Doom's ~/.config/emacs. Back and forth in a moment, and switching back
+;; once left the old project's root drawn on the new one's line ("doom emacs").
+;; Now only buffers that belong to a project: files, dired, magit.
+(defadvice! +my/treemacs-follow-project-buffers-a (fn &rest args)
+  :around #'treemacs--do-follow-project
+  (when (or buffer-file-name (derived-mode-p 'dired-mode 'magit-mode))
+    (apply fn args)))
+
 ;; An expanded folder gets its git colours a moment later; if the tree is
 ;; redrawn meanwhile (a project switch, a refresh), that folder's button is gone:
 ;; "Error running timer `treemacs--apply-annotations-deferred':

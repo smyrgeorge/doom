@@ -5,7 +5,9 @@
 - **Opens automatically** the first time a project file is shown in a workspace (`SPC p p`, `SPC SPC`, `SPC f r`, the
   dashboard...). Close it with `SPC o p` and it stays closed for that workspace.
 - **Follows the current buffer**: highlights the open file and switches to the buffer's project, right after every
-  buffer or window switch (treemacs' own project follow waits for 1.5 s without any input).
+  buffer or window switch (treemacs' own project follow waits for 1.5 s without any input). Only buffers that belong
+  to a project switch it (files, dired, magit): popups and logs (e.g. `doom/reload`'s, in Doom's `~/.config/emacs`)
+  switched it back and forth, and once left the old project's root drawn next to the new one ("doom emacs").
 - **Git status** colours for files and folders, computed asynchronously. Saving a file refreshes its status (macOS's
   kqueue file notifications miss in-place edits, so this is done explicitly on save). Changes made outside Emacs
   (Claude Code, a terminal, git) show up within a few seconds: while Emacs has focus, the shown projects' `git status`
