@@ -26,6 +26,10 @@ What changes in a terminal:
 - `SPC m p` (Markdown) shows markdown-mode's `eww` preview, which updates on save.
 - No Emacs server in `emacs -nw` (Doom starts it only in GUI sessions), so Claude can't reach the editor with
   `emacsclient`: use `emacs --daemon` and `emacsclient -t`, or `M-x server-start`.
+- Colours: `emacs -nw` has 24-bit colour where the terminal says so (`COLORTERM=truecolor`, as iTerm2 does), so the
+  theme looks as in the GUI. An `emacsclient -t` frame of a server started elsewhere (the GUI app) gets 256 unless
+  its `TERM` has them: `TERM=xterm-24bit emacsclient -t`, with `cmd/xterm-24bit.terminfo` compiled into
+  `~/.terminfo` (see [Shell commands](cmd.md); `cmd/diff.sh` does this itself).
 
 ## Terminal background
 

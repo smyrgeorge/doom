@@ -55,7 +55,7 @@ The bar, across the top:
 
 | Bar | Action |
 |---|---|
-| **Accept Left** / **Accept Right** | Yours / Theirs for every change not done yet |
+| **Accept Left** / **Accept Right** | Yours / Theirs for every change not done yet: the other side's are ignored, so nothing's left to press on it (`u` takes it back) |
 | **✨ Apply non-conflicting** | Every change only one side made (or both the same), not done yet |
 | *N changes left, M conflicts* | What's left |
 | **Done** | Save the file, and stage it (`git add`) if no change is left. With some left, it asks first, and saves those as Git's conflict markers, not staged |
@@ -69,12 +69,23 @@ each command that changed it, in the same step of its undo.
 
 The Result can be edited as any file, and `u` undoes the buttons too (`C-r` redoes them). Keys in the panes: `]c` / `[c`
 next / previous change; `SPC m l` / `SPC m r` the change at point from Yours / Theirs, `SPC m x` ignore it, `SPC m w`
-the wand, `SPC m L` /
-`SPC m R` accept left / right, `SPC m a` apply non-conflicting; `C-c C-c` (or `Cmd+S`) Done, `C-c C-k` Abort.
-Closing a pane aborts. In a terminal it works the same, with plain `>>` / `<<` / `x` / `*` buttons
-(clicked only with the terminal's mouse on, `xterm-mouse-mode`, which isn't: the keys then), and the bar's labels
-short (`Left`, `Right`, `✨ Non-conflicting`, `8 left, 3 conflicts`) when the long ones don't fit, as in 80 columns. Done writes the file as is (no save hooks, such as formatting) and shows it in its buffer if
-one is open (asking first if that one has changes not saved).
+the wand, `SPC m L` / `SPC m R` accept left / right, `SPC m a` apply non-conflicting; `C-c C-c` (or `Cmd+S`) Done,
+`C-c C-k` Abort. Closing a pane aborts. The current line's highlight (Doom's, in every window) isn't drawn over a
+change, whose colour it hid. Done writes the file as is (no save hooks, such as formatting) and shows it in its buffer
+if one is open (asking first if that one has changes not saved).
+
+In a terminal it works the same:
+
+- The buttons are plain: `>>` / `<<` / `x` / `*`. The mouse clicks them where Emacs 31 turns the terminal's mouse on
+  (iTerm2 and others, see [Terminal usage](terminal.md)); the keys work everywhere. In a terminal, Emacs takes a click
+  on a right margin's first column as one on the text, and reports the character to the left of the one clicked
+  elsewhere in it. So Yours' buttons start after a space, and a click's character is worked out from its column.
+- The bar's labels are short (`Left`, `Right`, `✨ Non-conflicting`, `8 left, 3 conflicts`) when the long ones don't
+  fit, as in 80 columns.
+- The colours: with 24-bit colour, the GUI's tints. With 256 colours, a blend would come out as the palette's nearest
+  (teal, salmon), so the palette's darkest tints are used instead (navy, dark green, maroon, greys; the lightest with a
+  light theme). An Emacs server's terminal frames have 24-bit colour only through a terminfo entry: `cmd/diff.sh`
+  sees to it (see [Shell commands](cmd.md)).
 
 The three versions are Git's, from its index (stages `:1:` the base, `:2:` yours, `:3:` theirs), so merges, rebases,
 cherry-picks, reverts and stash pops alike. Ediff finds the changes (its diff3 parser, comparing the three: it says

@@ -260,27 +260,103 @@ config/compile.el may (the other tests run them so)."
 (ert-deftest merge/buttons-in-the-margins-by-the-result ()
   (+test-merge
     ;; Yours' changes: lines 2 (two), 6, 8, and where ten was (eleven's line).
+    ;; In a terminal (batch), off the right margin's first column: a click
+    ;; there comes as one on the text.
     (should (equal (+test-merge--margin session 'yours)
-                   '((2 . ">> x") (6 . ">> x") (8 . ">> x") (10 . ">> x"))))
+                   '((2 . " >> x") (6 . " >> x") (8 . " >> x") (10 . " >> x"))))
     (should (equal (+test-merge--margin session 'theirs)
                    '((4 . "x <<") (6 . "x <<") (8 . "x <<") (13 . "x <<"))))
     ;; Each button says what it does.
     (with-current-buffer (+my/merge-yours session)
       (let* ((ov (seq-find (lambda (ov) (overlay-get ov 'before-string)) (overlays-in 1 8)))
              (text (cadr (get-text-property 0 'display (overlay-get ov 'before-string)))))
-        (should (equal (get-text-property 0 '+my/merge-action text)
+        (should-not (get-text-property 0 '+my/merge-action text))
+        (should (equal (get-text-property 1 '+my/merge-action text)
                        (list (+test-merge--chunk session 0) 'yours 'applied)))
-        (should (equal (get-text-property 3 '+my/merge-action text)
+        (should (equal (get-text-property 4 '+my/merge-action text)
                        (list (+test-merge--chunk session 0) 'yours 'ignored)))
-        (should (get-text-property 0 'mouse-face text))
+        (should (get-text-property 1 'mouse-face text))
         ;; The hand over the buttons.
-        (should (eq (get-text-property 0 'pointer text) 'hand))
-        (should (eq (get-text-property 3 'pointer text) 'hand))))
+        (should (eq (get-text-property 1 'pointer text) 'hand))
+        (should (eq (get-text-property 4 'pointer text) 'hand))))
     ;; Done: a check (applied), nothing (ignored).
     (+my/merge--decide (+test-merge--chunk session 0) 'yours 'applied)
     (+my/merge--decide (+test-merge--chunk session 1) 'theirs 'ignored)
-    (should (equal (assq 2 (+test-merge--margin session 'yours)) '(2 . "ok")))
+    (should (equal (assq 2 (+test-merge--margin session 'yours)) '(2 . " ok")))
     (should (equal (assq 4 (+test-merge--margin session 'theirs)) '(4 . " ")))))
+
+(ert-deftest merge/right-margin-padded-in-a-terminal ()
+  "A click on a right margin's first column comes (xterm-mouse-mode,
+posn-at-x-y) as one on the text: Yours' buttons start after it in a terminal,
+at once in the GUI."
+  (should (equal (+my/merge--right-margin-text ">> x") " >> x"))
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+    (should (equal (+my/merge--right-margin-text ">> x") ">> x")))
+  ;; It fits: the margin's 5 columns.
+  (should (<= (string-width (+my/merge--right-margin-text ">> x")) 5)))
+
+(ert-deftest merge/no-current-line-over-a-change ()
+  "Doom's current line, in every window, over a change's colour: not on a
+change's coloured lines; elsewhere, as anywhere."
+  (+test-merge
+    (require 'hl-line)
+    (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session)
+                          (+my/merge-theirs session)))
+      (with-current-buffer buffer
+        (should (eq hl-line-range-function #'+my/merge--hl-line-range))))
+    (let ((chunk (+test-merge--chunk session 0)))
+      (with-current-buffer (+my/merge-yours session)
+        ;; On the change (two's line): none.
+        (goto-char (overlay-start (+my/merge-chunk-yours chunk)))
+        (let ((range (+my/merge--hl-line-range)))
+          (should (= (car range) (cdr range))))
+        ;; The line before it (one): the whole line.
+        (forward-line -1)
+        (should (equal (+my/merge--hl-line-range)
+                       (cons (line-beginning-position) (line-beginning-position 2)))))
+      ;; Done (grey, no background): the current line again.
+      (+my/merge--decide chunk 'yours 'applied)
+      (with-current-buffer (+my/merge-yours session)
+        (goto-char (overlay-start (+my/merge-chunk-yours chunk)))
+        (should (equal (+my/merge--hl-line-range)
+                       (cons (line-beginning-position) (line-beginning-position 2))))))
+    ;; Doom's window highlight asks for it.
+    (with-current-buffer (+my/merge-theirs session)
+      (+my/merge-mode -1)
+      (should-not (local-variable-p 'hl-line-range-function)))))
+
+(ert-deftest merge/faces-by-colours ()
+  "The tints: the theme's colour blended into its background with true
+colours, the palette's tint with 256, diff-mode's faces with fewer."
+  (require 'doom-themes)
+  (let ((doom-themes--colors '((bg "#282c34" "black" "black")
+                               (blue "#51afef" "#51afef" "brightblue")
+                               (green "#98be65" "#98be65" "green")
+                               (red "#ff6c6b" "#ff6c6b" "red")
+                               (base5 "#5B6268" "#525252" "brightblack"))))
+    (unwind-protect
+        (progn
+          (+my/merge-faces-h)
+          (let ((spec (get '+my/merge-changed 'face-override-spec)))
+            (should (equal (face-spec-choose spec nil) nil))  ; batch: no colours
+            (cl-letf (((symbol-function 'display-color-cells) (lambda (&rest _) 16777216)))
+              (should (equal (plist-get (face-spec-choose spec) :background)
+                             (doom-blend "#51afef" "#282c34" 0.25))))
+            (cl-letf (((symbol-function 'display-color-cells) (lambda (&rest _) 256)))
+              (should (equal (plist-get (face-spec-choose spec) :background) "#00005f"))
+              (should (memq :inherit (face-spec-choose spec)))))
+          (should (equal (plist-get (cl-letf (((symbol-function 'display-color-cells) (lambda (&rest _) 256)))
+                                      (face-spec-choose (get '+my/merge-conflict 'face-override-spec)))
+                                    :background)
+                         "#5f0000"))
+          ;; A light theme: the palette's lightest.
+          (setf (alist-get 'bg doom-themes--colors) '("#fafafa" "white" "white"))
+          (+my/merge-faces-h)
+          (cl-letf (((symbol-function 'display-color-cells) (lambda (&rest _) 256)))
+            (should (equal (plist-get (face-spec-choose (get '+my/merge-changed 'face-override-spec)) :background)
+                           "#d7d7ff"))))
+      (dolist (face '(+my/merge-changed +my/merge-added +my/merge-removed +my/merge-conflict +my/merge-filler))
+        (put face 'face-override-spec nil)))))
 
 (ert-deftest merge/icons-in-the-gui ()
   (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
@@ -780,7 +856,7 @@ changed the same word."
       (with-current-buffer (+my/merge-result session)
         (should-not (seq-find (lambda (ov) (overlay-get ov 'before-string))
                               (overlays-in (point-min) (point-max)))))
-      (should (equal (cdar (+test-merge--margin session 'yours)) "*"))
+      (should (equal (cdar (+test-merge--margin session 'yours)) " *"))
       ;; Undone: as it was.
       (with-current-buffer (+my/merge-result session)
         (undo-boundary)
@@ -999,9 +1075,38 @@ no windows put back (they're gone)."
            (ov (seq-find (lambda (ov) (overlay-get ov 'before-string))
                          (with-current-buffer (+my/merge-yours session) (overlays-in 1 8))))
            (text (cadr (get-text-property 0 'display (overlay-get ov 'before-string))))
-           (event (lambda (pos) (list 'mouse-1 (list window 'right-margin '(0 . 0) 0 (cons text pos)
-                                                     nil '(0 . 0) nil '(0 . 0) '(0 . 0))))))
-      (+my/merge-click (funcall event 0))
+           ;; A terminal's click on the margin's Ith character, as Emacs 31
+           ;; makes it: its column, from the window's left edge, and the
+           ;; string's position one less (see `+my/merge--clicked-index').
+           (margin (- (nth 2 (window-body-edges window)) (nth 0 (window-edges window))))
+           (event (lambda (i) (list 'mouse-1 (list window 'right-margin (cons (+ margin i) 0) 0
+                                                   (cons text (1- i)) nil (cons (+ margin i) 0)
+                                                   nil '(0 . 0) '(1 . 1))))))
+      ;; The pad before the buttons: nothing; x, the next button's.
+      (+my/merge-click (funcall event 1))
+      (should (eq (+my/merge-chunk-yours-state (+test-merge--chunk session 0)) 'applied))
+      (should (eq (selected-window) window))
+      (should (string-prefix-p "one\nTWO\n" (+test-merge--result session)))
+      (with-current-buffer (+my/merge-result session)
+        (undo-boundary)
+        (let ((last-command nil)) (undo)))
+      (should-not (+my/merge-chunk-yours-state (+test-merge--chunk session 0)))
+      (+my/merge-click (funcall event 4))
+      (should (eq (+my/merge-chunk-yours-state (+test-merge--chunk session 0)) 'ignored))
+      (with-current-buffer (+my/merge-result session)
+        (undo-boundary)
+        (let ((last-command nil)) (undo)))
+      (+my/merge-click (funcall event 3))   ; the space between
+      (should-not (+my/merge-chunk-yours-state (+test-merge--chunk session 0)))
+      ;; In the GUI, or a left margin: the string's position, as given.
+      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+        (should (= (+my/merge--clicked-index (list window 'right-margin '(0 . 0) 0 (cons text 2)
+                                                   nil '(0 . 0) nil '(0 . 0) '(0 . 0)))
+                   2)))
+      (should (= (+my/merge--clicked-index (list window 'left-margin '(9 . 0) 0 (cons text 2)
+                                                 nil '(9 . 0) nil '(0 . 0) '(0 . 0)))
+                 2))
+      (+my/merge-click (funcall event 2))
       (should (eq (+my/merge-chunk-yours-state (+test-merge--chunk session 0)) 'applied))
       (should (eq (selected-window) window))
       (should (string-prefix-p "one\nTWO\n" (+test-merge--result session)))

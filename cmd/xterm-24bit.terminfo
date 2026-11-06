@@ -1,0 +1,10 @@
+# xterm with 24-bit colour, for Emacs's terminal frames (see docs/cmd.md).
+# Emacs takes 24-bit colour from a terminal's terminfo entry (setf24/setb24),
+# or from COLORTERM=truecolor in its own environment: a server started
+# elsewhere (the GUI app) doesn't have the client's, so its terminal frames
+# got 256 colours. cmd/diff.sh compiles this into ~/.terminfo when needed:
+#   tic -x -o ~/.terminfo cmd/xterm-24bit.terminfo
+xterm-24bit|xterm with 24-bit direct colour,
+	use=xterm-256color,
+	setb24=\E[48;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm,
+	setf24=\E[38;2;%p1%{65536}%/%d;%p1%{256}%/%{255}%&%d;%p1%{255}%&%dm,

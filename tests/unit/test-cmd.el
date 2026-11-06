@@ -30,6 +30,7 @@ Emacs's), `log' where its merges are noted."
                          (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
                          "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "GIT_EDITOR=true"
                          "TERM=xterm-256color"
+                         "COLORTERM"      ; not set (a test sets it)
                          ;; Doom's own folder: HOME is another.
                          (concat "DOOM_EMACS_DIR=" +test-doom-emacs-dir)
                          (concat "TEST_TMP=" (expand-file-name "emacs-tmp" home))
@@ -83,9 +84,12 @@ after 90 s (STATUS then `timeout')."
           (progn (kill-process process) (cons 'timeout (buffer-string)))
         (cons (process-exit-status process) (buffer-string))))))
 
-(defun +test-cmd--log (log)
+(defun +test-cmd--log (log &optional colours)
+  "The merges LOG noted: \"PATH tty|gui\" each, and its frame's number of
+colours if COLOURS."
   (and (file-exists-p log)
-       (split-string (with-temp-buffer (insert-file-contents log) (buffer-string)) "\n" t)))
+       (mapcar (lambda (line) (if colours line (replace-regexp-in-string " [0-9]+\\'" "" line)))
+               (split-string (with-temp-buffer (insert-file-contents log) (buffer-string)) "\n" t))))
 
 (defun +test-cmd--unmerged ()
   (split-string (+test-cmd--git "diff" "--name-only" "--diff-filter=U") "\n" t))
@@ -185,8 +189,35 @@ this terminal; the server still running after."
             (let ((run (+test-cmd--run "--socket" socket)))
               (should (= (car run) 0))
               (should (string-match-p "Resolved: 2 files" (cdr run))))
-            (should (equal (+test-cmd--log log) '("a.txt tty" "b.txt tty")))
+            ;; A terminal without 24-bit colour: its 256.
+            (should (equal (+test-cmd--log log t) '("a.txt tty 256" "b.txt tty 256")))
+            (should-not (file-exists-p (expand-file-name ".terminfo" home)))
             (should-not (+test-cmd--unmerged))
             ;; Still running, its frame gone.
             (should (zerop (call-process "emacsclient" nil nil nil "-s" socket "-e" "t"))))
+        (call-process "emacsclient" nil nil nil "-s" socket "-e" "(kill-emacs)")))))
+
+(ert-deftest cmd/a-running-emacs-in-24-bit-colour ()
+  "The terminal has 24-bit colour (COLORTERM), the server not (started
+elsewhere): its frame has them all the same, through a terminfo entry put in
+~/.terminfo the first time."
+  (+test-cmd-with-repo
+    (let* ((socket (format "doom-test-diff-%d-%d" (emacs-pid) (random 100000)))
+           (process-environment (cons "DIFF_TEST_ACTION=right" process-environment)))
+      ;; The server: no COLORTERM.
+      (apply #'call-process +test-cmd--emacs nil nil nil
+             (concat "--daemon=" socket)
+             (split-string (+test-cmd--emacs-args home)))
+      (unwind-protect
+          (let ((process-environment (cons "COLORTERM=truecolor" process-environment)))
+            (let ((run (+test-cmd--run "--socket" socket "a.txt")))
+              (should (= (car run) 0))
+              (should (string-match-p "installed xterm-24bit in ~/.terminfo" (cdr run))))
+            (should (equal (+test-cmd--log log t) '("a.txt tty 16777216")))
+            (should (directory-files-recursively (expand-file-name ".terminfo" home) "\\`xterm-24bit\\'"))
+            ;; Once: then there.
+            (let ((run (+test-cmd--run "--socket" socket "b.txt")))
+              (should (= (car run) 0))
+              (should-not (string-match-p "installed" (cdr run))))
+            (should (equal (+test-cmd--log log t) '("a.txt tty 16777216" "b.txt tty 16777216"))))
         (call-process "emacsclient" nil nil nil "-s" socket "-e" "(kill-emacs)")))))

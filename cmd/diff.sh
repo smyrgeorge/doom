@@ -119,11 +119,28 @@ else
 fi
 expr="(let ((frame (selected-frame))) $run)"
 
+# 24-bit colour in the server's terminal frame, as the terminal has
+# (COLORTERM): the server reads it from a terminfo entry, not from the
+# client's COLORTERM (cmd/xterm-24bit.terminfo, compiled into ~/.terminfo the
+# first time). A new Emacs reads COLORTERM itself.
+term=${TERM:-}
+if [ $use_server -eq 1 ] && [ $gui -eq 0 ]; then
+  case "${COLORTERM:-}:$term" in
+    truecolor:xterm*|24bit:xterm*)
+      if ! TERMINFO="$HOME/.terminfo" infocmp xterm-24bit >/dev/null 2>&1 &&
+         tic -x -o "$HOME/.terminfo" "$(dirname "$0")/xterm-24bit.terminfo" 2>/dev/null; then
+        echo "diff.sh: installed xterm-24bit in ~/.terminfo (24-bit colour in Emacs's terminal frames)" >&2
+      fi
+      TERMINFO="$HOME/.terminfo" infocmp xterm-24bit >/dev/null 2>&1 && term=xterm-24bit
+      ;;
+  esac
+fi
+
 if [ $use_server -eq 1 ]; then
   if [ $gui -eq 1 ]; then
     "${client[@]}" -c -e "$expr" >/dev/null
   else
-    "${client[@]}" -t -e "$expr"
+    TERM=$term "${client[@]}" -t -e "$expr"
   fi
 else
   # shellcheck disable=SC2086 # EMACS_ARGS: several arguments

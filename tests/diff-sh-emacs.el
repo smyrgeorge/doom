@@ -2,7 +2,7 @@
 ;; The Emacs cmd/diff.sh runs in tests/unit/test-cmd.el: tests/helper.el's
 ;; setup, the merge's config, and each merge then done as DIFF_TEST_ACTION
 ;; says, a moment after it opens: "right" (Accept Right, Done) or "abort".
-;; Each merge opened is noted in DIFF_TEST_LOG.
+;; Each merge opened is noted in DIFF_TEST_LOG ("PATH tty|gui COLOURS").
 
 ;; Never left running: first, so whatever fails after.
 (run-at-time 60 nil #'kill-emacs 3)
@@ -26,8 +26,9 @@
 (advice-add '+my/merge--start :filter-return
             (lambda (session)
               (when-let* ((log (getenv "DIFF_TEST_LOG")))
-                (write-region (format "%s %s\n" (+my/merge-path session)
-                                      (if (display-graphic-p) "gui" "tty"))
+                (write-region (format "%s %s %d\n" (+my/merge-path session)
+                                      (if (display-graphic-p) "gui" "tty")
+                                      (display-color-cells))
                               nil log t 'silent))
               (run-at-time 0.3 nil #'+test-diff-sh--act session)
               session)
