@@ -2,13 +2,13 @@
 
 ## Error stripe
 
-`config/stripe.el` draws a one-column strip at the right edge of every file window that maps the whole file onto the
-window height, like the marks on IntelliJ's scrollbar:
+`config/stripe.el` draws a strip at the right edge of every file window that maps the whole file onto the window
+height, like the marks on IntelliJ's scrollbar:
 
 - errors (red) and warnings (yellow) from flycheck / the language server;
 - git changes (diff-hl), in the gutter's colors: red deleted, orange changed, green added;
 - where several overlap, the most important wins: error > warning > deleted > changed > added > info;
-- a light band marks the part of the file on screen, like a scrollbar thumb.
+- a light band marks the part of the file on screen: the scrollbar's thumb.
 
 It's on in code, text and config files, and in files with very long lines (`so-long-mode`). The strip is at the very
 edge, the fringe (e.g. the arrows of lines cut off at the window edge) between it and the text: Doom's vc-gutter puts
@@ -17,31 +17,30 @@ File windows also get a character's width of space more on each side of the text
 side, `nil` for none; GUI only): their fringes are 16 px instead of 8, with the git gutter, flycheck's marks and the
 arrows in the middle (flycheck keeps its small markers there; in fringes that wide it would switch to big 16 px ones).
 
-In the GUI the strip is drawn to the pixel: each screen row shows its slice of the strip as a small image in the right
-margin. Rows are measured (an emoji, or a glyph rising above the font like indent-bars' `│` on the top row, makes a
-row taller), and smooth scrolling, which moves the rows by part of a line, shifts the slices back by as much, so the
-marks stay still while the text glides. Wrapped lines (Markdown, `visual-line-mode`) get a slice on each of their
-rows; a continuation row's slice hangs on its last character (the space it wraps at, or the newline). Laying out
-the row before, Emacs looks ahead into the next row's first word, and draws a margin string it meets there on that
-row too: hung at a row's start, slices showed on the wrong row (gaps) or on two rows (an extra mark). In a terminal
-each row is a coloured cell.
+In the GUI the strip is one image, drawn to the pixel, in a small frame of its own (a child frame, like the notices')
+laid over the window's right margin. It follows the window: splits, resizes, a notice above the text; it's hidden
+while the window shows a buffer without a strip, and goes with the window. It used to be a column of images in the
+margin, a slice per screen row: every scroll changed every row's slice, so Emacs redrew every row instead of moving
+the text (5.8 ms a scroll step instead of 3.3), and rows had to be measured (emoji, wrapped lines, smooth scrolling's
+part rows, the space below the last line). Now the window's rows are left alone, and a new image is made only when
+the strip changes: most scroll steps move the band by less than a pixel (a 3,000-line file: about one step in five
+redraws it, 0.2 ms; the old images are flushed from Emacs's image cache). The band covers the lines on screen: counted
+when lines are cut off at the edge (Doom's default, a line a row), laid out when they wrap (Markdown). In a terminal
+each row is a coloured cell in the margin.
 
 Every window scrolls past the end of its buffer only a bit (see [Smooth
 scrolling](scrolling.md#scrolling-past-the-end)): at most a quarter of it (`+my/stripe-overscroll`: a fraction, a number
 of rows, `0` for none, `t` for no limit). The strip maps the file plus that space onto the whole window height, like
 IntelliJ's scrollbar, so it never shrinks: marks stay put as the end comes into view, and the band reaches the bottom
-when the window can't scroll further. Margins need text to hang on, so below the last line the strip is drawn on one
-extra row after the end of the buffer, which also repeats the empty-line `~` and takes the place of the empty,
-unnumbered line after the final newline: as in Vim, the `~` start right after the last line. The cursor stays off that
-line in normal state (`j` on the last line stays put, `G` goes to the last line), and a click below the text puts it on
-the last line at the clicked column; insert state can go there, to add at the end. In a terminal the strip covers only
-the rows with text. Files shorter than the window get one line height per line.
+when the window can't scroll further. In a terminal the strip covers only the rows with text. Files shorter than the
+window get one line height per line.
 
 Click the strip to jump to that part of the file: the line lands in the middle of the window, and `C-o` (`Cmd+[`)
-jumps back; the mouse wheel scrolls as usual. Info-level hints are left out: add `info` to
-`+my/stripe-diagnostic-levels` (default `'(error warning)`) to show them, below every other mark. Marks are at least
-4 px tall (`+my/stripe-mark-height`). `M-x +my/stripe-mode` turns the strip off in a buffer (margin and fringes back to
-normal), `M-x +my/stripe-global-mode` everywhere.
+jumps back. Drag the band to scroll, as a scrollbar's thumb. The mouse wheel over the strip scrolls the file. Info-level
+hints are left out: add `info` to `+my/stripe-diagnostic-levels` (default `'(error warning)`) to show them, below every
+other mark. Marks are at least 4 px tall (`+my/stripe-mark-height`), the band 12 px (`+my/stripe-thumb-min-height`, to
+grab it). `M-x +my/stripe-mode` turns the strip off in a buffer (margin and fringes back to normal),
+`M-x +my/stripe-global-mode` everywhere.
 
 ## Notices
 

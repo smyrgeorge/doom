@@ -7,7 +7,7 @@
 | `config.el` | Main configuration; small sections inline, big ones loaded from `config/`. |
 | `docs/` | Documentation of the features, one file per topic (index in `README.md`). |
 | `config/emacs.el` | Emacs itself: garbage collection (32 MB while idle instead of gcmh's 800 KB). |
-| `config/stripe.el` | IntelliJ-like error stripe: git changes and errors across the file, at the right edge. |
+| `config/stripe.el` | IntelliJ-like error stripe: git changes and errors across the file, and the scrollbar's thumb, at the right edge (one image in a child frame over the margin; click, drag, wheel). |
 | `config/sticky.el` | Sticky header: the classes/functions (Markdown: headings) around the top line. |
 | `config/window.el` | Maximized frame; new windows (splits, panes) get focus; a wider right fringe. |
 | `config/tiling.el` | Tiling like a tiling window manager: `SPC w SPC` opens a pane where the strategy (tall) puts it, `SPC w a` arranges. |

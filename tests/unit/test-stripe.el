@@ -1,12 +1,14 @@
 ;;; tests/unit/test-stripe.el -*- lexical-binding: t; -*-
 ;; config/stripe.el: the IntelliJ-like error stripe at the right edge of file
 ;; windows (flycheck errors, diff-hl's git changes, the band of the part on
-;; screen), clicks on it, the scroll limit past the end, the filler row after
-;; the last line and the cursor kept off the empty line there.
+;; screen): its marks, its terminal cells, its graphical image and the child
+;; frame showing it (faked: batch Emacs makes no child frames), clicks, drags
+;; and the wheel on it, the scroll limit past the end.
 ;;
 ;; Batch Emacs has a terminal frame: a pixel per row and column. The graphical
-;; strip (images to the pixel) is drawn there too with `display-graphic-p'
-;; mocked (see `+test-stripe--gui'): its pixels are then rows.
+;; strip is computed there too with `display-graphic-p' mocked (see
+;; `+test-stripe--gui'): its pixels are then rows. tests/e2e/test-stripe.el
+;; covers the real child frames.
 
 ;; Flycheck's fringe bitmaps as stripe.el's `after!' redefines them, recorded
 ;; as flycheck loads (after the config, as in Doom).
@@ -52,8 +54,7 @@
 
 (defun +test-stripe--clear (window)
   "Forget what earlier tests drew in WINDOW (the frame's first window is reused)."
-  (dolist (parameter '(+my/stripe-key +my/stripe-geometry +my/stripe-row-cache
-                       +my/stripe-filler))
+  (dolist (parameter '(+my/stripe-key +my/stripe-geometry))
     (set-window-parameter window parameter nil)))
 
 (defmacro +test-stripe (content &rest body)
@@ -136,13 +137,6 @@ characters, one per row."
     (mapconcat (lambda (line) (substring line 1 2))
                (seq-take (nthcdr (+ 3 colors) lines) height)
                "")))
-
-(defun +test-stripe--strip (rows)
-  "The strip shown by image ROWS ((POSITION . STRING)...), as (LINE . PIXELS)."
-  (mapcar (lambda (row)
-            (cons (line-number-at-pos (car row))
-                  (+test-stripe--pixels (+test-stripe--margin (cdr row)))))
-          rows))
 
 (defun +test-stripe--click (window &optional string y)
   "A mouse-1 click on WINDOW's right margin, on STRING ((STRING . INDEX)), Y
@@ -561,47 +555,131 @@ the end on the last row."
                               collect (and (<= row (+my/stripe--line-to-row last-line 42 window-rows))
                                            thumb)))))))
 
-;; ====== GRAPHICAL FRAMES: IMAGES ======
+;; ====== GRAPHICAL FRAMES: THE STRIP'S IMAGE ======
+
+(defmacro +test-stripe--small (&rest body)
+  "BODY with marks and band a pixel high at least (rows are pixels here)."
+  (declare (indent 0))
+  `(let ((+my/stripe-mark-height 1)
+         (+my/stripe-thumb-min-height 1))
+     ,@body))
+
+(defun +test-stripe--strip-pixels (&optional window)
+  "(PIXELS SCALE THUMB) of WINDOW's strip as it shows now."
+  (let ((window (or window (selected-window))))
+    (pcase-let ((`(,lines . ,marks) (+my/stripe--marks)))
+      (+my/stripe--pixels window (window-start window) lines marks))))
+
+(ert-deftest stripe/pixels-band-at-the-top-and-marks ()
+  "A pixel row each: the band over the lines on screen, marks in their place."
+  (+test-stripe (+test-stripe--text 200)
+    (+test-stripe--small
+      (+test-stripe--errors '(100 error))
+      (pcase-let* ((height (window-body-height nil t))
+                   (`(,pixels ,scale ,thumb) (+test-stripe--strip-pixels)))
+        (should (= (length pixels) height))
+        (should (< scale 1))
+        (should (= (car thumb) 0))
+        (should (string-match-p "\\`t+" pixels))
+        (should (= (cdr thumb) (length (car (split-string pixels "[^t]")))))
+        (should (eq (aref pixels (floor (* scale 99))) ?6))))))
+
+(ert-deftest stripe/pixels-band-follows-the-scroll ()
+  (+test-stripe (+test-stripe--text 400)
+    (+test-stripe--small
+      (set-window-start nil (+test-stripe--line-start 201))
+      (pcase-let ((`(,pixels ,scale ,thumb) (+test-stripe--strip-pixels)))
+        (should (= (car thumb) (floor (* scale 200))))
+        (should (eq (aref pixels (car thumb)) ?t))
+        (should (eq (aref pixels 0) ?\s))))))
+
+(ert-deftest stripe/pixels-most-important-mark-wins ()
+  (+test-stripe (+test-stripe--text 50)
+    (+test-stripe--small
+      (+test-stripe--errors '(20 warning))
+      (+test-stripe--hunk 20 20 'change)
+      (+test-stripe--hunk 30 30 'insert)
+      (pcase-let ((`(,pixels ,scale) (+test-stripe--strip-pixels)))
+        (should (eq (aref pixels (floor (* scale 19))) ?5))  ; warning over change
+        (should (eq (aref pixels (floor (* scale 29))) ?2))))))
+
+(ert-deftest stripe/pixels-short-file ()
+  "A file that fits: no band, a line a row (the font's height a line)."
+  (+test-stripe (+test-stripe--text 5)
+    (+test-stripe--small
+      (+test-stripe--hunk 3 3 'insert)
+      (pcase-let ((`(,pixels ,scale ,thumb) (+test-stripe--strip-pixels)))
+        (should (= scale (window-font-height)))
+        (should-not thumb)
+        (should (eq (aref pixels 2) ?2))
+        (should-not (seq-contains-p pixels ?t))))))
+
+(ert-deftest stripe/pixels-band-reaches-the-bottom-at-the-end ()
+  "Scrolled as far as allowed: the band reaches the strip's bottom."
+  (+test-stripe (+test-stripe--text 300)
+    (+test-stripe--small
+      (let ((window (selected-window)))
+        (set-window-start window (car (+my/stripe--end-limit window)))
+        (pcase-let ((`(,pixels ,_ ,thumb) (+test-stripe--strip-pixels)))
+          (should (= (cdr thumb) (length pixels)))
+          (should (eq (aref pixels (1- (length pixels))) ?t)))))))
+
+(ert-deftest stripe/pixels-overscroll-setting ()
+  "The strip maps the file plus the space past its end the window may show."
+  (+test-stripe (+test-stripe--text 200)
+    (let ((rows (window-body-height))
+          (height (window-body-height nil t)))
+      (dolist (case `((0 . 0) (3 . 3) (t . ,(1- rows))))
+        (let ((+my/stripe-overscroll (car case)))
+          (should (= (nth 1 (+test-stripe--strip-pixels))
+                     (/ (float height) (+ 201 (cdr case))))))))))
+
+(ert-deftest stripe/pixels-band-at-least-its-minimum ()
+  (+test-stripe (+test-stripe--text 2000)
+    (let ((+my/stripe-thumb-min-height 6))
+      (pcase-let ((`(,_ ,_ ,thumb) (+test-stripe--strip-pixels)))
+        (should (>= (- (cdr thumb) (car thumb)) 6))))))
+
+(ert-deftest stripe/last-line-shown-counted-when-lines-are-cut ()
+  "Lines cut off at the edge (Doom's default): a row a line, no layout."
+  (+test-stripe (+test-stripe--text 100)
+    (setq truncate-lines t)
+    (let ((rows (window-body-height)))
+      (cl-letf (((symbol-function 'vertical-motion) (lambda (&rest _) (error "Laid out"))))
+        (should (equal (+my/stripe--last-line-shown (selected-window) (point-min) rows 101)
+                       (cons (1+ rows) 0)))
+        ;; The end on screen: the line after it, and the empty rows.
+        (should (equal (+my/stripe--last-line-shown (selected-window) (+test-stripe--line-start 95) rows 101)
+                       (cons 102 (- (+ 95 rows) 101 1))))))))
+
+(ert-deftest stripe/last-line-shown-laid-out-when-lines-wrap ()
+  "Wrapped lines: as many lines as fit, laid out."
+  (+test-stripe (mapconcat (lambda (_) (make-string 200 ?x)) (number-sequence 1 30) "\n")
+    (setq truncate-lines nil)
+    (let* ((rows (window-body-height))
+           (shown (+my/stripe--last-line-shown (selected-window) (point-min) rows 30)))
+      ;; Each line takes several rows: fewer lines than rows.
+      (should (< (car shown) (1+ rows)))
+      (should (= (cdr shown) 0))
+      (should (= (car shown)
+                 (save-excursion (goto-char (point-min)) (vertical-motion rows) (line-number-at-pos)))))))
 
 (ert-deftest stripe/image-xpm ()
-  "A row's image: an XPM WIDTH wide, a pixel row per character, in the palette's
-colours, on the text's middle line unless told otherwise."
-  (let ((+my/stripe--images (make-hash-table :test #'equal))
-        (+my/stripe--palette nil)
-        (palette '((?\s . "None") (?t . "#111111") (?6 . "#ff0000"))))
-    (let ((image (+my/stripe--image " t6" 3 palette)))
-      (should (eq (car image) 'image))
-      (should (eq (plist-get (cdr image) :type) 'xpm))
-      (should (eq (plist-get (cdr image) :ascent) 'center))
-      (should (eql (plist-get (cdr image) :scale) 1))
-      (should (equal (plist-get (cdr image) :data)
-                     (concat "/* XPM */\nstatic char *stripe[] = {\n"
-                             "\"3 3 3 1\",\n\"  c None\",\n\"t c #111111\",\n\"6 c #ff0000\",\n"
-                             "\"   \",\n\"ttt\",\n\"666\"};")))
-      (should (equal (+test-stripe--pixels image) " t6")))
-    (should (eql (plist-get (cdr (+my/stripe--image "6" 2 palette 80)) :ascent) 80))))
-
-(ert-deftest stripe/images-cached ()
-  "Rows that look alike share an image; a new palette (theme) starts afresh; at
-most 3000 kept."
-  (let ((+my/stripe--images (make-hash-table :test #'equal))
-        (+my/stripe--palette nil)
-        (palette '((?\s . "None") (?t . "#111111"))))
-    (let ((image (+my/stripe--image "tt" 1 palette)))
-      (should (eq (+my/stripe--image "tt" 1 palette) image))
-      (should-not (eq (+my/stripe--image "tt" 2 palette) image))
-      (should-not (eq (+my/stripe--image "tt" 1 palette 50) image))
-      (should (= (hash-table-count +my/stripe--images) 3))
-      ;; A new theme.
-      (let ((new (+my/stripe--image "tt" 1 '((?\s . "None") (?t . "#222222")))))
-        (should-not (eq new image))
-        (should (= (hash-table-count +my/stripe--images) 1))
-        (should (string-match-p "#222222" (plist-get (cdr new) :data)))))
-    (clrhash +my/stripe--images)
-    (setq +my/stripe--palette palette)
-    (dotimes (i 3000) (puthash (list i) t +my/stripe--images))
-    (+my/stripe--image "t" 1 palette)
-    (should (= (hash-table-count +my/stripe--images) 1))))
+  "The strip's image: an XPM WIDTH wide, a pixel row per character, in the
+palette's colours, its top on the line's top."
+  (let* ((palette '((?\s . "None") (?t . "#111111") (?6 . "#ff0000")))
+         (image (+my/stripe--image " t6" 3 palette)))
+    (should (eq (car image) 'image))
+    (should (eq (plist-get (cdr image) :type) 'xpm))
+    (should (eql (plist-get (cdr image) :ascent) 100))
+    (should (eql (plist-get (cdr image) :scale) 1))
+    (should (equal (plist-get (cdr image) :data)
+                   (concat "/* XPM */\nstatic char *stripe[] = {\n"
+                           "\"3 3 3 1\",\n\"  c None\",\n\"t c #111111\",\n\"6 c #ff0000\",\n"
+                           "\"   \",\n\"ttt\",\n\"666\"};")))
+    (should (equal (+test-stripe--pixels image) " t6"))
+    ;; Made anew each time: Emacs caches images, the config flushes the old.
+    (should-not (eq image (+my/stripe--image " t6" 3 palette)))))
 
 (ert-deftest stripe/pixel-rank ()
   "Marks by priority, then the band, then nothing."
@@ -612,106 +690,8 @@ most 3000 kept."
   (should (< (+my/stripe--pixel-rank ?\s) (+my/stripe--pixel-rank ?t)
              (+my/stripe--pixel-rank ?1) (+my/stripe--pixel-rank ?2))))
 
-(ert-deftest stripe/char-rise ()
-  "How far a glyph rises above its font's ascent, cached; 0 when it can't tell."
-  (let ((+my/stripe--rises (make-hash-table :test #'equal))
-        (calls 0))
-    (should (= (+my/stripe--char-rise 'no-font ?a) 0))
-    (should (eql (gethash (cons 'no-font ?a) +my/stripe--rises) 0))
-    (cl-letf (((symbol-function 'font-get-glyphs)
-               (lambda (_font _from _to string)
-                 (cl-incf calls)
-                 (vector (pcase (aref string 0)
-                           (?│ (vector 0 0 ?│ 0 10 0 10 18 4 nil)) ; ascent 18
-                           (?a (vector 0 0 ?a 0 10 0 10 10 4 nil))
-                           (_ nil)))))
-              ((symbol-function 'query-font)
-               (lambda (_font) (vector "font" nil 20 20 14 4 10 0 0 0 0))))
-      (should (= (+my/stripe--char-rise 'font ?│) 4))
-      (should (= (+my/stripe--char-rise 'font ?│) 4))
-      (should (= calls 1))
-      (should (= (+my/stripe--char-rise 'font ?a) 0)) ; below the ascent
-      (should (= (+my/stripe--char-rise 'font ?z) 0))))) ; no glyph
-
-(ert-deftest stripe/first-row-rise ()
-  "The top row grows by the most any of its glyphs rises (display strings
-included)."
-  (+test-stripe "ab│c\nxyz\n"
-    (cl-letf (((symbol-function 'font-at) (lambda (&rest _) 'font))
-              ((symbol-function '+my/stripe--char-rise)
-               (lambda (_font char) (pcase char (?│ 3) (?★ 5) (_ 0)))))
-      (should (= (+my/stripe--first-row-rise (selected-window) 1 5) 3))
-      (should (= (+my/stripe--first-row-rise (selected-window) 6 9) 0))
-      (put-text-property 7 8 'display "★")
-      (should (= (+my/stripe--first-row-rise (selected-window) 6 9) 5))
-      ;; A display that isn't a string: the buffer's character.
-      (put-text-property 7 8 'display '(space :width 2))
-      (should (= (+my/stripe--first-row-rise (selected-window) 6 9) 0)))
-    ;; No font (a terminal): nothing.
-    (cl-letf (((symbol-function 'font-at) (lambda (&rest _) (error "No font"))))
-      (should (= (+my/stripe--first-row-rise (selected-window) 1 5) 0)))))
-
-(ert-deftest stripe/layout-signature ()
-  "Overlays that can change the rows are counted, the stripe's own left out."
-  (+test-stripe "one\ntwo\nthree\nfour\nfive\n"
-    (should (= (+my/stripe--layout-signature) 0))
-    (overlay-put (make-overlay 1 3) 'invisible t)
-    (overlay-put (make-overlay 5 6) 'display "X")
-    (overlay-put (make-overlay 9 9) 'before-string "B")
-    (overlay-put (make-overlay 10 12) 'after-string "A")
-    (overlay-put (make-overlay 15 18) 'face 'bold)
-    (let ((ours (make-overlay 20 20)))
-      (overlay-put ours '+my/stripe t)
-      (overlay-put ours 'before-string "S"))
-    (should (= (+my/stripe--layout-signature) 4))))
-
-(ert-deftest stripe/rows-cache ()
-  "Measured rows are kept per window until the text, width, font or folds change."
-  (+test-stripe (+test-stripe--text 10)
-    (let ((cache (+my/stripe--rows-cache (selected-window))))
-      (should (hash-table-p cache))
-      (should (eq (+my/stripe--rows-cache (selected-window)) cache))
-      (should (eq (cdr (window-parameter nil '+my/stripe-row-cache)) cache))
-      (overlay-put (make-overlay 1 5) 'invisible t)
-      (let ((folded (+my/stripe--rows-cache (selected-window))))
-        (should-not (eq folded cache))
-        (insert "x")
-        (should-not (eq (+my/stripe--rows-cache (selected-window)) folded))))))
-
-(ert-deftest stripe/row-measures ()
-  "A row: where the next starts (nil at the end) and how tall it is; cached."
-  (+test-stripe "one\ntwo\nthree"
-    (let ((cache (make-hash-table)))
-      (should (equal (+my/stripe--row (selected-window) cache 1 0 1) '(5 . 1)))
-      (should (equal (+my/stripe--row (selected-window) cache 5 0 1) '(9 . 1)))
-      (should (equal (+my/stripe--row (selected-window) cache 9 0 1) '(nil . 1)))
-      (should (eq (+my/stripe--row (selected-window) cache 1 0 1) (gethash 1 cache)))))
-  ;; With a final newline the empty line after it is the last row.
-  (+test-stripe "one\ntwo\n"
-    (let ((cache (make-hash-table)))
-      (should (equal (car (+my/stripe--row (selected-window) cache 5 0 1)) 9))
-      (should (equal (car (+my/stripe--row (selected-window) cache 9 0 1)) nil))
-      ;; Nothing measured (here: less than the offset): a line high.
-      (should (equal (+my/stripe--row (selected-window) (make-hash-table) 1 5 7) '(5 . 7))))))
-
-(ert-deftest stripe/row-last-line-before-the-filler ()
-  "Without a final newline the filler after the end (it holds a line break)
-isn't a row of its own."
-  (+test-stripe "one\ntwo"
-    (let ((ov (make-overlay (point-max) (point-max))))
-      (overlay-put ov 'before-string "x\ny")
-      (should (equal (car (+my/stripe--row (selected-window) (make-hash-table) 5 0 1)) nil)))))
-
-(ert-deftest stripe/row-wrapped-line ()
-  (+test-stripe (concat (make-string 200 ?x) "\nend\n")
-    (setq truncate-lines nil)
-    (let* ((cache (make-hash-table))
-           (next (car (+my/stripe--row (selected-window) cache 1 0 1))))
-      (should (< 1 next 200))
-      (should (= next (save-excursion (goto-char 1) (vertical-motion 1) (point)))))))
-
 (ert-deftest stripe/anchor ()
-  "Strings hang at the start of rows that start a line, on the last character of
+  "Cells hang at the start of rows that start a line, on the last character of
 rows that continue a wrapped one, at the end on the last row."
   (+test-stripe (concat (make-string 200 ?x) "\nend\n")
     (setq truncate-lines nil)
@@ -730,10 +710,7 @@ rows that continue a wrapped one, at the end on the last row."
       (should (= (+my/stripe--anchor window (nth 1 starts)) (1- (nth 2 starts))))
       ;; The last row of the long line: on its newline.
       (let ((last-row (car (last (seq-filter (lambda (p) (< p end-line)) starts)))))
-        (should (= (+my/stripe--anchor window last-row) (1- end-line))))
-      ;; A one-character row: its start. (Measured rows come from the cache.)
-      (puthash (nth 1 starts) (cons (1+ (nth 1 starts)) 1) (+my/stripe--rows-cache window))
-      (should (= (+my/stripe--anchor window (nth 1 starts)) (nth 1 starts)))))
+        (should (= (+my/stripe--anchor window last-row) (1- end-line))))))
   (+test-stripe (make-string 200 ?x)
     (setq truncate-lines nil)
     (let ((second (save-excursion (goto-char 1) (vertical-motion 1) (point)))
@@ -741,199 +718,299 @@ rows that continue a wrapped one, at the end on the last row."
       (should (= (+my/stripe--anchor (selected-window) third) (point-max)))
       (should (= (+my/stripe--anchor (selected-window) second) (1- third))))))
 
-(ert-deftest stripe/image-rows-band-and-marks ()
-  "The strip spans the window, mapping the file plus the allowed overscroll
-onto it: the band at the top, the error at its place, marks at least
-`+my/stripe-mark-height' pixels tall; rows with nothing get no image."
+;; ====== GRAPHICAL FRAMES: THE STRIP'S FRAME ======
+
+;; Batch Emacs makes no child frames: they're stand-ins, the frame functions
+;; the config calls answering for them.
+(cl-defstruct (+test-stripe--frame (:constructor +test-stripe--frame-make))
+  buffer parent (params nil) (visible nil) (live t) size position)
+
+(defvar +test-stripe--made nil "The stand-in frames made, the latest first.")
+(defvar +test-stripe--flushed nil "The images flushed.")
+
+(defmacro +test-stripe--frames (&rest body)
+  "BODY as in a GUI, the strips' frames stand-ins (`+test-stripe--made')."
+  (declare (indent 0))
+  `(let ((+test-stripe--made nil)
+         (+test-stripe--flushed nil)
+         (+my/stripe--frames nil)
+         (orig (mapcar (lambda (f) (cons f (symbol-function f)))
+                       '(frame-live-p frame-root-window window-buffer set-frame-parameter
+                         frame-parameter set-frame-size set-frame-position frame-visible-p
+                         make-frame-visible make-frame-invisible delete-frame frame-parent))))
+     (cl-flet ((orig (f &rest args) (apply (alist-get f orig) args))
+               (fake-p (x) (+test-stripe--frame-p x)))
+       (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                 ((symbol-function 'display-multi-font-p) #'ignore)
+                 ((symbol-function 'image-flush) (lambda (image &rest _) (push image +test-stripe--flushed)))
+                 ;; A stand-in has no window to make bare (see stripe/bare).
+                 ((symbol-function '+my/stripe--bare) #'ignore)
+                 ((symbol-function '+my/stripe--make-frame)
+                  (lambda (parent)
+                    (car (push (+test-stripe--frame-make
+                                :parent parent
+                                :buffer (generate-new-buffer " *+my/stripe-test*"))
+                               +test-stripe--made))))
+                 ((symbol-function 'frame-live-p)
+                  (lambda (f) (if (fake-p f) (+test-stripe--frame-live f) (orig 'frame-live-p f))))
+                 ((symbol-function 'frame-root-window)
+                  (lambda (&optional f) (if (fake-p f) f (orig 'frame-root-window f))))
+                 ((symbol-function 'window-buffer)
+                  (lambda (&optional w) (if (fake-p w) (+test-stripe--frame-buffer w) (orig 'window-buffer w))))
+                 ((symbol-function 'set-frame-parameter)
+                  (lambda (f p v) (if (fake-p f) (setf (alist-get p (+test-stripe--frame-params f)) v)
+                                    (orig 'set-frame-parameter f p v))))
+                 ((symbol-function 'frame-parameter)
+                  (lambda (f p) (if (fake-p f) (alist-get p (+test-stripe--frame-params f))
+                                  (orig 'frame-parameter f p))))
+                 ((symbol-function 'set-frame-size)
+                  (lambda (f w h &optional pixelwise)
+                    (if (fake-p f) (setf (+test-stripe--frame-size f) (list w h pixelwise))
+                      (orig 'set-frame-size f w h pixelwise))))
+                 ((symbol-function 'set-frame-position)
+                  (lambda (f x y) (if (fake-p f) (setf (+test-stripe--frame-position f) (list x y))
+                                    (orig 'set-frame-position f x y))))
+                 ((symbol-function 'frame-visible-p)
+                  (lambda (f) (if (fake-p f) (+test-stripe--frame-visible f) (orig 'frame-visible-p f))))
+                 ((symbol-function 'make-frame-visible)
+                  (lambda (&optional f) (if (fake-p f) (setf (+test-stripe--frame-visible f) t)
+                                          (orig 'make-frame-visible f))))
+                 ((symbol-function 'make-frame-invisible)
+                  (lambda (&optional f force) (if (fake-p f) (setf (+test-stripe--frame-visible f) nil)
+                                                (orig 'make-frame-invisible f force))))
+                 ((symbol-function 'delete-frame)
+                  (lambda (&optional f force) (if (fake-p f) (setf (+test-stripe--frame-live f) nil)
+                                                (orig 'delete-frame f force))))
+                 ((symbol-function 'frame-parent)
+                  (lambda (&optional f) (if (fake-p f) (+test-stripe--frame-parent f) (orig 'frame-parent f)))))
+         (unwind-protect (progn ,@body)
+           (dolist (frame +test-stripe--made)
+             (when (buffer-live-p (+test-stripe--frame-buffer frame))
+               (kill-buffer (+test-stripe--frame-buffer frame)))))))))
+
+(defun +test-stripe--frame-of (window)
+  (nth 1 (assq window +my/stripe--frames)))
+
+(defun +test-stripe--shown-image (frame)
+  "The image FRAME's buffer shows, and the text properties around it."
+  (with-current-buffer (+test-stripe--frame-buffer frame)
+    (and (> (point-max) (point-min))
+         (list (get-text-property (point-min) 'display)
+               (get-text-property (point-min) 'keymap)
+               (get-text-property (point-min) 'pointer)))))
+
+(ert-deftest stripe/bare ()
+  "The strip's window all text: its margins (a file's, the first buffer it
+showed), fringes and horizontal scroll taken off. Emacs only changes a window's
+margins if it's left two columns wide: a narrower frame is widened first."
+  (+test-with-reset
+    (let ((window (selected-window))
+          (sized nil))
+      (set-window-margins window nil 1)
+      (set-window-fringes window 8 8)
+      (set-window-hscroll window 4)
+      (cl-letf (((symbol-function 'set-frame-size) (lambda (&rest args) (push args sized))))
+        (+my/stripe--bare (selected-frame)))
+      (should (equal (window-margins window) '(nil)))
+      (should (equal (seq-take (window-fringes window) 2) '(0 0)))
+      (should (= (window-hscroll window) 0))
+      (should-not sized)                  ; wide already
+      ;; Narrow: widened first, to be placed again.
+      (set-window-margins window nil 1)
+      (cl-letf (((symbol-function 'window-total-width) (lambda (&rest _) 1))
+                ((symbol-function 'set-frame-size) (lambda (&rest args) (push args sized))))
+        (+my/stripe--bare (selected-frame)))
+      (should (= (length sized) 1))
+      (should (= (nth 1 (car sized)) (* 10 (frame-char-width))))
+      (should-not (frame-parameter nil '+my/stripe-geometry))
+      (set-window-fringes window nil nil))))
+
+(ert-deftest stripe/a-frame-over-the-right-margin ()
+  "Synced: the window's strip frame, a child of its frame, laid over its right
+margin (beside the text, at the edge), shown, drawing the strip."
   (+test-stripe (+test-stripe--text 100)
-    (+test-stripe--gui
+    ;; Drawn as cells when the mode came on (the batch frame is a terminal).
+    (remove-overlays (point-min) (point-max) '+my/stripe-row t)
+    (+test-stripe--frames
+      (+my/stripe--sync)
       (let* ((window (selected-window))
-             (body (window-body-height window t))
-             (overscroll (- (window-body-height window) (+my/stripe--text-rows-wanted window)))
-             (scale (/ (float body) (+ 101 overscroll)))
-             (result (+my/stripe--image-rows window (point-min) 101 '((50 50 error))))
-             (error-top (floor (* scale 49))))
-        (should (= overscroll 5))
-        (should (equal (window-parameter window '+my/stripe-geometry) (list 'pixels scale 101)))
-        (should-not (cdr result))               ; no filler: the end isn't in view
-        (should (equal (+test-stripe--strip (car result))
-                       (append (mapcar (lambda (line) (cons line "t"))
-                                       (number-sequence 1 (round (* scale body))))
-                               (mapcar (lambda (line) (cons line "6"))
-                                       (number-sequence (1+ error-top) (+ error-top 4))))))
-        ;; Clickable, like the cells.
-        (let ((string (cdr (car (car result)))))
-          (should (eq (get-text-property 0 'keymap string) +my/stripe-margin-map))
-          (should (eq (get-text-property 0 'pointer string) 'hand)))
-        ;; A taller minimum.
-        (let ((+my/stripe-mark-height 6))
-          (should (= (seq-count (lambda (row) (equal (cdr row) "6"))
-                                (+test-stripe--strip
-                                 (car (+my/stripe--image-rows window (point-min) 101
-                                                              '((50 50 error))))))
-                     6)))))))
+             (frame (+test-stripe--frame-of window))
+             (geometry (+my/stripe--geometry window)))
+        (should (+test-stripe--frame-p frame))
+        (should (eq (+test-stripe--frame-parent frame) (window-frame window)))
+        (should (+test-stripe--frame-visible frame))
+        (should (eq (alist-get '+my/stripe-window (+test-stripe--frame-params frame)) window))
+        (should (equal (+test-stripe--frame-position frame) (seq-take geometry 2)))
+        (should (equal (+test-stripe--frame-size frame) (list (nth 2 geometry) (nth 3 geometry) t)))
+        ;; The margin: a column wide, beside the text, as tall as it.
+        (should (= (nth 2 geometry) (frame-char-width)))
+        (should (= (+ (nth 0 geometry) (nth 2 geometry))
+                   (- (nth 2 (window-pixel-edges window))
+                      (window-right-divider-width window) (window-scroll-bar-width window))))
+        (should (= (nth 1 geometry) (nth 1 (window-inside-pixel-edges window))))
+        (should (= (nth 3 geometry) (window-body-height window t)))
+        (pcase-let ((`(,image ,keymap ,pointer) (+test-stripe--shown-image frame)))
+          (should (eq (plist-get (cdr image) :type) 'xpm))
+          (should (eq keymap +my/stripe--strip-map))
+          (should (eq pointer 'hand)))
+        ;; Nothing in the window's own rows (a terminal's cells only).
+        (should-not (+test-stripe--row-overlays window))))))
 
-(ert-deftest stripe/image-rows-priority ()
-  "Overlapping marks: the most important wins; the band never hides a mark."
+(ert-deftest stripe/a-frame-per-window-hidden-and-deleted ()
+  "Each window its own; hidden (kept) while its window shows another buffer,
+shown again when it's back; deleted with its window."
   (+test-stripe (+test-stripe--text 100)
-    (+test-stripe--gui
-      (let* ((strip (+test-stripe--strip
-                     (car (+my/stripe--image-rows (selected-window) (point-min) 101
-                                                  '((1 1 insert)
-                                                    (40 40 info) (40 40 change)
-                                                    (80 80 warning) (80 80 error))))))
-             (pixels (mapcar #'cdr strip)))
-        (should (equal (seq-take pixels 4) '("2" "2" "2" "2"))) ; over the band
-        (should (member "t" pixels))
-        (should (member "3" pixels))
-        (should (member "6" pixels))
-        (should-not (member "1" pixels))
-        (should-not (member "5" pixels))))))
+    (+test-stripe--frames
+      (let* ((left (selected-window))
+             (right (split-window-right)))
+        (+my/stripe--sync)
+        (let ((a (+test-stripe--frame-of left))
+              (b (+test-stripe--frame-of right)))
+          (should (and a b (not (eq a b))))
+          (set-window-buffer right (get-buffer-create "*scratch*"))
+          (+my/stripe--sync)
+          (should-not (+test-stripe--frame-visible b))
+          (should (+test-stripe--frame-live b))
+          (set-window-buffer right "stripe")
+          (+my/stripe--sync)
+          (should (eq (+test-stripe--frame-of right) b))
+          (should (+test-stripe--frame-visible b))
+          (delete-window right)
+          (+my/stripe--sync)
+          (should-not (+test-stripe--frame-live b))
+          (should-not (assq right +my/stripe--frames))
+          (should (+test-stripe--frame-visible a)))))))
 
-(ert-deftest stripe/image-rows-short-file ()
-  "A file shorter than the window: a line height per line, no band; below the
-last line the rest of the strip is on the filler."
-  (+test-stripe "a\nb\nc\nd\ne\n"
-    (+test-stripe--gui
-      (let* ((result (+my/stripe--image-rows (selected-window) (point-min) 6 '((3 3 error))))
-             (filler (cdr result)))
-        (should (equal (window-parameter nil '+my/stripe-geometry) '(pixels 1.0 6)))
-        ;; Lines 3..5 (the 4-pixel mark goes on below the text).
-        (should (equal (+test-stripe--strip (car result)) '((3 . "6") (4 . "6") (5 . "6"))))
-        (should (stringp filler))
-        ;; The filler takes the place of the empty last line: no line break, and
-        ;; the strip's rest (the mark's last pixel) in its margin.
-        (should-not (string-search "\n" filler))
-        (let ((image (+test-stripe--filler-image filler)))
-          (should (string-prefix-p "6" (+test-stripe--pixels image))))))))
-
-(defun +test-stripe--filler-image (filler)
-  "The image in FILLER's margin, or nil."
-  (cl-loop for i below (length filler)
-           for display = (get-text-property i 'display filler)
-           when (equal (car-safe display) '(margin right-margin))
-           return (cadr display)))
-
-(ert-deftest stripe/image-rows-end-in-view ()
-  "Scrolled to the end: the marks stay where they were, the band reaches the
-bottom, and the strip below the last line is on the filler."
+(ert-deftest stripe/a-dead-frame-is-made-again ()
   (+test-stripe (+test-stripe--text 100)
-    (+test-stripe--gui
+    (+test-stripe--frames
+      (+my/stripe--sync)
+      (let ((first (+test-stripe--frame-of (selected-window))))
+        (setf (+test-stripe--frame-live first) nil)
+        (+my/stripe--sync)
+        (should-not (eq (+test-stripe--frame-of (selected-window)) first))
+        (should (+test-stripe--frame-live (+test-stripe--frame-of (selected-window))))))))
+
+(ert-deftest stripe/the-image-made-only-when-the-strip-changes ()
+  "Redrawn without a change: the image is left as it is; changed (the band
+moved): a new one, the old one flushed from Emacs's image cache."
+  (+test-stripe (+test-stripe--text 400)
+    (+test-stripe--frames
+      (+my/stripe--sync)
       (let* ((window (selected-window))
-             (top (+my/stripe--image-rows window (point-min) 101 '((50 50 error))))
-             (start (+test-stripe--line-start 86))
-             (end (+my/stripe--image-rows window start 101 '((50 50 error) (100 100 warning))))
-             (error-rows (lambda (strip first)
-                           (mapcar (lambda (row) (- (car row) first))
-                                   (seq-filter (lambda (row) (equal (cdr row) "6")) strip)))))
-        ;; The error is on the same screen rows.
-        (should (equal (funcall error-rows (+test-stripe--strip (car top)) 1)
-                       (funcall error-rows (+test-stripe--strip (car end)) 86)))
-        ;; Below the text (lines 86..100, then the empty one): the filler, with
-        ;; the band down to the bottom and the warning over it.
-        (let* ((filler (cdr end))
-               (pixels (+test-stripe--pixels (+test-stripe--filler-image filler))))
-          (should (= (length pixels) (- (window-body-height window t) 15)))
-          (should (string-suffix-p "5" pixels))
-          (should (string-match-p "t5+\\'" pixels)))))))
+             (frame (+test-stripe--frame-of window))
+             (tick (lambda () (buffer-modified-tick (+test-stripe--frame-buffer frame))))
+             (before (funcall tick))
+             (image (car (+test-stripe--shown-image frame))))
+        (+my/stripe--render window)
+        (+my/stripe--render window)
+        (should (= (funcall tick) before))
+        (should-not +test-stripe--flushed)
+        (set-window-start window (+test-stripe--line-start 300))
+        (+my/stripe--render window)
+        (should (> (funcall tick) before))
+        (should (equal +test-stripe--flushed (list image)))
+        (should-not (equal (car (+test-stripe--shown-image frame)) image))))))
 
-(ert-deftest stripe/image-rows-without-final-newline ()
-  "No final newline: the filler starts after the last line (a line break), the
-cursor stays on that line."
-  (+test-stripe "a\nb\nc"
-    (+test-stripe--gui
-      (let ((filler (cdr (+my/stripe--image-rows (selected-window) (point-min) 3 nil))))
-        (should (stringp filler))
-        (should (string-search "\n" filler))
-        (should (get-text-property 0 'cursor filler))))))
-
-(ert-deftest stripe/image-rows-overscroll-setting ()
-  "The strip maps the file plus the allowed empty space past its end."
+(ert-deftest stripe/no-frame-yet-one-is-made-after-this-redisplay ()
   (+test-stripe (+test-stripe--text 100)
-    (+test-stripe--gui
-      (let ((window (selected-window)))
-        (dolist (case `((0 . 0) (3 . 3) (t . ,(1- (window-body-height window)))
-                        (0.5 . ,(floor (* 0.5 (window-body-height window))))))
-          (let ((+my/stripe-overscroll (car case)))
-            (+my/stripe--image-rows window (point-min) 101 nil)
-            (should (equal (window-parameter window '+my/stripe-geometry)
-                           (list 'pixels (/ (float (window-body-height window t))
-                                            (+ 101 (cdr case)))
-                                 101)))))))))
+    (+test-stripe--frames
+      (let (scheduled)
+        (cl-letf (((symbol-function 'run-at-time)
+                   (lambda (time repeat fn &rest _) (push (list time repeat fn) scheduled) 'timer))
+                  ((symbol-function 'timerp) (lambda (x) (eq x 'timer))))
+          (let ((+my/stripe--sync-timer nil))
+            (+my/stripe--render (selected-window))
+            (should (equal scheduled '((0 nil +my/stripe--sync))))
+            ;; Once scheduled, not again.
+            (+my/stripe--render (selected-window))
+            (should (= (length scheduled) 1))))))))
 
-(ert-deftest stripe/tilde ()
-  "The empty-line `~' as a fringe bitmap repeating every PERIOD pixels: only
-with `indicate-empty-lines' and vi-tilde-fringe's bitmap."
-  (let ((indicate-empty-lines nil))
-    (should-not (+my/stripe--tilde 10)))
-  (let ((indicate-empty-lines t))
-    (unless (boundp 'vi-tilde-fringe-bitmap-array)
-      (should-not (+my/stripe--tilde 10)))
-    (let (defined)
-      (cl-letf* ((define (symbol-function 'define-fringe-bitmap))
-                 ((symbol-function 'define-fringe-bitmap)
-                  (lambda (&rest args) (push args defined) (apply define args))))
-        (cl-progv '(vi-tilde-fringe-bitmap-array) (list [1 2 3 4])
-          (should (eq (+my/stripe--tilde 10) '+my/stripe--tilde-10))
-          (should (equal (car defined)
-                         '(+my/stripe--tilde-10 [0 0 0 1 2 3 4 0 0 0] 10 8 (top t))))
-          (should (fringe-bitmap-p '+my/stripe--tilde-10))
-          ;; Defined once.
-          (should (eq (+my/stripe--tilde 10) '+my/stripe--tilde-10))
-          (should (= (length defined) 1))
-          ;; Rows shorter than the `~': its middle.
-          (should (eq (+my/stripe--tilde 2) '+my/stripe--tilde-2))
-          (should (equal (cadr (car defined)) [2 3])))))))
+(ert-deftest stripe/a-moved-window-s-frame-is-placed-anew ()
+  "The window's text moved down (a notice's header line): synced again."
+  (+test-stripe (+test-stripe--text 100)
+    (+test-stripe--frames
+      (+my/stripe--sync)
+      (let (synced)
+        (cl-letf (((symbol-function '+my/stripe--sync-soon) (lambda (&rest _) (push t synced))))
+          (+my/stripe--render (selected-window))
+          (should-not synced)
+          (setq-local header-line-format "a notice")
+          (+my/stripe--render (selected-window))
+          (should synced))))))
 
-(ert-deftest stripe/filler ()
-  "The filler: the cursor's place, a row the rest of the window high, the `~',
-the strip's rest in the margin (clickable)."
-  (let* ((palette '((?\s . "None") (?t . "#111111")))
-         (click (list 'keymap +my/stripe-margin-map 'pointer 'hand))
-         (indicate-empty-lines nil))
-    ;; After the last line: a line break first, the row's baseline at its bottom.
-    (let ((filler (+my/stripe--filler "  tt" 8 1 palette 1 click)))
-      (should (get-text-property 0 'cursor filler))
-      (should (equal (substring-no-properties filler 1 2) "\n"))
-      (should (equal (get-text-property 2 'display filler)
-                     '(space :width (1) :height (8) :ascent 100)))
-      (let ((image (+test-stripe--filler-image filler)))
-        (should (equal (+test-stripe--pixels image) "  tt"))
-        (should (eql (plist-get (cdr image) :ascent) 100)))
-      (should (eq (get-text-property (1- (length filler)) 'keymap filler) +my/stripe-margin-map)))
-    ;; In place of the empty last line: baseline ASCENT pixels down.
-    (let ((filler (+my/stripe--filler "t" 20 1 palette 1 click 4)))
-      (should-not (string-search "\n" filler))
-      (should (equal (get-text-property 1 'display filler)
-                     '(space :width (1) :height (20) :ascent 20)))
-      (should (eql (plist-get (cdr (+test-stripe--filler-image filler)) :ascent) 20)))
-    (should (equal (nth 6 (get-text-property 1 'display (+my/stripe--filler "t" 8 1 palette 1 click 14)))
-                   100))
-    (should (equal (nth 6 (get-text-property 1 'display (+my/stripe--filler "t" 8 1 palette 1 click -3)))
-                   1))
-    ;; Nothing to show: no image.
-    (should-not (+test-stripe--filler-image (+my/stripe--filler "    " 8 1 palette 1 click)))
-    ;; The `~', in the fringe face.
-    (cl-letf (((symbol-function '+my/stripe--tilde) (lambda (_) 'tilde-bitmap)))
-      (let ((filler (+my/stripe--filler "  " 8 1 palette 1 click)))
-        (should (cl-loop for i below (length filler)
-                         thereis (equal (get-text-property i 'display filler)
-                                        '(left-fringe tilde-bitmap fringe))))))))
+(ert-deftest stripe/no-margin-no-frame-shown ()
+  (+test-stripe (+test-stripe--text 100)
+    (+test-stripe--frames
+      (+my/stripe--sync)
+      (let ((frame (+test-stripe--frame-of (selected-window))))
+        (set-window-margins nil nil 0)
+        (+my/stripe--show-in (selected-window))
+        (should-not (+test-stripe--frame-visible frame))))))
+
+(ert-deftest stripe/not-in-a-child-frame-s-windows ()
+  "A window of a child frame (a popup's, a strip's own): no strip."
+  (+test-stripe (+test-stripe--text 100)
+    (+test-stripe--frames
+      (let (synced)
+        (cl-letf (((symbol-function 'frame-parent) (lambda (&optional _) 'a-parent))
+                  ((symbol-function '+my/stripe--sync-soon) (lambda (&rest _) (push t synced))))
+          (+my/stripe--render (selected-window)))
+        (should-not synced)
+        (should-not +my/stripe--frames)))))
+
+(ert-deftest stripe/no-frames-in-a-terminal ()
+  (+test-stripe (+test-stripe--text 100)
+    (let ((+my/stripe--frames nil)
+          (made nil))
+      (cl-letf (((symbol-function '+my/stripe--make-frame) (lambda (&rest _) (push t made))))
+        (+my/stripe--sync))
+      (should-not made)
+      (should-not +my/stripe--frames))))
+
+(ert-deftest stripe/a-theme-gives-the-frames-its-background ()
+  (+test-stripe (+test-stripe--text 100)
+    (+test-stripe--frames
+      (+my/stripe--sync)
+      (let ((frame (+test-stripe--frame-of (selected-window))))
+        (cl-letf (((symbol-function 'face-background) (lambda (&rest _) "#123456")))
+          (+my/stripe--render-all))
+        (should (equal (alist-get 'background-color (+test-stripe--frame-params frame)) "#123456"))))))
+
+(ert-deftest stripe/window-change-syncs-soon ()
+  (should (memq #'+my/stripe--window-change-h (default-value 'window-state-change-functions)))
+  (let (synced)
+    (cl-letf (((symbol-function '+my/stripe--sync-soon) (lambda (&rest _) (push t synced))))
+      (+my/stripe--window-change-h (selected-frame))
+      (should synced)
+      (setq synced nil)
+      (cl-letf (((symbol-function 'frame-parent) (lambda (&optional _) 'a-parent)))
+        (+my/stripe--window-change-h (selected-frame)))
+      (should-not synced))))
 
 ;; ====== DRAWING ======
 
 (ert-deftest stripe/key ()
   "What a window's strip depends on: buffer, start, vscroll, size, font,
-margin, errors, git highlights, line edits."
+margin, errors, git highlights, line edits, where the window is (its edges,
+its header and tab lines: a notice above moves the strip)."
   (+test-stripe (+test-stripe--text 50)
     (+test-stripe--errors '(3 error))
     (let ((window (selected-window)))
       (should (equal (+my/stripe--key window)
-                     (list (current-buffer) (window-start window) 0
-                           (window-body-height window t) (window-font-height window)
-                           1 flycheck-current-errors +my/stripe--diff-hl-tick
-                           +my/stripe--line-edits)))
-      (should (= (nth 1 (+my/stripe--key window 42)) 42)))))
+                     (append (list (current-buffer) (window-start window) 0
+                                   (window-body-height window t) (window-font-height window)
+                                   1 flycheck-current-errors +my/stripe--diff-hl-tick
+                                   +my/stripe--line-edits
+                                   (window-header-line-height window)
+                                   (window-tab-line-height window))
+                             (window-pixel-edges window))))
+      (should (= (nth 1 (+my/stripe--key window 42)) 42))
+      ;; Each part compares with `eq' (no list: edges are its last parts).
+      (should (cl-every #'eq (+my/stripe--key window) (+my/stripe--key window)))
+      (setq-local header-line-format "a notice")
+      (should-not (cl-every #'eq (+my/stripe--key window)
+                            (progn (setq-local header-line-format nil) (+my/stripe--key window)))))))
 
 (ert-deftest stripe/render-terminal ()
   "Drawn as row overlays (one per row, its cell in the margin)."
@@ -952,8 +1029,7 @@ margin, errors, git highlights, line edits."
                                    'before-string))
                      "#ff0000")))
     (should (equal (window-parameter nil '+my/stripe-key) (+my/stripe--key (selected-window))))
-    (should (equal (window-parameter nil '+my/stripe-geometry) (list 'cells (window-body-height) 101)))
-    (should-not (window-parameter nil '+my/stripe-filler))))
+    (should (equal (window-parameter nil '+my/stripe-geometry) (list 'cells (window-body-height) 101)))))
 
 (ert-deftest stripe/render-reuses-its-overlays ()
   (+test-stripe (+test-stripe--text 100)
@@ -1025,33 +1101,6 @@ it (or is gone) loses its."
       (let ((debug-on-error nil))
         (+my/stripe--render (selected-window))))
     (should (= (+test-messages "^Stripe: (error \"Boom\")") 1))))
-
-(ert-deftest stripe/render-graphical ()
-  "In a graphical frame: images on the rows that show something, the fringes
-padded, and the filler once the end is in view."
-  (+test-stripe (+test-stripe--text 100)
-    (+test-stripe--errors '(50 error))
-    (+test-stripe--gui
-      (+my/stripe--render (selected-window))
-      (should (local-variable-p 'left-fringe-width))
-      (should (= left-fringe-width (+ 8 (frame-char-width))))
-      (let ((overlays (+test-stripe--row-overlays)))
-        (should (< 0 (length overlays) (window-body-height)))
-        (dolist (ov overlays)
-          (should (eq (car (+test-stripe--margin (overlay-get ov 'before-string))) 'image))))
-      (should-not (window-parameter nil '+my/stripe-filler))
-      ;; The end in view: the filler, after the last line, for this window only.
-      (set-window-start nil (+test-stripe--line-start 90))
-      (+my/stripe--render (selected-window))
-      (let ((filler (window-parameter nil '+my/stripe-filler)))
-        (should (overlayp filler))
-        (should (= (overlay-start filler) (point-max)))
-        (should (eq (overlay-get filler 'window) (selected-window)))
-        (should (stringp (overlay-get filler 'before-string))))
-      ;; Back at the top: no filler.
-      (set-window-start nil 1)
-      (+my/stripe--render (selected-window))
-      (should-not (window-parameter nil '+my/stripe-filler)))))
 
 (ert-deftest stripe/render-graphical-pads-once ()
   (+test-stripe (+test-stripe--text 10)
@@ -1171,85 +1220,6 @@ strings); others aren't."
       (should (memq other rendered))
       (should (memq (selected-window) rendered)))))
 
-(ert-deftest stripe/filler-overlay ()
-  "The filler hangs after the end of the buffer, in its window, after text typed
-at the end; taken out while rows are measured."
-  (+test-stripe "one\ntwo\n"
-    (let ((window (selected-window)))
-      (+my/stripe--set-filler window "FILLER")
-      (let ((ov (window-parameter window '+my/stripe-filler)))
-        (should (overlayp ov))
-        (should (= (overlay-start ov) (point-max)))
-        (should (equal (overlay-get ov 'before-string) "FILLER"))
-        (should (= (overlay-get ov 'priority) 100))
-        (should (eq (overlay-get ov 'window) window))
-        (should (overlay-get ov '+my/stripe))
-        ;; Text typed at the end goes before it.
-        (goto-char (point-max))
-        (insert "three")
-        (should (= (overlay-start ov) (point-max)))
-        ;; Set again: the same overlay, at the (new) end.
-        (delete-region 5 (point-max))
-        (+my/stripe--set-filler window "AGAIN")
-        (should (eq (window-parameter window '+my/stripe-filler) ov))
-        (should (= (overlay-start ov) (point-max)))
-        (should (equal (overlay-get ov 'before-string) "AGAIN"))
-        ;; Hidden.
-        (+my/stripe--hide-filler window)
-        (should-not (overlay-get ov 'before-string))
-        (should (overlay-buffer ov))
-        ;; Removed.
-        (+my/stripe--set-filler window nil)
-        (should-not (overlay-buffer ov))
-        (should-not (window-parameter window '+my/stripe-filler))
-        (+my/stripe--hide-filler window)       ; nothing to hide
-        (+my/stripe--set-filler window nil)))))
-
-(ert-deftest stripe/filler-overlay-of-another-buffer ()
-  "The window now shows another buffer: its filler moves there."
-  (+test-stripe "one\n"
-    (let ((window (selected-window)))
-      (+my/stripe--set-filler window "OLD")
-      (let ((old (window-parameter window '+my/stripe-filler)))
-        (with-current-buffer (+test-buffer "other" "two\nthree\n")
-          (+my/stripe--set-filler window "NEW")
-          (let ((new (window-parameter window '+my/stripe-filler)))
-            (should-not (eq new old))
-            (should-not (overlay-buffer old))
-            (should (eq (overlay-buffer new) (current-buffer)))))))))
-
-(ert-deftest stripe/plain-last-line-number ()
-  "With the cursor on the last line (the filler's), its line number keeps the
-plain face."
-  (+test-stripe "one\ntwo\n"
-    (setq-local display-line-numbers t)
-    (+my/stripe--set-filler (selected-window) "FILLER")
-    (let ((remapped (lambda () (assq 'line-number-current-line face-remapping-alist))))
-      (goto-char 1)
-      (+my/stripe--plain-last-number)
-      (should-not +my/stripe--number-cookie)
-      (goto-char (point-max))
-      (+my/stripe--plain-last-number)
-      (should +my/stripe--number-cookie)
-      (should (funcall remapped))
-      (+my/stripe--plain-last-number)           ; once
-      (should (= (seq-count (lambda (e) (eq (car e) 'line-number-current-line))
-                            face-remapping-alist)
-                 1))
-      (goto-char 1)
-      (+my/stripe--plain-last-number)
-      (should-not +my/stripe--number-cookie)
-      (should-not (funcall remapped))
-      ;; No line numbers, or no filler: nothing.
-      (goto-char (point-max))
-      (setq-local display-line-numbers nil)
-      (+my/stripe--plain-last-number)
-      (should-not +my/stripe--number-cookie)
-      (setq-local display-line-numbers t)
-      (+my/stripe--set-filler (selected-window) nil)
-      (+my/stripe--plain-last-number)
-      (should-not +my/stripe--number-cookie))))
-
 ;; ====== SCROLLING PAST THE END ======
 
 (ert-deftest stripe/text-rows-wanted ()
@@ -1332,8 +1302,7 @@ goes back up."
     (should (= (window-start) 1))))
 
 (ert-deftest stripe/after-scroll-checks-the-limit-later ()
-  "When redisplay itself scrolled near the end, the limit is checked right after
-(the filler can't be taken out mid-redisplay)."
+  "When redisplay itself scrolled near the end, the limit is checked right after."
   (+test-stripe (+test-stripe--text 100)
     (let ((window (selected-window))
           scheduled)
@@ -1349,11 +1318,9 @@ goes back up."
         (+my/stripe--after-scroll window (+test-stripe--line-start 99))
         (should (= (length scheduled) 1))
         (should (equal (seq-take (car scheduled) 2) '(0 nil)))
-        (+my/stripe--set-filler window "FILLER")
         (set-window-parameter window '+my/stripe-key '(old))
         (funcall (nth 2 (car scheduled)))
         (should (= (window-start window) (car (+my/stripe--end-limit window))))
-        (should-not (overlay-get (window-parameter window '+my/stripe-filler) 'before-string))
         (should-not (window-parameter window '+my/stripe-key))))))
 
 (ert-deftest stripe/after-scroll-later-check-is-safe ()
@@ -1373,113 +1340,130 @@ goes back up."
         (delete-window window)
         (funcall (pop scheduled))))))
 
-;; ====== THE EMPTY LAST LINE ======
-
-(defmacro +test-stripe--command (before &rest body)
-  "BODY as a command run from position BEFORE (pre/post-command hooks)."
-  (declare (indent 1))
-  `(progn
-     (goto-char ,before)
-     (+my/stripe--note-point)
-     ,@body
-     (+my/stripe--leave-phantom-line)))
-
-(ert-deftest stripe/cursor-off-the-empty-last-line ()
-  "In normal state the cursor doesn't stay on the empty line after the final
-newline: to the last line's text (`G'), or back where it was on the last
-line (`j' there stays put)."
-  (+test-stripe "  one\n  two\n"
-    (evil-normal-state)
-    (let ((last-input-event ?G))
-      (+test-stripe--command 1 (goto-char (point-max)))
-      (should (= (point) (+ (+test-stripe--line-start 2) 2)))
-      (+test-stripe--command (+ (+test-stripe--line-start 2) 4) (goto-char (point-max)))
-      (should (= (point) (+ (+test-stripe--line-start 2) 4)))
-      ;; Nothing noted: to the text.
-      (setq +my/stripe--point-before nil)
-      (goto-char (point-max))
-      (+my/stripe--leave-phantom-line)
-      (should (= (point) (+ (+test-stripe--line-start 2) 2))))))
-
-(ert-deftest stripe/cursor-may-go-to-the-empty-last-line-in-insert-state ()
-  (+test-stripe "one\ntwo\n"
-    (let ((last-input-event ?o))
-      (dolist (state '(insert replace emacs))
-        (evil-change-state state)
-        (+test-stripe--command 1 (goto-char (point-max)))
-        (should (= (point) (point-max))))
-      (evil-normal-state))))
-
-(ert-deftest stripe/cursor-elsewhere-left-alone ()
-  "Not at the empty last line: nothing to do (no final newline, an empty buffer,
-the middle of the text)."
-  (+test-stripe "one\ntwo"
-    (evil-normal-state)
-    (let ((last-input-event ?G))
-      (+test-stripe--command 1 (goto-char (point-max)))
-      (should (= (point) (point-max)))))
-  (+test-stripe ""
-    (evil-normal-state)
-    (let ((last-input-event ?G))
-      (+test-stripe--command 1 nil)
-      (should (= (point) 1))))
-  (+test-stripe "one\ntwo\n"
-    (evil-normal-state)
-    (let ((last-input-event ?j))
-      (+test-stripe--command 1 (forward-line 1))
-      (should (= (point) 5)))))
-
-(defmacro +test-stripe--clicked (y target &rest body)
-  "BODY with a click Y pixels down (from the text's top) as the last event, and
-`posn-at-x-y' finding TARGET (the last line's row is 3 pixels down)."
-  (declare (indent 2))
-  `(let* ((asked nil)
-          (last-input-event
-           (list 'mouse-1 (list (selected-window) (point-max) (cons 7 ,y) 0 nil (point-max)
-                                '(7 . 0) nil '(0 . 0) '(1 . 1)))))
-     (cl-letf (((symbol-function 'posn-at-point)
-                (lambda (&rest _) (list (selected-window) (point) '(0 . 3) 0)))
-               ((symbol-function 'posn-at-x-y)
-                (lambda (x y &rest _) (setq asked (cons x y))
-                  (list (selected-window) ,target (cons x y) 0))))
-       ,@body)))
-
-(ert-deftest stripe/click-below-the-text ()
-  "A click below the text puts the cursor on the last line, at the clicked
-column (on the last character in normal state)."
-  (+test-stripe "first\nlast line\n"
-    (evil-normal-state)
-    (let ((last-line (+test-stripe--line-start 2)))
-      (+test-stripe--clicked 10 (+ last-line 3)
-        (+test-stripe--command 1 (goto-char (point-max)))
-        (should (= (point) (+ last-line 3)))
-        ;; Asked at the click's column, on the last line's row.
-        (should (equal asked (cons 7 (+ 3 (window-tab-line-height) (window-header-line-height))))))
-      ;; Past the end of the line: its last character...
-      (+test-stripe--clicked 10 (1- (point-max))
-        (+test-stripe--command 1 (goto-char (point-max)))
-        (should (= (point) (- (point-max) 2))))
-      ;; ...or after it, in insert state.
-      (evil-insert-state)
-      (+test-stripe--clicked 10 (1- (point-max))
-        (+test-stripe--command 1 (goto-char (point-max)))
-        (should (= (point) (1- (point-max)))))
-      (evil-normal-state)
-      ;; Not on the last line: its start.
-      (+test-stripe--clicked 10 2
-        (+test-stripe--command 1 (goto-char (point-max)))
-        (should (= (point) last-line))))))
-
-(ert-deftest stripe/click-in-another-window ()
-  "A click event from another window: as for keys."
-  (+test-stripe "one\n  two\n"
-    (evil-normal-state)
-    (let ((other (split-window)))
-      (let ((last-input-event (list 'mouse-1 (list other 1 '(0 . 0) 0))))
-        (+test-stripe--command 1 (goto-char (point-max)))
-        (should (= (point) (+ (+test-stripe--line-start 2) 2)))))))
-
 ;; ====== CLICKS ON THE STRIP ======
+
+;; Events on the strip's frame: its window a stand-in (see the frame tests).
+(defun +test-stripe--strip-event (type window y &optional extra)
+  "A TYPE event on WINDOW's strip, Y pixels down the image."
+  `(,type (strip-window 1 (0 . ,y) 0 nil 1 (0 . 0) nil (0 . ,y) (7 . 600)) ,@extra))
+
+(defmacro +test-stripe--on-strip (window &rest body)
+  "BODY with clicks on a strip taken as WINDOW's, focus changes ignored."
+  (declare (indent 1))
+  `(cl-letf (((symbol-function '+my/stripe--window-of) (lambda (_) ,window))
+             ((symbol-function 'select-frame-set-input-focus) #'ignore))
+     ,@body))
+
+(ert-deftest stripe/the-strip-s-keys ()
+  (should (eq (lookup-key +my/stripe--strip-map [down-mouse-1]) #'+my/stripe-press))
+  (dolist (event '(mouse-1 drag-mouse-1 double-mouse-1 mouse-3))
+    (should (eq (lookup-key +my/stripe--strip-map (vector event)) #'ignore)))
+  (dolist (event '(wheel-up wheel-down double-wheel-down triple-wheel-up))
+    (should (eq (lookup-key +my/stripe--strip-map (vector event)) #'+my/stripe-wheel))))
+
+(ert-deftest stripe/window-of-a-strip ()
+  (+test-stripe (+test-stripe--text 10)
+    (+test-stripe--frames
+      (+my/stripe--sync)
+      (let* ((window (selected-window))
+             (frame (+test-stripe--frame-of window)))
+        (cl-letf (((symbol-function 'window-frame) (lambda (&optional w) (if (eq w 'strip-window) frame (selected-frame)))))
+          (should (eq (+my/stripe--window-of (+test-stripe--strip-event 'mouse-1 window 3)) window))
+          (setf (alist-get '+my/stripe-window (+test-stripe--frame-params frame)) nil)
+          (should-not (+my/stripe--window-of (+test-stripe--strip-event 'mouse-1 window 3))))))))
+
+(ert-deftest stripe/press-off-the-band-jumps-there ()
+  "A press on the strip off the band: that part of the file, in the middle
+of the window, `C-o' going back."
+  (+test-stripe (+test-stripe--text 100)
+    (let* ((window (selected-window))
+           (jumped nil))
+      (set-window-parameter window '+my/stripe-geometry '(pixels 1.0 100 (0 . 5)))
+      (+test-stripe--on-strip window
+        (cl-letf (((symbol-function '+my/stripe--goto-line)
+                   (lambda (w line) (setq jumped (list w line)))))
+          (+my/stripe-press (+test-stripe--strip-event 'down-mouse-1 window 40))))
+      (should (equal jumped (list window 41))))))
+
+(ert-deftest stripe/press-past-the-end-goes-to-the-last-line ()
+  (+test-stripe (+test-stripe--text 100)
+    (let ((window (selected-window)) jumped)
+      (set-window-parameter window '+my/stripe-geometry '(pixels 1.0 100 nil))
+      (+test-stripe--on-strip window
+        (cl-letf (((symbol-function '+my/stripe--goto-line) (lambda (_ line) (setq jumped line))))
+          (+my/stripe-press (+test-stripe--strip-event 'down-mouse-1 window 500))))
+      (should (= jumped 100)))))
+
+(ert-deftest stripe/drag-the-band ()
+  "A press on the band holds it: as the mouse moves, the window scrolls so the
+band follows (where it was grabbed stays under the mouse); the release ends it."
+  (+test-stripe (+test-stripe--text 200)
+    (let* ((window (selected-window))
+           (positions (list '(0 . 1035) '(0 . 1060) '(0 . 1080) '(0 . 1080)))
+           (events (list '(mouse-movement (strip-window 1 (0 . 0) 0))
+                         '(mouse-movement (strip-window 1 (0 . 0) 0))
+                         '(mouse-1 (strip-window 1 (0 . 0) 0))))
+           (unread-command-events nil))
+      (set-window-parameter window '+my/stripe-geometry '(pixels 1.0 200 (30 . 40)))
+      (+test-stripe--on-strip window
+        (cl-letf (((symbol-function 'mouse-absolute-pixel-position)
+                   (lambda () (if (cdr positions) (pop positions) (car positions))))
+                  ((symbol-function 'read-event) (lambda (&rest _) (pop events)))
+                  ((symbol-function 'redisplay) #'ignore))
+          ;; Pressed 35 px down the strip (5 into the band) with the mouse at
+          ;; 1035 on the screen: the strip's top is at 1000.
+          (+my/stripe-press (+test-stripe--strip-event 'down-mouse-1 window 35))))
+      ;; The last move: the mouse at 1080, the band's top at 1080 - 1000 - 5.
+      (should (= (line-number-at-pos (window-start window)) 76))
+      (should-not unread-command-events))))
+
+(ert-deftest stripe/drag-ended-by-a-key-keeps-the-key ()
+  (+test-stripe (+test-stripe--text 200)
+    (let* ((window (selected-window))
+           (events (list '(mouse-movement (strip-window 1 (0 . 0) 0)) ?x))
+           (unread-command-events nil))
+      (set-window-parameter window '+my/stripe-geometry '(pixels 1.0 200 (30 . 40)))
+      (+test-stripe--on-strip window
+        (cl-letf (((symbol-function 'mouse-absolute-pixel-position) (lambda () '(0 . 1050)))
+                  ((symbol-function 'read-event) (lambda (&rest _) (pop events)))
+                  ((symbol-function 'redisplay) #'ignore))
+          (+my/stripe-press (+test-stripe--strip-event 'down-mouse-1 window 35))))
+      (should (equal unread-command-events '(?x))))))
+
+(ert-deftest stripe/scroll-band-to ()
+  (+test-stripe (+test-stripe--text 100)
+    (let ((window (selected-window)))
+      (+my/stripe--scroll-band-to window 49.5 1.0)
+      (should (= (window-start window) (+test-stripe--line-start 50)))
+      (+my/stripe--scroll-band-to window 20 0.5)
+      (should (= (window-start window) (+test-stripe--line-start 41)))
+      (+my/stripe--scroll-band-to window -5 1.0)
+      (should (= (window-start window) (point-min))))))
+
+(ert-deftest stripe/press-not-on-a-strip-does-nothing ()
+  (+test-stripe (+test-stripe--text 100)
+    (let ((window (selected-window)) jumped)
+      (cl-letf (((symbol-function '+my/stripe--window-of) #'ignore)
+                ((symbol-function '+my/stripe--goto-line) (lambda (&rest _) (setq jumped t))))
+        (+my/stripe-press (+test-stripe--strip-event 'down-mouse-1 window 3)))
+      (should-not jumped))))
+
+(ert-deftest stripe/the-wheel-scrolls-the-file ()
+  "The wheel over the strip: the file's window's wheel command, the event
+given that window (its pixel deltas kept)."
+  (+test-stripe (+test-stripe--text 100)
+    (let ((window (selected-window))
+          (got nil))
+      (+test-stripe--on-strip window
+        (cl-letf (((symbol-function 'key-binding)
+                   (lambda (keys &rest _)
+                     (should (equal keys [wheel-down]))
+                     (lambda (event) (interactive "e") (setq got (list (selected-window) event))))))
+          (+my/stripe-wheel (+test-stripe--strip-event 'wheel-down window 3 '(1 (0 . 12))))))
+      (pcase-let ((`(,_ ,event) got))
+        (should (eq (car event) 'wheel-down))
+        (should (eq (posn-window (event-start event)) window))
+        (should (equal (nthcdr 2 event) '(1 (0 . 12))))))))
 
 (ert-deftest stripe/click-on-a-cell-jumps ()
   "A click on a cell jumps to the middle of its lines."
@@ -1493,38 +1477,24 @@ column (on the last character in normal state)."
       (should (= (+my/stripe--line-to-row (line-number-at-pos) 101 rows) 11))
       (should (bolp)))))
 
-(ert-deftest stripe/click-on-an-image-jumps ()
-  "A click on the graphical strip: the line at the clicked pixel."
-  (+test-stripe (+test-stripe--text 100)
-    (set-window-parameter nil '+my/stripe-geometry '(pixels 0.5 100))
-    (dolist (case '((21 . 43) (0 . 1) (1000 . 100) (-3 . 1)))
-      (goto-char (point-min))
-      (+my/stripe-jump (+test-stripe--click (selected-window) nil (car case)))
-      (should (= (line-number-at-pos) (cdr case))))
-    ;; No y: nothing.
-    (goto-char (point-min))
-    (+my/stripe-jump (+test-stripe--click (selected-window) nil nil))
-    (should (= (point) 1))))
-
-(ert-deftest stripe/click-selects-the-window-and-marks-the-jump ()
-  "The clicked window is selected; `C-o' goes back (a better-jumper jump)."
+(ert-deftest stripe/goto-line-selects-the-window-and-marks-the-jump ()
+  "A jump from the strip: its window selected, the line in its middle, `C-o'
+going back (a better-jumper jump)."
   (+test-stripe (+test-stripe--text 100)
     (let* ((left (selected-window))
            (right (split-window-right))
-           (jumps nil))
-      (+test-stripe--clear right)
-      (set-window-parameter right '+my/stripe-geometry '(pixels 1.0 100))
+           (jumps nil)
+           (recentered nil))
       (cl-letf (((symbol-function 'better-jumper-set-jump)
-                 (lambda (&rest _) (push (cons (selected-window) (point)) jumps))))
-        (+my/stripe-jump (+test-stripe--click right nil 40)))
+                 (lambda (&rest _) (push (cons (selected-window) (point)) jumps)))
+                ((symbol-function 'recenter)
+                 (lambda (&rest _) (setq recentered (selected-window)))))
+        (+my/stripe--goto-line right 41))
       (should (eq (selected-window) right))
       (should (= (line-number-at-pos (window-point right)) 41))
       (should (equal jumps (list (cons right 1))))
-      ;; A window without a strip: nothing.
-      (select-window left)
-      (set-window-parameter right '+my/stripe-geometry nil)
-      (+my/stripe-jump (+test-stripe--click right nil 10))
-      (should (eq (selected-window) left)))))
+      (should (eq recentered right))
+      (should (window-live-p left)))))
 
 (ert-deftest stripe/click-in-a-dead-window ()
   (+test-stripe (+test-stripe--text 10)
@@ -1547,51 +1517,48 @@ nothing (not \"is undefined\")."
 ;; ====== THE MODE ======
 
 (ert-deftest stripe/mode-on ()
-  "A margin column for the strip, at the very edge (fringes inside), its hooks,
-and the strip drawn in the windows showing the buffer."
-  (+test-stripe (+test-stripe--text 50)
-    (should (local-variable-p 'right-margin-width))
-    (should (= right-margin-width 1))
-    (should (local-variable-p 'fringes-outside-margins))
-    (should-not fringes-outside-margins)
-    (should (equal (cdr (window-margins)) 1))
-    (pcase-dolist (`(,hook . ,fn) '((window-scroll-functions . +my/stripe--scrolled)
-                                    (window-scroll-functions . +my/stripe--after-scroll)
-                                    (before-change-functions . +my/stripe--note-line-edit)
-                                    (after-change-functions . +my/stripe--note-line-edit)
-                                    (post-command-hook . +my/stripe--plain-last-number)
-                                    (pre-command-hook . +my/stripe--note-point)
-                                    (post-command-hook . +my/stripe--leave-phantom-line)))
-      (should (local-variable-p hook))
-      (should (memq fn (symbol-value hook)))
-      (should-not (memq fn (default-value hook))))
-    (should (+test-stripe--row-overlays))))
+  "A margin column for the strip (its frame lies over it; a terminal's cells),
+at the very edge (fringes inside), its hooks, the strip drawn in the windows
+showing the buffer, and its frames synced soon."
+  (let (scheduled)
+    (cl-letf (((symbol-function '+my/stripe--sync-soon) (lambda (&rest _) (push t scheduled))))
+      (+test-stripe (+test-stripe--text 50)
+        (should (local-variable-p 'right-margin-width))
+        (should (= right-margin-width 1))
+        (should (local-variable-p 'fringes-outside-margins))
+        (should-not fringes-outside-margins)
+        (should (equal (cdr (window-margins)) 1))
+        (pcase-dolist (`(,hook . ,fn) '((window-scroll-functions . +my/stripe--scrolled)
+                                        (window-scroll-functions . +my/stripe--after-scroll)
+                                        (before-change-functions . +my/stripe--note-line-edit)
+                                        (after-change-functions . +my/stripe--note-line-edit)))
+          (should (local-variable-p hook))
+          (should (memq fn (symbol-value hook)))
+          (should-not (memq fn (default-value hook))))
+        ;; No cursor juggling at the end of the buffer any more.
+        (should-not (memq '+my/stripe--leave-phantom-line post-command-hook))
+        (should (+test-stripe--row-overlays))
+        (should scheduled)))))
 
 (ert-deftest stripe/mode-off ()
-  "Off: the strip, filler and hooks gone, margin and fringes back to normal."
+  "Off: the cells and hooks gone, margin and fringes back to normal, the
+strips' frames synced (its window's hidden)."
   (+test-stripe (+test-stripe--text 50)
-    (setq-local display-line-numbers t)
-    (+my/stripe--set-filler (selected-window) "FILLER")
-    (goto-char (point-max))
-    (+my/stripe--plain-last-number)
-    (should +my/stripe--number-cookie)
     (+my/stripe--marks)
     (setq-local left-fringe-width 16)
     (setq-local right-fringe-width 16)
-    (+my/stripe-mode -1)
+    (let (scheduled)
+      (cl-letf (((symbol-function '+my/stripe--sync-soon) (lambda (&rest _) (push t scheduled))))
+        (+my/stripe-mode -1))
+      (should scheduled))
     (should-not (seq-find (lambda (ov) (overlay-get ov '+my/stripe))
                           (overlays-in (point-min) (point-max))))
     (should-not +my/stripe--cache)
-    (should-not +my/stripe--number-cookie)
-    (should-not (assq 'line-number-current-line face-remapping-alist))
     (dolist (var '(right-margin-width fringes-outside-margins left-fringe-width right-fringe-width))
       (should-not (local-variable-p var)))
     (should-not (cdr (window-margins)))
-    (dolist (hook '(window-scroll-functions before-change-functions after-change-functions
-                    post-command-hook pre-command-hook))
-      (dolist (fn '(+my/stripe--scrolled +my/stripe--after-scroll +my/stripe--note-line-edit
-                    +my/stripe--plain-last-number +my/stripe--note-point
-                    +my/stripe--leave-phantom-line))
+    (dolist (hook '(window-scroll-functions before-change-functions after-change-functions))
+      (dolist (fn '(+my/stripe--scrolled +my/stripe--after-scroll +my/stripe--note-line-edit))
         (should-not (memq fn (symbol-value hook)))))))
 
 (ert-deftest stripe/pad ()
