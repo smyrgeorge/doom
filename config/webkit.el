@@ -323,15 +323,15 @@ DIR (in folders of its own maybe) from URL, checked against its SHA-256."
 ;; NO WHITE FLASH
 ;; WebKit's view is white until its page has loaded. A view only starts once
 ;; its window shows the page (nothing shown until then, in the theme's colour),
-;; under a borderless frame in the page's background colour
-;; (`+my/webkit-background'), like the notices' (config/banner.el): it goes
-;; once WebKit says the page has loaded, or after 2 s (e.g. offline).
+;; under a borderless frame (config/childframe.el) in the page's background
+;; colour (`+my/webkit-background'): it goes once WebKit says the page has
+;; loaded, or after 2 s (e.g. offline).
 (defun +my/webkit--uncover (xwidget)
   "Take the cover off XWIDGET's view."
   (when-let* ((cover (xwidget-get xwidget 'cover)))
     (xwidget-put xwidget 'cover nil)
     (when (timerp (cdr cover)) (cancel-timer (cdr cover)))
-    (+my/banner--delete-frame (car cover))))
+    (+my/childframe-delete (car cover))))
 
 (defun +my/webkit--background ()
   "The page's background colour (see `+my/webkit-background')."
@@ -344,10 +344,10 @@ DIR (in folders of its own maybe) from URL, checked against its SHA-256."
   "Cover WINDOW's text area in the page's background colour while XWIDGET
 loads there (see above). The current buffer kept: making the frame selects
 the selected one again, which makes its window's buffer current."
-  (when (and (fboundp '+my/banner--make-frame)
+  (when (and (fboundp '+my/childframe-make)
              (display-graphic-p (window-frame window)))
     (let ((frame (save-current-buffer
-                   (+my/banner--make-frame (window-frame window))))
+                   (+my/childframe-make (window-frame window) "+my/webkit-cover")))
           (edges (window-inside-pixel-edges window))
           (frame-resize-pixelwise t))
       (set-frame-parameter frame 'background-color (+my/webkit--background))

@@ -8,6 +8,7 @@
 | `config/agent-shell.el` | Claude Code |
 | `config/banner.el` | Notices |
 | `config/cheatsheet.el`, `cheatsheet.org` | Tips panel under the sidebar (turned off) |
+| `config/childframe.el` | Frames laid over a window: notices, the error stripe, WebKit's cover |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
 | `config/editor.el` | `Cmd+B`, jumps, case cycling, the `fill-column` line, the current line |
 | `config/emacs.el` | Garbage collection |

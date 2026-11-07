@@ -11,7 +11,7 @@
   (dolist (package '("magit" "magit-section"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
-(+test-load "config/banner" "config/window" "config/tabs" "config/smooth" "config/actions"
+(+test-load "config/childframe" "config/banner" "config/window" "config/tabs" "config/smooth" "config/actions"
             "config/webkit" "config/pdf" "config/markdown" "config/excalidraw" "config/stripe"
             "config/tiling" "config/merge" "config/examples")
 (global-tab-line-mode 1)

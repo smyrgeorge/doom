@@ -4,7 +4,7 @@
 ;; outline, history, search, zoom, copy, Option+Enter, the toolbar's
 ;; requests, places, links out, revert, no PDF.js, closing.
 
-(+test-load "config/banner" "config/window" "config/actions" "config/webkit" "config/pdf")
+(+test-load "config/childframe" "config/banner" "config/window" "config/actions" "config/webkit" "config/pdf")
 
 ;; ====== SETUP ======
 

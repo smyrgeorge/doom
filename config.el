@@ -104,6 +104,9 @@
 ;; TILING (SPC w SPC: a new pane where the tiling strategy puts it)
 (load! "config/tiling")
 
+;; CHILD FRAMES (laid over a window: the notices, the error stripe, WebKit's cover)
+(load! "config/childframe")
+
 ;; BANNERS (notices at the top of a window, with actions)
 (load! "config/banner")
 

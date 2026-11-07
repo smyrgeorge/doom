@@ -247,6 +247,8 @@ the first one, which takes the whole row)."
                        (window-body-width (selected-window))))))
 
 ;;; The notices' frames
+;; A child frame (config/childframe.el) over the header line of each window
+;; with notices.
 
 (defvar +my/banner--frames nil
   "(WINDOW FRAME KEY) for each window that shows (or showed) notices: FRAME
@@ -256,68 +258,9 @@ lays them over its header line, KEY is what it shows.")
 
 (defun +my/banner--make-frame (parent)
   "A frame without borders, not taking focus, inside PARENT, for notices."
-  (let* ((after-make-frame-functions nil)
-         (before-make-frame-hook nil)
-         (frame-resize-pixelwise t)
-         (buffer (generate-new-buffer " *+my/banner*"))
-         (selected (selected-frame))
-         (frame (make-frame
-                 `((parent-frame . ,parent)
-                   (title . "notices")
-                   (fullscreen . nil)
-                   (no-accept-focus . t)
-                   (no-focus-on-map . t)
-                   (min-width . 0)
-                   (min-height . 0)
-                   (border-width . 0)
-                   (internal-border-width . 0)
-                   (child-frame-border-width . 0)
-                   (vertical-scroll-bars . nil)
-                   (horizontal-scroll-bars . nil)
-                   (left-fringe . 0)
-                   (right-fringe . 0)
-                   (menu-bar-lines . 0)
-                   (tool-bar-lines . 0)
-                   (tab-bar-lines . 0)
-                   (line-spacing . 0)
-                   (unsplittable . t)
-                   (no-other-frame . t)
-                   (undecorated . t)
-                   (visibility . nil)
-                   (cursor-type . nil)
-                   (minibuffer . ,(minibuffer-window parent))
-                   (width . 1)
-                   (height . 1)
-                   (no-special-glyphs . t)
-                   (desktop-dont-save . t)
-                   (font . ,(face-attribute 'default :font parent))))))
-    (unless (eq (selected-frame) selected)
-      (select-frame selected 'norecord))
-    (with-current-buffer buffer
-      (setq-local mode-line-format nil
-                  header-line-format nil
-                  tab-line-format nil
-                  cursor-type nil
-                  cursor-in-non-selected-windows nil
-                  truncate-lines t
-                  display-line-numbers nil
-                  show-trailing-whitespace nil
-                  left-margin-width nil
-                  right-margin-width nil
-                  buffer-read-only t))
-    (let ((window (frame-root-window frame)))
-      (set-window-parameter window 'mode-line-format 'none)
-      (set-window-parameter window 'header-line-format 'none)
-      (set-window-parameter window 'tab-line-format 'none)
-      (set-window-buffer window buffer)
-      (set-window-dedicated-p window t))
-    frame))
-
-(defun +my/banner--delete-frame (frame)
-  (when (frame-live-p frame)
-    (let ((buffer (window-buffer (frame-root-window frame))))
-      (delete-frame frame t)
-      (when (buffer-live-p buffer) (kill-buffer buffer)))))
+  (+my/childframe-make parent "+my/banner"
+                       `((title . "notices")
+                         (font . ,(face-attribute 'default :font parent)))))
 
 (defun +my/banner--show-in (window)
   "Lay the notices of WINDOW's buffer over its header line."
@@ -327,7 +270,7 @@ lays them over its header line, KEY is what it shows.")
     ;; In case the header line was set anew (e.g. by a mode) since.
     (with-current-buffer buffer (+my/banner--install))
     (unless (and entry (frame-live-p (nth 1 entry)))
-      (when entry (+my/banner--delete-frame (nth 1 entry)))
+      (when entry (+my/childframe-delete (nth 1 entry)))
       (setq entry (list window (+my/banner--make-frame (window-frame window)) nil))
       (setq +my/banner--frames
             (cons entry (cl-remove window +my/banner--frames :key #'car))))
@@ -367,37 +310,15 @@ lays them over its header line, KEY is what it shows.")
 (defun +my/banner--sync ()
   "Show each window's notices over its header line, and hide those of windows
 that no longer have any."
-  (let (wanted)
-    (dolist (frame (frame-list))
-      (when (and (not (frame-parent frame))
-                 (display-graphic-p frame)
-                 (frame-visible-p frame))
-        (dolist (window (window-list frame 'nomini))
-          (when (buffer-local-value '+my/banner--list (window-buffer window))
-            (push window wanted)))))
-    (setq +my/banner--frames
-          (cl-remove-if (lambda (entry)
-                          (cond ((memq (car entry) wanted) nil)
-                                ((and (window-live-p (car entry))
-                                      (frame-live-p (nth 1 entry)))
-                                 (make-frame-invisible (nth 1 entry) t)
-                                 nil)
-                                (t (+my/banner--delete-frame (nth 1 entry)) t)))
-                        +my/banner--frames))
-    (dolist (window wanted)
-      (condition-case err
-          (+my/banner--show-in window)
-        (error (message "Notices: %s" (error-message-string err)))))))
+  (+my/childframe-sync '+my/banner--frames
+                       (lambda (window) (buffer-local-value '+my/banner--list (window-buffer window)))
+                       #'+my/banner--show-in "Notices"))
 
 (defvar +my/banner--sync-timer nil)
 
 (defun +my/banner--sync-soon (&rest _)
   "Sync right after this redisplay (frames can't be made during it)."
-  (unless (timerp +my/banner--sync-timer)
-    (setq +my/banner--sync-timer
-          (run-at-time 0 nil (lambda ()
-                               (setq +my/banner--sync-timer nil)
-                               (+my/banner--sync))))))
+  (+my/childframe-soon '+my/banner--sync-timer #'+my/banner--sync))
 
 (defun +my/banner--window-change-h (frame)
   ;; Windows split, closed, resized, or showing another buffer.

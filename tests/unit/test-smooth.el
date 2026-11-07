@@ -11,7 +11,7 @@
   (setq ultra-scroll-throttle-mode-line t))
 
 ;; As config.el: smooth.el, then stripe.el (its scroll limit).
-(+test-load "config/smooth" "config/stripe")
+(+test-load "config/smooth" "config/childframe" "config/stripe")
 
 (require 'mwheel)
 (require 'ultra-scroll)

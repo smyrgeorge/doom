@@ -400,64 +400,15 @@ frame's pixels (as a child frame is placed)."
           (window-body-height window t))))
 
 (defun +my/stripe--make-frame (parent)
-  "A child frame of PARENT for a strip: no borders, never focused, its window
-showing a buffer of its own."
-  (let* ((after-make-frame-functions nil)
-         (before-make-frame-hook nil)
-         (frame-resize-pixelwise t)
-         (buffer (generate-new-buffer " *+my/stripe*"))
-         (selected (selected-frame))
-         (frame (make-frame
-                 `((parent-frame . ,parent)
-                   (+my/stripe . t)
-                   (title . "stripe")
-                   (fullscreen . nil)
-                   (no-accept-focus . t)
-                   (no-focus-on-map . t)
-                   (min-width . 0)
-                   (min-height . 0)
-                   ;; Wide enough to take its margins off (see `+my/stripe--bare').
-                   (width . 10)
-                   (height . 2)
-                   (border-width . 0)
-                   (internal-border-width . 0)
-                   (child-frame-border-width . 0)
-                   (vertical-scroll-bars . nil)
-                   (horizontal-scroll-bars . nil)
-                   (left-fringe . 0)
-                   (right-fringe . 0)
-                   (menu-bar-lines . 0)
-                   (tool-bar-lines . 0)
-                   (tab-bar-lines . 0)
-                   (line-spacing . 0)
-                   (unsplittable . t)
-                   (no-other-frame . t)
-                   (undecorated . t)
-                   (visibility . nil)
-                   (cursor-type . nil)
-                   (minibuffer . ,(minibuffer-window parent))
-                   (no-special-glyphs . t)
-                   (desktop-dont-save . t)
-                   (background-color . ,(face-background 'default parent t))))))
-    (unless (eq (selected-frame) selected)
-      (select-frame selected 'norecord))
-    (with-current-buffer buffer
-      (setq-local mode-line-format nil
-                  header-line-format nil
-                  tab-line-format nil
-                  cursor-type nil
-                  cursor-in-non-selected-windows nil
-                  truncate-lines t
-                  display-line-numbers nil
-                  left-margin-width nil
-                  right-margin-width nil
-                  show-trailing-whitespace nil
-                  buffer-read-only t))
-    (let ((window (frame-root-window frame)))
-      (dolist (parameter '(mode-line-format header-line-format tab-line-format))
-        (set-window-parameter window parameter 'none))
-      (set-window-buffer window buffer)
-      (set-window-dedicated-p window t))
+  "A child frame of PARENT for a strip (config/childframe.el)."
+  (let ((frame (+my/childframe-make
+                parent "+my/stripe"
+                `((+my/stripe . t)
+                  (title . "stripe")
+                  ;; Wide enough to take its margins off (see `+my/stripe--bare').
+                  (width . 10)
+                  (height . 2)
+                  (background-color . ,(face-background 'default parent t))))))
     (+my/stripe--bare frame)
     frame))
 
@@ -479,18 +430,12 @@ showing a buffer of its own."
       (set-window-margins window 0 0))
     (set-window-hscroll window 0)))
 
-(defun +my/stripe--delete-frame (frame)
-  (when (frame-live-p frame)
-    (let ((buffer (window-buffer (frame-root-window frame))))
-      (delete-frame frame t)
-      (when (buffer-live-p buffer) (kill-buffer buffer)))))
-
 (defun +my/stripe--show-in (window)
   "Lay WINDOW's strip frame over its right margin (made the first time), and
 draw it."
   (let ((entry (assq window +my/stripe--frames)))
     (unless (and entry (frame-live-p (nth 1 entry)))
-      (when entry (+my/stripe--delete-frame (nth 1 entry)))
+      (when entry (+my/childframe-delete (nth 1 entry)))
       (setq entry (list window (+my/stripe--make-frame (window-frame window)) nil nil))
       (setq +my/stripe--frames
             (cons entry (cl-remove window +my/stripe--frames :key #'car))))
@@ -515,33 +460,13 @@ draw it."
 margin; hide those of windows that no longer show one; delete those of
 closed windows."
   (setq +my/stripe--sync-timer nil)
-  (let (wanted)
-    (dolist (frame (frame-list))
-      (when (and (not (frame-parent frame))
-                 (display-graphic-p frame)
-                 (frame-visible-p frame))
-        (dolist (window (window-list frame 'nomini))
-          (when (buffer-local-value '+my/stripe-mode (window-buffer window))
-            (push window wanted)))))
-    (setq +my/stripe--frames
-          (cl-remove-if (lambda (entry)
-                          (pcase-let ((`(,window ,frame) entry))
-                            (cond ((not (frame-live-p frame)) t)
-                                  ((memq window wanted) nil)
-                                  ((window-live-p window)
-                                   (make-frame-invisible frame t)
-                                   nil)
-                                  (t (+my/stripe--delete-frame frame) t))))
-                        +my/stripe--frames))
-    (dolist (window wanted)
-      (condition-case err
-          (+my/stripe--show-in window)
-        (error (message "Stripe: %s" (error-message-string err)))))))
+  (+my/childframe-sync '+my/stripe--frames
+                       (lambda (window) (buffer-local-value '+my/stripe-mode (window-buffer window)))
+                       #'+my/stripe--show-in "Stripe"))
 
 (defun +my/stripe--sync-soon (&rest _)
   "Sync right after this redisplay (frames can't be made during it)."
-  (unless (timerp +my/stripe--sync-timer)
-    (setq +my/stripe--sync-timer (run-at-time 0 nil #'+my/stripe--sync))))
+  (+my/childframe-soon '+my/stripe--sync-timer #'+my/stripe--sync))
 
 (defun +my/stripe--window-change-h (frame)
   ;; Windows split, closed, resized, or showing another buffer.

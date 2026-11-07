@@ -10,8 +10,8 @@
   (dolist (package '("magit" "magit-section"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
-(+test-load "config/banner" "config/window" "config/tabs" "config/tiling" "config/stripe" "config/smooth"
-            "config/merge" "config/examples")
+(+test-load "config/childframe" "config/banner" "config/window" "config/tabs" "config/tiling" "config/stripe"
+            "config/smooth" "config/merge" "config/examples")
 (require 'so-long)
 (require 'tab-line)
 

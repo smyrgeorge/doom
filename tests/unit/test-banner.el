@@ -5,7 +5,7 @@
 ;; stood in for here, batch Emacs can't make frames); theme colours; the long
 ;; lines notice and its actions.
 
-(+test-load "config/banner")
+(+test-load "config/childframe" "config/banner")
 
 ;; Loading tinted the rows (no theme yet: nothing to do) and asked for a sync.
 (defconst +test-banner--theme-at-load +my/banner--theme)
@@ -905,21 +905,6 @@ laid out; its window shows a read-only buffer without any lines of its own."
                 (should truncate-lines)))
           (set-window-dedicated-p window nil)
           (kill-buffer buffer))))))
-
-(ert-deftest banner/delete-frame ()
-  (+test-banner
-    (+test-banner--gui
-      (let* ((frame (+test-banner--make-frame (selected-frame)))
-             (buffer (+test-banner--frame-buffer frame)))
-        (+my/banner--delete-frame frame)
-        (should-not (+test-banner--frame-live frame))
-        (should-not (buffer-live-p buffer))
-        ;; Dead already: nothing.
-        (+my/banner--delete-frame frame)
-        (setf (+test-banner--frame-buffer frame) (generate-new-buffer " *keep*"))
-        (+my/banner--delete-frame frame)
-        (should (buffer-live-p (+test-banner--frame-buffer frame)))
-        (kill-buffer (+test-banner--frame-buffer frame))))))
 
 ;; ====== SYNCING SOON ======
 

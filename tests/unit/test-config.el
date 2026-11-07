@@ -259,6 +259,13 @@ built on it (config/markdown.el binds its clicks as it loads)."
   (should (eq (lookup-key +my/excalidraw-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
   (should (eq (lookup-key +md-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select)))
 
+(ert-deftest config/order-childframe-before-its-users ()
+  "config/childframe.el before the notices, the error stripe and WebKit's
+cover, which make their frames with it."
+  (dolist (name '("config/banner" "config/stripe" "config/webkit"))
+    (should (< (+test-config--load-position "config/childframe")
+               (+test-config--load-position name)))))
+
 (ert-deftest config/order-actions-before-pdf ()
   "config/actions.el before config/pdf.el, which puts its provider
 first in the Option+Enter menu, and config/excalidraw.el, which puts its last."

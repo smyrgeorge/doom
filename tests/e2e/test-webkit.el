@@ -3,7 +3,7 @@
 ;; splits, spare and kept views, links out, JavaScript, the title read, copy,
 ;; scrolling, closing.
 
-(+test-load "config/banner" "config/window" "config/webkit")
+(+test-load "config/childframe" "config/window" "config/webkit")
 
 ;; ====== A TEST PAGE ======
 
@@ -232,7 +232,7 @@ closed)."
   (+test-webkit
     (+test-webkit--open)
     (let ((child (with-current-buffer "*test page*"
-                   (+my/banner--make-frame (selected-frame)))))
+                   (+my/childframe-make (selected-frame) "test"))))
       (unwind-protect
           (progn
             (set-window-dedicated-p (frame-root-window child) nil)

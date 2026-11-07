@@ -15,7 +15,7 @@
 (defvar +test-stripe--bitmaps nil
   "(NAME ARGS...) of the `define-fringe-bitmap' calls made as flycheck loaded.")
 
-(+test-load "config/stripe")
+(+test-load "config/childframe" "config/stripe")
 
 (cl-letf* ((define (symbol-function 'define-fringe-bitmap))
            ((symbol-function 'define-fringe-bitmap)
@@ -921,10 +921,15 @@ moved): a new one, the old one flushed from Emacs's image cache."
                   ((symbol-function 'timerp) (lambda (x) (eq x 'timer))))
           (let ((+my/stripe--sync-timer nil))
             (+my/stripe--render (selected-window))
-            (should (equal scheduled '((0 nil +my/stripe--sync))))
+            (should (equal (mapcar (lambda (s) (seq-take s 2)) scheduled) '((0 nil))))
             ;; Once scheduled, not again.
             (+my/stripe--render (selected-window))
-            (should (= (length scheduled) 1))))))))
+            (should (= (length scheduled) 1))
+            ;; Then it syncs.
+            (let (synced)
+              (cl-letf (((symbol-function '+my/stripe--sync) (lambda () (push t synced))))
+                (funcall (nth 2 (car scheduled))))
+              (should synced))))))))
 
 (ert-deftest stripe/a-moved-window-s-frame-is-placed-anew ()
   "The window's text moved down (a notice's header line): synced again."

@@ -84,7 +84,7 @@
                 (lambda (xw type) (+test-webkit--log 'xwidget-webkit-callback xw type))))
        ,@body)))
 
-;; Cover frames (config/banner.el's, faked): symbols with their settings.
+;; Cover frames (config/childframe.el's, faked): symbols with their settings.
 (defvar +test-webkit--frames nil "The cover frames made, latest first.")
 
 (defun +test-webkit--fake-frame-p (frame)
@@ -99,17 +99,17 @@
          (set-position (symbol-function 'set-frame-position))
          (make-visible (symbol-function 'make-frame-visible)))
      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _) t))
-               ((symbol-function '+my/banner--make-frame)
-                (lambda (parent)
+               ((symbol-function '+my/childframe-make)
+                (lambda (parent _name &optional _parameters)
                   (let ((frame (make-symbol "cover")))
                     (put frame '+test-webkit-frame t)
                     (put frame 'parent parent)
                     (push frame +test-webkit--frames)
                     ;; As the real one: selecting the frame again makes
                     ;; another buffer current.
-                    (set-buffer (get-buffer-create " *test-banner*"))
+                    (set-buffer (get-buffer-create " *test-cover*"))
                     frame)))
-               ((symbol-function '+my/banner--delete-frame)
+               ((symbol-function '+my/childframe-delete)
                 (lambda (frame) (put frame 'deleted (1+ (or (get frame 'deleted) 0)))))
                ((symbol-function 'set-frame-parameter)
                 (lambda (frame parameter value)
@@ -914,7 +914,7 @@ mode has said what its page is."
 (ert-deftest webkit/no-cover-in-a-terminal ()
   (+test-webkit
     (let ((made nil))
-      (cl-letf (((symbol-function '+my/banner--make-frame) (lambda (_) (setq made t))))
+      (cl-letf (((symbol-function '+my/childframe-make) (lambda (&rest _) (setq made t))))
         (+test-webkit--show (+test-webkit--page)))
       (should-not made)
       (should-not (xwidget-get (car +test-webkit--made) 'cover)))))
@@ -963,10 +963,10 @@ mode has said what its page is."
           (should (eq (current-buffer) page)))
         (should (xwidget-get xw 'cover))))))
 
-(ert-deftest webkit/no-cover-without-config-banner ()
+(ert-deftest webkit/no-cover-without-config-childframe ()
   (+test-webkit
     (+test-webkit--graphic
-      (cl-letf (((symbol-function '+my/banner--make-frame) nil))
+      (cl-letf (((symbol-function '+my/childframe-make) nil))
         (+test-webkit--show (+test-webkit--page)))
       (should (= (length +test-webkit--made) 1))
       (should-not (xwidget-get (car +test-webkit--made) 'cover)))))

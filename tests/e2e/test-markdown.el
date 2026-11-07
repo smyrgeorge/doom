@@ -7,7 +7,7 @@
 ;; The preview's stylesheets (Doom's markdown module sets GitHub's).
 (setq markdown-css-paths '("https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css"))
 
-(+test-load "config/banner" "config/window" "config/webkit" "config/markdown")
+(+test-load "config/childframe" "config/banner" "config/window" "config/webkit" "config/markdown")
 
 ;; ====== SETUP ======
 

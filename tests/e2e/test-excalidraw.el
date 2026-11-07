@@ -6,7 +6,7 @@
 ;; change, the dark canvas, inserting from Markdown, files that aren't
 ;; drawings, the pointer.
 
-(+test-load "config/banner" "config/window" "config/actions" "config/webkit" "config/excalidraw")
+(+test-load "config/childframe" "config/banner" "config/window" "config/actions" "config/webkit" "config/excalidraw")
 (require 'markdown-mode)
 
 ;; ====== SETUP ======
