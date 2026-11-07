@@ -2,13 +2,56 @@
 
 My Emacs configuration, built on [Doom Emacs](https://github.com/doomemacs/core).
 
-> Doom is a configuration framework for GNU Emacs tailored for Emacs bankruptcy veterans who want less framework in their
-> frameworks, a modicum of stability (and reproducibility) from their package manager, and the performance of a hand
-> rolled config (or better).
+> Doom is a configuration framework for GNU Emacs tailored for Emacs bankruptcy
+veterans who want less framework in their frameworks, a modicum of stability
+(and reproducibility) from their package manager, and the performance of a hand
+rolled config (or better). It can be a foundation for your own config or a
+resource for Emacs enthusiasts to learn more about our favorite operating
+system.
 
 It targets **macOS on Apple Silicon** with **Emacs 31** (emacs-plus), and aims for an IDE-like workflow: a project
 sidebar that follows the current file, LSP for every language I use, format-on-save, and Claude Code inside Emacs. It
 works both as a GUI app and in the terminal (`emacs -nw`).
+
+## Showcase
+
+Each of these opens on files of its own with `M-x +my/example-NAME` (see [Examples](docs/examples.md)).
+
+### Tiling Window Manager
+
+`SPC w SPC` opens a new pane where the tiling layout puts it: the main pane on the left, the others stacked on the right
+([more](docs/editor.md#tiling)).
+
+![Tiling](examples/tiling.png)
+
+### Three-way merge
+
+`e` on a conflicted file in Magit opens Yours, the Result and Theirs side by side, lined up and scrolling together:
+take a change with `>>` / `<<`, ignore it with `x`, or let the ✨ wand merge both sides' words. It works in a terminal
+too ([more](docs/git.md#resolving-conflicts)).
+
+![Three-way merge](examples/merge.png)
+
+### Drawings
+
+`*.excalidraw.svg` files open as drawings in Excalidraw, inside Emacs, and save as images that Markdown and GitHub
+show ([more](docs/editor.md#drawings-excalidraw)).
+
+![Excalidraw](examples/excalidraw.png)
+
+### PDFs
+
+PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with Vim keys, search, an outline, and a night mode (dark
+pages that keep the colours' hues, `SPC m d`) ([more](docs/editor.md#pdfs)).
+
+![PDF in night mode](examples/pdf.png)
+
+### Markdown with live preview
+
+`SPC m p` shows the rendered file beside it, updated as you type and following the cursor
+([more](docs/markdown.md#live-preview)).
+
+![Markdown live preview](examples/markdown.png)
 
 ## Installation
 
