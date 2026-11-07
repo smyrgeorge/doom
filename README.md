@@ -13,8 +13,8 @@ It targets **macOS on Apple Silicon** with **Emacs 31** (emacs-plus), and aims f
 sidebar that follows the current file, LSP for every language I use, format-on-save, and Claude Code inside Emacs. It
 works both as a GUI app and in the terminal (`emacs -nw`).
 
-It's **tiling first**, like a tiling window manager: applications (Claude Code, the terminal, the Markdown preview, a
-file's diff, drawings) open in a new pane where the tiling layout puts it, files open as tabs in the current pane, and a
+It's **tiling first**, like a tiling window manager: applications (Claude Code, the terminal, magit, the Markdown
+preview, drawings) open in a new pane where the tiling layout puts it, files open as tabs in the current pane, and a
 pane closes with its last tab.
 
 ## Showcase

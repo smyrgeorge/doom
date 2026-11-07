@@ -17,13 +17,18 @@
 ;; in order: left to right, top to bottom.
 ;; TILING FIRST (config/tiling/apps.el)
 ;; - Applications (`+my/tiling-apps': Claude Code, the terminal, the Markdown
-;;   preview, a file's diff, drawings) open in a new pane where the strategy
-;;   puts it, whatever their own setting or Doom's popup rules say; one shown
-;;   already: its pane.
+;;   preview, magit, drawings) open in a new pane where the strategy puts it,
+;;   whatever their own setting or Doom's popup rules say; one shown already:
+;;   its pane. Magit's status (SPC g g), and any magit buffer opened from
+;;   outside magit (SPC g d's diff, a log from a file), open so; inside magit,
+;;   a log or a diff from the status stays in its pane as magit has it, a
+;;   commit or a stash (Doom: beside) opens in a new pane, its process log
+;;   below as Doom has it.
 ;; - Files open as a tab in the current pane. From an application's pane, a
-;;   popup or a side panel (a link in Claude Code, RET in a diff, the sidebar,
+;;   popup or a side panel (a link in Claude Code, RET in magit, the sidebar,
 ;;   SPC SPC there), in the last pane of files instead (a new pane without
-;;   one): applications' panes get no file tabs.
+;;   one): applications' panes get no file tabs. Git's own (a commit message,
+;;   the rebase todo: in .git/, edited for git) stay where git opens them.
 ;; - A pane closes with its last tab: its tab closed (config/editor/tabs.el)
 ;;   or its buffer killed (SPC b k, a terminal's shell ending), but the
 ;;   frame's last pane.
@@ -48,9 +53,11 @@
     ghostel-mode                        ; the terminal (SPC o t)
     +md-preview-page-mode               ; the Markdown preview (SPC m p)
     +my/excalidraw-mode                 ; drawings (Option+Enter, C-c C-d)
-    (magit-diff-mode . +my/tiling-file-diff-p)) ; a file's diff (SPC g d)
+    (magit-mode . +my/tiling-magit-new-pane-p)) ; magit (SPC g g, SPC g d...)
   "Applications (see TILING FIRST above): major modes (and the modes derived
-from them), or (MODE . PREDICATE), PREDICATE called in the buffer.")
+from them), whose buffers open in a new pane; or (MODE . PREDICATE), MODE's
+buffers an application's, opening in a new pane when PREDICATE, called in the
+buffer being shown, says so (else as they ask).")
 
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange))

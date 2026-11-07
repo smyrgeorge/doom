@@ -5,6 +5,7 @@
 ;; files as tabs in the panes of files, a pane closed with its last tab.
 
 (+test-load "config/window" "config/tiling")
+(require 'magit)
 
 ;; ====== HELPERS ======
 
@@ -324,7 +325,7 @@ the selected one stays selected."
   (should (memq #'+my/tiling-close-pane-h (default-value 'kill-buffer-hook)))
   ;; The applications.
   (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) +my/tiling-apps)
-                 '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-diff-mode))))
+                 '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-mode))))
 
 (ert-deftest tiling/what-is-an-application ()
   (+test-tiling-first
@@ -332,10 +333,14 @@ the selected one stays selected."
     ;; Modes derived from one too.
     (should (+my/tiling-app-p (+test-tiling--app "sub" #'+test-tiling-sub-app-mode)))
     (should-not (+my/tiling-app-p (get-buffer "A")))
-    ;; (MODE . PREDICATE): the mode, and the predicate in the buffer.
+    ;; (MODE . PREDICATE): MODE's buffers an application's; a new pane when
+    ;; PREDICATE says so, in the buffer.
     (let ((+my/tiling-apps '((+test-tiling-app-mode . (lambda () (string-prefix-p "yes" (buffer-name)))))))
       (should (+my/tiling-app-p (+test-tiling--app "yes-app")))
-      (should-not (+my/tiling-app-p (+test-tiling--app "no-app"))))))
+      (should (+my/tiling-app-p (+test-tiling--app "no-app")))
+      (should (+my/tiling--new-pane-p (get-buffer "yes-app")))
+      (should-not (+my/tiling--new-pane-p (get-buffer "no-app")))
+      (should-not (+my/tiling--new-pane-p (get-buffer "A"))))))
 
 (ert-deftest tiling/an-application-in-a-new-pane ()
   "Where the strategy puts it, not where its rules say, nor their size (a
@@ -502,3 +507,96 @@ Emacs puts it, from an application's pane too."
         (should (window-at-side-p window 'bottom))
         (should (= (window-total-width window) (frame-width)))
         (should (eq (window-buffer app) (get-buffer "app")))))))
+
+;; ====== MAGIT ======
+
+(defun +test-tiling--magit (name mode)
+  "A buffer standing for magit's buffer NAME in MODE (its mode only)."
+  (with-current-buffer (get-buffer-create name)
+    (setq-local major-mode mode)
+    (current-buffer)))
+
+(defmacro +test-tiling-magit (&rest body)
+  "BODY as `+test-tiling', the applications this config's."
+  (declare (indent 0))
+  `(+test-tiling
+     (let ((+my/tiling-apps (default-value '+my/tiling-apps)))
+       ,@body)))
+
+(ert-deftest tiling/magit-status-in-a-new-pane ()
+  "SPC g g from a file: magit's status in a new pane (Doom: the current
+window); shown, its pane."
+  (+test-tiling-magit
+    (let* ((main (selected-window))
+           (status (+test-tiling--magit "magit: test" 'magit-status-mode))
+           (window (display-buffer status '(display-buffer-same-window))))
+      (should-not (eq window main))
+      (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "magit: test")))
+      (select-window main)
+      (should (eq (display-buffer status '(display-buffer-same-window)) window)))))
+
+(ert-deftest tiling/magit-from-outside-in-a-new-pane ()
+  "A log, a file's diff (SPC g d) from a file: a new pane."
+  (+test-tiling-magit
+    (dolist (case '(("magit-log: test" . magit-log-mode) ("magit-diff: test" . magit-diff-mode)))
+      (delete-other-windows)
+      (switch-to-buffer "A")
+      (let* ((from (selected-window))
+             (window (display-buffer (+test-tiling--magit (car case) (cdr case)) '(display-buffer-same-window))))
+        (should-not (eq window from))
+        (should (equal (mapcar #'car (+test-tiling--layout)) (list "A" (car case))))))))
+
+(ert-deftest tiling/magit-inside-its-pane-as-magit-has-it ()
+  "From the status pane: a log, a diff in that pane (as magit and Doom have
+them); a commit, a stash in a new pane; the process log as Doom has it
+(below)."
+  (+test-tiling-magit
+    (let* ((status-window (display-buffer (+test-tiling--magit "magit: test" 'magit-status-mode) nil)))
+      (select-window status-window)
+      (let ((log (display-buffer (+test-tiling--magit "magit-log: test" 'magit-log-mode)
+                                 '(display-buffer-same-window))))
+        (should (eq log status-window)))
+      (let ((diff (display-buffer (+test-tiling--magit "magit-diff: test" 'magit-diff-mode)
+                                  '(display-buffer-same-window))))
+        (should (eq diff status-window)))
+      (let ((revision (display-buffer (+test-tiling--magit "magit-revision: test" 'magit-revision-mode)
+                                      '(display-buffer-same-window))))
+        (should-not (eq revision status-window))
+        (should (= (length (+my/tiling--panes)) 3)))
+      (select-window status-window)
+      (let ((process (display-buffer (+test-tiling--magit "magit-process: test" 'magit-process-mode)
+                                     '(display-buffer-below-selected))))
+        (should (eq (window-in-direction 'below status-window) process))))))
+
+(ert-deftest tiling/magit-s-panes-get-no-file-tabs ()
+  "RET on a file in magit (or SPC SPC there): the file in the pane of files."
+  (+test-tiling-magit
+    (let* ((left (selected-window))
+           (file (+test-tiling--file "f.txt"))
+           (status-window (display-buffer (+test-tiling--magit "magit: test" 'magit-status-mode) nil)))
+      (select-window status-window)
+      (should (eq (display-buffer file '(display-buffer-same-window)) left))
+      (select-window status-window)
+      (switch-to-buffer (+test-tiling--file "g.txt"))
+      (should (eq (selected-window) left)))))
+
+(ert-deftest tiling/git-s-own-files-where-git-opens-them ()
+  "A file in .git/ (git's: a commit message, the rebase todo), one edited for
+git (with-editor, git-commit-mode): in magit's pane, as git opens them."
+  (+test-tiling-magit
+    (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "repo-") t)))
+           ;; Not COMMIT_EDITMSG itself: git-commit-mode would hold it (only
+           ;; a commit closes it).
+           (git-file (progn (make-directory (expand-file-name ".git" dir) t)
+                            (find-file-noselect (expand-file-name ".git/description" dir))))
+           (status-window (display-buffer (+test-tiling--magit "magit: test" 'magit-status-mode) nil)))
+      (should-not (+my/tiling--file-p git-file))
+      (select-window status-window)
+      (switch-to-buffer git-file)
+      (should (eq (selected-window) status-window))
+      (should (eq (window-buffer status-window) git-file))
+      (dolist (mode '(with-editor-mode git-commit-mode))
+        (with-current-buffer (+test-tiling--file "msg.txt")
+          (set (make-local-variable mode) t)
+          (should-not (+my/tiling--file-p (current-buffer)))
+          (set (make-local-variable mode) nil))))))

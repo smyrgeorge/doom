@@ -312,6 +312,57 @@ of files, the diff staying; SPC g d there closes it."
           (should-not (window-live-p diff))
           (should (= (length (+my/tiling--panes)) 1)))))))
 
+(ert-deftest e2e-tiling/magit-status-and-its-buffers ()
+  "SPC g g from a file: magit's status in a new pane; its log in that pane; a
+commit from the log in a new pane, q closes it; RET on a file in the status:
+the file in the pane of files; SPC g g again: the status's pane."
+  (+test-tiling
+    (let* ((dir (+test-tiling--dir))
+           (default-directory dir)
+           (left (selected-window)))
+      (+test-tiling--git "init" "-q")
+      (with-temp-file (expand-file-name "f.txt" dir) (insert "one\n"))
+      (+test-tiling--git "add" "f.txt")
+      (+test-tiling--git "commit" "-qm" "first")
+      (with-temp-file (expand-file-name "f.txt" dir) (insert "one\ntwo\n"))
+      (find-file (expand-file-name "f.txt" dir))
+      (revert-buffer t t)
+      (let ((file (current-buffer)))
+        (magit-status-setup-buffer dir)
+        (let ((status (selected-window)))
+          (should-not (eq status left))
+          (should (with-current-buffer (window-buffer status) (derived-mode-p 'magit-status-mode)))
+          (should (= (length (+my/tiling--panes)) 2))
+          ;; Its log: in its pane.
+          (magit-log-setup-buffer (list "HEAD") nil nil)
+          (should (eq (selected-window) status))
+          (should (with-current-buffer (window-buffer status) (derived-mode-p 'magit-log-mode)))
+          (should (= (length (+my/tiling--panes)) 2))
+          ;; A commit from it: a new pane; q closes it.
+          (magit-show-commit "HEAD")
+          (let ((revision (get-buffer-window (magit-get-mode-buffer 'magit-revision-mode))))
+            (should (window-live-p revision))
+            (should-not (memq revision (list left status)))
+            (should (= (length (+my/tiling--panes)) 3))
+            (with-selected-window revision
+              (magit-mode-bury-buffer))
+            (should-not (window-live-p revision)))
+          (should (= (length (+my/tiling--panes)) 2))
+          ;; Back to the status; RET on its file.
+          (select-window status)
+          (magit-mode-bury-buffer)
+          (should (eq (window-buffer status) (magit-get-mode-buffer 'magit-status-mode)))
+          (goto-char (point-min))
+          (should (re-search-forward "^modified +f\\.txt" nil t))
+          (call-interactively #'magit-diff-visit-file)
+          (should (eq (selected-window) left))
+          (should (eq (window-buffer left) file))
+          (should (with-current-buffer (window-buffer status) (derived-mode-p 'magit-status-mode)))
+          ;; SPC g g again, from the file: its pane.
+          (magit-status-setup-buffer dir)
+          (should (eq (selected-window) status))
+          (should (= (length (+my/tiling--panes)) 2)))))))
+
 ;; ====== POPUPS, TABS ======
 
 (ert-deftest e2e-tiling/a-help-link-opens-in-the-files-pane ()

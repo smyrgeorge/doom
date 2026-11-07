@@ -4,23 +4,47 @@
 ;; config/tiling.el). Loaded from config/tiling.el.
 
 ;; WHAT A BUFFER IS
-(defun +my/tiling-file-diff-p ()
-  "Non-nil in a magit diff of some files (SPC g d's), not a whole one."
-  (bound-and-true-p magit-buffer-diff-files))
+(defun +my/tiling--in-magit-p (buffer)
+  "Non-nil if BUFFER is magit's, or a commit message (git's, edited for it)."
+  (with-current-buffer buffer
+    (or (derived-mode-p 'magit-mode)
+        (bound-and-true-p git-commit-mode)
+        (bound-and-true-p with-editor-mode))))
+
+(defun +my/tiling-magit-new-pane-p ()
+  "In a magit buffer being shown: non-nil if it opens in a new pane (see
+config/tiling.el): its status, any shown from outside magit, a commit or a
+stash; not its process log."
+  (and (not (derived-mode-p 'magit-process-mode))
+       (or (derived-mode-p 'magit-status-mode 'magit-revision-mode 'magit-stash-mode)
+           (not (+my/tiling--in-magit-p (window-buffer (selected-window)))))))
+
+(defun +my/tiling--app (buffer)
+  "BUFFER's entry in `+my/tiling-apps', if it's an application's."
+  (with-current-buffer buffer
+    (seq-find (lambda (app) (derived-mode-p (if (consp app) (car app) app)))
+              +my/tiling-apps)))
 
 (defun +my/tiling-app-p (buffer)
   "Non-nil if BUFFER is an application's (see `+my/tiling-apps')."
-  (with-current-buffer buffer
-    (seq-some (lambda (app)
-                (if (consp app)
-                    (and (derived-mode-p (car app)) (funcall (cdr app)))
-                  (derived-mode-p app)))
-              +my/tiling-apps)))
+  (and (+my/tiling--app buffer) t))
+
+(defun +my/tiling--new-pane-p (buffer)
+  "Non-nil if application BUFFER, being shown, opens in a new pane (see
+`+my/tiling-apps')."
+  (when-let* ((app (+my/tiling--app buffer)))
+    (or (not (consp app))
+        (with-current-buffer buffer (funcall (cdr app))))))
 
 (defun +my/tiling--file-p (buffer)
-  "Non-nil if BUFFER is a file's (or a folder's, dired)."
-  (or (buffer-file-name buffer)
-      (provided-mode-derived-p (buffer-local-value 'major-mode buffer) 'dired-mode)))
+  "Non-nil if BUFFER is a file's (or a folder's, dired); not git's own (in
+.git/, a commit message, edited for git: where git opens them)."
+  (with-current-buffer buffer
+    (if-let* ((file buffer-file-name))
+        (not (or (string-match-p "/\\.git/" file)
+                 (bound-and-true-p git-commit-mode)
+                 (bound-and-true-p with-editor-mode)))
+      (derived-mode-p 'dired-mode))))
 
 ;; PANES
 (defun +my/tiling--file-pane-p (window)
@@ -73,9 +97,11 @@ showed): as it asks."
   (cond
    ((active-minibuffer-window) nil)
    ((and (+my/tiling-app-p buffer) (not (alist-get 'allow-no-window alist)))
-    (if-let* ((window (get-buffer-window buffer)))
-        (window--display-buffer buffer window 'reuse (+my/tiling--alist alist))
-      (+my/tiling-display-buffer buffer alist)))
+    (cond ((get-buffer-window buffer)
+           (window--display-buffer buffer (get-buffer-window buffer) 'reuse
+                                   (+my/tiling--alist alist)))
+          ((+my/tiling--new-pane-p buffer)
+           (+my/tiling-display-buffer buffer alist))))
    ((and (+my/tiling--file-p buffer)
          (not (+my/tiling--file-pane-p (selected-window))))
     (if-let* ((window (or (seq-find #'+my/tiling--file-pane-p (get-buffer-window-list buffer 'nomini))
