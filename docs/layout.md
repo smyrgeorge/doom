@@ -18,7 +18,7 @@
 | `config/lsp.el` | Language server tweaks, `kotlin-lsp` |
 | `config/magit.el` | Commit graph, delta diffs, TODOs |
 | `config/markdown.el`, `markdown-alerts.lua` | Live preview; GitHub's alerts in it |
-| `config/merge.el` | Three-pane conflict resolution |
+| `config/merge.el`, `merge/` | Three-pane conflict resolution |
 | `config/modeline.el` | Mode line |
 | `config/pdf.el`, `.js` | PDFs |
 | `config/peek.el` | Usages peek |
@@ -39,3 +39,6 @@
 | `scripts/` | Installers (`emacs.sh`, `tools.sh`, `lsp.sh`), `dict.sh`, `screenshots.sh` |
 | `tests/` | Tests (`tests/run.sh`) |
 | `docs/` | These docs |
+
+A large feature is a file and a folder: `config/NAME.el` has its settings, keys and mode, and loads its parts from
+`config/NAME/`.

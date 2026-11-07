@@ -28,7 +28,7 @@
 ;; For its next call: a function that loads the package itself, then uses it,
 ;; runs compiled to its end the first time. Such a function binds the package's
 ;; variables with `dlet' and calls its functions, not its macros (see
-;; config/merge.el).
+;; config/merge/changes.el).
 (defvar +my/compile-idle-delay 2
   "Seconds of idleness before this config's functions get compiled.")
 

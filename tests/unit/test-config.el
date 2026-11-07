@@ -28,6 +28,21 @@
   "NAME (\"config/emacs\") as a file of this config."
   (expand-file-name (concat name ".el") +test-root))
 
+(defun +test-config--parts (name)
+  "The parts file NAME (\"config/merge\") loads (\"config/merge/git\"...), in
+order, theirs included: the `load!'s among its top-level forms."
+  (with-temp-buffer
+    (insert-file-contents (+test-config--file name))
+    (let (parts)
+      (condition-case nil
+          (while t
+            (let ((form (read (current-buffer))))
+              (when (eq (car-safe form) 'load!)
+                (push (concat (file-name-directory name) (cadr form)) parts))))
+        (end-of-file))
+      (cl-loop for part in (nreverse parts)
+               append (append (+test-config--parts part) (list part))))))
+
 (defvar +test-config--history-before (mapcar #'car load-history))
 
 (defvar +test-config--error nil "What loading config.el signalled, if anything.")
@@ -83,8 +98,11 @@ until something is used."
   (should-not +test-config--processes))
 
 (ert-deftest config/loads-every-file-in-order ()
-  "Each file config.el names, once, in its order, config.el itself last."
-  (let ((expected (append (mapcar #'+test-config--file (+test-config--loads))
+  "Each file config.el names, once, in its order, config.el itself last. A
+file is recorded once it has loaded: its parts (config/merge/...) before it."
+  (let ((expected (append (cl-loop for name in (+test-config--loads)
+                                   append (mapcar #'+test-config--file
+                                                  (append (+test-config--parts name) (list name))))
                           (list (expand-file-name "config.el" +test-root)))))
     (should (equal (+test-config--loaded) expected))))
 
@@ -93,7 +111,11 @@ until something is used."
     (should (> (length loads) 20))
     (dolist (name loads)
       (should (string-prefix-p "config/" name))
-      (should (file-exists-p (+test-config--file name))))
+      (should (file-exists-p (+test-config--file name)))
+      ;; Its parts, in its folder.
+      (dolist (part (+test-config--parts name))
+        (should (string-prefix-p (concat name "/") part))
+        (should (file-exists-p (+test-config--file part)))))
     ;; Each once.
     (should (equal loads (delete-dups (copy-sequence loads))))))
 
@@ -118,24 +140,38 @@ until something is used."
   (should (member "config/pdf" (+test-config--loads))))
 
 (ert-deftest config/every-config-file-accounted-for ()
-  "Each config/*.el is loaded or one of the disabled ones: none forgotten."
-  (let ((loads (+test-config--loads)))
-    (dolist (file (directory-files (expand-file-name "config/" +test-root) nil "\\.el\\'"))
+  "Each config/*.el is loaded or one of the disabled ones, and each
+config/NAME/*.el a part config/NAME.el loads: none forgotten."
+  (let ((loads (+test-config--loads))
+        (dir (expand-file-name "config/" +test-root)))
+    (dolist (file (directory-files dir nil "\\.el\\'"))
       (let ((name (concat "config/" (file-name-sans-extension file))))
         (should (or (member name loads)
-                    (member name '("config/cheatsheet"))))))))
+                    (member name '("config/cheatsheet"))))))
+    (dolist (folder (directory-files dir nil "\\`[^.]"))
+      (when (file-directory-p (expand-file-name folder dir))
+        (let ((entry (concat "config/" folder)))
+          (should (member entry loads))
+          (dolist (file (directory-files (expand-file-name folder dir) nil "\\.el\\'"))
+            (should (member (concat entry "/" (file-name-sans-extension file))
+                            (+test-config--parts entry)))))))))
 
 (ert-deftest config/files-are-lexical-and-say-so ()
   "Every config file uses lexical binding (compile.el relies on it) and its
-header says config.el loads it."
+header says what loads it: config.el, or for a part its file (config/merge.el)."
   (dolist (name (append (+test-config--loads) '("config/cheatsheet")))
-    (with-temp-buffer
-      (insert-file-contents (+test-config--file name))
-      (goto-char (point-min))
-      (should (looking-at-p (format ";;; \\$DOOMDIR/%s\\.el -\\*- lexical-binding: t; -\\*-"
-                                    (regexp-quote name))))
-      (should (re-search-forward "Loaded \\(?:last \\)?from\\(?:\n;;\\)? config\\.el"
-                                 (save-excursion (forward-line 5) (point)) t))))
+    (dolist (file (cons name (+test-config--parts name)))
+      (with-temp-buffer
+        (insert-file-contents (+test-config--file file))
+        (goto-char (point-min))
+        (should (looking-at-p (format ";;; \\$DOOMDIR/%s\\.el -\\*- lexical-binding: t; -\\*-"
+                                      (regexp-quote file))))
+        (should (re-search-forward
+                 (format "Loaded \\(?:last \\)?from\\(?:\n;;\\)? %s\\.el"
+                         (if (equal file name)
+                             "config"
+                           (regexp-quote (directory-file-name (file-name-directory file)))))
+                 (save-excursion (forward-line 5) (point)) t)))))
   (with-temp-buffer
     (insert-file-contents (expand-file-name "config.el" +test-root))
     (should (looking-at-p ";;; \\$DOOMDIR/config\\.el -\\*- lexical-binding: t; -\\*-"))))
