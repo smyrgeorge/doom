@@ -1,19 +1,19 @@
 # Claude Code
 
-[agent-shell](https://github.com/xenodium/agent-shell) runs Claude Code in an Emacs buffer, with the Claude CLI's
-login.
+Claude Code runs in an Emacs buffer through [agent-shell](https://github.com/xenodium/agent-shell), with the `claude`
+CLI's login.
 
-- `SPC o c` starts a new session; `SPC o C` goes to the project's (`C-u`: a new one, `C-u C-u`: pick one).
-- In code, `Option+Enter` sends the error at point or the selection to Claude, or adds them to the prompt.
+| Key | Action |
+|---|---|
+| `SPC o c` | A new session |
+| `SPC o C` | The project's session (`C-u`: a new one, `C-u C-u`: pick one) |
+| `Option+Enter` | Send the error at point or the selection to Claude |
 
-Claude is told how Emacs shows it: the Markdown it renders, `path:line` references (they become links), images shown
-inline (saved under `.agent-shell/images/`), the theme's colours for its diagrams, and that it can ask Emacs what you're
-looking at (`emacsclient --eval`). Images are as wide as the window.
+Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
+and Claude can ask Emacs what you're looking at.
 
-## Profiling
+## Profiling Emacs
 
-`SPC h T` starts Emacs's profiler (CPU and memory); do what's slow, then `SPC h T` again. The profile is written as text
-into a new folder under `~/.config/emacs/.local/cache/profiles/`: a summary, the call trees, and the raw profiles
-(`M-x profiler-find-profile`). The message says where, and to read the skill
-`.claude/skills/emacs-profiling/SKILL.md` first, which explains the files to an agent. It's also copied, so you can paste
-it to Claude.
+`SPC h T` starts the profiler; do what's slow, then `SPC h T` again. The profile is written as text under
+`~/.config/emacs/.local/cache/profiles/`, and a message (also copied) tells Claude where it is and to read the
+`emacs-profiling` skill first.

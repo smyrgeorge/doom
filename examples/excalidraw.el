@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/examples/excalidraw.el -*- lexical-binding: t; -*-
-;; Example: a drawing in Excalidraw (config/excalidraw.el, docs/editor.md).
+;; Example: a drawing in Excalidraw (config/excalidraw.el, docs/drawings.md).
 ;; M-x +my/example-excalidraw writes a drawing to the temp folder (how a
 ;; drawing opens in Emacs: boxes, arrows, labels, a note) and opens it. Draw
 ;; with the mouse; Excalidraw's keys work (r a rectangle, a an arrow, t text,

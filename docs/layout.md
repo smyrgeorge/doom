@@ -2,37 +2,37 @@
 
 | Path | What |
 |---|---|
-| `init.el`, `packages.el` | Doom's modules and the extra packages (`doom sync` after editing) |
+| `init.el`, `packages.el` | Doom modules and extra packages |
 | `config.el` | The main config; loads `config/` |
-| `config/agent-shell.el` | Claude Code |
-| `config/banner.el`, `banner/` | Notices |
-| `config/cheatsheet.el`, `cheatsheet.org` | Tips panel under the sidebar (turned off) |
-| `config/childframe.el` | Frames laid over a window: notices, the error stripe, WebKit's cover |
+| `config/agent-shell.el` | [Claude Code](claude-code.md) |
+| `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
+| `config/cheatsheet.el`, `cheatsheet.org` | A tips panel under the sidebar (off) |
+| `config/childframe.el` | Frames laid over a window: notices, the error stripe |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
-| `config/editor.el`, `editor/` | The editor: case cycling, the `fill-column` line, smooth scrolling, tabs, `Option+Enter`, `Cmd+B` and jumps, the sticky header, spelling (`dict/tech.txt`), tree-sitter grammars, long lines, Evil, the mode line |
+| `config/editor.el`, `editor/` | [The editor](editor.md): tabs, `Option+Enter`, `Cmd+B`, the sticky header, spelling |
 | `config/emacs.el` | Garbage collection |
-| `config/examples.el`, `examples/` | The examples and their screenshots |
-| `config/excalidraw.el`, `excalidraw/` | Drawings |
-| `config/git.el` | `SPC g d` diff pane |
-| `config/lsp.el`, `lsp/` | Language server tweaks, `kotlin-lsp`, the usages peek |
-| `config/magit.el` | Commit graph, delta diffs, TODOs |
-| `config/markdown.el`, `markdown/` | Live preview; GitHub's alerts in it |
-| `config/merge.el`, `merge/` | Three-pane conflict resolution |
-| `config/pdf.el`, `pdf/` | PDFs |
-| `config/profiling.el`, `profiling/` | `SPC h T` profiles, written for an agent to read |
-| `config/projectile.el` | Projects |
-| `config/search.el`, `search/` | Search Everywhere, find in files |
-| `config/stripe.el`, `stripe/` | Error stripe |
-| `config/terminal.el` | Terminal Emacs |
-| `config/tiling.el`, `tiling/` | Tiling |
-| `config/treemacs.el`, `treemacs/` | Sidebar |
-| `config/webkit.el`, `webkit/` | Web pages in Emacs, for PDFs, drawings and the preview |
-| `config/window.el` | Frame, fringes, focus of new windows |
-| `.claude/skills/` | Skills for Claude: `emacs-profiling` reads a profile |
-| `cmd/` | Shell commands (`diff.sh`) |
+| `config/examples.el`, `examples/` | [Examples](examples.md) and their screenshots |
+| `config/excalidraw.el`, `excalidraw/` | [Drawings](drawings.md) |
+| `config/git.el` | [File diff](git.md#file-diff) |
+| `config/lsp.el`, `lsp/` | Language servers, the usages list |
+| `config/magit.el` | [Magit](git.md#magit) |
+| `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
+| `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |
+| `config/pdf.el`, `pdf/` | [PDFs](pdf.md) |
+| `config/profiling.el`, `profiling/` | [Profiling](claude-code.md#profiling-emacs) |
+| `config/projectile.el` | [Projects](search.md#projects) |
+| `config/search.el`, `search/` | [Search](search.md) |
+| `config/stripe.el`, `stripe/` | [Error stripe](editor.md#error-stripe) |
+| `config/terminal.el` | [Terminal](terminal.md) |
+| `config/tiling.el`, `tiling/` | [Tiling](editor.md#tiling) |
+| `config/treemacs.el`, `treemacs/` | [Sidebar](sidebar.md) |
+| `config/webkit.el`, `webkit/` | Web pages in Emacs: PDFs, drawings, the Markdown preview |
+| `config/window.el` | The frame, fringes, focus of new windows |
+| `.claude/skills/` | Skills for Claude (`emacs-profiling`) |
+| `cmd/` | [Shell commands](cmd.md) |
+| `dict/tech.txt` | Programming words for spelling, built by `scripts/dict.sh` |
 | `scripts/` | Installers (`emacs.sh`, `tools.sh`, `lsp.sh`), `dict.sh`, `screenshots.sh` |
-| `tests/` | Tests (`tests/run.sh`) |
-| `docs/` | These docs |
+| `tests/` | [Tests](tests.md) |
 
-A large feature is a file and a folder: `config/NAME.el` has its settings and keys only, and loads its code from
+A large feature is a file and a folder: `config/NAME.el` holds its settings and keys, and loads its code from
 `config/NAME/`.

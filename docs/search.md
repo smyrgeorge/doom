@@ -1,17 +1,18 @@
 # Search
 
-## Search Everywhere (`SPC s a`)
+## Search Everywhere
 
-One list of **Classes**, **Files**, **Symbols** and **Actions** (commands). Type `c`, `f`, `s` or `a` and a space to
+`SPC s a` searches classes, files, symbols and actions (commands) in one list. Type `c`, `f`, `s` or `a` and a space to
 keep one kind; `DEL` on an empty input goes back to all.
 
-## Find in files (`Cmd+Shift+F`)
+## Find in files
 
-Searches the project with ripgrep; the selected text is the query. With `C-u`, ignored and hidden files too.
+`Cmd+Shift+F` searches the project with ripgrep, starting from the selected text; with `C-u`, ignored and hidden files
+too.
 
 ## Projects
 
-- Projects under `~/dev` are found by themselves.
-- Switching to a project (`SPC p p`) opens its README, if it has one.
-- `SPC SPC` also lists files created outside Emacs.
+- Projects under `~/dev` are found without adding them.
+- `SPC p p` opens the project's README, if it has one.
+- `SPC SPC` lists files created outside Emacs too.
 - Each workspace keeps its own project.

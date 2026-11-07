@@ -1,15 +1,14 @@
 # Project sidebar
 
-The treemacs sidebar works as a project view:
+The treemacs sidebar opens with a workspace's first project file, follows the current file and its project, and shows
+the git status, also of changes made outside Emacs.
 
-- It opens by itself with a workspace's first project file; `SPC o p` closes it for that workspace.
-- It follows the current file and its project at once. Scroll it away and it stays there until you switch files.
-- Files and folders have their git status colours, updated on save and every few seconds for changes made outside
-  Emacs.
-- The arrows work in the tree (`←` collapses or goes to the parent, `→` expands or opens), in the LSP lists
-  too. A single click opens a file or a folder. `zR` / `zM` expand or collapse everything.
-- `SPC w w` and the window numbers reach it.
-- With `+lsp`: the structure (`SPC c S`), the project's errors (`SPC c X`) and the call hierarchy (`SPC c y` /
-  `SPC c Y`) open with the cursor in them.
+| Key | Action |
+|---|---|
+| `←` / `→` | Collapse or go to the parent / expand or open |
+| `zR` / `zM` | Expand / collapse everything |
+| Click | Open a file or a folder |
+| `SPC w w`, window numbers | Go to the sidebar |
 
-A tips panel under it (from `cheatsheet.org`) is turned off; uncomment `config/cheatsheet` in `config.el` to turn it on.
+The arrows work in the language server's lists too (`SPC c S`, `SPC c X`, `SPC c y`), which open with the cursor in
+them.

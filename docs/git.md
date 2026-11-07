@@ -2,40 +2,31 @@
 
 ## Magit
 
-- Diffs rendered by `git-delta`.
+- Diffs are rendered by `git-delta`.
 - The status buffer lists the repository's TODO comments.
-- The log and the status buffer's recent commits draw the branch graph with lines, a colour per lane, the author and
-  date in the margin (like tig).
+- The log draws the branch graph with lines, a colour per lane, and the author and date in the margin.
 
-## File diff pane (`SPC g d`)
+## File diff
 
-The current file's changes against `HEAD`, in a pane on the right, refreshed on save. In it, `s` / `u` / `x` stage,
-unstage or discard a hunk, `RET` jumps to the line, `q` closes it.
+`SPC g d` shows the current file's changes in a pane on the right: `s` / `u` / `x` stage, unstage or discard a hunk,
+`RET` goes to the line, `q` closes it.
 
 ## Resolving conflicts
 
-`e` on a conflicted file in Magit opens it in three panes: **Yours**, the **Result** (editable, starting from the
-common base) and **Theirs**, under a bar. Try it: `M-x +my/example-merge`.
+`e` on a conflicted file in Magit opens three panes, **Yours**, the **Result** and **Theirs**, lined up and scrolling
+together. Try it: `M-x +my/example-merge`.
 
-Each change is coloured (changed blue, added green, removed grey, conflicts red) and has buttons in its margin, next to
-the Result: `>>` / `<<` put it in the Result (in a conflict whose other side is in already: after it, keeping both), and
-`x` ignores it. When both sides changed different words of the same lines, the **✨ wand** in the Result's margin
-merges them word by word.
-
-The bar has **Accept Left** / **Accept Right** (the rest from one side), **✨ Apply non-conflicting**, what's left,
-**Done** (saves, and stages once nothing is left) and **Abort**.
-
-The panes line up, scroll together and number their own lines.
+Each change has buttons in its margin: `>>` / `<<` put it in the Result, `x` ignores it, and `✨` merges both sides word
+by word. The bar at the top accepts the rest from one side or every non-conflicting change, and ends with **Done**
+(save and stage) or **Abort**.
 
 | Key | Action |
 |---|---|
 | `]c` / `[c` | Next / previous change |
-| `SPC m l` / `SPC m r` / `SPC m x` | The change at point from Yours / Theirs / ignored |
-| `SPC m w` | The wand |
+| `SPC m l` / `SPC m r` / `SPC m x` | Take the change from Yours / Theirs / ignore it |
+| `SPC m w` | Merge word by word |
 | `SPC m L` / `SPC m R` / `SPC m a` | Accept left / right / non-conflicting |
 | `C-c C-c` / `C-c C-k` | Done / Abort |
-| `u` | Undo, buttons too |
 
-It works for merges, rebases, cherry-picks and stash pops, and in a terminal too. Binary files, files added or deleted
-on one side, and submodules open in Magit's usual Ediff. `M-x +my/merge-all` resolves every conflicted file in turn;
-from the shell, see [`cmd/diff.sh`](cmd.md).
+It works for merges, rebases, cherry-picks and stash pops, also in a terminal. `M-x +my/merge-all` resolves every
+conflicted file in turn; from the shell, use [`cmd/diff.sh`](cmd.md).

@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/examples/pdf.el -*- lexical-binding: t; -*-
-;; Example: a PDF in WebKit, its pages dark (config/pdf.el, docs/editor.md).
+;; Example: a PDF in WebKit, its pages dark (config/pdf.el, docs/pdf.md).
 ;; M-x +my/example-pdf writes a short report to the temp folder (three pages:
 ;; headings, text, coloured charts; an outline) and opens it in PDF.js, then
 ;; turns dark pages on (SPC m d): inverted to dark greys, the charts' hues kept;

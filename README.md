@@ -32,24 +32,24 @@ too ([more](docs/git.md#resolving-conflicts)).
 
 ![Three-way merge](examples/merge.png)
 
-### Drawings
+### Excalidraw
 
 `*.excalidraw.svg` files open as drawings in Excalidraw, inside Emacs, and save as images that Markdown and GitHub
-show ([more](docs/editor.md#drawings-excalidraw)).
+show ([more](docs/drawings.md)).
 
 ![Excalidraw](examples/excalidraw.png)
 
 ### PDFs
 
 PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with Vim keys, search, an outline, and a night mode (dark
-pages that keep the colours' hues, `SPC m d`) ([more](docs/editor.md#pdfs)).
+pages that keep the colours' hues, `SPC m d`) ([more](docs/pdf.md)).
 
 ![PDF in night mode](examples/pdf.png)
 
 ### Markdown with live preview
 
 `SPC m p` shows the rendered file beside it, updated as you type and following the cursor
-([more](docs/markdown.md#live-preview)).
+([more](docs/markdown.md)).
 
 ![Markdown live preview](examples/markdown.png)
 
@@ -94,12 +94,14 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 
 ## Documentation
 
-- [The editor](docs/editor.md): error stripe, notices, sticky header, tabs per window, tiling, code, PDFs, drawings.
+- [The editor](docs/editor.md): tabs per window, tiling, error stripe, notices, sticky header, code.
+- [PDFs](docs/pdf.md): PDFs drawn by PDF.js, with Vim keys.
+- [Drawings](docs/drawings.md): Excalidraw inside Emacs.
 - [Project sidebar](docs/sidebar.md): treemacs as a project view that follows the current file.
 - [Search](docs/search.md): Search Everywhere, find in files, projects.
 - [Markdown](docs/markdown.md): live preview inside Emacs.
-- [Git](docs/git.md): Magit additions, file diff pane, resolving conflicts in three panes.
-- [Claude Code](docs/claude-code.md): sessions, what Claude is told about Emacs, profiling Emacs for it.
+- [Git](docs/git.md): Magit additions, file diff, resolving conflicts in three panes.
+- [Claude Code](docs/claude-code.md): sessions, and profiling Emacs for Claude.
 - [Terminal](docs/terminal.md): what differs in `emacs -nw`.
 - [Key bindings](docs/keybindings.md): this config's own keys.
 - [Examples](docs/examples.md): each feature on files of its own, with screenshots.
