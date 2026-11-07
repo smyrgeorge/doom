@@ -159,14 +159,12 @@
 ;; CONTEXT ACTIONS (Option+Enter, like JetBrains' Alt+Enter)
 (load! "config/actions")
 
-;; LSP (Kotlin: JetBrains' kotlin-lsp)
+;; LSP (Kotlin: JetBrains' kotlin-lsp; lsp-ui's usages/definitions peek: calmer, with
+;; functions and line numbers)
 (load! "config/lsp")
 
 ;; TREE-SITTER (the enabled languages' grammars built ahead of time)
 (load! "config/tree-sitter")
-
-;; PEEK (lsp-ui's usages/definitions peek: calmer, with functions and line numbers)
-(load! "config/peek")
 
 ;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
 (load! "config/agent-shell")

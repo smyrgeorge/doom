@@ -1,5 +1,5 @@
 ;;; tests/unit/test-peek.el -*- lexical-binding: t; -*-
-;; config/peek.el: lsp-ui's peek (usages with gD or Cmd+B on a declaration,
+;; config/lsp/peek.el: lsp-ui's peek (usages with gD or Cmd+B on a declaration,
 ;; definitions...) made calmer and more informative: soft colours from the
 ;; theme, a title saying what's listed, each usage's function/class, line
 ;; numbers in the preview, key hints, as tall as the list needs, the
@@ -10,7 +10,7 @@
 
 ;; config/sticky.el first, as config.el loads it: its tree-sitter helpers tell
 ;; which nodes are functions/classes.
-(+test-load "config/sticky" "config/peek")
+(+test-load "config/sticky" "config/lsp")
 
 ;; Before lsp-ui loads (Doom loads it with the first language server).
 (defconst +test-peek--before-load
@@ -30,7 +30,7 @@
   "`doom-color' as doom-one answers it."
   (pcase name ('blue "#51afef") ('yellow "#ecbe7b")))
 
-;; lsp-ui loads now, with a theme's colours: config/peek.el's `after!' block
+;; lsp-ui loads now, with a theme's colours: config/lsp/peek.el's `after!' block
 ;; runs.
 (set-face-attribute 'default nil :background "#282c34" :foreground "#bbc2cf")
 (cl-letf (((symbol-function 'doom-color) #'+test-peek--doom-color))

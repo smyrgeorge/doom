@@ -1,5 +1,6 @@
 ;;; $DOOMDIR/config/lsp.el -*- lexical-binding: t; -*-
-;; Language server setup. Loaded from config.el.
+;; Language server setup, and lsp-ui's peek. Loaded from config.el; its code is
+;; in config/lsp/.
 
 ;; ====== VARIABLES ======
 
@@ -17,63 +18,26 @@
       lsp-typescript-implementations-code-lens-enabled t
       lsp-javascript-references-code-lens-enabled t)
 
-;; ====== CODE ======
+;; PEEK
+;; - colours: a soft selection and soft matches instead of bright blue boxes;
+;; - the header says what's listed: "Usages of HOLD1 · 22 in 1 file";
+;; - the footer shows the keys;
+;; - the preview has line numbers, with the usage's line highlighted;
+;; - the peek is only as tall as its list needs (up to `lsp-ui-peek-peek-height');
+;; - each usage shows the function/class it's in, grouped: the name on the
+;;   first of its usages, with how many there are;
+;; - usages don't list the declaration itself (where you are).
+(defvar +my/peek-min-height 10
+  "The peek's height when it lists only a few usages.")
 
-;; PROJECT IMPORT
-;; Start the language server in the file's project (its git repository, as
-;; projectile sees it) without the "import project root?" prompt, like Zed or
-;; VS Code. Only for files inside a project: elsewhere lsp-mode would fall back
-;; to the file's folder (e.g. ~, which servers like pyright would scan), so
-;; those still ask.
-(defadvice! +my/lsp-auto-import-project-a (fn session file-name)
-  :around #'lsp--calculate-root
-  (let* ((default-directory (file-name-directory file-name)) ; guess from the file
-         (lsp-auto-guess-root (and (doom-project-root) t)))
-    (funcall fn session file-name)))
+(defvar +my/peek-scope-width 24
+  "Widest the function/class column of the list gets.")
 
-;; FILE WATCHERS
-;; To tell the server about files changed outside Emacs, lsp-mode watches every
-;; directory under the project root, skipping only those matching
-;; `lsp-file-watch-ignored-directories' (node_modules, build dirs...); it
-;; doesn't read .gitignore. A root that ignores big folders, e.g. pas-workspace
-;; with the 17 repositories cloned inside it, then needs ~8000 watches instead
-;; of ~30: hence the "watch N directories?" prompt and the lag (on macOS each
-;; watch is an open file). Also skip the directories git ignores in the root.
-(defun +my/lsp-gitignored-directories (root)
-  "Regexps matching the directories under ROOT that git ignores."
-  (let ((default-directory (file-name-as-directory (file-truename root))))
-    (with-temp-buffer
-      (when (eql 0 (ignore-errors
-                     (call-process "git" nil t nil "ls-files" "-z" "--others"
-                                   "--ignored" "--exclude-standard" "--directory")))
-        (cl-loop for entry in (split-string (buffer-string) "\0" t)
-                 when (string-suffix-p "/" entry) ; directories only
-                 ;; Relative to the root, as git prints it: `concat', as
-                 ;; `expand-file-name' takes a folder named ~ for home.
-                 collect (concat "\\`"
-                                 (regexp-quote (directory-file-name
-                                                (concat default-directory entry)))
-                                 "\\'"))))))
+(after! lsp-ui-peek
+  (setq lsp-ui-peek-list-width 60))     ; room for the function column
 
-(defadvice! +my/lsp-watch-skip-gitignored-a (fn workspace-root)
-  :around #'lsp--get-ignored-regexes-for-workspace-root
-  (pcase-let ((`(,files ,dirs) (funcall fn workspace-root)))
-    (list files (append dirs (+my/lsp-gitignored-directories workspace-root)))))
-
-;; CODE LENSES, CHEAPER
-;; Placing each lens, lsp-mode works out the indentation that lenses above the
-;; line need, even with them at the end of the line (here): it finds where the
-;; line starts on screen, which highlights that part of the file first. In
-;; Markdown that means a tree-sitter parser per paragraph, ~10 ms each (see
-;; config/tree-sitter.el, AVAILABLE GRAMMARS): opening a file froze for half a
-;; second when its lenses arrived. At the end of the line, just put them there.
-(defadvice! +my/lsp-lens-end-of-line-a (fn ov)
-  :around #'lsp-lens--update
-  (if (eq lsp-lens-place-position 'end-of-line)
-      (let ((str (overlay-get ov 'lsp--lens-contents)))
-        (overlay-put ov 'after-string (propertize (concat " " str) 'cursor t))
-        (overlay-put ov 'lsp-original str))
-    (funcall fn ov)))
+(defface +my/peek-separator '((t :inherit lsp-ui-peek-header))
+  "The rows above and below the peek.")
 
 ;; KOTLIN
 ;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
@@ -85,3 +49,11 @@
     :major-modes '(kotlin-mode kotlin-ts-mode)
     :priority 1                         ; win over kotlin-ls (-1)
     :server-id 'kotlin-lsp)))
+
+;; ====== CODE ======
+
+;; In config/lsp/, in this order: each part can use what the ones before it
+;; define.
+(load! "lsp/project")
+(load! "lsp/lenses")
+(load! "lsp/peek")

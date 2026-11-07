@@ -16,7 +16,7 @@
 | `config/examples.el`, `examples/` | The examples and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | Drawings |
 | `config/git.el` | `SPC g d` diff pane |
-| `config/lsp.el` | Language server tweaks, `kotlin-lsp` |
+| `config/lsp.el`, `lsp/` | Language server tweaks, `kotlin-lsp`, the usages peek |
 | `config/long-lines.el` | Files with very long lines: plain, unwrapped, a notice |
 | `config/magit.el` | Commit graph, delta diffs, TODOs |
 | `config/markdown.el`, `markdown/` | Live preview; GitHub's alerts in it |
@@ -24,7 +24,6 @@
 | `config/modeline.el` | Mode line |
 | `config/pdf.el`, `pdf/` | PDFs |
 | `config/navigation.el` | `Cmd+B`, jumps back and forward, previous / next buffer |
-| `config/peek.el` | Usages peek |
 | `config/profiling.el`, `profiling/` | `SPC h T` profiles, written for an agent to read |
 | `config/projectile.el` | Projects |
 | `config/search.el` | Search Everywhere, find in files |
