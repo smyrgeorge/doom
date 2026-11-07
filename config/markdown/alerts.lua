@@ -1,4 +1,4 @@
--- config/markdown-alerts.lua: a pandoc filter for the Markdown preview
+-- config/markdown/alerts.lua: a pandoc filter for the Markdown preview
 -- (config/markdown.el). GitHub's alerts (> [!NOTE], [!TIP], [!IMPORTANT],
 -- [!WARNING], [!CAUTION]) in GitHub's markup, which github-markdown-css styles:
 -- a coloured bar, the kind's icon and title. Pandoc reads one as a Div of that

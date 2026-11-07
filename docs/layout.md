@@ -19,7 +19,7 @@
 | `config/lsp.el` | Language server tweaks, `kotlin-lsp` |
 | `config/long-lines.el` | Files with very long lines: plain, unwrapped, a notice |
 | `config/magit.el` | Commit graph, delta diffs, TODOs |
-| `config/markdown.el`, `markdown-alerts.lua` | Live preview; GitHub's alerts in it |
+| `config/markdown.el`, `markdown/` | Live preview; GitHub's alerts in it |
 | `config/merge.el`, `merge/` | Three-pane conflict resolution |
 | `config/modeline.el` | Mode line |
 | `config/pdf.el`, `pdf/` | PDFs |
