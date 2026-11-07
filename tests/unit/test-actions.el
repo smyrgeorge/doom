@@ -336,7 +336,7 @@ something else."
 
 (ert-deftest actions/spelling-camel-case-part ()
   "In an identifier, the part spell-fu flagged (camelCase checked word by
-word: config/spell.el): `word' at point is the whole identifier, which is
+word: config/editor.el): `word' at point is the whole identifier, which is
 what the actions name."
   (+test-actions--in "getHelo()"
     (+test-actions--flag 4 8)

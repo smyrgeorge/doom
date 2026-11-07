@@ -1,9 +1,10 @@
 ;;; tests/unit/test-spell.el -*- lexical-binding: t; -*-
-;; config/spell.el: camelCase identifiers checked word by word, the tech-words
-;; dictionary (dict/tech.txt) in every spell-checked buffer, read-only so words
-;; added still go to the personal dictionary, which is created if missing.
-;; aspell never runs: the tests give spell-fu its dictionaries (files in the
-;; temp folder), and the user's own dictionaries are never touched.
+;; config/editor/spell.el, config/editor.el's spelling settings: camelCase
+;; identifiers checked word by word, the tech-words dictionary (dict/tech.txt)
+;; in every spell-checked buffer, read-only so words added still go to the
+;; personal dictionary, which is created if missing. aspell never runs: the
+;; tests give spell-fu its dictionaries (files in the temp folder), and the
+;; user's own dictionaries are never touched.
 
 (defvar doom-disabled-packages nil)     ; `use-package!' reads it (Doom's)
 
@@ -22,7 +23,7 @@
   (list :ispell (featurep 'ispell)
         :exists (file-exists-p +test-spell--personal)))
 
-(+test-load "config/spell")
+(+test-load "config/editor")
 
 (defvar +test-spell--after-config
   (list :ispell (featurep 'ispell)
@@ -45,10 +46,10 @@
 ;; ====== HELPERS ======
 
 (defun +test-spell--after-ispell-form ()
-  "config/spell.el's `after! ispell' form, read from the file (to run it again
+  "config/editor/spell.el's `after! ispell' form, read from the file (to run it again
 under other conditions: ispell is loaded once)."
   (with-temp-buffer
-    (insert-file-contents (expand-file-name "config/spell.el" +test-root))
+    (insert-file-contents (expand-file-name "config/editor/spell.el" +test-root))
     (let (form found)
       (condition-case nil
           (while (not found)

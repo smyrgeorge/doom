@@ -141,9 +141,6 @@
 ;; EDITOR (SPC c ~: cycle case style)
 (load! "config/editor")
 
-;; SPELL (create the personal dictionary if missing)
-(load! "config/spell")
-
 ;; LSP (Kotlin: JetBrains' kotlin-lsp; lsp-ui's usages/definitions peek: calmer, with
 ;; functions and line numbers)
 (load! "config/lsp")

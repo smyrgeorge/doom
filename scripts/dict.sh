@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Build dict/tech.txt: programming words (rect, rgba, kotlin, stdout, ...) for
 # the spell checker, from cspell's MIT-licensed dictionaries
-# (https://github.com/streetsidesoftware/cspell-dicts). config/spell.el loads it
-# next to English. Re-run to update; the result is committed.
+# (https://github.com/streetsidesoftware/cspell-dicts). config/editor/spell.el
+# loads it next to English. Re-run to update; the result is committed.
 #
 # Needs npm and aspell. `npm pack` only downloads the packages (no scripts run).
 

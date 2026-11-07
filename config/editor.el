@@ -131,6 +131,21 @@ The menu shows groups in this order.")
 declare them (kotlin-ts-mode, markdown-ts-mode); the others come from the major
 mode.")
 
+;; SPELLING
+;; CAMELCASE
+;; Check identifiers like AgreementController as Agreement + Controller
+;; instead of flagging them whole. Only applies to words that
+;; would otherwise be marked as misspelled.
+(setq spell-fu-word-delimit-camel-case t)
+
+;; TECH WORDS
+;; dict/tech.txt holds ~40k programming words English lacks (rect, rgba, async,
+;; kotlin, stdout, postgres...), built by scripts/dict.sh from cspell's
+;; dictionaries. Load it in every spell-checked buffer, next to English and the
+;; personal dictionary. It's read-only, so zg / "Add to dictionary" still go to
+;; the personal dictionary without asking which one.
+(defvar +my/spell-tech-words-file (expand-file-name "dict/tech.txt" doom-user-dir))
+
 ;; EVIL
 ;; Saving a buffer returns to normal state.
 (add-hook! 'after-save-hook #'evil-normal-state)
@@ -218,3 +233,4 @@ mode.")
 (load! "editor/actions")
 (load! "editor/navigation")
 (load! "editor/sticky")
+(load! "editor/spell")
