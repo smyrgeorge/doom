@@ -33,7 +33,7 @@
 | `config/terminal.el` | Terminal Emacs |
 | `config/tiling.el` | Tiling |
 | `config/tree-sitter.el` | Tree-sitter grammars built ahead of time |
-| `config/treemacs.el` | Sidebar |
+| `config/treemacs.el`, `treemacs/` | Sidebar |
 | `config/webkit.el`, `webkit/` | Web pages in Emacs, for PDFs, drawings and the preview |
 | `config/window.el` | Frame, fringes, focus of new windows |
 | `cmd/` | Shell commands (`diff.sh`) |
