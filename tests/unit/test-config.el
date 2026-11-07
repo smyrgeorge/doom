@@ -237,6 +237,11 @@ header says what loads it: config.el, or for a part its file (config/merge.el)."
   (should (eq +my/tiling-strategy 'tall))
   (should (eq (default-value '+my/tiling-strategy) 'tall)))
 
+(ert-deftest config/terminal-opens-tiled ()
+  "SPC o t (Doom's ghostel toggle) opens the terminal as a tiled pane."
+  (should (equal +my/tiling-commands '(+ghostel/toggle)))
+  (should (advice-member-p #'+my/tiling-in-pane-a '+ghostel/toggle)))
+
 (ert-deftest config/pdf-dark-pages ()
   "PDFs open with dark pages (config/pdf.el's own default: light)."
   (should (eq +my/pdf-dark-pages t)))
@@ -256,6 +261,8 @@ dark PDF pages (their files' defvars keep them)."
              (+test-config--position '(load! "config/tiling"))))
   (should (< (+test-config--position '(setq +my/pdf-dark-pages t))
              (+test-config--position '(load! "config/pdf"))))
+  (should (< (+test-config--position '(setq +my/tiling-commands '(+ghostel/toggle)))
+             (+test-config--position '(load! "config/tiling"))))
   (should (< (+test-config--position '(setq-default fill-column 120))
              (+test-config--position '(load! "config/editor")))))
 

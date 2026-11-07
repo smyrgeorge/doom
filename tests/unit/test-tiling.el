@@ -166,6 +166,54 @@ returns the new pane."
       (should-not (window-next-buffers new))
       (should-not (window-parameter new 'tab-line-buffers)))))
 
+(ert-deftest tiling/buffers-shown-in-new-panes ()
+  "`+my/tiling-display-buffer': a buffer in a new pane where the strategy puts
+it, its only tab; quitting it closes the pane."
+  (+test-tiling
+    (let* ((main (selected-window))
+           (first (display-buffer "B" '(+my/tiling-display-buffer))))
+      ;; The second pane: on the right.
+      (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "B")))
+      (should (> (car (window-edges first)) 0))
+      (should (= (cadr (window-edges first)) (cadr (window-edges main))))
+      (should-not (window-prev-buffers first))
+      (should-not (window-parameter first 'tab-line-buffers))
+      ;; The next: at the bottom of the stack, from whichever pane.
+      (select-window main)
+      (pop-to-buffer "C" '(+my/tiling-display-buffer))
+      (let ((second (selected-window)))
+        (should (eq (window-buffer second) (get-buffer "C")))
+        (should-not (memq second (list main first)))
+        (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "B" "C")))
+        (should (> (cadr (window-edges second)) (cadr (window-edges first))))
+        (quit-window nil second)
+        (should-not (window-live-p second))
+        (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "B")))))))
+
+(defun +test-tiling--opens-d ()
+  "A command opening D where Doom's popups would (stands for SPC o t)."
+  (interactive)
+  (pop-to-buffer "D" '((display-buffer-in-side-window) (side . bottom))))
+
+(ert-deftest tiling/commands-open-new-panes ()
+  "Commands of `+my/tiling-commands' open their windows as new panes, whatever
+action they ask for; others as they ask."
+  (+test-tiling
+    (let ((+my/tiling-commands '(+test-tiling--opens-d)))
+      (unwind-protect
+          (progn
+            (+my/tiling-advise-commands)
+            (call-interactively #'+test-tiling--opens-d)
+            (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "D")))
+            (should-not (window-parameter (get-buffer-window "D") 'window-side)))
+        (advice-remove '+test-tiling--opens-d #'+my/tiling-in-pane-a)))
+    ;; Not listed: as it asks (a side window, not a pane).
+    (delete-other-windows)
+    (switch-to-buffer "A")
+    (call-interactively #'+test-tiling--opens-d)
+    (should (eq (window-parameter (get-buffer-window "D") 'window-side) 'bottom))
+    (should (equal (mapcar #'car (+test-tiling--layout)) '("A")))))
+
 (ert-deftest tiling/focus-follows-the-setting ()
   (+test-tiling
     (let* ((main (selected-window))

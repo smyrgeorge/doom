@@ -114,6 +114,10 @@ that its buffer isn't modified."
         ;; New shells (e.g. from the Option+Enter Claude actions) start Claude
         ;; Code without asking which agent to use.
         agent-shell-preferred-agent-config 'claude-code
+        ;; A session opens in a new pane where the tiling strategy puts it
+        ;; (config/tiling.el), as SPC w SPC does; one already shown is
+        ;; selected.
+        agent-shell-display-action '(+my/tiling-display-buffer)
         ;; Images (screenshots, charts) as wide as the window: agent-shell
         ;; shrinks them to 40% of it. Smaller ones keep their own size.
         ;; One image only: {width=100%} after its link; the ones on screen:

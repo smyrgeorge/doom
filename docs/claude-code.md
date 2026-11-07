@@ -5,7 +5,7 @@ CLI's login.
 
 | Key | Action |
 |---|---|
-| `SPC o c` | A new session |
+| `SPC o c` | A new session, in a new [tiled](editor.md#tiling) pane |
 | `SPC o C` | The project's session (`C-u`: a new one, `C-u C-u`: pick one) |
 | `Option+Enter` | Send the error at point or the selection to Claude |
 

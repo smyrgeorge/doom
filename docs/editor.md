@@ -14,7 +14,8 @@ Each window has its own tabs: the files shown in it. A file closes once no windo
 ## Tiling
 
 `SPC w SPC` opens a new pane where the tiling strategy puts it, and `SPC w a` arranges the panes again. The `tall`
-strategy keeps the main pane on the left and stacks the others on the right. Try it: `M-x +my/example-tiling`.
+strategy keeps the main pane on the left and stacks the others on the right. Claude Code sessions (`SPC o c`) and the
+terminal (`SPC o t`) open as new panes the same way. Try it: `M-x +my/example-tiling`.
 
 ![Tiled panes: the main one on the left, the others stacked on the right](../examples/tiling.png)
 

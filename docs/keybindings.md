@@ -13,6 +13,7 @@ The keys this config adds or changes. PDFs, drawings and the merge have their ow
 | `M-[` / `M-]` | Previous / next buffer |
 | `SPC w SPC` / `SPC w a` | A new tiled pane / arrange the panes |
 | `SPC w S` / `SPC w V` | Split, the cursor staying |
+| `SPC o t` | The terminal, in a new tiled pane |
 | `q` (transient menus) | Close |
 | `SPC s a` | Search Everywhere |
 | `Cmd+Shift+F` | Find in files |

@@ -93,6 +93,10 @@
 ;; stacked on the right (Amethyst's Tall).
 (setq +my/tiling-strategy 'tall)
 
+;; Commands whose new windows open as panes the tiling strategy places
+;; (config/tiling.el): SPC o t, the terminal (Doom's popup otherwise).
+(setq +my/tiling-commands '(+ghostel/toggle))
+
 ;; PDFs: dark pages (inverted to dark greys, the colours' hues kept) in the
 ;; first PDF opened; SPC m d turns them light (config/pdf.el).
 (setq +my/pdf-dark-pages t)

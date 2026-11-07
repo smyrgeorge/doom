@@ -15,6 +15,11 @@
 ;;               splits of your own)
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom.
+;; Commands of `+my/tiling-commands' (config.el lists the terminal's, SPC o t)
+;; open their windows as new panes, where the strategy puts them, instead of
+;; where they would (a popup at the bottom); so do Claude Code's sessions
+;; (config/agent-shell.el). `+my/tiling-display-buffer' does it, an action
+;; for `display-buffer'.
 ;; Strategies:
 ;; - tall (Amethyst's Tall): the first pane is the main one, on the left
 ;;   (`+my/tiling-tall-ratio' of the width), the others stacked on the right at
@@ -24,6 +29,9 @@
 ;; More can be added to `+my/tiling-strategies'.
 (defvar +my/tiling-strategy 'tall
   "How SPC w SPC places new panes: a strategy of `+my/tiling-strategies'.")
+
+(defvar +my/tiling-commands nil
+  "Commands whose new windows open as new panes (see above).")
 
 (defvar +my/tiling-tall-ratio 0.5
   "The main pane's share of the width in the tall strategy.")
