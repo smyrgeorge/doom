@@ -1,4 +1,4 @@
-;;; tests/diff-sh-emacs.el -*- lexical-binding: t; -*-
+;;; tests/fixtures/diff-sh-emacs.el -*- lexical-binding: t; -*-
 ;; The Emacs cmd/diff.sh runs in tests/unit/test-cmd.el: tests/helper.el's
 ;; setup, the merge's config, and each merge then done as DIFF_TEST_ACTION
 ;; says, a moment after it opens: "right" (Accept Right, Done) or "abort".
@@ -7,7 +7,7 @@
 ;; Never left running: first, so whatever fails after.
 (run-at-time 60 nil #'kill-emacs 3)
 
-(load (expand-file-name "helper.el" (file-name-directory (or load-file-name buffer-file-name))) nil t)
+(load (expand-file-name "../helper.el" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "magit"))))))

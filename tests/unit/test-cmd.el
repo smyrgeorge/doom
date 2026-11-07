@@ -1,9 +1,9 @@
 ;;; tests/unit/test-cmd.el -*- lexical-binding: t; -*-
 ;; cmd/diff.sh: Git conflicts resolved in the merge's panes from the shell.
 ;; The script really runs, in a pseudo-terminal (`script'), its Emacs a test
-;; one (tests/diff-sh-emacs.el: each merge then done by itself), new (--new)
-;; or a test server (--socket): never the user's Emacs. Real git in temp repos,
-;; a temp HOME and global gitconfig.
+;; one (tests/fixtures/diff-sh-emacs.el: each merge then done by itself), new
+;; (--new) or a test server (--socket): never the user's Emacs. Real git in
+;; temp repos, a temp HOME and global gitconfig.
 
 (defconst +test-cmd--script (expand-file-name "cmd/diff.sh" +test-root))
 
@@ -15,7 +15,7 @@
 them (the script splits EMACS_ARGS on spaces)."
   (format "-Q --init-directory=%s -l %s"
           (expand-file-name "init" home)
-          (expand-file-name "diff-sh-emacs.el" +test-dir)))
+          (expand-file-name "fixtures/diff-sh-emacs.el" +test-dir)))
 
 (defmacro +test-cmd-with-repo (&rest body)
   "BODY in a new repo (`default-directory') where a.txt and b.txt are in

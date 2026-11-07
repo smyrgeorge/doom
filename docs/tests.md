@@ -12,5 +12,6 @@ end-to-end tests' frame, which otherwise stays off screen.
 
 - `tests/unit/test-NAME.el` tests `config/NAME.el` or a part of it (`test-tabs.el`: `config/editor/tabs.el`).
 - `tests/e2e/test-NAME.el` tests what needs a GUI: WebKit pages, child frames, the merge on screen.
+- `tests/fixtures/` holds what tests load: `diff-sh-emacs.el` is the Emacs that `cmd/diff.sh` starts in `test-cmd.el`.
 
 A failing or flaky test is a bug to fix in the config, not a test to relax.
