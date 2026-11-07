@@ -11,11 +11,13 @@
 ;; The file, as the branches have it. main (Yours): the tax rate 24%, a
 ;; bigger welcome discount, tax() given a rate, no code as "", the legacy
 ;; receipt removed. feature (Theirs): the tax rate 21%, a VIP discount, tax
-;; rounded up, refunds, prices with two decimals. Both: the subtotal's
+;; rounded up, refunds, the total with two decimals. Both: the subtotal's
 ;; docstring reworded the same. So: a conflict over the same word (the rate:
 ;; keep one, or both), two the wand merges (discount(), tax()), a change of
 ;; each side alone, lines added, lines removed, the same change on both.
-(defconst +my/example-merge--base "\"\"\"Orders: totals, discounts and receipts.\"\"\"
+;; Lines of 37 characters at most: the panes of the narrow screenshot
+;; (scripts/screenshots.el) show them whole.
+(defconst +my/example-merge--base "\"\"\"Orders: totals and receipts.\"\"\"
 
 import math
 
@@ -23,30 +25,31 @@ TAX_RATE = 0.20
 
 
 def subtotal(items):
-    \"\"\"The sum of the items' prices times their quantities.\"\"\"
-    return sum(item.price * item.quantity for item in items)
+    \"\"\"Prices times quantities.\"\"\"
+    return sum(i.cost for i in items)
 
 
 def discount(total, code):
-    \"\"\"The discount a code gives on a total.\"\"\"
+    \"\"\"What a code takes off.\"\"\"
     if code == \"WELCOME\":
         return total * 0.10
     return 0
 
 
-def tax(amount):
-    return amount * TAX_RATE
+def tax(net):
+    return net * TAX_RATE
 
 
 def total(items, code=None):
-    amount = subtotal(items)
-    amount -= discount(amount, code)
-    return round(amount + tax(amount), 2)
+    net = subtotal(items)
+    net -= discount(net, code)
+    return round(net + tax(net), 2)
 
 
 def receipt(items, code=None):
-    lines = [f\"{item.name}: {item.price}\" for item in items]
-    lines.append(f\"Total: {total(items, code)}\")
+    lines = [i.name for i in items]
+    due = total(items, code)
+    lines += [f\"Total: {due}\"]
     return \"\\n\".join(lines)
 
 
@@ -56,7 +59,7 @@ def legacy_receipt(items):
 "
   "orders.py where both branches started.")
 
-(defconst +my/example-merge--yours "\"\"\"Orders: totals, discounts and receipts.\"\"\"
+(defconst +my/example-merge--yours "\"\"\"Orders: totals and receipts.\"\"\"
 
 import math
 
@@ -64,35 +67,36 @@ TAX_RATE = 0.24
 
 
 def subtotal(items):
-    \"\"\"Sum of price × quantity over the items.\"\"\"
-    return sum(item.price * item.quantity for item in items)
+    \"\"\"Sum of price × quantity.\"\"\"
+    return sum(i.cost for i in items)
 
 
 def discount(total, code):
-    \"\"\"The discount a code gives on a total.\"\"\"
+    \"\"\"What a code takes off.\"\"\"
     if code == \"WELCOME\":
         return total * 0.15
     return 0
 
 
-def tax(amount, rate=TAX_RATE):
-    return amount * TAX_RATE
+def tax(net, rate=TAX_RATE):
+    return net * TAX_RATE
 
 
 def total(items, code=None):
-    amount = subtotal(items)
-    amount -= discount(amount, code or \"\")
-    return round(amount + tax(amount), 2)
+    net = subtotal(items)
+    net -= discount(net, code or \"\")
+    return round(net + tax(net), 2)
 
 
 def receipt(items, code=None):
-    lines = [f\"{item.name}: {item.price}\" for item in items]
-    lines.append(f\"Total: {total(items, code)}\")
+    lines = [i.name for i in items]
+    due = total(items, code)
+    lines += [f\"Total: {due}\"]
     return \"\\n\".join(lines)
 "
   "orders.py on main (Yours).")
 
-(defconst +my/example-merge--theirs "\"\"\"Orders: totals, discounts and receipts.\"\"\"
+(defconst +my/example-merge--theirs "\"\"\"Orders: totals and receipts.\"\"\"
 
 import math
 
@@ -100,12 +104,12 @@ TAX_RATE = 0.21
 
 
 def subtotal(items):
-    \"\"\"Sum of price × quantity over the items.\"\"\"
-    return sum(item.price * item.quantity for item in items)
+    \"\"\"Sum of price × quantity.\"\"\"
+    return sum(i.cost for i in items)
 
 
 def discount(total, code):
-    \"\"\"The discount a code gives on a total.\"\"\"
+    \"\"\"What a code takes off.\"\"\"
     if code == \"WELCOME\":
         return total * 0.10
     if code == \"VIP\":
@@ -113,24 +117,25 @@ def discount(total, code):
     return 0
 
 
-def tax(amount):
-    return math.ceil(amount * TAX_RATE * 100) / 100
+def tax(net):
+    return math.ceil(net * TAX_RATE)
 
 
 def total(items, code=None):
-    amount = subtotal(items)
-    amount -= discount(amount, code)
-    return round(amount + tax(amount), 2)
+    net = subtotal(items)
+    net -= discount(net, code)
+    return round(net + tax(net), 2)
 
 
 def refund(items, code=None):
-    \"\"\"What a cancelled order gives back.\"\"\"
+    \"\"\"A cancelled order's total.\"\"\"
     return total(items, code)
 
 
 def receipt(items, code=None):
-    lines = [f\"{item.name}: {item.price:.2f}\" for item in items]
-    lines.append(f\"Total: {total(items, code)}\")
+    lines = [i.name for i in items]
+    due = total(items, code)
+    lines += [f\"Total: {due:.2f}\"]
     return \"\\n\".join(lines)
 
 

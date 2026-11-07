@@ -7,9 +7,10 @@
 ;; Its progress, lines starting with "screenshots:", on stderr; exit status 0
 ;; if each was captured. See docs/examples.md.
 
-(defvar +my/screenshots-size '(1800 . 1150)
+(defvar +my/screenshots-size '(1200 . 860)
   "The frame's text area in pixels, at most (the screen's work area less a
-margin otherwise).")
+margin otherwise). Narrow, so GitHub, which fits images to its ~880 px README
+column, shrinks the text little.")
 
 (defvar +my/screenshots-wait 1.5
   "Seconds an example is given to be drawn (and composited) before it's

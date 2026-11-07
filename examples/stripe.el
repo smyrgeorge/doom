@@ -147,9 +147,16 @@ in a temp repository (deleted once closed). See examples/stripe.el."
     (when (require 'flycheck nil t)
       (flycheck-mode 1)
       (flycheck-buffer))
+    ;; One update of the gutter, now, waiting for git: diff-hl-mode's own
+    ;; (when Emacs is next idle) runs git in the background, and a second
+    ;; one started before the first ends kills the first's git, which could
+    ;; leave the file without marks.
     (when (require 'diff-hl nil t)
       (diff-hl-mode 1)
-      (diff-hl-update))
+      (when (timerp diff-hl-timer)
+        (cancel-timer diff-hl-timer))
+      (let ((diff-hl-update-async nil))
+        (diff-hl-update)))
     (when (and (fboundp '+my/stripe-mode) (not (bound-and-true-p +my/stripe-mode)))
       (+my/stripe-mode 1))
     ;; Where lines were removed and added, with warnings: the gutter and the
