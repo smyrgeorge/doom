@@ -33,7 +33,7 @@
 | `config/sticky.el` | Sticky header |
 | `config/tabs.el` | Tabs per window |
 | `config/terminal.el` | Terminal Emacs |
-| `config/tiling.el` | Tiling |
+| `config/tiling.el`, `tiling/` | Tiling |
 | `config/tree-sitter.el` | Tree-sitter grammars built ahead of time |
 | `config/treemacs.el`, `treemacs/` | Sidebar |
 | `config/webkit.el`, `webkit/` | Web pages in Emacs, for PDFs, drawings and the preview |
