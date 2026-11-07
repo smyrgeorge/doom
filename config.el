@@ -93,6 +93,10 @@
 ;; stacked on the right (Amethyst's Tall).
 (setq +my/tiling-strategy 'tall)
 
+;; PDFs: dark pages (inverted to dark greys, the colours' hues kept) in the
+;; first PDF opened; SPC m d turns them light (config/pdf.el).
+(setq +my/pdf-dark-pages t)
+
 ;; ====== CODE ======
 
 ;; EMACS (garbage collection)

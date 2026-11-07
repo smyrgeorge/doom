@@ -41,10 +41,10 @@ show ([more](docs/drawings.md)).
 
 ### PDFs
 
-PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with Vim keys, search, an outline, and a night mode (dark
-pages that keep the colours' hues, `SPC m d`) ([more](docs/pdf.md)).
+PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with Vim keys, search, an outline, and dark pages that keep
+the colours' hues (`SPC m d` turns them light) ([more](docs/pdf.md)).
 
-![PDF in night mode](examples/pdf.png)
+![PDF with dark pages](examples/pdf.png)
 
 ### Markdown with live preview
 

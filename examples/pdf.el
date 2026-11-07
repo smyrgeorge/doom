@@ -1,12 +1,13 @@
 ;;; $DOOMDIR/examples/pdf.el -*- lexical-binding: t; -*-
 ;; Example: a PDF in WebKit, its pages dark (config/pdf.el, docs/pdf.md).
 ;; M-x +my/example-pdf writes a short report to the temp folder (three pages:
-;; headings, text, coloured charts; an outline) and opens it in PDF.js, then
-;; turns dark pages on (SPC m d): inverted to dark greys, the charts' hues kept;
-;; a whole page in the window (P).
-;; Try j / k, J / K, / to search, O for the outline, SPC m d again. The file is
-;; deleted once it's closed, its place not kept, dark pages as they were
-;; before.
+;; headings, text, coloured charts; an outline) and opens it in PDF.js, its
+;; pages dark (as config.el has them; turned on if they're off):
+;; inverted to dark greys, the charts' hues kept; a whole page in the window
+;; (P).
+;; Try j / k, J / K, / to search, O for the outline, SPC m d for light pages.
+;; The file is deleted once it's closed, its place not kept, dark pages as
+;; they were before.
 
 ;; ====== VARIABLES ======
 
@@ -206,7 +207,7 @@ examples/pdf.el."
          (run-at-time 0 nil (lambda ()
                               (setq +my/pdf-dark-pages dark)
                               (+my/pdf--forget-place file)))))
-      (message "PDF example: j / k scroll, J / K pages, / searches, O the outline, SPC m d dark pages")
+      (message "PDF example: j / k scroll, J / K pages, / searches, O the outline, SPC m d light pages")
       buffer)))
 
 (defun +my/example-pdf-ready ()

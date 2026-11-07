@@ -28,7 +28,7 @@
 ;;                  current one marked; ▸ / ▾ open / close) or the pages'
 ;;                  thumbnails; click one to go there
 ;;   SPC m d        dark pages: inverted to dark greys, hues kept (as
-;;                  pdf-tools' midnight mode)
+;;                  pdf-tools' midnight mode); again, light pages
 ;;   SPC m t        the toolbar: sidebar, back / forward, page, zoom, fit, dark
 ;;                  pages, Preview, print
 ;;   Option+Enter   the actions menu (config/editor/actions.el): for the selected

@@ -237,6 +237,10 @@ header says what loads it: config.el, or for a part its file (config/merge.el)."
   (should (eq +my/tiling-strategy 'tall))
   (should (eq (default-value '+my/tiling-strategy) 'tall)))
 
+(ert-deftest config/pdf-dark-pages ()
+  "PDFs open with dark pages (config/pdf.el's own default: light)."
+  (should (eq +my/pdf-dark-pages t)))
+
 ;; ====== LOAD ORDER ======
 
 (defun +test-config--position (form)
@@ -246,10 +250,12 @@ header says what loads it: config.el, or for a part its file (config/merge.el)."
   (seq-position (+test-config--loads) name))
 
 (ert-deftest config/order-settings-before-files ()
-  "The settings the files read when they load come first: the tiling strategy
-(config/tiling.el's defvar keeps it)."
+  "The settings the files read when they load come first: the tiling strategy,
+dark PDF pages (their files' defvars keep them)."
   (should (< (+test-config--position '(setq +my/tiling-strategy 'tall))
              (+test-config--position '(load! "config/tiling"))))
+  (should (< (+test-config--position '(setq +my/pdf-dark-pages t))
+             (+test-config--position '(load! "config/pdf"))))
   (should (< (+test-config--position '(setq-default fill-column 120))
              (+test-config--position '(load! "config/editor")))))
 
