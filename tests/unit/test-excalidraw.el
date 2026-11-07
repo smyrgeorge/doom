@@ -377,7 +377,7 @@ mode, and why."
           (let ((react (string-search (concat assets "react.production.min.js") page))
                 (dom (string-search (concat assets "react-dom.production.min.js") page))
                 (excalidraw (string-search (concat assets "excalidraw.production.min.js") page))
-                (script (string-search (+my/webkit-file-url (expand-file-name "config/excalidraw.js" doom-user-dir))
+                (script (string-search (+my/webkit-file-url (expand-file-name "config/excalidraw/excalidraw.js" doom-user-dir))
                                        page)))
             (should (and react dom excalidraw script (< react dom excalidraw script))))
           (should (string-match-p "<div id=\"app\"></div>" page))

@@ -1,4 +1,4 @@
-// $DOOMDIR/config/excalidraw.js
+// $DOOMDIR/config/excalidraw/excalidraw.js
 // The page of a drawing in WebKit (config/excalidraw.el): Excalidraw (0.17,
 // its plain-script build, on React 18) over the drawing whose file's text
 // Emacs gives as base64. Emacs drives it through window.exd and reads what it

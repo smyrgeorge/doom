@@ -14,7 +14,7 @@
 | `config/emacs.el` | Garbage collection |
 | `config/evil.el` | Normal state on save; `q` closes transient menus |
 | `config/examples.el`, `examples/` | The examples and their screenshots |
-| `config/excalidraw.el`, `.js` | Drawings |
+| `config/excalidraw.el`, `excalidraw/` | Drawings |
 | `config/git.el` | `SPC g d` diff pane |
 | `config/lsp.el` | Language server tweaks, `kotlin-lsp` |
 | `config/magit.el` | Commit graph, delta diffs, TODOs |
