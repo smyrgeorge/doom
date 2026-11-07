@@ -25,6 +25,7 @@
 | `config/pdf.el`, `pdf/` | PDFs |
 | `config/navigation.el` | `Cmd+B`, jumps back and forward, previous / next buffer |
 | `config/peek.el` | Usages peek |
+| `config/profiling.el`, `profiling/` | `SPC h T` profiles, written for an agent to read |
 | `config/projectile.el` | Projects |
 | `config/search.el` | Search Everywhere, find in files |
 | `config/smooth.el` | Wheel glide, scroll limit |
@@ -38,6 +39,7 @@
 | `config/treemacs.el`, `treemacs/` | Sidebar |
 | `config/webkit.el`, `webkit/` | Web pages in Emacs, for PDFs, drawings and the preview |
 | `config/window.el` | Frame, fringes, focus of new windows |
+| `.claude/skills/` | Skills for Claude: `emacs-profiling` reads a profile |
 | `cmd/` | Shell commands (`diff.sh`) |
 | `scripts/` | Installers (`emacs.sh`, `tools.sh`, `lsp.sh`), `dict.sh`, `screenshots.sh` |
 | `tests/` | Tests (`tests/run.sh`) |

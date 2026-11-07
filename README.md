@@ -99,7 +99,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Search](docs/search.md): Search Everywhere, find in files, projects.
 - [Markdown](docs/markdown.md): live preview inside Emacs.
 - [Git](docs/git.md): Magit additions, file diff pane, resolving conflicts in three panes.
-- [Claude Code](docs/claude-code.md): sessions and what Claude is told about Emacs.
+- [Claude Code](docs/claude-code.md): sessions, what Claude is told about Emacs, profiling Emacs for it.
 - [Terminal](docs/terminal.md): what differs in `emacs -nw`.
 - [Key bindings](docs/keybindings.md): this config's own keys.
 - [Examples](docs/examples.md): each feature on files of its own, with screenshots.

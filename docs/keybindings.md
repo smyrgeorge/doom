@@ -17,6 +17,7 @@ This config's own keys; the rest are Doom's (`SPC h b b` lists them all).
 | `SPC g d` | The file's git diff in a pane |
 | `e` (Magit, on a conflicted file) | Resolve its conflicts |
 | `SPC o c` / `SPC o C` | A new Claude Code session / the project's |
+| `SPC h T` | Start the profiler / stop it and write the profile |
 | `SPC m p` / `SPC m P` (Markdown) | Live preview / in the browser |
 | `SPC m d` (PDF, drawing) | Dark pages / canvas |
 | `←` / `→`, `zR` / `zM` (sidebar) | Collapse / expand; everything |
