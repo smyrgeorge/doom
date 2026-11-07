@@ -27,7 +27,7 @@
 | `config/search.el` | Search Everywhere, find in files |
 | `config/smooth.el` | Wheel glide, scroll limit, long lines |
 | `config/spell.el`, `dict/tech.txt` | Spelling with programming words |
-| `config/stripe.el` | Error stripe |
+| `config/stripe.el`, `stripe/` | Error stripe |
 | `config/sticky.el` | Sticky header |
 | `config/tabs.el` | Tabs per window |
 | `config/terminal.el` | Terminal Emacs |
@@ -41,5 +41,5 @@
 | `tests/` | Tests (`tests/run.sh`) |
 | `docs/` | These docs |
 
-A large feature is a file and a folder: `config/NAME.el` has its settings, keys and mode, and loads its parts from
+A large feature is a file and a folder: `config/NAME.el` has its settings and keys only, and loads its code from
 `config/NAME/`.

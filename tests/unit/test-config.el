@@ -144,7 +144,8 @@ file is recorded once it has loaded: its parts (config/merge/...) before it."
 config/NAME/*.el a part config/NAME.el loads: none forgotten."
   (let ((loads (+test-config--loads))
         (dir (expand-file-name "config/" +test-root)))
-    (dolist (file (directory-files dir nil "\\.el\\'"))
+    ;; Not an editor's lock files (.#NAME.el, while a buffer has changes).
+    (dolist (file (directory-files dir nil "\\`[^.#].*\\.el\\'"))
       (let ((name (concat "config/" (file-name-sans-extension file))))
         (should (or (member name loads)
                     (member name '("config/cheatsheet"))))))
@@ -152,7 +153,7 @@ config/NAME/*.el a part config/NAME.el loads: none forgotten."
       (when (file-directory-p (expand-file-name folder dir))
         (let ((entry (concat "config/" folder)))
           (should (member entry loads))
-          (dolist (file (directory-files (expand-file-name folder dir) nil "\\.el\\'"))
+          (dolist (file (directory-files (expand-file-name folder dir) nil "\\`[^.#].*\\.el\\'"))
             (should (member (concat entry "/" (file-name-sans-extension file))
                             (+test-config--parts entry)))))))))
 
