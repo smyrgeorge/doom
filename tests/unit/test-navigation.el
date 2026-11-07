@@ -1,8 +1,8 @@
 ;;; tests/unit/test-navigation.el -*- lexical-binding: t; -*-
-;; config/navigation.el: Cmd+B (declaration or usages), Cmd+[ / Cmd+] (back /
-;; forward), M-[ / M-] (buffers, GUI only).
+;; config/editor/navigation.el and config/editor.el's keys: Cmd+B (declaration
+;; or usages), Cmd+[ / Cmd+] (back / forward), M-[ / M-] (buffers, GUI only).
 
-(+test-load "config/navigation")
+(+test-load "config/editor")
 
 ;; ====== HELPERS ======
 

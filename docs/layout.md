@@ -9,7 +9,7 @@
 | `config/cheatsheet.el`, `cheatsheet.org` | Tips panel under the sidebar (turned off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe, WebKit's cover |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
-| `config/editor.el`, `editor/` | Case cycling, the `fill-column` line, the current line, wheel glide, scroll limit, Evil's normal state on save, `q` closing menus, the mode line, tabs per window, the `Option+Enter` menu |
+| `config/editor.el`, `editor/` | Case cycling, the `fill-column` line, the current line, wheel glide, scroll limit, Evil's normal state on save, `q` closing menus, the mode line, tabs per window, the `Option+Enter` menu, `Cmd+B`, jumps, previous / next buffer |
 | `config/emacs.el` | Garbage collection |
 | `config/examples.el`, `examples/` | The examples and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | Drawings |
@@ -20,7 +20,6 @@
 | `config/markdown.el`, `markdown/` | Live preview; GitHub's alerts in it |
 | `config/merge.el`, `merge/` | Three-pane conflict resolution |
 | `config/pdf.el`, `pdf/` | PDFs |
-| `config/navigation.el` | `Cmd+B`, jumps back and forward, previous / next buffer |
 | `config/profiling.el`, `profiling/` | `SPC h T` profiles, written for an agent to read |
 | `config/projectile.el` | Projects |
 | `config/search.el`, `search/` | Search Everywhere, find in files |

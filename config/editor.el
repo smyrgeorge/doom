@@ -163,6 +163,28 @@ The menu shows groups in this order.")
 ;; Org keeps M-RET for "new heading/item".
 (map! :after org :map org-mode-map :ni "M-RET" #'org-meta-return)
 
+;; GO TO DECLARATION OR USAGES
+;; Cmd+B on a symbol: on a use, jump to its declaration; on the
+;; declaration itself, list its usages (Enter opens one). Cmd+[ goes back.
+(map! "s-b" #'+my/goto-declaration-or-usages)
+
+;; BACK / FORWARD
+;; Cmd+[ / Cmd+]: back / forward through the places the cursor jumped from and
+;; to (better-jumper).
+(map! "s-[" #'better-jumper-jump-backward)
+
+(map! "s-]" #'better-jumper-jump-forward)
+
+;; PREVIOUS / NEXT BUFFER
+;; M-[ / M-], GUI only: in a terminal, M-[ / M-] are ESC [ / ESC ], the
+;; prefixes of escape sequences (mouse, focus, OSC), so binding them flips
+;; buffers. (Defined here: the bindings call it as this file loads.)
+(defun +my/gui-only (cmd)
+  `(menu-item "" ,cmd :filter ,(lambda (c) (when (display-graphic-p) c))))
+
+(map! "M-[" (+my/gui-only #'previous-buffer)
+      "M-]" (+my/gui-only #'next-buffer))
+
 ;; ====== CODE ======
 
 ;; In config/editor/, in this order: each part can use what the ones before it
@@ -174,3 +196,4 @@ The menu shows groups in this order.")
 (load! "editor/modeline")
 (load! "editor/tabs")
 (load! "editor/actions")
+(load! "editor/navigation")

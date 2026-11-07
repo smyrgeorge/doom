@@ -1,32 +1,6 @@
-;;; $DOOMDIR/config/navigation.el -*- lexical-binding: t; -*-
-;; Getting around: Cmd+B, back / forward, previous / next buffer. Loaded from
-;; config.el.
-
-;; ====== KEY BINDINGS ======
-
-;; GO TO DECLARATION OR USAGES
-;; Cmd+B on a symbol: on a use, jump to its declaration; on the
-;; declaration itself, list its usages (Enter opens one). Cmd+[ goes back.
-(map! "s-b" #'+my/goto-declaration-or-usages)
-
-;; BACK / FORWARD
-;; Cmd+[ / Cmd+]: back / forward through the places the cursor jumped from and
-;; to (better-jumper).
-(map! "s-[" #'better-jumper-jump-backward)
-
-(map! "s-]" #'better-jumper-jump-forward)
-
-;; PREVIOUS / NEXT BUFFER
-;; M-[ / M-], GUI only: in a terminal, M-[ / M-] are ESC [ / ESC ], the
-;; prefixes of escape sequences (mouse, focus, OSC), so binding them flips
-;; buffers. (Defined here: the bindings call it as this file loads.)
-(defun +my/gui-only (cmd)
-  `(menu-item "" ,cmd :filter ,(lambda (c) (when (display-graphic-p) c))))
-
-(map! "M-[" (+my/gui-only #'previous-buffer)
-      "M-]" (+my/gui-only #'next-buffer))
-
-;; ====== CODE ======
+;;; $DOOMDIR/config/editor/navigation.el -*- lexical-binding: t; -*-
+;; Getting around: Cmd+B, declaration or usages.
+;; Loaded from config/editor.el.
 
 ;; GO TO DECLARATION OR USAGES
 ;; Where the symbol is declared comes from xref: the language server in LSP
