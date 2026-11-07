@@ -112,7 +112,7 @@ Written anew as the drawing changes: a view loading it shows it as it is."
     file))
 
 (defun +my/excalidraw--url (_window)
-  "The page a new view of the drawing loads (see VIEWS in config/webkit.el)."
+  "The page a new view of the drawing loads (see VIEWS in config/webkit/views.el)."
   (+my/webkit-file-url (+my/excalidraw--write-page)))
 
 (defun +my/excalidraw--loaded (xwidget)

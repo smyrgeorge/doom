@@ -10,7 +10,7 @@
   "o: go to a heading of the PDF's outline, picked in the minibuffer."
   (interactive)
   (setq +my/pdf--outline-for (current-buffer))
-  ;; An answer awaited (see JAVASCRIPT in config/webkit.el).
+  ;; An answer awaited (see JAVASCRIPT in config/webkit/js.el).
   (unless (and (not +my/pdf--native)
                (+my/webkit-ask "window.pdfx ? pdfx.outlineList() : '[]'"
                                #'+my/pdf--outline-received))

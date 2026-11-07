@@ -13,7 +13,7 @@
 ;; WebKit, and on its way to no site WebKit still says the site's address; so
 ;; the site is told to put the link clicked in its title instead, which Emacs
 ;; reads every 0.2 s while it's open (as WebKit pages' titles, see WATCHING in
-;; config/webkit.el). A notice above it says what to do, and goes back to the
+;; config/webkit/js.el). A notice above it says what to do, and goes back to the
 ;; drawing.
 (defconst +my/excalidraw--libraries "https://libraries.excalidraw.com"
   "Excalidraw's libraries' site.")

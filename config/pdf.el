@@ -44,7 +44,7 @@
 ;; first one. The mode line shows its page (P3/12).
 ;; Split (SPC w v, SPC w SPC, the tab's menu...), each pane shows the PDF on
 ;; its own: scrolled, zoomed and searched apart, its page in its mode line (a
-;; WebKit view per window, see VIEWS in config/webkit.el). Keys act on the
+;; WebKit view per window, see VIEWS in config/webkit/views.el). Keys act on the
 ;; selected pane; the settings (dark pages, the toolbar, the sidebar), Esc and
 ;; reverts on all of the PDF's.
 ;; The page can't call Emacs: it says its settings, page and place, the mouse
@@ -62,7 +62,7 @@
 ;; terminal, or an Emacs without xwidgets: doc-view, Emacs's own viewer.
 ;; JavaScript runs without waiting for answers, except the selection (y,
 ;; Cmd+C, Option+Enter) and the outline (o) (see JAVASCRIPT in
-;; config/webkit.el, which has what WebKit pages share: a view per window, no
+;; config/webkit/js.el, which has what WebKit pages share: a view per window, no
 ;; white flash, links out, the title read, the pointer, clicks).
 (defvar +my/pdf-toolbar t
   "Show the toolbar in the first PDF opened (see above).")

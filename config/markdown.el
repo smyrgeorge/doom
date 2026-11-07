@@ -209,7 +209,7 @@ system's setting (MODE: `dark' or `light' to choose)."
 ;; a view loads: its stylesheet comes from a CDN), each new view written anew
 ;; from the Markdown as it is, then scrolled to the cursor's line.
 (defun +md-preview--url (_window)
-  "The page a new view of the preview loads (see VIEWS in config/webkit.el),
+  "The page a new view of the preview loads (see VIEWS in config/webkit/views.el),
 written anew: the Markdown as it is now."
   (let ((src +md-preview--source))
     (when (buffer-live-p src)

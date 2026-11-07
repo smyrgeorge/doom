@@ -9,7 +9,7 @@
 ;; The page says in its title the drawing's version (one more at each change;
 ;; a new file's blank drawing is the first) and the version of its latest
 ;; export (the file's text as it would be saved). Emacs, every 0.1 s while
-;; it's on screen (see WATCHING in config/webkit.el): a new version marks the
+;; it's on screen (see WATCHING in config/webkit/js.el): a new version marks the
 ;; buffer modified; a new export is asked for (an answer awaited, see
 ;; JAVASCRIPT there) and becomes the buffer's text, then the other views'
 ;; drawing. Saving first asks each page for its version, exported now, and
@@ -131,7 +131,7 @@ unless NOCONFIRM)."
 
 ;; WATCHING
 ;; Every 0.1 s, for each window showing a drawing, from its view's title (see
-;; WATCHING in config/webkit.el): its changes (see SAVING), the mouse pointer
+;; WATCHING in config/webkit/js.el): its changes (see SAVING), the mouse pointer
 ;; the page wants (the hand over buttons and what can be moved, the I-beam
 ;; over text, else the arrow), its error in a notice.
 (defun +my/excalidraw--watch (window xwidget)

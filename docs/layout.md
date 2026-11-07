@@ -34,7 +34,7 @@
 | `config/tiling.el` | Tiling |
 | `config/tree-sitter.el` | Tree-sitter grammars built ahead of time |
 | `config/treemacs.el` | Sidebar |
-| `config/webkit.el` | Web pages in Emacs, for PDFs, drawings and the preview |
+| `config/webkit.el`, `webkit/` | Web pages in Emacs, for PDFs, drawings and the preview |
 | `config/window.el` | Frame, fringes, focus of new windows |
 | `cmd/` | Shell commands (`diff.sh`) |
 | `scripts/` | Installers (`emacs.sh`, `tools.sh`, `lsp.sh`), `dict.sh`, `screenshots.sh` |

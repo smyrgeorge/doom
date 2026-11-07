@@ -30,7 +30,7 @@
 ;;   SPC m l        Excalidraw's libraries (libraries.excalidraw.com), see LIBRARIES
 ;;   SPC m r        read the file again
 ;; The buffer has the file's text, under the views (see THE BUFFER'S TEXT in
-;; config/webkit.el): a moment after each change, the page exports the drawing
+;; config/webkit/files.el): a moment after each change, the page exports the drawing
 ;; and Emacs puts it there, marked modified, so it's saved as any file (Cmd+S,
 ;; :w, Emacs asking on closing). Saving waits for the last change (5 s at
 ;; most). Undo is Excalidraw's.

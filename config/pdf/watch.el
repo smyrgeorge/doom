@@ -3,7 +3,7 @@
 
 ;; WATCHING THE PAGES ON SCREEN
 ;; Every 0.1 s, for each window showing a PDF, from its view's title (no
-;; JavaScript, see WATCHING in config/webkit.el): its page in the window's
+;; JavaScript, see WATCHING in config/webkit/js.el): its page in the window's
 ;; mode line, the toolbar's requests, and the mouse pointer the page wants
 ;; (hand: buttons, headings, thumbnails, links; text: the PDF's text; arrow).
 (defun +my/pdf--show-page (window state)
@@ -78,7 +78,7 @@ PDF.js, the PDF's own (WebKit's viewer)."
     (+my/webkit-file-url (expand-file-name "index.html" +my/pdf--dir))))
 
 (defun +my/pdf--url (_window)
-  "The page a new view of the PDF loads (see VIEWS in config/webkit.el): made
+  "The page a new view of the PDF loads (see VIEWS in config/webkit/views.el): made
 the first time; written anew after, to start as the view latest looked at is
 (settings, place)."
   (cond ((not +my/pdf--home)
