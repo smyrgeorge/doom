@@ -11,7 +11,7 @@
 ;; - the preview has line numbers, with the usage's line highlighted;
 ;; - the peek is only as tall as its list needs (up to `lsp-ui-peek-peek-height');
 ;; - each usage shows the function/class it's in, grouped: the name on the
-;;   first of its usages, with how many there are (like IntelliJ's usages);
+;;   first of its usages, with how many there are;
 ;; - usages don't list the declaration itself (where you are).
 (defvar +my/peek-min-height 10
   "The peek's height when it lists only a few usages.")

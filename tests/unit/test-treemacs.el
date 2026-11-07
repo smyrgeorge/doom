@@ -1,9 +1,9 @@
 ;;; tests/unit/test-treemacs.el -*- lexical-binding: t; -*-
-;; config/treemacs.el: the project sidebar, like IntelliJ's project view. It
+;; config/treemacs.el: the project sidebar. It
 ;; opens on a workspace's first project file, follows the current buffer
 ;; (projects' buffers only: files, dired, magit), keeps its git colours fresh
-;; (on save, on revert, on focus, .git changes, a git status poll), arrows like
-;; IntelliJ's trees (also in lsp-treemacs' lists), zR / zM expand / collapse
+;; (on save, on revert, on focus, .git changes, a git status poll), arrows in
+;; the tree (also in lsp-treemacs' lists), zR / zM expand / collapse
 ;; all. Real treemacs on temp projects (its git and file-watch modes off),
 ;; real git for the poll; workspaces are persp-mode structs.
 

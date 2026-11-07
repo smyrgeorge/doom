@@ -1,6 +1,5 @@
 ;;; tests/unit/test-tabs.el -*- lexical-binding: t; -*-
-;; config/tabs.el: tabs per window (Emacs's tab line), like IntelliJ's split
-;; editors: which buffers keep tabs, labels, closing (✕, Cmd+W), Cmd+1..9,
+;; config/tabs.el: tabs per window (Emacs's tab line): which buffers keep tabs, labels, closing (✕, Cmd+W), Cmd+1..9,
 ;; gt/gT, the right-click menu (Close, Close other tabs, Split Vertically,
 ;; Split Horizontally), no tab line in popups and the dashboard.
 

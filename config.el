@@ -104,13 +104,13 @@
 ;; TILING (SPC w SPC: a new pane where the tiling strategy puts it)
 (load! "config/tiling")
 
-;; BANNERS (notices at the top of a window, like IntelliJ's editor notifications)
+;; BANNERS (notices at the top of a window, with actions)
 (load! "config/banner")
 
 ;; SMOOTH SCROLL (mouse-wheel notches glide instead of jumping)
 (load! "config/smooth")
 
-;; ERROR STRIPE (IntelliJ-like marks for git changes and errors at the right edge)
+;; ERROR STRIPE (marks for git changes and errors at the right edge)
 (load! "config/stripe")
 
 ;; STICKY HEADER (the functions/classes around the top visible line)
@@ -122,7 +122,7 @@
 ;; EVIL (back to normal state on save)
 (load! "config/evil")
 
-;; TREEMACS (IntelliJ-like project view)
+;; TREEMACS (project view)
 (load! "config/treemacs")
 
 ;; CHEATSHEET (tips panel under treemacs: Vim, Doom and this config's keys)
@@ -135,7 +135,7 @@
 ;; SPC g d: the current file's diff in a pane on the right.
 (load! "config/git")
 
-;; MERGE (conflicts resolved in three panes, like IntelliJ's: e on a conflicted file in Magit)
+;; MERGE (conflicts resolved in three panes: e on a conflicted file in Magit)
 (load! "config/merge")
 
 ;; EXAMPLES (M-x +my/example: a feature shown on files of its own, e.g. a merge in conflict)
@@ -178,7 +178,7 @@
 ;; PROJECTILE (projects under ~/dev, no file cache)
 (load! "config/projectile")
 
-;; SEARCH EVERYWHERE (IntelliJ's double Shift: classes, files, symbols, actions)
+;; SEARCH EVERYWHERE (classes, files, symbols, actions in one list)
 (load! "config/search")
 
 ;; TABS

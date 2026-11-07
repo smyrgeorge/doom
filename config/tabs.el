@@ -4,7 +4,7 @@
 ;; ====== VARIABLES ======
 
 ;; TABS PER WINDOW
-;; Each window has its own tabs, like IntelliJ's split editors: the buffers
+;; Each window has its own tabs: the buffers
 ;; shown in it, in the order they first were (Emacs's tab line, instead of
 ;; Doom's centaur-tabs, whose tab groups were per project and shared by every
 ;; window). A split starts with one tab, the buffer it shows. Files, Claude
@@ -16,7 +16,7 @@
 ;; if it has unsaved changes). A Claude session only leaves the tab line: close
 ;; it with its own commands.
 ;; Tabs look as they did: an icon, a bar on the current one, • when unsaved.
-;; Right-clicking a tab: Emacs's Close and Close other tabs, and IntelliJ's
+;; Right-clicking a tab: Emacs's Close and Close other tabs, and
 ;; Split Vertically (a pane on the right) and Split Horizontally (below): the
 ;; new pane has only that tab and takes focus; the tab stays where it was too.
 (defvar +my/tabs-height 22

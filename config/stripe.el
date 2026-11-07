@@ -1,12 +1,12 @@
 ;;; $DOOMDIR/config/stripe.el -*- lexical-binding: t; -*-
-;; IntelliJ-like error stripe at the right edge of file windows. Loaded from
+;; An error stripe at the right edge of file windows. Loaded from
 ;; config.el.
 
 ;; ====== VARIABLES ======
 
 ;; ERROR STRIPE
 ;; A strip at the right edge of the window that maps the whole file onto the
-;; window height, like the marks on IntelliJ's scrollbar:
+;; window height, like marks on a scrollbar:
 ;; - flycheck diagnostics (LSP included): red errors, yellow warnings (see
 ;;   `+my/stripe-diagnostic-levels');
 ;; - git changes (diff-hl), in the gutter's colours: red deleted, orange
@@ -39,8 +39,8 @@
 
 ;; Windows with the stripe may scroll past the end of the file only a bit: at
 ;; most this much empty space below the last line. In graphical frames the
-;; strip maps the file plus this space onto the whole window height (like
-;; IntelliJ's scrollbar), so it never shrinks: the marks stay put as the end
+;; strip maps the file plus this space onto the whole window height, so it
+;; never shrinks: the marks stay put as the end
 ;; comes into view, and the band reaches the bottom when the window can't
 ;; scroll further. In a terminal it covers only the rows with text.
 (defvar +my/stripe-overscroll 0.25
@@ -790,7 +790,7 @@ jump there (the line in the middle of the window, `C-o' going back)."
 ;;; Modes
 
 (define-minor-mode +my/stripe-mode
-  "IntelliJ-like stripe of git changes and diagnostics at the right edge."
+  "A stripe of git changes and diagnostics at the right edge."
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map [right-margin mouse-1] #'+my/stripe-jump)
             (define-key map [right-margin down-mouse-1] #'ignore)

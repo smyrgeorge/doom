@@ -6,7 +6,7 @@ My Emacs configuration, built on [Doom Emacs](https://github.com/doomemacs/core)
 > frameworks, a modicum of stability (and reproducibility) from their package manager, and the performance of a hand
 > rolled config (or better).
 
-It targets **macOS on Apple Silicon** with **Emacs 31** (emacs-plus), and aims for an IntelliJ-like workflow: a project
+It targets **macOS on Apple Silicon** with **Emacs 31** (emacs-plus), and aims for an IDE-like workflow: a project
 sidebar that follows the current file, LSP for every language I use, format-on-save, and Claude Code inside Emacs. It
 works both as a GUI app and in the terminal (`emacs -nw`).
 
@@ -51,24 +51,15 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 
 ## Documentation
 
-- [The editor](docs/editor.md): error stripe, notices, sticky header, tabs per window, current line, right margin,
-  fringes, case style, font and theme, PDFs in WebKit, drawings (Excalidraw), mode line, evil.
-- [Project sidebar](docs/sidebar.md): treemacs that follows the current file, git status, IntelliJ-like arrows, LSP
-  panels.
-- [Smooth scrolling](docs/scrolling.md): mouse-wheel glide, scroll limit past the end, long lines.
-- [Performance](docs/performance.md): compiled config, opening files faster.
-- [Code](docs/code.md): Cmd+B, Option+Enter actions, usages peek, code lenses, language servers, Kotlin, spelling in
-  code.
-- [Search](docs/search.md): Search Everywhere (`SPC s a`), find in files, projects.
-- [Markdown](docs/markdown.md): live preview inside Emacs, Markdown links.
-- [Git](docs/git.md): Magit, commit graph, file diff pane, resolving conflicts in three panes.
-- [Claude Code in Emacs](docs/claude-code.md): starting sessions, what Claude is told about Emacs, images.
-- [Terminal usage](docs/terminal.md): running in a terminal (`emacs -nw`).
+- [The editor](docs/editor.md): error stripe, notices, sticky header, tabs per window, tiling, code, PDFs, drawings.
+- [Project sidebar](docs/sidebar.md): treemacs as a project view that follows the current file.
+- [Search](docs/search.md): Search Everywhere, find in files, projects.
+- [Markdown](docs/markdown.md): live preview inside Emacs.
+- [Git](docs/git.md): Magit additions, file diff pane, resolving conflicts in three panes.
+- [Claude Code](docs/claude-code.md): sessions and what Claude is told about Emacs.
+- [Terminal](docs/terminal.md): what differs in `emacs -nw`.
 - [Key bindings](docs/keybindings.md): this config's own keys.
-- [Modules and languages](docs/modules.md): enabled Doom modules, languages and tooling, known `doom doctor` warnings.
+- [Examples](docs/examples.md): each feature on files of its own, with screenshots.
+- [Shell commands](docs/cmd.md): `cmd/diff.sh`.
+- [Tests](docs/tests.md): `tests/run.sh`.
 - [Repository layout](docs/layout.md): what each file is for.
-- [Tests](docs/tests.md): unit and end-to-end tests of this config's features (`tests/run.sh`).
-- [Examples](docs/examples.md): features shown on files of their own (`M-x +my/example`), with screenshots: a merge
-  in conflict, a dark PDF, the Markdown preview, a drawing, the error stripe, tiling, notices.
-- [Shell commands](docs/cmd.md): `cmd/diff.sh`, Git's conflicts resolved in the three panes from the shell (also as
-  `git mergetool`).

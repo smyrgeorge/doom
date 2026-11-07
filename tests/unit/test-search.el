@@ -1,5 +1,5 @@
 ;;; tests/unit/test-search.el -*- lexical-binding: t; -*-
-;; config/search.el: SPC s a, Search Everywhere (IntelliJ's double Shift):
+;; config/search.el: SPC s a, Search Everywhere:
 ;; Classes, Files, Symbols and Actions in one list; Cmd+Shift+F, find in files
 ;; (rg through Doom's SPC s p), the selected text as the query. The language
 ;; server is mocked (`lsp-request-async'); `consult--multi' and `consult--grep'

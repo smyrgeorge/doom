@@ -1,10 +1,10 @@
 ;;; $DOOMDIR/config/search.el -*- lexical-binding: t; -*-
-;; Search Everywhere (IntelliJ's double Shift) on SPC s a. Loaded from config.el.
+;; Search Everywhere on SPC s a. Loaded from config.el.
 
 ;; ====== VARIABLES ======
 
 ;; SEARCH EVERYWHERE
-;; One list with the tabs of IntelliJ's Search Everywhere: Classes, Files,
+;; One list with tabs: Classes, Files,
 ;; Symbols and Actions. Typing searches all of them at once; to show one tab,
 ;; type its key then SPC (or `<' then the key): c Classes, f Files, s Symbols,
 ;; a Actions. `<<' (or DEL on an empty input) goes back to all.
@@ -26,7 +26,7 @@
 ;; FIND IN FILES
 ;; Cmd+Shift+F: search the project's files (ripgrep, through Doom's SPC s p),
 ;; next to Cmd+F for the current buffer. With text selected, it searches for
-;; that text, like IntelliJ's Find in Files.
+;; that text.
 (map! "s-F" #'+default/search-project)
 
 ;; ====== CODE ======
@@ -128,7 +128,7 @@ Classes and Symbols requests would cancel each other."
     (command-execute command 'record)))
 
 (defun +my/search-everywhere ()
-  "Search classes, files, symbols and actions at once (IntelliJ's double Shift)."
+  "Search classes, files, symbols and actions at once."
   (interactive)
   (require 'consult)
   (let* ((root (doom-project-root))

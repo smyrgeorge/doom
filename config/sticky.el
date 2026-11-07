@@ -5,8 +5,8 @@
 
 ;; STICKY HEADER
 ;; The header line of code windows shows the classes/functions the top visible
-;; line is inside, once their first lines have scrolled out of view, like
-;; IntelliJ's sticky lines: e.g. "class Foo › def bar(self):". Otherwise it
+;; line is inside, once their first lines have scrolled out of view: e.g.
+;; "class Foo › def bar(self):". Otherwise it
 ;; shows the file's path in the project. Nested scopes come from tree-sitter
 ;; where the major mode uses it; other modes get the enclosing defun only.
 ;; In Markdown (markdown-ts-mode) the scopes are the headings: "# Guide › ## Setup".

@@ -4,8 +4,8 @@
 ;; ====== VARIABLES ======
 
 ;; CAMELCASE
-;; Check identifiers like AgreementController as Agreement + Controller (as
-;; IntelliJ does) instead of flagging them whole. Only applies to words that
+;; Check identifiers like AgreementController as Agreement + Controller
+;; instead of flagging them whole. Only applies to words that
 ;; would otherwise be marked as misspelled.
 (setq spell-fu-word-delimit-camel-case t)
 

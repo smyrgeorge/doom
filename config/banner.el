@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/banner.el -*- lexical-binding: t; -*-
-;; Notices at the top of a window, like IntelliJ's editor notifications.
+;; Notices at the top of a window, with actions.
 ;; Loaded from config.el.
 
 ;; ====== VARIABLES ======
@@ -410,7 +410,7 @@ that no longer have any."
 (add-hook 'change-major-mode-hook #'+my/banner--sync-soon)
 
 (defun +my/banner-faces-h ()
-  "Each type's row tinted with its theme colour, like IntelliJ's notices."
+  "Each type's row tinted with its theme colour."
   (when (and (fboundp 'doom-blend) (fboundp 'doom-color))
     (let ((bg (face-background 'default nil t)))
       (when (and (stringp bg) (string-prefix-p "#" bg))

@@ -2,39 +2,16 @@
 
 ## Search Everywhere (`SPC s a`)
 
-`config/search.el` emulates IntelliJ's double Shift: one list with **Classes**, **Files**, **Symbols** and
-**Actions**. Typing searches all of them (words in any order, case-insensitive); to show one tab, type its key and
-`SPC` — `c`, `f`, `s` or `a` — and `<<` (or `DEL` on an empty input) to go back to all.
-
-- **Classes / Symbols:** the language server's workspace symbols, queried as you type (from 2 characters; only in
-  buffers with an LSP server). Classes are classes, interfaces/traits, structs, enums and objects. Picking one records
-  a jump, so `Cmd+[` / `C-o` comes back.
-- **Files:** the project's files, recently opened ones first (only inside a project).
-- **Actions:** every command (what `M-x` runs), recently used ones first, with key bindings and docs.
-
-Emacs can't see a lone Shift key press on macOS, so it's on `SPC s a` instead of double Shift.
+One list of **Classes**, **Files**, **Symbols** and **Actions** (commands). Type `c`, `f`, `s` or `a` and a space to
+keep one kind; `DEL` on an empty input goes back to all.
 
 ## Find in files (`Cmd+Shift+F`)
 
-Searches the project's files with ripgrep, like IntelliJ's Find in Files, next to `Cmd+F` for the current buffer;
-with text selected, that text is the query. It's Doom's `SPC s p` (use that in terminal Emacs); with `C-u` it also
-searches ignored and hidden files (`config/search.el`).
+Searches the project with ripgrep; the selected text is the query. With `C-u`, ignored and hidden files too.
 
-## Projectile
+## Projects
 
-Projects are discovered under `~/dev`: its direct subfolders are added to `SPC p p` the first time the project list
-is used in a session (`M-x projectile-discover-projects-in-search-path` rescans). The file cache is off, so `SPC SPC`
-also lists files created outside Emacs (CLI, Claude Code, `git checkout`) (`config/projectile.el`).
-
-Picking a project in `SPC p p` opens its README straight away when it has one at its root, instead of asking for a
-file; otherwise it asks, as Doom does. Several READMEs: Markdown first, then Org, reStructuredText, AsciiDoc, text, one
-without an extension (`+my/project-readme-extensions`); any case (`readme.md` too).
-
-Each workspace remembers its project. What an empty workspace shows is Doom's dashboard, shared by the workspaces, which
-moves to each one's last project as you switch; but leaving a workspace recorded the project of whatever it showed, the
-dashboard too, still in the previous workspace's project. A workspace whose files were all closed took on another's:
-there `SPC SPC` listed the other project's files and the sidebar followed it. And the dashboard's reload put it back in
-the folder of the last file visited in any workspace (`+dashboard-pwd-policy`). Now the dashboard is always in the
-current workspace's project: the one it was made for (`SPC p p`); for a workspace made without one, that of the last
-file shown in it (the file in its window, not the previous workspace's, still current right after a switch), or `~`
-before any.
+- Projects under `~/dev` are found by themselves.
+- Switching to a project (`SPC p p`) opens its README, if it has one.
+- `SPC SPC` also lists files created outside Emacs.
+- Each workspace keeps its own project.

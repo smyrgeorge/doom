@@ -1,45 +1,15 @@
-# Project sidebar (treemacs)
+# Project sidebar
 
-`config/treemacs.el` makes treemacs behave like IntelliJ's project view:
+The treemacs sidebar works as a project view:
 
-- **Opens automatically** the first time a project file is shown in a workspace (`SPC p p`, `SPC SPC`, `SPC f r`, the
-  dashboard...). Close it with `SPC o p` and it stays closed for that workspace.
-- **Follows the current buffer**: highlights the open file and switches to the buffer's project, right after every
-  buffer or window switch (treemacs' own project follow waits for 1.5 s without any input). Only buffers that belong
-  to a project switch it (files, dired, magit): popups and logs (e.g. `doom/reload`'s, in Doom's `~/.config/emacs`)
-  switched it back and forth, and once left the old project's root drawn next to the new one ("doom emacs").
-- **The open file stays selected; scrolling is yours**: scroll the sidebar away from the open file and it stays where
-  you left it, the file still selected (highlighted, the arrow in the fringe) out of view. It's shown again when the
-  window's buffer changes: a file opened, closed or switched to, a project switched to. Clicking back into the same
-  file, a popup (`SPC`'s menu), a refresh don't move it. Treemacs's own follow ran a moment after any change to
-  Emacs's buffer list (every few seconds, from the git status check), and as soon as scrolling stopped it scrolled the
-  sidebar back to the file. Keys pressed in the sidebar act on the selection, as in IntelliJ (`j` after scrolling away
-  goes to the next file after the open one, back in view); a click selects what it clicks.
-- **Git status** colours for files and folders, computed asynchronously. Saving a file refreshes its status (macOS's
-  kqueue file notifications miss in-place edits, so this is done explicitly on save). Changes made outside Emacs
-  (Claude Code, a terminal, git) show up within a few seconds: while Emacs has focus, the shown projects' `git status`
-  is checked every 3 s in the background (`+my/treemacs-git-poll-interval`; only while the sidebar is shown, `nil`
-  turns it off), and treemacs refreshes when it changed. Switching back to Emacs, a change under a project's `.git` (a
-  commit, a checkout) and a file reloaded from disk refresh it too. Folder colours need `python3`.
-- **Reachable like any window**: `SPC w w` cycles into it and it gets a window number (`SPC w 1`, as the leftmost
-  window).
-- **No mode line**: it only said "Treemacs" and the workspace.
-- **Arrows, like IntelliJ's trees**: `←` collapses a node, or goes to its parent; `→` expands a closed node, goes to
-  the first child of an open one, and opens a file (in the error list, jumps to the error). `↑`/`↓` move a line, like
-  `k`/`j`. The same in the LSP lists (`SPC c X`, `SPC c S`), where `←`/`→` didn't expand or collapse anything.
-  `h`/`l` keep treemacs' own collapse / open. A **single click** opens a file or expands/collapses a folder
-  (treemacs' default is a double click).
-- `zR` / `zM` (`M-x treemacs-expand-all` / `treemacs-collapse-all`): expand every folder of the projects shown, or
-  collapse them all (each project stays open at its top level). Expanding asks first above 300 folders
-  (`+my/treemacs-expand-all-warn`).
-- With `+lsp`: structure view (`SPC c S`), project errors (`SPC c X`) and call hierarchy (`SPC c y` / `SPC c Y`).
-  The structure view and the error list open with the cursor in them, on their first line (it stayed in the code).
+- It opens by itself with a workspace's first project file; `SPC o p` closes it for that workspace.
+- It follows the current file and its project at once. Scroll it away and it stays there until you switch files.
+- Files and folders have their git status colours, updated on save and every few seconds for changes made outside
+  Emacs.
+- The arrows work in the tree (`←` collapses or goes to the parent, `→` expands or opens), in the LSP lists
+  too. A single click opens a file or a folder. `zR` / `zM` expand or collapse everything.
+- `SPC w w` and the window numbers reach it.
+- With `+lsp`: the structure (`SPC c S`), the project's errors (`SPC c X`) and the call hierarchy (`SPC c y` /
+  `SPC c Y`) open with the cursor in them.
 
-## Tips panel (disabled)
-
-Disabled for now: uncomment `(load! "config/cheatsheet")` in `config.el`. Below the sidebar, whenever it's open: a few
-tips from `cheatsheet.org` (this config's keys, Doom's, Vim's), two per section (`+my/cheatsheet-tips-per-section`),
-changing every 5 minutes (`+my/cheatsheet-rotate-seconds`), so over time you see them all. In the panel `n` shows the
-next tips, `e` opens the whole cheatsheet, `q` hides it; `SPC t ?` hides / shows it (`+my/cheatsheet-enabled` nil
-starts it hidden). Edit `cheatsheet.org` (`+my/cheatsheet-file`) to change the tips (one `- ` line each, under a `*`
-heading); the panel picks them up on save (`config/cheatsheet.el`).
+A tips panel under it (from `cheatsheet.org`) is turned off; uncomment `config/cheatsheet` in `config.el` to turn it on.

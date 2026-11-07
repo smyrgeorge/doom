@@ -1,29 +1,11 @@
-# Claude Code in Emacs
+# Claude Code
 
-[`agent-shell`](https://github.com/xenodium/agent-shell) runs Claude Code (via the Agent Client Protocol) in a native
-Emacs buffer — evil keys, search and copy work as usual. It uses the Claude CLI login.
+[agent-shell](https://github.com/xenodium/agent-shell) runs Claude Code in an Emacs buffer, with the Claude CLI's
+login.
 
-`SPC o c` starts a new Claude Code session (another one each time). `SPC o C` goes to the project's session, starting
-one if there's none (Claude Code, without asking which agent); `C-u SPC o C` starts a new one, `C-u C-u SPC o C` picks
-among the open ones. From code, Option+Enter (`M-RET`) sends the error at point or the selection to Claude (fix /
-explain), or adds the selection or file to the prompt (see [Context actions](code.md#context-actions-optionenter)).
+- `SPC o c` starts a new session; `SPC o C` goes to the project's (`C-u`: a new one, `C-u C-u`: pick one).
+- In code, `Option+Enter` sends the error at point or the selection to Claude, or adds them to the prompt.
 
-Claude is told where it runs and what that allows (`+my/agent-shell-claude-context`, appended to Claude Code's own
-system prompt in every session it starts or resumes):
-
-- **Formatting:** the Markdown agent-shell renders (tables, code blocks highlighted by their language's mode), and what
-  it doesn't (HTML, LaTeX, Mermaid).
-- **File references** as `path:line`: agent-shell makes them links that open the file at that line.
-- **Images** inline: a Markdown image link to a local file or an image's path alone on a line (PNG, JPEG, WebP, SVG),
-  saved under the project's `.agent-shell/images/`, next to agent-shell's transcripts, so they keep showing there.
-- **Reports** with diagrams or graphs come as Markdown in the reply, with only the diagrams rendered as images (not the
-  whole report as one image or a web page), so they read inside the editor.
-- **The editor:** Emacs runs a server, so Claude can ask it (`emacsclient --eval`) what you're looking at (buffers,
-  file and line, region, diagnostics) or open a file for you: quickly, never waiting for input, changing nothing unless
-  asked, and checking a file's buffer has no unsaved changes before editing it. (In GUI sessions; see
-  [Terminal usage](terminal.md) for `emacs -nw`.)
-- **The theme's colours**, read when the session starts, so the images it draws suit them (dark here).
-
-Images show as wide as the window (agent-shell shrinks them to 40% of it; `agent-shell-markdown-image-max-width` 1.0),
-smaller ones at their own size; `{width=100%}` after an image link sizes one image,
-`M-x agent-shell-markdown-image-scale-increase` / `-decrease` resize the ones on screen.
+Claude is told how Emacs shows it: the Markdown it renders, `path:line` references (they become links), images shown
+inline (saved under `.agent-shell/images/`), the theme's colours for its diagrams, and that it can ask Emacs what you're
+looking at (`emacsclient --eval`). Images are as wide as the window.

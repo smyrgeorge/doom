@@ -1,9 +1,9 @@
 ;;; $DOOMDIR/config/treemacs.el -*- lexical-binding: t; -*-
-;; Treemacs project sidebar (IntelliJ-like). Loaded from config.el.
+;; Treemacs project sidebar. Loaded from config.el.
 
 ;; ====== VARIABLES ======
 
-;; TREEMACS (IntelliJ-like project view)
+;; TREEMACS (project view)
 (setq +treemacs-git-mode 'deferred)     ; async git status, incl. folders (python3)
 
 ;; Treemacs hides its window from winum; number it (leftmost => SPC w 1).
@@ -45,14 +45,14 @@
 ;; EXPAND / COLLAPSE ALL
 ;; `treemacs-expand-all' (zR in treemacs) opens every folder of the project(s)
 ;; in the sidebar; `treemacs-collapse-all' (zM) closes them all again but keeps
-;; each project open at its top level, like IntelliJ's Collapse All (treemacs's
+;; each project open at its top level (treemacs's
 ;; own `treemacs-collapse-all-projects' folds the projects down to their names).
 (defvar +my/treemacs-expand-all-warn 300
   "Ask before `treemacs-expand-all' opens more than this many folders.")
 
 ;; ====== KEY BINDINGS ======
 
-;; Arrows, like IntelliJ's trees: ← collapses (or goes to the parent), → expands
+;; Arrows in trees: ← collapses (or goes to the parent), → expands
 ;; a closed node, or goes to the first child of an open one; on a file in the
 ;; project view it opens it, on an error in the error list (SPC c X) it jumps
 ;; there. ↑/↓ as k/j. (treemacs-evil binds h/l and j/k but leaves the arrows as
@@ -187,7 +187,7 @@ those say closed too."
 ;; changes to its buffer list: treemacs followed on each of those (the git
 ;; poll's buffers, every few seconds), and scrolled the sidebar back to the file
 ;; as soon as you stopped scrolling. A key pressed in the sidebar acts on the
-;; selection (it's scrolled back into view first), as in IntelliJ.
+;; selection (it's scrolled back into view first).
 (defvar-local +my/treemacs--selection nil
   "(PATH . MARKER): the sidebar's selected node, MARKER where it was last
 drawn (see above).")

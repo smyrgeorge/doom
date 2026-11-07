@@ -6,13 +6,13 @@
 (map! :leader :desc "Cycle case style" "c ~" #'string-inflection-all-cycle)
 
 ;; GO TO DECLARATION OR USAGES
-;; Cmd+B on a symbol, like IntelliJ: on a use, jump to its declaration; on the
+;; Cmd+B on a symbol: on a use, jump to its declaration; on the
 ;; declaration itself, list its usages (Enter opens one). Cmd+[ goes back.
 (map! "s-b" #'+my/goto-declaration-or-usages)
 
 ;; BACK / FORWARD
 ;; Cmd+[ / Cmd+]: back / forward through the places the cursor jumped from and
-;; to (better-jumper), like IntelliJ's Back / Forward.
+;; to (better-jumper).
 (map! "s-[" #'better-jumper-jump-backward)
 
 (map! "s-]" #'better-jumper-jump-forward)
@@ -36,14 +36,13 @@
   :commands string-inflection-all-cycle)
 
 ;; RAINBOW BRACKETS
-;; Color (), [] and {} by nesting depth in code, like IntelliJ's Rainbow
-;; Brackets plugin, so matching pairs are easy to spot.
+;; Color (), [] and {} by nesting depth in code, so matching pairs are easy
+;; to spot.
 (use-package! rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
 ;; RIGHT MARGIN
-;; A thin vertical line at the column lines shouldn't go past, like IntelliJ's
-;; right margin, in files of code, text and configuration: at `fill-column'
+;; A thin vertical line at the column lines shouldn't go past, in files of code, text and configuration: at `fill-column'
 ;; (set in config.el; also where gq and M-q wrap text). A project's
 ;; .editorconfig moves it with max_line_length (e.g. 100 in a ktfmt Kotlin
 ;; project), or removes it with max_line_length = off (e.g. for *.md). Commit
@@ -234,7 +233,7 @@ language server) on one it knows no declaration of."
 
 (defun +my/goto-declaration-or-usages ()
   "Jump to the declaration of the symbol at point; on the declaration itself,
-list its usages instead (IntelliJ's Go to Declaration or Usages)."
+list its usages instead."
   (interactive)
   (unless (thing-at-point 'symbol)
     (user-error "No symbol here"))

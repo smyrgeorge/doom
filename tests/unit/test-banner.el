@@ -1,6 +1,5 @@
 ;;; tests/unit/test-banner.el -*- lexical-binding: t; -*-
-;; config/banner.el: notices at the top of a window (IntelliJ's editor
-;; notifications): showing, replacing and closing them, per buffer; their rows
+;; config/banner.el: notices at the top of a window: showing, replacing and closing them, per buffer; their rows
 ;; (icon, message cut short, actions, ✕) and where clicks run; room in the header
 ;; line; the terminal's header line; the GUI's notices' frames (child frames:
 ;; stood in for here, batch Emacs can't make frames); theme colours; the long

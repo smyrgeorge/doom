@@ -6,7 +6,7 @@
 ;; CODE LENSES
 ;; lsp-mode shows the code lenses a server sends, at the end of the line:
 ;; rust-analyzer's "▶ Run" and implementations, and now also reference counts
-;; (IntelliJ's usages) for Rust and TypeScript/JavaScript. Pyright sends none.
+;; for Rust and TypeScript/JavaScript. Pyright sends none.
 ;; rust-analyzer's "Debug" lens needs a debugger set up (dap), so it's off.
 (setq lsp-rust-analyzer-lens-references-method-enable t
       lsp-rust-analyzer-lens-references-adt-enable t

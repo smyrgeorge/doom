@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/merge.el -*- lexical-binding: t; -*-
-;; Resolving merge conflicts in three panes, like IntelliJ's. Loaded from
+;; Resolving merge conflicts in three panes. Loaded from
 ;; config.el.
 
 ;; ====== VARIABLES ======
@@ -1419,7 +1419,7 @@ same), not done yet."
   (+my/merge--move nil))
 
 ;; THEME
-;; The changes tinted with the theme's colours, like IntelliJ's: the colour
+;; The changes tinted with the theme's colours: the colour
 ;; blended into the theme's background, where colours are true (the GUI, a
 ;; terminal with 24-bit colour). With 256 colours a blend comes out as the
 ;; palette's nearest (teal, salmon): the palette's darkest tint of the colour

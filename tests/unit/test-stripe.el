@@ -1,5 +1,5 @@
 ;;; tests/unit/test-stripe.el -*- lexical-binding: t; -*-
-;; config/stripe.el: the IntelliJ-like error stripe at the right edge of file
+;; config/stripe.el: the error stripe at the right edge of file
 ;; windows (flycheck errors, diff-hl's git changes, the band of the part on
 ;; screen): its marks, its terminal cells, its graphical image and the child
 ;; frame showing it (faked: batch Emacs makes no child frames), clicks, drags
