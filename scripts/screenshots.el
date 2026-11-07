@@ -41,9 +41,9 @@ not selected (a hollow box in the panes)."
     (dolist (package '("magit" "magit-section" "diff-hl"))
       (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
   (require 'doom-themes)
-  (+test-load "config/childframe" "config/banner" "config/window" "config/tabs" "config/smooth" "config/editor"
-              "config/actions" "config/webkit" "config/pdf" "config/markdown" "config/excalidraw" "config/stripe"
-              "config/tiling" "config/merge" "config/examples")
+  (+test-load "config/childframe" "config/banner" "config/window" "config/tabs" "config/smooth" "config/long-lines"
+              "config/editor" "config/actions" "config/webkit" "config/pdf" "config/markdown" "config/excalidraw"
+              "config/stripe" "config/tiling" "config/merge" "config/examples")
   ;; PDF.js and Excalidraw: copies of Doom's, not downloaded again.
   (+test-pdfjs-dir)
   (+test-excalidraw-dir)

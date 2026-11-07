@@ -113,6 +113,9 @@
 ;; SMOOTH SCROLL (mouse-wheel notches glide instead of jumping)
 (load! "config/smooth")
 
+;; LONG LINES (files with very long lines: plain, unwrapped, a notice saying so)
+(load! "config/long-lines")
+
 ;; ERROR STRIPE (marks for git changes and errors at the right edge)
 (load! "config/stripe")
 

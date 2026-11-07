@@ -1,8 +1,7 @@
 ;;; tests/unit/test-smooth.el -*- lexical-binding: t; -*-
 ;; config/smooth.el: mouse-wheel notches glide (ultra-scroll), heavy idle jobs
 ;; wait for a glide to end, every window's scroll limit past the end, good-scroll's
-;; timer only while scrolling, the wheel over the minibuffer, and files with very
-;; long lines opened plain (so-long-mode, unwrapped).
+;; timer only while scrolling, the wheel over the minibuffer.
 
 ;; What Doom's smooth-scroll module does to ultra-scroll; its config runs before
 ;; this config's `after!' blocks, as here.
@@ -115,8 +114,7 @@ tell); `+test-smooth--moves' gets vertico's moves: (next N) or (previous N)."
 (ert-deftest smooth/settings ()
   (should (= (default-value '+my/smooth-scroll-min-step) 20))
   (should (= (default-value '+my/smooth-scroll-frame) (/ 1.0 60)))
-  (should (= (default-value '+my/smooth-scroll-time-constant) 0.05))
-  (should (= (default-value '+my/long-line-threshold) 5000)))
+  (should (= (default-value '+my/smooth-scroll-time-constant) 0.05)))
 
 ;; ====== GLIDE ======
 
@@ -577,32 +575,5 @@ both leave the minibuffer to it."
       (let ((event (+test-smooth--wheel (selected-window) -5)))
         (+my/smooth-minibuffer-wheel-a (lambda (&rest a) (push a called)) event 'arg)
         (should (equal called (list (list event 'arg))))))))
-
-;; ====== LONG LINES ======
-
-(ert-deftest smooth/long-lines-settings ()
-  "Lines over 5,000 characters count as very long; so-long-mode doesn't wrap them."
-  (should (= so-long-threshold +my/long-line-threshold))
-  (should (eq (alist-get 'truncate-lines so-long-variable-overrides) t)))
-
-(ert-deftest smooth/long-lines-open-plain-and-unwrapped ()
-  "With Doom's global-so-long-mode: a file with a line over the threshold opens in
-so-long-mode (once shown in a window), unwrapped; one at the threshold in its own
-mode."
-  (+test-with-reset
-    (let ((was global-so-long-mode))
-      (unwind-protect
-          (progn
-            (global-so-long-mode 1)
-            (find-file (+test-file "smooth-long/report.py"
-                                   (concat "x = 1\ndata = '" (make-string 5001 ?a) "'\n")))
-            (run-window-configuration-change-hook)  ; as redisplay would
-            (should (eq major-mode 'so-long-mode))
-            (should truncate-lines)
-            (find-file (+test-file "smooth-long/ok.py" (concat (make-string 5000 ?a) "\n")))
-            (run-window-configuration-change-hook)
-            (should (eq major-mode 'python-mode))
-            (should-not truncate-lines))
-        (global-so-long-mode (if was 1 -1))))))
 
 ;;; test-smooth.el ends here

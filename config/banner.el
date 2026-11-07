@@ -348,37 +348,3 @@ that no longer have any."
 (+my/banner-faces-h)
 
 (add-hook 'doom-load-theme-hook #'+my/banner-faces-h)
-
-;;; Notice (warning): very long lines aren't wrapped nor highlighted
-
-(defun +my/banner--group-digits (n)
-  "N with thousands separators: 51997 -> \"51,997\"."
-  (let ((s (number-to-string n)))
-    (while (string-match "\\([0-9]\\)\\([0-9]\\{3\\}\\)\\(,\\|\\'\\)" s)
-      (setq s (replace-match "\\1,\\2\\3" t nil s)))
-    s))
-
-(defun +my/banner-long-lines-h ()
-  "In `so-long-mode' (very long lines), say the file is shown plain and unwrapped."
-  (when (derived-mode-p 'so-long-mode)
-    (+my/banner-show
-     'long-lines
-     (format "This file has very long lines (up to %s characters): shown without highlighting%s, to keep scrolling smooth."
-             (+my/banner--group-digits (cadr (buffer-line-statistics)))
-             (if truncate-lines " and unwrapped" ""))
-     :type 'warning
-     :actions `(,@(and truncate-lines '(("Wrap lines" . +my/banner--wrap-lines)))
-                ("Open normally" . +my/banner--open-normally)))))
-
-(defun +my/banner--wrap-lines ()
-  (setq-local truncate-lines nil)
-  ;; Same notice, without the part about wrapping.
-  (+my/banner-long-lines-h))
-
-(defun +my/banner--open-normally ()
-  ;; Back to the file's own mode. Not `so-long-revert': Doom's action keeps
-  ;; what to undo in a buffer-local variable that entering `so-long-mode'
-  ;; wipes, so it did nothing.
-  (so-long-mode-revert))
-
-(add-hook 'so-long-hook #'+my/banner-long-lines-h)

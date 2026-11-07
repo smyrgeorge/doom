@@ -2,8 +2,8 @@
 ;; config/banner.el: notices at the top of a window: showing, replacing and closing them, per buffer; their rows
 ;; (icon, message cut short, actions, ✕) and where clicks run; room in the header
 ;; line; the terminal's header line; the GUI's notices' frames (child frames:
-;; stood in for here, batch Emacs can't make frames); theme colours; the long
-;; lines notice and its actions.
+;; stood in for here, batch Emacs can't make frames); theme colours. The long
+;; lines notice: test-long-lines.el.
 
 (+test-load "config/childframe" "config/banner")
 
@@ -163,8 +163,7 @@
 (ert-deftest banner/hooks ()
   (should (memq '+my/banner--window-change-h window-state-change-functions))
   (should (memq '+my/banner--sync-soon change-major-mode-hook))
-  (should (memq '+my/banner-faces-h doom-load-theme-hook))
-  (should (memq '+my/banner-long-lines-h so-long-hook)))
+  (should (memq '+my/banner-faces-h doom-load-theme-hook)))
 
 (ert-deftest banner/loading-tints-and-syncs ()
   (should (= +test-banner--theme-at-load 1))
@@ -1002,87 +1001,6 @@ laid out; its window shows a read-only buffer without any lines of its own."
             (should (= +my/banner--theme (+ theme 3))))
         (dolist (face '(+my/banner-info +my/banner-warning +my/banner-error))
           (set-face-attribute face nil :background 'unspecified :foreground 'unspecified))))))
-
-;; ====== THE LONG LINES NOTICE ======
-
-(ert-deftest banner/group-digits ()
-  (should (equal (+my/banner--group-digits 0) "0"))
-  (should (equal (+my/banner--group-digits 7) "7"))
-  (should (equal (+my/banner--group-digits 999) "999"))
-  (should (equal (+my/banner--group-digits 1000) "1,000"))
-  (should (equal (+my/banner--group-digits 51997) "51,997"))
-  (should (equal (+my/banner--group-digits 100000) "100,000"))
-  (should (equal (+my/banner--group-digits 1234567) "1,234,567"))
-  (should (equal (+my/banner--group-digits 1000000000) "1,000,000,000")))
-
-(defun +test-banner--long-file ()
-  "A buffer visiting an Emacs Lisp file with a 20,000 characters long line."
-  (find-file-noselect
-   (+test-file "long.el" (concat ";; " (make-string 19997 ?x) "\n(setq a 1)\n"))))
-
-(ert-deftest banner/long-lines-notice ()
-  "Opened in `so-long-mode': a warning with the longest line's length."
-  (+test-banner
-    (with-current-buffer (+test-banner--long-file)
-      (so-long)
-      (should (derived-mode-p 'so-long-mode))
-      (let ((notice (assq 'long-lines +my/banner--list)))
-        (should notice)
-        (should (eq (nth 3 notice) 'warning))
-        (should (string-search "up to 20,000 characters" (nth 1 notice)))
-        (should (equal (mapcar #'car (nth 2 notice)) '("Open normally")))
-        (should-not (string-search "unwrapped" (nth 1 notice)))))))
-
-(ert-deftest banner/long-lines-notice-when-unwrapped ()
-  (+test-banner
-    (with-current-buffer (+test-banner--long-file)
-      (so-long)
-      (setq-local truncate-lines t)
-      (+my/banner-long-lines-h)
-      (let ((notice (assq 'long-lines +my/banner--list)))
-        (should (= (length +my/banner--list) 1))
-        (should (string-search "without highlighting and unwrapped" (nth 1 notice)))
-        (should (equal (mapcar #'car (nth 2 notice)) '("Wrap lines" "Open normally")))))))
-
-(ert-deftest banner/long-lines-only-in-so-long-mode ()
-  (+test-banner
-    (with-current-buffer (+test-buffer "B" (make-string 30000 ?x) #'text-mode)
-      (+my/banner-long-lines-h)
-      (should-not +my/banner--list))))
-
-(ert-deftest banner/wrap-lines-action ()
-  "Wrap lines: the lines wrap, the notice stays without that action."
-  (+test-banner
-    (let ((buffer (+test-banner--long-file)))
-      (switch-to-buffer buffer)
-      (so-long)
-      (setq-local truncate-lines t)
-      (+my/banner-show 'other "Another")
-      (+my/banner-long-lines-h)
-      (let ((row (+my/banner--row (assq 'long-lines +my/banner--list) buffer)))
-        (+test-banner--click row "Wrap lines"))
-      (should-not (buffer-local-value 'truncate-lines buffer))
-      (with-current-buffer buffer
-        ;; In its place, before the one shown after it.
-        (should (equal (mapcar #'car +my/banner--list) '(long-lines other)))
-        (let ((notice (assq 'long-lines +my/banner--list)))
-          (should (equal (mapcar #'car (nth 2 notice)) '("Open normally")))
-          (should-not (string-search "unwrapped" (nth 1 notice))))))))
-
-(ert-deftest banner/open-normally-action ()
-  "Open normally: the file's own mode back, the notice gone."
-  (+test-banner
-    (let ((buffer (+test-banner--long-file)))
-      (switch-to-buffer buffer)
-      (should (eq major-mode 'emacs-lisp-mode))
-      (so-long)
-      (should (eq major-mode 'so-long-mode))
-      (let ((row (+my/banner--row (assq 'long-lines +my/banner--list) buffer)))
-        (+test-banner--click row "Open normally"))
-      (with-current-buffer buffer
-        (should (eq major-mode 'emacs-lisp-mode))
-        (should-not +my/banner--list)
-        (should-not (+my/banner--ours-p))))))
 
 ;; ====== LOADED ======
 
