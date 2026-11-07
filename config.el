@@ -110,9 +110,6 @@
 ;; BANNERS (notices at the top of a window, with actions)
 (load! "config/banner")
 
-;; LONG LINES (files with very long lines: plain, unwrapped, a notice saying so)
-(load! "config/long-lines")
-
 ;; ERROR STRIPE (marks for git changes and errors at the right edge)
 (load! "config/stripe")
 

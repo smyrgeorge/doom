@@ -1,28 +1,6 @@
-;;; $DOOMDIR/config/long-lines.el -*- lexical-binding: t; -*-
-;; Files with very long lines: opened plain and unwrapped, with a notice.
-;; Loaded from config.el, after config/banner.el.
-
-;; ====== VARIABLES ======
-
-;; LONG LINES
-;; Files with very long lines (e.g. an HTML report embedding its data as one
-;; 50,000-character line) open in `so-long-mode', which still wraps them: one
-;; line then fills screens of rows, and each scroll step over it lays it all out
-;; again (~60 ms a step: the scroll stuttered). Don't wrap there (~13 ms): the
-;; line takes one row; M-x toggle-truncate-lines to read it wrapped.
-;; Lines over 5,000 characters count as very long (Doom keeps Emacs's 10,000
-;; in native-comp builds): an HTML report with 7,000-character SVG lines stayed
-;; in web-mode, where redisplay walks each such line character by character
-;; (highlighting, ligatures), ~6 ms a line a pass: scrolling stalled for
-;; seconds. A notice says so, with the way back (THE NOTICE, below).
-(defvar +my/long-line-threshold 5000
-  "Files with lines longer than this many characters open in `so-long-mode'.")
-
-(after! so-long
-  (setq so-long-threshold +my/long-line-threshold)
-  (setf (alist-get 'truncate-lines so-long-variable-overrides) t))
-
-;; ====== CODE ======
+;;; $DOOMDIR/config/editor/long-lines.el -*- lexical-binding: t; -*-
+;; The notice on files with very long lines, opened plain and unwrapped.
+;; Loaded from config/editor.el.
 
 ;; THE NOTICE (config/banner.el's), a warning: very long lines aren't wrapped
 ;; nor highlighted; its actions wrap them, or open the file normally.

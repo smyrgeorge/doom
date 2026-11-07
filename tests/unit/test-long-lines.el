@@ -1,9 +1,10 @@
 ;;; tests/unit/test-long-lines.el -*- lexical-binding: t; -*-
-;; config/long-lines.el: files with very long lines open plain (so-long-mode,
-;; unwrapped), with a notice (config/banner.el's) saying so; its actions wrap
-;; the lines, or open the file normally.
+;; config/editor/long-lines.el, config/editor.el's so-long settings: files with
+;; very long lines open plain (so-long-mode, unwrapped), with a notice
+;; (config/banner.el's) saying so; its actions wrap the lines, or open the file
+;; normally.
 
-(+test-load "config/childframe" "config/banner" "config/long-lines")
+(+test-load "config/childframe" "config/banner" "config/editor")
 (require 'so-long)
 
 ;; ====== HELPERS ======
@@ -149,4 +150,11 @@ length, and the ways back."
         (end-of-file))
       (setq forms (nreverse forms))
       (should (< (seq-position forms '(load! "config/banner"))
-                 (seq-position forms '(load! "config/long-lines")))))))
+                 (seq-position forms '(load! "config/editor"))))))
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "config/editor.el" +test-root))
+    (let (forms)
+      (condition-case nil
+          (while t (push (read (current-buffer)) forms))
+        (end-of-file))
+      (should (member '(load! "editor/long-lines") forms)))))

@@ -17,10 +17,10 @@
 ;; notice instead, saying how many more there are.)
 ;;
 ;; Notices so far:
-;; - long lines (warning, config/long-lines.el): files with very long lines
-;;   open in `so-long-mode', plain and unwrapped; "Wrap lines" wraps them again,
-;;   "Open normally" goes back to the file's own mode (both can make scrolling
-;;   slow again);
+;; - long lines (warning, config/editor/long-lines.el): files with very long
+;;   lines open in `so-long-mode', plain and unwrapped; "Wrap lines" wraps them
+;;   again, "Open normally" goes back to the file's own mode (both can make
+;;   scrolling slow again);
 ;; - the Markdown preview (info, config/markdown/notice.el): a Markdown file
 ;;   offers it ("Open preview").
 (defvar +my/banner-types
