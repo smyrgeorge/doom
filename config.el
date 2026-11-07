@@ -182,9 +182,6 @@
 ;; SEARCH EVERYWHERE (classes, files, symbols, actions in one list)
 (load! "config/search")
 
-;; TABS
-(load! "config/tabs")
-
 ;; PROFILING (SPC h T starts the profiler; again, it writes a profile for an
 ;; agent, who reads .claude/skills/emacs-profiling first)
 (load! "config/profiling")

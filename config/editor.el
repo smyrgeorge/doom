@@ -48,6 +48,44 @@ three times this.")
   ;; and its cleanup timer failed when the window was gone. Leave it alone.
   (setq ultra-scroll-throttle-mode-line nil))
 
+;; TABS PER WINDOW
+;; Each window has its own tabs: the buffers
+;; shown in it, in the order they first were (Emacs's tab line, instead of
+;; Doom's centaur-tabs, whose tab groups were per project and shared by every
+;; window). A split starts with one tab, the buffer it shows. Files, Claude
+;; sessions, dired and magit get tabs; other buffers only while shown.
+;; Closing a tab (its ✕, a middle click) takes it off that window, which goes
+;; back to the tab it showed before; closing its last tab closes the window
+;; (the frame's only one, beside side panels, shows Doom's dashboard instead).
+;; A file is closed too once no window has it as a tab any more (asking first
+;; if it has unsaved changes). A Claude session only leaves the tab line: close
+;; it with its own commands.
+;; Tabs look as they did: an icon, a bar on the current one, • when unsaved.
+;; Right-clicking a tab: Emacs's Close and Close other tabs, and
+;; Split Vertically (a pane on the right) and Split Horizontally (below): the
+;; new pane has only that tab and takes focus; the tab stays where it was too.
+(defvar +my/tabs-height 22
+  "Height of the tab row in graphical frames, in pixels.")
+
+(defvar +my/tabs-bar-width 2
+  "Width of the bar marking the current tab, in pixels.")
+
+;; The tab line drawn and closed as above (config/editor/tabs.el); none in the
+;; sidebar or the dashboard.
+(after! tab-line
+  (setq tab-line-tabs-function #'+my/tabs-window-buffers
+        tab-line-tab-name-format-function #'+my/tabs-format
+        tab-line-cache-key-function #'+my/tabs-cache-key
+        tab-line-close-tab-function #'+my/tabs-close
+        tab-line-close-button-show t
+        tab-line-new-button-show nil      ; new buffers come from the usual commands
+        tab-line-switch-cycling t)
+  (dolist (mode '(treemacs-mode +doom-dashboard-mode))
+    (add-to-list 'tab-line-exclude-modes mode)))
+
+;; On with the first buffer opened (Doom's `doom-first-buffer-hook').
+(add-hook 'doom-first-buffer-hook #'global-tab-line-mode)
+
 ;; EVIL
 ;; Saving a buffer returns to normal state.
 (add-hook! 'after-save-hook #'evil-normal-state)
@@ -67,6 +105,32 @@ three times this.")
   (keymap-set transient-base-map "q" #'transient-quit-one)
   (keymap-set transient-sticky-map "q" #'transient-quit-seq))
 
+;; TABS
+(map! :n "gt" #'tab-line-switch-to-next-tab
+      :n "gT" #'tab-line-switch-to-prev-tab)
+
+;; Cmd+1..8 show the window's tabs 1-8, Cmd+9 its last, as in browsers (Doom
+;; had them switch workspaces: M-1..9 and SPC TAB 1..9 still do); where there
+;; are no tabs (side panels, popups), they switch workspaces, as before.
+(map! :gn "s-1" #'+my/tabs-select-1
+      :gn "s-2" #'+my/tabs-select-2
+      :gn "s-3" #'+my/tabs-select-3
+      :gn "s-4" #'+my/tabs-select-4
+      :gn "s-5" #'+my/tabs-select-5
+      :gn "s-6" #'+my/tabs-select-6
+      :gn "s-7" #'+my/tabs-select-7
+      :gn "s-8" #'+my/tabs-select-8
+      :gn "s-9" #'+my/tabs-select-9)
+
+;; Cmd+W closes the current tab, like its ✕ (Doom's closed the window, or the
+;; workspace with its last window); where there are no tabs (popups, side
+;; panels), the window, as before.
+(map! "s-w" #'+my/tabs-close-current)
+
+;; The tab menu (right click, see above).
+(after! tab-line
+  (keymap-set tab-line-tab-map "<tab-line> <down-mouse-3>" #'+my/tabs-context-menu))
+
 ;; ====== CODE ======
 
 ;; In config/editor/, in this order: each part can use what the ones before it
@@ -76,3 +140,4 @@ three times this.")
 (load! "editor/fontify")
 (load! "editor/smooth")
 (load! "editor/modeline")
+(load! "editor/tabs")

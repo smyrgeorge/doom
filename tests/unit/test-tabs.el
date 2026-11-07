@@ -1,9 +1,9 @@
 ;;; tests/unit/test-tabs.el -*- lexical-binding: t; -*-
-;; config/tabs.el: tabs per window (Emacs's tab line): which buffers keep tabs, labels, closing (✕, Cmd+W), Cmd+1..9,
+;; config/editor/tabs.el: tabs per window (Emacs's tab line): which buffers keep tabs, labels, closing (✕, Cmd+W), Cmd+1..9,
 ;; gt/gT, the right-click menu (Close, Close other tabs, Split Vertically,
 ;; Split Horizontally), no tab line in popups and the dashboard.
 
-(+test-load "config/tabs")
+(+test-load "config/editor")
 (require 'tab-line)
 (require 'dired)
 
@@ -1091,11 +1091,17 @@ closed: no pane."
 
 ;; ====== LOADED ======
 
-(ert-deftest tabs/config-el-loads-it ()
+(defun +test-tabs--forms (file)
+  "FILE's (of this config) top-level forms."
   (with-temp-buffer
-    (insert-file-contents (expand-file-name "config.el" +test-root))
+    (insert-file-contents (expand-file-name file +test-root))
     (let (forms)
       (condition-case nil
           (while t (push (read (current-buffer)) forms))
         (end-of-file))
-      (should (member '(load! "config/tabs") forms)))))
+      forms)))
+
+(ert-deftest tabs/config-el-loads-it ()
+  "config.el loads the editor, which loads it."
+  (should (member '(load! "config/editor") (+test-tabs--forms "config.el")))
+  (should (member '(load! "editor/tabs") (+test-tabs--forms "config/editor.el"))))

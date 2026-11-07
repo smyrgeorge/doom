@@ -3,7 +3,7 @@
 ;; real child frames, under the tabs; splits, other buffers, closing, resizing,
 ;; clicks on their actions.
 
-(+test-load "config/window" "config/tabs" "config/childframe" "config/banner")
+(+test-load "config/window" "config/editor" "config/childframe" "config/banner")
 
 ;; ====== HELPERS ======
 
