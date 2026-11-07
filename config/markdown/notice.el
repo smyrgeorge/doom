@@ -10,13 +10,8 @@
     (+my/banner-show
      'markdown-preview
      "See this file rendered next to it, updated as you type (SPC m p)."
-     :actions '(("Open preview" . +my/markdown-preview-toggle)))))
+     :actions '(("Open preview" . +my/markdown-preview-show)))))
 
 (add-hook 'markdown-mode-hook #'+my/markdown-preview-notice-h)
 
 (add-hook 'markdown-ts-mode-hook #'+my/markdown-preview-notice-h)
-
-(add-hook '+md-preview-mode-hook
-          (defun +my/markdown-preview-notice-close-h ()
-            (when +md-preview-mode
-              (+my/banner-close 'markdown-preview))))

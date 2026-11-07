@@ -198,6 +198,38 @@ already), the cursor staying in the file; off, its pane closes."
         (should-not (window-live-p preview))
         (should (= (length (+my/tiling--panes)) 2))))))
 
+(ert-deftest e2e-tiling/markdown-preview-closed-by-its-tab-opens-again ()
+  "The preview's pane closed by its tab's ✕ (the pane goes with its last tab,
+the preview stays on): the notice's Open preview shows it again, in a new
+pane, the notice still there."
+  (+test-tiling
+    (let* ((left (selected-window))
+           (readme (+test-tiling--file "README.md" "# Title\n\nText.\n"))
+           (open (lambda ()
+                   (with-current-buffer readme
+                     (funcall (cdr (assoc "Open preview" (nth 2 (assq 'markdown-preview +my/banner--list)))))))))
+      (switch-to-buffer readme)
+      (markdown-mode)
+      (should (assq 'markdown-preview +my/banner--list))
+      (funcall open)
+      (let ((preview (buffer-local-value '+md-preview--buffer readme)))
+        (should (= (length (+my/tiling--panes)) 2))
+        ;; Its tab's ✕.
+        (with-selected-window (get-buffer-window preview)
+          (+my/tabs-close-current))
+        (should (= (length (+my/tiling--panes)) 1))
+        (should (buffer-local-value '+md-preview-mode readme))
+        (funcall open)
+        (should (eq (buffer-local-value '+md-preview--buffer readme) preview))
+        (should (get-buffer-window preview))
+        (should (= (length (+my/tiling--panes)) 2))
+        (should (eq (selected-window) left))
+        (should (assq 'markdown-preview +my/banner--list))
+        ;; Again: still one.
+        (funcall open)
+        (should (= (length (+my/tiling--panes)) 2))
+        (with-current-buffer readme (+md-preview-mode -1))))))
+
 ;; ====== DRAWINGS ======
 
 (ert-deftest e2e-tiling/drawings-in-a-new-pane ()

@@ -16,9 +16,12 @@
 ;; Terminal: falls back to markdown-mode's eww preview (updates on save).
 ;; PREVIEW NOTICE
 ;; A Markdown file opens with a notice at the top (config/banner.el) offering
-;; the live preview: it goes once the preview opens (SPC m p, or its button) or
-;; with its ✕, and doesn't come back for that buffer. Only where the live
-;; preview works (GUI, xwidgets, pandoc), and for files.
+;; the live preview: its button opens it, or shows it again if its pane was
+;; closed, and does nothing more while it's on screen. The notice stays until
+;; its ✕, and doesn't come back for that buffer. Only where the live preview
+;; works (GUI, xwidgets, pandoc), and for files.
+;; SPC m p closes the preview when it's on screen, else shows it (as the
+;; notice's button).
 (defvar +my/markdown-preview-notice t
   "Offer the live preview in a notice when a Markdown file opens.")
 

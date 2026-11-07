@@ -644,13 +644,14 @@ opens in Emacs, WebKit stays on the page."
   (should (eq (default-value '+my/markdown-preview-notice) t))
   (should (memq #'+my/markdown-preview-notice-h markdown-mode-hook))
   (should (memq #'+my/markdown-preview-notice-h markdown-ts-mode-hook))
-  (should (memq #'+my/markdown-preview-notice-close-h +md-preview-mode-hook))
+  (should-not (seq-filter (lambda (f) (and (symbolp f) (string-match-p "notice" (symbol-name f))))
+                         (default-value '+md-preview-mode-hook)))
   (+test-md
     (let ((md (+test-md--file "notice.md" "# Notice\n")))
       (should (equal +test-md--notices
                      (list (list 'show 'markdown-preview
                                  "See this file rendered next to it, updated as you type (SPC m p)."
-                                 '(("Open preview" . +my/markdown-preview-toggle))
+                                 '(("Open preview" . +my/markdown-preview-show))
                                  md)))))))
 
 (ert-deftest markdown/notice-only-where-the-preview-works ()
@@ -669,14 +670,92 @@ opens in Emacs, WebKit stays on the page."
       (with-current-buffer md (+my/markdown-preview-notice-h))
       (should-not (seq-find (lambda (n) (eq (car n) 'show)) +test-md--notices)))))
 
-(ert-deftest markdown/notice-goes-once-the-preview-opens ()
+(ert-deftest markdown/notice-stays-when-the-preview-opens ()
+  "Opened (its button, SPC m p) or closed, the preview leaves the notice."
   (+test-md
-    (let ((md (+test-md--file "gone.md" "# Gone\n")))
+    (let ((md (+test-md--file "stays.md" "# Stays\n")))
       (setq +test-md--notices nil)
-      (+test-md--open-preview md)
-      (should (equal +test-md--notices (list (list 'close 'markdown-preview md))))
+      (with-current-buffer md (+my/markdown-preview-show))
+      (+test-md--redisplay)
       (with-current-buffer md (+md-preview-mode -1))
-      (should (= (length +test-md--notices) 1)))))
+      (should-not +test-md--notices))))
+
+(defun +test-md--preview-windows (md)
+  (get-buffer-window-list (buffer-local-value '+md-preview--buffer md) nil t))
+
+(ert-deftest markdown/open-preview-twice-opens-it-once ()
+  "The notice's Open preview clicked twice: one preview, in one pane."
+  (+test-md
+    (let ((md (+test-md--file "twice.md" "# Twice\n")))
+      (with-current-buffer md
+        (+my/markdown-preview-show)
+        (+test-md--redisplay)
+        (let ((preview +md-preview--buffer)
+              (windows (window-list)))
+          (+my/markdown-preview-show)
+          (+test-md--redisplay)
+          (should +md-preview-mode)
+          (should (eq +md-preview--buffer preview))
+          (should (equal (window-list) windows))
+          (should (= (length (+test-md--preview-windows md)) 1))
+          (should (= (length (seq-filter (lambda (b) (string-prefix-p "Preview: twice.md" (buffer-name b)))
+                                         (buffer-list)))
+                     1)))))))
+
+(ert-deftest markdown/open-preview-after-its-pane-closed ()
+  "Its pane closed (its tab's ✕, the window deleted), the preview stays on:
+Open preview (and SPC m p) shows it again, not off."
+  (+test-md
+    (let* ((md (+test-md--file "closed.md" "# Closed\n"))
+           (preview (+test-md--open-preview md)))
+      (delete-window (get-buffer-window preview))
+      (with-current-buffer md
+        (should +md-preview-mode)
+        (should-not (+md-preview--shown-p))
+        (+my/markdown-preview-show)
+        (+test-md--redisplay)
+        (should (eq +md-preview--buffer preview))
+        (should (= (length (+test-md--preview-windows md)) 1))
+        (should (eq (selected-window) (get-buffer-window md))))
+      ;; SPC m p: shown again too.
+      (delete-window (get-buffer-window preview))
+      (with-current-buffer md
+        (+my/markdown-preview-toggle)
+        (should +md-preview-mode)
+        (should (= (length (+test-md--preview-windows md)) 1))
+        ;; On screen: SPC m p closes it.
+        (+my/markdown-preview-toggle)
+        (should-not +md-preview-mode)
+        (should-not (buffer-live-p preview))))))
+
+(ert-deftest markdown/open-preview-after-it-was-killed ()
+  "Its buffer killed (q in it): Open preview opens a new one."
+  (+test-md
+    (let* ((md (+test-md--file "killed.md" "# Killed\n"))
+           (preview (+test-md--open-preview md)))
+      (kill-buffer preview)
+      (with-current-buffer md
+        (should-not +md-preview-mode)
+        (+my/markdown-preview-show)
+        (+test-md--redisplay)
+        (should +md-preview-mode)
+        (should (buffer-live-p +md-preview--buffer))
+        (should-not (eq +md-preview--buffer preview))
+        (should (= (length (+test-md--preview-windows md)) 1))))))
+
+(ert-deftest markdown/open-preview-in-a-terminal ()
+  "Without the live preview (a terminal): markdown-mode's, turned on, not
+toggled off by a second click."
+  (+test-md
+    (let ((md (+test-md--file "eww.md" "# Eww\n"))
+          (calls nil))
+      (cl-letf (((symbol-function '+my/webkit-p) #'ignore)
+                ((symbol-function 'markdown-live-preview-mode)
+                 (lambda (&optional arg) (push arg calls) (setq-local markdown-live-preview-mode t))))
+        (with-current-buffer md
+          (+my/markdown-preview-show)
+          (+my/markdown-preview-show)))
+      (should (equal calls '(1))))))
 
 ;; ====== THE PREVIEW'S PANE ======
 

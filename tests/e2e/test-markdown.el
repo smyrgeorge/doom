@@ -103,14 +103,55 @@
         (should (equal (+test-md--js preview-window "document.querySelector('h1').getAttribute('data-pos').split(':')[0]")
                        "1"))))))
 
-(ert-deftest e2e-markdown/the-notice-goes-once-the-preview-opens ()
+(defun +test-md--click-open-preview ()
+  "Click the notice's Open preview, as its button does (in the file's buffer)."
+  (with-current-buffer (+test-md--source)
+    (let ((this-command '+my/markdown-preview-show))
+      (funcall (cdr (assoc "Open preview" (nth 2 (assq 'markdown-preview +my/banner--list))))))))
+
+(ert-deftest e2e-markdown/the-notice-s-button-opens-it-once-and-stays ()
+  "Open preview: the preview, loaded; the notice still there. Clicked again:
+still one preview, one pane."
   (+test-md
     (find-file +test-md--doc)
     (markdown-mode)
     (should (assq 'markdown-preview +my/banner--list))
-    (let ((this-command '+my/markdown-preview-toggle))
-      (+my/markdown-preview-toggle))
-    (should-not (assq 'markdown-preview +my/banner--list))))
+    (+test-md--click-open-preview)
+    (should (= (length (+test-md--windows)) 1))
+    (should (+test-md--ready (car (+test-md--windows))))
+    (should (assq 'markdown-preview +my/banner--list))
+    (let ((preview (+test-md--preview))
+          (windows (window-list)))
+      (+test-md--click-open-preview)
+      (+test-sleep 0.2)
+      (should (eq (+test-md--preview) preview))
+      (should (equal (window-list) windows))
+      (should (= (length (+test-md--windows)) 1))
+      (should (assq 'markdown-preview +my/banner--list)))))
+
+(ert-deftest e2e-markdown/the-notice-s-button-after-the-pane-closed ()
+  "The preview's pane closed (the preview still on): Open preview shows it
+again, loaded. Killed (q): a new one."
+  (+test-md
+    (find-file +test-md--doc)
+    (markdown-mode)
+    (+test-md--click-open-preview)
+    (should (+test-md--ready (car (+test-md--windows))))
+    (let ((preview (+test-md--preview)))
+      (delete-window (car (+test-md--windows)))
+      (should-not (+test-md--windows))
+      (should (buffer-local-value '+md-preview-mode (+test-md--source)))
+      (+test-md--click-open-preview)
+      (should (eq (+test-md--preview) preview))
+      (should (= (length (+test-md--windows)) 1))
+      (should (+test-md--ready (car (+test-md--windows))))
+      (should (+test-md--has (car (+test-md--windows)) "Paragraph 40 of the second part")))
+    ;; Killed.
+    (kill-buffer (+test-md--preview))
+    (should-not (buffer-local-value '+md-preview-mode (+test-md--source)))
+    (+test-md--click-open-preview)
+    (should (= (length (+test-md--windows)) 1))
+    (should (+test-md--ready (car (+test-md--windows))))))
 
 (ert-deftest e2e-markdown/the-pane-is-the-page-s-colour ()
   (+test-md
@@ -325,6 +366,9 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); 'ok'")
   (+test-md
     (find-file +test-md--doc)
     (markdown-mode)
+    ;; The notice closed (its ✕; it stays with the preview): its frame
+    ;; isn't the cover counted below.
+    (+my/banner-close 'markdown-preview)
     (let ((this-command '+my/markdown-preview-toggle))
       (+my/markdown-preview-toggle))
     (let ((preview (+test-md--preview))
