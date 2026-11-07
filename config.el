@@ -135,7 +135,8 @@
 ;; EXAMPLES (M-x +my/example: a feature shown on files of its own, e.g. a merge in conflict)
 (load! "config/examples")
 
-;; EDITOR (SPC c ~: cycle case style)
+;; EDITOR (editing, smooth scrolling, tabs, Option+Enter, Cmd+B, the sticky header,
+;; spelling, tree-sitter grammars, long lines, Evil, the mode line)
 (load! "config/editor")
 
 ;; LSP (Kotlin: JetBrains' kotlin-lsp; lsp-ui's usages/definitions peek: calmer, with

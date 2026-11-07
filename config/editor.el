@@ -1,6 +1,7 @@
 ;;; $DOOMDIR/config/editor.el -*- lexical-binding: t; -*-
-;; The editor. Loaded from config.el; its code is in config/editor/; getting
-;; around is config/navigation.el.
+;; The editor: editing, scrolling, tabs, Option+Enter, getting around, the
+;; sticky header, spelling, tree-sitter grammars, long lines, Evil, the mode
+;; line. Loaded from config.el; its code is in config/editor/.
 
 ;; ====== VARIABLES ======
 
