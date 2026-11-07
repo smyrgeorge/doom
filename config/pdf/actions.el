@@ -1,7 +1,7 @@
 ;;; $DOOMDIR/config/pdf/actions.el -*- lexical-binding: t; -*-
 ;; Option+Enter on a PDF's selection. Loaded from config/pdf.el.
 
-;; OPTION+ENTER (config/actions.el)
+;; OPTION+ENTER (config/editor/actions.el)
 ;; The menu's PDF actions, for the text selected in the page, which Emacs asks
 ;; the page for (an answer awaited, its function a symbol, as for copying)
 ;; before showing the menu.
@@ -79,6 +79,7 @@ always Preview and print."
              (list "PDF" "Print..."
                    (lambda () (with-current-buffer buffer (+my/pdf-print)))))))))
 
-;; First in the menu (config/actions.el is loaded before this file).
+;; First in the menu (config/editor.el, which has the list, loads before this
+;; file).
 (when (boundp '+my/context-action-providers)
   (add-to-list '+my/context-action-providers #'+my/context-actions-pdf))

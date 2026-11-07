@@ -268,11 +268,12 @@ cover, which make their frames with it."
                (+test-config--load-position name)))))
 
 (ert-deftest config/order-actions-before-pdf ()
-  "config/actions.el before config/pdf.el, which puts its provider
-first in the Option+Enter menu, and config/excalidraw.el, which puts its last."
-  (should (< (+test-config--load-position "config/actions")
+  "config/editor.el (Option+Enter's providers) before config/pdf.el, which puts
+its provider first in the Option+Enter menu, and config/excalidraw.el, which
+puts its last."
+  (should (< (+test-config--load-position "config/editor")
              (+test-config--load-position "config/pdf")))
-  (should (< (+test-config--load-position "config/actions")
+  (should (< (+test-config--load-position "config/editor")
              (+test-config--load-position "config/excalidraw")))
   (should (eq (car +my/context-action-providers) '+my/context-actions-pdf))
   (should (equal (cdr +my/context-action-providers)

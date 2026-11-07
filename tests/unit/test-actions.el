@@ -1,5 +1,5 @@
 ;;; tests/unit/test-actions.el -*- lexical-binding: t; -*-
-;; config/actions.el: Option+Enter (M-RET), one menu with the actions at point
+;; config/editor/actions.el: Option+Enter (M-RET), one menu with the actions at point
 ;; like JetBrains' Alt+Enter, from providers: spelling, the language server's
 ;; code actions, Claude (agent-shell). Org keeps M-RET.
 ;; Nothing external runs: aspell, the language server and Claude are mocked.
@@ -10,7 +10,7 @@
 ;; Org, if it loads, keeps its caches in the temp folder.
 (defvar org-persist-directory (+test-tmp-file "org-persist/"))
 
-(+test-load "config/actions")
+(+test-load "config/editor")
 
 (require 'agent-shell)
 (require 'lsp-mode)

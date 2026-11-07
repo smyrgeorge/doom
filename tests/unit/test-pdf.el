@@ -13,7 +13,7 @@
 
 (require 'xwidget)                      ; before faking its functions
 (require 'json)
-(+test-load "config/actions" "config/webkit" "config/pdf")
+(+test-load "config/editor" "config/webkit" "config/pdf")
 
 (defvar +my/sticky-separator)           ; config/sticky.el's, when loaded
 

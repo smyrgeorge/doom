@@ -42,7 +42,7 @@ not selected (a hollow box in the panes)."
       (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
   (require 'doom-themes)
   (+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/long-lines"
-              "config/actions" "config/webkit" "config/pdf" "config/markdown" "config/excalidraw"
+              "config/webkit" "config/pdf" "config/markdown" "config/excalidraw"
               "config/stripe" "config/tiling" "config/merge" "config/examples")
   ;; PDF.js and Excalidraw: copies of Doom's, not downloaded again.
   (+test-pdfjs-dir)

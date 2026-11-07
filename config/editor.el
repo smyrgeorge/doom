@@ -86,6 +86,31 @@ three times this.")
 ;; On with the first buffer opened (Doom's `doom-first-buffer-hook').
 (add-hook 'doom-first-buffer-hook #'global-tab-line-mode)
 
+;; CONTEXT ACTIONS
+;; One menu (grouped, in vertico) with everything that applies at point:
+;; - Spelling: suggestions and "add to dictionary", when spell-fu flagged the
+;;   word at point.
+;; - Code actions: the LSP server's quick fixes and refactors for the point or
+;;   the active region (same list as SPC c a).
+;; - Claude: send the error at point or the selection to Claude Code
+;;   (agent-shell), either as a ready prompt (fix / explain) or into the prompt
+;;   for you to finish.
+;; - PDF: in a PDF (config/pdf.el, which adds its provider first), for
+;;   the selected text: copy, search the PDF or the web, Claude; Preview, print.
+;;
+;; Each section comes from a provider: a function that returns a list of
+;; (GROUP LABEL FUNCTION). To add more, write a provider and
+;; (add-to-list '+my/context-action-providers #'my-provider t).
+(defvar +my/context-action-providers
+  '(+my/context-actions-spelling
+    +my/context-actions-lsp
+    +my/context-actions-claude)
+  "Functions returning the actions available at point, as (GROUP LABEL FUNCTION).
+The menu shows groups in this order.")
+
+(defvar +my/context-actions-max-suggestions 5
+  "How many spelling suggestions to show (aspell lists the likeliest first).")
+
 ;; EVIL
 ;; Saving a buffer returns to normal state.
 (add-hook! 'after-save-hook #'evil-normal-state)
@@ -131,6 +156,13 @@ three times this.")
 (after! tab-line
   (keymap-set tab-line-tab-map "<tab-line> <down-mouse-3>" #'+my/tabs-context-menu))
 
+;; OPTION+ENTER
+;; Visual state too: code actions and Claude actions work on the selection.
+(map! :nvi "M-RET" #'+my/context-actions)
+
+;; Org keeps M-RET for "new heading/item".
+(map! :after org :map org-mode-map :ni "M-RET" #'org-meta-return)
+
 ;; ====== CODE ======
 
 ;; In config/editor/, in this order: each part can use what the ones before it
@@ -141,3 +173,4 @@ three times this.")
 (load! "editor/smooth")
 (load! "editor/modeline")
 (load! "editor/tabs")
+(load! "editor/actions")

@@ -31,7 +31,7 @@
 ;;                  pdf-tools' midnight mode)
 ;;   SPC m t        the toolbar: sidebar, back / forward, page, zoom, fit, dark
 ;;                  pages, Preview, print
-;;   Option+Enter   the actions menu (config/actions.el): for the selected
+;;   Option+Enter   the actions menu (config/editor/actions.el): for the selected
 ;;                  text, copy, search the PDF or the web, explain it with
 ;;                  Claude or add it to Claude's prompt (with the file and
 ;;                  page); Preview, print

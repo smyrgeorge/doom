@@ -81,7 +81,7 @@ above); an existing FILE is linked and opened."
     (insert (+my/excalidraw--link file))
     (+my/excalidraw-open file new)))
 
-;; OPTION+ENTER (config/actions.el)
+;; OPTION+ENTER (config/editor/actions.el)
 (defun +my/context-actions-excalidraw ()
   "Drawings: edit the one a link at point names; in Markdown and Org, insert
 a new one."

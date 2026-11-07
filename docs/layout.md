@@ -4,13 +4,12 @@
 |---|---|
 | `init.el`, `packages.el` | Doom's modules and the extra packages (`doom sync` after editing) |
 | `config.el` | The main config; loads `config/` |
-| `config/actions.el` | `Option+Enter` actions menu |
 | `config/agent-shell.el` | Claude Code |
 | `config/banner.el`, `banner/` | Notices |
 | `config/cheatsheet.el`, `cheatsheet.org` | Tips panel under the sidebar (turned off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe, WebKit's cover |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
-| `config/editor.el`, `editor/` | Case cycling, the `fill-column` line, the current line, wheel glide, scroll limit, Evil's normal state on save, `q` closing menus, the mode line, tabs per window |
+| `config/editor.el`, `editor/` | Case cycling, the `fill-column` line, the current line, wheel glide, scroll limit, Evil's normal state on save, `q` closing menus, the mode line, tabs per window, the `Option+Enter` menu |
 | `config/emacs.el` | Garbage collection |
 | `config/examples.el`, `examples/` | The examples and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | Drawings |

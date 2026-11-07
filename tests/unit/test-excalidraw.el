@@ -12,7 +12,7 @@
 
 (require 'xwidget)                      ; before faking its functions
 (require 'json)
-(+test-load "config/childframe" "config/banner" "config/actions" "config/webkit" "config/excalidraw")
+(+test-load "config/childframe" "config/banner" "config/editor" "config/webkit" "config/excalidraw")
 (require 'markdown-mode)
 (require 'org)
 

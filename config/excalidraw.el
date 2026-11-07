@@ -36,7 +36,7 @@
 ;; most). Undo is Excalidraw's.
 ;; Split, each pane shows the drawing (a WebKit view per window); a change in
 ;; one shows in the others. Changed on disk (git, say): shown anew.
-;; From Markdown or Org, Option+Enter (config/actions.el) has "Insert a new
+;; From Markdown or Org, Option+Enter (config/editor/actions.el) has "Insert a new
 ;; drawing" (M-x +my/excalidraw-insert): it links a new one as an image at
 ;; point and opens it beside, saved blank at once; on a link to one, "Edit the
 ;; drawing" opens it beside.
