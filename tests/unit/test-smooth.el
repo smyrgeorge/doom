@@ -1,5 +1,5 @@
 ;;; tests/unit/test-smooth.el -*- lexical-binding: t; -*-
-;; config/smooth.el: mouse-wheel notches glide (ultra-scroll), heavy idle jobs
+;; config/editor/smooth.el: mouse-wheel notches glide (ultra-scroll), heavy idle jobs
 ;; wait for a glide to end, every window's scroll limit past the end, good-scroll's
 ;; timer only while scrolling, the wheel over the minibuffer.
 
@@ -9,8 +9,8 @@
   (add-hook 'ultra-scroll-hide-functions #'hl-todo-mode)
   (setq ultra-scroll-throttle-mode-line t))
 
-;; As config.el: smooth.el, then stripe.el (its scroll limit).
-(+test-load "config/smooth" "config/childframe" "config/stripe")
+;; As config.el: the stripe (its scroll limit), then the editor.
+(+test-load "config/childframe" "config/stripe" "config/editor")
 
 (require 'mwheel)
 (require 'ultra-scroll)

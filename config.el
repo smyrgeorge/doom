@@ -110,9 +110,6 @@
 ;; BANNERS (notices at the top of a window, with actions)
 (load! "config/banner")
 
-;; SMOOTH SCROLL (mouse-wheel notches glide instead of jumping)
-(load! "config/smooth")
-
 ;; LONG LINES (files with very long lines: plain, unwrapped, a notice saying so)
 (load! "config/long-lines")
 

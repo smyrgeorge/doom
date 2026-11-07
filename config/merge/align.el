@@ -202,8 +202,8 @@ three, changed (all of them); a pane's lines did (that pane, from the top)."
 ;; Lined up, the panes' rows are their lines: the pane scrolled (its first
 ;; line, the pixels of it scrolled off, its columns scrolled sideways) gives
 ;; the others theirs, before each redisplay; so whatever scrolled it: keys, the
-;; wheel, the trackpad, a glide of config/smooth.el's (its frames are timers,
-;; each followed by a redisplay).
+;; wheel, the trackpad, a glide of config/editor/smooth.el's (its frames are
+;; timers, each followed by a redisplay).
 (defun +my/merge--view (window)
   "WINDOW's view: (FIRST-LINE VSCROLL HSCROLL)."
   (list (with-current-buffer (window-buffer window)

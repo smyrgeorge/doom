@@ -8,7 +8,7 @@
   (dolist (package '("magit" "magit-section"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
-(+test-load "config/window" "config/tabs" "config/smooth" "config/merge")
+(+test-load "config/window" "config/tabs" "config/editor" "config/merge")
 (require 'magit)
 (require 'magit-ediff)
 (require 'ultra-scroll)
@@ -327,8 +327,8 @@ height on screen."
     (+test-sleep 0.05)
     (should (> (+test-merge--first-line theirs) 10))
     (should (+test-merge--together-p session))
-    ;; A glide (config/smooth.el's, as a mouse wheel's notch): together at
-    ;; each frame.
+    ;; A glide (config/editor/smooth.el's, as a mouse wheel's notch): together
+    ;; at each frame.
     (let ((frames 0))
       (+my/smooth--glide yours -600)
       (while (and +my/smooth--timer (< frames 200))

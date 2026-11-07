@@ -10,7 +10,7 @@
 | `config/cheatsheet.el`, `cheatsheet.org` | Tips panel under the sidebar (turned off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe, WebKit's cover |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
-| `config/editor.el`, `editor/` | Case cycling, the `fill-column` line, the current line |
+| `config/editor.el`, `editor/` | Case cycling, the `fill-column` line, the current line, wheel glide, scroll limit |
 | `config/emacs.el` | Garbage collection |
 | `config/evil.el` | Normal state on save; `q` closes transient menus |
 | `config/examples.el`, `examples/` | The examples and their screenshots |
@@ -27,7 +27,6 @@
 | `config/profiling.el`, `profiling/` | `SPC h T` profiles, written for an agent to read |
 | `config/projectile.el` | Projects |
 | `config/search.el`, `search/` | Search Everywhere, find in files |
-| `config/smooth.el` | Wheel glide, scroll limit |
 | `config/spell.el`, `dict/tech.txt` | Spelling with programming words |
 | `config/stripe.el`, `stripe/` | Error stripe |
 | `config/sticky.el` | Sticky header |
