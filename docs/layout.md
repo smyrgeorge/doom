@@ -6,7 +6,7 @@
 | `config.el` | The main config; loads `config/` |
 | `config/actions.el` | `Option+Enter` actions menu |
 | `config/agent-shell.el` | Claude Code |
-| `config/banner.el` | Notices |
+| `config/banner.el`, `banner/` | Notices |
 | `config/cheatsheet.el`, `cheatsheet.org` | Tips panel under the sidebar (turned off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe, WebKit's cover |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
