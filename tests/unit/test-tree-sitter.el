@@ -1,6 +1,7 @@
 ;;; tests/unit/test-tree-sitter.el -*- lexical-binding: t; -*-
 ;; config/tree-sitter.el: the enabled languages' grammars built ahead of time,
-;; in a background `emacs --batch', after startup. No grammar is ever built or
+;; in a background `emacs --batch', after startup; which ones are there,
+;; remembered. No grammar is ever built or
 ;; downloaded here: `make-process' is mocked (a `true' runs instead), the build
 ;; script is evaluated with `treesit-install-language-grammar' mocked.
 
@@ -456,21 +457,15 @@ folder; one failing doesn't stop the others."
       (should-not (+test-tree-sitter--build-dirs)))))
 
 (ert-deftest tree-sitter/done-forgets-unavailable-answers ()
-  "New grammars: config/editor.el's cache of \"not available\" is emptied (when
-that file is loaded; without it, no error)."
+  "New grammars: the remembered \"not available\" answers are forgotten."
   (+test-tree-sitter
     (cl-letf (((symbol-function 'treesit-language-available-p) #'always))
-      ;; Without config/editor.el.
-      (should-not (boundp '+my/treesit--available))
-      (+my/tree-sitter--done (+test-tree-sitter--finished-process '(+test-ts-a) nil) "finished\n")
-      ;; With it.
       (unwind-protect
-          (let ((cache (make-hash-table :test #'equal)))
-            (puthash '+test-ts-a nil cache)
-            (set '+my/treesit--available cache)
+          (progn
+            (puthash '+test-ts-a '(nil . not-found) +my/treesit--available)
             (+my/tree-sitter--done (+test-tree-sitter--finished-process '(+test-ts-a) nil) "finished\n")
-            (should (= (hash-table-count cache) 0)))
-        (makunbound '+my/treesit--available)))))
+            (should (= (hash-table-count +my/treesit--available) 0)))
+        (clrhash +my/treesit--available)))))
 
 (ert-deftest tree-sitter/done-killed-build-ends-too ()
   "A build killed (signal) ends like one that exited."
@@ -531,3 +526,74 @@ sentinel says what got built, removes its init folder and forgets it."
         (+test-clear-messages)
         (+my/tree-sitter-install-grammars)
         (should (= (+test-messages "^Tree-sitter grammars: all there$") 1))))))
+
+;; ====== AVAILABLE GRAMMARS, REMEMBERED ======
+
+(defmacro +test-tree-sitter--with-advice (symbol how fn &rest body)
+  "BODY with FN advised (HOW) innermost on SYMBOL: under the config's advice."
+  (declare (indent 3))
+  `(let ((advice ,fn))
+     (advice-add ,symbol ,how advice '((depth . 100)))
+     (unwind-protect (progn ,@body)
+       (advice-remove ,symbol advice))))
+
+(defmacro +test-tree-sitter--counting-grammar-checks (&rest body)
+  "BODY with `checks' counting the real `treesit-language-available-p' calls
+(under the cache), the cache empty."
+  `(let ((checks 0))
+     (clrhash +my/treesit--available)
+     (unwind-protect
+         (+test-tree-sitter--with-advice 'treesit-language-available-p :around
+             (lambda (fn &rest args) (cl-incf checks) (apply fn args))
+           ,@body)
+       (clrhash +my/treesit--available))))
+
+(ert-deftest tree-sitter/treesit-answers-remembered ()
+  (+test-tree-sitter--counting-grammar-checks
+   (should-not (treesit-language-available-p '+test-tree-sitter-nolang))
+   (should (= checks 1))
+   (should-not (treesit-language-available-p '+test-tree-sitter-nolang))
+   (should-not (treesit-language-available-p '+test-tree-sitter-nolang))
+   (should (= checks 1))
+   ;; Each language on its own.
+   (treesit-language-available-p '+test-tree-sitter-other)
+   (should (= checks 2))))
+
+(ert-deftest tree-sitter/treesit-detail-from-the-cache ()
+  "The full answer is cached: with DETAIL, the reason; without, yes / no."
+  (+test-tree-sitter--counting-grammar-checks
+   (should-not (treesit-language-available-p '+test-tree-sitter-nolang))
+   (let ((detail (treesit-language-available-p '+test-tree-sitter-nolang t)))
+     (should (consp detail))
+     (should-not (car detail))
+     (should (cdr detail)))                ; why it's missing
+   (should (= checks 1))
+   (should (consp (gethash '+test-tree-sitter-nolang +my/treesit--available)))))
+
+(ert-deftest tree-sitter/treesit-available-grammar ()
+  "An available grammar: t, (t . nil) with DETAIL, from the cache after."
+  (+test-tree-sitter--counting-grammar-checks
+   (+test-tree-sitter--with-advice 'treesit-language-available-p :override
+       (lambda (language &optional detail)
+         (if detail (cons (eq language 'fake) nil) (eq language 'fake)))
+     (should (eq (treesit-language-available-p 'fake) t))
+     (should (equal (treesit-language-available-p 'fake t) '(t)))
+     (should (eq (treesit-language-available-p 'fake) t)))
+   (should (<= checks 1))))
+
+(ert-deftest tree-sitter/treesit-cache-cleared-on-install ()
+  "Installing a grammar forgets the answers (it may be there now)."
+  (+test-tree-sitter--counting-grammar-checks
+   (treesit-language-available-p '+test-tree-sitter-nolang)
+   (should (= (hash-table-count +my/treesit--available) 1))
+   ;; The guard (no grammar built in the tests) off, the build stood in for.
+   (advice-remove 'treesit-install-language-grammar '+test-tree-sitter-guard)
+   (unwind-protect
+       (+test-tree-sitter--with-advice 'treesit-install-language-grammar :override #'ignore
+         (treesit-install-language-grammar '+test-tree-sitter-nolang))
+     (advice-add 'treesit-install-language-grammar :override
+                 (lambda (&rest args) (error "Tests never build grammars: %S" args))
+                 '((name . +test-tree-sitter-guard))))
+   (should (= (hash-table-count +my/treesit--available) 0))
+   (treesit-language-available-p '+test-tree-sitter-nolang)
+   (should (= checks 2))))

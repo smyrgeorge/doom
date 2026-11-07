@@ -150,6 +150,9 @@
 ;; EDITOR (SPC c ~: cycle case style)
 (load! "config/editor")
 
+;; NAVIGATION (Cmd+B: declaration or usages; Cmd+[ / Cmd+]: back / forward)
+(load! "config/navigation")
+
 ;; SPELL (create the personal dictionary if missing)
 (load! "config/spell")
 

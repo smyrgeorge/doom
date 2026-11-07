@@ -1,5 +1,6 @@
 ;;; $DOOMDIR/config/tree-sitter.el -*- lexical-binding: t; -*-
-;; Tree-sitter grammars built ahead of time. Loaded from config.el.
+;; Tree-sitter grammars built ahead of time, which ones are there remembered.
+;; Loaded from config.el.
 
 ;; ====== VARIABLES ======
 
@@ -22,6 +23,25 @@
   "Where the build's output goes.")
 
 ;; ====== CODE ======
+
+;; AVAILABLE GRAMMARS, REMEMBERED
+;; Every check that a grammar is available, and every parser made, loads its
+;; library again (dlopen), and with this many libraries loaded (each natively
+;; compiled package is one) that takes ~10 ms on macOS. Opening a Markdown file
+;; checked its grammars ~9 times (a missing one: 36 paths tried each time).
+;; Remember the answers (cleared when a grammar gets installed).
+(defvar +my/treesit--available (make-hash-table :test #'equal)
+  "LANGUAGE -> its `treesit-language-available-p' answer with DETAIL.")
+
+(defadvice! +my/treesit-remember-available-a (fn language &optional detail)
+  :around #'treesit-language-available-p
+  (let ((answer (or (gethash language +my/treesit--available)
+                    (puthash language (funcall fn language t) +my/treesit--available))))
+    (if detail answer (car answer))))
+
+(defadvice! +my/treesit-forget-available-a (&rest _)
+  :after #'treesit-install-language-grammar
+  (clrhash +my/treesit--available))
 
 (defvar +my/tree-sitter--process nil
   "The Emacs building grammars, while it runs.")
@@ -67,9 +87,9 @@ tree-sitter modes that bring theirs when loaded, as Doom does on first use."
     (let ((dir (process-get process 'init-dir)))
       (when (and dir (file-directory-p dir))
         (delete-directory dir t)))
-    ;; New grammars: forget the "not available" answers (config/editor.el).
-    (when (boundp '+my/treesit--available)
-      (clrhash +my/treesit--available))
+    ;; New grammars: forget the "not available" answers (see AVAILABLE
+    ;; GRAMMARS, REMEMBERED).
+    (clrhash +my/treesit--available)
     (let* ((wanted (process-get process 'grammars))
            (failed (seq-remove #'treesit-language-available-p wanted)))
       (if failed

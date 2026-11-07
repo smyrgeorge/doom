@@ -10,7 +10,7 @@
 | `config/cheatsheet.el`, `cheatsheet.org` | Tips panel under the sidebar (turned off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe, WebKit's cover |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
-| `config/editor.el` | `Cmd+B`, jumps, case cycling, the `fill-column` line, the current line |
+| `config/editor.el` | Case cycling, the `fill-column` line, the current line |
 | `config/emacs.el` | Garbage collection |
 | `config/evil.el` | Normal state on save; `q` closes transient menus |
 | `config/examples.el`, `examples/` | The examples and their screenshots |
@@ -23,6 +23,7 @@
 | `config/merge.el`, `merge/` | Three-pane conflict resolution |
 | `config/modeline.el` | Mode line |
 | `config/pdf.el`, `pdf/` | PDFs |
+| `config/navigation.el` | `Cmd+B`, jumps back and forward, previous / next buffer |
 | `config/peek.el` | Usages peek |
 | `config/projectile.el` | Projects |
 | `config/search.el` | Search Everywhere, find in files |
