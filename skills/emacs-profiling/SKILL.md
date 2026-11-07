@@ -1,23 +1,21 @@
 ---
 name: emacs-profiling
-description: How to read an Emacs profile recorded with this Doom config's profiler (SPC h T, `+my/profiling-toggle`), a folder holding summary.txt, cpu-calls.txt, cpu-callers.txt, mem-*.txt and *.profile under the Doom cache's profiles/ folder. Use when the user hands you such a folder or pastes "Emacs profile in …", or asks why their Emacs is slow.
+description: >-
+  Read an Emacs profile recorded with this Doom config's profiler (SPC h T, `+my/profiling-toggle`): a folder holding
+  summary.txt, cpu-calls.txt, cpu-callers.txt, mem-*.txt and *.profile under the Doom cache's profiles/ folder. Use
+  when the user hands you such a folder or pastes "Emacs profile in …", or asks why their Emacs is slow.
 ---
 
-# Reading an Emacs profile
+# Emacs profiling
 
-## How it was recorded
-
-The user pressed `SPC h T` (`+my/profiling-toggle`, in `~/.config/doom/config/profiling/session.el`; its settings are
-in `config/profiling.el`), did what felt slow, and pressed it again. That runs Emacs's own profiler (`profiler.el`) in
-`cpu+mem` mode:
+The user pressed `SPC h T`, did what felt slow, and pressed it again. That ran Emacs's own profiler (`profiler.el`) in
+`cpu+mem` mode and wrote what it recorded, as text, into a new folder named by the time it stopped:
+`~/.config/emacs/.local/cache/profiles/YYYY-MM-DD_HH-MM-SS/`. Earlier folders stay, for comparing.
 
 - **CPU**: on a timer, while Emacs is using the CPU, the Lisp call stack is sampled. Only Emacs's own work counts:
   waiting for input, for a process (an LSP server, git) or for the network isn't sampled.
 - **Memory**: the call stack is recorded as memory is allocated, weighted by bytes.
 - Stacks keep up to 32 calls (Emacs keeps 16), so most reach the command or timer they started from.
-
-The folder, named by the time it stopped: `~/.config/emacs/.local/cache/profiles/YYYY-MM-DD_HH-MM-SS/` (Doom's
-`doom-cache-dir`, then `profiles/`). Every run makes a new folder; earlier ones stay, for comparing.
 
 ## The files, in the order to read them
 
@@ -43,31 +41,6 @@ grep a function's name and read around it.
 - Memory counts are bytes allocated (sampled, so approximate). Allocation drives garbage collection: a big
   `Automatic GC` share in CPU plus many collections in the summary means find who allocates in `mem-*`.
 
-## Special names
-
-- `Automatic GC`: garbage collection; its samples have no caller. This config raises the GC thresholds with gcmh
-  (`config/emacs.el`).
-- `redisplay_internal (C function)`: redisplay. Under it: fontification (`jit-lock-function`, `font-lock-*`), the mode
-  line (`doom-modeline`), `:eval` forms, window and redisplay hooks.
-- `command-execute`, `call-interactively`: a command the user ran (a key press). `timer-event-handler`: a timer (idle
-  timers too). `...` (top-down tree only): stacks deeper than 32 calls, whose start isn't known.
-- `let`, `let*`, `if`, `progn`, `while`, `cond`, `save-excursion`...: special forms show up as calls only in
-  interpreted code. This config's functions (`+my/...`) are byte-compiled once Emacs has been idle a moment
-  (`config/compile.el`); a profile taken right after startup can catch them interpreted, slower than they really are.
-- `#<lambda ...>`, `#<subr ...>`, closures: anonymous functions; their callers say whose they are.
-- `profiler-start`, `profiler-stop`, `+my/profiling-...` at the start or end: the profiler itself; ignore.
-
-## Finding the code
-
-- `+my/...` and `+md-...` are this config's: `grep -rn "(defun +my/NAME" ~/.config/doom/config/`. A feature is
-  `config/NAME.el` (its settings and keys) and `config/NAME/*.el` (its code).
-- Doom: `~/.config/emacs/lisp/`, `~/.config/emacs/modules/`, `~/.config/emacs/sources/`.
-- Packages: `~/.config/emacs/.local/straight/repos/PACKAGE/`.
-- Emacs's own Lisp: `/Applications/Emacs.app/Contents/Resources/lisp/` (some files are `.el.gz`). Names ending in
-  `(C function)` are in Emacs's C source.
-- Or ask the running Emacs, read-only: `emacsclient --eval "(symbol-file 'FUNCTION 'defun)"`. Don't change its state
-  without asking.
-
 ## Working through it
 
 1. `summary.txt`: how long, how much GC; the top of Self (the hot functions) and of Total (which command, timer or
@@ -82,3 +55,11 @@ grep a function's name and read around it.
 6. Ask the user to profile again (`SPC h T`, the same steps) and compare the new `summary.txt` with this one.
 
 Tell the user the hot path in a few lines with its shares, the cause, and the fix.
+
+## Reference
+
+Read these only when the task needs them:
+
+- [references/names.md](references/names.md): names in the trees that aren't the code's own functions: garbage
+  collection, redisplay, commands and timers, special forms, anonymous functions, the profiler itself.
+- [references/code.md](references/code.md): where the code behind a name is: this config, Doom, packages, Emacs.

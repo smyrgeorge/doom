@@ -16,4 +16,4 @@ and Claude can ask Emacs what you're looking at.
 
 `SPC h T` starts the profiler; do what's slow, then `SPC h T` again. The profile is written as text under
 `~/.config/emacs/.local/cache/profiles/`, and a message (also copied) tells Claude where it is and to read the
-`emacs-profiling` skill first.
+[`emacs-profiling` skill](ai-agents.md) first.

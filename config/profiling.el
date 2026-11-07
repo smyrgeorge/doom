@@ -11,7 +11,7 @@
 ;; a summary (the functions that took the most time and memory), the call
 ;; trees, and the raw profiles (M-x profiler-find-profile). The message says
 ;; where, and that an agent should read the skill first
-;; (.claude/skills/emacs-profiling/SKILL.md, which explains the files); the
+;; (skills/emacs-profiling/SKILL.md, which explains the files); the
 ;; same text is copied, to paste to one.
 (defvar +my/profiling-directory (expand-file-name "profiles/" doom-cache-dir)
   "Where profiles are written, a folder each.")

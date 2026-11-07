@@ -8,7 +8,7 @@
 
 (defun +my/profiling--skill ()
   "The skill telling an agent how to read a profile."
-  (expand-file-name ".claude/skills/emacs-profiling/SKILL.md" doom-user-dir))
+  (expand-file-name "skills/emacs-profiling/SKILL.md" doom-user-dir))
 
 (defun +my/profiling--new-directory ()
   "A new, empty folder under `+my/profiling-directory', named by the time."

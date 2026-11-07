@@ -166,7 +166,7 @@
 (load! "config/search")
 
 ;; PROFILING (SPC h T starts the profiler; again, it writes a profile for an
-;; agent, who reads .claude/skills/emacs-profiling first)
+;; agent, who reads skills/emacs-profiling first)
 (load! "config/profiling")
 
 ;; COMPILE (byte-compile this config's functions when Emacs is idle; load last)

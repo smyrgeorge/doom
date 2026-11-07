@@ -76,7 +76,7 @@ its logs dropped after."
     (+my/profiling-start)
     (+test-profiling--spin 0.05)
     (let ((dir (+my/profiling-stop))
-          (skill (expand-file-name ".claude/skills/emacs-profiling/SKILL.md" +test-root)))
+          (skill (expand-file-name "skills/emacs-profiling/SKILL.md" +test-root)))
       (should (file-exists-p skill))
       (should (equal (car kill-ring)
                      (format "Emacs profile in %s\nBefore reading it, read the skill %s" dir skill)))

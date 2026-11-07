@@ -28,7 +28,7 @@
 | `config/treemacs.el`, `treemacs/` | [Sidebar](sidebar.md) |
 | `config/webkit.el`, `webkit/` | Web pages in Emacs: PDFs, drawings, the Markdown preview |
 | `config/window.el` | The frame, fringes, focus of new windows |
-| `.claude/skills/` | Skills for Claude (`emacs-profiling`) |
+| `skills/` | [Agent skills](ai-agents.md): `emacs-profiling` reads a profile |
 | `cmd/` | [Shell commands](cmd.md) |
 | `dict/tech.txt` | Programming words for spelling, built by `scripts/dict.sh` |
 | `scripts/` | Installers (`emacs.sh`, `tools.sh`, `lsp.sh`), `dict.sh`, `screenshots.sh` |
