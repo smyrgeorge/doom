@@ -185,9 +185,6 @@
 ;; TABS
 (load! "config/tabs")
 
-;; MODE LINE (a space after its last item on the right)
-(load! "config/modeline")
-
 ;; PROFILING (SPC h T starts the profiler; again, it writes a profile for an
 ;; agent, who reads .claude/skills/emacs-profiling first)
 (load! "config/profiling")

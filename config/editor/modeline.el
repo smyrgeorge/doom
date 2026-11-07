@@ -1,7 +1,6 @@
-;;; $DOOMDIR/config/modeline.el -*- lexical-binding: t; -*-
-;; Mode line (doom-modeline) tweaks. Loaded from config.el.
-
-;; ====== CODE ======
+;;; $DOOMDIR/config/editor/modeline.el -*- lexical-binding: t; -*-
+;; Mode line (doom-modeline) tweaks.
+;; Loaded from config/editor.el.
 
 ;; MODE LINE
 ;; A space after the mode line's last item on the right (e.g. flycheck's

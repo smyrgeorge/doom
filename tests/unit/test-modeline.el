@@ -1,8 +1,8 @@
 ;;; tests/unit/test-modeline.el -*- lexical-binding: t; -*-
-;; config/modeline.el: a space after the mode line's last item on the right,
+;; config/editor/modeline.el: a space after the mode line's last item on the right,
 ;; in every doom-modeline layout.
 
-(+test-load "config/modeline")
+(+test-load "config/editor")
 
 ;; Done once doom-modeline loads (`after!'): not loaded yet here.
 (defconst +test-modeline--loaded-first (featurep 'doom-modeline))
@@ -60,7 +60,7 @@
 (ert-deftest modeline/again-adds-none ()
   "Applied again (the config reloaded): no second space."
   (let ((before (copy-tree doom-modeline--modelines)))
-    (+test-load "config/modeline")
+    (+test-load "config/editor/modeline")
     (should (equal doom-modeline--modelines before))))
 
 (ert-deftest modeline/layouts-defined-before-it-runs ()
@@ -69,7 +69,7 @@ already, stays as it is."
   (+test-modeline--with-layouts '((+test-a (bar buffer-info) (major-mode))
                                   (+test-b (bar buffer-info) nil)
                                   (+test-c (bar buffer-info) (major-mode " ")))
-    (+test-load "config/modeline")
+    (+test-load "config/editor/modeline")
     (should (equal (+test-modeline--rhs '+test-a) '(major-mode " ")))
     (should (equal (+test-modeline--rhs '+test-b) nil))
     (should (equal (+test-modeline--rhs '+test-c) '(major-mode " ")))
@@ -80,11 +80,17 @@ already, stays as it is."
 
 ;; ====== LOADED ======
 
-(ert-deftest modeline/config-el-loads-it ()
+(defun +test-modeline--forms (file)
+  "FILE's (of this config) top-level forms."
   (with-temp-buffer
-    (insert-file-contents (expand-file-name "config.el" +test-root))
+    (insert-file-contents (expand-file-name file +test-root))
     (let (forms)
       (condition-case nil
           (while t (push (read (current-buffer)) forms))
         (end-of-file))
-      (should (member '(load! "config/modeline") forms)))))
+      forms)))
+
+(ert-deftest modeline/config-el-loads-it ()
+  "config.el loads the editor, which loads it."
+  (should (member '(load! "config/editor") (+test-modeline--forms "config.el")))
+  (should (member '(load! "editor/modeline") (+test-modeline--forms "config/editor.el"))))
