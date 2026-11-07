@@ -122,9 +122,6 @@
 ;; TERMINAL
 (load! "config/terminal")
 
-;; EVIL (back to normal state on save)
-(load! "config/evil")
-
 ;; TREEMACS (project view)
 (load! "config/treemacs")
 

@@ -1,8 +1,8 @@
 ;;; tests/unit/test-evil.el -*- lexical-binding: t; -*-
-;; config/evil.el: saving returns to normal state; q closes transient menus
+;; config/editor.el's Evil settings: saving returns to normal state; q closes transient menus
 ;; (unless a menu uses q itself).
 
-(+test-load "config/evil")
+(+test-load "config/editor")
 
 ;; Its q keys wait for transient (`after!'): not loaded yet here.
 (defconst +test-evil--transient-loaded-first (featurep 'transient))
@@ -156,10 +156,11 @@
 ;; ====== LOADED ======
 
 (ert-deftest evil/config-el-loads-it ()
+  "In config/editor.el, which config.el loads."
   (with-temp-buffer
     (insert-file-contents (expand-file-name "config.el" +test-root))
     (let (forms)
       (condition-case nil
           (while t (push (read (current-buffer)) forms))
         (end-of-file))
-      (should (member '(load! "config/evil") forms)))))
+      (should (member '(load! "config/editor") forms)))))
