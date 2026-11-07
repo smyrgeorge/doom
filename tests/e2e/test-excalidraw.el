@@ -4,9 +4,15 @@
 ;; (SVG and JSON, waiting for the last change), reopening, the mouse, Emacs's
 ;; keys, copy and paste, split panes, changes on disk, closing right after a
 ;; change, the dark canvas, inserting from Markdown, files that aren't
-;; drawings, the pointer.
+;; drawings, the pointer, a drawing's PNG, another drawing shown instead, and
+;; drawings for Claude (config/agent-shell/excalidraw.el: agent-shell's
+;; prompt stubbed, no agent).
 
-(+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit" "config/excalidraw")
+;; Doom's `use-package!' reads it (Doom's package manager defines it).
+(defvar doom-disabled-packages nil)
+
+(+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit" "config/excalidraw"
+            "config/agent-shell")
 (require 'markdown-mode)
 
 ;; ====== SETUP ======
@@ -592,3 +598,167 @@ library added."
       (should (+test-wait-for (lambda () (equal (plist-get (+test-exd--state) :cursor) "hand")) 3))
       (funcall move "canvas.excalidraw__canvas.interactive")
       (should (+test-wait-for (lambda () (equal (plist-get (+test-exd--state) :cursor) "arrow")) 3)))))
+
+;; ====== A PNG ======
+
+(defun +test-exd--png-size (file)
+  "PNG FILE's width and height (its IHDR)."
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert-file-contents-literally file)
+    (should (equal (buffer-substring 1 9) "\211PNG\r\n\032\n"))
+    (cl-flet ((u32 (pos) (let ((n 0))
+                           (dotimes (i 4) (setq n (+ (* n 256) (char-after (+ pos i)))))
+                           n)))
+      (cons (u32 17) (u32 21)))))
+
+(ert-deftest e2e-exd/a-png-of-the-drawing ()
+  "Nothing drawn: none. Drawn: a PNG, `+my/excalidraw-png-scale' times its
+size."
+  (+test-exd
+    (let* ((file (+test-exd--file "fig.excalidraw.svg"))
+           (png (expand-file-name "fig.png" (file-name-directory file))))
+      (+test-exd--open file)
+      (should (equal (cadr (should-error (+my/excalidraw-png png) :type 'user-error)) "Nothing is drawn"))
+      (should-not (file-exists-p png))
+      (+test-exd--add +test-exd--two-shapes)
+      (let* ((one (let ((+my/excalidraw-png-scale 1))
+                    (should (equal (+my/excalidraw-png png) png))
+                    (+test-exd--png-size png)))
+             (two (progn (should (equal (+my/excalidraw-png png) png))
+                         (+test-exd--png-size png))))
+        ;; The shapes span 290 x 80 px, with Excalidraw's padding around.
+        (should (<= 290 (car one) 400))
+        (should (<= 80 (cdr one) 200))
+        (should (= +my/excalidraw-png-scale 2))
+        (should (equal two (cons (* 2 (car one)) (* 2 (cdr one))))))
+      (set-buffer-modified-p nil))))
+
+(ert-deftest e2e-exd/another-drawing-shown-instead ()
+  "`+my/excalidraw-replace': another drawing, shown and saved as this one's."
+  (+test-exd
+    (let ((other (+test-exd--make (+test-exd--file "other.excalidraw.svg")
+                                  "[{type: 'ellipse', x: 0, y: 0, width: 50, height: 50}]"))
+          (file (+test-exd--file "fig.excalidraw.svg")))
+      (+test-exd--open file)
+      (+test-exd--in-buffer (+test-exd--add "[{type: 'rectangle', x: 0, y: 0, width: 80, height: 40}]"))
+      (save-buffer)
+      (+my/excalidraw-replace (+test-exd--file-text other))
+      (should (buffer-modified-p))
+      (should (+test-wait-for (lambda () (equal (+test-exd--elements) '("ellipse"))) 5))
+      (save-buffer)
+      (kill-buffer)
+      (+test-exd--open file)
+      (should (equal (+test-exd--elements) '("ellipse")))
+      (set-buffer-modified-p nil))))
+
+;; ====== DRAWINGS FOR CLAUDE ======
+
+(defmacro +test-exd--for-claude (&rest body)
+  "BODY with an agent-shell stand-in, `shell' (its mode only, the selected
+window's), drawings in `dir'/drawings/, and agent-shell's prompt stubbed:
+`inserted' gets what's inserted, (SHELL TEXT)."
+  (declare (indent 0))
+  `(let* ((dir (file-truename (make-temp-file (+test-tmp-file "claude-") t)))
+          (shell (generate-new-buffer "*test agent-shell*"))
+          (inserted nil))
+     (with-current-buffer shell
+       (setq-local major-mode 'agent-shell-mode))
+     (switch-to-buffer shell)
+     (cl-letf (((symbol-function 'agent-shell--dot-subdir)
+                (lambda (subdir) (let ((d (expand-file-name subdir dir))) (make-directory d t) d)))
+               ((symbol-function 'agent-shell--get-files-context)
+                (lambda (&rest args) (format "%S" (plist-get args :files))))
+               ((symbol-function 'agent-shell-insert)
+                (lambda (&rest args)
+                  (push (list (plist-get args :shell-buffer) (plist-get args :text)) inserted))))
+       (unwind-protect
+           (progn ,@body)
+         (kill-buffer shell)))))
+
+(ert-deftest e2e-exd/drawn-for-claude-and-inserted ()
+  "C-c C-d's drawing: on the shell's left, new; C-c C-c saves it, makes its
+PNG, inserts it into the shell's prompt and closes it."
+  (+test-exd
+    (+test-exd--for-claude
+      (let* ((from (selected-window))
+             (drawing (+my/agent-shell-excalidraw))
+             (file (buffer-file-name drawing))
+             (png (concat (string-remove-suffix ".excalidraw.svg" file) ".png")))
+        (should (eq (current-buffer) drawing))
+        (should (eq (window-in-direction 'left from) (selected-window)))
+        (should (equal (file-name-directory file) (file-name-as-directory (expand-file-name "drawings" dir))))
+        (should +my/agent-shell-excalidraw-mode)
+        (should (assq 'agent-shell-excalidraw +my/banner--list))
+        (should (+test-exd--ready))
+        (+test-exd--add +test-exd--two-shapes)
+        ;; The key reaches it (not the page, not Evil).
+        (execute-kbd-macro (kbd "C-c C-c"))
+        (should-not (buffer-live-p drawing))
+        (should-not (window-in-direction 'left from))
+        (should (string-prefix-p "<svg" (+test-exd--file-text file)))
+        (should (> (car (+test-exd--png-size png)) 290))
+        (should (equal inserted (list (list shell (format "%S" (list png))))))))))
+
+(ert-deftest e2e-exd/drawn-for-claude-in-the-left-window ()
+  "With a file on the shell's left: the drawing in that window, the file
+there again once it's inserted."
+  (+test-exd
+    (+test-exd--for-claude
+      (let* ((code (find-file-noselect (+test-exd--file "code.py")))
+             (left (selected-window))
+             (right (split-window-right)))
+        ;; The file on the left, the shell on the right (selected).
+        (set-window-buffer right shell)
+        (set-window-buffer left code)
+        (select-window right)
+        (let ((drawing (+my/agent-shell-excalidraw)))
+          (should (eq (selected-window) left))
+          (should (eq (window-buffer left) drawing))
+          (should (= (length (window-list)) 2))
+          (should (+test-exd--ready))
+          (+test-exd--add +test-exd--two-shapes)
+          (execute-kbd-macro (kbd "C-c C-c"))
+          (should-not (buffer-live-p drawing))
+          (should (window-live-p left))
+          (should (eq (window-buffer left) code))
+          (should (= (length inserted) 1)))))))
+
+(ert-deftest e2e-exd/drawn-for-claude-and-discarded ()
+  "C-c C-k: closed, its file deleted, nothing inserted."
+  (+test-exd
+    (+test-exd--for-claude
+      (let* ((drawing (+my/agent-shell-excalidraw))
+             (file (buffer-file-name drawing)))
+        (should (+test-exd--ready))
+        ;; Saved blank at once (a new drawing).
+        (should (+test-wait-for (lambda () (file-exists-p file)) 5))
+        (+test-exd--add +test-exd--two-shapes)
+        (execute-kbd-macro (kbd "C-c C-k"))
+        (should-not (buffer-live-p drawing))
+        (should-not (file-exists-p file))
+        (should-not inserted)))))
+
+(ert-deftest e2e-exd/drawn-for-claude-from-an-earlier-one ()
+  "M-p: an earlier drawing on the canvas; inserted, it's that one's PNG,
+under this drawing's name."
+  (+test-exd
+    (+test-exd--for-claude
+      (make-directory (expand-file-name "drawings" dir) t)
+      (let ((earlier (+test-exd--make (expand-file-name "drawings/drawing-2000-01-01-00-00-00.excalidraw.svg" dir)
+                                      "[{type: 'ellipse', x: 0, y: 0, width: 50, height: 50}]")))
+        (switch-to-buffer shell)
+        (let* ((drawing (+my/agent-shell-excalidraw))
+               (file (buffer-file-name drawing)))
+          (should (+test-exd--ready))
+          (execute-kbd-macro (kbd "M-p"))
+          (should (+test-wait-for (lambda () (equal (+test-exd--elements) '("ellipse"))) 5))
+          (execute-kbd-macro (kbd "C-c C-c"))
+          (should-not (buffer-live-p drawing))
+          (should (equal (car (car inserted)) shell))
+          ;; The earlier one untouched.
+          (should (file-exists-p earlier))
+          (find-file file)
+          (should (+test-exd--ready))
+          (should (equal (+test-exd--elements) '("ellipse")))
+          (set-buffer-modified-p nil))))))

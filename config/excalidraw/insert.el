@@ -53,17 +53,19 @@ Org's; elsewhere its path. Relative to the buffer's file."
                                        (+my/excalidraw--dir-here))))
           (and (file-exists-p file) file))))))
 
-(defun +my/excalidraw-open (file &optional save-new)
-  "Open drawing FILE beside the selected window (it takes focus); SAVE-NEW:
-saved once its page has made it (a new one)."
+(defun +my/excalidraw-open (file &optional save-new action)
+  "Open drawing FILE beside the selected window, on its right (it takes
+focus); SAVE-NEW: saved once its page has made it (a new one). ACTION, a
+`display-buffer' action, shows it elsewhere."
   (let ((buffer (find-file-noselect file)))
     (when save-new
       (with-current-buffer buffer
         (setq +my/excalidraw--save-new t)))
     (pop-to-buffer buffer
-                   `((display-buffer-reuse-window display-buffer-in-direction)
-                     (direction . right)
-                     (window-width . ,(/ (window-total-width) 2))))
+                   (or action
+                       `((display-buffer-reuse-window display-buffer-in-direction)
+                         (direction . right)
+                         (window-width . ,(/ (window-total-width) 2)))))
     buffer))
 
 (defun +my/excalidraw-insert (file)

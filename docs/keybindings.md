@@ -21,4 +21,5 @@ The keys this config adds or changes. PDFs, drawings and the merge have their ow
 | `e` (Magit, on a conflicted file) | Resolve its conflicts |
 | `SPC m p` / `SPC m P` (Markdown) | Live preview / in the browser |
 | `SPC o c` / `SPC o C` | A new Claude Code session / the project's |
+| `C-c C-d`, `SPC m d` (Claude Code) | Draw for Claude |
 | `SPC h T` | Start / stop the profiler |

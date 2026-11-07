@@ -12,6 +12,17 @@ CLI's login.
 Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
 and Claude can ask Emacs what you're looking at.
 
+## Drawing for Claude
+
+In a Claude Code buffer, `C-c C-d` (`SPC m d`) opens a new [drawing](drawings.md) in the window on its left, which
+shows its own file again when the drawing closes. The drawing is saved in the project's `.agent-shell/drawings/`.
+
+| Key | Action |
+|---|---|
+| `C-c C-c` | Insert it into the prompt as an image (a PNG beside the drawing) and close it |
+| `C-c C-k` | Discard it |
+| `M-p` / `M-n` | An earlier drawing instead, to change and insert again |
+
 ## Profiling Emacs
 
 `SPC h T` starts the profiler; do what's slow, then `SPC h T` again. The profile is written as text under

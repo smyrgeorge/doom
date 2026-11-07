@@ -1,5 +1,6 @@
 ;;; $DOOMDIR/config/agent-shell.el -*- lexical-binding: t; -*-
-;; Claude Code inside Emacs (agent-shell, via ACP). Loaded from config.el.
+;; Claude Code inside Emacs (agent-shell, via ACP). Loaded from config.el; its
+;; code is in config/agent-shell/.
 
 ;; ====== VARIABLES ======
 
@@ -60,11 +61,46 @@ that its buffer isn't modified."
   "Appended to Claude Code's system prompt in agent-shell (see above), with
 `+my/agent-shell-claude-theme'.")
 
+;; DRAWINGS FOR CLAUDE
+;; In an agent-shell buffer, C-c C-d (SPC m d) opens a new drawing on its left
+;; (in the window there, which shows its own buffer again once the drawing
+;; closes; without one, in a new window), in Excalidraw (config/excalidraw.el),
+;; saved in the project's .agent-shell/drawings/ (agent-shell's folder, next to
+;; its screenshots, out of git). Like agent-shell's artist mode (M-x
+;; agent-shell-artist-insert-text-drawing: text art), with Excalidraw. In it:
+;;   C-c C-c    insert it into that shell's prompt: saved, exported as a PNG
+;;              beside its file (what Claude reads: not SVG), shown as
+;;              agent-shell shows a screenshot; the drawing closes
+;;   C-c C-k    discard it: closed, its files deleted
+;;   M-p / M-n  an earlier drawing of the folder instead of this one (newest
+;;              first; M-n back past the newest: this one again), to change
+;;              and insert again
+;; A notice at its top says so, with buttons. It needs what drawings need: a
+;; GUI Emacs with xwidgets, and Excalidraw.
+(defvar +my/agent-shell-drawings-subdir "drawings"
+  "Where drawings for Claude go, in the project's .agent-shell/ folder.")
+
+(defvar +my/agent-shell-excalidraw-mode-map (make-sparse-keymap)
+  "Keys of a drawing for Claude (see DRAWINGS FOR CLAUDE above).")
+
 ;; ====== KEY BINDINGS ======
 
 (map! :leader
       :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code
       :desc "Agent shell"               "o C" #'agent-shell)
+
+;; DRAWINGS FOR CLAUDE (see above): C-c C-d next to agent-shell's own C-c keys.
+(map! :after agent-shell
+      :map agent-shell-mode-map
+      "C-c C-d" #'+my/agent-shell-excalidraw
+      :localleader
+      :desc "Draw for Claude" "d" #'+my/agent-shell-excalidraw)
+
+(map! :map +my/agent-shell-excalidraw-mode-map
+      "C-c C-c" #'+my/agent-shell-excalidraw-insert
+      "C-c C-k" #'+my/agent-shell-excalidraw-discard
+      "M-p"     #'+my/agent-shell-excalidraw-previous
+      "M-n"     #'+my/agent-shell-excalidraw-next)
 
 ;; ====== CODE ======
 
@@ -84,35 +120,7 @@ that its buffer isn't modified."
         ;; M-x agent-shell-markdown-image-scale-increase / -decrease.
         agent-shell-markdown-image-max-width 1.0))
 
-;; INSIDE EMACS (see above). agent-shell builds the agent's config each time a
-;; session starts (SPC o c, SPC o C, the Option+Enter Claude actions) and sends
-;; its session metadata to claude-agent-acp, which adds the `append' text of
-;; its `systemPrompt' to Claude Code's system prompt.
-(defun +my/agent-shell-claude-theme ()
-  "A line on the theme's colours, for the images Claude draws (nil if unknown)."
-  (let ((dark (eq (frame-parameter nil 'background-mode) 'dark))
-        (bg (face-background 'default nil t))
-        (fg (face-foreground 'default nil t)))
-    (when (and (stringp bg) (string-prefix-p "#" bg)
-               (stringp fg) (string-prefix-p "#" fg))
-      (format "Emacs uses a %s theme%s: background %s, text %s. Draw images \
-to read well on it: %s."
-              (if dark "dark" "light")
-              (if custom-enabled-themes
-                  (format " (%s)" (car custom-enabled-themes))
-                "")
-              bg fg
-              (if dark
-                  "a dark or transparent background, light text and lines"
-                "a light or transparent background, dark text and lines")))))
-
-(defadvice! +my/agent-shell-claude-context-a (config)
-  "Append `+my/agent-shell-claude-context' to Claude Code's system prompt."
-  :filter-return #'agent-shell-anthropic-make-claude-code-config
-  (let ((text (string-join (delq nil (list +my/agent-shell-claude-context
-                                           (+my/agent-shell-claude-theme)))
-                           "\n\n")))
-    (setf (alist-get :session-meta config)
-          (cons `(systemPrompt . ((append . ,text)))
-                (alist-get :session-meta config))))
-  config)
+;; In config/agent-shell/, in this order: each part can use what the ones
+;; before it define.
+(load! "agent-shell/context")
+(load! "agent-shell/excalidraw")

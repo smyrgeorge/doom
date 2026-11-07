@@ -40,6 +40,9 @@
 ;; drawing" (M-x +my/excalidraw-insert): it links a new one as an image at
 ;; point and opens it beside, saved blank at once; on a link to one, "Edit the
 ;; drawing" opens it beside.
+;; A drawing as a PNG, for what can't read its SVG (Claude, see DRAWINGS FOR
+;; CLAUDE in config/agent-shell.el): `+my/excalidraw-png' asks its page for
+;; one, light as the file is, `+my/excalidraw-png-scale' times its size.
 ;; LIBRARIES: Excalidraw's library (its panel: shapes kept to reuse, drawn or
 ;; added from libraries.excalidraw.com) is the drawings' one, kept in
 ;; `+my/excalidraw-library-file' across sessions; a change in one drawing shows
@@ -59,6 +62,9 @@
 
 (defvar +my/excalidraw-export-delay 300
   "Milliseconds after a change the page exports the drawing (see above).")
+
+(defvar +my/excalidraw-png-scale 2
+  "A drawing's PNG is this many times its size (see above).")
 
 (defvar +my/excalidraw-version "0.17.6"
   "The Excalidraw (npm's @excalidraw/excalidraw) version that draws.")
@@ -166,6 +172,7 @@
 ;; it define.
 (load! "excalidraw/page")
 (load! "excalidraw/sync")
+(load! "excalidraw/png")
 (load! "excalidraw/input")
 (load! "excalidraw/libraries")
 (load! "excalidraw/insert")

@@ -78,6 +78,15 @@ EXCEPT's."
       (unless (eq xwidget except)
         (+my/webkit-execute script xwidget)))))
 
+(defun +my/excalidraw-replace (text)
+  "Show the drawing whose file's text is TEXT instead of the buffer's: its
+text, then its views' drawing; a change to save."
+  (+my/webkit-set-text (if (string-empty-p text) " " text))
+  (when +my/excalidraw--dir
+    (+my/excalidraw--write-page))
+  (+my/excalidraw--show text)
+  (set-buffer-modified-p t))
+
 (defun +my/excalidraw--flushed (version)
   "A page's answer to saving: the VERSION its drawing is at (see above)."
   (when +my/webkit-answering

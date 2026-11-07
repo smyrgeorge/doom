@@ -4,7 +4,7 @@
 |---|---|
 | `init.el`, `packages.el` | Doom modules and extra packages |
 | `config.el` | The main config; loads `config/` |
-| `config/agent-shell.el` | [Claude Code](claude-code.md) |
+| `config/agent-shell.el`, `agent-shell/` | [Claude Code](claude-code.md), drawing for it |
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
 | `config/cheatsheet.el`, `cheatsheet.org` | A tips panel under the sidebar (off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe |

@@ -5,8 +5,9 @@
 // says in its title ("exd {json}"): whether it's ready, the version of the
 // drawing (one more at each change), the version its latest export (the
 // file's text as it would be saved) is of, the mouse pointer it wants, the
-// theme, an error, and its library's version (one more at each change of
-// the shapes kept to reuse, which Emacs keeps in a file for all drawings).
+// theme, an error, its library's version (one more at each change of the
+// shapes kept to reuse, which Emacs keeps in a file for all drawings), and
+// the number of its latest PNG (see png()).
 (function () {
   'use strict';
 
@@ -25,7 +26,7 @@
   window.EXCALIDRAW_ASSET_PATH = options.fonts;
 
   const state = { ready: false, version: 0, exported: 0, cursor: 'arrow', dark: !!options.dark, error: null,
-                  library: 0 };
+                  library: 0, png: 0 };
   let api = null;
   let content = null;        // the latest export (its version: state.exported)
   let lastSignature = null;  // the drawing's, as last seen
@@ -333,6 +334,45 @@
     document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
   }
 
+  // A PNG of the drawing (what an agent reads: not SVG), light as the file
+  // is, SCALE times its size, made in the background: png() returns its
+  // number, state.png says the latest one made, pngData() its number, a
+  // line break and its base64 ('' when nothing is drawn) or 'error: ' and
+  // why (WebKit doesn't answer with nothing).
+  let pngCount = 0;
+  let pngBase64 = '';
+  async function pngOf(scale) {
+    const elements = api.getSceneElements();
+    if (!elements.length) return '';
+    const blob = await L.exportToBlob({
+      elements,
+      appState: Object.assign({}, api.getAppState(), { exportBackground: true, exportWithDarkMode: false }),
+      files: api.getFiles(),
+      mimeType: 'image/png',
+      getDimensions: (width, height) => ({ width: width * scale, height: height * scale, scale }),
+    });
+    const url = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+    return url.slice(url.indexOf(',') + 1);
+  }
+  function png(scale) {
+    if (!api) return '0';
+    const n = ++pngCount;
+    pngOf(scale > 0 ? scale : 1)
+      .catch((error) => 'error: ' + (error && error.message || error))
+      .then((data) => {
+        if (n !== pngCount) return;
+        pngBase64 = data;
+        state.png = n;
+        publish();
+      });
+    return String(n);
+  }
+
   function set(settings) {
     if ('dark' in settings && api) {
       state.dark = !!settings.dark;
@@ -342,7 +382,9 @@
   }
 
   window.exd = {
-    open, replace, key, copy, cut, paste, set, setLibrary, addLibrary,
+    open, replace, key, copy, cut, paste, set, setLibrary, addLibrary, png,
+    // The latest PNG (see png()).
+    pngData: () => state.png + '\n' + pngBase64,
     // Export now: a save waits for the version the drawing is at.
     flush: () => { noticeChange(); exportNow(); return String(state.version); },
     // The latest export, the file's text as it would be saved, after the

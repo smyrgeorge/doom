@@ -15,4 +15,5 @@
 | `SPC m r` | Reload the file |
 
 The library is shared by all drawings. In Markdown or Org, `Option+Enter` → **Insert a new drawing** links a new one at
-point.
+point. In a Claude Code buffer, `C-c C-d` draws for Claude: see
+[Drawing for Claude](claude-code.md#drawing-for-claude).
