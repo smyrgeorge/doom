@@ -1,6 +1,8 @@
 ;;; tests/unit/test-tiling.el -*- lexical-binding: t; -*-
 ;; config/tiling.el: SPC w SPC opens a pane where the tiling strategy puts it
-;; (tall), SPC w a arranges the panes.
+;; (tall), SPC w a arranges the panes. Tiling first (config/tiling/apps.el):
+;; applications in new panes (not where their rules say, not their size),
+;; files as tabs in the panes of files, a pane closed with its last tab.
 
 (+test-load "config/window" "config/tiling")
 
@@ -190,30 +192,6 @@ it, its only tab; quitting it closes the pane."
         (should-not (window-live-p second))
         (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "B")))))))
 
-(defun +test-tiling--opens-d ()
-  "A command opening D where Doom's popups would (stands for SPC o t)."
-  (interactive)
-  (pop-to-buffer "D" '((display-buffer-in-side-window) (side . bottom))))
-
-(ert-deftest tiling/commands-open-new-panes ()
-  "Commands of `+my/tiling-commands' open their windows as new panes, whatever
-action they ask for; others as they ask."
-  (+test-tiling
-    (let ((+my/tiling-commands '(+test-tiling--opens-d)))
-      (unwind-protect
-          (progn
-            (+my/tiling-advise-commands)
-            (call-interactively #'+test-tiling--opens-d)
-            (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "D")))
-            (should-not (window-parameter (get-buffer-window "D") 'window-side)))
-        (advice-remove '+test-tiling--opens-d #'+my/tiling-in-pane-a)))
-    ;; Not listed: as it asks (a side window, not a pane).
-    (delete-other-windows)
-    (switch-to-buffer "A")
-    (call-interactively #'+test-tiling--opens-d)
-    (should (eq (window-parameter (get-buffer-window "D") 'window-side) 'bottom))
-    (should (equal (mapcar #'car (+test-tiling--layout)) '("A")))))
-
 (ert-deftest tiling/focus-follows-the-setting ()
   (+test-tiling
     (let* ((main (selected-window))
@@ -309,3 +287,218 @@ the selected one stays selected."
 (ert-deftest tiling/keys ()
   (should (eq (lookup-key evil-window-map (kbd "SPC")) #'+my/tiling-split))
   (should (eq (lookup-key evil-window-map "a") #'+my/tiling-arrange)))
+
+;; ====== TILING FIRST ======
+
+(define-derived-mode +test-tiling-app-mode special-mode "App"
+  "Stands for an application (Claude Code, the terminal...).")
+
+(define-derived-mode +test-tiling-sub-app-mode +test-tiling-app-mode "Sub-app")
+
+(defun +test-tiling--app (name &optional mode)
+  "Application buffer NAME (in MODE, default `+test-tiling-app-mode')."
+  (with-current-buffer (get-buffer-create name)
+    (funcall (or mode #'+test-tiling-app-mode))
+    (current-buffer)))
+
+(defun +test-tiling--file (name)
+  "A buffer visiting file NAME (in a temp folder, not written)."
+  (let ((file (expand-file-name name (make-temp-file (+test-tmp-file "tiling-") t))))
+    (find-file-noselect file)))
+
+(defmacro +test-tiling-first (&rest body)
+  "BODY as `+test-tiling', the applications being `+test-tiling-app-mode''s."
+  (declare (indent 0))
+  `(+test-tiling
+     (let ((+my/tiling-apps '(+test-tiling-app-mode)))
+       ,@body)))
+
+(defconst +test-tiling--popup-action
+  '((display-buffer-in-side-window) (side . bottom) (window-width . 40) (window-height . 0.25)
+    (window-parameters (ttl . 0)))
+  "As Doom's popup rules display: a side window of their size.")
+
+(ert-deftest tiling/first-is-on ()
+  (should (equal display-buffer-overriding-action '((+my/tiling--display))))
+  (should (advice-member-p #'+my/tiling-switch-to-buffer-a 'switch-to-buffer))
+  (should (memq #'+my/tiling-close-pane-h (default-value 'kill-buffer-hook)))
+  ;; The applications.
+  (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) +my/tiling-apps)
+                 '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-diff-mode))))
+
+(ert-deftest tiling/what-is-an-application ()
+  (+test-tiling-first
+    (should (+my/tiling-app-p (+test-tiling--app "app")))
+    ;; Modes derived from one too.
+    (should (+my/tiling-app-p (+test-tiling--app "sub" #'+test-tiling-sub-app-mode)))
+    (should-not (+my/tiling-app-p (get-buffer "A")))
+    ;; (MODE . PREDICATE): the mode, and the predicate in the buffer.
+    (let ((+my/tiling-apps '((+test-tiling-app-mode . (lambda () (string-prefix-p "yes" (buffer-name)))))))
+      (should (+my/tiling-app-p (+test-tiling--app "yes-app")))
+      (should-not (+my/tiling-app-p (+test-tiling--app "no-app"))))))
+
+(ert-deftest tiling/an-application-in-a-new-pane ()
+  "Where the strategy puts it, not where its rules say, nor their size (a
+popup 40 columns wide was the terminal's: narrow)."
+  (+test-tiling-first
+    (let* ((main (selected-window))
+           (app (+test-tiling--app "app"))
+           (window (display-buffer app +test-tiling--popup-action)))
+      (should-not (window-parameter window 'window-side))
+      (should-not (window-parameter window 'ttl))
+      (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "app")))
+      ;; The tall strategy's half, not the rule's 40 columns.
+      (should (<= (abs (- (window-total-width window) (window-total-width main))) 1))
+      (should-not (window-prev-buffers window))
+      ;; Shown already: its pane.
+      (should (eq (display-buffer app +test-tiling--popup-action) window))
+      (should (= (length (+my/tiling--panes)) 2))
+      ;; Quitting it closes the pane.
+      (quit-window nil window)
+      (should-not (window-live-p window)))))
+
+(ert-deftest tiling/anything-else-as-it-asks ()
+  (+test-tiling-first
+    (let ((window (display-buffer "B" +test-tiling--popup-action)))
+      (should (eq (window-parameter window 'window-side) 'bottom))
+      (should (equal (mapcar #'car (+test-tiling--layout)) '("A"))))))
+
+(ert-deftest tiling/files-from-an-application-in-the-last-pane-of-files ()
+  "A file shown from an application's pane: as a tab in the last selected
+pane of files, the one already showing it first; none: a new pane."
+  (+test-tiling-first
+    (let* ((left (selected-window))
+           (file (+test-tiling--file "a.txt"))
+           (other (+test-tiling--file "b.txt"))
+           (app (display-buffer (+test-tiling--app "app") nil)))
+      (set-window-buffer left other)
+      (select-window app)
+      ;; Asked for the same window (a link in Claude Code): not the app's.
+      (let ((window (display-buffer file '(display-buffer-same-window))))
+        (should (eq window left))
+        (should (eq (window-buffer app) (get-buffer "app")))
+        ;; A tab: b.txt is still one.
+        (should (assq other (window-prev-buffers left))))
+      ;; Shown already in a pane of files: that one.
+      (let ((right-of-app (progn (select-window left) (+my/tiling-split))))
+        (set-window-buffer right-of-app other)
+        (select-window app)
+        (should (eq (display-buffer other '(display-buffer-same-window)) right-of-app)))
+      ;; No pane of files: a new one.
+      (delete-other-windows app)
+      (should (equal (mapcar #'car (+test-tiling--layout)) '("app")))
+      (let ((window (display-buffer file '(display-buffer-same-window))))
+        (should-not (eq window app))
+        (should (equal (mapcar #'car (+test-tiling--layout)) '("app" "a.txt")))))))
+
+(ert-deftest tiling/files-from-a-popup-in-the-last-pane-of-files ()
+  "From a popup or a side panel (a link in *Help*), not in an application's
+pane."
+  (+test-tiling-first
+    (let* ((left (selected-window))
+           (file (+test-tiling--file "a.txt"))
+           (app (display-buffer (+test-tiling--app "app") nil))
+           (popup (display-buffer "C" +test-tiling--popup-action)))
+      ;; The app's pane used last.
+      (select-window app)
+      (select-window popup)
+      (should (eq (display-buffer file '((display-buffer-use-some-window))) left)))))
+
+(ert-deftest tiling/files-from-a-pane-of-files-as-asked ()
+  (+test-tiling-first
+    (let ((file (+test-tiling--file "a.txt")))
+      (should (eq (display-buffer file '(display-buffer-same-window)) (selected-window)))
+      (should (= (length (+my/tiling--panes)) 1)))))
+
+(ert-deftest tiling/files-switched-to-in-an-application-s-pane ()
+  "find-file, the sidebar (`switch-to-buffer') in an application's pane: the
+file in the last pane of files, selected; elsewhere, in the pane."
+  (+test-tiling-first
+    (let* ((left (selected-window))
+           (file (+test-tiling--file "a.txt"))
+           (app (display-buffer (+test-tiling--app "app") nil)))
+      (select-window app)
+      (switch-to-buffer file)
+      (should (eq (selected-window) left))
+      (should (eq (window-buffer left) file))
+      (should (eq (window-buffer app) (get-buffer "app")))
+      ;; Not a file: in the app's pane, as asked.
+      (select-window app)
+      (switch-to-buffer "B")
+      (should (eq (window-buffer app) (get-buffer "B")))
+      ;; In a pane of files: there.
+      (select-window left)
+      (switch-to-buffer (+test-tiling--file "b.txt"))
+      (should (eq (selected-window) left)))))
+
+(ert-deftest tiling/a-pane-closes-with-its-last-buffer ()
+  "Killed (SPC b k, a terminal's shell ending): the pane it was the only
+buffer of closes; one with others stays; the frame's last stays."
+  (+test-tiling-first
+    (let* ((app (+test-tiling--app "app"))
+           (window (display-buffer app nil)))
+      (kill-buffer app)
+      (should-not (window-live-p window))
+      (should (= (length (+my/tiling--panes)) 1)))
+    ;; Another buffer shown there before: it stays, showing it.
+    (let* ((app (+test-tiling--app "app2"))
+           (window (display-buffer app nil)))
+      (with-selected-window window
+        (switch-to-buffer "B")
+        (switch-to-buffer app))
+      (kill-buffer app)
+      (should (window-live-p window))
+      (should (eq (window-buffer window) (get-buffer "B"))))
+    ;; The frame's last pane: stays.
+    (delete-other-windows)
+    (let ((buffer (+test-buffer "last")))
+      (switch-to-buffer buffer)
+      (set-window-prev-buffers nil nil)
+      (kill-buffer buffer)
+      (should (= (length (+my/tiling--panes)) 1)))))
+
+(ert-deftest tiling/the-minibuffer-open-as-asked ()
+  "While the minibuffer is open (a preview, a completion's action): files and
+applications shown as asked, switched to where asked."
+  (+test-tiling-first
+    (let* ((left (selected-window))
+           (file (+test-tiling--file "a.txt"))
+           (app (display-buffer (+test-tiling--app "app") nil)))
+      (select-window app)
+      (cl-letf (((symbol-function 'active-minibuffer-window) (lambda () (minibuffer-window))))
+        ;; A file previewed in the window the minibuffer was entered from.
+        (should (eq (display-buffer file '(display-buffer-same-window)) app))
+        (set-window-buffer app (get-buffer "app"))
+        (switch-to-buffer file)
+        (should (eq (selected-window) app))
+        (should (eq (window-buffer app) file))
+        (set-window-buffer app (get-buffer "app"))
+        ;; An application where it asks (a side window).
+        (let ((other (display-buffer (+test-tiling--app "app2") +test-tiling--popup-action)))
+          (should (eq (window-parameter other 'window-side) 'bottom))))
+      (should (eq (window-buffer left) (get-buffer "A"))))))
+
+(ert-deftest tiling/switching-without-recording-where-asked ()
+  "`switch-to-buffer' with NORECORD (previews): in the application's pane, as
+asked."
+  (+test-tiling-first
+    (let* ((file (+test-tiling--file "a.txt"))
+           (app (display-buffer (+test-tiling--app "app") nil)))
+      (select-window app)
+      (switch-to-buffer file t)
+      (should (eq (selected-window) app))
+      (should (eq (window-buffer app) file)))))
+
+(ert-deftest tiling/completions-at-the-bottom-as-asked ()
+  "*Completions* (not a file, not an application): at the frame's bottom, as
+Emacs puts it, from an application's pane too."
+  (+test-tiling-first
+    (let* ((app (display-buffer (+test-tiling--app "app") nil))
+           (completions (with-current-buffer (get-buffer-create "*Completions*")
+                          (completion-list-mode)
+                          (current-buffer))))
+      (select-window app)
+      (let ((window (display-buffer completions '((display-buffer-at-bottom)))))
+        (should (window-at-side-p window 'bottom))
+        (should (= (window-total-width window) (frame-width)))
+        (should (eq (window-buffer app) (get-buffer "app")))))))

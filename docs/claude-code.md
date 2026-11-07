@@ -14,8 +14,8 @@ and Claude can ask Emacs what you're looking at.
 
 ## Drawing for Claude
 
-In a Claude Code buffer, `C-c C-d` (`SPC m d`) opens a new [drawing](drawings.md) in the window on its left, which
-shows its own file again when the drawing closes. The drawing is saved in the project's `.agent-shell/drawings/`.
+In a Claude Code buffer, `C-c C-d` (`SPC m d`) opens a new [drawing](drawings.md) in a new pane, saved in the project's
+`.agent-shell/drawings/`.
 
 | Key | Action |
 |---|---|

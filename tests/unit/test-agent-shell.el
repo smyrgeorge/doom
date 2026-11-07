@@ -188,10 +188,10 @@ login is used), and no OAuth token."
                                                   (+my/agent-shell-claude-theme)))
                                   "\n\n"))))))
 
-(ert-deftest agent-shell/sessions-open-in-tiled-panes ()
-  "A session opens in a new pane where the tiling strategy puts it
-(config/tiling.el)."
-  (should (equal agent-shell-display-action '(+my/tiling-display-buffer))))
+(ert-deftest agent-shell/sessions-display-as-agent-shell-has-them ()
+  "Where a session opens is agent-shell's (its window); tiling, when on,
+puts it in a new pane (config/tiling/apps.el)."
+  (should (equal agent-shell-display-action '(display-buffer-same-window))))
 
 (ert-deftest agent-shell/images-as-wide-as-the-window ()
   (should (equal agent-shell-markdown-image-max-width 1.0))

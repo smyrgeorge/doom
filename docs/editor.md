@@ -13,9 +13,18 @@ Each window has its own tabs: the files shown in it. A file closes once no windo
 
 ## Tiling
 
-`SPC w SPC` opens a new pane where the tiling strategy puts it, and `SPC w a` arranges the panes again. The `tall`
-strategy keeps the main pane on the left and stacks the others on the right. Claude Code sessions (`SPC o c`) and the
-terminal (`SPC o t`) open as new panes the same way. Try it: `M-x +my/example-tiling`.
+Emacs is tiling first:
+
+- Applications (Claude Code, the terminal, the Markdown preview, a file's diff, drawings) open in a new pane where the
+  tiling strategy puts it.
+- Files open as a tab in the current pane. From an application's pane, a popup or the sidebar, they open in the last
+  pane of files.
+- A pane closes with its last tab.
+
+The `tall` strategy keeps the main pane on the left and stacks the others on the right. `SPC w SPC` opens a new pane
+showing the current buffer, and `SPC w a` arranges the panes again. Try it: `M-x +my/example-tiling`.
+
+Without `(load! "config/tiling")` in `config.el`, each opens where it would on its own.
 
 ![Tiled panes: the main one on the left, the others stacked on the right](../examples/tiling.png)
 

@@ -8,7 +8,7 @@
 
 ## File diff
 
-`SPC g d` shows the current file's changes in a pane on the right: `s` / `u` / `x` stage, unstage or discard a hunk,
+`SPC g d` shows the current file's changes in a new pane: `s` / `u` / `x` stage, unstage or discard a hunk,
 `RET` goes to the line, `q` closes it.
 
 ## Resolving conflicts

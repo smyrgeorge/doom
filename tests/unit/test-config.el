@@ -237,10 +237,28 @@ header says what loads it: config.el, or for a part its file (config/merge.el)."
   (should (eq +my/tiling-strategy 'tall))
   (should (eq (default-value '+my/tiling-strategy) 'tall)))
 
-(ert-deftest config/terminal-opens-tiled ()
-  "SPC o t (Doom's ghostel toggle) opens the terminal as a tiled pane."
-  (should (equal +my/tiling-commands '(+ghostel/toggle)))
-  (should (advice-member-p #'+my/tiling-in-pane-a '+ghostel/toggle)))
+(ert-deftest config/tiling-first ()
+  "Tiling first (config/tiling/apps.el): applications in new panes."
+  (should (equal display-buffer-overriding-action '((+my/tiling--display))))
+  (should (memq 'ghostel-mode +my/tiling-apps))
+  (should (memq 'agent-shell-mode +my/tiling-apps)))
+
+(ert-deftest config/tiling-can-be-taken-out ()
+  "Tiling first lives in config/tiling.el and config/tiling/: config.el loads
+it and chooses its strategy; no other file uses it, so without that `load!'
+each feature opens its windows as it does alone."
+  (let ((dir (expand-file-name "config/" +test-root))
+        (users nil))
+    (dolist (file (directory-files-recursively dir "\\.el\\'"))
+      (unless (string-match-p "/config/tiling\\(?:\\.el\\|/\\)" file)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (when (re-search-forward "+my/tiling" nil t)
+            (push (file-relative-name file +test-root) users)))))
+    (should-not users))
+  (let ((forms (seq-filter (lambda (form) (string-match-p "+my/tiling" (format "%S" form)))
+                           (+test-config--forms))))
+    (should (equal forms '((setq +my/tiling-strategy 'tall))))))
 
 (ert-deftest config/pdf-dark-pages ()
   "PDFs open with dark pages (config/pdf.el's own default: light)."
@@ -261,8 +279,6 @@ dark PDF pages (their files' defvars keep them)."
              (+test-config--position '(load! "config/tiling"))))
   (should (< (+test-config--position '(setq +my/pdf-dark-pages t))
              (+test-config--position '(load! "config/pdf"))))
-  (should (< (+test-config--position '(setq +my/tiling-commands '(+ghostel/toggle)))
-             (+test-config--position '(load! "config/tiling"))))
   (should (< (+test-config--position '(setq-default fill-column 120))
              (+test-config--position '(load! "config/editor")))))
 

@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/tiling/commands.el -*- lexical-binding: t; -*-
-;; SPC w SPC and SPC w a; buffers shown in new panes.
+;; SPC w SPC and SPC w a.
 ;; Loaded from config/tiling.el.
 
 (defvar +my/focus-new-windows)          ; config/window.el
@@ -38,28 +38,3 @@
       (user-error "Not in a pane: side panels aren't tiled"))
     (when (cdr panes)
       (funcall (plist-get strategy :arrange) panes))))
-
-;; NEW PANES FOR BUFFERS (see config/tiling.el)
-(defun +my/tiling-display-buffer (buffer alist)
-  "A `display-buffer' action: BUFFER in a new pane where the tiling strategy
-puts it (config/tiling.el), its only tab; quitting it closes the pane. Nil
-(the next action then) in a frame without panes."
-  (when-let* ((panes (+my/tiling--panes)))
-    (let ((new (funcall (plist-get (+my/tiling--strategy) :split) panes)))
-      (set-window-prev-buffers new nil)
-      (set-window-next-buffers new nil)
-      (set-window-parameter new 'tab-line-buffers nil)
-      (window--display-buffer buffer new 'window alist))))
-
-(defun +my/tiling-in-pane-a (fn &rest args)
-  "Around a command of `+my/tiling-commands': the windows it opens are new
-panes (see config/tiling.el), whatever rules say (Doom's popups)."
-  (let ((display-buffer-overriding-action '((+my/tiling-display-buffer))))
-    (apply fn args)))
-
-(defun +my/tiling-advise-commands ()
-  "Have the commands of `+my/tiling-commands' open new panes (see above)."
-  (dolist (command +my/tiling-commands)
-    (advice-add command :around #'+my/tiling-in-pane-a)))
-
-(+my/tiling-advise-commands)

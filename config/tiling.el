@@ -15,11 +15,21 @@
 ;;               splits of your own)
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom.
-;; Commands of `+my/tiling-commands' (config.el lists the terminal's, SPC o t)
-;; open their windows as new panes, where the strategy puts them, instead of
-;; where they would (a popup at the bottom); so do Claude Code's sessions
-;; (config/agent-shell.el). `+my/tiling-display-buffer' does it, an action
-;; for `display-buffer'.
+;; TILING FIRST (config/tiling/apps.el)
+;; - Applications (`+my/tiling-apps': Claude Code, the terminal, the Markdown
+;;   preview, a file's diff, drawings) open in a new pane where the strategy
+;;   puts it, whatever their own setting or Doom's popup rules say; one shown
+;;   already: its pane.
+;; - Files open as a tab in the current pane. From an application's pane, a
+;;   popup or a side panel (a link in Claude Code, RET in a diff, the sidebar,
+;;   SPC SPC there), in the last pane of files instead (a new pane without
+;;   one): applications' panes get no file tabs.
+;; - A pane closes with its last tab: its tab closed (config/editor/tabs.el)
+;;   or its buffer killed (SPC b k, a terminal's shell ending), but the
+;;   frame's last pane.
+;; Without this file (config.el not loading it), each opens as it did: Claude
+;; Code in the current window, the terminal as Doom's popup, the preview and
+;; the diff on the right, a drawing for Claude on its shell's left.
 ;; Strategies:
 ;; - tall (Amethyst's Tall): the first pane is the main one, on the left
 ;;   (`+my/tiling-tall-ratio' of the width), the others stacked on the right at
@@ -30,11 +40,17 @@
 (defvar +my/tiling-strategy 'tall
   "How SPC w SPC places new panes: a strategy of `+my/tiling-strategies'.")
 
-(defvar +my/tiling-commands nil
-  "Commands whose new windows open as new panes (see above).")
-
 (defvar +my/tiling-tall-ratio 0.5
   "The main pane's share of the width in the tall strategy.")
+
+(defvar +my/tiling-apps
+  '(agent-shell-mode                    ; Claude Code (SPC o c, SPC o C)
+    ghostel-mode                        ; the terminal (SPC o t)
+    +md-preview-page-mode               ; the Markdown preview (SPC m p)
+    +my/excalidraw-mode                 ; drawings (Option+Enter, C-c C-d)
+    (magit-diff-mode . +my/tiling-file-diff-p)) ; a file's diff (SPC g d)
+  "Applications (see TILING FIRST above): major modes (and the modes derived
+from them), or (MODE . PREDICATE), PREDICATE called in the buffer.")
 
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange))
@@ -57,3 +73,4 @@ the panes in order (see above): :split opens a new pane and returns it,
 (load! "tiling/panes")
 (load! "tiling/tall")
 (load! "tiling/commands")
+(load! "tiling/apps")
