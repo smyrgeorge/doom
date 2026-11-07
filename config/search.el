@@ -1,5 +1,6 @@
 ;;; $DOOMDIR/config/search.el -*- lexical-binding: t; -*-
-;; Search Everywhere on SPC s a. Loaded from config.el.
+;; Search Everywhere on SPC s a. Loaded from config.el; its code is in
+;; config/search/.
 
 ;; ====== VARIABLES ======
 
@@ -31,128 +32,9 @@
 
 ;; ====== CODE ======
 
-(defun +my/search-everywhere--lsp-async (workspaces token classes)
-  "Async source of WORKSPACES' symbols, queried as the input changes.
-CLASSES non-nil keeps only class-like kinds, nil keeps the other kinds.
-TOKEN cancels the previous request; each source needs its own token, or the
-Classes and Symbols requests would cancel each other."
-  (consult--async-pipeline
-   (consult--async-min-input)
-   (consult--async-throttle)
-   (lambda (sink)
-     (let ((request
-            (lambda (query)
-              (let ((lsp--buffer-workspaces workspaces))
-                (lsp-request-async
-                 "workspace/symbol" (list :query query)
-                 (lambda (results)
-                   (funcall sink 'flush)
-                   (funcall sink results)
-                   (funcall sink [indicator finished]))
-                 :mode 'detached :no-merge t :cancel-token token)))))
-       (lambda (action)
-         (pcase action
-           ((pred stringp)
-            (unless (string-empty-p action)
-              (funcall sink [indicator running])
-              (funcall request action)))
-           ('destroy (lsp-cancel-request-by-token token)))
-         (funcall sink action))))
-   (consult--async-transform
-    (lambda (results)
-      (mapcan (pcase-lambda (`(,workspace . ,symbols))
-                (cl-loop for info in (append symbols nil)
-                         when (eq (and classes t)
-                                  (and (memq (lsp:symbol-information-kind info)
-                                             +my/search-everywhere--class-kinds)
-                                       t))
-                         collect (consult-lsp--symbols--transformer workspace info)))
-              results)))
-   (consult--async-highlight)))
-
-(defun +my/search-everywhere--annotate-symbol (cand)
-  "Show the symbol's kind and container, e.g. \"Method  UserService\"."
-  (let ((info (get-text-property 0 'consult--candidate cand))
-        (container (get-text-property 0 'consult--container-name cand)))
-    (concat (propertize (format " %s" (alist-get (lsp:symbol-information-kind info)
-                                                 lsp-symbol-kinds))
-                        'face 'font-lock-type-face)
-            (and container (propertize (format "  %s" container)
-                                       'face 'completions-annotations)))))
-
-(defun +my/search-everywhere--goto-symbol (cand)
-  "Open the file of symbol CAND at its position."
-  (let* ((info (get-text-property 0 'consult--candidate cand))
-         (location (lsp:symbol-information-location info)))
-    (when (fboundp 'better-jumper-set-jump)
-      (better-jumper-set-jump))         ; s-[ / C-o jumps back
-    (find-file (lsp--uri-to-path (lsp:location-uri location)))
-    (goto-char (lsp--position-to-point (lsp:range-start (lsp:location-range location))))
-    (recenter)))
-
-(defun +my/search-everywhere--files (root)
-  "ROOT's project files relative to ROOT, recently opened ones first."
-  (require 'projectile)
-  (let* ((root (expand-file-name root))
-         (recent (cl-loop for file in (bound-and-true-p recentf-list)
-                          for abs = (expand-file-name file)
-                          when (and (string-prefix-p root abs) (file-exists-p abs))
-                          collect (file-relative-name abs root))))
-    (delete-dups (append recent (projectile-project-files root)))))
-
-(defun +my/search-everywhere--commands ()
-  "Names of all commands M-x would offer here, recently used ones first."
-  (let* ((buffer (current-buffer))
-         (offered-p (lambda (sym)
-                      (and (commandp sym)
-                           (or (null read-extended-command-predicate)
-                               (funcall read-extended-command-predicate sym buffer)))))
-         (all nil))
-    (mapatoms
-     (lambda (sym)
-       (when (funcall offered-p sym)
-         (push (symbol-name sym) all))))
-    (delete-dups
-     ;; Recently used ones only where M-x offers them too: a mode's commands
-     ;; (e.g. dired's) used there aren't listed in other buffers.
-     (append (seq-filter (lambda (name) (funcall offered-p (intern-soft name)))
-                         extended-command-history)
-             (sort all #'string<)))))
-
-(defun +my/search-everywhere--run-command (name)
-  "Run command NAME as M-x would."
-  (let ((command (intern name)))
-    (add-to-history 'extended-command-history name)
-    (setq this-command command
-          real-this-command command)
-    (command-execute command 'record)))
-
-(defun +my/search-everywhere ()
-  "Search classes, files, symbols and actions at once."
-  (interactive)
-  (require 'consult)
-  (let* ((root (doom-project-root))
-         (default-directory (or root default-directory)) ; file annotations
-         (completion-ignore-case t)     ; "servic" finds UserService.kt
-         (workspaces (and (bound-and-true-p lsp-mode)
-                          (require 'consult-lsp nil t)
-                          (lsp-workspaces)))
-         (symbols (lambda (name key classes token)
-                    (when workspaces
-                      (list :name name :narrow key :category 'consult-lsp-symbols
-                            :async (+my/search-everywhere--lsp-async workspaces token classes)
-                            :annotate #'+my/search-everywhere--annotate-symbol
-                            :action #'+my/search-everywhere--goto-symbol)))))
-    (consult--multi
-     (list (funcall symbols "Classes" ?c t :+my/search-everywhere-classes)
-           (when root
-             (list :name "Files" :narrow ?f :category 'file :face 'consult-file
-                   :items (lambda () (+my/search-everywhere--files root))
-                   :action (lambda (file) (find-file (expand-file-name file root)))))
-           (funcall symbols "Symbols" ?s nil :+my/search-everywhere-symbols)
-           (list :name "Actions" :narrow ?a :category 'command
-                 :items #'+my/search-everywhere--commands
-                 :action #'+my/search-everywhere--run-command))
-     :prompt "Search everywhere: "
-     :require-match t
-     :sort nil)))
+;; In config/search/, in this order: each part can use what the ones before it
+;; define.
+(load! "search/symbols")
+(load! "search/files")
+(load! "search/actions")
+(load! "search/everywhere")

@@ -26,7 +26,7 @@
 | `config/navigation.el` | `Cmd+B`, jumps back and forward, previous / next buffer |
 | `config/profiling.el`, `profiling/` | `SPC h T` profiles, written for an agent to read |
 | `config/projectile.el` | Projects |
-| `config/search.el` | Search Everywhere, find in files |
+| `config/search.el`, `search/` | Search Everywhere, find in files |
 | `config/smooth.el` | Wheel glide, scroll limit |
 | `config/spell.el`, `dict/tech.txt` | Spelling with programming words |
 | `config/stripe.el`, `stripe/` | Error stripe |
