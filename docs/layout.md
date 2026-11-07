@@ -21,7 +21,7 @@
 | `config/markdown.el`, `markdown-alerts.lua` | Live preview; GitHub's alerts in it |
 | `config/merge.el`, `merge/` | Three-pane conflict resolution |
 | `config/modeline.el` | Mode line |
-| `config/pdf.el`, `.js` | PDFs |
+| `config/pdf.el`, `pdf/` | PDFs |
 | `config/peek.el` | Usages peek |
 | `config/projectile.el` | Projects |
 | `config/search.el` | Search Everywhere, find in files |

@@ -257,7 +257,7 @@ redisplay would; return WINDOW."
     ;; The page loads each one, from PDF.js's folder.
     (should (string-match-p (regexp-quote (concat "%p" (file-name-nondirectory (car file))))
                             +my/pdf--page-template)))
-  (should (file-exists-p (expand-file-name "config/pdf.js" +test-root))))
+  (should (file-exists-p (expand-file-name "config/pdf/pdf.js" +test-root))))
 
 (ert-deftest pdf/pdf-js-checksums-are-pdf-js-3-11-174s ()
   "The SHA-256s listed are those of Doom's copy of PDF.js (when there's one)."
@@ -543,7 +543,7 @@ by their path in the npm package; others missing (an error)."
                             (format "<script src=\"%spdf_viewer.js\"></script>" pdfjs)
                             (format "<script>window.PDFX_OPTIONS = %s;</script>" (+my/pdf--options))
                             (format "<script src=\"%s\"></script>"
-                                    (+my/webkit-file-url (expand-file-name "config/pdf.js" doom-user-dir)))
+                                    (+my/webkit-file-url (expand-file-name "config/pdf/pdf.js" doom-user-dir)))
                             "if (window.pdfx) pdfx.open(\"data-1.js\");"
                             "b.textContent = 'PDF.js did not load'"))
           (should (string-search part html)))))))
