@@ -3,6 +3,8 @@
 PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with selectable text, and they reopen where you left them.
 Try it: `M-x +my/example-pdf`.
 
+![A PDF with dark pages](../examples/pdf.png)
+
 | Key | Action |
 |---|---|
 | `j` / `k`, `C-d` / `C-u`, `gg` / `G` | Scroll (`5G`: page 5) |

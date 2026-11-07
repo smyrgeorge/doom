@@ -4,6 +4,8 @@
 `.excalidraw.svg` is also an image that Markdown and GitHub show. Excalidraw's keys work (`?` lists them). Try it:
 `M-x +my/example-excalidraw`.
 
+![A drawing in Excalidraw, inside Emacs](../examples/excalidraw.png)
+
 | Key | Action |
 |---|---|
 | `Cmd+S` | Save |

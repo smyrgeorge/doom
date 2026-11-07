@@ -16,6 +16,8 @@
 `e` on a conflicted file in Magit opens three panes, **Yours**, the **Result** and **Theirs**, lined up and scrolling
 together. Try it: `M-x +my/example-merge`.
 
+![Yours, the Result and Theirs side by side](../examples/merge.png)
+
 Each change has buttons in its margin: `>>` / `<<` put it in the Result, `x` ignores it, and `✨` merges both sides word
 by word. The bar at the top accepts the rest from one side or every non-conflicting change, and ends with **Done**
 (save and stage) or **Abort**.

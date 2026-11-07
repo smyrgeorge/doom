@@ -16,15 +16,21 @@ Each window has its own tabs: the files shown in it. A file closes once no windo
 `SPC w SPC` opens a new pane where the tiling strategy puts it, and `SPC w a` arranges the panes again. The `tall`
 strategy keeps the main pane on the left and stacks the others on the right. Try it: `M-x +my/example-tiling`.
 
+![Tiled panes: the main one on the left, the others stacked on the right](../examples/tiling.png)
+
 ## Error stripe
 
 A strip at the right edge of a file's window maps the whole file: errors, warnings, git changes and the part on screen.
 Click a mark to jump to it, drag the band to scroll. Try it: `M-x +my/example-stripe`.
 
+![The error stripe at the window's right edge](../examples/stripe.png)
+
 ## Notices
 
 Notices at the top of a window, with action buttons. Markdown files offer the [live preview](markdown.md); files with
 lines over 5,000 characters open plain, and offer to wrap them or open them normally. Try it: `M-x +my/example-banner`.
+
+![Notices of each kind at the top of a window](../examples/banner.png)
 
 ## Sticky header
 
