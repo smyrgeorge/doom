@@ -139,13 +139,18 @@ file is recorded once it has loaded: its parts (config/merge/...) before it."
   (should-not (+test-module-p :tools 'pdf))
   (should (member "config/pdf" (+test-config--loads))))
 
+(defun +test-config--el-files (dir)
+  "DIR's Emacs Lisp files, not an editor's own copies while a file is edited:
+lock files (.#NAME.el) and flycheck's (flycheck_NAME.el)."
+  (seq-remove (lambda (file) (string-prefix-p "flycheck_" file))
+              (directory-files dir nil "\\`[^.#].*\\.el\\'")))
+
 (ert-deftest config/every-config-file-accounted-for ()
   "Each config/*.el is loaded or one of the disabled ones, and each
 config/NAME/*.el a part config/NAME.el loads: none forgotten."
   (let ((loads (+test-config--loads))
         (dir (expand-file-name "config/" +test-root)))
-    ;; Not an editor's lock files (.#NAME.el, while a buffer has changes).
-    (dolist (file (directory-files dir nil "\\`[^.#].*\\.el\\'"))
+    (dolist (file (+test-config--el-files dir))
       (let ((name (concat "config/" (file-name-sans-extension file))))
         (should (or (member name loads)
                     (member name '("config/cheatsheet"))))))
@@ -153,7 +158,7 @@ config/NAME/*.el a part config/NAME.el loads: none forgotten."
       (when (file-directory-p (expand-file-name folder dir))
         (let ((entry (concat "config/" folder)))
           (should (member entry loads))
-          (dolist (file (directory-files (expand-file-name folder dir) nil "\\`[^.#].*\\.el\\'"))
+          (dolist (file (+test-config--el-files (expand-file-name folder dir)))
             (should (member (concat entry "/" (file-name-sans-extension file))
                             (+test-config--parts entry)))))))))
 
