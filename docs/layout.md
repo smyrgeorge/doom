@@ -17,7 +17,7 @@
 | `config/git.el` | `SPC g d` diff pane |
 | `config/lsp.el` | Language server tweaks, `kotlin-lsp` |
 | `config/magit.el` | Commit graph, delta diffs, TODOs |
-| `config/markdown.el` | Live preview |
+| `config/markdown.el`, `markdown-alerts.lua` | Live preview; GitHub's alerts in it |
 | `config/merge.el` | Three-pane conflict resolution |
 | `config/modeline.el` | Mode line |
 | `config/pdf.el`, `.js` | PDFs |

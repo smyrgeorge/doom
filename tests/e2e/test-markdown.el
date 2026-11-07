@@ -141,6 +141,31 @@
         (+md-preview--post-command-h))
       (should (+test-wait-for (lambda () (= (+test-md--scroll-y preview-window) 0)) 3)))))
 
+(ert-deftest e2e-markdown/github-alerts-look-as-on-github ()
+  "> [!CAUTION] typed in: shown as GitHub shows it (github-markdown-css): a
+coloured bar on the left, the title in that colour with its icon."
+  (+test-md
+    (+test-md--open)
+    (let ((preview-window (car (+test-md--windows))))
+      (with-current-buffer (+test-md--source)
+        (goto-char (point-max))
+        (insert "\n> [!CAUTION]\n> Careful there.\n"))
+      (should (+test-wait-for (lambda () (+test-md--has preview-window "Careful there")) 5))
+      (let ((style (+test-wait-for
+                    (lambda ()
+                      (let ((style (+test-md--js preview-window "(function(){var a=document.querySelector('.markdown-alert-caution'); if(!a) return ''; var s=getComputedStyle(a), t=getComputedStyle(a.querySelector('.markdown-alert-title')), i=a.querySelector('.markdown-alert-title svg'); return [s.borderLeftStyle, s.borderLeftColor, t.color, i ? i.getBoundingClientRect().width : 0].join('|');})()")))
+                        (and (string-prefix-p "solid" style) style)))
+                    10)))
+        (should style)
+        (pcase-let ((`(,_ ,bar ,title ,icon) (split-string style "|")))
+          ;; Red, the bar and the title (GitHub's caution colours, a shade
+          ;; apart).
+          (dolist (colour (list bar title))
+            (should (string-match "rgb(\\([0-9]+\\), \\([0-9]+\\), \\([0-9]+\\))" colour))
+            (should (> (string-to-number (match-string 1 colour))
+                       (+ 100 (string-to-number (match-string 2 colour))))))
+          (should (= (string-to-number icon) 16)))))))
+
 (ert-deftest e2e-markdown/updates-as-you-type ()
   (+test-md
     (+test-md--open)

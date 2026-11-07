@@ -108,15 +108,21 @@
 
 ;; ====== CODE ======
 
+(defconst +md-preview--alerts-filter
+  (expand-file-name "markdown-alerts.lua" (file-name-directory (or load-file-name buffer-file-name)))
+  "The pandoc filter that gives GitHub's alerts (> [!NOTE]...) GitHub's look.")
+
 (defun +md-preview--fragment ()
   "Render the current buffer to an HTML fragment with pandoc (source lines kept).
-Math becomes MathML (rendered natively by WebKit); code is left for highlight.js."
+Math becomes MathML (rendered natively by WebKit); code is left for highlight.js;
+GitHub's alerts get GitHub's markup (`+md-preview--alerts-filter')."
   (let ((src (current-buffer)))
     (with-temp-buffer
       (insert-buffer-substring src)
       (call-process-region (point-min) (point-max) "pandoc" t '(t nil) nil
                            "-f" "gfm+sourcepos" "-t" "html5"
-                           "--syntax-highlighting=none")
+                           "--syntax-highlighting=none"
+                           "-L" +md-preview--alerts-filter)
       (buffer-string))))
 
 (defun +md-preview--page (fragment)

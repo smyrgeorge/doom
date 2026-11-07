@@ -161,6 +161,29 @@ selected window, in markdown-mode; its buffer."
       (insert markdown)
       (+md-preview--fragment))))
 
+(ert-deftest markdown/github-alerts-in-github-s-markup ()
+  "> [!NOTE] and the others: GitHub's markup (github-markdown-css styles it: a
+coloured bar, the kind's icon and title), its source lines kept, its text
+escaped; a plain quote stays one."
+  (+test-md--needs-pandoc)
+  (should (file-exists-p +md-preview--alerts-filter))
+  (let ((html (+test-md--pandoc (concat "> [!CAUTION]\n> Salt & pepper.\n\n"
+                                        "> [!NOTE]\n> n\n\n> [!TIP]\n> t\n\n"
+                                        "> [!IMPORTANT]\n> i\n\n> [!WARNING]\n> w\n\n"
+                                        "> Just a quote.\n"))))
+    (should (string-match-p "<div class=\"markdown-alert markdown-alert-caution\" data-pos=\"1:1-" html))
+    (dolist (kind '("note" "tip" "important" "warning"))
+      (should (string-match-p (format "<div class=\"markdown-alert markdown-alert-%s\"" kind) html)))
+    (should (string-match-p "<p class=\"markdown-alert-title\"><svg class=\"octicon[^\"]*\"[^>]*><path d=\"M[^\"]+\"></path></svg>Caution</p>" html))
+    (with-temp-buffer
+      (insert html)
+      (should (= (how-many "class=\"markdown-alert-title\"" (point-min) (point-max)) 5)))
+    ;; Its text, as any paragraph's (escaped).
+    (should (string-match-p "Salt" html))
+    (should (string-match-p "&amp;" html))
+    (should-not (string-match-p "<div class=\"title\">" html))
+    (should (string-match-p "<blockquote data-pos=" html))))
+
 (ert-deftest markdown/fragment-tags-elements-with-their-source-lines ()
   (+test-md--needs-pandoc)
   (let ((html (+test-md--pandoc "# Title\n\nPara one\nstill para\n\n- item\n\n| a | b |\n|---|---|\n| 1 | 2 |\n")))
