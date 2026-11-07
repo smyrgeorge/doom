@@ -5,8 +5,8 @@
 ;; HIGHLIGHTING AFTER THE FIRST DISPLAY
 ;; A file just opened shows right away, plain, and gets its colours a moment
 ;; later. Highlighting the screen (in Markdown: a tree-sitter parser per
-;; paragraph, see config/tree-sitter.el) used to come first, everything that opening a file
-;; does measured the screen (restoring the saved place and centring it, the
+;; paragraph, see tree-sitter.el) used to come first, everything that opening a
+;; file does measured the screen (restoring the saved place and centring it, the
 ;; stripe...) and so highlighted it, while the previous file stayed on screen.
 ;; Like jit-lock's own deferral (`jit-lock-defer-time'), but only until a file
 ;; just opened is first displayed: scrolling isn't deferred, so no plain text

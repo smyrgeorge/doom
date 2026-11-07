@@ -145,9 +145,6 @@
 ;; functions and line numbers)
 (load! "config/lsp")
 
-;; TREE-SITTER (the enabled languages' grammars built ahead of time)
-(load! "config/tree-sitter")
-
 ;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
 (load! "config/agent-shell")
 

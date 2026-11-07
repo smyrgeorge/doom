@@ -1,28 +1,6 @@
-;;; $DOOMDIR/config/tree-sitter.el -*- lexical-binding: t; -*-
+;;; $DOOMDIR/config/editor/tree-sitter.el -*- lexical-binding: t; -*-
 ;; Tree-sitter grammars built ahead of time, which ones are there remembered.
-;; Loaded from config.el.
-
-;; ====== VARIABLES ======
-
-;; TREE-SITTER GRAMMARS
-;; The first file of a language asked to download and build its tree-sitter
-;; grammar (Doom's "Missing tree-sitter grammars: ... Install now?"). Instead,
-;; once Emacs has started and been idle a moment, every grammar the enabled
-;; languages need (what their modules in init.el register with
-;; `set-tree-sitter!') that isn't there yet is downloaded and built, with the
-;; same recipes, into Doom's grammar folder (.local/etc/tree-sitter). In the
-;; background: another Emacs (`emacs --batch') builds them, as building them
-;; here would freeze Emacs for minutes. Its output is in *tree-sitter
-;; grammars*; a message says when it starts and ends. A language enabled later
-;; (init.el, `doom sync') gets its grammars at the next start.
-;; M-x +my/tree-sitter-install-grammars does it now.
-(defvar +my/tree-sitter-install-delay 10
-  "Idle seconds after startup before missing grammars get built; nil: never.")
-
-(defconst +my/tree-sitter-buffer "*tree-sitter grammars*"
-  "Where the build's output goes.")
-
-;; ====== CODE ======
+;; Loaded from config/editor.el.
 
 ;; AVAILABLE GRAMMARS, REMEMBERED
 ;; Every check that a grammar is available, and every parser made, loads its

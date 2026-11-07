@@ -1,12 +1,12 @@
 ;;; tests/unit/test-tree-sitter.el -*- lexical-binding: t; -*-
-;; config/tree-sitter.el: the enabled languages' grammars built ahead of time,
+;; config/editor/tree-sitter.el: the enabled languages' grammars built ahead of time,
 ;; in a background `emacs --batch', after startup; which ones are there,
 ;; remembered. No grammar is ever built or
 ;; downloaded here: `make-process' is mocked (a `true' runs instead), the build
 ;; script is evaluated with `treesit-install-language-grammar' mocked.
 
 (require 'treesit)
-(+test-load "config/tree-sitter")
+(+test-load "config/editor")
 
 ;; Never build a grammar in the tests' Emacs.
 (advice-add 'treesit-install-language-grammar :override
@@ -130,9 +130,9 @@ are there (a list, re-evaluated at each call). The build is waited for after."
       (progn
         (remove-hook 'emacs-startup-hook #'+my/tree-sitter-install-later-h)
         (let ((+my/tree-sitter-install-delay nil))
-          (+test-load "config/tree-sitter"))
+          (+test-load "config/editor/tree-sitter"))
         (should-not (memq #'+my/tree-sitter-install-later-h emacs-startup-hook)))
-    (+test-load "config/tree-sitter")
+    (+test-load "config/editor/tree-sitter")
     (should (memq #'+my/tree-sitter-install-later-h emacs-startup-hook))))
 
 ;; ====== THE GRAMMARS NEEDED ======

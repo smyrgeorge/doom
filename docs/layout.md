@@ -9,7 +9,7 @@
 | `config/cheatsheet.el`, `cheatsheet.org` | Tips panel under the sidebar (turned off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe, WebKit's cover |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
-| `config/editor.el`, `editor/` | Case cycling, the `fill-column` line, the current line, wheel glide, scroll limit, Evil's normal state on save, `q` closing menus, the mode line, tabs per window, the `Option+Enter` menu, `Cmd+B`, jumps, previous / next buffer, the sticky header, spelling with programming words (`dict/tech.txt`) |
+| `config/editor.el`, `editor/` | Case cycling, the `fill-column` line, the current line, wheel glide, scroll limit, Evil's normal state on save, `q` closing menus, the mode line, tabs per window, the `Option+Enter` menu, `Cmd+B`, jumps, previous / next buffer, the sticky header, spelling with programming words (`dict/tech.txt`), tree-sitter grammars built ahead of time |
 | `config/emacs.el` | Garbage collection |
 | `config/examples.el`, `examples/` | The examples and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | Drawings |
@@ -26,7 +26,6 @@
 | `config/stripe.el`, `stripe/` | Error stripe |
 | `config/terminal.el` | Terminal Emacs |
 | `config/tiling.el`, `tiling/` | Tiling |
-| `config/tree-sitter.el` | Tree-sitter grammars built ahead of time |
 | `config/treemacs.el`, `treemacs/` | Sidebar |
 | `config/webkit.el`, `webkit/` | Web pages in Emacs, for PDFs, drawings and the preview |
 | `config/window.el` | Frame, fringes, focus of new windows |
