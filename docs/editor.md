@@ -2,6 +2,8 @@
 
 ## Error stripe
 
+To try it: `M-x +my/example-stripe` opens a file with errors, warnings and git changes (see [Examples](examples.md)).
+
 `config/stripe.el` draws a strip at the right edge of every file window that maps the whole file onto the window
 height, like the marks on IntelliJ's scrollbar:
 
@@ -43,6 +45,8 @@ grab it). `M-x +my/stripe-mode` turns the strip off in a buffer (margin and frin
 `M-x +my/stripe-global-mode` everywhere.
 
 ## Notices
+
+To try it: `M-x +my/example-banner` shows a notice of each kind (see [Examples](examples.md)).
 
 `config/banner.el` shows notices at the top of a window, under the tabs, like IntelliJ's editor notifications: a row
 each, with an icon and colour for its type (info blue, warning yellow, error red), the message, actions to click, and
@@ -137,6 +141,8 @@ module); the `doom-one` theme; absolute line numbers. The frame opens maximized.
 
 ## PDFs in WebKit
 
+To try it: `M-x +my/example-pdf` opens a short report with its pages dark (see [Examples](examples.md)).
+
 PDFs open inside the file's tab as a web page in WebKit, like the [Markdown preview](markdown.md#live-markdown-preview),
 drawn by [PDF.js](https://mozilla.github.io/pdf.js/) (Mozilla's PDF renderer, Firefox's): pages sharp at any zoom,
 smooth trackpad scrolling, text selectable with the mouse (`config/pdf.el`, the page's script
@@ -206,6 +212,8 @@ Doom's pdf module (pdf-tools) is off in `init.el`: PDFs are this config's own vi
 `config/pdf.js`).
 
 ## Drawings (Excalidraw)
+
+To try it: `M-x +my/example-excalidraw` opens a drawing (see [Examples](examples.md)).
 
 Files named `*.excalidraw.svg` or `*.excalidraw` open in the file's tab as a drawing in
 [Excalidraw](https://excalidraw.com) (excalidraw.com's editor: shapes, arrows, lines, text, freehand, images), a web
@@ -278,6 +286,8 @@ A space after its last item on the right (e.g. flycheck's checkmark), which touc
 edge; in every doom-modeline layout (`config/modeline.el`).
 
 ## Tiling (`SPC w SPC`)
+
+To try it: `M-x +my/example-tiling` opens a project's files tiled (see [Examples](examples.md)).
 
 Like a tiling window manager ([Amethyst](https://github.com/ianyh/Amethyst)'s layouts): `SPC w SPC` opens a new pane
 where the tiling strategy puts it, showing the current buffer (its only tab, as `SPC w v`), and moves the cursor there;

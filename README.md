@@ -68,6 +68,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Modules and languages](docs/modules.md): enabled Doom modules, languages and tooling, known `doom doctor` warnings.
 - [Repository layout](docs/layout.md): what each file is for.
 - [Tests](docs/tests.md): unit and end-to-end tests of this config's features (`tests/run.sh`).
-- [Examples](docs/examples.md): features shown on files of their own (`M-x +my/example`), e.g. a merge in conflict.
+- [Examples](docs/examples.md): features shown on files of their own (`M-x +my/example`), with screenshots: a merge
+  in conflict, a dark PDF, the Markdown preview, a drawing, the error stripe, tiling, notices.
 - [Shell commands](docs/cmd.md): `cmd/diff.sh`, Git's conflicts resolved in the three panes from the shell (also as
   `git mergetool`).

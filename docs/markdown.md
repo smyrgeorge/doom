@@ -2,6 +2,8 @@
 
 ## Live Markdown preview
 
+To try it: `M-x +my/example-markdown` opens a README with its preview (see [Examples](examples.md)).
+
 `config/markdown.el` renders Markdown in a WebKit side window (xwidgets) **inside Emacs**. `SPC m p` toggles it: it
 opens on the right, half the window's width, as its own tab (`Preview: FILE`; no "WebKit: TITLE" row above the page),
 and the cursor stays in the file; it closes with `SPC m p` again or when the file is closed (or its mode set again,

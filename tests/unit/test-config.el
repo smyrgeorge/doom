@@ -258,3 +258,19 @@ first in the Option+Enter menu, and config/excalidraw.el, which puts its last."
                 +my/agent-shell-claude-theme +my/lsp-gitignored-directories
                 +my/peek--title +my/compile-config-functions-h +my/excalidraw-insert))
     (should (fboundp fn))))
+
+;; ====== THE TESTS' DOOM ======
+
+(ert-deftest config/the-tests-modulep-as-doom-s ()
+  "tests/helper.el's `modulep!': a module and flags from init.el; in a
+module's file (`+test-load-module'), flags only ask about that module."
+  (should (modulep! :ui vc-gutter))
+  (should (modulep! :ui vc-gutter +pretty))
+  (should-not (modulep! :ui vc-gutter +no-such-flag))
+  (should-not (eval '(modulep! +pretty) t))     ; no module being loaded
+  (let ((+test-module-context '(:ui vc-gutter)))
+    (should (eval '(modulep! +pretty) t))
+    (should-not (eval '(modulep! +no-such-flag) t)))
+  (should-error (+test-load-module :ui 'no-such-module))
+  ;; Doom's :system feature.
+  (should (featurep :system (if (eq system-type 'darwin) 'macos 'linux))))

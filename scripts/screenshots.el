@@ -13,7 +13,10 @@ margin otherwise).")
 
 (defvar +my/screenshots-wait 1.5
   "Seconds an example is given to be drawn (and composited) before it's
-captured.")
+captured; after `+my/example-NAME-ready' says it is, where it has one.")
+
+(defvar +my/screenshots-ready-timeout 40
+  "Seconds an example with `+my/example-NAME-ready' is given to get ready.")
 
 (defun +my/screenshots--say (format-string &rest args)
   "A progress line on stderr: \"screenshots: \" and FORMAT-STRING with ARGS."
@@ -35,10 +38,33 @@ not selected (a hollow box in the panes)."
   (setq-default cursor-in-non-selected-windows nil)
   (let ((build (file-name-directory
                 (directory-file-name (file-name-directory (locate-library "magit"))))))
-    (dolist (package '("magit" "magit-section"))
+    (dolist (package '("magit" "magit-section" "diff-hl"))
       (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
   (require 'doom-themes)
-  (+test-load "config/window" "config/tabs" "config/merge" "config/examples")
+  (+test-load "config/banner" "config/window" "config/tabs" "config/smooth" "config/editor" "config/actions"
+              "config/webkit" "config/pdf" "config/markdown" "config/excalidraw" "config/stripe"
+              "config/tiling" "config/merge" "config/examples")
+  ;; PDF.js and Excalidraw: copies of Doom's, not downloaded again.
+  (+test-pdfjs-dir)
+  (+test-excalidraw-dir)
+  ;; As Doom has them: line numbers in code, text and conf buffers; the
+  ;; current line in every window; the git gutter (its ui/vc-gutter +pretty:
+  ;; thin bars in the left fringe, flycheck's arrows in the right).
+  (setq-default display-line-numbers-type t
+                display-line-numbers-width 3
+                display-line-numbers-widen t)
+  (dolist (hook '(prog-mode-hook text-mode-hook conf-mode-hook))
+    (add-hook hook #'display-line-numbers-mode))
+  (require 'hl-line)
+  (setq global-hl-line-sticky-flag 'window)
+  (global-hl-line-mode 1)
+  (+test-load-module :ui 'vc-gutter)
+  (when (require 'diff-hl nil t)
+    (global-diff-hl-mode 1))
+  (global-so-long-mode 1)
+  (require 'markdown-mode)              ; *.md in it (its autoloads)
+  (unless (bound-and-true-p markdown-css-paths)
+    (setq markdown-css-paths '("https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css")))
   (load-theme 'doom-one t)
   (run-hooks 'doom-load-theme-hook)
   (when (find-font (font-spec :family "JetBrains Mono"))
@@ -98,6 +124,10 @@ was captured."
         (condition-case err
             (progn
               (call-interactively (intern (format "+my/example-%s" name)))
+              (let ((ready (intern (format "+my/example-%s-ready" name))))
+                (when (and (fboundp ready)
+                           (not (+test-wait-for ready +my/screenshots-ready-timeout)))
+                  (error "Not drawn after %d s (%s)" +my/screenshots-ready-timeout ready)))
               (+test-sleep +my/screenshots-wait)
               (let ((captured (+my/screenshots--capture (selected-frame) file)))
                 (if (eq captured t)

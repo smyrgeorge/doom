@@ -10,7 +10,10 @@
   (dolist (package '("magit" "magit-section"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
-(+test-load "config/merge" "config/examples")
+(+test-load "config/banner" "config/window" "config/tabs" "config/tiling" "config/stripe" "config/smooth"
+            "config/merge" "config/examples")
+(require 'so-long)
+(require 'tab-line)
 
 (defconst +test-examples--loaded-at-start (featurep 'example-merge)
   "Whether loading the config loaded an example (it mustn't).")
@@ -95,3 +98,140 @@ was saved."
          (+my/example-merge--repos (list "/nowhere/")))
     (+my/example-merge--cleanup (+my/merge--make :toplevel dir))
     (should (file-directory-p dir))))
+
+;; ====== EVERY EXAMPLE ======
+
+(ert-deftest examples/each-one-a-command-a-file-and-a-screenshot-to-be ()
+  "Each example listed has its file, its command, its line in
+config/examples.el's list and docs/examples.md's table."
+  (should (equal (sort (+my/examples) #'string<)
+                 '("banner" "excalidraw" "markdown" "merge" "pdf" "stripe" "tiling")))
+  (let ((listed (with-temp-buffer
+                  (insert-file-contents (expand-file-name "config/examples.el" +test-root))
+                  (buffer-string)))
+        (docs (with-temp-buffer
+                (insert-file-contents (expand-file-name "docs/examples.md" +test-root))
+                (buffer-string))))
+    (dolist (name (+my/examples))
+      (should (fboundp (intern (format "+my/example-%s" name))))
+      (should (string-match-p (format "^;;   %s " (regexp-quote name)) listed))
+      (should (string-match-p (format "^| `%s` |" (regexp-quote name)) docs)))))
+
+;; ====== THE HELPERS ======
+
+(ert-deftest examples/folder-deleted-once-its-buffers-are-closed ()
+  "The folder goes with the last of the example's buffers; through a change
+of mode too; THEN called then."
+  (let* ((dir (+my/example-folder "test"))
+         (a (find-file-noselect (+my/example-write dir "a.txt" "a\n")))
+         (b (find-file-noselect (+my/example-write dir "sub/b.txt" "b\n")))
+         (then 0))
+    (should (string-match-p "/test-example-" dir))
+    (should (equal dir (file-name-as-directory (file-truename dir))))
+    (+my/example-delete-when-closed dir (list a b) (lambda () (cl-incf then)))
+    (with-current-buffer a (fundamental-mode))     ; a change of mode
+    (kill-buffer a)
+    (should (file-exists-p dir))
+    (should (= then 0))
+    (kill-buffer b)
+    (should-not (file-exists-p dir))
+    (should (= then 1))))
+
+;; ====== TILING ======
+
+(ert-deftest examples/tiling-a-project-tall ()
+  "A project's four files, tall: the first on the left, the others stacked
+on the right, the first selected; gone once closed."
+  (+test-examples
+    (let* ((buffers (+my/example-tiling))
+           (windows (window-list nil 'nomini))
+           (dir (car (buffer-local-value '+my/example--closing (car buffers)))))
+      (should (equal (mapcar #'buffer-name buffers) '("app.py" "cart.py" "prices.py" "test_cart.py")))
+      (should (equal (mapcar (lambda (window) (buffer-name (window-buffer window))) windows)
+                     '("app.py" "cart.py" "prices.py" "test_cart.py")))
+      (should (eq (selected-window) (car windows)))
+      ;; Tall: the main pane the full height on the left, the others one
+      ;; above the other on the right, as wide.
+      (let ((main (car windows)) (stack (cdr windows)))
+        (should (= (window-left-column main) 0))
+        (should (= (window-total-height main) (window-total-height (frame-root-window))))
+        (should (cl-every (lambda (window) (> (window-left-column window) 0)) stack))
+        (should (= (length (seq-uniq (mapcar #'window-left-column stack))) 1))
+        (should (equal (mapcar #'window-top-line stack)
+                       (sort (mapcar #'window-top-line stack) #'<))))
+      ;; Each pane its file's tab only (not the one it opened on).
+      (dolist (window windows)
+        (with-selected-window window
+          (should (equal (+my/tabs-window-buffers) (list (window-buffer window))))))
+      (should (string-prefix-p (file-name-as-directory (file-truename temporary-file-directory)) dir))
+      (mapc #'kill-buffer buffers)
+      (should-not (file-exists-p dir)))))
+
+;; ====== NOTICES ======
+
+(ert-deftest examples/banner-a-notice-of-each-kind ()
+  "A file of very long lines: shown plain, the config's notice (a warning)
+with its actions; an info and an error notice; gone once closed."
+  (+test-examples
+    (let* ((buffer (+my/example-banner))
+           (dir (car (buffer-local-value '+my/example--closing buffer))))
+      (with-current-buffer buffer
+        (should (derived-mode-p 'so-long-mode))
+        (should (> (cadr (buffer-line-statistics)) 10000))
+        (should (equal (mapcar (lambda (notice) (list (car notice) (nth 3 notice))) +my/banner--list)
+                       '((long-lines warning) (example-info info) (example-error error))))
+        ;; Its actions: another notice; close them all.
+        (funcall (cdr (assoc "Another one" (nth 2 (assq 'example-info +my/banner--list)))))
+        (should (= (length +my/banner--list) 4))
+        (funcall (cdr (assoc "Close them all" (nth 2 (assq 'example-error +my/banner--list)))))
+        (should-not +my/banner--list))
+      (kill-buffer buffer)
+      (should-not (file-exists-p dir)))))
+
+;; ====== THE ERROR STRIPE ======
+
+(ert-deftest examples/stripe-errors-warnings-and-changes ()
+  "inventory.el in a repository, changed since its commit: flycheck finds
+warnings through the file and an error at its end (the byte compiler: the
+file trusted while it's open), diff-hl the changes; the strip on; the
+repository and the trust gone once closed."
+  (+test-examples
+    (let* ((trusted trusted-content)
+           (buffer (+my/example-stripe))
+           (repo (car (buffer-local-value '+my/example--closing buffer))))
+      (should (member repo trusted-content))
+      (should (+test-wait-for #'+my/example-stripe-ready 60))
+      (with-current-buffer buffer
+        (should (bound-and-true-p +my/stripe-mode))
+        (should (equal (mapcar (lambda (error) (list (flycheck-error-line error) (flycheck-error-level error)))
+                               (seq-sort-by #'flycheck-error-line #'< flycheck-current-errors))
+                       '((29 warning) (175 warning) (180 warning) (247 warning) (276 error))))
+        ;; Changed, removed and added lines.
+        (let ((kinds (seq-uniq (mapcar (lambda (ov) (overlay-get ov 'diff-hl-hunk-type))
+                                       (seq-filter (lambda (ov) (overlay-get ov 'diff-hl-hunk))
+                                                   (overlays-in (point-min) (point-max)))))))
+          (should (seq-set-equal-p kinds '(change delete insert)))))
+      (kill-buffer buffer)
+      (should-not (file-exists-p repo))
+      (should (equal trusted-content trusted)))))
+
+;; ====== THE DRAWING ======
+
+(ert-deftest examples/excalidraw-drawing-each-element-its-own ()
+  "The drawing's JSON: elements not deleted, each with its own colours (not
+the last one's: the template's cells were shared), labels in their boxes."
+  (require 'example-excalidraw (expand-file-name "excalidraw" +my/examples-dir))
+  (let* ((drawing (json-parse-string (+my/example-excalidraw--drawing)
+                                     :object-type 'alist :false-object nil :null-object nil))
+         (elements (append (alist-get 'elements drawing) nil))
+         (get (lambda (id key) (alist-get key (seq-find (lambda (e) (equal (alist-get 'id e) id)) elements)))))
+    (should (> (length elements) 10))
+    (should-not (seq-some (lambda (e) (alist-get 'isDeleted e)) elements))
+    (should (equal (funcall get "title" 'strokeColor) "#1e1e1e"))
+    (should (equal (funcall get "save" 'strokeColor) "#e03131"))
+    (should (equal (funcall get "file" 'backgroundColor) "#a5d8ff"))
+    (should (equal (funcall get "webkit" 'backgroundColor) "#b2f2bb"))
+    (should (equal (funcall get "file" 'fillStyle) "hachure"))
+    (should (equal (funcall get "you" 'fillStyle) "solid"))
+    (should (equal (funcall get "file-label" 'containerId) "file"))
+    (should (equal (funcall get "note" 'strokeColor) "#1e1e1e"))))

@@ -66,7 +66,19 @@ in the windows not selected; the theme."
           (should-not (bound-and-true-p tool-bar-mode))
           (should-not scroll-bar-mode)
           (should-not (default-value 'cursor-in-non-selected-windows))
-          (should (memq 'doom-one custom-enabled-themes)))
+          (should (memq 'doom-one custom-enabled-themes))
+          ;; Doom's editors: line numbers, the current line, its git gutter.
+          (should (memq #'display-line-numbers-mode prog-mode-hook))
+          (should (eq (default-value 'display-line-numbers-width) 3))
+          (should global-hl-line-mode)
+          (should (bound-and-true-p global-diff-hl-mode))
+          (should (eq diff-hl-fringe-bmp-function '+vc-gutter-type-at-pos-fn))
+          ;; Its setup as diff-hl loads, all of it (not stopped by Doom's
+          ;; popup rules, which aren't here).
+          (should (equal diff-hl-global-modes '(not image-mode pdf-view-mode)))
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (should display-line-numbers-mode)))
       (when (fboundp 'tool-bar-mode) (tool-bar-mode (if tool-bar 1 -1)))
       (when (fboundp 'scroll-bar-mode) (scroll-bar-mode (if scroll-bar 1 -1)))
       (setq-default cursor-in-non-selected-windows cursor)
@@ -158,6 +170,27 @@ left, its repository deleted, one window again; the file said."
     (cl-letf (((symbol-function '+my/example-merge) (lambda () (interactive) (error "Broken"))))
       (should-not (+my/screenshots--one "merge" (+test-tmp-file "shots-d/"))))
     (should (equal +test-screenshots--said '("merge: Broken")))))
+
+(ert-deftest screenshots/an-example-waited-for ()
+  "An example with `+my/example-NAME-ready': captured once it says it's
+drawn; never: not captured, said why, closed."
+  (+test-screenshots
+    (let ((ready nil)
+          (captured nil))
+      (cl-letf (((symbol-function '+my/example-merge-ready) (lambda () ready))
+                ((symbol-function '+test-wait-for)
+                 (lambda (predicate &optional _timeout) (setq ready t) (funcall predicate)))
+                ((symbol-function '+my/screenshots--capture)
+                 (lambda (&rest _) (setq captured ready) t)))
+        (should (+my/screenshots--one "merge" (+test-tmp-file "shots-e/"))))
+      (should captured)
+      (cl-letf (((symbol-function '+my/example-merge-ready) #'ignore)
+                ((symbol-function '+test-wait-for) (lambda (predicate &optional _) (funcall predicate)))
+                ((symbol-function '+my/screenshots--capture) (lambda (&rest _) (error "Captured"))))
+        (should-not (+my/screenshots--one "merge" (+test-tmp-file "shots-f/"))))
+      (should (string-match-p "\\`merge: Not drawn after 40 s (\\+my/example-merge-ready)"
+                              (car +test-screenshots--said)))
+      (should-not (+test-screenshots--merges)))))
 
 ;; ====== THE SCRIPT ======
 

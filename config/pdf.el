@@ -384,6 +384,17 @@ PLACES)."
           (with-temp-file +my/pdf-places-file
             (prin1 +my/pdf--places (current-buffer))))))))
 
+(defun +my/pdf--forget-place (file)
+  "Forget FILE's place (an example's PDF, deleted once closed)."
+  (let ((file (abbreviate-file-name file)))
+    (when (assoc file (+my/pdf--read-places))
+      (setq +my/pdf--places (seq-remove (lambda (entry) (equal (car entry) file)) +my/pdf--places))
+      (ignore-errors
+        (let ((print-length nil)
+              (print-level nil))
+          (with-temp-file +my/pdf-places-file
+            (prin1 +my/pdf--places (current-buffer))))))))
+
 (defun +my/pdf--remember ()
   "Keep this page's settings for the next PDF, and its place (see above)."
   (when-let* ((state (+my/pdf--state)))

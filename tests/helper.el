@@ -128,9 +128,49 @@ name (macOS's /var is a link to /private/var): buffers visit files by theirs
                        (memq flag (cddr entry)))))
                  flags)))
 
+(defvar +test-module-context nil
+  "(GROUP MODULE) whose file `+test-load-module' is loading: `modulep!' with
+flags only asks about it, as in Doom.")
+
 (defmacro modulep! (group &optional module &rest flags)
-  "Doom's `modulep!', answered from init.el (see `+test-modules')."
-  (and (keywordp group) (apply #'+test-module-p group module flags) t))
+  "Doom's `modulep!', answered from init.el (see `+test-modules'). With
+flags only, about the module being loaded (`+test-module-context')."
+  (cond ((keywordp group) (and (apply #'+test-module-p group module flags) t))
+        (+test-module-context
+         (and (apply #'+test-module-p (car +test-module-context) (cadr +test-module-context)
+                     (delq nil (cons group (cons module flags))))
+              t))))
+
+;; Doom's :system feature, as doom.el announces it: (featurep :system 'macos).
+(unless (featurep :system)
+  (push :system features)
+  (put :system 'subfeatures
+       (cond ((eq system-type 'darwin) '(macos bsd))
+             ((memq system-type '(cygwin windows-nt ms-dos)) '(windows))
+             ((memq system-type '(gnu gnu/linux)) '(linux))
+             ((memq system-type '(gnu/kfreebsd berkeley-unix)) '(linux bsd))
+             ((eq system-type 'android) '(android)))))
+
+(defun +test--no-popup-rules (&rest _)
+  "Doom's `set-popup-rule!' / `set-popup-rules!': its :ui popup module isn't
+loaded here, rules for its windows don't matter. (Doom's vc-gutter calls it
+as diff-hl loads: the rest of its setup was skipped, an error.)"
+  nil)
+(unless (fboundp 'set-popup-rule!) (defalias 'set-popup-rule! #'+test--no-popup-rules))
+(unless (fboundp 'set-popup-rules!) (defalias 'set-popup-rules! #'+test--no-popup-rules))
+
+(defun +test-load-module (group module)
+  "Load Doom's module GROUP MODULE (its config.el) as Doom does: its
+`modulep!' about it."
+  (let ((+test-module-context (list group module))
+        (file (seq-find #'file-exists-p
+                        (mapcar (lambda (dir)
+                                  (expand-file-name (format "%s/%s/%s/config.el" dir (substring (symbol-name group) 1) module)
+                                                    +test-doom-emacs-dir))
+                                '("sources/doom+/modules" "modules")))))
+    (unless file
+      (error "No Doom module %s %s" group module))
+    (load file nil t)))
 
 ;; Loaded in a running Emacs (Doom, config/compile.el compile): otherwise code
 ;; let-binding `byte-compile-warnings' before it's special (doom-modeline's
