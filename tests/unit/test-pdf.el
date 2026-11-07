@@ -15,7 +15,7 @@
 (require 'json)
 (+test-load "config/editor" "config/webkit" "config/pdf")
 
-(defvar +my/sticky-separator)           ; config/sticky.el's, when loaded
+(defvar +my/sticky-separator)           ; config/editor.el's
 
 ;; ====== FAKE WEBKIT ======
 

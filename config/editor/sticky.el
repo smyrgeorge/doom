@@ -1,29 +1,6 @@
-;;; $DOOMDIR/config/sticky.el -*- lexical-binding: t; -*-
-;; Sticky function header in code windows. Loaded from config.el.
-
-;; ====== VARIABLES ======
-
-;; STICKY HEADER
-;; The header line of code windows shows the classes/functions the top visible
-;; line is inside, once their first lines have scrolled out of view: e.g.
-;; "class Foo › def bar(self):". Otherwise it
-;; shows the file's path in the project. Nested scopes come from tree-sitter
-;; where the major mode uses it; other modes get the enclosing defun only.
-;; In Markdown (markdown-ts-mode) the scopes are the headings: "# Guide › ## Setup".
-;; The header row is always there, so the text doesn't shift when it changes.
-;; Only where scopes can be told (e.g. not in HTML: web-mode has no notion of
-;; them): elsewhere there's no header row.
-(defvar +my/sticky-separator " › "
-  "Between the scopes in the header.")
-
-(defvar +my/sticky-defun-types
-  '((kotlin . "\\`\\(class\\|object\\|function\\)_declaration\\'\\|\\`companion_object\\'")
-    (markdown . "\\`section\\'"))        ; a heading and what's under it
-  "Tree-sitter node types of classes/functions, for languages whose mode doesn't
-declare them (kotlin-ts-mode, markdown-ts-mode); the others come from the major
-mode.")
-
-;; ====== CODE ======
+;;; $DOOMDIR/config/editor/sticky.el -*- lexical-binding: t; -*-
+;; Sticky function header in code windows.
+;; Loaded from config/editor.el.
 
 (defun +my/sticky--language ()
   "The tree-sitter language whose scopes to show at point: the buffer's own if

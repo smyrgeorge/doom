@@ -1,9 +1,9 @@
 ;;; tests/unit/test-sticky.el -*- lexical-binding: t; -*-
-;; config/sticky.el: the header line of code windows shows the classes /
+;; config/editor/sticky.el: the header line of code windows shows the classes /
 ;; functions (Markdown: headings) the top visible line is inside, once their
 ;; first lines scrolled out of view; otherwise the file's path in its project.
 
-(+test-load "config/sticky")
+(+test-load "config/editor")
 
 ;; Doom's tree-sitter grammars (read only) and the modes using them.
 (add-to-list 'treesit-extra-load-path

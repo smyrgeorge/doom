@@ -5,12 +5,12 @@
 ;; numbers in the preview, key hints, as tall as the list needs, the
 ;; declaration left out of the usages.
 
-;; `use-package!' (config/sticky.el...) reads it; not in tests/helper.el yet.
+;; `use-package!' (config/editor.el...) reads it.
 (defvar doom-disabled-packages nil)
 
-;; config/sticky.el first, as config.el loads it: its tree-sitter helpers tell
-;; which nodes are functions/classes.
-(+test-load "config/sticky" "config/lsp")
+;; config/editor.el first, as config.el loads it: its sticky header's tree-sitter
+;; helpers tell which nodes are functions/classes.
+(+test-load "config/editor" "config/lsp")
 
 ;; Before lsp-ui loads (Doom loads it with the first language server).
 (defconst +test-peek--before-load
@@ -480,7 +480,7 @@ start of the first AT, point at FROM (default: the buffer's start)."
       (should (equal (+test-peek--scope #'python-ts-mode text "return") "Foo.bar")))))
 
 (ert-deftest peek/scope-kotlin ()
-  "Kotlin (its mode doesn't declare its scopes: config/sticky.el's): classes,
+  "Kotlin (its mode doesn't declare its scopes: config/editor.el does): classes,
 functions, a nameless companion object left out."
   (unless (require 'kotlin-ts-mode nil t) (ert-skip "No kotlin-ts-mode"))
   (+test-peek--grammar 'kotlin)
@@ -494,7 +494,7 @@ functions, a nameless companion object left out."
       (should (equal (+test-peek--scope #'kotlin-ts-mode text "g()") "A.f")))))
 
 (ert-deftest peek/scope-without-config-sticky ()
-  "Without config/sticky.el's tree-sitter helpers: add-log only, no
+  "Without config/editor/sticky.el's tree-sitter helpers: add-log only, no
 top-level names."
   (cl-letf (((symbol-function '+my/sticky--treesit-p) nil))
     (should (equal (+test-peek--scope #'emacs-lisp-mode "(defun foo ()\n  (bar))\n" "bar") "foo"))
