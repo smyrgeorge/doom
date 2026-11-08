@@ -2,11 +2,9 @@
 
 Images open in Emacs's own viewer, in their tab, with a toolbar in the header line: the folder's images, zoom, rotate,
 flip, crop, sharp pixels, the image's size, copy, git's HEAD beside it, Preview. A file changed on disk (a regenerated
-screenshot) is shown anew, its zoom kept.
+screenshot) is shown anew, its zoom kept. Try it: `M-x +my/example-image`.
 
-```
- ‹ 3/12 › │ − 100% + Fit 1:1 │ ⟲ ⟳ ⇋ ⇵ Crop │ Sharp          1600×900 · PNG · 412 kB  Copy  Diff  Preview  Finder
-```
+![A picture beside its version in git's HEAD](../examples/image.png)
 
 | Key | Action |
 |---|---|

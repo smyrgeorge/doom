@@ -6,6 +6,7 @@
 |---|---|
 | `merge` | [Resolving conflicts](git.md#resolving-conflicts) |
 | `pdf` | [A PDF](pdf.md) with dark pages |
+| `image` | [The image viewer](images.md), a picture beside its version in git's HEAD |
 | `markdown` | [The live preview](markdown.md) |
 | `excalidraw` | [A drawing](drawings.md) |
 | `stripe` | [The error stripe](editor.md#error-stripe) |

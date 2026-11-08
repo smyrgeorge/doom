@@ -51,6 +51,13 @@ the colours' hues (`SPC m d` turns them light) ([more](docs/pdf.md)).
 
 ![PDF with dark pages](examples/pdf.png)
 
+### Images
+
+Images open in Emacs's own viewer with a toolbar: the folder's images, zoom, rotate, flip, crop, sharp pixels, copy the
+image, and its version in git's HEAD beside it (`SPC m g`) ([more](docs/images.md)).
+
+![A picture beside its version in git's HEAD](examples/image.png)
+
 ### Markdown with live preview
 
 `SPC m p` shows the rendered file beside it, updated as you type and following the cursor

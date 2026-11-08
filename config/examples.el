@@ -13,6 +13,8 @@
 ;;   merge       conflicts resolved in three panes (config/merge.el): a temp
 ;;               repository merging a branch, in conflict every way
 ;;   pdf         a PDF in WebKit (config/pdf.el), its pages dark
+;;   image       a picture in the image viewer (config/image.el), changed
+;;               since git's HEAD, its version there beside it
 ;;   markdown    a Markdown file and its live preview (config/markdown.el)
 ;;   excalidraw  a drawing in Excalidraw (config/excalidraw.el)
 ;;   stripe      the error stripe (config/stripe.el) of a file with errors,

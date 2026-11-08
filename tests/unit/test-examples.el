@@ -99,13 +99,52 @@ was saved."
     (+my/example-merge--cleanup (+my/merge--make :toplevel dir))
     (should (file-directory-p dir))))
 
+;; ====== IMAGE ======
+
+(ert-deftest examples/image-a-picture-changed-since-head ()
+  "The image example's repository: landscape.png committed, then changed (a
+PNG of the same size, other bytes), two smaller pictures beside it; in
+images/, always that name."
+  (require 'example-image (expand-file-name "examples/image" +test-root))
+  (let* ((repo (+my/example-image--repo))
+         (default-directory repo)
+         (png-size (lambda (bytes)
+                     ;; IHDR's width and height, after the signature.
+                     (cl-flet ((u32 (at) (+ (ash (aref bytes at) 24) (ash (aref bytes (+ at 1)) 16)
+                                            (ash (aref bytes (+ at 2)) 8) (aref bytes (+ at 3)))))
+                       (should (equal (substring bytes 0 8) (unibyte-string #x89 ?P ?N ?G 13 10 26 10)))
+                       (cons (u32 16) (u32 20)))))
+         (read (lambda (file)
+                 (with-temp-buffer
+                   (set-buffer-multibyte nil)
+                   (insert-file-contents-literally file)
+                   (buffer-string))))
+         (head (with-temp-buffer
+                 (set-buffer-multibyte nil)
+                 (let ((coding-system-for-read 'binary))
+                   (call-process "git" nil t nil "show" "HEAD:landscape.png"))
+                 (buffer-string))))
+    (unwind-protect
+        (progn
+          (should (equal (file-name-nondirectory (directory-file-name repo)) "images"))
+          (should (equal (funcall png-size head) '(480 . 300)))
+          (should (equal (funcall png-size (funcall read "landscape.png")) '(480 . 300)))
+          (should-not (equal head (funcall read "landscape.png")))
+          (should (equal (funcall png-size (funcall read "night.png")) '(240 . 150)))
+          (should (equal (funcall png-size (funcall read "dawn.png")) '(240 . 150)))
+          ;; Valid PNGs, as macOS reads them.
+          (with-temp-buffer
+            (should (zerop (call-process "sips" nil t nil "-g" "pixelWidth" "landscape.png")))
+            (should (string-match-p "pixelWidth: 480" (buffer-string)))))
+      (delete-directory (file-name-directory (directory-file-name repo)) t))))
+
 ;; ====== EVERY EXAMPLE ======
 
 (ert-deftest examples/each-one-a-command-a-file-and-a-screenshot-to-be ()
   "Each example listed has its file, its command, its line in
 config/examples.el's list and docs/examples.md's table."
   (should (equal (sort (+my/examples) #'string<)
-                 '("banner" "excalidraw" "markdown" "merge" "pdf" "stripe" "tiling")))
+                 '("banner" "excalidraw" "image" "markdown" "merge" "pdf" "stripe" "tiling")))
   (let ((listed (with-temp-buffer
                   (insert-file-contents (expand-file-name "config/examples.el" +test-root))
                   (buffer-string)))

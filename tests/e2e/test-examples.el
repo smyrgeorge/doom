@@ -12,7 +12,7 @@
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/editor"
-            "config/webkit" "config/pdf" "config/markdown" "config/excalidraw" "config/stripe"
+            "config/webkit" "config/pdf" "config/image" "config/markdown" "config/excalidraw" "config/stripe"
             "config/tiling" "config/merge" "config/examples")
 (global-tab-line-mode 1)
 (global-so-long-mode 1)
@@ -74,6 +74,24 @@ kept, dark pages as they were."
       (should-not (file-exists-p dir))
       (should (eq +my/pdf-dark-pages dark))
       (should-not (assoc (abbreviate-file-name file) (+my/pdf--read-places))))))
+
+(ert-deftest e2e-examples/image-beside-its-head ()
+  "The picture in the image viewer, its version in git's HEAD on its left,
+both with the toolbar; closed: the HEAD's pane with it, the repository gone."
+  (+test-with-reset
+    (let* ((buffer (+my/example-image))
+           (dir (+test-examples--folder buffer)))
+      (should (+test-wait-for #'+my/example-image-ready 20))
+      (let ((head (buffer-local-value '+my/image--head-buffer buffer)))
+        (should (eq (window-buffer (selected-window)) buffer))
+        (should (eq (window-in-direction 'left (selected-window)) (get-buffer-window head)))
+        (should (= (length (window-list)) 2))
+        (with-current-buffer buffer
+          (should (equal (+my/image-size) '(480 . 300)))
+          (should (equal (+my/image--position) '(1 . 3)))) ; dawn, landscape, night
+        (kill-buffer buffer)
+        (should-not (buffer-live-p head)))
+      (should-not (file-exists-p dir)))))
 
 (ert-deftest e2e-examples/markdown-and-its-preview ()
   "The README, its preview beside it, loaded; closed: the preview with it,
