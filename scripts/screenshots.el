@@ -87,21 +87,73 @@ left corner, above the other windows, focused."
     (set-frame-position frame (+ x 40) (+ y 40))
     (select-frame-set-input-focus frame)))
 
+;; THE FRAME'S WINDOW
+;; Captured as a window (screencapture -l), not as the screen's rectangle under
+;; it: its rounded corners black, not what was behind it (the desktop,
+;; other apps), which changed every screenshot's corners at each run, the
+;; example unchanged. No shadow (-o). Its macOS window number isn't Emacs's
+;; (`window-id' is "1"): asked of macOS's window list (JavaScript for
+;; Automation, CoreGraphics), this Emacs's windows, the one where the frame is.
+(defconst +my/screenshots--windows-script
+  "ObjC.import('CoreGraphics');
+function run(argv) {
+  const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0));
+  const lines = [];
+  for (let i = 0; i < list.count; i++) {
+    const w = ObjC.deepUnwrap(list.objectAtIndex(i));
+    if (w.kCGWindowOwnerPID == argv[0] && w.kCGWindowLayer == 0) {
+      const b = w.kCGWindowBounds;
+      lines.push([w.kCGWindowNumber, b.X, b.Y, b.Width, b.Height].join(' '));
+    }
+  }
+  return lines.join('\\n');
+}"
+  "Prints this Emacs's windows on screen (its pid the argument): a line each,
+\"NUMBER X Y WIDTH HEIGHT\".")
+
+(defun +my/screenshots--window-number (frame)
+  "FRAME's macOS window number (see above), or nil if macOS doesn't say."
+  (pcase-let* ((`(,left ,top ,right ,bottom) (frame-edges frame 'outer-edges))
+               (windows
+                (with-temp-buffer
+                  (and (eql 0 (call-process "osascript" nil '(t nil) nil
+                                            "-l" "JavaScript"
+                                            "-e" +my/screenshots--windows-script
+                                            (number-to-string (emacs-pid))))
+                       (mapcar (lambda (line) (mapcar #'string-to-number (split-string line)))
+                               (split-string (buffer-string) "\n" t))))))
+    (car (or (seq-find (lambda (window)
+                         (equal (cdr window) (list left top (- right left) (- bottom top))))
+                       windows)
+             ;; Its edges not quite macOS's: this Emacs's only window.
+             (and (= (length windows) 1) (car windows))))))
+
 (defun +my/screenshots--capture (frame file)
-  "Capture FRAME (its outer edges: the title bar too) into FILE (a PNG), with
-SCREENCAPTURE (default: macOS's screencapture). t if FILE was made, else why
-not (what screencapture said, its exit status)."
-  (pcase-let ((`(,left ,top ,right ,bottom) (frame-edges frame 'outer-edges)))
-    (when (file-exists-p file)
-      (delete-file file))
+  "Capture FRAME's window (the title bar too, no shadow, its corners
+black: see above) into FILE (a PNG), with SCREENCAPTURE (default:
+macOS's screencapture); the screen's rectangle under it if macOS didn't say
+which window it is. t if FILE was made, else why not (what screencapture
+said, its exit status). Captured into a temp file first: FILE (the last
+screenshot) replaced only by a capture made, not lost when it fails (e.g.
+without the Screen Recording permission)."
+  (pcase-let ((`(,left ,top ,right ,bottom) (frame-edges frame 'outer-edges))
+              (number (+my/screenshots--window-number frame))
+              (new (concat (file-name-sans-extension file) ".new.png")))
+    (when (file-exists-p new)
+      (delete-file new))
     (with-temp-buffer
-      (let ((status (call-process (or (getenv "SCREENCAPTURE") "screencapture") nil t nil
-                                  "-x" "-t" "png"
-                                  "-R" (format "%d,%d,%d,%d" left top (- right left) (- bottom top))
-                                  file))
+      (let ((status (apply #'call-process (or (getenv "SCREENCAPTURE") "screencapture") nil t nil
+                           (append
+                            '("-x" "-t" "png")
+                            (if number
+                                (list "-o" "-l" (number-to-string number))
+                              (list "-R" (format "%d,%d,%d,%d" left top (- right left) (- bottom top))))
+                            (list new))))
             (said (string-trim (buffer-string))))
-        (if (and (eql status 0) (file-exists-p file))
-            t
+        (if (and (eql status 0) (file-exists-p new))
+            (progn (rename-file new file t) t)
+          (when (file-exists-p new)
+            (delete-file new))
           (string-join (delq nil (list (and (not (string-empty-p said)) said)
                                        (format "exit %s" status)
                                        (and (eql status 0) "no file made")))

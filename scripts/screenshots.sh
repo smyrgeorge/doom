@@ -9,10 +9,12 @@
 # Its Emacs is a throwaway one (tests/helper.el's setup, its own temp
 # folders): your Doom profile and a running Emacs aren't touched. Its frame is
 # on top of the other windows while it's captured (macOS's screencapture, the
-# frame's rectangle): the terminal running this needs the Screen Recording
-# permission (System Settings > Privacy & Security > Screen & System Audio
-# Recording), which macOS asks for the first time. Exit status: 0 each
-# example captured, 1 not, 2 a wrong use.
+# frame's window alone: no shadow, its corners black, not what's behind
+# it, so an unchanged example's screenshot comes out the same each run): the
+# terminal running this needs the Screen Recording permission (System
+# Settings > Privacy & Security > Screen & System Audio Recording), which
+# macOS asks for the first time. Exit status: 0 each example captured, 1 not,
+# 2 a wrong use.
 #
 # EMACS_GUI (default: the emacs-plus app) runs it; SCREENCAPTURE (default:
 # screencapture) captures; SCREENSHOT_DIR (default: examples/) gets them.

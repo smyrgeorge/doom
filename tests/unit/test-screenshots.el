@@ -86,44 +86,91 @@ in the windows not selected; the theme."
 
 ;; ====== THE CAPTURE ======
 
-(ert-deftest screenshots/capture-the-frames-rectangle ()
-  "screencapture, silent, a PNG of the frame's outer edges (its title bar
-too); a file left from before replaced."
+(ert-deftest screenshots/capture-the-frames-window ()
+  "screencapture, silent, a PNG of the frame's window (its title bar too, no
+shadow, its corners black: not what's behind it), into a temp file
+first; a file left from before replaced once made."
   (let* ((file (+test-tmp-file "shots/a.png"))
+         (new (+test-tmp-file "shots/a.new.png"))
          (calls nil))
     (with-temp-file file (insert "old"))
     (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(40 70 1884 1176)))
+              ((symbol-function '+my/screenshots--window-number) (lambda (_) 4242))
               ((symbol-function 'call-process)
                (lambda (program &rest args)
                  (push (cons program (nthcdr 3 args)) calls)
-                 (should-not (file-exists-p file))   ; the old one gone first
-                 (with-temp-file file (insert "png"))
+                 (should (file-exists-p file))   ; the old one kept meanwhile
+                 (with-temp-file (car (last args)) (insert "png"))
                  0)))
       (should (eq (+my/screenshots--capture (selected-frame) file) t)))
-    (should (equal calls `(("screencapture" "-x" "-t" "png" "-R" "40,70,1844,1106" ,file))))
+    (should (equal calls `(("screencapture" "-x" "-t" "png" "-o" "-l" "4242" ,new))))
+    (should (equal (with-temp-buffer (insert-file-contents file) (buffer-string)) "png"))
+    (should-not (file-exists-p new))
+    ;; macOS didn't say which window: the screen's rectangle under the frame.
+    (setq calls nil)
+    (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(40 70 1884 1176)))
+              ((symbol-function '+my/screenshots--window-number) #'ignore)
+              ((symbol-function 'call-process)
+               (lambda (program &rest args)
+                 (push (cons program (nthcdr 3 args)) calls)
+                 (with-temp-file (car (last args)) (insert "png"))
+                 0)))
+      (should (eq (+my/screenshots--capture (selected-frame) file) t)))
+    (should (equal calls `(("screencapture" "-x" "-t" "png" "-R" "40,70,1844,1106" ,new))))
     ;; SCREENCAPTURE: another program.
     (let ((process-environment (cons "SCREENCAPTURE=/bin/fake" process-environment)))
       (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(0 0 10 10)))
+                ((symbol-function '+my/screenshots--window-number) #'ignore)
                 ((symbol-function 'call-process)
                  (lambda (program &rest _) (push program calls) 0)))
         (+my/screenshots--capture (selected-frame) file)))
     (should (equal (car calls) "/bin/fake"))))
 
+(ert-deftest screenshots/the-frame-s-macos-window ()
+  "The frame's macOS window number: of this Emacs's windows macOS lists (its
+pid asked for), the one where the frame is; the only one if none is quite
+there; nil if macOS doesn't say."
+  (let (asked (listed "25407 661 183 597 560\n25410 0 0 300 200\n"))
+    (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(661 183 1258 743)))
+              ((symbol-function 'call-process)
+               (lambda (program _infile _destination _display &rest args)
+                 (setq asked (cons program args))
+                 (insert listed)
+                 0)))
+      (should (eql (+my/screenshots--window-number (selected-frame)) 25407))
+      (should (equal (car asked) "osascript"))
+      (should (equal (car (last asked)) (number-to-string (emacs-pid))))
+      (setq listed "25410 0 0 300 200\n")
+      (should (eql (+my/screenshots--window-number (selected-frame)) 25410))
+      (setq listed "1 0 0 1 1\n2 5 5 1 1\n")
+      (should-not (+my/screenshots--window-number (selected-frame)))
+      (setq listed "")
+      (should-not (+my/screenshots--window-number (selected-frame))))
+    (cl-letf (((symbol-function 'call-process) (lambda (&rest _) 1)))
+      (should-not (+my/screenshots--window-number (selected-frame))))))
+
 (ert-deftest screenshots/capture-failed ()
   "screencapture failed, or made no file (no Screen Recording permission):
-not captured, why (what it said, its exit status)."
-  (let ((file (+test-tmp-file "shots/b.png")))
-    (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(0 0 10 10)))
-              ((symbol-function 'call-process)
-               (lambda (_program _infile destination &rest _)
-                 (should (eq destination t))
-                 (insert "could not create image from rect\n")
-                 1)))
-      (should (equal (+my/screenshots--capture (selected-frame) file)
-                     "could not create image from rect, exit 1")))
-    (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(0 0 10 10)))
-              ((symbol-function 'call-process) (lambda (&rest _) 0)))
-      (should (equal (+my/screenshots--capture (selected-frame) file) "exit 0, no file made")))))
+not captured, why (what it said, its exit status), the last screenshot kept."
+  (cl-letf (((symbol-function '+my/screenshots--window-number) (lambda (_) 7)))
+    (let ((file (+test-tmp-file "shots/b.png")))
+      (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(0 0 10 10)))
+		((symbol-function 'call-process)
+		 (lambda (_program _infile destination &rest _)
+                   (should (eq destination t))
+                   (insert "could not create image from rect\n")
+                   1)))
+	(should (equal (+my/screenshots--capture (selected-frame) file)
+                       "could not create image from rect, exit 1")))
+      (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(0 0 10 10)))
+		((symbol-function 'call-process) (lambda (&rest _) 0)))
+	(should (equal (+my/screenshots--capture (selected-frame) file) "exit 0, no file made")))
+      ;; The last screenshot kept: not lost to a failed capture.
+      (with-temp-file file (insert "old"))
+      (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(0 0 10 10)))
+		((symbol-function 'call-process) (lambda (&rest _) 1)))
+	(+my/screenshots--capture (selected-frame) file))
+      (should (equal (with-temp-buffer (insert-file-contents file) (buffer-string)) "old")))))
 
 ;; ====== AN EXAMPLE ======
 
