@@ -74,4 +74,4 @@
 sync:
     remote: "git+ssh://git@github.com/smyrgeorge/.doom.d.git"
 export:
-    auto: true
+    auto: false
