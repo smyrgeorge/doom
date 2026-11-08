@@ -18,6 +18,7 @@ The keys this config adds or changes. PDFs, images, drawings and the merge have 
 | `SPC s a` | Search Everywhere |
 | `Cmd+Shift+F` | Find in files |
 | `←` / `→`, `zR` / `zM` (sidebar) | Collapse / expand; everything |
+| `Cmd+C` (sidebar) | Copy the file's path |
 | `SPC g d` | The file's git diff in a pane |
 | `e` (Magit, on a conflicted file) | Resolve its conflicts |
 | `SPC m p` / `SPC m P` (Markdown) | Live preview / in the browser |

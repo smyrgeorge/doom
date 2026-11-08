@@ -7,7 +7,9 @@ the git status, also of changes made outside Emacs.
 |---|---|
 | `←` / `→` | Collapse or go to the parent / expand or open |
 | `zR` / `zM` | Expand / collapse everything |
-| Click | Open a file or a folder |
+| Click | Select (the sidebar gets the focus) |
+| Double click | Open a file, expand / collapse a folder |
+| `Cmd+C` | Copy the file's (or folder's) absolute path |
 | `SPC w w`, window numbers | Go to the sidebar |
 
 The arrows work in the language server's lists too (`SPC c S`, `SPC c X`, `SPC c y`), which open with the cursor in

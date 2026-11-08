@@ -236,13 +236,30 @@ advice around it kept."
         (should (eq (key-binding [down]) #'treemacs-next-line))
         (should (eq (key-binding (kbd "zR")) #'treemacs-expand-all))
         (should (eq (key-binding (kbd "zM")) #'treemacs-collapse-all))
+        (should (eq (key-binding (kbd "s-c")) #'treemacs-copy-absolute-path-at-point))
         ;; h / l: treemacs' own.
         (should (eq (key-binding "h") #'treemacs-COLLAPSE-action))
         (should (eq (key-binding "l") #'treemacs-RET-action))))))
 
-(ert-deftest treemacs/single-click ()
-  (should (eq (lookup-key treemacs-mode-map [mouse-1]) #'treemacs-single-click-expand-action))
-  (should (eq (lookup-key treemacs-mode-map [double-mouse-1]) #'ignore)))
+(ert-deftest treemacs/clicks ()
+  "A click goes to the line (focus, selection); a double click opens."
+  (should (eq (lookup-key treemacs-mode-map [down-mouse-1]) #'treemacs-leftclick-action))
+  (should (eq (lookup-key treemacs-mode-map [mouse-1]) #'ignore))
+  (should (eq (lookup-key treemacs-mode-map [double-mouse-1]) #'treemacs-doubleclick-action)))
+
+(ert-deftest treemacs/copy-copies-the-path ()
+  "Cmd+C on a file copies its absolute path (to the kill ring, so the
+clipboard)."
+  (+test-treemacs
+    (let ((root (+test-treemacs--project "copy" "README.md"))
+          (kill-ring nil)
+          (interprogram-cut-function nil))
+      (with-current-buffer (+test-treemacs--show-project root)
+        (goto-char (point-min))
+        (should (re-search-forward "README\\.md" nil t))
+        (let ((inhibit-message t))
+          (call-interactively (key-binding (kbd "s-c"))))
+        (should (equal (current-kill 0) (expand-file-name "README.md" root)))))))
 
 ;; ====== HOOKS, ADVICE, TIMERS ======
 

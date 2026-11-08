@@ -60,13 +60,23 @@
       "zR" #'treemacs-expand-all
       "zM" #'treemacs-collapse-all)
 
-;; SINGLE CLICK
-;; Open files and expand/collapse folders with one click (treemacs' default is
-;; a double click). A double click then counts as one click, so it doesn't open
-;; a folder and close it again.
+;; CLICKS
+;; A click only goes to the clicked line: the sidebar gets the focus and the
+;; node is selected (for Cmd+C, a key). A double click opens a file, or expands
+;; / collapses a folder. (treemacs's own, on the press and the double click; the
+;; click's release does nothing, where globally it moves point again, before
+;; the icon.)
 (after! treemacs
-  (define-key treemacs-mode-map [mouse-1] #'treemacs-single-click-expand-action)
-  (define-key treemacs-mode-map [double-mouse-1] #'ignore))
+  (define-key treemacs-mode-map [down-mouse-1] #'treemacs-leftclick-action)
+  (define-key treemacs-mode-map [mouse-1] #'ignore)
+  (define-key treemacs-mode-map [double-mouse-1] #'treemacs-doubleclick-action))
+
+;; COPY
+;; Cmd+C copies the selected file's (or folder's) absolute path to the
+;; clipboard, as `ya' does (globally it's `evil-yank', which here would wait
+;; for a motion).
+(after! treemacs
+  (define-key treemacs-mode-map (kbd "s-c") #'treemacs-copy-absolute-path-at-point))
 
 ;; ====== CODE ======
 
