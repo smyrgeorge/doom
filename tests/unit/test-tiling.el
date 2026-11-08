@@ -283,11 +283,55 @@ the selected one stays selected."
       (should (<= (- (apply #'max heights) (apply #'min heights)) 1)))
     (should (eq (selected-window) (nth 2 (+my/tiling--panes))))))
 
+;; ====== SPC w RET ======
+
+(ert-deftest tiling/swap-main-from-the-stack ()
+  "From a stacked pane: its buffer (tabs, point, history) to the main pane, the
+main's to its place, the focus on the main pane; the sizes kept."
+  (+test-tiling
+    (+my/tiling-split) (+my/tiling-split)
+    (let* ((panes (+my/tiling--panes))
+           (bottom (nth 2 panes))
+           (widths (mapcar #'window-total-width panes)))
+      (set-window-buffer (nth 1 panes) "B")
+      (set-window-buffer bottom "C")
+      (with-current-buffer "C" (insert "some\ntext\nhere\n"))
+      (set-window-point bottom 6)
+      (set-window-prev-buffers bottom (list (list (get-buffer "D") 1 1)))
+      (set-window-parameter bottom 'tab-line-buffers (list (get-buffer "C") (get-buffer "D")))
+      (set-window-parameter (car panes) 'tab-line-buffers (list (get-buffer "A")))
+      (select-window bottom)
+      (+my/tiling-swap-main)
+      (should (equal (mapcar #'car (+test-tiling--layout)) '("C" "B" "A")))
+      (should (equal (+my/tiling--panes) panes))
+      (should (equal (mapcar #'window-total-width panes) widths))
+      (should (eq (selected-window) (car panes)))
+      (should (= (window-point (car panes)) 6))
+      (should (eq (car (car (window-prev-buffers (car panes)))) (get-buffer "D")))
+      (should (equal (window-parameter (car panes) 'tab-line-buffers)
+                     (list (get-buffer "C") (get-buffer "D"))))
+      (should (equal (window-parameter bottom 'tab-line-buffers) (list (get-buffer "A")))))))
+
+(ert-deftest tiling/swap-main-from-the-main-pane ()
+  "From the main pane: the next pane's buffer to it, the focus kept there."
+  (+test-tiling
+    (+my/tiling-split)
+    (set-window-buffer (nth 1 (+my/tiling--panes)) "B")
+    (select-window (car (+my/tiling--panes)))
+    (+my/tiling-swap-main)
+    (should (equal (mapcar #'car (+test-tiling--layout)) '("B" "A")))
+    (should (eq (selected-window) (car (+my/tiling--panes))))))
+
+(ert-deftest tiling/swap-main-needs-two-panes ()
+  (+test-tiling
+    (should-error (+my/tiling-swap-main) :type 'user-error)))
+
 ;; ====== KEYS ======
 
 (ert-deftest tiling/keys ()
   (should (eq (lookup-key evil-window-map (kbd "SPC")) #'+my/tiling-split))
-  (should (eq (lookup-key evil-window-map "a") #'+my/tiling-arrange)))
+  (should (eq (lookup-key evil-window-map "a") #'+my/tiling-arrange))
+  (should (eq (lookup-key evil-window-map (kbd "RET")) #'+my/tiling-swap-main)))
 
 ;; ====== TILING FIRST ======
 

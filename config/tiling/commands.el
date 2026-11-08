@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/tiling/commands.el -*- lexical-binding: t; -*-
-;; SPC w SPC and SPC w a.
+;; SPC w SPC, SPC w a and SPC w RET.
 ;; Loaded from config/tiling.el.
 
 (defvar +my/focus-new-windows)          ; config/window.el
@@ -38,3 +38,24 @@
       (user-error "Not in a pane: side panels aren't tiled"))
     (when (cdr panes)
       (funcall (plist-get strategy :arrange) panes))))
+
+(defun +my/tiling-swap-main ()
+  "SPC w RET: the selected pane's buffer to the main pane (the first one), the
+main's to where it was; the focus to the main pane. From the main pane: the
+next pane's buffer to it (config/tiling.el). Tabs, point and history move
+with each; the panes' sizes stay."
+  (interactive)
+  (let ((from (selected-window))
+        (panes (+my/tiling--panes)))
+    (unless (memq from panes)
+      (user-error "Not in a pane: side panels aren't tiled"))
+    (unless (cdr panes)
+      (user-error "Only one pane"))
+    (let* ((main (car panes))
+           (other (if (eq from main) (cadr panes) from))
+           (main-state (+my/tiling--state main))
+           (other-state (+my/tiling--state other)))
+      (+my/tiling--restore main other-state)
+      (+my/tiling--restore other main-state)
+      (select-window main)
+      main)))

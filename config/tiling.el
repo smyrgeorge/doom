@@ -13,6 +13,9 @@
 ;;               buffer (its only tab, as SPC w v), which takes focus
 ;;   SPC w a     arrange the panes as the strategy lays them out (e.g. after
 ;;               splits of your own)
+;;   SPC w RET   the current pane's buffer to the main pane (the first one),
+;;               the main's to where it was, the focus with it (Amethyst's
+;;               swap with main); from the main pane, the next one's to it
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom.
 ;; TILING FIRST (config/tiling/apps.el)
@@ -71,7 +74,8 @@ the panes in order (see above): :split opens a new pane and returns it,
 (after! evil
   (map! :map evil-window-map
         :desc "New pane (tiling)"      "SPC" #'+my/tiling-split
-        :desc "Arrange panes (tiling)" "a"   #'+my/tiling-arrange))
+        :desc "Arrange panes (tiling)" "a"   #'+my/tiling-arrange
+        :desc "Swap with main (tiling)" "RET" #'+my/tiling-swap-main))
 
 ;; ====== CODE ======
 
