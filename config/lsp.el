@@ -9,7 +9,7 @@
 ;; scripts/tools.sh; a language's own settings, where it has some, in
 ;; config/lsp/LANGUAGE.el:
 ;;   C/C++                  clangd
-;;   Docker                 docker-langserver
+;;   Docker                 docker-langserver                  lsp/docker.el
 ;;   GDScript               Godot's editor (it serves while open)
 ;;   HTML, CSS, JSON        vscode-langservers-extracted
 ;;   Java                   Eclipse's jdtls (lsp-java downloads it)
@@ -74,6 +74,7 @@
 (load! "lsp/peek")
 
 ;; Each language's settings (see SERVERS).
+(load! "lsp/docker")
 (load! "lsp/kotlin")
 (load! "lsp/python")
 (load! "lsp/rust")
