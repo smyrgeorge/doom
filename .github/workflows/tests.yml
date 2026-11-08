@@ -146,6 +146,24 @@ jobs:
           key: doom-macos-${{ env.DOOM_REF }}-${{ hashFiles('init.el', 'packages.el') }}
           restore-keys: doom-macos-${{ env.DOOM_REF }}-
 
+      # Homebrew's downloads (bottles, casks, its API's index): what emacs.sh
+      # and tools.sh install is downloaded once a week, or when they change;
+      # pouring them still happens each run (Homebrew's installed files aren't
+      # cached: it keeps state and links outside them). A week's cache whole,
+      # no older one to start from: it holds this week's versions only (old
+      # weeks' go unused, and GitHub drops them after 7 days).
+      - name: Homebrew's cache folder, this week
+        id: brew-cache
+        run: |
+          echo "path=$(brew --cache)" >> "$GITHUB_OUTPUT"
+          echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Homebrew's downloads (restored)
+        uses: actions/cache/restore@v4
+        id: brew-restore
+        with:
+          path: ${{ steps.brew-cache.outputs.path }}
+          key: brew-macos-${{ hashFiles('scripts/emacs.sh', 'scripts/tools.sh') }}-${{ steps.brew-cache.outputs.week }}
+
       # emacs-plus's Emacs.app, then Doom's modules and `doom sync'.
       - name: Emacs and Doom (scripts/emacs.sh)
         run: scripts/emacs.sh
@@ -153,6 +171,13 @@ jobs:
       # Doom's tools, the modules' servers, formatters and linters, the fonts.
       - name: Tools (scripts/tools.sh)
         run: scripts/tools.sh
+
+      - name: Homebrew's downloads (saved)
+        if: steps.brew-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.brew-cache.outputs.path }}
+          key: ${{ steps.brew-restore.outputs.cache-primary-key }}
 
       - name: PDF.js and Excalidraw
         run: emacs --batch -l tests/helper.el -l tests/assets.el

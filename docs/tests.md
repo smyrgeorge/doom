@@ -40,6 +40,7 @@ Each push and pull request runs them all (`.github/workflows/tests.yml`), unit a
 
 Each machine is set up the way the README sets up yours, so every push tests the installers too. Doom is cloned at the
 commit in the workflow's `DOOM_REF` (the one the config is used with: bump it after updating Doom), and `emacs.sh`
-syncs it (its packages cached until `init.el`, `packages.el` or that commit change). PDF.js and Excalidraw are
+syncs it (its packages cached until `init.el`, `packages.el` or that commit change; on macOS, Homebrew's downloads too,
+a week at a time). PDF.js and Excalidraw are
 downloaded (`tests/assets.el`), so no test skips for want of them. A newer push to a
 branch cancels the run still going there.
