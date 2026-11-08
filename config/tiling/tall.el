@@ -56,3 +56,20 @@ at the bottom of the stack; PANES arranged tall first if need be. Return it."
              (new (split-window bottom nil 'below)))
         (balance-windows (window-parent new))
         new))))
+
+(defun +my/tiling-tall-resize (panes delta)
+  "The main pane DELTA (a share of the width, e.g. 0.05) bigger, PANES
+arranged tall first if need be; `+my/tiling-tall-ratio' set to it, so SPC w a
+and new panes keep it (within `+my/tiling-tall-ratio-limits'). The ratio."
+  (unless (+my/tiling--tall-p (window-main-window))
+    (+my/tiling-tall-arrange panes))
+  (let ((root (window-main-window)))
+    (when (window-live-p root)
+      (user-error "Only one pane"))
+    (setq +my/tiling-tall-ratio
+          (min (cdr +my/tiling-tall-ratio-limits)
+               (max (car +my/tiling-tall-ratio-limits)
+                    (/ (round (* 100 (+ +my/tiling-tall-ratio delta))) 100.0))))
+    (let ((main (window-left-child root)))
+      (window-resize main (- (+my/tiling--main-width root) (window-total-width main)) t))
+    +my/tiling-tall-ratio))

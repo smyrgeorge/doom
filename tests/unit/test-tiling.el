@@ -326,12 +326,59 @@ main's to its place, the focus on the main pane; the sizes kept."
   (+test-tiling
     (should-error (+my/tiling-swap-main) :type 'user-error)))
 
+;; ====== SPC w ] / [ ======
+
+(defun +test-tiling--main-share ()
+  "The main pane's share of the frame's width, rounded to a hundredth."
+  (/ (round (* 100 (/ (float (window-total-width (car (+my/tiling--panes))))
+                      (window-total-width (window-main-window)))))
+     100.0))
+
+(ert-deftest tiling/main-bigger-and-smaller ()
+  "SPC w ] / [ from any pane: the main pane a step bigger / smaller, the
+ratio kept for SPC w a; the focus where it was."
+  (+test-tiling
+    (+my/tiling-split) (+my/tiling-split)
+    (let ((window (selected-window)))
+      (+my/tiling-main-bigger)
+      (should (= +my/tiling-tall-ratio 0.55))
+      (should (< (abs (- (+test-tiling--main-share) 0.55)) 0.02))
+      (should (eq (selected-window) window))
+      (+my/tiling-main-smaller) (+my/tiling-main-smaller)
+      (should (= +my/tiling-tall-ratio 0.45))
+      (should (< (abs (- (+test-tiling--main-share) 0.45)) 0.02))
+      (+my/tiling-arrange)
+      (should (< (abs (- (+test-tiling--main-share) 0.45)) 0.02)))))
+
+(ert-deftest tiling/main-resize-within-limits ()
+  (+test-tiling
+    (+my/tiling-split)
+    (dotimes (_ 20) (+my/tiling-main-bigger))
+    (should (= +my/tiling-tall-ratio (cdr +my/tiling-tall-ratio-limits)))
+    (dotimes (_ 20) (+my/tiling-main-smaller))
+    (should (= +my/tiling-tall-ratio (car +my/tiling-tall-ratio-limits)))))
+
+(ert-deftest tiling/main-resize-arranges-first ()
+  "Panes not laid out tall: arranged first, then resized."
+  (+test-tiling
+    (split-window nil nil 'below)
+    (+my/tiling-main-bigger)
+    (should (+my/tiling--tall-p (window-main-window)))
+    (should (< (abs (- (+test-tiling--main-share) 0.55)) 0.02))))
+
+(ert-deftest tiling/main-resize-needs-two-panes ()
+  (+test-tiling
+    (should-error (+my/tiling-main-bigger) :type 'user-error)
+    (should (= +my/tiling-tall-ratio 0.5))))
+
 ;; ====== KEYS ======
 
 (ert-deftest tiling/keys ()
   (should (eq (lookup-key evil-window-map (kbd "SPC")) #'+my/tiling-split))
   (should (eq (lookup-key evil-window-map "a") #'+my/tiling-arrange))
-  (should (eq (lookup-key evil-window-map (kbd "RET")) #'+my/tiling-swap-main)))
+  (should (eq (lookup-key evil-window-map (kbd "RET")) #'+my/tiling-swap-main))
+  (should (eq (lookup-key evil-window-map "]") #'+my/tiling-main-bigger))
+  (should (eq (lookup-key evil-window-map "[") #'+my/tiling-main-smaller)))
 
 ;; ====== TILING FIRST ======
 

@@ -23,7 +23,8 @@ Emacs is tiling first:
 
 The `tall` strategy keeps the main pane on the left and stacks the others on the right. `SPC w SPC` opens a new pane
 showing the current buffer, `SPC w a` arranges the panes again, and `SPC w RET` moves the current pane's buffer to the
-main pane (the main's to its place). Try it: `M-x +my/example-tiling`.
+main pane (the main's to its place). `SPC w ]` / `SPC w [` make the main pane bigger / smaller (`]` / `[` again
+repeat it). Try it: `M-x +my/example-tiling`.
 
 Without `(load! "config/tiling")` in `config.el`, each opens where it would on its own.
 

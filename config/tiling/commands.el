@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/tiling/commands.el -*- lexical-binding: t; -*-
-;; SPC w SPC, SPC w a and SPC w RET.
+;; SPC w SPC, SPC w a, SPC w RET and SPC w ] / [.
 ;; Loaded from config/tiling.el.
 
 (defvar +my/focus-new-windows)          ; config/window.el
@@ -59,3 +59,34 @@ with each; the panes' sizes stay."
       (+my/tiling--restore other main-state)
       (select-window main)
       main)))
+
+(defvar +my/tiling-resize-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "]" #'+my/tiling-main-bigger)
+    (define-key map "[" #'+my/tiling-main-smaller)
+    map)
+  "After SPC w ] / [: ] and [ again (see config/tiling.el).")
+
+(defun +my/tiling--resize-main (delta)
+  "The main pane DELTA (a share of the width) bigger, by the strategy."
+  (let ((panes (+my/tiling--panes))
+        (resize (plist-get (+my/tiling--strategy) :resize)))
+    (unless resize
+      (user-error "The tiling strategy `%s' has no main pane to resize" +my/tiling-strategy))
+    (unless (memq (selected-window) panes)
+      (user-error "Not in a pane: side panels aren't tiled"))
+    (unless (cdr panes)
+      (user-error "Only one pane"))
+    (let ((ratio (funcall resize panes delta)))
+      (set-transient-map +my/tiling-resize-map t)
+      (message "Main pane: %d%% of the width (] / [ again)" (round (* 100 ratio))))))
+
+(defun +my/tiling-main-bigger ()
+  "SPC w ]: the main pane bigger (config/tiling.el)."
+  (interactive)
+  (+my/tiling--resize-main +my/tiling-resize-step))
+
+(defun +my/tiling-main-smaller ()
+  "SPC w [: the main pane smaller (config/tiling.el)."
+  (interactive)
+  (+my/tiling--resize-main (- +my/tiling-resize-step)))

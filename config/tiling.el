@@ -16,6 +16,9 @@
 ;;   SPC w RET   the current pane's buffer to the main pane (the first one),
 ;;               the main's to where it was, the focus with it (Amethyst's
 ;;               swap with main); from the main pane, the next one's to it
+;;   SPC w ] / [ the main pane bigger / smaller (`+my/tiling-resize-step' of
+;;               the width), from any pane; ] and [ again repeat it. Kept: SPC w
+;;               a and new panes lay it out so (Amethyst's expand / shrink main)
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom.
 ;; TILING FIRST (config/tiling/apps.el)
@@ -51,6 +54,12 @@
 (defvar +my/tiling-tall-ratio 0.5
   "The main pane's share of the width in the tall strategy.")
 
+(defvar +my/tiling-tall-ratio-limits '(0.2 . 0.8)
+  "The smallest and biggest share of the width SPC w [ / ] give the main pane.")
+
+(defvar +my/tiling-resize-step 0.05
+  "The share of the width SPC w ] / [ add to or take from the main pane.")
+
 (defvar +my/tiling-apps
   '(agent-shell-mode                    ; Claude Code (SPC o c, SPC o C)
     ghostel-mode                        ; the terminal (SPC o t)
@@ -63,10 +72,12 @@ buffers an application's, opening in a new pane when PREDICATE, called in the
 buffer being shown, says so (else as they ask).")
 
 (defvar +my/tiling-strategies
-  '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange))
-  "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION). Both take
-the panes in order (see above): :split opens a new pane and returns it,
-:arrange lays the panes out.")
+  '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange
+          :resize +my/tiling-tall-resize))
+  "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize
+FUNCTION]). Each takes the panes in order (see above): :split opens a new pane
+and returns it, :arrange lays the panes out, :resize (also given a DELTA, a
+share of the width) makes the main pane bigger and returns its share.")
 
 ;; ====== KEY BINDINGS ======
 
@@ -75,7 +86,9 @@ the panes in order (see above): :split opens a new pane and returns it,
   (map! :map evil-window-map
         :desc "New pane (tiling)"      "SPC" #'+my/tiling-split
         :desc "Arrange panes (tiling)" "a"   #'+my/tiling-arrange
-        :desc "Swap with main (tiling)" "RET" #'+my/tiling-swap-main))
+        :desc "Swap with main (tiling)" "RET" #'+my/tiling-swap-main
+        :desc "Main pane bigger (tiling)" "]" #'+my/tiling-main-bigger
+        :desc "Main pane smaller (tiling)" "[" #'+my/tiling-main-smaller))
 
 ;; ====== CODE ======
 
