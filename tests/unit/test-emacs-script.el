@@ -1,7 +1,8 @@
 ;;; tests/unit/test-emacs-script.el -*- lexical-binding: t; -*-
 ;; scripts/emacs.sh: Emacs installed, or updated to its latest release, then
-;; Doom synced: `doom sync --rebuild' when Emacs's version changed, else
-;; `doom sync'. macOS: the emacs-plus cask, installed or upgraded; Linux:
+;; Doom synced: `doom sync --rebuild' when Doom's packages aren't built for
+;; this Emacs (no .local/straight/build-VERSION), else `doom sync'; NO_DOOM=1,
+;; Emacs only. macOS: the emacs-plus cask, installed or upgraded; Linux:
 ;; GNU's latest release built from source, not again if it's installed.
 ;; And scripts/tools.sh says to run it when Emacs is missing or too old. With
 ;; fake brew, git, curl, doom and Emacs, which record what they're asked (or
@@ -14,8 +15,9 @@
 version (nil: no Emacs, version.txt absent); :cask t, emacs-plus-app
 installed; :formula t, Homebrew's emacs formula installed; :upgrade-to, the
 version `brew upgrade --cask' brings (its install too); :releases, the
-versions GNU's list has (nil: curl fails). Homebrew says the cask is
-outdated when :upgrade-to is given. Each fake notes its arguments
+versions GNU's list has (nil: curl fails); :built, the Emacs version Doom's
+packages are built for (its .local/straight/build-VERSION). Homebrew says the
+cask is outdated when :upgrade-to is given. Each fake notes its arguments
 in calls.log; the fake Emacs is bin/emacs, Doom's command doom/bin/doom."
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "emacs-script/") t)))
          (bin (expand-file-name "bin/" dir))
@@ -23,6 +25,8 @@ in calls.log; the fake Emacs is bin/emacs, Doom's command doom/bin/doom."
          (version-file (expand-file-name "version.txt" dir)))
     (make-directory bin t)
     (make-directory (expand-file-name "doom/bin/" dir) t)
+    (when (plist-get options :built)
+      (make-directory (expand-file-name (concat "doom/.local/straight/build-" (plist-get options :built)) dir) t))
     (when (plist-get options :version)
       (with-temp-file version-file (insert (plist-get options :version))))
     (cl-flet ((fake (path body)
@@ -99,7 +103,7 @@ exit 0\n"
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "macos" dir)))
       (should (= status 0))
       (should (string-search "✔ Emacs 31.1 upgraded" output))
-      (should (string-search "Emacs 31.1 -> 31.2: rebuilding" output))
+      (should (string-search "Doom's packages aren't built for Emacs 31.2: rebuilding them" output))
       (should (string-search "==> ✔ Emacs 31.2 and Doom ready" output))
       (let ((calls (+test-emacs-script--calls dir)))
         (should (member "brew upgrade --cask emacs-plus-app" calls))
@@ -109,7 +113,7 @@ exit 0\n"
 (ert-deftest emacs-script/macos-up-to-date-only-syncs ()
   "Up to date (Homebrew says it's not outdated): left, said so; Doom synced,
 not rebuilt."
-  (let ((dir (+test-emacs-script--fakes :version "31.1" :cask t)))
+  (let ((dir (+test-emacs-script--fakes :version "31.1" :cask t :built "31.1")))
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "macos" dir)))
       (should (= status 0))
       (should (string-search "✔ Emacs 31.1 up to date" output))
@@ -126,6 +130,27 @@ not rebuilt."
     (+test-emacs-script--run "macos" dir)
     (should (member "brew uninstall emacs" (+test-emacs-script--calls dir)))))
 
+(ert-deftest emacs-script/doom-rebuilt-when-not-built-for-this-emacs ()
+  "Emacs up to date but Doom's packages built for no Emacs (a new machine,
+CI) or for another (Emacs updated by hand): rebuilt; built for it: synced."
+  (dolist (case '((nil . "doom sync --rebuild") ("31.0" . "doom sync --rebuild") ("31.1" . "doom sync")))
+    (let ((dir (+test-emacs-script--fakes :version "31.1" :cask t :built (car case))))
+      (pcase-let ((`(,status . ,_) (+test-emacs-script--run "macos" dir)))
+        (should (= status 0))
+        (should (equal (list (car case) (seq-find (lambda (call) (string-prefix-p "doom " call))
+                                                  (+test-emacs-script--calls dir)))
+                       (list (car case) (cdr case))))))))
+
+(ert-deftest emacs-script/no-doom-emacs-only ()
+  "NO_DOOM=1: Emacs installed or updated, Doom left alone."
+  (let ((dir (+test-emacs-script--fakes :version "31.1" :cask t :upgrade-to "31.2")))
+    (pcase-let ((`(,status . ,output) (+test-emacs-script--run "macos" dir "NO_DOOM=1")))
+      (should (= status 0))
+      (should (string-search "✔ Emacs 31.2 ready (Doom left alone: NO_DOOM)" output))
+      (let ((calls (+test-emacs-script--calls dir)))
+        (should (member "brew upgrade --cask emacs-plus-app" calls))
+        (should-not (seq-some (lambda (call) (string-match-p "^\\(doom\\|git\\) " call)) calls))))))
+
 ;; ====== LINUX ======
 
 (ert-deftest emacs-script/linux-builds-the-latest-release ()
@@ -141,7 +166,7 @@ tarball, with xwidgets; Emacs changed: Doom rebuilt."
       (should (string-search "doom sync --rebuild" output)))))
 
 (ert-deftest emacs-script/linux-latest-installed-not-built-again ()
-  (let ((dir (+test-emacs-script--fakes :version "31.2" :releases '("31.1" "31.2"))))
+  (let ((dir (+test-emacs-script--fakes :version "31.2" :releases '("31.1" "31.2") :built "31.2")))
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "dnf" dir "DRY_RUN=1")))
       (should (= status 0))
       (should (string-search "✔ Emacs 31.2 up to date" output))

@@ -1,6 +1,8 @@
 # The tests (tests/run.sh: unit and end-to-end) on each push and pull request,
 # on Linux (with and without xwidgets, in tests/linux's Docker image) and on
-# macOS (emacs-plus), as docs/tests.md describes running them by hand.
+# macOS (emacs-plus). Each machine is set up as the README says a user sets
+# up theirs: scripts/emacs.sh (Emacs, then Doom), scripts/tools.sh (what
+# init.el and the config need). So the installers are tested too.
 name: Tests
 
 on:
@@ -21,6 +23,9 @@ env:
   # used with. Bump it after updating Doom (git -C ~/.config/emacs rev-parse
   # HEAD).
   DOOM_REF: 7ccac7f643ad67baa25b216717cf8617a0903c69
+  # Linux's Emacs (scripts/emacs.sh builds this release): pinned, so the
+  # image's cached build stays the one used.
+  EMACS_VERSION: "31.1"
   # Each end-to-end test file's limit, in seconds: runners are slower than a
   # desk's machine.
   E2E_TIMEOUT: "600"
@@ -37,15 +42,16 @@ jobs:
     env:
       XWIDGETS: ${{ matrix.xwidgets }}
       IMAGE: ${{ matrix.xwidgets == 'yes' && 'doom-config-tests' || 'doom-config-tests:no-xwidgets' }}
+      # tests/linux/run.sh: the image as built here (its layers cached).
+      SKIP_BUILD: "1"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Doom
+      - name: Doom (cloned)
         run: |
           echo "DOOM_EMACS=$RUNNER_TEMP/doom-emacs" >> "$GITHUB_ENV"
           git clone -q https://github.com/doomemacs/core "$RUNNER_TEMP/doom-emacs"
           git -C "$RUNNER_TEMP/doom-emacs" checkout -q "$DOOM_REF"
-          git -C "$RUNNER_TEMP/doom-emacs" submodule update -q --init --recursive
 
       # Doom's packages, as `doom sync' built them: again only when init.el,
       # packages.el or Doom change (and then from the last ones).
@@ -58,29 +64,42 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      # Emacs 31 built from source (tests/linux/Dockerfile): its layers cached,
-      # built again only when the Dockerfile changes.
-      - name: The test image
+      # Debian, Emacs by scripts/emacs.sh, the tools by scripts/tools.sh
+      # (tests/linux/Dockerfile): its layers cached, Emacs built again only
+      # when emacs.sh changes.
+      - name: The test image (scripts/emacs.sh, scripts/tools.sh)
         uses: docker/build-push-action@v6
         with:
-          context: tests/linux
+          context: .
+          file: tests/linux/Dockerfile
           load: true
           tags: ${{ env.IMAGE }}
-          build-args: ${{ matrix.xwidgets == 'no' && 'EMACS_CONFIGURE_EXTRA=' || '' }}
-          cache-from: type=gha,scope=emacs-${{ matrix.xwidgets }}
-          cache-to: type=gha,mode=max,scope=emacs-${{ matrix.xwidgets }}
+          build-args: |
+            XWIDGETS=${{ matrix.xwidgets }}
+            EMACS_VERSION=${{ env.EMACS_VERSION }}
+          cache-from: type=gha,scope=image-${{ matrix.xwidgets }}
+          cache-to: type=gha,mode=max,scope=image-${{ matrix.xwidgets }}
 
-      - name: doom sync
+      # scripts/emacs.sh in the image: Emacs is there (up to date), so Doom:
+      # its modules, `doom sync' (--rebuild when its packages aren't built for
+      # this Emacs). The container runs as root, and Doom's CLI refuses to run
+      # as root unless its folder is root's (bin/doom): given to root (the
+      # cache still reads it; the tests mount it read-only).
+      - name: Doom (scripts/emacs.sh)
         run: |
+          sudo chown -R 0:0 "$DOOM_EMACS"
           docker run --rm -v "$GITHUB_WORKSPACE:/root/.config/doom" -v "$DOOM_EMACS:/root/.config/emacs" \
-            "$IMAGE" /root/.config/emacs/bin/doom sync
+            -e EMACS_VERSION "$IMAGE" scripts/emacs.sh
+
+      - name: Tools (scripts/tools.sh --check)
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/root/.config/doom:ro" "$IMAGE" scripts/tools.sh --check
 
       # PDF.js and Excalidraw, as opening a PDF or a drawing downloads them:
       # their end-to-end tests run instead of skipping.
       - name: PDF.js and Excalidraw
         run: |
           docker run --rm -v "$GITHUB_WORKSPACE:/root/.config/doom" -v "$DOOM_EMACS:/root/.config/emacs" \
-            -w /root/.config/doom "$IMAGE" emacs --batch -l tests/helper.el -l tests/assets.el
+            "$IMAGE" emacs --batch -l tests/helper.el -l tests/assets.el
 
       - name: Unit tests
         run: tests/linux/run.sh unit
@@ -98,21 +117,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The tests' programs, as scripts/tools.sh installs them.
-      - name: Emacs and the tests' programs
-        run: |
-          brew tap d12frosted/emacs-plus
-          brew trust d12frosted/emacs-plus 2>/dev/null || true
-          brew install --cask emacs-plus-app
-          brew install pandoc imagemagick ripgrep fd git-delta coreutils
-
-      - name: Doom, this config as ~/.config/doom
+      # The README's step 1: this config as ~/.config/doom, Doom cloned.
+      - name: This config and Doom
         run: |
           mkdir -p ~/.config
           ln -s "$GITHUB_WORKSPACE" ~/.config/doom
           git clone -q https://github.com/doomemacs/core ~/.config/emacs
           git -C ~/.config/emacs checkout -q "$DOOM_REF"
-          git -C ~/.config/emacs submodule update -q --init --recursive
 
       - name: Doom's packages (cache)
         uses: actions/cache@v4
@@ -121,8 +132,13 @@ jobs:
           key: doom-macos-${{ env.DOOM_REF }}-${{ hashFiles('init.el', 'packages.el') }}
           restore-keys: doom-macos-${{ env.DOOM_REF }}-
 
-      - name: doom sync
-        run: ~/.config/emacs/bin/doom sync
+      # emacs-plus's Emacs.app, then Doom's modules and `doom sync'.
+      - name: Emacs and Doom (scripts/emacs.sh)
+        run: scripts/emacs.sh
+
+      # Doom's tools, the modules' servers, formatters and linters, the fonts.
+      - name: Tools (scripts/tools.sh)
+        run: scripts/tools.sh
 
       - name: PDF.js and Excalidraw
         run: emacs --batch -l tests/helper.el -l tests/assets.el

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Emacs, installed or updated to its latest release, then Doom synced against
-# it: `doom sync --rebuild' when Emacs's version changed (its packages built
-# for the new one), else `doom sync'. Run again, it updates.
+# it: `doom sync --rebuild' when Doom's packages aren't built for this Emacs
+# (no .local/straight/build-VERSION: a new Emacs, a new machine), else `doom
+# sync'. Run again, it updates.
 #
 # macOS: the prebuilt emacs-plus Emacs.app (Homebrew cask; arm64, macOS 15+):
 # installed, or upgraded.
@@ -11,8 +12,9 @@
 # version is already there. XWIDGETS=no leaves WebKit out (they fall back:
 # DocView, the file, markdown-mode's preview).
 #
-# DRY_RUN=1 prints the commands instead. EMACS_BIN (the Emacs whose version is
-# checked) and DOOM_BIN (Doom's command) are for the tests.
+# NO_DOOM=1: Emacs only, Doom left alone (a Docker image, CI: they sync Doom
+# themselves). DRY_RUN=1 prints the commands instead. EMACS_BIN (the Emacs
+# whose version is checked) and DOOM_BIN (Doom's command) are for the tests.
 set -euo pipefail
 # shellcheck source=scripts/os.sh
 . "$(dirname "$0")/os.sh"
@@ -41,7 +43,8 @@ if [ "$OS" = macos ]; then
 
   ui_step "Emacs $(ui_dim "(emacs-plus-app${DRY_RUN:+, dry run})")"
   quiet brew tap d12frosted/emacs-plus
-  quiet brew trust d12frosted/emacs-plus
+  # (An older Homebrew has no `brew trust', and needs none.)
+  quiet brew trust d12frosted/emacs-plus || ui_info "this Homebrew has no brew trust: not needed"
   if ! brew list --cask emacs-plus-app >/dev/null 2>&1; then
     run brew install --cask emacs-plus-app
     ui_ok "Emacs $(ui_green installed)"
@@ -127,6 +130,12 @@ else
   [ -n "${DRY_RUN:-}" ] && after=$EMACS_VERSION
 fi
 
+if [ -n "${NO_DOOM:-}" ]; then
+  echo
+  ui_step "$(ui_green "✔ Emacs ${after:-?} ready") $(ui_dim "(Doom left alone: NO_DOOM)")"
+  exit 0
+fi
+
 # Doom's modules live in a git submodule (sources/doom+). `doom install`
 # fetches it but `doom sync` doesn't; without it only Doom's core is installed.
 echo
@@ -134,9 +143,12 @@ ui_step "Doom"
 quiet git -C "$(dirname "$(dirname "$DOOM_BIN")")" submodule update --init --recursive
 ui_ok "Doom's modules (sources/doom+)"
 
-# Doom against this Emacs: its packages built again if Emacs changed.
-if [ "$before" != "$after" ]; then
-  ui_info "Emacs ${before:-(none)} -> ${after:-?}: rebuilding Doom's packages for it"
+# Doom against this Emacs: its packages built for it if they aren't (Doom
+# builds them in a folder per Emacs version), whatever changed Emacs (this
+# script, an update by hand) or if Doom's is new (a new machine, CI).
+DOOM_DIR=$(dirname "$(dirname "$DOOM_BIN")")
+if [ ! -d "$DOOM_DIR/.local/straight/build-$after" ]; then
+  ui_info "Doom's packages aren't built for Emacs ${after:-?}: rebuilding them"
   run "$DOOM_BIN" sync --rebuild
   ui_ok "Doom synced, its packages rebuilt"
 else

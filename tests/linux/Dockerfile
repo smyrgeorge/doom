@@ -1,50 +1,44 @@
-# The tests on Linux (tests/linux/run.sh builds and runs it, docs/tests.md):
-# Debian with GNU Emacs 31.1 built from GNU's release as scripts/emacs.sh
-# builds it (GTK3, tree-sitter, xwidgets: WebKitGTK; --build-arg
-# EMACS_CONFIGURE_EXTRA= leaves xwidgets out, as most distributions do), and
-# the programs the config and the tests run.
+# The tests on Linux (tests/linux/run.sh builds and runs it; GitHub Actions
+# too: docs/tests.md). Debian, set up as a user sets up theirs: Emacs by
+# scripts/emacs.sh (GNU's release built from source, with xwidgets: WebKitGTK;
+# XWIDGETS=no leaves them out, as most distributions do), then what init.el
+# and the config need by scripts/tools.sh; and what the tests need on top.
+# Doom isn't in it: the tests mount Doom's folder (synced for this Emacs).
+#
+# Built from the repository's root (`docker build -f tests/linux/Dockerfile
+# .'): it copies the scripts and init.el (Dockerfile.dockerignore: nothing
+# else). Each step's layer is cached until what it copies changes: Emacs's
+# build, the longest, until scripts/emacs.sh (or os.sh, ui.sh) does.
 FROM debian:trixie
 
 ARG EMACS_VERSION=31.1
-ARG EMACS_CONFIGURE_EXTRA="--with-xwidgets"
-ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
+ARG XWIDGETS=yes
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8 HOME=/root \
+    PATH=/root/.local/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Build dependencies (kept: the runtime libraries come with them).
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential pkg-config curl ca-certificates xz-utils \
-      libgtk-3-dev libwebkit2gtk-4.1-dev libtree-sitter-dev \
-      libxpm-dev libpng-dev libjpeg-dev libgif-dev libtiff-dev libwebp-dev \
-      librsvg2-dev libgnutls28-dev libxml2-dev libncurses-dev libharfbuzz-dev \
-      libcairo2-dev libsqlite3-dev libgmp-dev libacl1-dev libdbus-1-dev \
-      liblcms2-dev libselinux1-dev libsystemd-dev zlib1g-dev \
+# What the scripts need first (README: git, curl; root needs no sudo).
+RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir /src && cd /src \
-    && curl -fsSL https://ftpmirror.gnu.org/emacs/emacs-${EMACS_VERSION}.tar.xz -o emacs.tar.xz \
-    && tar xf emacs.tar.xz && cd emacs-${EMACS_VERSION} \
-    && ./configure --prefix=/usr/local \
-         --with-x-toolkit=gtk3 ${EMACS_CONFIGURE_EXTRA} --with-tree-sitter \
-         --with-xpm --with-png --with-jpeg --with-gif --with-tiff --with-webp \
-         --with-rsvg --with-gnutls --with-xml2 --with-cairo --with-harfbuzz \
-         --with-sqlite3 --with-modules --with-dbus \
-         --with-native-compilation=no --without-compress-install \
-    && make -j"$(nproc)" && make install \
-    && cd / && rm -rf /src
-
-# What the tests (and the config they load) call.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git python3 pandoc imagemagick ripgrep git-delta \
-      xvfb xauth dbus dbus-x11 util-linux procps \
-      fonts-dejavu fonts-noto-color-emoji \
+# Emacs, as scripts/emacs.sh installs it (Doom left out: NO_DOOM).
+COPY scripts/ui.sh scripts/os.sh scripts/emacs.sh /setup/scripts/
+RUN EMACS_VERSION=$EMACS_VERSION XWIDGETS=$XWIDGETS NO_DOOM=1 /setup/scripts/emacs.sh \
     && rm -rf /var/lib/apt/lists/*
 
-# The config's fonts, as on the Mac: JetBrains Mono, Nerd Fonts' symbols
-# (nerd-icons).
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-jetbrains-mono unzip \
+# What init.el and the config need, as scripts/tools.sh installs it.
+COPY scripts/tools.sh /setup/scripts/
+COPY init.el /setup/
+RUN DOOM_INIT=/setup/init.el /setup/scripts/tools.sh && rm -rf /var/lib/apt/lists/*
+
+# The tests' own: an X server and D-Bus for the GUI Emacs of the end-to-end
+# tests, fonts for what the config's leave out, and Nerd Fonts' symbols (on
+# Linux tools.sh leaves them to M-x nerd-icons-install-fonts; the merge's rows
+# line up in the config's fonts).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      xvfb xauth dbus dbus-x11 procps unzip fonts-dejavu fonts-noto-color-emoji \
     && mkdir -p /usr/local/share/fonts/nerd \
     && curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/latest/download/NerdFontsSymbolsOnly.zip -o /tmp/n.zip \
     && unzip -o /tmp/n.zip -d /usr/local/share/fonts/nerd && rm /tmp/n.zip && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
-ENV HOME=/root
 WORKDIR /root/.config/doom

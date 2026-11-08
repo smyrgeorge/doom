@@ -10,7 +10,9 @@
 #   tests/linux/run.sh shell             a shell in the container
 #
 # XWIDGETS=no: an Emacs without xwidgets (most distributions'): its own
-# image. The image is built the first time (Emacs compiles: ~10 minutes).
+# image. The image (tests/linux/Dockerfile: Emacs by scripts/emacs.sh, the
+# tools by scripts/tools.sh) is built, or brought up to date from its cached
+# layers, each run: the first time Emacs compiles (~15 minutes).
 # DOOM_EMACS (default ~/.config/emacs) is Doom's folder; E2E_TIMEOUT and
 # E2E_WINDOW are passed on.
 set -euo pipefail
@@ -24,14 +26,12 @@ KIND=${1:-unit}
 [ $# -gt 0 ] && shift
 
 image=doom-config-tests
-build_args=()
-if [ "${XWIDGETS:-yes}" = no ]; then
-  image=doom-config-tests:no-xwidgets
-  build_args=(--build-arg EMACS_CONFIGURE_EXTRA=)
-fi
-if ! docker image inspect "$image" >/dev/null 2>&1; then
-  ui_step "Building the $image image $(ui_dim "(Emacs from source: ~10 minutes, once)")"
-  docker build ${build_args[@]+"${build_args[@]}"} -t "$image" "$HERE"
+xwidgets=${XWIDGETS:-yes}
+[ "$xwidgets" = no ] && image=doom-config-tests:no-xwidgets
+# SKIP_BUILD=1: the image as it is (CI built it already).
+if [ -z "${SKIP_BUILD:-}" ]; then
+  ui_step "The $image image $(ui_dim "(cached layers; Emacs from source the first time: ~15 minutes)")"
+  docker build --build-arg "XWIDGETS=$xwidgets" -t "$image" -f "$HERE/Dockerfile" "$ROOT"
 fi
 
 # Doom's straight folder links into its repos by their absolute path: Doom's

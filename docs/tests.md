@@ -22,9 +22,9 @@ run those under Xvfb: `xvfb-run -a tests/run.sh e2e`.
   `tests/helper-lsp.el`. `test-keys.el` checks the keys of both systems (`+test-on-macos`, `+test-on-linux` in
   `tests/helper.el` run code as on either); no test opens another app (`config/os.el`'s are recorded).
 - `tests/e2e/test-NAME.el` tests what needs a GUI: WebKit pages, child frames, the merge on screen.
-- `tests/linux/` runs them on Linux: a Debian image with Emacs 31.1 built as `scripts/emacs.sh` builds it (with or
+- `tests/linux/` runs them on Linux: a Debian image set up by `scripts/emacs.sh` and `scripts/tools.sh` (with or
   without xwidgets), the config and Doom's folder mounted read-only, the end-to-end tests under Xvfb. Built the first
-  time (~10 minutes). Tests needing what only the host built (ghostel's native module) skip there.
+  time (~15 minutes), then from its cached layers. Tests needing what only the host built (ghostel's native module) skip there.
 - `tests/fixtures/` holds what tests load: `diff-sh-emacs.el` is the Emacs that `cmd/diff.sh` starts in `test-cmd.el`.
 
 A failing or flaky test is a bug to fix in the config, not a test to relax.
@@ -33,11 +33,13 @@ A failing or flaky test is a bug to fix in the config, not a test to relax.
 
 Each push and pull request runs them all (`.github/workflows/tests.yml`), unit and end-to-end, in three jobs:
 
-- **Linux, with xwidgets** and **Linux, without xwidgets**: `tests/linux/run.sh`, in its Docker image (Emacs 31 built
-  from source, the image's layers cached between runs);
-- **macOS**: `tests/run.sh`, with emacs-plus's Emacs.app.
+- **Linux, with xwidgets** and **Linux, without xwidgets**: `tests/linux/run.sh`, in its Docker image, which
+  `scripts/emacs.sh` and `scripts/tools.sh` set up (its layers cached between runs: Emacs is built again only when
+  `emacs.sh` changes);
+- **macOS**: `tests/run.sh`, after `scripts/emacs.sh` and `scripts/tools.sh` set the machine up.
 
-Each installs Doom at the commit in the workflow's `DOOM_REF` (the one the config is used with: bump it after updating
-Doom), runs `doom sync` (its packages cached until `init.el`, `packages.el` or that commit change) and downloads PDF.js
-and Excalidraw (`tests/assets.el`), so no test skips for want of them. A newer push to a
+Each machine is set up the way the README sets up yours, so every push tests the installers too. Doom is cloned at the
+commit in the workflow's `DOOM_REF` (the one the config is used with: bump it after updating Doom), and `emacs.sh`
+syncs it (its packages cached until `init.el`, `packages.el` or that commit change). PDF.js and Excalidraw are
+downloaded (`tests/assets.el`), so no test skips for want of them. A newer push to a
 branch cancels the run still going there.

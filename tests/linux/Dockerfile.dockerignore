@@ -1,0 +1,8 @@
+# The image copies only these (tests/linux/Dockerfile): a small context, its
+# layers cached until they change.
+*
+!scripts/ui.sh
+!scripts/os.sh
+!scripts/emacs.sh
+!scripts/tools.sh
+!init.el
