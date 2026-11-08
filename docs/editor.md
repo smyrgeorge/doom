@@ -19,7 +19,8 @@ Emacs is tiling first:
   tiling strategy puts it. Inside magit, a log or a diff stays in its pane; a commit opens in a new one.
 - Files open as a tab in the current pane. From an application's pane, a popup or the sidebar, they open in the last
   pane of files.
-- A pane closes with its last tab.
+- A pane closes with its last tab. When one closes (however: `SPC w d`, `q`, its last tab), the stacked panes share its
+  rows again, at equal heights.
 
 The `tall` strategy keeps the main pane on the left and stacks the others on the right. `SPC w SPC` opens a new pane
 showing the current buffer, `SPC w a` arranges the panes again, and `SPC w RET` moves the current pane's buffer to the

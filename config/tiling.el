@@ -21,14 +21,17 @@
 ;;               a and new panes lay it out so (Amethyst's expand / shrink main)
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom.
+;; A pane closed, however (SPC w d, q, its last tab...): the others laid out
+;; again as the strategy has them (tall: the stack's panes at equal heights;
+;; Emacs gave the closed one's rows to its neighbour).
 ;; TILING FIRST (config/tiling/apps.el)
 ;; - Applications (`+my/tiling-apps': Claude Code, the terminal, the Markdown
 ;;   preview, magit, drawings, issues) open in a new pane where the strategy
 ;;   puts it, whatever their own setting or Doom's popup rules say; one shown
-;;   already: its pane. Magit's status (SPC g g), and any magit buffer opened from
-;;   outside magit (SPC g d's diff, a log from a file), open so; inside magit,
-;;   a log or a diff from the status stays in its pane as magit has it, a
-;;   commit or a stash (Doom: beside) opens in a new pane, its process log
+;;   already: its pane. Magit's status (SPC g g), and any magit buffer opened
+;;   from outside magit (SPC g d's diff, a log from a file), open so; inside
+;;   magit, a log or a diff from the status stays in its pane as magit has it,
+;;   a commit or a stash (Doom: beside) opens in a new pane, its process log
 ;;   below as Doom has it.
 ;; - Files open as a tab in the current pane. From an application's pane, a
 ;;   popup or a side panel (a link in Claude Code, RET in magit, the sidebar,
@@ -76,11 +79,12 @@ buffer being shown, says so (else as they ask).")
 
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange
-          :resize +my/tiling-tall-resize))
+          :resize +my/tiling-tall-resize :closed +my/tiling-tall-closed))
   "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize
-FUNCTION]). Each takes the panes in order (see above): :split opens a new pane
-and returns it, :arrange lays the panes out, :resize (also given a DELTA, a
-share of the width) makes the main pane bigger and returns its share.")
+FUNCTION] [:closed FUNCTION]). Each takes the panes in order (see above):
+:split opens a new pane and returns it, :arrange lays the panes out, :resize
+(also given a DELTA, a share of the width) makes the main pane bigger and
+returns its share, :closed lays out the panes left once one closed.")
 
 ;; ====== KEY BINDINGS ======
 

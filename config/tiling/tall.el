@@ -73,3 +73,12 @@ and new panes keep it (within `+my/tiling-tall-ratio-limits'). The ratio."
     (let ((main (window-left-child root)))
       (window-resize main (- (+my/tiling--main-width root) (window-total-width main)) t))
     +my/tiling-tall-ratio))
+
+(defun +my/tiling-tall-closed (_panes)
+  "A pane closed (see config/tiling.el): the stack's panes at equal heights
+again, the main pane's width as it is; only when the panes are laid out tall."
+  (let ((root (window-main-window)))
+    (when (and (not (window-live-p root)) (+my/tiling--tall-p root))
+      (let ((stack (window-next-sibling (window-left-child root))))
+        (unless (window-live-p stack)
+          (balance-windows stack))))))

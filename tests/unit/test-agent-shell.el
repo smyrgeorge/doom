@@ -20,6 +20,11 @@
 
 (require 'agent-shell)
 
+;; What Claude is told of a project's issues (config/agent-shell/beads.el):
+;; its own tests (test-agent-shell-beads.el), in projects of their own. Not
+;; here: these run in this config's folder, which may track its issues.
+(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+
 ;; ====== HELPERS ======
 
 (defconst +test-agent-shell--dark

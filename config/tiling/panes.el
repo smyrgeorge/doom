@@ -17,10 +17,11 @@
       (setq child (window-next-sibling child)))
     (nreverse children)))
 
-(defun +my/tiling--panes ()
-  "The selected frame's panes: its windows besides side panels, in order."
+(defun +my/tiling--panes (&optional frame)
+  "FRAME's (the selected frame's) panes: its windows besides side panels, in
+order."
   (let (panes)
-    (named-let walk ((window (window-main-window)))
+    (named-let walk ((window (window-main-window frame)))
       (if (window-live-p window)
           (push window panes)
         (mapc #'walk (+my/tiling--children window))))
@@ -48,3 +49,19 @@
   (set-window-next-buffers window (plist-get state :next))
   (set-window-parameter window 'tab-line-buffers (plist-get state :tabs))
   (set-window-dedicated-p window (plist-get state :dedicated)))
+
+;; A PANE CLOSED (see config/tiling.el)
+(defun +my/tiling--closed-h (frame)
+  "FRAME's panes fewer than when last seen (one closed, however): the others
+laid out again by the strategy's :closed. Not a child frame's (notices, the
+stripe), nor down to one pane."
+  (unless (frame-parent frame)
+    (let ((count (length (+my/tiling--panes frame)))
+          (before (frame-parameter frame '+my/tiling-panes)))
+      (set-frame-parameter frame '+my/tiling-panes count)
+      (when (and before (< count before) (> count 1))
+        (when-let* ((closed (plist-get (+my/tiling--strategy) :closed)))
+          (with-selected-frame frame
+            (funcall closed (+my/tiling--panes))))))))
+
+(add-hook 'window-state-change-functions #'+my/tiling--closed-h)

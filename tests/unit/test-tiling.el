@@ -283,6 +283,68 @@ the selected one stays selected."
       (should (<= (- (apply #'max heights) (apply #'min heights)) 1)))
     (should (eq (selected-window) (nth 2 (+my/tiling--panes))))))
 
+;; ====== A PANE CLOSED ======
+
+(defun +test-tiling--stack-heights ()
+  "The heights of the panes stacked on the right (all but the first)."
+  (mapcar #'window-total-height (cdr (+my/tiling--panes))))
+
+(defun +test-tiling--even-p (heights)
+  (<= (- (apply #'max heights) (apply #'min heights)) 1))
+
+(ert-deftest tiling/a-closed-pane-s-rows-shared-by-the-stack ()
+  "Main pane and three stacked: one of the stack closed, the two left at
+equal heights again (Emacs gave its rows to its neighbour); the main pane's
+width as it was."
+  (+test-tiling
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C" "D"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (should (= (length (+my/tiling--panes)) 4))
+      (should (+test-tiling--even-p (+test-tiling--stack-heights)))
+      (+my/tiling--closed-h (selected-frame)) ; seen: 4 panes
+      (let ((width (window-total-width main)))
+        (delete-window (get-buffer-window "C"))
+        (should-not (+test-tiling--even-p (+test-tiling--stack-heights)))
+        (+my/tiling--closed-h (selected-frame))
+        (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "B" "D")))
+        (should (+test-tiling--even-p (+test-tiling--stack-heights)))
+        (should (= (window-total-width main) width))))))
+
+(ert-deftest tiling/heights-kept-when-no-pane-closed ()
+  "Panes resized by hand, none closed (or one added): their heights stay."
+  (+test-tiling
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C" "D"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (+my/tiling--closed-h (selected-frame))
+      (with-selected-window (get-buffer-window "B")
+        (enlarge-window 2))
+      (let ((heights (+test-tiling--stack-heights)))
+        (should-not (+test-tiling--even-p heights))
+        (+my/tiling--closed-h (selected-frame))
+        (should (equal (+test-tiling--stack-heights) heights))))))
+
+(ert-deftest tiling/a-closed-pane-not-laid-out-tall-left-alone ()
+  "Panes of one's own (not tall): left as they are; down to one pane: nothing."
+  (+test-tiling
+    (split-window nil nil 'below)
+    (split-window nil nil 'below)
+    (+my/tiling--closed-h (selected-frame))
+    (delete-window (car (last (window-list))))
+    (let ((heights (mapcar #'window-total-height (+my/tiling--panes))))
+      (+my/tiling--closed-h (selected-frame))
+      (should (equal (mapcar #'window-total-height (+my/tiling--panes)) heights)))
+    (delete-other-windows)
+    (+my/tiling--closed-h (selected-frame))
+    (should (= (length (+my/tiling--panes)) 1))))
+
+(ert-deftest tiling/closed-panes-watched ()
+  (should (memq #'+my/tiling--closed-h (default-value 'window-state-change-functions)))
+  (should (eq (plist-get (alist-get 'tall +my/tiling-strategies) :closed) #'+my/tiling-tall-closed)))
+
 ;; ====== SPC w RET ======
 
 (ert-deftest tiling/swap-main-from-the-stack ()

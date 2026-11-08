@@ -132,6 +132,30 @@ Doom's popup (40 columns); again, its pane closes."
         (should-not (window-live-p window))
         (should (equal (+test-tiling--layout) '("a.txt")))))))
 
+;; ====== A PANE CLOSED ======
+
+(ert-deftest e2e-tiling/a-closed-pane-s-rows-shared-by-the-stack ()
+  "Three sessions stacked beside the file; the middle one closed (its buffer
+killed): the two left at equal heights once Emacs redisplays (its
+`window-state-change-functions'), with no call of ours."
+  (+test-tiling
+    (let ((main (selected-window))
+          (sessions (mapcar #'+test-tiling--session '("*one*" "*two*" "*three*"))))
+      (dolist (session sessions)
+        (select-window main)
+        (display-buffer session))
+      (redisplay t)
+      (should (equal (+test-tiling--layout) '("a.txt" "*one*" "*two*" "*three*")))
+      (kill-buffer (nth 1 sessions))
+      (should (equal (+test-tiling--layout) '("a.txt" "*one*" "*three*")))
+      (should (+test-wait-for
+               (lambda ()
+                 (redisplay t)
+                 (let ((heights (mapcar #'window-total-height (cdr (+my/tiling--panes)))))
+                   (<= (abs (- (car heights) (cadr heights))) 1)))
+               3))
+      (mapc #'kill-buffer (list (nth 0 sessions) (nth 2 sessions))))))
+
 ;; ====== CLAUDE CODE ======
 
 (ert-deftest e2e-tiling/claude-code-in-a-new-pane-its-links-in-the-files-pane ()
