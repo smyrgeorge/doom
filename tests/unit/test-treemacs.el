@@ -261,6 +261,66 @@ clipboard)."
           (call-interactively (key-binding (kbd "s-c"))))
         (should (equal (current-kill 0) (expand-file-name "README.md" root)))))))
 
+;; ====== CONTEXT MENU ======
+
+(defun +test-treemacs--menu-at (label)
+  "The sidebar's context menu, right-clicked on LABEL's line: its items'
+names (a keymap's prompts), shown ones only."
+  (let (shown)
+    (goto-char (point-min))
+    (should (re-search-forward (regexp-quote label) nil t))
+    (cl-letf (((symbol-function 'x-popup-menu)
+               (lambda (_event menu) (setq shown menu) nil)))
+      ;; The click's position by hand: the window isn't drawn (batch).
+      (treemacs-rightclick-menu
+       (list 'mouse-3 (list (get-buffer-window (current-buffer)) (point) '(0 . 0) 0
+                            nil (point) '(0 . 0) nil '(0 . 0) '(0 . 0)))))
+    (let (names)
+      (map-keymap (lambda (_key binding)
+                    (when (and (eq (car-safe binding) 'menu-item)
+                               (let ((visible (plist-get (nthcdr 3 binding) :visible)))
+                                 (or (null visible) (eval visible t))))
+                      (push (nth 1 binding) names)))
+                  shown)
+      (nreverse names))))
+
+(ert-deftest treemacs/menu-reveal-in-finder ()
+  "Right-clicked on a file or a folder: \"Reveal in Finder\" after \"Open
+With\"."
+  (+test-treemacs
+    (let ((root (+test-treemacs--project "menu" "README.md" "src/")))
+      (with-current-buffer (+test-treemacs--show-project root)
+        (dolist (label '("README.md" "src"))
+          (let* ((names (+test-treemacs--menu-at label))
+                 (at (seq-position names "Open With")))
+            (should at)
+            (should (equal (nth (1+ at) names)
+                           (if (eq system-type 'darwin) "Reveal in Finder" "Show in File Manager")))))))))
+
+(ert-deftest treemacs/menu-with-reveal-only-at-the-top ()
+  "Submenus (no \"Open With\") unchanged."
+  (let ((items '(["New File" ignore] ["New Directory" ignore])))
+    (should (eq (+my/treemacs--menu-with-reveal items) items))))
+
+(ert-deftest treemacs/reveal-in-finder ()
+  "Finder opened on the node's folder, the node selected (Linux: its folder
+in the file manager); not on a line without a path."
+  (+test-treemacs
+    (let ((root (+test-treemacs--project "reveal" "README.md"))
+          calls)
+      (with-current-buffer (+test-treemacs--show-project root)
+        (goto-char (point-min))
+        (should (re-search-forward "README\\.md" nil t))
+        (cl-letf (((symbol-function 'call-process)
+                   (lambda (&rest args) (push args calls) 0)))
+          (+my/treemacs-reveal-in-finder))
+        (should (equal (car calls)
+                       (if (eq system-type 'darwin)
+                           (list "open" nil 0 nil "-R" (expand-file-name "README.md" root))
+                         (list "xdg-open" nil 0 nil root))))
+        (cl-letf (((symbol-function 'treemacs--prop-at-point) #'ignore))
+          (should-error (+my/treemacs-reveal-in-finder) :type 'user-error))))))
+
 ;; ====== HOOKS, ADVICE, TIMERS ======
 
 (ert-deftest treemacs/hooks ()
@@ -276,7 +336,8 @@ clipboard)."
   (should (advice-member-p #'+my/lsp-treemacs-select-panel-a 'lsp-treemacs-symbols))
   (should (advice-member-p #'+my/treemacs-follow-project-buffers-a #'treemacs--do-follow-project))
   (should (advice-member-p #'+my/treemacs-stale-annotations-a #'treemacs--apply-annotations-deferred))
-  (should (advice-member-p #'+my/treemacs-follow-guard-a #'treemacs--follow)))
+  (should (advice-member-p #'+my/treemacs-follow-guard-a #'treemacs--follow))
+  (should (advice-member-p #'+my/treemacs-menu-reveal-a #'treemacs-rightclick-menu)))
 
 (ert-deftest treemacs/git-poll-timer ()
   "Every 3 s (while Emacs runs), the poll."

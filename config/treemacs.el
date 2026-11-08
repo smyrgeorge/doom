@@ -87,3 +87,4 @@
 (load! "treemacs/follow")
 (load! "treemacs/git")
 (load! "treemacs/expand")
+(load! "treemacs/menu")

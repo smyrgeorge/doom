@@ -10,6 +10,7 @@ the git status, also of changes made outside Emacs.
 | Click | Select (the sidebar gets the focus) |
 | Double click | Open a file, expand / collapse a folder |
 | `Cmd+C` | Copy the file's (or folder's) absolute path |
+| Right click → Reveal in Finder | The file or folder selected in Finder |
 | `SPC w w`, window numbers | Go to the sidebar |
 
 The arrows work in the language server's lists too (`SPC c S`, `SPC c X`, `SPC c y`), which open with the cursor in
