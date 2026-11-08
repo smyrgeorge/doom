@@ -5,12 +5,15 @@ that keeps them in the project's `.beads/`, beside the code. Coding agents such 
 across sessions; [beads.el](https://codeberg.org/ctietze/beads.el) shows the same issues in Emacs. `scripts/tools.sh`
 installs `bd` (Homebrew on macOS, npm on Linux).
 
-A project starts tracking its issues with `bd init` at its root (it also adds instructions and hooks for agents).
-
 | Key | Action |
 |---|---|
 | `SPC o i` | The project's issues |
 | `SPC o I` | A new issue: title, type, priority |
+
+In a project that doesn't track its issues yet, `SPC o i` and `SPC o I` ask to start, then run `bd init`: it adds
+`.beads/` and a `.gitignore` entry and commits them. It commits what's staged too, so with something staged it isn't
+run: commit or unstage it first. No files for agents are added (`CLAUDE.md`, `AGENTS.md`...): Claude Code in Emacs is
+told about the issues [by this config](claude-code.md#issues-for-claude).
 
 ## The list
 

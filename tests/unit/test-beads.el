@@ -31,17 +31,17 @@
         (error "%s %s: %s" program (string-join args " ") (buffer-string)))
       (buffer-string))))
 
-(defmacro +test-beads-with-project (&rest body)
-  "BODY in a new git repo tracking its issues with bd (`default-directory'),
-with a temp HOME and global gitconfig; skipped without bd. One window on
-*scratch*, and again after (Beads' buffers killed)."
+(defmacro +test-beads-with-repo (&rest body)
+  "BODY in a new git repo (`default-directory', also `repo'), with a temp HOME
+and global gitconfig, Doom's project root it; skipped without bd. One window
+on *scratch*, and again after (Beads' buffers killed)."
   (declare (indent 0))
   `(progn
      (unless (executable-find "bd")
        (ert-skip "No bd (scripts/tools.sh installs it)"))
      (+test-with-reset
        (let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "beads-home-") t)))
-              (repo (file-name-as-directory (make-temp-file (+test-tmp-file "beads-repo-") t)))
+              (repo (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "beads-repo-") t))))
               (process-environment
                (append (list (concat "HOME=" home)
                              (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
@@ -52,15 +52,22 @@ with a temp HOME and global gitconfig; skipped without bd. One window on
               (default-directory repo))
          ;; Doom's project root (projectile's, not loaded here): the repo.
          (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) repo)))
-         (with-temp-file (expand-file-name ".gitconfig" home)
-           (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
-                   "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
-         (+test-beads--run "git" "init" "-q")
-         (+test-beads--run "bd" "init" "--quiet" "--prefix" "t")
-         (unwind-protect (progn ,@body)
-           (dolist (buffer (buffer-list))
-             (when (string-prefix-p "*Beads" (buffer-name buffer))
-               (kill-buffer buffer)))))))))
+           (with-temp-file (expand-file-name ".gitconfig" home)
+             (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
+                     "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
+           (+test-beads--run "git" "init" "-q")
+           (unwind-protect (progn ,@body)
+             (dolist (buffer (buffer-list))
+               (when (string-prefix-p "*Beads" (buffer-name buffer))
+                 (kill-buffer buffer)))))))))
+
+(defmacro +test-beads-with-project (&rest body)
+  "BODY in a new git repo tracking its issues with bd (see
+`+test-beads-with-repo')."
+  (declare (indent 0))
+  `(+test-beads-with-repo
+     (+test-beads--run "bd" "init" "--quiet" "--prefix" "t")
+     ,@body))
 
 (defun +test-beads--create (title &rest args)
   "A new issue TITLE (with ARGS, as `beads-client-create' takes them): its id."
@@ -77,17 +84,71 @@ with a temp HOME and global gitconfig; skipped without bd. One window on
   (should (eq (lookup-key doom-leader-map (kbd "o i")) #'+my/beads-project))
   (should (eq (lookup-key doom-leader-map (kbd "o I")) #'+my/beads-new-issue)))
 
-(ert-deftest beads/a-project-without-issues-says-so ()
-  "SPC o i, SPC o I where no .beads/ is: what to run, nothing opened."
+(ert-deftest beads/the-root ()
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "beads-none-") t)))
          (default-directory dir))
     (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) dir)))
       (should-not (+my/beads-root))
-      (let ((err (should-error (+my/beads-project) :type 'user-error)))
-        (should (string-match-p "run .bd init. in" (cadr err))))
-      (should-error (+my/beads-new-issue) :type 'user-error)
       (make-directory (expand-file-name ".beads" dir))
       (should (equal (+my/beads-root) dir)))))
+
+;; ====== STARTING ======
+
+(ert-deftest beads/spc-o-i-starts-tracking-once-asked ()
+  "SPC o i where no .beads/ is: asked; no, nothing; yes, bd init (its commit,
+no files for agents), then the (empty) list."
+  (+test-beads-with-repo
+    (let (asked)
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (push prompt asked) nil)))
+        (should-error (+my/beads-project) :type 'user-error))
+      (should (string-match-p "Track .*beads-repo-.*'s issues with Beads\\?" (car asked)))
+      (should-not (file-exists-p (expand-file-name ".beads" repo)))
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t)))
+        (+my/beads-project))
+      (should (equal (+my/beads-root) repo))
+      (should (string-match-p "bd init" (+test-beads--run "git" "log" "--format=%s")))
+      (dolist (file '("CLAUDE.md" "AGENTS.md" ".claude" ".codex" ".cursor"))
+        (should-not (file-exists-p (expand-file-name file repo))))
+      (should (seq-find (lambda (b) (with-current-buffer b (derived-mode-p 'beads-list-mode)))
+                        (buffer-list)))
+      ;; Tracked now: not asked again.
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) (error "Asked again"))))
+        (+my/beads-project)))))
+
+(ert-deftest beads/spc-o-I-starts-tracking-too ()
+  (+test-beads-with-repo
+    (let (created)
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t))
+                ((symbol-function 'beads-create-issue)
+                 (lambda () (interactive) (push default-directory created))))
+        (+my/beads-new-issue))
+      (should (equal created (list repo)))
+      (should (+my/beads-root)))))
+
+(ert-deftest beads/not-started-over-staged-changes ()
+  "bd init commits what's staged: with something staged, not run (not asked)."
+  (+test-beads-with-repo
+    (with-temp-file (expand-file-name "work.txt" repo) (insert "half done\n"))
+    (+test-beads--run "git" "add" "work.txt")
+    (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) (error "Asked"))))
+      (let ((err (should-error (+my/beads-project) :type 'user-error)))
+        (should (string-match-p "commit or unstage it first" (cadr err)))))
+    (should-not (file-exists-p (expand-file-name ".beads" repo)))
+    ;; Still staged, nothing committed.
+    (should (equal (+test-beads--run "git" "diff" "--cached" "--name-only") "work.txt\n"))))
+
+(ert-deftest beads/not-started-without-bd ()
+  (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "beads-nobd-") t)))
+         (default-directory dir))
+    (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) dir))
+              ((symbol-function 'executable-find) (lambda (&rest _) nil)))
+      (let ((err (should-error (+my/beads-project) :type 'user-error)))
+        (should (string-match-p "scripts/tools.sh" (cadr err)))))))
+
+(ert-deftest beads/init-arguments ()
+  (should (equal (car +my/beads-init-args) "init"))
+  (should (member "--non-interactive" +my/beads-init-args))
+  (should (member "--skip-agents" +my/beads-init-args)))
 
 ;; ====== BD 1.x ======
 
