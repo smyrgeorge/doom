@@ -134,25 +134,50 @@ function run(argv) {
              (and (= (length windows) 1) (car windows))))))
 
 ;; THE SAME SCREENSHOT
-;; macOS draws the window's outer edge (its 1 px border, by the rounded
-;; corners) a little differently from one capture to the next: the example
-;; unchanged, its screenshot's file changed at each run. A new capture
-;; differing from the last screenshot only there (its outer
-;; `+my/screenshots-edge' pixels) leaves the last one as it is. With
-;; ImageMagick (scripts/tools.sh); without it, each capture replaces it.
+;; macOS draws the window's outer edge (its 1 px border, its rounded corners'
+;; curve) a little differently from one capture to the next, and WebKit a few
+;; pixels a shade apart (PDF.js's toolbar): the example unchanged, its
+;; screenshot's file changed at each run. A new capture differing from the
+;; last screenshot only there leaves the last one as it is: its outer
+;; `+my/screenshots-edge' pixels and its corners' `+my/screenshots-corner'
+;; squares left out, colours within `+my/screenshots-fuzz' the same. Not more
+;; of the edge: the error stripe's marks are in the window's last 10 pixels.
+;; With ImageMagick (scripts/tools.sh); without it, each capture replaces it.
 (defvar +my/screenshots-edge 3
-  "Pixels on each side of a screenshot (the window's edge) a new capture may
+  "Pixels on each side of a screenshot (the window's border) a new capture may
 differ in from the last one and still be the same screenshot (see above).")
 
+(defvar +my/screenshots-corner 12
+  "The side of the squares, at a screenshot's corners within its edge, a new
+capture may differ in (the rounded corners' curve, see above).")
+
+(defvar +my/screenshots-fuzz "1%"
+  "How far apart two pixels' colours may be and still be the same (see
+above): ImageMagick's -fuzz.")
+
 (defun +my/screenshots--same-p (old new)
-  "Non-nil if image files OLD and NEW are the same but for their outer
-`+my/screenshots-edge' pixels (see above); nil without ImageMagick."
+  "Non-nil if image files OLD and NEW are the same but for their edge and
+corners, colours within the fuzz (see above); nil without ImageMagick."
   (and (executable-find "magick")
        (with-temp-buffer
-         (and (eql 0 (call-process "magick" nil t nil old new
-                                   "-shave" (format "%dx%d" +my/screenshots-edge +my/screenshots-edge)
+         (and (eql 0 (apply #'call-process "magick" nil t nil old new
+                            "-alpha" "off"
+                            "-shave" (format "%dx%d" +my/screenshots-edge +my/screenshots-edge)
+                            "-fill" "black"
+                            (append
+                             ;; The corners blacked out in both: top left, top
+                             ;; right, bottom left, bottom right (%[fx:w] and
+                             ;; %[fx:h], ImageMagick's: the image's size).
+                             (let ((c +my/screenshots-corner)
+                                   (n (1- +my/screenshots-corner)))
+                               (mapcan (lambda (rectangle) (list "-draw" (concat "rectangle " rectangle)))
+                                       (list (format "0,0 %d,%d" n n)
+                                             (format "%%[fx:w-%d],0 %%[fx:w],%d" c n)
+                                             (format "0,%%[fx:h-%d] %d,%%[fx:h]" c n)
+                                             (format "%%[fx:w-%d],%%[fx:h-%d] %%[fx:w],%%[fx:h]" c c))))
+                             (list "-fuzz" +my/screenshots-fuzz
                                    "-metric" "AE" "-compare"
-                                   "-format" "%[distortion]" "info:"))
+                                   "-format" "%[distortion]" "info:"))))
               (let ((said (string-trim (buffer-string))))
                 (and (string-match-p "\\`[0-9.e+-]+\\'" said)
                      (zerop (string-to-number said))))))))

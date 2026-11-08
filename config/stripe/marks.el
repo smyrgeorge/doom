@@ -168,7 +168,8 @@ errors or the diff-hl highlights change."
 
 (defun +my/stripe--key (window &optional start)
   "What WINDOW's stripe depends on, each part compared with `eq'. Edits
-within a line don't change it."
+within a line don't change it. Flycheck's errors 7th, diff-hl's tick 8th:
+examples/stripe.el reads them there."
   (nconc (list (current-buffer)
                (or start (window-start window))
                (window-vscroll window t)       ; smooth scrolling: part of a row

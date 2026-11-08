@@ -156,20 +156,29 @@ last one left as it is (its file not rewritten); different: replaced."
       (should-not (file-exists-p new)))))
 
 (ert-deftest screenshots/same-but-for-the-window-s-edge ()
-  "ImageMagick: the same image, or one differing in its outer
-`+my/screenshots-edge' pixels only; not one differing inside."
+  "ImageMagick: the same image, or one differing only in its outer
+`+my/screenshots-edge' pixels, its corners' squares or by a shade (within
+`+my/screenshots-fuzz'); not one differing inside, nor by the window's right
+edge past its border (where the error stripe's marks are)."
   (skip-unless (executable-find "magick"))
   (let ((base (+test-tmp-file "shots/base.png"))
-        (edge (+test-tmp-file "shots/edge.png"))
-        (inside (+test-tmp-file "shots/inside.png")))
-    (should (zerop (call-process "magick" nil nil nil "-size" "40x30" "xc:gray20" base)))
-    (should (zerop (call-process "magick" nil nil nil base "-fill" "white"
-                                 "-draw" "point 39,5" "-draw" "point 0,29" edge)))
-    (should (zerop (call-process "magick" nil nil nil base "-fill" "white"
-                                 "-draw" "point 20,15" inside)))
+        (variants nil))
+    (should (zerop (call-process "magick" nil nil nil "-size" "100x80" "xc:gray20" base)))
+    (pcase-dolist (`(,name . ,draw)
+                   '((edge "-fill" "white" "-draw" "point 99,40" "-draw" "point 0,79")
+                     (corner "-fill" "white" "-draw" "point 9,9" "-draw" "point 90,72")
+                     (shade "-fill" "rgb(52,52,52)" "-draw" "point 50,40")
+                     (inside "-fill" "white" "-draw" "point 50,40")
+                     (stripe "-fill" "white" "-draw" "point 92,40")))
+      (let ((file (+test-tmp-file (format "shots/%s.png" name))))
+        (should (zerop (apply #'call-process "magick" nil nil nil base (append draw (list file)))))
+        (push (cons name file) variants)))
     (should (+my/screenshots--same-p base base))
-    (should (+my/screenshots--same-p base edge))
-    (should-not (+my/screenshots--same-p base inside))
+    (should (+my/screenshots--same-p base (alist-get 'edge variants)))
+    (should (+my/screenshots--same-p base (alist-get 'corner variants)))
+    (should (+my/screenshots--same-p base (alist-get 'shade variants)))
+    (should-not (+my/screenshots--same-p base (alist-get 'inside variants)))
+    (should-not (+my/screenshots--same-p base (alist-get 'stripe variants)))
     (let ((exec-path nil))
       (should-not (+my/screenshots--same-p base base)))))
 

@@ -188,7 +188,10 @@ in a temp repository (deleted once closed). See examples/stripe.el."
 
 (defun +my/example-stripe-ready ()
   "Non-nil once the example's strip shows flycheck's findings and git's
-changes."
+changes: they're found, and the strip was drawn with them (its window's
+`+my/stripe-key', what it was last drawn from, has flycheck's errors and
+diff-hl's highlights as they are). Found isn't enough: the screenshot caught
+the strip drawn before flycheck's errors came, the mode line counting them."
   (when-let* ((buffer (seq-find (lambda (buffer)
                                   (equal (buffer-local-value 'buffer-file-name buffer)
                                          (and (buffer-local-value '+my/example--closing buffer)
@@ -200,6 +203,13 @@ changes."
            (eq (bound-and-true-p flycheck-last-status-change) 'finished)
            (flycheck-has-current-errors-p)
            (seq-some (lambda (ov) (overlay-get ov 'diff-hl))
-                     (overlays-in (point-min) (point-max)))))))
+                     (overlays-in (point-min) (point-max)))
+           (when-let* ((window (get-buffer-window buffer)))
+             ;; Drawn where there's a GUI (redisplay draws it: none in batch).
+             (or (not (display-graphic-p (window-frame window)))
+                 (when-let* ((drawn (window-parameter window '+my/stripe-key)))
+                   ;; Their places in it (`+my/stripe--key').
+                   (and (eq (nth 6 drawn) flycheck-current-errors)
+                        (eql (nth 7 drawn) +my/stripe--diff-hl-tick)))))))))
 
 (provide 'example-stripe)
