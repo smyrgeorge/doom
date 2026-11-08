@@ -3,8 +3,8 @@
 ;; +my/example-stripe makes a Git repository in the temp folder with an Emacs
 ;; Lisp file, inventory.el, long enough to scroll, committed and then changed
 ;; (lines changed, added and removed: the git gutter's colours) with mistakes
-;; the byte compiler finds (flycheck: errors in red, warnings in yellow), and
-;; opens it. The strip at the window's right edge maps them all onto its
+;; the byte compiler finds (flycheck: errors in red, warnings in yellow) and
+;; TODO comments (blue), and opens it. The strip at the window's right edge maps them all onto its
 ;; height, the part on screen a light band: click it to jump there, drag the
 ;; band to scroll. The repository is deleted once the file is closed.
 
@@ -57,10 +57,12 @@
   \"ITEM's kind of fruit.\"
   (car item))
 
+;; TODO: prices by weight, not by piece.
 (defun inventory-price (items price)
   \"ITEMS, PRICE each.\"
   (* (length items) price))
 
+;; HACK: the cache stands in for the real total.
 (defun inventory-total ()
   \"All the inventory is worth.\"
   (+ inventory-cache 0))
@@ -99,6 +101,9 @@
   (/ (inventory-guava-count items) (inventory-price items)))
 
 "))
+           ;; In both versions: a TODO comment, not a change.
+           ((equal kind "lemon")
+            (concat ";; FIXME: lemons are sold by the kilo.\n" text))
            ((and changed (equal kind "coconut"))
             (concat text "(inventory-define-unit tray \"six\")\n\n"))
            (t text))))
@@ -131,7 +136,8 @@ your name, hooks or signing): its exit status."
     default-directory))
 
 (defun +my/example-stripe ()
-  "Example: the error stripe of a file with errors, warnings and git changes,
+  "Example: the error stripe of a file with errors, warnings, TODO comments and
+git changes,
 in a temp repository (deleted once closed). See examples/stripe.el."
   (interactive)
   (let ((repo (+my/example-stripe--repo)))
@@ -171,7 +177,7 @@ in a temp repository (deleted once closed). See examples/stripe.el."
      (lambda ()
        (when (boundp 'trusted-content)
          (setq trusted-content (if (listp trusted-content) (delete repo trusted-content) trusted-content)))))
-    (message "Stripe example: errors red, warnings yellow, git's changes in the gutter's colours; click the strip to jump, drag its band to scroll")
+    (message "Stripe example: errors red, warnings yellow, TODO comments blue, git's changes in the gutter's colours; click the strip to jump, drag its band to scroll")
     (current-buffer)))
 
 (defun +my/example-stripe-ready ()

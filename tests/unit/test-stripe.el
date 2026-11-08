@@ -1,7 +1,7 @@
 ;;; tests/unit/test-stripe.el -*- lexical-binding: t; -*-
 ;; config/stripe.el: the error stripe at the right edge of file
-;; windows (flycheck errors, diff-hl's git changes, the band of the part on
-;; screen): its marks, its terminal cells, its graphical image and the child
+;; windows (flycheck errors, TODO comments, diff-hl's git changes, the band of
+;; the part on screen): its marks, its terminal cells, its graphical image and the child
 ;; frame showing it (faked: batch Emacs makes no child frames), clicks, drags
 ;; and the wheel on it, the scroll limit past the end.
 ;;
@@ -32,7 +32,8 @@
     (diff-hl-delete . "#aa0000")
     (diff-hl-change . "#ff8800")
     (diff-hl-insert . "#00ff00")
-    (flycheck-fringe-info . "#0000ff")))
+    (+my/stripe-todo . "#00aaff")
+    (+my/stripe-suggestion . "#888800")))
 
 (pcase-dolist (`(,face . ,color) +test-stripe--colors)
   (set-face-foreground face color))
@@ -146,19 +147,51 @@ pixels from the top of the text."
 ;; ====== SETTINGS ======
 
 (ert-deftest stripe/settings-defaults ()
-  (should (equal (default-value '+my/stripe-diagnostic-levels) '(error warning)))
+  (should (equal (default-value '+my/stripe-diagnostic-levels) '(error warning info)))
+  (should (equal (default-value '+my/stripe-todo-keywords) '("TODO" "FIXME" "HACK")))
   (should (= (default-value '+my/stripe-mark-height) 4))
   (should (eql (default-value '+my/stripe-overscroll) 0.25))
   (should (eql (default-value '+my/stripe-padding) 1)))
 
 (ert-deftest stripe/kinds-by-priority ()
-  "error > warning > deleted > changed > added > info, each in its face."
+  "error > warning > TODO > deleted > changed > added > suggestion (info), each
+in its face."
   (should (equal (mapcar #'car (sort (copy-sequence +my/stripe--kinds)
                                      (lambda (a b) (> (cadr a) (cadr b)))))
-                 '(error warning delete change insert info)))
+                 '(error warning todo delete change insert info)))
   (should (equal (mapcar (lambda (kind) (nth 2 kind)) +my/stripe--kinds)
-                 '(flycheck-fringe-error flycheck-fringe-warning diff-hl-delete
-                   diff-hl-change diff-hl-insert flycheck-fringe-info))))
+                 '(flycheck-fringe-error flycheck-fringe-warning +my/stripe-todo
+                   diff-hl-delete diff-hl-change diff-hl-insert +my/stripe-suggestion))))
+
+(ert-deftest stripe/faces-from-the-theme ()
+  "TODO marks the theme's blue, suggestions its warning colour dimmed; nothing
+without Doom's colour functions or with colours not in hex."
+  (let ((todo (face-attribute '+my/stripe-todo :foreground))
+        (suggestion (face-attribute '+my/stripe-suggestion :foreground)))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'doom-color) (lambda (name) (and (eq name 'blue) "#0000ee")))
+                    ((symbol-function 'doom-blend)
+                     (lambda (a b alpha) (format "%s+%s*%s" a b alpha)))
+                    ((symbol-function 'face-foreground)
+                     (lambda (face &rest _) (and (eq face 'warning) "#eeee00")))
+                    ((symbol-function 'face-background)
+                     (lambda (face &rest _) (and (eq face 'default) "#000000"))))
+            (+my/stripe-faces-h)
+            (should (equal (face-attribute '+my/stripe-todo :foreground) "#0000ee"))
+            (should (equal (face-attribute '+my/stripe-suggestion :foreground)
+                           "#eeee00+#000000*0.5")))
+          (set-face-foreground '+my/stripe-todo "#123456")
+          (cl-letf (((symbol-function 'doom-color) (lambda (_) "blue"))
+                    ((symbol-function 'doom-blend) #'ignore))
+            (+my/stripe-faces-h)
+            (should (equal (face-attribute '+my/stripe-todo :foreground) "#123456"))))
+      (set-face-foreground '+my/stripe-todo todo)
+      (set-face-foreground '+my/stripe-suggestion suggestion)))
+  (should (memq #'+my/stripe-faces-h doom-load-theme-hook))
+  ;; Before the strips are redrawn in the theme's colours.
+  (should (< (cl-position #'+my/stripe-faces-h doom-load-theme-hook)
+             (cl-position #'+my/stripe--render-all doom-load-theme-hook))))
 
 ;; ====== MARKS ======
 
@@ -189,19 +222,29 @@ pixels from the top of the text."
   (+test-stripe "αβγ\n😀 ✓\n"
     (should (= (car (+my/stripe--marks)) 3))))
 
-(ert-deftest stripe/marks-errors-and-warnings ()
+(ert-deftest stripe/marks-errors-warnings-and-suggestions ()
   (+test-stripe (+test-stripe--text 20)
     (+test-stripe--errors '(3 error) '(7 warning) '(9 info) '(12 error))
     (should (equal (car (+my/stripe--marks)) 21))
     (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks)))
-                   '((3 3 error) (7 7 warning) (12 12 error))))))
+                   '((3 3 error) (7 7 warning) (9 9 info) (12 12 error))))))
 
-(ert-deftest stripe/marks-info-only-when-asked ()
+(ert-deftest stripe/marks-lsp-hints-are-suggestions ()
+  "lsp-mode gives flycheck its hints (severity 4) as `info', tagged ones
+(unnecessary, deprecated) as levels of their own of the same severity."
   (+test-stripe (+test-stripe--text 20)
-    (let ((+my/stripe-diagnostic-levels '(error warning info)))
+    (let ((level '+test-stripe-lsp-flycheck-info-unnecessary))
+      (put level 'flycheck-error-severity (get 'info 'flycheck-error-severity))
+      (+test-stripe--errors '(4 info) (list 6 level))
+      (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks)))
+                     '((4 4 info) (6 6 info)))))))
+
+(ert-deftest stripe/marks-levels-as-set ()
+  (+test-stripe (+test-stripe--text 20)
+    (let ((+my/stripe-diagnostic-levels '(error warning)))
       (+test-stripe--errors '(3 error) '(9 info))
       (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks)))
-                     '((3 3 error) (9 9 info))))))
+                     '((3 3 error))))))
   (+test-stripe (+test-stripe--text 20)
     (let ((+my/stripe-diagnostic-levels '(error)))
       (+test-stripe--errors '(3 error) '(5 warning))
@@ -278,6 +321,44 @@ pixels from the top of the text."
           (goto-char (point-min))
           (insert "x")
           (should-not (eq (+my/stripe--marks) marks3)))))))
+
+(ert-deftest stripe/marks-todo-in-text ()
+  "In text: TODO, FIXME, HACK anywhere, as words, in capitals; a line once."
+  (+test-stripe (concat "one\n"
+                        "TODO: two\n"
+                        "three FIXME\n"
+                        "todo four\n"            ; case matters
+                        "TODOS FIXMEs MY_HACK\n" ; not words of their own
+                        "(HACK) and TODO\n"      ; one mark
+                        "NOTE seven\n")
+    (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks)))
+                   '((2 2 todo) (3 3 todo) (6 6 todo))))
+    (let ((+my/stripe-todo-keywords '("NOTE")))
+      (should (equal (+my/stripe--todo-lines) '(7))))
+    (let ((+my/stripe-todo-keywords nil))
+      (should-not (+my/stripe--todo-lines))
+      (should-not (+my/stripe--todo-regexp)))))
+
+(ert-deftest stripe/marks-todo-in-code-only-in-comments ()
+  (+test-with-reset
+    (with-current-buffer (+test-buffer "stripe-code"
+                                       (concat "(defun f ()\n"
+                                               "  ;; TODO: a comment\n"
+                                               "  \"TODO in a string\"\n"
+                                               "  'FIXME)\n"
+                                               "; HACK\n"
+                                               "\"HACK\" ; FIXME after a string\n"
+                                               "'TODO\n")
+                                       #'emacs-lisp-mode)
+      (goto-char (point-max))
+      (should (equal (+my/stripe--todo-lines) '(2 5 6)))
+      (should (= (point) (point-max))))))
+
+(ert-deftest stripe/marks-todo-whole-buffer-when-narrowed ()
+  (+test-stripe "TODO\nb\nc\nFIXME\n"
+    (narrow-to-region (+test-stripe--line-start 2) (+test-stripe--line-start 3))
+    (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks)))
+                   '((1 1 todo) (4 4 todo))))))
 
 (defun +test-stripe--git (&rest args)
   "Run git with ARGS in `default-directory' (the user's git config left out)."
@@ -395,21 +476,21 @@ current line's background, else gray30."
 
 (ert-deftest stripe/kind-colors ()
   "Each kind in its face's colour (the gutter's for git changes)."
-  (dolist (kind '(error warning delete change insert info))
+  (dolist (kind '(error warning todo delete change insert info))
     (should (equal (+my/stripe--kind-color kind) (+test-stripe--color kind))))
   (should-not (+my/stripe--kind-color 'unknown))
   (let ((+my/stripe--kinds '((error 6 +test-stripe-no-such-face))))
     (should-not (+my/stripe--kind-color 'error))))
 
 (ert-deftest stripe/palette ()
-  "The images' colours by pixel character: blank, ?t the band, ?6..?1 the kinds
+  "The images' colours by pixel character: blank, ?t the band, ?7..?1 the kinds
 (None for a kind without a colour)."
   (should (equal (+my/stripe--palette)
                  `((?\s . "None") (?t . ,(+my/stripe--thumb-color))
-                   (?6 . "#ff0000") (?5 . "#ffff00") (?4 . "#aa0000")
-                   (?3 . "#ff8800") (?2 . "#00ff00") (?1 . "#0000ff"))))
+                   (?7 . "#ff0000") (?6 . "#ffff00") (?5 . "#00aaff") (?4 . "#aa0000")
+                   (?3 . "#ff8800") (?2 . "#00ff00") (?1 . "#888800"))))
   (cl-letf (((symbol-function '+my/stripe--kind-color) #'ignore))
-    (should (equal (mapcar #'cdr (nthcdr 2 (+my/stripe--palette))) (make-list 6 "None")))))
+    (should (equal (mapcar #'cdr (nthcdr 2 (+my/stripe--palette))) (make-list 7 "None")))))
 
 ;; ====== TERMINAL: CELLS ======
 
@@ -448,12 +529,13 @@ hand pointer and a hint."
 
 (ert-deftest stripe/cells-show-marks-in-their-colours ()
   (+test-stripe "1\n2\n3\n4\n5\n6\n7\n8\n"
-    (let* ((marks '((1 1 error) (2 2 warning) (3 3 delete) (4 4 change) (5 5 insert) (6 6 info)))
+    (let* ((marks '((1 1 error) (2 2 warning) (3 3 todo) (4 4 delete) (5 5 change)
+                    (6 6 insert) (7 7 info)))
            (colors (+test-stripe--cell-colors
                     (+my/stripe--cell-rows (selected-window) (point-min) 9 marks))))
       (should (equal colors (append (mapcar #'+test-stripe--color
-                                            '(error warning delete change insert info))
-                                    '(nil nil nil)))))))
+                                            '(error warning todo delete change insert info))
+                                    '(nil nil)))))))
 
 (ert-deftest stripe/cells-most-important-mark-wins ()
   "Overlapping marks: error > warning > deleted > changed > added > info, in
@@ -582,7 +664,7 @@ the end on the last row."
         (should (= (car thumb) 0))
         (should (string-match-p "\\`t+" pixels))
         (should (= (cdr thumb) (length (car (split-string pixels "[^t]")))))
-        (should (eq (aref pixels (floor (* scale 99))) ?6))))))
+        (should (eq (aref pixels (floor (* scale 99))) ?7))))))
 
 (ert-deftest stripe/pixels-band-follows-the-scroll ()
   (+test-stripe (+test-stripe--text 400)
@@ -599,9 +681,14 @@ the end on the last row."
       (+test-stripe--errors '(20 warning))
       (+test-stripe--hunk 20 20 'change)
       (+test-stripe--hunk 30 30 'insert)
+      (+test-stripe--hunk 40 40 'delete)
+      (+test-stripe--errors '(20 warning) '(30 info))
+      (goto-char (+test-stripe--line-start 40))
+      (insert "TODO ")
       (pcase-let ((`(,pixels ,scale) (+test-stripe--strip-pixels)))
-        (should (eq (aref pixels (floor (* scale 19))) ?5))  ; warning over change
-        (should (eq (aref pixels (floor (* scale 29))) ?2))))))
+        (should (eq (aref pixels (floor (* scale 19))) ?6))  ; warning over change
+        (should (eq (aref pixels (floor (* scale 29))) ?2))  ; added over suggestion
+        (should (eq (aref pixels (floor (* scale 39))) ?5)))))) ; TODO over deleted
 
 (ert-deftest stripe/pixels-short-file ()
   "A file that fits: no band, a line a row (the font's height a line)."
@@ -1189,6 +1276,29 @@ errors, lines added or removed), not otherwise (edits within a line)."
         (set-window-parameter nil '+my/stripe-key (list (current-buffer)))
         (+my/stripe--scrolled (selected-window) 10)
         (should (equal renders (list (cons (selected-window) 10))))))))
+
+(ert-deftest stripe/todo-edits-counted ()
+  "Edits within a line that add or remove a TODO keyword are counted (the strip
+is redrawn for them), as are other edits of lines with one; others aren't."
+  (+test-stripe "one\ntwo\n"
+    (cl-flet ((counted (fn)
+                (let ((count +my/stripe--line-edits))
+                  (funcall fn)
+                  (> +my/stripe--line-edits count))))
+      (goto-char (point-max))
+      (should-not (counted (lambda () (insert "TOD"))))
+      (should (counted (lambda () (insert "O"))))                 ; added
+      (should (counted (lambda ()                                 ; its line
+                         (goto-char (+test-stripe--line-start 3))
+                         (insert "- "))))
+      (should-not (counted (lambda ()                             ; another line
+                             (goto-char (point-min))
+                             (insert "y"))))
+      (should (counted (lambda ()                                 ; removed
+                         (goto-char (point-max))
+                         (delete-char -1))))
+      (let ((+my/stripe-todo-keywords nil))
+        (should-not (counted (lambda () (insert "O"))))))))
 
 (ert-deftest stripe/line-edits-counted ()
   "Edits that add or remove line breaks are counted (they move the strip's

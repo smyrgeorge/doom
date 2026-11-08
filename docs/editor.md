@@ -30,7 +30,13 @@ Without `(load! "config/tiling")` in `config.el`, each opens where it would on i
 
 ## Error stripe
 
-A strip at the right edge of a file's window maps the whole file: errors, warnings, git changes and the part on screen.
+A strip at the right edge of a file's window maps the whole file, as IntelliJ's does:
+- diagnostics: errors (red), warnings (yellow), suggestions (dim yellow: LSP hints and information);
+- TODO comments: `TODO`, `FIXME`, `HACK` (blue);
+- git changes: added, changed and deleted lines, in the gutter's colours;
+- the part on screen, a light band.
+
+Where marks overlap the most important wins: error > warning > TODO > deleted > changed > added > suggestion.
 Click a mark to jump to it, drag the band to scroll. Try it: `M-x +my/example-stripe`.
 
 ![The error stripe at the window's right edge](../examples/stripe.png)

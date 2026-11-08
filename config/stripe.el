@@ -7,12 +7,14 @@
 ;; ERROR STRIPE
 ;; A strip at the right edge of the window that maps the whole file onto the
 ;; window height, like marks on a scrollbar:
-;; - flycheck diagnostics (LSP included): red errors, yellow warnings (see
+;; - flycheck diagnostics (LSP included): red errors, yellow warnings, dim
+;;   yellow suggestions (flycheck's info: LSP hints, information; see
 ;;   `+my/stripe-diagnostic-levels');
+;; - TODO comments: TODO, FIXME, HACK in blue (see `+my/stripe-todo-keywords');
 ;; - git changes (diff-hl), in the gutter's colours: red deleted, orange
 ;;   changed, green added;
 ;; - where several overlap, the most important wins, in that order
-;;   (error > warning > deleted > changed > added > info);
+;;   (error > warning > TODO > deleted > changed > added > suggestion);
 ;; - a light band marks the part of the file on screen: the scrollbar's thumb.
 ;; Click the strip to jump to that part of the file; drag the band to scroll;
 ;; the wheel over it scrolls the file. On in every file buffer in prog, text and
@@ -28,8 +30,13 @@
 ;; made anew only when it changes (most scrolls move the band by less than a
 ;; pixel). In a terminal each row is a coloured cell in the margin.
 
-(defvar +my/stripe-diagnostic-levels '(error warning)
-  "Flycheck levels shown in the stripe; add `info' to also show hints.")
+(defvar +my/stripe-diagnostic-levels '(error warning info)
+  "Flycheck levels shown in the stripe: `error', `warning', `info' (suggestions:
+LSP hints and information).")
+
+(defvar +my/stripe-todo-keywords '("TODO" "FIXME" "HACK")
+  "Keywords whose lines the stripe marks, as words, case matters: in code only
+in comments, in text anywhere. nil: none.")
 
 (defvar +my/stripe-mark-height 4
   "Minimum height of a mark, in pixels (graphical frames).")

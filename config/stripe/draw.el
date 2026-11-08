@@ -36,9 +36,18 @@ already."
 
 (defun +my/stripe--note-line-edit (beg end &rest _)
   "Before/after a change: count it if BEG..END holds a line break, i.e. lines
-are being removed (before) or added (after)."
-  (when (and (< beg end)
-             (save-excursion (goto-char beg) (search-forward "\n" end t)))
+are being removed (before) or added (after), or its lines hold a TODO keyword,
+i.e. one may be removed (before) or added (after)."
+  (when (save-excursion
+          (goto-char beg)
+          (or (and (< beg end) (search-forward "\n" end t))
+              (when-let* ((regexp (+my/stripe--todo-regexp)))
+                (let ((case-fold-search nil))
+                  (goto-char beg)
+                  (forward-line 0)
+                  (re-search-forward regexp (save-excursion (goto-char end)
+                                                            (line-end-position))
+                                     t)))))
     (cl-incf +my/stripe--line-edits)))
 
 (defun +my/stripe--render-all ()

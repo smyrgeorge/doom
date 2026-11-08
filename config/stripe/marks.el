@@ -1,22 +1,97 @@
 ;;; $DOOMDIR/config/stripe/marks.el -*- lexical-binding: t; -*-
-;; What the stripe marks: diagnostics, git changes. Loaded from config/stripe.el.
+;; What the stripe marks: diagnostics, TODO comments, git changes. Loaded from
+;; config/stripe.el.
 
 (defvar-local +my/stripe--cache nil "(KEY LINES . MARKS) for `+my/stripe--marks'.")
 
 (defvar-local +my/stripe--diff-hl-tick 0 "Bumped whenever diff-hl redraws.")
 
+(defface +my/stripe-todo '((t :inherit font-lock-keyword-face))
+  "TODO comments in the stripe: its foreground is their colour.")
+
+(defface +my/stripe-suggestion '((t :inherit shadow))
+  "Suggestions (flycheck's `info': LSP hints, information) in the stripe: its
+foreground is their colour.")
+
 (defconst +my/stripe--kinds
   ;; KIND    PRIORITY FACE (its foreground is the colour)
-  '((error   6 flycheck-fringe-error)
-    (warning 5 flycheck-fringe-warning)
+  '((error   7 flycheck-fringe-error)
+    (warning 6 flycheck-fringe-warning)
+    (todo    5 +my/stripe-todo)
     (delete  4 diff-hl-delete)
     (change  3 diff-hl-change)
     (insert  2 diff-hl-insert)
-    (info    1 flycheck-fringe-info)))
+    (info    1 +my/stripe-suggestion)))
+
+(defun +my/stripe-faces-h ()
+  "The marks' own colours from the theme, as IntelliJ's: TODO comments blue,
+suggestions a dim warning colour (flycheck's info green is the git gutter's
+added lines')."
+  (when (and (fboundp 'doom-blend) (fboundp 'doom-color))
+    (let ((bg (face-background 'default nil t))
+          (blue (doom-color 'blue))
+          (warning (face-foreground 'warning nil t))
+          (hex (lambda (colour) (and (stringp colour) (string-prefix-p "#" colour)))))
+      (when (funcall hex blue)
+        (set-face-attribute '+my/stripe-todo nil :foreground blue))
+      (when (and (funcall hex bg) (funcall hex warning))
+        (set-face-attribute '+my/stripe-suggestion nil
+                            :foreground (doom-blend warning bg 0.5))))))
+
+(+my/stripe-faces-h)
+
+;; Before the strips are redrawn for the new theme (`+my/stripe--render-all').
+(add-hook 'doom-load-theme-hook #'+my/stripe-faces-h -50)
 
 (defvar-local +my/stripe--line-edits 0
-  "Bumped by edits that add or remove line breaks: they move the marks and the
-band (edits within a line don't: the strip isn't redrawn for those).")
+  "Bumped by edits that add or remove line breaks, or touch a line with a TODO
+keyword: they move the marks and the band, or add or remove a TODO mark (other
+edits within a line don't: the strip isn't redrawn for those).")
+
+(defvar +my/stripe--todo-regexp nil "(KEYWORDS . REGEXP) for `+my/stripe--todo-regexp'.")
+
+(defun +my/stripe--todo-regexp ()
+  "A regexp matching `+my/stripe-todo-keywords' as words (group 1): not next to
+a letter, a digit or an underscore. nil for none."
+  (when +my/stripe-todo-keywords
+    (unless (eq (car +my/stripe--todo-regexp) +my/stripe-todo-keywords)
+      (setq +my/stripe--todo-regexp
+            (cons +my/stripe-todo-keywords
+                  (concat "\\(?:^\\|[^[:alnum:]_]\\)"
+                          (regexp-opt +my/stripe-todo-keywords t)
+                          "\\(?:[^[:alnum:]_]\\|$\\)"))))
+    (cdr +my/stripe--todo-regexp)))
+
+(defun +my/stripe--todo-match-p ()
+  "Whether the TODO keyword just matched marks its line: in code (and conf
+files) only in a comment, in text anywhere."
+  (or (not (derived-mode-p 'prog-mode 'conf-mode))
+      ;; `syntax-ppss' moves point.
+      (save-excursion (save-match-data (nth 4 (syntax-ppss (match-beginning 1)))))))
+
+(defun +my/stripe--todo-lines ()
+  "The lines with a TODO keyword (see `+my/stripe-todo-keywords'), first to last."
+  (when-let* ((regexp (+my/stripe--todo-regexp)))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((case-fold-search nil)
+            (line 1)
+            (pos (point-min))
+            lines)
+        (while (re-search-forward regexp nil t)
+          (if (not (+my/stripe--todo-match-p))
+              ;; Searched on from the keyword's end: the character after it,
+              ;; part of the match, may start the next one.
+              (goto-char (match-end 1))
+            ;; The keyword's line (the match may end on the next one, with the
+            ;; line break after the keyword).
+            (goto-char (match-beginning 1))
+            (setq line (+ line (count-lines pos (line-beginning-position)))
+                  pos (line-beginning-position))
+            (push line lines)
+            ;; One mark a line.
+            (forward-line 1)))
+        (nreverse lines)))))
 
 (defun +my/stripe--level (err)
   "The stripe kind of flycheck error ERR: `error', `warning' or `info'."
@@ -46,6 +121,8 @@ errors or the diff-hl highlights change."
                     (kind (+my/stripe--level err)))
                 (when (and line (memq kind +my/stripe-diagnostic-levels))
                   (push (list line line kind) marks)))))
+          (dolist (line (+my/stripe--todo-lines))
+            (push (list line line 'todo) marks))
           (dolist (ov (overlays-in (point-min) (point-max)))
             (when (overlay-get ov 'diff-hl-hunk)
               (let ((beg (line-number-at-pos (overlay-start ov))))

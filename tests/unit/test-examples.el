@@ -193,8 +193,8 @@ with its actions; an info and an error notice; gone once closed."
 (ert-deftest examples/stripe-errors-warnings-and-changes ()
   "inventory.el in a repository, changed since its commit: flycheck finds
 warnings through the file and an error at its end (the byte compiler: the
-file trusted while it's open), diff-hl the changes; the strip on; the
-repository and the trust gone once closed."
+file trusted while it's open), diff-hl the changes; TODO comments; the strip
+on; the repository and the trust gone once closed."
   (+test-examples
     (let* ((trusted trusted-content)
            (buffer (+my/example-stripe))
@@ -205,7 +205,15 @@ repository and the trust gone once closed."
         (should (bound-and-true-p +my/stripe-mode))
         (should (equal (mapcar (lambda (error) (list (flycheck-error-line error) (flycheck-error-level error)))
                                (seq-sort-by #'flycheck-error-line #'< flycheck-current-errors))
-                       '((29 warning) (175 warning) (180 warning) (247 warning) (276 error))))
+                       '((31 warning) (178 warning) (183 warning) (250 warning) (279 error))))
+        ;; A TODO, a HACK and a FIXME comment.
+        (should (equal (mapcar (lambda (line)
+                                 (save-excursion
+                                   (goto-char (point-min))
+                                   (forward-line (1- line))
+                                   (and (looking-at ";; \\([A-Z]+\\):") (match-string 1))))
+                               (+my/stripe--todo-lines))
+                       '("TODO" "HACK" "FIXME")))
         ;; Changed, removed and added lines.
         (let ((kinds (seq-uniq (mapcar (lambda (ov) (overlay-get ov 'diff-hl-hunk-type))
                                        (seq-filter (lambda (ov) (overlay-get ov 'diff-hl-hunk))
