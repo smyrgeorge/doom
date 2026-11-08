@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # Sourced by the installers (emacs.sh, tools.sh, lsp.sh): which system this is
-# and how it installs packages.
+# and how it installs packages. Run again, they update: a package installed
+# already is upgraded to its latest version.
 #
 #   macOS               Homebrew
 #   Debian, Ubuntu      apt (sudo)
 #   Fedora              dnf (sudo)
 #   another Linux       the packages are listed, to install by hand
 #
-# DRY_RUN=1 prints what would run instead of running it.
+# DRY_RUN=1 prints what would run instead of running it. OS=macos|apt|dnf
+# picks the system (tests/unit/test-lsp-script.el).
 
-case "$(uname -s)" in
+case "${OS:-$(uname -s)}" in
+  macos|apt|dnf|linux) ;;
   Darwin) OS=macos ;;
   Linux)
     if command -v apt-get >/dev/null 2>&1; then OS=apt
@@ -36,7 +39,9 @@ run() {
 }
 
 # pkg BREW APT DNF: install this system's packages (a word list each; "-":
-# none there). A failure is noted, not fatal: the other tools still install.
+# none there), or upgrade them if they're installed: brew upgrade, else brew
+# install; apt-get install (it upgrades); dnf install, then dnf upgrade. A
+# failure is noted, not fatal: the other tools still install.
 pkg() {
   local names
   case "$OS" in
@@ -48,9 +53,9 @@ pkg() {
   [ "$names" = - ] && return 0
   # shellcheck disable=SC2086  # a word list: "--cask font-x", "aspell aspell-en"
   case "$OS" in
-    macos) run brew install $names || OS_SKIPPED+=("$names") ;;
+    macos) run brew upgrade $names 2>/dev/null || run brew install $names || OS_SKIPPED+=("$names") ;;
     apt) run $SUDO apt-get install -y $names || OS_SKIPPED+=("$names") ;;
-    dnf) run $SUDO dnf install -y $names || OS_SKIPPED+=("$names") ;;
+    dnf) { run $SUDO dnf install -y $names && run $SUDO dnf upgrade -y $names; } || OS_SKIPPED+=("$names") ;;
     *) OS_SKIPPED+=("$names") ;;
   esac
 }
@@ -66,8 +71,9 @@ manual() {
   OS_SKIPPED+=("$*")
 }
 
-# npm_global PACKAGE...: npm install -g. On Linux, where npm's global folder is
-# root's (/usr/local), into ~/.local instead (its bin on PATH).
+# npm_global PACKAGE...: npm install -g, each at its latest version (installed
+# already: upgraded). On Linux, where npm's global folder is root's
+# (/usr/local), into ~/.local instead (its bin on PATH).
 npm_global() {
   if [ "$OS" != macos ] && [ -z "${DRY_RUN:-}" ]; then
     local prefix
@@ -78,7 +84,23 @@ npm_global() {
     fi
     mkdir -p "$HOME/.local"
   fi
-  run npm install -g "$@"
+  local packages=() package
+  for package in "$@"; do
+    case "$package" in
+      @*@*|[!@]*@*) packages+=("$package") ;; # a version given
+      *) packages+=("$package@latest") ;;
+    esac
+  done
+  run npm install -g "${packages[@]}"
+}
+
+# uv_tool TOOL...: uv tool install --upgrade, each (installed already: its
+# latest).
+uv_tool() {
+  local tool
+  for tool in "$@"; do
+    run uv tool install --upgrade "$tool"
+  done
 }
 
 # os_summary: what's left to install by hand, if anything.
