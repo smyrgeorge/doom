@@ -194,12 +194,16 @@ the window's edge (see THE SAME SCREENSHOT)."
 
 (defun +my/screenshots--close ()
   "Close what an example opened: its merges aborted (its files go with them),
-one window on *scratch* again."
+one window on *scratch* again, the echo area empty: a message of two lines
+left the next example's panes laid out around a taller echo area (tiling's,
+after stripe's), its screenshot changed with the message before it."
   (dolist (buffer (buffer-list))
     (when-let* (((buffer-live-p buffer))
                 (session (buffer-local-value '+my/merge--session buffer)))
       (ignore-errors (+my/merge--finish session))))
-  (+test-reset))
+  (+test-reset)
+  (message nil)
+  (redisplay t))
 
 (defun +my/screenshots--one (name dir)
   "Open example NAME, capture it into DIR/NAME.png, close it. Non-nil if it

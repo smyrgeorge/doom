@@ -182,7 +182,8 @@ in a temp repository (deleted once closed). See examples/stripe.el."
      (lambda ()
        (when (boundp 'trusted-content)
          (setq trusted-content (if (listp trusted-content) (delete repo trusted-content) trusted-content)))))
-    (message "Stripe example: errors red, warnings yellow, TODO comments blue, git's changes in the gutter's colours; click the strip to jump, drag its band to scroll")
+    ;; One line in the screenshot's echo area (~145 characters).
+    (message "Stripe example: errors red, warnings yellow, TODOs blue, git's changes as in the gutter; click the strip to jump, drag to scroll")
     (current-buffer)))
 
 (defun +my/example-stripe-ready ()
