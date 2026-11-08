@@ -137,14 +137,30 @@ close after (config/webkit.el)."
               (when-let* ((dir (buffer-local-value '+my/excalidraw--dir buffer)))
                 (ignore-errors (delete-directory dir t))))))
 
+(defun +my/excalidraw--show-dark (dark)
+  "Every open drawing's canvas dark (DARK non-nil) or light."
+  (dolist (buffer (buffer-list))
+    (when (provided-mode-derived-p (buffer-local-value 'major-mode buffer) '+my/excalidraw-mode)
+      (with-current-buffer buffer
+        (+my/webkit-execute (format "window.exd && exd.set({dark: %s})" (if dark "true" "false"))
+                            t)))))
+
 (defun +my/excalidraw-toggle-dark ()
   "SPC m d: drawings on a dark canvas, or a light one (see config/excalidraw.el)."
   (interactive)
   (let ((dark (not (+my/excalidraw--dark-p))))
     (setq +my/excalidraw-theme (if dark 'dark 'light))
-    (dolist (buffer (buffer-list))
-      (when (provided-mode-derived-p (buffer-local-value 'major-mode buffer) '+my/excalidraw-mode)
-        (with-current-buffer buffer
-          (+my/webkit-execute (format "window.exd && exd.set({dark: %s})" (if dark "true" "false"))
-                              t))))
+    (+my/excalidraw--show-dark dark)
     (message "Dark canvas %s" (if dark "on" "off"))))
+
+;; THE THEME, CHANGED
+;; With the canvas `auto' (the theme's dark or light), open drawings follow a
+;; theme changed (SPC h t, its previews too); a drawing opened later reads it
+;; when it opens.
+(defun +my/excalidraw-theme-h ()
+  "The theme changed: open drawings' canvas dark or light as it is (if
+`auto')."
+  (when (eq +my/excalidraw-theme 'auto)
+    (+my/excalidraw--show-dark (+my/excalidraw--dark-p))))
+
+(add-hook 'doom-load-theme-hook #'+my/excalidraw-theme-h)

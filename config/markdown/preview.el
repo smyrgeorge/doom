@@ -60,7 +60,7 @@ preview off."
               +my/webkit-link-function #'+md-preview--follow)
   (add-hook '+my/webkit-load-functions #'+md-preview--loaded nil t)
   ;; What the views don't cover, in the page's colour.
-  (face-remap-add-relative 'default :background (+md-preview--page-color))
+  (+md-preview--paint-background)
   (add-hook 'kill-buffer-hook #'+md-preview--closed-h nil t))
 
 (defvar +my/focus-new-windows)          ; config/window.el

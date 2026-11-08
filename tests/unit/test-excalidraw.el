@@ -1502,3 +1502,29 @@ path."
   (dolist (command '(+my/excalidraw-insert +my/excalidraw-install +my/excalidraw-toggle-dark
                      +my/excalidraw-copy +my/excalidraw-cut +my/excalidraw-paste +my/excalidraw-key))
     (should (commandp command))))
+
+;; ====== THE THEME, CHANGED ======
+
+(ert-deftest exd/theme-change-follows-with-auto ()
+  "A theme changed: with the canvas `auto', open drawings dark or light as the
+theme now is; set (SPC m d), left as they are."
+  (should (memq '+my/excalidraw-theme-h doom-load-theme-hook))
+  (+test-exd
+    (let* ((buffer (+test-exd--open (+test-exd--file "theme.excalidraw.svg" +test-exd--svg)))
+           (xw (+test-exd--xw buffer))
+           (mode 'light))
+      (cl-letf (((symbol-function 'frame-parameter)
+                 (let ((fp (symbol-function 'frame-parameter)))
+                   (lambda (frame parameter)
+                     (if (eq parameter 'background-mode) mode (funcall fp frame parameter))))))
+        (let ((+my/excalidraw-theme 'auto))
+          (setq +test-exd--scripts nil)
+          (with-temp-buffer (+my/excalidraw-theme-h))
+          (should (equal (+test-exd--run-in xw) (list "window.exd && exd.set({dark: false})\n;void 0")))
+          (setq mode 'dark +test-exd--scripts nil)
+          (with-temp-buffer (+my/excalidraw-theme-h))
+          (should (equal (+test-exd--run-in xw) (list "window.exd && exd.set({dark: true})\n;void 0"))))
+        (let ((+my/excalidraw-theme 'light))
+          (setq +test-exd--scripts nil)
+          (with-temp-buffer (+my/excalidraw-theme-h))
+          (should-not (+test-exd--run-in xw)))))))

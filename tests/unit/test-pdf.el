@@ -1566,3 +1566,32 @@ place), the page written for views to come."
   ;; Clicks are WebKit's.
   (should (eq (lookup-key +my/pdf-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
   (should (eq (+test-pdf--key 'normal "<drag-mouse-1>") #'ignore)))
+
+;; ====== THE THEME, CHANGED ======
+
+(ert-deftest pdf/theme-change-repaints-open-pdfs ()
+  "A theme changed (doom-load-theme-hook, run from a temporary buffer as
+Doom runs it): each PDF's views get its colours (the toolbar's and the
+sidebar's variables, the page's background and colour scheme)."
+  (should (memq '+my/pdf-theme-h doom-load-theme-hook))
+  (+test-pdf
+    (let* ((buffer (+test-pdf--open (+test-pdf--pdf "theme.pdf")))
+           (xw (+test-pdf--xw buffer)))
+      (setq +test-pdf--scripts nil)
+      (cl-letf (((symbol-function '+my/pdf--color)
+                 (lambda (face attribute _fallback)
+                   (pcase (list face attribute)
+                     ('(default :background) "#fafafa")
+                     ('(default :foreground) "#383a42")
+                     (_ "#123456"))))
+                ((symbol-function 'frame-parameter)
+                 (let ((fp (symbol-function 'frame-parameter)))
+                   (lambda (frame parameter)
+                     (if (eq parameter 'background-mode) 'light (funcall fp frame parameter))))))
+        (with-temp-buffer (+my/pdf-theme-h)))
+      (should (equal (mapcar #'car +test-pdf--scripts) (list xw)))
+      (let ((script (cadr (car +test-pdf--scripts))))
+        (should (string-search "--bg:#fafafa;" script))
+        (should (string-search "--fg:#383a42;" script))
+        (should (string-search "background:#fafafa;color-scheme:light" script))
+        (should (string-search "b.style.colorScheme=\"light\"" script))))))

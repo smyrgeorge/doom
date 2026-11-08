@@ -23,8 +23,8 @@ html,body{margin:0;height:100%%;overflow:hidden;background:%b;color-scheme:%c}
 #viewerContainer{position:absolute;inset:0;overflow:auto}
 .pdfViewer.removePageBorders .page{margin:10px auto;box-shadow:0 1px 6px rgba(0,0,0,.45)}
 .badge{position:fixed;right:14px;z-index:10;padding:3px 9px;border-radius:6px;
-  font:12px -apple-system,sans-serif;white-space:pre;background:rgba(0,0,0,.72);
-  color:#eee;pointer-events:none;opacity:0;transition:opacity .2s}
+  font:12px -apple-system,sans-serif;white-space:pre;background:var(--bar);
+  color:var(--fg);border:1px solid var(--border);pointer-events:none;opacity:0;transition:opacity .2s}
 .badge.on{opacity:1}
 #find{top:10px}
 #page{bottom:12px}
@@ -114,6 +114,28 @@ names), FALLBACK without one."
           (+my/pdf--color 'region :background "#3f444a")
           (+my/pdf--color 'link :foreground "#51afef")
           (+my/pdf--color 'vertical-border :foreground "#191b20")))
+
+;; THE THEME, CHANGED
+;; A page takes the theme's colours when it's written (a new view writes it
+;; anew); the views open when the theme changes (SPC h t, its previews too)
+;; take the new ones at once.
+(defun +my/pdf--theme-script ()
+  "JavaScript giving a page the theme's colours now (see above)."
+  (let ((background (+my/pdf--color 'default :background "#282c34"))
+        (scheme (if (eq (frame-parameter nil 'background-mode) 'light) "light" "dark")))
+    (format "(function(){var h=document.documentElement,b=document.body;h.style.cssText=%S;b.style.background=%S;b.style.colorScheme=%S})()"
+            (format "%s;background:%s;color-scheme:%s" (+my/pdf--css-variables) background scheme)
+            background scheme)))
+
+(defun +my/pdf-theme-h ()
+  "The theme changed: each PDF's views in its colours (see above)."
+  (dolist (buffer (buffer-list))
+    (when (eq (buffer-local-value 'major-mode buffer) '+my/pdf-mode)
+      (with-current-buffer buffer
+        (unless +my/pdf--native
+          (+my/webkit-execute (+my/pdf--theme-script) t))))))
+
+(add-hook 'doom-load-theme-hook #'+my/pdf-theme-h)
 
 ;; SETTINGS: the toolbar, the outline sidebar, dark pages (see config/pdf.el). The
 ;; page says them, and its page, in its title: "pdfx {json}".

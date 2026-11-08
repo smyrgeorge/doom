@@ -425,6 +425,37 @@ goes nowhere; then killed."
     (should (+test-wait-for (lambda () (equal (+test-exd--js "exd.api().getAppState().theme") "light")) 3))
     (should (eq +my/excalidraw-theme 'light))))
 
+(defun +test-exd--theme-loaded (mode)
+  "A theme of MODE (dark or light) loaded, as Doom runs its hook: from
+`enable-theme-functions', in a temp buffer."
+  (cl-letf* ((frame-parameter (symbol-function 'frame-parameter))
+             ((symbol-function 'frame-parameter)
+              (lambda (frame parameter)
+                (if (eq parameter 'background-mode)
+                    mode
+                  (funcall frame-parameter frame parameter)))))
+    (with-temp-buffer
+      (run-hooks 'doom-load-theme-hook))))
+
+(ert-deftest e2e-exd/the-canvas-follows-the-theme ()
+  "With `+my/excalidraw-theme' auto, an open drawing's canvas follows each
+theme loaded (dark, then light); a canvas chosen (light) stays."
+  (+test-exd
+    (setq +my/excalidraw-theme 'auto)
+    (+test-exd--open (+test-exd--file "theme.excalidraw.svg"))
+    (+test-exd--theme-loaded 'dark)
+    (should (+test-wait-for (lambda () (equal (+test-exd--js "exd.api().getAppState().theme") "dark")) 3))
+    (+test-exd--theme-loaded 'light)
+    (should (+test-wait-for (lambda () (equal (+test-exd--js "exd.api().getAppState().theme") "light")) 3))
+    ;; Not a change of the drawing.
+    (+test-sleep 0.5)
+    (should (eql (plist-get (+test-exd--state) :version) 1))
+    ;; Chosen: a theme loaded leaves it.
+    (setq +my/excalidraw-theme 'light)
+    (+test-exd--theme-loaded 'dark)
+    (+test-sleep 0.5)
+    (should (equal (+test-exd--js "exd.api().getAppState().theme") "light"))))
+
 ;; ====== INSERTING ======
 
 (ert-deftest e2e-exd/inserted-from-markdown ()

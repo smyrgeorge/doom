@@ -86,25 +86,23 @@ GitHub's alerts get GitHub's markup (`+md-preview--alerts-filter')."
   "Wrap FRAGMENT in a page styled like Doom's markdown preview (GitHub look)."
   (concat
    "<!doctype html><html><head><meta charset='utf-8'>"
-   ;; In dark mode the whole page is GitHub's dark background, also before its
-   ;; stylesheet arrives (a CDN; not WebKit's white) and below the text (the
-   ;; stylesheet colours only the body, as tall as the text).
-   "<meta name='color-scheme' content='light dark'>"
-   (format "<style>@media (prefers-color-scheme: dark){html{background:%s}}</style>"
-           (+md-preview--page-color 'dark))
+   ;; Dark or light as the theme is (not the OS: `+md-preview--mode'). The
+   ;; whole page in its background, also before the stylesheet arrives (a
+   ;; CDN; not WebKit's white) and below the text (the stylesheet colours only
+   ;; the body, as tall as the text).
+   (format "<meta id='md-scheme' name='color-scheme' content='%s'>" (+md-preview--mode))
+   (format "<style id='md-background'>html{background:%s}</style>" (+md-preview--page-color))
    ;; Encoded: a folder named C# would otherwise end at its #.
    (format "<base href=\"%s\">"
            (+my/webkit-file-url (file-name-directory (or buffer-file-name default-directory))))
    (format "<title>Preview: %s</title>" (buffer-name))
    "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-   ;; github-markdown-css follows the OS light/dark setting, but highlight.js's
-   ;; github theme is light-only; pick its light or dark variant to match.
-   (mapconcat (lambda (css) (format "<link rel='stylesheet' href='%s'>" css))
-              (seq-remove (lambda (css) (string-match-p "highlightjs" css))
-                          markdown-css-paths)
-              "")
-   "<link rel='stylesheet' media='(prefers-color-scheme: light)' href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github.min.css'>"
-   "<link rel='stylesheet' media='(prefers-color-scheme: dark)' href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github-dark.min.css'>"
+   ;; GitHub's stylesheets, their dark or light variant (the theme's).
+   (let ((n 0))
+     (mapconcat (lambda (css)
+                  (format "<link id='md-css-%d' rel='stylesheet' href='%s'>" (cl-incf n) css))
+                (+md-preview--stylesheets)
+                ""))
    ;; As wide as the pane. (GitHub's stylesheet sets `.markdown-body''s margin,
    ;; which beat a plain `body' rule: the text stayed in a 740 px column on the
    ;; left, empty space on the right.)
@@ -153,10 +151,64 @@ page as it was (swapping its content, not reloading it)."
       (setq +md-preview--line line)
       (+md-preview--scroll))))
 
+(defun +md-preview--mode ()
+  "The preview's look, `dark' or `light': the theme's (its background), not
+the OS's: beside a light theme, a light page."
+  (if (eq (frame-parameter nil 'background-mode) 'light) 'light 'dark))
+
 (defun +md-preview--page-color (&optional mode)
-  "The preview page's background: GitHub's dark or light one, following the
-system's setting (MODE: `dark' or `light' to choose)."
-  (pcase (or mode (bound-and-true-p ns-system-appearance)
-             (frame-parameter nil 'background-mode))
+  "The preview page's background: GitHub's dark or light one, the theme's
+(MODE: `dark' or `light' to choose)."
+  (pcase (or mode (+md-preview--mode))
     ('light "#ffffff")
     (_ "#0d1117")))
+
+(defun +md-preview--stylesheets (&optional mode)
+  "GitHub's stylesheets (Doom's `markdown-css-paths'), their MODE variant
+(default: the theme's): github-markdown-css's and highlight.js's, which
+otherwise follow the OS (one) or are light only (the other)."
+  (let ((mode (or mode (+md-preview--mode))))
+    (append
+     (mapcar (lambda (css)
+               (replace-regexp-in-string
+                "/github-markdown\\(?:-light\\|-dark\\)?\\(\\.min\\)?\\.css\\'"
+                (format "/github-markdown-%s\\1.css" mode) css t))
+             (seq-remove (lambda (css) (string-match-p "highlightjs" css)) markdown-css-paths))
+     (list (format "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/%s.min.css"
+                   (if (eq mode 'light) "github" "github-dark"))))))
+
+;; THE THEME, CHANGED
+;; An open preview takes the theme's look at once (SPC h t, its previews too):
+;; its stylesheets, background and colour scheme swapped, not reloaded (its
+;; place kept).
+(defun +md-preview--theme-script ()
+  "JavaScript giving a page the theme's look now (see above)."
+  (let ((n 0))
+    (concat
+     (format "document.getElementById('md-scheme').content=%S;" (symbol-name (+md-preview--mode)))
+     (format "document.getElementById('md-background').textContent='html{background:%s}';"
+             (+md-preview--page-color))
+     (mapconcat (lambda (css)
+                  (format "var l=document.getElementById('md-css-%d');if(l)l.href=%S;" (cl-incf n) css))
+                (+md-preview--stylesheets)
+                ""))))
+
+(defvar-local +md-preview--background-cookie nil
+  "The preview pane's background remap (`face-remap-add-relative').")
+
+(defun +md-preview--paint-background ()
+  "The preview pane's background, what its views don't cover: the page's."
+  (when +md-preview--background-cookie
+    (face-remap-remove-relative +md-preview--background-cookie))
+  (setq +md-preview--background-cookie
+        (face-remap-add-relative 'default :background (+md-preview--page-color))))
+
+(defun +md-preview-theme-h ()
+  "The theme changed: each preview in its look (see above)."
+  (dolist (buffer (buffer-list))
+    (when (eq (buffer-local-value 'major-mode buffer) '+md-preview-page-mode)
+      (with-current-buffer buffer
+        (+md-preview--paint-background)
+        (+my/webkit-execute (+md-preview--theme-script) t)))))
+
+(add-hook 'doom-load-theme-hook #'+md-preview-theme-h)

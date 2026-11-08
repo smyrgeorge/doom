@@ -275,7 +275,17 @@ takes."
 
 ;; ====== THE PAGE ======
 
+(defmacro +test-md--with-theme (mode &rest body)
+  "BODY with the theme MODE (`dark' or `light': the frame's background-mode)."
+  (declare (indent 1))
+  `(cl-letf* ((frame-parameter-fn (symbol-function 'frame-parameter))
+              ((symbol-function 'frame-parameter)
+               (lambda (frame parameter)
+                 (if (eq parameter 'background-mode) ,mode (funcall frame-parameter-fn frame parameter)))))
+     ,@body))
+
 (ert-deftest markdown/page ()
+  (+test-md--with-theme 'dark
   (with-temp-buffer
     (rename-buffer "notes.md" t)
     (setq buffer-file-name "/tmp/docs/notes.md")
@@ -284,13 +294,12 @@ takes."
            (page (+md-preview--page "<p data-pos=\"1:1-2:1\">Hi</p>")))
       (should (string-prefix-p "<!doctype html><html><head><meta charset='utf-8'>" page))
       (should (string-suffix-p "</head><body class='markdown-body'><p data-pos=\"1:1-2:1\">Hi</p></body></html>" page))
-      (dolist (part (list "<meta name='color-scheme' content='light dark'>"
-                          "<style>@media (prefers-color-scheme: dark){html{background:#0d1117}}</style>"
+      (dolist (part (list "<meta id='md-scheme' name='color-scheme' content='dark'>"
+                          "<style id='md-background'>html{background:#0d1117}</style>"
                           (format "<title>Preview: %s</title>" (buffer-name))
-                          "<link rel='stylesheet' href='https://cdn.example/github-markdown.css'>"
-                          ;; highlight.js's light or dark theme, as the system is.
-                          "<link rel='stylesheet' media='(prefers-color-scheme: light)' href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github.min.css'>"
-                          "<link rel='stylesheet' media='(prefers-color-scheme: dark)' href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github-dark.min.css'>"
+                          ;; GitHub's stylesheets, dark as the theme is.
+                          "<link id='md-css-1' rel='stylesheet' href='https://cdn.example/github-markdown-dark.css'>"
+                          "<link id='md-css-2' rel='stylesheet' href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github-dark.min.css'>"
                           "body.markdown-body{box-sizing:border-box;max-width:none;width:100%;margin:0;"
                           "<script src='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/highlight.min.js'></script>"
                           +md-preview--anchors-js
@@ -298,8 +307,10 @@ takes."
                                   +md-preview--highlight-js "});")))
         (should (string-search part page)))
       ;; The light-only highlight.js theme of Doom's paths left out.
-      (should-not (string-search "cdn.example/highlightjs" page)))
-    (setq buffer-file-name nil)))
+      (should-not (string-search "cdn.example/highlightjs" page))
+      ;; Nothing follows the OS's setting.
+      (should-not (string-search "prefers-color-scheme" page)))
+    (setq buffer-file-name nil))))
 
 (defun +test-md--base (page)
   "The folder PAGE's <base> says relative links are in."
@@ -328,22 +339,57 @@ takes."
     (setq buffer-file-name nil)))
 
 (ert-deftest markdown/page-colour ()
+  "GitHub's background, dark or light as the theme is, whatever the OS's
+setting (macOS's dark beside a light theme: light)."
   (should (equal (+md-preview--page-color 'light) "#ffffff"))
   (should (equal (+md-preview--page-color 'dark) "#0d1117"))
-  ;; macOS's setting first, else the frame's.
-  (let ((ns-system-appearance 'light))
-    (should (equal (+md-preview--page-color) "#ffffff")))
   (let ((ns-system-appearance 'dark))
-    (should (equal (+md-preview--page-color) "#0d1117")))
-  (let ((ns-system-appearance nil))
-    (cl-letf* ((frame-parameter-fn (symbol-function 'frame-parameter))
-               (mode 'light)
-               ((symbol-function 'frame-parameter)
-                (lambda (frame parameter)
-                  (if (eq parameter 'background-mode) mode (funcall frame-parameter-fn frame parameter)))))
-      (should (equal (+md-preview--page-color) "#ffffff"))
-      (setq mode 'dark)
+    (+test-md--with-theme 'light
+      (should (eq (+md-preview--mode) 'light))
+      (should (equal (+md-preview--page-color) "#ffffff"))))
+  (let ((ns-system-appearance 'light))
+    (+test-md--with-theme 'dark
+      (should (eq (+md-preview--mode) 'dark))
       (should (equal (+md-preview--page-color) "#0d1117")))))
+
+(ert-deftest markdown/stylesheets-dark-or-light ()
+  "Doom's github-markdown-css (its auto one, or minified) in the theme's
+variant; highlight.js's GitHub theme in it too."
+  (let ((markdown-css-paths '("https://cdn.example/github-markdown-css/github-markdown.min.css"
+                              "https://cdn.example/highlightjs/github.min.css")))
+    (should (equal (+md-preview--stylesheets 'dark)
+                   '("https://cdn.example/github-markdown-css/github-markdown-dark.min.css"
+                     "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github-dark.min.css")))
+    (should (equal (+md-preview--stylesheets 'light)
+                   '("https://cdn.example/github-markdown-css/github-markdown-light.min.css"
+                     "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github.min.css"))))
+  (let ((markdown-css-paths '("https://cdn.example/github-markdown-light.css")))
+    (should (equal (car (+md-preview--stylesheets 'dark)) "https://cdn.example/github-markdown-dark.css"))))
+
+(ert-deftest markdown/theme-change-repaints-open-previews ()
+  "A theme changed (doom-load-theme-hook): each open preview's views get its
+look (scheme, background, stylesheets), not reloaded; the pane too."
+  (should (memq '+md-preview-theme-h doom-load-theme-hook))
+  (+test-md
+    (let* ((md (+test-md--file "theme.md" "# Theme\n"))
+           (preview (+test-md--open-preview md)))
+      (+test-md--redisplay)
+      (setq +test-md--scripts nil)
+      (+test-md--with-theme 'light
+        ;; As Doom runs it: from a temporary buffer (Doom's stylesheet set).
+        (let ((markdown-css-paths '("https://cdn.example/github-markdown.min.css")))
+          (with-temp-buffer (+md-preview-theme-h))))
+      (should (equal (mapcar #'car +test-md--scripts) (+test-md--xws preview)))
+      (let ((script (cadr (car +test-md--scripts))))
+        (should (string-search "getElementById('md-scheme').content=\"light\"" script))
+        (should (string-search "html{background:#ffffff}" script))
+        (should (string-search "github-markdown-light" script))
+        (should-not (string-search "location.reload" script)))
+      (with-current-buffer preview
+        ;; Its pane's background remapped to the page's (one remap, the new).
+        (let ((remaps (seq-filter (lambda (spec) (and (consp spec) (plist-member spec :background)))
+                                  (alist-get 'default face-remapping-alist))))
+          (should (equal (mapcar (lambda (spec) (plist-get spec :background)) remaps) '("#ffffff"))))))))
 
 (ert-deftest markdown/update-script-swaps-the-content ()
   (with-temp-buffer

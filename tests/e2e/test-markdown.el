@@ -380,3 +380,46 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); 'ok'")
       (should-not (file-exists-p file))
       (+test-sleep 2.2)                   ; past the cover's 2 s
       (should (= (+test-visible-frames) 1)))))
+
+;; ====== THE THEME ======
+
+(defun +test-md--theme-loaded (mode)
+  "A theme of MODE (dark or light) loaded, as Doom runs its hook: from
+`enable-theme-functions', in a temp buffer."
+  (cl-letf* ((frame-parameter (symbol-function 'frame-parameter))
+             ((symbol-function 'frame-parameter)
+              (lambda (frame parameter)
+                (if (eq parameter 'background-mode)
+                    mode
+                  (funcall frame-parameter frame parameter)))))
+    (with-temp-buffer
+      (run-hooks 'doom-load-theme-hook))))
+
+(ert-deftest e2e-markdown/a-theme-change-repaints-the-page ()
+  "A dark theme, then a light one: the open page follows each (its scheme,
+its background, GitHub's stylesheets), as does the pane around it."
+  (+test-md
+    (+test-md--open)
+    (let ((window (car (+test-md--windows))))
+      (+test-md--theme-loaded 'dark)
+      (should (+test-wait-for
+               (lambda ()
+                 (equal (+test-md--js window "getComputedStyle(document.documentElement).backgroundColor")
+                        "rgb(13, 17, 23)"))
+               3))
+      (should (equal (+test-md--js window "document.getElementById('md-scheme').content") "dark"))
+      (should (equal (+test-md--js window "(function(){var l=[...document.querySelectorAll('link[id^=md-css]')];return String(l.some(x => /github-markdown-dark/.test(x.href)) && l.every(x => !/-light/.test(x.href)))})()")
+                     "true"))
+      (+test-md--theme-loaded 'light)
+      (should (+test-wait-for
+               (lambda ()
+                 (equal (+test-md--js window "getComputedStyle(document.documentElement).backgroundColor")
+                        "rgb(255, 255, 255)"))
+               3))
+      (should (equal (+test-md--js window "document.getElementById('md-scheme').content") "light"))
+      (should (equal (+test-md--js window "(function(){var l=[...document.querySelectorAll('link[id^=md-css]')];return String(l.some(x => /github-markdown-light/.test(x.href)) && l.every(x => !/-dark/.test(x.href)))})()")
+                     "true"))
+      (with-current-buffer (+test-md--preview)
+        (let ((remaps (seq-filter (lambda (spec) (and (consp spec) (plist-member spec :background)))
+                                  (alist-get 'default face-remapping-alist))))
+          (should (equal (mapcar (lambda (spec) (plist-get spec :background)) remaps) '("#ffffff"))))))))

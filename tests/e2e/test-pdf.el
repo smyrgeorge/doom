@@ -509,3 +509,39 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
       (+test-sleep 0.2)
       (execute-kbd-macro "q")
       (should-not (buffer-live-p buffer)))))
+
+;; ====== THE THEME ======
+
+(ert-deftest e2e-pdf/a-theme-change-repaints-the-page ()
+  "A theme loaded: the open PDF's page takes its colours (the CSS
+variables PDF.js's toolbar and sidebar use, its background)."
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (cl-letf* ((frame-parameter (symbol-function 'frame-parameter))
+               ((symbol-function 'frame-parameter)
+                (lambda (frame parameter)
+                  (if (eq parameter 'background-mode)
+                      'light
+                    (funcall frame-parameter frame parameter))))
+               ((symbol-function '+my/pdf--color)
+                (lambda (_face attribute _fallback)
+                  (if (eq attribute :background) "#fafafa" "#383a42"))))
+      ;; As Doom runs it: from `enable-theme-functions', in a temp buffer.
+      (with-temp-buffer
+        (run-hooks 'doom-load-theme-hook)))
+    (should (+test-wait-for
+             (lambda ()
+               (equal (+test-pdf--js "getComputedStyle(document.body).backgroundColor")
+                      "rgb(250, 250, 250)"))
+             3))
+    (should (equal (+test-pdf--js "getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()")
+                   "#fafafa"))
+    (should (equal (+test-pdf--js "getComputedStyle(document.documentElement).colorScheme")
+                   "light"))
+    ;; The badges (search, page) too: the theme's bar and text.
+    (should (equal (+test-pdf--js "getComputedStyle(document.getElementById('page')).backgroundColor")
+                   "rgb(250, 250, 250)"))
+    (should (equal (+test-pdf--js "getComputedStyle(document.getElementById('find')).color")
+                   "rgb(56, 58, 66)"))
+    ;; PDF.js still there: the page's drawn text untouched.
+    (should (eql (plist-get (+test-pdf--state) :pages) 3))))
