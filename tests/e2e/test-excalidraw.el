@@ -757,7 +757,17 @@ under this drawing's name."
                (file (buffer-file-name drawing)))
           (should (+test-exd--ready))
           (execute-kbd-macro (kbd "M-p"))
-          (should (+test-wait-for (lambda () (equal (+test-exd--elements) '("ellipse"))) 5))
+          ;; 15 s: a CI runner at half this Mac's speed once missed 5. If it
+          ;; isn't there, what the page and Emacs said (a race would show).
+          (unless (+test-wait-for (lambda () (equal (+test-exd--elements) '("ellipse"))) 15)
+            (ert-fail (list "The earlier drawing isn't shown"
+                            :elements (+test-exd--elements)
+                            :state (+test-exd--state)
+                            :buffer (with-current-buffer drawing
+                                      (buffer-substring-no-properties (point-min) (min (point-max) 200)))
+                            :messages (with-current-buffer "*Messages*"
+                                        (buffer-substring-no-properties
+                                         (max (point-min) (- (point-max) 1500)) (point-max))))))
           (execute-kbd-macro (kbd "C-c C-c"))
           (should-not (buffer-live-p drawing))
           (should (equal (car (car inserted)) shell))

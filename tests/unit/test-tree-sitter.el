@@ -348,7 +348,10 @@ init folder (never ~/.emacs.d), into Doom's grammar folder."
         (should (string-prefix-p (expand-file-name +test-tmp) (expand-file-name out-dir)))
         ;; The process remembers what it builds.
         (should (equal (process-get +my/tree-sitter--process 'grammars) '(+test-ts-a +test-ts-b)))
-        (should (process-live-p +my/tree-sitter--process))
+        ;; Not waited for: still the build under way (its sentinel, which ends
+        ;; it, runs once events are read). Not `process-live-p': the fake
+        ;; build (true) may have exited already, on a fast machine.
+        (should (processp +my/tree-sitter--process))
         ;; Said, with the grammars without a recipe.
         (should (= (+test-messages "^Building tree-sitter grammars in the background: \\+test-ts-a, \\+test-ts-b (no recipe for \\+test-ts-c)$") 1))
         ;; The build's buffer says what and where.
@@ -575,7 +578,8 @@ sentinel says what got built, removes its init folder and forgets it."
       (+test-tree-sitter-with-fake-build built
         (+my/tree-sitter-install-grammars)
         (setq process +my/tree-sitter--process)
-        (should (process-live-p process))
+        ;; Under way (not `process-live-p': `true' may have exited already).
+        (should (processp process))
         (should (= (length (+test-tree-sitter--build-dirs)) 1))
         ;; What the other Emacs would build, there once it ends.
         (setq built '(+test-ts-a +test-ts-b)))
