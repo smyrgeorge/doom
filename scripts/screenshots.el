@@ -33,9 +33,12 @@ all of them."
 (defun +my/screenshots--setup ()
   "This config's look. Doom's frame too, which `emacs -Q' hasn't: no tool bar
 \(its icons were in the title bar), no scroll bars, no cursor in the windows
-not selected (a hollow box in the panes)."
+not selected (a hollow box in the panes), a cursor that doesn't blink."
   (tool-bar-mode -1)
   (scroll-bar-mode -1)
+  ;; A cursor that doesn't blink, as Doom's: captured blinked out or not, the
+  ;; screenshot changed at each run.
+  (blink-cursor-mode -1)
   (setq-default cursor-in-non-selected-windows nil)
   (let ((build (file-name-directory
                 (directory-file-name (file-name-directory (locate-library "magit"))))))
