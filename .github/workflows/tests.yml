@@ -53,10 +53,13 @@ jobs:
           git clone -q https://github.com/doomemacs/core "$RUNNER_TEMP/doom-emacs"
           git -C "$RUNNER_TEMP/doom-emacs" checkout -q "$DOOM_REF"
 
-      # Doom's packages, as `doom sync' built them: again only when init.el,
-      # packages.el or Doom change (and then from the last ones).
-      - name: Doom's packages (cache)
-        uses: actions/cache@v4
+      # Doom's packages, as `doom sync' built them (and PDF.js, Excalidraw):
+      # again only when init.el, packages.el or Doom change (and then from the
+      # last ones). Saved as soon as they're there (below), not at the job's
+      # end: a test failing doesn't lose them.
+      - name: Doom's packages (restored)
+        id: doom-cache
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/doom-emacs/.local
           key: doom-linux-${{ matrix.xwidgets }}-${{ env.DOOM_REF }}-${{ hashFiles('init.el', 'packages.el') }}
@@ -83,8 +86,8 @@ jobs:
       # scripts/emacs.sh in the image: Emacs is there (up to date), so Doom:
       # its modules, `doom sync' (--rebuild when its packages aren't built for
       # this Emacs). The container runs as root, and Doom's CLI refuses to run
-      # as root unless its folder is root's (bin/doom): given to root (the
-      # cache still reads it; the tests mount it read-only).
+      # as root unless its folder is root's (bin/doom): given to root here,
+      # back to the runner's user after (the cache, saved by it, reads it).
       - name: Doom (scripts/emacs.sh)
         run: |
           sudo chown -R 0:0 "$DOOM_EMACS"
@@ -100,6 +103,14 @@ jobs:
         run: |
           docker run --rm -v "$GITHUB_WORKSPACE:/root/.config/doom" -v "$DOOM_EMACS:/root/.config/emacs" \
             "$IMAGE" emacs --batch -l tests/helper.el -l tests/assets.el
+          sudo chown -R "$(id -u):$(id -g)" "$DOOM_EMACS"
+
+      - name: Doom's packages (saved)
+        if: steps.doom-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/doom-emacs/.local
+          key: ${{ steps.doom-cache.outputs.cache-primary-key }}
 
       - name: Unit tests
         run: tests/linux/run.sh unit
@@ -125,8 +136,11 @@ jobs:
           git clone -q https://github.com/doomemacs/core ~/.config/emacs
           git -C ~/.config/emacs checkout -q "$DOOM_REF"
 
-      - name: Doom's packages (cache)
-        uses: actions/cache@v4
+      # Doom's packages (natively compiled: the longest to build), saved as
+      # soon as they're there (below), as on Linux.
+      - name: Doom's packages (restored)
+        id: doom-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.config/emacs/.local
           key: doom-macos-${{ env.DOOM_REF }}-${{ hashFiles('init.el', 'packages.el') }}
@@ -142,6 +156,13 @@ jobs:
 
       - name: PDF.js and Excalidraw
         run: emacs --batch -l tests/helper.el -l tests/assets.el
+
+      - name: Doom's packages (saved)
+        if: steps.doom-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.config/emacs/.local
+          key: ${{ steps.doom-cache.outputs.cache-primary-key }}
 
       - name: Unit tests
         run: tests/run.sh unit
