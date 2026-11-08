@@ -1,0 +1,134 @@
+# The tests (tests/run.sh: unit and end-to-end) on each push and pull request,
+# on Linux (with and without xwidgets, in tests/linux's Docker image) and on
+# macOS (emacs-plus), as docs/tests.md describes running them by hand.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the run still going.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The Doom (doomemacs/core) commit the config is tested with: the one it's
+  # used with. Bump it after updating Doom (git -C ~/.config/emacs rev-parse
+  # HEAD).
+  DOOM_REF: 7ccac7f643ad67baa25b216717cf8617a0903c69
+  # Each end-to-end test file's limit, in seconds: runners are slower than a
+  # desk's machine.
+  E2E_TIMEOUT: "600"
+
+jobs:
+  linux:
+    name: Linux (${{ matrix.xwidgets == 'yes' && 'with' || 'without' }} xwidgets)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        xwidgets: ["yes", "no"]
+    env:
+      XWIDGETS: ${{ matrix.xwidgets }}
+      IMAGE: ${{ matrix.xwidgets == 'yes' && 'doom-config-tests' || 'doom-config-tests:no-xwidgets' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Doom
+        run: |
+          echo "DOOM_EMACS=$RUNNER_TEMP/doom-emacs" >> "$GITHUB_ENV"
+          git clone -q https://github.com/doomemacs/core "$RUNNER_TEMP/doom-emacs"
+          git -C "$RUNNER_TEMP/doom-emacs" checkout -q "$DOOM_REF"
+          git -C "$RUNNER_TEMP/doom-emacs" submodule update -q --init --recursive
+
+      # Doom's packages, as `doom sync' built them: again only when init.el,
+      # packages.el or Doom change (and then from the last ones).
+      - name: Doom's packages (cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/doom-emacs/.local
+          key: doom-linux-${{ matrix.xwidgets }}-${{ env.DOOM_REF }}-${{ hashFiles('init.el', 'packages.el') }}
+          restore-keys: doom-linux-${{ matrix.xwidgets }}-${{ env.DOOM_REF }}-
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Emacs 31 built from source (tests/linux/Dockerfile): its layers cached,
+      # built again only when the Dockerfile changes.
+      - name: The test image
+        uses: docker/build-push-action@v6
+        with:
+          context: tests/linux
+          load: true
+          tags: ${{ env.IMAGE }}
+          build-args: ${{ matrix.xwidgets == 'no' && 'EMACS_CONFIGURE_EXTRA=' || '' }}
+          cache-from: type=gha,scope=emacs-${{ matrix.xwidgets }}
+          cache-to: type=gha,mode=max,scope=emacs-${{ matrix.xwidgets }}
+
+      - name: doom sync
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/root/.config/doom" -v "$DOOM_EMACS:/root/.config/emacs" \
+            "$IMAGE" /root/.config/emacs/bin/doom sync
+
+      # PDF.js and Excalidraw, as opening a PDF or a drawing downloads them:
+      # their end-to-end tests run instead of skipping.
+      - name: PDF.js and Excalidraw
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/root/.config/doom" -v "$DOOM_EMACS:/root/.config/emacs" \
+            -w /root/.config/doom "$IMAGE" emacs --batch -l tests/helper.el -l tests/assets.el
+
+      - name: Unit tests
+        run: tests/linux/run.sh unit
+
+      - name: End-to-end tests
+        run: tests/linux/run.sh e2e
+
+  macos:
+    name: macOS
+    runs-on: macos-15
+    timeout-minutes: 150
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      # The tests' programs, as scripts/tools.sh installs them.
+      - name: Emacs and the tests' programs
+        run: |
+          brew tap d12frosted/emacs-plus
+          brew trust d12frosted/emacs-plus 2>/dev/null || true
+          brew install --cask emacs-plus-app
+          brew install pandoc imagemagick ripgrep fd git-delta coreutils
+
+      - name: Doom, this config as ~/.config/doom
+        run: |
+          mkdir -p ~/.config
+          ln -s "$GITHUB_WORKSPACE" ~/.config/doom
+          git clone -q https://github.com/doomemacs/core ~/.config/emacs
+          git -C ~/.config/emacs checkout -q "$DOOM_REF"
+          git -C ~/.config/emacs submodule update -q --init --recursive
+
+      - name: Doom's packages (cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.config/emacs/.local
+          key: doom-macos-${{ env.DOOM_REF }}-${{ hashFiles('init.el', 'packages.el') }}
+          restore-keys: doom-macos-${{ env.DOOM_REF }}-
+
+      - name: doom sync
+        run: ~/.config/emacs/bin/doom sync
+
+      - name: PDF.js and Excalidraw
+        run: emacs --batch -l tests/helper.el -l tests/assets.el
+
+      - name: Unit tests
+        run: tests/run.sh unit
+
+      - name: End-to-end tests
+        run: tests/run.sh e2e

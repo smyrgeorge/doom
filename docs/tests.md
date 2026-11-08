@@ -10,7 +10,9 @@ tests/linux/run.sh all             # the same on Linux, in Docker (from macOS to
 XWIDGETS=no tests/linux/run.sh all # on an Emacs without xwidgets, as most distributions'
 ```
 
-Each test file runs in a throwaway Emacs, so your Emacs and its files are never touched. `E2E_WINDOW=front` shows the
+Each test file runs in a throwaway Emacs, so your Emacs and its files are never touched. The PDF and drawing tests copy
+PDF.js and Excalidraw from Doom's data folder, and skip without them: opening a PDF or a drawing once downloads them,
+or `emacs --batch -l tests/helper.el -l tests/assets.el` does. `E2E_WINDOW=front` shows the
 end-to-end tests' frame, which otherwise stays off screen. They run on macOS and on Linux; `EMACS_GUI` names the GUI
 Emacs for the end-to-end tests (default: macOS's `/Applications/Emacs.app`, else `emacs`). On Linux without a display,
 run those under Xvfb: `xvfb-run -a tests/run.sh e2e`.
@@ -26,3 +28,16 @@ run those under Xvfb: `xvfb-run -a tests/run.sh e2e`.
 - `tests/fixtures/` holds what tests load: `diff-sh-emacs.el` is the Emacs that `cmd/diff.sh` starts in `test-cmd.el`.
 
 A failing or flaky test is a bug to fix in the config, not a test to relax.
+
+## On GitHub
+
+Each push and pull request runs them all (`.github/workflows/tests.yml`), unit and end-to-end, in three jobs:
+
+- **Linux, with xwidgets** and **Linux, without xwidgets**: `tests/linux/run.sh`, in its Docker image (Emacs 31 built
+  from source, the image's layers cached between runs);
+- **macOS**: `tests/run.sh`, with emacs-plus's Emacs.app.
+
+Each installs Doom at the commit in the workflow's `DOOM_REF` (the one the config is used with: bump it after updating
+Doom), runs `doom sync` (its packages cached until `init.el`, `packages.el` or that commit change) and downloads PDF.js
+and Excalidraw (`tests/assets.el`), so no test skips for want of them. A newer push to a
+branch cancels the run still going there.

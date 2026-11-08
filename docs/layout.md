@@ -34,6 +34,7 @@
 | `dict/tech.txt` | Programming words for spelling, built by `scripts/dict.sh` |
 | `scripts/` | Installers (`emacs.sh`; `tools.sh`: what `init.el` and this config need; `os.sh`: Homebrew, apt or dnf), `dict.sh`, `screenshots.sh` |
 | `tests/` | [Tests](tests.md); `tests/linux/`: the same on Linux, in Docker |
+| `.github/workflows/tests.yml` | The tests on each push, on Linux and macOS ([Tests](tests.md#on-github)) |
 
 A large feature is a file and a folder: `config/NAME.el` holds its settings and keys, and loads its code from
 `config/NAME/`.

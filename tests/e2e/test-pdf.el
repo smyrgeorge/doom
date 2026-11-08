@@ -12,17 +12,18 @@
 ;; there already: `doom-data-dir' is the temp one).
 (defvar +test-pdf--pdfjs (+test-pdfjs-dir))
 
-;; Nothing opens outside Emacs: Preview (open -a Preview) and the print
-;; dialog (osascript) are recorded instead.
+;; Nothing opens outside Emacs: printing (osascript's Preview dialog on macOS,
+;; lp on Linux) is recorded instead; the apps config/os.el starts, by
+;; tests/helper.el (`+test-os-runs').
 (defvar +test-pdf--outside nil
   "The commands that would have run outside Emacs, the latest first.")
 
 (advice-add 'call-process :around
             (lambda (fn program &rest args)
-              (if (equal program "open")
+              (if (equal program "lp")
                   (progn (push (cons program args) +test-pdf--outside) 0)
                 (apply fn program args)))
-            '((name . +test-pdf-no-open)))
+            '((name . +test-pdf-no-lp)))
 
 (advice-add 'make-process :around
             (lambda (fn &rest args)
@@ -396,18 +397,29 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
 ;; ====== PREVIEW, PRINT ======
 
 (ert-deftest e2e-pdf/the-toolbar-s-preview-and-print ()
+  "The toolbar's Open in Preview (Linux: the default app) and Print
+(Preview's dialog; Linux: lp, after asking), each run once."
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+test-pdf--click "Open in Preview")
-    (should (+test-wait-for (lambda () +test-pdf--outside) 3))
-    (should (equal (car +test-pdf--outside) (list "open" nil 0 nil "-a" "Preview" +test-pdf--book)))
-    (+test-pdf--click "Print")
-    (should (+test-wait-for (lambda () (= (length +test-pdf--outside) 2)) 3))
-    (should (equal (car (car +test-pdf--outside)) "osascript"))
+    (setq +test-os-runs nil)
+    (+test-pdf--click (concat "Open in " (+my/os-app-name 'viewer)))
+    (should (+test-wait-for (lambda () +test-os-runs) 3))
+    (should (equal (car +test-os-runs)
+                   (if (+my/macos-p)
+                       (list "open" "-a" "Preview" +test-pdf--book)
+                     (list "xdg-open" +test-pdf--book))))
+    (let ((find (symbol-function 'executable-find)))
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t))
+                ((symbol-function 'executable-find)
+                 (lambda (name &rest args) (if (equal name "lp") "/usr/bin/lp" (apply find name args)))))
+        (+test-pdf--click "Print")
+        (should (+test-wait-for (lambda () +test-pdf--outside) 3))))
+    (should (equal (car (car +test-pdf--outside)) (if (+my/macos-p) "osascript" "lp")))
     (should (equal (car (last (car +test-pdf--outside))) +test-pdf--book))
     ;; Each request runs once.
     (+test-sleep 0.5)
-    (should (= (length +test-pdf--outside) 2))))
+    (should (= (length +test-pdf--outside) 1))
+    (should (= (length +test-os-runs) 1))))
 
 ;; ====== LINKS OUT ======
 

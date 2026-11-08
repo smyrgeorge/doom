@@ -1,5 +1,7 @@
 # doom
 
+[![Tests](https://github.com/smyrgeorge/doom/actions/workflows/tests.yml/badge.svg)](https://github.com/smyrgeorge/doom/actions/workflows/tests.yml)
+
 My Emacs configuration, built on [Doom Emacs](https://github.com/doomemacs/core) with Vim keys.
 
 It runs on **macOS** and **Linux** with **Emacs 31**, as a GUI app or in a terminal (`emacs -nw`). On top of Doom it
@@ -138,5 +140,5 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Terminal](docs/terminal.md): what differs in `emacs -nw`
 - [Examples](docs/examples.md): each feature on files of its own, with screenshots
 - [Shell commands](docs/cmd.md): `cmd/diff.sh`
-- [Tests](docs/tests.md): unit and end-to-end tests, on macOS and on Linux (Docker)
+- [Tests](docs/tests.md): unit and end-to-end tests, on macOS and Linux, on each push (GitHub Actions)
 - [Repository layout](docs/layout.md): what each file is for
