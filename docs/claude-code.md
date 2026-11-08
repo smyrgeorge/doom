@@ -23,6 +23,19 @@ In a Claude Code buffer, `C-c C-d` (`SPC m d`) opens a new [drawing](drawings.md
 | `C-c C-k` | Discard it |
 | `M-p` / `M-n` | An earlier drawing instead, to change and insert again |
 
+## Issues for Claude
+
+In a project that tracks its [issues](issues.md) with Beads, Claude works with them through `bd`. A session started
+there is told so, with Beads' own guide for agents (`bd prime`), and each `bd` command Claude runs refreshes the
+issue lists and issues you have open, so its changes show as it makes them.
+
+| Key | Action |
+|---|---|
+| `C-c C-i` (`SPC m i`) | In a Claude Code buffer: pick one of the project's open issues (ready ones first) for the prompt |
+| `C-c C-a` (`SPC m a`) | On an issue, in the list or its own buffer: put it in the prompt of the project's session |
+
+An issue goes into the prompt as `Beads issue ID: title`, for you to say what to do with it.
+
 ## Profiling Emacs
 
 `SPC h T` starts the profiler; do what's slow, then `SPC h T` again. The profile is written as text under

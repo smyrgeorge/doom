@@ -83,6 +83,33 @@ that its buffer isn't modified."
 (defvar +my/agent-shell-excalidraw-mode-map (make-sparse-keymap)
   "Keys of a drawing for Claude (see DRAWINGS FOR CLAUDE above).")
 
+;; ISSUES FOR CLAUDE
+;; In a project tracking its issues with Beads (config/beads.el: a .beads/
+;; folder, SPC o i), Claude works with them through bd, its command line:
+;; - a session started there is told so (`+my/agent-shell-beads-context'),
+;;   with Beads' own guide for agents (`bd prime': finding work, claiming,
+;;   creating, closing issues, dependencies), appended to its system prompt;
+;; - each bd command Claude runs refreshes the issue lists and issues open in
+;;   Emacs for that project, so its changes show as it makes them;
+;; - C-c C-i (SPC m i) in agent-shell picks one of the project's open issues
+;;   (ready ones first) and puts it in the prompt, as its id and title;
+;;   C-c C-a (SPC m a) on an issue, in the list or its own buffer, puts it in
+;;   the prompt of the project's session.
+(defvar +my/agent-shell-beads-context
+  "This project tracks its issues with Beads: the bd command line, its \
+.beads/ folder. Use bd for the project's tasks. The user \
+sees the same issues in Emacs (SPC o i): the issue lists and issues they \
+have open there refresh after each bd command you run, so they follow your \
+changes. They may hand you an issue as \"Beads issue ID: title\": read it \
+with bd show ID. Add --json when you read bd's output. Never run bd edit: it \
+opens an editor and waits."
+  "Appended to Claude Code's system prompt in a project tracking its issues
+with Beads (see ISSUES FOR CLAUDE above), before `bd prime''s guide.")
+
+(defvar +my/agent-shell-beads-prime t
+  "Non-nil: Beads' guide for agents (`bd prime') follows
+`+my/agent-shell-beads-context' in the system prompt.")
+
 ;; ====== KEY BINDINGS ======
 
 (map! :leader
@@ -95,6 +122,26 @@ that its buffer isn't modified."
       "C-c C-d" #'+my/agent-shell-excalidraw
       :localleader
       :desc "Draw for Claude" "d" #'+my/agent-shell-excalidraw)
+
+;; ISSUES FOR CLAUDE (see above): an issue into the prompt, from agent-shell
+;; or from Beads' list and issues.
+(map! :after agent-shell
+      :map agent-shell-mode-map
+      "C-c C-i" #'+my/agent-shell-beads-insert
+      :localleader
+      :desc "Issue for Claude" "i" #'+my/agent-shell-beads-insert)
+
+(map! :after beads-list
+      :map beads-list-mode-map
+      "C-c C-a" #'+my/agent-shell-beads-send
+      :localleader
+      :desc "To Claude" "a" #'+my/agent-shell-beads-send)
+
+(map! :after beads-detail
+      :map (beads-detail-mode-map beads-detail-vui-mode-map)
+      "C-c C-a" #'+my/agent-shell-beads-send
+      :localleader
+      :desc "To Claude" "a" #'+my/agent-shell-beads-send)
 
 (map! :map +my/agent-shell-excalidraw-mode-map
       "C-c C-c" #'+my/agent-shell-excalidraw-insert
@@ -124,3 +171,4 @@ that its buffer isn't modified."
 ;; before it define.
 (load! "agent-shell/context")
 (load! "agent-shell/excalidraw")
+(load! "agent-shell/beads")

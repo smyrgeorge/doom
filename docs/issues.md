@@ -49,6 +49,11 @@ Its description, design, acceptance criteria and notes, rendered as Markdown, wi
 `M-x beads-stale`, `beads-orphans` (issues mentioned in commits but still open), `beads-duplicates` and `beads-lint`
 (issues missing their type's sections) are reports of their own.
 
+## With Claude
+
+Claude Code works with the same issues: a session in the project is told about them, your open lists follow its
+changes, and `C-c C-a` on an issue hands it to the project's session ([more](claude-code.md#issues-for-claude)).
+
 ## With bd 1.x
 
 beads.el was written for bd 0.49, which ran a daemon; bd 1.x has only its command line. `config/beads/bd.el` mends what

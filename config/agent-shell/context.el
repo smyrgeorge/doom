@@ -23,11 +23,19 @@ to read well on it: %s."
                   "a dark or transparent background, light text and lines"
                 "a light or transparent background, dark text and lines")))))
 
+(defvar +my/agent-shell-claude-context-functions (list #'+my/agent-shell-claude-theme)
+  "Functions each returning more for Claude Code's system prompt, or nil,
+appended after `+my/agent-shell-claude-context' in this order: the theme's
+line; a project's issues (config/agent-shell/beads.el).")
+
 (defadvice! +my/agent-shell-claude-context-a (config)
-  "Append `+my/agent-shell-claude-context' to Claude Code's system prompt."
+  "Append `+my/agent-shell-claude-context' (and what
+`+my/agent-shell-claude-context-functions' return) to Claude Code's system
+prompt."
   :filter-return #'agent-shell-anthropic-make-claude-code-config
-  (let ((text (string-join (delq nil (list +my/agent-shell-claude-context
-                                           (+my/agent-shell-claude-theme)))
+  (let ((text (string-join (delq nil (cons +my/agent-shell-claude-context
+                                           (mapcar #'funcall
+                                                   +my/agent-shell-claude-context-functions)))
                            "\n\n")))
     (setf (alist-get :session-meta config)
           (cons `(systemPrompt . ((append . ,text)))
