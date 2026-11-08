@@ -95,12 +95,13 @@ examples/excalidraw.el."
   (interactive)
   (let* ((dir (+my/example-folder "excalidraw"))
          (file (+my/example-write dir "how-it-opens.excalidraw" (+my/example-excalidraw--drawing))))
-    (find-file file)
-    ;; The drawing alone: tiling opens it in a new pane (an application,
-    ;; config/tiling.el), beside the window it was opened from.
-    (when-let* ((window (get-buffer-window (current-buffer))))
-      (select-window window)
-      (delete-other-windows window))
+    ;; The drawing alone, in the one window, at its size from the start: not
+    ;; `find-file', which tiling opens in a new pane (an application,
+    ;; config/tiling.el) the example then had to widen, its WebKit view
+    ;; resized as it loaded (at times left blank).
+    (delete-other-windows)
+    (set-window-buffer (selected-window) (find-file-noselect file))
+    (set-buffer (window-buffer (selected-window)))
     (+my/example-delete-when-closed dir (list (current-buffer)))
     (message "Drawing example: draw with the mouse, r a rectangle, a an arrow, t text, ? the keys; SPC m d the dark canvas")
     (current-buffer)))

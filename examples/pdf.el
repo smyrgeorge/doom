@@ -168,8 +168,14 @@ RGB), in points from the bottom left of a US Letter page.")
         (write-region out nil file nil 'silent)))
     file))
 
+(defconst +my/example-pdf--message
+  "PDF example: j / k scroll, J / K pages, / searches, O the outline, SPC m d light pages"
+  "What the example says: as it opens, and again once the PDF is (the
+messages opening it said after it, PDF.js installed..., not left last).")
+
 (defun +my/example-pdf--dark (buffer)
-  "Dark pages in BUFFER's PDF once PDF.js has opened it (15 s at most)."
+  "Dark pages and a whole page in BUFFER's PDF once PDF.js has opened it, if it
+didn't open so (15 s at most); the example's message again."
   (let ((timer nil)
         (until (+ (float-time) 15)))
     (setq timer
@@ -183,11 +189,16 @@ RGB), in points from the bottom left of a US Letter page.")
                         (let ((state (+my/pdf--state)))
                           (and state (natnump (plist-get state :pages)) (> (plist-get state :pages) 0))))
                       (cancel-timer timer)
+                      ;; Only if the page didn't start so (another PDF open,
+                      ;; light, gives the new one its settings).
                       (with-selected-window window
-                        (unless (plist-get (+my/pdf--state) :dark)
-                          (+my/pdf-toggle-dark))
-                        ;; A whole page, its chart too (P).
-                        (+my/pdf-fit-page))))))))))
+                        (let ((state (+my/pdf--state)))
+                          (unless (plist-get state :dark)
+                            (+my/pdf-toggle-dark))
+                          ;; A whole page, its chart too (P).
+                          (unless (equal (plist-get (plist-get state :place) :s) "page-fit")
+                            (+my/pdf-fit-page))))
+                      (message "%s" +my/example-pdf--message)))))))))
 
 (defun +my/example-pdf ()
   "Example: a PDF in WebKit, its pages dark (deleted once closed). See
@@ -196,6 +207,12 @@ examples/pdf.el."
   (let* ((dir (+my/example-folder "pdf"))
          (file (+my/example-pdf--write (expand-file-name "report.pdf" dir)))
          (dark +my/pdf-dark-pages))
+    ;; Dark and a whole page from its first frame: as the page starts (its
+    ;; settings, a place kept for it), not turned so once it's open, a light
+    ;; page flashing first.
+    (setq +my/pdf-dark-pages t)
+    (let ((buffer-file-name file))
+      (+my/pdf--keep-place '(:p 1 :s "page-fit")))
     (delete-other-windows)
     (find-file file)
     (let ((buffer (current-buffer)))
@@ -207,7 +224,7 @@ examples/pdf.el."
          (run-at-time 0 nil (lambda ()
                               (setq +my/pdf-dark-pages dark)
                               (+my/pdf--forget-place file)))))
-      (message "PDF example: j / k scroll, J / K pages, / searches, O the outline, SPC m d light pages")
+      (message "%s" +my/example-pdf--message)
       buffer)))
 
 (defun +my/example-pdf-ready ()
