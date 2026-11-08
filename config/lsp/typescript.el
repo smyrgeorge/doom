@@ -9,7 +9,7 @@
 ;; a file moves. lsp-mode knows it as tsgo; which tsc runs it, in order:
 ;; - the project's own, if it's TypeScript 7 or later (node_modules/.bin/tsc):
 ;;   the errors are the ones its build gets;
-;; - the one on PATH, if TypeScript 7 or later (scripts/lsp.sh installs it);
+;; - the one on PATH, if TypeScript 7 or later (scripts/tools.sh installs it);
 ;; - else lsp-mode's own copy (a nightly build, @typescript/native-preview,
 ;;   installed on first use).
 ;; typescript-language-server (ts-ls) wraps tsserver, TypeScript 6 at most
@@ -33,7 +33,7 @@
 ;; ESLINT
 ;; ESLint runs alongside, for its diagnostics and fixes (in projects with an
 ;; ESLint config): vscode-eslint-language-server (vscode-langservers-extracted,
-;; scripts/lsp.sh), not the VS Code extension lsp-mode would download. It
+;; scripts/tools.sh), not the VS Code extension lsp-mode would download. It
 ;; doesn't format: TypeScript or Prettier does (see FORMATTING).
 (setq lsp-eslint-server-command '("vscode-eslint-language-server" "--stdio")
       lsp-eslint-format nil)

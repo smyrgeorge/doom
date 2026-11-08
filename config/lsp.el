@@ -6,7 +6,7 @@
 
 ;; SERVERS
 ;; A server per language of init.el's +lsp modules, installed by
-;; scripts/lsp.sh; a language's own settings, where it has some, in
+;; scripts/tools.sh; a language's own settings, where it has some, in
 ;; config/lsp/LANGUAGE.el:
 ;;   C/C++                  clangd
 ;;   Docker                 docker-langserver

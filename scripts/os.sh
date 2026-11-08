@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by the installers (emacs.sh, tools.sh, lsp.sh): which system this is
+# Sourced by the installers (emacs.sh, tools.sh): which system this is
 # and how it installs packages. Run again, they update: a package installed
 # already is upgraded to its latest version.
 #
@@ -9,7 +9,7 @@
 #   another Linux       the packages are listed, to install by hand
 #
 # DRY_RUN=1 prints what would run instead of running it. OS=macos|apt|dnf
-# picks the system (tests/unit/test-lsp-script.el).
+# picks the system (tests/unit/test-tools-script.el).
 
 case "${OS:-$(uname -s)}" in
   macos|apt|dnf|linux) ;;
@@ -40,7 +40,7 @@ run() {
 
 # pkg BREW APT DNF: install this system's packages (a word list each; "-":
 # none there), or upgrade them if they're installed: brew upgrade, else brew
-# install; apt-get install (it upgrades); dnf install, then dnf upgrade. A
+# install, each package on its own (`brew_latest'); apt-get install (it upgrades); dnf install, then dnf upgrade. A
 # failure is noted, not fatal: the other tools still install.
 pkg() {
   local names
@@ -53,11 +53,27 @@ pkg() {
   [ "$names" = - ] && return 0
   # shellcheck disable=SC2086  # a word list: "--cask font-x", "aspell aspell-en"
   case "$OS" in
-    macos) run brew upgrade $names 2>/dev/null || run brew install $names || OS_SKIPPED+=("$names") ;;
+    macos) brew_latest $names ;;
     apt) run $SUDO apt-get install -y $names || OS_SKIPPED+=("$names") ;;
     dnf) { run $SUDO dnf install -y $names && run $SUDO dnf upgrade -y $names; } || OS_SKIPPED+=("$names") ;;
     *) OS_SKIPPED+=("$names") ;;
   esac
+}
+
+# brew_latest [--cask] NAME...: each upgraded if it's installed, else
+# installed (one at a time: `brew upgrade a b' fails whole if one isn't
+# installed).
+brew_latest() {
+  local cask=() name
+  if [ "${1:-}" = --cask ]; then
+    cask=(--cask)
+    shift
+  fi
+  for name in "$@"; do
+    run brew upgrade ${cask[@]+"${cask[@]}"} "$name" 2>/dev/null ||
+      run brew install ${cask[@]+"${cask[@]}"} "$name" ||
+      OS_SKIPPED+=("$name")
+  done
 }
 
 # pkg_update: refresh apt's package lists (once per script).

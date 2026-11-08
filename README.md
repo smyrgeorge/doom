@@ -86,11 +86,10 @@ git clone --depth 1 --recurse-submodules https://github.com/doomemacs/core ~/.co
 #    replaces Homebrew's `emacs` formula). Linux: built from source into /usr/local (XWIDGETS=no: without WebKit)
 ~/.config/doom/scripts/emacs.sh
 
-# 4. CLI tools, fonts, LaTeX (macOS's BasicTeX asks for an admin password), and the language servers of the
-#    languages init.el enables with +lsp; what a system has no package for is listed at the end, to install by hand.
-#    Run again, they update everything to its latest version
+# 4. What init.el and this config need outside Emacs: Doom's tools, each enabled module's (language servers,
+#    formatters, linters), fonts. Its table lists them all; it fails on a module it doesn't know (add its tools).
+#    Run again, it updates them to their latest versions; --check only shows what's there and what's missing
 ~/.config/doom/scripts/tools.sh
-~/.config/doom/scripts/lsp.sh
 
 # 5. Let the GUI app see your shell's PATH (re-run when PATH changes)
 ~/.config/emacs/bin/doom env
@@ -100,7 +99,7 @@ git clone --depth 1 --recurse-submodules https://github.com/doomemacs/core ~/.co
 ```
 
 After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` and restart Emacs (and
-`scripts/lsp.sh` for a language newly enabled with `+lsp`). Changes to
+`scripts/tools.sh` for a module newly enabled). Changes to
 `config.el` and `config/*.el` only need a restart.
 
 **One-time manual steps**

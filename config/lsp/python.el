@@ -4,7 +4,7 @@
 
 ;; SERVER
 ;; basedpyright, Pyright's community fork (uv tool install basedpyright,
-;; scripts/lsp.sh): the same checks, and also inlay hints (variable and return
+;; scripts/tools.sh): the same checks, and also inlay hints (variable and return
 ;; types, argument names), semantic highlighting, and Pylance's features
 ;; Pyright leaves out. lsp-pyright knows it; its type checking mode stays
 ;; lsp-pyright's ("standard"), a project's pyproject.toml or
