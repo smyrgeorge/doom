@@ -39,6 +39,12 @@ esac\n"
       (set-file-modes (expand-file-name program dir) #o755))
     dir))
 
+(defconst +test-tools-script--unset
+  '("EMACS_VERSION" "XWIDGETS" "NO_DOOM" "DRY_RUN" "OS" "EMACS" "DOOM_INIT")
+  "What the scripts read from their environment, unset for each run (a bare
+name in `process-environment'): a test sets what it means to, not what
+the shell running the tests had (CI's).")
+
 (defun +test-tools-script--run (os init &rest args)
   "Run scripts/tools.sh as OS on INIT, the strings of ARGS that look like
 VAR=value added to its environment, the others its arguments:
@@ -54,6 +60,7 @@ ARGS give a PATH."
               (append env
                       (list (concat "OS=" os) (concat "DOOM_INIT=" init)
                             (concat "EMACS=" (expand-file-name invocation-name invocation-directory)))
+                      +test-tools-script--unset
                       process-environment))
              (status (apply #'call-process "bash" nil t nil +test-tools-script--script arguments)))
         (cons status (buffer-string))))))

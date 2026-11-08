@@ -64,6 +64,12 @@ exit 0\n"
               "exit 22\n")))
     dir))
 
+(defconst +test-emacs-script--unset
+  '("EMACS_VERSION" "XWIDGETS" "NO_DOOM" "DRY_RUN" "OS" "EMACS_BIN" "DOOM_BIN" "EMACS" "DOOM_INIT")
+  "What the scripts read from their environment, unset for each run (a bare
+name in `process-environment'): a test sets what it means to, not what
+the shell running the tests had (CI pins EMACS_VERSION).")
+
 (defun +test-emacs-script--run (os dir &rest env)
   "Run scripts/emacs.sh as OS with DIR's fakes, ENV added: (STATUS . OUTPUT)."
   (with-temp-buffer
@@ -74,6 +80,7 @@ exit 0\n"
                           (concat "EMACS_BIN=" dir "bin/emacs")
                           (concat "DOOM_BIN=" dir "doom/bin/doom")
                           (concat "TMPDIR=" (+test-tmp-file "emacs-script/tmp/")))
+                    +test-emacs-script--unset
                     process-environment))
            (status (call-process "bash" nil t nil +test-emacs-script--script)))
       (cons status (buffer-string)))))
@@ -197,7 +204,7 @@ tarball, with xwidgets; Emacs changed: Doom rebuilt."
 (defun +test-emacs-script--tools (dir &rest env)
   (with-temp-buffer
     (let* ((process-environment (append env (list (concat "PATH=" dir "bin:/usr/bin:/bin"))
-                                        process-environment))
+                                        +test-emacs-script--unset process-environment))
            (status (call-process "bash" nil t nil (expand-file-name "scripts/tools.sh" +test-root) "--check")))
       (cons status (buffer-string)))))
 
