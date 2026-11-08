@@ -94,7 +94,7 @@ installers valid there)."
                (+test-tools-script--run "macos" (+test-tools-script--init ":lang (sh +lsp)")
                                         "DRY_RUN=1" "EMACS=no-such-emacs")))
     (should (= status 1))
-    (should (string-search "no Emacs to read init.el" output))))
+    (should (string-search "Emacs isn't installed: run scripts/emacs.sh first" output))))
 
 ;; ====== WHAT IT INSTALLS ======
 

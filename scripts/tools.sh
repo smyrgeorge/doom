@@ -15,16 +15,22 @@
 # init.el needs its tools added here).
 #
 # macOS: Homebrew; Linux: apt (Debian, Ubuntu) or dnf (Fedora), see
-# scripts/os.sh. DRY_RUN=1 prints the commands instead. DOOM_INIT (default:
-# this config's init.el) and EMACS (default: emacs) are what it reads the
-# modules with.
+# scripts/os.sh. Emacs (31 or later) must be installed first: scripts/emacs.sh;
+# without it, it fails, saying so. DRY_RUN=1 prints the commands instead.
+# DOOM_INIT (default: this config's init.el) and EMACS (default: emacs, else
+# macOS's Emacs.app) are what it reads the modules with.
 set -euo pipefail
 # shellcheck source=scripts/os.sh
 . "$(dirname "$0")/os.sh"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DOOM_INIT=${DOOM_INIT:-$ROOT/init.el}
-EMACS=${EMACS:-emacs}
+if [ -z "${EMACS:-}" ]; then
+  EMACS=emacs
+  if ! command -v emacs >/dev/null 2>&1 && [ -x /Applications/Emacs.app/Contents/MacOS/Emacs ]; then
+    EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs
+  fi
+fi
 CHECK_ONLY=
 case "${1:-}" in
   --check) CHECK_ONLY=1 ;;
@@ -138,8 +144,18 @@ NOTHING=(
 
 # ====== INIT.EL'S MODULES ======
 
+# Emacs first: it reads init.el, and the tools are for it.
 if ! command -v "$EMACS" >/dev/null 2>&1; then
-  echo "tools.sh: no Emacs to read init.el with (scripts/emacs.sh installs it; EMACS=...)" >&2
+  echo "tools.sh: Emacs isn't installed: run scripts/emacs.sh first (it installs Emacs and Doom)" >&2
+  exit 1
+fi
+EMACS_MAJOR=$("$EMACS" --batch -Q --eval '(princ emacs-major-version)' 2>/dev/null || true)
+if [ -z "$EMACS_MAJOR" ]; then
+  echo "tools.sh: Emacs ($EMACS) doesn't run: run scripts/emacs.sh first" >&2
+  exit 1
+fi
+if [ "$EMACS_MAJOR" -lt 31 ]; then
+  echo "tools.sh: Emacs ${EMACS_MAJOR:-?} is older than this config needs (31): run scripts/emacs.sh first" >&2
   exit 1
 fi
 

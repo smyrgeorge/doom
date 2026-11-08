@@ -82,8 +82,10 @@ git clone git@github.com:smyrgeorge/doom.git ~/.config/doom
 # 2. Doom itself (its modules are a git submodule)
 git clone --depth 1 --recurse-submodules https://github.com/doomemacs/core ~/.config/emacs
 
-# 3. Emacs + `doom sync` (also fetches Doom's modules). macOS: the prebuilt emacs-plus Emacs.app (macOS 15+,
-#    replaces Homebrew's `emacs` formula). Linux: built from source into /usr/local (XWIDGETS=no: without WebKit)
+# 3. Emacs, installed or updated to its latest release, + `doom sync` (also fetches Doom's modules; --rebuild when
+#    Emacs's version changed). macOS: the prebuilt emacs-plus Emacs.app (macOS 15+, replaces Homebrew's `emacs`
+#    formula). Linux: GNU's latest release built from source into /usr/local (XWIDGETS=no: without WebKit).
+#    Run again, it updates. Step 4 needs it: it says so if Emacs isn't there
 ~/.config/doom/scripts/emacs.sh
 
 # 4. What init.el and this config need outside Emacs: Doom's tools, each enabled module's (language servers,
