@@ -6,6 +6,7 @@
 
 ;; TREEMACS (project view)
 (setq +treemacs-git-mode 'deferred)     ; async git status, incl. folders (python3)
+(setq treemacs-hide-dot-git-directory nil) ; show .git (treemacs hides it)
 
 ;; Treemacs hides its window from winum; number it (leftmost => SPC w 1).
 (after! (treemacs winum)

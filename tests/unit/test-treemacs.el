@@ -184,6 +184,7 @@ advice around it kept."
 (ert-deftest treemacs/settings ()
   (should (eq +treemacs-git-mode 'deferred))
   (should (eq treemacs-user-mode-line-format 'none))
+  (should-not treemacs-hide-dot-git-directory)
   (should (eql (default-value '+my/treemacs-git-poll-interval) 3))
   (should (eql (default-value '+my/treemacs-expand-all-warn) 300)))
 
@@ -1369,6 +1370,10 @@ exists) checked."
     (should-error (treemacs-expand-all) :type 'user-error)
     (should-error (treemacs-collapse-all) :type 'user-error)))
 
+(defun +test-treemacs--closed-dirs ()
+  "The closed folders' lines (after zR: .git only)."
+  (seq-filter (lambda (l) (string-prefix-p "+ " l)) (+test-treemacs--lines)))
+
 (defun +test-treemacs--tree-project (name)
   (+test-treemacs--project name "README.md" "docs/guide.md" "src/main/kotlin/A.kt"
                            "src/test/T.kt" "build/"))
@@ -1381,13 +1386,15 @@ level."
       (+test-treemacs--show-project root)
       (with-current-buffer (treemacs-get-local-buffer)
         (treemacs-expand-all)
-        (should-not (memq 'dir-node-closed (+test-treemacs--states)))
+        ;; Every folder open but .git (shown, closed).
+        (should (equal (+test-treemacs--closed-dirs) '("+ .git")))
+        (should (= (seq-count (lambda (s) (eq s 'dir-node-closed)) (+test-treemacs--states)) 1))
         (should (equal (seq-filter (lambda (l) (string-match-p "\\.\\(kt\\|md\\)\\'" l)) (+test-treemacs--lines))
                        '("guide.md" "A.kt" "T.kt" "README.md")))
         (treemacs-collapse-all)
         (should-not (memq 'dir-node-open (+test-treemacs--states)))
         (should (eq (car (+test-treemacs--states)) 'root-node-open))
-        (should (equal (cdr (+test-treemacs--lines)) '("+ build" "+ docs" "+ src" "README.md")))))))
+        (should (equal (cdr (+test-treemacs--lines)) '("+ .git" "+ build" "+ docs" "+ src" "README.md")))))))
 
 (ert-deftest treemacs/expand-collapse-a-closed-project ()
   "A project folded down to its name: zR opens all of it, zM opens it at its
@@ -1401,7 +1408,8 @@ top level."
         (should (equal (+test-treemacs--states) '(root-node-closed)))
         (treemacs-collapse-all)
         (should (equal (+test-treemacs--states)
-                       '(root-node-open dir-node-closed dir-node-closed dir-node-closed file-node-closed)))
+                       '(root-node-open dir-node-closed dir-node-closed dir-node-closed dir-node-closed
+                                        file-node-closed)))
         (goto-char (point-min))
         (treemacs-toggle-node)
         (treemacs-expand-all)
@@ -1438,10 +1446,10 @@ opened."
             (should-not (memq 'dir-node-open (+test-treemacs--states)))
             (setq answer t)
             (treemacs-expand-all)
-            (should-not (memq 'dir-node-closed (+test-treemacs--states))))
+            (should (equal (+test-treemacs--closed-dirs) '("+ .git"))))
           ;; Below the limit: no question.
           (setq prompts nil)
           (treemacs-collapse-all)
           (treemacs-expand-all)
           (should-not prompts)
-          (should-not (memq 'dir-node-closed (+test-treemacs--states))))))))
+          (should (equal (+test-treemacs--closed-dirs) '("+ .git"))))))))

@@ -36,10 +36,17 @@
                  (y-or-n-p (format "%s has more than %d folders. Expand them all? "
                                    (treemacs-project->name project)
                                    +my/treemacs-expand-all-warn)))
-         ;; Close it (forgetting what was open below), then reopen recursively.
+         ;; Close it (forgetting what was open below), then reopen recursively;
+         ;; .git (shown) left closed: it's git's, hundreds of folders.
          (when (eq (treemacs-button-get pos :state) 'root-node-open)
            (treemacs--collapse-root-node pos t))
-         (treemacs--expand-root-node pos t))))))
+         (let ((expand-dir (symbol-function 'treemacs--expand-dir-node)))
+           (cl-letf (((symbol-function 'treemacs--expand-dir-node)
+                      (lambda (btn &rest args)
+                        (unless (equal (file-name-nondirectory (treemacs-button-get btn :path))
+                                       ".git")
+                          (apply expand-dir btn args)))))
+             (treemacs--expand-root-node pos t))))))))
 
 (defun treemacs-collapse-all ()
   "Collapse every folder of the projects shown in treemacs (projects stay open)."
