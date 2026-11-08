@@ -149,7 +149,7 @@ pixels from the top of the text."
 (ert-deftest stripe/settings-defaults ()
   (should (equal (default-value '+my/stripe-diagnostic-levels) '(error warning info)))
   (should (equal (default-value '+my/stripe-todo-keywords) '("TODO" "FIXME" "HACK")))
-  (should (= (default-value '+my/stripe-mark-height) 4))
+  (should (= (default-value '+my/stripe-mark-height) 2))
   (should (eql (default-value '+my/stripe-overscroll) 0.25))
   (should (eql (default-value '+my/stripe-padding) 1)))
 
@@ -689,6 +689,23 @@ the end on the last row."
         (should (eq (aref pixels (floor (* scale 19))) ?6))  ; warning over change
         (should (eq (aref pixels (floor (* scale 29))) ?2))  ; added over suggestion
         (should (eq (aref pixels (floor (* scale 39))) ?5)))))) ; TODO over deleted
+
+(ert-deftest stripe/pixels-marks-a-thin-line ()
+  "A mark of one line is `+my/stripe-mark-height' high, however tall its line
+on the strip (lines 10 pixels here); one of several lines spans them."
+  (+test-stripe (+test-stripe--text 5)
+    (+test-stripe--errors '(2 error))
+    (+test-stripe--hunk 3 5 'change)
+    (cl-letf (((symbol-function 'window-body-height)
+               (lambda (&optional _ pixelwise) (if pixelwise 200 20)))
+              ((symbol-function 'window-font-height) (lambda (&rest _) 10))
+              ((symbol-function '+my/stripe--text-rows-wanted) (lambda (&rest _) 20)))
+      (pcase-let ((`(,pixels ,scale) (+test-stripe--strip-pixels)))
+        (should (= scale 10))
+        (should (equal (substring pixels 8 52)
+                       (concat "  77" (make-string 8 ?\s) (make-string 30 ?3) "  "))))
+      (let ((+my/stripe-mark-height 4))
+        (should (equal (substring (car (+test-stripe--strip-pixels)) 10 15) "7777 "))))))
 
 (ert-deftest stripe/pixels-short-file ()
   "A file that fits: no band, a line a row (the font's height a line)."

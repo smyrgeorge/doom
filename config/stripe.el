@@ -38,8 +38,10 @@ LSP hints and information).")
   "Keywords whose lines the stripe marks, as words, case matters: in code only
 in comments, in text anywhere. nil: none.")
 
-(defvar +my/stripe-mark-height 4
-  "Minimum height of a mark, in pixels (graphical frames).")
+(defvar +my/stripe-mark-height 2
+  "Height of a mark, in pixels (graphical frames): a line, as IntelliJ's, however
+tall its line is on the strip. Marks of several lines (git hunks) span them,
+this high at least.")
 
 (defvar +my/stripe-thumb-min-height 12
   "Minimum height of the band, in pixels: big enough to grab (graphical frames).")
