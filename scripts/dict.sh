@@ -29,15 +29,17 @@ EXTRA_WORDS=(
 )
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=scripts/ui.sh
+. "$ROOT/scripts/ui.sh"
 OUT="$ROOT/dict/tech.txt"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cd "$TMP"
 
-echo "Downloading ${#DICTS[@]} cspell dictionaries:"
+ui_step "Downloading ${#DICTS[@]} cspell dictionaries"
 for d in "${DICTS[@]}"; do
   npm pack --silent "@cspell/dict-$d" >/dev/null
-  echo "  @cspell/dict-$d"
+  ui_ok "@cspell/dict-$d"
 done
 
 for tgz in *.tgz; do
@@ -65,6 +67,9 @@ done
   sort -u >words.txt
 
 # Keep only what English doesn't already know.
+echo
+ui_step "Keeping the words aspell's English doesn't know"
 aspell --lang=en list <words.txt | sort -u >"$OUT"
 
-echo "Wrote $(wc -l <"$OUT" | tr -d ' ') words to ${OUT#"$ROOT"/} (from $(wc -l <words.txt | tr -d ' ') entries)."
+echo
+ui_step "$(ui_green "✔ Wrote $(wc -l <"$OUT" | tr -d ' ') words to ${OUT#"$ROOT"/}") $(ui_dim "(from $(wc -l <words.txt | tr -d ' ') entries)")"

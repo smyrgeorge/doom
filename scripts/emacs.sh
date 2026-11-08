@@ -39,14 +39,17 @@ if [ "$OS" = macos ]; then
     run rm /Applications/Emacs.app
   fi
 
-  run brew tap d12frosted/emacs-plus
-  run brew trust d12frosted/emacs-plus
-  if brew list --cask emacs-plus-app >/dev/null 2>&1; then
-    echo "Updating Emacs (emacs-plus-app, now ${before:-?}):"
-    run brew upgrade --cask emacs-plus-app || true # up to date: nothing to do
-  else
-    echo "Installing Emacs (emacs-plus-app):"
+  ui_step "Emacs $(ui_dim "(emacs-plus-app${DRY_RUN:+, dry run})")"
+  quiet brew tap d12frosted/emacs-plus
+  quiet brew trust d12frosted/emacs-plus
+  if ! brew list --cask emacs-plus-app >/dev/null 2>&1; then
     run brew install --cask emacs-plus-app
+    ui_ok "Emacs $(ui_green installed)"
+  elif brew outdated --cask --quiet 2>/dev/null | grep -qx emacs-plus-app; then
+    run brew upgrade --cask emacs-plus-app
+    ui_ok "Emacs ${before:-?} $(ui_green upgraded)"
+  else
+    ui_ok "Emacs ${before:-?} $(ui_dim 'up to date')"
   fi
   after=$(version_of "$EMACS_BIN")
 else
@@ -61,18 +64,19 @@ else
                       sed -E 's/^emacs-(.*)\.tar\.xz$/\1/' |
                       sort -t. -k1,1n -k2,2n -k3,3n | tail -1) || true
     if [ -z "$EMACS_VERSION" ]; then
-      echo "emacs.sh: couldn't read Emacs's latest release from ftp.gnu.org (EMACS_VERSION=...)" >&2
+      ui_error "emacs.sh: couldn't read Emacs's latest release from ftp.gnu.org (EMACS_VERSION=...)"
       exit 1
     fi
   fi
 
+  ui_step "Emacs $(ui_dim "(GNU's latest release: $EMACS_VERSION${DRY_RUN:+, dry run})")"
   if [ "$before" = "$EMACS_VERSION" ]; then
-    echo "Emacs $EMACS_VERSION, the latest, is installed already."
+    ui_ok "Emacs $EMACS_VERSION $(ui_dim 'up to date')"
   else
     if [ -n "$before" ]; then
-      echo "Updating Emacs $before to $EMACS_VERSION (built from source):"
+      ui_info "Updating Emacs $before to $EMACS_VERSION, built from source"
     else
-      echo "Installing Emacs $EMACS_VERSION (built from source):"
+      ui_info "Installing Emacs $EMACS_VERSION, built from source"
     fi
     # Build dependencies (what tests/linux's image builds it with).
     case "$OS" in
@@ -95,8 +99,8 @@ else
         # shellcheck disable=SC2086
         run $SUDO dnf install -y $webkit libtree-sitter-devel curl xz ;;
       *)
-        echo "emacs.sh: no package manager it knows (apt, dnf): install Emacs $EMACS_VERSION," \
-             "built with GTK, tree-sitter (and xwidgets), then run: doom sync --rebuild" >&2
+        ui_error "emacs.sh: no package manager it knows (apt, dnf): install Emacs $EMACS_VERSION," \
+                 "built with GTK, tree-sitter (and xwidgets), then run: doom sync --rebuild"
         exit 1 ;;
     esac
 
@@ -117,6 +121,7 @@ else
     run make -j"$(nproc 2>/dev/null || echo 4)"
     run $SUDO make install
     cd - >/dev/null 2>&1 || true
+    ui_ok "Emacs $EMACS_VERSION $(ui_green installed)"
   fi
   after=$(version_of "$EMACS_BIN")
   [ -n "${DRY_RUN:-}" ] && after=$EMACS_VERSION
@@ -124,15 +129,23 @@ fi
 
 # Doom's modules live in a git submodule (sources/doom+). `doom install`
 # fetches it but `doom sync` doesn't; without it only Doom's core is installed.
-run git -C "$(dirname "$(dirname "$DOOM_BIN")")" submodule update --init --recursive
+echo
+ui_step "Doom"
+quiet git -C "$(dirname "$(dirname "$DOOM_BIN")")" submodule update --init --recursive
+ui_ok "Doom's modules (sources/doom+)"
 
 # Doom against this Emacs: its packages built again if Emacs changed.
 if [ "$before" != "$after" ]; then
-  echo "Emacs ${before:-(none)} -> ${after:-?}: rebuilding Doom's packages for it."
+  ui_info "Emacs ${before:-(none)} -> ${after:-?}: rebuilding Doom's packages for it"
   run "$DOOM_BIN" sync --rebuild
+  ui_ok "Doom synced, its packages rebuilt"
 else
   run "$DOOM_BIN" sync
+  ui_ok "Doom synced"
 fi
+
+echo
+ui_step "$(ui_green "✔ Emacs ${after:-?} and Doom ready")"
 
 # To re-install (macOS), uninstall first:
 # brew uninstall --cask emacs-plus-app

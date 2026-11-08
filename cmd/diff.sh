@@ -30,10 +30,12 @@
 # (more arguments for a new Emacs) say which Emacs to run.
 
 set -u
+# shellcheck source=scripts/ui.sh
+. "$(dirname "$0")/../scripts/ui.sh"
 
 usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p;}' "$0"; }
 
-die() { echo "diff.sh: $*" >&2; exit 2; }
+die() { ui_error "diff.sh: $*"; exit 2; }
 
 gui=0 new=0 list=0 socket="" files=()
 while [ $# -gt 0 ]; do
@@ -44,7 +46,7 @@ while [ $# -gt 0 ]; do
     -l|--list) list=1 ;;
     -s|--socket) [ $# -ge 2 ] || die "$1 needs a server name"; socket=$2; shift ;;
     --) shift; files+=("$@"); break ;;
-    -*) echo "diff.sh: unknown option $1" >&2; usage >&2; exit 2 ;;
+    -*) ui_error "diff.sh: unknown option $1"; usage >&2; exit 2 ;;
     *) files+=("$1") ;;
   esac
   shift
@@ -81,13 +83,14 @@ if [ $example -eq 0 ]; then
     done
   fi
   if [ $list -eq 1 ]; then
-    for file in "${files[@]}"; do
+    # (Empty: bash 3.2's set -u calls "${files[@]}" unbound.)
+    for file in ${files[@]+"${files[@]}"}; do
       git -C "$(dirname "$file")" ls-files -u -- "$file" | grep -q . && echo "${file#"$top"/}"
     done
     exit 0
   fi
   if [ ${#files[@]} -eq 0 ]; then
-    echo "No conflicts here"
+    ui_ok "No conflicts here"
     exit 0
   fi
 fi
@@ -129,7 +132,7 @@ if [ $use_server -eq 1 ] && [ $gui -eq 0 ]; then
     truecolor:xterm*|24bit:xterm*)
       if ! TERMINFO="$HOME/.terminfo" infocmp xterm-24bit >/dev/null 2>&1 &&
          tic -x -o "$HOME/.terminfo" "$(dirname "$0")/xterm-24bit.terminfo" 2>/dev/null; then
-        echo "diff.sh: installed xterm-24bit in ~/.terminfo (24-bit colour in Emacs's terminal frames)" >&2
+        ui_info "diff.sh: installed xterm-24bit in ~/.terminfo (24-bit colour in Emacs's terminal frames)" >&2
       fi
       TERMINFO="$HOME/.terminfo" infocmp xterm-24bit >/dev/null 2>&1 && term=xterm-24bit
       ;;
@@ -158,8 +161,8 @@ for file in "${files[@]}"; do
   git -C "$(dirname "$file")" ls-files -u -- "$file" | grep -q . && left+=("${file#"$top"/}")
 done
 if [ ${#left[@]} -gt 0 ]; then
-  echo "Still in conflict: ${left[*]}"
+  ui_fail "Still in conflict: ${left[*]}"
   exit 1
 fi
-echo "Resolved: ${#files[@]} file$([ ${#files[@]} -eq 1 ] || echo s)"
+ui_ok "Resolved: ${#files[@]} file$([ ${#files[@]} -eq 1 ] || echo s)"
 exit 0

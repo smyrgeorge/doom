@@ -14,7 +14,8 @@
 version (nil: no Emacs, version.txt absent); :cask t, emacs-plus-app
 installed; :formula t, Homebrew's emacs formula installed; :upgrade-to, the
 version `brew upgrade --cask' brings (its install too); :releases, the
-versions GNU's list has (nil: curl fails). Each fake notes its arguments
+versions GNU's list has (nil: curl fails). Homebrew says the cask is
+outdated when :upgrade-to is given. Each fake notes its arguments
 in calls.log; the fake Emacs is bin/emacs, Doom's command doom/bin/doom."
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "emacs-script/") t)))
          (bin (expand-file-name "bin/" dir))
@@ -38,11 +39,13 @@ esac\n" version-file version-file version-file))
             (format "case \"$1 $2 $3\" in
   'list --cask emacs-plus-app') exit %d ;;
   'list --formula emacs') exit %d ;;
+  'outdated --cask --quiet') %s ;;
   'upgrade --cask emacs-plus-app'|'install --cask emacs-plus-app') %s ;;
 esac
 exit 0\n"
                     (if (plist-get options :cask) 0 1)
                     (if (plist-get options :formula) 0 1)
+                    (if (plist-get options :upgrade-to) "echo emacs-plus-app" ":")
                     (if (plist-get options :upgrade-to)
                         (format "printf %s > %s" (plist-get options :upgrade-to) version-file)
                       ":")))
@@ -84,7 +87,7 @@ exit 0\n"
   (let ((dir (+test-emacs-script--fakes :upgrade-to "31.1")))
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "macos" dir)))
       (should (= status 0))
-      (should (string-search "Installing Emacs" output))
+      (should (string-search "✔ Emacs installed" output))
       (let ((calls (+test-emacs-script--calls dir)))
         (should (member "brew install --cask emacs-plus-app" calls))
         (should-not (member "brew upgrade --cask emacs-plus-app" calls))
@@ -95,20 +98,23 @@ exit 0\n"
   (let ((dir (+test-emacs-script--fakes :version "31.1" :cask t :upgrade-to "31.2")))
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "macos" dir)))
       (should (= status 0))
-      (should (string-search "Updating Emacs (emacs-plus-app, now 31.1)" output))
+      (should (string-search "✔ Emacs 31.1 upgraded" output))
       (should (string-search "Emacs 31.1 -> 31.2: rebuilding" output))
+      (should (string-search "==> ✔ Emacs 31.2 and Doom ready" output))
       (let ((calls (+test-emacs-script--calls dir)))
         (should (member "brew upgrade --cask emacs-plus-app" calls))
         (should-not (member "brew install --cask emacs-plus-app" calls))
         (should (member "doom sync --rebuild" calls))))))
 
 (ert-deftest emacs-script/macos-up-to-date-only-syncs ()
-  "Up to date: the upgrade changes nothing, Doom synced, not rebuilt."
+  "Up to date (Homebrew says it's not outdated): left, said so; Doom synced,
+not rebuilt."
   (let ((dir (+test-emacs-script--fakes :version "31.1" :cask t)))
-    (pcase-let ((`(,status . ,_) (+test-emacs-script--run "macos" dir)))
+    (pcase-let ((`(,status . ,output) (+test-emacs-script--run "macos" dir)))
       (should (= status 0))
+      (should (string-search "✔ Emacs 31.1 up to date" output))
       (let ((calls (+test-emacs-script--calls dir)))
-        (should (member "brew upgrade --cask emacs-plus-app" calls))
+        (should-not (member "brew upgrade --cask emacs-plus-app" calls))
         (should (member "doom sync" calls))
         (should-not (member "doom sync --rebuild" calls))
         (should (seq-some (lambda (call) (string-match-p "^git -C .* submodule update --init --recursive$" call))
@@ -128,27 +134,28 @@ tarball, with xwidgets; Emacs changed: Doom rebuilt."
   (let ((dir (+test-emacs-script--fakes :version "31.1" :releases '("30.2" "31.2" "31.10" "29.4"))))
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "apt" dir "DRY_RUN=1")))
       (should (= status 0))
-      (should (string-search "Updating Emacs 31.1 to 31.10 (built from source)" output))
+      (should (string-search "• Updating Emacs 31.1 to 31.10, built from source" output))
       (should (string-search "emacs-31.10.tar.xz" output))
-      (should (string-match-p "\\+ ./configure .*--with-xwidgets" output))
-      (should (string-match-p "\\+ \\(sudo \\)?make install" output))
+      (should (string-match-p "\\$ ./configure .*--with-xwidgets" output))
+      (should (string-match-p "\\$ \\(sudo \\)?make install" output))
       (should (string-search "doom sync --rebuild" output)))))
 
 (ert-deftest emacs-script/linux-latest-installed-not-built-again ()
   (let ((dir (+test-emacs-script--fakes :version "31.2" :releases '("31.1" "31.2"))))
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "dnf" dir "DRY_RUN=1")))
       (should (= status 0))
-      (should (string-search "Emacs 31.2, the latest, is installed already." output))
+      (should (string-search "✔ Emacs 31.2 up to date" output))
       (should-not (string-search "configure" output))
       (should-not (string-search "dnf" output))
-      (should (string-match-p "doom sync$" (string-trim output))))))
+      (should (string-match-p "\\$ .*doom sync\n" output))
+      (should-not (string-search "--rebuild" output)))))
 
 (ert-deftest emacs-script/linux-a-version-asked-for ()
   "EMACS_VERSION: that one, GNU's list not read; XWIDGETS=no: without."
   (let ((dir (+test-emacs-script--fakes)))
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "apt" dir "DRY_RUN=1" "EMACS_VERSION=31.1" "XWIDGETS=no")))
       (should (= status 0))
-      (should (string-search "Installing Emacs 31.1" output))
+      (should (string-search "• Installing Emacs 31.1, built from source" output))
       (should-not (string-search "xwidgets" output))
       (should-not (string-search "libwebkit2gtk" output)))))
 
@@ -158,7 +165,7 @@ tarball, with xwidgets; Emacs changed: Doom rebuilt."
     (pcase-let ((`(,status . ,output) (+test-emacs-script--run "apt" dir "DRY_RUN=1")))
       (should (= status 1))
       (should (string-search "couldn't read Emacs's latest release" output))
-      (should-not (string-search "+ " output)))))
+      (should-not (string-search "$ " output)))))
 
 ;; ====== TOOLS.SH NEEDS IT ======
 

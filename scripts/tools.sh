@@ -35,7 +35,7 @@ CHECK_ONLY=
 case "${1:-}" in
   --check) CHECK_ONLY=1 ;;
   "") ;;
-  *) echo "usage: $0 [--check]" >&2; exit 2 ;;
+  *) ui_error "usage: $0 [--check]"; exit 2 ;;
 esac
 
 # ====== THE TOOLS ======
@@ -146,16 +146,16 @@ NOTHING=(
 
 # Emacs first: it reads init.el, and the tools are for it.
 if ! command -v "$EMACS" >/dev/null 2>&1; then
-  echo "tools.sh: Emacs isn't installed: run scripts/emacs.sh first (it installs Emacs and Doom)" >&2
+  ui_error "tools.sh: Emacs isn't installed: run scripts/emacs.sh first (it installs Emacs and Doom)"
   exit 1
 fi
 EMACS_MAJOR=$("$EMACS" --batch -Q --eval '(princ emacs-major-version)' 2>/dev/null || true)
 if [ -z "$EMACS_MAJOR" ]; then
-  echo "tools.sh: Emacs ($EMACS) doesn't run: run scripts/emacs.sh first" >&2
+  ui_error "tools.sh: Emacs ($EMACS) doesn't run: run scripts/emacs.sh first"
   exit 1
 fi
 if [ "$EMACS_MAJOR" -lt 31 ]; then
-  echo "tools.sh: Emacs ${EMACS_MAJOR:-?} is older than this config needs (31): run scripts/emacs.sh first" >&2
+  ui_error "tools.sh: Emacs ${EMACS_MAJOR:-?} is older than this config needs (31): run scripts/emacs.sh first"
   exit 1
 fi
 
@@ -221,8 +221,10 @@ while read -r category module flags; do
   esac
 done <<<"$MODULES"
 if [ ${#problems[@]} -gt 0 ]; then
-  echo "tools.sh: init.el enables modules this script doesn't know; add them to TOOLS (or NOTHING):" >&2
-  printf '  %s\n' "${problems[@]}" >&2
+  ui_error "tools.sh: init.el enables modules this script doesn't know; add them to TOOLS (or NOTHING):"
+  for problem in "${problems[@]}"; do
+    printf '  %s\n' "$problem" >&2
+  done
   exit 2
 fi
 
@@ -232,7 +234,7 @@ case "$OS" in
   macos) column=3 ;;
   apt|linux) column=4 ;;
   dnf) column=5 ;;
-  *) echo "tools.sh: unknown system ($(uname -s))" >&2; exit 1 ;;
+  *) ui_error "tools.sh: unknown system ($(uname -s))"; exit 1 ;;
 esac
 
 # Per installer, what to install; the rows that apply here.
@@ -256,7 +258,7 @@ for row in "${TOOLS[@]}"; do
       npm:*) NPM+=("${spec#*:}") ;;
       uv:*) UV+=("${spec#*:}") ;;
       builtin|manual:*) ;;
-      *) echo "tools.sh: bad installer \"$spec\" in TOOLS ($(trim "$program"))" >&2; exit 2 ;;
+      *) ui_error "tools.sh: bad installer \"$spec\" in TOOLS ($(trim "$program"))"; exit 2 ;;
     esac
   done
 done
@@ -288,35 +290,95 @@ dedupe() { # dedupe ARRAY: its values, each once (word list)
 
 # ====== INSTALL OR UPDATE ======
 
+modules=$(grep -c . <<<"$MODULES")
+ui_step "init.el: $modules modules, every one known $(ui_dim "($OS${DRY_RUN:+, dry run})")"
+
 if [ -z "$CHECK_ONLY" ]; then
-  echo "Installing or updating (init.el: $(grep -c . <<<"$MODULES") modules):"
   case "$OS" in
     macos)
-      [ ${#BREW[@]} -gt 0 ] && brew_latest "${BREW[@]}"
-      [ ${#CASK[@]} -gt 0 ] && brew_latest --cask "${CASK[@]}" ;;
+      if [ ${#BREW[@]} -gt 0 ]; then
+        echo; ui_step "Homebrew $(ui_dim "(${#BREW[@]} packages)")"
+        brew_latest "${BREW[@]}"
+      fi
+      if [ ${#CASK[@]} -gt 0 ]; then
+        echo; ui_step "Homebrew casks $(ui_dim "(${#CASK[@]})")"
+        brew_latest --cask "${CASK[@]}"
+      fi ;;
     apt)
+      echo; ui_step "apt $(ui_dim "(${#SYSTEM[@]} packages)")"
       pkg_update
-      [ ${#SYSTEM[@]} -gt 0 ] && { run $SUDO apt-get install -y "${SYSTEM[@]}" || OS_SKIPPED+=("${SYSTEM[*]}"); } ;;
+      if [ ${#SYSTEM[@]} -gt 0 ]; then
+        if run $SUDO apt-get install -y -q "${SYSTEM[@]}"; then
+          ui_ok "${#SYSTEM[@]} packages installed or upgraded"
+        else
+          ui_fail "apt-get install failed"
+          OS_SKIPPED+=("${SYSTEM[*]}")
+        fi
+      fi ;;
     dnf)
-      [ ${#SYSTEM[@]} -gt 0 ] && { { run $SUDO dnf install -y "${SYSTEM[@]}" &&
-                                     run $SUDO dnf upgrade -y "${SYSTEM[@]}"; } || OS_SKIPPED+=("${SYSTEM[*]}"); } ;;
+      if [ ${#SYSTEM[@]} -gt 0 ]; then
+        echo; ui_step "dnf $(ui_dim "(${#SYSTEM[@]} packages)")"
+        if run $SUDO dnf install -y -q "${SYSTEM[@]}" && run $SUDO dnf upgrade -y -q "${SYSTEM[@]}"; then
+          ui_ok "${#SYSTEM[@]} packages installed or upgraded"
+        else
+          ui_fail "dnf install failed"
+          OS_SKIPPED+=("${SYSTEM[*]}")
+        fi
+      fi ;;
     linux)
       [ ${#SYSTEM[@]} -gt 0 ] && manual "your distribution's packages: ${SYSTEM[*]}" ;;
   esac
-  for tool in ${PIPX[@]+"${PIPX[@]}"}; do
-    run pipx upgrade "$tool" 2>/dev/null || run pipx install "$tool" || OS_SKIPPED+=("$tool (pipx)")
-  done
-  [ ${#PIPX[@]} -gt 0 ] && export PATH="$HOME/.local/bin:$PATH"
+
+  if [ ${#PIPX[@]} -gt 0 ]; then
+    echo; ui_step "pipx $(ui_dim "(${#PIPX[@]})")"
+    for tool in "${PIPX[@]}"; do
+      if run pipx upgrade "$tool" 2>/dev/null || run pipx install "$tool"; then
+        ui_ok "$tool"
+      else
+        ui_fail "$tool: couldn't install it"
+        OS_SKIPPED+=("$tool (pipx)")
+      fi
+    done
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+
   if [ ${#RUSTUP[@]} -gt 0 ]; then
+    echo; ui_step "rustup $(ui_dim "(${#RUSTUP[@]} components)")"
     if command -v rustup >/dev/null 2>&1 || [ -n "${DRY_RUN:-}" ]; then
-      run rustup component add "${RUSTUP[@]}" || OS_SKIPPED+=("${RUSTUP[*]} (rustup)")
-      run rustup update || true
+      if run rustup component add "${RUSTUP[@]}"; then
+        ui_ok "$(printf '%-30s' "${RUSTUP[*]}") $(ui_dim installed)"
+      else
+        ui_fail "rustup component add failed"
+        OS_SKIPPED+=("${RUSTUP[*]} (rustup)")
+      fi
+      run rustup update || ui_warn "rustup update failed"
     else
+      ui_warn "no rustup"
       manual "rustup (rustup.rs), then: rustup component add ${RUSTUP[*]}"
     fi
   fi
-  [ ${#NPM[@]} -gt 0 ] && { npm_global "${NPM[@]}" || OS_SKIPPED+=("${NPM[*]} (npm)"); }
-  [ ${#UV[@]} -gt 0 ] && uv_tool "${UV[@]}"
+
+  if [ ${#NPM[@]} -gt 0 ]; then
+    echo; ui_step "npm $(ui_dim "(${#NPM[@]} packages)")"
+    if npm_global "${NPM[@]}"; then
+      ui_ok "${#NPM[@]} packages, at their latest"
+    else
+      ui_fail "npm install failed"
+      OS_SKIPPED+=("${NPM[*]} (npm)")
+    fi
+  fi
+
+  if [ ${#UV[@]} -gt 0 ]; then
+    echo; ui_step "uv $(ui_dim "(${#UV[@]} tools)")"
+    for tool in "${UV[@]}"; do
+      if uv_tool "$tool"; then
+        ui_ok "$(printf '%-30s' "$tool") $(ui_dim 'at its latest')"
+      else
+        ui_fail "$tool: uv tool install failed"
+        OS_SKIPPED+=("$tool (uv)")
+      fi
+    done
+  fi
 fi
 
 # ====== CHECK ======
@@ -342,8 +404,9 @@ found() {
   esac
 }
 
-echo -e "\nChecking:"
-missing=0
+echo
+ui_step "Checking"
+missing=0 present=0
 checked=" "
 for entry in "${APPLIES[@]}"; do
   IFS='|' read -r program cell why <<<"$entry"
@@ -351,18 +414,22 @@ for entry in "${APPLIES[@]}"; do
   case "$checked" in *" $program "*) continue ;; esac
   checked="$checked$program "
   if found "$program"; then
-    printf '  ok       %-30s %s\n' "$program" "$why"
+    present=$((present + 1))
+    ui_ok "$(printf '%-30s' "$program") $(ui_dim "$why")"
   else
     missing=$((missing + 1))
     case "$cell" in
       *manual:*) how=" (by hand: $(sed -E 's/.*manual:([^ ]*).*/\1/; s/_/ /g' <<<"$cell"))" ;;
       *) how= ;;
     esac
-    printf '  MISSING  %-30s %s%s\n' "$program" "$why" "$how"
+    ui_fail "$(printf '%-30s' "$program") $why$how $(ui_red missing)"
   fi
 done
 
 os_summary
+echo
 if [ "$missing" -gt 0 ]; then
-  echo -e "\n$missing missing (see above)."
+  ui_step "$(ui_yellow "⚠ $missing of $((present + missing)) tools missing") (see above)"
+else
+  ui_step "$(ui_green "✔ All $present tools are there")"
 fi

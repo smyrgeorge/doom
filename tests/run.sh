@@ -15,6 +15,8 @@
 
 
 TESTS=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=scripts/ui.sh
+. "$TESTS/../scripts/ui.sh"
 KIND=${1:-unit}
 [ $# -gt 0 ] && shift
 case "$KIND" in
@@ -49,7 +51,8 @@ run_file() {  # run_file KIND FILE
   tmp="$RUN/$kind-$base"
   log="$tmp/log.txt"
   mkdir -p "$tmp/home"
-  printf '%-5s %-28s ' "$kind" "$base"
+  # The file's name while it runs (a terminal: replaced by its result).
+  [ -t 1 ] && printf '  %s %s %s' "$(ui_dim "…")" "$(ui_dim "$kind")" "$base"
   if [ "$kind" = unit ]; then
     TEST_TMP="$tmp" "$EMACS" --batch -Q --init-directory="$tmp/home" \
       -l "$TESTS/helper.el" -l "$file" -f ert-run-tests-batch-and-exit >"$log" 2>&1
@@ -72,13 +75,28 @@ run_file() {  # run_file KIND FILE
       status=$?
     fi
   fi
-  local summary
+  local summary counts
   summary=$(grep -E '^Ran [0-9]+ tests' "$log" | tail -1)
+  # "Ran 74 tests, 73 results as expected, 0 unexpected, 1 skipped (DATE,
+  # 1.19 sec)": "74 tests, 1 skipped · 1.2 s".
+  counts=$(sed -E 's/^Ran ([0-9]+) tests?,.*[^0-9]([0-9]+) unexpected(, ([0-9]+) skipped)?.*, ([0-9.]+) sec\)$/\1 tests|\2|\4|\5/' <<<"$summary")
+  IFS='|' read -r ran unexpected skipped secs <<<"$counts"
+  local detail="${ran:-no tests}"
+  [ "${unexpected:-0}" != 0 ] && detail="$detail, $unexpected failed"
+  [ -n "${skipped:-}" ] && detail="$detail, $skipped skipped"
+  [ -n "${secs:-}" ] && detail="$detail · $(printf '%.1f' "$secs") s"
+  [ -t 1 ] && printf '\r\033[K'
+  local name
+  name=$(printf '%-5s %-28s' "$kind" "$base")
   if [ "$status" -eq 0 ]; then
-    echo "ok    ${summary:-}"
+    ui_ok "$name $(ui_dim "$detail")"
     PASSED=$((PASSED + 1))
   else
-    echo "FAIL  ${summary:-(exit $status)}"
+    if [ -n "$summary" ]; then
+      ui_fail "$name $(ui_red FAIL) $(ui_dim "$detail")"
+    else
+      ui_fail "$name $(ui_red FAIL) $(ui_dim "(exit $status)")"
+    fi
     FAILED+=("$kind/$base")
     # Each failure's condition and the list of them; or, if the file didn't
     # get as far as running its tests (it failed to load), the log's end.
@@ -106,10 +124,14 @@ if [ "$KIND" = e2e ] || [ "$KIND" = all ]; then
   done
 fi
 
+if [ $((PASSED + ${#FAILED[@]})) -eq 0 ]; then
+  ui_error "run.sh: no test file${NAMES[*]:+ named ${NAMES[*]}} ($KIND)"
+  exit 2
+fi
 echo
 if [ ${#FAILED[@]} -eq 0 ]; then
-  echo "All $PASSED test files passed (logs: $RUN)"
+  ui_step "$(ui_green "✔ All $PASSED test files passed") $(ui_dim "(logs: $RUN)")"
   exit 0
 fi
-echo "$PASSED passed, ${#FAILED[@]} failed: ${FAILED[*]} (logs: $RUN)"
+ui_step "$(ui_red "✖ ${#FAILED[@]} failed:") ${FAILED[*]}; $PASSED passed $(ui_dim "(logs: $RUN)")"
 exit 1

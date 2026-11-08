@@ -17,6 +17,8 @@ set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
+# shellcheck source=scripts/ui.sh
+. "$ROOT/scripts/ui.sh"
 DOOM_EMACS=${DOOM_EMACS:-$HOME/.config/emacs}
 KIND=${1:-unit}
 [ $# -gt 0 ] && shift
@@ -28,7 +30,7 @@ if [ "${XWIDGETS:-yes}" = no ]; then
   build_args=(--build-arg EMACS_CONFIGURE_EXTRA=)
 fi
 if ! docker image inspect "$image" >/dev/null 2>&1; then
-  echo "Building $image (Emacs from source, ~10 minutes)..."
+  ui_step "Building the $image image $(ui_dim "(Emacs from source: ~10 minutes, once)")"
   docker build ${build_args[@]+"${build_args[@]}"} -t "$image" "$HERE"
 fi
 
@@ -51,6 +53,6 @@ case "$KIND" in
   shell)
     exec docker run "${args[@]}" -i "$image" bash ;;
   *)
-    echo "usage: $0 unit|e2e|all|shell [names...]" >&2
+    ui_error "usage: $0 unit|e2e|all|shell [names...]"
     exit 2 ;;
 esac

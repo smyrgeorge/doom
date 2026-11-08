@@ -335,7 +335,7 @@ the rest; its exit status passed on."
                (run (+test-screenshots--sh (list (concat "EMACS_GUI=" emacs) "SCREENSHOT_DIR=/out")
                                            "merge")))
     (should (= (car run) 0))
-    (should (equal (cdr run) "/somewhere/merge.png\n"))
+    (should (equal (cdr run) "  ✔ /somewhere/merge.png\n"))
     (let* ((lines (split-string (with-temp-buffer (insert-file-contents notes) (buffer-string)) "\n" t))
            (args (split-string (nth 0 lines) " "))
            (env (split-string (nth 1 lines) "|")))

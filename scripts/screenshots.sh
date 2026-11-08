@@ -24,6 +24,8 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=scripts/ui.sh
+. "$ROOT/scripts/ui.sh"
 if [ -z "${EMACS_GUI:-}" ]; then
   EMACS_GUI=/Applications/Emacs.app/Contents/MacOS/Emacs
   [ -x "$EMACS_GUI" ] || EMACS_GUI=emacs
@@ -41,12 +43,12 @@ if [ ${#names[@]} -eq 0 ]; then
   done
 fi
 if [ ${#names[@]} -eq 0 ]; then
-  echo "screenshots.sh: no examples in examples/" >&2
+  ui_error "screenshots.sh: no examples in examples/"
   exit 2
 fi
 for name in "${names[@]}"; do
   if [ ! -f "$ROOT/examples/$name.el" ]; then
-    echo "screenshots.sh: no example $name (examples/$name.el)" >&2
+    ui_error "screenshots.sh: no example $name (examples/$name.el)"
     exit 2
   fi
 done
@@ -70,16 +72,23 @@ while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 6000 ]; do
 done
 if kill -0 "$pid" 2>/dev/null; then
   kill "$pid" 2>/dev/null || true
-  echo "screenshots.sh: Emacs didn't finish; its log:" >&2
+  ui_error "screenshots.sh: Emacs didn't finish; its log:"
   tail -20 "$tmp/log" >&2
   exit 1
 fi
 status=0
 wait "$pid" || status=$?
 
-grep '^screenshots: ' "$tmp/log" | sed 's/^screenshots: //' || true
+# Its progress: a screenshot's path (made), else what went wrong with one.
+while IFS= read -r line; do
+  line=${line#screenshots: }
+  case "$line" in
+    *.png) ui_ok "$line" ;;
+    *) ui_fail "$line" ;;
+  esac
+done < <(grep '^screenshots: ' "$tmp/log" || true)
 if [ "$status" -ne 0 ]; then
-  echo "screenshots.sh: failed (exit $status); Emacs's log:" >&2
+  ui_error "screenshots.sh: failed (exit $status); Emacs's log:"
   grep -v '^screenshots: ' "$tmp/log" | tail -20 >&2
 fi
 exit "$status"
