@@ -162,6 +162,9 @@
 ;; PDF (PDFs in WebKit, drawn by PDF.js, inside the file's tab)
 (load! "config/pdf")
 
+;; IMAGES (Emacs's image viewer, with a toolbar: zoom, rotate, crop, copy, diff)
+(load! "config/image")
+
 ;; DRAWINGS (*.excalidraw.svg, *.excalidraw: Excalidraw in WebKit, in the file's tab)
 (load! "config/excalidraw")
 

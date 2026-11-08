@@ -13,6 +13,8 @@ brew install --cask font-jetbrains-mono
 # Icons (nerd-icons: treemacs, dirvish, modeline, completion).
 brew install --cask font-symbols-only-nerd-font
 brew install inetutils git vim qemu ripgrep wget k9s
+# Images: cropping (c), and copying SVGs as PNGs (config/image.el).
+brew install imagemagick
 
 
 # agent-shell (Claude Code in Emacs via ACP)

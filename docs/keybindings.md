@@ -1,7 +1,7 @@
 # Key bindings
 
-The keys this config adds or changes. PDFs, drawings and the merge have their own: see [PDFs](pdf.md),
-[Drawings](drawings.md) and [Resolving conflicts](git.md#resolving-conflicts).
+The keys this config adds or changes. PDFs, images, drawings and the merge have their own: see [PDFs](pdf.md),
+[Images](images.md), [Drawings](drawings.md) and [Resolving conflicts](git.md#resolving-conflicts).
 
 | Key | Action |
 |---|---|

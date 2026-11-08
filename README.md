@@ -101,6 +101,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 
 - [The editor](docs/editor.md): tabs per window, tiling, error stripe, notices, sticky header, code.
 - [PDFs](docs/pdf.md): PDFs drawn by PDF.js, with Vim keys.
+- [Images](docs/images.md): Emacs's image viewer with a toolbar: zoom, rotate, crop, copy, git's HEAD beside it.
 - [Drawings](docs/drawings.md): Excalidraw inside Emacs.
 - [Project sidebar](docs/sidebar.md): treemacs as a project view that follows the current file.
 - [Search](docs/search.md): Search Everywhere, find in files, projects.
