@@ -474,7 +474,7 @@ ratio kept for SPC w a; the focus where it was."
 
 (ert-deftest tiling/first-is-on ()
   (should (equal display-buffer-overriding-action '((+my/tiling--display))))
-  (should (advice-member-p #'+my/tiling-switch-to-buffer-a 'switch-to-buffer))
+  (should (advice-member-p #'+my/tiling-kill-last-tab-a 'kill-current-buffer))
   (should (memq #'+my/tiling-close-pane-h (default-value 'kill-buffer-hook)))
   ;; The applications.
   (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) +my/tiling-apps)
@@ -522,46 +522,49 @@ popup 40 columns wide was the terminal's: narrow)."
       (should (eq (window-parameter window 'window-side) 'bottom))
       (should (equal (mapcar #'car (+test-tiling--layout)) '("A"))))))
 
-(ert-deftest tiling/files-from-an-application-in-the-last-pane-of-files ()
-  "A file shown from an application's pane: as a tab in the last selected
-pane of files, the one already showing it first; none: a new pane."
+(ert-deftest tiling/files-from-an-application-as-its-tab ()
+  "A file shown from an application's pane (a link in Claude Code, asked for
+this window or another): a tab there, the application still one."
   (+test-tiling-first
     (let* ((left (selected-window))
            (file (+test-tiling--file "a.txt"))
            (other (+test-tiling--file "b.txt"))
            (app (display-buffer (+test-tiling--app "app") nil)))
-      (set-window-buffer left other)
       (select-window app)
-      ;; Asked for the same window (a link in Claude Code): not the app's.
-      (let ((window (display-buffer file '(display-buffer-same-window))))
-        (should (eq window left))
-        (should (eq (window-buffer app) (get-buffer "app")))
-        ;; A tab: b.txt is still one.
-        (should (assq other (window-prev-buffers left))))
-      ;; Shown already in a pane of files: that one.
-      (let ((right-of-app (progn (select-window left) (+my/tiling-split))))
-        (set-window-buffer right-of-app other)
-        (select-window app)
-        (should (eq (display-buffer other '(display-buffer-same-window)) right-of-app)))
-      ;; No pane of files: a new one.
-      (delete-other-windows app)
-      (should (equal (mapcar #'car (+test-tiling--layout)) '("app")))
-      (let ((window (display-buffer file '(display-buffer-same-window))))
-        (should-not (eq window app))
-        (should (equal (mapcar #'car (+test-tiling--layout)) '("app" "a.txt")))))))
+      (should (eq (display-buffer file '(display-buffer-same-window)) app))
+      (should (eq (window-buffer app) file))
+      (should (assq (get-buffer "app") (window-prev-buffers app)))
+      ;; From the application again, asked for another window: still there.
+      (switch-to-buffer "app")
+      (should (eq (display-buffer other '(display-buffer-pop-up-window)) app))
+      (should (= (length (+my/tiling--panes)) 2))
+      (should (eq (window-buffer left) (get-buffer "A")))
+      ;; Shown already in another pane: that one, no second view.
+      (switch-to-buffer "app")
+      (set-window-buffer left file)
+      (should (eq (display-buffer file '(display-buffer-same-window)) left))
+      (should (eq (window-buffer app) (get-buffer "app"))))))
 
-(ert-deftest tiling/files-from-a-popup-in-the-last-pane-of-files ()
-  "From a popup or a side panel (a link in *Help*), not in an application's
-pane."
+(ert-deftest tiling/files-from-a-popup-in-the-last-pane-used ()
+  "From a popup or a side panel (a link in *Help*): in the pane used last, an
+application's too; from a dedicated pane (Doom's terminal), the same."
   (+test-tiling-first
     (let* ((left (selected-window))
            (file (+test-tiling--file "a.txt"))
            (app (display-buffer (+test-tiling--app "app") nil))
            (popup (display-buffer "C" +test-tiling--popup-action)))
       ;; The app's pane used last.
+      (select-window left)
       (select-window app)
       (select-window popup)
-      (should (eq (display-buffer file '((display-buffer-use-some-window))) left)))))
+      (should (eq (display-buffer file '((display-buffer-use-some-window))) app))
+      ;; From a dedicated pane: the last one used but it.
+      (set-window-buffer app (get-buffer "app"))
+      (select-window left)
+      (select-window app)
+      (set-window-dedicated-p app t)
+      (should (eq (display-buffer (+test-tiling--file "b.txt") '(display-buffer-same-window)) left))
+      (set-window-dedicated-p app nil))))
 
 (ert-deftest tiling/files-from-a-pane-of-files-as-asked ()
   (+test-tiling-first
@@ -570,25 +573,19 @@ pane."
       (should (= (length (+my/tiling--panes)) 1)))))
 
 (ert-deftest tiling/files-switched-to-in-an-application-s-pane ()
-  "find-file, the sidebar (`switch-to-buffer') in an application's pane: the
-file in the last pane of files, selected; elsewhere, in the pane."
+  "find-file, SPC SPC (`switch-to-buffer') in an application's pane: the file
+there, a tab; the application still one."
   (+test-tiling-first
     (let* ((left (selected-window))
            (file (+test-tiling--file "a.txt"))
            (app (display-buffer (+test-tiling--app "app") nil)))
       (select-window app)
       (switch-to-buffer file)
-      (should (eq (selected-window) left))
-      (should (eq (window-buffer left) file))
-      (should (eq (window-buffer app) (get-buffer "app")))
-      ;; Not a file: in the app's pane, as asked.
-      (select-window app)
-      (switch-to-buffer "B")
-      (should (eq (window-buffer app) (get-buffer "B")))
-      ;; In a pane of files: there.
-      (select-window left)
-      (switch-to-buffer (+test-tiling--file "b.txt"))
-      (should (eq (selected-window) left)))))
+      (should (eq (selected-window) app))
+      (should (eq (window-buffer app) file))
+      (should (assq (get-buffer "app") (window-prev-buffers app)))
+      (should (eq (window-buffer left) (get-buffer "A")))
+      (should-not (advice-member-p 'tiling-switch-to-buffer-a 'switch-to-buffer)))))
 
 (ert-deftest tiling/a-pane-closes-with-its-last-buffer ()
   "Killed (SPC b k, a terminal's shell ending): the pane it was the only
@@ -615,6 +612,48 @@ buffer of closes; one with others stays; the frame's last stays."
       (set-window-prev-buffers nil nil)
       (kill-buffer buffer)
       (should (= (length (+my/tiling--panes)) 1)))))
+
+(defun +test-tiling--doom-kill-a (&rest _)
+  "As Doom's `kill-current-buffer' advice (lisp/doom-emacs.el): another
+buffer shown in the window first, then the buffer killed."
+  (let ((buffer (current-buffer)))
+    (switch-to-prev-buffer nil t)
+    (kill-buffer buffer)
+    t))
+
+(ert-deftest tiling/spc-b-k-closes-a-pane-with-its-last-tab ()
+  "SPC b k (`kill-current-buffer', Doom's advice on it) on a pane's last tab:
+the buffer killed, the pane closed; with other tabs, Doom's (the previous
+one shown); the frame's last pane stays."
+  (+test-tiling-first
+    (advice-add 'kill-current-buffer :before-until #'+test-tiling--doom-kill-a)
+    (unwind-protect
+        (progn
+          (let* ((app (+test-tiling--app "app"))
+                 (window (display-buffer app nil)))
+            (select-window window)
+            (kill-current-buffer)
+            (should-not (buffer-live-p app))
+            (should-not (window-live-p window))
+            (should (= (length (+my/tiling--panes)) 1)))
+          ;; Other tabs: Doom's, the pane stays.
+          (let* ((app (+test-tiling--app "app2"))
+                 (window (display-buffer app nil)))
+            (select-window window)
+            (switch-to-buffer "B")
+            (switch-to-buffer app)
+            (kill-current-buffer)
+            (should-not (buffer-live-p app))
+            (should (window-live-p window))
+            (should (eq (window-buffer window) (get-buffer "B"))))
+          ;; The frame's last pane: Doom's.
+          (delete-other-windows)
+          (let ((buffer (+test-buffer "last")))
+            (switch-to-buffer buffer)
+            (set-window-prev-buffers nil nil)
+            (kill-current-buffer)
+            (should (= (length (+my/tiling--panes)) 1))))
+      (advice-remove 'kill-current-buffer #'+test-tiling--doom-kill-a))))
 
 (ert-deftest tiling/the-minibuffer-open-as-asked ()
   "While the minibuffer is open (a preview, a completion's action): files and
@@ -722,17 +761,19 @@ them); a commit, a stash in a new pane; the process log as Doom has it
                                      '(display-buffer-below-selected))))
         (should (eq (window-in-direction 'below status-window) process))))))
 
-(ert-deftest tiling/magit-s-panes-get-no-file-tabs ()
-  "RET on a file in magit (or SPC SPC there): the file in the pane of files."
+(ert-deftest tiling/magit-s-panes-get-file-tabs ()
+  "RET on a file in magit (or SPC SPC there): the file in magit's pane, a tab."
   (+test-tiling-magit
     (let* ((left (selected-window))
            (file (+test-tiling--file "f.txt"))
-           (status-window (display-buffer (+test-tiling--magit "magit: test" 'magit-status-mode) nil)))
+           (status (+test-tiling--magit "magit: test" 'magit-status-mode))
+           (status-window (display-buffer status nil)))
       (select-window status-window)
-      (should (eq (display-buffer file '(display-buffer-same-window)) left))
-      (select-window status-window)
+      (should (eq (display-buffer file '(display-buffer-same-window)) status-window))
+      (should (assq status (window-prev-buffers status-window)))
       (switch-to-buffer (+test-tiling--file "g.txt"))
-      (should (eq (selected-window) left)))))
+      (should (eq (selected-window) status-window))
+      (should (eq (window-buffer left) (get-buffer "A"))))))
 
 (ert-deftest tiling/git-s-own-files-where-git-opens-them ()
   "A file in .git/ (git's: a commit message, the rebase todo), one edited for

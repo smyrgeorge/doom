@@ -158,10 +158,10 @@ killed): the two left at equal heights once Emacs redisplays (its
 
 ;; ====== CLAUDE CODE ======
 
-(ert-deftest e2e-tiling/claude-code-in-a-new-pane-its-links-in-the-files-pane ()
+(ert-deftest e2e-tiling/claude-code-in-a-new-pane-its-links-as-its-tabs ()
   "agent-shell shows a session (SPC o c) in a new pane; shown, it's selected
-there. Its links to files open them as tabs in the pane of files, not over
-the session."
+there. Its links to files open them as tabs in its pane, the session one too;
+to a file shown already in a pane, there."
   (+test-tiling
     (let* ((left (selected-window))
            (session (+test-tiling--session))
@@ -177,15 +177,18 @@ the session."
         (should (= (length (+my/tiling--panes)) 2))
         ;; A link in it (path:line).
         (funcall agent-shell-markdown-open-file-function (buffer-file-name file))
+        (should (eq (selected-window) pane))
+        (should (eq (window-buffer pane) file))
+        (should (equal (+test-tiling--tabs pane) (list (buffer-name session) "b.txt")))
+        (should (equal (+test-tiling--tabs left) '("a.txt")))
+        ;; A link to a.txt, shown on the left: there.
+        (switch-to-buffer session)
+        (funcall agent-shell-markdown-open-file-function (buffer-file-name (window-buffer left)))
         (should (eq (selected-window) left))
-        (should (eq (window-buffer left) file))
-        (should (eq (window-buffer pane) session))
-        (should (equal (+test-tiling--tabs left) '("a.txt" "b.txt")))
-        (should (equal (+test-tiling--tabs pane) (list (buffer-name session))))))))
+        (should (eq (window-buffer pane) session))))))
 
-(ert-deftest e2e-tiling/files-found-in-an-application-s-pane-go-to-the-files ()
-  "SPC SPC (find-file) in Claude Code's pane: the file in the pane of files, as
-a tab, selected."
+(ert-deftest e2e-tiling/files-found-in-an-application-s-pane-as-its-tabs ()
+  "SPC SPC (find-file) in Claude Code's pane: the file there, a tab."
   (+test-tiling
     (let ((left (selected-window))
           (session (+test-tiling--session))
@@ -193,20 +196,20 @@ a tab, selected."
       (agent-shell--display-buffer session)
       (let ((pane (selected-window)))
         (find-file (buffer-file-name file))
-        (should (eq (selected-window) left))
-        (should (eq (window-buffer left) file))
-        (should (eq (window-buffer pane) session))
-        (should (equal (+test-tiling--tabs left) '("a.txt" "c.txt")))))))
+        (should (eq (selected-window) pane))
+        (should (eq (window-buffer pane) file))
+        (should (equal (+test-tiling--tabs pane) (list (buffer-name session) "c.txt")))
+        (should (equal (+test-tiling--tabs left) '("a.txt")))))))
 
-(ert-deftest e2e-tiling/a-session-alone-files-in-a-new-pane ()
-  "No pane of files (the session alone): a file opens in a new one."
+(ert-deftest e2e-tiling/a-session-alone-files-as-its-tabs ()
+  "The session alone: a file opens in its pane, a tab, no new pane."
   (+test-tiling
     (let ((session (+test-tiling--session))
           (file (+test-tiling--file "d.txt")))
       (switch-to-buffer session)
       (find-file (buffer-file-name file))
-      (should (equal (+test-tiling--layout) (list (buffer-name session) "d.txt")))
-      (should (eq (window-buffer) file)))))
+      (should (equal (+test-tiling--layout) '("d.txt")))
+      (should (equal (+test-tiling--tabs (selected-window)) (list "a.txt" (buffer-name session) "d.txt"))))))
 
 ;; ====== THE MARKDOWN PREVIEW ======
 
@@ -402,9 +405,9 @@ the file in the pane of files; SPC g g again: the status's pane."
 
 ;; ====== POPUPS, TABS ======
 
-(ert-deftest e2e-tiling/a-help-link-opens-in-the-files-pane ()
-  "A link to a file in a popup (*Help*): in the pane of files, not in the
-application's pane used last."
+(ert-deftest e2e-tiling/a-help-link-opens-in-the-last-pane-used ()
+  "A link to a file in a popup (*Help*): in the pane used last, the
+application's too, as a tab."
   (+test-tiling
     (let ((left (selected-window))
           (session (+test-tiling--session)))
@@ -414,8 +417,9 @@ application's pane used last."
                                   '((display-buffer-in-side-window) (side . bottom)))))
         (select-window help)
         (pop-to-buffer (+test-tiling--file "e.txt"))
-        (should (eq (selected-window) left))
-        (should (eq (window-buffer pane) session))))))
+        (should (eq (selected-window) pane))
+        (should (equal (+test-tiling--tabs pane) (list (buffer-name session) "e.txt")))
+        (should (equal (+test-tiling--tabs left) '("a.txt")))))))
 
 (ert-deftest e2e-tiling/popups-stay-popups ()
   (+test-tiling
@@ -491,7 +495,7 @@ without tiling (the same edges), the panes as they were."
 (ert-deftest e2e-tiling/a-preview-from-an-application-s-pane-as-asked ()
   "A preview (consult's: the file shown, without recording it, in the window
 the minibuffer was entered from, then put back): in Claude Code's pane, as
-asked. Picked after, the file goes to the pane of files."
+asked. Picked after, the file opens there, a tab."
   (+test-tiling
     (let* ((left (selected-window))
            (session (+test-tiling--session))
@@ -507,10 +511,11 @@ asked. Picked after, the file goes to the pane of files."
         (should (equal previewed (list pane file)))
         (should (eq (window-buffer pane) session))
         (should (eq (window-buffer left) (get-buffer "a.txt")))
-        ;; Picked: the pane of files.
+        ;; Picked: in its pane, a tab.
         (find-file (buffer-file-name file))
-        (should (eq (selected-window) left))
-        (should (eq (window-buffer pane) session))))))
+        (should (eq (selected-window) pane))
+        (should (eq (window-buffer pane) file))
+        (should (eq (window-buffer left) (get-buffer "a.txt")))))))
 
 (ert-deftest e2e-tiling/a-transient-menu-at-the-bottom-as-ever ()
   "A transient menu (magit's), from Claude Code's pane: at the bottom, not a

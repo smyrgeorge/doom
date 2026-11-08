@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/tiling/apps.el -*- lexical-binding: t; -*-
-;; Tiling first: applications in new panes, files as tabs in the panes of
-;; files, a pane closed with its last tab (see TILING FIRST in
+;; Tiling first: applications in new panes, files as tabs in the pane they're
+;; opened from, a pane closed with its last tab (see TILING FIRST in
 ;; config/tiling.el). Loaded from config/tiling.el.
 
 ;; WHAT A BUFFER IS
@@ -54,19 +54,16 @@ issue goes to the first one's pane: config/beads/project.el.)"
 
 ;; PANES
 (defun +my/tiling--file-pane-p (window)
-  "Non-nil if WINDOW is a pane files open in: not an application's, not
-dedicated."
+  "Non-nil if WINDOW is a pane a file can open in as a tab: a pane, an
+application's too, not dedicated (Doom's terminal's)."
   (and (memq window (+my/tiling--panes))
-       (not (window-dedicated-p window))
-       (not (+my/tiling-app-p (window-buffer window)))))
+       (not (window-dedicated-p window))))
 
 (defun +my/tiling--file-pane ()
-  "The pane files open in from elsewhere: the last selected of those files open
-in, one showing a file first; nil without one."
-  (let* ((panes (seq-filter #'+my/tiling--file-pane-p (+my/tiling--panes)))
-         (files (seq-filter (lambda (window) (+my/tiling--file-p (window-buffer window))) panes)))
-    (car (sort (or files panes)
-               (lambda (a b) (> (window-use-time a) (window-use-time b)))))))
+  "The pane a file shown from elsewhere (a popup, a side panel, a dedicated
+pane) opens in: the last selected one it can; nil without one."
+  (car (sort (seq-filter #'+my/tiling--file-pane-p (+my/tiling--panes))
+             (lambda (a b) (> (window-use-time a) (window-use-time b))))))
 
 (defun +my/tiling--alist (alist)
   "ALIST, a `display-buffer' one, without where and how big its window should
@@ -96,10 +93,12 @@ puts it (config/tiling.el), its only tab; quitting it closes the pane. Nil
 ;; APPLICATIONS AND FILES SHOWN (`display-buffer', see config/tiling.el)
 (defun +my/tiling--display (buffer alist)
   "`display-buffer-overriding-action': an application in its pane, else a new
-one; a file shown from elsewhere than a pane of files, in the last one (a new
-pane without one). Nil for anything else (popups, *Completions*, transient
-menus...), and while the minibuffer is open (previews put back what they
-showed): as it asks."
+one; a file shown from an application's pane, from a popup, a side panel or
+a dedicated pane: in the pane already showing it, else in the application's
+pane (a tab), else in the last pane it can open in (a new pane without one).
+Nil for anything else (a file from a pane of files, popups, *Completions*,
+transient menus...), and while the minibuffer is open (previews put back
+what they showed): as it asks."
   (cond
    ((active-minibuffer-window) nil)
    ((and (+my/tiling-app-p buffer) (not (alist-get 'allow-no-window alist)))
@@ -108,33 +107,19 @@ showed): as it asks."
                                    (+my/tiling--alist alist)))
           ((+my/tiling--new-pane-p buffer)
            (+my/tiling-display-buffer buffer alist))))
-   ((and (+my/tiling--file-p buffer)
-         (not (+my/tiling--file-pane-p (selected-window))))
-    (if-let* ((window (or (seq-find #'+my/tiling--file-pane-p (get-buffer-window-list buffer 'nomini))
-                          (+my/tiling--file-pane))))
-        (window--display-buffer buffer window 'reuse (+my/tiling--alist alist))
-      (+my/tiling-display-buffer buffer alist)))))
+   ((+my/tiling--file-p buffer)
+    (let ((here (selected-window)))
+      ;; From a pane of files: as asked.
+      (unless (and (+my/tiling--file-pane-p here)
+                   (not (+my/tiling-app-p (window-buffer here))))
+        (if-let* ((window (or (seq-find (lambda (window) (memq window (+my/tiling--panes)))
+                                        (get-buffer-window-list buffer 'nomini))
+                              (and (+my/tiling--file-pane-p here) here)
+                              (+my/tiling--file-pane))))
+            (window--display-buffer buffer window 'reuse (+my/tiling--alist alist))
+          (+my/tiling-display-buffer buffer alist)))))))
 
 (setq display-buffer-overriding-action '((+my/tiling--display)))
-
-;; FILES SWITCHED TO (find-file, the sidebar...: `switch-to-buffer')
-(defun +my/tiling-switch-to-buffer-a (fn buffer-or-name &optional norecord &rest args)
-  "A file switched to in an application's pane: in the last pane of files
-instead (a new pane without one), see config/tiling.el. Not while the
-minibuffer is open, nor without recording it (NORECORD): previews (consult's)
-show files where they were asked to, and put back what was there."
-  (let ((buffer (get-buffer buffer-or-name)))
-    (when (and buffer
-               (not norecord)
-               (not (active-minibuffer-window))
-               (+my/tiling--file-p buffer)
-               (memq (selected-window) (+my/tiling--panes))
-               (+my/tiling-app-p (window-buffer)))
-      (when-let* ((pane (or (+my/tiling--file-pane) (+my/tiling--new-pane))))
-        (select-window pane)))
-    (apply fn buffer-or-name norecord args)))
-
-(advice-add 'switch-to-buffer :around #'+my/tiling-switch-to-buffer-a)
 
 ;; A PANE CLOSED WITH ITS LAST TAB (see config/tiling.el)
 (defun +my/tiling--last-tab-p (window buffer)
@@ -158,3 +143,24 @@ last pane."
         (delete-window window)))))
 
 (add-hook 'kill-buffer-hook #'+my/tiling-close-pane-h)
+
+;; SPC b k (`kill-current-buffer') on a pane's last tab: Doom's first shows
+;; another buffer there (the previous one, else any), then kills it: the
+;; pane, no longer showing it, stayed. Killed at once instead: its pane closes
+;; (above). Elsewhere (other tabs, the frame's last pane), Doom's.
+(defun +my/tiling-kill-last-tab-a (&rest _)
+  "`kill-current-buffer' on its pane's last tab: killed, the pane closed (see
+above). Non-nil if so (Doom's and Emacs's then skipped)."
+  (let ((buffer (current-buffer))
+        (window (selected-window)))
+    (when (and (eq (window-buffer window) buffer)
+               (memq window (+my/tiling--panes))
+               (not (window-parameter window 'window-side))
+               (eq (window-deletable-p window) t)
+               (not (and (fboundp 'doom-fallback-buffer) (eq buffer (doom-fallback-buffer))))
+               (+my/tiling--last-tab-p window buffer))
+      ;; A modified file's asked about first (`kill-buffer'): no, nothing.
+      (kill-buffer buffer)
+      t)))
+
+(advice-add 'kill-current-buffer :before-until #'+my/tiling-kill-last-tab-a '((depth . -90)))
