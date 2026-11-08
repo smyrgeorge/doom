@@ -6,7 +6,8 @@
 (defvar image-crop-crop-command)
 
 (defconst +my/image--editable-types '(png jpeg gif tiff bmp heic)
-  "Image types sips can write: what rotating, flipping and cropping change.")
+  "Image types sips (macOS) and ImageMagick (Linux) write: what rotating,
+flipping and cropping change.")
 
 (defvar-local +my/image--head-of nil
   "In the image as it is in git's HEAD (config/image/diff.el): the image's
@@ -14,7 +15,7 @@ file.")
 
 (defun +my/image--editable-p ()
   "Non-nil if rotating, flipping and cropping can change the image: one sips
-writes (not an SVG: text), not an animation (one frame would be left), not
+or ImageMagick writes (not an SVG: text), not an animation (one frame would be left), not
 git's HEAD."
   (and (memq image-type +my/image--editable-types)
        (not image-multi-frame)
@@ -41,39 +42,38 @@ git's HEAD."
   (setq image-transform-rotation 0.0)
   (+my/image--redisplay))
 
-(defun +my/image--sips (&rest args)
-  "Change the image as macOS's sips with ARGS does to a file (see
+(defun +my/image--transform (transform)
+  "Change the image by TRANSFORM (config/os.el's `+my/os-image-transform':
+sips on macOS, ImageMagick on Linux), as done to a file (see
 config/image.el)."
   (+my/image--check-editable)
   (let ((dir (make-temp-file "image-edit-" t)))
     (unwind-protect
         (let ((file (expand-file-name (concat "image." (+my/image--extension)) dir)))
           (+my/image--write file)
-          (with-temp-buffer
-            (unless (zerop (apply #'call-process "sips" nil t nil (append args (list file))))
-              (user-error "sips couldn't change the image: %s" (string-trim (buffer-string)))))
+          (+my/os-image-transform file transform)
           (+my/image--replace file))
       (delete-directory dir t))))
 
 (defun +my/image-rotate ()
   "r: rotate the image clockwise (changes it: see config/image.el)."
   (interactive)
-  (+my/image--sips "-r" "90"))
+  (+my/image--transform 'rotate-right))
 
 (defun +my/image-rotate-left ()
   "R: rotate the image anticlockwise (changes it)."
   (interactive)
-  (+my/image--sips "-r" "270"))
+  (+my/image--transform 'rotate-left))
 
 (defun +my/image-flip ()
   "f: flip the image horizontally (changes it)."
   (interactive)
-  (+my/image--sips "-f" "horizontal"))
+  (+my/image--transform 'flip-horizontal))
 
 (defun +my/image-flip-vertically ()
   "F: flip the image vertically (changes it)."
   (interactive)
-  (+my/image--sips "-f" "vertical"))
+  (+my/image--transform 'flip-vertical))
 
 (defun +my/image-crop ()
   "c: crop the image, with Emacs's image-crop: drag a rectangle, RET crops, q
@@ -82,8 +82,9 @@ cancels (changes it)."
   (+my/image--check-editable)
   (require 'image-crop)
   (unless (executable-find (car image-crop-crop-command))
-    (user-error "Cropping needs ImageMagick's %s (brew install imagemagick)"
-                (car image-crop-crop-command)))
+    (user-error "Cropping needs ImageMagick's %s (%s)"
+                (car image-crop-crop-command)
+                (if (+my/macos-p) "brew install imagemagick" "your distribution's imagemagick package")))
   (let ((tick (buffer-chars-modified-tick)))
     (goto-char (point-min))
     (image-crop)

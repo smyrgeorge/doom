@@ -29,7 +29,14 @@
 ;; ====== CODE ======
 
 ;; WINDOW
-(add-hook 'window-setup-hook #'toggle-frame-maximized)
+;; Maximized at startup. Set, not toggled: a frame the window manager already
+;; maximized or tiled (Linux's tiling ones) isn't made small again.
+(defun +my/maximize-frame-h ()
+  "Maximize the selected frame, unless it is already (or full screen)."
+  (unless (memq (frame-parameter nil 'fullscreen) '(maximized fullboth fullscreen))
+    (set-frame-parameter nil 'fullscreen 'maximized)))
+
+(add-hook 'window-setup-hook #'+my/maximize-frame-h)
 
 ;; FRINGES (see above). A frame's character width is known once it's
 ;; graphical; a terminal's has no fringes.

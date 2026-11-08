@@ -7,7 +7,7 @@ keep one kind; `DEL` on an empty input goes back to all.
 
 ## Find in files
 
-`Cmd+Shift+F` searches the project with ripgrep, starting from the selected text; with `C-u`, ignored and hidden files
+`Cmd+Shift+F` (Linux: `Ctrl+Shift+F`) searches the project with ripgrep, starting from the selected text; with `C-u`, ignored and hidden files
 too.
 
 ## Projects

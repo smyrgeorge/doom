@@ -207,6 +207,11 @@ as diff-hl loads: the rest of its setup was skipped, an error.)"
             (lambda (url &rest _) (push url +test-browsed))
             '((name . +test-no-browser)))
 
+;; No test opens another app or the file manager: what config/os.el would
+;; start is only recorded (see LOADING THE CONFIG).
+(defvar +test-os-runs nil
+  "(PROGRAM ARGS...) config/os.el was asked to start, the latest first.")
+
 ;; ====== NO SOUND ======
 
 ;; Emacs's bell (macOS's alert sound, in the GUI Emacs of the end-to-end
@@ -242,6 +247,26 @@ binds keys (Doom's does nothing in batch mode)."
     (let ((noninteractive nil)
           (inhibit-message t))
       (load (expand-file-name file +test-root) nil t))))
+
+;; What config.el loads first, which the other files use (config/os.el); the
+;; apps it starts only recorded (see NOTHING OPENS OUTSIDE). Advice stays
+;; when a test loads it again.
+(+test-load "config/os")
+(advice-add '+my/os--run :override
+            (lambda (program &rest args) (push (cons program args) +test-os-runs) 0)
+            '((name . +test-no-apps)))
+(advice-add '+my/os--reveal-dbus :override #'ignore '((name . +test-no-apps)))
+
+(defmacro +test-on-linux (&rest body)
+  "BODY as on Linux: `system-type' gnu/linux (config/os.el's `+my/macos-p'
+nil); files BODY loads bind Linux's keys."
+  (declare (indent 0))
+  `(let ((system-type 'gnu/linux)) ,@body))
+
+(defmacro +test-on-macos (&rest body)
+  "BODY as on macOS."
+  (declare (indent 0))
+  `(let ((system-type 'darwin)) ,@body))
 
 ;; ====== TEST TOOLS ======
 
@@ -441,6 +466,12 @@ view closed while one was crashed Emacs)."
   (unless (+test-wait-for (lambda () +test--js-answer) (or timeout 5))
     (error "No answer from WebKit to: %s" script))
   (car +test--js-answer))
+
+(defun +test-needs-webkit ()
+  "Skip unless this Emacs has xwidgets (WebKit): most Linux distributions'
+hasn't (the config falls back there: DocView, the file, eww)."
+  (unless (featurep 'xwidget-internal)
+    (ert-skip "No xwidgets (WebKit) in this Emacs")))
 
 (defun +test--stderr (text)
   (princ text #'external-debugging-output))

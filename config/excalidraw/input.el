@@ -5,7 +5,8 @@
 ;; A key typed in Emacs, as the KeyboardEvent a browser gives a page on a US
 ;; keyboard: the character typed (`key') and the physical key (`code', which
 ;; Excalidraw reads for some: Shift+1 is "!" on Digit1), and the modifiers
-;; (Cmd is `metaKey', Option `altKey').
+;; (Cmd is `metaKey', Option `altKey'). On Linux Excalidraw reads Ctrl where
+;; macOS has Cmd: Super is Ctrl there too (`ctrlKey'), no key `metaKey'.
 (defconst +my/excalidraw--shifted
   '((?! . ?1) (?@ . ?2) (?# . ?3) (?$ . ?4) (?% . ?5) (?^ . ?6) (?& . ?7) (?* . ?8)
     (?\( . ?9) (?\) . ?0) (?_ . ?-) (?+ . ?=) (?{ . ?\[) (?} . ?\]) (?| . ?\\)
@@ -56,9 +57,11 @@
       (+my/excalidraw--json
        (list :key key :code code
              :shiftKey (if shift t :false)
-             :metaKey (if (memq 'super modifiers) t :false)
+             :metaKey (if (and (+my/macos-p) (memq 'super modifiers)) t :false)
              :altKey (if (memq 'meta modifiers) t :false)
-             :ctrlKey (if (memq 'control modifiers) t :false))))))
+             :ctrlKey (if (or (memq 'control modifiers)
+                              (and (not (+my/macos-p)) (memq 'super modifiers)))
+                          t :false))))))
 
 (defun +my/excalidraw-key ()
   "A key of Excalidraw's: to the drawing in the selected window (see above)."
@@ -70,12 +73,12 @@
 ;; Through Emacs's kill ring (and so the clipboard): WebKit's own clipboard
 ;; events don't come from Emacs's keys.
 (defun +my/excalidraw-copy ()
-  "Cmd+C: copy the selection (see above)."
+  "Cmd+C (Linux: Ctrl+Shift+C): copy the selection (see above)."
   (interactive)
   (+my/webkit-ask "window.exd ? exd.copy() : ''" #'+my/excalidraw--copied))
 
 (defun +my/excalidraw-cut ()
-  "Cmd+X: cut the selection (see above)."
+  "Cmd+X (Linux: Ctrl+Shift+X): cut the selection (see above)."
   (interactive)
   (+my/webkit-ask "window.exd ? exd.cut() : ''" #'+my/excalidraw--copied))
 
@@ -87,7 +90,7 @@
     (message "Nothing selected")))
 
 (defun +my/excalidraw-paste ()
-  "Cmd+V: paste the kill ring's latest (the clipboard's): shapes copied from
+  "Cmd+V (Linux: Ctrl+Shift+V): paste the kill ring's latest (the clipboard's): shapes copied from
 a drawing, or text."
   (interactive)
   (let ((text (ignore-errors (current-kill 0))))

@@ -8,8 +8,8 @@
 #   tests/run.sh all           both
 #   tests/run.sh unit tiling   only tests/unit/test-tiling.el (names, any kind)
 #
-# EMACS (default: emacs) runs the unit tests, EMACS_GUI (default: the
-# emacs-plus app) the end-to-end ones; E2E_TIMEOUT (default 180) seconds per
+# EMACS (default: emacs) runs the unit tests, EMACS_GUI (default: macOS's
+# Emacs.app if there's one, else emacs) the end-to-end ones; E2E_TIMEOUT (default 180) seconds per
 # end-to-end file; E2E_WINDOW=front shows their frame whole, focused (by
 # default it's off the screen but for a corner). Exits 1 if a test failed.
 
@@ -22,9 +22,14 @@ case "$KIND" in
   *) set -- "$KIND" "$@"; KIND=all ;;
 esac
 EMACS=${EMACS:-emacs}
-EMACS_GUI=${EMACS_GUI:-/Applications/Emacs.app/Contents/MacOS/Emacs}
+if [ -z "${EMACS_GUI:-}" ]; then
+  EMACS_GUI=/Applications/Emacs.app/Contents/MacOS/Emacs
+  [ -x "$EMACS_GUI" ] || EMACS_GUI=emacs
+fi
 E2E_TIMEOUT=${E2E_TIMEOUT:-180}
-RUN=$(mktemp -d -t doom-tests)
+# A template with X's: GNU's and BSD's mktemp both take it.
+TMP_ROOT=${TMPDIR:-/tmp}
+RUN=$(mktemp -d "${TMP_ROOT%/}/doom-tests.XXXXXXXXXX")
 FAILED=()
 PASSED=0
 

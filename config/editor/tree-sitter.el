@@ -24,6 +24,36 @@
 (defvar +my/tree-sitter--process nil
   "The Emacs building grammars, while it runs.")
 
+;; WHAT CAN'T BE BUILT
+;; Building needs git and a C compiler (cc, gcc: Xcode's command line tools on
+;; macOS, build-essential or gcc on Linux); without them, the build at startup
+;; doesn't start. A grammar that failed to build (an old libtree-sitter, a
+;; recipe gone) isn't tried again at startup, each time, in the background:
+;; only by M-x +my/tree-sitter-install-grammars, which tries them all.
+(defvar +my/tree-sitter-failed-file (expand-file-name "tree-sitter-failed.eld" doom-cache-dir)
+  "Where the grammars that failed to build are remembered (see above).")
+
+(defun +my/tree-sitter--can-build-p ()
+  "Non-nil if grammars can be built here: git and a C compiler."
+  (and (executable-find "git")
+       (seq-some #'executable-find '("cc" "gcc" "c99" "clang"))))
+
+(defun +my/tree-sitter--failed ()
+  "The grammars that failed to build last (see above)."
+  (and (file-readable-p +my/tree-sitter-failed-file)
+       (ignore-errors
+         (with-temp-buffer
+           (insert-file-contents +my/tree-sitter-failed-file)
+           (seq-filter #'symbolp (read (current-buffer)))))))
+
+(defun +my/tree-sitter--remember-failed (wanted failed)
+  "A build of WANTED grammars ended, FAILED didn't build: remember them, and
+forget those of WANTED that built (see above)."
+  (let ((all (append failed (seq-difference (+my/tree-sitter--failed) wanted))))
+    (make-directory (file-name-directory +my/tree-sitter-failed-file) t)
+    (with-temp-file +my/tree-sitter-failed-file
+      (prin1 all (current-buffer)))))
+
 (defvar treesit-language-source-alist)
 
 (defun +my/tree-sitter--grammars ()
@@ -70,6 +100,7 @@ tree-sitter modes that bring theirs when loaded, as Doom does on first use."
     (clrhash +my/treesit--available)
     (let* ((wanted (process-get process 'grammars))
            (failed (seq-remove #'treesit-language-available-p wanted)))
+      (+my/tree-sitter--remember-failed wanted failed)
       (if failed
           (message "Tree-sitter grammars: %d built, %s failed (see %s)"
                    (- (length wanted) (length failed))
@@ -79,7 +110,9 @@ tree-sitter modes that bring theirs when loaded, as Doom does on first use."
 
 (defun +my/tree-sitter-install-grammars (&optional quiet)
   "Build the missing grammars of the enabled languages, in the background
-(see above). QUIET: say nothing when none are missing."
+(see above). QUIET (at startup): say nothing when none are missing, nor when
+they can't be built; leave out those that failed before (see WHAT CAN'T BE
+BUILT)."
   (interactive)
   (require 'treesit)
   (cond
@@ -88,13 +121,20 @@ tree-sitter modes that bring theirs when loaded, as Doom does on first use."
    ((process-live-p +my/tree-sitter--process)
     (unless quiet (message "Tree-sitter grammars: still building (see %s)" +my/tree-sitter-buffer)))
    (t
-    (let* ((missing (+my/tree-sitter--missing))
+    (let* ((missing (if quiet
+                        (seq-difference (+my/tree-sitter--missing) (+my/tree-sitter--failed))
+                      (+my/tree-sitter--missing)))
            (recipes (delq nil (mapcar #'+my/tree-sitter--recipe missing)))
            (grammars (mapcar #'car recipes))
            (unknown (seq-difference missing grammars))
            (out-dir (doom-profile-data-dir t "tree-sitter"))
            (init-dir (make-temp-file "tree-sitter-build-" t)))
       (cond
+       ((and grammars (not (+my/tree-sitter--can-build-p)))
+        (delete-directory init-dir t)
+        (unless quiet
+          (message "Tree-sitter grammars: building %s needs git and a C compiler (cc, gcc)"
+                   (mapconcat #'symbol-name grammars ", "))))
        ((null grammars)
         (delete-directory init-dir t)
         (cond (unknown

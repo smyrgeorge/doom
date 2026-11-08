@@ -35,11 +35,20 @@
 ;; numbers, side by side), and delta applies line numbers even in
 ;; magit-delta's --color-only mode, writing them into the diff's text
 ;; ("  1 ⋮  1 │ a"), which staging or discarding a hunk (s, x) sends to git:
-;; "corrupt patch".
+;; "corrupt patch". Only where delta is installed (brew install git-delta;
+;; Linux: the git-delta package): without it magit-delta left every diff
+;; empty.
 (use-package! magit-delta
-  :hook (magit-mode . magit-delta-mode)
+  :defer t
   :config
   (add-to-list 'magit-delta-delta-args "--no-gitconfig" t))
+
+(defun +my/magit-delta-maybe-h ()
+  "Diffs through delta, if it's installed (see above)."
+  (when (executable-find "delta")
+    (magit-delta-mode 1)))
+
+(add-hook 'magit-mode-hook #'+my/magit-delta-maybe-h)
 
 ;; List TODO/FIXME/... comments of the repo in the magit status buffer (uses rg).
 ;; rg runs on a pty there, so it coloured its output whenever TERM allowed it

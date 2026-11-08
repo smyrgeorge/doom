@@ -17,6 +17,8 @@
   const ui = window.pdfjsViewer;
   const options = window.PDFX_OPTIONS || {};
   const zoomStep = options.zoomStep || 1.25;
+  // Words that differ between macOS and Linux (config/pdf/page.el).
+  const labels = Object.assign({ mod: 'Cmd', viewer: 'Preview' }, options.labels);
   const minScale = 0.25;
   const maxScale = 10;
   const autoScales = ['page-width', 'page-fit', 'page-actual', 'auto'];
@@ -285,15 +287,15 @@
   const pageInfo = toolbar.appendChild(el('span', 'info'));
   button('next', 'Next page (J)', () => turnPage(1));
   sep();
-  button('zoomOut', 'Zoom out (Cmd+-)', () => zoom(1 / zoomStep));
+  button('zoomOut', `Zoom out (${labels.mod}+-)`, () => zoom(1 / zoomStep));
   const zoomInfo = toolbar.appendChild(el('span', 'info'));
-  button('zoomIn', 'Zoom in (Cmd+=)', () => zoom(zoomStep));
+  button('zoomIn', `Zoom in (${labels.mod}+=)`, () => zoom(zoomStep));
   button('fitWidth', 'Fit width (W)', () => fit('page-width'));
   button('fitPage', 'Fit page (P)', () => fit('page-fit'));
   toolbar.appendChild(el('span', 'grow'));
   const darkButton = button('dark', 'Dark pages (SPC m d)', () => set({ dark: !state.dark }));
-  button('preview', 'Open in Preview (SPC m p)', () => request('preview'));
-  button('print', 'Print (Cmd+P)', () => request('print'));
+  button('preview', `Open in ${labels.viewer} (SPC m p)`, () => request('preview'));
+  button('print', `Print (${labels.mod}+P)`, () => request('print'));
 
   function historyButtons() {
     backButton.disabled = !back.length;

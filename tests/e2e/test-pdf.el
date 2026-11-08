@@ -99,6 +99,7 @@ text."
   "BODY with PDF.js there, from one window; the PDFs closed after."
   (declare (indent 0))
   `(progn
+     (+test-needs-webkit)
      (unless +test-pdf--pdfjs
        (ert-skip "No PDF.js in Doom's data folder (open a PDF in Emacs once)"))
      (+test-with-reset

@@ -132,10 +132,15 @@ images/, always that name."
           (should-not (equal head (funcall read "landscape.png")))
           (should (equal (funcall png-size (funcall read "night.png")) '(240 . 150)))
           (should (equal (funcall png-size (funcall read "dawn.png")) '(240 . 150)))
-          ;; Valid PNGs, as macOS reads them.
+          ;; Valid PNGs, as an image tool reads them: macOS's sips, else
+          ;; ImageMagick's identify (Linux).
           (with-temp-buffer
-            (should (zerop (call-process "sips" nil t nil "-g" "pixelWidth" "landscape.png")))
-            (should (string-match-p "pixelWidth: 480" (buffer-string)))))
+            (cond ((executable-find "sips")
+                   (should (zerop (call-process "sips" nil t nil "-g" "pixelWidth" "landscape.png")))
+                   (should (string-match-p "pixelWidth: 480" (buffer-string))))
+                  ((executable-find "identify")
+                   (should (zerop (call-process "identify" nil t nil "-format" "%w" "landscape.png")))
+                   (should (equal (buffer-string) "480"))))))
       (delete-directory (file-name-directory (directory-file-name repo)) t))))
 
 ;; ====== EVERY EXAMPLE ======

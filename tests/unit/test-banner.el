@@ -597,6 +597,8 @@ text below (or none)."
         ;; Alone: the rows, the image on the baseline.
         (should (= (funcall height (+my/banner--spacer 1 t)) 15))
         (should (= (funcall height (+my/banner--spacer 3 t)) 55))
+        ;; Not scaled (a HiDPI X11 screen scaled it up).
+        (should (eql (image-property (get-text-property 0 'display (+my/banner--spacer 1 nil)) :scale) 1))
         (let* ((spacer (+my/banner--spacer 2 t))
                (image (get-text-property 0 'display spacer)))
           (should (equal (substring-no-properties spacer) " "))

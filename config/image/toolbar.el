@@ -44,9 +44,17 @@
     (play . "▶") (pause . "⏸") (finder . "Finder"))
   "Icons without a label, as text where Nerd icons aren't loaded.")
 
+(defun +my/image--icon-spec (name)
+  "Button NAME's (NAME NERD-ICON LABEL) (see `+my/image--icons'): on Linux,
+Preview is Open (the default app) and Finder a folder (the file manager)."
+  (pcase (and (not (+my/macos-p)) name)
+    ('preview '(preview "nf-cod-link_external" "Open"))
+    ('finder '(finder "nf-md-folder_open"))
+    (_ (assq name +my/image--icons))))
+
 (defun +my/image--icon (name)
   "Button NAME's icon and label (see `+my/image--icons')."
-  (pcase-let* ((`(,_ ,icon ,label) (assq name +my/image--icons))
+  (pcase-let* ((`(,_ ,icon ,label) (+my/image--icon-spec name))
                (glyph (and icon (fboundp 'nerd-icons-codicon)
                            (ignore-errors
                              (funcall (if (string-prefix-p "nf-md-" icon)
@@ -55,6 +63,7 @@
                                       icon)))))
     (cond ((and glyph label) (concat glyph " " label))
           ((or glyph label))
+          ((and (eq name 'finder) (not (+my/macos-p))) "Folder")
           (t (alist-get name +my/image--fallbacks)))))
 
 (defvar +my/image--click-maps (make-hash-table :test #'eq)
@@ -156,15 +165,18 @@ Finder. LEVEL 0 all of it, 1 without the size, 2 Copy only (a narrow window)."
     (concat
      (when (< level 1)
        (concat (+my/image--text (+my/image-info)) " "))
-     (+my/image--button 'copy "Copy the image (y, Cmd+C)" #'+my/image-copy)
+     (+my/image--button 'copy (format "Copy the image (y, %s)" (+my/os-key-name "Cmd+C" "Ctrl+Shift+C"))
+                        #'+my/image-copy)
      (when (and file (< level 2))
        (concat
         (+my/image--button 'diff "The image as in git's HEAD, on the left (SPC m g)"
                            #'+my/image-diff (and (+my/image--head-shown-p) 'on))
         (when (buffer-modified-p)
           (+my/image--button 'save "Save the edited image (SPC f s)" #'+my/image-save 'on))
-        (+my/image--button 'preview "Open in Preview (SPC m p)" #'+my/image-open-in-preview)
-        (+my/image--button 'finder "Show in Finder (SPC m f)" #'+my/image-show-in-finder))))))
+        (+my/image--button 'preview (format "Open in %s (SPC m p)" (+my/os-app-name 'viewer))
+                           #'+my/image-open-in-preview)
+        (+my/image--button 'finder (format "Show in %s (SPC m f)" (+my/os-app-name 'files))
+                           #'+my/image-show-in-finder))))))
 
 (defvar-local +my/image--toolbar-cache nil
   "(KEY . TEXT): the toolbar last made, and what it was made from.")

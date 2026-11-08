@@ -26,8 +26,12 @@
 ;;(setq doom-font (font-spec :family "Fira Code" :size 12 :weight 'semi-light)
 ;;      doom-variable-pitch-font (font-spec :family "Fira Sans" :size 13))
 ;;
-;; JetBrains Mono (brew install --cask font-jetbrains-mono): has ligatures.
-(setq doom-font (font-spec :family "JetBrains Mono" :size 13))
+;; JetBrains Mono (brew install --cask font-jetbrains-mono; Linux: the
+;; fonts-jetbrains-mono package, or jetbrains.com/mono): has ligatures. 13
+;; pixels on macOS (its pixels are points); on Linux 10 points, which follow
+;; the screen's DPI (a HiDPI screen's text the same size as a plain one's).
+(setq doom-font (font-spec :family "JetBrains Mono"
+                           :size (if (eq system-type 'darwin) 13 10.0)))
 
 ;;
 ;; If you or Emacs can't find your font, use 'M-x describe-font' to look them
@@ -98,6 +102,9 @@
 (setq +my/pdf-dark-pages t)
 
 ;; ====== CODE ======
+
+;; OS (what differs between macOS and Linux: keys, other apps; the files below use it)
+(load! "config/os")
 
 ;; EMACS (garbage collection)
 (load! "config/emacs")

@@ -76,12 +76,14 @@
   (+my/pdf--js (format "page(%d)" (- (or count 1)))))
 
 (defun +my/pdf-back ()
-  "C-o / Cmd+[: back to where the last jump left from (see config/pdf.el)."
+  "C-o / Cmd+[ (Linux: Alt+←): back to where the last jump left from (see
+config/pdf.el)."
   (interactive)
   (+my/pdf--js "back()"))
 
 (defun +my/pdf-forward ()
-  "C-i / Cmd+]: forward again, after going back (see config/pdf.el)."
+  "C-i / Cmd+] (Linux: Alt+→): forward again, after going back (see
+config/pdf.el)."
   (interactive)
   (+my/pdf--js "forward()"))
 
@@ -159,33 +161,21 @@ if it can't."
 
 ;; PREVIEW AND PRINT
 (defun +my/pdf-open-in-preview ()
-  "SPC m p: the PDF in macOS's Preview (to sign, annotate...)."
+  "SPC m p: the PDF in another app: macOS's Preview (to sign, annotate...),
+Linux's default app for PDFs (config/os.el)."
   (interactive)
   (unless buffer-file-name
     (user-error "Not a file"))
-  (call-process "open" nil 0 nil "-a" "Preview" (expand-file-name buffer-file-name)))
+  (+my/os-open (expand-file-name buffer-file-name)))
 
 (defun +my/pdf-print ()
-  "Cmd+P: print the PDF, in Preview's print dialog (macOS asks once to let
-Emacs control Preview)."
+  "Cmd+P (Linux: Ctrl+P): print the PDF: in Preview's print dialog on macOS
+(it asks once to let Emacs control Preview), on the default printer on
+Linux, after asking (config/os.el)."
   (interactive)
   (unless buffer-file-name
     (user-error "Not a file"))
-  (make-process
-   :name "pdf-print"
-   :noquery t
-   :command (list "osascript"
-                  "-e" "on run argv"
-                  "-e" "tell application \"Preview\""
-                  "-e" "activate"
-                  "-e" "print ((POSIX file (item 1 of argv)) as alias) with print dialog"
-                  "-e" "end tell"
-                  "-e" "end run"
-                  (expand-file-name buffer-file-name))
-   :sentinel (lambda (process _event)
-               (when (and (eq (process-status process) 'exit)
-                          (/= (process-exit-status process) 0))
-                 (message "Couldn't print through Preview: SPC m p opens it there, then Cmd+P")))))
+  (+my/os-print (expand-file-name buffer-file-name)))
 
 (defun +my/pdf-zoom-in ()
   "Cmd+=: zoom the PDF in."

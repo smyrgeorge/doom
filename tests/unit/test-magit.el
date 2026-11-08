@@ -24,7 +24,7 @@
   (list :magit (featurep 'magit)
         :delta (featurep 'magit-delta)
         :todos (featurep 'magit-todos)
-        :hook (and (boundp 'magit-mode-hook) (memq 'magit-delta-mode magit-mode-hook) t))
+        :hook (and (boundp 'magit-mode-hook) (memq '+my/magit-delta-maybe-h magit-mode-hook) t))
   "What loading config/magit.el did before magit loaded (as at Doom's startup).")
 
 (require 'magit)
@@ -316,14 +316,25 @@ margin."
 ;; ====== DELTA ======
 
 (ert-deftest magit/delta-mode-in-magit-buffers ()
-  (should (memq 'magit-delta-mode magit-mode-hook))
+  (should (memq '+my/magit-delta-maybe-h magit-mode-hook))
+  (+test-magit-with-delta
   (+test-magit-with-repo nil
     (+test-magit--git "commit" "-q" "--allow-empty" "-m" "x")
     (magit-status-setup-buffer default-directory)
     (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
       (should magit-delta-mode)
       (should (memq 'magit-delta-call-delta-and-convert-ansi-escape-sequences
-                    magit-diff-wash-diffs-hook)))))
+                    magit-diff-wash-diffs-hook))))))
+
+(ert-deftest magit/no-delta-mode-without-delta ()
+  "delta not installed: magit's own diffs (magit-delta's were empty)."
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (name &rest _) (unless (equal name "delta") (locate-file name exec-path)))))
+    (+test-magit-with-repo nil
+      (+test-magit--git "commit" "-q" "--allow-empty" "-m" "x")
+      (magit-status-setup-buffer default-directory)
+      (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
+        (should-not magit-delta-mode)))))
 
 (ert-deftest magit/delta-ignores-the-gitconfig ()
   "--no-gitconfig appended to magit-delta's arguments (theirs kept), once,

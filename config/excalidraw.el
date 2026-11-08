@@ -18,14 +18,19 @@
 ;; them to the page, so Excalidraw's work as at excalidraw.com (its ? lists
 ;; them): tools (v r d o a l p t e h k, 1-0), Delete, Esc, Enter, the arrows,
 ;; Shift+1 (fit), Cmd+Z / Cmd+Shift+Z (undo / redo), Cmd+A, Cmd+D, Cmd+G,
-;; Cmd+= / Cmd+- / Cmd+0 (zoom)... Text is typed straight into the page (a
+;; Cmd+= / Cmd+- / Cmd+0 (zoom)... On Linux they're Ctrl's, as Excalidraw has
+;; them there (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y, Ctrl+A...; but Ctrl+G, Emacs's
+;; C-g, and Ctrl+[, which is Esc to Emacs: the selection's menu groups it and
+;; sends it backward). Text is typed straight into the page (a
 ;; double-click, or t then a click). Emacs keeps SPC (the leader), : (Evil's
 ;; command line) and its keys that Excalidraw has none for (Cmd+S, Cmd+W,
 ;; M-x, C-x, C-g, Option+Enter...). Also:
 ;;   Cmd+C / Cmd+X  copy / cut the selection: Emacs's kill ring and the
 ;;                  clipboard, in Excalidraw's format (it pastes them back,
-;;                  here or at excalidraw.com)
-;;   Cmd+V          paste: shapes copied so, or text (a text element)
+;;                  here or at excalidraw.com); Linux: Ctrl+Shift+C / X
+;;   Cmd+V          paste: shapes copied so, or text (a text element);
+;;                  Linux: Ctrl+Shift+V
+;;   Ctrl+S         save (Linux; Cmd+S is Doom's on macOS)
 ;;   SPC m d        dark canvas (the file stays light), for all drawings
 ;;   SPC m l        Excalidraw's libraries (libraries.excalidraw.com), see LIBRARIES
 ;;   SPC m r        read the file again
@@ -122,7 +127,8 @@
 ;; The keys Excalidraw has (see above), given to the page (see
 ;; `+my/excalidraw-key'): what they type, but SPC (Doom's leader) and : (Evil's
 ;; command line); Esc, Enter, Tab, Delete, the arrows; and its Cmd and Option
-;; keys (macOS's, as Excalidraw has them there).
+;; keys (macOS's, as Excalidraw has them there), on Linux its Ctrl ones too
+;; (`+my/excalidraw--linux-keys').
 (defconst +my/excalidraw--page-keys
   (append
    (mapcar #'vector (remq ?: (number-sequence 33 126)))
@@ -141,13 +147,37 @@
              "s-M-c" "s-M-v" "s-RET" "s-<return>" "M-z" "M-r")))
   "Keys given to a drawing's page (see above).")
 
-(dolist (key +my/excalidraw--page-keys)
-  (define-key +my/excalidraw-mode-map key #'+my/excalidraw-key))
+(defconst +my/excalidraw--linux-keys
+  (mapcar #'kbd
+          '(;; Undo, redo, select all, duplicate, ungroup (C-g stays Emacs's).
+            "C-z" "C-S-z" "C-y" "C-a" "C-d" "C-S-g"
+            ;; Zoom, the grid, a link, lock, font size.
+            "C-=" "C-+" "C--" "C-0" "C-'" "C-k" "C-S-l" "C-<" "C->"
+            ;; Forward (C-[ is Esc to Emacs), to the back, to the front; align.
+            "C-]" "C-{" "C-}"
+            "C-S-<up>" "C-S-<down>" "C-S-<left>" "C-S-<right>"
+            ;; Copy and paste styles; a line's points.
+            "C-M-c" "C-M-v" "C-RET" "C-<return>"))
+  "Keys given to a drawing's page on Linux too: Excalidraw's Ctrl keys there
+(its Cmd keys on macOS, see above).")
 
-(map! :map +my/excalidraw-mode-map
-      "s-c" #'+my/excalidraw-copy
-      "s-x" #'+my/excalidraw-cut
-      "s-v" #'+my/excalidraw-paste)
+(defun +my/excalidraw--bind-keys (map)
+  "Bind the page's keys in MAP (see above): Linux's too, on Linux; copy,
+cut and paste through Emacs (Cmd+C...; Linux: Ctrl+Shift+C...), and on Linux
+Ctrl+S saves."
+  (dolist (key (append +my/excalidraw--page-keys
+                       (unless (+my/macos-p) +my/excalidraw--linux-keys)))
+    (define-key map key #'+my/excalidraw-key))
+  (define-key map (kbd "s-c") #'+my/excalidraw-copy)
+  (define-key map (kbd "s-x") #'+my/excalidraw-cut)
+  (define-key map (kbd "s-v") #'+my/excalidraw-paste)
+  (unless (+my/macos-p)
+    (define-key map (kbd "C-S-c") #'+my/excalidraw-copy)
+    (define-key map (kbd "C-S-x") #'+my/excalidraw-cut)
+    (define-key map (kbd "C-S-v") #'+my/excalidraw-paste)
+    (define-key map (kbd "C-s") #'save-buffer)))
+
+(+my/excalidraw--bind-keys +my/excalidraw-mode-map)
 
 ;; Clicks are WebKit's: Emacs only selects the window (config/webkit.el).
 (+my/webkit-bind-clicks +my/excalidraw-mode-map)

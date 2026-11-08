@@ -24,6 +24,10 @@
   "A fake WebKit view."
   buffer props uri title killed)
 
+;; macOS's light or dark setting (an NS Emacs's variable): let-bound below,
+;; it must be special on Linux too, where Emacs doesn't define it.
+(defvar ns-system-appearance)
+
 (defvar +test-md--made nil "The fake views made, oldest first.")
 (defvar +test-md--scripts nil "(XWIDGET SCRIPT CALLBACK) run, oldest first.")
 (defvar +test-md--notices nil "(show ID TEXT ACTIONS BUFFER) or (close ID BUFFER), latest first.")
@@ -152,6 +156,15 @@ selected window, in markdown-mode; its buffer."
 (defun +test-md--needs-pandoc ()
   (unless (executable-find "pandoc") (ert-skip "No pandoc")))
 
+(defun +test-md--needs-new-pandoc ()
+  "Skip unless pandoc is 3.8 or newer: older ones (Debian's, Ubuntu's) write
+other markup (a paragraph's lines on a <div> around it, a task's box,
+GitHub's alerts as quotes), which the preview shows as well."
+  (+test-md--needs-pandoc)
+  (let ((version (+md-preview--pandoc-version)))
+    (unless (and version (version<= "3.8" version))
+      (ert-skip (format "pandoc %s writes older markup" version)))))
+
 ;; ====== PANDOC ======
 
 (defun +test-md--pandoc (markdown)
@@ -165,7 +178,7 @@ selected window, in markdown-mode; its buffer."
   "> [!NOTE] and the others: GitHub's markup (github-markdown-css styles it: a
 coloured bar, the kind's icon and title), its source lines kept, its text
 escaped; a plain quote stays one."
-  (+test-md--needs-pandoc)
+  (+test-md--needs-new-pandoc)
   (should (file-exists-p +md-preview--alerts-filter))
   (let ((html (+test-md--pandoc (concat "> [!CAUTION]\n> Salt & pepper.\n\n"
                                         "> [!NOTE]\n> n\n\n> [!TIP]\n> t\n\n"
@@ -185,7 +198,7 @@ escaped; a plain quote stays one."
     (should (string-match-p "<blockquote data-pos=" html))))
 
 (ert-deftest markdown/fragment-tags-elements-with-their-source-lines ()
-  (+test-md--needs-pandoc)
+  (+test-md--needs-new-pandoc)
   (let ((html (+test-md--pandoc "# Title\n\nPara one\nstill para\n\n- item\n\n| a | b |\n|---|---|\n| 1 | 2 |\n")))
     (should (string-match-p "<h1 data-pos=\"1:1-[0-9:]+\" id=\"title\">" html))
     (should (string-match-p "<p data-pos=\"3:1-" html))
@@ -233,7 +246,28 @@ escaped; a plain quote stays one."
   (let ((html (+test-md--pandoc "~~gone~~ https://example.com\n\n- [x] done\n")))
     (should (string-search "<del>" html))
     (should (string-search "<a href=\"https://example.com\"" html))
-    (should (string-search "<li>☒ " html))))         ; a task, done
+    (should (string-search "done" html))
+    ;; A task, done (older pandoc: a checkbox).
+    (let ((version (+md-preview--pandoc-version)))
+      (when (version<= "3.8" version)
+        (should (string-search "<li>☒ " html))))))
+
+(ert-deftest markdown/pandoc-arguments-by-version ()
+  "No highlighting of pandoc's own, math as MathML: the arguments each pandoc
+takes."
+  (dolist (case '(("3.13" "--syntax-highlighting=none") ("3.8" "--syntax-highlighting=none")
+                  ("3.1.11.1" "--no-highlight" "--mathml") ("2.17.1.1" "--no-highlight" "--mathml")
+                  (nil "--no-highlight" "--mathml")))
+    (let ((+md-preview--pandoc-args nil))
+      (cl-letf (((symbol-function '+md-preview--pandoc-version) (lambda () (car case))))
+        (should (equal (+md-preview--version-args) (cdr case)))
+        ;; Asked once.
+        (cl-letf (((symbol-function '+md-preview--pandoc-version) (lambda () (error "Asked again"))))
+          (should (equal (+md-preview--version-args) (cdr case))))))))
+
+(ert-deftest markdown/pandoc-version-read ()
+  (+test-md--needs-pandoc)
+  (should (string-match-p "\\`[0-9]+\\.[0-9.]+\\'" (+md-preview--pandoc-version))))
 
 (ert-deftest markdown/fragment-of-nothing ()
   (+test-md--needs-pandoc)

@@ -13,8 +13,8 @@
 | `tiling` | [Tiled panes](editor.md#tiling) |
 | `banner` | [Notices](editor.md#notices) |
 
-`scripts/screenshots.sh [NAME...]` takes the screenshots. The terminal it runs from needs macOS's Screen Recording
-permission.
+`scripts/screenshots.sh [NAME...]` takes the screenshots, on macOS only (macOS's `screencapture`; the terminal it runs
+from needs the Screen Recording permission). The examples themselves work on Linux too.
 
 To add an example, write `examples/NAME.el` with a `+my/example-NAME` command, list it here and in
 `config/examples.el`, test it in `tests/unit/test-examples.el`, and show its screenshot in the feature's doc.

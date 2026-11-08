@@ -141,10 +141,17 @@ PLACES)."
          (get (lambda (key default) (if last (plist-get last key) default)))
          (bool (lambda (value) (if value "true" "false")))
          (place (or (plist-get own :place) (+my/pdf--kept-place))))
-    (format "{\"dark\":%s,\"toolbar\":%s,\"sidebar\":%s,\"view\":%s,\"place\":%s,\"zoomStep\":%s}"
+    (format "{\"dark\":%s,\"toolbar\":%s,\"sidebar\":%s,\"view\":%s,\"place\":%s,\"zoomStep\":%s,\"labels\":%s}"
             (funcall bool (funcall get :dark +my/pdf-dark-pages))
             (funcall bool (funcall get :toolbar +my/pdf-toolbar))
             (funcall bool (funcall get :sidebar +my/pdf-outline-sidebar))
             (json-encode (or (funcall get :view nil) "outline"))
             (if place (json-encode place) "null")
-            +my/pdf-zoom-step)))
+            +my/pdf-zoom-step
+            (+my/pdf--labels))))
+
+(defun +my/pdf--labels ()
+  "The toolbar's words that differ between macOS and Linux (JSON): the
+modifier of its keys' names (Cmd, Ctrl), the app SPC m p opens it in."
+  (json-encode (list :mod (+my/os-key-name "Cmd" "Ctrl")
+                     :viewer (+my/os-app-name 'viewer))))

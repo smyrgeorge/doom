@@ -41,6 +41,19 @@ a line."
                                  (forward-line (1- line))
                                  (point))))))
 
+(defun +my/stripe--pointer-y (window)
+  "The mouse's height in pixels, from a top that stays put while the band is
+dragged: the screen's; on Wayland (pgtk), which doesn't give the mouse's
+place on the screen, WINDOW's frame's (the strip's frame, a child of it, is
+placed in it). Nil if the mouse is over another frame."
+  (if (not (eq (framep (window-frame window)) 'pgtk))
+      (cdr (mouse-absolute-pixel-position))
+    (let ((parent (window-frame window)))
+      (pcase (mouse-pixel-position)
+        (`(,frame ,_ . ,(and y (pred integerp)))
+         (cond ((eq frame parent) y)
+               ((eq (frame-parent frame) parent) (+ y (cdr (frame-position frame))))))))))
+
 (defun +my/stripe-press (event)
   "A press on the strip: on the band, hold it (dragging scrolls); elsewhere,
 jump there (the line in the middle of the window, `C-o' going back)."
@@ -58,14 +71,14 @@ jump there (the line in the middle of the window, `C-o' going back)."
              (+my/stripe--goto-line window (max 1 (min lines (1+ (floor (/ y scale))))))
            ;; Where the strip's top is on the screen: the mouse there now,
            ;; less how far down the strip it is.
-           (let ((origin (- (cdr (mouse-absolute-pixel-position)) y))
+           (let ((origin (- (or (+my/stripe--pointer-y window) y) y))
                  (next nil))
              (track-mouse
                (while (progn (setq next (read-event))
                              (mouse-movement-p next))
-                 (+my/stripe--scroll-band-to
-                  window (- (cdr (mouse-absolute-pixel-position)) origin grab) scale)
-                 (redisplay)))
+                 (when-let* ((pointer (+my/stripe--pointer-y window)))
+                   (+my/stripe--scroll-band-to window (- pointer origin grab) scale)
+                   (redisplay))))
              ;; Anything but the button's release goes on as input.
              (unless (memq (event-basic-type next) '(mouse-1))
                (push next unread-command-events)))))))))

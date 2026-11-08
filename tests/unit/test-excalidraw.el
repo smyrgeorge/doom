@@ -839,6 +839,25 @@ answers Emacs's questions (through timers: while a save waits)."
                        :ctrlKey (and (memq :ctrl modifiers) t)))))
 
 (ert-deftest exd/keys-as-a-browser-gives-them ()
+  (+test-on-macos (+test-exd--keys-as-a-browser-gives-them)))
+
+(ert-deftest exd/keys-as-a-linux-browser-gives-them ()
+  "On Linux Excalidraw reads Ctrl where macOS has Cmd: Super is Ctrl too,
+nothing is metaKey."
+  (+test-on-linux
+    (let ((key (lambda (description) (aref (kbd description) 0))))
+      (+test-exd--expect ?r "r" "KeyR")
+      (+test-exd--expect (funcall key "C-z") "z" "KeyZ" :ctrl)
+      (+test-exd--expect (funcall key "C-S-z") "Z" "KeyZ" :ctrl :shift)
+      (+test-exd--expect (funcall key "C-{") "{" "BracketLeft" :ctrl :shift)
+      (+test-exd--expect (funcall key "C-<") "<" "Comma" :ctrl :shift)
+      (+test-exd--expect (funcall key "C-S-<up>") "ArrowUp" "ArrowUp" :ctrl :shift)
+      (+test-exd--expect (funcall key "C-M-c") "c" "KeyC" :ctrl :alt)
+      (+test-exd--expect (funcall key "C-<return>") "Enter" "Enter" :ctrl)
+      (+test-exd--expect (funcall key "s-z") "z" "KeyZ" :ctrl)
+      (+test-exd--expect (funcall key "M-z") "z" "KeyZ" :alt))))
+
+(defun +test-exd--keys-as-a-browser-gives-them ()
   ;; Letters, digits.
   (+test-exd--expect ?r "r" "KeyR")
   (+test-exd--expect ?R "R" "KeyR" :shift)
@@ -953,6 +972,30 @@ line); Esc, Enter, Tab, Delete, the arrows; its Cmd and Option keys."
     (pcase-dolist (`(,key . ,command) '(("d" . +my/excalidraw-toggle-dark) ("r" . revert-buffer)))
       (should (eq (lookup-key (evil-get-auxiliary-keymap map 'normal) (kbd (concat "SPC m " key)))
                   command)))))
+
+(ert-deftest exd/keys-per-system ()
+  "macOS: the Cmd keys only. Linux: Excalidraw's Ctrl keys too; copy, cut
+and paste on Ctrl+Shift+C / X / V, save on Ctrl+S; Emacs's C-g, C-x, C-c
+kept."
+  (let ((linux-keys '("C-z" "C-S-z" "C-y" "C-a" "C-d" "C-S-g" "C-=" "C-+" "C--" "C-0" "C-'" "C-k"
+                      "C-S-l" "C-<" "C->" "C-]" "C-{" "C-}" "C-S-<up>" "C-M-c" "C-M-v" "C-<return>")))
+    (let ((map (make-sparse-keymap)))
+      (+test-on-macos (+my/excalidraw--bind-keys map))
+      (should (eq (lookup-key map (kbd "s-z")) #'+my/excalidraw-key))
+      (should (eq (lookup-key map (kbd "s-c")) #'+my/excalidraw-copy))
+      (dolist (key (append linux-keys '("C-S-c" "C-S-x" "C-S-v" "C-s")))
+        (should-not (lookup-key map (kbd key)))))
+    (let ((map (make-sparse-keymap)))
+      (+test-on-linux (+my/excalidraw--bind-keys map))
+      (dolist (key (cons "s-z" linux-keys))
+        (should (eq (lookup-key map (kbd key)) #'+my/excalidraw-key)))
+      (should (eq (lookup-key map (kbd "C-S-c")) #'+my/excalidraw-copy))
+      (should (eq (lookup-key map (kbd "C-S-x")) #'+my/excalidraw-cut))
+      (should (eq (lookup-key map (kbd "C-S-v")) #'+my/excalidraw-paste))
+      (should (eq (lookup-key map (kbd "C-s")) #'save-buffer))
+      (should (eq (lookup-key map (kbd "s-c")) #'+my/excalidraw-copy))
+      (dolist (key '("C-g" "C-x" "C-c" "M-x" "M-RET"))
+        (should-not (lookup-key map (kbd key)))))))
 
 (ert-deftest exd/keys-before-evils ()
   "In normal state, the drawing's keys come before Evil's and its packages'

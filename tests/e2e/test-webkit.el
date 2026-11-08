@@ -83,14 +83,16 @@ addEventListener('scroll', say); addEventListener('resize', say); say();
   "BODY from one window, the test page's buffer killed after (its views
 closed)."
   (declare (indent 0))
-  `(+test-with-reset
+  `(progn
+     (+test-needs-webkit)
+     (+test-with-reset
      (setq +test-webkit--watched nil
            +test-webkit--loaded nil
            +test-browsed nil)
      (+test-clear-messages)
      ,@body
      ;; Nothing left pending in WebKit when the views close.
-     (+test-sleep 0.2)))
+     (+test-sleep 0.2))))
 
 (defun +test-webkit--shares ()
   (+test-messages "share an xwidget"))

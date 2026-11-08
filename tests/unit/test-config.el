@@ -43,7 +43,10 @@ order, theirs included: the `load!'s among its top-level forms."
       (cl-loop for part in (nreverse parts)
                append (append (+test-config--parts part) (list part))))))
 
-(defvar +test-config--history-before (mapcar #'car load-history))
+(defvar +test-config--history-before
+  (remove (expand-file-name "config/os.el" +test-root) (mapcar #'car load-history))
+  "The files loaded before config.el; but config/os.el, which tests/helper.el
+loads too (config.el loads it again, first).")
 
 (defvar +test-config--error nil "What loading config.el signalled, if anything.")
 
@@ -215,7 +218,8 @@ header says what loads it: config.el, or for a part its file (config/merge.el)."
 (ert-deftest config/font-theme-line-numbers ()
   (should (fontp doom-font))
   (should (equal (format "%s" (font-get doom-font :family)) "JetBrains Mono"))
-  (should (eql (font-get doom-font :size) 13))
+  ;; macOS: 13 px; Linux: 10 pt (the screen's DPI followed).
+  (should (eql (font-get doom-font :size) (if (eq system-type 'darwin) 13 10.0)))
   (should (eq doom-theme 'doom-one))
   (should (eq display-line-numbers-type t)))
 

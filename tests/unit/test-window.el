@@ -40,7 +40,21 @@ set), new windows getting focus."
   (should (eq evil-vsplit-window-right t)))
 
 (ert-deftest window/frame-maximized-at-startup ()
-  (should (memq 'toggle-frame-maximized window-setup-hook)))
+  (should (memq '+my/maximize-frame-h window-setup-hook)))
+
+(ert-deftest window/maximized-not-toggled ()
+  "Maximized; already maximized or full screen (a window manager's doing):
+left so, not made small again."
+  (dolist (case '((nil . maximized) (fullwidth . maximized) (fullheight . maximized)
+                  (maximized . maximized) (fullboth . fullboth)))
+    (let ((parameter (car case)) set)
+      (cl-letf (((symbol-function 'frame-parameter)
+                 (lambda (_frame name) (and (eq name 'fullscreen) parameter)))
+                ((symbol-function 'set-frame-parameter)
+                 (lambda (_frame name value) (when (eq name 'fullscreen) (setq parameter value set t)))))
+        (+my/maximize-frame-h)
+        (should (eq parameter (cdr case)))
+        (should (eq set (not (memq (car case) '(maximized fullboth)))))))))
 
 ;; ====== SPLITS (SPC w s / SPC w v) ======
 

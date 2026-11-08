@@ -44,6 +44,22 @@ itself when there's none."
     (cl-letf (((symbol-function 'executable-find) #'ignore))
       (should (equal (+my/kotlin-lsp-command) '("kotlin-lsp" "--stdio"))))))
 
+(ert-deftest lsp-kotlin/command-from-the-linux-zip ()
+  "Linux's zip: its kotlin-lsp.sh on PATH (no `kotlin-lsp'), bin/intellij-server
+beside it; without a server, the script."
+  (let* ((install (+test-lsp--dir "kotlin-zip"))
+         (script (expand-file-name "kotlin-lsp.sh" install))
+         (server (expand-file-name "bin/intellij-server" install)))
+    (make-directory (file-name-directory server) t)
+    (with-temp-file script)
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (name &rest _) (and (equal name "kotlin-lsp.sh") script))))
+      (should (equal (+my/kotlin-lsp-command) (list "kotlin-lsp.sh" "--stdio")))
+      (should (funcall (plist-get (lsp--client-new-connection (+test-lsp--kotlin-client)) :test?)))
+      (with-temp-file server)
+      (set-file-modes server #o755)
+      (should (equal (+my/kotlin-lsp-command) (list (file-truename server) "--stdio"))))))
+
 (ert-deftest lsp-kotlin/notifications-taken-quietly ()
   "kotlin-lsp's intellij/... notifications: no warning, no handler run; others,
 and other servers', as lsp-mode has them."
@@ -85,7 +101,7 @@ and other servers', as lsp-mode has them."
     (cl-letf (((symbol-function 'executable-find)
                (lambda (name &rest _) (push name looked) nil)))
       (should-not (funcall (plist-get connection :test?))))
-    (should (equal looked '("kotlin-lsp")))
+    (should (equal looked '("kotlin-lsp.sh" "kotlin-lsp")))
     (cl-letf (((symbol-function 'executable-find)
                (lambda (name &rest _) (and (equal name "kotlin-lsp") "/opt/homebrew/bin/kotlin-lsp"))))
       (should (funcall (plist-get connection :test?))))))

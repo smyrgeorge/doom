@@ -23,7 +23,12 @@
 
 (defun +my/webkit--answered (xwidget function value)
   "XWIDGET's page answered VALUE: FUNCTION with it, but if its view was
-closed meanwhile (see above)."
+closed meanwhile (see above); killed already (5 s passed), nothing."
+  (when (xwidget-live-p xwidget)
+    (+my/webkit--answered-live xwidget function value)))
+
+(defun +my/webkit--answered-live (xwidget function value)
+  "`+my/webkit--answered', XWIDGET not killed."
   (xwidget-put xwidget 'asked (max 0 (1- (or (xwidget-get xwidget 'asked) 1))))
   (cond ((xwidget-get xwidget '+my/webkit-closing)
          (unless (+my/webkit--asked-p xwidget)

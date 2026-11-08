@@ -73,11 +73,13 @@
   (define-key treemacs-mode-map [double-mouse-1] #'treemacs-doubleclick-action))
 
 ;; COPY
-;; Cmd+C copies the selected file's (or folder's) absolute path to the
-;; clipboard, as `ya' does (globally it's `evil-yank', which here would wait
-;; for a motion).
+;; Cmd+C (Linux: Ctrl+Shift+C) copies the selected file's (or folder's)
+;; absolute path to the clipboard, as `ya' does (globally Cmd+C is
+;; `evil-yank', which here would wait for a motion).
 (after! treemacs
-  (define-key treemacs-mode-map (kbd "s-c") #'treemacs-copy-absolute-path-at-point))
+  (define-key treemacs-mode-map (kbd "s-c") #'treemacs-copy-absolute-path-at-point)
+  (unless (+my/macos-p)
+    (define-key treemacs-mode-map (kbd "C-S-c") #'treemacs-copy-absolute-path-at-point)))
 
 ;; ====== CODE ======
 

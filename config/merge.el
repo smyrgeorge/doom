@@ -104,6 +104,11 @@ a pane closed).")
       :nm "]c" #'+my/merge-next
       :nm "[c" #'+my/merge-previous)
 
+;; On Linux Ctrl+S (config/os.el, KEYS).
+(map! :unless (+my/macos-p)
+      :map +my/merge-mode-map
+      "C-s" #'+my/merge-done)
+
 (map! :map +my/merge-mode-map
       :localleader
       :desc "Change at point from Yours"  "l" #'+my/merge-take-left

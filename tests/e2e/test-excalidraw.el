@@ -139,6 +139,7 @@ skeletons) to WINDOW's drawing; return its version."
 its own; the drawings closed after."
   (declare (indent 0))
   `(progn
+     (+test-needs-webkit)
      (unless +test-exd--excalidraw
        (ert-skip "No Excalidraw in Doom's data folder (open a drawing in Emacs once)"))
      (let ((+my/excalidraw-theme 'light)
@@ -399,7 +400,11 @@ goes nowhere; then killed."
       (should (xwidget-get xwidget '+my/webkit-closing))
       (should (equal (buffer-name (xwidget-buffer xwidget)) " *webkit-closing*"))
       (should-not (xwidget-get xwidget '+my/webkit-killed))
-      (should (+test-wait-for (lambda () (xwidget-get xwidget '+my/webkit-killed)) 3))
+      ;; Killed: macOS's Emacs says so in its properties (`xwidget-live-p'
+      ;; stays t); Linux's can't read a killed view's, it says it's not live.
+      (should (+test-wait-for (lambda () (or (not (xwidget-live-p xwidget))
+                                             (xwidget-get xwidget '+my/webkit-killed)))
+                              3))
       (should-not +test-exd--late)
       (should (assq xwidget +my/webkit--killed))
       (+test-sleep 0.3)

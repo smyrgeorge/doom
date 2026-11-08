@@ -9,9 +9,10 @@ rolled config (or better). It can be a foundation for your own config or a
 resource for Emacs enthusiasts to learn more about our favorite operating
 system.
 
-It targets **macOS on Apple Silicon** with **Emacs 31** (emacs-plus), and aims for an IDE-like workflow: a project
-sidebar that follows the current file, LSP for every language I use, format-on-save, and Claude Code inside Emacs. It
-works both as a GUI app and in the terminal (`emacs -nw`).
+It runs on **macOS** (Apple Silicon, emacs-plus) and **Linux** (X11 or Wayland), with **Emacs 31**, and aims for an
+IDE-like workflow: a project sidebar that follows the current file, LSP for every language I use, format-on-save, and
+Claude Code inside Emacs. It works both as a GUI app and in the terminal (`emacs -nw`). The keys use `Cmd` on macOS and
+`Ctrl` on Linux, as each system's apps do ([Key bindings](docs/keybindings.md)).
 
 It's **tiling first**, like a tiling window manager: applications (Claude Code, the terminal, magit, the Markdown
 preview, drawings) open in a new pane where the tiling layout puts it, files open as tabs in the current pane, and a
@@ -67,8 +68,12 @@ image, and its version in git's HEAD beside it (`SPC m g`) ([more](docs/images.m
 
 ## Installation
 
-Requirements: macOS (Apple Silicon), [Homebrew](https://brew.sh), `git`, `node`/`npm` and
-[`uv`](https://github.com/astral-sh/uv).
+Requirements:
+
+- **macOS** (Apple Silicon): [Homebrew](https://brew.sh), `git`, `node`/`npm` and [`uv`](https://github.com/astral-sh/uv).
+- **Linux**: Debian, Ubuntu or Fedora (the scripts use `apt` or `dnf`, with `sudo`), and `git`. Step 3 builds Emacs 31
+  from GNU's release, with xwidgets (WebKitGTK) for PDFs, drawings and the Markdown preview: distributions' Emacs
+  packages are older and have no xwidgets. Another distribution: install the packages the scripts name, by hand.
 
 ```sh
 # 1. This config
@@ -77,11 +82,12 @@ git clone git@github.com:smyrgeorge/doom.git ~/.config/doom
 # 2. Doom itself (its modules are a git submodule)
 git clone --depth 1 --recurse-submodules https://github.com/doomemacs/core ~/.config/emacs
 
-# 3. Emacs (prebuilt emacs-plus Emacs.app; macOS 15+, replaces Homebrew's `emacs` formula) + `doom sync`
-#    (also fetches Doom's modules)
+# 3. Emacs + `doom sync` (also fetches Doom's modules). macOS: the prebuilt emacs-plus Emacs.app (macOS 15+,
+#    replaces Homebrew's `emacs` formula). Linux: built from source into /usr/local (XWIDGETS=no: without WebKit)
 ~/.config/doom/scripts/emacs.sh
 
-# 4. CLI tools, fonts, BasicTeX (its installer asks for an admin password), language servers
+# 4. CLI tools, fonts, LaTeX (macOS's BasicTeX asks for an admin password), language servers; what a system has no
+#    package for is listed at the end, to install by hand
 ~/.config/doom/scripts/tools.sh
 ~/.config/doom/scripts/lsp.sh
 
@@ -100,9 +106,21 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - **Claude Code:** install the `claude` CLI (the scripts don't), run it once in a terminal and log in; `agent-shell`
   reuses that login.
 - **Kotlin LSP EULA:** read it with `kotlin-lsp --show-eula`, then run `kotlin-lsp --stdio` once and accept.
-- **iTerm (terminal Emacs):** in *Settings → Profiles → Text*, use a Nerd Font (e.g. *JetBrainsMono Nerd Font*) for
-  icons and tick *Use ligatures*; in *Profiles → Keys*, set the left Option key to *Esc+* so `M-` keys (e.g. `M-RET`)
-  work.
+- **iTerm (terminal Emacs, macOS):** in *Settings → Profiles → Text*, use a Nerd Font (e.g. *JetBrainsMono Nerd Font*)
+  for icons and tick *Use ligatures*; in *Profiles → Keys*, set the left Option key to *Esc+* so `M-` keys (e.g.
+  `M-RET`) work.
+- **Linux:** run `M-x nerd-icons-install-fonts` once (the icons' font). Your desktop may take some `Super` keys and
+  `Ctrl+Alt` ones; this config's own are `Ctrl` and `Ctrl+Shift` ones ([Key bindings](docs/keybindings.md)).
+
+**On Linux**
+
+- **What needs xwidgets:** PDFs, drawings and the live Markdown preview open in WebKit. Without xwidgets they fall back:
+  PDFs to DocView, drawings to their file, the preview to markdown-mode's (eww, updated on save).
+- **Other apps:** Preview and Finder become the file's default app and the file manager (`xdg-open`, D-Bus); printing
+  uses CUPS's `lp`, after asking; copying an image uses `wl-copy` (Wayland) or `xclip` (X11); rotating and flipping
+  images use ImageMagick.
+- **Tested:** the unit and end-to-end tests run on Linux too (Debian, with and without xwidgets: `tests/linux/`), as on
+  macOS.
 
 ## Documentation
 
@@ -117,7 +135,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Claude Code](docs/claude-code.md): sessions, drawing for Claude, and profiling Emacs for it.
 - [AI agents](docs/ai-agents.md): the `emacs-profiling` skill, and installing it.
 - [Terminal](docs/terminal.md): what differs in `emacs -nw`.
-- [Key bindings](docs/keybindings.md): this config's own keys.
+- [Key bindings](docs/keybindings.md): this config's own keys, on macOS and on Linux.
 - [Examples](docs/examples.md): each feature on files of its own, with screenshots.
 - [Shell commands](docs/cmd.md): `cmd/diff.sh`.
 - [Tests](docs/tests.md): `tests/run.sh`.

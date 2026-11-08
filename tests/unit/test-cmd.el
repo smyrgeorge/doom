@@ -71,11 +71,19 @@ after 90 s (STATUS then `timeout')."
     (let* ((buffer (current-buffer))
            ;; The terminal a size, as a real one has (with nothing attached,
            ;; script's has none: a server's frame there was too small).
+           (command (append (list "bash" "-c"
+                                  "stty cols 120 rows 40 2>/dev/null; exec bash \"$0\" \"$@\""
+                                  +test-cmd--script)
+                            args))
+           ;; script(1) runs it in a pseudo-terminal: BSD's (macOS) takes the
+           ;; command as arguments, util-linux's (Linux) as one string (-c),
+           ;; its exit status passed on with -e.
            (process (make-process :name "diff.sh" :buffer buffer :connection-type 'pipe
-                                  :command (append (list "script" "-q" "/dev/null" "bash" "-c"
-                                                         "stty cols 120 rows 40 2>/dev/null; exec bash \"$0\" \"$@\""
-                                                         +test-cmd--script)
-                                                   args)))
+                                  :command (if (eq system-type 'darwin)
+                                               (append (list "script" "-q" "/dev/null") command)
+                                             (list "script" "-q" "-e" "-c"
+                                                   (mapconcat #'shell-quote-argument command " ")
+                                                   "/dev/null"))))
            (end (+ (float-time) 90)))
       (process-send-eof process)
       (while (and (process-live-p process) (< (float-time) end))

@@ -7,7 +7,7 @@ CLI's login.
 |---|---|
 | `SPC o c` | A new session, in a new [tiled](editor.md#tiling) pane |
 | `SPC o C` | The project's session (`C-u`: a new one, `C-u C-u`: pick one) |
-| `Option+Enter` | Send the error at point or the selection to Claude |
+| `Option+Enter` (Linux: `Alt+Enter`) | Send the error at point or the selection to Claude |
 
 Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
 and Claude can ask Emacs what you're looking at.

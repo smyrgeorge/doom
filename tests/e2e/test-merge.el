@@ -124,9 +124,14 @@ on feature, feature merged into main."
              (ignore-errors (+my/merge--finish (buffer-local-value '+my/merge--session buffer)))))))))
 
 (defun +test-merge--e ()
-  "Magit's status, point on a.txt (Unmerged), e: the merge's session."
-  (magit-status-setup-buffer default-directory)
-  (+test-sleep 0.3)
+  "Magit's status, point on a.txt (Unmerged), e: the merge's session. In
+Magit's status buffer and window, whatever the frame's focus did meanwhile
+(Xvfb, without a window manager)."
+  (let ((status (magit-status-setup-buffer default-directory)))
+    (+test-sleep 0.3)
+    (when (get-buffer-window status)
+      (select-window (get-buffer-window status)))
+    (set-buffer status))
   (goto-char (point-min))
   (should (re-search-forward "^unmodified\\|a\\.txt" nil t))
   (goto-char (point-min))

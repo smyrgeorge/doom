@@ -26,7 +26,6 @@
 (defvar +test-pdf--made nil "The fake views made, oldest first.")
 (defvar +test-pdf--scripts nil "(XWIDGET SCRIPT CALLBACK) run, oldest first.")
 (defvar +test-pdf--log nil "(FUNCTION ARGS...) of the other WebKit calls, oldest first.")
-(defvar +test-pdf--opened nil "The arguments `call-process' got for \"open\", latest first.")
 (defvar +test-pdf--processes nil "The arguments `make-process' got for printing, latest first.")
 
 (defun +test-pdf--log (&rest call)
@@ -42,9 +41,8 @@ osascript recorded (not run)."
   `(let ((+test-pdf--made nil)
          (+test-pdf--scripts nil)
          (+test-pdf--log nil)
-         (+test-pdf--opened nil)
+         (+test-os-runs nil)
          (+test-pdf--processes nil)
-         (call-process-fn (symbol-function 'call-process))
          (make-process-fn (symbol-function 'make-process)))
      (cl-letf (((symbol-function 'make-xwidget)
                 (lambda (_type _title _width _height &optional _arguments buffer _related)
@@ -81,14 +79,9 @@ osascript recorded (not run)."
                ;; No download, no Preview, no osascript.
                ((symbol-function 'url-copy-file)
                 (lambda (url &rest _) (signal 'file-error (list "A test can't download" url))))
-               ((symbol-function 'call-process)
-                (lambda (program &rest args)
-                  (if (equal program "open")
-                      (progn (push args +test-pdf--opened) 0)
-                    (apply call-process-fn program args))))
                ((symbol-function 'make-process)
                 (lambda (&rest args)
-                  (if (equal (plist-get args :name) "pdf-print")
+                  (if (equal (plist-get args :name) "os-print")
                       (progn (push args +test-pdf--processes) 'fake-process)
                     (apply make-process-fn args)))))
        ,@body)))
@@ -225,9 +218,13 @@ redisplay would; return WINDOW."
   (mapcar #'cadr +test-pdf--scripts))
 
 (defun +test-pdf--options ()
-  "The settings a page of the current buffer would start with, parsed."
-  (json-parse-string (+my/pdf--options) :object-type 'plist
-                     :false-object nil :null-object nil))
+  "The settings a page of the current buffer would start with, parsed (but
+the toolbar's labels: see pdf/options-labels-per-system)."
+  (let ((options (json-parse-string (+my/pdf--options) :object-type 'plist
+                                    :false-object nil :null-object nil)))
+    (should (plist-get options :labels))
+    (cl-loop for (key value) on options by #'cddr
+             unless (eq key :labels) append (list key value))))
 
 (defun +test-pdf--page-html (buffer)
   (+test-pdf--text (expand-file-name "index.html" (buffer-local-value '+my/pdf--dir buffer))))
@@ -611,7 +608,7 @@ latest looked at; the same page, its data not written again."
           (should (equal (directory-files +my/pdf--dir nil "\\`[^.]") '("data-1.js" "index.html"))))
         (let ((html (+test-pdf--page-html buffer)))
           (should (string-search "pdfx.open(\"data-1.js\")" html))
-          (should (string-search "window.PDFX_OPTIONS = {\"dark\":true,\"toolbar\":false,\"sidebar\":true,\"view\":\"thumbnails\",\"place\":{\"page\":5,\"top\":0.25,\"zoom\":\"page-width\"},\"zoomStep\":1.25};" html)))))))
+          (should (string-search "window.PDFX_OPTIONS = {\"dark\":true,\"toolbar\":false,\"sidebar\":true,\"view\":\"thumbnails\",\"place\":{\"page\":5,\"top\":0.25,\"zoom\":\"page-width\"},\"zoomStep\":1.25,\"labels\":" html)))))))
 
 (ert-deftest pdf/new-view-in-webkits-own-viewer ()
   (+test-pdf
@@ -642,6 +639,16 @@ latest looked at; the same page, its data not written again."
         (select-window w2)
         (set-buffer buffer)
         (should (equal (+my/pdf--state) '(:dark nil :page 8)))))))
+
+(ert-deftest pdf/options-labels-per-system ()
+  "The toolbar's words: Cmd and Preview on macOS, Ctrl and the default app on
+Linux."
+  (+test-on-macos
+    (should (equal (json-parse-string (+my/pdf--labels) :object-type 'plist)
+                   '(:mod "Cmd" :viewer "Preview"))))
+  (+test-on-linux
+    (should (equal (json-parse-string (+my/pdf--labels) :object-type 'plist)
+                   '(:mod "Ctrl" :viewer "the default app")))))
 
 (ert-deftest pdf/options-of-the-first-pdf-from-the-variables ()
   (+test-pdf
@@ -877,26 +884,28 @@ latest looked at; the same page, its data not written again."
           (should (= redraws 3)))))))
 
 (ert-deftest pdf/toolbar-requests-answered-once ()
+  (+test-on-macos
   (+test-pdf
     (let* ((file (+test-pdf--pdf "requests.pdf"))
            (buffer (+test-pdf--open file))
            (xw (+test-pdf--xw buffer)))
       (with-current-buffer buffer
         (+my/pdf--answer xw '(:action (:name "preview" :n 0)))
-        (should-not +test-pdf--opened)
+        (should-not +test-os-runs)
         (+my/pdf--answer xw '(:action (:name "preview" :n 1)))
         (+my/pdf--answer xw '(:action (:name "preview" :n 1)))
-        (should (= (length +test-pdf--opened) 1))
+        (should (= (length +test-os-runs) 1))
         (+my/pdf--answer xw '(:action (:name "print" :n 2)))
         (+my/pdf--answer xw '(:action (:name "print" :n 2)))
         (should (= (length +test-pdf--processes) 1))
         (+my/pdf--answer xw '(:action (:name "unknown" :n 3)))
         (+my/pdf--answer xw '(:page 1))             ; no request
-        (should (= (length +test-pdf--opened) 1))
+        (should (= (length +test-os-runs) 1))
         (should (= (length +test-pdf--processes) 1))
-        (should (eql (xwidget-get xw 'answered) 0))))))
+        (should (eql (xwidget-get xw 'answered) 0)))))))
 
 (ert-deftest pdf/toolbar-requests-through-the-title ()
+  (+test-on-macos
   (+test-pdf
     (let* ((buffer (+test-pdf--open (+test-pdf--pdf "title requests.pdf")))
            (xw (+test-pdf--xw buffer)))
@@ -904,8 +913,8 @@ latest looked at; the same page, its data not written again."
       (with-current-buffer "*scratch*"
         (+my/webkit--watch)
         (+my/webkit--watch))
-      (should (equal +test-pdf--opened
-                     (list (list nil 0 nil "-a" "Preview" (buffer-file-name buffer))))))))
+      (should (equal +test-os-runs
+                     (list (list "open" "-a" "Preview" (buffer-file-name buffer)))))))))
 
 (ert-deftest pdf/pointer-the-page-wants ()
   (+test-pdf
@@ -1177,18 +1186,20 @@ place), the page written for views to come."
 ;; PREVIEW AND PRINT
 
 (ert-deftest pdf/open-in-preview ()
+  (+test-on-macos
   (+test-pdf
     (let* ((file (+test-pdf--pdf "preview it's ü #1.pdf"))
            (buffer (+test-pdf--open file)))
       (with-current-buffer buffer
         (call-interactively #'+my/pdf-open-in-preview))
       ;; Not waited for (BUFFER 0); the file as one argument.
-      (should (equal +test-pdf--opened (list (list nil 0 nil "-a" "Preview" file))))
+      (should (equal +test-os-runs (list (list "open" "-a" "Preview" file))))
       (with-temp-buffer
         (should-error (+my/pdf-open-in-preview) :type 'user-error))
-      (should (= (length +test-pdf--opened) 1)))))
+      (should (= (length +test-os-runs) 1))))))
 
 (ert-deftest pdf/print-through-previews-dialog ()
+  (+test-on-macos
   (+test-pdf
     (let* ((file (+test-pdf--pdf "print \"me\".pdf"))
            (buffer (+test-pdf--open file)))
@@ -1196,7 +1207,7 @@ place), the page written for views to come."
         (call-interactively #'+my/pdf-print))
       (let ((process (car +test-pdf--processes)))
         (should (= (length +test-pdf--processes) 1))
-        (should (equal (plist-get process :name) "pdf-print"))
+        (should (equal (plist-get process :name) "os-print"))
         (should (eq (plist-get process :noquery) t))
         (let ((command (plist-get process :command)))
           (should (equal (car command) "osascript"))
@@ -1219,7 +1230,7 @@ place), the page written for views to come."
             (should (= (+test-messages "^Couldn.t print through Preview: SPC m p opens it there, then Cmd\\+P$") 1)))))
       (with-temp-buffer
         (should-error (+my/pdf-print) :type 'user-error))
-      (should (= (length +test-pdf--processes) 1)))))
+      (should (= (length +test-pdf--processes) 1))))))
 
 ;; ====== OPTION+ENTER ======
 
@@ -1313,6 +1324,7 @@ place), the page written for views to come."
     (+my/pdf--actions-menu buffer text)))
 
 (ert-deftest pdf/actions-do-what-they-say ()
+  (+test-on-macos
   (+test-pdf
     (let* ((root (file-truename (file-name-as-directory (+test-tmp-file "pdfs/project/"))))
            (file (+test-pdf--pdf "project/docs/paper.pdf"))
@@ -1350,9 +1362,9 @@ place), the page written for views to come."
           (should (equal inserted (list (list :text "From docs/paper.pdf, page 3:\n\n> two words & ü"
                                               :shell-buffer 'the-shell))))
           (+test-pdf--choose buffer text "Open in Preview")
-          (should (equal +test-pdf--opened (list (list nil 0 nil "-a" "Preview" file))))
+          (should (equal +test-os-runs (list (list "open" "-a" "Preview" file))))
           (+test-pdf--choose buffer nil "Print...")
-          (should (= (length +test-pdf--processes) 1)))))))
+          (should (= (length +test-pdf--processes) 1))))))))
 
 (ert-deftest pdf/claude-context ()
   (+test-pdf

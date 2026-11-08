@@ -50,7 +50,8 @@
       (gcmh-mode -1))))
 
 (ert-deftest emacs/config-el-loads-it-first ()
-  "First of the config files, so it holds from the start."
+  "First of the config files, so it holds from the start: after config/os.el
+only, which defines functions the others use (nothing runs)."
   (let* ((forms (+test-emacs--config-forms))
          (loads (seq-filter (lambda (form) (eq (car-safe form) 'load!)) forms)))
-    (should (equal (car loads) '(load! "config/emacs")))))
+    (should (equal (seq-take loads 2) '((load! "config/os") (load! "config/emacs"))))))

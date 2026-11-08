@@ -30,6 +30,11 @@
 ;; that text.
 (map! "s-F" #'+default/search-project)
 
+;; On Linux Ctrl+Shift+F, as Linux's IDEs (in normal state Doom had it toggle
+;; full screen: F11 still does).
+(map! :unless (+my/macos-p)
+      :gn "C-S-f" #'+default/search-project)
+
 ;; ====== CODE ======
 
 ;; In config/search/, in this order: each part can use what the ones before it

@@ -219,10 +219,26 @@ mode.")
       :gn "s-8" #'+my/tabs-select-8
       :gn "s-9" #'+my/tabs-select-9)
 
+;; On Linux also Ctrl+1..9 (config/os.el, KEYS), as Linux's browsers (Alt+1..9
+;; stay Doom's workspaces).
+(map! :unless (+my/macos-p)
+      :gn "C-1" #'+my/tabs-select-1
+      :gn "C-2" #'+my/tabs-select-2
+      :gn "C-3" #'+my/tabs-select-3
+      :gn "C-4" #'+my/tabs-select-4
+      :gn "C-5" #'+my/tabs-select-5
+      :gn "C-6" #'+my/tabs-select-6
+      :gn "C-7" #'+my/tabs-select-7
+      :gn "C-8" #'+my/tabs-select-8
+      :gn "C-9" #'+my/tabs-select-9)
+
 ;; Cmd+W closes the current tab, like its ✕ (Doom's closed the window, or the
 ;; workspace with its last window); where there are no tabs (popups, side
 ;; panels), the window, as before.
 (map! "s-w" #'+my/tabs-close-current)
+
+;; On Linux also Ctrl+Shift+W (Ctrl+W is Vim's windows), as Linux's terminals.
+(map! :unless (+my/macos-p) "C-S-w" #'+my/tabs-close-current)
 
 ;; The tab menu (right click, see above).
 (after! tab-line
@@ -240,12 +256,21 @@ mode.")
 ;; declaration itself, list its usages (Enter opens one). Cmd+[ goes back.
 (map! "s-b" #'+my/goto-declaration-or-usages)
 
+;; On Linux Ctrl+Shift+B (Ctrl+B is Vim's page up).
+(map! :unless (+my/macos-p) "C-S-b" #'+my/goto-declaration-or-usages)
+
 ;; BACK / FORWARD
 ;; Cmd+[ / Cmd+]: back / forward through the places the cursor jumped from and
 ;; to (better-jumper).
 (map! "s-[" #'better-jumper-jump-backward)
 
 (map! "s-]" #'better-jumper-jump-forward)
+
+;; On Linux Alt+← / Alt+→, as browsers (C-o / C-i too, Vim's); in insert
+;; state they still move by words.
+(map! :unless (+my/macos-p)
+      :nvm "M-<left>"  #'better-jumper-jump-backward
+      :nvm "M-<right>" #'better-jumper-jump-forward)
 
 ;; PREVIOUS / NEXT BUFFER
 ;; M-[ / M-], GUI only: in a terminal, M-[ / M-] are ESC [ / ESC ], the

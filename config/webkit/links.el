@@ -34,9 +34,11 @@ WebKit may encode it otherwise)."
   "WebKit's events: the page has loaded (see NO WHITE FLASH in views.el,
 `+my/webkit-load-functions'), links out of it (see above); others as usual
 (not `xwidget-webkit-callback' for loads: it renames the buffer after the
-page)."
-  (let ((buffer (xwidget-buffer xwidget)))
-    (cond ((eq event-type 'javascript-callback)
+page). Nothing for a killed view (an answer after its 5 s, see JAVASCRIPT in
+js.el): Linux's Emacs can't read a killed view."
+  (let ((buffer (and (xwidget-live-p xwidget) (xwidget-buffer xwidget))))
+    (cond ((not (xwidget-live-p xwidget)))
+          ((eq event-type 'javascript-callback)
            (+my/webkit--answered xwidget (nth 3 last-input-event) (nth 4 last-input-event)))
           ((not (eq event-type 'load-changed))
            (xwidget-webkit-callback xwidget event-type))

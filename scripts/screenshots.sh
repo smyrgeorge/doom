@@ -24,7 +24,10 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-EMACS_GUI=${EMACS_GUI:-/Applications/Emacs.app/Contents/MacOS/Emacs}
+if [ -z "${EMACS_GUI:-}" ]; then
+  EMACS_GUI=/Applications/Emacs.app/Contents/MacOS/Emacs
+  [ -x "$EMACS_GUI" ] || EMACS_GUI=emacs
+fi
 SCREENSHOT_DIR=${SCREENSHOT_DIR:-$ROOT/examples}
 
 case "${1:-}" in
@@ -48,7 +51,9 @@ for name in "${names[@]}"; do
   fi
 done
 
-tmp=$(mktemp -d -t doom-screenshots)
+# A template with X's: GNU's and BSD's mktemp both take it.
+tmp_root=${TMPDIR:-/tmp}
+tmp=$(mktemp -d "${tmp_root%/}/doom-screenshots.XXXXXXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
 SCREENSHOT_EXAMPLES="${names[*]}" SCREENSHOT_DIR="$SCREENSHOT_DIR" TEST_TMP="$tmp" \

@@ -4,12 +4,12 @@
 
 Each window has its own tabs: the files shown in it. A file closes once no window has it as a tab.
 
-| Key | Action |
-|---|---|
-| `gt` / `gT` | Next / previous tab |
-| `Cmd+1`..`Cmd+8`, `Cmd+9` | Tab 1 to 8, the last tab |
-| `Cmd+W`, middle click | Close the tab, and the window with its last tab |
-| Right click | Close the others, split vertically / horizontally |
+| macOS | Linux | Action |
+|---|---|---|
+| `gt` / `gT` | `gt` / `gT` | Next / previous tab |
+| `Cmd+1`..`Cmd+8`, `Cmd+9` | `Ctrl+1`..`Ctrl+8`, `Ctrl+9` | Tab 1 to 8, the last tab |
+| `Cmd+W`, middle click | `Ctrl+Shift+W`, middle click | Close the tab, and the window with its last tab |
+| Right click | Right click | Close the others, split vertically / horizontally |
 
 ## Tiling
 
@@ -55,12 +55,12 @@ Markdown, the headings.
 
 ## Code
 
-| Key | Action |
-|---|---|
-| `Cmd+B` | Go to the declaration; on the declaration, list the usages |
-| `Cmd+[` / `Cmd+]` | Back / forward |
-| `Option+Enter` | Spelling fixes, code actions and [Claude](claude-code.md), in one menu |
-| `SPC c ~` | Cycle the word through snake_case, UPPER_CASE, PascalCase, camelCase and kebab-case |
+| macOS | Linux | Action |
+|---|---|---|
+| `Cmd+B` | `Ctrl+Shift+B` | Go to the declaration; on the declaration, list the usages |
+| `Cmd+[` / `Cmd+]` | `Alt+←` / `Alt+→` | Back / forward (`C-o` / `C-i` on both) |
+| `Option+Enter` | `Alt+Enter` | Spelling fixes, code actions and [Claude](claude-code.md), in one menu |
+| `SPC c ~` | `SPC c ~` | Cycle the word through snake_case, UPPER_CASE, PascalCase, camelCase and kebab-case |
 
 Spelling knows ~40k programming words and checks camelCase words part by part.
 

@@ -238,13 +238,18 @@ hook, then the view started after it. Return WINDOW."
     (should (local-variable-if-set-p var))))
 
 (ert-deftest webkit/p-needs-the-gui-and-xwidgets ()
+  "WebKit needs a GUI frame and an Emacs built with xwidgets (most Linux
+distributions' isn't); faked here either way, as this Emacs may have them or
+not."
   (should-not (+my/webkit-p))                       ; batch: no GUI
-  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _) t)))
-    (should (+my/webkit-p))
-    (cl-letf* ((featurep (symbol-function 'featurep))
+  (let ((xwidgets t))
+    (cl-letf* ((featurep-fn (symbol-function 'featurep))
                ((symbol-function 'featurep)
                 (lambda (feature &rest args)
-                  (and (not (eq feature 'xwidget-internal)) (apply featurep feature args)))))
+                  (if (eq feature 'xwidget-internal) xwidgets (apply featurep-fn feature args))))
+               ((symbol-function 'display-graphic-p) (lambda (&optional _) t)))
+      (should (+my/webkit-p))
+      (setq xwidgets nil)
       (should-not (+my/webkit-p)))))
 
 ;; ====== URLS ======
@@ -1273,6 +1278,68 @@ view that answered; one fewer awaited (never below none)."
       (should (= (+test-webkit--fire #'+my/webkit--kill-now) 2))
       (should (+test-webkit--xw-killed xw))
       (should (= (length (+test-webkit--calls 'kill-xwidget)) 1)))))
+
+(defmacro +test-webkit-as-on-linux (&rest body)
+  "BODY with killed xwidgets as Emacs on Linux has them (WebKitGTK): not
+`xwidget-live-p', their properties and buffer an error to read."
+  (declare (indent 0))
+  `(let ((get-fn (symbol-function 'xwidget-get))
+         (put-fn (symbol-function 'xwidget-put))
+         (buffer-fn (symbol-function 'xwidget-buffer)))
+     (cl-letf (((symbol-function 'xwidget-live-p)
+                (lambda (xw) (and (+test-webkit--xw-p xw) (not (+test-webkit--xw-killed xw)))))
+               ((symbol-function 'xwidget-get)
+                (lambda (xw property)
+                  (when (+test-webkit--xw-killed xw) (signal 'wrong-type-argument (list 'xwidget-live-p xw)))
+                  (funcall get-fn xw property)))
+               ((symbol-function 'xwidget-put)
+                (lambda (xw property value)
+                  (when (+test-webkit--xw-killed xw) (signal 'wrong-type-argument (list 'xwidget-live-p xw)))
+                  (funcall put-fn xw property value)))
+               ((symbol-function 'xwidget-buffer)
+                (lambda (xw)
+                  (when (+test-webkit--xw-killed xw) (signal 'wrong-type-argument (list 'xwidget-live-p xw)))
+                  (funcall buffer-fn xw))))
+       ,@body)))
+
+(ert-deftest webkit/a-killed-view-left-alone-on-linux ()
+  "Linux's Emacs can't read a killed view: the answer killing it, then the
+5 s timer; or the timer, then the answer (late): no error, killed once, the
+answer going nowhere."
+  (+test-webkit
+    (+test-webkit-as-on-linux
+      ;; The answer first.
+      (let* ((page (+test-webkit--page))
+             (xw (+test-webkit--xw page (+test-webkit--show page)))
+             (+test-webkit--answers nil))
+        (with-current-buffer page
+          (+my/webkit-ask "slow()" '+test-webkit--answer-function))
+        (kill-buffer page)
+        (+test-webkit--answer xw "done")
+        (+test-webkit--fire #'+my/webkit--kill-now)
+        (should (+test-webkit--xw-killed xw))
+        (should (= (length (+test-webkit--calls 'kill-xwidget)) 1))
+        (+test-webkit--answer xw "later still")
+        (+test-webkit--callback-load xw)
+        (should-not +test-webkit--answers))
+      ;; The timer first.
+      (let* ((page (+test-webkit--page "second"))
+             (xw (+test-webkit--xw page (+test-webkit--show page)))
+             (+test-webkit--answers nil))
+        (with-current-buffer page
+          (+my/webkit-ask "throw 1" '+test-webkit--answer-function))
+        (kill-buffer page)
+        (+test-webkit--fire #'+my/webkit--kill-now)
+        (should (+test-webkit--xw-killed xw))
+        (+test-webkit--answer xw "late")
+        (+my/webkit--kill-now xw)
+        (should-not +test-webkit--answers)
+        (should (= (length (+test-webkit--calls 'kill-xwidget)) 2))))))
+
+(defun +test-webkit--callback-load (xw)
+  "WebKit says XW's page loaded (an event for a view maybe killed)."
+  (let ((last-input-event (list 'xwidget-event 'load-changed xw "load-finished")))
+    (+my/webkit--callback xw 'load-changed)))
 
 (ert-deftest webkit/view-closed-answer-never-comes ()
   "WebKit doesn't answer a script that failed: the view is killed 5 s later."

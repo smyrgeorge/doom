@@ -45,6 +45,30 @@
   (expand-file-name "alerts.lua" (file-name-directory (or load-file-name buffer-file-name)))
   "The pandoc filter that gives GitHub's alerts (> [!NOTE]...) GitHub's look.")
 
+(defvar +md-preview--pandoc-args nil
+  "The pandoc arguments that differ by its version, once known (see
+`+md-preview--version-args').")
+
+(defun +md-preview--pandoc-version ()
+  "The installed pandoc's version (\"3.13\"), or nil."
+  (with-temp-buffer
+    (and (eql 0 (ignore-errors (call-process "pandoc" nil t nil "--version")))
+         (progn (goto-char (point-min))
+                (and (re-search-forward "\\`pandoc[^ \n]* \\([0-9.]+\\)" nil t)
+                     (match-string 1))))))
+
+(defun +md-preview--version-args ()
+  "Pandoc's arguments for no highlighting of its own and math as MathML:
+since pandoc 3.8, --syntax-highlighting=none (MathML is its default there,
+--no-highlight and --mathml only warn); before (Debian's and Ubuntu's
+pandoc, where the new one is an error), --no-highlight and --mathml."
+  (or +md-preview--pandoc-args
+      (setq +md-preview--pandoc-args
+            (let ((version (+md-preview--pandoc-version)))
+              (if (and version (version<= "3.8" version))
+                  '("--syntax-highlighting=none")
+                '("--no-highlight" "--mathml"))))))
+
 (defun +md-preview--fragment ()
   "Render the current buffer to an HTML fragment with pandoc (source lines kept).
 Math becomes MathML (rendered natively by WebKit); code is left for highlight.js;
@@ -52,10 +76,10 @@ GitHub's alerts get GitHub's markup (`+md-preview--alerts-filter')."
   (let ((src (current-buffer)))
     (with-temp-buffer
       (insert-buffer-substring src)
-      (call-process-region (point-min) (point-max) "pandoc" t '(t nil) nil
-                           "-f" "gfm+sourcepos" "-t" "html5"
-                           "--syntax-highlighting=none"
-                           "-L" +md-preview--alerts-filter)
+      (apply #'call-process-region (point-min) (point-max) "pandoc" t '(t nil) nil
+             "-f" "gfm+sourcepos" "-t" "html5"
+             (append (+md-preview--version-args)
+                     (list "-L" +md-preview--alerts-filter)))
       (buffer-string))))
 
 (defun +md-preview--page (fragment)

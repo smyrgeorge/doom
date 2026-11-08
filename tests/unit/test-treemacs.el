@@ -304,23 +304,38 @@ With\"."
     (should (eq (+my/treemacs--menu-with-reveal items) items))))
 
 (ert-deftest treemacs/reveal-in-finder ()
-  "Finder opened on the node's folder, the node selected (Linux: its folder
-in the file manager); not on a line without a path."
+  "The node shown in the file manager (config/os.el's `+my/os-reveal'); not
+on a line without a path."
   (+test-treemacs
     (let ((root (+test-treemacs--project "reveal" "README.md"))
-          calls)
+          revealed)
       (with-current-buffer (+test-treemacs--show-project root)
         (goto-char (point-min))
         (should (re-search-forward "README\\.md" nil t))
-        (cl-letf (((symbol-function 'call-process)
-                   (lambda (&rest args) (push args calls) 0)))
-          (+my/treemacs-reveal-in-finder))
-        (should (equal (car calls)
-                       (if (eq system-type 'darwin)
-                           (list "open" nil 0 nil "-R" (expand-file-name "README.md" root))
-                         (list "xdg-open" nil 0 nil root))))
-        (cl-letf (((symbol-function 'treemacs--prop-at-point) #'ignore))
-          (should-error (+my/treemacs-reveal-in-finder) :type 'user-error))))))
+        (cl-letf (((symbol-function '+my/os-reveal) (lambda (file) (push file revealed))))
+          (+my/treemacs-reveal-in-finder)
+          (should (equal revealed (list (expand-file-name "README.md" root))))
+          (cl-letf (((symbol-function 'treemacs--prop-at-point) #'ignore))
+            (should-error (+my/treemacs-reveal-in-finder) :type 'user-error)))))))
+
+(ert-deftest treemacs/reveal-label-per-system ()
+  (+test-on-macos (should (equal (+my/treemacs--reveal-label) "Reveal in Finder")))
+  (+test-on-linux (should (equal (+my/treemacs--reveal-label) "Show in File Manager"))))
+
+(ert-deftest treemacs/copy-key-per-system ()
+  "Cmd+C everywhere; Ctrl+Shift+C on Linux only (config/os.el, KEYS)."
+  (unwind-protect
+      (progn
+        (define-key treemacs-mode-map (kbd "C-S-c") nil)
+        (+test-on-macos (+test-treemacs--reload))
+        (should (eq (lookup-key treemacs-mode-map (kbd "s-c")) #'treemacs-copy-absolute-path-at-point))
+        (should-not (lookup-key treemacs-mode-map (kbd "C-S-c")))
+        (+test-on-linux (+test-treemacs--reload))
+        (should (eq (lookup-key treemacs-mode-map (kbd "s-c")) #'treemacs-copy-absolute-path-at-point))
+        (should (eq (lookup-key treemacs-mode-map (kbd "C-S-c")) #'treemacs-copy-absolute-path-at-point)))
+    (define-key treemacs-mode-map (kbd "C-S-c") nil)
+    (+test-treemacs--reload)
+    (when (timerp +my/treemacs--git-poll-timer) (cancel-timer +my/treemacs--git-poll-timer))))
 
 ;; ====== HOOKS, ADVICE, TIMERS ======
 

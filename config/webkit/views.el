@@ -61,8 +61,10 @@ JAVASCRIPT): (XWIDGET . TIME)...")
 
 (defun +my/webkit--kill-now (xwidget)
   "Kill XWIDGET's view (once), kept referenced for 10 s after (see
-JAVASCRIPT)."
-  (unless (xwidget-get xwidget '+my/webkit-killed)
+JAVASCRIPT). Already killed: nothing (Linux's Emacs can't read a killed
+view's properties: an error)."
+  (when (and (xwidget-live-p xwidget)
+             (not (xwidget-get xwidget '+my/webkit-killed)))
     (xwidget-put xwidget '+my/webkit-killed t)
     (let ((now (float-time)))
       (setq +my/webkit--killed

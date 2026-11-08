@@ -18,6 +18,7 @@
 | `config/magit.el` | [Magit](git.md#magit) |
 | `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
 | `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |
+| `config/os.el` | What differs between macOS and Linux: [the keys](keybindings.md), other apps, the clipboard's images |
 | `config/pdf.el`, `pdf/` | [PDFs](pdf.md) |
 | `config/profiling.el`, `profiling/` | [Profiling](claude-code.md#profiling-emacs) |
 | `config/projectile.el` | [Projects](search.md#projects) |
@@ -31,8 +32,8 @@
 | `skills/` | [Agent skills](ai-agents.md): `emacs-profiling` reads a profile |
 | `cmd/` | [Shell commands](cmd.md) |
 | `dict/tech.txt` | Programming words for spelling, built by `scripts/dict.sh` |
-| `scripts/` | Installers (`emacs.sh`, `tools.sh`, `lsp.sh`), `dict.sh`, `screenshots.sh` |
-| `tests/` | [Tests](tests.md) |
+| `scripts/` | Installers (`emacs.sh`, `tools.sh`, `lsp.sh`; `os.sh`: Homebrew, apt or dnf), `dict.sh`, `screenshots.sh` |
+| `tests/` | [Tests](tests.md); `tests/linux/`: the same on Linux, in Docker |
 
 A large feature is a file and a folder: `config/NAME.el` holds its settings and keys, and loads its code from
 `config/NAME/`.

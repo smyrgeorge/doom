@@ -35,7 +35,10 @@ header line that much taller, its text in the bottom row."
                            " 1 1\", \". c None\","
                            (mapconcat (lambda (_) "\".\"") (number-sequence 1 height) ",")
                            "};")
-                   'xpm t :ascent 100))
+                   ;; Its pixels as they are: no scaling up on a HiDPI X11
+                   ;; screen (`image-scaling-factor'), where the header line
+                   ;; grew twice as tall.
+                   'xpm t :ascent 100 :scale 1))
                  +my/banner--spacers))))
 
 (defun +my/banner--header-line ()

@@ -259,7 +259,11 @@ given its own colour back."
          (socket (format "doom-test-tty-%d-%d" (emacs-pid) (random 100000)))
          (setup "(progn (run-at-time 60 nil #'kill-emacs 3) (require 'doom-themes) (+test-load \"config/terminal\") (load-theme 'doom-one t) (run-hooks 'doom-load-theme-hook))")
          (emacs (expand-file-name invocation-name invocation-directory))
-         (process-environment (append (list "TERM=xterm-256color" (concat "TEST_TMP=" (file-name-as-directory home)))
+         ;; COLORTERM the server's own: Emacs reads it from its environment
+         ;; for a client's terminal too (24-bit colour, the theme's #RRGGBB;
+         ;; without, it was the shell's that ran the tests).
+         (process-environment (append (list "TERM=xterm-256color" "COLORTERM=truecolor"
+                                            (concat "TEST_TMP=" (file-name-as-directory home)))
                                       process-environment)))
     (call-process emacs nil nil nil (concat "--daemon=" socket) "-Q" (concat "--init-directory=" home)
                   "-l" (expand-file-name "helper.el" +test-dir) "--eval" setup)

@@ -70,6 +70,14 @@ project root, a name."
   (with-selected-window window
     (mapcar #'buffer-name (+my/tabs-window-buffers))))
 
+(defun +test-tiling--needs-ghostel ()
+  "Skip unless ghostel's native module is built for this system (a .so on
+Linux, a .dylib on macOS): without, the terminal asks how to get one."
+  (let ((dir (file-name-directory (or (locate-library "ghostel") ""))))
+    (unless (and dir (file-exists-p (expand-file-name (concat "ghostel-module" module-file-suffix) dir)))
+      (ert-skip (format "No ghostel module (ghostel-module%s): M-x ghostel-module-compile"
+                        module-file-suffix)))))
+
 (defmacro +test-tiling (&rest body)
   "BODY from one pane showing a file, a.txt, selected, as commands run (new
 windows take focus); the buffers it made killed after."
@@ -90,6 +98,7 @@ windows take focus); the buffers it made killed after."
 (ert-deftest e2e-tiling/terminal-in-a-pane-as-wide-as-the-strategy-makes-it ()
   "SPC o t: the terminal in a new pane on the right, half the width, not
 Doom's popup (40 columns); again, its pane closes."
+  (+test-tiling--needs-ghostel)
   (+test-tiling
     (+test-tiling--doom-projects
     (let ((main (selected-window)))
@@ -112,6 +121,7 @@ Doom's popup (40 columns); again, its pane closes."
 
 (ert-deftest e2e-tiling/terminal-killed-its-pane-closes ()
   "The terminal's buffer killed (its shell ended): its pane closes."
+  (+test-tiling--needs-ghostel)
   (+test-tiling
     (+test-tiling--doom-projects
       (call-interactively #'+ghostel/toggle)
@@ -202,6 +212,7 @@ already), the cursor staying in the file; off, its pane closes."
   "The preview's pane closed by its tab's ✕ (the pane goes with its last tab,
 the preview stays on): the notice's Open preview shows it again, in a new
 pane, the notice still there."
+  (+test-needs-webkit)
   (+test-tiling
     (let* ((left (selected-window))
            (readme (+test-tiling--file "README.md" "# Title\n\nText.\n"))
@@ -235,6 +246,7 @@ pane, the notice still there."
 (ert-deftest e2e-tiling/drawings-in-a-new-pane ()
   "Option+Enter's new drawing, from Markdown: in a new pane, taking focus; its
 link where it was."
+  (+test-needs-webkit)
   (unless +test-tiling--excalidraw
     (ert-skip "No Excalidraw in Doom's data folder"))
   (+test-tiling
@@ -255,6 +267,7 @@ link where it was."
 (ert-deftest e2e-tiling/drawing-for-claude-in-a-new-pane ()
   "C-c C-d in Claude Code's pane: the drawing in a new pane (not its left);
 discarded, the pane closes."
+  (+test-needs-webkit)
   (unless +test-tiling--excalidraw
     (ert-skip "No Excalidraw in Doom's data folder"))
   (+test-tiling

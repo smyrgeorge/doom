@@ -1,6 +1,7 @@
 ;;; tests/e2e/test-image.el -*- lexical-binding: t; -*-
 ;; config/image.el in a GUI Emacs: real images in image-mode with the toolbar.
-;; Zoom, fit, actual size, sharp pixels, rotating and flipping (sips, saved),
+;; Zoom, fit, actual size, sharp pixels, rotating and flipping (sips on macOS,
+;; ImageMagick on Linux; saved),
 ;; the folder's images, the toolbar's text and its narrow form, copying (the
 ;; clipboard not touched), git's HEAD beside the image, a file changed on disk.
 
@@ -46,15 +47,17 @@
 (defun +test-image--toolbar ()
   (substring-no-properties (format-mode-line header-line-format nil (selected-window))))
 
-;; Nothing goes outside Emacs: the clipboard (osascript) and Preview, Finder
-;; (open) are recorded instead.
+;; Nothing goes outside Emacs: the clipboard (osascript on macOS; xclip,
+;; wl-copy on Linux) is recorded instead; other apps (Preview, Finder, the
+;; file manager) are, by tests/helper.el (`+test-os-runs').
 (defvar +test-image--outside nil
-  "(PROGRAM ARGS...) that would have run outside Emacs, the latest first.")
+  "(PROGRAM INFILE ARGS...) that would have run outside Emacs, the latest
+first.")
 
 (advice-add 'call-process :around
             (lambda (fn program &rest args)
-              (if (member program '("osascript" "open"))
-                  (progn (push (cons program (nthcdr 3 args)) +test-image--outside) 0)
+              (if (member program '("osascript" "xclip" "wl-copy"))
+                  (progn (push (append (list program (car args)) (nthcdr 3 args)) +test-image--outside) 0)
                 (apply fn program args)))
             '((name . +test-image-no-outside)))
 
@@ -72,7 +75,8 @@
         (should (string-match-p "1/2" toolbar))
         (should (string-match-p "100%" toolbar)) ; smaller than the window: as is
         (should (string-match-p "40×20 · PNG · " toolbar))
-        (dolist (label '("Fit" "1:1" "Crop" "Sharp" "Copy" "Diff" "Preview"))
+        (dolist (label (list "Fit" "1:1" "Crop" "Sharp" "Copy" "Diff"
+                             (if (+my/macos-p) "Preview" "Open")))
           (should (string-match-p (regexp-quote label) toolbar)))
         (should-not (string-match-p "Save" toolbar))))))
 
@@ -177,22 +181,38 @@
 
 ;; ====== COPYING, OTHER APPS ======
 
+(defun +test-image--copy ()
+  "Copy the image (y): on Linux through xclip (X11), as if it were installed."
+  (let ((process-environment (cons "WAYLAND_DISPLAY" process-environment))
+        (find (symbol-function 'executable-find)))
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (name &rest args) (if (equal name "xclip") "/usr/bin/xclip" (apply find name args)))))
+      (+my/image-copy))))
+
+(defun +test-image--copied (call)
+  "The file a recorded copy CALL gave: osascript's last argument, xclip's
+input."
+  (if (equal (car call) "osascript") (car (last call)) (nth 1 call)))
+
 (ert-deftest e2e-image/copy-the-image ()
   (+test-with-reset
     (let ((file (expand-file-name "a.png" (+test-image--folder))))
       (+test-image--open file)
       (setq +test-image--outside nil)
-      (+my/image-copy)
+      (+test-image--copy)
       (let ((call (car +test-image--outside)))
-        (should (equal (car call) "osascript"))
-        (should (seq-some (lambda (arg) (string-match-p "«class PNGf»" arg)) call))
-        (should (equal (car (last call)) file)))
+        (if (+my/macos-p)
+            (progn (should (equal (car call) "osascript"))
+                   (should (seq-some (lambda (arg) (and (stringp arg) (string-match-p "«class PNGf»" arg))) call)))
+          (should (equal (car call) "xclip"))
+          (should (member "image/png" call)))
+        (should (equal (+test-image--copied call) file)))
       ;; Edited: its bytes as shown, not the file's.
       (+my/image-flip)
       (setq +test-image--outside nil)
       (cl-letf (((symbol-function 'delete-directory) #'ignore))
-        (+my/image-copy))
-      (let ((copied (car (last (car +test-image--outside)))))
+        (+test-image--copy))
+      (let ((copied (+test-image--copied (car +test-image--outside))))
         (should-not (equal copied file))
         (should (equal (+test-image--bytes copied) (buffer-string))))
       (+my/image-copy-path)
@@ -202,11 +222,14 @@
   (+test-with-reset
     (let ((file (expand-file-name "a.png" (+test-image--folder))))
       (+test-image--open file)
-      (setq +test-image--outside nil)
+      (setq +test-os-runs nil)
       (+my/image-open-in-preview)
       (+my/image-show-in-finder)
-      (should (equal (reverse +test-image--outside)
-                     `(("open" "-a" "Preview" ,file) ("open" "-R" ,file)))))))
+      (should (equal (reverse +test-os-runs)
+                     (if (+my/macos-p)
+                         `(("open" "-a" "Preview" ,file) ("open" "-R" ,file))
+                       ;; The file manager on D-Bus (none here): its folder.
+                       `(("xdg-open" ,file) ("xdg-open" ,(file-name-directory file)))))))))
 
 ;; ====== GIT'S HEAD ======
 
@@ -280,10 +303,10 @@ path."
 ;; ====== ANIMATIONS ======
 
 (ert-deftest e2e-image/an-animation-plays-and-pauses-not-edited ()
-  (skip-unless (executable-find "magick"))
+  (skip-unless (+my/os-imagemagick))
   (+test-with-reset
     (let ((file (expand-file-name "anim.gif" (+test-image--folder))))
-      (should (zerop (call-process "magick" nil nil nil "-size" "20x10"
+      (should (zerop (call-process (+my/os-imagemagick) nil nil nil "-size" "20x10"
                                    "xc:red" "xc:blue" "-loop" "0" file)))
       (+test-image--open file)
       (should image-multi-frame)
@@ -340,8 +363,10 @@ path."
       (should (or (< (car room) 2) (< (cdr room) 2))))
     ;; Bigger than the window: no room, it scrolls.
     (let ((big (expand-file-name "big.png" default-directory)))
-      (should (zerop (call-process "sips" nil nil nil "-z" "2000" "4000"
-                                   buffer-file-name "--out" big)))
+      (should (zerop (if (executable-find "sips")
+                         (call-process "sips" nil nil nil "-z" "2000" "4000" buffer-file-name "--out" big)
+                       (call-process (+my/os-imagemagick) nil nil nil buffer-file-name
+                                     "-resize" "4000x2000!" big))))
       (+test-image--open big)
       (+my/image-actual-size)
       (should (equal (+my/image-size) '(4000 . 2000)))

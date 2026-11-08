@@ -31,10 +31,11 @@ replaced by Doom's own when doom-lib.el loads)."
 (defmacro +test-tree-sitter (&rest body)
   "BODY with a fresh state: no build running, no recipes, an empty
 `temporary-file-directory' (the build's init folders), *Messages* and the
-build buffer cleared, Doom's folders in the temp folder; registered modes
-forgotten after."
+build buffer cleared, Doom's folders in the temp folder, no grammar failed
+before; registered modes forgotten after."
   (declare (indent 0))
   `(let ((+my/tree-sitter--process nil)
+         (+my/tree-sitter-failed-file (make-temp-name (+test-tmp-file "ts-failed/x-")))
          (treesit-language-source-alist nil)
          (temporary-file-directory
           (file-name-as-directory (make-temp-file (+test-tmp-file "ts-tmp/x-") t))))
@@ -455,6 +456,68 @@ folder; one failing doesn't stop the others."
         (+my/tree-sitter--done process "exited abnormally with code 1\n"))
       (should (= (+test-messages "^Tree-sitter grammars: 1 built, \\+test-ts-a, \\+test-ts-c failed (see \\*tree-sitter grammars\\*)$") 1))
       (should-not (+test-tree-sitter--build-dirs)))))
+
+(ert-deftest tree-sitter/done-remembers-what-failed ()
+  "The failed grammars remembered; built ones forgotten, others kept."
+  (+test-tree-sitter
+    (+my/tree-sitter--remember-failed '(+test-ts-x) '(+test-ts-x))
+    (let ((process (+test-tree-sitter--finished-process
+                    '(+test-ts-a +test-ts-b +test-ts-x) (make-temp-file "tree-sitter-build-" t))))
+      (cl-letf (((symbol-function 'treesit-language-available-p)
+                 (lambda (grammar &rest _) (memq grammar '(+test-ts-b +test-ts-x)))))
+        (+my/tree-sitter--done process "exited abnormally with code 1\n"))
+      (should (equal (+my/tree-sitter--failed) '(+test-ts-a)))
+      (+my/tree-sitter--remember-failed '(+test-ts-a) '(+test-ts-c))
+      (should (equal (+my/tree-sitter--failed) '(+test-ts-c))))))
+
+(ert-deftest tree-sitter/failed-file-unreadable-is-none ()
+  (+test-tree-sitter
+    (should-not (+my/tree-sitter--failed))
+    (with-temp-file +my/tree-sitter-failed-file (insert "(oops"))
+    (should-not (+my/tree-sitter--failed))
+    (with-temp-file +my/tree-sitter-failed-file (insert "(a \"b\" 3 c)"))
+    (should (equal (+my/tree-sitter--failed) '(a c)))))
+
+(ert-deftest tree-sitter/startup-skips-what-failed-before ()
+  "At startup (quiet) grammars that failed before aren't built again; M-x
+tries them all."
+  (+test-tree-sitter
+    (+test-tree-sitter--register 'some-ts-mode '+test-ts-a '+test-ts-b)
+    (setq treesit-language-source-alist '((+test-ts-a "https://a") (+test-ts-b "https://b")))
+    (+my/tree-sitter--remember-failed '(+test-ts-a) '(+test-ts-a))
+    (+test-tree-sitter-with-fake-build '()
+      (+my/tree-sitter-install-grammars 'quiet)
+      (should (equal (plist-get (car +test-tree-sitter--started) :name) "tree-sitter-grammars"))
+      (let ((form (prin1-to-string (+test-tree-sitter--command-form
+                                    (plist-get (car +test-tree-sitter--started) :command)))))
+        (should (string-search "+test-ts-b" form))
+        (should-not (string-search "+test-ts-a" form))))
+    (+test-tree-sitter-with-fake-build '()
+      (+my/tree-sitter-install-grammars)
+      (let ((form (prin1-to-string (+test-tree-sitter--command-form
+                                    (plist-get (car +test-tree-sitter--started) :command)))))
+        (should (string-search "+test-ts-a" form))))))
+
+(ert-deftest tree-sitter/no-compiler-no-build ()
+  "Without git or a C compiler (a Linux without build-essential): no build;
+at startup nothing said, by M-x what's needed."
+  (+test-tree-sitter
+    (+test-tree-sitter--register 'some-ts-mode '+test-ts-a)
+    (setq treesit-language-source-alist '((+test-ts-a "https://a")))
+    (dolist (installed '(("git") ("cc" "gcc") ()))
+      (cl-letf (((symbol-function 'executable-find) (lambda (name &rest _) (member name installed))))
+        (should-not (+my/tree-sitter--can-build-p))
+        (+test-clear-messages)
+        (+test-tree-sitter-with-fake-build '()
+          (+my/tree-sitter-install-grammars 'quiet)
+          (should-not +test-tree-sitter--started)
+          (should (= (+test-messages "Tree-sitter") 0))
+          (+my/tree-sitter-install-grammars)
+          (should-not +test-tree-sitter--started)
+          (should (= (+test-messages "^Tree-sitter grammars: building \\+test-ts-a needs git and a C compiler (cc, gcc)$") 1)))
+        (should-not (+test-tree-sitter--build-dirs))))
+    (cl-letf (((symbol-function 'executable-find) (lambda (name &rest _) (member name '("git" "gcc")))))
+      (should (+my/tree-sitter--can-build-p)))))
 
 (ert-deftest tree-sitter/done-forgets-unavailable-answers ()
   "New grammars: the remembered \"not available\" answers are forgotten."

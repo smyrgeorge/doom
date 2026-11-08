@@ -12,8 +12,10 @@
 ;; preview, following the cursor; it opens without a white flash; links to
 ;; files open them in Emacs, in the file's pane, other links in the browser, links to a
 ;; heading (#install) scroll there. In it, j / k, C-d / C-u, C-f / C-b, gg / G
-;; scroll, y or Cmd+C copies the selected text, q closes it (as SPC m p).
-;; Terminal: falls back to markdown-mode's eww preview (updates on save).
+;; scroll, y or Cmd+C (Linux: Ctrl+Shift+C) copies the selected text, q
+;; closes it (as SPC m p).
+;; Terminal, or an Emacs without xwidgets (most Linux distributions'): falls
+;; back to markdown-mode's eww preview (updates on save).
 ;; PREVIEW NOTICE
 ;; A Markdown file opens with a notice at the top (config/banner.el) offering
 ;; the live preview: its button opens it, or shows it again if its pane was
@@ -66,6 +68,11 @@
       :nm "<end>"   #'+my/webkit-bottom
       :nm "y"       #'+my/webkit-copy
       :gnm "q"      #'kill-current-buffer)
+
+;; On Linux Ctrl+Shift+C copies (config/os.el, KEYS).
+(map! :unless (+my/macos-p)
+      :map +md-preview-page-mode-map
+      :nm "C-S-c" #'+my/webkit-copy)
 
 ;; Clicks are WebKit's: Emacs only selects the window (config/webkit.el).
 (+my/webkit-bind-clicks +md-preview-page-mode-map)

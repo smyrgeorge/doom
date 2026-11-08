@@ -11,10 +11,11 @@
 ;; left to right, and their keys:
 ;;   ‹ 3/12 ›      J / K     the previous / next image in the folder (by name, as
 ;;                           people count: img2 before img10), in the same tab
-;;   − 100% +      + / -     zoom (also Cmd+= / Cmd+-, Cmd+scroll, a pinch)
+;;   − 100% +      + / -     zoom (also Cmd+= / Cmd+-, Cmd+scroll, a pinch;
+;;                           Linux: Ctrl+= / Ctrl+-, Ctrl+scroll)
 ;;   Fit           W         fit the window, scaled up too (it opens fitted if
 ;;                           bigger than the window, else at its size)
-;;   1:1           0         its actual size (Cmd+0)
+;;   1:1           0         its actual size (Cmd+0; Linux: Ctrl+0)
 ;;   ⟲ ⟳ ⇋ ⇵       R / r,    rotate anticlockwise / clockwise, flip
 ;;                 f / F     horizontally / vertically
 ;;   Crop          c         drag a rectangle, RET crops, q cancels (Emacs's
@@ -22,19 +23,21 @@
 ;;       Rotating, flipping and cropping change the image, as Preview does: the
 ;;       tab is modified, saved as any file (SPC f s, Cmd+S, the toolbar's Save)
 ;;       and undone by reverting it (SPC b r). Not SVGs (text), nor animations
-;;       (one frame would be kept). With macOS's sips.
+;;       (one frame would be kept). With macOS's sips; on Linux ImageMagick.
 ;;   ▶ / ⏸         RET       an animation (GIF, WebP...) played / paused
 ;;   Sharp         SPC m s   no smoothing: pixels stay square zoomed in, for
 ;;                           screenshots and icons
 ;;   1600×900 · PNG · 412 kB  its size in pixels, type (frames) and file size
-;;   Copy          y         the image itself to the clipboard (Cmd+C too), to
+;;   Copy          y         the image itself to the clipboard (Cmd+C too;
+;;                           Linux: Ctrl+Shift+C, with wl-copy or xclip), to
 ;;                           paste in Slack, GitHub...; SPC m y copies its path
 ;;   Diff          SPC m g   the image as it is in git's HEAD, in a pane on its
 ;;                           left, to compare (e.g. regenerated screenshots);
 ;;                           again, closed
 ;;   Save                    shown while edited (see above)
 ;;   Preview       SPC m p   open it in macOS's Preview; SPC m f shows it in
-;;                           Finder
+;;                           Finder (Linux: Open, its default app; Folder, the
+;;                           file manager)
 ;; SPC m t turns the toolbar off (all images'); q closes the image. The
 ;; toolbar and Sharp are as the last image had them, the variables below for
 ;; the first. A narrow window's toolbar leaves out the file's size first, then
@@ -86,6 +89,15 @@
       :n "RET" #'+my/image-toggle-animation
       :n "q"   #'kill-current-buffer)    ; as PDFs
 
+;; On Linux, Ctrl for Cmd (config/os.el, KEYS): zoom, copy.
+(map! :unless (+my/macos-p)
+      :map +my/image-mode-map
+      :n "C-="   #'+my/image-zoom-in
+      :n "C-+"   #'+my/image-zoom-in
+      :n "C--"   #'+my/image-zoom-out
+      :n "C-0"   #'+my/image-actual-size
+      :n "C-S-c" #'+my/image-copy)
+
 (map! :map +my/image-mode-map
       :localleader
       :desc "Toolbar"                "t" #'+my/image-toggle-toolbar
@@ -93,8 +105,8 @@
       :desc "Sharp pixels"           "s" #'+my/image-toggle-sharp
       :desc "Crop"                   "c" #'+my/image-crop
       :desc "Copy the path"          "y" #'+my/image-copy-path
-      :desc "Open in Preview"        "p" #'+my/image-open-in-preview
-      :desc "Show in Finder"         "f" #'+my/image-show-in-finder)
+      :desc (concat "Open in " (+my/os-app-name 'viewer)) "p" #'+my/image-open-in-preview
+      :desc (concat "Show in " (+my/os-app-name 'files))  "f" #'+my/image-show-in-finder)
 
 ;; ====== CODE ======
 

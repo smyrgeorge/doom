@@ -83,7 +83,7 @@
   "Pixels j / k / h / l scroll a PDF.")
 
 (defvar +my/pdf-zoom-step 1.25
-  "How much Cmd+= / Cmd+- zoom a PDF (a factor).")
+  "How much Cmd+= / Cmd+- (Linux: Ctrl+= / Ctrl+-) zoom a PDF (a factor).")
 
 (defvar +my/pdf-js-version "3.11.174"
   "The PDF.js (npm's pdfjs-dist) version that draws PDFs (see above).")
@@ -165,6 +165,19 @@
       :nm "O"       #'+my/pdf-toggle-sidebar
       :gnm "q"      #'kill-current-buffer)  ; as Doom's pdf-tools did
 
+;; On Linux, Ctrl for Cmd (config/os.el, KEYS): zoom, copy, print; Alt+← /
+;; Alt+→ back and forward, as browsers.
+(map! :unless (+my/macos-p)
+      :map +my/pdf-mode-map
+      :nm "C-="       #'+my/pdf-zoom-in
+      :nm "C-+"       #'+my/pdf-zoom-in
+      :nm "C--"       #'+my/pdf-zoom-out
+      :nm "C-0"       #'+my/pdf-actual-size
+      :nm "C-S-c"     #'+my/webkit-copy
+      :nm "C-p"       #'+my/pdf-print
+      :nm "M-<left>"  #'+my/pdf-back
+      :nm "M-<right>" #'+my/pdf-forward)
+
 ;; Clicks are WebKit's: Emacs only selects the window (config/webkit.el).
 (+my/webkit-bind-clicks +my/pdf-mode-map)
 
@@ -174,7 +187,7 @@
       :desc "Sidebar (outline, pages)" "O" #'+my/pdf-toggle-sidebar
       :desc "Dark pages"               "d" #'+my/pdf-toggle-dark
       :desc "Toolbar"                  "t" #'+my/pdf-toggle-toolbar
-      :desc "Open in Preview"          "p" #'+my/pdf-open-in-preview
+      :desc (concat "Open in " (+my/os-app-name 'viewer)) "p" #'+my/pdf-open-in-preview
       :desc "Print"                    "P" #'+my/pdf-print)
 
 ;; Evil keys (see above) in normal state.

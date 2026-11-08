@@ -58,6 +58,7 @@
 (ert-deftest e2e-examples/pdf-dark ()
   "Opened in PDF.js, three pages, dark; closed: its file gone, its place not
 kept, dark pages as they were."
+  (+test-needs-webkit)
   (skip-unless +test-examples--pdfjs)
   (+test-with-reset
     (let* ((dark +my/pdf-dark-pages)
@@ -96,6 +97,7 @@ both with the toolbar; closed: the HEAD's pane with it, the repository gone."
 (ert-deftest e2e-examples/markdown-and-its-preview ()
   "The README, its preview beside it, loaded; closed: the preview with it,
 the file gone."
+  (+test-needs-webkit)
   (skip-unless (executable-find "pandoc"))
   (+test-with-reset
     (let* ((buffer (+my/example-markdown))
@@ -112,6 +114,7 @@ the file gone."
 (ert-deftest e2e-examples/drawing-in-excalidraw ()
   "The drawing up in Excalidraw, not changed (nothing to save); closed: its
 file gone."
+  (+test-needs-webkit)
   (skip-unless +test-examples--excalidraw)
   (+test-with-reset
     (let* ((buffer (+my/example-excalidraw))

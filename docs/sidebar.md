@@ -3,15 +3,15 @@
 The treemacs sidebar opens with a workspace's first project file, follows the current file and its project, and shows
 the git status, also of changes made outside Emacs.
 
-| Key | Action |
-|---|---|
-| `←` / `→` | Collapse or go to the parent / expand or open |
-| `zR` / `zM` | Expand / collapse everything |
-| Click | Select (the sidebar gets the focus) |
-| Double click | Open a file, expand / collapse a folder |
-| `Cmd+C` | Copy the file's (or folder's) absolute path |
-| Right click → Reveal in Finder | The file or folder selected in Finder |
-| `SPC w w`, window numbers | Go to the sidebar |
+| macOS | Linux | Action |
+|---|---|---|
+| `←` / `→` | `←` / `→` | Collapse or go to the parent / expand or open |
+| `zR` / `zM` | `zR` / `zM` | Expand / collapse everything (`.git` stays closed) |
+| Click | Click | Select (the sidebar gets the focus) |
+| Double click | Double click | Open a file, expand / collapse a folder |
+| `Cmd+C` | `Ctrl+Shift+C` | Copy the file's (or folder's) absolute path (`ya` on both) |
+| Right click → Reveal in Finder | Right click → Show in File Manager | The file or folder, selected in the file manager |
+| `SPC w w`, window numbers | the same | Go to the sidebar |
 
 The arrows work in the language server's lists too (`SPC c S`, `SPC c X`, `SPC c y`), which open with the cursor in
 them.

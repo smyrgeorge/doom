@@ -125,31 +125,15 @@ the next images as this one."
   (force-mode-line-update))
 
 ;; COPYING
-(defun +my/image--to-clipboard (file class)
-  "FILE's bytes on macOS's clipboard as an image of CLASS (AppleScript's:
-PNGf, JPEG)."
-  (with-temp-buffer
-    (unless (zerop (call-process
-                    "osascript" nil t nil
-                    "-e" "on run argv"
-                    "-e" (format "set the clipboard to (read (POSIX file (item 1 of argv)) as «class %s»)"
-                                 class)
-                    "-e" "end run"
-                    file))
-      (user-error "Couldn't copy the image: %s" (string-trim (buffer-string))))))
-
 (defun +my/image--png (from to)
-  "Make PNG TO from image FROM: with macOS's sips, or ImageMagick for what
-sips can't read (SVG)."
-  (unless (or (and (zerop (call-process "sips" nil nil nil "-s" "format" "png" from "--out" to))
-                   (file-exists-p to))
-              (and (executable-find "magick")
-                   (zerop (call-process "magick" nil nil nil from (concat "png:" to)))
-                   (file-exists-p to)))
-    (user-error "Couldn't make a PNG of the image to copy")))
+  "Make PNG TO from image FROM (config/os.el: sips on macOS, ImageMagick for
+what sips can't read, SVG, and on Linux)."
+  (unless (+my/os-image-to-png from to)
+    (user-error "Couldn't make a PNG of the image to copy%s"
+                (if (+my/os-imagemagick) "" " (it needs ImageMagick)"))))
 
 (defun +my/image-copy ()
-  "y, Cmd+C: the image itself to the clipboard, as shown (edited too), to
+  "y, Cmd+C (Linux: Ctrl+Shift+C): the image itself to the clipboard, as shown (edited too), to
 paste in other apps; a PNG unless it's one or a JPEG."
   (interactive)
   (unless (+my/image--spec)
@@ -158,11 +142,11 @@ paste in other apps; a PNG unless it's one or a JPEG."
     (unwind-protect
         (let ((file (+my/image--file dir)))
           (pcase image-type
-            ('png (+my/image--to-clipboard file "PNGf"))
-            ('jpeg (+my/image--to-clipboard file "JPEG"))
+            ('png (+my/os-copy-image file 'png))
+            ('jpeg (+my/os-copy-image file 'jpeg))
             (_ (let ((png (expand-file-name "copy.png" dir)))
                  (+my/image--png file png)
-                 (+my/image--to-clipboard png "PNGf"))))
+                 (+my/os-copy-image png 'png))))
           (message "Copied the image"))
       (delete-directory dir t))))
 
@@ -184,11 +168,12 @@ paste in other apps; a PNG unless it's one or a JPEG."
   (expand-file-name buffer-file-name))
 
 (defun +my/image-open-in-preview ()
-  "SPC m p: the image in macOS's Preview (to annotate, export...)."
+  "SPC m p: the image in another app: macOS's Preview (to annotate,
+export...), Linux's default app for it."
   (interactive)
-  (call-process "open" nil 0 nil "-a" "Preview" (+my/image--saved-file)))
+  (+my/os-open (+my/image--saved-file)))
 
 (defun +my/image-show-in-finder ()
-  "SPC m f: the image selected in a Finder window."
+  "SPC m f: the image selected in the file manager (Finder on macOS)."
   (interactive)
-  (call-process "open" nil 0 nil "-R" (+my/image--saved-file)))
+  (+my/os-reveal (+my/image--saved-file)))

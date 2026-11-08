@@ -75,6 +75,7 @@
   "BODY with pandoc there, from one window; the preview and files closed after."
   (declare (indent 0))
   `(progn
+     (+test-needs-webkit)
      (unless (executable-find "pandoc")
        (ert-skip "No pandoc"))
      (+test-with-reset
