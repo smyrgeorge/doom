@@ -95,8 +95,12 @@ examples/excalidraw.el."
   (interactive)
   (let* ((dir (+my/example-folder "excalidraw"))
          (file (+my/example-write dir "how-it-opens.excalidraw" (+my/example-excalidraw--drawing))))
-    (delete-other-windows)
     (find-file file)
+    ;; The drawing alone: tiling opens it in a new pane (an application,
+    ;; config/tiling.el), beside the window it was opened from.
+    (when-let* ((window (get-buffer-window (current-buffer))))
+      (select-window window)
+      (delete-other-windows window))
     (+my/example-delete-when-closed dir (list (current-buffer)))
     (message "Drawing example: draw with the mouse, r a rectangle, a an arrow, t text, ? the keys; SPC m d the dark canvas")
     (current-buffer)))

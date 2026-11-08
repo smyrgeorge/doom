@@ -99,6 +99,9 @@ file gone."
     (let* ((buffer (+my/example-excalidraw))
            (dir (+test-examples--folder buffer)))
       (should (+test-wait-for #'+my/example-excalidraw-ready 30))
+      ;; The drawing alone, though tiling opens it in a new pane.
+      (should (one-window-p))
+      (should (eq (window-buffer (selected-window)) buffer))
       (with-current-buffer buffer
         (should (eq major-mode '+my/excalidraw-mode))
         (should-not (plist-get (+my/excalidraw--state) :error))
