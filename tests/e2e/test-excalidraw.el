@@ -775,5 +775,19 @@ under this drawing's name."
           (should (file-exists-p earlier))
           (find-file file)
           (should (+test-exd--ready))
-          (should (equal (+test-exd--elements) '("ellipse")))
+          ;; Saved as the earlier drawing: its ellipse, drawn (15 s: CI's
+          ;; macOS runner once found none). If not, what the file, the page
+          ;; and Emacs said: a blank file saved (a race) or a page not drawn.
+          (unless (+test-wait-for (lambda () (equal (+test-exd--elements) '("ellipse"))) 15)
+            (ert-fail (list "The saved drawing isn't the earlier one"
+                            :elements (+test-exd--elements)
+                            :state (+test-exd--state)
+                            :file-size (file-attribute-size (file-attributes file))
+                            :file-has-ellipse (with-temp-buffer
+                                                (insert-file-contents file)
+                                                (and (search-forward "ellipse" nil t) t))
+                            :earlier-size (file-attribute-size (file-attributes earlier))
+                            :messages (with-current-buffer "*Messages*"
+                                        (buffer-substring-no-properties
+                                         (max (point-min) (- (point-max) 1500)) (point-max))))))
           (set-buffer-modified-p nil))))))
