@@ -14,7 +14,7 @@
 | `config/examples.el`, `examples/` | [Examples](examples.md) and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | [Drawings](drawings.md) |
 | `config/git.el` | [File diff](git.md#file-diff) |
-| `config/lsp.el`, `lsp/` | Language servers, the usages list |
+| `config/lsp.el`, `lsp/` | Language servers (each language's settings: `lsp/LANGUAGE.el`), the usages list |
 | `config/magit.el` | [Magit](git.md#magit) |
 | `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
 | `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |

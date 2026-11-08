@@ -1,22 +1,47 @@
 ;;; $DOOMDIR/config/lsp.el -*- lexical-binding: t; -*-
-;; Language server setup, and lsp-ui's peek. Loaded from config.el; its code is
-;; in config/lsp/.
+;; Language servers: what's on for all of them, and lsp-ui's peek. Loaded from
+;; config.el; its code, and each language's own settings, are in config/lsp/.
 
 ;; ====== VARIABLES ======
 
+;; SERVERS
+;; A server per language of init.el's +lsp modules, installed by
+;; scripts/lsp.sh; a language's own settings, where it has some, in
+;; config/lsp/LANGUAGE.el:
+;;   C/C++                  clangd
+;;   Docker                 docker-langserver
+;;   GDScript               Godot's editor (it serves while open)
+;;   HTML, CSS, JSON        vscode-langservers-extracted
+;;   Java                   Eclipse's jdtls (lsp-java downloads it)
+;;   Kotlin                 JetBrains' kotlin-lsp              lsp/kotlin.el
+;;   Lua                    lua-language-server
+;;   Markdown               marksman
+;;   Python                 basedpyright                       lsp/python.el
+;;   Rust                   rust-analyzer                      lsp/rust.el
+;;   Shell                  bash-language-server (shellcheck)
+;;   TypeScript/JavaScript  TypeScript 7 (and ESLint)          lsp/typescript.el
+;;   YAML                   yaml-language-server
+
+;; FEATURES
+;; Doom turns off the LSP features that can be slow or get in the way
+;; (modules/tools/lsp/+lsp.el); these are back on, as an IDE has them:
+;; - inlay hints: types and parameter names inline, in the comment colour (what
+;;   each server shows: its language's file);
+;; - semantic highlighting: the server colours symbols by what they are
+;;   (a parameter, a mutable variable, a macro...), over tree-sitter's
+;;   colours; it asks again when the server has indexed the project;
+;; - colours: CSS and HTML colour values get a swatch.
+;; Still off: breadcrumbs (the sticky header shows where you are, see
+;; config/editor.el), LSP folding (tree-sitter folds), formatting as you type
+;; (formatting is on save, see :editor format).
+(setq lsp-inlay-hint-enable t
+      lsp-semantic-tokens-enable t
+      lsp-semantic-tokens-honor-refresh-requests t
+      lsp-enable-text-document-color t)
+
 ;; CODE LENSES
-;; lsp-mode shows the code lenses a server sends, at the end of the line:
-;; rust-analyzer's "▶ Run" and implementations, and now also reference counts
-;; for Rust and TypeScript/JavaScript. Pyright sends none.
-;; rust-analyzer's "Debug" lens needs a debugger set up (dap), so it's off.
-(setq lsp-rust-analyzer-lens-references-method-enable t
-      lsp-rust-analyzer-lens-references-adt-enable t
-      lsp-rust-analyzer-lens-references-trait-enable t
-      lsp-rust-analyzer-lens-references-enum-variant-enable t
-      lsp-rust-analyzer-lens-debug-enable nil
-      lsp-typescript-references-code-lens-enabled t
-      lsp-typescript-implementations-code-lens-enabled t
-      lsp-javascript-references-code-lens-enabled t)
+;; lsp-mode shows the code lenses a server sends (which: its language's file)
+;; at the end of the line, placed there without measuring the line.
 
 ;; PEEK
 ;; - colours: a soft selection and soft matches instead of bright blue boxes;
@@ -39,21 +64,17 @@
 (defface +my/peek-separator '((t :inherit lsp-ui-peek-header))
   "The rows above and below the peek.")
 
-;; KOTLIN
-;; Use JetBrains' kotlin-lsp (brew install --cask kotlin-lsp) instead of
-;; lsp-mode's default kotlin-language-server.
-(after! lsp-mode
-  (lsp-register-client
-   (make-lsp-client
-    :new-connection (lsp-stdio-connection '("kotlin-lsp" "--stdio"))
-    :major-modes '(kotlin-mode kotlin-ts-mode)
-    :priority 1                         ; win over kotlin-ls (-1)
-    :server-id 'kotlin-lsp)))
-
 ;; ====== CODE ======
 
 ;; In config/lsp/, in this order: each part can use what the ones before it
 ;; define.
+(load! "lsp/capabilities")
 (load! "lsp/project")
 (load! "lsp/lenses")
 (load! "lsp/peek")
+
+;; Each language's settings (see SERVERS).
+(load! "lsp/kotlin")
+(load! "lsp/python")
+(load! "lsp/rust")
+(load! "lsp/typescript")

@@ -1,48 +1,14 @@
 ;;; tests/unit/test-lsp.el -*- lexical-binding: t; -*-
-;; config/lsp.el: code lenses (references for Rust and TypeScript/JavaScript,
-;; no Debug lens; placed at the end of the line without measuring it),
-;; projects imported without asking (only inside a project), file watchers that
-;; skip what git ignores, and JetBrains' kotlin-lsp. No language server is ever
-;; started: process starts are mocked.
+;; config/lsp.el and its general parts: the features Doom turns off back on
+;; (inlay hints, semantic highlighting, colours), lsp-mode's capabilities as
+;; strict servers read them, code lenses placed at the end of the line without
+;; measuring it, projects imported without asking (only inside a project), file
+;; watchers that skip what git ignores. Each language's settings: in
+;; test-lsp-LANGUAGE.el.
 
-(defvar doom-disabled-packages nil)     ; `use-package!' reads it (Doom's)
-
-;; Mocking a primitive (`call-process', `make-process') mustn't natively
-;; compile a trampoline for it: that runs another Emacs.
-(setq native-comp-enable-subr-trampolines nil)
-
-;; What lsp-mode sees before it loads (the config sets its variables first).
-(defvar +test-lsp--before-lsp-mode
-  (list :lsp-mode (featurep 'lsp-mode)
-        :clients (boundp 'lsp-clients)))
-
-(+test-load "config/lsp")
-
-(defvar +test-lsp--after-config
-  (list :lsp-mode (featurep 'lsp-mode)
-        :clients (boundp 'lsp-clients)))
-
-(require 'projectile)                   ; Doom loads it at startup
-(require 'lsp-mode)
-(require 'lsp-lens)
+(load (expand-file-name "../helper-lsp" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 
 ;; ====== HELPERS ======
-
-(defun +test-lsp--dir (name)
-  "A new empty folder NAME-XXXX in the temp folder (with a slash)."
-  (file-name-as-directory (make-temp-file (+test-tmp-file (concat "lsp/" name "-")) t)))
-
-(defun +test-lsp--project (&rest files)
-  "A new git project (a .git folder) with FILES (relative paths, made empty);
-return its folder."
-  (let ((root (+test-lsp--dir "proj")))
-    (make-directory (expand-file-name ".git" root))
-    (dolist (file files)
-      (let ((path (expand-file-name file root)))
-        (make-directory (file-name-directory path) t)
-        (unless (string-suffix-p "/" file)
-          (with-temp-file path))))
-    root))
 
 (defmacro +test-lsp--with-git-output (output exit &rest body)
   "BODY with `call-process' mocked: git prints OUTPUT and exits with EXIT (a
@@ -71,73 +37,56 @@ the end of its first line showing CONTENTS (as `lsp-lens--show' makes them)."
         (overlay-put ov 'lsp--lens-contents contents)
         ov))))
 
-(defmacro +test-lsp--without-advice (symbol advice &rest body)
-  "BODY with ADVICE taken off SYMBOL (put back after)."
-  (declare (indent 2))
-  `(progn
-     (advice-remove ,symbol ,advice)
-     (unwind-protect (progn ,@body)
-       (advice-add ,symbol :around ,advice))))
+;; ====== FEATURES ======
 
-;; ====== CODE LENSES ======
+(ert-deftest lsp/features-on ()
+  "Inlay hints, semantic highlighting (asked again on the server's refresh),
+colours (Doom turns them off; breadcrumbs, LSP folding and formatting as you
+type it turns off stay so: not set here)."
+  (should (eq lsp-inlay-hint-enable t))
+  (should (eq lsp-semantic-tokens-enable t))
+  (should (eq lsp-semantic-tokens-honor-refresh-requests t))
+  (should (eq lsp-enable-text-document-color t)))
 
-(ert-deftest lsp/lens-settings ()
-  "Reference counts for Rust (methods, types, traits, enum variants),
-TypeScript (and its implementations) and JavaScript; Rust's Debug lens off."
-  (should (eq lsp-rust-analyzer-lens-references-method-enable t))
-  (should (eq lsp-rust-analyzer-lens-references-adt-enable t))
-  (should (eq lsp-rust-analyzer-lens-references-trait-enable t))
-  (should (eq lsp-rust-analyzer-lens-references-enum-variant-enable t))
-  (should (eq lsp-rust-analyzer-lens-debug-enable nil))
-  (should (eq lsp-typescript-references-code-lens-enabled t))
-  (should (eq lsp-typescript-implementations-code-lens-enabled t))
-  (should (eq lsp-javascript-references-code-lens-enabled t)))
+(ert-deftest lsp/features-survive-the-packages-loading ()
+  "lsp-mode's defaults are off; loading its parts keeps the config's values."
+  (require 'lsp-semantic-tokens)
+  (let ((default (lambda (var) (eval (car (get var 'standard-value)) t))))
+    (should (eq (funcall default 'lsp-inlay-hint-enable) nil))
+    (should (eq (funcall default 'lsp-semantic-tokens-enable) nil))
+    (should (eq (funcall default 'lsp-semantic-tokens-honor-refresh-requests) nil)))
+  (should (eq lsp-inlay-hint-enable t))
+  (should (eq lsp-semantic-tokens-enable t))
+  (should (eq lsp-semantic-tokens-honor-refresh-requests t)))
 
-(ert-deftest lsp/lens-settings-set-before-lsp-mode-loads ()
+(ert-deftest lsp/settings-set-before-lsp-mode-loads ()
   "config/lsp.el loads before lsp-mode (as in Doom), so its values are what the
 packages' defcustoms find."
   (should-not (plist-get +test-lsp--before-lsp-mode :lsp-mode))
   (should-not (plist-get +test-lsp--after-config :lsp-mode)))
 
-(ert-deftest lsp/lens-settings-survive-the-packages-loading ()
-  "lsp-rust and lsp-javascript's defaults are the other way round; loading them
-keeps the config's values."
-  (require 'lsp-rust)
-  (require 'lsp-javascript)
-  (let ((default (lambda (var) (eval (car (get var 'standard-value)) t))))
-    ;; The defaults the config changes.
-    (should (eq (funcall default 'lsp-rust-analyzer-lens-references-method-enable) nil))
-    (should (eq (funcall default 'lsp-rust-analyzer-lens-debug-enable) t))
-    (should (eq (funcall default 'lsp-typescript-references-code-lens-enabled) nil))
-    (should (eq (funcall default 'lsp-typescript-implementations-code-lens-enabled) nil))
-    (should (eq (funcall default 'lsp-javascript-references-code-lens-enabled) nil)))
-  (should (eq lsp-rust-analyzer-lens-references-method-enable t))
-  (should (eq lsp-rust-analyzer-lens-references-adt-enable t))
-  (should (eq lsp-rust-analyzer-lens-references-trait-enable t))
-  (should (eq lsp-rust-analyzer-lens-references-enum-variant-enable t))
-  (should (eq lsp-rust-analyzer-lens-debug-enable nil))
-  (should (eq lsp-typescript-references-code-lens-enabled t))
-  (should (eq lsp-typescript-implementations-code-lens-enabled t))
-  (should (eq lsp-javascript-references-code-lens-enabled t)))
+;; ====== CAPABILITIES ======
 
-(ert-deftest lsp/lens-settings-reach-rust-analyzer ()
-  "What rust-analyzer is sent when it starts: references on, Debug off."
-  (require 'lsp-rust)
-  (let ((lens (plist-get (lsp-rust-analyzer--make-init-options) :lens)))
-    (should (eq (plist-get (plist-get lens :debug) :enable) :json-false))
-    (let ((references (plist-get lens :references)))
-      (dolist (kind '(:adt :enumVariant :method :trait))
-        (should (eq (plist-get (plist-get references kind) :enable) t))))))
-
-(ert-deftest lsp/lens-settings-reach-typescript-server ()
-  "What typescript-language-server is sent (workspace/configuration)."
-  (require 'lsp-javascript)
-  (let ((setting (lambda (section key)
-                   (gethash "enabled"
-                            (gethash key (gethash section (lsp-configuration-section section)))))))
-    (should (eq (funcall setting "typescript" "referencesCodeLens") t))
-    (should (eq (funcall setting "typescript" "implementationsCodeLens") t))
-    (should (eq (funcall setting "javascript" "referencesCodeLens") t))))
+(ert-deftest lsp/inline-completion-capability-an-object ()
+  "lsp-mode's capabilities say inlineCompletion as an object, not null (which
+strict servers, TypeScript 7, refuse); the rest as lsp-mode has them. (Semantic tokens off:
+their part needs a server.)"
+  (let* ((lsp-semantic-tokens-enable nil)
+         (capabilities (lsp--client-capabilities))
+         (text (alist-get 'textDocument capabilities))
+         (json (lsp--json-serialize capabilities)))
+    (should (equal (alist-get 'inlineCompletion text) '((dynamicRegistration . :json-false))))
+    (should (string-match-p "\"inlineCompletion\":{\"dynamicRegistration\":false}" json))
+    (should-not (string-match-p "\"inlineCompletion\":null" json))
+    (should (assq 'hover text))
+    (should (assq 'workspace capabilities))
+    ;; lsp-mode's own value untouched: still what it builds.
+    (should (equal (assq 'inlineCompletion
+                         (alist-get 'textDocument
+                                    (+test-lsp--without-advice #'lsp--client-capabilities
+                                        #'+my/lsp-inline-completion-capability-a
+                                      (lsp--client-capabilities))))
+                   '(inlineCompletion)))))
 
 ;; ====== CODE LENSES, CHEAPER ======
 
@@ -523,94 +472,3 @@ its own defaults), with the root as lsp-mode gives it."
                         (directory-file-name (file-truename root)) (cadr ignored))))
           (should (member (expand-file-name "a" (file-truename root)) watched))
           (should (member (expand-file-name "b" (file-truename root)) watched)))))))
-
-;; ====== KOTLIN ======
-
-(defun +test-lsp--kotlin-client ()
-  (gethash 'kotlin-lsp lsp-clients))
-
-(ert-deftest lsp/kotlin-registered-when-lsp-mode-loads ()
-  "Registered in `after! lsp-mode': not before lsp-mode loads."
-  (should-not (plist-get +test-lsp--after-config :clients))
-  (should (+test-lsp--kotlin-client)))
-
-(ert-deftest lsp/kotlin-client ()
-  (let ((client (+test-lsp--kotlin-client)))
-    (should (eq (lsp--client-server-id client) 'kotlin-lsp))
-    (should (equal (lsp--client-major-modes client) '(kotlin-mode kotlin-ts-mode)))
-    (should (eql (lsp--client-priority client) 1))
-    (should-not (lsp--client-add-on? client))
-    (should-not (lsp--client-remote? client))))
-
-(ert-deftest lsp/kotlin-command ()
-  "It would run `kotlin-lsp --stdio' (the process start is mocked)."
-  (let* ((connection (lsp--client-new-connection (+test-lsp--kotlin-client)))
-         (started nil))
-    (cl-letf (((symbol-function 'make-process)
-               (lambda (&rest args) (setq started args) (throw '+test-lsp--started nil)))
-              ((symbol-function 'lsp-json-rpc-connection)
-               (lambda (_workspace command)
-                 (setq started (list :command command)) (throw '+test-lsp--started nil))))
-      (let ((default-directory (+test-lsp--dir "kt")))
-        (catch '+test-lsp--started
-          (funcall (plist-get connection :connect) #'ignore #'ignore "kotlin-lsp" nil nil))))
-    (should (equal (plist-get started :command) '("kotlin-lsp" "--stdio")))
-    (dolist (buffer (buffer-list))      ; the stderr buffer lsp-mode made first
-      (when (string-match-p "kotlin-lsp" (buffer-name buffer))
-        (kill-buffer buffer)))))
-
-(ert-deftest lsp/kotlin-present-when-kotlin-lsp-is-installed ()
-  "lsp-mode looks for the `kotlin-lsp' executable (brew's cask)."
-  (let* ((connection (lsp--client-new-connection (+test-lsp--kotlin-client)))
-         (looked nil))
-    (cl-letf (((symbol-function 'executable-find)
-               (lambda (name &rest _) (push name looked) nil)))
-      (should-not (funcall (plist-get connection :test?))))
-    (should (equal looked '("kotlin-lsp")))
-    (cl-letf (((symbol-function 'executable-find)
-               (lambda (name &rest _) (and (equal name "kotlin-lsp") "/opt/homebrew/bin/kotlin-lsp"))))
-      (should (funcall (plist-get connection :test?))))))
-
-(ert-deftest lsp/kotlin-wins-over-kotlin-language-server ()
-  "In a Kotlin buffer with both servers installed, lsp-mode picks kotlin-lsp."
-  (require 'lsp-kotlin)
-  (require 'kotlin-mode)
-  (should (< (lsp--client-priority (gethash 'kotlin-ls lsp-clients))
-             (lsp--client-priority (+test-lsp--kotlin-client))))
-  (let ((buffer (+test-buffer "Main.kt")))
-    (unwind-protect
-        (with-current-buffer buffer
-          (setq buffer-file-name (expand-file-name "Main.kt" (+test-lsp--dir "kt")))
-          (delay-mode-hooks (kotlin-mode))
-          (cl-letf (((symbol-function 'executable-find)
-                     (lambda (name &rest _) (concat "/usr/local/bin/" name))))
-            (let ((clients (lsp--find-clients)))
-              (should (equal (mapcar #'lsp--client-server-id clients) '(kotlin-lsp)))))
-          (setq buffer-file-name nil))
-      (kill-buffer buffer))))
-
-(ert-deftest lsp/kotlin-without-kotlin-lsp-falls-back ()
-  "Only kotlin-language-server installed: that one is used."
-  (require 'lsp-kotlin)
-  (require 'kotlin-mode)
-  (let ((buffer (+test-buffer "Other.kt")))
-    (unwind-protect
-        (with-current-buffer buffer
-          (setq buffer-file-name (expand-file-name "Other.kt" (+test-lsp--dir "kt")))
-          (delay-mode-hooks (kotlin-mode))
-          (cl-letf (((symbol-function 'executable-find)
-                     (lambda (name &rest _)
-                       (and (string-suffix-p "kotlin-language-server" name)
-                            "/usr/local/bin/kotlin-language-server"))))
-            (should (equal (mapcar #'lsp--client-server-id (lsp--find-clients)) '(kotlin-ls))))
-          (setq buffer-file-name nil))
-      (kill-buffer buffer))))
-
-(ert-deftest lsp/kotlin-not-for-other-modes ()
-  (require 'kotlin-mode)
-  (let ((buffer (+test-buffer "x.py")))
-    (unwind-protect
-        (with-current-buffer buffer
-          (python-mode)
-          (should-not (lsp--supports-buffer? (+test-lsp--kotlin-client))))
-      (kill-buffer buffer))))

@@ -7,7 +7,8 @@ brew install node uv
 
 # python (uv)
 echo -e "\nInstalling python:"
-npm i -g pyright
+# basedpyright: Pyright with inlay hints and semantic highlighting (config/lsp/python.el)
+uv tool install --upgrade basedpyright
 uv tool install --upgrade black
 uv tool install --upgrade isort # import sorting (py-isort)
 
@@ -22,7 +23,10 @@ npm i -g dockerfile-language-server-nodejs
 
 # javascript / typescript
 echo -e "\nInstalling javascript:"
-npm i -g typescript typescript-language-server
+# TypeScript 7 (native): its tsc is the language server too, for projects
+# without TypeScript 7 of their own (config/lsp.el, TYPESCRIPT). ESLint's
+# server comes with vscode-langservers-extracted (web, below).
+npm i -g typescript@latest
 
 # web (html/css/json)
 echo -e "\nInstalling web:"

@@ -144,7 +144,8 @@
 ;; spelling, tree-sitter grammars, long lines, Evil, the mode line)
 (load! "config/editor")
 
-;; LSP (Kotlin: JetBrains' kotlin-lsp; lsp-ui's usages/definitions peek: calmer, with
+;; LSP (inlay hints, semantic highlighting; each language's server and settings in
+;; config/lsp/LANGUAGE.el; lsp-ui's usages/definitions peek: calmer, with
 ;; functions and line numbers)
 (load! "config/lsp")
 
