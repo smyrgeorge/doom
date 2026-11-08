@@ -1,145 +1,142 @@
 # doom
 
-My Emacs configuration, built on [Doom Emacs](https://github.com/doomemacs/core).
+My Emacs configuration, built on [Doom Emacs](https://github.com/doomemacs/core) with Vim keys.
 
-> Doom is a configuration framework for GNU Emacs tailored for Emacs bankruptcy
-veterans who want less framework in their frameworks, a modicum of stability
-(and reproducibility) from their package manager, and the performance of a hand
-rolled config (or better). It can be a foundation for your own config or a
-resource for Emacs enthusiasts to learn more about our favorite operating
-system.
+It runs on **macOS** and **Linux** with **Emacs 31**, as a GUI app or in a terminal (`emacs -nw`). On top of Doom it
+adds a tiling layout, tabs per window, a three-way merge for Git conflicts, PDFs, images and Excalidraw drawings that
+open inside Emacs, a live Markdown preview, language servers set up for each language `init.el` enables, and Claude
+Code in a pane of its own. The keys use `Cmd` on macOS and `Ctrl` on Linux, as each system's apps do.
 
-It runs on **macOS** (Apple Silicon, emacs-plus) and **Linux** (X11 or Wayland), with **Emacs 31**, and aims for an
-IDE-like workflow: a project sidebar that follows the current file, LSP for every language I use, format-on-save, and
-Claude Code inside Emacs. It works both as a GUI app and in the terminal (`emacs -nw`). The keys use `Cmd` on macOS and
-`Ctrl` on Linux, as each system's apps do ([Key bindings](docs/keybindings.md)).
+## A tour
 
-It's **tiling first**, like a tiling window manager: applications (Claude Code, the terminal, magit, the Markdown
-preview, drawings) open in a new pane where the tiling layout puts it, files open as tabs in the current pane, and a
-pane closes with its last tab.
+Each feature below opens on files of its own with `M-x +my/example-NAME`, so you can try it without a project of your
+own ([Examples](docs/examples.md)).
 
-## Showcase
+### Tiling
 
-Each of these opens on files of its own with `M-x +my/example-NAME` (see [Examples](docs/examples.md)).
-
-### Tiling first
-
-Applications open in a new pane where the tiling layout puts it, the main pane on the left and the others stacked on
-the right; files open as tabs in the current pane. `SPC w SPC` opens a pane the same way
-([more](docs/editor.md#tiling)).
+Applications (Claude Code, the terminal, Magit, the Markdown preview, drawings) open in a new pane where the tiling
+layout puts it: the main pane on the left, the others stacked on the right. Files open as tabs in the current pane, and
+a pane closes with its last tab. `SPC w SPC` opens a pane the same way ([more](docs/editor.md#tiling)).
 
 ![Tiling](examples/tiling.png)
 
 ### Three-way merge
 
-`e` on a conflicted file in Magit opens Yours, the Result and Theirs side by side, lined up and scrolling together:
-take a change with `>>` / `<<`, ignore it with `x`, or let the ✨ wand merge both sides' words. It works in a terminal
-too ([more](docs/git.md#resolving-conflicts)).
+`e` on a conflicted file in Magit shows Yours, the Result and Theirs side by side, lined up and scrolling together.
+Take a change with `>>` / `<<`, ignore it with `x`, or let the ✨ wand merge the words of both sides. It works in a
+terminal too, and from the shell with `cmd/diff.sh` ([more](docs/git.md#resolving-conflicts)).
 
 ![Three-way merge](examples/merge.png)
 
-### Excalidraw
+### Excalidraw drawings
 
-`*.excalidraw.svg` files open as drawings in Excalidraw, inside Emacs, and save as images that Markdown and GitHub
-show ([more](docs/drawings.md)).
+`*.excalidraw.svg` files open as drawings in Excalidraw, inside Emacs, and are saved as images that Markdown and
+GitHub show. In a Claude Code session, `C-c C-d` draws something for Claude to see ([more](docs/drawings.md)).
 
 ![Excalidraw](examples/excalidraw.png)
 
 ### PDFs
 
-PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with Vim keys, search, an outline, and dark pages that keep
-the colours' hues (`SPC m d` turns them light) ([more](docs/pdf.md)).
+PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with Vim keys, search and an outline. Pages are dark,
+their colours' hues kept, and `SPC m d` turns them light ([more](docs/pdf.md)).
 
 ![PDF with dark pages](examples/pdf.png)
 
 ### Images
 
-Images open in Emacs's own viewer with a toolbar: the folder's images, zoom, rotate, flip, crop, sharp pixels, copy the
-image, and its version in git's HEAD beside it (`SPC m g`) ([more](docs/images.md)).
+Images open with a toolbar: the folder's other images, zoom, rotate, flip, crop, sharp pixels, copy the image, and its
+version in Git's HEAD beside it with `SPC m g` ([more](docs/images.md)).
 
 ![A picture beside its version in git's HEAD](examples/image.png)
 
-### Markdown with live preview
+### Markdown preview
 
-`SPC m p` shows the rendered file beside it, updated as you type and following the cursor
+`SPC m p` shows the rendered file beside it, in GitHub's style, updated as you type and following the cursor
 ([more](docs/markdown.md)).
 
 ![Markdown live preview](examples/markdown.png)
 
+### Error stripe and notices
+
+A strip at the right edge of each file maps the whole file: errors, warnings, TODOs and Git changes, with a band for
+the part on screen. Click a mark to jump there. Notices at the top of a window offer actions, such as the Markdown
+preview ([more](docs/editor.md#error-stripe)).
+
+![The error stripe at the window's right edge](examples/stripe.png)
+
 ## Installation
 
-Requirements:
-
-- **macOS** (Apple Silicon): [Homebrew](https://brew.sh), `git`, `node`/`npm` and [`uv`](https://github.com/astral-sh/uv).
-- **Linux**: Debian, Ubuntu or Fedora (the scripts use `apt` or `dnf`, with `sudo`), and `git`. Step 3 builds Emacs 31
-  from GNU's release, with xwidgets (WebKitGTK) for PDFs, drawings and the Markdown preview: distributions' Emacs
-  packages are older and have no xwidgets. Another distribution: install the packages the scripts name, by hand.
+| | macOS | Linux |
+|---|---|---|
+| System | Apple Silicon, macOS 15 or later | Debian, Ubuntu or Fedora; X11 or Wayland |
+| Needs first | [Homebrew](https://brew.sh), `git` | `git`, `curl`, `sudo` |
+| Emacs | emacs-plus's prebuilt Emacs.app | GNU's release, built from source |
 
 ```sh
-# 1. This config
+# 1. This config, and Doom
 git clone git@github.com:smyrgeorge/doom.git ~/.config/doom
-
-# 2. Doom itself (its modules are a git submodule)
 git clone --depth 1 --recurse-submodules https://github.com/doomemacs/core ~/.config/emacs
 
-# 3. Emacs, installed or updated to its latest release, + `doom sync` (also fetches Doom's modules; --rebuild when
-#    Emacs's version changed). macOS: the prebuilt emacs-plus Emacs.app (macOS 15+, replaces Homebrew's `emacs`
-#    formula). Linux: GNU's latest release built from source into /usr/local (XWIDGETS=no: without WebKit).
-#    Run again, it updates. Step 4 needs it: it says so if Emacs isn't there
+# 2. Emacs, then Doom synced against it
 ~/.config/doom/scripts/emacs.sh
 
-# 4. What init.el and this config need outside Emacs: Doom's tools, each enabled module's (language servers,
-#    formatters, linters), fonts. Its table lists them all; it fails on a module it doesn't know (add its tools).
-#    Run again, it updates them to their latest versions; --check only shows what's there and what's missing
+# 3. Everything init.el and this config need outside Emacs
 ~/.config/doom/scripts/tools.sh
 
-# 5. Let the GUI app see your shell's PATH (re-run when PATH changes)
+# 4. Let the GUI app see your shell's PATH, then check the setup
 ~/.config/emacs/bin/doom env
-
-# 6. Check everything
 ~/.config/emacs/bin/doom doctor
 ```
 
-After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` and restart Emacs (and
-`scripts/tools.sh` for a module newly enabled). Changes to
-`config.el` and `config/*.el` only need a restart.
+**`emacs.sh`** installs Emacs 31, or updates it to the latest release, then runs `doom sync`. On macOS that's the
+emacs-plus Emacs.app (it replaces Homebrew's terminal-only `emacs`). On Linux it builds GNU's latest release into
+`/usr/local`, with WebKit for PDFs, drawings and the preview (`XWIDGETS=no` builds without it). When Emacs's version
+changes, Doom's packages are rebuilt for it.
 
-**One-time manual steps**
+**`tools.sh`** installs Doom's own tools, the language servers, formatters and linters of the modules `init.el`
+enables, and the config's fonts. A table at its top lists every tool and why it's there. If `init.el` enables a module
+the table doesn't know, the script stops and names it, so a new language never goes without its tools.
+`tools.sh --check` only reports what's installed and what's missing. It needs Emacs, so run `emacs.sh` first.
 
-- **Claude Code:** install the `claude` CLI (the scripts don't), run it once in a terminal and log in; `agent-shell`
-  reuses that login.
-- **Kotlin LSP EULA:** read it with `kotlin-lsp --show-eula`, then run `kotlin-lsp --stdio` once and accept.
-- **iTerm (terminal Emacs, macOS):** in *Settings → Profiles → Text*, use a Nerd Font (e.g. *JetBrainsMono Nerd Font*)
-  for icons and tick *Use ligatures*; in *Profiles → Keys*, set the left Option key to *Esc+* so `M-` keys (e.g.
-  `M-RET`) work.
-- **Linux:** run `M-x nerd-icons-install-fonts` once (the icons' font). Your desktop may take some `Super` keys and
-  `Ctrl+Alt` ones; this config's own are `Ctrl` and `Ctrl+Shift` ones ([Key bindings](docs/keybindings.md)).
+### Keeping it up to date
 
-**On Linux**
+Run `scripts/emacs.sh` and `scripts/tools.sh` again: each brings what it installs to the latest version and leaves
+alone what already is.
 
-- **What needs xwidgets:** PDFs, drawings and the live Markdown preview open in WebKit. Without xwidgets they fall back:
-  PDFs to DocView, drawings to their file, the preview to markdown-mode's (eww, updated on save).
-- **Other apps:** Preview and Finder become the file's default app and the file manager (`xdg-open`, D-Bus); printing
-  uses CUPS's `lp`, after asking; copying an image uses `wl-copy` (Wayland) or `xclip` (X11); rotating and flipping
-  images use ImageMagick.
-- **Tested:** the unit and end-to-end tests run on Linux too (Debian, with and without xwidgets: `tests/linux/`), as on
-  macOS.
+After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` and restart Emacs, and run
+`scripts/tools.sh` if you enabled a module. Changes to `config.el` and `config/*.el` only need a restart.
+
+### Once, by hand
+
+- **Claude Code:** install the `claude` CLI, run it once in a terminal and log in; Emacs uses that login.
+- **Kotlin:** accept kotlin-lsp's licence once: read it with `kotlin-lsp --show-eula`, then run `kotlin-lsp --stdio`.
+- **Linux:** run `M-x nerd-icons-install-fonts` for the icons. `tools.sh` lists the few servers no distribution
+  packages (marksman, kotlin-lsp, ktlint, lua-language-server), with where to get them.
+- **iTerm** (terminal Emacs on macOS): in *Settings → Profiles → Text*, pick a Nerd Font (e.g. *JetBrainsMono Nerd
+  Font*) and tick *Use ligatures*; in *Profiles → Keys*, set the left Option key to *Esc+* so `M-` keys work.
+
+### On Linux
+
+- **Without WebKit:** PDFs, drawings and the live preview need an Emacs with xwidgets, which `emacs.sh` builds but most
+  distributions' packages lack. Without it they fall back: PDFs to DocView, drawings to their file, the preview to
+  markdown-mode's.
+- **Other apps:** macOS's Preview and Finder become the file's default app and your file manager. Printing goes through
+  `lp`, copying images through `wl-copy` (Wayland) or `xclip` (X11), and rotating images through ImageMagick.
+- **Keys:** Linux desktops keep many `Super` keys for themselves, so this config's keys there are `Ctrl` and
+  `Ctrl+Shift` ones ([Key bindings](docs/keybindings.md)).
 
 ## Documentation
 
-- [The editor](docs/editor.md): tabs per window, tiling, error stripe, notices, sticky header, code.
-- [PDFs](docs/pdf.md): PDFs drawn by PDF.js, with Vim keys.
-- [Images](docs/images.md): Emacs's image viewer with a toolbar: zoom, rotate, crop, copy, git's HEAD beside it.
-- [Drawings](docs/drawings.md): Excalidraw inside Emacs.
-- [Project sidebar](docs/sidebar.md): treemacs as a project view that follows the current file.
-- [Search](docs/search.md): Search Everywhere, find in files, projects.
-- [Markdown](docs/markdown.md): live preview inside Emacs.
-- [Git](docs/git.md): Magit additions, file diff, resolving conflicts in three panes.
-- [Claude Code](docs/claude-code.md): sessions, drawing for Claude, and profiling Emacs for it.
-- [AI agents](docs/ai-agents.md): the `emacs-profiling` skill, and installing it.
-- [Terminal](docs/terminal.md): what differs in `emacs -nw`.
-- [Key bindings](docs/keybindings.md): this config's own keys, on macOS and on Linux.
-- [Examples](docs/examples.md): each feature on files of its own, with screenshots.
-- [Shell commands](docs/cmd.md): `cmd/diff.sh`.
-- [Tests](docs/tests.md): `tests/run.sh`.
-- [Repository layout](docs/layout.md): what each file is for.
+- [The editor](docs/editor.md): tabs per window, tiling, the error stripe, notices, the sticky header, code
+- [Key bindings](docs/keybindings.md): this config's own keys, on macOS and Linux
+- [Project sidebar](docs/sidebar.md): treemacs following the current file
+- [Search](docs/search.md): Search Everywhere, find in files, projects
+- [Git](docs/git.md): Magit additions, a file's diff, resolving conflicts in three panes
+- [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md)
+- [Claude Code](docs/claude-code.md): sessions, drawing for Claude, profiling Emacs
+- [AI agents](docs/ai-agents.md): the `emacs-profiling` skill
+- [Terminal](docs/terminal.md): what differs in `emacs -nw`
+- [Examples](docs/examples.md): each feature on files of its own, with screenshots
+- [Shell commands](docs/cmd.md): `cmd/diff.sh`
+- [Tests](docs/tests.md): unit and end-to-end tests, on macOS and on Linux (Docker)
+- [Repository layout](docs/layout.md): what each file is for
