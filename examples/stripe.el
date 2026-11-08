@@ -125,8 +125,12 @@ your name, hooks or signing): its exit status."
 
 (defun +my/example-stripe--repo ()
   "A repository in the temp folder: inventory.el committed, then changed
-(see above). Its folder."
-  (let ((default-directory (+my/example-folder "stripe")))
+(see above). Its folder: stripe-example/ in a new temp folder, always that
+name, which the mode line shows (the temp folder's random one changed its
+screenshot at each run)."
+  (let ((default-directory (file-name-as-directory
+                            (expand-file-name "stripe-example" (+my/example-folder "stripe")))))
+    (make-directory default-directory)
     (+my/example-stripe--git "init" "-q")
     (+my/example-write default-directory "inventory.el" (+my/example-stripe--text nil))
     (unless (and (zerop (+my/example-stripe--git "add" "inventory.el"))
@@ -172,8 +176,9 @@ in a temp repository (deleted once closed). See examples/stripe.el."
       (forward-line 0)
       (when-let* ((window (get-buffer-window (current-buffer))))
         (set-window-start window (save-excursion (forward-line -12) (point)))))
+    ;; The temp folder the repository is in, with it.
     (+my/example-delete-when-closed
-     repo (list (current-buffer))
+     (file-name-directory (directory-file-name repo)) (list (current-buffer))
      (lambda ()
        (when (boundp 'trusted-content)
          (setq trusted-content (if (listp trusted-content) (delete repo trusted-content) trusted-content)))))
@@ -186,7 +191,7 @@ changes."
   (when-let* ((buffer (seq-find (lambda (buffer)
                                   (equal (buffer-local-value 'buffer-file-name buffer)
                                          (and (buffer-local-value '+my/example--closing buffer)
-                                              (expand-file-name "inventory.el"
+                                              (expand-file-name "stripe-example/inventory.el"
                                                                 (car (buffer-local-value '+my/example--closing buffer))))))
                                 (buffer-list))))
     (with-current-buffer buffer

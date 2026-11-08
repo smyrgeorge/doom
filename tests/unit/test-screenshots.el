@@ -96,6 +96,7 @@ first; a file left from before replaced once made."
     (with-temp-file file (insert "old"))
     (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(40 70 1884 1176)))
               ((symbol-function '+my/screenshots--window-number) (lambda (_) 4242))
+              ((symbol-function '+my/screenshots--same-p) #'ignore)
               ((symbol-function 'call-process)
                (lambda (program &rest args)
                  (push (cons program (nthcdr 3 args)) calls)
@@ -110,6 +111,7 @@ first; a file left from before replaced once made."
     (setq calls nil)
     (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(40 70 1884 1176)))
               ((symbol-function '+my/screenshots--window-number) #'ignore)
+              ((symbol-function '+my/screenshots--same-p) #'ignore)
               ((symbol-function 'call-process)
                (lambda (program &rest args)
                  (push (cons program (nthcdr 3 args)) calls)
@@ -125,6 +127,51 @@ first; a file left from before replaced once made."
                  (lambda (program &rest _) (push program calls) 0)))
         (+my/screenshots--capture (selected-frame) file)))
     (should (equal (car calls) "/bin/fake"))))
+
+(ert-deftest screenshots/the-same-screenshot-kept ()
+  "A capture the same as the last screenshot but for the window's edge: the
+last one left as it is (its file not rewritten); different: replaced."
+  (let ((file (+test-tmp-file "shots/same.png"))
+        (new (+test-tmp-file "shots/same.new.png"))
+        same)
+    (cl-letf (((symbol-function 'frame-edges) (lambda (&rest _) '(0 0 10 10)))
+              ((symbol-function '+my/screenshots--window-number) (lambda (_) 1))
+              ((symbol-function '+my/screenshots--same-p)
+               (lambda (old captured)
+                 (should (equal old file))
+                 (should (equal captured new))
+                 same))
+              ((symbol-function 'call-process)
+               (lambda (&rest args)
+                 (with-temp-file (car (last args)) (insert "capture"))
+                 0)))
+      (with-temp-file file (insert "last"))
+      (setq same t)
+      (should (eq (+my/screenshots--capture (selected-frame) file) t))
+      (should (equal (with-temp-buffer (insert-file-contents file) (buffer-string)) "last"))
+      (should-not (file-exists-p new))
+      (setq same nil)
+      (should (eq (+my/screenshots--capture (selected-frame) file) t))
+      (should (equal (with-temp-buffer (insert-file-contents file) (buffer-string)) "capture"))
+      (should-not (file-exists-p new)))))
+
+(ert-deftest screenshots/same-but-for-the-window-s-edge ()
+  "ImageMagick: the same image, or one differing in its outer
+`+my/screenshots-edge' pixels only; not one differing inside."
+  (skip-unless (executable-find "magick"))
+  (let ((base (+test-tmp-file "shots/base.png"))
+        (edge (+test-tmp-file "shots/edge.png"))
+        (inside (+test-tmp-file "shots/inside.png")))
+    (should (zerop (call-process "magick" nil nil nil "-size" "40x30" "xc:gray20" base)))
+    (should (zerop (call-process "magick" nil nil nil base "-fill" "white"
+                                 "-draw" "point 39,5" "-draw" "point 0,29" edge)))
+    (should (zerop (call-process "magick" nil nil nil base "-fill" "white"
+                                 "-draw" "point 20,15" inside)))
+    (should (+my/screenshots--same-p base base))
+    (should (+my/screenshots--same-p base edge))
+    (should-not (+my/screenshots--same-p base inside))
+    (let ((exec-path nil))
+      (should-not (+my/screenshots--same-p base base)))))
 
 (ert-deftest screenshots/the-frame-s-macos-window ()
   "The frame's macOS window number: of this Emacs's windows macOS lists (its

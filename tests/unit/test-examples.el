@@ -198,7 +198,10 @@ on; the repository and the trust gone once closed."
   (+test-examples
     (let* ((trusted trusted-content)
            (buffer (+my/example-stripe))
-           (repo (car (buffer-local-value '+my/example--closing buffer))))
+           (folder (car (buffer-local-value '+my/example--closing buffer)))
+           (repo (expand-file-name "stripe-example/" folder)))
+      ;; Always that name (the mode line shows it), in a new temp folder.
+      (should (equal (buffer-local-value 'default-directory buffer) repo))
       (should (member repo trusted-content))
       (should (+test-wait-for #'+my/example-stripe-ready 60))
       (with-current-buffer buffer
@@ -220,7 +223,7 @@ on; the repository and the trust gone once closed."
                                                    (overlays-in (point-min) (point-max)))))))
           (should (seq-set-equal-p kinds '(change delete insert)))))
       (kill-buffer buffer)
-      (should-not (file-exists-p repo))
+      (should-not (file-exists-p folder))
       (should (equal trusted-content trusted)))))
 
 ;; ====== THE DRAWING ======

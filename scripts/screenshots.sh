@@ -10,7 +10,9 @@
 # folders): your Doom profile and a running Emacs aren't touched. Its frame is
 # on top of the other windows while it's captured (macOS's screencapture, the
 # frame's window alone: no shadow, its corners black, not what's behind
-# it, so an unchanged example's screenshot comes out the same each run): the
+# it; a capture differing from the last screenshot only in the window's edge,
+# which macOS draws a little differently each time, leaves it as it is: an
+# unchanged example's screenshot isn't rewritten, with ImageMagick): the
 # terminal running this needs the Screen Recording permission (System
 # Settings > Privacy & Security > Screen & System Audio Recording), which
 # macOS asks for the first time. Exit status: 0 each example captured, 1 not,

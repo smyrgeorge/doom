@@ -93,7 +93,9 @@ left corner, above the other windows, focused."
 ;; other apps), which changed every screenshot's corners at each run, the
 ;; example unchanged. No shadow (-o). Its macOS window number isn't Emacs's
 ;; (`window-id' is "1"): asked of macOS's window list (JavaScript for
-;; Automation, CoreGraphics), this Emacs's windows, the one where the frame is.
+;; Automation, CoreGraphics), this Emacs's windows, the one where the frame is:
+;; at any level (the frame is above the others, `+my/screenshots--place':
+;; level 1, not the usual 0), among its child frames' (the stripe's...).
 (defconst +my/screenshots--windows-script
   "ObjC.import('CoreGraphics');
 function run(argv) {
@@ -101,7 +103,7 @@ function run(argv) {
   const lines = [];
   for (let i = 0; i < list.count; i++) {
     const w = ObjC.deepUnwrap(list.objectAtIndex(i));
-    if (w.kCGWindowOwnerPID == argv[0] && w.kCGWindowLayer == 0) {
+    if (w.kCGWindowOwnerPID == argv[0]) {
       const b = w.kCGWindowBounds;
       lines.push([w.kCGWindowNumber, b.X, b.Y, b.Width, b.Height].join(' '));
     }
@@ -128,14 +130,39 @@ function run(argv) {
              ;; Its edges not quite macOS's: this Emacs's only window.
              (and (= (length windows) 1) (car windows))))))
 
+;; THE SAME SCREENSHOT
+;; macOS draws the window's outer edge (its 1 px border, by the rounded
+;; corners) a little differently from one capture to the next: the example
+;; unchanged, its screenshot's file changed at each run. A new capture
+;; differing from the last screenshot only there (its outer
+;; `+my/screenshots-edge' pixels) leaves the last one as it is. With
+;; ImageMagick (scripts/tools.sh); without it, each capture replaces it.
+(defvar +my/screenshots-edge 3
+  "Pixels on each side of a screenshot (the window's edge) a new capture may
+differ in from the last one and still be the same screenshot (see above).")
+
+(defun +my/screenshots--same-p (old new)
+  "Non-nil if image files OLD and NEW are the same but for their outer
+`+my/screenshots-edge' pixels (see above); nil without ImageMagick."
+  (and (executable-find "magick")
+       (with-temp-buffer
+         (and (eql 0 (call-process "magick" nil t nil old new
+                                   "-shave" (format "%dx%d" +my/screenshots-edge +my/screenshots-edge)
+                                   "-metric" "AE" "-compare"
+                                   "-format" "%[distortion]" "info:"))
+              (let ((said (string-trim (buffer-string))))
+                (and (string-match-p "\\`[0-9.e+-]+\\'" said)
+                     (zerop (string-to-number said))))))))
+
 (defun +my/screenshots--capture (frame file)
   "Capture FRAME's window (the title bar too, no shadow, its corners
 black: see above) into FILE (a PNG), with SCREENCAPTURE (default:
 macOS's screencapture); the screen's rectangle under it if macOS didn't say
-which window it is. t if FILE was made, else why not (what screencapture
-said, its exit status). Captured into a temp file first: FILE (the last
+which window it is. t if captured, else why not (what screencapture said,
+its exit status). Captured into a temp file first: FILE (the last
 screenshot) replaced only by a capture made, not lost when it fails (e.g.
-without the Screen Recording permission)."
+without the Screen Recording permission), and not by one the same but for
+the window's edge (see THE SAME SCREENSHOT)."
   (pcase-let ((`(,left ,top ,right ,bottom) (frame-edges frame 'outer-edges))
               (number (+my/screenshots--window-number frame))
               (new (concat (file-name-sans-extension file) ".new.png")))
@@ -151,7 +178,10 @@ without the Screen Recording permission)."
                             (list new))))
             (said (string-trim (buffer-string))))
         (if (and (eql status 0) (file-exists-p new))
-            (progn (rename-file new file t) t)
+            (progn (if (and (file-exists-p file) (+my/screenshots--same-p file new))
+                       (delete-file new)
+                     (rename-file new file t))
+                   t)
           (when (file-exists-p new)
             (delete-file new))
           (string-join (delq nil (list (and (not (string-empty-p said)) said)
