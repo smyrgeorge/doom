@@ -5,7 +5,7 @@ the git status, also of changes made outside Emacs.
 
 | macOS | Linux | Action |
 |---|---|---|
-| `←` / `→` | `←` / `→` | Collapse or go to the parent / expand or open |
+| `←` / `→` | `←` / `→` | Collapse or go to the parent / expand; on a file, up / down (`RET` opens it) |
 | `zR` / `zM` | `zR` / `zM` | Expand / collapse everything (`.git` stays closed) |
 | Click | Click | Select (the sidebar gets the focus) |
 | Double click | Double click | Open a file, expand / collapse a folder |

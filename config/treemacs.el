@@ -45,8 +45,8 @@
 
 ;; Arrows in trees: ← collapses (or goes to the parent), → expands
 ;; a closed node, or goes to the first child of an open one; on a file in the
-;; project view it opens it, on an error in the error list (SPC c X) it jumps
-;; there. ↑/↓ as k/j. (treemacs-evil binds h/l and j/k but leaves the arrows as
+;; project view they move up / down as ↑ / ↓ (RET or a double click opens it),
+;; on an error in the error list (SPC c X) → jumps there. ↑/↓ as k/j. (treemacs-evil binds h/l and j/k but leaves the arrows as
 ;; evil's line motions, which in lsp-treemacs' lists could stop on the hidden
 ;; first line; → was RET, which there didn't expand anything.)
 (map! :after treemacs-evil

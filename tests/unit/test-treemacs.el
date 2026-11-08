@@ -411,7 +411,7 @@ actions it ran: ((ACTION ARGS...)...)."
      (let ((markers (+test-treemacs--fake-buttons ,@specs)))
        (goto-char (nth ,line markers))
        (+test-treemacs-recording (treemacs-COLLAPSE-action treemacs-TAB-action treemacs-RET-action
-                                  treemacs-goto-parent-node treemacs-next-line)
+                                  treemacs-goto-parent-node treemacs-next-line treemacs-previous-line)
          (funcall ,fn)))))
 
 (ert-deftest treemacs/node ()
@@ -447,12 +447,14 @@ off the buttons."
         (should-not (+my/treemacs--leaf-p (nth i markers)))))))
 
 (ert-deftest treemacs/left-on-project-nodes-collapses ()
-  "← on treemacs' own nodes (root, folders, files, tags): its collapse (which
-goes to the parent of a closed one)."
+  "← on treemacs' own nodes (root, folders, a file's tags): its collapse
+(which goes to the parent of a closed one); on a file: up, as ↑."
   (dolist (state '(root-node-open root-node-closed dir-node-open dir-node-closed
-                   file-node-open file-node-closed tag-node-open tag-node-closed tag-node))
+                   file-node-open tag-node-open tag-node-closed tag-node))
     (should (equal (+test-treemacs-arrow #'+my/treemacs-left 0 `("node" :state ,state :depth 1))
-                   '((treemacs-COLLAPSE-action))))))
+                   '((treemacs-COLLAPSE-action)))))
+  (should (equal (mapcar #'car (+test-treemacs-arrow #'+my/treemacs-left 0 '("f" :state file-node-closed :depth 1)))
+                 '(treemacs-previous-line))))
 
 (ert-deftest treemacs/left-in-lsp-lists ()
   "← in lsp-treemacs' lists: an open node closes, a closed one goes to its
@@ -481,10 +483,10 @@ parent (not up to the hidden first line)."
     (should-not (+test-treemacs-arrow #'+my/treemacs-left 0 hidden))))
 
 (ert-deftest treemacs/right ()
-  "→: a closed file opens, an error (leaf) is jumped to, a closed node
+  "→: a file goes down (as ↓, not opened), an error (leaf) is jumped to, a closed node
 expands, an open one goes to its first child; others: RET."
   (let ((cases
-         `((("f" :state file-node-closed :depth 1) . treemacs-RET-action)
+         `((("f" :state file-node-closed :depth 1) . treemacs-next-line)
            (("e" :state treemacs-error-closed :depth 1 :item (:key "e")) . treemacs-RET-action)
            (("d" :state dir-node-closed :depth 1) . treemacs-TAB-action)
            (("r" :state root-node-closed :depth 0) . treemacs-TAB-action)
@@ -507,8 +509,8 @@ expands, an open one goes to its first child; others: RET."
 
 (ert-deftest treemacs/arrows-in-the-project-view ()
   "In a real sidebar: → expands a folder, → again goes into it, → on a file
-opens it; ← goes back to the folder, ← collapses it, ← on the root collapses
-the project, → opens it again."
+goes down (not opened), ← on a file goes up (here to the folder), ← collapses
+it, ← on the root collapses the project, → opens it again."
   (+test-treemacs
     (let ((root (+test-treemacs--project "arrows" "README.md" "docs/guide.md" "src/A.kt")))
       (+test-treemacs--show-project root)
@@ -520,13 +522,12 @@ the project, → opens it again."
       (+my/treemacs-right)
       (should (equal (treemacs-button-get (treemacs-current-button) :path)
                      (expand-file-name "docs/guide.md" root)))
-      (let ((sidebar (selected-window)))
-        (+my/treemacs-right)                   ; opens the file
-        (should (get-file-buffer (expand-file-name "docs/guide.md" root)))
-        (should (get-buffer-window (get-file-buffer (expand-file-name "docs/guide.md" root))))
-        (select-window sidebar))
+      (+my/treemacs-right)                     ; down, as ↓: not opened
+      (should-not (get-file-buffer (expand-file-name "docs/guide.md" root)))
+      (should (equal (treemacs-button-get (treemacs-current-button) :path)
+                     (expand-file-name "src" root)))
       (+test-treemacs--goto "guide.md")
-      (+my/treemacs-left)                      ; to the folder
+      (+my/treemacs-left)                      ; up, as ↑: the folder
       (should (equal (treemacs-button-get (treemacs-current-button) :path)
                      (expand-file-name "docs" root)))
       (+my/treemacs-left)                      ; collapse it

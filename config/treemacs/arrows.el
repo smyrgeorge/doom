@@ -21,6 +21,8 @@ those say closed too."
   (interactive)
   (pcase-let ((`(,button ,name) (+my/treemacs--node)))
     (cond ((null button))
+          ;; A file: up, as ↑ (not to its folder).
+          ((equal name "file-node-closed") (treemacs-previous-line 1))
           ;; treemacs' own nodes (the project view): collapse, or go to the
           ;; parent.
           ((string-match-p "\\`\\(root\\|dir\\|file\\|tag\\)-node" name)
@@ -37,9 +39,9 @@ those say closed too."
   (interactive)
   (pcase-let ((`(,button ,name) (+my/treemacs--node)))
     (cond ((null button) (treemacs-next-line 1))
-          ((or (equal name "file-node-closed")         ; open the file
-               (+my/treemacs--leaf-p button))           ; go to the error
-           (treemacs-RET-action))
+          ;; A file: down, as ↓ (RET or a double click opens it).
+          ((equal name "file-node-closed") (treemacs-next-line 1))
+          ((+my/treemacs--leaf-p button) (treemacs-RET-action)) ; go to the error
           ((string-suffix-p "-closed" name) (treemacs-TAB-action))
           ((and (string-suffix-p "-open" name) (not (equal name "file-node-open")))
            (treemacs-next-line 1))
