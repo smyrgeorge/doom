@@ -1,8 +1,8 @@
 ;;; tests/e2e/test-stripe.el -*- lexical-binding: t; -*-
 ;; config/stripe.el in a GUI Emacs: the strip, one image in a child frame laid
 ;; over each file window's right margin; its pixels (band, marks), splits,
-;; other buffers, a notice above, a press, the wheel, and images made only
-;; when the strip changes.
+;; other buffers, a notice above, a press, the wheel, and images made (and
+;; the strip's frame drawn anew) only when the strip changes.
 
 (setq-default truncate-lines t)          ; as Doom
 (+test-load "config/window" "config/childframe" "config/banner" "config/stripe")
@@ -173,18 +173,25 @@ the text, and back up when it goes."
 
 (ert-deftest e2e-stripe/images-made-only-when-the-strip-changes ()
   "300 scrolls of one line in a 3000-line file: the band moves by under a pixel
-most times, so few new images, each old one flushed from Emacs's cache."
+most times, so few new images, each old one flushed from Emacs's cache, and
+the strip's frame drawn anew with each (on macOS a reload left it showing the
+old one), only the strip's."
   (+test-stripe
     (+test-stripe--file "e.el" 3000)
-    (let ((made 0) (flushed 0))
+    (let ((made 0) (flushed 0) (redrawn nil)
+          (strip (+test-stripe--frame (selected-window))))
       (advice-add '+my/stripe--image :after (lambda (&rest _) (cl-incf made)) '((name . count)))
       (advice-add 'image-flush :after (lambda (&rest _) (cl-incf flushed)) '((name . count)))
+      (advice-add 'redraw-frame :after (lambda (&optional frame) (push frame redrawn)) '((name . count)))
       (unwind-protect
           (dotimes (_ 300) (scroll-up 1) (redisplay t))
         (advice-remove '+my/stripe--image 'count)
-        (advice-remove 'image-flush 'count))
+        (advice-remove 'image-flush 'count)
+        (advice-remove 'redraw-frame 'count))
       (should (< 20 made 150))
-      (should (= flushed made)))))
+      (should (= flushed made))
+      (should (= (length redrawn) made))
+      (should (seq-every-p (lambda (frame) (eq frame strip)) redrawn)))))
 
 ;; ====== THE MOUSE ======
 

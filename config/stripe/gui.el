@@ -216,7 +216,13 @@ made first, after this redisplay, if it has none)."
                                     'help-echo "mouse-1: jump there; drag the band to scroll"))))
             ;; Emacs keeps each image drawn: scrolling made a new one at each
             ;; step of the band.
-            (when old (image-flush old t))))
+            (when old (image-flush old t))
+            ;; Drawn anew, all of it: on macOS the strip's frame once kept
+            ;; showing its old image on screen though Emacs had drawn the new
+            ;; one (its glyphs had it), so the band stopped moving (seen after
+            ;; Doom reloaded its config, SPC h r r). A frame 8 pixels wide,
+            ;; one image: cheap.
+            (redraw-frame frame)))
         ;; Moved or resized (a notice above, a split): placed anew.
         (unless (equal (+my/stripe--geometry window) (frame-parameter frame '+my/stripe-geometry))
           (+my/stripe--sync-soon))))))

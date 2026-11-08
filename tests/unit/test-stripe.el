@@ -841,7 +841,8 @@ rows that continue a wrapped one, at the end on the last row."
          (orig (mapcar (lambda (f) (cons f (symbol-function f)))
                        '(frame-live-p frame-root-window window-buffer set-frame-parameter
                          frame-parameter set-frame-size set-frame-position frame-visible-p
-                         make-frame-visible make-frame-invisible delete-frame frame-parent))))
+                         make-frame-visible make-frame-invisible delete-frame frame-parent
+                         redraw-frame))))
      (cl-flet ((orig (f &rest args) (apply (alist-get f orig) args))
                (fake-p (x) (+test-stripe--frame-p x)))
        (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
@@ -857,6 +858,9 @@ rows that continue a wrapped one, at the end on the last row."
                                +test-stripe--made))))
                  ((symbol-function 'frame-live-p)
                   (lambda (f) (if (fake-p f) (+test-stripe--frame-live f) (orig 'frame-live-p f))))
+                 ;; Drawn anew (config/stripe/gui.el): nothing to draw here.
+                 ((symbol-function 'redraw-frame)
+                  (lambda (&optional f) (unless (fake-p f) (orig 'redraw-frame f))))
                  ((symbol-function 'frame-root-window)
                   (lambda (&optional f) (if (fake-p f) f (orig 'frame-root-window f))))
                  ((symbol-function 'window-buffer)
