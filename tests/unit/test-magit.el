@@ -142,7 +142,8 @@ the margin."
 unpushed ones open."
   (should (equal (get 'magit-status-mode 'magit-log-default-arguments)
                  '("--graph" "--color" "-n256" "--decorate")))
-  (should (equal magit-status-margin '(t "%Y-%m-%d %H:%M " magit-log-margin-width t 18)))
+  ;; No margin: it took the window's width from the diffs too (L L shows it).
+  (should (equal magit-status-margin '(nil "%Y-%m-%d %H:%M " magit-log-margin-width t 18)))
   (should (= magit-log-section-commit-count 20))
   (should (eq (alist-get 'recent magit-section-initial-visibility-alist) 'show))
   (should (eq (alist-get 'unpushed magit-section-initial-visibility-alist) 'show)))
@@ -297,6 +298,20 @@ margin."
         (setq magit-section-visibility-cache nil)
         (magit-refresh)
         (should (oref (+test-magit--section 'unpushed) hidden))))))
+
+(ert-deftest magit/status-buffer-uses-the-whole-width ()
+  "SPC g g: no margin taking the window's right side, so a diff's lines run
+to the window's edge; the log keeps its margin."
+  (+test-magit-with-repo nil
+    (+test-magit--git "commit" "-q" "--allow-empty" "-m" "x")
+    (magit-status-setup-buffer default-directory)
+    (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
+      (should-not (magit--right-margin-active))
+      (should (memq right-margin-width '(nil 0)))
+      (should-not (cdr (window-margins (get-buffer-window (current-buffer))))))
+    (magit-log-setup-buffer (list "--all") (get 'magit-log-mode 'magit-log-default-arguments) nil)
+    (with-current-buffer (magit-get-mode-buffer 'magit-log-mode)
+      (should (magit--right-margin-active)))))
 
 (ert-deftest magit/status-unpushed-commits-open ()
   (+test-magit-with-repo nil

@@ -7,7 +7,9 @@
 ;; Commits are shown as a tree, like tig: in the log (l l) and in the status
 ;; buffer's commit sections (SPC g g: open, 20 commits), each branch's lane in
 ;; its own colour, drawn with box-drawing lines instead of ASCII (`*' `|' `/'
-;; `\'), with the date and author in the margin.
+;; `\'). The log has the date and author in the margin; the status buffer
+;; doesn't: a margin takes its width from the whole window, and its diffs and
+;; headers were cut where it starts (L L there shows it, for that buffer).
 (defvar +my/magit-graph-glyphs
   '((?* . "●") (?| . "│") (?/ . "╱") (?\\ . "╲") (?- . "─"))
   "How the characters of git's graph are drawn.")
@@ -22,7 +24,8 @@
   ;; (magit folds "Recent commits"), with more of them.
   (put 'magit-status-mode 'magit-log-default-arguments
        '("--graph" "--color" "-n256" "--decorate"))
-  (setq magit-status-margin '(t "%Y-%m-%d %H:%M " magit-log-margin-width t 18)
+  ;; No margin (see above); its look, when L L shows it, the log's.
+  (setq magit-status-margin '(nil "%Y-%m-%d %H:%M " magit-log-margin-width t 18)
         magit-log-section-commit-count 20)
   (add-to-list 'magit-section-initial-visibility-alist '(recent . show))
   (add-to-list 'magit-section-initial-visibility-alist '(unpushed . show)))
