@@ -10,12 +10,16 @@ installs `bd` (Homebrew on macOS, npm on Linux).
 | `SPC o i` | The project's issues |
 | `SPC o I` | A new issue: title, type, priority |
 
-In a project that doesn't track its issues yet, `SPC o i` and `SPC o I` ask to start, then run `bd init`: it adds
-`.beads/` and a `.gitignore` entry and commits them. It commits what's staged too, so with something staged it isn't
-run: commit or unstage it first. No files for agents are added (`CLAUDE.md`, `AGENTS.md`...): Claude Code in Emacs is
-told about the issues [by this config](claude-code.md#issues-for-claude).
+In a project that doesn't track its issues yet, `SPC o i` and `SPC o I` offer a terminal at its root with `bd init`
+typed, not run: read it, run it with `RET`, then `SPC o i` again. `bd init` commits what it adds (and what's staged);
+add `--skip-hooks` before running it to install no git hooks, `--skip-agents` to add no files for agents (`CLAUDE.md`,
+`AGENTS.md`...). Claude Code in Emacs is told about the issues either way ([more](claude-code.md#issues-for-claude)).
+The command typed is `+my/beads-init-command` in `config/beads.el`.
 
 ## The list
+
+The list opens in a new pane where [tiling](editor.md#tiling) puts it, as Claude Code and Magit do; an issue opened
+from it in a new pane too, and the next ones in that pane, as its tabs. The preview (`P`) stays beside the list.
 
 | Key | Action |
 |---|---|

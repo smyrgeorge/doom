@@ -16,9 +16,9 @@ own ([Examples](docs/examples.md)).
 
 ### Tiling
 
-Applications (Claude Code, the terminal, Magit, the Markdown preview, drawings) open in a new pane where the tiling
-layout puts it: the main pane on the left, the others stacked on the right. Files open as tabs in the current pane, and
-a pane closes with its last tab. `SPC w SPC` opens a pane the same way ([more](docs/editor.md#tiling)).
+Applications (Claude Code, the terminal, Magit, the Markdown preview, drawings, issues) open in a new pane where the
+tiling layout puts it: the main pane on the left, the others stacked on the right. Files open as tabs in the current
+pane, and a pane closes with its last tab. `SPC w SPC` opens a pane the same way ([more](docs/editor.md#tiling)).
 
 ![Tiling](examples/tiling.png)
 

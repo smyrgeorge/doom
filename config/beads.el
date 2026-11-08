@@ -5,8 +5,8 @@
 
 ;; ====== KEY BINDINGS ======
 
-;; SPC o i: the current project's issues (its .beads/, started if need be,
-;; once asked); SPC o I: a new one.
+;; SPC o i: the current project's issues (its .beads/; without one, a
+;; terminal offered with bd init typed); SPC o I: a new one.
 (map! :leader
       :desc "Issues (Beads)" "o i" #'+my/beads-project
       :desc "New issue"      "o I" #'+my/beads-new-issue)
@@ -16,12 +16,15 @@
 ;; bd's command line: bd 1.x runs no daemon (config/beads/bd.el).
 (setq beads-client-connection-strategy 'cli)
 
-;; How SPC o i starts tracking a project's issues (config/beads/project.el):
-;; no questions (Emacs answers none), no files for agents (CLAUDE.md,
-;; AGENTS.md, .claude/, .codex/, .cursor/): Claude Code in Emacs is told of
-;; the issues by config/agent-shell/beads.el.
-(defvar +my/beads-init-args '("init" "--quiet" "--non-interactive" "--skip-agents")
-  "bd's arguments starting a project's issues.")
+;; What SPC o i types (not runs) in a terminal where a project's issues aren't
+;; tracked yet (config/beads/project.el). bd init commits what it adds (and
+;; what's staged). Flags to add here, or before running it: --skip-hooks, no
+;; git hooks (else bd's become the repository's core.hooksPath, run on every
+;; commit, merge, push); --skip-agents, no CLAUDE.md, AGENTS.md, .claude/,
+;; .codex/, .cursor/ (Claude Code in Emacs is told of the issues anyway, by
+;; config/agent-shell/beads.el).
+(defvar +my/beads-init-command "bd init"
+  "The command SPC o i types in a terminal to start tracking a project's issues.")
 
 ;; ====== CODE ======
 

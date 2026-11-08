@@ -19,6 +19,12 @@ stash; not its process log."
        (or (derived-mode-p 'magit-status-mode 'magit-revision-mode 'magit-stash-mode)
            (not (+my/tiling--in-magit-p (window-buffer (selected-window)))))))
 
+(defun +my/tiling-beads-issue-new-pane-p ()
+  "In a Beads issue's buffer being shown (config/beads.el): non-nil if it opens
+in a new pane: not the list's preview (P), beads.el's side window. (A second
+issue goes to the first one's pane: config/beads/project.el.)"
+  (not (equal (buffer-name) "*Beads Preview*")))
+
 (defun +my/tiling--app (buffer)
   "BUFFER's entry in `+my/tiling-apps', if it's an application's."
   (with-current-buffer buffer

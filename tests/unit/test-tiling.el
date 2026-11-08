@@ -416,7 +416,8 @@ ratio kept for SPC w a; the focus where it was."
   (should (memq #'+my/tiling-close-pane-h (default-value 'kill-buffer-hook)))
   ;; The applications.
   (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) +my/tiling-apps)
-                 '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-mode))))
+                 '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-mode
+                   beads-list-mode beads-detail-mode beads-detail-vui-mode))))
 
 (ert-deftest tiling/what-is-an-application ()
   (+test-tiling-first

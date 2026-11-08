@@ -9,7 +9,7 @@
 (load (expand-file-name "beads-autoloads"
                         (file-name-directory (locate-library "beads")))
       nil t)
-(+test-load "config/beads")
+(+test-load "config/window" "config/tiling" "config/beads")
 
 (defconst +test-beads--loaded-before (featurep 'beads)
   "Whether loading config/beads.el loaded beads.el (it mustn't).")
@@ -94,61 +94,102 @@ on *scratch*, and again after (Beads' buffers killed)."
 
 ;; ====== STARTING ======
 
-(ert-deftest beads/spc-o-i-starts-tracking-once-asked ()
-  "SPC o i where no .beads/ is: asked; no, nothing; yes, bd init (its commit,
-no files for agents), then the (empty) list."
-  (+test-beads-with-repo
+(defmacro +test-beads--untracked (&rest body)
+  "BODY in a new folder (`dir', Doom's project root) whose issues aren't
+tracked; the terminals it would open (`terminals') and what they'd be typed
+(`typed') recorded, its timers run at once."
+  (declare (indent 0))
+  `(let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "beads-none-") t)))
+          (default-directory dir)
+          (terminals nil)
+          (typed nil))
+     (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) dir))
+               ((symbol-function 'ghostel-new)
+                (lambda ()
+                  (let ((buffer (generate-new-buffer "*test terminal*")))
+                    (with-current-buffer buffer (insert "~/project $ "))
+                    (push (cons buffer default-directory) terminals)
+                    buffer)))
+               ((symbol-function 'ghostel-send-string)
+                (lambda (text) (push (cons (current-buffer) text) typed)))
+               ((symbol-function 'run-at-time)
+                (lambda (_time _repeat fn &rest args) (apply fn args) nil)))
+       (unwind-protect (progn ,@body)
+         (dolist (terminal terminals) (kill-buffer (car terminal)))))))
+
+(ert-deftest beads/untracked-offers-a-terminal-with-bd-init-typed ()
+  "SPC o i where no .beads/ is: asked; yes, a terminal at the project's root,
+bd init typed there, not run (no RET); nothing else done."
+  (+test-beads--untracked
     (let (asked)
-      (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (push prompt asked) nil)))
-        (should-error (+my/beads-project) :type 'user-error))
-      (should (string-match-p "Track .*beads-repo-.*'s issues with Beads\\?" (car asked)))
-      (should-not (file-exists-p (expand-file-name ".beads" repo)))
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (push prompt asked) t))
+                ((symbol-function 'beads-list) (lambda () (error "The list opened"))))
+        (+my/beads-project))
+      (should (string-match-p "doesn't track its issues with Beads. Open a terminal with .bd init. to run\\?"
+                              (car asked)))
+      (should (equal (mapcar #'cdr terminals) (list dir)))
+      (should (equal typed (list (cons (caar terminals) "bd init"))))
+      (should-not (string-match-p "[\r\n]" (cdar typed)))
+      (should-not (file-exists-p (expand-file-name ".beads" dir))))))
+
+(ert-deftest beads/untracked-declined-nothing-opened ()
+  (+test-beads--untracked
+    (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) nil)))
+      (+my/beads-project)
+      (+my/beads-new-issue))
+    (should-not terminals)
+    (should-not typed)))
+
+(ert-deftest beads/spc-o-I-offers-it-too ()
+  (+test-beads--untracked
+    (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t))
+              ((symbol-function 'beads-create-issue) (lambda () (interactive) (error "Created"))))
+      (+my/beads-new-issue))
+    (should (= (length terminals) 1))
+    (should (equal (cdar typed) "bd init"))))
+
+(ert-deftest beads/typed-once-the-prompt-is-drawn ()
+  "Not before the shell drew something and it settled; given up after a
+while without one."
+  (let ((buffer (generate-new-buffer "*test terminal*"))
+        (scheduled 0) typed)
+    (unwind-protect
+        (cl-letf (((symbol-function 'ghostel-send-string) (lambda (text) (push text typed)))
+                  ((symbol-function 'run-at-time)
+                   (lambda (_time _repeat fn &rest args)
+                     (cl-incf scheduled)
+                     (when (< scheduled 100) (apply fn args)))))
+          ;; Nothing drawn: never typed, 50 tries.
+          (+my/beads--type-when-ready buffer "bd init")
+          (should-not typed)
+          (should (= scheduled 50))
+          ;; Drawn and settled: typed, once.
+          (setq scheduled 0)
+          (with-current-buffer buffer (insert "$ "))
+          (+my/beads--type-when-ready buffer "bd init")
+          (should (equal typed '("bd init")))
+          ;; Its buffer gone: nothing.
+          (kill-buffer buffer)
+          (+my/beads--type-when-ready buffer "bd init")
+          (should (equal typed '("bd init"))))
+      (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
+(ert-deftest beads/the-command-typed ()
+  (should (equal +my/beads-init-command "bd init"))
+  (let ((+my/beads-init-command "bd init --skip-hooks"))
+    (+test-beads--untracked
       (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t)))
         (+my/beads-project))
-      (should (equal (+my/beads-root) repo))
-      (should (string-match-p "bd init" (+test-beads--run "git" "log" "--format=%s")))
-      (dolist (file '("CLAUDE.md" "AGENTS.md" ".claude" ".codex" ".cursor"))
-        (should-not (file-exists-p (expand-file-name file repo))))
-      (should (seq-find (lambda (b) (with-current-buffer b (derived-mode-p 'beads-list-mode)))
-                        (buffer-list)))
-      ;; Tracked now: not asked again.
-      (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) (error "Asked again"))))
-        (+my/beads-project)))))
+      (should (equal (cdar typed) "bd init --skip-hooks")))))
 
-(ert-deftest beads/spc-o-I-starts-tracking-too ()
-  (+test-beads-with-repo
-    (let (created)
-      (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t))
-                ((symbol-function 'beads-create-issue)
-                 (lambda () (interactive) (push default-directory created))))
-        (+my/beads-new-issue))
-      (should (equal created (list repo)))
-      (should (+my/beads-root)))))
-
-(ert-deftest beads/not-started-over-staged-changes ()
-  "bd init commits what's staged: with something staged, not run (not asked)."
-  (+test-beads-with-repo
-    (with-temp-file (expand-file-name "work.txt" repo) (insert "half done\n"))
-    (+test-beads--run "git" "add" "work.txt")
-    (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) (error "Asked"))))
+(ert-deftest beads/no-terminal-says-what-to-run ()
+  (+test-beads--untracked
+    (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t))
+              ((symbol-function 'fboundp)
+               (let ((fboundp (symbol-function 'fboundp)))
+                 (lambda (f) (and (not (eq f 'ghostel-new)) (funcall fboundp f))))))
       (let ((err (should-error (+my/beads-project) :type 'user-error)))
-        (should (string-match-p "commit or unstage it first" (cadr err)))))
-    (should-not (file-exists-p (expand-file-name ".beads" repo)))
-    ;; Still staged, nothing committed.
-    (should (equal (+test-beads--run "git" "diff" "--cached" "--name-only") "work.txt\n"))))
-
-(ert-deftest beads/not-started-without-bd ()
-  (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "beads-nobd-") t)))
-         (default-directory dir))
-    (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) dir))
-              ((symbol-function 'executable-find) (lambda (&rest _) nil)))
-      (let ((err (should-error (+my/beads-project) :type 'user-error)))
-        (should (string-match-p "scripts/tools.sh" (cadr err)))))))
-
-(ert-deftest beads/init-arguments ()
-  (should (equal (car +my/beads-init-args) "init"))
-  (should (member "--non-interactive" +my/beads-init-args))
-  (should (member "--skip-agents" +my/beads-init-args)))
+        (should (string-match-p "run .bd init. in" (cadr err)))))))
 
 ;; ====== BD 1.x ======
 
@@ -248,6 +289,54 @@ no files for agents), then the (empty) list."
       (should (alist-get 'results (beads-core-cli-request "lint")))
       (should (beads-client-stats))
       (should (member "bug" (beads-get-types))))))
+
+;; ====== PANES ======
+
+(ert-deftest beads/the-list-and-issues-in-panes ()
+  "Tiling's applications: SPC o i, a new pane (its own, shown already); an
+issue, a new pane, the next one in it; the preview, beads.el's side window."
+  (+test-beads-with-project
+    (let ((this-command 'test)
+          (+my/tiling-strategy 'tall)
+          (+my/focus-new-windows t)
+          (first (+test-beads--create "First"))
+          (second (+test-beads--create "Second"))
+          (file (+test-buffer "notes.txt" "Notes\n")))
+      (switch-to-buffer file)
+      (+my/beads-project)
+      (should (= (length (+my/tiling--panes)) 2))
+      (should (eq (window-buffer (car (+my/tiling--panes))) file))
+      (let ((list-window (selected-window)))
+        (should (with-current-buffer (window-buffer list-window) (derived-mode-p 'beads-list-mode)))
+        ;; Again, from the file: its pane.
+        (select-window (car (+my/tiling--panes)))
+        (+my/beads-project)
+        (should (= (length (+my/tiling--panes)) 2))
+        (should (eq (selected-window) list-window))
+        ;; An issue: a new pane; the next one: that pane.
+        (beads-detail-open (beads-client-show first))
+        (should (= (length (+my/tiling--panes)) 3))
+        (let ((issue-window (selected-window)))
+          (should (string-match-p first (buffer-name (window-buffer issue-window))))
+          (select-window list-window)
+          (beads-detail-open (beads-client-show second))
+          (should (= (length (+my/tiling--panes)) 3))
+          (should (eq (selected-window) issue-window))
+          (should (string-match-p second (buffer-name (window-buffer issue-window)))))
+        ;; The preview: beads.el's side window, no pane.
+        (beads-detail-show (beads-client-show first))
+        (should (= (length (+my/tiling--panes)) 3))
+        (should (window-parameter (get-buffer-window "*Beads Preview*") 'window-side))))))
+
+(ert-deftest beads/issues-are-tiling-s-applications ()
+  (dolist (mode '(beads-list-mode beads-detail-mode beads-detail-vui-mode))
+    (should (seq-find (lambda (app) (eq (if (consp app) (car app) app) mode)) +my/tiling-apps)))
+  (with-temp-buffer
+    (rename-buffer "*Beads Preview*" t)
+    (when (equal (buffer-name) "*Beads Preview*")
+      (should-not (+my/tiling-beads-issue-new-pane-p))))
+  (with-temp-buffer
+    (should (+my/tiling-beads-issue-new-pane-p))))
 
 ;; ====== EVIL ======
 

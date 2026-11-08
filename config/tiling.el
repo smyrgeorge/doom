@@ -23,9 +23,9 @@
 ;; in order: left to right, top to bottom.
 ;; TILING FIRST (config/tiling/apps.el)
 ;; - Applications (`+my/tiling-apps': Claude Code, the terminal, the Markdown
-;;   preview, magit, drawings) open in a new pane where the strategy puts it,
-;;   whatever their own setting or Doom's popup rules say; one shown already:
-;;   its pane. Magit's status (SPC g g), and any magit buffer opened from
+;;   preview, magit, drawings, issues) open in a new pane where the strategy
+;;   puts it, whatever their own setting or Doom's popup rules say; one shown
+;;   already: its pane. Magit's status (SPC g g), and any magit buffer opened from
 ;;   outside magit (SPC g d's diff, a log from a file), open so; inside magit,
 ;;   a log or a diff from the status stays in its pane as magit has it, a
 ;;   commit or a stash (Doom: beside) opens in a new pane, its process log
@@ -65,7 +65,10 @@
     ghostel-mode                        ; the terminal (SPC o t)
     +md-preview-page-mode               ; the Markdown preview (SPC m p)
     +my/excalidraw-mode                 ; drawings (Option+Enter, C-c C-d)
-    (magit-mode . +my/tiling-magit-new-pane-p)) ; magit (SPC g g, SPC g d...)
+    (magit-mode . +my/tiling-magit-new-pane-p) ; magit (SPC g g, SPC g d...)
+    beads-list-mode                     ; issues (SPC o i, config/beads.el)
+    (beads-detail-mode . +my/tiling-beads-issue-new-pane-p) ; an issue (RET there)
+    (beads-detail-vui-mode . +my/tiling-beads-issue-new-pane-p))
   "Applications (see TILING FIRST above): major modes (and the modes derived
 from them), whose buffers open in a new pane; or (MODE . PREDICATE), MODE's
 buffers an application's, opening in a new pane when PREDICATE, called in the
