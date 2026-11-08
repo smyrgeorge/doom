@@ -207,7 +207,12 @@ while without one."
                  '("create" "T" "--type" "bug" "--acceptance" "ok")))
   (should (equal (beads-backend-bd--operation-to-cli-args "list" '((issue_type . "epic")))
                  '("list" "--type" "epic")))
-  (should-not (member "--no-daemon" (beads-backend-bd--cli-extra-flags "duplicates"))))
+  (should-not (member "--no-daemon" (beads-backend-bd--cli-extra-flags "duplicates")))
+  ;; A delete forced (bd 1.x only previews it otherwise), once.
+  (should (equal (beads-backend-bd--operation-to-cli-args "delete" '((ids . ("t-1"))))
+                 '("delete" "t-1" "--force")))
+  (should (equal (beads-backend-bd--operation-to-cli-args "delete" '((ids . ("t-1")) (force . t)))
+                 '("delete" "t-1" "--force"))))
 
 (ert-deftest beads/show-one-issue ()
   (should (equal (+my/beads--one-issue-a '(((id . "t-1") (title . "T")))) '((id . "t-1") (title . "T"))))
@@ -248,7 +253,8 @@ while without one."
       (should (equal (alist-get 'status (beads-client-show id)) "closed"))
       (beads-client-update id :status "open")
       (should (equal (alist-get 'status (beads-client-show id)) "open"))
-      (beads-client-delete (list id) :force t)
+      ;; Deleted as beads.el's D deletes it (asked first): no :force.
+      (beads-client-delete (list id))
       (should-not (beads-client-list)))))
 
 (ert-deftest beads/bd-labels-comments-dependencies ()

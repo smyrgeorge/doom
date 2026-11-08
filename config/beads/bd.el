@@ -7,7 +7,8 @@
 ;; bd 1.x has none, only its command line (`bd ... --json'), where beads.el
 ;; trips: its arguments built with string keys but read with symbols (create,
 ;; update, close, labels, dependencies all failed), flags bd renamed, `bd
-;; show' answering a list. Mended here; the activity feed (`bd mutations')
+;; show' answering a list, `bd delete' only previewing without --force.
+;; Mended here; the activity feed (`bd mutations')
 ;; and the merge conflicts view (`bd resolve-conflicts') are gone from bd and
 ;; say so. Only bd's command line is used (config/beads.el).
 ;; tests/unit/test-beads.el runs each against the real bd.
@@ -29,8 +30,13 @@ keys symbols: beads.el's client makes them strings, its CLI reads symbols."
       ,@rest)))
 
 (defun +my/beads--flags-a (args)
-  "bd's command line ARGS, with the flags bd renamed (see above)."
-  (mapcar (lambda (arg) (or (cdr (assoc arg +my/beads--flags)) arg)) args))
+  "bd's command line ARGS, with the flags bd renamed (see above); a delete
+forced: without --force bd 1.x only previews it (and exits 0: beads.el said
+\"Deleted\", nothing was), and beads.el has asked first."
+  (let ((args (mapcar (lambda (arg) (or (cdr (assoc arg +my/beads--flags)) arg)) args)))
+    (if (and (equal (car args) "delete") (not (member "--force" args)))
+        (append args '("--force"))
+      args)))
 
 (defun +my/beads--no-daemon-a (flags)
   "beads.el's extra FLAGS, without --no-daemon (bd 1.x has no daemon, nor the flag)."
