@@ -68,6 +68,7 @@ TOOLS=(
   "config            | magick/convert   | brew:imagemagick      | apt:imagemagick       | dnf:ImageMagick        | images: crop; rotate, flip on Linux (config/image.el)"
   "config            | npm              | brew:node             | apt:nodejs apt:npm    | dnf:nodejs dnf:nodejs-npm | Claude Code's bridge, npm's servers"
   "config            | claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | Claude Code in Emacs (config/agent-shell.el)"
+  "config            | bd               | brew:beads            | npm:@beads/bd         | npm:@beads/bd          | issues: Beads (config/beads.el)"
   "config            | python3          | builtin               | apt:python3           | dnf:python3            | treemacs's git status (config/treemacs.el)"
   "config            | xdg-open         | -                     | apt:xdg-utils         | dnf:xdg-utils          | other apps, the file manager (config/os.el)"
   "config            | lp               | -                     | apt:cups-client       | dnf:cups-client        | printing PDFs (config/os.el)"

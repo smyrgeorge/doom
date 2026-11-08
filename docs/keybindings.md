@@ -38,6 +38,7 @@ Vim's and Doom's keys stay as they are there. `config/os.el` has the rules.
 | `Cmd+C` (Markdown preview) | `Ctrl+Shift+C` | Copy the selection |
 | `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | A new Claude Code session / the project's |
 | `C-c C-d`, `SPC m d` (Claude Code) | the same | Draw for Claude |
+| `SPC o i` / `SPC o I` | `SPC o i` / `SPC o I` | The project's [issues](issues.md) / a new one |
 | `SPC h T` | `SPC h T` | Start / stop the profiler |
 
 On Linux, `Alt+1`..`Alt+9` stay Doom's workspace keys, and `Alt+←` / `Alt+→` still move by words in insert state. In a

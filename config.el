@@ -178,6 +178,9 @@
 ;; PROJECTILE (projects under ~/dev, no file cache)
 (load! "config/projectile")
 
+;; ISSUES (Beads, the project's issues in .beads/: SPC o i / SPC o I)
+(load! "config/beads")
+
 ;; SEARCH EVERYWHERE (classes, files, symbols, actions in one list)
 (load! "config/search")
 

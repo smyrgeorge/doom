@@ -6,6 +6,7 @@
 | `config.el` | The main config; loads `config/` |
 | `config/agent-shell.el`, `agent-shell/` | [Claude Code](claude-code.md), drawing for it |
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
+| `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |
 | `config/cheatsheet.el`, `cheatsheet.org` | A tips panel under the sidebar (off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |

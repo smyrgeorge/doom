@@ -69,3 +69,12 @@
 
 ;; Rainbow brackets: color (), [] and {} by nesting depth.
 (package! rainbow-delimiters)
+
+;; Beads: a git-backed issue tracker (bd, scripts/tools.sh) in Emacs: SPC o i
+;; (config/beads.el). Pinned: config/beads.el mends beads.el for bd 1.x, the
+;; commit it was checked with (tests/unit/test-beads.el); vui, its UI library,
+;; the one it was checked with too.
+(package! vui :recipe (:host github :repo "d12frosted/vui.el")
+  :pin "9e9ffa2f631cf5f99ef28bccc1a667922ddd71c5")
+(package! beads :recipe (:host codeberg :repo "ctietze/beads.el" :files ("lisp/*.el"))
+  :pin "f7ab243c3bd8c175a5bd9e68847d0d9b1b678735")
