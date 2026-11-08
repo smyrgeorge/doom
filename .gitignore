@@ -1,2 +1,43 @@
+# Emacs
+*~
+\#*\#
+.\#*
+*.elc
+*.eln
 flycheck_*.el
+/.dir-locals-2.el
+.projectile
+.lsp/
+/auto/
+/eln-cache/
+/.agent-shell/
+
+# Claude Code
 .claude/worktrees/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+.directory
+.Trash-*
+.nfs*
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Other editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp
