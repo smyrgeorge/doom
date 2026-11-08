@@ -71,6 +71,14 @@ gitconfig has GITCONFIG too (the user's gitconfig is never read)."
        (+test-magit--git "init" "-q")
        ,@body)))
 
+(defun +test-magit--status (&optional dir)
+  "Magit's status buffer for DIR (default: `default-directory'), a file
+written there first (untracked): magit-todos scans the repository with rg in
+the background, and rg exits with an error when it has no file to search,
+which reached the test Emacs (an empty repository's status: a CI runner)."
+  (+test-magit--write "README.md" "A readme.\n")
+  (magit-status-setup-buffer (or dir default-directory)))
+
 (defun +test-magit--graph-repo ()
   "Two branches merged: a graph with lanes (and a message with graph chars)."
   (+test-magit--write "f.txt" "a\nb\nc\n")
@@ -281,7 +289,7 @@ margin."
   (+test-magit-with-repo nil
     (dotimes (i 25)
       (+test-magit--git "commit" "-q" "--allow-empty" "-m" (format "commit %d" i)))
-    (magit-status-setup-buffer default-directory)
+    (+test-magit--status)
     (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
       (let ((recent (+test-magit--section 'unpushed)))
         (should recent)
@@ -304,7 +312,7 @@ margin."
 to the window's edge; the log keeps its margin."
   (+test-magit-with-repo nil
     (+test-magit--git "commit" "-q" "--allow-empty" "-m" "x")
-    (magit-status-setup-buffer default-directory)
+    (+test-magit--status)
     (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
       (should-not (magit--right-margin-active))
       (should (memq right-margin-width '(nil 0)))
@@ -321,7 +329,7 @@ to the window's edge; the log keeps its margin."
       (+test-magit--git "remote" "add" "origin" bare)
       (+test-magit--git "push" "-q" "-u" "origin" "main")
       (+test-magit--git "commit" "-q" "--allow-empty" "-m" "not pushed")
-      (magit-status-setup-buffer default-directory)
+      (+test-magit--status)
       (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
         (let ((unpushed (+test-magit--section 'unpushed)))
           (should unpushed)
@@ -335,7 +343,7 @@ to the window's edge; the log keeps its margin."
   (+test-magit-with-delta
   (+test-magit-with-repo nil
     (+test-magit--git "commit" "-q" "--allow-empty" "-m" "x")
-    (magit-status-setup-buffer default-directory)
+    (+test-magit--status)
     (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
       (should magit-delta-mode)
       (should (memq 'magit-delta-call-delta-and-convert-ansi-escape-sequences
@@ -347,7 +355,7 @@ to the window's edge; the log keeps its margin."
              (lambda (name &rest _) (unless (equal name "delta") (locate-file name exec-path)))))
     (+test-magit-with-repo nil
       (+test-magit--git "commit" "-q" "--allow-empty" "-m" "x")
-      (magit-status-setup-buffer default-directory)
+      (+test-magit--status)
       (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
         (should-not magit-delta-mode)))))
 
