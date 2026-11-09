@@ -274,3 +274,26 @@ checked (not run), its rules matching a line as they should."
       (+test-ausrc-wait (lambda () (equal (plist-get (agent-ui-get "l") :lines) "12:00 INFO up\n12:01 ERROR down")))
       (should (string-prefix-p "1 error · 2 lines" (+test-ausrc-text))))))
 
+
+(ert-deftest agent-ui-source/a-childs-source ()
+  (+test-ausrc
+    ;; A child's source: started with its panel, updating the child.
+    (agent-ui-show '(:id "p" :type "panel"
+                     :children ((:id "c" :type "progress" :max 1
+                                 :source (:command "echo 3/4" :match "(\\d)/(\\d)" :set (:value "$1" :max "$2"))))))
+    (+test-ausrc-ended "c")
+    (should (equal (plist-get (agent-ui-get "c") :value) 3))
+    (should (string-match-p "3/4  75%" (+test-ausrc-text)))
+    ;; Its panel removed: its source stopped.
+    (agent-ui-show '(:id "q" :type "panel" :children ((:id "s" :type "text" :text "" :source (:command "sleep 30" :tail 1)))))
+    (let ((process (agent-ui-source--state-process (agent-ui-source--state canvas "s"))))
+      (should (process-live-p process))
+      (agent-ui-remove "q")
+      (should-not (process-live-p process)))
+    ;; Updating a panel keeps its children's sources running; one gone, stopped.
+    (agent-ui-show '(:id "r" :type "panel" :children ((:id "t" :type "text" :text "" :source (:command "sleep 30" :tail 1)))))
+    (let ((process (agent-ui-source--state-process (agent-ui-source--state canvas "t"))))
+      (agent-ui-update "r" '(:title "renamed"))
+      (should (process-live-p process))
+      (agent-ui-update "r" '(:children ((:id "u" :type "text" :text "x"))))
+      (should-not (process-live-p process)))))

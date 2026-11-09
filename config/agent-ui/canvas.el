@@ -255,9 +255,10 @@ it if none is."
         (agent-ui--animate)))))
 
 (defun agent-ui--stop-timers ()
-  ;; Its elements go with it.
+  ;; Its elements go with it, panels' children too.
   (dolist (id agent-ui--order)
-    (run-hook-with-args 'agent-ui-removed-functions id))
+    (run-hook-with-args 'agent-ui-removed-functions id)
+    (agent-ui--children-stopped (agent-ui--entry-element (gethash id agent-ui--entries))))
   (dolist (timer (list agent-ui--redraw-timer agent-ui--animation-timer))
     (when (timerp timer)
       (cancel-timer timer)))
@@ -272,6 +273,83 @@ it if none is."
       (agent-ui--fail "no element %s in canvas %s; its elements: %s"
                       (agent-ui--show-value id) agent-ui--canvas-name
                       (if agent-ui--order (string-join agent-ui--order ", ") "none"))))
+
+;; ====== A PANEL'S CHILDREN ======
+;; A panel's children are elements too, each its own id, unique in its
+;; canvas: they're shown, updated, appended to, removed by it, their panel
+;; (the canvas's element holding them) redrawn; their sources started and
+;; stopped with them.
+
+(defun agent-ui--descendants (element)
+  "ELEMENT's children, theirs...: a flat list."
+  (cl-loop for child in (and (listp element) (plist-get element :children))
+           when (agent-ui--plist-p child)
+           append (cons child (agent-ui--descendants child))))
+
+(defun agent-ui--find-child (element id)
+  (seq-find (lambda (child) (equal (plist-get child :id) id)) (agent-ui--descendants element)))
+
+(defun agent-ui--replace-child (element id new)
+  "ELEMENT with its descendant ID replaced by NEW (removed, NEW nil)."
+  (if (not (plist-get element :children))
+      element
+    (plist-put (copy-sequence element) :children
+               (delq nil (mapcar (lambda (child)
+                                   (if (equal (plist-get child :id) id)
+                                       new
+                                     (agent-ui--replace-child child id new)))
+                                 (plist-get element :children))))))
+
+(defun agent-ui--owner (id)
+  "The current canvas's element (its entry) holding child ID, or nil."
+  (seq-find (lambda (entry) (agent-ui--find-child (agent-ui--entry-element entry) id))
+            (mapcar (lambda (top) (gethash top agent-ui--entries)) agent-ui--order)))
+
+(defun agent-ui--resolve (id)
+  "Element ID of the current canvas: (ENTRY . CHILD), CHILD nil for one of
+the canvas's own, else the child ID of ENTRY's panel. An error if none."
+  (if-let* ((entry (and (stringp id) (gethash id agent-ui--entries))))
+      (cons entry nil)
+    (if-let* ((owner (and (stringp id) (agent-ui--owner id))))
+        (cons owner (agent-ui--find-child (agent-ui--entry-element owner) id))
+      (agent-ui--entry id))))
+
+(defun agent-ui--children-started (element)
+  "ELEMENT's descendants shown: their sources started (`agent-ui-shown-functions')."
+  (dolist (child (agent-ui--descendants element))
+    (when (plist-get child :id)
+      (run-hook-with-args 'agent-ui-shown-functions (plist-get child :id) child))))
+
+(defun agent-ui--children-stopped (element &optional keep)
+  "ELEMENT's descendants gone, but those whose ids are in KEEP: their
+sources stopped (`agent-ui-removed-functions')."
+  (dolist (child (agent-ui--descendants element))
+    (let ((id (plist-get child :id)))
+      (when (and id (not (member id keep)))
+        (run-hook-with-args 'agent-ui-removed-functions id)))))
+
+(defun agent-ui--children-changed (old new)
+  "A panel changed from OLD to NEW: the children gone stopped, the new ones
+started (those staying, left running)."
+  (let ((old-ids (delq nil (mapcar (lambda (c) (plist-get c :id)) (agent-ui--descendants old))))
+        (new-ids (delq nil (mapcar (lambda (c) (plist-get c :id)) (agent-ui--descendants new)))))
+    (agent-ui--children-stopped old new-ids)
+    (dolist (child (agent-ui--descendants new))
+      (when (and (plist-get child :id) (not (member (plist-get child :id) old-ids)))
+        (run-hook-with-args 'agent-ui-shown-functions (plist-get child :id) child)))))
+
+(defun agent-ui--ids-free (element &optional except)
+  "An error if an id of ELEMENT or its descendants is taken in the current
+canvas (but by the element EXCEPT, its own place)."
+  (dolist (id (cons (plist-get element :id)
+                    (delq nil (mapcar (lambda (c) (plist-get c :id)) (agent-ui--descendants element)))))
+    (when id
+      (dolist (top agent-ui--order)
+        (unless (equal top except)
+          (let ((other (agent-ui--entry-element (gethash top agent-ui--entries))))
+            (when (or (and (equal top id) (not (equal id (plist-get element :id))))
+                      (agent-ui--find-child other id))
+              (agent-ui--fail "the id %s is taken in canvas %s" (agent-ui--show-value id) agent-ui--canvas-name))))))))
 
 (defun agent-ui--check-id (id)
   (unless (and (stringp id) (string-match-p "\\`[A-Za-z0-9_.-]+\\'" id))
@@ -323,11 +401,27 @@ Signals `agent-ui-error' if ELEMENT is wrong."
            (id (or (plist-get element :id)
                    (agent-ui--new-id (plist-get element :type))))
            (element (plist-put element :id id))
-           (entry (progn (agent-ui--check-id id) (gethash id agent-ui--entries))))
-      (if entry
+           (entry (progn (agent-ui--check-id id) (gethash id agent-ui--entries)))
+           (owner (and (not entry) (agent-ui--owner id))))
+      (cond
+       (owner
+        ;; A panel's child: replaced in its place, its panel redrawn.
+        (let ((old (agent-ui--find-child (agent-ui--entry-element owner) id)))
+          (agent-ui--ids-free (agent-ui--replace-child (agent-ui--entry-element owner) id nil)
+                              (agent-ui--entry-id owner))
+          (setf (agent-ui--entry-element owner)
+                (agent-ui--checked (agent-ui--replace-child (agent-ui--entry-element owner) id element)))
+          (run-hook-with-args 'agent-ui-removed-functions id)
+          (agent-ui--children-stopped old)
+          (agent-ui--dirty (list (agent-ui--entry-id owner)))))
+       (entry
           (progn
+            (agent-ui--ids-free element id)
+            (agent-ui--children-stopped (agent-ui--entry-element entry))
             (setf (agent-ui--entry-element entry) element)
-            (agent-ui--dirty (list id)))
+            (agent-ui--dirty (list id))))
+       (t
+        (agent-ui--ids-free element)
         (when (>= (length agent-ui--order) agent-ui-max-elements)
           (agent-ui--fail "canvas %s has %d elements, the most it holds: remove some"
                           agent-ui--canvas-name agent-ui-max-elements))
@@ -343,8 +437,9 @@ Signals `agent-ui-error' if ELEMENT is wrong."
           (unless (agent-ui--window)
             (funcall agent-ui-display-function (current-buffer)))
           (agent-ui--draw entry (agent-ui--context))
-          (agent-ui--animate)))
+          (agent-ui--animate))))
       (run-hook-with-args 'agent-ui-shown-functions id element)
+      (agent-ui--children-started element)
       (run-hooks 'agent-ui-changed-hook)
       id)))
 
@@ -353,27 +448,48 @@ Signals `agent-ui-error' if ELEMENT is wrong."
 `agent-ui-redraw-delay' from now. Returns ID. Signals `agent-ui-error' if
 there's no such element or the change makes it wrong (then it's unchanged)."
   (agent-ui--in canvas
-    (let ((entry (agent-ui--entry id)))
-      (setf (agent-ui--entry-element entry)
-            (agent-ui--checked (agent-ui-merge (agent-ui--entry-element entry) patch)))
-      (agent-ui--dirty (list id))
-      (run-hooks 'agent-ui-changed-hook)
-      id)))
+    (agent-ui--change id (lambda (element) (agent-ui-merge element patch)))))
+
+(defun agent-ui--change (id change)
+  "Element ID of the current canvas (or a panel's child) changed by CHANGE,
+a function of it returning it changed: checked, its panel's children
+started or stopped as they came or went, redrawn soon. Returns ID."
+  (pcase-let* ((`(,entry . ,child) (agent-ui--resolve id))
+               (old (or child (agent-ui--entry-element entry)))
+               (new (agent-ui--checked (funcall change old))))
+    (if child
+        (progn
+          (agent-ui--ids-free (agent-ui--replace-child (agent-ui--entry-element entry) id new)
+                              (agent-ui--entry-id entry))
+          (setf (agent-ui--entry-element entry)
+                (agent-ui--checked (agent-ui--replace-child (agent-ui--entry-element entry) id new))))
+      (agent-ui--ids-free new id)
+      (setf (agent-ui--entry-element entry) new))
+    (agent-ui--children-changed old new)
+    (agent-ui--dirty (list (agent-ui--entry-id entry)))
+    (run-hooks 'agent-ui-changed-hook)
+    id))
 
 (cl-defun agent-ui-append (id patch &key canvas)
   "Add PATCH's lists to element ID of CANVAS (see `agent-ui-append-to'), as
 `agent-ui-update' changes it."
   (agent-ui--in canvas
-    (let ((entry (agent-ui--entry id)))
-      (setf (agent-ui--entry-element entry)
-            (agent-ui--checked (agent-ui-append-to (agent-ui--entry-element entry) patch)))
-      (agent-ui--dirty (list id))
-      (run-hooks 'agent-ui-changed-hook)
-      id)))
+    (agent-ui--change id (lambda (element) (agent-ui-append-to element patch)))))
 
 (cl-defun agent-ui-remove (id &key canvas)
   "Remove element ID from CANVAS. Returns ID."
   (agent-ui--in canvas
+   (pcase (agent-ui--resolve id)
+    (`(,owner . ,(and child (pred identity)))
+     ;; A panel's child: out of its panel, redrawn.
+     (setf (agent-ui--entry-element owner)
+           (agent-ui--checked (agent-ui--replace-child (agent-ui--entry-element owner) id nil)))
+     (run-hook-with-args 'agent-ui-removed-functions id)
+     (agent-ui--children-stopped child)
+     (agent-ui--dirty (list (agent-ui--entry-id owner)))
+     (run-hooks 'agent-ui-changed-hook)
+     id)
+    (_
     (let ((entry (agent-ui--entry id))
           (inhibit-read-only t))
       ;; Its text and the blank line after it.
@@ -386,8 +502,9 @@ there's no such element or the change makes it wrong (then it's unchanged)."
             agent-ui--dirty (delete id agent-ui--dirty))
       (agent-ui--animate)
       (run-hook-with-args 'agent-ui-removed-functions id)
+      (agent-ui--children-stopped (agent-ui--entry-element entry))
       (run-hooks 'agent-ui-changed-hook)
-      id)))
+      id)))))
 
 (cl-defun agent-ui-clear (&key canvas)
   "Remove every element from CANVAS (if it's there)."
@@ -402,14 +519,18 @@ there's no such element or the change makes it wrong (then it's unchanged)."
 (cl-defun agent-ui-get (id &key canvas)
   "Element ID of CANVAS, a plist."
   (agent-ui--in canvas
-    (copy-sequence (agent-ui--entry-element (agent-ui--entry id)))))
+    (pcase-let ((`(,entry . ,child) (agent-ui--resolve id)))
+      (copy-sequence (or child (agent-ui--entry-element entry))))))
 
 (cl-defun agent-ui-elements (&key canvas)
   "CANVAS's elements in order: plists (:id ID :type TYPE); none if it isn't
 there."
   (when (agent-ui--live-canvas-p canvas)
    (agent-ui--in canvas
-    (mapcar (lambda (id)
-              (let ((element (agent-ui--entry-element (gethash id agent-ui--entries))))
-                (list :id id :type (plist-get element :type))))
-            agent-ui--order))))
+    (cl-loop for id in agent-ui--order
+             for element = (agent-ui--entry-element (gethash id agent-ui--entries))
+             collect (list :id id :type (plist-get element :type))
+             ;; A panel's children (with ids), after it.
+             append (cl-loop for child in (agent-ui--descendants element)
+                             when (plist-get child :id)
+                             collect (list :id (plist-get child :id) :type (plist-get child :type) :panel id))))))

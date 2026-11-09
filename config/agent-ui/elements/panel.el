@@ -66,9 +66,18 @@ image kept as it is."
           (split-string text "\n")))
 
 (defun agent-ui-panel--child (child ctx width)
-  "CHILD drawn at WIDTH, its id in its context (its own buttons)."
-  (agent-ui-render child (plist-put (plist-put (copy-sequence ctx) :width width)
-                                    :id (or (plist-get child :id) (plist-get ctx :id)))))
+  "CHILD drawn at WIDTH, its id in its context (its own buttons); its text
+marked as its (`agent-ui-child'), where a deeper child hasn't marked it."
+  (let ((text (agent-ui-render child (plist-put (plist-put (copy-sequence ctx) :width width)
+                                                :id (or (plist-get child :id) (plist-get ctx :id))))))
+    (when-let* ((id (plist-get child :id)))
+      (let ((pos 0))
+        (while (< pos (length text))
+          (let ((next (or (next-single-property-change pos 'agent-ui-child text) (length text))))
+            (unless (get-text-property pos 'agent-ui-child text)
+              (put-text-property pos next 'agent-ui-child id text))
+            (setq pos next)))))
+    text))
 
 (defun agent-ui-panel--draw (props ctx)
   (let* ((children (plist-get props :children))

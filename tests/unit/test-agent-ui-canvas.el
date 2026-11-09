@@ -344,3 +344,69 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
         (should-not (memq timer timer-list))))
     ;; The macro kills it again: a live one.
     (setq canvas (agent-ui-canvas))))
+
+;; ====== A PANEL'S CHILDREN ======
+
+(defconst +test-auc-panel-type (gethash 'panel agent-ui--types)
+  "The real panel type (the tests' registry, bound in each test, lacks it).")
+
+(defun +test-auc-with-panels ()
+  "The real panel type, in the tests' registry."
+  (puthash 'panel +test-auc-panel-type agent-ui--types))
+
+(defconst +test-auc-panel
+  '(:id "dash" :type "panel" :layout "row" :min-width 5
+    :children ((:id "a" :type "meter" :value 1)
+               (:type "panel" :border :false :children ((:id "b" :type "meter" :value 2)))))
+  "A panel: a, and b in a panel in it.")
+
+(ert-deftest agent-ui-canvas/a-panels-children-by-id ()
+  (+test-auc
+    (+test-auc-with-panels)
+    (agent-ui-show +test-auc-panel)
+    ;; Listed after their panel.
+    (should (equal (agent-ui-elements)
+                   '((:id "dash" :type "panel") (:id "a" :type "meter" :panel "dash") (:id "b" :type "meter" :panel "dash"))))
+    (should (equal (agent-ui-get "b") '(:id "b" :type "meter" :value 2)))
+    ;; Updated by its own id: its panel redrawn.
+    (agent-ui-update "b" '(:value 7))
+    (+test-auc-flush)
+    (should (string-match-p "1/10 +│ 7/10" (+test-auc-text)))
+    (should (equal (plist-get (agent-ui-get "b") :value) 7))
+    ;; Appended to.
+    (agent-ui-append "a" '(:marks ("x")))
+    (+test-auc-flush)
+    (should (string-match-p "1/10 x" (+test-auc-text)))
+    ;; Shown again by its id: replaced in its place.
+    (agent-ui-show '(:id "a" :type "spinner"))
+    (+test-auc-flush)
+    (should (string-match-p "spin [0-9]+ +│ 7/10" (+test-auc-text)))
+    ;; Removed: out of its panel.
+    (agent-ui-remove "a")
+    (+test-auc-flush)
+    (should-not (agent-ui--find-child (agent-ui-get "dash") "a"))
+    (should (string-match-p "7/10" (+test-auc-text)))
+    (should (string-match-p "no element \"a\"" (+test-auc-message #'agent-ui-get "a")))))
+
+(ert-deftest agent-ui-canvas/a-childs-id-taken ()
+  (+test-auc
+    (+test-auc-with-panels)
+    (agent-ui-show +test-auc-panel)
+    (should (string-match-p "the id \"b\" is taken"
+                            (+test-auc-message #'agent-ui-show '(:id "other" :type "panel" :children ((:id "b" :type "meter"))))))
+    ;; A wrong change to a child: refused, the panel as it was.
+    (should (string-match-p "must be a number" (+test-auc-message #'agent-ui-update "b" '(:value "x"))))
+    (should (equal (plist-get (agent-ui-get "b") :value) 2))))
+
+(ert-deftest agent-ui-canvas/a-childs-text-knows-it ()
+  (+test-auc
+    (+test-auc-with-panels)
+    (agent-ui-show +test-auc-panel)
+    (with-current-buffer canvas
+      (agent-ui--flush)
+      (goto-char (point-min))
+      (search-forward "2/10")
+      (should (equal (get-text-property (match-beginning 0) 'agent-ui-child) "b"))
+      (should (equal (get-text-property (match-beginning 0) 'agent-ui-id) "dash"))
+      ;; Its link, its start.
+      (should (equal (get-text-property (agent-ui--element-start canvas "b") 'agent-ui-child) "b")))))

@@ -132,3 +132,12 @@ window shown, saves at once; what it makes, killed after."
       (with-temp-file (+test-aup-file) (insert "[{\"id\":\"t\",\"type\":\"text\",\"text\":\"back\"}]"))
       (funcall (plist-get subscribed :on-event) '((:event . init-session)))
       (should (equal (plist-get (agent-ui-get "t" :canvas name) :text) "back")))))
+
+(ert-deftest agent-ui-persist/a-childs-source-not-started-again ()
+  (+test-aup
+    (make-directory (file-name-directory (+test-aup-file)) t)
+    (with-temp-file (+test-aup-file)
+      (insert "[{\"id\":\"p\",\"type\":\"panel\",\"children\":[{\"id\":\"c\",\"type\":\"text\",\"text\":\"t\",\"source\":{\"command\":\"echo x\",\"tail\":1}}]}]"))
+    (should (= (agent-ui-persist-restore session) 1))
+    (should-not (plist-get (agent-ui-get "c" :canvas name) :source))
+    (should-not (agent-ui-source-status "c" :canvas name))))

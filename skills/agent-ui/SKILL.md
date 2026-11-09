@@ -236,8 +236,12 @@ side, each its share of the width: `weights`, equal by default) or a `"column"` 
 false` for none). Panels nest: rows of columns make a dashboard. A row too narrow (under `min-width` a child) stacks
 its children. In a row, children are drawn as text. Keep a dashboard's related elements in one panel.
 
+**Each child is an element of its own**: give it an `id`, and `update`, `append`, `remove`, `show` (replacing it),
+`snapshot` and links work on it as on any element, its panel redrawn in place. Its `source` runs with it: a live
+dashboard is a panel whose children follow commands and files. Ids are unique in the canvas, children's too.
+
 ```sh
-agent-ui show '{"id":"release","type":"panel","title":"Release","layout":"row","children":[{"id":"build","type":"progress","title":"Build","value":8,"max":12},{"id":"tests","type":"table","title":"Tests","columns":["Test","Result"],"rows":[["lexer","passed"],["parser","failed"]]}]}'
+agent-ui show '{"id":"release","type":"panel","title":"Release","layout":"row","children":[{"id":"release-build","type":"progress","title":"Build","value":8,"max":12},{"id":"release-tests","type":"table","title":"Tests","columns":["Test","Result"],"rows":[["lexer","passed"],["parser","failed"]]}]}'
 ```
 
 ### `diff`

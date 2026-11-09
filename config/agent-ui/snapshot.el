@@ -271,7 +271,8 @@ one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
 
 (defun agent-ui--element-at-point ()
   "The id of the element at point, in a canvas."
-  (or (get-text-property (point) 'agent-ui-id)
+  (or (get-text-property (point) 'agent-ui-child)
+      (get-text-property (point) 'agent-ui-id)
       (and (> (point) (point-min)) (get-text-property (1- (point)) 'agent-ui-id))
       (user-error "No element here")))
 
@@ -338,8 +339,10 @@ shown and selected, the cursor on its element. A `browse-url' handler."
   "Where element ID starts in CANVAS, or nil."
   (with-current-buffer canvas
     (let ((pos (point-min)))
-      (while (and pos (not (equal (get-text-property pos 'agent-ui-id) id)))
-        (setq pos (next-single-property-change pos 'agent-ui-id)))
+      ;; Its own, or a panel's child.
+      (while (and pos (not (equal (get-text-property pos 'agent-ui-id) id))
+                  (not (equal (get-text-property pos 'agent-ui-child) id)))
+        (setq pos (next-property-change pos)))
       pos)))
 
 (require 'browse-url)

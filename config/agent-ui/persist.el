@@ -82,6 +82,14 @@ id: its elements, as JSON. Returns the file, or nil."
 
 ;; ====== RESTORING ======
 
+(defun agent-ui-persist--without-sources (element)
+  "ELEMENT without its source, nor its panel's children theirs."
+  (let ((element (agent-ui--plist-delete element :source)))
+    (if-let* ((children (plist-get element :children)))
+        (plist-put element :children (mapcar (lambda (c) (if (agent-ui--plist-p c) (agent-ui-persist--without-sources c) c))
+                                             children))
+      element)))
+
 (defun agent-ui-persist-restore (session)
   "SESSION's canvas back (an agent-shell buffer whose session id is known),
 if one was kept and its canvas is empty: its elements shown again, their
@@ -100,7 +108,7 @@ sources not started. Returns how many."
       (dolist (element elements)
         (when (agent-ui--plist-p element)
           (condition-case nil
-              (progn (agent-ui-show (agent-ui--plist-delete element :source) :canvas name)
+              (progn (agent-ui-show (agent-ui-persist--without-sources element) :canvas name)
                      (cl-incf count))
             ;; One of a type gone since (discarded): left out.
             (agent-ui-error nil))))
