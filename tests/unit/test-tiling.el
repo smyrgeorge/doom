@@ -475,6 +475,8 @@ ratio kept for SPC w a; the focus where it was."
 (ert-deftest tiling/first-is-on ()
   (should (equal display-buffer-overriding-action '((+my/tiling--display))))
   (should (advice-member-p #'+my/tiling-kill-last-tab-a 'kill-current-buffer))
+  ;; Applications are Doom's real buffers (their tabs kept, gone back to).
+  (should (memq #'+my/tiling-app-p doom-real-buffer-functions))
   (should (memq #'+my/tiling-close-pane-h (default-value 'kill-buffer-hook)))
   ;; The applications.
   (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) +my/tiling-apps)

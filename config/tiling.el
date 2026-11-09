@@ -34,12 +34,13 @@
 ;;   a commit or a stash (Doom: beside) opens in a new pane, its process log
 ;;   below as Doom has it.
 ;; - Files open as a tab in the pane they're opened from, an application's
-;;   too (a link in Claude Code, RET in magit, SPC SPC there): only the
-;;   applications above open in a pane of their own. One already shown in a
-;;   pane: that pane (RET in SPC g d's diff: the file's). From a popup, a side
-;;   panel (the sidebar, *Help*) or a dedicated pane (Doom's terminal), in the
-;;   last pane used (a new pane without one). Git's own (a commit message,
-;;   the rebase todo: in .git/, edited for git) stay where git opens them.
+;;   too, which keeps its tab (a link in Claude Code, RET in magit, SPC SPC
+;;   there): only the applications above open in a pane of their own. One
+;;   already shown in a pane: that pane (RET in SPC g d's diff: the file's).
+;;   From a popup, a side panel (the sidebar, *Help*) or a dedicated pane
+;;   (Doom's terminal), in the last pane used (a new pane without one). Git's
+;;   own (a commit message, the rebase todo: in .git/, edited for git) stay
+;;   where git opens them.
 ;; - A pane closes with its last tab: its tab closed (config/editor/tabs.el)
 ;;   or its buffer killed (SPC b k, a terminal's shell ending), but the
 ;;   frame's last pane.

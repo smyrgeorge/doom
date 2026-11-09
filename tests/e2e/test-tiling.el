@@ -405,6 +405,39 @@ the file in the pane of files; SPC g g again: the status's pane."
 
 ;; ====== POPUPS, TABS ======
 
+(define-derived-mode +test-tiling-e2e-app-mode special-mode "App"
+  "Stands for an application not a file's nor Doom's \"real\" of its own:
+Beads' issue list, the Markdown preview.")
+
+(ert-deftest e2e-tiling/an-application-keeps-its-tab-under-a-file ()
+  "A file opened in an application's pane (the issue list's): a tab beside
+the application's, which stays one; the file's tab closed (Cmd+W) or its
+buffer killed: the application shown again. With Doom's frames (their
+`buffer-predicate': real buffers only), not another pane's file (README,
+the main pane's: the application wasn't real)."
+  (dolist (close '(+my/tabs-close kill-buffer))
+    (+test-tiling
+      (set-frame-parameter nil 'buffer-predicate #'doom-buffer-frame-predicate)
+      (unwind-protect
+          (let* ((+my/tiling-apps (cons '+test-tiling-e2e-app-mode +my/tiling-apps))
+                 (app (with-current-buffer (get-buffer-create "*test app*")
+                        (+test-tiling-e2e-app-mode)
+                        (current-buffer)))
+                 (file (+test-tiling--file "t.txt")))
+            (should (doom-real-buffer-p app))
+            (pop-to-buffer app)
+            (let ((pane (selected-window)))
+              (should (equal (+test-tiling--layout) '("a.txt" "*test app*")))
+              (find-file (buffer-file-name file))
+              (should (eq (selected-window) pane))
+              (should (equal (+test-tiling--tabs pane) '("*test app*" "t.txt")))
+              (funcall close (window-buffer pane))
+              (should (eq (window-buffer pane) app))
+              (should (equal (+test-tiling--tabs pane) '("*test app*")))
+              (should (equal (+test-tiling--layout) '("a.txt" "*test app*")))
+              (kill-buffer app)))
+        (set-frame-parameter nil 'buffer-predicate nil)))))
+
 (ert-deftest e2e-tiling/a-help-link-opens-in-the-last-pane-used ()
   "A link to a file in a popup (*Help*): in the pane used last, the
 application's too, as a tab."

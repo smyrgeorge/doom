@@ -121,6 +121,16 @@ what they showed): as it asks."
 
 (setq display-buffer-overriding-action '((+my/tiling--display)))
 
+;; APPLICATIONS ARE DOOM'S "REAL" BUFFERS
+;; As Doom has magit and the terminal: a file opened in an application's pane
+;; is a tab there, the application one too, shown again when the file's tab
+;; closes. Doom's frames only go back to real buffers (`buffer-predicate':
+;; `doom-buffer-frame-predicate'), and tabs (config/editor/tabs.el) keep only
+;; those besides files: Beads' issues and the Markdown preview weren't, so
+;; their tab went once a file covered them, and closing the file's showed
+;; another buffer (a file of another pane) in their place. SPC b b lists them.
+(add-hook 'doom-real-buffer-functions #'+my/tiling-app-p)
+
 ;; A PANE CLOSED WITH ITS LAST TAB (see config/tiling.el)
 (defun +my/tiling--last-tab-p (window buffer)
   "Non-nil if BUFFER is WINDOW's only tab (config/editor/tabs.el), or without
