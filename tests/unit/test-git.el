@@ -1,5 +1,5 @@
 ;;; tests/unit/test-git.el -*- lexical-binding: t; -*-
-;; config/git.el: SPC g d shows the current file's git diff in a pane on the
+;; config/git.el, config/git/diff-pane.el: SPC g d shows the current file's git diff in a pane on the
 ;; right (focused, on the hunk of the line you were on); from another file it
 ;; switches the pane to that one; in the pane SPC g d, q or Esc closes it; it
 ;; refreshes when the file is saved. Real git and magit in temp repos, with a
@@ -9,7 +9,7 @@
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "magit"))))))
-  (dolist (package '("magit" "magit-section"))
+  (dolist (package '("magit" "magit-section" "magit-delta" "magit-todos"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
 (+test-load "config/git")

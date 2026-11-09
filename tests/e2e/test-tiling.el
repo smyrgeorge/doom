@@ -13,7 +13,7 @@
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "magit"))))))
-  (dolist (package '("magit" "magit-section" "ghostel"))
+  (dolist (package '("magit" "magit-section" "magit-delta" "magit-todos" "ghostel"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit"

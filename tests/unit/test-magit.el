@@ -1,5 +1,5 @@
 ;;; tests/unit/test-magit.el -*- lexical-binding: t; -*-
-;; config/magit.el: the commit graph like tig (box-drawing lines, lanes in
+;; config/git.el, config/git/magit.el: the commit graph like tig (box-drawing lines, lanes in
 ;; colour, the date and author in the margin), git-delta diffs without the
 ;; delta settings of ~/.gitconfig (--no-gitconfig: its line numbers broke
 ;; staging / discarding hunks, "corrupt patch"), TODOs in the status buffer.
@@ -18,14 +18,14 @@
 (+test-magit--autoloads "magit" "magit-section" "magit-delta" "magit-todos")
 (defvar doom-disabled-packages nil)     ; `use-package!' reads it (Doom's core)
 
-(+test-load "config/magit")
+(+test-load "config/git")
 
 (defconst +test-magit--before-magit
   (list :magit (featurep 'magit)
         :delta (featurep 'magit-delta)
         :todos (featurep 'magit-todos)
         :hook (and (boundp 'magit-mode-hook) (memq '+my/magit-delta-maybe-h magit-mode-hook) t))
-  "What loading config/magit.el did before magit loaded (as at Doom's startup).")
+  "What loading config/git.el did before magit loaded (as at Doom's startup).")
 
 (require 'magit)
 (require 'magit-log)
@@ -366,7 +366,7 @@ even when the file is loaded again."
   (should (equal (car (last magit-delta-delta-args)) "--no-gitconfig"))
   (should (member "--color-only" magit-delta-delta-args))
   (should (member "--max-line-distance" magit-delta-delta-args))
-  (+test-load "config/magit")
+  (+test-load "config/git")
   (should (= (seq-count (lambda (a) (equal a "--no-gitconfig")) magit-delta-delta-args) 1))
   (let ((args (magit-delta--make-delta-args)))
     (should (member "--no-gitconfig" args))

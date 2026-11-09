@@ -14,9 +14,8 @@
 | `config/emacs.el` | Garbage collection |
 | `config/examples.el`, `examples/` | [Examples](examples.md) and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | [Drawings](drawings.md) |
-| `config/git.el` | [File diff](git.md#file-diff) |
+| `config/git.el`, `git/` | [Magit](git.md#magit), [a file's diff](git.md#file-diff) |
 | `config/lsp.el`, `lsp/` | Language servers (each language's settings: `lsp/LANGUAGE.el`), the usages list |
-| `config/magit.el` | [Magit](git.md#magit) |
 | `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
 | `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |
 | `config/os.el` | What differs between macOS and Linux: [the keys](keybindings.md), other apps, the clipboard's images |

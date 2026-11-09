@@ -139,10 +139,8 @@
 ;; Disabled for now; uncomment to try it again.
 ;;(load! "config/cheatsheet")
 
-;; MAGIT (git-delta diffs, TODOs in the status buffer)
-(load! "config/magit")
-
-;; SPC g d: the current file's diff in a pane on the right.
+;; GIT (Magit: the commit graph, git-delta diffs, TODOs in the status buffer;
+;; SPC g d: the current file's diff in a pane)
 (load! "config/git")
 
 ;; MERGE (conflicts resolved in three panes: e on a conflicted file in Magit)
