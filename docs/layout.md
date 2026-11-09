@@ -17,6 +17,7 @@
 | `config/git.el`, `git/` | [Magit](git.md#magit), [a file's diff](git.md#file-diff) |
 | `config/lsp.el`, `lsp/` | Language servers (each language's settings: `lsp/LANGUAGE.el`), the usages list |
 | `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
+| `config/html.el` | HTML files: a [notice](editor.md#notices) to open them in the browser |
 | `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |
 | `config/os.el` | What differs between macOS and Linux: [the keys](keybindings.md), other apps, the clipboard's images |
 | `config/pdf.el`, `pdf/` | [PDFs](pdf.md) |

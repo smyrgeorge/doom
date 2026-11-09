@@ -3,7 +3,7 @@
 ;; real child frames, under the tabs; splits, other buffers, closing, resizing,
 ;; clicks on their actions.
 
-(+test-load "config/window" "config/editor" "config/childframe" "config/banner")
+(+test-load "config/window" "config/editor" "config/childframe" "config/banner" "config/html")
 
 ;; ====== HELPERS ======
 
@@ -209,3 +209,21 @@ mouse-1 command run."
       (+test-banner--click frame "✕")
       (should (equal (mapcar #'car +my/banner--list) '(second)))
       (should (+test-wait-for (lambda () (+test-banner--over-p frame (selected-window) 1)) 3)))))
+
+;; ====== AN HTML FILE (config/html.el) ======
+
+(ert-deftest e2e-banner/an-html-file-offers-the-browser ()
+  "An HTML file: its notice on screen; Open in browser opens the file in the
+browser (recorded), the notice staying; its ✕ closes it."
+  (+test-banner
+    (let ((+test-browsed nil))
+      (find-file (+test-file "banner/page.html" "<!doctype html><p>Hi</p>\n"))
+      (let ((frame (+test-banner--shown (selected-window))))
+        (should (string-match-p "Open this file in your browser\\." (+test-banner--text frame)))
+        (should (string-match-p "Open in browser" (+test-banner--text frame)))
+        (+test-banner--click frame "Open in browser")
+        (should (= (length +test-browsed) 1))
+        (should (string-match-p "\\`file://.*/banner/page\\.html\\'" (car +test-browsed)))
+        (should (assq 'html-browser +my/banner--list))
+        (+test-banner--click frame "✕")
+        (should-not (assq 'html-browser +my/banner--list))))))

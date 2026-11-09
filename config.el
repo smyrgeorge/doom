@@ -168,6 +168,9 @@
 ;; MARKDOWN
 (load! "config/markdown")
 
+;; HTML (a notice: open this file in the browser)
+(load! "config/html")
+
 ;; PDF (PDFs in WebKit, drawn by PDF.js, inside the file's tab)
 (load! "config/pdf")
 

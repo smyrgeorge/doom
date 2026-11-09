@@ -22,7 +22,9 @@
 ;;   again, "Open normally" goes back to the file's own mode (both can make
 ;;   scrolling slow again);
 ;; - the Markdown preview (info, config/markdown/notice.el): a Markdown file
-;;   offers it ("Open preview").
+;;   offers it ("Open preview");
+;; - the browser (info, config/html.el): an HTML file offers it ("Open in
+;;   browser").
 (defvar +my/banner-types
   '((info    "nf-cod-info"    blue)
     (warning "nf-cod-warning" yellow)
