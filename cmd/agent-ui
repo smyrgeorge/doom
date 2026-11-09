@@ -14,6 +14,11 @@
 #   agent-ui types [TYPE]         the element types: properties, an example
 #   agent-ui batch [JSON]         several at once: [{"op": "show", ...},
 #                                 {"op": "update", "id": ..., ...}, ...]
+#   agent-ui render [JSON]        an element drawn as text, as the canvas would
+#                                 (nothing shown): to see what it looks like
+#   agent-ui define [FILE]        a type of your own: its Emacs Lisp code (one
+#                                 agent-ui-define), from FILE or stdin; staged
+#                                 for the user to keep or discard
 #
 # JSON is the last argument, or comes on stdin. The reply is JSON on stdout:
 # {"ok": true, "id": ...}, or {"ok": false, "error": "what's wrong"}.
@@ -49,7 +54,7 @@ case "$1" in -h|--help|help) usage; exit 0 ;; esac
 op=$1; shift
 id="" json="" takes_json=0
 case "$op" in
-  show|batch)
+  show|batch|render)
     takes_json=1
     [ $# -gt 1 ] && fail 2 "$op: too many arguments (JSON only)"
     [ $# -eq 1 ] && json=$1 ;;
@@ -65,15 +70,23 @@ case "$op" in
   types)
     [ $# -gt 1 ] && fail 2 "types: agent-ui types [TYPE]"
     id=${1:-} ;;
+  define)
+    takes_json=1
+    [ $# -gt 1 ] && fail 2 "define: agent-ui define [FILE]"
+    if [ $# -eq 1 ]; then
+      [ -f "$1" ] || fail 2 "define: no file $1"
+      json=$(cat "$1")
+      [ -n "$json" ] || fail 2 "define: $1 is empty"
+    fi ;;
   clear|list)
     [ $# -gt 0 ] && fail 2 "$op: takes no arguments" ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch" ;;
+    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define" ;;
 esac
 case "$id" in *$'\n'*) fail 2 "an id is one line" ;; esac
 
 if [ "$takes_json" = 1 ] && [ -z "$json" ]; then
-  [ -t 0 ] && fail 2 "$op: give JSON as the last argument, or on stdin"
+  [ -t 0 ] && fail 2 "$op: give it as the last argument, or on stdin"
   json=$(cat)
 fi
 

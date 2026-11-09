@@ -93,13 +93,18 @@ killed after."
   (+test-aua
     (should (eq agent-ui-canvas-function #'agent-ui-session-canvas))
     (let* ((session (+test-aua-session "Claude Agent @ proj" "/tmp/proj/"))
-           (canvas (agent-ui-session-canvas nil "/tmp/proj/src")))
-      (should (equal (buffer-name canvas) "Agent UI: Claude Agent @ proj"))
-      (should (eq (buffer-local-value 'agent-ui--session-buffer canvas) session))
-      (should (eq (agent-ui-session-canvas "Claude Agent @ proj" nil) canvas))
-      ;; Killed with its session.
-      (kill-buffer session)
-      (should-not (buffer-live-p canvas)))))
+           (name (agent-ui-session-canvas nil "/tmp/proj/src")))
+      ;; Its name, the session's; no canvas made just for asking.
+      (should (equal name "Claude Agent @ proj"))
+      (should (equal (agent-ui-session-canvas "Claude Agent @ proj" nil) name))
+      (should-not (get-buffer "Agent UI: Claude Agent @ proj"))
+      ;; Made by the first element shown: tied to its session.
+      (agent-ui-show '(:id "a" :type "text" :text "x") :canvas name)
+      (let ((canvas (get-buffer "Agent UI: Claude Agent @ proj")))
+        (should (eq (buffer-local-value 'agent-ui--session-buffer canvas) session))
+        ;; Killed with its session.
+        (kill-buffer session)
+        (should-not (buffer-live-p canvas))))))
 
 (ert-deftest agent-ui-agent/no-session ()
   (+test-aua
@@ -113,10 +118,17 @@ killed after."
     ;; Two sessions named alike in turn: killing the first leaves the
     ;; second's canvas.
     (let* ((first (+test-aua-session "S" "/tmp/a/"))
-           (canvas (agent-ui-session-canvas nil "/tmp/a/")))
+           (name (agent-ui-session-canvas nil "/tmp/a/"))
+           (canvas (agent-ui-canvas name)))
       (with-current-buffer canvas (setq agent-ui--session-buffer (generate-new-buffer "other")))
       (kill-buffer first)
       (should (buffer-live-p canvas)))))
+
+(ert-deftest agent-ui-agent/a-canvas-without-its-session ()
+  (+test-aua
+    ;; A canvas named after no session: tied to none.
+    (let ((canvas (agent-ui-canvas (make-temp-name "nobody-"))))
+      (should-not (buffer-local-value 'agent-ui--session-buffer canvas)))))
 
 ;; ====== WHAT THE AGENT IS TOLD ======
 

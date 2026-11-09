@@ -30,6 +30,22 @@
 ;; it (config/agent-ui/agent.el); without it, the session working in the
 ;; request's directory.
 
+;; TYPES THE AGENT MAKES
+;; When none of the types fits, the agent writes one (cmd/agent-ui define
+;; FILE: an `agent-ui-define' and its definitions, named after it). It's
+;; checked, compiled and loaded, its example drawn for the agent to see
+;; (config/agent-ui/staging.el), and staged: usable at once, kept only if you
+;; keep it. A message and the canvas's header say so; R in the canvas (M-x
+;; agent-ui-review) lists them (config/agent-ui/review.el): RET its preview
+;; (its example drawn, its code), a keeps it, x discards it (its elements
+;; removed), v its code. Staged ones wait in `agent-ui-staging-directory' (not
+;; loaded again after a restart: the review loads one to preview it); kept ones
+;; go to `agent-ui-kept-directory', in this config (git), loaded at each start,
+;; and an issue is filed for their tests and documentation (in this config's
+;; Beads issues).
+(setq agent-ui-staging-directory (expand-file-name "agent-ui/staged/" doom-cache-dir)
+      agent-ui-kept-directory (expand-file-name "config/agent-ui/kept/" doom-user-dir))
+
 ;; WHAT THE AGENT IS TOLD
 ;; Claude Code's system prompt in agent-shell (config/agent-shell/context.el)
 ;; gets a paragraph on the canvas (`agent-ui-agent-context'): what it's for, the
@@ -41,7 +57,22 @@
 ;; THE CANVAS (see above): Vim's keys, as Doom's other buffers'.
 (map! :map agent-ui-canvas-mode-map
       :n "q"  #'quit-window
-      :n "gr" #'agent-ui-canvas-redraw)
+      :n "gr" #'agent-ui-canvas-redraw
+      :n "R"  #'agent-ui-review)
+
+;; TYPES THE AGENT MAKES (see above): the list, a preview.
+(map! :map agent-ui-review-mode-map
+      :n "RET" #'agent-ui-review-preview
+      :n "a"   #'agent-ui-review-keep
+      :n "x"   #'agent-ui-review-discard
+      :n "v"   #'agent-ui-review-source
+      :n "gr"  #'revert-buffer
+      :n "q"   #'quit-window
+      :map agent-ui-review-preview-mode-map
+      :n "a"   #'agent-ui-review-keep
+      :n "x"   #'agent-ui-review-discard
+      :n "v"   #'agent-ui-review-source
+      :n "q"   #'quit-window)
 
 ;; ====== CODE ======
 
@@ -53,6 +84,26 @@
 (load! "agent-ui/agent")
 ;; The element types, a file each in agent-ui/elements/.
 (load! "agent-ui/elements")
+(load! "agent-ui/staging")
+(load! "agent-ui/review")
+
+;; TYPES THE AGENT MAKES (see above): the ones you kept.
+(agent-ui-load-kept)
+
+(defun +my/agent-ui-kept-issue (name file)
+  "An issue in this config's Beads issues for the type NAME just kept (in
+FILE): its tests and documentation."
+  (when (and (executable-find "bd")
+             (file-directory-p (expand-file-name ".beads" doom-user-dir)))
+    (let ((default-directory doom-user-dir))
+      (start-process
+       "agent-ui-kept-issue" nil "bd" "create" "--silent" "--type=task" "--priority=3"
+       "--labels=agent-ui"
+       (format "--title=Agent UI: tests and docs for the kept type %s" name)
+       (format "--description=The agent made the element type %s; it was kept, in %s. Give it tests (tests/unit/test-agent-ui-elements.el expects every type), a section in skills/agent-ui/SKILL.md (its test expects one per type), and a row in docs/agent-ui.md's types."
+               name (file-relative-name file doom-user-dir))))))
+
+(add-hook 'agent-ui-kept-functions #'+my/agent-ui-kept-issue)
 
 ;; WHAT THE AGENT IS TOLD (see above), after what's there (the theme's line, the
 ;; project's issues).

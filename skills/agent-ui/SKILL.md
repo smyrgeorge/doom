@@ -37,6 +37,8 @@ agent-ui clear                # remove every element
 agent-ui list                 # the canvas's elements: ids and types
 agent-ui types [TYPE]         # the types, their properties, an example each
 agent-ui batch JSON           # several operations at once: [{"op":"show",...}, {"op":"update","id":...,...}]
+agent-ui render JSON          # an element drawn as text, as the canvas would (nothing shown): {"ok":true,"text":...}
+agent-ui define FILE          # a type of your own (see below), from FILE or stdin
 ```
 
 JSON is the last argument (quote it with single quotes), or comes on stdin (a heredoc for anything long). An element
@@ -120,6 +122,60 @@ or notes that should stay in view. Images show as their text.
 ```sh
 agent-ui show '{"id":"notes","type":"markdown","title":"Plan","markdown":"1. **Parse** the config\n2. Check it against `schema.json`\n3. Write the report"}'
 ```
+
+## Seeing what you draw
+
+You can't see the user's screen; `render` shows you an element as the canvas draws it, as text, at the canvas's width,
+without showing it: check a layout before you show it.
+
+```sh
+agent-ui render '{"type":"table","columns":["Test","Result"],"rows":[["lexer","passed"]]}'
+```
+
+## A type of your own
+
+When none of the types fits (a gauge, a diff summary, a timeline...), write one: an Emacs Lisp file with **one**
+`agent-ui-define`, and the definitions it uses, **each named after it** (`agent-ui-NAME-...`), nothing else (no
+`setq`, no code run at load; `require` only cl-lib, subr-x, seq, map, pcase, rx, svg). Then `agent-ui define FILE`.
+It's checked, compiled, loaded, and its `:example` drawn: the reply has that drawing (`preview`) and the compiler's
+`warnings`. Fix and define it again until it's right; it's usable at once. The user then keeps it (loaded at each
+start) or discards it (its elements go with it): say what you made and why.
+
+```elisp
+;;; gauge.el --- Agent UI type gauge -*- lexical-binding: t; -*-
+
+(defun agent-ui-gauge--text (props ctx)
+  "PROPS drawn in CTX's width: [#####.....] 50% LABEL."
+  (let* ((value (plist-get props :value))
+         (cells (min 20 (max 5 (- (plist-get ctx :width) 30))))
+         (full (round (* cells (/ value 100.0)))))
+    (concat "[" (propertize (make-string full ?#) 'face 'agent-ui-accent)
+            (make-string (- cells full) ?.) "] "
+            (format "%d%%" value)
+            (if-let* ((label (plist-get props :label))) (concat "  " label) ""))))
+
+(agent-ui-define gauge
+  "A gauge: VALUE percent, with a LABEL."
+  :props ((value integer "Percent, 0 to 100" :default 0)
+          (label string "What it measures"))
+  :example (:value 42 :label "disk")
+  :check (lambda (props)
+           (unless (<= 0 (plist-get props :value) 100)
+             (agent-ui--fail "gauge: value must be from 0 to 100"))
+           props)
+  :text #'agent-ui-gauge--text)
+```
+
+- `:props`: `(NAME KIND DOC [:default V] [:required t])`, KIND one of `string`, `number`, `integer`, `boolean`,
+  `list`, `any`, `(choice a b c)`. Each element is checked against them before it's drawn.
+- `:text (lambda (PROPS CTX) ...)` returns a string, maybe with faces (`agent-ui-accent`, `agent-ui-muted`,
+  `agent-ui-success`, `agent-ui-warning`, `agent-ui-error`, `bold`). PROPS: the properties, defaults filled; CTX:
+  `:width` (columns: fit it), `:graphic`, `:tick` (counts up, for animations), `:char-width` and `:line-height`
+  (pixels, for an SVG). Keep it quick: it runs in the user's Emacs, on each change.
+- Optional: `:gui` (the same, for a graphic frame: a string with an SVG image, see `svg.el`), `:check` (more than
+  each property's kind: signal with `agent-ui--fail`), `:append` (how lists grow), `:animated` (t, or a function of
+  PROPS).
+- Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-format-number`, `agent-ui-spinner`.
 
 ## Following a long command
 

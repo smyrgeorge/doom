@@ -140,6 +140,37 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
     (should (string-match-p "\"ünïcødé\""
                             (plist-get (+test-aur-request "show" nil "{\"type\":\"ünïcødé\"}") :error)))))
 
+;; render, define: the agent sees what it draws; makes a type.
+(ert-deftest agent-ui-request/render ()
+  (+test-aur
+    (should (equal (+test-aur-request "render" nil "{\"type\":\"text\",\"text\":\"hello\",\"title\":\"T\"}")
+                   '(:ok t :text "T\nhello")))
+    ;; Nothing shown.
+    (should-not (agent-ui-elements))
+    ;; Wrong: an error, not a drawing of one.
+    (should (string-match-p "unknown property"
+                            (plist-get (+test-aur-request "render" nil "{\"type\":\"text\",\"txt\":1}") :error)))))
+
+(ert-deftest agent-ui-request/define ()
+  (+test-aur
+    (let ((agent-ui-staging-directory (file-name-as-directory (make-temp-file (+test-tmp-file "staged-") t)))
+          (agent-ui--types (copy-hash-table agent-ui--types)))
+      (let ((reply (+test-aur-request
+                    "define" nil
+                    "(agent-ui-define dots \"Dots.\" :props ((n integer \"How many\" :default 3))
+  :example (:n 5) :text (lambda (props _ctx) (make-string (plist-get props :n) ?.)))")))
+        (should (eq (plist-get reply :ok) t))
+        (should (equal (plist-get reply :type) "dots"))
+        (should (equal (plist-get reply :preview) "....."))
+        (should (equal (plist-get reply :warnings) nil)))
+      ;; Usable at once.
+      (should (equal (+test-aur-request "show" nil "{\"id\":\"d\",\"type\":\"dots\",\"n\":2}")
+                     '(:ok t :id "d")))
+      (should (string-match-p "one type (one agent-ui-define), not 0"
+                              (plist-get (+test-aur-request "define" nil "(setq x 1)") :error)))
+      (should (string-match-p "define: no JSON given\\|give a type's code"
+                              (plist-get (+test-aur-request "define" nil "  ") :error))))))
+
 ;; ====== THE SCRIPT ======
 
 (defmacro +test-aur-with-server (&rest body)
@@ -188,6 +219,20 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
         (should (string-match-p "\\`{\"ok\":false,\"error\":\"no element \\\\\"q\\\\\"" (cdr run))))
       (should (equal (car (+test-aur-run '("list"))) 0))
       (should (string-match-p "\"name\":\"table\"" (cdr (+test-aur-run '("types" "table")))))
+      ;; A type's code from a file.
+      (let ((agent-ui-staging-directory (file-name-as-directory (make-temp-file (+test-tmp-file "staged-") t)))
+            (agent-ui--types (copy-hash-table agent-ui--types))
+            (file (make-temp-file (+test-tmp-file "type-") nil ".el"
+                                  "(agent-ui-define bang \"!\" :example () :text (lambda (_p _c) \"!\"))")))
+        (let ((run (+test-aur-run (list "define" file))))
+          (should (= (car run) 1))
+          (should (string-match-p "has no :example" (cdr run))))
+        (with-temp-file file
+          (insert "(agent-ui-define bang \"!\" :example (:title \"b\") :text (lambda (_p _c) \"!\"))"))
+        (let ((run (+test-aur-run (list "define" file))))
+          (should (= (car run) 0))
+          (should (string-match-p "\"preview\":\"b\\\\n!\"" (cdr run))))
+        (should (= (car (+test-aur-run '("define" "/no/such/file.el"))) 2)))
       ;; This directory's: the request says where it came from.
       (should (= (car (+test-aur-run '("remove" "p"))) 0))
       (should-not (agent-ui-elements)))))

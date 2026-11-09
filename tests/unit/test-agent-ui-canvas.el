@@ -83,6 +83,24 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
                               (+test-auc-message #'agent-ui-show '(:type "meter")
                                                  :canvas (current-buffer)))))))
 
+;; Only showing an element makes a canvas: looking at one doesn't.
+(ert-deftest agent-ui-canvas/made-by-showing-only ()
+  (+test-auc
+    (let ((name (make-temp-name "unmade-")))
+      (should-not (agent-ui-elements :canvas name))
+      (should-not (agent-ui-clear :canvas name))
+      (dolist (call (list (lambda () (agent-ui-get "a" :canvas name))
+                          (lambda () (agent-ui-update "a" '(:value 1) :canvas name))
+                          (lambda () (agent-ui-append "a" '(:marks ("x")) :canvas name))
+                          (lambda () (agent-ui-remove "a" :canvas name))))
+        (should (equal (agent-ui-error-message (should-error (funcall call) :type 'agent-ui-error))
+                       (format "canvas %s has no elements yet" name))))
+      (should-not (get-buffer (agent-ui-canvas-buffer-name name)))
+      (agent-ui-show '(:id "a" :type "meter") :canvas name)
+      (let ((made (get-buffer (agent-ui-canvas-buffer-name name))))
+        (should made)
+        (kill-buffer made)))))
+
 ;; ====== SHOWING ======
 
 (ert-deftest agent-ui-canvas/elements-shown-in-order ()

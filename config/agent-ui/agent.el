@@ -76,20 +76,28 @@ working in CWD or above it, the deepest, then the most recently used."
                                     :key (lambda (b) (length (agent-ui--session-cwd b))))))))))
 
 (defun agent-ui-session-canvas (session cwd)
-  "The canvas for an agent's request (`agent-ui-canvas-function'): its
-session's (SESSION, else the one in CWD), named after it; else SESSION's
-name's, else the default."
+  "The canvas for an agent's request (`agent-ui-canvas-function'), its
+name: its session's (SESSION, else the one in CWD), named after it; else
+SESSION, else the default. Made when an element is first shown in it
+\(`agent-ui--link-session' then ties it to its session)."
   (let ((buffer (agent-ui--session-buffer session cwd)))
-    (if (not buffer)
-        (agent-ui-request-canvas session cwd)
-      (let ((canvas (agent-ui-canvas (agent-ui--session-name buffer))))
-        (with-current-buffer canvas
-          (setq agent-ui--session-buffer buffer))
-        (with-current-buffer buffer
-          (add-hook 'kill-buffer-hook #'agent-ui--kill-canvas nil t))
-        canvas))))
+    (if buffer
+        (agent-ui--session-name buffer)
+      (agent-ui-request-canvas session cwd))))
 
 (setq agent-ui-canvas-function #'agent-ui-session-canvas)
+
+(defun agent-ui--link-session ()
+  "In a new canvas: tied to the session it's named after, if there's one
+\(killed with it)."
+  (when-let* ((name agent-ui--canvas-name)
+              (buffer (seq-find (lambda (b) (equal (buffer-local-value 'agent-ui-session b) name))
+                                (agent-ui--sessions))))
+    (setq agent-ui--session-buffer buffer)
+    (with-current-buffer buffer
+      (add-hook 'kill-buffer-hook #'agent-ui--kill-canvas nil t))))
+
+(add-hook 'agent-ui-canvas-hook #'agent-ui--link-session)
 
 (defun agent-ui--kill-canvas ()
   "The session's buffer is killed: its canvas too."
@@ -126,6 +134,7 @@ says once. From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear. It replies with JSON. Before using it \
-the first time, read %s (its types, properties and examples). Remove what \
-stops helping, and never leave something shown running once it stopped."
+the first time, read %s (its types, properties and examples; when none \
+fits, how to make one). Remove what stops helping, and never leave something \
+shown running once it stopped."
               command command skill))))

@@ -27,7 +27,8 @@
 directory (or nil); returns the canvas its request is for (a buffer, or a
 canvas's name). config/agent-ui/agent.el finds agent-shell's sessions.")
 
-(defconst agent-ui-operations '("show" "update" "append" "remove" "clear" "list" "types" "batch")
+(defconst agent-ui-operations
+  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define")
   "What cmd/agent-ui does.")
 
 ;; ====== THE CANVAS ======
@@ -77,6 +78,23 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
      (list :ok t))
     ("list"
      (list :ok t :elements (vconcat (agent-ui-elements :canvas canvas))))
+    ("render"
+     ;; Drawn as text at the canvas's width (its window's, else the default):
+     ;; for the agent to see what it draws.
+     (let* ((element (agent-ui--payload-object payload "render"))
+            (type (agent-ui-type (plist-get element :type)))
+            (buffer (and (agent-ui--live-canvas-p canvas) (agent-ui--buffer canvas)))
+            (window (and buffer (get-buffer-window buffer t))))
+       (agent-ui-check type element)
+       (list :ok t :text (substring-no-properties
+                          (agent-ui-render element
+                                           (agent-ui-context
+                                            :width (if window (1- (window-max-chars-per-line window))
+                                                     agent-ui-default-width)))))))
+    ("define"
+     (unless (and (stringp payload) (not (string-empty-p (string-trim payload))))
+       (agent-ui--fail "define: give a type's code (a file, or on stdin)"))
+     (append (list :ok t) (agent-ui-stage payload)))
     ("types"
      (let ((catalog (agent-ui-catalog)))
        (when (and id (not (string-empty-p id)))
@@ -103,7 +121,7 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
         (cond
          ((not (stringp op))
           (agent-ui--fail "batch: each operation has \"op\": show, update, append or remove"))
-         ((member op '("batch" "types" "list"))
+         ((member op '("batch" "types" "list" "render" "define"))
           (agent-ui--fail "batch: %s isn't done in a batch" op)))
         (agent-ui-do op (plist-get rest :id)
                      (if (equal op "show") rest (agent-ui--plist-delete rest :id))
@@ -132,9 +150,11 @@ its reply written there, as JSON. Never signals: an error is the reply."
                     (payload-file (expand-file-name "payload" folder))
                     (payload (when (file-exists-p payload-file)
                                (let ((json (string-trim (agent-ui--read-file payload-file))))
-                                 (if (string-empty-p json)
-                                     (agent-ui--fail "%s: no JSON given" op)
-                                   (agent-ui-parse-json json)))))
+                                 (cond
+                                  ((string-empty-p json) (agent-ui--fail "%s: no JSON given" op))
+                                  ;; A type's code, not JSON.
+                                  ((equal op "define") json)
+                                  (t (agent-ui-parse-json json))))))
                     (canvas (funcall agent-ui-canvas-function
                                      (unless (equal session "") session)
                                      (unless (equal cwd "") cwd))))

@@ -359,6 +359,8 @@ graphic frame (CTX's :graphic) if it has one, else :text. An error (an
 unknown type, a property wrong, the drawing failing) is drawn in its place,
 so a canvas goes on with its other elements. No newline at its end."
   (let ((title (plist-get element :title)))
+    ;; Only text: a title of another kind is the element's error to show.
+    (unless (stringp title) (setq title nil))
     (concat
      (when (and title (not (equal title "")))
        (concat (propertize (format "%s" title) 'face 'agent-ui-title) "\n"))

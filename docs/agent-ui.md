@@ -1,8 +1,9 @@
 # Agent UI
 
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line, the
-> `text`, `markdown`, `progress`, `steps`, `table` and `chart` types, and what the agent is told. `M-x
-> +my/example-agent-ui` shows it ([Examples](examples.md)). Still to come: what's [later](#later).
+> `text`, `markdown`, `progress`, `steps`, `table` and `chart` types, types the agent makes (kept or discarded by you),
+> and what the agent is told. `M-x +my/example-agent-ui` shows it ([Examples](examples.md)). Still to come: what's
+> [later](#later).
 
 A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
@@ -42,7 +43,7 @@ A table with a `key` column replaces a row with the same key instead of adding o
 ## The command line
 
 `cmd/agent-ui` (the system prompt gives its full path). JSON comes on stdin or as the last argument; the reply is JSON
-on stdout, the exit status 0 or 1.
+on stdout.
 
 ```sh
 agent-ui show '{"id":"build","type":"progress","title":"Build","max":12}'
@@ -53,6 +54,8 @@ agent-ui clear                 # every element of the canvas
 agent-ui list                  # the canvas's elements: id, type
 agent-ui types [TYPE]          # the catalog: each type, its properties, an example
 agent-ui batch < ops.json      # several operations, one trip to Emacs
+agent-ui render '{"type":...}' # an element drawn as text, nothing shown: for the agent to see it
+agent-ui define gauge.el       # a type of the agent's own (below)
 ```
 
 A batch is an array of operations, each an object with its `op` and what it takes, flat:
@@ -195,6 +198,31 @@ wed  ████████████████████████  1
 thu  ████████                   60
 ```
 
+## Types the agent makes
+
+When none of the types fits, the agent writes one: an Emacs Lisp file with one `agent-ui-define` and the definitions it
+uses, each named after it (`agent-ui-NAME-...`), nothing else (no `setq`, nothing run at load; `require` of a few
+built-in libraries only). `agent-ui define FILE` stages it (`config/agent-ui/staging.el`):
+
+1. **Checked:** its forms read, one type, its definitions named after it, not a type already there (built in or kept).
+2. **Compiled** by the byte compiler, nothing written: errors refuse it, warnings go back to the agent (by its lines).
+3. **Loaded,** and **its example drawn:** the reply has that drawing as text (`preview`), so the agent sees what it
+   made. An example that doesn't draw refuses it. Refused, nothing of it stays (a staged type it was replacing is back).
+
+A staged type is usable at once. A message says the agent made one, and each canvas's header lists the types waiting.
+**`R`** in a canvas (`M-x agent-ui-review`) lists them (`config/agent-ui/review.el`):
+
+| Key | Action |
+|---|---|
+| `RET` | Its preview: what it is, its properties, its example drawn (as SVG if it has a GUI drawing), its code |
+| `a` | Keep it: its file moves to `config/agent-ui/kept/` (this config, in git), loaded at each start; an issue is filed in this config's Beads issues for its tests and documentation |
+| `x` | Discard it: its file deleted, the elements of it removed from the canvases |
+| `v` | Its code, read-only |
+
+Staged types wait in Doom's cache (`agent-ui/staged/`): after a restart they aren't loaded again, but stay listed for
+the review, which loads one to preview it. Kept types are the library's like the others: the tests expect each type
+to have its tests and its section in the skill, which the filed issue is for.
+
 ## What the agent is told
 
 A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
@@ -210,9 +238,6 @@ the types change.
 - **Elements following a source** (`doom-nwj.11`). The agent's tool calls run one after another: a bar it updates
   itself stands still while it waits on a long command. An element can follow a command's output, a file or a polling
   command instead: `"source": {"command": "make", "progress": "REGEXP"}`.
-- **Types made by the agent** (`doom-nwj.13`). The agent writes an `agent-ui-define` into a staging folder and loads it,
-  checked by the byte compiler first. You review staged types with a preview: keep moves one into `config/agent-ui/`
-  (with an issue for its tests and documentation), discard deletes it.
 - **In the conversation** (`doom-nwj.14`): an element, or a snapshot of it, in the agent-shell buffer itself.
 - **MCP** (`doom-nwj.15`): the same operations as tools with schemas, given to each session through
   `agent-shell-mcp-servers`.
@@ -229,9 +254,13 @@ the types change.
 | `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
+| `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
+| `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
+| `config/agent-ui/kept/` | The types you kept (made when you keep one) |
 | `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `skills/agent-ui/SKILL.md` | The skill: the types with examples, for the agent |
 
-`core.el`, `canvas.el` and the elements don't use Doom, so they can become a package of their own.
+None of `config/agent-ui/` uses Doom (`config/agent-ui.el` does: its settings, keys, the Beads issue for a kept type),
+so it can become a package of its own.

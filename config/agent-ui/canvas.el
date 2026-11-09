@@ -95,17 +95,29 @@ if there's none."
   (seq-filter (lambda (b) (eq (buffer-local-value 'major-mode b) 'agent-ui-canvas-mode))
               (buffer-list)))
 
-(defun agent-ui--buffer (canvas)
-  "CANVAS's buffer: CANVAS a buffer, a canvas's name, or nil (the default)."
+(defun agent-ui--buffer (canvas &optional create)
+  "CANVAS's buffer: CANVAS a buffer, a canvas's name, or nil (the default).
+A canvas by name that isn't there: made if CREATE, else an error (only
+showing an element makes one: looking at one doesn't)."
   (if (bufferp canvas)
       (if (and (buffer-live-p canvas)
                (eq (buffer-local-value 'major-mode canvas) 'agent-ui-canvas-mode))
           canvas
         (agent-ui--fail "%S isn't a live canvas" canvas))
-    (agent-ui-canvas canvas)))
+    (let* ((name (or canvas agent-ui-default-canvas))
+           (buffer (get-buffer (agent-ui-canvas-buffer-name name))))
+      (cond
+       ((and buffer (eq (buffer-local-value 'major-mode buffer) 'agent-ui-canvas-mode)) buffer)
+       (create (agent-ui-canvas name))
+       (t (agent-ui--fail "canvas %s has no elements yet" name))))))
+
+(defun agent-ui--live-canvas-p (canvas)
+  "Whether CANVAS (see `agent-ui--buffer') is there."
+  (condition-case nil (and (agent-ui--buffer canvas) t) (agent-ui-error nil)))
 
 (defmacro agent-ui--in (canvas &rest body)
-  "BODY in CANVAS's buffer (see `agent-ui--buffer')."
+  "BODY in CANVAS's buffer (see `agent-ui--buffer'): an error if it isn't
+there."
   (declare (indent 1))
   `(with-current-buffer (agent-ui--buffer ,canvas) ,@body))
 
@@ -267,7 +279,7 @@ with its id there already is replaced in its place; a new one goes at the
 end, drawn at once, and the canvas is shown if it's in no window
 \(`agent-ui-display-function'). Without an id, one is made. Returns the id.
 Signals `agent-ui-error' if ELEMENT is wrong."
-  (agent-ui--in canvas
+  (with-current-buffer (agent-ui--buffer canvas t)
     (let* ((element (agent-ui--checked element))
            (id (or (plist-get element :id)
                    (agent-ui--new-id (plist-get element :type))))
@@ -333,13 +345,14 @@ there's no such element or the change makes it wrong (then it's unchanged)."
       id)))
 
 (cl-defun agent-ui-clear (&key canvas)
-  "Remove every element from CANVAS."
-  (agent-ui--in canvas
+  "Remove every element from CANVAS (if it's there)."
+  (when (agent-ui--live-canvas-p canvas)
+   (agent-ui--in canvas
     (dolist (id (copy-sequence agent-ui--order))
       (agent-ui-remove id :canvas (current-buffer)))
     (let ((inhibit-read-only t))
-      (erase-buffer))
-    nil))
+      (erase-buffer))))
+  nil)
 
 (cl-defun agent-ui-get (id &key canvas)
   "Element ID of CANVAS, a plist."
@@ -347,9 +360,11 @@ there's no such element or the change makes it wrong (then it's unchanged)."
     (copy-sequence (agent-ui--entry-element (agent-ui--entry id)))))
 
 (cl-defun agent-ui-elements (&key canvas)
-  "CANVAS's elements in order: plists (:id ID :type TYPE)."
-  (agent-ui--in canvas
+  "CANVAS's elements in order: plists (:id ID :type TYPE); none if it isn't
+there."
+  (when (agent-ui--live-canvas-p canvas)
+   (agent-ui--in canvas
     (mapcar (lambda (id)
               (let ((element (agent-ui--entry-element (gethash id agent-ui--entries))))
                 (list :id id :type (plist-get element :type))))
-            agent-ui--order)))
+            agent-ui--order))))
