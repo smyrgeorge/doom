@@ -22,6 +22,13 @@
 ;; it's in no window, without taking the focus. In it: g r redraws it, q hides it. At
 ;; most `agent-ui-max-elements'.
 
+;; SOURCES
+;; An element can follow what changes by itself (config/agent-ui/source.el):
+;; a command Emacs runs for the agent (its output logged for it to read), a
+;; file as it grows, a command polled every so many seconds. Rules turn their
+;; lines into updates: the agent's tool calls run one after another, so a bar
+;; it updated itself would stand still while it waits on a long build.
+
 ;; THE AGENT'S WAY IN
 ;; cmd/agent-ui, from the agent's shell: show, update, append, remove... an
 ;; element as JSON, the reply as JSON (config/agent-ui/request.el), through
@@ -86,6 +93,7 @@
 (load! "agent-ui/elements")
 (load! "agent-ui/staging")
 (load! "agent-ui/review")
+(load! "agent-ui/source")
 
 ;; TYPES THE AGENT MAKES (see above): the ones you kept.
 (agent-ui-load-kept)

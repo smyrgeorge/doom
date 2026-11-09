@@ -27,6 +27,9 @@
 directory (or nil); returns the canvas its request is for (a buffer, or a
 canvas's name). config/agent-ui/agent.el finds agent-shell's sessions.")
 
+(defvar agent-ui--request-cwd nil
+  "While a request is answered: the agent's directory (its sources' default).")
+
 (defconst agent-ui-operations
   '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define")
   "What cmd/agent-ui does.")
@@ -61,7 +64,15 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
      (let ((element (agent-ui--payload-object payload "show")))
        (when (and id (not (string-empty-p id)))
          (setq element (plist-put (copy-sequence element) :id id)))
-       (list :ok t :id (agent-ui-show element :canvas canvas))))
+       ;; A source runs in the agent's directory, unless it says.
+       (let ((source (plist-get element :source)))
+         (when (and (agent-ui--plist-p source) (not (plist-get source :dir)) agent-ui--request-cwd)
+           (setq element (plist-put (copy-sequence element) :source
+                                    (plist-put (copy-sequence source) :dir agent-ui--request-cwd)))))
+       (let* ((id (agent-ui-show element :canvas canvas))
+              (log (and (fboundp 'agent-ui-source-status)
+                        (plist-get (agent-ui-source-status id :canvas canvas) :log))))
+         (append (list :ok t :id id) (when log (list :log log))))))
     ("update"
      (list :ok t :id (agent-ui-update (agent-ui--need-id op (or id (plist-get payload :id)))
                                       (agent-ui--payload-object payload "update")
@@ -77,7 +88,12 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
      (agent-ui-clear :canvas canvas)
      (list :ok t))
     ("list"
-     (list :ok t :elements (vconcat (agent-ui-elements :canvas canvas))))
+     (list :ok t :elements
+           (vconcat (mapcar (lambda (e)
+                              (let ((source (and (fboundp 'agent-ui-source-status)
+                                                 (agent-ui-source-status (plist-get e :id) :canvas canvas))))
+                                (append e (when source (list :source source)))))
+                            (agent-ui-elements :canvas canvas)))))
     ("render"
      ;; Drawn as text at the canvas's width (its window's, else the default):
      ;; for the agent to see what it draws.
@@ -158,7 +174,8 @@ its reply written there, as JSON. Never signals: an error is the reply."
                     (canvas (funcall agent-ui-canvas-function
                                      (unless (equal session "") session)
                                      (unless (equal cwd "") cwd))))
-               (agent-ui-do op (unless (equal id "") id) payload canvas))
+               (let ((agent-ui--request-cwd (unless (equal cwd "") cwd)))
+                 (agent-ui-do op (unless (equal id "") id) payload canvas)))
            (error (list :ok :false :error (agent-ui-error-message err))))))
     (with-temp-file (expand-file-name "reply" folder)
       (setq-local coding-system-for-write 'utf-8)

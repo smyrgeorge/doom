@@ -44,7 +44,7 @@ with a line saying so."
 
 (define-error 'agent-ui-error "Agent UI")
 
-(defconst agent-ui--reserved '(:id :type :title)
+(defconst agent-ui--reserved '(:id :type :title :source)
   "Keys every element may have; no type's property is named so.")
 
 (defconst agent-ui--kinds '(string number integer boolean list any)
@@ -288,6 +288,8 @@ when it's drawn. Signals `agent-ui-error' if PATCH changes the type."
     (cl-loop for (key value) on patch by #'cddr
              do (cond
                  ((eq key :id))
+                 ((eq key :source)
+                  (agent-ui--fail "an update can't change a source: show the element again"))
                  ((eq key :type)
                   (unless (agent-ui--same-type-p value (plist-get element :type))
                     (agent-ui--fail "an update can't change the type (%s to %s): show it again"

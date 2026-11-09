@@ -1,9 +1,9 @@
 # Agent UI
 
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line, the
-> `text`, `markdown`, `progress`, `steps`, `table` and `chart` types, types the agent makes (kept or discarded by you),
-> and what the agent is told. `M-x +my/example-agent-ui` shows it ([Examples](examples.md)). Still to come: what's
-> [later](#later).
+> `text`, `markdown`, `progress`, `steps`, `table` and `chart` types, sources (an element following a command, a file,
+> a poll), types the agent makes (kept or discarded by you), and what the agent is told. `M-x +my/example-agent-ui`
+> shows it ([Examples](examples.md)). Still to come: what's [later](#later).
 
 A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
@@ -198,6 +198,32 @@ wed  ████████████████████████  1
 thu  ████████                   60
 ```
 
+## Sources
+
+The agent's tool calls run one after another: a bar it updates itself stands still while it waits on a long command.
+An element's `source` has Emacs follow what changes instead (`config/agent-ui/source.el`):
+
+| Source | |
+|---|---|
+| `{"command": "make -j8"}` | Run by Emacs, in the agent's directory (or `dir`); its output kept in a log the reply names; when it ends, its `done` or `failed` patch (`$code`: its exit code), a progress bar's own if none |
+| `{"file": "build.log", "from": "end"}` | A file followed as it grows (from its start by default; written again, from its start again) |
+| `{"poll": "df -h /", "every": 10}` | A command run every so many seconds |
+
+Rules turn its lines (`\r` ends one too, as a progress meter's) into changes: each line matching a rule's `match` (a
+regular expression as in `grep -E`, turned into Emacs's) applies its `set` (an update) and `append`, their `"$1"`
+a group's value (a number if it reads as one), `$N` in text replaced. `tail: N` sets a text element to the last N
+lines. A chunk of output is one update, however many lines it has.
+
+```json
+{"id": "build", "type": "progress", "title": "Build", "max": 1,
+ "source": {"command": "ninja -C build", "match": "^\\[(\\d+)/(\\d+)\\] (.*)$",
+            "set": {"value": "$1", "max": "$2", "label": "$3"}}}
+```
+
+`agent-ui list` gives each source's state: running, its exit code, how many lines, its log, and the error of a
+change the element refused. A source stops when its element is removed or shown again, or its canvas closed. An
+update can't change a source: showing the element again does.
+
 ## Types the agent makes
 
 When none of the types fits, the agent writes one: an Emacs Lisp file with one `agent-ui-define` and the definitions it
@@ -235,9 +261,6 @@ the types change.
 
 ## Later
 
-- **Elements following a source** (`doom-nwj.11`). The agent's tool calls run one after another: a bar it updates
-  itself stands still while it waits on a long command. An element can follow a command's output, a file or a polling
-  command instead: `"source": {"command": "make", "progress": "REGEXP"}`.
 - **In the conversation** (`doom-nwj.14`): an element, or a snapshot of it, in the agent-shell buffer itself.
 - **MCP** (`doom-nwj.15`): the same operations as tools with schemas, given to each session through
   `agent-shell-mcp-servers`.
@@ -254,6 +277,7 @@ the types change.
 | `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
+| `config/agent-ui/source.el` | Sources: an element following a command, a file, a poll |
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |

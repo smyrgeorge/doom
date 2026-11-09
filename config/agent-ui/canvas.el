@@ -44,6 +44,18 @@ in no window: shows it, without selecting it."
 (defvar agent-ui-canvas-hook nil
   "Run in a canvas's buffer once it's made.")
 
+(defvar agent-ui-check-source-function
+  (lambda (_source) (agent-ui--fail "sources aren't loaded (config/agent-ui/source.el)"))
+  "Called with an element's :source: an error if it's wrong.")
+
+(defvar agent-ui-shown-functions nil
+  "Called in a canvas with an element's id and itself, once it's shown
+\(new, or shown again).")
+
+(defvar agent-ui-removed-functions nil
+  "Called in a canvas with an element's id once it's gone (removed, or its
+canvas killed).")
+
 (cl-defstruct (agent-ui--entry (:constructor agent-ui--make-entry))
   "An element of a canvas: its id, itself (a plist), where it's drawn."
   id element start end)
@@ -237,6 +249,9 @@ it if none is."
         (agent-ui--animate)))))
 
 (defun agent-ui--stop-timers ()
+  ;; Its elements go with it.
+  (dolist (id agent-ui--order)
+    (run-hook-with-args 'agent-ui-removed-functions id))
   (dolist (timer (list agent-ui--redraw-timer agent-ui--animation-timer))
     (when (timerp timer)
       (cancel-timer timer)))
@@ -270,6 +285,8 @@ error saying what's wrong. Its :type a string, as JSON gives it."
     (let ((title (plist-get element :title)))
       (when (and title (not (stringp title)))
         (agent-ui--fail "a title is text, not %s" (agent-ui--show-value title))))
+    (when-let* ((source (plist-get element :source)))
+      (funcall agent-ui-check-source-function source))
     (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type)))))
 
 (cl-defun agent-ui-show (element &key canvas)
@@ -305,6 +322,7 @@ Signals `agent-ui-error' if ELEMENT is wrong."
             (funcall agent-ui-display-function (current-buffer)))
           (agent-ui--draw entry (agent-ui--context))
           (agent-ui--animate)))
+      (run-hook-with-args 'agent-ui-shown-functions id element)
       id)))
 
 (cl-defun agent-ui-update (id patch &key canvas)
@@ -342,6 +360,7 @@ there's no such element or the change makes it wrong (then it's unchanged)."
       (setq agent-ui--order (delete id agent-ui--order)
             agent-ui--dirty (delete id agent-ui--dirty))
       (agent-ui--animate)
+      (run-hook-with-args 'agent-ui-removed-functions id)
       id)))
 
 (cl-defun agent-ui-clear (&key canvas)
