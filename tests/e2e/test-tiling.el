@@ -160,8 +160,8 @@ killed): the two left at equal heights once Emacs redisplays (its
 
 (ert-deftest e2e-tiling/claude-code-in-a-new-pane-its-links-as-its-tabs ()
   "agent-shell shows a session (SPC o c) in a new pane; shown, it's selected
-there. Its links to files open them as tabs in its pane, the session one too;
-to a file shown already in a pane, there."
+there. Its links to files open them as tabs in its pane, the session one too,
+a file shown in another pane too."
   (+test-tiling
     (let* ((left (selected-window))
            (session (+test-tiling--session))
@@ -181,11 +181,12 @@ to a file shown already in a pane, there."
         (should (eq (window-buffer pane) file))
         (should (equal (+test-tiling--tabs pane) (list (buffer-name session) "b.txt")))
         (should (equal (+test-tiling--tabs left) '("a.txt")))
-        ;; A link to a.txt, shown on the left: there.
+        ;; A link to a.txt, shown on the left: here too.
         (switch-to-buffer session)
         (funcall agent-shell-markdown-open-file-function (buffer-file-name (window-buffer left)))
-        (should (eq (selected-window) left))
-        (should (eq (window-buffer pane) session))))))
+        (should (eq (selected-window) pane))
+        (should (equal (buffer-name (window-buffer pane)) "a.txt"))
+        (should (equal (buffer-name (window-buffer left)) "a.txt"))))))
 
 (ert-deftest e2e-tiling/files-found-in-an-application-s-pane-as-its-tabs ()
   "SPC SPC (find-file) in Claude Code's pane: the file there, a tab."
@@ -317,9 +318,9 @@ discarded, the pane closes."
                         "-c" "user.name=T" "-c" "user.email=t@example.invalid"
                         "-c" "commit.gpgsign=false" "-c" "core.hooksPath=/dev/null" args))))
 
-(ert-deftest e2e-tiling/file-diff-in-a-new-pane-ret-in-the-files-pane ()
-  "SPC g d: the diff in a new pane; RET on a line opens the file in the pane
-of files, the diff staying; SPC g d there closes it."
+(ert-deftest e2e-tiling/file-diff-in-a-new-pane-ret-there ()
+  "SPC g d: the diff in a new pane; RET on a line opens the file there, a tab
+beside the diff's; the diff's tab again, SPC g d closes its pane."
   (+test-tiling
     (let* ((dir (+test-tiling--dir))
            (default-directory dir)
@@ -334,20 +335,22 @@ of files, the diff staying; SPC g d there closes it."
       (save-buffer)
       (let ((file (current-buffer)))
         (+my/git-diff-pane)
-        (let ((diff (selected-window)))
+        (let* ((diff (selected-window))
+               (diff-buffer (window-buffer diff)))
           (should-not (eq diff left))
-          (should (with-current-buffer (window-buffer diff) (derived-mode-p 'magit-diff-mode)))
-          (set-buffer (window-buffer diff))
+          (should (with-current-buffer diff-buffer (derived-mode-p 'magit-diff-mode)))
+          (set-buffer diff-buffer)
           (should (= (length (+my/tiling--panes)) 2))
-          ;; RET on the added line.
+          ;; RET on the added line: the file here, a tab.
           (goto-char (point-min))
           (should (search-forward "+four" nil t))
           (call-interactively #'magit-diff-visit-file)
-          (should (eq (selected-window) left))
+          (should (eq (selected-window) diff))
+          (should (eq (window-buffer diff) file))
+          (should (equal (+test-tiling--tabs diff) (list (buffer-name diff-buffer) "f.txt")))
           (should (eq (window-buffer left) file))
-          (should (with-current-buffer (window-buffer diff) (derived-mode-p 'magit-diff-mode)))
-          ;; Closed from it.
-          (select-window diff)
+          ;; Its tab again; SPC g d there closes the pane.
+          (switch-to-buffer diff-buffer)
           (+my/git-diff-pane)
           (should-not (window-live-p diff))
           (should (= (length (+my/tiling--panes)) 1)))))))
@@ -355,7 +358,7 @@ of files, the diff staying; SPC g d there closes it."
 (ert-deftest e2e-tiling/magit-status-and-its-buffers ()
   "SPC g g from a file: magit's status in a new pane; its log in that pane; a
 commit from the log in a new pane, q closes it; RET on a file in the status:
-the file in the pane of files; SPC g g again: the status's pane."
+the file there, a tab; SPC g g again: the status's tab there."
   (+test-tiling
     (let* ((dir (+test-tiling--dir))
            (default-directory dir)
@@ -395,12 +398,12 @@ the file in the pane of files; SPC g g again: the status's pane."
           (goto-char (point-min))
           (should (re-search-forward "^modified +f\\.txt" nil t))
           (call-interactively #'magit-diff-visit-file)
-          (should (eq (selected-window) left))
-          (should (eq (window-buffer left) file))
-          (should (with-current-buffer (window-buffer status) (derived-mode-p 'magit-status-mode)))
-          ;; SPC g g again, from the file: its pane.
+          (should (eq (selected-window) status))
+          (should (eq (window-buffer status) file))
+          ;; SPC g g again, from the file over it: the status's tab there.
           (magit-status-setup-buffer dir)
           (should (eq (selected-window) status))
+          (should (with-current-buffer (window-buffer status) (derived-mode-p 'magit-status-mode)))
           (should (= (length (+my/tiling--panes)) 2)))))))
 
 ;; ====== POPUPS, TABS ======

@@ -53,17 +53,26 @@ issue goes to the first one's pane: config/beads/project.el.)"
       (derived-mode-p 'dired-mode))))
 
 ;; PANES
-(defun +my/tiling--file-pane-p (window)
-  "Non-nil if WINDOW is a pane a file can open in as a tab: a pane, an
-application's too, not dedicated (Doom's terminal's)."
-  (and (memq window (+my/tiling--panes))
-       (not (window-dedicated-p window))))
-
-(defun +my/tiling--file-pane ()
-  "The pane a file shown from elsewhere (a popup, a side panel, a dedicated
-pane) opens in: the last selected one it can; nil without one."
-  (car (sort (seq-filter #'+my/tiling--file-pane-p (+my/tiling--panes))
+(defun +my/tiling--last-pane ()
+  "The pane used last (where a file shown from a popup or a side panel
+opens); nil without one."
+  (car (sort (copy-sequence (+my/tiling--panes))
              (lambda (a b) (> (window-use-time a) (window-use-time b))))))
+
+(defun +my/tiling--tab-pane (buffer)
+  "A pane BUFFER is a tab of, not shown (a file over it): the current pane
+first; nil if none."
+  (seq-find (lambda (pane) (assq buffer (window-prev-buffers pane)))
+            (let ((panes (+my/tiling--panes)))
+              (if (memq (selected-window) panes)
+                  (cons (selected-window) (delq (selected-window) panes))
+                panes))))
+
+(defun +my/tiling--show-file (buffer pane alist)
+  "BUFFER in PANE, as a tab there (ALIST, a `display-buffer' one, without its
+size). PANE taking tabs like any: Doom's terminal's was dedicated to it."
+  (set-window-dedicated-p pane nil)
+  (window--display-buffer buffer pane 'reuse (+my/tiling--alist alist)))
 
 (defun +my/tiling--alist (alist)
   "ALIST, a `display-buffer' one, without where and how big its window should
@@ -102,18 +111,22 @@ file's tab in its pane showed another file. Nothing without workspaces."
     (ignore-errors (persp-add-buffer buffer (get-current-persp) nil))))
 
 (defun +my/tiling--display (buffer alist)
-  "`display-buffer-overriding-action': an application in its pane, else a new
-one; a file shown from an application's pane, from a popup, a side panel or
-a dedicated pane: in the pane already showing it, else in the application's
-pane (a tab), else in the last pane it can open in (a new pane without one).
-Nil for anything else (a file from a pane of files, popups, *Completions*,
-transient menus...), and while the minibuffer is open (previews put back
-what they showed): as it asks."
+  "`display-buffer-overriding-action': an application in its pane (shown, or
+one of its tabs), else a new one (as the strategy puts it); a file in the current pane, as a tab, from a
+popup or a side panel in the pane used last (a new pane without one). Nil
+for anything else (popups, *Completions*, transient menus, git's own
+files...), for a buffer shown in no window (ALIST's `allow-no-window'), and
+while the minibuffer is open (previews put back what they showed): as it
+asks."
   (cond
    ((active-minibuffer-window) nil)
-   ((and (+my/tiling-app-p buffer) (not (alist-get 'allow-no-window alist)))
+   ((alist-get 'allow-no-window alist) nil)
+   ((+my/tiling-app-p buffer)
     (let ((window (cond ((get-buffer-window buffer)
                          (window--display-buffer buffer (get-buffer-window buffer) 'reuse
+                                                 (+my/tiling--alist alist)))
+                        ((+my/tiling--tab-pane buffer)
+                         (window--display-buffer buffer (+my/tiling--tab-pane buffer) 'reuse
                                                  (+my/tiling--alist alist)))
                         ((+my/tiling--new-pane-p buffer)
                          (+my/tiling-display-buffer buffer alist)))))
@@ -122,15 +135,9 @@ what they showed): as it asks."
       window))
    ((+my/tiling--file-p buffer)
     (let ((here (selected-window)))
-      ;; From a pane of files: as asked.
-      (unless (and (+my/tiling--file-pane-p here)
-                   (not (+my/tiling-app-p (window-buffer here))))
-        (if-let* ((window (or (seq-find (lambda (window) (memq window (+my/tiling--panes)))
-                                        (get-buffer-window-list buffer 'nomini))
-                              (and (+my/tiling--file-pane-p here) here)
-                              (+my/tiling--file-pane))))
-            (window--display-buffer buffer window 'reuse (+my/tiling--alist alist))
-          (+my/tiling-display-buffer buffer alist)))))))
+      (if-let* ((pane (if (memq here (+my/tiling--panes)) here (+my/tiling--last-pane))))
+          (+my/tiling--show-file buffer pane alist)
+        (+my/tiling-display-buffer buffer alist))))))
 
 (setq display-buffer-overriding-action '((+my/tiling--display)))
 

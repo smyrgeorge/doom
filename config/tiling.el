@@ -28,19 +28,19 @@
 ;; - Applications (`+my/tiling-apps': Claude Code, the terminal, the Markdown
 ;;   preview, magit, drawings, issues) open in a new pane where the strategy
 ;;   puts it, whatever their own setting or Doom's popup rules say; one shown
-;;   already: its pane. Magit's status (SPC g g), and any magit buffer opened
+;;   already, or a tab of a pane (a file over it): that pane. Magit's status (SPC g g), and any magit buffer opened
 ;;   from outside magit (SPC g d's diff, a log from a file), open so; inside
 ;;   magit, a log or a diff from the status stays in its pane as magit has it,
 ;;   a commit or a stash (Doom: beside) opens in a new pane, its process log
 ;;   below as Doom has it.
-;; - Files open as a tab in the pane they're opened from, an application's
-;;   too, which keeps its tab (a link in Claude Code, RET in magit, SPC SPC
-;;   there): only the applications above open in a pane of their own. One
-;;   already shown in a pane: that pane (RET in SPC g d's diff: the file's).
-;;   From a popup, a side panel (the sidebar, *Help*) or a dedicated pane
-;;   (Doom's terminal), in the last pane used (a new pane without one). Git's
-;;   own (a commit message, the rebase todo: in .git/, edited for git) stay
-;;   where git opens them.
+;; - Applications then behave as any buffer: a file opened in their pane is a
+;;   tab there, they keep theirs (shown again when its tab closes).
+;; - Files open as a tab in the current pane, always: an application's too (a
+;;   link in Claude Code, RET in magit or SPC g d's diff, SPC SPC there), one
+;;   asked for in another window too, Doom's terminal's pane too. From a popup
+;;   or a side panel (the sidebar, *Help*), in the pane used last (a new pane
+;;   without one). Git's own (a commit message, the rebase todo: in .git/,
+;;   edited for git) stay where git opens them.
 ;; - A pane closes with its last tab: its tab closed (config/editor/tabs.el)
 ;;   or its buffer killed (SPC b k, a terminal's shell ending), but the
 ;;   frame's last pane.

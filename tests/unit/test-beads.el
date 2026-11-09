@@ -324,6 +324,9 @@ issue, a new pane, the next one in it; the preview, beads.el's side window."
         (should (= (length (+my/tiling--panes)) 3))
         (let ((issue-window (selected-window)))
           (should (string-match-p first (buffer-name (window-buffer issue-window))))
+          ;; Not in the list's pane's history (drawn there, not shown).
+          (should-not (seq-find (lambda (entry) (string-match-p "Beads Detail" (buffer-name (car entry))))
+                                (window-prev-buffers list-window)))
           (select-window list-window)
           (beads-detail-open (beads-client-show second))
           (should (= (length (+my/tiling--panes)) 3))

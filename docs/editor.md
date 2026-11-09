@@ -16,9 +16,11 @@ Each window has its own tabs: the files shown in it. A file closes once no windo
 Emacs is tiling first:
 
 - Applications (Claude Code, the terminal, magit, the Markdown preview, drawings, issues) open in a new pane where the
-  tiling strategy puts it. Inside magit, a log or a diff stays in its pane; a commit opens in a new one.
-- Files open as a tab in the pane they're opened from, an application's too (a link in Claude Code, `RET` in Magit).
-  One already shown in a pane opens there. From a popup or the sidebar, they open in the last pane used.
+  tiling strategy puts it; one already open (shown, or a tab under a file), in its pane. Inside magit, a log or a diff
+  stays in its pane; a commit opens in a new one.
+- Then they behave as any buffer: a file opened in their pane is a tab there, and they keep theirs.
+- Files always open as a tab in the current pane, whatever pane it is. From a popup or the sidebar, in the last pane
+  used.
 - A pane closes with its last tab (`Cmd+W`, `SPC b k`). When one closes (however: `SPC w d`, `q`, its last tab), the
   stacked panes share its rows again, at equal heights.
 

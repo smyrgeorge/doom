@@ -97,6 +97,26 @@ terminal offered to start (see STARTING), and nothing more done."
 
 (advice-add 'beads-detail-open :around #'+my/beads-issue-pane-a)
 
+;; An issue's buffer is drawn (vui) inside `save-window-excursion', not to be
+;; shown; but vui shows it (`switch-to-buffer') and the window it showed it in
+;; (the list's pane) kept it in its history: a tab of the list's pane, where
+;; the issue then opened. Drawn not shown (vui's NO-DISPLAY).
+(defvar +my/beads--drawing nil
+  "Non-nil while beads.el draws an issue's buffer.")
+
+(defun +my/beads-draw-not-show-a (fn &rest args)
+  (let ((+my/beads--drawing t))
+    (apply fn args)))
+
+(defun +my/beads-vui-no-display-a (args)
+  "`vui-mount''s ARGS, NO-DISPLAY set while beads.el draws an issue."
+  (if +my/beads--drawing
+      (list (nth 0 args) (nth 1 args) t)
+    args))
+
+(advice-add 'beads-detail--render-vui :around #'+my/beads-draw-not-show-a)
+(advice-add 'vui-mount :filter-args #'+my/beads-vui-no-display-a)
+
 (defun +my/beads-new-issue ()
   "A new issue in the current project (see above)."
   (interactive)

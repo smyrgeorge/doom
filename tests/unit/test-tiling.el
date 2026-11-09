@@ -561,11 +561,11 @@ this window or another): a tab there, the application still one."
       (should (eq (display-buffer other '(display-buffer-pop-up-window)) app))
       (should (= (length (+my/tiling--panes)) 2))
       (should (eq (window-buffer left) (get-buffer "A")))
-      ;; Shown already in another pane: that one, no second view.
+      ;; Shown already in another pane: here too, the current pane's tab.
       (switch-to-buffer "app")
       (set-window-buffer left file)
-      (should (eq (display-buffer file '(display-buffer-same-window)) left))
-      (should (eq (window-buffer app) (get-buffer "app"))))))
+      (should (eq (display-buffer file '(display-buffer-same-window)) app))
+      (should (eq (window-buffer left) file)))))
 
 (ert-deftest tiling/files-from-a-popup-in-the-last-pane-used ()
   "From a popup or a side panel (a link in *Help*): in the pane used last, an
@@ -580,19 +580,30 @@ application's too; from a dedicated pane (Doom's terminal), the same."
       (select-window app)
       (select-window popup)
       (should (eq (display-buffer file '((display-buffer-use-some-window))) app))
-      ;; From a dedicated pane: the last one used but it.
+      ;; From a dedicated pane (Doom's terminal's): there too, as any.
       (set-window-buffer app (get-buffer "app"))
       (select-window left)
       (select-window app)
       (set-window-dedicated-p app t)
-      (should (eq (display-buffer (+test-tiling--file "b.txt") '(display-buffer-same-window)) left))
-      (set-window-dedicated-p app nil))))
+      (should (eq (display-buffer (+test-tiling--file "b.txt") '(display-buffer-same-window)) app))
+      (should-not (window-dedicated-p app)))))
 
-(ert-deftest tiling/files-from-a-pane-of-files-as-asked ()
+(ert-deftest tiling/files-in-the-current-pane-always ()
+  "From a pane of files too, asked for another window (C-x 4 f, xref's other
+window): the current pane, as a tab; no new pane, not another one."
   (+test-tiling-first
-    (let ((file (+test-tiling--file "a.txt")))
-      (should (eq (display-buffer file '(display-buffer-same-window)) (selected-window)))
-      (should (= (length (+my/tiling--panes)) 1)))))
+    (let ((file (+test-tiling--file "a.txt"))
+          (here (selected-window)))
+      (should (eq (display-buffer file '(display-buffer-same-window)) here))
+      (should (= (length (+my/tiling--panes)) 1))
+      (let* ((other (split-window))
+             (shown (window-buffer other)))
+        (should (eq (display-buffer (+test-tiling--file "b.txt") '(display-buffer-pop-up-window)) here))
+        (should (eq (display-buffer (+test-tiling--file "c.txt") '(display-buffer-use-some-window)) here))
+        (should (eq (window-buffer other) shown))
+        (should (= (length (+my/tiling--panes)) 2)))
+      ;; Shown in no window (asked so): none.
+      (should-not (+my/tiling--display (+test-tiling--file "d.txt") '((allow-no-window . t)))))))
 
 (ert-deftest tiling/files-switched-to-in-an-application-s-pane ()
   "find-file, SPC SPC (`switch-to-buffer') in an application's pane: the file
