@@ -15,3 +15,4 @@
 (load! "elements/choice")
 (load! "elements/files")
 (load! "elements/stats")
+(load! "elements/log")

@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice diff files html image markdown progress stats steps table text)))
+  (should (equal (agent-ui-types) '(chart choice diff files html image log markdown progress stats steps table text)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -679,4 +679,33 @@ new file mode 100644
   (should (string-match-p "figure 1 has no value" (+test-aue-error '(:type "stats" :figures ((:label "a"))))))
   (should (string-match-p "good is up, down or none" (+test-aue-error '(:type "stats" :figures ((:label "a" :value 1 :good "yes"))))))
   (should (string-match-p "has \"trend\"" (+test-aue-error '(:type "stats" :figures ((:label "a" :value 1 :trend 2)))))))
+
+;; ====== LOG ======
+
+(ert-deftest agent-ui-elements/log ()
+  (let ((element '(:type "log" :lines "start\nWARN: slow query\nERROR db: refused\ndebug: retry\nPanic! at the disco\nok")))
+    (should (equal (+test-aue-draw element)
+                   (concat "2 errors · 1 warning · 6 lines\n"
+                           "start\nWARN: slow query\nERROR db: refused\ndebug: retry\nPanic! at the disco\nok")))
+    (should (eq (+test-aue-face-at element "ERROR db") 'agent-ui-error))
+    (should (eq (+test-aue-face-at element "WARN:") 'agent-ui-warning))
+    (should (eq (+test-aue-face-at element "debug:") 'agent-ui-muted))
+    (should-not (+test-aue-face-at element "start")))
+  ;; Words, not parts of words: "errorless" isn't an error.
+  (should (equal (+test-aue-draw '(:type "log" :lines "errorless run")) "1 line\nerrorless run"))
+  ;; Given levels; the last SHOW shown, KEEP counted.
+  (should (equal (+test-aue-draw '(:type "log" :show 2 :keep 3
+                                   :lines ((:level "error" :text "a") "b" "c" (:level "warning" :text "d"))))
+                 "1 warning · 3 lines\nc\nd"))
+  (should (equal (+test-aue-draw '(:type "log")) "no lines yet")))
+
+(ert-deftest agent-ui-elements/log-appended ()
+  (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines "a\nb") '(:lines "c\n")) :lines) '("a" "b" "c")))
+  (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines ("a")) '(:lines ("b" "c"))) :lines) '("a" "b" "c")))
+  (should (string-match-p "only lines" (agent-ui-error-message (should-error (agent-ui-append-to '(:type "log") '(:show 3)) :type 'agent-ui-error)))))
+
+(ert-deftest agent-ui-elements/log-wrong ()
+  (should (string-match-p "line 1 must be" (+test-aue-error '(:type "log" :lines ((:level "loud" :text "x"))))))
+  (should (string-match-p "keep is 1 to 5000" (+test-aue-error '(:type "log" :keep 0))))
+  (should (string-match-p "lines is text or a list" (+test-aue-error '(:type "log" :lines 3)))))
 

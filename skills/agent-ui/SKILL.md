@@ -161,6 +161,20 @@ A row of figures, each with its change: the summary at the top of a canvas. A fi
 agent-ui show '{"id":"summary","type":"stats","figures":[{"label":"Coverage","value":87.1,"unit":"%","change":2.3},{"label":"Tests","value":412,"change":"all pass"},{"label":"Build","value":29,"unit":"s","change":-12,"good":"down"}]}'
 ```
 
+### `log`
+
+Lines of output, each coloured by its level (found by its words: error, fatal, panic, failed; warn; info; debug,
+trace; or given as `{"level", "text"}`), errors and warnings counted above, the last `show` shown (`keep` kept).
+`lines` is text (a line each) or a list; append adds lines. To follow a log as it grows:
+
+```sh
+agent-ui show '{"id":"server","type":"log","title":"server.log","lines":"12:01:03 INFO listening on :8080\n12:01:09 ERROR db: connection refused"}'
+agent-ui show <<'EOF'
+{"id": "app", "type": "log", "title": "app.log", "show": 20,
+ "source": {"file": "app.log", "from": "end", "into": "lines"}}
+EOF
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines

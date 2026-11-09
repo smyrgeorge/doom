@@ -242,18 +242,18 @@ checked (not run), its rules matching a line as they should."
       (push (agent-ui-parse-json (match-string 1 skill)) elements)
       (setq pos (match-end 0)))
     (setq elements (nreverse elements))
-    (should (= (length elements) 5))
+    (should (= (length elements) 6))
     (dolist (element elements)
       (should (agent-ui-check (plist-get element :type) element))
       (should (agent-ui-source-check (plist-get element :source))))
     ;; The rules read what they're for.
     (cl-flet ((applied (element line)
                 (agent-ui-source--apply (agent-ui-source-check (plist-get element :source)) (list line))))
-      (should (equal (applied (nth 1 elements) "[3/120] Building CXX object a.o")
+      (should (equal (applied (nth 2 elements) "[3/120] Building CXX object a.o")
                      '((:value 3 :max 120 :label "Building CXX object a.o"))))
-      (should (equal (applied (nth 2 elements) "test parser::empty ... FAILED")
+      (should (equal (applied (nth 3 elements) "test parser::empty ... FAILED")
                      '(nil :rows (("parser::empty" "FAILED")))))
-      (should (equal (applied (nth 4 elements) " 51234")
+      (should (equal (applied (nth 5 elements) " 51234")
                      '(nil :values (51234)))))))
 
 (ert-deftest agent-ui-source/all-of-it-into-a-property ()
@@ -263,4 +263,14 @@ checked (not run), its rules matching a line as they should."
     (+test-ausrc-ended "d")
     (should (equal (plist-get (agent-ui-get "d") :diff) "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b"))
     (should (string-match-p "into names a property" (+test-ausrc-error '(:command "a" :into "Bad Name"))))))
+
+(ert-deftest agent-ui-source/a-log-following-a-file ()
+  (+test-ausrc
+    (let ((file (+test-tmp-file (format "app-%d.log" (random 100000)))))
+      (with-temp-file file (insert "old\n"))
+      (agent-ui-show (list :id "l" :type "log" :source (list :file file :from "end" :into "lines")))
+      (accept-process-output nil 0.1)
+      (write-region "12:00 INFO up\n12:01 ERROR down\n" nil file t 'silent)
+      (+test-ausrc-wait (lambda () (equal (plist-get (agent-ui-get "l") :lines) "12:00 INFO up\n12:01 ERROR down")))
+      (should (string-prefix-p "1 error · 2 lines" (+test-ausrc-text))))))
 
