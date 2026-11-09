@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice diff files html image markdown progress steps table text)))
+  (should (equal (agent-ui-types) '(chart choice diff files html image markdown progress stats steps table text)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -650,4 +650,33 @@ new file mode 100644
   (should (string-match-p "status \"edited\"" (+test-aue-error '(:type "files" :files ((:path "a" :status "edited"))))))
   (should (string-match-p "added must be a count" (+test-aue-error '(:type "files" :files ((:path "a" :added -1))))))
   (should (string-match-p "has \"size\"" (+test-aue-error '(:type "files" :files ((:path "a" :size 3)))))))
+
+;; ====== STATS ======
+
+(ert-deftest agent-ui-elements/stats ()
+  (let ((element '(:type "stats" :figures ((:label "Coverage" :value 87.1 :unit "%" :change 2.3)
+                                          (:label "Tests" :value 412 :change "all pass")
+                                          (:label "Build" :value 29 :unit "s" :change -12 :good "down")
+                                          (:label "Errors" :value 3 :change 1 :good "down")))))
+    (should (equal (+test-aue-draw element :width 60)
+                   (concat "Coverage       Tests          Build          Errors\n"
+                           "87.1% ▲2.3     412 all pass   29 s ▼12       3 ▲1")))
+    ;; A rise good (up), a fall good (down), a rise bad (down).
+    (should (eq (+test-aue-face-at element "▲2.3") 'agent-ui-success))
+    (should (eq (+test-aue-face-at element "▼12") 'agent-ui-success))
+    (should (eq (+test-aue-face-at element "▲1") 'agent-ui-error))
+    ;; Narrow: wrapped.
+    (should (string-match-p "\\`Coverage +Tests\n87.1% ▲2.3 +412 all pass\n\nBuild +Errors\n29 s ▼12 +3 ▲1\\'"
+                            (+test-aue-draw element :width 30)))
+    ;; In the GUI: tiles, an SVG.
+    (let ((svg (plist-get (cdr (get-text-property 0 'display (agent-ui-render element (agent-ui-context :width 80 :graphic t)))) :data)))
+      (should (= 4 (cl-count ?\n (replace-regexp-in-string "<rect" "\n" svg))))
+      (should (string-match-p ">87.1%</text>" svg))))
+  (should (equal (+test-aue-draw '(:type "stats")) "no figures")))
+
+(ert-deftest agent-ui-elements/stats-wrong ()
+  (should (string-match-p "figure 1 has no label" (+test-aue-error '(:type "stats" :figures ((:value 1))))))
+  (should (string-match-p "figure 1 has no value" (+test-aue-error '(:type "stats" :figures ((:label "a"))))))
+  (should (string-match-p "good is up, down or none" (+test-aue-error '(:type "stats" :figures ((:label "a" :value 1 :good "yes"))))))
+  (should (string-match-p "has \"trend\"" (+test-aue-error '(:type "stats" :figures ((:label "a" :value 1 :trend 2)))))))
 

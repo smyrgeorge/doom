@@ -151,6 +151,16 @@ user folds a folder with `RET`). `RET` on a file opens it, at its `line`. For wh
 agent-ui show '{"id":"touched","type":"files","title":"What I changed","tree":true,"files":[{"path":"src/parser.c","status":"changed","added":12,"removed":3},{"path":"src/lexer.h","status":"added","added":40},{"path":"tests/parser_test.c","status":"failing","errors":2,"line":88}]}'
 ```
 
+### `stats`
+
+A row of figures, each with its change: the summary at the top of a canvas. A figure is `{"label", "value", "unit",
+"change", "good"}`: `change` a number (▲ or ▼ with it) or text; `good` `"up"` (default: a rise is good, green),
+`"down"` (a rise is bad, red: time, errors) or `"none"`. Tiles in the GUI; side by side, wrapping, as text.
+
+```sh
+agent-ui show '{"id":"summary","type":"stats","figures":[{"label":"Coverage","value":87.1,"unit":"%","change":2.3},{"label":"Tests","value":412,"change":"all pass"},{"label":"Build","value":29,"unit":"s","change":-12,"good":"down"}]}'
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines

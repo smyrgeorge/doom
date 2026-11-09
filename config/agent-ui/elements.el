@@ -14,3 +14,4 @@
 (load! "elements/diff")
 (load! "elements/choice")
 (load! "elements/files")
+(load! "elements/stats")
