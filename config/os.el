@@ -30,6 +30,14 @@
 ;; IMAGE EDITING (`+my/os-image-transform', `+my/os-image-to-png')
 ;; macOS: sips. Linux: ImageMagick (magick, or convert: ImageMagick 6).
 
+;; DESKTOP NOTIFICATIONS (`+my/os-notify', config/notify.el's)
+;; macOS: Notification Center, posted by Emacs itself (AppleScript's display
+;; notification, `do-applescript'; osascript's without it); macOS asks once
+;; whether Emacs may notify (System Settings > Notifications > Emacs). A click
+;; brings Emacs forward.
+;; Linux: the desktop's notifications, through D-Bus (`notifications-notify':
+;; a click runs the caller's function), else notify-send.
+
 ;; ====== CODE ======
 
 (defun +my/macos-p ()
@@ -172,3 +180,49 @@ what sips can't read: SVG). Non-nil if TO was made."
       (when-let* ((magick (+my/os-imagemagick)))
         (and (zerop (call-process magick nil nil nil from (concat "png:" to)))
              (file-exists-p to)))))
+
+;; DESKTOP NOTIFICATIONS (see above)
+(defun +my/os--applescript-string (text)
+  "TEXT as an AppleScript string, on one line."
+  (format "\"%s\"" (replace-regexp-in-string
+                    "[\"\\]" "\\\\\\&"
+                    (replace-regexp-in-string "[\n\r]+" " " text))))
+
+(defun +my/os--notify-macos (title body)
+  "TITLE and BODY in macOS's Notification Center (see above)."
+  (let ((script (format "display notification %s with title %s"
+                        (+my/os--applescript-string body)
+                        (+my/os--applescript-string title))))
+    (if (fboundp 'do-applescript)
+        (do-applescript script)
+      (+my/os--run "osascript" "-e" script))
+    t))
+
+(defun +my/os--dbus-notifications-p ()
+  "Non-nil if the desktop's notifications answer on D-Bus."
+  (and (featurep 'dbusbind)
+       (require 'notifications nil t)
+       (ignore-errors (dbus-ping :session notifications-service 500))))
+
+(defun +my/os--notify-linux (title body on-click)
+  "TITLE and BODY in the desktop's notifications (see above); ON-CLICK, a
+function, run on a click (D-Bus only). Nil if neither D-Bus nor notify-send
+can show it."
+  (cond ((+my/os--dbus-notifications-p)
+         (apply #'notifications-notify
+                :title title :body body :app-name "Emacs" :app-icon "emacs"
+                (and on-click
+                     (list :actions '("default" "Show")
+                           :on-action (lambda (_id _action) (funcall on-click)))))
+         t)
+        ((executable-find "notify-send")
+         (+my/os--run "notify-send" "--app-name=Emacs" "--icon=emacs" title body)
+         t)))
+
+(defun +my/os-notify (title body &optional on-click)
+  "Show a desktop notification, TITLE and BODY (see DESKTOP NOTIFICATIONS
+above). ON-CLICK, a function, runs when it's clicked (Linux; on macOS a click
+brings Emacs forward). Non-nil if it was shown."
+  (if (+my/macos-p)
+      (+my/os--notify-macos title body)
+    (+my/os--notify-linux title body on-click)))

@@ -257,6 +257,21 @@ binds keys (Doom's does nothing in batch mode)."
             '((name . +test-no-apps)))
 (advice-add '+my/os--reveal-dbus :override #'ignore '((name . +test-no-apps)))
 
+;; No test shows a desktop notification: what config/os.el would post is only
+;; recorded, macOS's (AppleScript) and Linux's (D-Bus; notify-send goes
+;; through `+my/os--run', recorded above).
+(defvar +test-notifications nil
+  "The notifications config/os.el posted, the latest first: (applescript
+SCRIPT) or (dbus ARGS...).")
+
+(advice-add 'do-applescript :override
+            (lambda (script &rest _) (push (list 'applescript script) +test-notifications) "")
+            '((name . +test-no-notifications)))
+(require 'notifications nil t)
+(advice-add 'notifications-notify :override
+            (lambda (&rest args) (push (cons 'dbus args) +test-notifications) 1)
+            '((name . +test-no-notifications)))
+
 (defmacro +test-on-linux (&rest body)
   "BODY as on Linux: `system-type' gnu/linux (config/os.el's `+my/macos-p'
 nil); files BODY loads bind Linux's keys."

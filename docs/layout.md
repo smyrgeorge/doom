@@ -5,6 +5,7 @@
 | `init.el`, `packages.el` | Doom modules and extra packages |
 | `config.el` | The main config; loads `config/` |
 | `config/agent-shell.el`, `agent-shell/` | [Claude Code](claude-code.md), drawing for it, its issues |
+| `config/notify.el`, `notify/` | [Notifications](notifications.md) on the desktop while Emacs isn't in front |
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
 | `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |
 | `config/cheatsheet.el`, `cheatsheet.org` | A tips panel under the sidebar (off) |
@@ -19,7 +20,7 @@
 | `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
 | `config/html.el` | HTML files: a [notice](editor.md#notices) to open them in the browser |
 | `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |
-| `config/os.el` | What differs between macOS and Linux: [the keys](keybindings.md), other apps, the clipboard's images |
+| `config/os.el` | What differs between macOS and Linux: [the keys](keybindings.md), other apps, the clipboard's images, notifications |
 | `config/pdf.el`, `pdf/` | [PDFs](pdf.md) |
 | `config/profiling.el`, `profiling/` | [Profiling](claude-code.md#profiling-emacs) |
 | `config/projectile.el`, `projectile/` | [Projects](search.md#projects) |

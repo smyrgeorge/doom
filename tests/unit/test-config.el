@@ -269,6 +269,22 @@ each feature opens its windows as it does alone."
                            (+test-config--forms))))
     (should (equal forms '((setq +my/tiling-strategy 'tall))))))
 
+(ert-deftest config/notifications-can-be-taken-out ()
+  "Notifications live in config/notify.el and config/notify/ (the desktop's
+side, `+my/os-notify', in config/os.el): config.el loads them, no other file
+fires one, so without that `load!' nothing notifies and nothing breaks."
+  (let ((users nil))
+    (dolist (file (directory-files-recursively (expand-file-name "config/" +test-root) "\\.el\\'"))
+      (unless (string-match-p "/config/notify\\(?:\\.el\\|/\\)" file)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (when (re-search-forward "+my/notify" nil t)
+            (push (file-relative-name file +test-root) users)))))
+    (should-not users))
+  (should (equal (seq-filter (lambda (form) (string-match-p "notify" (format "%S" form)))
+                             (+test-config--forms))
+                 '((load! "config/notify")))))
+
 (ert-deftest config/pdf-dark-pages ()
   "PDFs open with dark pages (config/pdf.el's own default: light)."
   (should (eq +my/pdf-dark-pages t)))

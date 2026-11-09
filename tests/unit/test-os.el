@@ -252,3 +252,55 @@ neither made it."
         (to (+test-tmp-file "os/made.png")))
     (+test-on-linux (should (+my/os-image-to-png from to)))
     (should (equal (+test-os--size to) '(4 3)))))
+
+;; ====== DESKTOP NOTIFICATIONS ======
+
+(ert-deftest os/notify-on-macos ()
+  "Notification Center, through AppleScript in Emacs (posted as Emacs's);
+quotes and backslashes escaped, line breaks spaces."
+  (let ((+test-notifications nil))
+    (+test-on-macos
+      (should (+my/os-notify "Claude Code" "doom: \"done\" in a\\b\nnext")))
+    (should (equal +test-notifications
+                   '((applescript "display notification \"doom: \\\"done\\\" in a\\\\b next\" with title \"Claude Code\""))))))
+
+(ert-deftest os/notify-on-macos-without-applescript-in-emacs ()
+  "No `do-applescript' (an Emacs built without it): osascript's."
+  (let ((+test-os-runs nil)
+        (+test-notifications nil))
+    (cl-letf (((symbol-function 'do-applescript) nil))
+      (+test-on-macos (should (+my/os-notify "Title" "Body"))))
+    (should-not +test-notifications)
+    (should (equal +test-os-runs
+                   '(("osascript" "-e" "display notification \"Body\" with title \"Title\""))))))
+
+(ert-deftest os/notify-on-linux-through-dbus ()
+  "The desktop's notifications (D-Bus): as Emacs's; a click runs the
+caller's function."
+  (let ((+test-notifications nil)
+        (clicked nil))
+    (cl-letf (((symbol-function '+my/os--dbus-notifications-p) (lambda () t)))
+      (+test-on-linux
+        (should (+my/os-notify "Claude Code" "doom: finished" (lambda () (setq clicked t))))
+        (should (+my/os-notify "Claude Code" "no click"))))
+    (pcase-let ((`((dbus . ,plain) (dbus . ,with-click)) +test-notifications))
+      (should (equal (plist-get with-click :title) "Claude Code"))
+      (should (equal (plist-get with-click :body) "doom: finished"))
+      (should (equal (plist-get with-click :app-name) "Emacs"))
+      (should (equal (plist-get with-click :actions) '("default" "Show")))
+      (funcall (plist-get with-click :on-action) 1 "default")
+      (should clicked)
+      (should-not (plist-member plain :actions))
+      (should-not (plist-member plain :on-action)))))
+
+(ert-deftest os/notify-on-linux-without-dbus ()
+  "No D-Bus notifications: notify-send; neither: none (nil)."
+  (let ((+test-os-runs nil)
+        (+test-notifications nil))
+    (cl-letf (((symbol-function '+my/os--dbus-notifications-p) #'ignore))
+      (+test-os--with-programs '("notify-send")
+        (+test-on-linux (should (+my/os-notify "Title" "Body"))))
+      (+test-os--with-programs '()
+        (+test-on-linux (should-not (+my/os-notify "Title" "Body")))))
+    (should-not +test-notifications)
+    (should (equal +test-os-runs '(("notify-send" "--app-name=Emacs" "--icon=emacs" "Title" "Body"))))))

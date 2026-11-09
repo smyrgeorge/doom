@@ -161,6 +161,10 @@
 ;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
 (load! "config/agent-shell")
 
+;; NOTIFICATIONS (on the desktop while Emacs isn't in front: Claude Code
+;; finished, or needs your permission; SPC t n)
+(load! "config/notify")
+
 ;; WEBKIT (web pages inside Emacs: what the PDF viewer, the Markdown preview and
 ;; drawings share)
 (load! "config/webkit")

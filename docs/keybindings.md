@@ -43,6 +43,7 @@ Vim's and Doom's keys stay as they are there. `config/os.el` has the rules.
 | `SPC o i` / `SPC o I` | `SPC o i` / `SPC o I` | The project's [issues](issues.md) / a new one |
 | `C-c C-i` (Claude Code), `C-c C-a` (an issue) | the same | An issue into Claude's prompt |
 | `SPC h T` | `SPC h T` | Start / stop the profiler |
+| `SPC t n` / `SPC t N` | the same | All [notifications](notifications.md) on / off; one kind |
 
 On Linux, `Alt+1`..`Alt+9` stay Doom's workspace keys, and `Alt+←` / `Alt+→` still move by words in insert state. In a
 terminal (`emacs -nw`), neither the `Cmd` keys nor most `Ctrl+Shift` and `Ctrl+digit` keys reach Emacs: use the `SPC`

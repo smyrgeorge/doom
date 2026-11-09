@@ -142,6 +142,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Git](docs/git.md): Magit additions, a file's diff, resolving conflicts in three panes
 - [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md)
 - [Claude Code](docs/claude-code.md): sessions, drawing for Claude, profiling Emacs
+- [Notifications](docs/notifications.md): on the desktop while you're in another app (Claude Code finished, needs you)
 - [Issues](docs/issues.md): the project's Beads issues
 - [AI agents](docs/ai-agents.md): the `emacs-profiling` skill
 - [Terminal](docs/terminal.md): what differs in `emacs -nw`
