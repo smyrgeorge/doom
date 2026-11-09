@@ -259,8 +259,12 @@ neither made it."
   "Notification Center, through AppleScript in Emacs (posted as Emacs's);
 quotes and backslashes escaped, line breaks spaces."
   (let ((+test-notifications nil))
-    (+test-on-macos
-      (should (+my/os-notify "Claude Code" "doom: \"done\" in a\\b\nnext")))
+    ;; macOS's Emacs has it, recorded (tests/helper.el); this test's Emacs may
+    ;; be Linux's, without it.
+    (cl-letf (((symbol-function 'do-applescript)
+               (lambda (script) (push (list 'applescript script) +test-notifications) "")))
+      (+test-on-macos
+        (should (+my/os-notify "Claude Code" "doom: \"done\" in a\\b\nnext"))))
     (should (equal +test-notifications
                    '((applescript "display notification \"doom: \\\"done\\\" in a\\\\b next\" with title \"Claude Code\""))))))
 
