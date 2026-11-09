@@ -992,3 +992,28 @@ new file mode 100644
                           (let ((agent-ui-panel-depth 2))
                             (+test-aue-error '(:type "panel" :children ((:type "panel" :children ((:type "panel" :children ()))))))))))
 
+(ert-deftest agent-ui-elements/panel-row-with-a-chart-in-the-gui ()
+  (let* ((element '(:type "panel" :layout "row" :min-width 8
+                    :children ((:type "chart" :title "p95" :values (1 3 2)) (:type "text" :title "Note" :text "fine"))))
+         (gui (agent-ui-render element (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+         (lines (split-string gui "\n")))
+    ;; Its border's top and bottom as text; the row between, one SVG.
+    (should (= (length lines) 3))
+    (let* ((image (get-text-property 0 'display (nth 1 lines)))
+           (svg (plist-get (cdr image) :data)))
+      (should (eq (car image) 'image))
+      (should (string-match-p "\\`<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"480\"" svg))
+      ;; Each child nested: the chart's own SVG (a polyline), the text's.
+      (should (string-match-p "<svg x=\"8\" y=\"0\"" svg))
+      (should (string-match-p "<polyline" svg))
+      (should (string-match-p ">fine</text>" svg))))
+  ;; Without an image: text, its children's buttons kept.
+  (let ((gui (agent-ui-render '(:type "panel" :layout "row" :min-width 8
+                                :children ((:type "text" :text "a") (:type "choice" :question "?" :options ("x"))))
+                              (agent-ui-context :width 60 :graphic t))))
+    (should-not (text-property-not-all 0 (length gui) 'display nil gui))
+    (should (text-property-any 0 (length gui) 'keymap agent-ui-button-map gui)))
+  ;; In a terminal: text, as before.
+  (should-not (string-match-p "<svg" (+test-aue-draw '(:type "panel" :layout "row" :min-width 8
+                                                       :children ((:type "chart" :values (1 2)) (:type "text" :text "x")))))))
+

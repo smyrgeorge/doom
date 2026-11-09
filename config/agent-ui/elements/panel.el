@@ -6,9 +6,10 @@
 ;; laid out as a ROW (side by side, a │ between, each its share of the
 ;; width: WEIGHTS, equal by default) or a COLUMN (one under another), in a
 ;; BORDER. Panels nest: rows of columns, a dashboard. A row too narrow for
-;; its children (under MIN-WIDTH each) stacks them. In a row, children are
-;; drawn as text (an SVG can't be joined line by line; doom-erp.19); in a
-;; column, as anywhere.
+;; its children (under MIN-WIDTH each) stacks them. In the GUI, a row with an
+;; image among its children (a chart, stats' tiles) is drawn as one SVG, each
+;; child's drawing in its column (their buttons not clickable there); other
+;; rows, as text.
 ;;
 ;;   ╭──────────────────────────────────────╮
 ;;   │ Build              │ Tests           │
@@ -79,6 +80,53 @@ marked as its (`agent-ui-child'), where a deeper child hasn't marked it."
             (setq pos next)))))
     text))
 
+(defun agent-ui-panel--image-p (text)
+  "Whether TEXT shows an image somewhere (a chart's, stats' tiles...)."
+  (text-property-not-all 0 (length text) 'display nil text))
+
+(defun agent-ui-panel--svg-row (texts widths ctx border)
+  "TEXTS, a row's children drawn for the GUI at WIDTHS, as one SVG image
+\(a string showing it): each child its column (its SVG nested; its text as
+SVG text: `agent-ui-snapshot-svg'), a line between them, the border's
+sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
+  (when (fboundp 'agent-ui-snapshot-svg)
+    (let* ((cw (plist-get ctx :char-width))
+           (lh (plist-get ctx :line-height))
+           (left (if border 2 0))
+           (svgs (cl-mapcar (lambda (text w) (agent-ui-snapshot-svg text (plist-put (copy-sequence ctx) :width w)))
+                            texts widths))
+           (heights (mapcar (lambda (svg) (if (string-match "height=\"\\([0-9.]+\\)\"" svg)
+                                              (string-to-number (match-string 1 svg)) lh))
+                            svgs))
+           (height (round (apply #'max heights)))
+           (width (* cw (plist-get ctx :width)))
+           (muted (agent-ui-chart--color 'agent-ui-muted))
+           (x left)
+           (parts nil))
+      (cl-loop for svg in svgs
+               for w in widths
+               for i from 0
+               do (progn
+                    ;; Its text where it'd be: past the snapshot's padding (a cell).
+                    (push (replace-regexp-in-string
+                           "\\`<svg xmlns=\"http://www.w3.org/2000/svg\" "
+                           (format "<svg x=\"%d\" y=\"0\" " (* cw (1- x))) svg t t)
+                          parts)
+                    (setq x (+ x w))
+                    (when (< i (1- (length widths)))
+                      (push (format "<line x1=\"%.1f\" y1=\"0\" x2=\"%.1f\" y2=\"%d\" stroke=\"%s\"/>"
+                                    (* cw (+ x 1.5)) (* cw (+ x 1.5)) height muted)
+                            parts)
+                      (setq x (+ x 3)))))
+      (when border
+        (dolist (side (list (* 0.5 cw) (- width (* 0.5 cw))))
+          (push (format "<line x1=\"%.1f\" y1=\"0\" x2=\"%.1f\" y2=\"%d\" stroke=\"%s\"/>" side side height muted)
+                parts)))
+      (propertize " " 'display
+                  (create-image (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\">%s</svg>"
+                                        width height (string-join (nreverse parts)))
+                                'svg t :scale 1 :ascent 'center)))))
+
 (defun agent-ui-panel--draw (props ctx)
   (let* ((children (plist-get props :children))
          (border (plist-get props :border))
@@ -91,12 +139,21 @@ marked as its (`agent-ui-child'), where a deeper child hasn't marked it."
          (widths (let ((ws (mapcar (lambda (w) (max 1 (floor (* room (/ w total))))) weights)))
                    ;; What rounding left over, to the last.
                    (append (butlast ws) (list (+ (car (last ws)) (- room (apply #'+ ws)))))))
+         (row-image nil)
          (row (and (eq (plist-get props :layout) 'row) (> n 1)
                    (cl-every (lambda (w) (>= w (plist-get props :min-width))) widths)))
          (body
           (cond
            ((null children) (list (propertize "no elements" 'face 'agent-ui-muted)))
-           (row
+           ((and row (plist-get ctx :graphic)
+                (let ((texts (cl-mapcar (lambda (child w) (agent-ui-panel--child child ctx w)) children widths)))
+                  (and (seq-some #'agent-ui-panel--image-p texts)
+                       ;; Side by side with an image among them: one SVG (its
+                       ;; children's buttons, then, not clickable).
+                       (when-let* ((image (agent-ui-panel--svg-row texts widths ctx border)))
+                         (setq row-image image)))))
+           (list row-image))
+          (row
             ;; Side by side, as text: line by line, each child its width.
             (let* ((text-ctx (plist-put (copy-sequence ctx) :graphic nil))
                    (columns (cl-mapcar (lambda (child w) (agent-ui-panel--lines (agent-ui-panel--child child text-ctx w) w))
@@ -118,9 +175,13 @@ marked as its (`agent-ui-child'), where a deeper child hasn't marked it."
       (let ((edge (lambda (s) (propertize s 'face 'agent-ui-muted))))
         (concat (funcall edge (concat "╭" (make-string (- width 2) ?─) "╮")) "\n"
                 (mapconcat (lambda (line)
-                             (if (and (> (length line) 0) (get-text-property 0 'display line))
-                                 (concat (funcall edge "│ ") line)
-                               (concat (funcall edge "│ ") line (funcall edge " │"))))
+                             (cond
+                              ;; A row as one SVG: its sides drawn in it.
+                              ((eq line row-image) line)
+                              ((and (> (length line) 0) (get-text-property 0 'display line))
+                                 (concat (funcall edge "│ ") line))
+                              (t
+                               (concat (funcall edge "│ ") line (funcall edge " │")))))
                            body "\n")
                 "\n" (funcall edge (concat "╰" (make-string (- width 2) ?─) "╯")))))))
 
@@ -129,7 +190,8 @@ marked as its (`agent-ui-child'), where a deeper child hasn't marked it."
 title, id), as a ROW (side by side, each its share of the width, WEIGHTS
 equal by default) or a COLUMN, in a BORDER. Panels nest (rows of
 columns: a dashboard). A row too narrow (under MIN-WIDTH a child) stacks
-its children. In a row, children are drawn as text."
+its children. In a row with a chart or an image (in the GUI), the row is one
+SVG: its children's buttons aren't clickable there."
   :props ((children list "The elements: {\"type\": ..., \"id\": ..., ...}")
           (layout (choice row column) "Side by side (row) or one under another (column)" :default column)
           (weights list "Each child's share of a row's width (default: equal)")
