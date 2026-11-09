@@ -130,6 +130,17 @@ A web page as a card: its title and the start of its text, from an HTML `file` (
 agent-ui show '{"id":"coverage","type":"html","title":"Coverage","file":"coverage/index.html","lines":3}'
 ```
 
+### `choice`
+
+A question for the user, when you need a decision: which approach, approve a plan. `options` are labels, or
+`{"label", "detail"}`; one to pick, or several with `"multiple": true`; `"note": true` lets them add a note. They pick
+(`RET`, a click) and press Answer: "Answer to choice ID (QUESTION): A, B. Note: ..." comes into your prompt (sent at
+once with `"submit": true`). Then it shows the answer. Ask one question at a time, and wait for the answer.
+
+```sh
+agent-ui show '{"id":"fix","type":"choice","question":"The checker test expects the old message. Which fix?","options":[{"label":"Change the test","detail":"keeps the new message"},{"label":"Revert the message","detail":"as before"}],"note":true}'
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines

@@ -12,3 +12,4 @@
 (load! "elements/image")
 (load! "elements/html")
 (load! "elements/diff")
+(load! "elements/choice")

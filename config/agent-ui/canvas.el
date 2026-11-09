@@ -171,7 +171,9 @@ there."
     (save-excursion
       (delete-region start end)
       (goto-char start)
-      (insert (propertize (agent-ui-render (agent-ui--entry-element entry) ctx)
+      ;; Its id in the context: an element's buttons may change it (a choice).
+      (insert (propertize (agent-ui-render (agent-ui--entry-element entry)
+                                           (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry)))
                           'agent-ui-id (agent-ui--entry-id entry)))
       ;; The end follows what's inserted at it; the start stays before it.
       (set-marker end (point)))))

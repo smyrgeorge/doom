@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart diff html image markdown progress steps table text)))
+  (should (equal (agent-ui-types) '(chart choice diff html image markdown progress steps table text)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -519,4 +519,86 @@ new file mode 100644
           (agent-ui-show '(:id "e" :type "diff" :dir "sub"))
           (should (equal (plist-get (agent-ui-get "e") :dir) "/proj/sub")))
       (kill-buffer (agent-ui-canvas)))))
+
+;; ====== CHOICE ======
+
+(defmacro +test-aue-canvas (&rest body)
+  "BODY with a canvas of its own (`canvas'), no window shown; killed after."
+  (declare (indent 0))
+  `(let* ((agent-ui-default-canvas (make-temp-name "choice-"))
+          (agent-ui-display-function #'ignore)
+          (canvas (progn (agent-ui-show '(:id "first" :type "text" :text "x")) (agent-ui-canvas))))
+     (unwind-protect (progn ,@body) (kill-buffer canvas))))
+
+(defun +test-aue-press (text)
+  "Press the button on TEXT in the current canvas."
+  (agent-ui--flush)
+  (goto-char (point-min))
+  (search-forward text)
+  (goto-char (match-beginning 0))
+  (agent-ui-button-press))
+
+(ert-deftest agent-ui-elements/choice-one ()
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?"
+                       :options ((:label "Change the test" :detail "keeps the new message") "Revert")))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (should (string-match-p (concat "Which fix\\?\n ( ) Change the test  keeps the new message\n"
+                                        " ( ) Revert\n ⏵ Answer")
+                                (buffer-substring-no-properties (point-min) (point-max))))
+        ;; Nothing chosen: nothing to answer.
+        (should-error (+test-aue-press "⏵ Answer") :type 'user-error)
+        (+test-aue-press "Change the test")
+        (should (equal (plist-get (agent-ui-get "fix") :selected) '("Change the test")))
+        ;; One only: choosing another replaces it; choosing it again, none.
+        (+test-aue-press "Revert")
+        (should (equal (plist-get (agent-ui-get "fix") :selected) '("Revert")))
+        (agent-ui--flush)
+        (should (string-match-p "(•) Revert" (buffer-string)))
+        (+test-aue-press "⏵ Answer")
+        (should (equal sent '(("Answer to choice fix (Which fix?): Revert" nil))))
+        ;; Answered: said, no more buttons.
+        (agent-ui--flush)
+        (should (string-match-p "Which fix\\?\n✓ Answered: Revert" (buffer-string)))
+        (should-not (string-search "⏵ Answer" (buffer-string)))))))
+
+(ert-deftest agent-ui-elements/choice-several-and-a-note ()
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "pick" :type "choice" :question "Which tests?" :multiple t :note t :submit t
+                       :options ("lexer" "parser" "checker") :selected ("lexer")))
+      (with-current-buffer canvas
+        (+test-aue-press "parser")
+        (+test-aue-press "lexer")
+        (+test-aue-press "checker")
+        (should (equal (plist-get (agent-ui-get "pick") :selected) '("parser" "checker")))
+        (agent-ui--flush)
+        (should (string-match-p "\\[ \\] lexer\n \\[x\\] parser\n \\[x\\] checker" (buffer-string)))
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "only the slow ones")))
+          (+test-aue-press "Add a note"))
+        (+test-aue-press "⏵ Send the answer")
+        (should (equal sent '(("Answer to choice pick (Which tests?): parser, checker. Note: only the slow ones" t))))
+        (should (equal (plist-get (agent-ui-get "pick") :answered) "parser, checker · note: only the slow ones"))))))
+
+(ert-deftest agent-ui-elements/choice-wrong ()
+  ;; None, or an empty list (JSON's []: the same): required.
+  (should (string-match-p "options is required" (+test-aue-error '(:type "choice" :question "Q?" :options ()))))
+  (should (string-match-p "option 2 must be" (+test-aue-error '(:type "choice" :question "Q?" :options ("a" 3)))))
+  (should (string-match-p "same label" (+test-aue-error '(:type "choice" :question "Q?" :options ("a" "a")))))
+  (should (string-match-p "selected \"c\" isn't an option"
+                          (+test-aue-error '(:type "choice" :question "Q?" :options ("a" "b") :selected ("c")))))
+  (should (string-match-p "one option only"
+                          (+test-aue-error '(:type "choice" :question "Q?" :options ("a" "b") :selected ("a" "b")))))
+  ;; Its buttons, outside a canvas (a render): said.
+  (let ((text (agent-ui-render '(:type "choice" :question "Q?" :options ("a")) (agent-ui-context))))
+    (with-temp-buffer
+      (insert text)
+      (goto-char (point-min))
+      (search-forward " a")
+      (goto-char (match-beginning 0))
+      (should-error (agent-ui-button-press) :type 'user-error))))
 
