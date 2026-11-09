@@ -325,7 +325,11 @@ one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
          (title (or (plist-get element :title) id)))
     (make-directory dir t)
     (let ((coding-system-for-write 'utf-8))
-      (write-region (agent-ui-snapshot-svg (agent-ui-render element ctx) ctx) nil file nil 'silent))
+      ;; Drawn in its canvas, its id given: as it's shown (a bar's rate).
+      (write-region (agent-ui-snapshot-svg (agent-ui--in canvas
+                                             (agent-ui-render element (plist-put (copy-sequence ctx) :id id)))
+                                           ctx)
+                    nil file nil 'silent))
     (list :file file :markdown (format "![%s](%s)" (string-replace "]" ")" title) file))))
 
 ;; ====== INTO THE PROMPT ======
