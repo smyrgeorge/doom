@@ -162,9 +162,12 @@ Magit's status buffer and window, whatever the frame's focus did meanwhile
           (should-not (with-current-buffer (window-buffer window) (bound-and-true-p tab-line-mode))))
         (should (string-match-p "Yours: main" (with-current-buffer (window-buffer yours)
                                                  (format-mode-line header-line-format nil yours))))
-        ;; The margins with the buttons, shown.
-        (should (equal (window-margins yours) '(nil . 6)))   ; a column more: the icons
-        (should (equal (window-margins theirs) '(5)))))))
+        ;; The margins with the buttons, shown: as wide as they draw (Yours'
+        ;; a column more at least: the icons), the columns at least.
+        (should (equal (window-margins yours) (cons nil (+my/merge--yours-margin-columns))))
+        (should (equal (window-margins theirs) (list (+my/merge--theirs-margin-columns))))
+        (should (>= (cdr (window-margins yours)) 6))
+        (should (>= (car (window-margins theirs)) 5))))))
 
 (ert-deftest e2e-merge/a-margin-button-clicked-where-it-shows ()
   (+test-merge-conflict
@@ -295,10 +298,12 @@ pixels of it scrolled off, sideways."
         (progn (message "APART %S" views) nil))))
 
 (defun +test-merge--row-heights (window)
-  "The pixel heights of WINDOW's rows on screen."
+  "The pixel heights of WINDOW's rows on screen, but one the window's bottom
+cuts (its height not a whole number of rows: its visible part)."
   (let (heights)
     (dotimes (row (window-body-height window))
-      (when-let* ((height (window-line-height row window)))
+      (when-let* ((height (window-line-height row window))
+                  ((zerop (nth 3 height))))
         (push (car height) heights)))
     heights))
 

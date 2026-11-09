@@ -351,6 +351,38 @@ GUI, where an icon is wider than a column, one more."
     (should (equal (+my/merge--right-margin-text "»x") " »x"))
     (should (= (+my/merge--yours-margin-columns) 6))))
 
+(defun +test-merge--actions-in (text)
+  "The buttons' actions in margin TEXT (applied, ignored), each once."
+  (let (actions)
+    (dotimes (i (length text))
+      (when-let* ((action (nth 2 (get-text-property i '+my/merge-action text))))
+        (cl-pushnew action actions)))
+    actions))
+
+(ert-deftest merge/margins-fit-their-buttons ()
+  "In the GUI a margin is as wide as its buttons draw (their icons' font may be
+wider than the code's: 45 pixels in 6 columns of 7 cut the x off), never
+narrower than its columns; in a terminal, its columns."
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+            ((symbol-function 'frame-char-width) (lambda (&rest _) 7)))
+    (cl-letf (((symbol-function 'string-pixel-width) (lambda (&rest _) 45)))
+      (should (= (+my/merge--yours-margin-columns) 7))
+      (should (= (+my/merge--theirs-margin-columns) 7)))
+    (cl-letf (((symbol-function 'string-pixel-width) (lambda (&rest _) 20)))
+      (should (= (+my/merge--yours-margin-columns) 6))
+      (should (= (+my/merge--theirs-margin-columns) 5))))
+  ;; Measured: the buttons as they show.
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+            (measured nil))
+    (cl-letf (((symbol-function 'string-pixel-width) (lambda (text &rest _) (push text measured) 0)))
+      (+my/merge--yours-margin-columns)
+      (+my/merge--theirs-margin-columns))
+    (should (string-prefix-p " " (cadr measured)))       ; Yours': after its space
+    (dolist (text measured)
+      (should (equal (sort (+test-merge--actions-in text) #'string<) '(applied ignored)))))
+  (should (= (+my/merge--yours-margin-columns) 5))
+  (should (= (+my/merge--theirs-margin-columns) 5)))
+
 (ert-deftest merge/fringes-outside-the-margins ()
   "The panes' margins (buttons, the wand) by the code, their fringes at the
 window's edges, whatever the default (Doom's vc-gutter sets it so)."

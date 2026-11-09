@@ -52,7 +52,7 @@ Theirs."
                                                    (,middle ,(+my/merge-result session) nil)
                                                    (,right ,(+my/merge-theirs session) left)))
         (set-window-buffer window buffer)
-        (set-window-margins window (pcase margin ('left +my/merge--margin-columns) ('nil 2))
+        (set-window-margins window (pcase margin ('left (+my/merge--theirs-margin-columns)) ('nil 2))
                             (and (eq margin 'right) (+my/merge--yours-margin-columns)))
         (set-window-start window (point-min))
         (set-window-prev-buffers window nil))

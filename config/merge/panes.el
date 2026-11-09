@@ -50,18 +50,23 @@
                          (_ " "))
                        'face '+my/merge-done))
           (t
-           (let ((apply (+my/merge--button
-                         (if (eq side 'yours)
-                             (+my/merge--icon "nf-md-chevron_double_right" ">>")
-                           (+my/merge--icon "nf-md-chevron_double_left" "<<"))
-                         'applied chunk side
-                         (if (and (eq (+my/merge-chunk-kind chunk) 'conflict)
-                                  (eq (+my/merge--state chunk other) 'applied))
-                             (format "Add after %s's (keep both)" (if (eq other 'yours) "Yours" "Theirs"))
-                           "Put in the Result")))
-                 (ignore (+my/merge--button (+my/merge--icon "nf-cod-close" "x")
-                                            'ignored chunk side "Ignore")))
-             (if (eq side 'yours) (concat apply " " ignore) (concat ignore " " apply)))))))
+           (+my/merge--pair chunk side
+                            (if (and (eq (+my/merge-chunk-kind chunk) 'conflict)
+                                     (eq (+my/merge--state chunk other) 'applied))
+                                (format "Add after %s's (keep both)" (if (eq other 'yours) "Yours" "Theirs"))
+                              "Put in the Result"))))))
+
+(defun +my/merge--pair (chunk side apply-help)
+  "SIDE's two buttons for CHUNK: put in the Result (APPLY-HELP its help),
+ignore; Yours' in that order, Theirs' the other way."
+  (let ((apply (+my/merge--button
+                (if (eq side 'yours)
+                    (+my/merge--icon "nf-md-chevron_double_right" ">>")
+                  (+my/merge--icon "nf-md-chevron_double_left" "<<"))
+                'applied chunk side apply-help))
+        (ignore (+my/merge--button (+my/merge--icon "nf-cod-close" "x")
+                                   'ignored chunk side "Ignore")))
+    (if (eq side 'yours) (concat apply " " ignore) (concat ignore " " apply))))
 
 (defvar +my/merge-margin-map
   (let ((map (make-sparse-keymap)))
@@ -83,11 +88,26 @@ breakpoint) in code buffers, which took Theirs' buttons and the wand's.")
   "The width of Theirs' margin (its buttons'), in columns; Yours' in a
 terminal (see `+my/merge--yours-margin-columns').")
 
+(defun +my/merge--margin-fit (text columns)
+  "COLUMNS, or in the GUI the columns TEXT's pixels take if more: a margin is
+counted in the default font's columns, the buttons' icons are another font's,
+as wide as that one makes them (wider than 6 columns of a 7-pixel font: the x
+cut off)."
+  (if (display-graphic-p)
+      (max columns (ceiling (string-pixel-width text) (frame-char-width)))
+    columns))
+
+(defun +my/merge--theirs-margin-columns ()
+  "The width of Theirs' (left) margin, in columns: its buttons'."
+  (+my/merge--margin-fit (+my/merge--pair nil 'theirs "") +my/merge--margin-columns))
+
 (defun +my/merge--yours-margin-columns ()
   "The width of Yours' (right) margin, in columns: Theirs', and in the GUI
 one more for the space before the buttons (see
-`+my/merge--right-margin-text'), the icons being wider than a column."
-  (if (display-graphic-p) (1+ +my/merge--margin-columns) +my/merge--margin-columns))
+`+my/merge--right-margin-text'), the icons being wider than a column; more if
+its buttons take more."
+  (+my/merge--margin-fit (+my/merge--right-margin-text (+my/merge--pair nil 'yours ""))
+                         (if (display-graphic-p) (1+ +my/merge--margin-columns) +my/merge--margin-columns)))
 
 (defun +my/merge--right-margin-text (text)
   "TEXT for Yours' (right) margin: after a space. Left-aligned in the margin,
