@@ -206,6 +206,49 @@ gt/gT wrap around."
       (kill-buffer b)
       (should (equal (+test-tabs--tabs) (list a c))))))
 
+(defvar persp-mode)                     ; Doom's workspaces (persp-mode)
+
+(defmacro +test-tabs--in-workspace (buffers &rest body)
+  "BODY with Doom's workspaces on, the current one's buffers BUFFERS (a form)."
+  (declare (indent 1))
+  `(let ((persp-mode t)
+         (in ,buffers))
+     (cl-letf (((symbol-function 'persp-contain-buffer-p)
+                (lambda (&optional buffer &rest _) (memq (get-buffer buffer) in))))
+       ,@body)))
+
+(ert-deftest tabs/the-current-workspace-s-tabs-only ()
+  "SPC p p made a workspace in the window the last one showed: its README
+there, the other workspace's in the window's history. Its tabs: this
+workspace's buffers (and the one shown); without workspaces, all."
+  (+test-tabs
+    (let ((theirs (+test-tabs--file "pas/README.md"))
+          (ours (+test-tabs--file "rskit/README.md"))
+          (notes (+test-tabs--file "rskit/notes.md")))
+      (+test-tabs--show theirs notes ours)
+      (+test-tabs--in-workspace (list ours notes)
+        (should (equal (+test-tabs--tabs) (list notes ours))))
+      ;; The shown one, even if not the workspace's (yet).
+      (+test-tabs--in-workspace (list notes)
+        (should (equal (+test-tabs--tabs) (list notes ours))))
+      (should (equal (+test-tabs--tabs) (list theirs notes ours))))))
+
+(ert-deftest tabs/the-workspace-s-last-tab-closes-the-pane ()
+  "Its only tab in this workspace closed: the window's last, whatever other
+workspaces' buffers its history has."
+  (+test-tabs
+    (let* ((theirs (+test-tabs--file "pas/README.md"))
+           (ours (+test-tabs--file "rskit/README.md"))
+           (left (selected-window))
+           (right (split-window-right)))
+      (select-window right)
+      (+test-tabs--show theirs ours)
+      (+test-tabs--in-workspace (list ours)
+        (should (equal (+test-tabs--tabs) (list ours)))
+        (+my/tabs-close-current))
+      (should-not (window-live-p right))
+      (should (window-live-p left)))))
+
 (ert-deftest tabs/each-window-has-its-own-tabs ()
   (+test-tabs
     (let ((a (+test-tabs--file "a.txt"))

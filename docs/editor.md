@@ -2,7 +2,8 @@
 
 ## Tabs per window
 
-Each window has its own tabs: the files shown in it. A file closes once no window has it as a tab.
+Each window has its own tabs: the files shown in it, of the current workspace. A file closes once no window has it as a
+tab.
 
 | macOS | Linux | Action |
 |---|---|---|

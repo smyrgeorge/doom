@@ -9,10 +9,22 @@
         (derived-mode-p 'agent-shell-mode 'dired-mode)
         (doom-real-buffer-p buffer))))
 
+(defun +my/tabs-in-workspace-p (buffer)
+  "Non-nil if BUFFER is the current workspace's (Doom's workspaces), or
+without workspaces."
+  (or (not (bound-and-true-p persp-mode))
+      (not (fboundp 'persp-contain-buffer-p))
+      (persp-contain-buffer-p buffer)))
+
 (defun +my/tabs-window-buffers ()
-  "The selected window's tabs (see above)."
+  "The selected window's tabs (see above): the buffers it showed that keep a
+tab, the current workspace's only. A new workspace (SPC p p) starts in the
+window the last one showed, its buffers in the window's history: their tabs
+are the other workspace's."
   (let ((current (window-buffer)))
-    (seq-filter (lambda (buffer) (or (eq buffer current) (+my/tabs-p buffer)))
+    (seq-filter (lambda (buffer)
+                  (or (eq buffer current)
+                      (and (+my/tabs-p buffer) (+my/tabs-in-workspace-p buffer))))
                 (tab-line-tabs-fixed-window-buffers))))
 
 ;; LABELS
