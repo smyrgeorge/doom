@@ -141,6 +141,16 @@ once with `"submit": true`). Then it shows the answer. Ask one question at a tim
 agent-ui show '{"id":"fix","type":"choice","question":"The checker test expects the old message. Which fix?","options":[{"label":"Change the test","detail":"keeps the new message"},{"label":"Revert the message","detail":"as before"}],"note":true}'
 ```
 
+### `files`
+
+Files, each with its state: a path, or `{"path", "status", "added", "removed", "errors", "line", "note"}`; status
+`changed`, `added`, `deleted`, `renamed`, `failing`, `passing` or `none`. `"tree": true` groups them by folder (the
+user folds a folder with `RET`). `RET` on a file opens it, at its `line`. For what you touched, or where the errors are.
+
+```sh
+agent-ui show '{"id":"touched","type":"files","title":"What I changed","tree":true,"files":[{"path":"src/parser.c","status":"changed","added":12,"removed":3},{"path":"src/lexer.h","status":"added","added":40},{"path":"tests/parser_test.c","status":"failing","errors":2,"line":88}]}'
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines

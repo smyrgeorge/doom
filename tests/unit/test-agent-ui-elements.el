@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice diff html image markdown progress steps table text)))
+  (should (equal (agent-ui-types) '(chart choice diff files html image markdown progress steps table text)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -601,4 +601,53 @@ new file mode 100644
       (search-forward " a")
       (goto-char (match-beginning 0))
       (should-error (agent-ui-button-press) :type 'user-error))))
+
+;; ====== FILES ======
+
+(ert-deftest agent-ui-elements/files-flat-and-tree ()
+  (let ((files '((:path "src/parser.c" :status "changed" :added 12 :removed 3)
+                 (:path "src/lexer.h" :status "added" :added 40)
+                 (:path "tests/parser_test.c" :status "failing" :errors 1 :line 88)
+                 "README.md")))
+    (should (equal (+test-aue-draw (list :type "files" :files files))
+                   (concat "M src/parser.c         +12 −3\n"
+                           "A src/lexer.h          +40\n"
+                           "✗ tests/parser_test.c  1 error\n"
+                           "  README.md")))
+    (should (equal (+test-aue-draw (list :type "files" :files files :tree t))
+                   (concat "▾ src/\n"
+                           "    M parser.c  +12 −3\n"
+                           "    A lexer.h   +40\n"
+                           "▾ tests/\n"
+                           "    ✗ parser_test.c  1 error\n"
+                           "  README.md")))
+    (should (eq (+test-aue-face-at (list :type "files" :files files) "✗") 'agent-ui-error))
+    (should (equal (+test-aue-draw '(:type "files")) "no files"))))
+
+(ert-deftest agent-ui-elements/files-open-and-fold ()
+  (+test-aue-canvas
+    (let* ((opened nil)
+           (agent-ui-open-file-function (lambda (f) (push f opened) (set-buffer (get-buffer-create " *opened*")))))
+      (with-current-buffer (get-buffer-create " *opened*") (erase-buffer) (insert (make-string 100 ?\n)))
+      (agent-ui-show '(:id "f" :type "files" :tree t :dir "/work/"
+                       :files ((:path "src/a.c" :status "changed") (:path "tests/t.c" :status "failing" :line 42))))
+      (with-current-buffer canvas
+        ;; A file: opened at its line.
+        (+test-aue-press "t.c")
+        (should (equal (car opened) "/work/tests/t.c"))
+        (should (= (with-current-buffer " *opened*" (line-number-at-pos)) 42))
+        ;; A folder: folded, its files counted; again, unfolded.
+        (+test-aue-press "src/")
+        (agent-ui--flush)
+        (should (equal (plist-get (agent-ui-get "f") :folded) '("src/")))
+        (should (string-match-p "▸ src/  1 files\n▾ tests/" (buffer-string)))
+        (+test-aue-press "src/")
+        (should-not (plist-get (agent-ui-get "f") :folded))))
+    (kill-buffer " *opened*")))
+
+(ert-deftest agent-ui-elements/files-wrong ()
+  (should (string-match-p "file 2 has no path" (+test-aue-error '(:type "files" :files ("a" (:status "added"))))))
+  (should (string-match-p "status \"edited\"" (+test-aue-error '(:type "files" :files ((:path "a" :status "edited"))))))
+  (should (string-match-p "added must be a count" (+test-aue-error '(:type "files" :files ((:path "a" :added -1))))))
+  (should (string-match-p "has \"size\"" (+test-aue-error '(:type "files" :files ((:path "a" :size 3)))))))
 

@@ -13,3 +13,4 @@
 (load! "elements/html")
 (load! "elements/diff")
 (load! "elements/choice")
+(load! "elements/files")
