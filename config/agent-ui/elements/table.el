@@ -7,6 +7,10 @@
 ;;    Test    │ Result │ Time
 ;;   ─────────┼────────┼──────
 ;;    lexer   │ passed │ 0.4s
+;;
+;; Sorted by a column (sort; s on it in the canvas, again the other way), its
+;; name marked ↑ or ↓. Row actions: buttons at each row's end, their prompts
+;; filled with its cells ({Test}, {row}).
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -59,6 +63,15 @@ if there's no such column."
                                (agent-ui--fail "table: align is left, right or center, not %s"
                                                (agent-ui--show-value a)))))
                          align)))
+    (when (plist-get props :sort)
+      (condition-case err
+          (agent-ui-table--key-index (plist-get props :sort) columns)
+        (agent-ui-error
+         (agent-ui--fail "%s" (string-replace "key must be" "sort must be" (agent-ui-error-message err))))))
+    (when-let* ((actions (plist-get props :row-actions)))
+      (condition-case err
+          (agent-ui-check-actions actions)
+        (agent-ui-error (agent-ui--fail "table: row-%s" (agent-ui-error-message err)))))
     (plist-put props :key (agent-ui-table--key-index (plist-get props :key) columns))))
 
 (defun agent-ui-table--widths (header rows max-width)
@@ -77,15 +90,74 @@ table fits MAX-WIDTH (no column under 3)."
           (cl-decf (aref widths widest)))))
     (append widths nil)))
 
+(defun agent-ui-table--number (cell)
+  "CELL's leading number (\"0.4s\": 0.4, \"1,204\": 1204), or nil."
+  (when (string-match "\\`[-+]?[0-9][0-9,]*\\(?:\\.[0-9]+\\)?" cell)
+    (string-to-number (string-replace "," "" (match-string 0 cell)))))
+
+(defun agent-ui-table--sorted (rows column descending)
+  "ROWS (their cells as text) by COLUMN's cells: as numbers if they all
+start with one, else as text; DESCENDING the other way; empty cells last."
+  (let* ((cells (seq-remove #'string-empty-p (mapcar (lambda (r) (nth column r)) rows)))
+         (numbers (and cells (cl-every #'agent-ui-table--number cells)))
+         (before (lambda (a b)
+                   (if numbers
+                       (< (agent-ui-table--number a) (agent-ui-table--number b))
+                     (string< (downcase a) (downcase b))))))
+    (cl-stable-sort (copy-sequence rows)
+                    (lambda (ra rb)
+                      (let ((a (nth column ra)) (b (nth column rb)))
+                        (cond ((string-empty-p a) nil)
+                              ((string-empty-p b) t)
+                              (descending (funcall before b a))
+                              (t (funcall before a b))))))))
+
+(defun agent-ui-table--fill (prompt columns row)
+  "PROMPT with {COLUMN} as ROW's cell in that column, {row} as all of them."
+  (replace-regexp-in-string
+   "{\\([^{}]+\\)}"
+   (lambda (match)
+     (let ((name (match-string 1 match)))
+       (cond
+        ((equal name "row")
+         (mapconcat #'identity
+                    (cl-loop for c in columns for cell in row
+                             collect (if (string-empty-p c) cell (format "%s: %s" c cell)))
+                    ", "))
+        ((cl-position name columns :test #'equal) (nth (cl-position name columns :test #'equal) row))
+        (t match))))
+   prompt t t))
+
+(defun agent-ui-table--row-buttons (actions columns row)
+  "ACTIONS as buttons for ROW: their prompts filled with its cells."
+  (mapconcat
+   (lambda (action)
+     (let ((prompt (agent-ui-table--fill (plist-get action :prompt) columns row))
+           (submit (eq (plist-get action :submit) t)))
+       (agent-ui-button (propertize (concat "⏵ " (plist-get action :label)) 'face 'agent-ui-action)
+                        (lambda () (funcall agent-ui-action-function prompt submit))
+                        (format "RET: %s \"%s\"" (if submit "send" "put into the prompt")
+                                (truncate-string-to-width prompt 60 nil nil "…")))))
+   actions "  "))
+
 (defun agent-ui-table--text (props ctx)
   (let* ((columns (plist-get props :columns))
          (n (length columns))
-         (all (plist-get props :rows))
-         (rows (mapcar (lambda (row)
-                         (let ((cells (mapcar #'agent-ui-cell row)))
-                           (append cells (make-list (- n (length cells)) ""))))
-                       (seq-take all agent-ui-max-rows)))
-         (widths (agent-ui-table--widths columns rows (plist-get ctx :width)))
+         (all (mapcar (lambda (row)
+                        (let ((cells (mapcar #'agent-ui-cell row)))
+                          (append cells (make-list (- n (length cells)) ""))))
+                      (plist-get props :rows)))
+         (sort (agent-ui-table--key-index (plist-get props :sort) columns))
+         (descending (eq (plist-get props :descending) t))
+         (rows (seq-take (if sort (agent-ui-table--sorted all sort descending) all) agent-ui-max-rows))
+         ;; The sorted column's name marked.
+         (header (cl-loop for c in columns for i from 0
+                          collect (if (eql i sort) (concat c (if descending " ↓" " ↑")) c)))
+         (actions (plist-get props :row-actions))
+         (actions-width (if actions
+                            (+ 2 (apply #'+ (mapcar (lambda (a) (+ 4 (string-width (plist-get a :label)))) actions)))
+                          0))
+         (widths (agent-ui-table--widths header rows (max 10 (- (plist-get ctx :width) actions-width))))
          (align (cl-loop for i below n
                          collect (or (nth i (plist-get props :align))
                                      ;; Numbers to the right.
@@ -98,20 +170,22 @@ table fits MAX-WIDTH (no column under 3)."
                                          'left)))))
          (bar (propertize "│" 'face 'agent-ui-muted)))
     (cl-flet ((line (cells &optional face)
-                (string-trim-right
-                 (mapconcat #'identity
-                            (cl-loop for cell in cells
-                                     for width in widths
-                                     for a in align
-                                     collect (let ((text (agent-ui-pad cell width a))
-                                                   (state (cdr (assoc (downcase cell) agent-ui-table--states))))
-                                               (concat " " (propertize text 'face (or face state)) " ")))
-                            bar))))
+                ;; Each cell its column's (`s' there sorts by it).
+                (mapconcat #'identity
+                           (cl-loop for cell in cells
+                                    for width in widths
+                                    for a in align
+                                    for i from 0
+                                    collect (let ((text (agent-ui-pad cell width a))
+                                                  (state (cdr (assoc (downcase cell) agent-ui-table--states))))
+                                              (propertize (concat " " (propertize text 'face (or face state)) " ")
+                                                          'agent-ui-table-column i)))
+                           bar)))
       (concat
        ;; No column named: no header, the rows alone.
        (unless (cl-every #'string-empty-p columns)
          (concat
-          (line columns 'bold) "\n"
+          (string-trim-right (line header 'bold)) "\n"
           ;; As wide as the lines: the last column's has no space after it.
           (propertize (mapconcat (lambda (w) (make-string (+ w 2) ?─))
                                  (append (butlast widths) (list (1- (car (last widths)))))
@@ -119,11 +193,43 @@ table fits MAX-WIDTH (no column under 3)."
                       'face 'agent-ui-muted)
           "\n"))
        (if rows
-           (mapconcat #'line rows "\n")
+           (mapconcat (lambda (row)
+                        (if actions
+                            (concat (line row) " " (agent-ui-table--row-buttons actions columns row))
+                          (string-trim-right (line row))))
+                      rows "\n")
          (concat " " (propertize "no rows yet" 'face 'agent-ui-muted)))
        (when (> (length all) (length rows))
          (concat "\n " (propertize (format "… %d rows more" (- (length all) (length rows)))
                                    'face 'agent-ui-muted)))))))
+
+;; ====== SORTING IN THE CANVAS ======
+
+(declare-function agent-ui--element-at-point "agent-ui/snapshot")
+
+(defun agent-ui-table-sort ()
+  "Sort the table at point by the column at point; again, the other way.
+Kept as its sort and descending (the agent sees it)."
+  (interactive)
+  (let ((column (get-text-property (point) 'agent-ui-table-column)))
+    (unless column
+      (user-error "No table's column here"))
+    (let* ((id (agent-ui--element-at-point))
+           (element (agent-ui-get id :canvas (current-buffer)))
+           (columns (plist-get element :columns))
+           (current (ignore-errors (agent-ui-table--key-index (plist-get element :sort) columns)))
+           (descending (and (eql current column) (not (eq (plist-get element :descending) t))))
+           (name (nth column columns)))
+      (agent-ui-update id (list :sort (if (and (not (string-empty-p name))
+                                               (= (cl-count name columns :test #'equal) 1))
+                                          name
+                                        column)
+                                :descending (and descending t))
+                       :canvas (current-buffer))
+      (message "Sorted by %s, %s" (if (string-empty-p name) (format "column %d" (1+ column)) name)
+               (if descending "descending" "ascending")))))
+
+(keymap-set agent-ui-canvas-mode-map "s" #'agent-ui-table-sort)
 
 (defun agent-ui-table--append (element patch)
   "ELEMENT with PATCH's rows: with a key column, a row whose key is there
@@ -148,11 +254,16 @@ replaces that row; the others after."
 true, false, null), fitting the width; cells reading passed, failed,
 running, pending... are coloured. With KEY (a column's index or name),
 appending a row whose key is there replaces that row: append
-{\"rows\": [[\"parser\", \"failed\", \"1.2s\"]]}."
+{\"rows\": [[\"parser\", \"failed\", \"1.2s\"]]}. SORT orders its rows by a
+column (DESCENDING the other way); ROW-ACTIONS are buttons on each row
+putting a prompt with its cells into the session's prompt."
   :props ((columns list "The columns' names (all \"\": no header, the rows alone)" :required t)
           (rows list "The rows, each an array of cells")
           (key any "The column (index from 0, or name) whose cell identifies a row")
-          (align list "Each column's alignment: left, right, center (numbers: right)"))
+          (align list "Each column's alignment: left, right, center (numbers: right)")
+          (sort any "The column (index from 0, or name) its rows are sorted by (s on a column in the canvas)")
+          (descending boolean "Sorted the other way: largest first")
+          (row-actions list "Buttons on each row: [{\"label\", \"prompt\", \"submit\"}], the prompt's {Column} its cell, {row} all"))
   :example (:title "Tests" :columns ("Test" "Result" "Time") :key 0
             :rows (("lexer" "passed" "0.4s") ("parser" "running" nil)))
   :check #'agent-ui-table--check

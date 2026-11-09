@@ -1153,3 +1153,82 @@ new file mode 100644
   ;; Not on a canvas (render, a snapshot): neither.
   (should-not (string-match-p "/s" (+test-aue-draw '(:type "progress" :value 5 :max 10)))))
 
+(ert-deftest agent-ui-elements/table-sorted ()
+  (let ((element '(:type "table" :columns ("Test" "Time")
+                   :rows (("parser" "1.1s") ("lexer" "10.2s") ("codegen" nil) ("Checker" "0.7s")))))
+    ;; By a column's name: as numbers where they're numbers, empty last; the
+    ;; column marked.
+    (should (equal (+test-aue-draw (append element '(:sort "Time")))
+                   (concat " Test    │ Time ↑\n"
+                           "─────────┼───────\n"
+                           " Checker │ 0.7s\n"
+                           " parser  │ 1.1s\n"
+                           " lexer   │ 10.2s\n"
+                           " codegen │")))
+    ;; By index, the other way; text without case.
+    (should (string-match-p "\\` Test ↓ +│ Time\n.*\n parser .*\n lexer .*\n codegen .*\n Checker "
+                            (+test-aue-draw (append element '(:sort 0 :descending t)))))
+    ;; Not a column: said so.
+    (should (string-match-p "table: sort must be a column" (+test-aue-error (append element '(:sort "Size")))))))
+
+(ert-deftest agent-ui-elements/table-sorted-in-the-canvas ()
+  (let* ((agent-ui-default-canvas (make-temp-name "table-"))
+         (agent-ui-display-function #'ignore)
+         (canvas (agent-ui-canvas)))
+    (unwind-protect
+        (with-current-buffer canvas
+          (agent-ui-show '(:id "t" :type "table" :columns ("Name" "Size") :rows (("b" 2) ("a" 10) ("c" 1))))
+          (agent-ui--flush)
+          (cl-flet ((rows () (agent-ui--flush)
+                      (mapcar (lambda (l) (car (split-string l)))
+                              (cddr (split-string (string-trim (buffer-string)) "\n")))))
+            ;; s on the Size column: by it; again: the other way.
+            (goto-char (point-min))
+            (search-forward "10")
+            (backward-char)
+            (agent-ui-table-sort)
+            (should (equal (plist-get (agent-ui-get "t") :sort) "Size"))
+            (should (equal (rows) '("c" "b" "a")))
+            (search-forward "Size")
+            (agent-ui-table-sort)
+            (should (eq (plist-get (agent-ui-get "t") :descending) t))
+            (should (equal (rows) '("a" "b" "c")))
+            ;; Another column: ascending again.
+            (goto-char (point-min))
+            (search-forward "Name")
+            (agent-ui-table-sort)
+            (should (equal (rows) '("a" "b" "c")))
+            (should-not (plist-get (agent-ui-get "t") :descending))
+            ;; Elsewhere: nothing to sort.
+            (goto-char (point-max))
+            (should-error (agent-ui-table-sort) :type 'user-error)))
+      (kill-buffer canvas))))
+
+(ert-deftest agent-ui-elements/table-row-actions ()
+  (let* ((element '(:type "table" :columns ("Test" "Result")
+                    :rows (("lexer" "passed") ("checker" "failed"))
+                    :row-actions ((:label "Fix" :prompt "Fix {Test}: it {Result}. ({row}, {Other})")
+                                  (:label "Run" :prompt "Run {Test}" :submit t))))
+         (text (agent-ui-render element (agent-ui-context :width 60)))
+         (sent nil)
+         (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+    ;; Buttons at each row's end.
+    (should (string-match-p "^ checker │ failed  ⏵ Fix  ⏵ Run$" (substring-no-properties text)))
+    ;; Pressed: their prompts with the row's cells.
+    (with-temp-buffer
+      (insert text)
+      (goto-char (point-min))
+      (search-forward "checker")
+      (search-forward "⏵ Fix")
+      (backward-char)
+      (agent-ui-button-press)
+      (search-forward "⏵ Run")
+      (backward-char)
+      (agent-ui-button-press))
+    (should (equal (reverse sent)
+                   '(("Fix checker: it failed. (Test: checker, Result: failed, {Other})" nil)
+                     ("Run checker" t))))
+    ;; Wrong ones: said so.
+    (should (string-match-p "table: row-actions: action 1 must be"
+                            (+test-aue-error '(:type "table" :columns ("A") :row-actions ("x")))))))
+

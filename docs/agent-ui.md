@@ -106,8 +106,8 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 
 - **Its buffer** is `Agent UI: SESSION`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
   time an element is shown (an application of `+my/tiling-apps`), without taking the focus, and again if it was closed.
-  `q` hides it; it closes with its session. `a` on an element puts it into the session's prompt; `R` reviews the
-  types the agent made.
+  `q` hides it; it closes with its session. `a` on an element puts it into the session's prompt; `s` on a table's
+  column sorts it by it (again: the other way); `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
   the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements
   and ids. They close with the session, and are kept and come back with it.
@@ -161,7 +161,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 |---|---|---|
 | `text` | A paragraph | `text`, `face` (plain, muted, success, warning, error) |
 | `markdown` | Markdown, drawn as agent-shell draws replies | `markdown` |
-| `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it | `columns`, `rows`, `key`, `align` |
+| `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it; sorted by a column (`s` on it in the canvas); buttons on each row with its cells in their prompts | `columns`, `rows`, `key`, `align`, `sort`, `descending`, `row-actions` |
 | `progress` | A bar, or a run without an end; on a canvas, its rate and time left from its updates over time | `value`, `max`, `label`, `unit`, `status` |
 | `steps` | A checklist whose steps change state; appending a step by its name changes it; a step's time (timed from running to done), its own steps under it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":..., "seconds":..., "steps": [...]}]` |
 | `chart` | Lines (several series), bars or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window` |

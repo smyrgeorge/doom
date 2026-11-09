@@ -87,7 +87,8 @@
       :n "q"  #'quit-window
       :n "gr" #'agent-ui-canvas-redraw
       :n "R"  #'agent-ui-review
-      :n "a"  #'agent-ui-send-element)
+      :n "a"  #'agent-ui-send-element
+      :n "s"  #'agent-ui-table-sort)
 
 ;; TYPES THE AGENT MAKES (see above): the list, a preview.
 (map! :map agent-ui-review-mode-map

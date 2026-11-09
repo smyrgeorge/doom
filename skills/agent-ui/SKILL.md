@@ -109,7 +109,13 @@ agent-ui append tests '{"rows":[["lexer","passed","0.4s"]]}'
 ```
 
 `align` sets each column's: `["left","right","center"]`. Columns all named `""`: no header, the rows alone (a
-summary of figures).
+summary of figures). `sort` (a column's name or index) orders the rows, `descending` the other way; the user sorts
+with `s` on a column, and you see it in `list`. `row-actions` are buttons on each row putting a prompt into your
+session's prompt, `{Column}` in it that row's cell, `{row}` all of them:
+
+```sh
+agent-ui update tests '{"sort":"Time","descending":true,"row-actions":[{"label":"Fix","prompt":"Fix the failing test {Test}"}]}'
+```
 
 ### `chart`
 
