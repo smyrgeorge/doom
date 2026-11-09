@@ -14,6 +14,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'svg)
+(require 'mailcap)
 
 ;; ====== VARIABLES ======
 
@@ -120,6 +121,28 @@ characters as rectangles (full ones joined), ░ a faint cell, the rest text."
   (when (string-match "<svg[^>]*\\bwidth=\"\\([0-9.]+\\)\"[^>]*\\bheight=\"\\([0-9.]+\\)\"" data)
     (cons (string-to-number (match-string 1 data)) (string-to-number (match-string 2 data)))))
 
+(defun agent-ui-snapshot--image-file (display)
+  "An image DISPLAY from a file (an image element's) as an SVG <image> at its
+shown size: (SVG . (W . H)); nil if it isn't one, or its size can't be had."
+  (let* ((props (cdr display))
+         (file (plist-get props :file))
+         (size (and file (file-readable-p file) (display-graphic-p)
+                    (ignore-errors (image-size display t)))))
+    (when size
+      (let ((mime (or (cdr (assoc (downcase (or (file-name-extension file) ""))
+                                  '(("svg" . "image/svg+xml") ("png" . "image/png") ("jpg" . "image/jpeg")
+                                    ("jpeg" . "image/jpeg") ("gif" . "image/gif") ("webp" . "image/webp"))))
+                      (mailcap-file-name-to-mime-type file)
+                      "image/png")))
+        (cons (format "<image width=\"%d\" height=\"%d\" href=\"data:%s;base64,%s\"/>"
+                      (car size) (cdr size) mime
+                      (with-temp-buffer
+                        (set-buffer-multibyte nil)
+                        (insert-file-contents-literally file)
+                        (base64-encode-region (point-min) (point-max) t)
+                        (buffer-string)))
+              size)))))
+
 (defun agent-ui-snapshot-svg (text ctx)
   "TEXT, an element's drawing, as an SVG document (a string): each line in
 its faces' colours, on the theme's background; a line that's an SVG image (a
@@ -138,13 +161,22 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
       (let* ((display (and (> (length line) 0) (get-text-property 0 'display line)))
              (data (and (eq (car-safe display) 'image) (eq (plist-get (cdr display) :type) 'svg)
                         (plist-get (cdr display) :data)))
-             (size (and data (agent-ui-snapshot--svg-size data))))
-        (if size
+             (size (and data (agent-ui-snapshot--svg-size data)))
+             (file (and (eq (car-safe display) 'image) (not data)
+                        (agent-ui-snapshot--image-file display))))
+        (cond
+         (file
+          ;; An image from a file (an image element's): itself, embedded.
+          (push (format "<g transform=\"translate(%d %d)\">%s</g>" pad y (car file)) parts)
+          (setq width (max width (+ (* 2 pad) (cadr file))))
+          (cl-incf y (cddr file)))
+         (size
             ;; A chart: its own SVG, nested.
             (progn
               (push (replace-regexp-in-string "\\`<svg " (format "<svg x=\"%d\" y=\"%d\" " pad y) data) parts)
               (setq width (max width (+ (* 2 pad) (round (car size)))))
-              (cl-incf y (round (cdr size))))
+              (cl-incf y (round (cdr size)))))
+         (t
           (let ((col 0)
                 (spans nil))
             (dolist (run (agent-ui-snapshot--runs line))
@@ -154,7 +186,7 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
                     spans)
               (cl-incf col (string-width (car run))))
             (push (string-join (nreverse spans)) parts)
-            (cl-incf y lh)))))
+            (cl-incf y lh))))))
     (let ((height (+ y pad)))
       (concat (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" font-family=\"%s\" font-size=\"%d\" xml:space=\"preserve\" style=\"white-space:pre\">"
                       width height (xml-escape-string family) (round (* 0.8 lh)))

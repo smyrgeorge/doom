@@ -57,6 +57,21 @@
     (should (string-match-p "<text x=\"72\" [^>]*>50%</text>" svg))
     (should-not (string-match-p "█" svg))))
 
+;; An image element's: its file embedded, at its shown size.
+(ert-deftest agent-ui-snapshot/an-image-embedded ()
+  (let* ((file (expand-file-name "images/splash.svg" data-directory))
+         (ctx (agent-ui-context :width 40 :graphic t :char-width 8 :line-height 16))
+         (text (agent-ui-render (list :type "image" :file file :title "Splash") ctx)))
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+              ((symbol-function 'image-size) (lambda (&rest _) '(120 . 90))))
+      (let ((svg (agent-ui-snapshot-svg text ctx)))
+        (should (string-match-p ">Splash</text>" svg))
+        (should (string-match-p "<g transform=\"translate(8 24)\"><image width=\"120\" height=\"90\" href=\"data:image/svg\\+xml;base64," svg))
+        ;; Under its title: padding, its title, the image, padding (8 16 90 8).
+        (should (string-match-p "height=\"122\"" svg))))
+    ;; Where its size can't be had (a terminal): its line, not an error.
+    (should (agent-ui-snapshot-svg text ctx))))
+
 ;; ====== A SNAPSHOT ======
 
 (ert-deftest agent-ui-snapshot/saved-for-the-reply ()
