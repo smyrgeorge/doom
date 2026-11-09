@@ -1,8 +1,8 @@
 # Agent UI
 
 > **Status: being built** (epic `doom-nwj`). Built: the element types' registry, the canvas, the command line, the
-> sessions' canvases, and the `progress`, `steps` and `table` types. Not yet: `text`, `markdown`, `chart`, and telling
-> the agent about it (its system prompt, a skill).
+> sessions' canvases, the `text`, `markdown`, `progress`, `steps` and `table` types, and what the agent is told (its
+> system prompt, a skill). Not yet: `chart`, and what's [later](#later).
 
 A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
@@ -197,9 +197,13 @@ thu  ████████                   60
 
 ## What the agent is told
 
-A short paragraph in its system prompt (`+my/agent-shell-claude-context-functions`): the canvas exists, the script's
-path, and when to use it rather than Markdown in a reply: for what changes over time or stays in view while the
-conversation scrolls. The full catalog, from `agent-ui types`, is in a skill (`skills/agent-ui/`), read when needed.
+A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
+`+my/agent-shell-claude-context-functions`), while Emacs runs a server: the canvas, when to use it rather than Markdown
+in a reply (for what changes over time or deserves watching), the command's full path with an example, and to read the
+skill before using it the first time. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), has each
+type with examples, how to follow a long command, and cleaning up; it's read from there, nothing to install (as other
+skills, it can be installed too: [AI agents](ai-agents.md)). A test runs each of its examples, so they stay right as
+the types change.
 
 ## Later
 
@@ -227,6 +231,6 @@ conversation scrolls. The full catalog, from `agent-ui types`, is in a skill (`s
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
 | `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `progress`, `steps`, `table` |
 | `cmd/agent-ui` | The command line |
-| `skills/agent-ui/` | The catalog, for the agent |
+| `skills/agent-ui/SKILL.md` | The skill: the types with examples, for the agent |
 
 `core.el`, `canvas.el` and the elements don't use Doom, so they can become a package of their own.

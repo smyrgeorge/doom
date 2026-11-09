@@ -253,6 +253,26 @@
     (should-not (agent-ui-animated-p '(:type "nope")))
     (should-not (agent-ui-animated-p '(:type "meter")))))
 
+;; ====== HELPERS FOR TYPES ======
+
+(ert-deftest agent-ui-core/helpers ()
+  (should (equal (agent-ui-wrap "aaa bbb ccc" 7) "aaa bbb\nccc"))
+  (should (equal (agent-ui-wrap "short\nlines kept" 20) "short\nlines kept"))
+  ;; A word too long: within it.
+  (should (equal (agent-ui-wrap "abcdefghij" 4) "abcd\nefgh\nij"))
+  ;; Wide characters: by their width.
+  (should (equal (agent-ui-wrap "日本語 日本語" 6) "日本語\n日本語"))
+  (should (equal (get-text-property 0 'face (agent-ui-wrap (propertize "aa bb" 'face 'bold) 2)) 'bold))
+  (should (equal (agent-ui-pad "ab" 4) "ab  "))
+  (should (equal (agent-ui-pad "ab" 4 'right) "  ab"))
+  (should (equal (agent-ui-pad "ab" 5 'center) " ab  "))
+  (should (equal (agent-ui-pad "abcdef" 4) "abc…"))
+  (should (equal (agent-ui-format-number 3.0) "3"))
+  (should (equal (agent-ui-format-number 2.5) "2.5"))
+  (should (equal (agent-ui-format-number 12) "12"))
+  (should (equal (mapcar #'agent-ui-cell '(nil t :false 1.5 "x")) '("" "true" "false" "1.5" "x")))
+  (should (equal (agent-ui-spinner (agent-ui-context :tick 11)) "⠙")))
+
 ;; ====== JSON ======
 
 (ert-deftest agent-ui-core/json-read ()

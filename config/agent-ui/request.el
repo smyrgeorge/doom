@@ -16,6 +16,12 @@
 
 ;; ====== VARIABLES ======
 
+(defcustom agent-ui-command
+  (expand-file-name "../../cmd/agent-ui"
+                    (file-name-directory (or load-file-name buffer-file-name)))
+  "cmd/agent-ui: the command line agents run (as the agent is told)."
+  :type 'file :group 'agent-ui)
+
 (defvar agent-ui-canvas-function #'agent-ui-request-canvas
   "Called with the agent's session (a string, or nil) and its working
 directory (or nil); returns the canvas its request is for (a buffer, or a

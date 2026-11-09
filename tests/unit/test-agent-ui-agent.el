@@ -117,3 +117,72 @@ killed after."
       (with-current-buffer canvas (setq agent-ui--session-buffer (generate-new-buffer "other")))
       (kill-buffer first)
       (should (buffer-live-p canvas)))))
+
+;; ====== WHAT THE AGENT IS TOLD ======
+
+(ert-deftest agent-ui-agent/told-in-its-system-prompt ()
+  (should (memq #'agent-ui-agent-context +my/agent-shell-claude-context-functions))
+  (should (file-executable-p agent-ui-command))
+  (should (equal agent-ui-command (expand-file-name "cmd/agent-ui" +test-root)))
+  (should (equal agent-ui-skill (expand-file-name "skills/agent-ui/SKILL.md" +test-root)))
+  (should (file-exists-p agent-ui-skill))
+  ;; Without a server, nothing: the command couldn't reach Emacs.
+  (cl-letf (((symbol-function 'server-running-p) #'ignore))
+    (should-not (agent-ui-agent-context)))
+  (cl-letf (((symbol-function 'server-running-p) (lambda (&rest _) t)))
+    (let ((text (agent-ui-agent-context)))
+      (should (string-prefix-p "Agent UI: beside this session" text))
+      ;; Where the command and the skill are.
+      (should (string-search (concat (abbreviate-file-name agent-ui-command) " show '{\"id\":\"build\"")
+                             text))
+      (should (string-search (concat "then " (abbreviate-file-name agent-ui-command)
+                                     " update build '{\"value\":5}'")
+                             text))
+      (should (string-search (concat "read " (abbreviate-file-name agent-ui-skill)) text))
+      ;; Its example is right.
+      (string-match "show '\\([^']+\\)'" text)
+      (should (agent-ui-check "progress" (agent-ui-parse-json (match-string 1 text)))))))
+
+(defun +test-aua-skill ()
+  (with-temp-buffer
+    (insert-file-contents agent-ui-skill)
+    (buffer-string)))
+
+(ert-deftest agent-ui-agent/the-skill ()
+  (let ((skill (+test-aua-skill)))
+    (should (string-prefix-p "---\nname: agent-ui\ndescription: >-\n" skill))
+    ;; Each type has its section; each section a type.
+    (should (equal (let ((pos 0) names)
+                     (while (string-match "^### `\\([a-z-]+\\)`$" skill pos)
+                       (push (intern (match-string 1 skill)) names)
+                       (setq pos (match-end 0)))
+                     (sort names (lambda (a b) (string< (symbol-name a) (symbol-name b)))))
+                   (agent-ui-types)))
+    ;; Each operation it names, the command's.
+    (dolist (op agent-ui-operations)
+      (should (string-match-p (concat "^agent-ui " op "\\b") skill)))))
+
+(ert-deftest agent-ui-agent/the-skills-examples-right ()
+  "Each `agent-ui show/update/append ... '{...}'' in the skill: its JSON is
+right, and does what it says on a canvas, in order."
+  (+test-aua
+    (let ((agent-ui-default-canvas (make-temp-name "skill-"))
+          (skill (+test-aua-skill))
+          (pos 0)
+          (count 0))
+      (while (string-match "^agent-ui \\(show\\|update\\|append\\) \\(?:\\([a-z]+\\) \\)?'\\({.*}\\)'$"
+                           skill pos)
+        (let ((op (match-string 1 skill))
+              (id (match-string 2 skill))
+              (json (agent-ui-parse-json (match-string 3 skill))))
+          (setq pos (match-end 0))
+          (cl-incf count)
+          (pcase op
+            ("show" (should (agent-ui-show json)))
+            ("update" (should (agent-ui-update id json)))
+            ("append" (should (agent-ui-append id json))))))
+      (should (>= count 12))
+      ;; Drawn without an error.
+      (with-current-buffer (agent-ui-canvas)
+        (agent-ui--flush)
+        (should-not (string-search "⚠" (buffer-string)))))))

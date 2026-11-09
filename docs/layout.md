@@ -32,7 +32,7 @@
 | `config/treemacs.el`, `treemacs/` | [Sidebar](sidebar.md) |
 | `config/webkit.el`, `webkit/` | Web pages in Emacs: PDFs, drawings, the Markdown preview |
 | `config/window.el` | The frame, fringes, focus of new windows |
-| `skills/` | [Agent skills](ai-agents.md): `emacs-profiling` reads a profile |
+| `skills/` | [Agent skills](ai-agents.md): `emacs-profiling` reads a profile, `agent-ui` shows things on the canvas |
 | `cmd/` | [Shell commands](cmd.md) |
 | `dict/tech.txt` | Programming words for spelling, built by `scripts/dict.sh` |
 | `scripts/` | Installers (`emacs.sh`; `tools.sh`: what `init.el` and this config need; `os.sh`: Homebrew, apt or dnf), `dict.sh`, `screenshots.sh` |

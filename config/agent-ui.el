@@ -30,6 +30,12 @@
 ;; it (config/agent-ui/agent.el); without it, the session working in the
 ;; request's directory.
 
+;; WHAT THE AGENT IS TOLD
+;; Claude Code's system prompt in agent-shell (config/agent-shell/context.el)
+;; gets a paragraph on the canvas (`agent-ui-agent-context'): what it's for, the
+;; command, and the skill to read before using it (skills/agent-ui/SKILL.md:
+;; its types, with examples). Only while Emacs runs a server.
+
 ;; ====== KEY BINDINGS ======
 
 ;; THE CANVAS (see above): Vim's keys, as Doom's other buffers'.
@@ -47,3 +53,7 @@
 (load! "agent-ui/agent")
 ;; The element types, a file each in agent-ui/elements/.
 (load! "agent-ui/elements")
+
+;; WHAT THE AGENT IS TOLD (see above), after what's there (the theme's line, the
+;; project's issues).
+(add-hook '+my/agent-shell-claude-context-functions #'agent-ui-agent-context t)

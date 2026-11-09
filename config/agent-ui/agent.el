@@ -97,3 +97,35 @@ name's, else the default."
               (canvas (get-buffer (agent-ui-canvas-buffer-name name))))
     (when (eq (buffer-local-value 'agent-ui--session-buffer canvas) (current-buffer))
       (kill-buffer canvas))))
+
+;; ====== WHAT THE AGENT IS TOLD ======
+
+(defcustom agent-ui-skill
+  (expand-file-name "../../skills/agent-ui/SKILL.md"
+                    (file-name-directory (or load-file-name buffer-file-name)))
+  "The agent-ui skill: the guide the agent reads before using the canvas."
+  :type 'file :group 'agent-ui)
+
+(defun agent-ui--home-relative (file)
+  "FILE as ~/..., if it's in the home folder."
+  (abbreviate-file-name (expand-file-name file)))
+
+(defun agent-ui-agent-context ()
+  "What an agent starting in agent-shell is told of its canvas (for its system
+prompt); nil while Emacs runs no server (the command couldn't reach it)."
+  (when (and (fboundp 'server-running-p) (server-running-p))
+    (let ((command (agent-ui--home-relative agent-ui-command))
+          (skill (agent-ui--home-relative agent-ui-skill)))
+      (format "Agent UI: beside this session, Emacs has a canvas (a pane of its \
+own, opened without taking the user's focus when you first show something) \
+that keeps things in view while the conversation scrolls: progress bars, \
+checklists of steps, tables, text, Markdown, each updated in place. Use it for \
+what changes over time or deserves watching (a long build or test run, a \
+multi-step task's progress, results arriving one by one), not for what a reply \
+says once. From your shell: %s show \
+'{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
+%s update build '{\"value\":5}'; append adds a table's rows or a \
+checklist's steps; remove ID; clear. It replies with JSON. Before using it \
+the first time, read %s (its types, properties and examples). Remove what \
+stops helping, and never leave something shown running once it stopped."
+              command command skill))))

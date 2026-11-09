@@ -391,6 +391,26 @@ so a canvas goes on with its other elements. No newline at its end."
       string
     (truncate-string-to-width string (max 0 width) nil nil (if (> width 0) "…" ""))))
 
+(defun agent-ui-wrap (string width)
+  "STRING with each line longer than WIDTH columns broken at spaces (a word
+wider than WIDTH, within it). Its lines are kept; their properties too."
+  (mapconcat
+   (lambda (line)
+     (let ((lines nil))
+       (while (> (string-width line) width)
+         (let* ((head (truncate-string-to-width line width))
+                (space (string-match-p " [^ ]*\\'" head))
+                (cut (cond
+                      ;; It ends at a word's end.
+                      ((eq (aref line (length head)) ?\s) (length head))
+                      ((and space (> space 0)) space)
+                      (t (length head)))))
+           (push (substring line 0 cut) lines)
+           (setq line (string-trim-left (substring line cut) " +"))))
+       (string-join (nreverse (cons line lines)) "\n")))
+   (split-string string "\n")
+   "\n"))
+
 (defun agent-ui-pad (string width &optional align)
   "STRING in WIDTH columns (cut if wider): ALIGN left (default), right or
 center."

@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(progress steps table)))
+  (should (equal (agent-ui-types) '(markdown progress steps table text)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -38,7 +38,49 @@
           (should-not (string-match-p "⚠" text))
           ;; No line wider than the width.
           (dolist (line (split-string text "\n"))
-            (should (<= (string-width line) (max width 30)))))))))
+            (should (equal (list name width line (string-width line))
+                           (list name width line (min (string-width line) (max width 30)))))))))))
+
+;; ====== TEXT ======
+
+(ert-deftest agent-ui-elements/text ()
+  (should (equal (+test-aue-draw '(:type "text" :text "One line.\nAnother.")) "One line.\nAnother."))
+  ;; Wrapped to the width, at spaces.
+  (should (equal (+test-aue-draw (list :type "text" :text (string-join (make-list 8 "word") " "))
+                                 :width 20)
+                 "word word word word\nword word word word"))
+  (should (eq (+test-aue-face-at '(:type "text" :text "Done." :face "success") "Done") 'agent-ui-success))
+  (should (eq (+test-aue-face-at '(:type "text" :text "Hm." :face "muted") "Hm") 'agent-ui-muted))
+  (should-not (+test-aue-face-at '(:type "text" :text "Plain.") "Plain"))
+  (should (equal (+test-aue-error '(:type "text")) "text: text is required"))
+  (should (string-match-p "face must be one of"
+                          (+test-aue-error '(:type "text" :text "x" :face "loud")))))
+
+;; ====== MARKDOWN ======
+
+(ert-deftest agent-ui-elements/markdown ()
+  (let ((element '(:type "markdown" :markdown "# Plan\n\nSome **bold** and `code`.\n\n- one\n- two\n")))
+    (should (equal (+test-aue-draw element) "Plan\n\nSome bold and code.\n\n• one\n• two"))
+    ;; As agent-shell draws it: its faces.
+    (should (eq (+test-aue-face-at element "bold") 'agent-shell-markdown-bold))
+    ;; Wrapped to the width, its faces kept.
+    (should (equal (+test-aue-draw element :width 10) "Plan\n\nSome bold\nand code.\n\n• one\n• two"))
+    (should (eq (+test-aue-face-at element "code" :width 10) 'agent-shell-markdown-inline-code)))
+  ;; A table: at the canvas's width, not the selected window's.
+  (let ((text (+test-aue-draw (list :type "markdown"
+                                    :markdown (concat "| A | B |\n|---|---|\n| "
+                                                      (string-join (make-list 30 "word") " ")
+                                                      " | x |\n"))
+                              :width 40)))
+    (should (string-match-p "│" text))
+    (dolist (line (split-string text "\n"))
+      (should (<= (string-width line) 40)))))
+
+(ert-deftest agent-ui-elements/markdown-without-agent-shell ()
+  ;; As written, wrapped.
+  (cl-letf (((symbol-function 'agent-ui-markdown--render) #'ignore))
+    (should (equal (+test-aue-draw '(:type "markdown" :markdown "Some **bold** words") :width 12)
+                   "Some\n**bold**\nwords"))))
 
 ;; ====== PROGRESS ======
 

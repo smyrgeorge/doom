@@ -10,7 +10,8 @@ CLI's login.
 | `Option+Enter` (Linux: `Alt+Enter`) | Send the error at point or the selection to Claude |
 
 Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
-and Claude can ask Emacs what you're looking at. While you're in another app, a [notification](notifications.md) says
+and Claude can ask Emacs what you're looking at. Claude can also keep things in view on a canvas beside its session:
+progress bars, checklists, tables, updated as work goes on ([Agent UI](agent-ui.md)). While you're in another app, a [notification](notifications.md) says
 when a session finished its turn or asks for your permission.
 
 ## Drawing for Claude
