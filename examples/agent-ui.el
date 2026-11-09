@@ -71,7 +71,7 @@
                                   (:name "CI" :values (61 63 58 60 52))))
                        :canvas canvas))
       (lambda ()
-        (agent-ui-append "plan" '(:steps ((:name "Build" :status "done" :detail "29s")
+        (agent-ui-append "plan" '(:steps ((:name "Build" :status "done" :seconds 29)
                                           (:name "Publish" :status "skipped" :detail "a test failed")))
                          :canvas canvas)
         (setq +my/example-agent-ui--done t)

@@ -134,6 +134,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
   :animated (lambda (props) (null (plist-get props :max)))
   :check (lambda (props) ...)       ; optional: more than each property's kind
   :append (lambda (element patch) ...) ; optional: how its lists grow
+  :prepare (lambda (element) ...)   ; optional: the element as it's kept
   :text (lambda (props ctx) ...)    ; a propertized string
   :gui  (lambda (props ctx) ...))   ; optional: a string with an image
 ```
@@ -144,6 +145,8 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
   `agent-ui-error` with what's wrong; it may return the properties normalized (a step's status as a symbol). Inside a
   list, JSON's `false` stays `:false`, for the type to show.
 - **`:append`** says how `agent-ui append` adds to it (a table's rows by key); without it, each list is added to.
+- **`:prepare`** turns the element into what's kept, each time it's shown or changed: for what it notes as time
+  passes (a step's start, then how long it ran). Called again on its result, it must change nothing.
 - **`:text` and `:gui`** take the element's properties (checked, defaults filled) and a context: `:width` in
   characters, `:graphic`, `:tick` for animations, the theme's colours. They return the text to insert; they don't touch
   the buffer. So a type is tested by calling them.
@@ -160,7 +163,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `markdown` | Markdown, drawn as agent-shell draws replies | `markdown` |
 | `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it | `columns`, `rows`, `key`, `align` |
 | `progress` | A bar, or a run without an end; on a canvas, its rate and time left from its updates over time | `value`, `max`, `label`, `unit`, `status` |
-| `steps` | A checklist whose steps change state; appending a step by its name changes it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":...}]` |
+| `steps` | A checklist whose steps change state; appending a step by its name changes it; a step's time (timed from running to done), its own steps under it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":..., "seconds":..., "steps": [...]}]` |
 | `chart` | Lines (several series), bars or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window` |
 | `image` | An image file (an `.excalidraw.svg` drawing too) in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file`, `alt`, `width` (percent), `height` (lines) |
 | `choice` | A question for you: options to pick (one or several), a note; Answer puts "Answer to choice ID (question): …" into the session's prompt, then it shows the answer | `question`, `options`, `multiple`, `note`, `submit`, `selected` |

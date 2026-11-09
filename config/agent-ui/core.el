@@ -60,7 +60,7 @@ buffer's): while a request is answered, the agent's.")
 
 (cl-defstruct (agent-ui-type (:constructor agent-ui--make-type))
   "An element type (see `agent-ui-define')."
-  name doc props example animated text gui append check file)
+  name doc props example animated text gui append check prepare file)
 
 (defvar agent-ui--types (make-hash-table :test #'eq)
   "The element types, by name (a symbol).")
@@ -119,7 +119,7 @@ as an `agent-ui-prop'."
     (_ (agent-ui--fail "%s: %S isn't a property: (NAME KIND DOC [:default VALUE] [:required t])"
                        type entry))))
 
-(cl-defun agent-ui--register (name doc &key props example animated text gui append check file)
+(cl-defun agent-ui--register (name doc &key props example animated text gui append check prepare file)
   "Define the element type NAME (see `agent-ui-define'); replaces one so named."
   (unless (and (symbolp name) (string-match-p "\\`[a-z][a-z0-9-]*\\'" (symbol-name name)))
     (agent-ui--fail "%S: a type's name is a symbol of a-z, 0-9 and -" name))
@@ -127,14 +127,14 @@ as an `agent-ui-prop'."
     (agent-ui--fail "%s: no documentation string" name))
   (unless (functionp text)
     (agent-ui--fail "%s: no :text function drawing it" name))
-  (dolist (fn (list gui append check (and (not (eq animated t)) animated)))
+  (dolist (fn (list gui append check prepare (and (not (eq animated t)) animated)))
     (when (and fn (not (functionp fn)))
       (agent-ui--fail "%s: %S isn't a function" name fn)))
   (let* ((props (mapcar (lambda (entry) (agent-ui--parse-prop name entry)) props))
          (keys (mapcar #'agent-ui-prop-key props))
          (type (agent-ui--make-type :name name :doc doc :props props :example example
                                     :animated animated :text text :gui gui
-                                    :append append :check check :file file)))
+                                    :append append :check check :prepare prepare :file file)))
     (when (/= (length keys) (length (delete-dups (copy-sequence keys))))
       (agent-ui--fail "%s: a property is named twice" name))
     ;; Its example must be right: the agent copies it.
@@ -165,11 +165,16 @@ ARGS are keywords:
   :check    (lambda (PROPS) ...) checking more than each property's kind
             (a list's items, properties that go together): returns PROPS,
             maybe normalized, or signals `agent-ui-error' (`agent-ui--fail').
+            What it returns is drawn; what's kept is the element as given.
+  :prepare  (lambda (ELEMENT) ...) returning ELEMENT as it's kept, once
+            checked, each time it's shown or changed: for what it notes as
+            time passes (a step's start). Called again on what it returned:
+            a second call changes nothing.
 
 Defining a type again replaces it."
   (declare (indent defun) (doc-string 2))
   (let ((unknown (cl-loop for (k _) on args by #'cddr
-                          unless (memq k '(:props :example :text :gui :animated :append :check))
+                          unless (memq k '(:props :example :text :gui :animated :append :check :prepare))
                           collect k)))
     (when unknown
       (error "agent-ui-define %s: unknown keys %S" name unknown)))
@@ -181,6 +186,7 @@ Defining a type again replaces it."
                        :gui ,(plist-get args :gui)
                        :append ,(plist-get args :append)
                        :check ,(plist-get args :check)
+                       :prepare ,(plist-get args :prepare)
                        :file (or load-file-name buffer-file-name)))
 
 (defun agent-ui-undefine (name)
@@ -503,6 +509,10 @@ center."
         ((floatp number)
          (string-trim-right (string-trim-right (format "%.2f" number) "0+") "\\."))
         (t (format "%s" number))))
+
+(defvar agent-ui-clock #'float-time
+  "What gives the time now, in seconds (tests stub it): a progress bar's
+rate, a step's time.")
 
 (defun agent-ui-format-duration (seconds)
   "SECONDS as a duration: 8s, 2m 05s, 1h 02m."

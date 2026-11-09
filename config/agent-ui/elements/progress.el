@@ -17,9 +17,6 @@
 (defconst agent-ui-progress--eighths [" " "▏" "▎" "▍" "▌" "▋" "▊" "▉"]
   "A cell partly filled, by eighths.")
 
-(defvar agent-ui-progress-clock #'float-time
-  "What gives the time now, in seconds (tests stub it).")
-
 (defconst agent-ui-progress-window 30
   "Seconds of values its rate is taken over, back from the latest.")
 
@@ -34,7 +31,7 @@
 samples, the latest first."
   (unless agent-ui-progress--samples
     (setq agent-ui-progress--samples (make-hash-table :test #'equal)))
-  (let* ((now (funcall agent-ui-progress-clock))
+  (let* ((now (funcall agent-ui-clock))
          (samples (gethash id agent-ui-progress--samples))
          (last (car samples)))
     (cond ((or (null last) (< value (cdr last))) (setq samples (list (cons now value))))
@@ -75,7 +72,7 @@ time on its canvas (CTX's :id there); \"\" when not running, nor steady."
           (concat (agent-ui-progress--per rate (plist-get props :unit))
                   (when max
                     (let ((left (- (/ (- max (cdar samples)) rate)
-                                   (- (funcall agent-ui-progress-clock) (caar samples)))))
+                                   (- (funcall agent-ui-clock) (caar samples)))))
                       (concat "  " (agent-ui-format-duration (max 1 left)) " left")))))))))
 
 ;; ====== DRAWING ======

@@ -311,7 +311,9 @@ once both are closed."
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas))
                        '("plan" "tests" "build" "times")))
         (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-          (should (string-match-p "✗ Run the tests +4 passed, 1 failed" text))
+          ;; Each step its time: the build's given, the tests' timed.
+          (should (string-match-p "✗ Run the tests +[0-9]+s +4 passed" text))
+          (should (string-match-p "✓ Build +29s" text))
           (should (string-match-p "– Publish +a test failed" text))
           (should (string-match-p " checker │ failed │ 0.7s" text))
           (should (string-match-p "12/12  100%  ✓ built" text))

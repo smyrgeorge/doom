@@ -145,12 +145,16 @@
                            "Publish"
                            (:name "Tag" :status "failed" :detail "exists")
                            (:name "Notify" :status "skipped")))))
+    ;; Drawn as given (not kept on a canvas: no times noted).
     (should (equal (+test-aue-draw element :tick 2)
                    (concat "✓ Run the tests  412 passed\n"
                            "⠹ Build\n"
                            "○ Publish\n"
                            "✗ Tag            exists\n"
                            "– Notify")))
+    ;; None timed: no times' column.
+    (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "a" :status "done" :detail "x") "bb")))
+                   "✓ a   x\n○ bb"))
     ;; The spinner turns.
     (should (string-match-p "⠼ Build" (+test-aue-draw element :tick 4)))
     (should (agent-ui-animated-p element))
@@ -178,8 +182,71 @@
   (should (equal (+test-aue-error '(:type "steps" :steps ((:status "done"))))
                  "steps: step 1 has no name"))
   (should (equal (+test-aue-error '(:type "steps" :steps ((:name "a" :state "done"))))
-                 "steps: step 1 has \"state\": a step has name, status, detail"))
+                 "steps: step 1 has \"state\": a step has name, status, detail, seconds, steps"))
   (should (string-match-p "step 1 is 3" (+test-aue-error '(:type "steps" :steps (3))))))
+
+(ert-deftest agent-ui-elements/steps-their-times ()
+  (let* ((now 100.0)
+         (agent-ui-clock (lambda () now))
+         (element (agent-ui--checked '(:type "steps" :steps ((:name "a" :status "running") "b")))))
+    ;; Running: when it began, noted; its time counts.
+    (should (equal (plist-get (car (plist-get element :steps)) :started) 100.0))
+    (setq now 112.0)
+    (should (string-match-p "a  12s" (+test-aue-draw element)))
+    ;; Done: how long it ran, kept; the next one starts.
+    (setq now 141.0)
+    (setq element (agent-ui--checked (agent-ui-append-to element '(:steps ((:name "a" :status "done")
+                                                                            (:name "b" :status "running"))))))
+    (should (equal (plist-get (car (plist-get element :steps)) :seconds) 41.0))
+    (setq now 150.0)
+    (should (equal (+test-aue-draw element) "✓ a  41s\n⠋ b   9s"))
+    ;; Kept again (a panel's re-check): nothing changes.
+    (should (equal (agent-ui--checked element) element))
+    ;; A panel's: noted too.
+    (should (equal (plist-get (car (plist-get (car (plist-get (agent-ui--checked '(:type "panel" :children ((:type "steps" :steps ((:name "c" :status "running"))))))
+                                                              :children))
+                                              :steps))
+                              :started)
+                   150.0))
+    ;; Given: as given; a step not run has none.
+    (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "x" :status "done" :seconds 125) "y")))
+                   "✓ x  2m 05s\n○ y"))))
+
+(ert-deftest agent-ui-elements/steps-with-steps-of-their-own ()
+  (let ((agent-ui-clock (lambda () 0.0)))
+    ;; Drawn under theirs, indented; the names' column fits them.
+    (should (equal (+test-aue-draw '(:type "steps"
+                                     :steps ((:name "Build" :status "done" :seconds 12
+                                              :steps ((:name "compile" :status "done" :seconds 8)
+                                                      (:name "link" :status "done" :seconds 4 :detail "ok")))
+                                             "Publish")))
+                   "✓ Build      12s\n  ✓ compile   8s\n  ✓ link      4s  ok\n○ Publish"))
+    ;; Appended by their parent's name, at any depth; merged by name.
+    (let* ((element '(:type "steps" :steps ((:name "Build" :steps ((:name "compile"))) "Publish")))
+           (element (agent-ui-append-to element '(:steps ((:name "link" :parent "Build" :status "running")
+                                                         (:name "ld" :parent "link")
+                                                         (:name "Publish" :steps ("upload"))))))
+           (steps (plist-get element :steps)))
+      (should (equal (mapcar #'agent-ui-steps--name (plist-get (car steps) :steps)) '("compile" "link")))
+      (should (equal (plist-get (cadr (plist-get (car steps) :steps)) :steps) '((:name "ld"))))
+      (should (equal (plist-get (cadr steps) :steps) '("upload")))
+      ;; A nested step merged by name: its own steps too.
+      (let ((merged (agent-ui-append-to element '(:steps ((:name "Build" :steps ((:name "compile" :status "done"))))))))
+        (should (equal (plist-get (car (plist-get (car (plist-get merged :steps)) :steps)) :status) "done"))
+        (should (= (length (plist-get (car (plist-get merged :steps)) :steps)) 2)))
+      ;; Running deep down: it animates.
+      (should (agent-ui-animated-p (agent-ui--checked element)))
+      ;; A parent not there: said so.
+      (should (string-match-p "no step \"nope\" to put \"x\" under"
+                              (agent-ui-error-message
+                               (should-error (agent-ui-append-to element '(:steps ((:name "x" :parent "nope"))))
+                                             :type 'agent-ui-error)))))
+    ;; Wrong ones: where they are.
+    (should (equal (+test-aue-error '(:type "steps" :steps ((:name "a" :steps ((:name "b" :status "x"))))))
+                   "steps: step 1.1 has status \"x\"; one of: pending, running, done, failed, skipped"))
+    (should (string-match-p "step 1 has seconds -1" (+test-aue-error '(:type "steps" :steps ((:name "a" :seconds -1))))))
+    (should (string-match-p "steps 5 deep: 4 at most"
+                            (+test-aue-error '(:type "steps" :steps ((:name "1" :steps ((:name "2" :steps ((:name "3" :steps ((:name "4" :steps ("5")))))))))))))))
 
 ;; ====== TABLE ======
 
@@ -1051,7 +1118,7 @@ new file mode 100644
 
 (ert-deftest agent-ui-elements/progress-its-rate-and-time-left ()
   (let* ((now 100.0)
-         (agent-ui-progress-clock (lambda () now)))
+         (agent-ui-clock (lambda () now)))
     (with-temp-buffer
       (agent-ui-canvas-mode)
       (cl-flet ((at (time value &optional props)

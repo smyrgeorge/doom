@@ -406,6 +406,18 @@ error saying what's wrong. Its :type a string, as JSON gives it."
               (setq element (plist-put element key
                                        (file-name-as-directory
                                         (expand-file-name (or agent-ui-file-directory default-directory))))))))))
+      (agent-ui--prepared element))))
+
+(defun agent-ui--prepared (element)
+  "ELEMENT as it's kept: its type's :prepare, if it has one, its panel's
+children's too."
+  (let* ((type (agent-ui-type (plist-get element :type)))
+         (element (if-let* ((fn (agent-ui-type-prepare type))) (funcall fn element) element))
+         (children (plist-get element :children)))
+    (if (and children (listp children))
+        (plist-put (copy-sequence element) :children
+                   (mapcar (lambda (c) (if (and (agent-ui--plist-p c) (plist-get c :type)) (agent-ui--prepared c) c))
+                           children))
       element)))
 
 (cl-defun agent-ui-show (element &key canvas)

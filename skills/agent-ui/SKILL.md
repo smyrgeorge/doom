@@ -87,6 +87,15 @@ agent-ui append plan '{"steps":[{"name":"Run the tests","status":"running"}]}'
 agent-ui append plan '{"steps":[{"name":"Run the tests","status":"done","detail":"412 passed"},{"name":"Build","status":"running"}]}'
 ```
 
+**Times and sub-steps.** A step is timed from `running` to `done` or `failed` (its time counting while it runs), or
+give its `seconds`. A step's own `steps` are drawn under it; append one with `"parent"` (its step's name, at any
+depth), or a step with `steps` (merged by name), up to 4 deep:
+
+```sh
+agent-ui append plan '{"steps":[{"name":"compile","parent":"Build","status":"running"}]}'
+agent-ui append plan '{"steps":[{"name":"compile","parent":"Build","status":"done"},{"name":"link","parent":"Build","status":"running"}]}'
+```
+
 ### `table`
 
 `columns` (names) and `rows` (arrays of cells: text, numbers, true, false, null), fitted to the pane's width; numbers
@@ -357,7 +366,7 @@ start) or discards it (its elements go with it): say what you made and why.
   (pixels, for an SVG). Keep it quick: it runs in the user's Emacs, on each change.
 - Optional: `:gui` (the same, for a graphic frame: a string with an SVG image, see `svg.el`), `:check` (more than
   each property's kind: signal with `agent-ui--fail`), `:append` (how lists grow), `:animated` (t, or a function of
-  PROPS).
+  PROPS), `:prepare` (the element as it's kept: what it notes as time passes).
 - Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-format-number`, `agent-ui-spinner`.
 
 ## Following a long command: sources
