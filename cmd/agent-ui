@@ -3,25 +3,25 @@
 # checklists, on its canvas (config/agent-ui.el). For coding agents, from their
 # shell. See docs/agent-ui.md.
 #
-#   agent-ui.sh show [JSON]         show an element: {"id":..., "type":...}
-#                                   (its id there already: replaced in place)
-#   agent-ui.sh update ID [JSON]    change some of its properties ({"value": 5});
-#                                   null puts one back to its default
-#   agent-ui.sh append ID [JSON]    add to its lists ({"rows": [[...]]})
-#   agent-ui.sh remove ID           remove it
-#   agent-ui.sh clear               remove every element
-#   agent-ui.sh list                the canvas's elements: ids, types, sources
-#   agent-ui.sh types [TYPE]        the element types: properties, an example
-#   agent-ui.sh batch [JSON]        several at once: [{"op": "show", ...},
-#                                   {"op": "update", "id": ..., ...}, ...]
-#   agent-ui.sh render [JSON]       an element drawn as text, as the canvas
-#                                   would (nothing shown): what it looks like
-#   agent-ui.sh snapshot ID         the element as an image (SVG) in
-#                                   .agent-shell/images/: {"file", "markdown"},
-#                                   a link for your reply (shown inline)
-#   agent-ui.sh define [FILE]       a type of your own: its Emacs Lisp code
-#                                   (one agent-ui-define), from FILE or stdin;
-#                                   staged for the user to keep or discard
+#   agent-ui show [JSON]         show an element: {"id":..., "type":...}
+#                                (its id there already: replaced in place)
+#   agent-ui update ID [JSON]    change some of its properties ({"value": 5});
+#                                null puts one back to its default
+#   agent-ui append ID [JSON]    add to its lists ({"rows": [[...]]})
+#   agent-ui remove ID           remove it
+#   agent-ui clear               remove every element
+#   agent-ui list                the canvas's elements: ids, types, sources
+#   agent-ui types [TYPE]        the element types: properties, an example
+#   agent-ui batch [JSON]        several at once: [{"op": "show", ...},
+#                                {"op": "update", "id": ..., ...}, ...]
+#   agent-ui render [JSON]       an element drawn as text, as the canvas
+#                                would (nothing shown): what it looks like
+#   agent-ui snapshot ID         the element as an image (SVG) in
+#                                .agent-shell/images/: {"file", "markdown"},
+#                                a link for your reply (shown inline)
+#   agent-ui define [FILE]       a type of your own: its Emacs Lisp code
+#                                (one agent-ui-define), from FILE or stdin;
+#                                staged for the user to keep or discard
 #
 # JSON is the last argument, or comes on stdin. The reply is JSON on stdout:
 # {"ok": true, "id": ...}, or {"ok": false, "error": "what's wrong"}.
@@ -63,19 +63,19 @@ case "$op" in
     [ $# -eq 1 ] && json=$1 ;;
   update|append)
     takes_json=1
-    [ $# -lt 1 ] && fail 2 "$op: which element? agent-ui.sh $op ID [JSON]"
+    [ $# -lt 1 ] && fail 2 "$op: which element? agent-ui $op ID [JSON]"
     [ $# -gt 2 ] && fail 2 "$op: too many arguments (ID, then JSON)"
     id=$1
     [ $# -eq 2 ] && json=$2 ;;
   remove|snapshot)
-    [ $# -ne 1 ] && fail 2 "$op: agent-ui.sh $op ID"
+    [ $# -ne 1 ] && fail 2 "$op: agent-ui $op ID"
     id=$1 ;;
   types)
-    [ $# -gt 1 ] && fail 2 "types: agent-ui.sh types [TYPE]"
+    [ $# -gt 1 ] && fail 2 "types: agent-ui types [TYPE]"
     id=${1:-} ;;
   define)
     takes_json=1
-    [ $# -gt 1 ] && fail 2 "define: agent-ui.sh define [FILE]"
+    [ $# -gt 1 ] && fail 2 "define: agent-ui define [FILE]"
     if [ $# -eq 1 ]; then
       [ -f "$1" ] || fail 2 "define: no file $1"
       json=$(cat "$1")

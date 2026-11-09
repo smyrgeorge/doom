@@ -14,7 +14,7 @@ the first time you show something. It holds **elements**, in the order you showe
 you change it in place: a progress bar moves, a table fills in, a step goes from running to done. The canvas belongs to
 your session and closes with it.
 
-You drive it with one command, from your shell: **`~/.config/doom/cmd/agent-ui.sh`** (`agent-ui` below). Each call is one
+You drive it with one command, from your shell: **`~/.config/doom/cmd/agent-ui`** (`agent-ui` below). Each call is one
 quick round trip to Emacs; its reply is JSON on stdout.
 
 ## When to use it

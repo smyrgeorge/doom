@@ -16,7 +16,7 @@
 (defvar +test-aum-runs nil "The command lines it ran (their arguments), the latest first.")
 
 (defmacro +test-aum (reply &rest body)
-  "BODY with what the server sends recorded, cmd/agent-ui.sh not run but
+  "BODY with what the server sends recorded, cmd/agent-ui not run but
 recorded, its reply REPLY (a plist)."
   (declare (indent 1))
   `(let ((+test-aum-sent nil) (+test-aum-runs nil))

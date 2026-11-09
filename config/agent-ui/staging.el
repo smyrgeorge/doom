@@ -2,7 +2,7 @@
 ;; Agent UI's element types made by the agent: staged, then kept or
 ;; discarded by the user. Loaded from config/agent-ui.el. No Doom here.
 ;;
-;; The agent sends a type's code (cmd/agent-ui.sh define FILE): one
+;; The agent sends a type's code (cmd/agent-ui define FILE): one
 ;; `agent-ui-define' and the definitions it uses, named after it. It's
 ;; checked (its forms, its name), written to `agent-ui-staging-directory',
 ;; byte-compiled (errors refuse it, warnings go back to the agent), loaded,

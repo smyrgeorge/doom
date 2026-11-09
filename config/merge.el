@@ -45,7 +45,7 @@
 ;; both sides or deleted on one, submodules and links open in Magit's usual
 ;; Ediff instead (each version isn't a text with a common base).
 ;; M-x +my/merge-all resolves each conflicted file of the repository, one
-;; after the other; from the shell, cmd/diff.sh does (in this terminal, see
+;; after the other; from the shell, cmd/diff does (in this terminal, see
 ;; docs/cmd.md).
 (defvar +my/merge-refine-max-lines 200
   "Changes longer than this (lines) on a side aren't refined word by word.")

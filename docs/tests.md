@@ -25,7 +25,7 @@ run those under Xvfb: `xvfb-run -a tests/run.sh e2e`.
 - `tests/linux/` runs them on Linux: a Debian image set up by `scripts/emacs.sh` and `scripts/tools.sh` (with or
   without xwidgets), the config and Doom's folder mounted read-only, the end-to-end tests under Xvfb. Built the first
   time (~15 minutes), then from its cached layers. Tests needing what only the host built (ghostel's native module) skip there.
-- `tests/fixtures/` holds what tests load: `diff-sh-emacs.el` is the Emacs that `cmd/diff.sh` starts in `test-cmd.el`.
+- `tests/fixtures/` holds what tests load: `diff-emacs.el` is the Emacs that `cmd/diff` starts in `test-cmd.el`.
 
 A failing or flaky test is a bug to fix in the config, not a test to relax.
 

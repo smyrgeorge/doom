@@ -26,7 +26,7 @@ pane, and a pane closes with its last tab. `SPC w SPC` opens a pane the same way
 
 `e` on a conflicted file in Magit shows Yours, the Result and Theirs side by side, lined up and scrolling together.
 Take a change with `>>` / `<<`, ignore it with `x`, or let the ✨ wand merge the words of both sides. It works in a
-terminal too, and from the shell with `cmd/diff.sh` ([more](docs/git.md#resolving-conflicts)).
+terminal too, and from the shell with `cmd/diff` ([more](docs/git.md#resolving-conflicts)).
 
 ![Three-way merge](examples/merge.png)
 
@@ -68,7 +68,7 @@ their dependencies ([more](docs/issues.md)).
 
 Claude Code keeps things in view on a canvas beside its session while it works: a checklist of its steps, a table of
 test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
-place. It draws them with `cmd/agent-ui.sh`, which its system prompt tells it about ([more](docs/agent-ui.md)).
+place. It draws them with `cmd/agent-ui`, which its system prompt tells it about ([more](docs/agent-ui.md)).
 
 ![Agent UI: a canvas beside the conversation](examples/agent-ui.png)
 
@@ -150,12 +150,12 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Git](docs/git.md): Magit additions, a file's diff, resolving conflicts in three panes
 - [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md)
 - [Claude Code](docs/claude-code.md): sessions, drawing for Claude, profiling Emacs
-- [Agent UI](docs/agent-ui.md): what Claude shows on a canvas beside its session, and `cmd/agent-ui.sh`
+- [Agent UI](docs/agent-ui.md): what Claude shows on a canvas beside its session, and `cmd/agent-ui`
 - [Notifications](docs/notifications.md): on the desktop while you're in another app (Claude Code finished, needs you)
 - [Issues](docs/issues.md): the project's Beads issues
 - [AI agents](docs/ai-agents.md): the `emacs-profiling` skill
 - [Terminal](docs/terminal.md): what differs in `emacs -nw`
 - [Examples](docs/examples.md): each feature on files of its own, with screenshots
-- [Shell commands](docs/cmd.md): `cmd/diff.sh`
+- [Shell commands](docs/cmd.md): `cmd/diff`
 - [Tests](docs/tests.md): unit and end-to-end tests, on macOS and Linux, on each push (GitHub Actions)
 - [Repository layout](docs/layout.md): what each file is for

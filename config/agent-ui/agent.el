@@ -5,7 +5,7 @@
 ;;
 ;; - agent-shell starts each session's agent with AGENT_UI_SESSION in its
 ;;   environment, the session's name (its buffer's, when it started); the
-;;   agent's shell inherits it, so cmd/agent-ui.sh says whose request it is.
+;;   agent's shell inherits it, so cmd/agent-ui says whose request it is.
 ;; - Without it (an agent started otherwise, a session older than this), the
 ;;   session working in the request's directory: the deepest one, of those
 ;;   the most recently used.

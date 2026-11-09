@@ -1,5 +1,5 @@
-;;; tests/fixtures/diff-sh-emacs.el -*- lexical-binding: t; -*-
-;; The Emacs cmd/diff.sh runs in tests/unit/test-cmd.el: tests/helper.el's
+;;; tests/fixtures/diff-emacs.el -*- lexical-binding: t; -*-
+;; The Emacs cmd/diff runs in tests/unit/test-cmd.el: tests/helper.el's
 ;; setup, the merge's config, and each merge then done as DIFF_TEST_ACTION
 ;; says, a moment after it opens: "right" (Accept Right, Done) or "abort".
 ;; Each merge opened is noted in DIFF_TEST_LOG ("PATH tty|gui COLOURS").
@@ -16,7 +16,7 @@
 
 (+test-load "config/merge" "config/examples")
 
-(defun +test-diff-sh--act (session)
+(defun +test-diff--act (session)
   (when (and (buffer-live-p (+my/merge-result session)) (not (+my/merge-finished session)))
     (with-current-buffer (+my/merge-result session)
       (pcase (getenv "DIFF_TEST_ACTION")
@@ -30,7 +30,7 @@
                                       (if (display-graphic-p) "gui" "tty")
                                       (display-color-cells))
                               nil log t 'silent))
-              (run-at-time 0.3 nil #'+test-diff-sh--act session)
+              (run-at-time 0.3 nil #'+test-diff--act session)
               session)
-            '((name . +test-diff-sh)))
+            '((name . +test-diff)))
 

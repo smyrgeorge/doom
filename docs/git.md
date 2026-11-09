@@ -31,4 +31,4 @@ by word. The bar at the top accepts the rest from one side or every non-conflict
 | `C-c C-c` / `C-c C-k` | Done / Abort |
 
 It works for merges, rebases, cherry-picks and stash pops, also in a terminal. `M-x +my/merge-all` resolves every
-conflicted file in turn; from the shell, use [`cmd/diff.sh`](cmd.md).
+conflicted file in turn; from the shell, use [`cmd/diff`](cmd.md).

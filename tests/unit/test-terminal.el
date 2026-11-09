@@ -251,8 +251,8 @@ before the theme's painted, given that very colour back on exit, not OSC 111
     (should-not (string-search "\e]111" output))))
 
 (ert-deftest terminal/given-back-when-a-servers-frame-closes ()
-  "cmd/diff.sh with Emacs running as a server: emacsclient -t's frame, on a
-terminal that answers; the frame deleted as diff.sh does it: that terminal
+  "cmd/diff with Emacs running as a server: emacsclient -t's frame, on a
+terminal that answers; the frame deleted as cmd/diff does it: that terminal
 given its own colour back."
   (let* ((home (make-temp-file (+test-tmp-file "server-home-") t))
          ;; A name, not a path: a socket's path has at most ~104 characters.
@@ -271,7 +271,7 @@ given its own colour back."
         (let* ((output "")
                (answered nil)
                (closing nil)
-               ;; 24-bit colour, as diff.sh gets it (the theme's #RRGGBB).
+               ;; 24-bit colour, as cmd/diff gets it (the theme's #RRGGBB).
                (process-environment (cons "COLORTERM=truecolor" process-environment))
                (client (make-process
                         :name "emacsclient-t" :connection-type 'pty :coding 'binary :noquery t
@@ -287,7 +287,7 @@ given its own colour back."
               (when (and answered (not closing) (string-search "\e]11;#" output))
                 (setq closing t)
                 (sleep-for 0.5)         ; the reply read (the client's output too)
-                ;; As diff.sh's end: its frame deleted. Not waited for here:
+                ;; As cmd/diff's end: its frame deleted. Not waited for here:
                 ;; this Emacs is the client's terminal, and while it waited it
                 ;; read nothing, the pty filled, the server's writes to it
                 ;; blocked, and the request never came back.

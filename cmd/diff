@@ -2,11 +2,11 @@
 # Resolve Git conflicts in this config's three-pane merge (config/merge.el), in
 # Emacs, from the shell. See docs/cmd.md.
 #
-#   cmd/diff.sh                  each conflicted file of the repository here, one
-#                                after the other
-#   cmd/diff.sh FILE...          those files (a file named example: ./example)
-#   cmd/diff.sh example          the merge example (examples/merge.el), on a temp
-#                                repository
+#   cmd/diff                  each conflicted file of the repository here, one
+#                             after the other
+#   cmd/diff FILE...          those files (a file named example: ./example)
+#   cmd/diff example          the merge example (examples/merge.el), on a temp
+#                             repository
 #
 # Options:
 #   -g, --gui           a GUI frame instead of this terminal
@@ -19,7 +19,7 @@
 # quick, your session), else starts Emacs and quits it after. Done or Abort
 # in the merge moves on to the next file; closing the frame (or quitting the
 # Emacs it started) stops. As `git mergetool`:
-#   git config mergetool.doom.cmd '~/.config/doom/cmd/diff.sh "$MERGED"'
+#   git config mergetool.doom.cmd '~/.config/doom/cmd/diff "$MERGED"'
 #   git config mergetool.doom.trustExitCode true
 #   git mergetool -t doom
 #
@@ -35,7 +35,7 @@ set -u
 
 usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p;}' "$0"; }
 
-die() { ui_error "diff.sh: $*"; exit 2; }
+die() { ui_error "diff: $*"; exit 2; }
 
 gui=0 new=0 list=0 socket="" files=()
 while [ $# -gt 0 ]; do
@@ -46,7 +46,7 @@ while [ $# -gt 0 ]; do
     -l|--list) list=1 ;;
     -s|--socket) [ $# -ge 2 ] || die "$1 needs a server name"; socket=$2; shift ;;
     --) shift; files+=("$@"); break ;;
-    -*) ui_error "diff.sh: unknown option $1"; usage >&2; exit 2 ;;
+    -*) ui_error "diff: unknown option $1"; usage >&2; exit 2 ;;
     *) files+=("$1") ;;
   esac
   shift
@@ -132,7 +132,7 @@ if [ $use_server -eq 1 ] && [ $gui -eq 0 ]; then
     truecolor:xterm*|24bit:xterm*)
       if ! TERMINFO="$HOME/.terminfo" infocmp xterm-24bit >/dev/null 2>&1 &&
          tic -x -o "$HOME/.terminfo" "$(dirname "$0")/xterm-24bit.terminfo" 2>/dev/null; then
-        ui_info "diff.sh: installed xterm-24bit in ~/.terminfo (24-bit colour in Emacs's terminal frames)" >&2
+        ui_info "diff: installed xterm-24bit in ~/.terminfo (24-bit colour in Emacs's terminal frames)" >&2
       fi
       TERMINFO="$HOME/.terminfo" infocmp xterm-24bit >/dev/null 2>&1 && term=xterm-24bit
       ;;

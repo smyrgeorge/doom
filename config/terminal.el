@@ -7,7 +7,7 @@
 ;; exits or an emacsclient -t frame closes. Its own: asked before the first
 ;; paint (OSC 11 ?), set back with OSC 11. OSC 111 (reset) only where it didn't
 ;; answer: iTerm2 ignores 111, and the theme's colour stayed after Emacs (after
-;; cmd/diff.sh, emacs -nw). Only once the terminal is set up (its
+;; cmd/diff, emacs -nw). Only once the terminal is set up (its
 ;; term/xterm.el loaded, which makes the query): `emacs -nw' loads Doom's
 ;; theme before that, and tty-setup-hook paints then.
 (defun +my/tty--query (frame query handler)
@@ -72,7 +72,7 @@ BEL), and keep the colour to give back."
 ;; (C-x 5 0 of one of two): it still shows the theme's background. First of
 ;; the hook (depth -90): the server's `server-handle-delete-frame', added
 ;; after this when the server starts, closes the client's terminal, and
-;; after it nothing reached the terminal (cmd/diff.sh: the theme's stayed).
+;; after it nothing reached the terminal (cmd/diff: the theme's stayed).
 (defun +my/tty-reset-frame-bg-h (frame)
   (when (and (frame-live-p frame) (eq (framep frame) t)
              (not (seq-some (lambda (other)

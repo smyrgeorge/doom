@@ -31,7 +31,7 @@
 
 ;; IN THE CONVERSATION
 ;; agent-shell owns its buffer's text: an element goes there the ways it has
-;; (config/agent-ui/snapshot.el). The agent saves one as an image (cmd/agent-ui.sh
+;; (config/agent-ui/snapshot.el). The agent saves one as an image (cmd/agent-ui
 ;; snapshot ID: an SVG in the session's .agent-shell/images/) and links it in
 ;; its reply, which agent-shell shows inline and its transcript keeps; a in a
 ;; canvas puts the element at point into its session's prompt, as text.
@@ -46,7 +46,7 @@
   "Agent UI as MCP tools in each agent-shell session (see MCP above).")
 
 ;; THE AGENT'S WAY IN
-;; cmd/agent-ui.sh, from the agent's shell: show, update, append, remove... an
+;; cmd/agent-ui, from the agent's shell: show, update, append, remove... an
 ;; element as JSON, the reply as JSON (config/agent-ui/request.el), through
 ;; emacsclient. Each agent-shell session starts its agent with
 ;; AGENT_UI_SESSION, so its requests go to its own canvas, which closes with
@@ -54,7 +54,7 @@
 ;; request's directory.
 
 ;; TYPES THE AGENT MAKES
-;; When none of the types fits, the agent writes one (cmd/agent-ui.sh define
+;; When none of the types fits, the agent writes one (cmd/agent-ui define
 ;; FILE: an `agent-ui-define' and its definitions, named after it). It's
 ;; checked, compiled and loaded, its example drawn for the agent to see
 ;; (config/agent-ui/staging.el), and staged: usable at once, kept only if you

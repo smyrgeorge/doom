@@ -1,11 +1,11 @@
 ;;; tests/unit/test-cmd.el -*- lexical-binding: t; -*-
-;; cmd/diff.sh: Git conflicts resolved in the merge's panes from the shell.
+;; cmd/diff: Git conflicts resolved in the merge's panes from the shell.
 ;; The script really runs, in a pseudo-terminal (`script'), its Emacs a test
-;; one (tests/fixtures/diff-sh-emacs.el: each merge then done by itself), new
+;; one (tests/fixtures/diff-emacs.el: each merge then done by itself), new
 ;; (--new) or a test server (--socket): never the user's Emacs. Real git in
 ;; temp repos, a temp HOME and global gitconfig.
 
-(defconst +test-cmd--script (expand-file-name "cmd/diff.sh" +test-root))
+(defconst +test-cmd--script (expand-file-name "cmd/diff" +test-root))
 
 (defconst +test-cmd--emacs (expand-file-name invocation-name invocation-directory)
   "This Emacs's binary (the GUI app's: -nw in a terminal).")
@@ -15,7 +15,7 @@
 them (the script splits EMACS_ARGS on spaces)."
   (format "-Q --init-directory=%s -l %s"
           (expand-file-name "init" home)
-          (expand-file-name "fixtures/diff-sh-emacs.el" +test-dir)))
+          (expand-file-name "fixtures/diff-emacs.el" +test-dir)))
 
 (defmacro +test-cmd-with-repo (&rest body)
   "BODY in a new repo (`default-directory') where a.txt and b.txt are in
@@ -65,7 +65,7 @@ Emacs's), `log' where its merges are noted."
     (buffer-string)))
 
 (defun +test-cmd--run (&rest args)
-  "Run cmd/diff.sh with ARGS in a pseudo-terminal: (STATUS . OUTPUT); killed
+  "Run cmd/diff with ARGS in a pseudo-terminal: (STATUS . OUTPUT); killed
 after 90 s (STATUS then `timeout')."
   (with-temp-buffer
     (let* ((buffer (current-buffer))
@@ -78,7 +78,7 @@ after 90 s (STATUS then `timeout')."
            ;; script(1) runs it in a pseudo-terminal: BSD's (macOS) takes the
            ;; command as arguments, util-linux's (Linux) as one string (-c),
            ;; its exit status passed on with -e.
-           (process (make-process :name "diff.sh" :buffer buffer :connection-type 'pipe
+           (process (make-process :name "diff" :buffer buffer :connection-type 'pipe
                                   :command (if (eq system-type 'darwin)
                                                (append (list "script" "-q" "/dev/null") command)
                                              (list "script" "-q" "-e" "-c"
@@ -91,7 +91,7 @@ after 90 s (STATUS then `timeout')."
         (condition-case nil
             (process-send-eof process)
           (error (when (process-live-p process)
-                   (error "Couldn't end diff.sh's input")))))
+                   (error "Couldn't end cmd/diff's input")))))
       (while (and (process-live-p process) (< (float-time) end))
         (accept-process-output process 0.1))
       (if (process-live-p process)
@@ -113,7 +113,7 @@ colours if COLOURS."
 (ert-deftest cmd/help-and-wrong-uses ()
   (let ((help (+test-cmd--run "--help")))
     (should (= (car help) 0))
-    (should (string-match-p "cmd/diff.sh FILE\\.\\.\\." (cdr help)))
+    (should (string-match-p "cmd/diff FILE\\.\\.\\." (cdr help)))
     (should (string-match-p "-g, --gui" (cdr help))))
   (let ((wrong (+test-cmd--run "--bogus")))
     (should (= (car wrong) 2))

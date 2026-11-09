@@ -2,7 +2,7 @@
 # Emacs takes 24-bit colour from a terminal's terminfo entry (setf24/setb24),
 # or from COLORTERM=truecolor in its own environment: a server started
 # elsewhere (the GUI app) doesn't have the client's, so its terminal frames
-# got 256 colours. cmd/diff.sh compiles this into ~/.terminfo when needed:
+# got 256 colours. cmd/diff compiles this into ~/.terminfo when needed:
 #   tic -x -o ~/.terminfo cmd/xterm-24bit.terminfo
 xterm-24bit|xterm with 24-bit direct colour,
 	use=xterm-256color,

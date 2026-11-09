@@ -1182,7 +1182,7 @@ function given, with the files still in conflict."
       (should-not (assq session +my/merge--then)))))
 
 (ert-deftest merge/its-frame-closed-aborts-it ()
-  "The frame a merge is in deleted (a terminal's, cmd/diff.sh's): aborted,
+  "The frame a merge is in deleted (a terminal's, cmd/diff's): aborted,
 no windows put back (they're gone)."
   (+test-merge
     (should (eq (+my/merge-frame session) (selected-frame)))

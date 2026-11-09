@@ -1,5 +1,5 @@
 ;;; tests/unit/test-agent-ui-request.el -*- lexical-binding: t; -*-
-;; config/agent-ui/request.el and cmd/agent-ui.sh: the agent's way in. Each
+;; config/agent-ui/request.el and cmd/agent-ui: the agent's way in. Each
 ;; operation through `agent-ui-request' (a request folder, its reply), then the
 ;; script itself, run as the agent runs it, its emacsclient answered by a
 ;; server started in this test Emacs (never the user's).
@@ -9,7 +9,7 @@
 
 ;; ====== HELPERS ======
 
-(defconst +test-aur-script (expand-file-name "cmd/agent-ui.sh" +test-root))
+(defconst +test-aur-script (expand-file-name "cmd/agent-ui" +test-root))
 
 (defmacro +test-aur (&rest body)
   "BODY with a canvas of its own (the default: killed after), the real
@@ -23,7 +23,7 @@ element types, no window shown, no agent-shell sessions."
          (kill-buffer canvas)))))
 
 (defun +test-aur-request (op &optional id payload session cwd)
-  "OP's reply (parsed) as cmd/agent-ui.sh gets it: a request folder with ID,
+  "OP's reply (parsed) as cmd/agent-ui gets it: a request folder with ID,
 SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
   (let ((dir (make-temp-file (+test-tmp-file "aur-") t)))
     (with-temp-file (expand-file-name "request" dir)
@@ -188,7 +188,7 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
        (delete-directory server-socket-dir t))))
 
 (defun +test-aur-run (args &optional stdin)
-  "Run cmd/agent-ui.sh with ARGS (STDIN given, else closed): (STATUS . OUTPUT).
+  "Run cmd/agent-ui with ARGS (STDIN given, else closed): (STATUS . OUTPUT).
 Asynchronously: this Emacs, its server, answers it meanwhile."
   (let* ((output (generate-new-buffer " *agent-ui-run*"))
          (process (make-process :name "agent-ui" :buffer output
@@ -197,7 +197,7 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
                                 :stderr (get-buffer-create " *agent-ui-stderr*"))))
     (when stdin (process-send-string process stdin))
     (process-send-eof process)
-    (with-timeout (20 (delete-process process) (ert-fail "cmd/agent-ui.sh didn't end"))
+    (with-timeout (20 (delete-process process) (ert-fail "cmd/agent-ui didn't end"))
       (while (process-live-p process)
         (accept-process-output nil 0.02)))
     (prog1 (cons (process-exit-status process)
@@ -243,7 +243,7 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
       (dolist (case '((("frob") . "unknown operation \\\\\"frob\\\\\"")
                       (("update") . "which element")
                       (("update" "a" "{}" "x") . "too many")
-                      (("remove") . "agent-ui.sh remove ID")
+                      (("remove") . "agent-ui remove ID")
                       (("list" "x") . "takes no arguments")
                       (("show" "a" "b") . "too many")))
         (let ((run (+test-aur-run (car case))))
@@ -257,7 +257,7 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
       ;; Help: its header.
       (let ((run (+test-aur-run '("--help"))))
         (should (= (car run) 0))
-        (should (string-match-p "agent-ui.sh show \\[JSON\\]" (cdr run))))
+        (should (string-match-p "agent-ui show \\[JSON\\]" (cdr run))))
       (should (= (car (+test-aur-run nil)) 2)))))
 
 (ert-deftest agent-ui-request/the-script-without-emacs ()

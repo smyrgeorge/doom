@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The scripts' output, alike (sourced by scripts/*.sh, tests/run.sh,
-# tests/linux/run.sh, cmd/diff.sh):
+# tests/linux/run.sh, cmd/diff):
 #
 #   ==> A step                     ui_step
 #   ✔ done                        ui_ok
