@@ -287,7 +287,14 @@ error saying what's wrong. Its :type a string, as JSON gives it."
         (agent-ui--fail "a title is text, not %s" (agent-ui--show-value title))))
     (when-let* ((source (plist-get element :source)))
       (funcall agent-ui-check-source-function source))
-    (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type)))))
+    (let ((element (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type)))))
+      ;; Its files by their full names: drawn later, wherever the agent was.
+      (dolist (prop (agent-ui-type-props type))
+        (when (and (eq (agent-ui-prop-kind prop) 'file) (plist-get element (agent-ui-prop-key prop)))
+          (setq element (plist-put element (agent-ui-prop-key prop)
+                                   (expand-file-name (plist-get element (agent-ui-prop-key prop))
+                                                     agent-ui-file-directory)))))
+      element)))
 
 (cl-defun agent-ui-show (element &key canvas)
   "Show ELEMENT (a plist: :type, :id, :title, its type's properties) in

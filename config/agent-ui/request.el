@@ -174,7 +174,9 @@ its reply written there, as JSON. Never signals: an error is the reply."
                     (canvas (funcall agent-ui-canvas-function
                                      (unless (equal session "") session)
                                      (unless (equal cwd "") cwd))))
-               (let ((agent-ui--request-cwd (unless (equal cwd "") cwd)))
+               (let* ((agent-ui--request-cwd (unless (equal cwd "") cwd))
+                      (agent-ui-file-directory (and agent-ui--request-cwd
+                                                    (file-name-as-directory agent-ui--request-cwd))))
                  (agent-ui-do op (unless (equal id "") id) payload canvas)))
            (error (list :ok :false :error (agent-ui-error-message err))))))
     (with-temp-file (expand-file-name "reply" folder)

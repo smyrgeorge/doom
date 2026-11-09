@@ -9,3 +9,5 @@
 (load! "elements/steps")
 (load! "elements/table")
 (load! "elements/chart")
+(load! "elements/image")
+(load! "elements/html")

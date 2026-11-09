@@ -116,3 +116,39 @@ notice."
     (with-temp-buffer
       (should-error (+my/html-open-in-browser) :type 'user-error))
     (should (commandp #'+my/html-open-in-browser))))
+
+;; ====== A PAGE IN EMACS ======
+
+(ert-deftest html/a-page-in-emacs-without-webkit ()
+  "In a terminal (as here, in batch): the browser, a file as a file URL."
+  (+test-html
+    (should (commandp #'+my/html-open-in-emacs))
+    (should-not (+my/html-open-in-emacs "/tmp/report.html"))
+    (should (string-prefix-p "file://" (car +test-browsed)))
+    (should (string-suffix-p "/tmp/report.html" (car +test-browsed)))
+    (should-not (+my/html-open-in-emacs "https://example.com/"))
+    (should (equal (car +test-browsed) "https://example.com/"))))
+
+(ert-deftest html/a-page-in-emacs-with-webkit ()
+  "Where WebKit can: a page buffer of its own, its URL, in a pane; another
+page so named replaces it."
+  (+test-html
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+              ((symbol-function 'featurep) (let ((featurep (symbol-function 'featurep)))
+                                             (lambda (f &rest r) (or (eq f 'xwidget-internal)
+                                                                     (apply featurep f r)))))
+              ((symbol-function '+my/webkit-file-url) (lambda (f) (concat "file://" f)))
+              ((symbol-function '+my/html-page-mode) (lambda () (setq major-mode '+my/html-page-mode))))
+      (let ((buffer (+my/html-open-in-emacs "/tmp/a/report.html")))
+        (should (equal (buffer-name buffer) "Page: report.html"))
+        (should (equal (buffer-local-value '+my/html-page-url buffer) "file:///tmp/a/report.html"))
+        (should (eq (window-buffer (selected-window)) buffer))
+        (should-not +test-browsed)
+        (let ((other (+my/html-open-in-emacs "/tmp/b/report.html")))
+          (should-not (buffer-live-p buffer))
+          (should (equal (buffer-local-value '+my/html-page-url other) "file:///tmp/b/report.html"))
+          (kill-buffer other))))))
+
+(ert-deftest html/the-page-mode ()
+  (should (eq (get '+my/html-page-mode 'derived-mode-parent) '+my/webkit-mode)))
+

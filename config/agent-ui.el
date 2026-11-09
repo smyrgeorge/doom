@@ -113,6 +113,16 @@ FILE): its tests and documentation."
 
 (add-hook 'agent-ui-kept-functions #'+my/agent-ui-kept-issue)
 
+;; PAGES AND FILES an element opens (RET on an html card, an image): a page in
+;; WebKit in a pane where it can (config/html.el), else the browser.
+(defun +my/agent-ui-open-page (page)
+  "Open PAGE, an html element's file or URL (see above)."
+  (if (fboundp '+my/html-open-in-emacs)
+      (+my/html-open-in-emacs page)
+    (agent-ui-html-browse page)))
+
+(setq agent-ui-open-page-function #'+my/agent-ui-open-page)
+
 ;; WHAT THE AGENT IS TOLD (see above), after what's there (the theme's line, the
 ;; project's issues).
 (add-hook '+my/agent-shell-claude-context-functions #'agent-ui-agent-context t)

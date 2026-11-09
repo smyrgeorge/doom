@@ -106,6 +106,26 @@ agent-ui show '{"id":"times","type":"chart","series":[{"name":"p95","values":[12
 agent-ui append times '{"series":[{"name":"p95","values":[13]},{"name":"p50","values":[5]}]}'
 ```
 
+### `image`
+
+An image file (PNG, JPEG, GIF, WebP, SVG; an Excalidraw drawing's `.excalidraw.svg` too) shown in a graphic Emacs, at
+most `width` percent of the pane wide and `height` lines high (never above its own size), `alt` under it; in a
+terminal, a line naming it. `RET` on it opens it. `file` is relative to your directory. For a screenshot, a plot you
+rendered, a drawing.
+
+```sh
+agent-ui show '{"id":"shot","type":"image","title":"The login page","file":"screenshots/login.png","alt":"After the fix","width":60}'
+```
+
+### `html`
+
+A web page as a card: its title and the start of its text, from an HTML `file` (or a `url`: its address only).
+`RET` on it opens it, in WebKit inside Emacs where it can, else in the browser. For a report or a page you made.
+
+```sh
+agent-ui show '{"id":"coverage","type":"html","title":"Coverage","file":"coverage/index.html","lines":3}'
+```
+
 ### `text`
 
 Plain text, wrapped to the width, newlines kept. `face`: `plain` (default), `muted`, `success`, `warning`, `error`.

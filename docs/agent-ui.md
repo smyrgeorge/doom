@@ -1,9 +1,9 @@
 # Agent UI
 
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line, the
-> `text`, `markdown`, `progress`, `steps`, `table` and `chart` types, sources (an element following a command, a file,
-> a poll), types the agent makes (kept or discarded by you), and what the agent is told. `M-x +my/example-agent-ui`
-> shows it ([Examples](examples.md)). Still to come: what's [later](#later).
+> `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image` and `html` types, sources (an element following a
+> command, a file, a poll), types the agent makes (kept or discarded by you), and what the agent is told. `M-x
+> +my/example-agent-ui` shows it ([Examples](examples.md)). Still to come: what's [later](#later).
 
 A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
@@ -149,8 +149,11 @@ else the canvas `default`. A session's canvas is killed with it.
 | `progress` | A bar, or a run without an end | `value`, `max`, `label`, `unit`, `status` |
 | `steps` | A checklist whose steps change state; appending a step by its name changes it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":...}]` |
 | `chart` | Lines (several series), bars or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window` |
+| `image` | An image file (an `.excalidraw.svg` drawing too) in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file`, `alt`, `width` (percent), `height` (lines) |
+| `html` | A web page as a card: its title and the start of its text; `RET` opens it in WebKit in a pane (`config/html.el`), else the browser | `file` or `url`, `lines` |
 
-Later ([the epic](#later)): images, drawings, web pages in the GUI, with a text stand-in in a terminal.
+A `file` property is relative to the agent's directory, kept by its full name. A button (`agent-ui-button`) opens
+what an element shows: `RET` or a click on it.
 
 ## Examples
 
@@ -281,7 +284,7 @@ the types change.
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `skills/agent-ui/SKILL.md` | The skill: the types with examples, for the agent |

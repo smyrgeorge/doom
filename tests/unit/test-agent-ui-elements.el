@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart markdown progress steps table text)))
+  (should (equal (agent-ui-types) '(chart html image markdown progress steps table text)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -352,3 +352,85 @@
                           (+test-aue-error '(:type "chart" :height 1))))
   (should (string-match-p "min must be below max"
                           (+test-aue-error '(:type "chart" :min 5 :max 5)))))
+
+;; ====== FILES, BUTTONS ======
+
+(ert-deftest agent-ui-elements/a-file-relative-to-the-agent ()
+  (let ((agent-ui-file-directory "/work/proj/"))
+    (should (equal (plist-get (agent-ui-check "image" '(:file "shots/a.png")) :file) "/work/proj/shots/a.png"))
+    (should (equal (plist-get (agent-ui-check "image" '(:file "/abs/a.png")) :file) "/abs/a.png")))
+  (should (string-match-p "file must be a file's name"
+                          (+test-aue-error '(:type "image" :file 3)))))
+
+(ert-deftest agent-ui-elements/a-button ()
+  (let* ((pressed nil)
+         (text (agent-ui-button "open" (lambda () (setq pressed t)) "RET: open it")))
+    (should (eq (get-text-property 0 'keymap text) agent-ui-button-map))
+    (should (equal (get-text-property 0 'help-echo text) "RET: open it"))
+    (with-temp-buffer
+      (insert "x " text)
+      (goto-char 4)
+      (should (eq (key-binding (kbd "RET")) #'agent-ui-button-press))
+      (agent-ui-button-press)
+      (should pressed)
+      (goto-char 1)
+      (should-error (agent-ui-button-press) :type 'user-error))))
+
+;; ====== IMAGE ======
+
+(defconst +test-aue-image (expand-file-name "images/splash.svg" data-directory)
+  "An image every Emacs has.")
+
+(ert-deftest agent-ui-elements/image ()
+  ;; In a terminal: a line naming it, a button opening it.
+  (let* ((opened nil)
+         (agent-ui-open-file-function (lambda (f) (setq opened f)))
+         (element (list :type "image" :file +test-aue-image :alt "Emacs's splash"))
+         (text (agent-ui-render element (agent-ui-context :width 200))))
+    (should (equal (substring-no-properties text)
+                   (format "▣ %s  Emacs's splash" (abbreviate-file-name +test-aue-image))))
+    (funcall (get-text-property 3 'agent-ui-action text))
+    (should (equal opened +test-aue-image)))
+  ;; Not there: said.
+  (should (string-suffix-p "(not found)" (+test-aue-draw '(:type "image" :file "/no/such.png"))))
+  ;; In the GUI: the image, at most WIDTH percent of the pane, the alt under it.
+  (let* ((text (agent-ui-render (list :type "image" :file +test-aue-image :width 50 :alt "splash")
+                                (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+         (image (get-text-property 0 'display text)))
+    (should (eq (car image) 'image))
+    (should (equal (plist-get (cdr image) :file) +test-aue-image))
+    (should (= (plist-get (cdr image) :max-width) 240))
+    (should (= (plist-get (cdr image) :max-height) (* 20 16)))
+    (should (equal (substring-no-properties text 1) "\nsplash"))
+    (should (functionp (get-text-property 0 'agent-ui-action text))))
+  (should (string-match-p "width is a percentage" (+test-aue-error '(:type "image" :file "a.png" :width 0)))))
+
+;; ====== HTML ======
+
+(defun +test-aue-html (html)
+  (let ((file (make-temp-file (+test-tmp-file "page-") nil ".html")))
+    (with-temp-file file (insert html))
+    file))
+
+(ert-deftest agent-ui-elements/html ()
+  (let* ((file (+test-aue-html "<html><head><title>Coverage &amp; report</title>
+<style>p { color: red }</style></head><body><h1>Coverage: 87%</h1>
+<p>Lines covered: <b>4,120</b> of&nbsp;4,735.</p><script>alert('x')</script>
+<!-- a comment --><ul><li>parser.c 92%</li><li>lexer.c 78%</li></ul></body></html>"))
+         (opened nil)
+         (agent-ui-open-page-function (lambda (p) (setq opened p)))
+         (element (list :type "html" :file file :lines 3))
+         (text (agent-ui-render element (agent-ui-context :width 300))))
+    (should (equal (substring-no-properties text)
+                   (concat "◫ Coverage & report\n" (abbreviate-file-name file) "\n"
+                           "Coverage: 87%\nLines covered: 4,120 of 4,735.\nparser.c 92%")))
+    ;; Its title opens it.
+    (funcall (get-text-property 2 'agent-ui-action text))
+    (should (equal opened file)))
+  ;; A URL: its address.
+  (should (equal (+test-aue-draw '(:type "html" :url "https://example.com/report"))
+                 "◫ https://example.com/report\nhttps://example.com/report"))
+  (should (string-suffix-p "(not found)" (+test-aue-draw '(:type "html" :file "/no/page.html"))))
+  (should (string-match-p "give a file or a url" (+test-aue-error '(:type "html"))))
+  (should (string-match-p "give a file or a url" (+test-aue-error '(:type "html" :file "a" :url "b")))))
+

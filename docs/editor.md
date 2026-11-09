@@ -50,7 +50,7 @@ Click a mark to jump to it, drag the band to scroll. Try it: `M-x +my/example-st
 ## Notices
 
 Notices at the top of a window, with action buttons. Markdown files offer the [live preview](markdown.md); HTML files
-offer to open them in your browser; files with lines over 5,000 characters open plain, and offer to wrap them or open
+offer to open them in your browser (`M-x +my/html-open-in-emacs` shows one in WebKit, in a pane); files with lines over 5,000 characters open plain, and offer to wrap them or open
 them normally. Try it: `M-x +my/example-banner`.
 
 ![Notices of each kind at the top of a window](../examples/banner.png)

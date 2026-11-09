@@ -47,7 +47,11 @@ with a line saying so."
 (defconst agent-ui--reserved '(:id :type :title :source)
   "Keys every element may have; no type's property is named so.")
 
-(defconst agent-ui--kinds '(string number integer boolean list any)
+(defvar agent-ui-file-directory nil
+  "The directory a `file' property's relative name is in (nil: the current
+buffer's): while a request is answered, the agent's.")
+
+(defconst agent-ui--kinds '(string number integer boolean list any file)
   "The kinds of property, with (choice SYMBOL...).")
 
 (cl-defstruct (agent-ui-prop (:constructor agent-ui--make-prop))
@@ -217,11 +221,16 @@ Signals `agent-ui-error' if there's none."
                                 type (substring (symbol-name (agent-ui-prop-key prop)) 1)
                                 (pcase kind
                                   ('integer "an integer") ('any "anything") ('list "a list")
+                                  ('file "a file's name")
                                   ((pred symbolp) (concat "a " (symbol-name kind)))
                                   (_ (agent-ui--kind-name kind)))
                                 (agent-ui--show-value value))))
       (pcase kind
         ('string (if (stringp value) value (bad)))
+        ;; Absolute: relative to the agent's directory.
+        ('file (if (and (stringp value) (not (string-empty-p value)))
+                   (expand-file-name value agent-ui-file-directory)
+                 (bad)))
         ('number (if (numberp value) value (bad)))
         ('integer (if (integerp value) value (bad)))
         ('boolean (pcase value ('t t) ((or :false 'nil) nil) (_ (bad))))
@@ -437,6 +446,30 @@ center."
         ((floatp number)
          (string-trim-right (string-trim-right (format "%.2f" number) "0+") "\\."))
         (t (format "%s" number))))
+
+(defvar-keymap agent-ui-button-map
+  :doc "Keys of an element's button: its action."
+  "RET" #'agent-ui-button-press
+  "<mouse-1>" #'agent-ui-button-press
+  "<follow-link>" 'mouse-face)
+
+(defun agent-ui-button (text action &optional help)
+  "TEXT, a button: RET or a click on it calls ACTION (a function of no
+argument); HELP said in the echo area."
+  (propertize text
+              'agent-ui-action action
+              'keymap agent-ui-button-map
+              'mouse-face 'highlight
+              'help-echo (or help "RET: open")))
+
+(defun agent-ui-button-press (&optional event)
+  "Call the action of the button at point (or EVENT's)."
+  (interactive (list last-nonmenu-event))
+  (let* ((pos (if (mouse-event-p event) (posn-point (event-end event)) (point)))
+         (action (get-text-property pos 'agent-ui-action
+                                    (if (mouse-event-p event) (window-buffer (posn-window (event-end event)))
+                                      (current-buffer)))))
+    (if action (funcall action) (user-error "Nothing to do here"))))
 
 (defun agent-ui-cell (value)
   "VALUE (a JSON scalar) as text: a number formatted, true and false, null
