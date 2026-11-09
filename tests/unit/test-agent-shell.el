@@ -310,6 +310,27 @@ Draw images to read well on it: a light or transparent background, dark text and
 
 ;; ====== THE SYSTEM PROMPT ======
 
+;; ====== THE PROMPT ======
+
+(ert-deftest agent-shell/no-snippets-in-the-prompt ()
+  "yasnippet stays off in Claude Code's buffers (its completion, Doom's
+`yasnippet-capf', stalled typing in long sessions); elsewhere as ever."
+  (require 'yasnippet)
+  (should (memq #'+my/agent-shell-no-snippets-p yas-dont-activate-functions))
+  ;; yasnippet's own still there.
+  (should (memq #'minibufferp yas-dont-activate-functions))
+  ;; Buffers of their own: yasnippet skips temporary ones.
+  (dolist (case '((agent-shell-mode . nil) (text-mode . t)))
+    (let ((buffer (generate-new-buffer "yas-test")))
+      (unwind-protect
+          (with-current-buffer buffer
+            (if (eq (car case) 'agent-shell-mode)
+                (setq-local major-mode 'agent-shell-mode)
+              (funcall (car case)))
+            (yas-minor-mode-on)
+            (should (eq (and yas-minor-mode t) (cdr case))))
+        (kill-buffer buffer)))))
+
 ;; ====== CONTEXT FROM THE CURRENT BUFFER ======
 
 (ert-deftest agent-shell/context-from-a-buffer-with-dated-lines ()
