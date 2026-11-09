@@ -1,6 +1,6 @@
 ;;; tests/unit/test-projectile.el -*- lexical-binding: t; -*-
-;; config/projectile.el: projects under ~/dev; the project's files listed
-;; without a cache; a project (SPC p p) opens on its README; each workspace
+;; config/projectile.el: no search path of its own (config.el's); the project's
+;; files listed without a cache; a project (SPC p p) opens on its README; each workspace
 ;; remembers its project (the dashboard is in the current workspace's one).
 ;; Projects are temp folders (with a .git); workspaces are persp-mode structs,
 ;; `get-current-persp' mocked; Doom's dashboard functions come from its source.
@@ -104,8 +104,15 @@ Doom's fallback buffer)."
 
 ;; ====== PROJECTS ======
 
-(ert-deftest projectile/projects-under-dev ()
-  (should (equal projectile-project-search-path '("~/dev"))))
+(ert-deftest projectile/no-search-path-of-its-own ()
+  "Where projects are is config.el's (test-config.el): loading this sets none,
+leaves one set before as it is."
+  (let ((projectile-project-search-path '("~/elsewhere")))
+    (+test-load "config/projectile")
+    (should (equal projectile-project-search-path '("~/elsewhere"))))
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "config/projectile.el" +test-root))
+    (should-not (search-forward "(setq projectile-project-search-path" nil t))))
 
 (ert-deftest projectile/no-file-cache ()
   "No cache, even after Doom's own setting (its projectile :init, before)."

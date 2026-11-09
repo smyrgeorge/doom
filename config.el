@@ -87,6 +87,10 @@
 ;; CUSTOM CONFIG ;;
 (setq default-directory "~")
 
+;; Projects: where Projectile looks for them (SPC p D discovers them there;
+;; config/projectile.el sets none).
+(setq projectile-project-search-path '("~/dev"))
+
 ;; Maximum line length: where the right margin's line is drawn and where gq /
 ;; M-q wrap text (config/editor.el). A project's .editorconfig overrides it with
 ;; max_line_length. `setq-default', not `setq': each buffer has its own.
@@ -175,7 +179,8 @@
 ;; DRAWINGS (*.excalidraw.svg, *.excalidraw: Excalidraw in WebKit, in the file's tab)
 (load! "config/excalidraw")
 
-;; PROJECTILE (projects under ~/dev, no file cache)
+;; PROJECTILE (no file cache, a project opening on its README, each workspace
+;; its project; where projects are: `projectile-project-search-path' above)
 (load! "config/projectile")
 
 ;; ISSUES (Beads, the project's issues in .beads/: SPC o i / SPC o I)

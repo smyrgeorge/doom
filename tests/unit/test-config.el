@@ -237,6 +237,11 @@ header says what loads it: config.el, or for a part its file (config/merge.el)."
     (should (= fill-column 120)))
   (should (member '(setq-default fill-column 120) (+test-config--forms))))
 
+(ert-deftest config/projects-under-dev ()
+  "Where Projectile finds projects: set here, config/projectile.el sets none."
+  (should (equal projectile-project-search-path '("~/dev")))
+  (should (member '(setq projectile-project-search-path '("~/dev")) (+test-config--forms))))
+
 (ert-deftest config/tiling-strategy-tall ()
   (should (eq +my/tiling-strategy 'tall))
   (should (eq (default-value '+my/tiling-strategy) 'tall)))

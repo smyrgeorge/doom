@@ -12,7 +12,7 @@ too.
 
 ## Projects
 
-- Projects under `~/dev` are found without adding them.
+- Projects under `~/dev` are found without adding them (`projectile-project-search-path`, set in `config.el`).
 - `SPC p p` opens the project's README, if it has one.
 - `SPC SPC` lists files created outside Emacs too.
 - Each workspace keeps its own project.

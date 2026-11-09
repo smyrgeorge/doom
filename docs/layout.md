@@ -22,7 +22,7 @@
 | `config/os.el` | What differs between macOS and Linux: [the keys](keybindings.md), other apps, the clipboard's images |
 | `config/pdf.el`, `pdf/` | [PDFs](pdf.md) |
 | `config/profiling.el`, `profiling/` | [Profiling](claude-code.md#profiling-emacs) |
-| `config/projectile.el` | [Projects](search.md#projects) |
+| `config/projectile.el`, `projectile/` | [Projects](search.md#projects) |
 | `config/search.el`, `search/` | [Search](search.md) |
 | `config/stripe.el`, `stripe/` | [Error stripe](editor.md#error-stripe) |
 | `config/terminal.el` | [Terminal](terminal.md) |
