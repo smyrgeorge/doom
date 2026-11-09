@@ -310,6 +310,41 @@ Draw images to read well on it: a light or transparent background, dark text and
 
 ;; ====== THE SYSTEM PROMPT ======
 
+;; ====== CONTEXT FROM THE CURRENT BUFFER ======
+
+(ert-deftest agent-shell/context-from-a-buffer-with-dated-lines ()
+  "SPC o c from a buffer whose lines start with a date (Beads' issue list):
+no error (dired took the line for a file's), no files."
+  (with-temp-buffer
+    (insert "    t-1 2026-11-08 open  P0 task  An issue\n")
+    (goto-char (point-min))
+    (forward-char 6)
+    (should-not (agent-shell--buffer-files))
+    (should-not (agent-shell--buffer-files :obvious t))
+    (let ((agent-shell-context-sources '(files)))
+      (should-not (agent-shell--context)))))
+
+(ert-deftest agent-shell/context-dired-s-files-in-dired ()
+  "In dired: its file at point, as agent-shell has it."
+  (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "ctx-") t)))
+         (file (expand-file-name "x.txt" dir)))
+    (with-temp-file file (insert "x\n"))
+    (let ((buffer (dired-noselect dir)))
+      (unwind-protect
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (should (search-forward "x.txt" nil t))
+            (should (equal (agent-shell--buffer-files) (list file))))
+        (kill-buffer buffer)))))
+
+(ert-deftest agent-shell/context-an-image-buffer-s-file ()
+  (let ((file (expand-file-name "pic.png" (make-temp-file (+test-tmp-file "ctx-") t))))
+    (with-temp-buffer
+      (setq buffer-file-name file)
+      (should (equal (agent-shell--buffer-files :obvious t) (list file)))
+      (should-not (agent-shell--buffer-files))
+      (set-buffer-modified-p nil))))
+
 (ert-deftest agent-shell/advice-installed ()
   (should (advice-member-p #'+my/agent-shell-claude-context-a
                            #'agent-shell-anthropic-make-claude-code-config)))

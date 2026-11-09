@@ -41,3 +41,22 @@ prompt."
           (cons `(systemPrompt . ((append . ,text)))
                 (alist-get :session-meta config))))
   config)
+
+;; CONTEXT FROM THE CURRENT BUFFER
+;; Starting a session (SPC o c), agent-shell takes what's at point as context:
+;; a region, an error, files: dired's marked ones, asked of dired in any buffer.
+;; Outside dired, dired takes a line starting with a date (an issue in Beads'
+;; list: 2026-11-08 ...) for a file's, then fails (no subdir-alist): the
+;; session never opened. Dired's files only in dired; elsewhere, as agent-shell
+;; has it (an image file buffer: its file).
+(defun +my/agent-shell-buffer-files-a (fn &rest args)
+  "`agent-shell--buffer-files': dired's files in dired only (see above)."
+  (if (derived-mode-p 'dired-mode)
+      (apply fn args)
+    (let ((file (buffer-file-name)))
+      (and (plist-get args :obvious)
+           file
+           (image-supported-file-p file)
+           (list file)))))
+
+(advice-add 'agent-shell--buffer-files :around #'+my/agent-shell-buffer-files-a)
