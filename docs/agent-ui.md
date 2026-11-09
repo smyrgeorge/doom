@@ -1,7 +1,7 @@
 # Agent UI
 
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line and MCP
-> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log` and `timeline` types, sources (an element
+> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline` and `graph` types, sources (an element
 > following a command, a file, a poll), actions (buttons into the prompt), types the agent makes (kept or discarded by
 > you), elements in the conversation, canvases kept with their sessions, and what the agent is told. `M-x
 > +my/example-agent-ui` shows it ([Examples](examples.md)).
@@ -162,6 +162,7 @@ else the canvas `default`. A session's canvas is killed with it.
 | `stats` | A row of figures with their change (▲▼, green or red by whether a rise is good): tiles in the GUI, side by side as text | `figures` |
 | `log` | Lines coloured by level (found by their words, or given), errors and warnings counted, the last ones shown; follows a file with `"into": "lines"` | `lines`, `show`, `keep` |
 | `timeline` | Tasks as bars on a time axis (seconds or timestamps), running ones growing, coloured by status, a scale under them; SVG in the GUI | `tasks` |
+| `graph` | Nodes and edges, laid out in layers by itself (no Graphviz): boxes and curved arrows in the GUI, shrunk to fit; each node's arrows as text; nodes coloured by status | `nodes`, `edges`, `direction` |
 | `diff` | Changes from a unified diff: by file (lines added and removed) and hunk, coloured, line numbers; `RET` opens the file there; a source with `"into": "diff"` follows `git diff` | `diff`, `dir` |
 | `html` | A web page as a card: its title and the start of its text; `RET` opens it in WebKit in a pane (`config/html.el`), else the browser | `file` or `url`, `lines` |
 
@@ -342,7 +343,7 @@ the types change.
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |

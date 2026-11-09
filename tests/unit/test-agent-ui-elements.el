@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice diff files html image log markdown progress stats steps table text timeline)))
+  (should (equal (agent-ui-types) '(chart choice diff files graph html image log markdown progress stats steps table text timeline)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -747,4 +747,47 @@ new file mode 100644
   (should (string-match-p "ends before it starts" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start 5 :end 1))))))
   (should (string-match-p "status is running, done" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start 0 :status "slow"))))))
   (should (string-match-p "has \"stop\"" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start 0 :stop 3)))))))
+
+;; ====== GRAPH ======
+
+(ert-deftest agent-ui-elements/graph-layout ()
+  (cl-flet ((layout (nodes edges)
+              (agent-ui-graph-layout (mapcar (lambda (id) (list :id id)) nodes)
+                                     (mapcar (lambda (e) (list :from (car e) :to (cadr e))) edges))))
+    ;; By the longest path: codegen after checker, not beside it.
+    (should (equal (layout '("lexer" "parser" "checker" "codegen")
+                           '(("lexer" "parser") ("parser" "checker") ("parser" "codegen") ("checker" "codegen")))
+                   '(("lexer") ("parser") ("checker") ("codegen"))))
+    ;; A cycle: its edge back left out, no loop.
+    (should (equal (layout '("a" "b" "c") '(("a" "b") ("b" "c") ("c" "a"))) '(("a") ("b") ("c"))))
+    ;; Unconnected nodes: the first layer.
+    (should (equal (layout '("x" "y") nil) '(("x" "y"))))
+    ;; Ordered by their parents' places (fewer crossings).
+    (should (equal (layout '("a" "b" "c" "d") '(("a" "d") ("b" "c")))
+                   '(("a" "b") ("d" "c"))))))
+
+(ert-deftest agent-ui-elements/graph ()
+  (let ((element '(:type "graph" :nodes ("lexer" "parser" (:id "checker" :status "error"))
+                   :edges (("lexer" "parser") (:from "parser" :to "checker" :label "types") ("parser" "codegen")))))
+    ;; codegen: a node only an edge names.
+    (should (equal (+test-aue-draw element)
+                   (concat "lexer   ─▶ parser\n"
+                           "parser  ─▶ checker (types), codegen\n"
+                           "checker\n"
+                           "codegen")))
+    (should (eq (+test-aue-face-at element "checker") 'agent-ui-error))
+    ;; In the GUI: a box each, an arrow each, shrunk to the pane.
+    (let ((svg (plist-get (cdr (get-text-property 0 'display (agent-ui-render element (agent-ui-context :width 20 :graphic t))))
+                          :data)))
+      (should (= 4 (cl-count ?\n (replace-regexp-in-string "<rect" "\n" svg))))
+      (should (= 3 (cl-count ?\n (replace-regexp-in-string "marker-end" "\n" svg))))
+      (should (string-match-p "<svg width=\"160\"" svg))
+      (should (string-match-p "viewBox=\"0 0 [0-9]+ [0-9]+\"" svg))))
+  (should (equal (+test-aue-draw '(:type "graph")) "no nodes")))
+
+(ert-deftest agent-ui-elements/graph-wrong ()
+  (should (string-match-p "edge 1 must be" (+test-aue-error '(:type "graph" :edges (("a"))))))
+  (should (string-match-p "node 1 must be" (+test-aue-error '(:type "graph" :nodes (3)))))
+  (should (string-match-p "status is ok, error" (+test-aue-error '(:type "graph" :nodes ((:id "a" :status "red"))))))
+  (should (string-match-p "direction must be" (+test-aue-error '(:type "graph" :direction "up")))))
 

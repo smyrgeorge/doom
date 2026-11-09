@@ -1,0 +1,240 @@
+;;; $DOOMDIR/config/agent-ui/elements/graph.el -*- lexical-binding: t; -*-
+;; Agent UI's graph: nodes and edges. Loaded from config/agent-ui/elements.el.
+;;
+;; NODES (names, or {"id", "label", "status"}) and EDGES ([from, to], or
+;; {"from", "to", "label"}); a node only an edge names is one too. Laid out
+;; by itself (no Graphviz): in layers by the longest path to each node (a
+;; cycle's edge back ignored for that), each layer's nodes ordered by their
+;; parents' places. In the GUI, an SVG: boxes, curved arrows, left to right
+;; (or down); shrunk to the pane's width. As text, each node's arrows, layer
+;; by layer. STATUS ok, error, warning, active colours a node.
+;;
+;;   lexer   ─▶ parser
+;;   parser  ─▶ checker, codegen
+;;   checker ─▶ codegen
+
+(require 'cl-lib)
+(require 'subr-x)
+(require 'svg)
+
+(defconst agent-ui-graph--statuses
+  '((none nil) (ok agent-ui-success) (error agent-ui-error) (warning agent-ui-warning) (active agent-ui-accent))
+  "Each status: its face.")
+
+(defun agent-ui-graph--check (props)
+  (let* ((nodes (cl-loop for n in (plist-get props :nodes)
+                         for i from 1
+                         collect (cond
+                                  ((and (stringp n) (not (string-blank-p n))) (list :id n :label n :status 'none))
+                                  ((and (agent-ui--plist-p n) (stringp (plist-get n :id)))
+                                   (cl-loop for (k _) on n by #'cddr
+                                            unless (memq k '(:id :label :status))
+                                            do (agent-ui--fail "graph: node %d has %s: a node has id, label, status"
+                                                               i (agent-ui--show-value (substring (symbol-name k) 1))))
+                                   (let ((status (let ((s (plist-get n :status))) (if (stringp s) (intern-soft s) (or s 'none)))))
+                                     (unless (assq status agent-ui-graph--statuses)
+                                       (agent-ui--fail "graph: node %d's status is ok, error, warning, active or none" i))
+                                     (list :id (plist-get n :id) :label (or (plist-get n :label) (plist-get n :id)) :status status)))
+                                  (t (agent-ui--fail "graph: node %d must be a name, or {\"id\": ..., \"label\": ...}" i)))))
+         (edges (cl-loop for e in (plist-get props :edges)
+                         for i from 1
+                         collect (cond
+                                  ((and (listp e) (not (agent-ui--plist-p e)) (= (length e) 2) (cl-every #'stringp e))
+                                   (list :from (car e) :to (cadr e)))
+                                  ((and (agent-ui--plist-p e) (stringp (plist-get e :from)) (stringp (plist-get e :to)))
+                                   (list :from (plist-get e :from) :to (plist-get e :to) :label (plist-get e :label)))
+                                  (t (agent-ui--fail "graph: edge %d must be [from, to], or {\"from\", \"to\", \"label\"}" i))))))
+    ;; Nodes only edges name.
+    (dolist (e edges)
+      (dolist (id (list (plist-get e :from) (plist-get e :to)))
+        (unless (cl-find id nodes :key (lambda (n) (plist-get n :id)) :test #'equal)
+          (setq nodes (append nodes (list (list :id id :label id :status 'none)))))))
+    (when (> (length nodes) agent-ui-max-rows)
+      (agent-ui--fail "graph: at most %d nodes" agent-ui-max-rows))
+    (plist-put (plist-put props :nodes nodes) :edges edges)))
+
+(defun agent-ui-graph-layout (nodes edges)
+  "NODES' layers: a list of lists of node ids, the first the nodes nothing
+points to; by the longest path to each, a cycle's edge back left out;
+each layer ordered by its nodes' parents' places."
+  (let* ((ids (mapcar (lambda (n) (plist-get n :id)) nodes))
+         (out (make-hash-table :test #'equal))
+         (state (make-hash-table :test #'equal))
+         (dag nil))
+    (dolist (e edges) (push (plist-get e :to) (gethash (plist-get e :from) out)))
+    ;; Edges back (to a node being visited) left out: what's left has no cycle.
+    (cl-labels ((visit (id)
+                  (puthash id 'visiting state)
+                  (dolist (to (reverse (gethash id out)))
+                    (pcase (gethash to state)
+                      ('visiting)
+                      ((or 'done (pred null))
+                       (push (cons id to) dag)
+                       (unless (gethash to state) (visit to)))))
+                  (puthash id 'done state)))
+      (dolist (id ids) (unless (gethash id state) (visit id))))
+    (let ((layer (make-hash-table :test #'equal))
+          (changed t))
+      (dolist (id ids) (puthash id 0 layer))
+      ;; Longest path: relax until nothing moves (no cycle left: it ends).
+      (while changed
+        (setq changed nil)
+        (dolist (edge dag)
+          (when (<= (gethash (cdr edge) layer) (gethash (car edge) layer))
+            (puthash (cdr edge) (1+ (gethash (car edge) layer)) layer)
+            (setq changed t))))
+      (let* ((depth (1+ (apply #'max 0 (hash-table-values layer))))
+             (layers (cl-loop for d below depth
+                              collect (seq-filter (lambda (id) (= (gethash id layer) d)) ids)))
+             (place (make-hash-table :test #'equal)))
+        (cl-loop for l in layers
+                 collect (let ((ordered
+                                (if (null (hash-table-keys place)) l
+                                  ;; By the mean place of the nodes pointing to it.
+                                  (cl-stable-sort
+                                   (copy-sequence l) #'<
+                                   :key (lambda (id)
+                                          (let ((ps (delq nil (mapcar (lambda (e) (and (equal (cdr e) id) (gethash (car e) place)))
+                                                                      dag))))
+                                            (if ps (/ (float (apply #'+ ps)) (length ps)) 1e9)))))))
+                           (cl-loop for id in ordered for i from 0 do (puthash id i place))
+                           ordered))))))
+
+(defun agent-ui-graph--node (nodes id)
+  (cl-find id nodes :key (lambda (n) (plist-get n :id)) :test #'equal))
+
+(defun agent-ui-graph--text (props ctx)
+  (let* ((nodes (plist-get props :nodes))
+         (edges (plist-get props :edges))
+         (width (plist-get ctx :width)))
+    (if (null nodes)
+        (propertize "no nodes" 'face 'agent-ui-muted)
+      (let* ((order (apply #'append (agent-ui-graph-layout nodes edges)))
+             (name-width (min (apply #'max (mapcar (lambda (n) (string-width (plist-get n :label))) nodes)) (/ width 3))))
+        (mapconcat
+         (lambda (id)
+           (let* ((node (agent-ui-graph--node nodes id))
+                  (face (cadr (assq (plist-get node :status) agent-ui-graph--statuses)))
+                  (targets (mapcar (lambda (e)
+                                     (let ((to (agent-ui-graph--node nodes (plist-get e :to))))
+                                       (concat (propertize (plist-get to :label)
+                                                           'face (cadr (assq (plist-get to :status) agent-ui-graph--statuses)))
+                                               (if (plist-get e :label)
+                                                   (propertize (format " (%s)" (plist-get e :label)) 'face 'agent-ui-muted)
+                                                 ""))))
+                                   (seq-filter (lambda (e) (equal (plist-get e :from) id)) edges)))
+                  ;; Padded only before its arrows: no spaces at a line's end.
+                  (name (if targets (agent-ui-pad (plist-get node :label) name-width) (plist-get node :label))))
+             (agent-ui-truncate
+              (concat (if face (propertize name 'face face) name)
+                      (if targets (concat (propertize " ─▶ " 'face 'agent-ui-muted) (string-join targets ", ")) ""))
+              width)))
+         order "\n")))))
+
+(defun agent-ui-graph--gui (props ctx)
+  (let ((nodes (plist-get props :nodes))
+        (edges (plist-get props :edges)))
+    (if (null nodes)
+        (agent-ui-graph--text props ctx)
+      (let* ((cw (plist-get ctx :char-width)) (lh (plist-get ctx :line-height))
+             (down (equal (plist-get props :direction) "down"))
+             (layers (agent-ui-graph-layout nodes edges))
+             (box-w (lambda (id) (* cw (+ 2 (string-width (plist-get (agent-ui-graph--node nodes id) :label))))))
+             (box-h (* 2 lh))
+             (gap-a (* 6 cw)) (gap-b (round (* 0.8 lh)))
+             (where (make-hash-table :test #'equal))
+             (depth (make-hash-table :test #'equal))
+             (along 0) (across-max 0))
+        (cl-loop for layer in layers for d from 0 do (dolist (id layer) (puthash id d depth)))
+        ;; Each layer a column (or a row, down); its nodes stacked across it.
+        (dolist (layer layers)
+          (let ((size (if down box-h (apply #'max (mapcar box-w layer))))
+                (across 0))
+            (dolist (id layer)
+              (let ((w (funcall box-w id)))
+                (puthash id (if down (list across along w box-h) (list along across w box-h)) where)
+                (setq across (+ across (if down w box-h) (if down gap-a gap-b)))))
+            (setq across-max (max across-max across)
+                  along (+ along size (if down (* 2 gap-b) gap-a)))))
+        (let* ((long (seq-some (lambda (e) (> (abs (- (gethash (plist-get e :to) depth) (gethash (plist-get e :from) depth))) 1))
+                               edges))
+               ;; Room for the arcs of edges skipping a layer: above the rows
+               ;; (beside the columns, down).
+               (arc (if long (round (* 0.9 box-h)) 0))
+               ;; Both sides: from the first row (column) an arc goes over it, from the others under them.
+               (natural-w (+ (if down across-max along) (if down (* 2 arc) 0)))
+               (natural-h (+ (if down along across-max) (if down 0 (* 2 arc))))
+               (pane (* cw (plist-get ctx :width)))
+               (scale (min 1.0 (/ (float pane) (max 1 natural-w))))
+               (svg (svg-create (round (* scale natural-w)) (round (* scale natural-h))
+                                :viewBox (format "0 0 %d %d" natural-w natural-h)))
+               (fg (agent-ui-chart--color 'default)) (muted (agent-ui-chart--color 'agent-ui-muted))
+               (fill (agent-ui-progress--blend (or (face-background 'default nil t) "black") fg 0.07)))
+          (svg--append svg (dom-node 'defs nil
+                                     (dom-node 'marker '((id . "arrow") (viewBox . "0 0 10 10") (refX . "10") (refY . "5")
+                                                         (markerWidth . "7") (markerHeight . "7") (orient . "auto"))
+                                               (dom-node 'path `((d . "M0,0 L10,5 L0,10 z") (fill . ,muted))))))
+          ;; The arcs' room: everything moved past it.
+          (when long
+            (maphash (lambda (id box)
+                       (puthash id (if down (cons (+ (car box) arc) (cdr box))
+                                     (list (car box) (+ (cadr box) arc) (nth 2 box) (nth 3 box)))
+                                where))
+                     where))
+          (dolist (e edges)
+            (pcase-let ((`(,x1 ,y1 ,w1 ,h1) (gethash (plist-get e :from) where))
+                        (`(,x2 ,y2 ,w2 ,h2) (gethash (plist-get e :to) where)))
+              (let* ((sx (if down (+ x1 (/ w1 2.0)) (+ x1 w1))) (sy (if down (+ y1 h1) (+ y1 (/ h1 2.0))))
+                     (tx (if down (+ x2 (/ w2 2.0)) x2)) (ty (if down y2 (+ y2 (/ h2 2.0))))
+                     (back (if down (<= ty sy) (<= tx sx)))
+                     (skip (> (abs (- (gethash (plist-get e :to) depth) (gethash (plist-get e :from) depth))) 1))
+                     ;; Skipping a layer: an arc over the boxes between, not through them.
+                     (bend (if back 60 (* 0.5 (if down (- ty sy) (- tx sx))))))
+                (svg--append svg (dom-node 'path `((d . ,(cond
+                                                          ((and skip down)
+                                                           (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" sx sy (- sx (+ arc (* 0.5 w1))) (+ sy bend) (- tx (+ arc (* 0.5 w2))) (- ty bend) tx ty))
+                                                          ((and skip (= y1 arc))
+                                                           ;; From the first row: over it.
+                                                           (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" (- sx (* 0.5 w1)) (- sy (* 0.5 h1))
+                                                                   (- sx (* 0.5 w1)) (- sy (* 0.5 h1) arc) (+ tx (* 0.5 w2)) (- ty (* 0.5 h2) arc)
+                                                                   (+ tx (* 0.5 w2)) (- ty (* 0.5 h2))))
+                                                          (skip
+                                                           ;; From another row: under the rows.
+                                                           (let ((under (+ arc across-max)))
+                                                             (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" (- sx (* 0.5 w1)) (+ sy (* 0.5 h1))
+                                                                     (- sx (* 0.5 w1)) (+ under arc) (+ tx (* 0.5 w2)) (+ under arc)
+                                                                     (+ tx (* 0.5 w2)) (+ ty (* 0.5 h2)))))
+                                                          (down
+                                                           (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" sx sy sx (+ sy bend) tx (- ty bend) tx ty))
+                                                          (t
+                                                           (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" sx sy (+ sx bend) sy (- tx bend) ty tx ty))))
+                                                   (fill . "none") (stroke . ,muted) (stroke-width . "1.5")
+                                                   (marker-end . "url(#arrow)"))))
+                (when (plist-get e :label)
+                  (agent-ui-chart--svg-text svg ctx (plist-get e :label) (/ (+ sx tx) 2) (- (/ (+ sy ty) 2) 4)
+                                            :fill muted :text-anchor "middle")))))
+          (dolist (node nodes)
+            (pcase-let ((`(,x ,y ,w ,h) (gethash (plist-get node :id) where))
+                        (face (cadr (assq (plist-get node :status) agent-ui-graph--statuses))))
+              (svg-rectangle svg x y w h :rx 6 :fill fill
+                             :stroke (if face (agent-ui-chart--color face) muted) :stroke-width (if face 2 1))
+              (agent-ui-chart--svg-text svg ctx (plist-get node :label) (+ x (/ w 2.0)) (+ y (* 0.62 h))
+                                        :fill (if face (agent-ui-chart--color face) fg) :text-anchor "middle")))
+          (agent-ui-chart--image svg))))))
+
+(agent-ui-define graph
+  "A graph: NODES (names, or {\"id\", \"label\", \"status\"}) and EDGES
+\([from, to], or {\"from\", \"to\", \"label\"}); a node only an edge names is
+one too. Laid out in layers by itself: boxes and arrows in the GUI (left to
+right, or DIRECTION \"down\"), each node's arrows as text. STATUS ok,
+error, warning, active colours a node. For module dependencies, a state
+machine, a call graph."
+  :props ((nodes list "The nodes: names, or {\"id\", \"label\", \"status\"}")
+          (edges list "The edges: [from, to], or {\"from\", \"to\", \"label\"}")
+          (direction (choice right down) "The way it goes: right (default) or down" :default right))
+  :example (:title "Modules"
+            :nodes ("lexer" "parser" (:id "checker" :status "error") "codegen")
+            :edges (("lexer" "parser") ("parser" "checker") ("parser" "codegen") ("checker" "codegen")))
+  :check #'agent-ui-graph--check
+  :text #'agent-ui-graph--text
+  :gui #'agent-ui-graph--gui)

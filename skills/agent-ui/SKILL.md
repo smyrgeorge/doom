@@ -185,6 +185,17 @@ colours it. For CI jobs, parallel test shards, a trace's spans; update the eleme
 agent-ui show '{"id":"ci","type":"timeline","title":"CI","tasks":[{"name":"build","start":0,"duration":8},{"name":"test-1","start":8,"duration":14},{"name":"test-2","start":8,"duration":11,"status":"failed"},{"name":"deploy","start":22,"duration":4,"status":"queued"}]}'
 ```
 
+### `graph`
+
+Nodes and edges: `nodes` are names, or `{"id", "label", "status"}` (status ok, error, warning, active colours one);
+`edges` are `[from, to]`, or `{"from", "to", "label"}`; a node only an edge names is one too. Laid out in layers by
+itself: boxes and arrows in the GUI (left to right, or `"direction": "down"`), each node's arrows as text. For module
+dependencies, a state machine, a call graph (a few dozen nodes at most).
+
+```sh
+agent-ui show '{"id":"deps","type":"graph","title":"Modules","nodes":["lexer","parser",{"id":"checker","status":"error"},"codegen"],"edges":[["lexer","parser"],["parser","checker"],["parser","codegen"],["checker","codegen"]]}'
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines
