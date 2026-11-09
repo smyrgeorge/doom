@@ -1,0 +1,232 @@
+# Agent UI
+
+> **Status: being built** (epic `doom-nwj`). Built: the element types' registry, the canvas, the command line, the
+> sessions' canvases, and the `progress`, `steps` and `table` types. Not yet: `text`, `markdown`, `chart`, and telling
+> the agent about it (its system prompt, a skill).
+
+A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
+bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
+beside its session, through a small command line. Everything works in a terminal (`emacs -nw`); the GUI draws some
+elements better (charts as SVG) and has elements of its own (images, drawings, web pages).
+
+## The model
+
+- An **element** is data: a JSON object with a `type`, an `id` and the type's properties. The agent never writes Lisp
+  for the common case, and an element can be saved and shown again.
+- An **element type** (`progress`, `table`...) is defined once in Lisp: its properties, a function drawing it as text,
+  and optionally one drawing it for the GUI. The types form a **registry**, from which the agent's catalog is made.
+- A **canvas** is a buffer per agent-shell session, shown in a [tiled](editor.md#tiling) pane beside it, without taking
+  the focus. It holds the session's elements in the order they were shown. Showing an element with an id already there
+  replaces it in place; updating it redraws only that element.
+
+## Elements as JSON
+
+```json
+{"id": "build", "type": "progress", "title": "Build", "value": 3, "max": 12, "label": "compiling parser.c"}
+```
+
+| Key | |
+|---|---|
+| `id` | A name of the agent's choice (`[a-z0-9_-]+`), unique in its canvas. Omitted: one is made and returned |
+| `type` | An element type of the registry |
+| `title` | Optional, any type: a heading line above the element |
+| anything else | The type's properties. An unknown one is an error naming the type's properties, so the agent learns them |
+
+**Updates** are partial: an object with the `id` and the properties that change, merged into the element's
+(shallowly: a list given replaces the list). A property set to `null` goes back to its default.
+
+**Appends** add to an element's list properties (a table's `rows`, a chart's `values`) without sending them all again.
+A table with a `key` column replaces a row with the same key instead of adding one, so a row can change state:
+`parser` *running*, then `parser` *passed*.
+
+## The command line
+
+`cmd/agent-ui` (the system prompt gives its full path). JSON comes on stdin or as the last argument; the reply is JSON
+on stdout, the exit status 0 or 1.
+
+```sh
+agent-ui show '{"id":"build","type":"progress","title":"Build","max":12}'
+agent-ui update build '{"value":5,"label":"linking"}'
+agent-ui append tests '{"rows":[["lexer","passed","0.4s"]]}'
+agent-ui remove build
+agent-ui clear                 # every element of the canvas
+agent-ui list                  # the canvas's elements: id, type
+agent-ui types [TYPE]          # the catalog: each type, its properties, an example
+agent-ui batch < ops.json      # several operations, one trip to Emacs
+```
+
+A batch is an array of operations, each an object with its `op` and what it takes, flat:
+
+```json
+[{"op": "show", "id": "build", "type": "progress", "max": 12},
+ {"op": "update", "id": "build", "value": 3},
+ {"op": "append", "id": "tests", "rows": [["lexer", "passed"]]},
+ {"op": "remove", "id": "old"}]
+```
+
+Its reply has each one's: `{"ok": true, "results": [{"ok": true, "id": "build"}, ...]}`, `ok` false if one failed
+(the others are done).
+
+| Reply | |
+|---|---|
+| `{"ok": true, "id": "build"}` | Done |
+| `{"ok": false, "error": "progress: unknown property \"total\"; its properties: value, max, label, unit, status"}` | Not done, and why |
+
+Its exit status: 0 done, 1 not done (the reply says why), 2 a wrong use (an unknown operation, an argument missing),
+3 no Emacs to talk to. Each error is a reply too, on stdout.
+
+**How it reaches Emacs.** The script writes the request in a temporary folder (`request`: the operation, the id, the
+session, the directory, a line each; `payload`: the JSON as given) and runs `emacsclient --eval '(agent-ui-request
+"FOLDER")'`; Emacs writes its `reply` there. No JSON is ever quoted into Lisp, whatever it holds.
+Without an Emacs server it fails with a clear error.
+
+**Which canvas.** agent-shell starts the agent with `AGENT_UI_SESSION` in its environment (advice on the client
+agent-shell makes), naming its session after its buffer; the agent's shell inherits it, so the script finds its
+session's canvas, `Agent UI: SESSION`. Without it (a session started before Agent UI was loaded, an agent in a
+terminal), the session working in the script's directory or above it (the deepest; of those, the most recently used),
+else the canvas `default`. A session's canvas is killed with it.
+
+**In Lisp,** the same operations: `(agent-ui-show SPEC)`, `(agent-ui-update ID PATCH)`, `(agent-ui-append ID PATCH)`,
+`(agent-ui-remove ID)`, each taking an optional `:canvas`. SPEC and PATCH are plists (`(:type progress :value 3)`), as
+`json-parse-string` makes them with `:object-type 'plist`.
+
+## The canvas
+
+- **Its buffer** is `*agent-ui: SESSION*`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
+  time an element is shown (an application of `+my/tiling-apps`), without taking the focus, and again if it was closed.
+  `q` hides it; it closes with its session.
+- **Each element** is the text between two markers, its id in a text property. Drawing replaces that text only;
+  point and each window's scroll stay where they were.
+- **Redraws are throttled:** an update marks the element dirty, and a timer (`agent-ui-redraw-delay`, 0.1s) redraws the
+  dirty ones. A hundred updates a second cost ten redraws.
+- **Animated elements** (a spinner, an indeterminate bar) are redrawn by one timer of the canvas, running only while one
+  is shown in a window.
+- **The width** is the canvas window's; its elements are drawn again when it changes size.
+- **Terminal or GUI** is decided by the frame showing the canvas (`display-graphic-p`). A type without a GUI drawing
+  draws as text in both.
+
+## Defining a type
+
+```elisp
+(agent-ui-define progress
+  "A progress bar: VALUE of MAX. Without MAX, it runs without an end (indeterminate)."
+  :props ((value  number "Done so far" 0)
+          (max    number "The total; none: indeterminate")
+          (label  string "What's being done now")
+          (status (choice running done failed) "Its colour" running))
+  :example (:title "Build" :value 5 :max 12 :label "linking")
+  :animated (lambda (props) (null (plist-get props :max)))
+  :check (lambda (props) ...)       ; optional: more than each property's kind
+  :append (lambda (element patch) ...) ; optional: how its lists grow
+  :text (lambda (props ctx) ...)    ; a propertized string
+  :gui  (lambda (props ctx) ...))   ; optional: a string with an image
+```
+
+- **`:props`** list each property: its name, its kind (`string`, `number`, `boolean`, `list`, `(choice A B...)`), a line
+  saying what it is (in the catalog the agent reads), and a default. A spec is checked against them before drawing.
+- **`:check`** checks what each property's kind can't (a list's items, properties that go together), signalling
+  `agent-ui-error` with what's wrong; it may return the properties normalized (a step's status as a symbol). Inside a
+  list, JSON's `false` stays `:false`, for the type to show.
+- **`:append`** says how `agent-ui append` adds to it (a table's rows by key); without it, each list is added to.
+- **`:text` and `:gui`** take the element's properties (checked, defaults filled) and a context: `:width` in
+  characters, `:graphic`, `:tick` for animations, the theme's colours. They return the text to insert; they don't touch
+  the buffer. So a type is tested by calling them.
+- **Errors are contained:** a drawing that signals shows the error in the element's place, in the error face; the
+  canvas and its other elements go on.
+- **Limits** keep a drawing quick, as it runs in Emacs's only thread: a table's rows, a chart's values, a text's length
+  are capped (`agent-ui-max-rows`...), with a line saying what was left out.
+
+## The first types
+
+| Type | What | Properties |
+|---|---|---|
+| `text` | A paragraph | `text`, `face` (plain, muted, success, warning, error) |
+| `markdown` | Markdown, drawn as agent-shell draws replies | `markdown` |
+| `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it | `columns`, `rows`, `key`, `align` |
+| `progress` | A bar, or a run without an end | `value`, `max`, `label`, `unit`, `status` |
+| `steps` | A checklist whose steps change state; appending a step by its name changes it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":...}]` |
+| `chart` | A sparkline, bars or lines | `kind`, `values` or `series`, `labels` |
+
+Later ([the epic](#later)): images, drawings, web pages in the GUI, with a text stand-in in a terminal.
+
+## Examples
+
+**A build**, its bar moving as the agent learns more:
+
+```sh
+agent-ui show '{"id":"build","type":"progress","title":"Build","max":12}'
+agent-ui update build '{"value":7,"label":"linking"}'
+agent-ui update build '{"value":12,"status":"done","label":"done in 41s"}'
+```
+
+```text
+Build
+███████████████░░░░░░░░░░░  7/12  58%  linking
+```
+
+**Tests as they run**, one row per test, changing state by its key:
+
+```sh
+agent-ui show '{"id":"tests","type":"table","title":"Tests","columns":["Test","Result","Time"],"key":0,"rows":[]}'
+agent-ui append tests '{"rows":[["lexer","passed","0.4s"],["parser","running",""]]}'
+agent-ui append tests '{"rows":[["parser","failed","1.2s"]]}'
+```
+
+```text
+Tests
+ Test    │ Result │ Time
+─────────┼────────┼──────
+ lexer   │ passed │ 0.4s
+ parser  │ failed │ 1.2s
+```
+
+**A chart**, as text in a terminal and as SVG in the GUI:
+
+```sh
+agent-ui show '{"id":"latency","type":"chart","title":"p95 latency (ms)","kind":"bar",
+                "labels":["mon","tue","wed","thu"],"values":[120,95,180,60]}'
+```
+
+```text
+p95 latency (ms)
+mon  ████████████████          120
+tue  ████████████▋              95
+wed  ████████████████████████  180
+thu  ████████                   60
+```
+
+## What the agent is told
+
+A short paragraph in its system prompt (`+my/agent-shell-claude-context-functions`): the canvas exists, the script's
+path, and when to use it rather than Markdown in a reply: for what changes over time or stays in view while the
+conversation scrolls. The full catalog, from `agent-ui types`, is in a skill (`skills/agent-ui/`), read when needed.
+
+## Later
+
+- **Elements following a source** (`doom-nwj.11`). The agent's tool calls run one after another: a bar it updates
+  itself stands still while it waits on a long command. An element can follow a command's output, a file or a polling
+  command instead: `"source": {"command": "make", "progress": "REGEXP"}`.
+- **Types made by the agent** (`doom-nwj.13`). The agent writes an `agent-ui-define` into a staging folder and loads it,
+  checked by the byte compiler first. You review staged types with a preview: keep moves one into `config/agent-ui/`
+  (with an issue for its tests and documentation), discard deletes it.
+- **In the conversation** (`doom-nwj.14`): an element, or a snapshot of it, in the agent-shell buffer itself.
+- **MCP** (`doom-nwj.15`): the same operations as tools with schemas, given to each session through
+  `agent-shell-mcp-servers`.
+- **Back after a restart:** a canvas's elements are data, so it can be saved with the session's transcript and shown
+  again when the session resumes.
+- **Actions:** a button in an element that puts text into the session's prompt ("Retry the failing tests").
+
+## Files
+
+| Path | What |
+|---|---|
+| `config/agent-ui.el` | Settings and keys; loads `config/agent-ui/` |
+| `config/agent-ui/core.el` | The registry, `agent-ui-define`, checking specs, containing errors |
+| `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws |
+| `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
+| `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `progress`, `steps`, `table` |
+| `cmd/agent-ui` | The command line |
+| `skills/agent-ui/` | The catalog, for the agent |
+
+`core.el`, `canvas.el` and the elements don't use Doom, so they can become a package of their own.

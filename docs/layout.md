@@ -5,6 +5,7 @@
 | `init.el`, `packages.el` | Doom modules and extra packages |
 | `config.el` | The main config; loads `config/` |
 | `config/agent-shell.el`, `agent-shell/` | [Claude Code](claude-code.md), drawing for it, its issues |
+| `config/agent-ui.el`, `agent-ui/` | [Agent UI](agent-ui.md): what the agent shows beyond its replies (being built) |
 | `config/notify.el`, `notify/` | [Notifications](notifications.md) on the desktop while Emacs isn't in front |
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
 | `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |

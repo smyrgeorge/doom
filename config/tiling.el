@@ -73,6 +73,7 @@
     +my/excalidraw-mode                 ; drawings (Option+Enter, C-c C-d)
     (magit-mode . +my/tiling-magit-new-pane-p) ; magit (SPC g g, SPC g d...)
     beads-list-mode                     ; issues (SPC o i, config/beads.el)
+    agent-ui-canvas-mode                ; Agent UI's canvas (config/agent-ui.el)
     (beads-detail-mode . +my/tiling-beads-issue-new-pane-p) ; an issue (RET there)
     (beads-detail-vui-mode . +my/tiling-beads-issue-new-pane-p))
   "Applications (see TILING FIRST above): major modes (and the modes derived

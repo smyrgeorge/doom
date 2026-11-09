@@ -161,6 +161,9 @@
 ;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
 (load! "config/agent-shell")
 
+;; AGENT UI (what the agent shows beyond its replies: progress, tables, charts)
+(load! "config/agent-ui")
+
 ;; NOTIFICATIONS (on the desktop while Emacs isn't in front: Claude Code
 ;; finished, or needs your permission; SPC t n)
 (load! "config/notify")

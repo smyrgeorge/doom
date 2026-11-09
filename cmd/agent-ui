@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Show things in Emacs beside an agent's session: progress bars, tables,
+# checklists, on its canvas (config/agent-ui.el). For coding agents, from their
+# shell. See docs/agent-ui.md.
+#
+#   agent-ui show [JSON]          show an element: {"id":..., "type":..., ...}
+#                                 (its id there already: replaced in place)
+#   agent-ui update ID [JSON]     change some of its properties ({"value": 5});
+#                                 null puts one back to its default
+#   agent-ui append ID [JSON]     add to its lists ({"rows": [[...]]})
+#   agent-ui remove ID            remove it
+#   agent-ui clear                remove every element
+#   agent-ui list                 the canvas's elements: their ids and types
+#   agent-ui types [TYPE]         the element types: properties, an example
+#   agent-ui batch [JSON]         several at once: [{"op": "show", ...},
+#                                 {"op": "update", "id": ..., ...}, ...]
+#
+# JSON is the last argument, or comes on stdin. The reply is JSON on stdout:
+# {"ok": true, "id": ...}, or {"ok": false, "error": "what's wrong"}.
+#
+# Exit status: 0 done, 1 not done (the reply says why), 2 a wrong use,
+# 3 no Emacs to talk to (it runs as a server: M-x server-start).
+#
+# AGENT_UI_SESSION (set by agent-shell for its agents) names the session whose
+# canvas it is; without it, the session working in this directory's. EMACSCLIENT
+# (default: emacsclient) is the client, EMACS_SOCKET_NAME its server.
+
+set -u
+
+usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p;}' "$0"; }
+
+json_string() {  # json_string TEXT: TEXT as a JSON string
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\t'/\\t}
+  printf '"%s"' "$s"
+}
+
+fail() {  # fail STATUS MESSAGE: the reply for an error, and exit
+  printf '{"ok":false,"error":%s}\n' "$(json_string "$2")"
+  exit "$1"
+}
+
+[ $# -eq 0 ] && { usage >&2; exit 2; }
+case "$1" in -h|--help|help) usage; exit 0 ;; esac
+
+op=$1; shift
+id="" json="" takes_json=0
+case "$op" in
+  show|batch)
+    takes_json=1
+    [ $# -gt 1 ] && fail 2 "$op: too many arguments (JSON only)"
+    [ $# -eq 1 ] && json=$1 ;;
+  update|append)
+    takes_json=1
+    [ $# -lt 1 ] && fail 2 "$op: which element? agent-ui $op ID [JSON]"
+    [ $# -gt 2 ] && fail 2 "$op: too many arguments (ID, then JSON)"
+    id=$1
+    [ $# -eq 2 ] && json=$2 ;;
+  remove)
+    [ $# -ne 1 ] && fail 2 "remove: agent-ui remove ID"
+    id=$1 ;;
+  types)
+    [ $# -gt 1 ] && fail 2 "types: agent-ui types [TYPE]"
+    id=${1:-} ;;
+  clear|list)
+    [ $# -gt 0 ] && fail 2 "$op: takes no arguments" ;;
+  *)
+    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch" ;;
+esac
+case "$id" in *$'\n'*) fail 2 "an id is one line" ;; esac
+
+if [ "$takes_json" = 1 ] && [ -z "$json" ]; then
+  [ -t 0 ] && fail 2 "$op: give JSON as the last argument, or on stdin"
+  json=$(cat)
+fi
+
+dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-ui.XXXXXXXXXX") || fail 3 "no temp folder"
+trap 'rm -rf "$dir"' EXIT
+printf '%s\n%s\n%s\n%s\n' "$op" "$id" "${AGENT_UI_SESSION:-}" "$PWD" >"$dir/request"
+[ "$takes_json" = 1 ] && printf '%s' "$json" >"$dir/payload"
+
+# The folder as a Lisp string.
+lisp_dir=${dir//\\/\\\\}
+lisp_dir=${lisp_dir//\"/\\\"}
+out=$("${EMACSCLIENT:-emacsclient}" --timeout=30 --eval \
+        "(if (fboundp 'agent-ui-request) (agent-ui-request \"$lisp_dir\") 'agent-ui-not-loaded)" 2>&1)
+status=$?
+
+if [ -f "$dir/reply" ]; then
+  cat "$dir/reply"
+  grep -q '^{"ok":true' "$dir/reply" && exit 0
+  exit 1
+fi
+case "$out" in
+  *agent-ui-not-loaded*) fail 3 "Emacs runs, but without Agent UI (config/agent-ui.el)" ;;
+esac
+[ $status -ne 0 ] && fail 3 "no Emacs server answered (M-x server-start): ${out//$'\n'/ }"
+fail 3 "Emacs didn't answer: ${out//$'\n'/ }"
