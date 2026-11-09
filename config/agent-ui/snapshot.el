@@ -255,7 +255,12 @@ one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
                                 :char-width (if (display-graphic-p frame) (frame-char-width frame) 8)
                                 :line-height (if (display-graphic-p frame) (frame-char-height frame) 17)))
          (dir (expand-file-name agent-ui-snapshot-directory (or directory default-directory)))
-         (file (expand-file-name (format "agent-ui-%s-%s.svg" id (format-time-string "%Y%m%d-%H%M%S")) dir))
+         (stem (format "agent-ui-%s-%s" id (format-time-string "%Y%m%d-%H%M%S")))
+         ;; Two in a second (a change between them): another name, not over it.
+         (file (let ((n 1) (f (expand-file-name (concat stem ".svg") dir)))
+                 (while (file-exists-p f)
+                   (setq f (expand-file-name (format "%s-%d.svg" stem (cl-incf n)) dir)))
+                 f))
          (title (or (plist-get element :title) id)))
     (make-directory dir t)
     (let ((coding-system-for-write 'utf-8))

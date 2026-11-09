@@ -89,7 +89,11 @@
       (should (string-prefix-p (expand-file-name ".agent-shell/images/agent-ui-build-" dir) file))
       (should (string-suffix-p ".svg" file))
       (should (string-match-p ">3/4</text><text x=\"[0-9]+\" y=\"[0-9]+\" [^>]*>75%</text>" (+test-aush-read file)))
-      (should (equal (plist-get snap :markdown) (format "![Build [main)](%s)" file))))
+      (should (equal (plist-get snap :markdown) (format "![Build [main)](%s)" file)))
+      ;; Again within the second: another file, the first kept.
+      (let ((again (plist-get (agent-ui-snapshot "build" :directory dir) :file)))
+        (should-not (equal again file))
+        (should (file-exists-p file))))
     ;; Through the command line's way in: in the agent's directory.
     (let* ((agent-ui--request-cwd dir)
            (reply (agent-ui-do "snapshot" "build" nil canvas)))
