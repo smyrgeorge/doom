@@ -530,10 +530,28 @@ mode, and why."
       (should (eql (xwidget-get x2 'fetched) 2))
       ;; The other view shows it; not the one it came from.
       (should (equal (+test-exd--run-in x1)
-                     (list (format "window.exd && exd.replace(\"%s\")\n;void 0" (+test-exd--base64 text)))))
+                     (list (format "window.exd && exd.replace(\"%s\", false)\n;void 0" (+test-exd--base64 text)))))
       (should-not (+test-exd--run-in x2))
       ;; A view loading the page anew gets it.
       (should (string-search (+test-exd--base64 text) (+test-exd--text index))))))
+
+(ert-deftest exd/another-drawing-instead-a-change-of-the-page ()
+  "`+my/excalidraw-replace' (M-p's): the buffer's text, the page told to show
+it as its change (exported again: an export asked for before, a new drawing's
+blank one, can't stand for it), the buffer modified."
+  (+test-exd
+    (let* ((buffer (+test-exd--open (+test-exd--file "instead.excalidraw.svg" +test-exd--svg)))
+           (xwidget (with-current-buffer buffer (+my/webkit-xwidget)))
+           (other "<svg>other</svg>\n"))
+      (setq +test-exd--scripts nil)
+      (with-current-buffer buffer
+        (set-buffer-modified-p nil)
+        (+my/excalidraw-replace other)
+        (should (equal (+test-exd--buffer-text buffer) other))
+        (should (buffer-modified-p)))
+      (should (equal (+test-exd--run-in xwidget)
+                     (list (format "window.exd && exd.replace(\"%s\", true)\n;void 0"
+                                   (+test-exd--base64 other))))))))
 
 (ert-deftest exd/old-or-odd-answers-change-nothing ()
   (+test-exd
@@ -743,7 +761,7 @@ answers Emacs's questions (through timers: while a save waits)."
       ;; Every view shows it.
       (dolist (xw (list x1 x2))
         (should (equal (+test-exd--run-in xw)
-                       (list (format "window.exd && exd.replace(\"%s\")\n;void 0" (+test-exd--base64 new))))))
+                       (list (format "window.exd && exd.replace(\"%s\", false)\n;void 0" (+test-exd--base64 new))))))
       (should (string-search (+test-exd--base64 new)
                              (+test-exd--text (expand-file-name "index.html" (buffer-local-value '+my/excalidraw--dir buffer))))))))
 

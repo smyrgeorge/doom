@@ -688,6 +688,32 @@ size."
       (should (equal (+test-exd--elements) '("ellipse")))
       (set-buffer-modified-p nil))))
 
+(ert-deftest e2e-exd/another-drawing-instead-a-late-answer-doesn-t-undo-it ()
+  "An answer the page gave before the other drawing was shown (a new
+drawing's blank export, on its way: CI's macOS runner) comes after it: saved,
+it's still the other drawing (the page exports it again, a newer version)."
+  (+test-exd
+    (let* ((other (+test-exd--make (+test-exd--file "other.excalidraw.svg")
+                                   "[{type: 'ellipse', x: 0, y: 0, width: 50, height: 50}]"))
+           (file (+test-exd--file "late.excalidraw.svg"))
+           (buffer (+test-exd--open file))
+           (xwidget (+test-exd--xw))
+           ;; The blank drawing's export, as the page had it.
+           (blank (with-current-buffer buffer (buffer-substring-no-properties (point-min) (point-max))))
+           (version (plist-get (+test-exd--state) :version)))
+      (with-current-buffer buffer
+        (+my/excalidraw-replace (+test-exd--file-text other))
+        (should (+test-wait-for (lambda () (equal (+test-exd--elements) '("ellipse"))) 5))
+        ;; The late answer: the blank drawing, at the page's version then.
+        (xwidget-put xwidget 'fetched (1- version))
+        (let ((+my/webkit-answering xwidget))
+          (+my/excalidraw--received (format "%d\n%s" version blank)))
+        (save-buffer))
+      (kill-buffer buffer)
+      (+test-exd--open file)
+      (should (equal (+test-exd--elements) '("ellipse")))
+      (set-buffer-modified-p nil))))
+
 ;; ====== DRAWINGS FOR CLAUDE ======
 
 (defmacro +test-exd--for-claude (&rest body)

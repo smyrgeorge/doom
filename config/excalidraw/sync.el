@@ -70,21 +70,24 @@
           (setq +my/excalidraw--save-new nil)
           (run-at-time 0 nil #'+my/excalidraw--save (current-buffer)))))))
 
-(defun +my/excalidraw--show (text &optional except)
+(defun +my/excalidraw--show (text &optional except as-change)
   "Show the drawing whose file's text is TEXT in the buffer's views, but
-EXCEPT's."
-  (let ((script (format "window.exd && exd.replace(\"%s\")" (+my/excalidraw--base64 text))))
+EXCEPT's; AS-CHANGE, as a change of theirs (a new version, exported)."
+  (let ((script (format "window.exd && exd.replace(\"%s\", %s)" (+my/excalidraw--base64 text)
+                        (if as-change "true" "false"))))
     (dolist (xwidget (+my/webkit-xwidgets))
       (unless (eq xwidget except)
         (+my/webkit-execute script xwidget)))))
 
 (defun +my/excalidraw-replace (text)
   "Show the drawing whose file's text is TEXT instead of the buffer's: its
-text, then its views' drawing; a change to save."
+text, then its views' drawing, as their change (exported again: an export
+asked for before, a new drawing's blank one, can't stand for it); a change to
+save."
   (+my/webkit-set-text (if (string-empty-p text) " " text))
   (when +my/excalidraw--dir
     (+my/excalidraw--write-page))
-  (+my/excalidraw--show text)
+  (+my/excalidraw--show text nil t)
   (set-buffer-modified-p t))
 
 (defun +my/excalidraw--flushed (version)

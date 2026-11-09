@@ -266,7 +266,12 @@
   // Another view's drawing, or the file read again: shown, not a change of
   // this one; its undo history starts there. Changes count from then on (its
   // fonts are loaded: nothing to settle; a drag going on goes on).
-  async function replace(base64) {
+  // AS-CHANGE (Emacs's M-p, another drawing instead of this one): a change,
+  // one more version, exported as after an edit. Not "what Emacs has": an
+  // export Emacs asked for before (a new drawing's blank one) could come back
+  // after it, and the earlier drawing, its version no newer, was never
+  // exported again: the blank one saved.
+  async function replace(base64, asChange) {
     if (!api) return;
     let scene;
     try {
@@ -286,10 +291,16 @@
       commitToHistory: false,
     });
     if (api.history && api.history.clear) api.history.clear();
-    content = null;
-    state.exported = state.version;      // what it shows is what Emacs has
     state.error = null;
     lastSignature = signature(background);
+    if (asChange) {
+      state.version += 1;
+      publish();
+      scheduleExport();
+      return;
+    }
+    content = null;
+    state.exported = state.version;      // what it shows is what Emacs has
     publish();
   }
 
