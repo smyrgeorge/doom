@@ -169,3 +169,35 @@
     (should (equal (agent-shell-markdown-link-url-at-point (1- (point)))
                    "agent-ui://canvas/Claude%20Agent%20%40%20doom#lat"))))
 
+;; ====== TEXT IN A TERMINAL'S COLOURS ======
+
+(ert-deftest agent-ui-snapshot/ansi-colours ()
+  ;; #RRGGBB as it is (not as the selected frame would show it).
+  (should (equal (agent-ui--ansi-rgb "#51afef") "81;175;239"))
+  (cl-letf (((symbol-function 'agent-ui-snapshot--bold-p) (lambda (face) (eq face 'bold)))
+            ((symbol-function 'agent-ui-snapshot--color)
+             (lambda (face attribute fallback)
+               (pcase (list face attribute)
+                 ('(default :foreground) "#bbc2cf") ('(default :background) "#282c34")
+                 (`(agent-ui-accent :foreground) "#51afef")
+                 (`((:background "#98be65") :background) "#98be65")
+                 (_ fallback)))))
+    (let ((text (concat (propertize "T" 'face 'bold) "\n"
+                        (propertize "██" 'face 'agent-ui-accent) " 12\n"
+                        (propertize "  " 'face '(:background "#98be65")))))
+      (should (equal (agent-ui-ansi text)
+                     (concat "\e[1mT\e[0m\n"
+                             "\e[38;2;81;175;239m██\e[0m 12\n"
+                             "\e[48;2;152;190;101m  \e[0m")))))
+  ;; Plain text: as it is.
+  (should (equal (agent-ui-ansi "plain\nlines") "plain\nlines")))
+
+(ert-deftest agent-ui-snapshot/render-ansi ()
+  (+test-aush
+    (let ((element '(:type "chart" :kind "bar" :labels ("a") :values (3) :title "T")))
+      (let ((agent-ui--request-options '("ansi")))
+        (should (string-match-p "\\`\e\\[1mT\e\\[0m\na  \e\\["
+                                (plist-get (agent-ui-do "render" nil element canvas) :text))))
+      ;; Without --ansi: plain, as before.
+      (should-not (string-match-p "\e" (plist-get (agent-ui-do "render" nil element canvas) :text))))))
+

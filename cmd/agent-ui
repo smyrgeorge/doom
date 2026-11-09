@@ -14,8 +14,10 @@
 #   agent-ui types [TYPE]        the element types: properties, an example
 #   agent-ui batch [JSON]        several at once: [{"op": "show", ...},
 #                                {"op": "update", "id": ..., ...}, ...]
-#   agent-ui render [JSON]       an element drawn as text, as the canvas
-#                                would (nothing shown): what it looks like
+#   agent-ui render [--ansi] [JSON]
+#                                an element drawn as text, as the canvas
+#                                would (nothing shown): what it looks like;
+#                                --ansi: in its colours, for a terminal
 #   agent-ui snapshot ID         the element as an image (SVG) in
 #                                .agent-shell/images/: {"file", "markdown"},
 #                                a link for your reply (shown inline)
@@ -55,7 +57,8 @@ fail() {  # fail STATUS MESSAGE: the reply for an error, and exit
 case "$1" in -h|--help|help) usage; exit 0 ;; esac
 
 op=$1; shift
-id="" json="" takes_json=0
+id="" json="" takes_json=0 options=""
+if [ "$op" = render ] && [ "${1:-}" = --ansi ]; then options=ansi; shift; fi
 case "$op" in
   show|batch|render)
     takes_json=1
@@ -95,7 +98,7 @@ fi
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-ui.XXXXXXXXXX") || fail 3 "no temp folder"
 trap 'rm -rf "$dir"' EXIT
-printf '%s\n%s\n%s\n%s\n' "$op" "$id" "${AGENT_UI_SESSION:-}" "$PWD" >"$dir/request"
+printf '%s\n%s\n%s\n%s\n%s\n' "$op" "$id" "${AGENT_UI_SESSION:-}" "$PWD" "$options" >"$dir/request"
 [ "$takes_json" = 1 ] && printf '%s' "$json" >"$dir/payload"
 
 # The folder as a Lisp string.

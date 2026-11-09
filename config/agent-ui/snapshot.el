@@ -15,6 +15,7 @@
 (require 'subr-x)
 (require 'svg)
 (require 'mailcap)
+(require 'color)
 
 ;; ====== VARIABLES ======
 
@@ -200,6 +201,47 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
               (format "<rect width=\"100%%\" height=\"100%%\" rx=\"6\" fill=\"%s\"/>" bg)
               (string-join (nreverse parts))
               "</svg>"))))
+
+;; ====== TEXT IN A TERMINAL'S COLOURS ======
+
+(defun agent-ui--ansi-rgb (color)
+  "COLOR (#RRGGBB, or a name) as \"R;G;B\", 0 to 255; nil if unknown.
+#RRGGBB read as it is: `color-name-to-rgb' gives what the selected frame
+shows, a terminal's 8 colours in one."
+  (cond
+   ((and (stringp color) (string-match "\\`#\\([[:xdigit:]]\\{2\\}\\)\\([[:xdigit:]]\\{2\\}\\)\\([[:xdigit:]]\\{2\\}\\)\\'" color))
+    (mapconcat (lambda (i) (number-to-string (string-to-number (match-string i color) 16))) '(1 2 3) ";"))
+   ((stringp color)
+    (when-let* ((rgb (color-name-to-rgb color)))
+      (mapconcat (lambda (x) (number-to-string (round (* 255 x)))) rgb ";")))))
+
+(defun agent-ui-ansi (text)
+  "TEXT with its faces as ANSI codes (24-bit colour, bold), for a terminal:
+the theme's colours; text in the default face as the terminal has it."
+  (let ((fg (agent-ui-snapshot--color 'default :foreground nil))
+        (bg (agent-ui-snapshot--color 'default :background nil)))
+    (mapconcat
+     (lambda (run)
+       (let* ((face (cdr run))
+              (fore (agent-ui-snapshot--color face :foreground fg))
+              (back (agent-ui-snapshot--color face :background bg))
+              (codes (delq nil (list (and (agent-ui-snapshot--bold-p face) "1")
+                                     (and fore (not (equal fore fg))
+                                          (when-let* ((rgb (agent-ui--ansi-rgb fore))) (concat "38;2;" rgb)))
+                                     (and back (not (equal back bg))
+                                          (when-let* ((rgb (agent-ui--ansi-rgb back))) (concat "48;2;" rgb)))))))
+         (if codes
+             (concat "\e[" (string-join codes ";") "m" (car run) "\e[0m")
+           (car run))))
+     ;; Run by run, a line at a time: each run's colour ends with it, so a
+     ;; line's end leaves the terminal's own.
+     (let ((runs nil) (first t))
+       (dolist (line (split-string text "\n"))
+         (unless first (push (cons "\n" nil) runs))
+         (setq first nil)
+         (dolist (run (agent-ui-snapshot--runs line)) (push run runs)))
+       (nreverse runs))
+     "")))
 
 ;; ====== A SNAPSHOT ======
 

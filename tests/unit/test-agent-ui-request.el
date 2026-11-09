@@ -235,6 +235,10 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
           (should (= (car run) 0))
           (should (string-match-p "\"preview\":\"b\\\\n!\"" (cdr run))))
         (should (= (car (+test-aur-run '("define" "/no/such/file.el"))) 2)))
+      ;; render --ansi: in colour.
+      (let ((run (+test-aur-run '("render" "--ansi" "{\"type\":\"text\",\"text\":\"ok\",\"face\":\"success\"}"))))
+        (should (= (car run) 0))
+        (should (string-match-p "\\\\u001b\\[" (cdr run))))
       ;; This directory's: the request says where it came from.
       (should (= (car (+test-aur-run '("remove" "p"))) 0))
       (should-not (agent-ui-elements)))))

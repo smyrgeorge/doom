@@ -39,6 +39,7 @@ agent-ui list                 # the canvas's elements: ids and types
 agent-ui types [TYPE]         # the types, their properties, an example each
 agent-ui batch JSON           # several operations at once: [{"op":"show",...}, {"op":"update","id":...,...}]
 agent-ui render JSON          # an element drawn as text, as the canvas would (nothing shown): {"ok":true,"text":...}
+                              # --ansi first: in its colours, to print in a terminal
 agent-ui define FILE          # a type of your own (see below), from FILE or stdin
 agent-ui snapshot ID          # the element as an image, for your reply: {"file":..., "markdown":"![...](...)"}
 ```

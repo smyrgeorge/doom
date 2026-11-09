@@ -59,6 +59,7 @@ agent-ui list                  # the canvas's elements: id, type
 agent-ui types [TYPE]          # the catalog: each type, its properties, an example
 agent-ui batch < ops.json      # several operations, one trip to Emacs
 agent-ui render '{"type":...}' # an element drawn as text, nothing shown: for the agent to see it
+agent-ui render --ansi '{...}' # the same in its colours (24-bit ANSI), to print in a terminal
 agent-ui define gauge.el       # a type of the agent's own (below)
 agent-ui snapshot build        # the element as an image for the agent's reply (below)
 ```

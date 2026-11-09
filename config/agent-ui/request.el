@@ -5,7 +5,8 @@
 ;;
 ;; cmd/agent-ui makes a folder holding:
 ;;   request   lines: the operation, an id, the agent's session
-;;             ($AGENT_UI_SESSION), its working directory (empty when none)
+;;             ($AGENT_UI_SESSION), its working directory, its options
+;;             (render's ansi), each empty when none
 ;;   payload   the agent's JSON, as it gave it (absent if none)
 ;; and runs emacsclient --eval '(agent-ui-request "FOLDER")'. Emacs writes
 ;; reply (JSON: {"ok": true, ...} or {"ok": false, "error": "..."}) there,
@@ -26,6 +27,9 @@
   "Called with the agent's session (a string, or nil) and its working
 directory (or nil); returns the canvas its request is for (a buffer, or a
 canvas's name). config/agent-ui/agent.el finds agent-shell's sessions.")
+
+(defvar agent-ui--request-options nil
+  "While a request is answered: its options (strings: \"ansi\").")
 
 (defvar agent-ui--request-cwd nil
   "While a request is answered: the agent's directory (its sources' default).")
@@ -108,11 +112,14 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
             (buffer (and (agent-ui--live-canvas-p canvas) (agent-ui--buffer canvas)))
             (window (and buffer (get-buffer-window buffer t))))
        (agent-ui-check type element)
-       (list :ok t :text (substring-no-properties
-                          (agent-ui-render element
-                                           (agent-ui-context
-                                            :width (if window (1- (window-max-chars-per-line window))
-                                                     agent-ui-default-width)))))))
+       (let ((text (agent-ui-render element
+                                    (agent-ui-context
+                                     :width (if window (1- (window-max-chars-per-line window))
+                                              agent-ui-default-width)))))
+         ;; --ansi: in its faces' colours, for a terminal.
+         (list :ok t :text (if (and (member "ansi" agent-ui--request-options) (fboundp 'agent-ui-ansi))
+                               (agent-ui-ansi text)
+                             (substring-no-properties text))))))
     ("snapshot"
      (append (list :ok t)
              (agent-ui-snapshot (agent-ui--need-id op id) :canvas canvas :directory agent-ui--request-cwd)))
@@ -172,6 +179,7 @@ its reply written there, as JSON. Never signals: an error is the reply."
                     (id (nth 1 lines))
                     (session (nth 2 lines))
                     (cwd (nth 3 lines))
+                    (options (split-string (or (nth 4 lines) "") " " t))
                     (payload-file (expand-file-name "payload" folder))
                     (payload (when (file-exists-p payload-file)
                                (let ((json (string-trim (agent-ui--read-file payload-file))))
@@ -183,7 +191,8 @@ its reply written there, as JSON. Never signals: an error is the reply."
                     (canvas (funcall agent-ui-canvas-function
                                      (unless (equal session "") session)
                                      (unless (equal cwd "") cwd))))
-               (let* ((agent-ui--request-cwd (unless (equal cwd "") cwd))
+               (let* ((agent-ui--request-options options)
+                      (agent-ui--request-cwd (unless (equal cwd "") cwd))
                       (agent-ui-file-directory (and agent-ui--request-cwd
                                                     (file-name-as-directory agent-ui--request-cwd))))
                  (agent-ui-do op (unless (equal id "") id) payload canvas)))
