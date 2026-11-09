@@ -3,7 +3,8 @@
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line and MCP
 > tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image` and `html` types, sources (an element
 > following a command, a file, a poll), types the agent makes (kept or discarded by you), elements in the
-> conversation, and what the agent is told. `M-x +my/example-agent-ui` shows it ([Examples](examples.md)).
+> conversation, canvases kept with their sessions, and what the agent is told. `M-x +my/example-agent-ui` shows it
+> ([Examples](examples.md)).
 
 A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
@@ -239,6 +240,14 @@ registered in `agent-shell-mcp-servers` with the session's name and directory; e
 `cmd/agent-ui`, so replies and errors are the command line's. The system prompt says the tools are there.
 `(setq +my/agent-ui-mcp nil)` in `config.el` turns them off.
 
+## Kept with the session
+
+A session's canvas is saved as it changes (a moment later, the changes together), as its elements' JSON, in the
+session's `.agent-shell/agent-ui/`, named by its ACP session id, beside agent-shell's transcripts
+(`config/agent-ui/persist.el`). When a session starts with that id (resumed: `SPC o C` with `C-u C-u`, or
+agent-shell's restart), its canvas comes back as it was. Its elements' sources aren't started again: a command isn't
+run twice. Closing a canvas, or its session, leaves what's saved; clearing it saves it empty.
+
 ## In the conversation
 
 agent-shell owns its buffer's text, so an element isn't put there: it goes the ways agent-shell already has
@@ -288,8 +297,6 @@ the types change.
 
 ## Later
 
-- **Back after a restart:** a canvas's elements are data, so it can be saved with the session's transcript and shown
-  again when the session resumes.
 - **Actions:** a button in an element that puts text into the session's prompt ("Retry the failing tests").
 
 ## Files
@@ -301,6 +308,7 @@ the types change.
 | `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
+| `config/agent-ui/persist.el` | Kept with the session: saved as it changes, back when it's resumed |
 | `config/agent-ui/snapshot.el` | In the conversation: an element as an SVG for the agent's reply, into the prompt |
 | `config/agent-ui/source.el` | Sources: an element following a command, a file, a poll |
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |

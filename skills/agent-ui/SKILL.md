@@ -12,7 +12,8 @@ description: >-
 Beside your agent-shell session, Emacs has a **canvas**: a pane of its own that opens, without taking the user's focus,
 the first time you show something. It holds **elements**, in the order you showed them. Each has an id you choose, and
 you change it in place: a progress bar moves, a table fills in, a step goes from running to done. The canvas belongs to
-your session and closes with it.
+your session and closes with it; it's kept with it too, and comes back when the session is resumed (its sources not
+started again).
 
 You drive it with one command, from your shell: **`~/.config/doom/cmd/agent-ui`** (`agent-ui` below). Each call is one
 quick round trip to Emacs; its reply is JSON on stdout.

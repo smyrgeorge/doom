@@ -45,6 +45,11 @@
 (defvar +my/agent-ui-mcp t
   "Agent UI as MCP tools in each agent-shell session (see MCP above).")
 
+;; KEPT WITH THE SESSION
+;; A session's canvas is saved as it changes, in its .agent-shell/agent-ui/
+;; (by its session id), and comes back when the session is resumed, as it was
+;; (config/agent-ui/persist.el); its sources aren't started again.
+
 ;; THE AGENT'S WAY IN
 ;; cmd/agent-ui, from the agent's shell: show, update, append, remove... an
 ;; element as JSON, the reply as JSON (config/agent-ui/request.el), through
@@ -106,6 +111,7 @@
 (load! "agent-ui/canvas")
 (load! "agent-ui/request")
 (load! "agent-ui/agent")
+(load! "agent-ui/persist")
 ;; The element types, a file each in agent-ui/elements/.
 (load! "agent-ui/elements")
 (load! "agent-ui/staging")

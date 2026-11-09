@@ -52,6 +52,10 @@ in no window: shows it, without selecting it."
   "Called in a canvas with an element's id and itself, once it's shown
 \(new, or shown again).")
 
+(defvar agent-ui-changed-hook nil
+  "Run in a canvas when its elements change: shown, updated, appended to,
+removed, cleared; not when the canvas closes.")
+
 (defvar agent-ui-removed-functions nil
   "Called in a canvas with an element's id once it's gone (removed, or its
 canvas killed).")
@@ -330,6 +334,7 @@ Signals `agent-ui-error' if ELEMENT is wrong."
           (agent-ui--draw entry (agent-ui--context))
           (agent-ui--animate)))
       (run-hook-with-args 'agent-ui-shown-functions id element)
+      (run-hooks 'agent-ui-changed-hook)
       id)))
 
 (cl-defun agent-ui-update (id patch &key canvas)
@@ -341,6 +346,7 @@ there's no such element or the change makes it wrong (then it's unchanged)."
       (setf (agent-ui--entry-element entry)
             (agent-ui--checked (agent-ui-merge (agent-ui--entry-element entry) patch)))
       (agent-ui--dirty (list id))
+      (run-hooks 'agent-ui-changed-hook)
       id)))
 
 (cl-defun agent-ui-append (id patch &key canvas)
@@ -351,6 +357,7 @@ there's no such element or the change makes it wrong (then it's unchanged)."
       (setf (agent-ui--entry-element entry)
             (agent-ui--checked (agent-ui-append-to (agent-ui--entry-element entry) patch)))
       (agent-ui--dirty (list id))
+      (run-hooks 'agent-ui-changed-hook)
       id)))
 
 (cl-defun agent-ui-remove (id &key canvas)
@@ -368,6 +375,7 @@ there's no such element or the change makes it wrong (then it's unchanged)."
             agent-ui--dirty (delete id agent-ui--dirty))
       (agent-ui--animate)
       (run-hook-with-args 'agent-ui-removed-functions id)
+      (run-hooks 'agent-ui-changed-hook)
       id)))
 
 (cl-defun agent-ui-clear (&key canvas)
