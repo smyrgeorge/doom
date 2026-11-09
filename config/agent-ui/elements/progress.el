@@ -7,6 +7,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'color)
 
 (defconst agent-ui-progress--eighths [" " "▏" "▎" "▍" "▌" "▋" "▊" "▉"]
   "A cell partly filled, by eighths.")
@@ -35,6 +36,40 @@ and fro."
     (concat (propertize (make-string at ?░) 'face 'agent-ui-muted)
             (propertize (make-string block ?█) 'face face)
             (propertize (make-string (- width at block) ?░) 'face 'agent-ui-muted))))
+
+(defun agent-ui-progress--color (face)
+  "FACE's foreground, a colour (#RRGGBB where it can say)."
+  (let ((color (face-foreground face nil 'default)))
+    (if (and (stringp color) (not (string-prefix-p "unspecified" color))) color "gray")))
+
+(defun agent-ui-progress--blend (a b share)
+  "Colour A with SHARE (0 to 1) of colour B in it."
+  (let ((ra (color-name-to-rgb a)) (rb (color-name-to-rgb b)))
+    (if (and ra rb)
+        (apply #'color-rgb-to-hex (append (cl-mapcar (lambda (x y) (+ (* x (- 1 share)) (* y share))) ra rb)
+                                          '(2)))
+      a)))
+
+(defun agent-ui-progress--seamless (text)
+  "TEXT, a bar's line, its blocks as spaces on their colour: in a graphic
+frame, glyphs drawn one by one leave seams between them."
+  (let ((bg (or (face-background 'default nil t) "black"))
+        (pos 0)
+        (out nil))
+    (while (< pos (length text))
+      (let* ((c (aref text pos))
+             (next (or (next-single-property-change pos 'face text) (length text)))
+             (run-end (let ((i pos)) (while (and (< i next) (eq (aref text i) c)) (cl-incf i)) i)))
+        (push (pcase c
+                (?█ (propertize (make-string (- run-end pos) ?\s)
+                                'face (list :background (agent-ui-progress--color (get-text-property pos 'face text)))))
+                (?░ (propertize (make-string (- run-end pos) ?\s)
+                                'face (list :background (agent-ui-progress--blend
+                                                         bg (agent-ui-progress--color 'agent-ui-muted) 0.3))))
+                (_ (substring text pos run-end)))
+              out)
+        (setq pos run-end)))
+    (apply #'concat (nreverse out))))
 
 (defun agent-ui-progress--counts (props)
   "\"7/12 files  58%\", or without a max \"37 files\" (\"\" if nothing done)."
@@ -96,4 +131,5 @@ STATUS done or failed colours it and stops it."
              (when (and max (<= max 0))
                (agent-ui--fail "progress: max must be above 0, not %s" (agent-ui-format-number max))))
            props)
-  :text #'agent-ui-progress--text)
+  :text #'agent-ui-progress--text
+  :gui (lambda (props ctx) (agent-ui-progress--seamless (agent-ui-progress--text props ctx))))

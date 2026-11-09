@@ -70,6 +70,8 @@ Claude Code keeps things in view on a canvas beside its session while it works: 
 test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
 place. It draws them with `cmd/agent-ui.sh`, which its system prompt tells it about ([more](docs/agent-ui.md)).
 
+![Agent UI: a canvas beside the conversation](examples/agent-ui.png)
+
 ### Error stripe and notices
 
 A strip at the right edge of each file maps the whole file: errors, warnings, TODOs and Git changes, with a band for

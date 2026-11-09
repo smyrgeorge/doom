@@ -72,6 +72,13 @@
     ;; Where its size can't be had (a terminal): its line, not an error.
     (should (agent-ui-snapshot-svg text ctx))))
 
+;; A run on a colour of its own (a GUI bar's): a rectangle of it.
+(ert-deftest agent-ui-snapshot/backgrounds-as-rectangles ()
+  (let ((svg (agent-ui-snapshot-svg (concat (propertize "   " 'face '(:background "#51afef")) " 50%")
+                                    (agent-ui-context :width 20 :char-width 8 :line-height 16))))
+    (should (string-match-p "<rect x=\"8\" y=\"[0-9]+\" width=\"24\" height=\"11\" fill=\"#51afef\"/>" svg))
+    (should (string-match-p ">50%</text>" svg))))
+
 ;; ====== A SNAPSHOT ======
 
 (ert-deftest agent-ui-snapshot/saved-for-the-reply ()

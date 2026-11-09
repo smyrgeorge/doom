@@ -434,3 +434,18 @@
   (should (string-match-p "give a file or a url" (+test-aue-error '(:type "html"))))
   (should (string-match-p "give a file or a url" (+test-aue-error '(:type "html" :file "a" :url "b")))))
 
+(ert-deftest agent-ui-elements/progress-seamless-in-the-gui ()
+  ;; Its blocks as spaces on their colour (glyphs leave seams); the counts
+  ;; and label as they are.
+  (let* ((text (agent-ui-render '(:type "progress" :value 1 :max 2 :label "half")
+                                (agent-ui-context :width 60 :graphic t)))
+         (plain (substring-no-properties text)))
+    (should-not (string-match-p "[█░]" plain))
+    (should (string-match-p "\\`  +1/2  50%  half\\'" plain))
+    (should (plist-get (get-text-property 0 'face text) :background))
+    ;; The gap before the counts: no colour.
+    (should-not (get-text-property (1- (string-search "1/2" plain)) 'face text))
+    (let ((empty (get-text-property (- (string-search "1/2" plain) 3) 'face text)))
+      (should (stringp (plist-get empty :background)))
+      (should-not (equal (plist-get empty :background) (plist-get (get-text-property 0 'face text) :background))))))
+

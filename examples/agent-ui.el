@@ -21,11 +21,9 @@
 
 **You:** Release v2.4: run the tests, build it, and publish it if all's well.
 
-**Agent:** On it. I'll keep the steps, the tests and the build beside us on
-the canvas while they run.
+**Agent:** On it. I'll keep the steps, the tests and the build beside us on the canvas while they run.
 
-**Agent:** `checker` fails: its test expects the old error message. I won't
-publish: the build is done, publishing waits for a fix. Shall I fix the test?
+**Agent:** `checker` fails: its test expects the old error message. I won't publish: the build is done, publishing waits for a fix. Shall I fix the test?
 "
   "release.md: the conversation the canvas goes with.")
 
@@ -76,7 +74,8 @@ publish: the build is done, publishing waits for a fix. Shall I fix the test?
         (agent-ui-append "plan" '(:steps ((:name "Build" :status "done" :detail "29s")
                                           (:name "Publish" :status "skipped" :detail "a test failed")))
                          :canvas canvas)
-        (setq +my/example-agent-ui--done t))))))
+        (setq +my/example-agent-ui--done t)
+        (message "Agent UI example: the canvas an agent fills in beside its conversation as it works; q hides it"))))))
 
 (defun +my/example-agent-ui--stop ()
   (when (timerp +my/example-agent-ui--timer)

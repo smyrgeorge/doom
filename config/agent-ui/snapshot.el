@@ -180,6 +180,13 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
           (let ((col 0)
                 (spans nil))
             (dolist (run (agent-ui-snapshot--runs line))
+              ;; A run on a colour of its own (a GUI bar's): that colour.
+              (let ((back (agent-ui-snapshot--color (cdr run) :background nil)))
+                (when (and back (not (equal back bg)))
+                  (push (format "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"%s\"/>"
+                                (+ pad (* col cw)) (+ y (round (* 0.15 lh)))
+                                (* cw (string-width (car run))) (round (* 0.7 lh)) back)
+                        spans)))
               (push (agent-ui-snapshot--run (car run) col y
                                             (agent-ui-snapshot--color (cdr run) :foreground fg)
                                             (agent-ui-snapshot--bold-p (cdr run)) cw lh)
