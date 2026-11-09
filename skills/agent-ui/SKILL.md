@@ -2,7 +2,7 @@
 name: agent-ui
 description: >-
   Show things to the user in Emacs beside your agent-shell session, on its Agent UI canvas: progress bars, checklists
-  of steps, tables, text, Markdown, each updated in place as work goes on. Use when running inside Emacs (agent-shell)
+  of steps, tables, charts, text, Markdown, each updated in place as work goes on. Use when running inside Emacs (agent-shell)
   with this Doom config, for anything that changes over time or that the user should keep in view while the
   conversation scrolls: a long build or test run, a multi-step task's progress, results arriving one by one.
 ---
@@ -87,6 +87,22 @@ agent-ui append tests '{"rows":[["lexer","passed","0.4s"]]}'
 ```
 
 `align` sets each column's: `["left","right","center"]`.
+
+### `chart`
+
+Numbers over time or side by side. `kind`: `line` (default; `values`, or several `series` each its colour),
+`bar` (one series, a bar per value, `labels` naming them) or `sparkline` (one line of the latest values). `labels` name
+the values in order, `unit` follows the numbers, `min`/`max` fix the axis, `height` is a line chart's in lines. Drawn
+as SVG in a graphic Emacs, as characters in a terminal. **For a live chart, append values**, `window` keeping the
+latest so many:
+
+```sh
+agent-ui show '{"id":"latency","type":"chart","title":"p95 latency","kind":"bar","unit":"ms","labels":["mon","tue","wed"],"values":[120,95,180]}'
+agent-ui show '{"id":"mem","type":"chart","title":"Memory","unit":"MB","window":60,"values":[]}'
+agent-ui append mem '{"values":[412]}'
+agent-ui show '{"id":"times","type":"chart","series":[{"name":"p95","values":[12,15,11]},{"name":"p50","values":[4,5,4]}]}'
+agent-ui append times '{"series":[{"name":"p95","values":[13]},{"name":"p50","values":[5]}]}'
+```
 
 ### `text`
 

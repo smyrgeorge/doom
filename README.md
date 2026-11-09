@@ -64,6 +64,12 @@ version in Git's HEAD beside it with `SPC m g` ([more](docs/images.md)).
 the same ones Claude Code and other agents read and write: filter them, preview them as you move, edit them, follow
 their dependencies ([more](docs/issues.md)).
 
+### Agent UI
+
+Claude Code keeps things in view on a canvas beside its session while it works: a checklist of its steps, a table of
+test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
+place. It draws them with `cmd/agent-ui`, which its system prompt tells it about ([more](docs/agent-ui.md)).
+
 ### Error stripe and notices
 
 A strip at the right edge of each file maps the whole file: errors, warnings, TODOs and Git changes, with a band for
@@ -142,6 +148,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Git](docs/git.md): Magit additions, a file's diff, resolving conflicts in three panes
 - [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md)
 - [Claude Code](docs/claude-code.md): sessions, drawing for Claude, profiling Emacs
+- [Agent UI](docs/agent-ui.md): what Claude shows on a canvas beside its session, and `cmd/agent-ui`
 - [Notifications](docs/notifications.md): on the desktop while you're in another app (Claude Code finished, needs you)
 - [Issues](docs/issues.md): the project's Beads issues
 - [AI agents](docs/ai-agents.md): the `emacs-profiling` skill

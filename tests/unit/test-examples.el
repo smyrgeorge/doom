@@ -11,7 +11,7 @@
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/tiling" "config/stripe"
-            "config/editor" "config/merge" "config/examples")
+            "config/editor" "config/merge" "config/agent-ui" "config/examples")
 (require 'so-long)
 (require 'tab-line)
 
@@ -149,7 +149,7 @@ images/, always that name."
   "Each example listed has its file, its command, its line in
 config/examples.el's list and docs/examples.md's table."
   (should (equal (sort (+my/examples) #'string<)
-                 '("banner" "excalidraw" "image" "markdown" "merge" "pdf" "stripe" "tiling")))
+                 '("agent-ui" "banner" "excalidraw" "image" "markdown" "merge" "pdf" "stripe" "tiling")))
   (let ((listed (with-temp-buffer
                   (insert-file-contents (expand-file-name "config/examples.el" +test-root))
                   (buffer-string)))
@@ -290,3 +290,42 @@ the last one's: the template's cells were shared), labels in their boxes."
     (should (equal (funcall get "you" 'fillStyle) "solid"))
     (should (equal (funcall get "file-label" 'containerId) "file"))
     (should (equal (funcall get "note" 'strokeColor) "#1e1e1e"))))
+
+;; ====== AGENT UI ======
+
+(ert-deftest examples/agent-ui-a-canvas-filled-in ()
+  "The conversation on the left, the canvas beside it, played out: the
+release's steps, the tests (one failed), the build done, the chart; gone
+once both are closed."
+  (+test-examples
+    (pcase-let* ((`(,conversation ,canvas) (+my/example-agent-ui))
+                 (dir (car (buffer-local-value '+my/example--closing conversation))))
+      (should (equal (buffer-name conversation) "release.md"))
+      (should (equal (buffer-name canvas) "Agent UI: example"))
+      ;; Beside it, at once, the conversation keeping the focus.
+      (should (get-buffer-window canvas))
+      (should (eq (window-buffer (selected-window)) conversation))
+      (should (+test-wait-for #'+my/example-agent-ui-ready 20))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas))
+                       '("plan" "tests" "build" "times")))
+        (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+          (should (string-match-p "✗ Run the tests +4 passed, 1 failed" text))
+          (should (string-match-p "– Publish +a test failed" text))
+          (should (string-match-p " checker │ failed │ 0.7s" text))
+          (should (string-match-p "12/12  100%  ✓ built" text))
+          (should (string-match-p "● this machine  ● CI" text))
+          (should-not (string-match-p "⚠" text))))
+      (kill-buffer canvas)
+      (should (file-exists-p dir))
+      (kill-buffer conversation)
+      (should-not (file-exists-p dir)))))
+
+(ert-deftest examples/agent-ui-stops-when-closed ()
+  (+test-examples
+    (pcase-let ((`(,conversation ,canvas) (+my/example-agent-ui)))
+      (should (timerp +my/example-agent-ui--timer))
+      (kill-buffer canvas)
+      (should-not +my/example-agent-ui--timer)
+      (kill-buffer conversation))))

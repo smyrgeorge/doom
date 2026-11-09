@@ -23,6 +23,8 @@
 ;;               (config/tiling.el)
 ;;   banner      notices at the top of a window (config/banner.el), of each
 ;;               kind
+;;   agent-ui    an agent's canvas (config/agent-ui.el) beside its
+;;               conversation, filled in as it works
 ;; An example may define `+my/example-NAME-ready': non-nil once it's drawn
 ;; (a WebKit page loaded...), which the screenshots wait for.
 (defvar +my/examples-dir (expand-file-name "examples/" doom-user-dir)

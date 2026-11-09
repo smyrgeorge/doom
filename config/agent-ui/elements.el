@@ -8,3 +8,4 @@
 (load! "elements/progress")
 (load! "elements/steps")
 (load! "elements/table")
+(load! "elements/chart")

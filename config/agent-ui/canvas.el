@@ -122,15 +122,18 @@ if there's none."
 
 (defun agent-ui--context ()
   "The context the current canvas's elements are drawn in (`agent-ui-context')."
-  (let ((window (agent-ui--window)))
+  (let* ((window (agent-ui--window))
+         (frame (if window (window-frame window) (selected-frame))))
     (agent-ui-context
      :width (if window
                 ;; One column short: a line as wide as the window wraps in a
                 ;; terminal.
                 (max 10 (1- (window-max-chars-per-line window)))
               agent-ui-default-width)
-     :graphic (display-graphic-p (if window (window-frame window) (selected-frame)))
-     :tick agent-ui--tick)))
+     :graphic (display-graphic-p frame)
+     :tick agent-ui--tick
+     :char-width (frame-char-width frame)
+     :line-height (frame-char-height frame))))
 
 (defun agent-ui--draw (entry ctx)
   "Draw ENTRY again, in its place."

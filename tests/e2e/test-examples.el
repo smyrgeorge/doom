@@ -13,7 +13,7 @@
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/editor"
             "config/webkit" "config/pdf" "config/image" "config/markdown" "config/excalidraw" "config/stripe"
-            "config/tiling" "config/merge" "config/examples")
+            "config/tiling" "config/merge" "config/agent-ui" "config/examples")
 (global-tab-line-mode 1)
 (global-so-long-mode 1)
 (setq markdown-css-paths '("https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css"))
@@ -161,4 +161,32 @@ file gone."
                                   (and (frame-live-p frame) (+my/childframe-shown-p frame))))
                               10))
       (kill-buffer buffer)
+      (should-not (file-exists-p dir)))))
+
+(ert-deftest e2e-examples/agent-ui-charts-as-svg ()
+  "The canvas beside the conversation, played out; its chart an SVG image as
+wide as the canvas's text, the rest text; closed: the file gone."
+  (+test-with-reset
+    (pcase-let* ((`(,conversation ,canvas) (+my/example-agent-ui))
+                 (dir (+test-examples--folder conversation)))
+      (should (+test-wait-for #'+my/example-agent-ui-ready 20))
+      (redisplay t)
+      (let ((window (get-buffer-window canvas)))
+        (should window)
+        (with-current-buffer canvas
+          (agent-ui--flush)
+          (let* ((at (let ((pos (point-min)))
+                       ;; Ids are strings: not `text-property-any' (eq).
+                       (while (and pos (not (equal (get-text-property pos 'agent-ui-id) "times")))
+                         (setq pos (next-single-property-change pos 'agent-ui-id)))
+                       pos))
+                 (image (and at (get-text-property (next-single-property-change at 'display) 'display))))
+            (should (eq (car-safe image) 'image))
+            (let ((size (image-size image t)))
+              ;; As wide as the text the canvas draws (a column short of
+              ;; its window's), and some lines high.
+              (should (= (car size) (* (frame-char-width) (1- (window-max-chars-per-line window)))))
+              (should (> (cdr size) (* 4 (frame-char-height))))))))
+      (kill-buffer canvas)
+      (kill-buffer conversation)
       (should-not (file-exists-p dir)))))

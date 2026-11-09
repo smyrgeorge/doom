@@ -119,7 +119,7 @@ prompt); nil while Emacs runs no server (the command couldn't reach it)."
       (format "Agent UI: beside this session, Emacs has a canvas (a pane of its \
 own, opened without taking the user's focus when you first show something) \
 that keeps things in view while the conversation scrolls: progress bars, \
-checklists of steps, tables, text, Markdown, each updated in place. Use it for \
+checklists of steps, tables, charts, text, Markdown, each updated in place. Use it for \
 what changes over time or deserves watching (a long build or test run, a \
 multi-step task's progress, results arriving one by one), not for what a reply \
 says once. From your shell: %s show \

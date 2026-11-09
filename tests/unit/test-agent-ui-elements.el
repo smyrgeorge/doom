@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(markdown progress steps table text)))
+  (should (equal (agent-ui-types) '(chart markdown progress steps table text)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -251,3 +251,104 @@
                           (+test-aue-error '(:type "table" :columns ("A") :align ("middle")))))
   (should (equal (+test-aue-error '(:type "table"))
                  "table: columns is required")))
+
+;; ====== CHART ======
+
+(ert-deftest agent-ui-elements/chart-bars ()
+  (let ((element '(:type "chart" :kind "bar" :unit "ms" :labels ("mon" "tue" "wed" "thu")
+                   :values (120 95 180 60))))
+    (should (equal (+test-aue-draw element :width 50)
+                   (concat "mon  ████████████████████████▋              120 ms\n"
+                           "tue  ███████████████████▌                    95 ms\n"
+                           "wed  █████████████████████████████████████  180 ms\n"
+                           "thu  ████████████▎                           60 ms")))
+    (should (eq (+test-aue-face-at element "█") 'agent-ui-accent)))
+  ;; No labels: numbered.
+  (should (string-prefix-p "1  " (+test-aue-draw '(:type "chart" :kind "bar" :values (1 2))))))
+
+(ert-deftest agent-ui-elements/chart-sparkline ()
+  (should (equal (+test-aue-draw '(:type "chart" :kind "sparkline" :unit "ms" :values (3 5 9 4 12 20 15 8 3 1 7)))
+                 "▁▂▄▂▅█▆▃▁▁▃  last 7 ms  min 1  max 20"))
+  ;; The latest that fit.
+  (let ((text (+test-aue-draw (list :type "chart" :kind "sparkline" :values (number-sequence 1 100))
+                              :width 40)))
+    (should (= (string-width text) 40))
+    (should (string-suffix-p "last 100  min 1  max 100" text))))
+
+(ert-deftest agent-ui-elements/chart-lines ()
+  (let* ((element '(:type "chart" :height 4 :labels ("a" "b" "c")
+                    :series ((:name "up" :values (1 2 3)) (:name "down" :values (3 2 1)))))
+         (lines (split-string (+test-aue-draw element :width 30) "\n")))
+    ;; The height, then the labels, then the legend.
+    (should (= (length lines) 6))
+    (should (string-prefix-p "3 ┤" (nth 0 lines)))
+    (should (string-prefix-p "  │" (nth 1 lines)))
+    (should (string-prefix-p "1 ┤" (nth 3 lines)))
+    (should (string-match-p "\\`   a +c\\'" (nth 4 lines)))
+    (should (equal (nth 5 lines) "   ● up  ● down"))
+    (dolist (line lines) (should (<= (string-width line) 30)))
+    ;; Braille, each series its colour: up starts low, down high.
+    (should (string-match-p "[⠀-⣿]" (nth 0 lines)))
+    (should (eq (+test-aue-face-at element "● up") 'agent-ui-accent))
+    (should (eq (+test-aue-face-at element "● down") 'agent-ui-warning)))
+  ;; The plot: a rising line's first dot at the bottom left, its last at the
+  ;; top right.
+  (let ((plot (agent-ui-chart--plot '((:values (0 10))) '(0 . 10) 2 1)))
+    ;; 4 dots wide, 4 high: (0,3) in the first cell, (3,0) in the second.
+    (should (/= 0 (logand (aref (car plot) 0) #x40)))
+    (should (/= 0 (logand (aref (car plot) 1) #x08))))
+  (should (equal (+test-aue-draw '(:type "chart")) "no values yet")))
+
+(ert-deftest agent-ui-elements/chart-as-svg ()
+  (let* ((text (agent-ui-render '(:type "chart" :labels ("a" "c") :values (1 5 3) :title "T")
+                                (agent-ui-context :width 50 :graphic t :char-width 8 :line-height 16)))
+         (image (get-text-property 2 'display text))
+         (svg (plist-get (cdr image) :data)))
+    (should (string-prefix-p "T\n" (substring-no-properties text)))
+    (should (eq (car image) 'image))
+    (should (eq (plist-get (cdr image) :type) 'svg))
+    ;; As wide as the text's 50 columns.
+    (should (string-match-p "<svg width=\"400\"" svg))
+    (should (string-match-p "<polyline" svg))
+    (should (string-match-p ">5</text>" svg))
+    (should (string-match-p ">a</text>" svg)))
+  (let ((svg (plist-get (cdr (get-text-property
+                              0 'display
+                              (agent-ui-render '(:type "chart" :kind "bar" :labels ("x" "y") :values (1 2))
+                                               (agent-ui-context :graphic t))))
+                        :data)))
+    (should (= (cl-count ?\n (replace-regexp-in-string "<rect" "\n" svg)) 2)))
+  ;; A sparkline, or nothing to draw: text.
+  (should-not (get-text-property 0 'display (agent-ui-render '(:type "chart" :kind "sparkline" :values (1 2))
+                                                             (agent-ui-context :graphic t))))
+  (should (equal (substring-no-properties (agent-ui-render '(:type "chart") (agent-ui-context :graphic t)))
+                 "no values yet")))
+
+(ert-deftest agent-ui-elements/chart-live ()
+  ;; Values appended, the latest WINDOW kept.
+  (let* ((element '(:type "chart" :window 3 :values (1 2)))
+         (more (agent-ui-append-to element '(:values (3 4 5)))))
+    (should (equal (plist-get more :values) '(1 2 3 4 5)))
+    (should (equal (plist-get (car (plist-get (agent-ui-check "chart" more) :series)) :values) '(3 4 5))))
+  ;; Series by name; a new one added.
+  (let ((more (agent-ui-append-to '(:type "chart" :series ((:name "a" :values (1))))
+                                  '(:series ((:name "a" :values (2)) (:name "b" :values (9)))))))
+    (should (equal (plist-get more :series) '((:name "a" :values (1 2)) (:name "b" :values (9))))))
+  (should (string-match-p "only values, series and labels"
+                          (agent-ui-error-message
+                           (should-error (agent-ui-append-to '(:type "chart") '(:unit "x"))
+                                         :type 'agent-ui-error)))))
+
+(ert-deftest agent-ui-elements/chart-wrong ()
+  (should (equal (+test-aue-error '(:type "chart" :values (1 "x")))
+                 "chart: values must be numbers; value 2 is \"x\""))
+  (should (string-match-p "values (one series) or series, not both"
+                          (+test-aue-error '(:type "chart" :values (1) :series ((:values (1)))))))
+  (should (string-match-p "a bar chart has one series"
+                          (+test-aue-error '(:type "chart" :kind "bar" :series ((:values (1)) (:values (2)))))))
+  (should (string-match-p "series 1 has \"color\""
+                          (+test-aue-error '(:type "chart" :series ((:values (1) :color "red"))))))
+  (should (string-match-p "height must be from 2 to 40"
+                          (+test-aue-error '(:type "chart" :height 1))))
+  (should (string-match-p "min must be below max"
+                          (+test-aue-error '(:type "chart" :min 5 :max 5)))))

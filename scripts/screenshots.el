@@ -47,7 +47,7 @@ not selected (a hollow box in the panes), a cursor that doesn't blink."
   (require 'doom-themes)
   (+test-load "config/childframe" "config/banner" "config/window" "config/editor"
               "config/webkit" "config/pdf" "config/image" "config/markdown" "config/excalidraw"
-              "config/stripe" "config/tiling" "config/merge" "config/examples")
+              "config/stripe" "config/tiling" "config/merge" "config/agent-ui" "config/examples")
   ;; PDF.js and Excalidraw: copies of Doom's, not downloaded again.
   (+test-pdfjs-dir)
   (+test-excalidraw-dir)

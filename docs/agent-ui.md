@@ -1,8 +1,8 @@
 # Agent UI
 
-> **Status: being built** (epic `doom-nwj`). Built: the element types' registry, the canvas, the command line, the
-> sessions' canvases, the `text`, `markdown`, `progress`, `steps` and `table` types, and what the agent is told (its
-> system prompt, a skill). Not yet: `chart`, and what's [later](#later).
+> **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line, the
+> `text`, `markdown`, `progress`, `steps`, `table` and `chart` types, and what the agent is told. `M-x
+> +my/example-agent-ui` shows it ([Examples](examples.md)). Still to come: what's [later](#later).
 
 A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
@@ -145,7 +145,7 @@ else the canvas `default`. A session's canvas is killed with it.
 | `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it | `columns`, `rows`, `key`, `align` |
 | `progress` | A bar, or a run without an end | `value`, `max`, `label`, `unit`, `status` |
 | `steps` | A checklist whose steps change state; appending a step by its name changes it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":...}]` |
-| `chart` | A sparkline, bars or lines | `kind`, `values` or `series`, `labels` |
+| `chart` | Lines (several series), bars or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window` |
 
 Later ([the epic](#later)): images, drawings, web pages in the GUI, with a text stand-in in a terminal.
 
@@ -229,7 +229,8 @@ the types change.
 | `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `progress`, `steps`, `table` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart` |
+| `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `skills/agent-ui/SKILL.md` | The skill: the types with examples, for the agent |
 

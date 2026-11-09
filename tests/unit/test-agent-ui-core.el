@@ -216,7 +216,7 @@
     (let (seen)
       (agent-ui-define spy "Spy." :text (lambda (_p ctx) (setq seen ctx) ""))
       (agent-ui-render '(:type "spy") (agent-ui-context :width 42 :tick 7))
-      (should (equal seen '(:width 42 :graphic nil :tick 7))))))
+      (should (equal seen '(:width 42 :graphic nil :tick 7 :char-width 8 :line-height 16))))))
 
 (ert-deftest agent-ui-core/errors-drawn-in-place ()
   (+test-aui
