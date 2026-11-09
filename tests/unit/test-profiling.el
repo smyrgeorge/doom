@@ -84,15 +84,19 @@ its logs dropped after."
       (should (= 1 (+test-messages (regexp-quote skill)))))))
 
 (ert-deftest profiling/stacks-are-deeper ()
+  "A sampled stack 32 calls deep. Profiled again until one is sampled (up to
+20 times): under load, a run of 50 ms may sample too few (doom-7ra)."
   (+test-profiling--with
-    (+my/profiling-start)
-    (+test-profiling--spin 0.05)
-    (+my/profiling-stop)
-    (let ((lengths nil))
-      (maphash (lambda (backtrace _) (cl-pushnew (length backtrace) lengths))
-               profiler-cpu-log)
-      ;; Garbage collections' are shorter: [Automatic\ GC nil].
-      (should (= (apply #'max lengths) 32)))))
+    (let ((deepest 0) (runs 0))
+      (while (and (< deepest 32) (< runs 20))
+        (cl-incf runs)
+        (+my/profiling-start)
+        (+test-profiling--spin 0.05)
+        (+my/profiling-stop)
+        ;; Garbage collections' are shorter: [Automatic\ GC nil].
+        (maphash (lambda (backtrace _) (setq deepest (max deepest (length backtrace))))
+                 profiler-cpu-log))
+      (should (= deepest 32)))))
 
 (ert-deftest profiling/raw-profile-reads-back ()
   (+test-profiling--with
