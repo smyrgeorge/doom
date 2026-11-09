@@ -34,4 +34,5 @@ cmd/agent-ui types           # what it can show
 ```
 
 The reply is JSON on stdout; it exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without
-an Emacs server.
+an Emacs server. `cmd/agent-ui-mcp.el` serves the same operations as MCP tools (`emacs --batch -Q -l
+cmd/agent-ui-mcp.el -f agent-ui-mcp-main`), as each agent-shell session starts it.

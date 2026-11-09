@@ -1,9 +1,9 @@
 # Agent UI
 
-> **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line, the
-> `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image` and `html` types, sources (an element following a
-> command, a file, a poll), types the agent makes (kept or discarded by you), and what the agent is told. `M-x
-> +my/example-agent-ui` shows it ([Examples](examples.md)). Still to come: what's [later](#later).
+> **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line and MCP
+> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image` and `html` types, sources (an element
+> following a command, a file, a poll), types the agent makes (kept or discarded by you), elements in the
+> conversation, and what the agent is told. `M-x +my/example-agent-ui` shows it ([Examples](examples.md)).
 
 A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
@@ -229,6 +229,15 @@ lines. A chunk of output is one update, however many lines it has.
 change the element refused. A source stops when its element is removed or shown again, or its canvas closed. An
 update can't change a source: showing the element again does.
 
+## MCP
+
+Each agent-shell session also gets the operations as MCP tools, with their schemas: `show`, `update`, `append`,
+`remove`, `clear`, `list`, `types`, `render`, `snapshot`, `batch`, `define` (`show`'s description lists the types,
+asked of Emacs). The server is `cmd/agent-ui-mcp.el`, run by a batch Emacs (this Emacs's binary) the agent starts,
+registered in `agent-shell-mcp-servers` with the session's name and directory; each call goes through
+`cmd/agent-ui`, so replies and errors are the command line's. The system prompt says the tools are there.
+`(setq +my/agent-ui-mcp nil)` in `config.el` turns them off.
+
 ## In the conversation
 
 agent-shell owns its buffer's text, so an element isn't put there: it goes the ways agent-shell already has
@@ -278,8 +287,6 @@ the types change.
 
 ## Later
 
-- **MCP** (`doom-nwj.15`): the same operations as tools with schemas, given to each session through
-  `agent-shell-mcp-servers`.
 - **Back after a restart:** a canvas's elements are data, so it can be saved with the session's transcript and shown
   again when the session resumes.
 - **Actions:** a button in an element that puts text into the session's prompt ("Retry the failing tests").
@@ -301,6 +308,7 @@ the types change.
 | `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
+| `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |
 | `skills/agent-ui/SKILL.md` | The skill: the types with examples, for the agent |
 
 None of `config/agent-ui/` uses Doom (`config/agent-ui.el` does: its settings, keys, the Beads issue for a kept type),

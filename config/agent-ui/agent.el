@@ -108,6 +108,10 @@ SESSION, else the default. Made when an element is first shown in it
 
 ;; ====== WHAT THE AGENT IS TOLD ======
 
+(defvar agent-ui-agent-mcp nil
+  "Non-nil when agents get Agent UI as MCP tools too (cmd/agent-ui-mcp.el):
+their system prompt says so.")
+
 (defcustom agent-ui-skill
   (expand-file-name "../../skills/agent-ui/SKILL.md"
                     (file-name-directory (or load-file-name buffer-file-name)))
@@ -136,5 +140,10 @@ says once. From your shell: %s show \
 checklist's steps; remove ID; clear. It replies with JSON. Before using it \
 the first time, read %s (its types, properties and examples; when none \
 fits, how to make one). Remove what stops helping, and never leave something \
-shown running once it stopped."
-              command command skill))))
+shown running once it stopped.%s"
+              command command skill
+              (if agent-ui-agent-mcp
+                  " The same operations are MCP tools too (the agent-ui server: show, \
+update, append, remove, list, types, render, snapshot, batch, define), with \
+their schemas: use whichever you like."
+                "")))))

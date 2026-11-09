@@ -36,6 +36,15 @@
 ;; its reply, which agent-shell shows inline and its transcript keeps; a in a
 ;; canvas puts the element at point into its session's prompt, as text.
 
+;; MCP
+;; Each agent-shell session also gets Agent UI as MCP tools, with their
+;; schemas (`agent-shell-mcp-servers'): cmd/agent-ui-mcp.el, run by a batch
+;; Emacs (this one's binary) the agent starts, each call through
+;; cmd/agent-ui. The session's name and directory are passed to it. Its system
+;; prompt then says so. (setq +my/agent-ui-mcp nil) in config.el: none.
+(defvar +my/agent-ui-mcp t
+  "Agent UI as MCP tools in each agent-shell session (see MCP above).")
+
 ;; THE AGENT'S WAY IN
 ;; cmd/agent-ui, from the agent's shell: show, update, append, remove... an
 ;; element as JSON, the reply as JSON (config/agent-ui/request.el), through
@@ -131,6 +140,31 @@ FILE): its tests and documentation."
     (agent-ui-html-browse page)))
 
 (setq agent-ui-open-page-function #'+my/agent-ui-open-page)
+
+;; MCP (see above): the server, for each session started from now on.
+(defun +my/agent-ui-mcp-server ()
+  "Agent UI's MCP server, as `agent-shell-mcp-servers' has them: its
+session's name and directory read when the session starts (in its buffer)."
+  `((name . "agent-ui")
+    (command . ,(expand-file-name invocation-name invocation-directory))
+    (args . ("--batch" "-Q" "-l" ,(expand-file-name "cmd/agent-ui-mcp.el" doom-user-dir)
+             "-f" "agent-ui-mcp-main"))
+    (env . (((name . "AGENT_UI_SESSION")
+             (value . ,(lambda () (agent-ui--session-name (current-buffer)))))
+            ((name . "AGENT_UI_DIR")
+             (value . ,(lambda () (if (fboundp 'agent-shell-cwd) (agent-shell-cwd) default-directory))))))))
+
+(defun +my/agent-ui-mcp-register ()
+  "Add (or replace) Agent UI's MCP server in `agent-shell-mcp-servers'."
+  (setq agent-shell-mcp-servers
+        (append (seq-remove (lambda (server) (equal (alist-get 'name server) "agent-ui"))
+                            (bound-and-true-p agent-shell-mcp-servers))
+                (list (+my/agent-ui-mcp-server)))
+        agent-ui-agent-mcp t))
+
+(when +my/agent-ui-mcp
+  (with-eval-after-load 'agent-shell
+    (+my/agent-ui-mcp-register)))
 
 ;; WHAT THE AGENT IS TOLD (see above), after what's there (the theme's line, the
 ;; project's issues).
