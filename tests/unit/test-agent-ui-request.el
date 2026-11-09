@@ -134,6 +134,58 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
             (should-not (agent-ui-elements)))
         (kill-buffer (agent-ui-canvas-buffer-name name))))))
 
+(defun +test-aur-request-in (canvas op &optional id payload)
+  "OP's reply, its request naming the other canvas CANVAS (its 6th line)."
+  (let ((dir (make-temp-file (+test-tmp-file "aur-") t)))
+    (with-temp-file (expand-file-name "request" dir)
+      (insert (format "%s\n%s\n\n\n\n%s\n" op (or id "") canvas)))
+    (when payload
+      (with-temp-file (expand-file-name "payload" dir) (insert payload)))
+    (agent-ui-request dir)
+    (agent-ui-parse-json (with-temp-buffer
+                           (insert-file-contents (expand-file-name "reply" dir))
+                           (buffer-string)))))
+
+(ert-deftest agent-ui-request/another-canvas ()
+  (+test-aur
+    (let ((tests (concat agent-ui-default-canvas " / tests"))
+          (logs (concat agent-ui-default-canvas " / my logs")))
+      (unwind-protect
+          (progn
+            ;; --canvas: the session's other canvas, its own buffer; linked so.
+            (should (equal (+test-aur-request-in "tests" "show" nil "{\"id\":\"a\",\"type\":\"text\",\"text\":\"x\"}")
+                           (list :ok t :id "a" :link (agent-ui-link tests "a"))))
+            (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas tests)) '("a")))
+            (should-not (agent-ui-elements))
+            ;; Its ids its own: the same id in the session's canvas.
+            (+test-aur-request "show" nil "{\"id\":\"a\",\"type\":\"text\",\"text\":\"main\"}")
+            (should (equal (plist-get (agent-ui-get "a" :canvas tests) :text) "x"))
+            ;; "canvas" in the JSON: the same, not kept in the element.
+            (+test-aur-request "show" nil "{\"id\":\"l\",\"type\":\"text\",\"text\":\"y\",\"canvas\":\"my logs\"}")
+            (should (equal (agent-ui-get "l" :canvas logs) '(:id "l" :type "text" :text "y")))
+            (+test-aur-request "update" "l" "{\"text\":\"z\",\"canvas\":\"my logs\"}")
+            (should (equal (plist-get (agent-ui-get "l" :canvas logs) :text) "z"))
+            ;; list and clear: a canvas's.
+            (should (= (length (plist-get (+test-aur-request-in "tests" "list") :elements)) 1))
+            (+test-aur-request-in "tests" "clear")
+            (should-not (agent-ui-elements :canvas tests))
+            (should (agent-ui-elements))
+            ;; A batch's operations, each its canvas.
+            (should (eq (plist-get (+test-aur-request "batch" nil "[{\"op\":\"show\",\"id\":\"b\",\"type\":\"text\",\"text\":\"1\",\"canvas\":\"tests\"},{\"op\":\"remove\",\"id\":\"l\",\"canvas\":\"my logs\"},{\"op\":\"remove\",\"id\":\"a\"}]")
+                                   :ok)
+                        t))
+            (should (agent-ui-get "b" :canvas tests))
+            (should-not (agent-ui-elements :canvas logs))
+            (should-not (agent-ui-elements))
+            ;; A name that won't do: said so.
+            (should (string-match-p "canvas: a name of letters"
+                                    (plist-get (+test-aur-request-in "a/b" "list") :error)))
+            (should (string-match-p "canvas: give a name"
+                                    (plist-get (+test-aur-request "show" nil "{\"type\":\"text\",\"canvas\":3}") :error))))
+        (dolist (name (list tests logs))
+          (when (get-buffer (agent-ui-canvas-buffer-name name))
+            (kill-buffer (agent-ui-canvas-buffer-name name))))))))
+
 (ert-deftest agent-ui-request/unicode-both-ways ()
   (+test-aur
     (+test-aur-request "show" nil "{\"id\":\"u\",\"type\":\"progress\",\"label\":\"ünïcødé ✓ 日本\"}")
@@ -239,6 +291,17 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
       (let ((run (+test-aur-run '("render" "--ansi" "{\"type\":\"text\",\"text\":\"ok\",\"face\":\"success\"}"))))
         (should (= (car run) 0))
         (should (string-match-p "\\\\u001b\\[" (cdr run))))
+      ;; --canvas NAME, wherever it is: the session's other canvas.
+      (let ((tests (concat agent-ui-default-canvas " / tests")))
+        (unwind-protect
+            (progn
+              (should (= (car (+test-aur-run '("show" "--canvas" "tests" "{\"id\":\"c\",\"type\":\"text\",\"text\":\"t\"}"))) 0))
+              (should (agent-ui-get "c" :canvas tests))
+              (should (= (car (+test-aur-run '("--canvas=tests" "remove" "c"))) 0))
+              (should-not (agent-ui-elements :canvas tests))
+              (should (= (car (+test-aur-run '("list" "--canvas"))) 2)))
+          (when (get-buffer (agent-ui-canvas-buffer-name tests))
+            (kill-buffer (agent-ui-canvas-buffer-name tests)))))
       ;; This directory's: the request says where it came from.
       (should (= (car (+test-aur-run '("remove" "p"))) 0))
       (should-not (agent-ui-elements)))))

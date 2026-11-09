@@ -94,6 +94,25 @@ canvas killed).")
 (defun agent-ui-canvas-buffer-name (name)
   (format "Agent UI: %s" name))
 
+(defconst agent-ui-canvas-separator " / "
+  "Between a canvas's name and the name of another canvas of its session.")
+
+(defun agent-ui-check-canvas-part (part)
+  "PART if it's a fit name for another canvas of a session (\"tests\");
+else an error."
+  (unless (and (stringp part) (<= 1 (length part) 40)
+               (string-match-p "\\`[[:alnum:]][[:alnum:] _.-]*\\'" part))
+    (agent-ui--fail "canvas: a name of letters, digits, spaces, _ . or -, up to 40, not %s"
+                    (agent-ui--show-value part)))
+  part)
+
+(defun agent-ui-sub-canvas (canvas part)
+  "The name of CANVAS's other canvas PART (\"SESSION / tests\"); CANVAS
+itself when PART is nil or empty."
+  (if (or (null part) (equal part ""))
+      canvas
+    (concat canvas agent-ui-canvas-separator (agent-ui-check-canvas-part part))))
+
 (defun agent-ui-canvas (&optional name)
   "The canvas named NAME (default `agent-ui-default-canvas'), its buffer: made
 if there's none."

@@ -62,6 +62,7 @@ agent-ui render '{"type":...}' # an element drawn as text, nothing shown: for th
 agent-ui render --ansi '{...}' # the same in its colours (24-bit ANSI), to print in a terminal
 agent-ui define gauge.el       # a type of the agent's own (below)
 agent-ui snapshot build        # the element as an image for the agent's reply (below)
+agent-ui list --canvas tests   # any of them, on another canvas of the session (below)
 ```
 
 A batch is an array of operations, each an object with its `op` and what it takes, flat:
@@ -85,7 +86,7 @@ Its exit status: 0 done, 1 not done (the reply says why), 2 a wrong use (an unkn
 3 no Emacs to talk to. Each error is a reply too, on stdout.
 
 **How it reaches Emacs.** The script writes the request in a temporary folder (`request`: the operation, the id, the
-session, the directory, a line each; `payload`: the JSON as given) and runs `emacsclient --eval '(agent-ui-request
+session, the directory, the options, the other canvas, a line each; `payload`: the JSON as given) and runs `emacsclient --eval '(agent-ui-request
 "FOLDER")'`; Emacs writes its `reply` there. No JSON is ever quoted into Lisp, whatever it holds.
 Without an Emacs server it fails with a clear error.
 
@@ -93,7 +94,9 @@ Without an Emacs server it fails with a clear error.
 agent-shell makes), naming its session after its buffer; the agent's shell inherits it, so the script finds its
 session's canvas, `Agent UI: SESSION`. Without it (a session started before Agent UI was loaded, an agent in a
 terminal), the session working in the script's directory or above it (the deepest; of those, the most recently used),
-else the canvas `default`. A session's canvas is killed with it.
+else the canvas `default`. A session's canvas is killed with it. `--canvas NAME`, or `"canvas": "NAME"` in the JSON (an
+element's, a change's, a batch's operation's), picks the session's other canvas `Agent UI: SESSION / NAME`, made in a
+pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up to 40.
 
 **In Lisp,** the same operations: `(agent-ui-show SPEC)`, `(agent-ui-update ID PATCH)`, `(agent-ui-append ID PATCH)`,
 `(agent-ui-remove ID)`, each taking an optional `:canvas`. SPEC and PATCH are plists (`(:type progress :value 3)`), as
@@ -101,10 +104,13 @@ else the canvas `default`. A session's canvas is killed with it.
 
 ## The canvas
 
-- **Its buffer** is `*agent-ui: SESSION*`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
+- **Its buffer** is `Agent UI: SESSION`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
   time an element is shown (an application of `+my/tiling-apps`), without taking the focus, and again if it was closed.
   `q` hides it; it closes with its session. `a` on an element puts it into the session's prompt; `R` reviews the
   types the agent made.
+- **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
+  the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements
+  and ids. They close with the session, and are kept and come back with it.
 - **Each element** is the text between two markers, its id in a text property. Drawing replaces that text only;
   point and each window's scroll stay where they were.
 - **Redraws are throttled:** an update marks the element dirty, and a timer (`agent-ui-redraw-delay`, 0.1s) redraws the
@@ -277,7 +283,8 @@ A session's canvas is saved as it changes (a moment later, the changes together)
 session's `.agent-shell/agent-ui/`, named by its ACP session id, beside agent-shell's transcripts
 (`config/agent-ui/persist.el`). When a session starts with that id (resumed: `SPC o C` with `C-u C-u`, or
 agent-shell's restart), its canvas comes back as it was. Its elements' sources aren't started again: a command isn't
-run twice. Closing a canvas, or its session, leaves what's saved; clearing it saves it empty.
+run twice. Closing a canvas, or its session, leaves what's saved; clearing it saves it empty. Its other canvases are
+kept beside it (`ID@tests.json`, the name hex-escaped) and come back with it.
 
 ## In the conversation
 

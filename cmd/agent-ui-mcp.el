@@ -24,6 +24,17 @@
 
 ;; ====== THE TOOLS ======
 
+(defconst agent-ui-mcp--canvas-schema
+  '(:type "string" :description "Optional: another canvas of your session, by name (\"tests\"), in a pane of its own; without it, your session's canvas")
+  "The canvas argument's schema.")
+
+(defun agent-ui-mcp--with-canvas (tool)
+  "TOOL (a tools/list entry) taking a canvas argument too."
+  (let* ((schema (copy-sequence (plist-get tool :inputSchema)))
+         (properties (copy-sequence (plist-get schema :properties))))
+    (plist-put tool :inputSchema
+               (plist-put schema :properties (plist-put properties :canvas agent-ui-mcp--canvas-schema)))))
+
 (defconst agent-ui-mcp--element-schema
   '(:type "object"
     :description "An element: \"type\" (one of the types below), \"id\" (yours, to change it later), an optional \"title\", the type's properties, optionally a \"source\" (a command, file or poll it follows) and \"actions\" (buttons putting a prompt into your session's prompt: [{\"label\", \"prompt\", \"submit\"}])."
@@ -54,7 +65,12 @@ nil if it can't be reached."
          (patch '(:type "object" :description "The properties to change (null: back to the default)"
                   :additionalProperties t)))
     (vconcat
-     (list
+     (mapcar
+      (lambda (tool)
+        (if (member (plist-get tool :name) '("types" "define"))
+            tool
+          (agent-ui-mcp--with-canvas tool)))
+      (list
       (list :name "show"
             :description (concat "Show an element on the canvas beside your session (the user's Emacs); one with its id there already is replaced in place. For what changes over time or should stay in view: progress, a checklist, test results, a chart. Types:\n"
                                  (or types "(ask with the types tool)"))
@@ -81,7 +97,7 @@ nil if it can't be reached."
             :inputSchema '(:type "object" :properties (:operations (:type "array" :items (:type "object")))
                            :required ["operations"]))
       (list :name "define" :description "A type of your own: Emacs Lisp code with one agent-ui-define and its definitions, each named agent-ui-NAME-... (see the agent-ui skill). Checked, compiled, loaded, its example drawn (the reply's preview); the user keeps or discards it."
-            :inputSchema '(:type "object" :properties (:code (:type "string")) :required ["code"]))))))
+            :inputSchema '(:type "object" :properties (:code (:type "string")) :required ["code"])))))))
 
 ;; ====== DOING A CALL ======
 
@@ -107,19 +123,26 @@ an error reply if it said nothing readable)."
   "Tool NAME with ARGUMENTS (a plist): (ERROR-P . TEXT)."
   (cl-flet ((arg (key) (plist-get arguments key))
             (json (value) (agent-ui-mcp--json value)))
-    (let ((reply
-           (pcase name
-             ("show" (agent-ui-mcp--run (list "show" (json (arg :element)))))
-             ("render" (agent-ui-mcp--run (list "render" (json (arg :element)))))
-             ("update" (agent-ui-mcp--run (list "update" (or (arg :id) "") (json (or (arg :patch) (make-hash-table))))))
-             ("append" (agent-ui-mcp--run (list "append" (or (arg :id) "") (json (or (arg :patch) (make-hash-table))))))
-             ("remove" (agent-ui-mcp--run (list "remove" (or (arg :id) ""))))
-             ("snapshot" (agent-ui-mcp--run (list "snapshot" (or (arg :id) ""))))
-             ("clear" (agent-ui-mcp--run (list "clear")))
-             ("list" (agent-ui-mcp--run (list "list")))
-             ("types" (agent-ui-mcp--run (if (arg :type) (list "types" (arg :type)) (list "types"))))
-             ("batch" (agent-ui-mcp--run (list "batch" (json (or (arg :operations) [])))))
-             ("define"
+    (let* ((canvas (let ((c (arg :canvas))) (and (stringp c) (not (string-empty-p c)) c)))
+           (args (pcase name
+                   ("show" (list "show" (json (arg :element))))
+                   ("render" (list "render" (json (arg :element))))
+                   ("update" (list "update" (or (arg :id) "") (json (or (arg :patch) (make-hash-table)))))
+                   ("append" (list "append" (or (arg :id) "") (json (or (arg :patch) (make-hash-table)))))
+                   ("remove" (list "remove" (or (arg :id) "")))
+                   ("snapshot" (list "snapshot" (or (arg :id) "")))
+                   ("clear" (list "clear"))
+                   ("list" (list "list"))
+                   ("types" (if (arg :type) (list "types" (arg :type)) (list "types")))
+                   ("batch" (list "batch" (json (or (arg :operations) []))))))
+           (reply
+            (cond
+             (args
+              ;; Another canvas of the session, if it names one.
+              (agent-ui-mcp--run (if (and canvas (not (equal name "types")))
+                                     (append args (list "--canvas" canvas))
+                                   args)))
+             ((equal name "define")
               (let ((file (make-temp-file "agent-ui-type-" nil ".el")))
                 (unwind-protect
                     (progn
@@ -127,7 +150,7 @@ an error reply if it said nothing readable)."
                         (write-region (or (arg :code) "") nil file nil 'silent))
                       (agent-ui-mcp--run (list "define" file)))
                   (delete-file file))))
-             (_ (list :ok :false :error (format "unknown tool %s" name))))))
+             (t (list :ok :false :error (format "unknown tool %s" name))))))
       (cons (not (eq (plist-get reply :ok) t)) (json reply)))))
 
 ;; ====== THE PROTOCOL ======

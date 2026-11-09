@@ -62,7 +62,11 @@ recorded, its reply REPLY (a plist)."
         (should (equal (plist-get (plist-get tool :inputSchema) :type) "object")))
       (should (string-match-p "^- progress: A progress bar: VALUE of MAX\\. Properties: value (number)\\.$"
                               (plist-get (car tools) :description)))
-      (should (equal (plist-get (plist-get (car tools) :inputSchema) :required) ["element"])))))
+      (should (equal (plist-get (plist-get (car tools) :inputSchema) :required) ["element"]))
+      ;; Another canvas of the session: an argument of each tool that has one.
+      (dolist (tool tools)
+        (should (eq (and (plist-get (plist-get (plist-get tool :inputSchema) :properties) :canvas) t)
+                    (not (member (plist-get tool :name) '("types" "define")))))))))
 
 (ert-deftest agent-ui-mcp/each-tool-a-command-line ()
   (+test-aum '(:ok t :id "b")
@@ -84,6 +88,8 @@ recorded, its reply REPLY (a plist)."
       (should (equal (call "types" "{\"type\":\"table\"}") '("types" "table")))
       (should (equal (call "render" "{\"element\":{\"type\":\"text\",\"text\":\"ü\"}}")
                      '("render" "{\"type\":\"text\",\"text\":\"ü\"}")))
+      (should (equal (call "remove" "{\"id\":\"b\",\"canvas\":\"tests\"}") '("remove" "b" "--canvas" "tests")))
+      (should (equal (call "types" "{\"canvas\":\"tests\"}") '("types")))
       (should (equal (call "batch" "{\"operations\":[{\"op\":\"remove\",\"id\":\"b\"}]}")
                      '("batch" "[{\"op\":\"remove\",\"id\":\"b\"}]")))
       ;; A type's code: in a file, gone after.

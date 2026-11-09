@@ -49,6 +49,12 @@ The same operations are MCP tools too, where your session has the `agent-ui` ser
 heredoc for anything long). An element is an object with a `type`, an `id` (letters, digits, `-`, `_`, `.`), an
 optional `title` (a line above it) and its type's properties.
 
+**Several canvases.** `--canvas NAME` on any operation (or `"canvas": "NAME"` in the JSON: an element's, a change's, a
+batch's operation's; the `canvas` argument of the MCP tools) uses another canvas of your session, in a pane of its
+own, instead of its canvas: `agent-ui show --canvas tests '{...}'`. Use it for a second subject worth its own pane
+(the tests' results beside the build's dashboard), not for each element. Its name: letters, digits, spaces, `_ . -`.
+Ids are its own; `list` and `clear` are a canvas's. It closes, is kept and comes back with your session.
+
 Replies: `{"ok":true,"id":"build"}`, or `{"ok":false,"error":"..."}` saying exactly what's wrong (an unknown property
 lists the right ones). Exit status: 0 done, 1 not done, 2 a wrong use, 3 no Emacs (the canvas can't be used: carry on
 without it). A wrong element is refused whole; nothing half-shown.

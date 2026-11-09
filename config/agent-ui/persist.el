@@ -9,10 +9,12 @@
 ;; restart), its canvas comes back, as it was. Its elements' sources aren't
 ;; started again (a command run twice): they come back as they last were.
 ;; Closing a canvas, or its session, doesn't change what's saved; clearing it
-;; does (an empty canvas, saved).
+;; does (an empty canvas, saved). A session's other canvases ("SESSION /
+;; tests") are kept beside it, ID@tests.json, and come back with it.
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'url-util)
 
 ;; ====== VARIABLES ======
 
@@ -32,15 +34,33 @@ saved together)."
 
 ;; ====== WHERE ======
 
-(defun agent-ui-persist-file (session)
-  "Where SESSION's (an agent-shell buffer) canvas is kept: nil while it has
-no session id."
+(defun agent-ui-persist--stem (session)
+  "SESSION's (an agent-shell buffer) files' start: its folder and id; nil
+while it has no session id."
   (when-let* (((buffer-live-p session))
               ((fboundp 'agent-shell-session-id))
               (id (agent-shell-session-id :shell-buffer session))
               ((not (string-empty-p id))))
-    (expand-file-name (concat (replace-regexp-in-string "[^A-Za-z0-9_.-]" "_" id) ".json")
+    (expand-file-name (replace-regexp-in-string "[^A-Za-z0-9_.-]" "_" id)
                       (expand-file-name agent-ui-persist-directory (agent-ui--session-cwd session)))))
+
+(defun agent-ui-persist-file (session &optional part)
+  "Where SESSION's (an agent-shell buffer) canvas is kept, or its other
+canvas PART's (ID@PART.json, PART hex-escaped: read back as it was): nil
+while it has no session id."
+  (when-let* ((stem (agent-ui-persist--stem session)))
+    (concat stem (if part (concat "@" (url-hexify-string part)) "") ".json")))
+
+(defun agent-ui-persist--parts (session)
+  "SESSION's other canvases kept: their names."
+  (when-let* ((stem (agent-ui-persist--stem session))
+              ((file-directory-p (file-name-directory stem))))
+    (mapcar (lambda (file)
+              (decode-coding-string
+               (url-unhex-string (substring (file-name-base file) (1+ (length (file-name-nondirectory stem)))))
+               'utf-8))
+            (directory-files (file-name-directory stem) t
+                             (concat "\\`" (regexp-quote (file-name-nondirectory stem)) "@.+\\.json\\'")))))
 
 ;; ====== SAVING ======
 
@@ -51,7 +71,7 @@ id: its elements, as JSON. Returns the file, or nil."
     (when (timerp agent-ui--persist-timer)
       (cancel-timer agent-ui--persist-timer))
     (setq agent-ui--persist-timer nil)
-    (when-let* ((file (agent-ui-persist-file agent-ui--session-buffer)))
+    (when-let* ((file (agent-ui-persist-file agent-ui--session-buffer agent-ui--canvas-part)))
       (let ((elements (mapcar (lambda (id) (agent-ui--entry-element (gethash id agent-ui--entries)))
                               agent-ui--order)))
         (make-directory (file-name-directory file) t)
@@ -91,12 +111,25 @@ id: its elements, as JSON. Returns the file, or nil."
       element)))
 
 (defun agent-ui-persist-restore (session)
-  "SESSION's canvas back (an agent-shell buffer whose session id is known),
-if one was kept and its canvas is empty: its elements shown again, their
-sources not started. Returns how many."
-  (when-let* ((file (agent-ui-persist-file session))
+  "SESSION's canvases back (an agent-shell buffer whose session id is
+known): its own and its others, each kept and empty now, its elements shown
+again, their sources not started. Returns how many; nil if none was."
+  (let* ((counts (mapcar (lambda (part) (agent-ui-persist--restore-canvas session part))
+                         (cons nil (agent-ui-persist--parts session))))
+         (restored (delq nil counts)))
+    (when restored
+      (let ((count (apply #'+ restored)))
+        (when (> count 0)
+          (message "Agent UI: this session's canvas%s, back (%d element%s)"
+                   (if (cdr restored) "es" "") count (if (= count 1) "" "s")))
+        count))))
+
+(defun agent-ui-persist--restore-canvas (session part)
+  "SESSION's canvas (PART nil) or its other canvas PART back, if kept and
+empty: how many of its elements; nil if not."
+  (when-let* ((file (agent-ui-persist-file session part))
               ((file-readable-p file))
-              (name (agent-ui--session-name session))
+              (name (agent-ui-sub-canvas (agent-ui--session-name session) part))
               ((not (agent-ui-elements :canvas name))))
     (let ((elements (condition-case nil
                         (agent-ui-parse-json (with-temp-buffer
@@ -112,8 +145,6 @@ sources not started. Returns how many."
                      (cl-incf count))
             ;; One of a type gone since (discarded): left out.
             (agent-ui-error nil))))
-      (when (> count 0)
-        (message "Agent UI: this session's canvas, back (%d element%s)" count (if (= count 1) "" "s")))
       count)))
 
 (defun agent-ui--persist-watch ()

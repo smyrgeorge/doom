@@ -106,6 +106,33 @@ killed after."
         (kill-buffer session)
         (should-not (buffer-live-p canvas))))))
 
+(ert-deftest agent-ui-agent/the-sessions-other-canvases ()
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ proj" "/tmp/proj/"))
+           (other (+test-aua-session "Claude Agent @ proj / x" "/tmp/x/")))
+      ;; Named as their agents start.
+      (mapc #'agent-ui--session-name (list session other))
+      (agent-ui-show '(:id "a" :type "text" :text "x") :canvas "Claude Agent @ proj")
+      (agent-ui-show '(:id "a" :type "text" :text "y") :canvas "Claude Agent @ proj / tests")
+      (let ((main (get-buffer "Agent UI: Claude Agent @ proj"))
+            (tests (get-buffer "Agent UI: Claude Agent @ proj / tests")))
+        ;; Tied to its session, its own name known.
+        (should (eq (buffer-local-value 'agent-ui--session-buffer tests) session))
+        (should (equal (buffer-local-value 'agent-ui--canvas-part tests) "tests"))
+        (should-not (buffer-local-value 'agent-ui--canvas-part main))
+        (should (equal (sort (mapcar #'buffer-name (agent-ui-session-canvases session)) #'string<)
+                       '("Agent UI: Claude Agent @ proj" "Agent UI: Claude Agent @ proj / tests")))
+        ;; A session whose name looks like another's canvas: its own.
+        (agent-ui-show '(:id "a" :type "text" :text "z") :canvas "Claude Agent @ proj / x")
+        (should (eq (buffer-local-value 'agent-ui--session-buffer
+                                        (get-buffer "Agent UI: Claude Agent @ proj / x"))
+                    other))
+        ;; All killed with their session.
+        (kill-buffer session)
+        (should-not (buffer-live-p main))
+        (should-not (buffer-live-p tests))
+        (should (get-buffer "Agent UI: Claude Agent @ proj / x"))))))
+
 (ert-deftest agent-ui-agent/no-session ()
   (+test-aua
     ;; By the name given, else the default.

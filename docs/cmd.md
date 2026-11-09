@@ -33,6 +33,8 @@ agents, from their shell; see [Agent UI](agent-ui.md).
 cmd/agent-ui show '{"id":"build","type":"progress","title":"Build","max":12}'
 cmd/agent-ui update build '{"value":5,"label":"linking"}'
 cmd/agent-ui types           # what it can show
+cmd/agent-ui show --canvas tests '{"id":"t","type":"table","columns":["Test","Result"]}'
+                             # another canvas of the session, its own pane
 ```
 
 The reply is JSON on stdout; it exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without

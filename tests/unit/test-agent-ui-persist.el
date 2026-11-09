@@ -141,3 +141,22 @@ window shown, saves at once; what it makes, killed after."
     (should (= (agent-ui-persist-restore session) 1))
     (should-not (plist-get (agent-ui-get "c" :canvas name) :source))
     (should-not (agent-ui-source-status "c" :canvas name))))
+
+(ert-deftest agent-ui-persist/the-sessions-other-canvases ()
+  (+test-aup
+    (let ((tests (concat name " / my tests"))
+          (file (expand-file-name ".agent-shell/agent-ui/sess-1@my%20tests.json" +test-aup-dir)))
+      (agent-ui-show '(:id "m" :type "text" :text "main") :canvas name)
+      (agent-ui-show '(:id "t" :type "text" :text "ü") :canvas tests)
+      ;; Beside the session's, its name escaped.
+      (should (equal (+test-aup-saved) '((:id "m" :type "text" :text "main"))))
+      (with-timeout (2 nil) (while (not (file-exists-p file)) (accept-process-output nil 0.01)))
+      (should (file-exists-p file))
+      (should (equal (agent-ui-persist--parts session) '("my tests")))
+      ;; Back with the session: both.
+      (kill-buffer (agent-ui-canvas-buffer-name name))
+      (kill-buffer (agent-ui-canvas-buffer-name tests))
+      (should (= (agent-ui-persist-restore session) 2))
+      (should (equal (plist-get (agent-ui-get "t" :canvas tests) :text) "ü"))
+      (should (equal (buffer-local-value 'agent-ui--canvas-part (get-buffer (agent-ui-canvas-buffer-name tests)))
+                     "my tests")))))

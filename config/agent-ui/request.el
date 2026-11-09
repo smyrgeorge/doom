@@ -6,11 +6,16 @@
 ;; cmd/agent-ui makes a folder holding:
 ;;   request   lines: the operation, an id, the agent's session
 ;;             ($AGENT_UI_SESSION), its working directory, its options
-;;             (render's ansi), each empty when none
+;;             (render's ansi), the session's other canvas it's for
+;;             (--canvas NAME), each empty when none
 ;;   payload   the agent's JSON, as it gave it (absent if none)
 ;; and runs emacsclient --eval '(agent-ui-request "FOLDER")'. Emacs writes
 ;; reply (JSON: {"ok": true, ...} or {"ok": false, "error": "..."}) there,
 ;; which the script prints. No JSON is quoted into Lisp, whatever it holds.
+;;
+;; A session has its canvas and, named, others ("SESSION / tests"), each in
+;; its own pane: --canvas NAME, or "canvas": NAME in the JSON (an element's,
+;; a change's, a batch's operation's), says which.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -30,6 +35,10 @@ canvas's name). config/agent-ui/agent.el finds agent-shell's sessions.")
 
 (defvar agent-ui--request-options nil
   "While a request is answered: its options (strings: \"ansi\").")
+
+(defvar agent-ui--request-canvas nil
+  "While a request is answered: its session's canvas (its other canvases'
+names start with it).")
 
 (defvar agent-ui--request-cwd nil
   "While a request is answered: the agent's directory (its sources' default).")
@@ -53,6 +62,16 @@ canvas's name). config/agent-ui/agent.el finds agent-shell's sessions.")
   (unless (or (null payload) (agent-ui--plist-p payload))
     (agent-ui--fail "%s: give a JSON object, not %s" what (agent-ui--show-value payload)))
   payload)
+
+(defun agent-ui--take-canvas (payload)
+  "PAYLOAD's \"canvas\", if it's an object with one: (NAME . PAYLOAD without
+it); else (nil . PAYLOAD)."
+  (if (and (agent-ui--plist-p payload) (plist-member payload :canvas))
+      (let ((name (plist-get payload :canvas)))
+        (unless (or (null name) (stringp name))
+          (agent-ui--fail "canvas: give a name, not %s" (agent-ui--show-value name)))
+        (cons name (agent-ui--plist-delete payload :canvas)))
+    (cons nil payload)))
 
 (defun agent-ui--need-id (op id)
   (when (or (null id) (string-empty-p id))
@@ -149,7 +168,12 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
   (condition-case err
       (let* ((item (agent-ui--payload-object item "batch"))
              (op (plist-get item :op))
-             (rest (agent-ui--plist-delete item :op)))
+             (taken (agent-ui--take-canvas (agent-ui--plist-delete item :op)))
+             (rest (cdr taken))
+             ;; Its own canvas, if it names one: its session's other.
+             (canvas (if (and (car taken) agent-ui--request-canvas)
+                         (agent-ui-sub-canvas agent-ui--request-canvas (car taken))
+                       canvas)))
         (cond
          ((not (stringp op))
           (agent-ui--fail "batch: each operation has \"op\": show, update, append or remove"))
@@ -180,6 +204,7 @@ its reply written there, as JSON. Never signals: an error is the reply."
                     (session (nth 2 lines))
                     (cwd (nth 3 lines))
                     (options (split-string (or (nth 4 lines) "") " " t))
+                    (part (nth 5 lines))
                     (payload-file (expand-file-name "payload" folder))
                     (payload (when (file-exists-p payload-file)
                                (let ((json (string-trim (agent-ui--read-file payload-file))))
@@ -188,10 +213,20 @@ its reply written there, as JSON. Never signals: an error is the reply."
                                   ;; A type's code, not JSON.
                                   ((equal op "define") json)
                                   (t (agent-ui-parse-json json))))))
-                    (canvas (funcall agent-ui-canvas-function
-                                     (unless (equal session "") session)
-                                     (unless (equal cwd "") cwd))))
+                    ;; Its canvas named in its JSON (not a batch's: each
+                    ;; operation its own), else on its command line.
+                    (taken (if (member op '("show" "update" "append" "render"))
+                               (agent-ui--take-canvas payload)
+                             (cons nil payload)))
+                    (payload (cdr taken))
+                    (part (or (car taken) part))
+                    (base (funcall agent-ui-canvas-function
+                                   (unless (equal session "") session)
+                                   (unless (equal cwd "") cwd)))
+                    (base-name (if (bufferp base) (buffer-local-value 'agent-ui--canvas-name base) base))
+                    (canvas (if (member part '(nil "")) base (agent-ui-sub-canvas base-name part))))
                (let* ((agent-ui--request-options options)
+                      (agent-ui--request-canvas base-name)
                       (agent-ui--request-cwd (unless (equal cwd "") cwd))
                       (agent-ui-file-directory (and agent-ui--request-cwd
                                                     (file-name-as-directory agent-ui--request-cwd))))

@@ -9,7 +9,8 @@
 ;; - Without it (an agent started otherwise, a session older than this), the
 ;;   session working in the request's directory: the deepest one, of those
 ;;   the most recently used.
-;; - A canvas is named after its session; killing the session kills it.
+;; - A canvas is named after its session, its others after it ("SESSION /
+;;   tests"); killing the session kills them.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -24,6 +25,10 @@
 
 (defvar-local agent-ui--session-buffer nil
   "In a canvas: its session's agent-shell buffer, if it has one.")
+
+(defvar-local agent-ui--canvas-part nil
+  "In a session's other canvas: its own name (\"tests\"); nil in the
+session's canvas.")
 
 ;; ====== THE SESSION'S ENVIRONMENT ======
 
@@ -87,24 +92,43 @@ SESSION, else the default. Made when an element is first shown in it
 
 (setq agent-ui-canvas-function #'agent-ui-session-canvas)
 
+(defun agent-ui--canvas-session (name)
+  "The session a canvas named NAME is of: (BUFFER . PART), PART its other
+canvas's name (nil for the session's canvas); nil if none."
+  (let ((sessions (agent-ui--sessions)))
+    (cl-flet ((named (session)
+                (seq-find (lambda (b) (equal (buffer-local-value 'agent-ui-session b) session))
+                          sessions)))
+      (if-let* ((buffer (named name)))
+          (cons buffer nil)
+        ;; "SESSION / PART": the session's other canvas.
+        (let ((at (string-search agent-ui-canvas-separator name)))
+          (while (and at (not (named (substring name 0 at))))
+            (setq at (string-search agent-ui-canvas-separator name (1+ at))))
+          (when at
+            (cons (named (substring name 0 at))
+                  (substring name (+ at (length agent-ui-canvas-separator))))))))))
+
 (defun agent-ui--link-session ()
   "In a new canvas: tied to the session it's named after, if there's one
 \(killed with it)."
   (when-let* ((name agent-ui--canvas-name)
-              (buffer (seq-find (lambda (b) (equal (buffer-local-value 'agent-ui-session b) name))
-                                (agent-ui--sessions))))
-    (setq agent-ui--session-buffer buffer)
-    (with-current-buffer buffer
+              (found (agent-ui--canvas-session name)))
+    (setq agent-ui--session-buffer (car found)
+          agent-ui--canvas-part (cdr found))
+    (with-current-buffer (car found)
       (add-hook 'kill-buffer-hook #'agent-ui--kill-canvas nil t))))
 
 (add-hook 'agent-ui-canvas-hook #'agent-ui--link-session)
 
+(defun agent-ui-session-canvases (session)
+  "SESSION's (an agent-shell buffer) canvases: its own and its others."
+  (seq-filter (lambda (b) (eq (buffer-local-value 'agent-ui--session-buffer b) session))
+              (agent-ui-canvases)))
+
 (defun agent-ui--kill-canvas ()
-  "The session's buffer is killed: its canvas too."
-  (when-let* ((name agent-ui-session)
-              (canvas (get-buffer (agent-ui-canvas-buffer-name name))))
-    (when (eq (buffer-local-value 'agent-ui--session-buffer canvas) (current-buffer))
-      (kill-buffer canvas))))
+  "The session's buffer is killed: its canvases too."
+  (mapc #'kill-buffer (agent-ui-session-canvases (current-buffer))))
 
 ;; ====== WHAT THE AGENT IS TOLD ======
 
@@ -137,7 +161,8 @@ multi-step task's progress, results arriving one by one), not for what a reply \
 says once. From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
-checklist's steps; remove ID; clear. It replies with JSON. Before using it \
+checklist's steps; remove ID; clear; --canvas NAME on any of them uses \
+another canvas of this session, in a pane of its own. It replies with JSON. Before using it \
 the first time, read %s (its types, properties and examples; when none \
 fits, how to make one). Remove what stops helping, and never leave something \
 shown running once it stopped.%s"

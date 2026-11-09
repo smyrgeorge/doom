@@ -25,6 +25,10 @@
 #                                (one agent-ui-define), from FILE or stdin;
 #                                staged for the user to keep or discard
 #
+# --canvas NAME (any operation): the session's other canvas NAME ("tests"),
+# in a pane of its own, instead of its canvas; "canvas": NAME in the JSON
+# (an element's, a change's, a batch's operation's) says the same.
+#
 # JSON is the last argument, or comes on stdin. The reply is JSON on stdout:
 # {"ok": true, "id": ...}, or {"ok": false, "error": "what's wrong"}.
 #
@@ -55,6 +59,20 @@ fail() {  # fail STATUS MESSAGE: the reply for an error, and exit
 
 [ $# -eq 0 ] && { usage >&2; exit 2; }
 case "$1" in -h|--help|help) usage; exit 0 ;; esac
+
+# --canvas NAME, wherever it is: taken out.
+canvas="" args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --canvas) [ $# -lt 2 ] && fail 2 "--canvas: which canvas? --canvas NAME"
+              canvas=$2; shift 2 ;;
+    --canvas=*) canvas=${1#--canvas=}; shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+case "$canvas" in *$'\n'*) fail 2 "a canvas's name is one line" ;; esac
+set -- ${args[@]+"${args[@]}"}
+[ $# -eq 0 ] && { usage >&2; exit 2; }
 
 op=$1; shift
 id="" json="" takes_json=0 options=""
@@ -98,7 +116,7 @@ fi
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-ui.XXXXXXXXXX") || fail 3 "no temp folder"
 trap 'rm -rf "$dir"' EXIT
-printf '%s\n%s\n%s\n%s\n%s\n' "$op" "$id" "${AGENT_UI_SESSION:-}" "$PWD" "$options" >"$dir/request"
+printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$op" "$id" "${AGENT_UI_SESSION:-}" "$PWD" "$options" "$canvas" >"$dir/request"
 [ "$takes_json" = 1 ] && printf '%s' "$json" >"$dir/payload"
 
 # The folder as a Lisp string.
