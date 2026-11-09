@@ -401,7 +401,7 @@
   (let ((more (agent-ui-append-to '(:type "chart" :series ((:name "a" :values (1))))
                                   '(:series ((:name "a" :values (2)) (:name "b" :values (9)))))))
     (should (equal (plist-get more :series) '((:name "a" :values (1 2)) (:name "b" :values (9))))))
-  (should (string-match-p "only values, series and labels"
+  (should (string-match-p "only values, series, labels and times"
                           (agent-ui-error-message
                            (should-error (agent-ui-append-to '(:type "chart") '(:unit "x"))
                                          :type 'agent-ui-error)))))
@@ -411,8 +411,8 @@
                  "chart: values must be numbers; value 2 is \"x\""))
   (should (string-match-p "values (one series) or series, not both"
                           (+test-aue-error '(:type "chart" :values (1) :series ((:values (1)))))))
-  (should (string-match-p "a bar chart has one series"
-                          (+test-aue-error '(:type "chart" :kind "bar" :series ((:values (1)) (:values (2)))))))
+  (should (string-match-p "a histogram chart has one series"
+                          (+test-aue-error '(:type "chart" :kind "histogram" :series ((:values (1)) (:values (2)))))))
   (should (string-match-p "series 1 has \"color\""
                           (+test-aue-error '(:type "chart" :series ((:values (1) :color "red"))))))
   (should (string-match-p "height must be from 2 to 40"
@@ -1231,4 +1231,78 @@ new file mode 100644
     ;; Wrong ones: said so.
     (should (string-match-p "table: row-actions: action 1 must be"
                             (+test-aue-error '(:type "table" :columns ("A") :row-actions ("x")))))))
+
+(ert-deftest agent-ui-elements/chart-bars-grouped-and-stacked ()
+  (let ((grouped '(:type "chart" :kind "bar" :labels ("a" "b")
+                   :series ((:name "x" :values (2 4)) (:name "y" :values (1 3))))))
+    ;; Grouped: a bar per series under each label, each its colour; a legend.
+    (should (equal (+test-aue-draw grouped :width 20)
+                   (concat "a  ███████         2\n"
+                           "   ███▌            1\n"
+                           "b  ██████████████  4\n"
+                           "   ██████████▌     3\n"
+                           "   ● x  ● y")))
+    (should (eq (+test-aue-face-at grouped "███▌" :width 20) (agent-ui-chart--face 1)))
+    ;; Stacked: a bar per label, its series end to end, their total.
+    (let ((text (agent-ui-render (append '(:stacked t) grouped) (agent-ui-context :width 20))))
+      (should (equal (substring-no-properties text)
+                     "a  ██████          3\nb  ██████████████  7\n   ● x  ● y"))
+      ;; b: 4 of 7 in x's colour (8 cells), 3 in y's (6).
+      (let ((b (cadr (split-string text "\n"))))
+        (should (eq (get-text-property 10 'face b) (agent-ui-chart--face 0)))
+        (should (eq (get-text-property 11 'face b) (agent-ui-chart--face 1)))
+        (should (eq (get-text-property 3 'face b) (agent-ui-chart--face 0)))))
+    ;; As SVG: a rectangle per segment, a legend.
+    (let ((svg (plist-get (cdr (get-text-property 0 'display (agent-ui-render (append '(:stacked t) grouped)
+                                                                              (agent-ui-context :width 40 :graphic t :char-width 8 :line-height 16))))
+                          :data)))
+      (with-temp-buffer
+        (insert svg)
+        (should (= (count-matches "<rect" (point-min) (point-max)) 4))
+        (should (= (count-matches "<circle" (point-min) (point-max)) 2))))))
+
+(ert-deftest agent-ui-elements/chart-histogram ()
+  (let ((element '(:type "chart" :kind "histogram" :unit "ms" :bins 4 :values (0 1 2 3 4 5 6 7 8 9 10 40))))
+    ;; Counted in 4 bins of 10, 0 to 40, each its range.
+    (should (equal (plist-get (car (plist-get (agent-ui-chart--histogram (agent-ui-check "chart" element)) :series))
+                              :values)
+                   '(10 1 0 1)))
+    (should (string-match-p "\\`0–10 ms  +█+ +10\n10–20 ms  .* 1\n20–30 ms  +0\n30–40 ms  .* 1\\'"
+                            (+test-aue-draw element)))
+    ;; Its min and max: its bins' span (the counts' axis from 0).
+    (should (string-match-p "\\`0–25 ms .*\n25–50 ms "
+                            (+test-aue-draw '(:type "chart" :kind "histogram" :unit "ms" :bins 2 :min 0 :max 50
+                                              :values (5 30)))))
+    (should (string-match-p "bins must be from 1 to 50"
+                            (+test-aue-error '(:type "chart" :kind "histogram" :bins 0 :values (1)))))))
+
+(ert-deftest agent-ui-elements/chart-a-time-axis ()
+  (let ((zone (getenv "TZ")))
+    (unwind-protect
+        (progn
+          (set-time-zone-rule "UTC")
+          ;; Times as dates and times, or seconds; wrong ones said so.
+          (should (= (agent-ui-chart--time "1970-01-02") 86400.0))
+          (should (= (agent-ui-chart--time "1970-01-01T00:01:00Z") 60.0))
+          (should (= (agent-ui-chart--time 5) 5.0))
+          (should (string-match-p "time 2 is \"soon\""
+                                  (+test-aue-error '(:type "chart" :values (1 2) :times (0 "soon")))))
+          ;; Ticks at round times: hours over a day's hours, midnights over days.
+          (should (equal (mapcar #'cdr (agent-ui-chart--ticks (* 9.5 3600) (* 17 3600) 5))
+                         '("10:00" "12:00" "14:00" "16:00")))
+          (should (equal (car (agent-ui-chart--ticks 0 (* 6 86400) 7)) '(0.0 . "Jan 01")))
+          ;; Drawn: the values placed by their times; the axis, ┬ at each tick.
+          (let* ((element '(:type "chart" :height 2 :values (1 2 3) :times (0 600 3600)))
+                 (lines (split-string (+test-aue-draw element :width 30) "\n")))
+            (should (string-match-p "\\` +└┬─+┬─+┬─*\\'" (nth 2 lines)))
+            (should (string-match-p "00:00 +00:30 +01:00" (nth 3 lines))))
+          ;; As SVG: the axis's ticks, labelled.
+          (let ((svg (plist-get (cdr (get-text-property 0 'display (agent-ui-render '(:type "chart" :values (1 2 3) :times (0 600 3600))
+                                                                                    (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16))))
+                                :data)))
+            (should (string-match-p ">00:20</text>" svg)))
+          ;; Appended, with values: kept as many as they are.
+          (should (equal (plist-get (agent-ui-append-to '(:type "chart" :values (1) :times (0)) '(:values (2) :times (60))) :times)
+                         '(0 60))))
+      (set-time-zone-rule zone))))
 

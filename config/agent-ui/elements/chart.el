@@ -1,8 +1,10 @@
 ;;; $DOOMDIR/config/agent-ui/elements/chart.el -*- lexical-binding: t; -*-
-;; Agent UI's chart: lines, bars or a sparkline. Loaded from
+;; Agent UI's chart: lines, bars, a histogram or a sparkline. Loaded from
 ;; config/agent-ui/elements.el.
 ;;
-;; One series of values or several. In a terminal, drawn with characters
+;; One series of values or several: bars grouped by label, or stacked. A
+;; histogram counts its values in bins. A line chart's values may have times:
+;; placed by them, an axis of ticks under it (minutes, hours, days). In a terminal, drawn with characters
 ;; (braille dots for lines, blocks for bars); in a graphic frame, as SVG in the
 ;; theme's colours, sized to the text. Values appended to it (a live chart)
 ;; keep their latest WINDOW.
@@ -15,6 +17,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'svg)
+(require 'parse-time)
 
 (defconst agent-ui-chart-faces
   '(agent-ui-accent agent-ui-warning font-lock-constant-face agent-ui-success agent-ui-error
@@ -64,13 +67,27 @@
                                             (format "series %d's values" i))))))
       (list (list :name nil :values (agent-ui-chart--numbers values "values"))))))
 
+(defun agent-ui-chart--time (time)
+  "TIME (seconds since 1970, or an ISO 8601 date and time) in seconds; nil
+if it's neither."
+  (cond
+   ((numberp time) (float time))
+   ((stringp time)
+    (let ((text (if (string-match-p "\\`[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\'" time)
+                    (concat time "T00:00:00")
+                  time)))
+      (ignore-errors (float-time (parse-iso8601-time-string text)))))))
+
 (defun agent-ui-chart--check (props)
   (let* ((series (agent-ui-chart--series props))
          (kind (plist-get props :kind))
          (window (plist-get props :window))
          (height (plist-get props :height)))
-    (when (and (memq kind '(bar sparkline)) (> (length series) 1))
+    (when (and (memq kind '(histogram sparkline)) (> (length series) 1))
       (agent-ui--fail "chart: a %s chart has one series: give values" kind))
+    (let ((bins (plist-get props :bins)))
+      (when (and bins (not (<= 1 bins 50)))
+        (agent-ui--fail "chart: bins must be from 1 to 50, not %d" bins)))
     (when (and window (< window 1))
       (agent-ui--fail "chart: window must be 1 or more, not %d" window))
     (unless (<= 2 height 40)
@@ -79,30 +96,39 @@
       (when (and min max (>= min max))
         (agent-ui--fail "chart: min must be below max")))
     (let* ((labels (mapcar #'agent-ui-cell (plist-get props :labels)))
-           (keep (or window agent-ui-max-rows)))
+           (times (cl-loop for time in (plist-get props :times)
+                           for i from 1
+                           collect (or (agent-ui-chart--time time)
+                                       (agent-ui--fail "chart: time %d is %s: a date and time (2026-11-10T14:30:00) or seconds since 1970"
+                                                       i (agent-ui--show-value time)))))
+           ;; A histogram keeps all its values: it counts them.
+           (keep (or window (if (eq kind 'histogram) 100000 agent-ui-max-rows))))
       ;; The latest KEEP values; labels as many from the end as the longest
       ;; series lost.
       (let ((longest (apply #'max 0 (mapcar (lambda (s) (length (plist-get s :values))) series))))
         (when (> longest keep)
-          (setq labels (if (> (length labels) keep) (last labels keep) labels))))
+          (setq labels (if (> (length labels) keep) (last labels keep) labels)
+                times (if (> (length times) keep) (last times keep) times))))
       (setq series (mapcar (lambda (s)
                              (let ((values (plist-get s :values)))
                                (plist-put (copy-sequence s) :values
                                           (if (> (length values) keep) (last values keep) values))))
                            series))
-      (plist-put (plist-put props :series series) :labels labels))))
+      (plist-put (plist-put (plist-put props :series series) :labels labels) :times times))))
 
 (defun agent-ui-chart--append (element patch)
   "ELEMENT with PATCH's values added: :values to its values; :series by name
 to each's (a new name, a new series); :labels to its labels."
   (cl-loop for (k _) on patch by #'cddr
-           unless (memq k '(:id :values :series :labels))
-           do (agent-ui--fail "chart: only values, series and labels can be appended to"))
+           unless (memq k '(:id :values :series :labels :times))
+           do (agent-ui--fail "chart: only values, series, labels and times can be appended to"))
   (let ((result (copy-sequence element)))
     (when-let* ((values (plist-get patch :values)))
       (setq result (plist-put result :values (append (plist-get element :values) values))))
     (when-let* ((labels (plist-get patch :labels)))
       (setq result (plist-put result :labels (append (plist-get element :labels) labels))))
+    (when-let* ((times (plist-get patch :times)))
+      (setq result (plist-put result :times (append (plist-get element :times) times))))
     (when-let* ((added (plist-get patch :series)))
       (let ((series (copy-sequence (plist-get element :series))))
         (dolist (s added)
@@ -119,10 +145,23 @@ to each's (a new name, a new series); :labels to its labels."
 
 ;; ====== SCALE ======
 
+(defun agent-ui-chart--stacked-p (props)
+  "Whether PROPS are bars of several series, stacked."
+  (and (eq (plist-get props :kind) 'bar) (eq (plist-get props :stacked) t)
+       (cdr (plist-get props :series)) t))
+
+(defun agent-ui-chart--totals (series)
+  "SERIES' values added up, label by label (negatives as 0)."
+  (let ((n (apply #'max 0 (mapcar (lambda (s) (length (plist-get s :values))) series))))
+    (cl-loop for i below n
+             collect (apply #'+ (mapcar (lambda (s) (max 0 (or (nth i (plist-get s :values)) 0))) series)))))
+
 (defun agent-ui-chart--range (props)
   "(LOW . HIGH) the chart spans: PROPS' min and max, else its values' (bars
 from 0)."
-  (let* ((values (apply #'append (mapcar (lambda (s) (plist-get s :values)) (plist-get props :series))))
+  (let* ((values (if (agent-ui-chart--stacked-p props)
+                     (agent-ui-chart--totals (plist-get props :series))
+                   (apply #'append (mapcar (lambda (s) (plist-get s :values)) (plist-get props :series)))))
          (low (or (plist-get props :min)
                   (if (eq (plist-get props :kind) 'bar)
                       (min 0 (apply #'min 0 values))
@@ -171,34 +210,72 @@ from 0)."
                         'face 'agent-ui-accent)
             (propertize suffix 'face 'agent-ui-muted))))
 
-(defun agent-ui-chart--bar-text (props ctx)
-  (let* ((values (plist-get (car (plist-get props :series)) :values))
+(defun agent-ui-chart--bar-rows (props)
+  "PROPS' bars, a row each: (NAME SEGMENTS NUMBER), SEGMENTS ((VALUE .
+SERIES-INDEX) ...) from the left. One series: a bar per value; several,
+grouped: a bar per series under each label (its name on the first);
+stacked: a bar per label, its series end to end, their total its number."
+  (let* ((series (plist-get props :series))
+         (n (apply #'max 0 (mapcar (lambda (s) (length (plist-get s :values))) series)))
          (labels (plist-get props :labels))
-         (names (cl-loop for i from 0 below (length values)
-                         collect (or (nth i labels) (number-to-string (1+ i)))))
-         (width (plist-get ctx :width))
-         (label-width (min (apply #'max 0 (mapcar #'string-width names)) (/ width 3)))
-         (numbers (mapcar (lambda (v) (agent-ui-chart--number props v)) values))
-         (value-width (apply #'max 0 (mapcar #'string-width numbers)))
-         (bar-width (max 5 (- width label-width value-width 4)))
-         (high (float (cdr (agent-ui-chart--range props)))))
-    (mapconcat
-     (lambda (i)
-       (let* ((cells (* bar-width (max 0.0 (min 1.0 (/ (nth i values) high)))))
-              (full (floor cells))
-              (part (if (< full bar-width) (floor (* (- cells full) 8)) 0))
-              (bar (concat (make-string full ?█)
-                           (if (> part 0) (aref agent-ui-chart--eighths part) ""))))
-         (concat (agent-ui-pad (nth i names) label-width) "  "
-                 (propertize bar 'face 'agent-ui-accent)
-                 (make-string (- bar-width (length bar)) ?\s) "  "
-                 (agent-ui-pad (nth i numbers) value-width 'right))))
-     (number-sequence 0 (1- (length values))) "\n")))
+         (value (lambda (s i) (max 0 (or (nth i (plist-get s :values)) 0)))))
+    (cl-loop
+     for i below n
+     for name = (or (nth i labels) (number-to-string (1+ i)))
+     append (cond
+             ((agent-ui-chart--stacked-p props)
+              (list (list name
+                          (cl-loop for s in series for k from 0 collect (cons (funcall value s i) k))
+                          (agent-ui-chart--number props (apply #'+ (mapcar (lambda (s) (funcall value s i)) series))))))
+             (t
+              (cl-loop for s in series
+                       for k from 0
+                       collect (list (if (= k 0) name "")
+                                     (list (cons (funcall value s i) k))
+                                     (agent-ui-chart--number props (or (nth i (plist-get s :values)) 0)))))))))
 
-(defun agent-ui-chart--plot (series range columns rows)
+(defun agent-ui-chart--bar-cells (segments scale width)
+  "SEGMENTS ((VALUE . INDEX) ...) as text, SCALE cells a unit, at most WIDTH
+cells: each in its series' colour, whole cells but the last one's end (by
+eighths)."
+  (let* ((end (min width (* scale (apply #'+ (mapcar #'car segments)))))
+         (at 0) (sum 0) (parts nil))
+    (cl-loop for (v . k) in segments
+             for rest on segments
+             do (setq sum (+ sum v))
+             (let* ((last (null (cdr rest)))
+                    (to (if last end (min width (round (* scale sum)))))
+                    (full (- (floor to) at))
+                    (part (if (and last (< (floor to) width)) (floor (* (- to (floor to)) 8)) 0))
+                    (text (concat (make-string (max 0 full) ?█)
+                                  (if (> part 0) (aref agent-ui-chart--eighths part) ""))))
+               (push (propertize text 'face (agent-ui-chart--face k)) parts)
+               (setq at (+ at (max 0 full) (if (> part 0) 1 0)))))
+    (let ((bar (apply #'concat (nreverse parts))))
+      (concat bar (make-string (max 0 (- width (string-width bar))) ?\s)))))
+
+(defun agent-ui-chart--bar-text (props ctx)
+  (let* ((rows (agent-ui-chart--bar-rows props))
+         (width (plist-get ctx :width))
+         (label-width (min (apply #'max 0 (mapcar (lambda (r) (string-width (car r))) rows)) (/ width 3)))
+         (value-width (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)))
+         (bar-width (max 5 (- width label-width value-width 4)))
+         (scale (/ bar-width (float (cdr (agent-ui-chart--range props)))))
+         (legend (and (cdr (plist-get props :series)) (agent-ui-chart--legend props))))
+    (concat
+     (mapconcat
+      (lambda (row)
+        (concat (agent-ui-pad (agent-ui-truncate (car row) label-width) label-width) "  "
+                (agent-ui-chart--bar-cells (nth 1 row) scale bar-width) "  "
+                (agent-ui-pad (nth 2 row) value-width 'right)))
+      rows "\n")
+     (when legend (concat "\n" (make-string (+ label-width 2) ?\s) legend)))))
+
+(defun agent-ui-chart--plot (series range columns rows &optional xs)
   "SERIES' values drawn on a grid of braille characters, COLUMNS wide and
 ROWS high, spanning RANGE (LOW . HIGH): (BITS . OWNERS), vectors by cell, each
-cell's dots and the series that drew it last."
+cell's dots and the series that drew it last. XS: each value's place
+across, 0 to 1 (by its time); else evenly."
   (let* ((bits (make-vector (* columns rows) 0))
          (owners (make-vector (* columns rows) nil))
          (width (* 2 columns)) (height (* 4 rows))
@@ -216,9 +293,11 @@ cell's dots and the series that drew it last."
                  (n (length values)))
             (cond
              ((= n 0))
-             ((= n 1) (dot 0 (y-of (aref values 0)) index))
+             ((= n 1) (dot (if xs (round (* (car xs) (1- width))) 0) (y-of (aref values 0)) index))
              (t
-              (let ((x-of (lambda (i) (round (* i (/ (float (1- width)) (1- n))))))
+              (let ((x-of (lambda (i) (if xs
+                                          (round (* (nth i xs) (1- width)))
+                                        (round (* i (/ (float (1- width)) (1- n)))))))
                     (previous (y-of (aref values 0))))
                 (dotimes (i (1- n))
                   (let ((x0 (funcall x-of i)) (x1 (funcall x-of (1+ i)))
@@ -232,6 +311,53 @@ cell's dots and the series that drew it last."
                                   (setq previous y)))))))))))
     (cons bits owners)))
 
+(defconst agent-ui-chart--steps
+  '(1 2 5 10 15 30 60 120 300 600 900 1800 3600 7200 10800 21600 43200 86400 172800 604800 2592000)
+  "A time axis's steps between ticks, in seconds: the first that fits.")
+
+(defun agent-ui-chart--xs (props)
+  "Each value's place across (0 to 1) by its time; nil without times."
+  (when-let* ((times (plist-get props :times))
+              ((cdr times)))
+    (let ((t0 (apply #'min times)) (t1 (apply #'max times)))
+      (mapcar (lambda (time) (if (= t1 t0) 0.0 (/ (- time t0) (- t1 t0)))) times))))
+
+(defun agent-ui-chart--ticks (t0 t1 most)
+  "Ticks between times T0 and T1, at most MOST, at round times (local
+midnights, hours, minutes): ((PLACE . LABEL) ...), PLACE 0 to 1."
+  (when (> t1 t0)
+    (let* ((step (or (seq-find (lambda (s) (<= (/ (- t1 t0) s) most)) agent-ui-chart--steps)
+                     (car (last agent-ui-chart--steps))))
+           (offset (or (car (current-time-zone (seconds-to-time t0))) 0))
+           (format (cond ((< step 60) "%H:%M:%S") ((< step 86400) "%H:%M") (t "%b %d")))
+           (time (- (* step (ceiling (+ t0 offset) step)) offset))
+           (ticks nil))
+      (while (<= time t1)
+        (push (cons (/ (- time t0) (float (- t1 t0))) (format-time-string format (seconds-to-time time))) ticks)
+        (setq time (+ time step)))
+      (nreverse ticks))))
+
+(defun agent-ui-chart--time-axis (props columns)
+  "Under a plot COLUMNS wide: its axis, ┬ at each tick, and the ticks'
+labels under them (none on another's), as two lines; nil without times."
+  (when-let* ((times (plist-get props :times))
+              ((cdr times))
+              (ticks (agent-ui-chart--ticks (apply #'min times) (apply #'max times)
+                                            (max 2 (/ columns 10)))))
+    (let ((axis (make-vector columns ?─))
+          (labels (make-string columns ?\s))
+          (free 0))
+      (dolist (tick ticks)
+        (let* ((column (min (1- columns) (floor (* (car tick) (1- (* 2 columns))) 2)))
+               (label (cdr tick))
+               (start (max 0 (min (- columns (length label)) (- column (/ (length label) 2))))))
+          (aset axis column ?┬)
+          (when (>= start free)
+            (setq labels (concat (substring labels 0 start) label
+                                 (substring labels (min (length labels) (+ start (length label))))))
+            (setq free (+ start (length label) 1)))))
+      (cons (concat axis) (string-trim-right labels)))))
+
 (defun agent-ui-chart--line-text (props ctx)
   (let* ((range (agent-ui-chart--range props))
          (high-label (agent-ui-chart--number props (cdr range)))
@@ -239,8 +365,9 @@ cell's dots and the series that drew it last."
          (label-width (max (string-width high-label) (string-width low-label)))
          (columns (max 4 (- (plist-get ctx :width) label-width 2)))
          (rows (plist-get props :height))
-         (plot (agent-ui-chart--plot (plist-get props :series) range columns rows))
+         (plot (agent-ui-chart--plot (plist-get props :series) range columns rows (agent-ui-chart--xs props)))
          (labels (plist-get props :labels))
+         (time-axis (agent-ui-chart--time-axis props columns))
          (legend (agent-ui-chart--legend props)))
     (concat
      (mapconcat
@@ -259,8 +386,12 @@ cell's dots and the series that drew it last."
                                       'face (agent-ui-chart--face (aref (cdr plot) cell))))))
                     (number-sequence 0 (1- columns)) "")))
       (number-sequence 0 (1- rows)) "\n")
+     ;; Times: an axis of ticks, labelled.
+     (when time-axis
+       (concat "\n" (propertize (concat (make-string label-width ?\s) " └" (car time-axis)) 'face 'agent-ui-muted)
+               "\n" (propertize (concat (make-string (+ label-width 2) ?\s) (cdr time-axis)) 'face 'agent-ui-muted)))
      ;; The first and last labels, under the plot's ends.
-     (when labels
+     (when (and labels (not time-axis))
        (let ((first (car labels))
              (last (if (cdr labels) (car (last labels)) "")))
          (concat "\n" (make-string (+ label-width 2) ?\s)
@@ -275,6 +406,7 @@ cell's dots and the series that drew it last."
     (pcase (plist-get props :kind)
       ('sparkline (agent-ui-chart--sparkline props ctx))
       ('bar (agent-ui-chart--bar-text props ctx))
+      ('histogram (agent-ui-chart--bar-text (agent-ui-chart--histogram props) ctx))
       (_ (agent-ui-chart--line-text props ctx)))))
 
 ;; ====== AS SVG ======
@@ -307,12 +439,14 @@ cell's dots and the series that drew it last."
          (low-label (agent-ui-chart--number props low))
          (label-width (* cw (+ 1 (max (string-width high-label) (string-width low-label)))))
          (labels (plist-get props :labels))
+         (xs (agent-ui-chart--xs props))
+         (times (and xs (plist-get props :times)))
          (legend (seq-some (lambda (s) (plist-get s :name)) (plist-get props :series)))
          (width (* cw (plist-get ctx :width)))
          (plot-height (* lh (plist-get props :height)))
          ;; Room above the plot for its top label's letters.
          (top (round (* 0.8 lh)))
-         (height (+ plot-height (if labels lh 0) (if legend lh 0) (/ lh 2)))
+         (height (+ plot-height (if (or labels times) lh 0) (if legend lh 0) (/ lh 2)))
          (left (+ label-width cw))
          (right (- width cw))
          (muted (agent-ui-chart--color 'agent-ui-muted))
@@ -331,22 +465,38 @@ cell's dots and the series that drew it last."
                  (color (agent-ui-chart--color (agent-ui-chart--face index)))
                  (points (cl-loop for v in values
                                   for i from 0
-                                  collect (cons (if (= n 1) left
-                                                  (+ left (* (- right left) (/ (float i) (1- n)))))
+                                  collect (cons (cond
+                                                 (xs (+ left (* (- right left) (or (nth i xs) 1.0))))
+                                                 ((= n 1) left)
+                                                 (t (+ left (* (- right left) (/ (float i) (1- n))))))
                                                 (y-of v)))))
             (if (= n 1)
                 (svg-circle svg (caar points) (cdar points) 2.5 :fill color)
               (when points
                 (svg-polyline svg points :fill "none" :stroke color :stroke-width 2
                               :stroke-linejoin "round" :stroke-linecap "round"))))))
-    (when labels
+    ;; Times: an axis under the plot, its ticks labelled (none on another's).
+    (when times
+      (svg-line svg left plot-height right plot-height :stroke muted :stroke-width 1)
+      (let ((free 0))
+        (dolist (tick (agent-ui-chart--ticks (apply #'min times) (apply #'max times)
+                                             (max 2 (/ (plist-get ctx :width) 10))))
+          (let* ((x (+ left (* (- right left) (car tick))))
+                 (half (* cw (/ (string-width (cdr tick)) 2.0)))
+                 (center (max (+ left half) (min (- right half) x))))
+            (svg-line svg x plot-height x (+ plot-height (/ lh 4)) :stroke muted :stroke-width 1)
+            (when (>= (- center half) free)
+              (agent-ui-chart--svg-text svg ctx (cdr tick) center (+ plot-height lh)
+                                        :fill muted :text-anchor "middle")
+              (setq free (+ center half cw)))))))
+    (when (and labels (not times))
       (agent-ui-chart--svg-text svg ctx (car labels) left (+ plot-height lh) :fill muted)
       (when (cdr labels)
         (agent-ui-chart--svg-text svg ctx (car (last labels)) right (+ plot-height lh)
                                   :fill muted :text-anchor "end")))
     (when legend
       (let ((x left)
-            (y (+ plot-height (if labels lh 0) lh)))
+            (y (+ plot-height (if (or labels times) lh 0) lh)))
         (cl-loop for s in (plist-get props :series)
                  for index from 0
                  do (let ((name (or (plist-get s :name) "")))
@@ -360,53 +510,100 @@ cell's dots and the series that drew it last."
 (defun agent-ui-chart--bar-svg (props ctx)
   (let* ((cw (plist-get ctx :char-width))
          (lh (plist-get ctx :line-height))
-         (values (plist-get (car (plist-get props :series)) :values))
-         (labels (plist-get props :labels))
-         (names (cl-loop for i from 0 below (length values)
-                         collect (or (nth i labels) (number-to-string (1+ i)))))
-         (numbers (mapcar (lambda (v) (agent-ui-chart--number props v)) values))
+         (rows (agent-ui-chart--bar-rows props))
          (columns (plist-get ctx :width))
-         (label-width (* cw (min (apply #'max 0 (mapcar #'string-width names)) (/ columns 3))))
-         (value-width (* cw (apply #'max 0 (mapcar #'string-width numbers))))
+         (label-width (* cw (min (apply #'max 0 (mapcar (lambda (r) (string-width (car r))) rows)) (/ columns 3))))
+         (value-width (* cw (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows))))
          (width (* cw columns))
          (bar-left (+ label-width (* 2 cw)))
          (bar-width (max (* 5 cw) (- width bar-left value-width (* 2 cw))))
-         (high (float (cdr (agent-ui-chart--range props))))
-         (row (round (* 1.4 lh)))
-         (svg (svg-create width (* row (length values))))
+         (scale (/ bar-width (float (cdr (agent-ui-chart--range props)))))
+         (series (plist-get props :series))
+         ;; Grouped: a group's bars closer, a gap between groups.
+         (grouped (and (cdr series) (not (agent-ui-chart--stacked-p props))))
+         (row (round (* (if grouped 1.1 1.4) lh)))
+         (gap (if grouped (round (* 0.5 lh)) 0))
+         (legend (and (cdr series) (seq-some (lambda (s) (plist-get s :name)) series)))
+         (ys (let ((y 0))
+               (mapcar (lambda (r)
+                         (when (and grouped (not (string-empty-p (car r))) (> y 0)) (cl-incf y gap))
+                         (prog1 y (cl-incf y row)))
+                       rows)))
+         (height (+ (if rows (+ (car (last ys)) row) 0) (if legend (round (* 1.4 lh)) 0)))
+         (svg (svg-create width height))
          (fg (agent-ui-chart--color 'default))
-         (color (agent-ui-chart--color 'agent-ui-accent)))
-    (cl-loop for v in values
-             for name in names
-             for number in numbers
-             for i from 0
-             do (let ((y (* i row))
-                      (length (* bar-width (max 0.0 (min 1.0 (/ v high))))))
-                  (agent-ui-chart--svg-text svg ctx (agent-ui-truncate name (/ label-width cw))
-                                            0 (+ y (* 0.7 row)) :fill fg)
-                  (svg-rectangle svg bar-left (+ y (* 0.2 row)) (max 1 length) (* 0.6 row)
-                                 :fill color :rx 2)
-                  (agent-ui-chart--svg-text svg ctx number (+ bar-left length cw) (+ y (* 0.7 row))
-                                            :fill (agent-ui-chart--color 'agent-ui-muted))))
+         (muted (agent-ui-chart--color 'agent-ui-muted)))
+    (cl-loop for r in rows
+             for y in ys
+             do (let ((x bar-left))
+                  (unless (string-empty-p (car r))
+                    (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (car r) (/ label-width cw))
+                                              0 (+ y (* 0.7 row)) :fill fg))
+                  (dolist (segment (nth 1 r))
+                    (let ((length (min (- (+ bar-left bar-width) x) (* scale (car segment)))))
+                      (when (> length 0)
+                        (svg-rectangle svg x (+ y (* 0.2 row)) (max 1 length) (* 0.6 row)
+                                       :fill (agent-ui-chart--color (agent-ui-chart--face (cdr segment)))
+                                       :rx (if (cdr (nth 1 r)) 0 2))
+                        (setq x (+ x length)))))
+                  (agent-ui-chart--svg-text svg ctx (nth 2 r) (+ (max x (+ bar-left 1)) cw) (+ y (* 0.7 row))
+                                            :fill muted)))
+    (when legend
+      (let ((x bar-left) (y (- height (round (* 0.4 lh)))))
+        (cl-loop for s in series
+                 for index from 0
+                 do (let ((name (or (plist-get s :name) "")))
+                      (svg-circle svg (+ x (/ cw 2)) (- y (/ lh 3)) (/ cw 2.5)
+                                  :fill (agent-ui-chart--color (agent-ui-chart--face index)))
+                      (agent-ui-chart--svg-text svg ctx name (+ x (* 1.5 cw)) y :fill fg)
+                      (setq x (+ x (* cw (+ 4 (string-width name)))))))))
     (agent-ui-chart--image svg)))
+
+;; ====== A HISTOGRAM ======
+
+(defun agent-ui-chart--histogram (props)
+  "PROPS, a histogram's, as bars: its values counted in BINS (default: the
+square root of how many, 5 to 20) of equal width, MIN to MAX (default:
+its values'), each labelled with its range."
+  (let* ((values (plist-get (car (plist-get props :series)) :values))
+         (low (or (plist-get props :min) (apply #'min values)))
+         (high (or (plist-get props :max) (apply #'max values)))
+         (high (if (<= high low) (+ low 1) high))
+         (bins (or (plist-get props :bins) (max 5 (min 20 (ceiling (sqrt (length values)))))))
+         (step (/ (- high low) (float bins)))
+         (counts (make-vector bins 0)))
+    (dolist (v values)
+      (when (<= low v high)
+        (cl-incf (aref counts (min (1- bins) (floor (/ (- v low) step)))))))
+    ;; Its min and max are its bins' span, not the counts' axis.
+    (append (list :kind 'bar :unit nil :min nil :max nil
+                  :series (list (list :name nil :values (append counts nil)))
+                  :labels (cl-loop for i below bins
+                                   collect (format "%s–%s"
+                                                   (agent-ui-format-number (+ low (* i step)))
+                                                   (agent-ui-chart--number props (+ low (* (1+ i) step))))))
+            props)))
 
 (defun agent-ui-chart--gui (props ctx)
   (if (agent-ui-chart--empty-p props)
       (agent-ui-chart--text props ctx)
     (pcase (plist-get props :kind)
       ('bar (agent-ui-chart--bar-svg props ctx))
+      ('histogram (agent-ui-chart--bar-svg (agent-ui-chart--histogram props) ctx))
       ('line (agent-ui-chart--line-svg props ctx))
       ;; A sparkline is a line of text: as in a terminal.
       (_ (agent-ui-chart--text props ctx)))))
 
 (agent-ui-define chart
-  "A chart of numbers: KIND line (default; several series, each its colour),
-bar (one series, a bar per value, LABELS naming them) or sparkline (one
-line, the latest values). As SVG in a graphic frame, as characters in a
+  "A chart of numbers: KIND line (default; several series, each its colour;
+TIMES placing the values on a time axis), bar (a bar per value, LABELS
+naming them; several series grouped under each label, or STACKED),
+histogram (its values counted in BINS) or sparkline (one line, the latest
+values). As SVG in a graphic frame, as characters in a
 terminal. For a live chart, append values: {\"values\": [42]} (or
 {\"series\": [{\"name\": \"p95\", \"values\": [42]}]}), WINDOW keeping the
 latest so many."
-  :props ((kind (choice line bar sparkline) "line, bar or sparkline" :default line)
+  :props ((kind (choice line bar histogram sparkline) "line, bar, histogram or sparkline" :default line)
           (values list "The numbers (one series)")
           (series list "Several series: [{\"name\": ..., \"values\": [...]}]")
           (labels list "Names for the values, in order (x axis; a bar's name)")
@@ -414,7 +611,10 @@ latest so many."
           (min number "The lowest the axis shows (default: the values', bars from 0)")
           (max number "The highest the axis shows (default: the values')")
           (height integer "A line chart's height, in lines" :default 8)
-          (window integer "Keep only the latest so many values (a live chart)"))
+          (window integer "Keep only the latest so many values (a live chart)")
+          (stacked boolean "Bars of several series end to end, a bar per label (else grouped)")
+          (bins integer "A histogram's bins (default: from how many values, 5 to 20)")
+          (times list "Each value's time (ISO 8601, or seconds since 1970): a line chart's time axis"))
   :example (:title "p95 latency" :kind "bar" :unit "ms"
             :labels ("mon" "tue" "wed" "thu") :values (120 95 180 60))
   :check #'agent-ui-chart--check

@@ -120,7 +120,10 @@ agent-ui update tests '{"sort":"Time","descending":true,"row-actions":[{"label":
 ### `chart`
 
 Numbers over time or side by side. `kind`: `line` (default; `values`, or several `series` each its colour),
-`bar` (one series, a bar per value, `labels` naming them) or `sparkline` (one line of the latest values). `labels` name
+`bar` (a bar per value, `labels` naming them; several `series` grouped under each label, or end to end with
+`"stacked": true`), `histogram` (its `values` counted in `bins`, labelled with their ranges) or `sparkline` (one line
+of the latest values). A line chart's `times` (ISO 8601, or seconds since 1970, one per value) place its values by
+time, with an axis of ticks (hours, days) under it. `labels` name
 the values in order, `unit` follows the numbers, `min`/`max` fix the axis, `height` is a line chart's in lines. Drawn
 as SVG in a graphic Emacs, as characters in a terminal. **For a live chart, append values**, `window` keeping the
 latest so many:
@@ -131,6 +134,10 @@ agent-ui show '{"id":"mem","type":"chart","title":"Memory","unit":"MB","window":
 agent-ui append mem '{"values":[412]}'
 agent-ui show '{"id":"times","type":"chart","series":[{"name":"p95","values":[12,15,11]},{"name":"p50","values":[4,5,4]}]}'
 agent-ui append times '{"series":[{"name":"p95","values":[13]},{"name":"p50","values":[5]}]}'
+agent-ui show '{"type":"chart","kind":"bar","stacked":true,"unit":"s","labels":["v2.3","v2.4"],"series":[{"name":"compile","values":[25,20]},{"name":"test","values":[9,6]}]}'
+agent-ui show '{"type":"chart","kind":"histogram","unit":"ms","bins":8,"values":[12,15,18,22,25,31,33,41,58,90]}'
+agent-ui show '{"id":"req","type":"chart","times":["2026-11-10T09:00:00","2026-11-10T12:00:00"],"values":[120,340]}'
+agent-ui append req '{"times":["2026-11-10T13:00:00"],"values":[410]}'
 ```
 
 ### `image`
