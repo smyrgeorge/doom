@@ -1040,3 +1040,12 @@ new file mode 100644
     (should (string-suffix-p " │" (substring-no-properties chart-line)))
     (should (= (agent-ui-panel--pixels chart-line 8) (* 30 8)))))
 
+(ert-deftest agent-ui-elements/table-without-column-names ()
+  ;; No column named: no header nor rule, the rows alone.
+  (should (equal (+test-aue-draw '(:type "table" :columns ("" "") :rows (("build" "29s") ("tests" "1.4s"))))
+                 " build │ 29s\n tests │ 1.4s"))
+  (should (equal (+test-aue-draw '(:type "table" :columns ("") :rows ()))
+                 " no rows yet"))
+  ;; One named: the header, as before.
+  (should (string-match-p "\\` +│ Time\n─+┼─+\n" (+test-aue-draw '(:type "table" :columns ("" "Time") :rows (("a" "1")))))))
+

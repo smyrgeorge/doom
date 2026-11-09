@@ -108,15 +108,19 @@ table fits MAX-WIDTH (no column under 3)."
                                                (concat " " (propertize text 'face (or face state)) " ")))
                             bar))))
       (concat
-       (line columns 'bold) "\n"
-       ;; As wide as the lines: the last column's has no space after it.
-       (propertize (mapconcat (lambda (w) (make-string (+ w 2) ?─))
-                              (append (butlast widths) (list (1- (car (last widths)))))
-                              "┼")
-                   'face 'agent-ui-muted)
+       ;; No column named: no header, the rows alone.
+       (unless (cl-every #'string-empty-p columns)
+         (concat
+          (line columns 'bold) "\n"
+          ;; As wide as the lines: the last column's has no space after it.
+          (propertize (mapconcat (lambda (w) (make-string (+ w 2) ?─))
+                                 (append (butlast widths) (list (1- (car (last widths)))))
+                                 "┼")
+                      'face 'agent-ui-muted)
+          "\n"))
        (if rows
-           (concat "\n" (mapconcat #'line rows "\n"))
-         (concat "\n " (propertize "no rows yet" 'face 'agent-ui-muted)))
+           (mapconcat #'line rows "\n")
+         (concat " " (propertize "no rows yet" 'face 'agent-ui-muted)))
        (when (> (length all) (length rows))
          (concat "\n " (propertize (format "… %d rows more" (- (length all) (length rows)))
                                    'face 'agent-ui-muted)))))))
@@ -145,7 +149,7 @@ true, false, null), fitting the width; cells reading passed, failed,
 running, pending... are coloured. With KEY (a column's index or name),
 appending a row whose key is there replaces that row: append
 {\"rows\": [[\"parser\", \"failed\", \"1.2s\"]]}."
-  :props ((columns list "The columns' names" :required t)
+  :props ((columns list "The columns' names (all \"\": no header, the rows alone)" :required t)
           (rows list "The rows, each an array of cells")
           (key any "The column (index from 0, or name) whose cell identifies a row")
           (align list "Each column's alignment: left, right, center (numbers: right)"))

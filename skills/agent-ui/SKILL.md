@@ -98,7 +98,8 @@ agent-ui append tests '{"rows":[["lexer","running",null],["parser","running",nul
 agent-ui append tests '{"rows":[["lexer","passed","0.4s"]]}'
 ```
 
-`align` sets each column's: `["left","right","center"]`.
+`align` sets each column's: `["left","right","center"]`. Columns all named `""`: no header, the rows alone (a
+summary of figures).
 
 ### `chart`
 
