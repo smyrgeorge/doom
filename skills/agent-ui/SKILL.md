@@ -218,6 +218,17 @@ commands; `RET` opens an issue. To keep the work's state in view while you go th
 agent-ui show '{"id":"board","type":"issues","title":"The epic","parent":"doom-erp","limit":6}'
 ```
 
+### `heatmap`
+
+A grid of cells coloured by their values: `rows` and `columns` (labels), `values` a row of cells for each row: a
+number, coloured on a `scale` from the lowest to the highest (`"blue"`: low faint, high strong; `"green-red"`: low
+good, high bad; `"red-green"`), a word coloured by its state (passed, failed, flaky, skipped...), or null. A legend
+under it; SVG cells with their values in the GUI. A test's results by OS and version, flaky tests by day.
+
+```sh
+agent-ui show '{"id":"matrix","type":"heatmap","title":"Test runs by OS","rows":["lexer","parser","checker"],"columns":["linux","macos","windows"],"values":[["passed","passed","passed"],["passed","flaky","passed"],["failed","passed","skipped"]]}'
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines

@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code diff files graph html image issues log markdown progress stats steps table text timeline)))
+  (should (equal (agent-ui-types) '(chart choice code diff files graph heatmap html image issues log markdown progress stats steps table text timeline)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -905,4 +905,36 @@ new file mode 100644
           (agent-ui--flush)
           (should (string-match-p "Ready (1)" (buffer-string)))
           (should (string-match-p "t-[a-z0-9]+ First" (buffer-string))))))))
+
+;; ====== HEATMAP ======
+
+(ert-deftest agent-ui-elements/heatmap-numbers ()
+  (let ((element '(:type "heatmap" :rows ("a" "b") :columns ("mon" "tue") :values ((1 5) (nil 9)))))
+    (should (equal (+test-aue-draw element)
+                   "   mon tue\na  ███ ███\nb  ··· ███\n1 █████ 9"))
+    ;; Coloured on the scale: the lowest faint, the highest strong.
+    (let* ((text (agent-ui-render element (agent-ui-context :width 60)))
+           (colour (lambda (n) (plist-get (get-text-property (+ (string-search "\na  " text) 4 (* n 4)) 'face text) :foreground))))
+      (should (stringp (funcall colour 0)))
+      (should-not (equal (funcall colour 0) (funcall colour 1))))
+    ;; green-red: low good, high bad.
+    (let ((text (agent-ui-render (plist-put (copy-sequence element) :scale "green-red") (agent-ui-context))))
+      (should (stringp (plist-get (get-text-property (+ (string-search "\na  " text) 4) 'face text) :foreground))))))
+
+(ert-deftest agent-ui-elements/heatmap-states ()
+  (let ((text (+test-aue-draw '(:type "heatmap" :rows ("lexer") :columns ("linux" "macos") :values (("passed" "failed"))))))
+    (should (equal text "       linux macos\nlexer  █████ █████\n█ passed  █ failed")))
+  ;; In the GUI: SVG cells, a number's value in it; the legend as text.
+  (let* ((text (agent-ui-render '(:type "heatmap" :rows ("a") :columns ("x" "y") :values ((3 7)))
+                                (agent-ui-context :width 40 :graphic t)))
+         (svg (plist-get (cdr (get-text-property 0 'display text)) :data)))
+    (should (= 2 (cl-count ?\n (replace-regexp-in-string "<rect" "\n" svg))))
+    (should (string-match-p ">7</text>" svg))
+    (should (string-suffix-p "3 █████ 7" (substring-no-properties text)))))
+
+(ert-deftest agent-ui-elements/heatmap-wrong ()
+  (should (string-match-p "values has 1 rows, for 2" (+test-aue-error '(:type "heatmap" :rows ("a" "b") :columns ("x") :values ((1))))))
+  (should (string-match-p "row 1 has 2 cells, for 1" (+test-aue-error '(:type "heatmap" :rows ("a") :columns ("x") :values ((1 2))))))
+  (should (string-match-p "a cell is a number, a word or null" (+test-aue-error '(:type "heatmap" :rows ("a") :columns ("x") :values (((1)))))))
+  (should (string-match-p "rows must be labels" (+test-aue-error '(:type "heatmap" :rows (1) :columns ("x") :values ((1)))))))
 

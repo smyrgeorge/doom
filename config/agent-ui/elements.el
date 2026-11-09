@@ -20,3 +20,4 @@
 (load! "elements/graph")
 (load! "elements/code")
 (load! "elements/issues")
+(load! "elements/heatmap")
