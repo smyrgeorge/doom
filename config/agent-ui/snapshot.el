@@ -63,10 +63,41 @@ list of them or a plist; FALLBACK where it has none."
   '((?█ . 1.0) (?▉ . 0.875) (?▊ . 0.75) (?▋ . 0.625) (?▌ . 0.5) (?▍ . 0.375) (?▎ . 0.25) (?▏ . 0.125))
   "Block characters (a bar's), drawn as rectangles: glyphs leave gaps.")
 
-(defun agent-ui-snapshot--run (text col y color bold cw lh)
+(defconst agent-ui-snapshot--lines
+  '((?─ . (left right)) (?│ . (up down)) (?┼ . (up down left right))
+    (?├ . (up down right)) (?┤ . (up down left)) (?┬ . (down left right)) (?┴ . (up left right))
+    (?┌ . (down right)) (?┐ . (down left)) (?└ . (up right)) (?┘ . (up left))
+    (?╴ . (left)) (?╵ . (up)) (?╶ . (right)) (?╷ . (down))
+    (?╭ . (curve down right)) (?╮ . (curve down left)) (?╰ . (curve up right)) (?╯ . (curve up left)))
+  "Box-drawing characters (borders', tables', axes'), drawn as lines from
+their cell's centre to its sides: a font's glyphs fall short of the line's
+height, leaving gaps between lines, and a run of them drifts off the
+columns. A corner with curve: a quarter curve between its two sides.")
+
+(defun agent-ui-snapshot--line-path (char col y cw lh &optional height)
+  "CHAR's (in `agent-ui-snapshot--lines') lines in column COL of the line
+at Y: SVG path data. Its vertical ones as long as the line's HEIGHT
+\(default LH: taller beside an image), its horizontal ones at LH's middle."
+  (let* ((sides (cdr (assq char agent-ui-snapshot--lines)))
+         (x0 (+ cw (* col cw)))
+         (cx (+ x0 (/ cw 2.0)))
+         (cy (+ y (/ lh 2.0)))
+         (ends `((up ,cx ,y) (down ,cx ,(+ y (or height lh))) (left ,x0 ,cy) (right ,(+ x0 cw) ,cy))))
+    (if (eq (car sides) 'curve)
+        (pcase-let ((`(,_ ,ax ,ay) (assq (nth 1 sides) ends))
+                    (`(,_ ,bx ,by) (assq (nth 2 sides) ends)))
+          (format "M%.1f %.1fQ%.1f %.1f %.1f %.1f" ax ay cx cy bx by))
+      (mapconcat (lambda (side)
+                   (pcase-let ((`(,_ ,x ,y) (assq side ends)))
+                     (format "M%.1f %.1fL%.1f %.1f" cx cy x y)))
+                 sides ""))))
+
+(defun agent-ui-snapshot--run (text col y color bold cw lh &optional height)
   "TEXT, a run in COLOR from column COL on the line at Y, as SVG: its block
-characters as rectangles (full ones joined), ░ a faint cell, the rest text."
-  (let ((parts nil) (pending "") (pending-col col) (bar-start nil) (bar-cells 0))
+characters as rectangles (full ones joined), ░ a faint cell, its
+box-drawing ones as lines (`agent-ui-snapshot--lines', down to the line's
+HEIGHT), the rest text."
+  (let ((parts nil) (pending "") (pending-col col) (bar-start nil) (bar-cells 0) (lines ""))
     (cl-flet ((flush-text ()
                 ;; Word by word, each at its column: no viewer's way with
                 ;; spaces (some collapse them) moves anything.
@@ -110,6 +141,9 @@ characters as rectangles (full ones joined), ░ a faint cell, the rest text."
             (push (format "<rect x=\"%d\" y=\"%d\" width=\"%.1f\" height=\"%d\" fill=\"%s\"/>"
                           (+ cw (* col cw)) (+ y (round (* 0.15 lh))) (* block cw) (round (* 0.7 lh)) color)
                   parts))
+           ((assq c agent-ui-snapshot--lines)
+            (flush-text) (flush-bar)
+            (setq lines (concat lines (agent-ui-snapshot--line-path c col y cw lh height))))
            ((eq c ?░)
             (flush-text) (flush-bar)
             (push (format "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"%s\" fill-opacity=\"0.25\"/>"
@@ -121,7 +155,10 @@ characters as rectangles (full ones joined), ░ a faint cell, the rest text."
             (setq pending (concat pending (string c))))))
         (cl-incf col (char-width c)))
       (flush-text)
-      (flush-bar))
+      (flush-bar)
+      (unless (string-empty-p lines)
+        (push (format "<path d=\"%s\" stroke=\"%s\" stroke-width=\"1\" fill=\"none\"/>" lines color)
+              parts)))
     (string-join (nreverse parts))))
 
 (defun agent-ui-snapshot--svg-size (data)
@@ -151,6 +188,19 @@ shown size: (SVG . (W . H)); nil if it isn't one, or its size can't be had."
                         (buffer-string)))
               size)))))
 
+(defun agent-ui-snapshot--line-height (line lh)
+  "How high LINE is drawn: LH, or its tallest image's height."
+  (let ((height lh) (pos 0))
+    (while (< pos (length line))
+      (let ((display (get-text-property pos 'display line)))
+        (when (eq (car-safe display) 'image)
+          (let ((size (if-let* ((data (plist-get (cdr display) :data)))
+                          (agent-ui-snapshot--svg-size data)
+                        (and (display-graphic-p) (ignore-errors (image-size display t))))))
+            (when size (setq height (max height (round (cdr size))))))))
+      (setq pos (or (next-single-property-change pos 'display line) (length line))))
+    height))
+
 (defun agent-ui-snapshot-svg (text ctx)
   "TEXT, an element's drawing, as an SVG document (a string): each line in
 its faces' colours, on the theme's background; a line that's an SVG image (a
@@ -169,7 +219,7 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
       ;; A line's parts, an image's (a chart's SVG, nested; an image file's,
       ;; embedded) or text's, each at its column: an image in a bordered
       ;; panel's line is where it's shown, beside the border.
-      (let ((col 0) (height lh) (pos 0) (spans nil))
+      (let ((col 0) (height (agent-ui-snapshot--line-height line lh)) (pos 0) (spans nil))
         (while (< pos (length line))
           (let* ((next (or (next-single-property-change pos 'display line) (length line)))
                  (display (get-text-property pos 'display line))
@@ -181,12 +231,13 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
             (cond
              (size
               (push (replace-regexp-in-string "\\`<svg " (format "<svg x=\"%d\" y=\"%d\" " x y) data) spans)
-              (cl-incf col (ceiling (car size) cw))
-              (setq height (max height (round (cdr size)))))
+              (cl-incf col (ceiling (car size) cw)))
              (file
               (push (format "<g transform=\"translate(%d %d)\">%s</g>" x y (car file)) spans)
-              (cl-incf col (ceiling (cadr file) cw))
-              (setq height (max height (cddr file))))
+              (cl-incf col (ceiling (cadr file) cw)))
+             ;; A filler after an image, to its last column's end (a
+             ;; panel's): counted in the image's columns already.
+             ((eq (car-safe display) 'space))
              (t
               (dolist (run (agent-ui-snapshot--runs (substring line pos next)))
                 ;; A run on a colour of its own (a GUI bar's): that colour.
@@ -198,7 +249,7 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
                           spans)))
                 (push (agent-ui-snapshot--run (car run) col y
                                               (agent-ui-snapshot--color (cdr run) :foreground fg)
-                                              (agent-ui-snapshot--bold-p (cdr run)) cw lh)
+                                              (agent-ui-snapshot--bold-p (cdr run)) cw lh height)
                       spans)
                 (cl-incf col (string-width (car run))))))
             (setq pos next)))

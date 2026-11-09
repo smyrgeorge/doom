@@ -1017,3 +1017,26 @@ new file mode 100644
   (should-not (string-match-p "<svg" (+test-aue-draw '(:type "panel" :layout "row" :min-width 8
                                                        :children ((:type "chart" :values (1 2)) (:type "text" :text "x")))))))
 
+(ert-deftest agent-ui-elements/panel-an-image-line-in-its-border ()
+  ;; An image's line padded to the panel's width: a filler to its last
+  ;; column's end, spaces, the border's right side.
+  (let* ((image (lambda (w) (propertize "img" 'display (list 'image :type 'svg :scale 1
+                                                             :data (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"16\"/>" w)))))
+         (ctx (agent-ui-context :width 20 :graphic t :char-width 8 :line-height 16))
+         (lines (agent-ui-panel--lines (concat (funcall image 45) "\nab") 10 ctx))
+         (line (car lines)))
+    ;; 45 px: 6 columns, 3 px of filler, 4 spaces.
+    (should (equal (substring-no-properties line) "img     "))
+    (should (equal (get-text-property 3 'display line) '(space :width (3))))
+    (should (= (agent-ui-panel--pixels line 8) 80))
+    (should (equal (cadr lines) "ab        "))
+    ;; Wider than its room: as it is.
+    (should (equal (substring-no-properties (car (agent-ui-panel--lines (funcall image 200) 10 ctx))) "img")))
+  ;; A chart in a column panel, in the GUI: both sides of the border.
+  (let* ((gui (agent-ui-render '(:type "panel" :children ((:type "chart" :values (1 3 2))))
+                               (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16)))
+         (chart-line (seq-find #'agent-ui-panel--image-p (split-string gui "\n"))))
+    (should (string-prefix-p "│ " (substring-no-properties chart-line)))
+    (should (string-suffix-p " │" (substring-no-properties chart-line)))
+    (should (= (agent-ui-panel--pixels chart-line 8) (* 30 8)))))
+

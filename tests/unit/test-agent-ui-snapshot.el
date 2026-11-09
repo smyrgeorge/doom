@@ -57,10 +57,33 @@
          (svg (agent-ui-snapshot-svg (concat line "\nnext") (agent-ui-context :width 40 :char-width 8 :line-height 16))))
     (should (string-match-p "<svg x=\"24\" y=\"8\" xmlns" svg))
     (should-not (string-match-p ">chart</text>" svg))
-    (should (string-match-p "<text x=\"72\" y=\"20\" [^>]*>│</text>" svg))
+    ;; The border after it in its column (column 8: its line at x 76), down
+    ;; to the line's bottom (the image's): no gap to the next line.
+    (should (string-match-p "M76.0 16.0L76.0 8.0M76.0 16.0L76.0 40.0" svg))
     (should (string-match-p "<text x=\"8\" y=\"52\" [^>]*>next</text>" svg))
+    ;; A filler after an image (a panel's): in the image's last column, the
+    ;; border right after (45 px: 6 columns, its line at x 60).
+    (let ((svg (agent-ui-snapshot-svg
+                (concat (propertize "i" 'display (list 'image :type 'svg :data "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"45\" height=\"16\"/>"))
+                        (propertize " " 'display '(space :width (3))) "│")
+                (agent-ui-context :width 40 :char-width 8 :line-height 16))))
+      (should (string-match-p "<path d=\"M60.0 16.0L60.0 8.0" svg)))
     ;; Words held to their cells' width.
     (should (string-match-p "textLength=\"32\" lengthAdjust=\"spacingAndGlyphs\">next</text>" svg))))
+
+(ert-deftest agent-ui-snapshot/box-drawing-as-lines ()
+  ;; A table's borders: lines from each cell's centre to its sides, meeting
+  ;; from line to line; none as text.
+  (let ((svg (agent-ui-snapshot-svg "a│b\n─┼─\n╭╯" (agent-ui-context :width 40 :char-width 8 :line-height 16))))
+    (should-not (string-match-p ">[│─┼╭╯]+</text>" svg))
+    ;; │ in column 1 of line 1: x 20, from y 16 to 8 (the top) and 24.
+    (should (string-match-p "<path d=\"M20.0 16.0L20.0 8.0M20.0 16.0L20.0 24.0\" stroke=\"#[0-9a-fA-F]+\" stroke-width=\"1\" fill=\"none\"/>" svg))
+    ;; ┼ under it: all four sides, its vertical on the same x.
+    (should (string-match-p "M20.0 32.0L20.0 24.0M20.0 32.0L20.0 40.0M20.0 32.0L16.0 32.0M20.0 32.0L24.0 32.0" svg))
+    ;; ─ beside it: across its cell.
+    (should (string-match-p "M28.0 32.0L24.0 32.0M28.0 32.0L32.0 32.0" svg))
+    ;; ╭: a curve from its bottom to its right.
+    (should (string-match-p "M12.0 56.0Q12.0 48.0 16.0 48.0" svg))))
 
 (ert-deftest agent-ui-snapshot/bars-as-rectangles ()
   (let ((svg (agent-ui-snapshot-svg "███▌░░  50%" (agent-ui-context :width 20 :char-width 8 :line-height 16))))

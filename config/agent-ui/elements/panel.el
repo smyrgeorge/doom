@@ -57,14 +57,47 @@ an error saying which is wrong. Returns the ids seen."
       (agent-ui--fail "panel: weights are a positive number for each child (%d)" (length children))))
   props)
 
-(defun agent-ui-panel--lines (text width)
-  "TEXT's lines, each padded (or cut) to WIDTH columns; a line that's an
-image kept as it is."
-  (mapcar (lambda (line)
-            (if (and (> (length line) 0) (get-text-property 0 'display line))
-                line
-              (agent-ui-pad line width)))
-          (split-string text "\n")))
+(declare-function agent-ui-snapshot--svg-size "agent-ui/snapshot")
+
+(defun agent-ui-panel--pixels (line cw)
+  "How wide LINE is shown, in pixels (CW a column's): its images' widths, a
+filler's (a space of a given width), CW a column for the rest; nil if an
+image's width can't be known."
+  (let ((pos 0) (pixels 0))
+    (while (and pixels (< pos (length line)))
+      (let* ((next (or (next-single-property-change pos 'display line) (length line)))
+             (display (get-text-property pos 'display line)))
+        (setq pixels
+              (pcase display
+                (`(image . ,props)
+                 (let ((size (if-let* ((data (plist-get props :data))
+                                       ((eq (plist-get props :type) 'svg)))
+                                 (agent-ui-snapshot--svg-size data)
+                               (and (display-graphic-p) (ignore-errors (image-size display t))))))
+                   (and size (+ pixels (* (car size) (or (plist-get props :scale) 1))))))
+                (`(space :width (,width)) (+ pixels width))
+                (_ (+ pixels (* cw (string-width (substring line pos next)))))))
+        (setq pos next)))
+    pixels))
+
+(defun agent-ui-panel--lines (text width ctx)
+  "TEXT's lines, each padded (or cut) to WIDTH columns. A line with an
+image: padded after it, a space as wide as the image leaves of its last
+column (shown so; a snapshot counts it in the image's columns), then
+spaces; kept as it is if wider, or its width unknown."
+  (let ((cw (or (plist-get ctx :char-width) 8)))
+    (mapcar (lambda (line)
+              (if (not (agent-ui-panel--image-p line))
+                  (agent-ui-pad line width)
+                (let ((pixels (agent-ui-panel--pixels line cw)))
+                  (if (or (null pixels) (> pixels (* width cw)))
+                      line
+                    (let* ((columns (ceiling pixels cw))
+                           (filler (round (- (* columns cw) pixels))))
+                      (concat line
+                              (if (> filler 0) (propertize " " 'display `(space :width (,filler))) "")
+                              (make-string (- width columns) ?\s)))))))
+            (split-string text "\n"))))
 
 (defun agent-ui-panel--child (child ctx width)
   "CHILD drawn at WIDTH, its id in its context (its own buttons); its text
@@ -156,7 +189,7 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
           (row
             ;; Side by side, as text: line by line, each child its width.
             (let* ((text-ctx (plist-put (copy-sequence ctx) :graphic nil))
-                   (columns (cl-mapcar (lambda (child w) (agent-ui-panel--lines (agent-ui-panel--child child text-ctx w) w))
+                   (columns (cl-mapcar (lambda (child w) (agent-ui-panel--lines (agent-ui-panel--child child text-ctx w) w text-ctx))
                                        children widths))
                    (height (apply #'max (mapcar #'length columns))))
               (cl-loop for i below height
@@ -168,7 +201,7 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
             ;; One under another, a blank line between.
             (cdr (apply #'append
                         (mapcar (lambda (child) (cons (make-string inner ?\s)
-                                                      (agent-ui-panel--lines (agent-ui-panel--child child ctx inner) inner)))
+                                                      (agent-ui-panel--lines (agent-ui-panel--child child ctx inner) inner ctx)))
                                 children)))))))
     (if (not border)
         (mapconcat (lambda (l) (string-trim-right l)) body "\n")
@@ -178,8 +211,11 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
                              (cond
                               ;; A row as one SVG: its sides drawn in it.
                               ((eq line row-image) line)
-                              ((and (> (length line) 0) (get-text-property 0 'display line))
-                                 (concat (funcall edge "│ ") line))
+                              ;; Wider than its room (an image): its right side left out.
+                              ((and (agent-ui-panel--image-p line)
+                                    (let ((pixels (agent-ui-panel--pixels line (or (plist-get ctx :char-width) 8))))
+                                      (or (null pixels) (> pixels (* inner (or (plist-get ctx :char-width) 8))))))
+                               (concat (funcall edge "│ ") line))
                               (t
                                (concat (funcall edge "│ ") line (funcall edge " │")))))
                            body "\n")

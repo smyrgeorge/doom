@@ -292,9 +292,9 @@ agent-shell owns its buffer's text, so an element isn't put there: it goes the w
 (`config/agent-ui/snapshot.el`).
 
 - **From the agent:** `agent-ui snapshot ID` saves the element as it's drawn, an SVG (its text in its faces' colours,
-  a word at its column; a bar's blocks as rectangles; a chart's own SVG nested), in the session's
-  `.agent-shell/images/`, and replies with a Markdown image link. In its reply, agent-shell shows it inline, and the
-  transcript keeps it.
+  a word at its column; a bar's blocks as rectangles; borders' box-drawing characters as lines through their cells,
+  meeting from line to line; a chart's own SVG nested), in the session's `.agent-shell/images/`, and replies with a
+  Markdown image link. In its reply, agent-shell shows it inline, and the transcript keeps it.
 - **From you:** `a` on an element in a canvas puts it into its session's prompt, as text: its id, its type, its
   drawing in a code block.
 - **Links:** `show`'s reply has the element's link, `agent-ui://canvas/NAME#ID`. In the agent's reply as a Markdown
