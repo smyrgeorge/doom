@@ -11,3 +11,4 @@
 (load! "elements/chart")
 (load! "elements/image")
 (load! "elements/html")
+(load! "elements/diff")

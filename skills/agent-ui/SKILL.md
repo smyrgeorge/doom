@@ -130,6 +130,20 @@ A web page as a card: its title and the start of its text, from an HTML `file` (
 agent-ui show '{"id":"coverage","type":"html","title":"Coverage","file":"coverage/index.html","lines":3}'
 ```
 
+### `diff`
+
+Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines
+green, removed red, each line's number in the new file. `RET` on a line opens its file there. `dir` is where its files
+are (default: your directory). To show what you changed, or follow the work tree as you go:
+
+```sh
+agent-ui show '{"id":"fix","type":"diff","title":"The fix","diff":"--- a/src/parser.c\n+++ b/src/parser.c\n@@ -40,2 +40,2 @@\n   int depth = 0;\n-  return NULL;\n+  return parse_term(p);\n"}'
+agent-ui show <<'EOF'
+{"id": "changes", "type": "diff", "title": "Uncommitted changes",
+ "source": {"poll": "git diff", "every": 5, "into": "diff"}}
+EOF
+```
+
 ### `text`
 
 Plain text, wrapped to the width, newlines kept. `face`: `plain` (default), `muted`, `success`, `warning`, `error`.
@@ -237,7 +251,7 @@ Each line of its output that matches a rule's `match` changes the element: `set`
 append. In them, a string that's only `"$1"` is that group (a number if it reads as one), `"$0"` the match, and `$N`
 in other text is replaced. `match` is a regular expression as in `grep -E` (groups, `\d`, `\s`, `\w`, `|`, `?`, `+`,
 `*`, `{n,m}`), written in JSON: each `\` doubled (`\\d`, `\\[`). `tail: N` instead sets a `text` element to the last N
-lines.
+lines; `into: PROP` sets that property to all of it (a `diff`'s `diff`).
 
 ```sh
 agent-ui show <<'EOF'

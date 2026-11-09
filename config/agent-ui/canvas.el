@@ -296,10 +296,17 @@ error saying what's wrong. Its :type a string, as JSON gives it."
     (let ((element (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type)))))
       ;; Its files by their full names: drawn later, wherever the agent was.
       (dolist (prop (agent-ui-type-props type))
-        (when (and (eq (agent-ui-prop-kind prop) 'file) (plist-get element (agent-ui-prop-key prop)))
-          (setq element (plist-put element (agent-ui-prop-key prop)
-                                   (expand-file-name (plist-get element (agent-ui-prop-key prop))
-                                                     agent-ui-file-directory)))))
+        (when (eq (agent-ui-prop-kind prop) 'file)
+          (let ((key (agent-ui-prop-key prop)))
+            (cond
+             ((plist-get element key)
+              (setq element (plist-put element key (expand-file-name (plist-get element key)
+                                                                     agent-ui-file-directory))))
+             ;; :here: the agent's directory, now (drawn later, elsewhere).
+             ((eq (agent-ui-prop-default prop) :here)
+              (setq element (plist-put element key
+                                       (file-name-as-directory
+                                        (expand-file-name (or agent-ui-file-directory default-directory))))))))))
       element)))
 
 (cl-defun agent-ui-show (element &key canvas)

@@ -1,7 +1,7 @@
 # Agent UI
 
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line and MCP
-> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image` and `html` types, sources (an element
+> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html` and `diff` types, sources (an element
 > following a command, a file, a poll), actions (buttons into the prompt), types the agent makes (kept or discarded by
 > you), elements in the conversation, canvases kept with their sessions, and what the agent is told. `M-x
 > +my/example-agent-ui` shows it ([Examples](examples.md)).
@@ -157,6 +157,7 @@ else the canvas `default`. A session's canvas is killed with it.
 | `steps` | A checklist whose steps change state; appending a step by its name changes it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":...}]` |
 | `chart` | Lines (several series), bars or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window` |
 | `image` | An image file (an `.excalidraw.svg` drawing too) in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file`, `alt`, `width` (percent), `height` (lines) |
+| `diff` | Changes from a unified diff: by file (lines added and removed) and hunk, coloured, line numbers; `RET` opens the file there; a source with `"into": "diff"` follows `git diff` | `diff`, `dir` |
 | `html` | A web page as a card: its title and the start of its text; `RET` opens it in WebKit in a pane (`config/html.el`), else the browser | `file` or `url`, `lines` |
 
 A `file` property is relative to the agent's directory, kept by its full name. A button (`agent-ui-button`) opens
@@ -336,7 +337,7 @@ the types change.
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |

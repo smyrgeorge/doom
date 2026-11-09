@@ -15,7 +15,8 @@
 ;; changes the element: "set" (as an update) and "append" (as an append),
 ;; their strings "$1" (a group: a number if it reads as one), "$0" (the
 ;; match), or text with $N in it. "tail": N sets a text element's text to the
-;; last N lines. When a command ends: "done" (exit 0) or "failed" (else),
+;; last N lines; "into": PROP sets PROP to all of them (a diff's diff, as a
+;; poll of git diff gives it), or the last N with tail. When a command ends: "done" (exit 0) or "failed" (else),
 ;; patches with $code; a progress bar is done or failed by itself. A source
 ;; stops when its element is removed or shown again, or its canvas closed.
 ;; No Doom here.
@@ -35,12 +36,12 @@
   :type 'number :group 'agent-ui)
 
 (defconst agent-ui-source--keys
-  '(:command :file :poll :dir :every :rules :match :set :append :tail :done :failed :from)
+  '(:command :file :poll :dir :every :rules :match :set :append :tail :into :done :failed :from)
   "What a source may have.")
 
 (cl-defstruct (agent-ui-source--state (:constructor agent-ui-source--make-state))
   "A source following, for an element of a canvas."
-  kind what dir every rules tail done failed process timer log (partial "") lines exit error
+  kind what dir every rules tail into done failed process timer log (partial "") lines exit error
   (count 0) offset)
 
 (defvar-local agent-ui-source--states nil
@@ -130,7 +131,7 @@ not started. Signals `agent-ui-error' saying what's wrong."
     (agent-ui--fail "source: give an object: {\"command\": ...}, {\"file\": ...} or {\"poll\": ...}"))
   (cl-loop for (k _) on source by #'cddr
            unless (memq k agent-ui-source--keys)
-           do (agent-ui--fail "source: unknown key %s; its keys: command, file, poll, dir, every, rules, match, set, append, tail, done, failed, from"
+           do (agent-ui--fail "source: unknown key %s; its keys: command, file, poll, dir, every, rules, match, set, append, tail, into, done, failed, from"
                               (agent-ui--show-value (substring (symbol-name k) 1))))
   (let* ((kinds (seq-filter (lambda (k) (plist-get source k)) '(:command :file :poll)))
          (kind (car kinds))
@@ -148,8 +149,12 @@ not started. Signals `agent-ui-error' saying what's wrong."
       (agent-ui--fail "source: %s must be text" (substring (symbol-name kind) 1)))
     (when (and (plist-get source :rules) (plist-get source :match))
       (agent-ui--fail "source: give rules, or one rule's match, set, append: not both"))
-    (unless (or rules tail (eq kind :command))
-      (agent-ui--fail "source: give rules (or tail): what of its output changes the element?"))
+    (unless (or rules tail (plist-get source :into) (eq kind :command))
+      (agent-ui--fail "source: give rules (or tail, into): what of its output changes the element?"))
+    (when (and (plist-get source :into)
+               (not (and (stringp (plist-get source :into))
+                         (string-match-p "\\`[a-z][a-z0-9-]*\\'" (plist-get source :into)))))
+      (agent-ui--fail "source: into names a property: \"diff\", \"text\""))
     (when (and tail (not (and (integerp tail) (<= 1 tail 200))))
       (agent-ui--fail "source: tail is how many lines, 1 to 200"))
     (when (and every (not (and (numberp every) (>= every 1))))
@@ -167,6 +172,7 @@ not started. Signals `agent-ui-error' saying what's wrong."
             (and (stringp dir) (file-name-as-directory (expand-file-name dir))))
      :rules (cl-loop for rule in rules for i from 1 collect (agent-ui-source--rule rule i))
      :tail tail
+     :into (plist-get source :into)
      :done (agent-ui-source--patch (plist-get source :done) "done")
      :failed (agent-ui-source--patch (plist-get source :failed) "failed")
      :offset (if (equal (plist-get source :from) "end") 'end 0)
@@ -241,11 +247,15 @@ lines (all of them if FINAL) through the rules, the element changed."
       (cl-incf (agent-ui-source--state-count state) (length lines))
       (condition-case err
           (pcase-let ((`(,set . ,append) (agent-ui-source--apply state lines)))
-            (when-let* ((tail (agent-ui-source--state-tail state)))
-              (when lines
-                (let ((kept (last (append (agent-ui-source--state-lines state) lines) tail)))
+            ;; tail: the last lines; into: all of them (the latest 5000), into
+            ;; that property (text by default).
+            (let ((tail (agent-ui-source--state-tail state))
+                  (into (agent-ui-source--state-into state)))
+              (when (and (or tail into) (or lines final))
+                (let ((kept (last (append (agent-ui-source--state-lines state) lines) (or tail 5000))))
                   (setf (agent-ui-source--state-lines state) kept)
-                  (setq set (plist-put set :text (string-join kept "\n"))))))
+                  (setq set (plist-put set (intern (concat ":" (or into "text")))
+                                       (string-join kept "\n"))))))
             (agent-ui-source--change canvas id set append))
         (error (setf (agent-ui-source--state-error state) (agent-ui-error-message err)))))))
 

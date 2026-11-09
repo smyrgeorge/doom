@@ -109,7 +109,12 @@ as an `agent-ui-prop'."
        (let ((prop (agent-ui--make-prop :key key :kind kind :doc doc
                                         :required (plist-get keys :required))))
          (when-let* ((default (plist-get keys :default)))
-           (setf (agent-ui-prop-default prop) (agent-ui--check-value type prop default)))
+           (setf (agent-ui-prop-default prop)
+                 ;; A file property's :here: the agent's directory (see
+                 ;; `agent-ui-file-directory'), when the element is shown.
+                 (if (and (eq default :here) (eq kind 'file))
+                     :here
+                   (agent-ui--check-value type prop default))))
          prop)))
     (_ (agent-ui--fail "%s: %S isn't a property: (NAME KIND DOC [:default VALUE] [:required t])"
                        type entry))))
@@ -144,7 +149,9 @@ as an `agent-ui-prop'."
 ARGS are keywords:
   :props    its properties, each (NAME KIND DOC [:default VALUE]
             [:required t]). KIND: string, number, integer, boolean, list,
-            any, or (choice SYMBOL...) (JSON's strings become the symbol).
+            any, file (a name, relative to the agent's directory), or
+            (choice SYMBOL...) (JSON's strings become the symbol). A file
+            property's :default :here is the agent's directory.
   :example  an element of it, a plist (:value 3 :max 12): checked, shown in
             the catalog.
   :text     (lambda (PROPS CTX) ...) drawing it as text: a string, maybe
@@ -275,6 +282,8 @@ required one missing, or what the type's :check refuses. ELEMENT's :id,
                           ((agent-ui-prop-required prop)
                            (agent-ui--fail "%s: %s is required"
                                            name (substring (symbol-name key) 1)))
+                          ((eq (agent-ui-prop-default prop) :here)
+                           (file-name-as-directory (expand-file-name (or agent-ui-file-directory default-directory))))
                           (t (agent-ui-prop-default prop)))))))
     (if-let* ((check (agent-ui-type-check type)))
         (funcall check result)

@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart html image markdown progress steps table text)))
+  (should (equal (agent-ui-types) '(chart diff html image markdown progress steps table text)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -448,4 +448,75 @@
     (let ((empty (get-text-property (- (string-search "1/2" plain) 3) 'face text)))
       (should (stringp (plist-get empty :background)))
       (should-not (equal (plist-get empty :background) (plist-get (get-text-property 0 'face text) :background))))))
+
+;; ====== DIFF ======
+
+(defconst +test-aue-diff
+  "diff --git a/src/parser.c b/src/parser.c
+index 1111111..2222222 100644
+--- a/src/parser.c
++++ b/src/parser.c
+@@ -40,4 +40,5 @@ parse_expr
+   int depth = 0;
+-  return NULL;
++  if (!p) return NULL;
++  return parse_term(p);
+ }
+\\ No newline at end of file
+diff --git a/README.md b/README.md
+new file mode 100644
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,2 @@
++# Parser
++A parser.
+")
+
+(ert-deftest agent-ui-elements/diff ()
+  (let* ((opened nil)
+         (agent-ui-open-file-function (lambda (f) (push f opened) (set-buffer (get-buffer-create " *opened*"))))
+         (element (list :type "diff" :diff +test-aue-diff :dir "/work/"))
+         (text (agent-ui-render element (agent-ui-context :width 60))))
+    (should (equal (substring-no-properties text)
+                   (concat "▾ src/parser.c  +2 −1\n"
+                           "  @@ -40,4 +40,5 @@ parse_expr\n"
+                           "     40     int depth = 0;\n"
+                           "        −   return NULL;\n"
+                           "     41 +   if (!p) return NULL;\n"
+                           "     42 +   return parse_term(p);\n"
+                           "     43   }\n"
+                           "        \\  No newline at end of file\n"
+                           "▾ README.md  +2 −0\n"
+                           "  @@ -0,0 +1,2 @@\n"
+                           "      1 + # Parser\n"
+                           "      2 + A parser.")))
+    (should (eq (+test-aue-face-at element "+2 −1") 'agent-ui-success))
+    (should (eq (get-text-property (string-search "−   return" text) 'face text) 'agent-ui-error))
+    ;; RET on an added line: its file, at its line.
+    (funcall (get-text-property (string-search "if (!p)" text) 'agent-ui-action text))
+    (should (equal (car opened) "/work/src/parser.c"))
+    (should (= (with-current-buffer " *opened*" (line-number-at-pos)) 1))
+    (kill-buffer " *opened*")
+    ;; In the GUI: added and removed lines on a tint as wide as the pane.
+    (let ((gui (agent-ui-render element (agent-ui-context :width 60 :graphic t))))
+      (should (seq-some (lambda (f) (and (consp f) (keywordp (car f)) (plist-get f :background)))
+                        (ensure-list (get-text-property (string-search "−   return" gui) 'face gui))))
+      (should (= (string-width (nth 3 (split-string (substring-no-properties gui) "\n"))) 60))))
+  (should (equal (+test-aue-draw '(:type "diff" :diff "")) "no changes"))
+  ;; Too many lines: what's left out said.
+  (let ((agent-ui-max-rows 3))
+    (should (string-suffix-p "… 5 lines more" (+test-aue-draw (list :type "diff" :diff +test-aue-diff))))))
+
+(ert-deftest agent-ui-elements/diff-dir-the-agents ()
+  ;; Its dir: the agent's directory, when shown (relative names resolve there).
+  (let ((agent-ui-file-directory "/proj/")
+        (agent-ui-default-canvas (make-temp-name "diff-"))
+        (agent-ui-display-function #'ignore))
+    (unwind-protect
+        (progn
+          (agent-ui-show '(:id "d" :type "diff" :diff ""))
+          (should (equal (plist-get (agent-ui-get "d") :dir) "/proj/"))
+          (agent-ui-show '(:id "e" :type "diff" :dir "sub"))
+          (should (equal (plist-get (agent-ui-get "e") :dir) "/proj/sub")))
+      (kill-buffer (agent-ui-canvas)))))
 
