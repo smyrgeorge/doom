@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code diff files graph html image log markdown progress stats steps table text timeline)))
+  (should (equal (agent-ui-types) '(chart choice code diff files graph html image issues log markdown progress stats steps table text timeline)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -828,4 +828,76 @@ new file mode 100644
   (should (string-match-p "to is before from" (+test-aue-error '(:type "code" :file "a" :from 5 :to 2))))
   (should (string-match-p "mark 1's kind" (+test-aue-error '(:type "code" :code "x" :marks ((:line 1 :kind "bad"))))))
   (should (string-match-p "mark 1 must be" (+test-aue-error '(:type "code" :code "x" :marks ((:kind "error")))))))
+
+;; ====== ISSUES ======
+
+(defconst +test-aue-issues
+  '(:ready ("p-1" "p-4")
+    :issues ((:id "p-1" :title "Ready one" :status "open" :priority 2)
+             (:id "p-4" :title "Urgent ready" :status "open" :priority 0 :labels ("ui"))
+             (:id "p-2" :title "Working on it" :status "in_progress" :priority 1)
+             (:id "p-3" :title "Waits on p-2" :status "open" :priority 2)
+             (:id "p-5" :title "Old" :status "closed" :closed_at "2026-01-01T00:00:00Z")
+             (:id "p-6" :title "New" :status "closed" :closed_at "2026-02-01T00:00:00Z")
+             (:id "p-e" :title "An epic" :status "open" :issue_type "epic")))
+  "A project's issues as fetched: p-3 blocked (open, not ready).")
+
+(ert-deftest agent-ui-elements/issues-a-board ()
+  (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
+    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
+    (let ((element '(:type "issues" :dir "/proj/")))
+      ;; Side by side: by priority; done, the latest first; no epics.
+      (should (equal (+test-aue-draw element :width 80)
+                     (concat "Ready (2)           In progress (1)     Blocked (1)         Done (2)\n"
+                             "p-4 Urgent ready    p-2 Working on it   p-3 Waits on p-2    p-6 New\n"
+                             "p-1 Ready one                                               p-5 Old")))
+      (should (eq (+test-aue-face-at element "p-4") 'agent-ui-warning))
+      ;; Narrow: one under another.
+      (should (string-prefix-p "Ready (2)\np-4 Urgent ready\np-1 Ready one\n\nIn progress (1)"
+                               (+test-aue-draw element :width 40))))
+    ;; An epic's, a label's.
+    (puthash "/proj/" (list :ready nil :issues '((:id "e.1" :title "child" :status "in_progress")
+                                                 (:id "x" :title "other" :status "in_progress")))
+             agent-ui-issues--cache)
+    (should (string-match-p "In progress (1)" (+test-aue-draw '(:type "issues" :dir "/proj/" :parent "e") :width 80)))
+    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
+    (should (string-match-p "Ready (1)" (+test-aue-draw '(:type "issues" :dir "/proj/" :label "ui") :width 80)))
+    ;; Not fetched yet; bd failing.
+    (should (equal (+test-aue-draw '(:type "issues" :dir "/other/")) "fetching the issues…"))
+    (puthash "/bad/" '(:error "no Beads issues here (bd failed)") agent-ui-issues--cache)
+    (should (equal (+test-aue-draw '(:type "issues" :dir "/bad/")) "no Beads issues here (bd failed)"))))
+
+(ert-deftest agent-ui-elements/issues-open-one ()
+  (let ((agent-ui-issues--cache (make-hash-table :test #'equal))
+        (opened nil))
+    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
+    (let* ((agent-ui-open-issue-function (lambda (id dir) (push (list id dir) opened)))
+           (text (agent-ui-render '(:type "issues" :dir "/proj/") (agent-ui-context :width 80))))
+      (funcall (get-text-property (string-search "Working on" text) 'agent-ui-action text))
+      (should (equal opened '(("p-2" "/proj/")))))))
+
+(ert-deftest agent-ui-elements/issues-fetched-by-bd ()
+  (unless (executable-find "bd") (ert-skip "No bd"))
+  (let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "issues-home-") t)))
+         (root (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "issues-") t))))
+         (process-environment (append (list (concat "HOME=" home) (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
+                                            "GIT_CONFIG_NOSYSTEM=1" "BD_ACTOR=Tester")
+                                      process-environment))
+         (default-directory root)
+         (agent-ui-issues--cache (make-hash-table :test #'equal)))
+    (with-temp-file (expand-file-name ".gitconfig" home)
+      (insert "[user]\n\tname = T\n\temail = t@example.invalid\n[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
+    (call-process "git" nil nil nil "init" "-q")
+    (should (zerop (call-process "bd" nil nil nil "init" "--quiet" "--prefix" "t")))
+    (call-process "bd" nil nil nil "create" "--silent" "--title=First" "--priority=1")
+    (+test-aue-canvas
+      (let ((agent-ui-file-directory root))
+        (agent-ui-show '(:id "board" :type "issues"))
+        ;; Shown: fetched in the background, then drawn.
+        (with-timeout (20 (ert-fail "Not fetched"))
+          (while (not (gethash root agent-ui-issues--cache)) (accept-process-output nil 0.05)))
+        (with-current-buffer canvas
+          (agent-ui--flush)
+          (should (string-match-p "Ready (1)" (buffer-string)))
+          (should (string-match-p "t-[a-z0-9]+ First" (buffer-string))))))))
 

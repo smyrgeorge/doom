@@ -207,6 +207,17 @@ after the line. For the line an error is on, the code a change is about.
 agent-ui show '{"id":"where","type":"code","title":"Where it fails","language":"c","from":40,"code":"int parse_expr(Parser *p) {\n  return NULL;\n}","marks":[{"line":41,"kind":"error","note":"never NULL here"}]}'
 ```
 
+### `issues`
+
+The project's Beads issues as a board: Ready (open, nothing blocking), In progress, Blocked, Done (the latest first),
+each issue's id and title, P0/P1 marked. `parent` shows an epic's issues only, `label` those with it, `limit` per
+column; `dir` is the project (default: your directory). Fetched by bd in the background, refreshed after your bd
+commands; `RET` opens an issue. To keep the work's state in view while you go through an epic.
+
+```sh
+agent-ui show '{"id":"board","type":"issues","title":"The epic","parent":"doom-erp","limit":6}'
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines

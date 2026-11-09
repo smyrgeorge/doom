@@ -176,7 +176,9 @@ killed after."
 
 (ert-deftest agent-ui-agent/the-skills-examples-right ()
   "Each `agent-ui show/update/append ... '{...}'' in the skill: its JSON is
-right, and does what it says on a canvas, in order."
+right, and does what it says on a canvas, in order. Its issues board isn't
+fetched: bd would read this repository's own issues."
+  (cl-letf (((symbol-function 'agent-ui-issues-refresh) #'ignore))
   (+test-aua
     (let ((agent-ui-default-canvas (make-temp-name "skill-"))
           (skill (+test-aua-skill))
@@ -197,7 +199,7 @@ right, and does what it says on a canvas, in order."
       ;; Drawn without an error.
       (with-current-buffer (agent-ui-canvas)
         (agent-ui--flush)
-        (should-not (string-search "⚠" (buffer-string)))))))
+        (should-not (string-search "⚠" (buffer-string))))))))
 
 ;; ====== ACTIONS ======
 

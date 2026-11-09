@@ -19,3 +19,4 @@
 (load! "elements/timeline")
 (load! "elements/graph")
 (load! "elements/code")
+(load! "elements/issues")
