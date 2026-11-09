@@ -4,6 +4,11 @@
 ;; config/agent-ui/elements.el.
 ;;
 ;;   ███████████████▎░░░░░░░░░░  7/12  58%  linking
+;;
+;; On a canvas, the values it's given over time say its rate and, with a max,
+;; the time left, once they're steady (a few values over a few seconds):
+;;
+;;   █████████▌░░░░░░░░░░░░░░░░  37/100 MB  37%  3.4 MB/s  19s left  downloading
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -11,6 +16,69 @@
 
 (defconst agent-ui-progress--eighths [" " "▏" "▎" "▍" "▌" "▋" "▊" "▉"]
   "A cell partly filled, by eighths.")
+
+(defvar agent-ui-progress-clock #'float-time
+  "What gives the time now, in seconds (tests stub it).")
+
+(defconst agent-ui-progress-window 30
+  "Seconds of values its rate is taken over, back from the latest.")
+
+(defvar-local agent-ui-progress--samples nil
+  "In a canvas: its progress bars' values over time, by id: ((TIME . VALUE)
+...), the latest first, those of `agent-ui-progress-window'.")
+
+;; ====== ITS RATE ======
+
+(defun agent-ui-progress--note (id value)
+  "Bar ID's VALUE, noted now if it's new (a lower one starts again); its
+samples, the latest first."
+  (unless agent-ui-progress--samples
+    (setq agent-ui-progress--samples (make-hash-table :test #'equal)))
+  (let* ((now (funcall agent-ui-progress-clock))
+         (samples (gethash id agent-ui-progress--samples))
+         (last (car samples)))
+    (cond ((or (null last) (< value (cdr last))) (setq samples (list (cons now value))))
+          ((> value (cdr last)) (push (cons now value) samples)))
+    (let ((from (- (caar samples) agent-ui-progress-window)))
+      (setq samples (seq-take-while (lambda (s) (>= (car s) from)) samples)))
+    (puthash id samples agent-ui-progress--samples)))
+
+(defun agent-ui-progress--rate (samples)
+  "SAMPLES' rate, a second, once it's steady (3 values or more, over 2
+seconds or more); else nil."
+  (let ((newest (car samples)) (oldest (car (last samples))))
+    (when (and (>= (length samples) 3) (>= (- (car newest) (car oldest)) 2))
+      (/ (float (- (cdr newest) (cdr oldest))) (- (car newest) (car oldest))))))
+
+(defun agent-ui-progress--per (rate unit)
+  "RATE (a second) as text, with UNIT: 12 files/s, 3.4 MB/s, 20/min."
+  (let ((unit (if (and unit (not (string-empty-p unit))) (concat " " unit) "")))
+    (cl-flet ((amount (n) (agent-ui-format-number (if (< n 10) (/ (round (* n 10)) 10.0) (round n)))))
+      (cond ((>= rate 1) (format "%s%s/s" (amount rate) unit))
+            ((>= (* rate 60) 1) (format "%s%s/min" (amount (* rate 60)) unit))
+            (t (format "%s%s/h" (amount (* rate 3600)) unit))))))
+
+(defun agent-ui-progress--pace (props ctx)
+  "Its rate and time left (\"3.4 MB/s  19s left\"), from its values over
+time on its canvas (CTX's :id there); \"\" when not running, nor steady."
+  (let ((id (plist-get ctx :id))
+        (value (plist-get props :value))
+        (max (plist-get props :max)))
+    (if (not (and id (numberp value) (derived-mode-p 'agent-ui-canvas-mode)))
+        ""
+      (let* ((samples (agent-ui-progress--note id value))
+             (rate (and (eq (plist-get props :status) 'running)
+                        (not (and max (>= value max)))
+                        (agent-ui-progress--rate samples))))
+        (if (not (and rate (> rate 0)))
+            ""
+          (concat (agent-ui-progress--per rate (plist-get props :unit))
+                  (when max
+                    (let ((left (- (/ (- max (cdar samples)) rate)
+                                   (- (funcall agent-ui-progress-clock) (caar samples)))))
+                      (concat "  " (agent-ui-format-duration (max 1 left)) " left")))))))))
+
+;; ====== DRAWING ======
 
 (defun agent-ui-progress--fill-face (status)
   (pcase status ('done 'agent-ui-success) ('failed 'agent-ui-error) (_ 'agent-ui-accent)))
@@ -89,7 +157,11 @@ frame, glyphs drawn one by one leave seams between them."
   (let* ((status (plist-get props :status))
          (max (plist-get props :max))
          (face (agent-ui-progress--fill-face status))
-         (counts (agent-ui-progress--counts props))
+         (pace (agent-ui-progress--pace props ctx))
+         (counts (string-join (seq-remove #'string-empty-p
+                                          (list (agent-ui-progress--counts props)
+                                                (propertize pace 'face 'agent-ui-muted)))
+                              "  "))
          (mark (pcase status ('done "✓") ('failed "✗") (_ "")))
          (width (plist-get ctx :width))
          (text (or (plist-get props :label) ""))
@@ -116,7 +188,8 @@ frame, glyphs drawn one by one leave seams between them."
 (agent-ui-define progress
   "A progress bar: VALUE of MAX, with a LABEL saying what's being done.
 Without MAX, no end is known: a block goes to and fro while it's running.
-STATUS done or failed colours it and stops it."
+STATUS done or failed colours it and stops it. On a canvas, its values
+over time give its rate and, with MAX, the time left."
   :props ((value number "Done so far" :default 0)
           (max number "The total; none: no end known")
           (label string "What's being done now, after the bar")

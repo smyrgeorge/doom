@@ -1049,3 +1049,40 @@ new file mode 100644
   ;; One named: the header, as before.
   (should (string-match-p "\\` +│ Time\n─+┼─+\n" (+test-aue-draw '(:type "table" :columns ("" "Time") :rows (("a" "1")))))))
 
+(ert-deftest agent-ui-elements/progress-its-rate-and-time-left ()
+  (let* ((now 100.0)
+         (agent-ui-progress-clock (lambda () now)))
+    (with-temp-buffer
+      (agent-ui-canvas-mode)
+      (cl-flet ((at (time value &optional props)
+                  (setq now time)
+                  (substring-no-properties
+                   (agent-ui-render (append (list :type "progress" :value value :max 100 :unit "MB") props)
+                                    (agent-ui-context :width 100 :id "dl")))))
+        ;; Not steady yet: two values, then three over under 2 seconds.
+        (should-not (string-match-p "/s" (at 100.0 10)))
+        (should-not (string-match-p "/s" (at 101.0 14)))
+        ;; Steady: 3 values over 2 seconds, 4 MB a second; 82 MB left: 20s.
+        (should (string-match-p "18/100 MB  18%  4 MB/s  20s left" (at 102.0 18)))
+        ;; Drawn again, nothing new: the time left counts down.
+        (should (string-match-p "4 MB/s  18s left" (at 104.5 18)))
+        ;; Slower: 13 MB over 5 seconds, under 10 to a decimal.
+        (should (string-match-p "2.6 MB/s" (at 105.0 23)))
+        ;; Done, or failed: neither.
+        (should-not (string-match-p "/s" (at 106.0 30 '(:status "done"))))
+        ;; A lower value: starts again.
+        (should-not (string-match-p "/s" (at 107.0 1)))
+        ;; Without a max: the rate, no time left; slow ones a minute.
+        (setq now 200.0)
+        (cl-flet ((open (time value)
+                    (setq now time)
+                    (substring-no-properties
+                     (agent-ui-render (list :type "progress" :value value) (agent-ui-context :width 80 :id "n")))))
+          ;; 2 more in 30 seconds (the window's): 4 a minute.
+          (open 200.0 1) (open 215.0 2)
+          (let ((text (open 230.0 3)))
+            (should (string-match-p "  3  4/min" text))
+            (should-not (string-match-p "left" text)))))))
+  ;; Not on a canvas (render, a snapshot): neither.
+  (should-not (string-match-p "/s" (+test-aue-draw '(:type "progress" :value 5 :max 10)))))
+

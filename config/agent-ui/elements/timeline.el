@@ -74,13 +74,6 @@
 (defun agent-ui-timeline--end (task span)
   (or (plist-get task :end) (cdr span)))
 
-(defun agent-ui-timeline--seconds (seconds)
-  "SECONDS as a duration: 8s, 2m 05s, 1h 02m."
-  (let ((s (round seconds)))
-    (cond ((< s 60) (format "%ds" s))
-          ((< s 3600) (format "%dm %02ds" (/ s 60) (% s 60)))
-          (t (format "%dh %02dm" (/ s 3600) (/ (% s 3600) 60))))))
-
 (defun agent-ui-timeline--text (props ctx)
   (let* ((tasks (plist-get props :tasks))
          (width (plist-get ctx :width)))
@@ -105,14 +98,14 @@
                       (propertize (make-string (- b a) (if (eq status 'queued) ?░ ?█)) 'face face)
                       (make-string (max 0 (- bar-width b)) ?\s) "  "
                       (propertize (if (eq status 'running) "running"
-                                    (agent-ui-timeline--seconds (- end (plist-get task :start))))
+                                    (agent-ui-format-duration (- end (plist-get task :start))))
                                   'face (if (eq status 'failed) 'agent-ui-error 'agent-ui-muted)))))
           (seq-take tasks agent-ui-max-rows) "\n")
          "\n"
          ;; The scale: its start, middle and end.
          (propertize
-          (let ((mid (agent-ui-timeline--seconds (/ length 2)))
-                (end (agent-ui-timeline--seconds length)))
+          (let ((mid (agent-ui-format-duration (/ length 2)))
+                (end (agent-ui-format-duration length)))
             (concat (make-string (+ name-width 2) ?\s)
                     (agent-ui-pad "0s" (- (/ bar-width 2) (/ (string-width mid) 2)))
                     (agent-ui-pad mid (- bar-width (- (/ bar-width 2) (/ (string-width mid) 2)) (string-width end)))
@@ -145,11 +138,11 @@
                                      :fill (agent-ui-chart--color (cadr (assq status agent-ui-timeline--statuses)))
                                      :fill-opacity (if (eq status 'queued) 0.5 1))
                       (agent-ui-chart--svg-text svg ctx (if (eq status 'running) "running"
-                                                          (agent-ui-timeline--seconds (- end (plist-get task :start))))
+                                                          (agent-ui-format-duration (- end (plist-get task :start))))
                                                 (+ x1 (/ cw 2)) (+ y (* 0.7 row)) :fill muted)))
         (let ((y (+ (* row (length shown)) (* 0.8 lh))))
           (agent-ui-chart--svg-text svg ctx "0s" bar-left y :fill muted)
-          (agent-ui-chart--svg-text svg ctx (agent-ui-timeline--seconds length) (+ bar-left bar-width) y
+          (agent-ui-chart--svg-text svg ctx (agent-ui-format-duration length) (+ bar-left bar-width) y
                                     :fill muted :text-anchor "end"))
         (agent-ui-chart--image svg)))))
 

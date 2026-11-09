@@ -504,6 +504,13 @@ center."
          (string-trim-right (string-trim-right (format "%.2f" number) "0+") "\\."))
         (t (format "%s" number))))
 
+(defun agent-ui-format-duration (seconds)
+  "SECONDS as a duration: 8s, 2m 05s, 1h 02m."
+  (let ((s (round seconds)))
+    (cond ((< s 60) (format "%ds" s))
+          ((< s 3600) (format "%dm %02ds" (/ s 60) (% s 60)))
+          (t (format "%dh %02dm" (/ s 3600) (/ (% s 3600) 60))))))
+
 (defvar-keymap agent-ui-button-map
   :doc "Keys of an element's button: its action."
   "RET" #'agent-ui-button-press

@@ -65,7 +65,8 @@ without it). A wrong element is refused whole; nothing half-shown.
 
 A bar: `value` of `max`, with a `label` saying what's being done now, and an optional `unit` (files, MB). Without
 `max`, no end is known: a block goes to and fro. `status`: `running` (default), `done` or `failed` colours it and stops
-it.
+it. Its rate and the time left (`3.4 MB/s  19s left`) are worked out from your updates and shown once steady:
+update its `value` as it goes (every second or so) rather than once at the end.
 
 ```sh
 agent-ui show '{"id":"build","type":"progress","title":"Build","max":12,"label":"configuring"}'

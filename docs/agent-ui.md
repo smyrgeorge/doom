@@ -159,7 +159,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `text` | A paragraph | `text`, `face` (plain, muted, success, warning, error) |
 | `markdown` | Markdown, drawn as agent-shell draws replies | `markdown` |
 | `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it | `columns`, `rows`, `key`, `align` |
-| `progress` | A bar, or a run without an end | `value`, `max`, `label`, `unit`, `status` |
+| `progress` | A bar, or a run without an end; on a canvas, its rate and time left from its updates over time | `value`, `max`, `label`, `unit`, `status` |
 | `steps` | A checklist whose steps change state; appending a step by its name changes it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":...}]` |
 | `chart` | Lines (several series), bars or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window` |
 | `image` | An image file (an `.excalidraw.svg` drawing too) in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file`, `alt`, `width` (percent), `height` (lines) |
