@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice diff files html image log markdown progress stats steps table text)))
+  (should (equal (agent-ui-types) '(chart choice diff files html image log markdown progress stats steps table text timeline)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -708,4 +708,43 @@ new file mode 100644
   (should (string-match-p "line 1 must be" (+test-aue-error '(:type "log" :lines ((:level "loud" :text "x"))))))
   (should (string-match-p "keep is 1 to 5000" (+test-aue-error '(:type "log" :keep 0))))
   (should (string-match-p "lines is text or a list" (+test-aue-error '(:type "log" :lines 3)))))
+
+;; ====== TIMELINE ======
+
+(ert-deftest agent-ui-elements/timeline ()
+  (let ((element '(:type "timeline" :tasks ((:name "build" :start 0 :duration 10)
+                                           (:name "test" :start 10 :end 20 :status "failed")
+                                           (:name "deploy" :start 20 :duration 10 :status "queued")))))
+    (should (equal (+test-aue-draw element :width 50)
+                   (concat "build   ██████████                      10s\n"
+                           "test              ██████████            10s\n"
+                           "deploy                      ░░░░░░░░░░  10s\n"
+                           "        0s            15s          30s")))
+    (should (eq (+test-aue-face-at element "░") 'agent-ui-muted))
+    (let ((text (agent-ui-render element (agent-ui-context :width 50))))
+      (should (eq (get-text-property (string-search "10s" text (string-search "test" text)) 'face text)
+                  'agent-ui-error)))
+    (should-not (agent-ui-animated-p element)))
+  ;; Running, in seconds: until the latest end; not animated.
+  (should (string-match-p "  running"
+                          (+test-aue-draw '(:type "timeline" :tasks ((:name "a" :start 0 :duration 4) (:name "b" :start 2))))))
+  ;; Timestamps: running ones until now, animated (they grow).
+  (let* ((start (format-time-string "%FT%TZ" (time-subtract nil 30) t))
+         (element (list :type "timeline" :tasks (list (list :name "job" :start start)))))
+    (should (agent-ui-animated-p element))
+    ;; Whole seconds in the timestamp: 30 or 31 ago.
+    (should (string-match-p "3[01]s\\'" (+test-aue-draw element))))
+  ;; In the GUI: SVG bars.
+  (let ((svg (plist-get (cdr (get-text-property 0 'display (agent-ui-render '(:type "timeline" :tasks ((:name "a" :start 0 :duration 1)))
+                                                                            (agent-ui-context :graphic t))))
+                        :data)))
+    (should (string-match-p "<rect" svg)))
+  (should (equal (+test-aue-draw '(:type "timeline")) "no tasks")))
+
+(ert-deftest agent-ui-elements/timeline-wrong ()
+  (should (string-match-p "task 1 has no name" (+test-aue-error '(:type "timeline" :tasks ((:start 0))))))
+  (should (string-match-p "start must be seconds or a timestamp" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start "soon"))))))
+  (should (string-match-p "ends before it starts" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start 5 :end 1))))))
+  (should (string-match-p "status is running, done" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start 0 :status "slow"))))))
+  (should (string-match-p "has \"stop\"" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start 0 :stop 3)))))))
 

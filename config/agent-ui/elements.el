@@ -16,3 +16,4 @@
 (load! "elements/files")
 (load! "elements/stats")
 (load! "elements/log")
+(load! "elements/timeline")
