@@ -196,6 +196,17 @@ dependencies, a state machine, a call graph (a few dozen nodes at most).
 agent-ui show '{"id":"deps","type":"graph","title":"Modules","nodes":["lexer","parser",{"id":"checker","status":"error"},"codegen"],"edges":[["lexer","parser"],["parser","checker"],["parser","codegen"],["checker","codegen"]]}'
 ```
 
+### `code`
+
+A snippet, highlighted by its `language`'s mode (python, c, rust, emacs-lisp...; else its `file`'s), each line
+numbered from `from` and linked to `file` (`RET` opens it there). Give `code`, or a `file` with `from` and `to` (read
+as it is now). `marks`: `{"line", "kind", "note"}`, kind error, warning, change or info: a sign in the gutter, the note
+after the line. For the line an error is on, the code a change is about.
+
+```sh
+agent-ui show '{"id":"where","type":"code","title":"Where it fails","language":"c","from":40,"code":"int parse_expr(Parser *p) {\n  return NULL;\n}","marks":[{"line":41,"kind":"error","note":"never NULL here"}]}'
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines

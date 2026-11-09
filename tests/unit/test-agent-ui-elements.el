@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice diff files graph html image log markdown progress stats steps table text timeline)))
+  (should (equal (agent-ui-types) '(chart choice code diff files graph html image log markdown progress stats steps table text timeline)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -790,4 +790,42 @@ new file mode 100644
   (should (string-match-p "node 1 must be" (+test-aue-error '(:type "graph" :nodes (3)))))
   (should (string-match-p "status is ok, error" (+test-aue-error '(:type "graph" :nodes ((:id "a" :status "red"))))))
   (should (string-match-p "direction must be" (+test-aue-error '(:type "graph" :direction "up")))))
+
+;; ====== CODE ======
+
+(ert-deftest agent-ui-elements/code ()
+  (let ((element '(:type "code" :language "emacs-lisp" :from 10
+                   :code "(defun f (x)\n  (error \"no\"))"
+                   :marks ((:line 11 :kind "error" :note "always fails")))))
+    (should (equal (+test-aue-draw element)
+                   "10 │ (defun f (x)\n11 ✗   (error \"no\"))  ← always fails"))
+    ;; Highlighted by its mode; its mark, its note.
+    (should (eq (+test-aue-face-at element "defun") 'font-lock-keyword-face))
+    (should (eq (+test-aue-face-at element "✗") 'agent-ui-error))
+    (should (eq (+test-aue-face-at element "← always") 'agent-ui-error))))
+
+(ert-deftest agent-ui-elements/code-from-its-file ()
+  (let* ((file (make-temp-file (+test-tmp-file "code-") nil ".py"
+                               (mapconcat (lambda (n) (format "x%d = %d" n n)) (number-sequence 1 30) "\n")))
+         (opened nil)
+         (agent-ui-open-file-function (lambda (f) (push f opened) (find-file f)))
+         (element (list :type "code" :file file :from 5 :to 7))
+         (text (agent-ui-render element (agent-ui-context :width 60))))
+    ;; Its lines FROM to TO, its file named above; python-mode's colours (by its name).
+    (should (equal (substring-no-properties text)
+                   (concat (abbreviate-file-name file) "\n5 │ x5 = 5\n6 │ x6 = 6\n7 │ x7 = 7")))
+    (should (get-text-property (string-search "x6" text) 'face text))
+    ;; RET on a line: its file, there.
+    (funcall (get-text-property (string-search "x6" text) 'agent-ui-action text))
+    (should (equal (car opened) file))
+    (should (= (line-number-at-pos) 6))
+    (kill-buffer (current-buffer))
+    (should (string-suffix-p "not found" (+test-aue-draw '(:type "code" :file "/no/such.py"))))))
+
+(ert-deftest agent-ui-elements/code-wrong ()
+  (should (string-match-p "give code, or a file" (+test-aue-error '(:type "code"))))
+  (should (string-match-p "from is a line" (+test-aue-error '(:type "code" :code "x" :from 0))))
+  (should (string-match-p "to is before from" (+test-aue-error '(:type "code" :file "a" :from 5 :to 2))))
+  (should (string-match-p "mark 1's kind" (+test-aue-error '(:type "code" :code "x" :marks ((:line 1 :kind "bad"))))))
+  (should (string-match-p "mark 1 must be" (+test-aue-error '(:type "code" :code "x" :marks ((:kind "error")))))))
 

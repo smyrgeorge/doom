@@ -18,3 +18,4 @@
 (load! "elements/log")
 (load! "elements/timeline")
 (load! "elements/graph")
+(load! "elements/code")
