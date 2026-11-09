@@ -91,6 +91,16 @@ puts it (config/tiling.el), its only tab; quitting it closes the pane. Nil
     (window--display-buffer buffer new 'window (+my/tiling--alist alist))))
 
 ;; APPLICATIONS AND FILES SHOWN (`display-buffer', see config/tiling.el)
+(defun +my/tiling--in-workspace (buffer)
+  "BUFFER, an application shown in a pane, in the current workspace (Doom's,
+persp-mode). Doom's frames only go back to its buffers (`buffer-predicate'):
+Claude Code's session (SPC o c, `display-buffer') wasn't in it, so closing a
+file's tab in its pane showed another file. Nothing without workspaces."
+  (when (and (bound-and-true-p persp-mode)
+             (fboundp 'persp-add-buffer)
+             (fboundp 'get-current-persp))
+    (ignore-errors (persp-add-buffer buffer (get-current-persp) nil))))
+
 (defun +my/tiling--display (buffer alist)
   "`display-buffer-overriding-action': an application in its pane, else a new
 one; a file shown from an application's pane, from a popup, a side panel or
@@ -102,11 +112,14 @@ what they showed): as it asks."
   (cond
    ((active-minibuffer-window) nil)
    ((and (+my/tiling-app-p buffer) (not (alist-get 'allow-no-window alist)))
-    (cond ((get-buffer-window buffer)
-           (window--display-buffer buffer (get-buffer-window buffer) 'reuse
-                                   (+my/tiling--alist alist)))
-          ((+my/tiling--new-pane-p buffer)
-           (+my/tiling-display-buffer buffer alist))))
+    (let ((window (cond ((get-buffer-window buffer)
+                         (window--display-buffer buffer (get-buffer-window buffer) 'reuse
+                                                 (+my/tiling--alist alist)))
+                        ((+my/tiling--new-pane-p buffer)
+                         (+my/tiling-display-buffer buffer alist)))))
+      (when window
+        (+my/tiling--in-workspace buffer))
+      window))
    ((+my/tiling--file-p buffer)
     (let ((here (selected-window)))
       ;; From a pane of files: as asked.
