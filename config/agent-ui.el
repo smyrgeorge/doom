@@ -74,6 +74,9 @@
 (setq agent-ui-staging-directory (expand-file-name "agent-ui/staged/" doom-cache-dir)
       agent-ui-kept-directory (expand-file-name "config/agent-ui/kept/" doom-user-dir))
 
+;; IMAGES FROM URLS: downloaded once, kept in Doom's cache.
+(setq agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir))
+
 ;; WHAT THE AGENT IS TOLD
 ;; Claude Code's system prompt in agent-shell (config/agent-shell/context.el)
 ;; gets a paragraph on the canvas (`agent-ui-agent-context'): what it's for, the

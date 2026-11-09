@@ -1306,3 +1306,52 @@ new file mode 100644
                          '(0 60))))
       (set-time-zone-rule zone))))
 
+(ert-deftest agent-ui-elements/image-from-a-url ()
+  (let* ((agent-ui-image-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "images-") t)))
+         (agent-ui-image--fetches (make-hash-table :test #'equal))
+         (fetches nil) (done nil)
+         (agent-ui-image-fetch-function (lambda (url file callback) (push url fetches) (setq done (list file callback))))
+         (element '(:type "image" :url "https://example.com/chart?x=1" :alt "Sales")))
+    (unwind-protect
+        (progn
+          ;; Not there yet: downloading, said; started once.
+          (should (string-match-p "▣ https://example.com/chart\\?x=1  Sales  (downloading…)" (+test-aue-draw element)))
+          (+test-aue-draw element)
+          (should (equal fetches '("https://example.com/chart?x=1")))
+          ;; Done: kept by its hash, its extension its type's; shown as a file.
+          ;; (A PNG's signature: its type known by it.)
+          (with-temp-file (car done) (set-buffer-multibyte nil) (insert "\211PNG\r\n\032\n"))
+          (funcall (cadr done) nil)
+          (should (equal (agent-ui-image--cached "https://example.com/chart?x=1")
+                         (concat agent-ui-image-cache-directory (sha1 "https://example.com/chart?x=1") ".png")))
+          (should (equal (+test-aue-draw element) "▣ https://example.com/chart?x=1  Sales"))
+          ;; Not downloaded again.
+          (+test-aue-draw element)
+          (should (= (length fetches) 1))
+          ;; Failed: said in its place; not an image, too.
+          (let ((bad '(:type "image" :url "https://example.com/404.png")))
+            (+test-aue-draw bad)
+            (funcall (cadr done) "The requested URL returned error: 404")
+            (should (string-match-p "(couldn't download it: The requested URL returned error: 404)" (+test-aue-draw bad :width 120)))
+            (should (eq (+test-aue-face-at bad "(couldn't") 'agent-ui-error))
+            ;; Shown again, within 30 seconds: not tried again; later: tried.
+            (agent-ui--prepared bad)
+            (+test-aue-draw bad)
+            (should (= (length fetches) 2))
+            (puthash "https://example.com/404.png" (list :error "x" :time 0) agent-ui-image--fetches)
+            (agent-ui--prepared bad)
+            (+test-aue-draw bad)
+            (should (= (length fetches) 3)))
+          (let ((page '(:type "image" :url "https://example.com/page")))
+            (+test-aue-draw page)
+            (with-temp-file (car done) (insert "<html>nope</html>"))
+            (funcall (cadr done) nil)
+            (should (string-match-p "(couldn't download it: not an image)" (+test-aue-draw page :width 120)))
+            (should-not (file-exists-p (car done)))))
+      (delete-directory agent-ui-image-cache-directory t)))
+  ;; File or url, one; an http(s) url.
+  (should (string-match-p "give file or url, one of them" (+test-aue-error '(:type "image"))))
+  (should (string-match-p "give file or url" (+test-aue-error '(:type "image" :file "a.png" :url "https://x/a.png"))))
+  (should (string-match-p "url is an http(s) address, not \"file:///a.png\""
+                          (+test-aue-error '(:type "image" :url "file:///a.png")))))
+

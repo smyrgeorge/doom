@@ -145,10 +145,12 @@ agent-ui append req '{"times":["2026-11-10T13:00:00"],"values":[410]}'
 An image file (PNG, JPEG, GIF, WebP, SVG; an Excalidraw drawing's `.excalidraw.svg` too) shown in a graphic Emacs, at
 most `width` percent of the pane wide and `height` lines high (never above its own size), `alt` under it; in a
 terminal, a line naming it. `RET` on it opens it. `file` is relative to your directory. For a screenshot, a plot you
-rendered, a drawing.
+rendered, a drawing. Or give a `url` (http or https) instead: it's downloaded once, in the background, and kept; its
+place says so meanwhile, or why it failed (showing it again tries again).
 
 ```sh
 agent-ui show '{"id":"shot","type":"image","title":"The login page","file":"screenshots/login.png","alt":"After the fix","width":60}'
+agent-ui show '{"id":"badge","type":"image","url":"https://img.shields.io/badge/build-passing-green.svg"}'
 ```
 
 ### `html`
