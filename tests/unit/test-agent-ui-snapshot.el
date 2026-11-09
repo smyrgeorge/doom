@@ -49,6 +49,19 @@
     (should (string-match-p "<polyline" svg))))
 
 ;; A bar's blocks: rectangles (full ones joined), ░ faint, the rest text.
+(ert-deftest agent-ui-snapshot/an-image-where-it-is-in-its-line ()
+  ;; A chart's SVG after a border's text (a panel's line): nested at its
+  ;; column, the text after it past its width; the line as high as it.
+  (let* ((chart "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"32\"><rect/></svg>")
+         (line (concat "│ " (propertize "chart" 'display (list 'image :type 'svg :data chart)) " │"))
+         (svg (agent-ui-snapshot-svg (concat line "\nnext") (agent-ui-context :width 40 :char-width 8 :line-height 16))))
+    (should (string-match-p "<svg x=\"24\" y=\"8\" xmlns" svg))
+    (should-not (string-match-p ">chart</text>" svg))
+    (should (string-match-p "<text x=\"72\" y=\"20\" [^>]*>│</text>" svg))
+    (should (string-match-p "<text x=\"8\" y=\"52\" [^>]*>next</text>" svg))
+    ;; Words held to their cells' width.
+    (should (string-match-p "textLength=\"32\" lengthAdjust=\"spacingAndGlyphs\">next</text>" svg))))
+
 (ert-deftest agent-ui-snapshot/bars-as-rectangles ()
   (let ((svg (agent-ui-snapshot-svg "███▌░░  50%" (agent-ui-context :width 20 :char-width 8 :line-height 16))))
     (should (string-match-p "<rect x=\"8\" y=\"[0-9]+\" width=\"24\" height=\"11\"" svg))

@@ -77,8 +77,15 @@ characters as rectangles (full ones joined), ░ a faint cell, the rest text."
                            (word-end (match-end 0))
                            (word (substring pending word-start word-end)))
                       (cl-incf column (string-width (substring pending start word-start)))
-                      (push (format "<text x=\"%d\" y=\"%d\" fill=\"%s\"%s>%s</text>"
+                      ;; Its cells' width exactly: a font's glyphs a little
+                      ;; wider than the cells would push a long run (a
+                      ;; border's) past its end.
+                      (push (format "<text x=\"%d\" y=\"%d\" fill=\"%s\"%s%s>%s</text>"
                                     (+ cw (* column cw)) (+ y (round (* 0.78 lh))) color
+                                    (if (> (string-width word) 1)
+                                        (format " textLength=\"%d\" lengthAdjust=\"spacingAndGlyphs\""
+                                                (* cw (string-width word)))
+                                      "")
                                     (if bold " font-weight=\"bold\"" "") (xml-escape-string word))
                             parts)
                       (cl-incf column (string-width word))
@@ -159,42 +166,45 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
          (width (+ (* 2 pad) (* cw (max 1 (apply #'max (mapcar #'string-width (split-string text "\n")))))))
          (parts nil))
     (dolist (line (split-string text "\n"))
-      (let* ((display (and (> (length line) 0) (get-text-property 0 'display line)))
-             (data (and (eq (car-safe display) 'image) (eq (plist-get (cdr display) :type) 'svg)
-                        (plist-get (cdr display) :data)))
-             (size (and data (agent-ui-snapshot--svg-size data)))
-             (file (and (eq (car-safe display) 'image) (not data)
-                        (agent-ui-snapshot--image-file display))))
-        (cond
-         (file
-          ;; An image from a file (an image element's): itself, embedded.
-          (push (format "<g transform=\"translate(%d %d)\">%s</g>" pad y (car file)) parts)
-          (setq width (max width (+ (* 2 pad) (cadr file))))
-          (cl-incf y (cddr file)))
-         (size
-            ;; A chart: its own SVG, nested.
-            (progn
-              (push (replace-regexp-in-string "\\`<svg " (format "<svg x=\"%d\" y=\"%d\" " pad y) data) parts)
-              (setq width (max width (+ (* 2 pad) (round (car size)))))
-              (cl-incf y (round (cdr size)))))
-         (t
-          (let ((col 0)
-                (spans nil))
-            (dolist (run (agent-ui-snapshot--runs line))
-              ;; A run on a colour of its own (a GUI bar's): that colour.
-              (let ((back (agent-ui-snapshot--color (cdr run) :background nil)))
-                (when (and back (not (equal back bg)))
-                  (push (format "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"%s\"/>"
-                                (+ pad (* col cw)) (+ y (round (* 0.15 lh)))
-                                (* cw (string-width (car run))) (round (* 0.7 lh)) back)
-                        spans)))
-              (push (agent-ui-snapshot--run (car run) col y
-                                            (agent-ui-snapshot--color (cdr run) :foreground fg)
-                                            (agent-ui-snapshot--bold-p (cdr run)) cw lh)
-                    spans)
-              (cl-incf col (string-width (car run))))
-            (push (string-join (nreverse spans)) parts)
-            (cl-incf y lh))))))
+      ;; A line's parts, an image's (a chart's SVG, nested; an image file's,
+      ;; embedded) or text's, each at its column: an image in a bordered
+      ;; panel's line is where it's shown, beside the border.
+      (let ((col 0) (height lh) (pos 0) (spans nil))
+        (while (< pos (length line))
+          (let* ((next (or (next-single-property-change pos 'display line) (length line)))
+                 (display (get-text-property pos 'display line))
+                 (image (eq (car-safe display) 'image))
+                 (data (and image (eq (plist-get (cdr display) :type) 'svg) (plist-get (cdr display) :data)))
+                 (size (and data (agent-ui-snapshot--svg-size data)))
+                 (file (and image (not data) (agent-ui-snapshot--image-file display)))
+                 (x (+ pad (* col cw))))
+            (cond
+             (size
+              (push (replace-regexp-in-string "\\`<svg " (format "<svg x=\"%d\" y=\"%d\" " x y) data) spans)
+              (cl-incf col (ceiling (car size) cw))
+              (setq height (max height (round (cdr size)))))
+             (file
+              (push (format "<g transform=\"translate(%d %d)\">%s</g>" x y (car file)) spans)
+              (cl-incf col (ceiling (cadr file) cw))
+              (setq height (max height (cddr file))))
+             (t
+              (dolist (run (agent-ui-snapshot--runs (substring line pos next)))
+                ;; A run on a colour of its own (a GUI bar's): that colour.
+                (let ((back (agent-ui-snapshot--color (cdr run) :background nil)))
+                  (when (and back (not (equal back bg)))
+                    (push (format "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"%s\"/>"
+                                  (+ pad (* col cw)) (+ y (round (* 0.15 lh)))
+                                  (* cw (string-width (car run))) (round (* 0.7 lh)) back)
+                          spans)))
+                (push (agent-ui-snapshot--run (car run) col y
+                                              (agent-ui-snapshot--color (cdr run) :foreground fg)
+                                              (agent-ui-snapshot--bold-p (cdr run)) cw lh)
+                      spans)
+                (cl-incf col (string-width (car run))))))
+            (setq pos next)))
+        (push (string-join (nreverse spans)) parts)
+        (setq width (max width (+ (* 2 pad) (* col cw))))
+        (cl-incf y height)))
     (let ((height (+ y pad)))
       (concat (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" font-family=\"%s\" font-size=\"%d\" xml:space=\"preserve\" style=\"white-space:pre\">"
                       width height (xml-escape-string family) (round (* 0.8 lh)))
