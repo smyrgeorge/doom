@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code diff files graph heatmap html image issues log markdown progress stats steps table text timeline)))
+  (should (equal (agent-ui-types) '(chart choice code diff files graph heatmap html image issues log markdown panel progress stats steps table text timeline)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -937,4 +937,58 @@ new file mode 100644
   (should (string-match-p "row 1 has 2 cells, for 1" (+test-aue-error '(:type "heatmap" :rows ("a") :columns ("x") :values ((1 2))))))
   (should (string-match-p "a cell is a number, a word or null" (+test-aue-error '(:type "heatmap" :rows ("a") :columns ("x") :values (((1)))))))
   (should (string-match-p "rows must be labels" (+test-aue-error '(:type "heatmap" :rows (1) :columns ("x") :values ((1)))))))
+
+;; ====== PANEL ======
+
+(ert-deftest agent-ui-elements/panel-row-and-column ()
+  (let ((row '(:type "panel" :layout "row" :min-width 8
+               :children ((:type "text" :title "A" :text "one") (:type "text" :title "B" :text "two\nlines")))))
+    (should (equal (+test-aue-draw row :width 30)
+                   (concat "╭────────────────────────────╮\n"
+                           "│ A           │ B            │\n"
+                           "│ one         │ two          │\n"
+                           "│             │ lines        │\n"
+                           "╰────────────────────────────╯")))
+    ;; Weights: shares of the width.
+    (should (string-prefix-p "╭────────────────────────────╮\n│ A       │ B"
+                             (+test-aue-draw (plist-put (plist-put (copy-sequence row) :weights '(1 2)) :min-width 4) :width 30)))
+    ;; Too narrow for its children: stacked.
+    (should (equal (+test-aue-draw (plist-put (copy-sequence row) :min-width 20) :width 30)
+                   (concat "╭────────────────────────────╮\n"
+                           "│ A                          │\n│ one                        │\n"
+                           "│                            │\n"
+                           "│ B                          │\n│ two                        │\n│ lines                      │\n"
+                           "╰────────────────────────────╯"))))
+  ;; A column without a border.
+  (should (equal (+test-aue-draw '(:type "panel" :border :false
+                                   :children ((:type "text" :text "x") (:type "text" :text "y"))))
+                 "x\n\ny")))
+
+(ert-deftest agent-ui-elements/panel-nested-and-live ()
+  ;; A panel in a panel; an animated child makes it animated.
+  (let ((element '(:type "panel" :layout "row"
+                   :children ((:type "panel" :border :false :children ((:type "text" :text "in")))
+                              (:type "progress" :title "Wait")))))
+    (should (string-match-p "│ in +│ Wait" (+test-aue-draw element :width 60)))
+    (should (agent-ui-animated-p element)))
+  ;; A child's buttons get its id (they change it).
+  (let (seen)
+    (cl-letf (((symbol-function 'agent-ui-choice--change) (lambda (ctx _patch) (setq seen (plist-get ctx :id)))))
+      (let ((text (agent-ui-render '(:type "panel" :children ((:id "q" :type "choice" :question "?" :options ("a"))))
+                                   (agent-ui-context :width 40 :id "outer"))))
+        (funcall (get-text-property (string-search "( ) a" text) 'agent-ui-action text))
+        (should (equal seen "q"))))))
+
+(ert-deftest agent-ui-elements/panel-wrong ()
+  (should (string-match-p "child 2 (text): text: text is required"
+                          (+test-aue-error '(:type "panel" :children ((:type "text" :text "x") (:type "text"))))))
+  (should (string-match-p "child 1 must be an element" (+test-aue-error '(:type "panel" :children ("x")))))
+  (should (string-match-p "two children are \"a\""
+                          (+test-aue-error '(:type "panel" :children ((:id "a" :type "text" :text "x")
+                                                                      (:type "panel" :children ((:id "a" :type "text" :text "y"))))))))
+  (should (string-match-p "weights are a positive number for each child"
+                          (+test-aue-error '(:type "panel" :weights (1) :children ((:type "text" :text "x") (:type "text" :text "y"))))))
+  (should (string-match-p "nest 2 deep at most"
+                          (let ((agent-ui-panel-depth 2))
+                            (+test-aue-error '(:type "panel" :children ((:type "panel" :children ((:type "panel" :children ()))))))))))
 

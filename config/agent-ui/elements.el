@@ -21,3 +21,4 @@
 (load! "elements/code")
 (load! "elements/issues")
 (load! "elements/heatmap")
+(load! "elements/panel")

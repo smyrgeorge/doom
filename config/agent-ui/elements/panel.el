@@ -1,0 +1,135 @@
+;;; $DOOMDIR/config/agent-ui/elements/panel.el -*- lexical-binding: t; -*-
+;; Agent UI's panel: elements laid out together. Loaded from
+;; config/agent-ui/elements.el.
+;;
+;; CHILDREN, ordinary elements (each with its type, its title, its id),
+;; laid out as a ROW (side by side, a │ between, each its share of the
+;; width: WEIGHTS, equal by default) or a COLUMN (one under another), in a
+;; BORDER. Panels nest: rows of columns, a dashboard. A row too narrow for
+;; its children (under MIN-WIDTH each) stacks them. In a row, children are
+;; drawn as text (an SVG can't be joined line by line; doom-erp.19); in a
+;; column, as anywhere.
+;;
+;;   ╭──────────────────────────────────────╮
+;;   │ Build              │ Tests           │
+;;   │ ████████░░  8/12   │  lexer  passed  │
+;;   ╰──────────────────────────────────────╯
+
+(require 'cl-lib)
+(require 'subr-x)
+
+(defcustom agent-ui-panel-depth 6
+  "How deep panels may nest."
+  :type 'natnum :group 'agent-ui)
+
+(defun agent-ui-panel--children-check (children depth ids)
+  "CHILDREN checked (their types, properties, ids: unique, with IDS so far);
+an error saying which is wrong. Returns the ids seen."
+  (when (> depth agent-ui-panel-depth)
+    (agent-ui--fail "panel: panels nest %d deep at most" agent-ui-panel-depth))
+  (cl-loop for child in children
+           for i from 1
+           do (unless (agent-ui--plist-p child)
+                (agent-ui--fail "panel: child %d must be an element: {\"type\": ..., ...}" i))
+           (let ((id (plist-get child :id)))
+             (when id
+               (unless (and (stringp id) (string-match-p "\\`[A-Za-z0-9_.-]+\\'" id))
+                 (agent-ui--fail "panel: child %d's id is letters, digits, -, _ or ." i))
+               (when (member id ids)
+                 (agent-ui--fail "panel: two children are %s" (agent-ui--show-value id)))
+               (push id ids)))
+           (condition-case err
+               (agent-ui-check (plist-get child :type) child)
+             (agent-ui-error
+              (agent-ui--fail "panel: child %d (%s): %s" i
+                              (or (plist-get child :id) (plist-get child :type)) (agent-ui-error-message err))))
+           (when (equal (format "%s" (plist-get child :type)) "panel")
+             (setq ids (agent-ui-panel--children-check (plist-get child :children) (1+ depth) ids))))
+  ids)
+
+(defun agent-ui-panel--check (props)
+  (let ((children (plist-get props :children))
+        (weights (plist-get props :weights)))
+    (agent-ui-panel--children-check children 1 nil)
+    (when (and weights (not (and (= (length weights) (length children))
+                                 (cl-every (lambda (w) (and (numberp w) (> w 0))) weights))))
+      (agent-ui--fail "panel: weights are a positive number for each child (%d)" (length children))))
+  props)
+
+(defun agent-ui-panel--lines (text width)
+  "TEXT's lines, each padded (or cut) to WIDTH columns; a line that's an
+image kept as it is."
+  (mapcar (lambda (line)
+            (if (and (> (length line) 0) (get-text-property 0 'display line))
+                line
+              (agent-ui-pad line width)))
+          (split-string text "\n")))
+
+(defun agent-ui-panel--child (child ctx width)
+  "CHILD drawn at WIDTH, its id in its context (its own buttons)."
+  (agent-ui-render child (plist-put (plist-put (copy-sequence ctx) :width width)
+                                    :id (or (plist-get child :id) (plist-get ctx :id)))))
+
+(defun agent-ui-panel--draw (props ctx)
+  (let* ((children (plist-get props :children))
+         (border (plist-get props :border))
+         (width (plist-get ctx :width))
+         (inner (if border (- width 4) width))
+         (n (length children))
+         (weights (or (plist-get props :weights) (make-list n 1)))
+         (total (float (apply #'+ weights)))
+         (room (- inner (* 3 (max 0 (1- n)))))
+         (widths (let ((ws (mapcar (lambda (w) (max 1 (floor (* room (/ w total))))) weights)))
+                   ;; What rounding left over, to the last.
+                   (append (butlast ws) (list (+ (car (last ws)) (- room (apply #'+ ws)))))))
+         (row (and (eq (plist-get props :layout) 'row) (> n 1)
+                   (cl-every (lambda (w) (>= w (plist-get props :min-width))) widths)))
+         (body
+          (cond
+           ((null children) (list (propertize "no elements" 'face 'agent-ui-muted)))
+           (row
+            ;; Side by side, as text: line by line, each child its width.
+            (let* ((text-ctx (plist-put (copy-sequence ctx) :graphic nil))
+                   (columns (cl-mapcar (lambda (child w) (agent-ui-panel--lines (agent-ui-panel--child child text-ctx w) w))
+                                       children widths))
+                   (height (apply #'max (mapcar #'length columns))))
+              (cl-loop for i below height
+                       collect (mapconcat #'identity
+                                          (cl-mapcar (lambda (lines w) (or (nth i lines) (make-string w ?\s)))
+                                                     columns widths)
+                                          (propertize " │ " 'face 'agent-ui-muted)))))
+           (t
+            ;; One under another, a blank line between.
+            (cdr (apply #'append
+                        (mapcar (lambda (child) (cons (make-string inner ?\s)
+                                                      (agent-ui-panel--lines (agent-ui-panel--child child ctx inner) inner)))
+                                children)))))))
+    (if (not border)
+        (mapconcat (lambda (l) (string-trim-right l)) body "\n")
+      (let ((edge (lambda (s) (propertize s 'face 'agent-ui-muted))))
+        (concat (funcall edge (concat "╭" (make-string (- width 2) ?─) "╮")) "\n"
+                (mapconcat (lambda (line)
+                             (if (and (> (length line) 0) (get-text-property 0 'display line))
+                                 (concat (funcall edge "│ ") line)
+                               (concat (funcall edge "│ ") line (funcall edge " │"))))
+                           body "\n")
+                "\n" (funcall edge (concat "╰" (make-string (- width 2) ?─) "╯")))))))
+
+(agent-ui-define panel
+  "Elements laid out together: CHILDREN, ordinary elements (each its type,
+title, id), as a ROW (side by side, each its share of the width, WEIGHTS
+equal by default) or a COLUMN, in a BORDER. Panels nest (rows of
+columns: a dashboard). A row too narrow (under MIN-WIDTH a child) stacks
+its children. In a row, children are drawn as text."
+  :props ((children list "The elements: {\"type\": ..., \"id\": ..., ...}")
+          (layout (choice row column) "Side by side (row) or one under another (column)" :default column)
+          (weights list "Each child's share of a row's width (default: equal)")
+          (border boolean "A border around it" :default t)
+          (min-width integer "The narrowest a child of a row may be before it stacks" :default 24))
+  :example (:title "Release" :layout "row"
+            :children ((:id "build" :type "progress" :title "Build" :value 8 :max 12)
+                       (:id "tests" :type "table" :title "Tests" :columns ("Test" "Result")
+                            :rows (("lexer" "passed") ("parser" "failed")))))
+  :animated (lambda (props) (seq-some #'agent-ui-animated-p (plist-get props :children)))
+  :check #'agent-ui-panel--check
+  :text #'agent-ui-panel--draw)

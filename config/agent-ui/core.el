@@ -346,13 +346,15 @@ each list after ELEMENT's (its default's, if it has none). Signals
 
 ;; ====== DRAWING AN ELEMENT ======
 
-(cl-defun agent-ui-context (&key (width 80) graphic (tick 0) (char-width 8) (line-height 16))
+(cl-defun agent-ui-context (&key (width 80) graphic (tick 0) (char-width 8) (line-height 16) id)
   "What an element's drawing knows of where it's drawn: WIDTH in characters,
 GRAPHIC (a graphic frame, else a terminal), TICK (counts up, for
 animations), and in a graphic frame a character's CHAR-WIDTH and a line's
 LINE-HEIGHT in pixels (for images sized to the text)."
-  (list :width width :graphic graphic :tick tick
-        :char-width char-width :line-height line-height))
+  (append (list :width width :graphic graphic :tick tick
+                :char-width char-width :line-height line-height)
+          ;; The element's id, in a canvas: its buttons may change it.
+          (when id (list :id id))))
 
 (defun agent-ui-animated-p (element)
   "Whether ELEMENT is redrawn as time passes (its type's :animated)."

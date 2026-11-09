@@ -229,6 +229,17 @@ under it; SVG cells with their values in the GUI. A test's results by OS and ver
 agent-ui show '{"id":"matrix","type":"heatmap","title":"Test runs by OS","rows":["lexer","parser","checker"],"columns":["linux","macos","windows"],"values":[["passed","passed","passed"],["passed","flaky","passed"],["failed","passed","skipped"]]}'
 ```
 
+### `panel`
+
+Elements laid out together: `children` are ordinary elements (each its `type`, `title`, `id`), as a `"row"` (side by
+side, each its share of the width: `weights`, equal by default) or a `"column"` (the default), in a border (`"border":
+false` for none). Panels nest: rows of columns make a dashboard. A row too narrow (under `min-width` a child) stacks
+its children. In a row, children are drawn as text. Keep a dashboard's related elements in one panel.
+
+```sh
+agent-ui show '{"id":"release","type":"panel","title":"Release","layout":"row","children":[{"id":"build","type":"progress","title":"Build","value":8,"max":12},{"id":"tests","type":"table","title":"Tests","columns":["Test","Result"],"rows":[["lexer","passed"],["parser","failed"]]}]}'
+```
+
 ### `diff`
 
 Changes, from a unified diff (`git diff`'s): by file, its lines added and removed counted, and hunk; added lines
