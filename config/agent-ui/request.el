@@ -31,7 +31,7 @@ canvas's name). config/agent-ui/agent.el finds agent-shell's sessions.")
   "While a request is answered: the agent's directory (its sources' default).")
 
 (defconst agent-ui-operations
-  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define")
+  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot")
   "What cmd/agent-ui does.")
 
 ;; ====== THE CANVAS ======
@@ -107,6 +107,9 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
                                            (agent-ui-context
                                             :width (if window (1- (window-max-chars-per-line window))
                                                      agent-ui-default-width)))))))
+    ("snapshot"
+     (append (list :ok t)
+             (agent-ui-snapshot (agent-ui--need-id op id) :canvas canvas :directory agent-ui--request-cwd)))
     ("define"
      (unless (and (stringp payload) (not (string-empty-p (string-trim payload))))
        (agent-ui--fail "define: give a type's code (a file, or on stdin)"))
@@ -137,7 +140,7 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
         (cond
          ((not (stringp op))
           (agent-ui--fail "batch: each operation has \"op\": show, update, append or remove"))
-         ((member op '("batch" "types" "list" "render" "define"))
+         ((member op '("batch" "types" "list" "render" "define" "snapshot"))
           (agent-ui--fail "batch: %s isn't done in a batch" op)))
         (agent-ui-do op (plist-get rest :id)
                      (if (equal op "show") rest (agent-ui--plist-delete rest :id))

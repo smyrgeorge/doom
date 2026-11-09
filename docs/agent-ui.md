@@ -56,6 +56,7 @@ agent-ui types [TYPE]          # the catalog: each type, its properties, an exam
 agent-ui batch < ops.json      # several operations, one trip to Emacs
 agent-ui render '{"type":...}' # an element drawn as text, nothing shown: for the agent to see it
 agent-ui define gauge.el       # a type of the agent's own (below)
+agent-ui snapshot build        # the element as an image for the agent's reply (below)
 ```
 
 A batch is an array of operations, each an object with its `op` and what it takes, flat:
@@ -97,7 +98,8 @@ else the canvas `default`. A session's canvas is killed with it.
 
 - **Its buffer** is `*agent-ui: SESSION*`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
   time an element is shown (an application of `+my/tiling-apps`), without taking the focus, and again if it was closed.
-  `q` hides it; it closes with its session.
+  `q` hides it; it closes with its session. `a` on an element puts it into the session's prompt; `R` reviews the
+  types the agent made.
 - **Each element** is the text between two markers, its id in a text property. Drawing replaces that text only;
   point and each window's scroll stay where they were.
 - **Redraws are throttled:** an update marks the element dirty, and a timer (`agent-ui-redraw-delay`, 0.1s) redraws the
@@ -227,6 +229,18 @@ lines. A chunk of output is one update, however many lines it has.
 change the element refused. A source stops when its element is removed or shown again, or its canvas closed. An
 update can't change a source: showing the element again does.
 
+## In the conversation
+
+agent-shell owns its buffer's text, so an element isn't put there: it goes the ways agent-shell already has
+(`config/agent-ui/snapshot.el`).
+
+- **From the agent:** `agent-ui snapshot ID` saves the element as it's drawn, an SVG (its text in its faces' colours,
+  a word at its column; a bar's blocks as rectangles; a chart's own SVG nested), in the session's
+  `.agent-shell/images/`, and replies with a Markdown image link. In its reply, agent-shell shows it inline, and the
+  transcript keeps it.
+- **From you:** `a` on an element in a canvas puts it into its session's prompt, as text: its id, its type, its
+  drawing in a code block.
+
 ## Types the agent makes
 
 When none of the types fits, the agent writes one: an Emacs Lisp file with one `agent-ui-define` and the definitions it
@@ -264,7 +278,6 @@ the types change.
 
 ## Later
 
-- **In the conversation** (`doom-nwj.14`): an element, or a snapshot of it, in the agent-shell buffer itself.
 - **MCP** (`doom-nwj.15`): the same operations as tools with schemas, given to each session through
   `agent-shell-mcp-servers`.
 - **Back after a restart:** a canvas's elements are data, so it can be saved with the session's transcript and shown
@@ -280,6 +293,7 @@ the types change.
 | `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
+| `config/agent-ui/snapshot.el` | In the conversation: an element as an SVG for the agent's reply, into the prompt |
 | `config/agent-ui/source.el` | Sources: an element following a command, a file, a poll |
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |

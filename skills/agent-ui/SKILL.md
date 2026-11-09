@@ -39,6 +39,7 @@ agent-ui types [TYPE]         # the types, their properties, an example each
 agent-ui batch JSON           # several operations at once: [{"op":"show",...}, {"op":"update","id":...,...}]
 agent-ui render JSON          # an element drawn as text, as the canvas would (nothing shown): {"ok":true,"text":...}
 agent-ui define FILE          # a type of your own (see below), from FILE or stdin
+agent-ui snapshot ID          # the element as an image, for your reply: {"file":..., "markdown":"![...](...)"}
 ```
 
 JSON is the last argument (quote it with single quotes), or comes on stdin (a heredoc for anything long). An element
@@ -151,6 +152,14 @@ without showing it: check a layout before you show it.
 ```sh
 agent-ui render '{"type":"table","columns":["Test","Result"],"rows":[["lexer","passed"]]}'
 ```
+
+## In the conversation
+
+The canvas changes; the conversation stays. To keep an element's state in it (the final test table, a chart you're
+talking about), `agent-ui snapshot ID` saves it as it's drawn, an SVG in `.agent-shell/images/`, and replies with
+`markdown`: put that line in your reply, and agent-shell shows the image there (its transcript keeps it). The user can
+also send you an element: `a` on it in the canvas puts it into your prompt as text, "Agent UI element ID (TYPE), as
+it's shown:" and its drawing.
 
 ## A type of your own
 

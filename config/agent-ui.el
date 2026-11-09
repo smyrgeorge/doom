@@ -29,6 +29,13 @@
 ;; lines into updates: the agent's tool calls run one after another, so a bar
 ;; it updated itself would stand still while it waits on a long build.
 
+;; IN THE CONVERSATION
+;; agent-shell owns its buffer's text: an element goes there the ways it has
+;; (config/agent-ui/snapshot.el). The agent saves one as an image (cmd/agent-ui
+;; snapshot ID: an SVG in the session's .agent-shell/images/) and links it in
+;; its reply, which agent-shell shows inline and its transcript keeps; a in a
+;; canvas puts the element at point into its session's prompt, as text.
+
 ;; THE AGENT'S WAY IN
 ;; cmd/agent-ui, from the agent's shell: show, update, append, remove... an
 ;; element as JSON, the reply as JSON (config/agent-ui/request.el), through
@@ -65,7 +72,8 @@
 (map! :map agent-ui-canvas-mode-map
       :n "q"  #'quit-window
       :n "gr" #'agent-ui-canvas-redraw
-      :n "R"  #'agent-ui-review)
+      :n "R"  #'agent-ui-review
+      :n "a"  #'agent-ui-send-element)
 
 ;; TYPES THE AGENT MAKES (see above): the list, a preview.
 (map! :map agent-ui-review-mode-map
@@ -94,6 +102,7 @@
 (load! "agent-ui/staging")
 (load! "agent-ui/review")
 (load! "agent-ui/source")
+(load! "agent-ui/snapshot")
 
 ;; TYPES THE AGENT MAKES (see above): the ones you kept.
 (agent-ui-load-kept)

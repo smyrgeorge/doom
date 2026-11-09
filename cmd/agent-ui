@@ -16,6 +16,9 @@
 #                                 {"op": "update", "id": ..., ...}, ...]
 #   agent-ui render [JSON]        an element drawn as text, as the canvas would
 #                                 (nothing shown): to see what it looks like
+#   agent-ui snapshot ID          the element as an image (SVG) in .agent-shell/
+#                                 images/: {"file", "markdown"}, a link for your
+#                                 reply (agent-shell shows it in the conversation)
 #   agent-ui define [FILE]        a type of your own: its Emacs Lisp code (one
 #                                 agent-ui-define), from FILE or stdin; staged
 #                                 for the user to keep or discard
@@ -64,8 +67,8 @@ case "$op" in
     [ $# -gt 2 ] && fail 2 "$op: too many arguments (ID, then JSON)"
     id=$1
     [ $# -eq 2 ] && json=$2 ;;
-  remove)
-    [ $# -ne 1 ] && fail 2 "remove: agent-ui remove ID"
+  remove|snapshot)
+    [ $# -ne 1 ] && fail 2 "$op: agent-ui $op ID"
     id=$1 ;;
   types)
     [ $# -gt 1 ] && fail 2 "types: agent-ui types [TYPE]"
@@ -81,7 +84,7 @@ case "$op" in
   clear|list)
     [ $# -gt 0 ] && fail 2 "$op: takes no arguments" ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define" ;;
+    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define, snapshot" ;;
 esac
 case "$id" in *$'\n'*) fail 2 "an id is one line" ;; esac
 
