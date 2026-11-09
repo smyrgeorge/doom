@@ -766,6 +766,23 @@ and (moved or resized) laid out again."
           (should-not (+test-banner--frame-visible frame))
           (should (+test-banner--frame-live frame)))))))
 
+(ert-deftest banner/a-hidden-frame-x-calls-iconified-is-shown-again ()
+  "Hidden right after it was shown, X calls the frame iconified (`icon'), off
+the screen all the same: back in the window, it's shown again."
+  (+test-banner
+    (+test-banner--gui
+      (let ((buffer (+test-buffer "B"))
+            (window (selected-window)))
+        (switch-to-buffer buffer)
+        (with-current-buffer buffer (+my/banner-show 'a "A"))
+        (let ((frame (+test-banner--frame-of window)))
+          (switch-to-buffer (+test-buffer "C"))
+          (+my/banner--sync)
+          (setf (+test-banner--frame-visible frame) 'icon)
+          (switch-to-buffer buffer)
+          (+my/banner--sync)
+          (should (eq (+test-banner--frame-visible frame) t)))))))
+
 (ert-deftest banner/frame-deleted-with-its-window ()
   (+test-banner
     (+test-banner--gui

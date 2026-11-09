@@ -59,8 +59,7 @@ lays them over its header line, KEY is what it shows.")
         (set-frame-size frame width height t)
         (set-frame-position frame left top)
         (set-frame-parameter frame '+my/banner-geometry geometry))
-      (unless (frame-visible-p frame)
-        (make-frame-visible frame)))))
+      (+my/childframe-show frame))))
 
 (defun +my/banner--sync ()
   "Show each window's notices over its header line, and hide those of windows

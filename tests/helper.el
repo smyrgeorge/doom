@@ -464,8 +464,9 @@ return its value, or nil if it never did."
 
 (defun +test-visible-frames ()
   "How many frames are on screen (a WebKit page's cover is one while it
-loads; a window's notices frame stays, invisible, once they're gone)."
-  (seq-count #'frame-visible-p (frame-list)))
+loads; a window's notices frame stays, invisible, once they're gone): those
+`frame-visible-p' calls t (X calls one hidden at once `icon')."
+  (seq-count (lambda (frame) (eq (frame-visible-p frame) t)) (frame-list)))
 
 (defvar +test--js-answer nil)
 

@@ -166,8 +166,7 @@ draw it."
           (set-frame-parameter frame '+my/stripe-geometry geometry))
         (with-current-buffer (window-buffer window)
           (+my/stripe--render window))
-        (unless (frame-visible-p frame)
-          (make-frame-visible frame))))))
+        (+my/childframe-show frame)))))
 
 (defun +my/stripe--sync ()
   "Give each window showing a stripe its strip frame, laid over its right

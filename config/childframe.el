@@ -80,6 +80,20 @@ about it (`after-make-frame-functions'), and the selected frame stays so."
       (delete-frame frame t)
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
+;; ON THE SCREEN
+;; Only a frame `frame-visible-p' calls t is on the screen. On X, one hidden
+;; right after it was shown (its window showing another buffer at once) is
+;; called `icon': its late events took the hiding for iconifying. It's off the
+;; screen all the same, and showing it again must not skip it.
+(defun +my/childframe-shown-p (frame)
+  "Non-nil if FRAME is on the screen (see ON THE SCREEN)."
+  (eq (frame-visible-p frame) t))
+
+(defun +my/childframe-show (frame)
+  "Put FRAME on the screen, unless it is (see ON THE SCREEN)."
+  (unless (+my/childframe-shown-p frame)
+    (make-frame-visible frame)))
+
 ;; A FRAME PER WINDOW
 ;; A feature keeps a list of (WINDOW FRAME ...), for the windows that want a
 ;; frame over them (or wanted one). When windows change, it syncs the list

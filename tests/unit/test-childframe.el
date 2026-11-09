@@ -115,6 +115,27 @@ added to them."
         (+my/childframe-delete 'child)
         (should (= deleted 1))))))
 
+;; ====== ON THE SCREEN ======
+
+(ert-deftest childframe/on-the-screen-only-if-visible-says-t ()
+  "On the screen only if `frame-visible-p' says t: `icon' (X: hidden right
+after it was shown) is off it, and showing it again shows it."
+  (let ((visible nil)
+        (made-visible nil))
+    (cl-letf (((symbol-function 'frame-visible-p) (lambda (f) (and (eq f 'child) visible)))
+              ((symbol-function 'make-frame-visible)
+               (lambda (&optional f) (push f made-visible) (setq visible t))))
+      (dolist (state '(nil icon))
+        (setq visible state
+              made-visible nil)
+        (should-not (+my/childframe-shown-p 'child))
+        (+my/childframe-show 'child)
+        (should (equal made-visible '(child)))
+        (should (+my/childframe-shown-p 'child)))
+      (setq made-visible nil)
+      (+my/childframe-show 'child)
+      (should-not made-visible))))
+
 ;; ====== A FRAME PER WINDOW ======
 
 (ert-deftest childframe/windows-wanting-one ()

@@ -989,6 +989,21 @@ shown again when it's back; deleted with its window."
           (should-not (assq right +my/stripe--frames))
           (should (+test-stripe--frame-visible a)))))))
 
+(ert-deftest stripe/a-hidden-frame-x-calls-iconified-is-shown-again ()
+  "Hidden right after it was shown, X calls the frame iconified (`icon'), off
+the screen all the same: back in the window, it's shown again."
+  (+test-stripe (+test-stripe--text 100)
+    (+test-stripe--frames
+      (let ((window (selected-window)))
+        (+my/stripe--sync)
+        (let ((frame (+test-stripe--frame-of window)))
+          (set-window-buffer window (get-buffer-create "*scratch*"))
+          (+my/stripe--sync)
+          (setf (+test-stripe--frame-visible frame) 'icon)
+          (set-window-buffer window "stripe")
+          (+my/stripe--sync)
+          (should (eq (+test-stripe--frame-visible frame) t)))))))
+
 (ert-deftest stripe/a-dead-frame-is-made-again ()
   (+test-stripe (+test-stripe--text 100)
     (+test-stripe--frames

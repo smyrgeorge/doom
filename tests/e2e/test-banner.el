@@ -15,7 +15,7 @@
   "WINDOW's notices frame, once on screen."
   (+test-wait-for (lambda ()
                     (let ((frame (+test-banner--frame window)))
-                      (and (frame-live-p frame) (frame-visible-p frame) frame)))
+                      (and (frame-live-p frame) (+my/childframe-shown-p frame) frame)))
                   5))
 
 (defun +test-banner--text (frame)
@@ -117,7 +117,7 @@ mouse-1 command run."
     (+my/banner-show 'hello "Closing soon")
     (let ((frame (+test-banner--shown (selected-window))))
       (+my/banner-close)
-      (should (+test-wait-for (lambda () (not (frame-visible-p frame))) 3))
+      (should (+test-wait-for (lambda () (not (+my/childframe-shown-p frame))) 3))
       ;; Kept for the window's next notices; the header line as it was.
       (should (frame-live-p frame))
       (should (equal header-line-format "the file's own header"))
@@ -147,7 +147,7 @@ mouse-1 command run."
       (+my/banner-show 'hello "Only for away.txt")
       (let ((frame (+test-banner--shown (selected-window))))
         (switch-to-buffer "*scratch*")
-        (should (+test-wait-for (lambda () (not (frame-visible-p frame))) 3))
+        (should (+test-wait-for (lambda () (not (+my/childframe-shown-p frame))) 3))
         (switch-to-buffer buffer)
         (should (eq (+test-banner--shown (selected-window)) frame))))))
 
@@ -181,7 +181,7 @@ mouse-1 command run."
     (let ((frame (+test-banner--shown (selected-window))))
       (emacs-lisp-mode)
       (should-not +my/banner--list)
-      (should (+test-wait-for (lambda () (not (frame-visible-p frame))) 3)))))
+      (should (+test-wait-for (lambda () (not (+my/childframe-shown-p frame))) 3)))))
 
 ;; ====== CLICKS ======
 
