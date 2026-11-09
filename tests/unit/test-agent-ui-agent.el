@@ -135,7 +135,7 @@ killed after."
 (ert-deftest agent-ui-agent/told-in-its-system-prompt ()
   (should (memq #'agent-ui-agent-context +my/agent-shell-claude-context-functions))
   (should (file-executable-p agent-ui-command))
-  (should (equal agent-ui-command (expand-file-name "cmd/agent-ui" +test-root)))
+  (should (equal agent-ui-command (expand-file-name "cmd/agent-ui.sh" +test-root)))
   (should (equal agent-ui-skill (expand-file-name "skills/agent-ui/SKILL.md" +test-root)))
   (should (file-exists-p agent-ui-skill))
   ;; Without a server, nothing: the command couldn't reach Emacs.

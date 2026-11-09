@@ -5,7 +5,7 @@
 ;; session) and, beside it, the canvas the agent keeps up to date as it works,
 ;; played out over a few seconds: a checklist of the release's steps, the
 ;; tests' table filling in (one fails), the build's progress bar, a chart of
-;; the last builds' times. The agent's way of doing it is cmd/agent-ui; here,
+;; the last builds' times. The agent's way of doing it is cmd/agent-ui.sh; here,
 ;; the same through Lisp. The file is deleted once both are closed.
 
 ;; ====== VARIABLES ======

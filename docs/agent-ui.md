@@ -42,7 +42,7 @@ A table with a `key` column replaces a row with the same key instead of adding o
 
 ## The command line
 
-`cmd/agent-ui` (the system prompt gives its full path). JSON comes on stdin or as the last argument; the reply is JSON
+`cmd/agent-ui.sh` (the system prompt gives its full path). JSON comes on stdin or as the last argument; the reply is JSON
 on stdout.
 
 ```sh
@@ -235,7 +235,7 @@ Each agent-shell session also gets the operations as MCP tools, with their schem
 `remove`, `clear`, `list`, `types`, `render`, `snapshot`, `batch`, `define` (`show`'s description lists the types,
 asked of Emacs). The server is `cmd/agent-ui-mcp.el`, run by a batch Emacs (this Emacs's binary) the agent starts,
 registered in `agent-shell-mcp-servers` with the session's name and directory; each call goes through
-`cmd/agent-ui`, so replies and errors are the command line's. The system prompt says the tools are there.
+`cmd/agent-ui.sh`, so replies and errors are the command line's. The system prompt says the tools are there.
 `(setq +my/agent-ui-mcp nil)` in `config.el` turns them off.
 
 ## In the conversation
@@ -307,7 +307,7 @@ the types change.
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
 | `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
-| `cmd/agent-ui` | The command line |
+| `cmd/agent-ui.sh` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |
 | `skills/agent-ui/SKILL.md` | The skill: the types with examples, for the agent |
 

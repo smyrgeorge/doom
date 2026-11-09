@@ -22,15 +22,15 @@ git config --global mergetool.doom.cmd '~/.config/doom/cmd/diff.sh "$MERGED"'
 git config --global mergetool.doom.trustExitCode true
 ```
 
-## cmd/agent-ui
+## cmd/agent-ui.sh
 
 Shows things in Emacs beside a coding agent's session, on its canvas: progress bars, checklists, tables. Made for
 agents, from their shell; see [Agent UI](agent-ui.md).
 
 ```sh
-cmd/agent-ui show '{"id":"build","type":"progress","title":"Build","max":12}'
-cmd/agent-ui update build '{"value":5,"label":"linking"}'
-cmd/agent-ui types           # what it can show
+cmd/agent-ui.sh show '{"id":"build","type":"progress","title":"Build","max":12}'
+cmd/agent-ui.sh update build '{"value":5,"label":"linking"}'
+cmd/agent-ui.sh types           # what it can show
 ```
 
 The reply is JSON on stdout; it exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without

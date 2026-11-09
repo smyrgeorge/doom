@@ -6,7 +6,7 @@
 ;;   emacs --batch -Q -l cmd/agent-ui-mcp.el -f agent-ui-mcp-main
 ;;
 ;; It speaks MCP over stdio (JSON-RPC, a message a line) and does each tool
-;; call through cmd/agent-ui, beside it: the same operations, replies and
+;; call through cmd/agent-ui.sh, beside it: the same operations, replies and
 ;; errors as the command line, reaching the user's Emacs with emacsclient.
 ;; AGENT_UI_SESSION says whose canvas; AGENT_UI_DIR the agent's directory
 ;; (its files', its sources'), else where it was started. Tools' descriptions
@@ -16,8 +16,8 @@
 (require 'subr-x)
 
 (defconst agent-ui-mcp-command
-  (expand-file-name "agent-ui" (file-name-directory (or load-file-name buffer-file-name)))
-  "cmd/agent-ui: what each tool call runs.")
+  (expand-file-name "agent-ui.sh" (file-name-directory (or load-file-name buffer-file-name)))
+  "cmd/agent-ui.sh: what each tool call runs.")
 
 (defconst agent-ui-mcp-version "2025-06-18"
   "The MCP version it speaks (or the client's, if it asks for another).")
@@ -90,7 +90,7 @@ nil if it can't be reached."
   (decode-coding-string (json-serialize value :null-object :null :false-object :false) 'utf-8))
 
 (defun agent-ui-mcp--run (args)
-  "cmd/agent-ui with ARGS, in the agent's directory: its reply, parsed (or
+  "cmd/agent-ui.sh with ARGS, in the agent's directory: its reply, parsed (or
 an error reply if it said nothing readable)."
   (let ((default-directory (file-name-as-directory
                             (or (getenv "AGENT_UI_DIR") default-directory))))
@@ -101,7 +101,7 @@ an error reply if it said nothing readable)."
              (text (if (multibyte-string-p text) text (decode-coding-string text 'utf-8))))
         (condition-case nil
             (json-parse-string text :object-type 'plist :null-object nil :false-object :false)
-          (error (list :ok :false :error (format "cmd/agent-ui (exit %s): %s" status text))))))))
+          (error (list :ok :false :error (format "cmd/agent-ui.sh (exit %s): %s" status text))))))))
 
 (defun agent-ui-mcp--call (name arguments)
   "Tool NAME with ARGUMENTS (a plist): (ERROR-P . TEXT)."

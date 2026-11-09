@@ -1,9 +1,9 @@
 ;;; $DOOMDIR/config/agent-ui/request.el -*- lexical-binding: t; -*-
-;; Agent UI's way in for the command line (cmd/agent-ui): a request in a
+;; Agent UI's way in for the command line (cmd/agent-ui.sh): a request in a
 ;; folder, its reply written there. Loaded from config/agent-ui.el, after
 ;; canvas.el. No Doom here (see docs/agent-ui.md).
 ;;
-;; cmd/agent-ui makes a folder holding:
+;; cmd/agent-ui.sh makes a folder holding:
 ;;   request   lines: the operation, an id, the agent's session
 ;;             ($AGENT_UI_SESSION), its working directory (empty when none)
 ;;   payload   the agent's JSON, as it gave it (absent if none)
@@ -17,9 +17,9 @@
 ;; ====== VARIABLES ======
 
 (defcustom agent-ui-command
-  (expand-file-name "../../cmd/agent-ui"
+  (expand-file-name "../../cmd/agent-ui.sh"
                     (file-name-directory (or load-file-name buffer-file-name)))
-  "cmd/agent-ui: the command line agents run (as the agent is told)."
+  "cmd/agent-ui.sh: the command line agents run (as the agent is told)."
   :type 'file :group 'agent-ui)
 
 (defvar agent-ui-canvas-function #'agent-ui-request-canvas
@@ -32,7 +32,7 @@ canvas's name). config/agent-ui/agent.el finds agent-shell's sessions.")
 
 (defconst agent-ui-operations
   '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot")
-  "What cmd/agent-ui does.")
+  "What cmd/agent-ui.sh does.")
 
 ;; ====== THE CANVAS ======
 
@@ -156,7 +156,7 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
     (buffer-string)))
 
 (defun agent-ui-request (folder)
-  "Answer cmd/agent-ui's request in FOLDER (see the top of this file):
+  "Answer cmd/agent-ui.sh's request in FOLDER (see the top of this file):
 its reply written there, as JSON. Never signals: an error is the reply."
   (let ((reply
          (condition-case err
