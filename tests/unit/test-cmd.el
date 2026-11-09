@@ -85,7 +85,13 @@ after 90 s (STATUS then `timeout')."
                                                    (mapconcat #'shell-quote-argument command " ")
                                                    "/dev/null"))))
            (end (+ (float-time) 90)))
-      (process-send-eof process)
+      ;; No input: a wrong use may have exited already (at once, 2), and a
+      ;; finished process can't be sent its end (CI's macOS runner).
+      (when (process-live-p process)
+        (condition-case nil
+            (process-send-eof process)
+          (error (when (process-live-p process)
+                   (error "Couldn't end diff.sh's input")))))
       (while (and (process-live-p process) (< (float-time) end))
         (accept-process-output process 0.1))
       (if (process-live-p process)
