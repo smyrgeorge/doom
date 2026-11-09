@@ -130,3 +130,42 @@
               (goto-char (point-max))
               (should-error (agent-ui-send-element) :type 'user-error)))
         (kill-buffer shell)))))
+
+;; ====== LINKS ======
+
+(ert-deftest agent-ui-snapshot/a-link-to-an-element ()
+  (+test-aush
+    (should (equal (agent-ui-link "Claude Agent @ doom" "lat")
+                   "agent-ui://canvas/Claude%20Agent%20%40%20doom#lat"))
+    (should (equal (agent-ui-link "a") "agent-ui://canvas/a"))
+    ;; browse-url opens it.
+    (should (equal (browse-url-select-handler "agent-ui://canvas/x#y") #'agent-ui-open-link))
+    (agent-ui-show '(:id "b" :type "text" :text "second"))
+    (let ((link (agent-ui-link agent-ui-default-canvas "b")))
+      (save-window-excursion
+        (delete-other-windows)
+        (let ((agent-ui-display-function #'agent-ui-display-canvas)
+              (other (selected-window)))
+          (ignore other)
+          (should (eq (agent-ui-open-link link) canvas))
+          ;; Its pane shown, selected, the cursor on the element.
+          (should (eq (window-buffer (selected-window)) canvas))
+          (should (equal (get-text-property (point) 'agent-ui-id) "b"))
+          (should (looking-at "second")))))
+    ;; Its show's reply has it.
+    (should (equal (plist-get (agent-ui-do "show" nil '(:id "c" :type "text" :text "x") canvas) :link)
+                   (agent-ui-link agent-ui-default-canvas "c")))
+    (should-error (agent-ui-open-link "agent-ui://canvas/no-such-canvas#x") :type 'user-error)))
+
+(ert-deftest agent-ui-snapshot/agent-shell-draws-it-as-a-link ()
+  ;; As the agent's reply has it: a link agent-shell opens with browse-url.
+  (require 'agent-shell-markdown)
+  (with-temp-buffer
+    (insert "See [the graph](agent-ui://canvas/Claude%20Agent%20%40%20doom#lat).")
+    (agent-shell-markdown-replace-markup :render-images nil :highlight-blocks t :complete t)
+    (should (equal (buffer-string) "See the graph."))
+    (goto-char (point-min))
+    (search-forward "graph")
+    (should (equal (agent-shell-markdown-link-url-at-point (1- (point)))
+                   "agent-ui://canvas/Claude%20Agent%20%40%20doom#lat"))))
+

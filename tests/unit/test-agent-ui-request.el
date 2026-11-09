@@ -44,8 +44,9 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
 
 (ert-deftest agent-ui-request/show-update-append-remove ()
   (+test-aur
+    ;; Its link too, for the agent's reply.
     (should (equal (+test-aur-request "show" nil "{\"id\":\"b\",\"type\":\"progress\",\"max\":4}")
-                   '(:ok t :id "b")))
+                   (list :ok t :id "b" :link (agent-ui-link agent-ui-default-canvas "b"))))
     (should (string-match-p "\\`░+  0/4  0%\n\n\\'" (+test-aur-text)))
     (should (equal (+test-aur-request "update" "b" "{\"value\":2,\"label\":\"half\"}")
                    '(:ok t :id "b")))
@@ -94,7 +95,7 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
       ;; Each done, or why not; not ok if one wasn't.
       (should (eq (plist-get reply :ok) :false))
       (let ((results (plist-get reply :results)))
-        (should (equal (nth 0 results) '(:ok t :id "p")))
+        (should (equal (nth 0 results) (list :ok t :id "p" :link (agent-ui-link agent-ui-default-canvas "p"))))
         (should (equal (nth 1 results) '(:ok t :id "p")))
         (should (string-match-p "no element \"nope\"" (plist-get (nth 2 results) :error)))
         (should (string-match-p "list isn't done in a batch" (plist-get (nth 3 results) :error)))
@@ -164,8 +165,8 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
         (should (equal (plist-get reply :preview) "....."))
         (should (equal (plist-get reply :warnings) nil)))
       ;; Usable at once.
-      (should (equal (+test-aur-request "show" nil "{\"id\":\"d\",\"type\":\"dots\",\"n\":2}")
-                     '(:ok t :id "d")))
+      (should (equal (plist-get (+test-aur-request "show" nil "{\"id\":\"d\",\"type\":\"dots\",\"n\":2}") :id)
+                     "d"))
       (should (string-match-p "one type (one agent-ui-define), not 0"
                               (plist-get (+test-aur-request "define" nil "(setq x 1)") :error)))
       (should (string-match-p "define: no JSON given\\|give a type's code"
@@ -209,7 +210,8 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
     (+test-aur-with-server
       ;; JSON as an argument, or on stdin.
       (should (equal (+test-aur-run '("show" "{\"id\":\"p\",\"type\":\"progress\",\"max\":4}"))
-                     '(0 . "{\"ok\":true,\"id\":\"p\"}")))
+                     (cons 0 (format "{\"ok\":true,\"id\":\"p\",\"link\":\"%s\"}"
+                                     (agent-ui-link agent-ui-default-canvas "p")))))
       (should (equal (+test-aur-run '("update" "p") "{\"value\": 3, \"label\": \"a \\\"quote\\\" and \\\\\"}")
                      '(0 . "{\"ok\":true,\"id\":\"p\"}")))
       (should (string-match-p "3/4  75%  a \"quote\" and \\\\" (+test-aur-text)))

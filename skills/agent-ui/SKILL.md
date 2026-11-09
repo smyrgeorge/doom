@@ -167,6 +167,9 @@ agent-ui render '{"type":"table","columns":["Test","Result"],"rows":[["lexer","p
 
 ## In the conversation
 
+`show`'s reply has the element's `link` (`agent-ui://canvas/...#ID`): put it in your reply as a Markdown link
+(`[the build](agent-ui://...)`), and clicking it brings up the canvas's pane, the cursor on the element.
+
 The canvas changes; the conversation stays. To keep an element's state in it (the final test table, a chart you're
 talking about), `agent-ui snapshot ID` saves it as it's drawn, an SVG in `.agent-shell/images/`, and replies with
 `markdown`: put that line in your reply, and agent-shell shows the image there (its transcript keeps it). The user can

@@ -249,3 +249,52 @@ text the agent reads."
 
 (declare-function agent-shell-insert "agent-shell")
 (keymap-set agent-ui-canvas-mode-map "a" #'agent-ui-send-element)
+
+;; ====== LINKS ======
+;; agent-ui://canvas/NAME#ID, in the agent's reply ([the build](...)): a
+;; link agent-shell draws, and opens with `browse-url'; its handler here shows
+;; the canvas's pane, selected, the cursor on element ID.
+
+(require 'url-parse)
+(require 'url-util)
+
+(defun agent-ui-link (canvas &optional id)
+  "The link to CANVAS (its name) and, with ID, to its element ID."
+  (concat "agent-ui://canvas/" (url-hexify-string canvas)
+          (if id (concat "#" (url-hexify-string id)) "")))
+
+(defun agent-ui-open-link (url &rest _)
+  "Open URL, an agent-ui:// link (see LINKS above): its canvas's pane
+shown and selected, the cursor on its element. A `browse-url' handler."
+  (let* ((parsed (url-generic-parse-url url))
+         (name (decode-coding-string (url-unhex-string (string-remove-prefix "/" (url-filename parsed))) 'utf-8))
+         (id (and (url-target parsed)
+                  (decode-coding-string (url-unhex-string (url-target parsed)) 'utf-8)))
+         (canvas (get-buffer (agent-ui-canvas-buffer-name name))))
+    (unless (and (equal (url-host parsed) "canvas") canvas)
+      (user-error "Agent UI: no canvas %s (closed?)" name))
+    (let ((window (or (get-buffer-window canvas)
+                      (progn (funcall agent-ui-display-function canvas)
+                             (get-buffer-window canvas)))))
+      (when window
+        (select-window window))
+      (with-current-buffer canvas
+        (let ((pos (and id (agent-ui--element-start canvas id))))
+          (when pos
+            (goto-char pos)
+            (when window
+              (set-window-point window pos)
+              (set-window-start window (save-excursion (goto-char pos) (line-beginning-position)))))))
+      canvas)))
+
+(defun agent-ui--element-start (canvas id)
+  "Where element ID starts in CANVAS, or nil."
+  (with-current-buffer canvas
+    (let ((pos (point-min)))
+      (while (and pos (not (equal (get-text-property pos 'agent-ui-id) id)))
+        (setq pos (next-single-property-change pos 'agent-ui-id)))
+      pos)))
+
+(require 'browse-url)
+(add-to-list 'browse-url-handlers '("\\`agent-ui:" . agent-ui-open-link))
+

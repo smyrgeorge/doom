@@ -278,6 +278,9 @@ agent-shell owns its buffer's text, so an element isn't put there: it goes the w
   transcript keeps it.
 - **From you:** `a` on an element in a canvas puts it into its session's prompt, as text: its id, its type, its
   drawing in a code block.
+- **Links:** `show`'s reply has the element's link, `agent-ui://canvas/NAME#ID`. In the agent's reply as a Markdown
+  link, agent-shell draws it, and a click on it (`browse-url`, whose handler this is) brings up the canvas's pane,
+  selected, the cursor on the element.
 
 ## Types the agent makes
 

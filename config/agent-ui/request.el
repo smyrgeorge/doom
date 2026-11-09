@@ -72,7 +72,13 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
        (let* ((id (agent-ui-show element :canvas canvas))
               (log (and (fboundp 'agent-ui-source-status)
                         (plist-get (agent-ui-source-status id :canvas canvas) :log))))
-         (append (list :ok t :id id) (when log (list :log log))))))
+         (append (list :ok t :id id)
+                 ;; A link to it, for the agent's reply (config/agent-ui/snapshot.el).
+                 (when (fboundp 'agent-ui-link)
+                   (list :link (agent-ui-link (with-current-buffer (agent-ui--buffer canvas)
+                                                agent-ui--canvas-name)
+                                              id)))
+                 (when log (list :log log))))))
     ("update"
      (list :ok t :id (agent-ui-update (agent-ui--need-id op (or id (plist-get payload :id)))
                                       (agent-ui--payload-object payload "update")
