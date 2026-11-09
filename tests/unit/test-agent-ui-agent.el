@@ -198,3 +198,39 @@ right, and does what it says on a canvas, in order."
       (with-current-buffer (agent-ui-canvas)
         (agent-ui--flush)
         (should-not (string-search "⚠" (buffer-string)))))))
+
+;; ====== ACTIONS ======
+
+(ert-deftest agent-ui-agent/an-action-into-the-sessions-prompt ()
+  (+test-aua
+    (should (eq agent-ui-action-function #'agent-ui--act))
+    (let* ((session (+test-aua-session "Claude Agent @ act" "/tmp/act/"))
+           (name (agent-ui--session-name session))
+           (inserted nil))
+      (agent-ui-show '(:id "t" :type "text" :text "2 failed"
+                       :actions ((:label "Retry" :prompt "Run the 2 failing tests again" :submit t)))
+                     :canvas name)
+      ;; Wrong actions: refused with the element.
+      (should (string-match-p "action 1's prompt"
+                              (agent-ui-error-message
+                               (should-error (agent-ui-show '(:id "u" :type "text" :text "x" :actions ((:label "a")))
+                                                            :canvas name)
+                                             :type 'agent-ui-error))))
+      (cl-letf (((symbol-function 'agent-shell-insert) (lambda (&rest args) (push args inserted))))
+        (with-current-buffer (agent-ui-canvas-buffer-name name)
+          (agent-ui--flush)
+          (goto-char (point-min))
+          (search-forward "⏵ Retry")
+          (goto-char (match-beginning 0))
+          (agent-ui-button-press)))
+      (should (equal (car inserted) (list :text "Run the 2 failing tests again" :submit t :shell-buffer session)))
+      ;; A canvas of no session: said.
+      (let ((agent-ui-default-canvas (make-temp-name "lonely-")))
+        (agent-ui-show '(:id "t" :type "text" :text "x" :actions ((:label "Go" :prompt "go"))))
+        (with-current-buffer (agent-ui-canvas)
+          (goto-char (point-min))
+          (search-forward "⏵ Go")
+          (goto-char (match-beginning 0))
+          (should (string-match-p "no agent-shell session"
+                                  (cadr (should-error (agent-ui-button-press) :type 'user-error)))))))))
+

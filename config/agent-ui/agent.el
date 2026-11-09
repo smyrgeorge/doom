@@ -147,3 +147,18 @@ shown running once it stopped.%s"
 update, append, remove, list, types, render, snapshot, batch, define), with \
 their schemas: use whichever you like."
                 "")))))
+
+;; ====== ACTIONS ======
+
+(defun agent-ui--act (prompt submit)
+  "An element's action pressed, in its canvas: PROMPT into the prompt of the
+canvas's session (sent if SUBMIT)."
+  (let ((session (and (derived-mode-p 'agent-ui-canvas-mode) agent-ui--session-buffer)))
+    (unless (buffer-live-p session)
+      (user-error "This canvas has no agent-shell session"))
+    (unless (fboundp 'agent-shell-insert)
+      (user-error "agent-shell isn't loaded"))
+    (agent-shell-insert :text prompt :submit submit :shell-buffer session)))
+
+(declare-function agent-shell-insert "agent-shell")
+(setq agent-ui-action-function #'agent-ui--act)

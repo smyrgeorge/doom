@@ -44,7 +44,7 @@ with a line saying so."
 
 (define-error 'agent-ui-error "Agent UI")
 
-(defconst agent-ui--reserved '(:id :type :title :source)
+(defconst agent-ui--reserved '(:id :type :title :source :actions)
   "Keys every element may have; no type's property is named so.")
 
 (defvar agent-ui-file-directory nil
@@ -364,6 +364,50 @@ LINE-HEIGHT in pixels (for images sized to the text)."
             (propertize (format "… %d characters more" (- (length text) agent-ui-max-chars))
                         'face 'agent-ui-muted))))
 
+(defface agent-ui-action '((t :inherit link))
+  "An element's action: a button putting text into the session's prompt.")
+
+(defvar agent-ui-action-function
+  (lambda (_prompt _submit) (user-error "Actions need an agent's session"))
+  "Called with an action's PROMPT and SUBMIT when its button is pressed, in
+the buffer of the button (config/agent-ui/agent.el: into its canvas's
+session's prompt).")
+
+(defun agent-ui-check-actions (actions)
+  "ACTIONS, an element's: an error saying what's wrong, else themselves."
+  (unless (and (listp actions) (not (agent-ui--plist-p actions)))
+    (agent-ui--fail "actions: give an array: [{\"label\": ..., \"prompt\": ...}]"))
+  (when (> (length actions) 6)
+    (agent-ui--fail "actions: at most 6, not %d" (length actions)))
+  (cl-loop for action in actions
+           for i from 1
+           do (unless (agent-ui--plist-p action)
+                (agent-ui--fail "actions: action %d must be {\"label\": ..., \"prompt\": ...}" i))
+           (cl-loop for (k _) on action by #'cddr
+                    unless (memq k '(:label :prompt :submit))
+                    do (agent-ui--fail "actions: action %d has %s: an action has label, prompt, submit"
+                                       i (agent-ui--show-value (substring (symbol-name k) 1))))
+           (dolist (key '(:label :prompt))
+             (let ((value (plist-get action key)))
+               (unless (and (stringp value) (not (string-blank-p value)))
+                 (agent-ui--fail "actions: action %d's %s must be text" i (substring (symbol-name key) 1)))))
+           (unless (memq (plist-get action :submit) '(nil t :false))
+             (agent-ui--fail "actions: action %d's submit is true or false" i)))
+  actions)
+
+(defun agent-ui--actions (actions)
+  "ACTIONS as a line of buttons; nil if there are none (or they're wrong)."
+  (when (and actions (ignore-errors (agent-ui-check-actions actions)))
+    (mapconcat
+     (lambda (action)
+       (let ((prompt (plist-get action :prompt))
+             (submit (eq (plist-get action :submit) t)))
+         (agent-ui-button (propertize (concat "⏵ " (plist-get action :label)) 'face 'agent-ui-action)
+                          (lambda () (funcall agent-ui-action-function prompt submit))
+                          (format "RET: %s \"%s\"" (if submit "send" "put into the prompt")
+                                  (truncate-string-to-width prompt 60 nil nil "…")))))
+     actions "   ")))
+
 (defun agent-ui-render (element ctx)
   "ELEMENT drawn as text, its title on a line above: by its type's :gui in a
 graphic frame (CTX's :graphic) if it has one, else :text. An error (an
@@ -386,7 +430,9 @@ so a canvas goes on with its other elements. No newline at its end."
                              (agent-ui-type-name type) (agent-ui--show-value text)))
            (agent-ui--cap (string-trim-right text "\n+")))
        (error
-        (propertize (concat "⚠ " (agent-ui-error-message err)) 'face 'agent-ui-error))))))
+        (propertize (concat "⚠ " (agent-ui-error-message err)) 'face 'agent-ui-error)))
+     (when-let* ((buttons (agent-ui--actions (plist-get element :actions))))
+       (concat "\n" buttons)))))
 
 ;; ====== HELPERS FOR TYPES ======
 
@@ -466,10 +512,12 @@ argument); HELP said in the echo area."
   "Call the action of the button at point (or EVENT's)."
   (interactive (list last-nonmenu-event))
   (let* ((pos (if (mouse-event-p event) (posn-point (event-end event)) (point)))
-         (action (get-text-property pos 'agent-ui-action
-                                    (if (mouse-event-p event) (window-buffer (posn-window (event-end event)))
-                                      (current-buffer)))))
-    (if action (funcall action) (user-error "Nothing to do here"))))
+         (buffer (if (mouse-event-p event) (window-buffer (posn-window (event-end event))) (current-buffer)))
+         (action (get-text-property pos 'agent-ui-action buffer)))
+    ;; In the button's buffer: its action may ask it (a canvas: its session).
+    (if action
+        (with-current-buffer buffer (funcall action))
+      (user-error "Nothing to do here"))))
 
 (defun agent-ui-cell (value)
   "VALUE (a JSON scalar) as text: a number formatted, true and false, null

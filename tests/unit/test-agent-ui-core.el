@@ -316,3 +316,44 @@
       ;; As JSON, for `agent-ui types'.
       (should (string-prefix-p "[{\"name\":\"meter\""
                                (json-serialize (vconcat catalog)))))))
+
+;; ====== ACTIONS ======
+
+(ert-deftest agent-ui-core/actions-drawn-as-buttons ()
+  (+test-aui
+    (agent-ui-define plain "Text." :text (lambda (_p _c) "body"))
+    (let* ((pressed nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit (current-buffer)) pressed)))
+           (text (agent-ui-render '(:type "plain" :title "T"
+                                    :actions ((:label "Retry" :prompt "Run the failing tests again")
+                                              (:label "Log" :prompt "Show me the log" :submit t)))
+                                  (agent-ui-context))))
+      (should (equal (substring-no-properties text) "T\nbody\n⏵ Retry   ⏵ Log"))
+      (should (eq (get-text-property (string-search "⏵ Retry" text) 'face text) 'agent-ui-action))
+      (should (string-match-p "put into the prompt \"Run the failing"
+                              (get-text-property (string-search "⏵ Retry" text) 'help-echo text)))
+      ;; Pressed: its prompt, sent or not, in the button's buffer.
+      (with-temp-buffer
+        (insert text)
+        (goto-char (1+ (string-search "⏵ Log" text)))
+        (agent-ui-button-press)
+        (goto-char (1+ (string-search "⏵ Retry" text)))
+        (agent-ui-button-press)
+        (should (equal (mapcar #'butlast pressed)
+                       '(("Run the failing tests again" nil) ("Show me the log" t))))
+        (should (eq (nth 2 (car pressed)) (current-buffer)))))
+    ;; None: no line for them.
+    (should (equal (agent-ui-render '(:type "plain") (agent-ui-context)) "body"))))
+
+(ert-deftest agent-ui-core/wrong-actions-explained ()
+  (cl-flet ((wrong (actions) (agent-ui-error-message
+                              (should-error (agent-ui-check-actions actions) :type 'agent-ui-error))))
+    (should (string-match-p "give an array" (wrong '(:label "x"))))
+    (should (string-match-p "action 1 must be" (wrong '("x"))))
+    (should (string-match-p "action 1's prompt must be text" (wrong '((:label "x")))))
+    (should (string-match-p "action 1's label must be text" (wrong '((:label " " :prompt "p")))))
+    (should (string-match-p "action 2 has \"run\"" (wrong '((:label "a" :prompt "p") (:label "b" :prompt "q" :run t)))))
+    (should (string-match-p "submit is true or false" (wrong '((:label "a" :prompt "p" :submit "yes")))))
+    (should (string-match-p "at most 6" (wrong (make-list 7 '(:label "a" :prompt "p"))))))
+  (should (agent-ui-check-actions '((:label "a" :prompt "p" :submit :false)))))
+

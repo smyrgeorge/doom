@@ -146,6 +146,16 @@ or notes that should stay in view. Images show as their text.
 agent-ui show '{"id":"notes","type":"markdown","title":"Plan","markdown":"1. **Parse** the config\n2. Check it against `schema.json`\n3. Write the report"}'
 ```
 
+## Actions: buttons for the user
+
+Any element can have `actions`: buttons under it that put a `prompt` into your session's prompt when the user
+presses one, for them to read and send (or sent at once with `"submit": true`, for what needs no second look). Offer
+the next steps that follow from what it shows; at most 6.
+
+```sh
+agent-ui show '{"id":"result","type":"text","text":"2 tests failed: checker, codegen.","face":"error","actions":[{"label":"Fix them","prompt":"Fix the 2 failing tests (checker, codegen)."},{"label":"Show the log","prompt":"Show me the test log.","submit":true}]}'
+```
+
 ## Seeing what you draw
 
 You can't see the user's screen; `render` shows you an element as the canvas draws it, as text, at the canvas's width,

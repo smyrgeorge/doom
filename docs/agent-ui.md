@@ -2,9 +2,9 @@
 
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line and MCP
 > tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image` and `html` types, sources (an element
-> following a command, a file, a poll), types the agent makes (kept or discarded by you), elements in the
-> conversation, canvases kept with their sessions, and what the agent is told. `M-x +my/example-agent-ui` shows it
-> ([Examples](examples.md)).
+> following a command, a file, a poll), actions (buttons into the prompt), types the agent makes (kept or discarded by
+> you), elements in the conversation, canvases kept with their sessions, and what the agent is told. `M-x
+> +my/example-agent-ui` shows it ([Examples](examples.md)).
 
 A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
@@ -33,6 +33,8 @@ elements better (charts as SVG) and has elements of its own (images, drawings, w
 | `id` | A name of the agent's choice (`[a-z0-9_-]+`), unique in its canvas. Omitted: one is made and returned |
 | `type` | An element type of the registry |
 | `title` | Optional, any type: a heading line above the element |
+| `source` | Optional, any type: a command, file or poll it follows ([Sources](#sources)) |
+| `actions` | Optional, any type: buttons putting a prompt into the session's prompt ([Actions](#actions)) |
 | anything else | The type's properties. An unknown one is an error naming the type's properties, so the agent learns them |
 
 **Updates** are partial: an object with the `id` and the properties that change, merged into the element's
@@ -240,6 +242,23 @@ registered in `agent-shell-mcp-servers` with the session's name and directory; e
 `cmd/agent-ui`, so replies and errors are the command line's. The system prompt says the tools are there.
 `(setq +my/agent-ui-mcp nil)` in `config.el` turns them off.
 
+## Actions
+
+Any element can have `actions`: buttons under it, each a `label` and the `prompt` it puts into the session's prompt
+when pressed (`RET` or a click), for you to read and send; with `"submit": true`, sent at once. At most 6; they're
+checked when the element is shown.
+
+```json
+{"id": "result", "type": "text", "text": "2 tests failed.", "face": "error",
+ "actions": [{"label": "Fix them", "prompt": "Fix the 2 failing tests."},
+             {"label": "Show the log", "prompt": "Show me the test log.", "submit": true}]}
+```
+
+```text
+2 tests failed.
+⏵ Fix them   ⏵ Show the log
+```
+
 ## Kept with the session
 
 A session's canvas is saved as it changes (a moment later, the changes together), as its elements' JSON, in the
@@ -297,7 +316,6 @@ the types change.
 
 ## Later
 
-- **Actions:** a button in an element that puts text into the session's prompt ("Retry the failing tests").
 
 ## Files
 

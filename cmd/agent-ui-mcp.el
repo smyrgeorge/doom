@@ -26,7 +26,7 @@
 
 (defconst agent-ui-mcp--element-schema
   '(:type "object"
-    :description "An element: \"type\" (one of the types below), \"id\" (yours, to change it later), an optional \"title\", the type's properties, optionally a \"source\" (a command, file or poll it follows)."
+    :description "An element: \"type\" (one of the types below), \"id\" (yours, to change it later), an optional \"title\", the type's properties, optionally a \"source\" (a command, file or poll it follows) and \"actions\" (buttons putting a prompt into your session's prompt: [{\"label\", \"prompt\", \"submit\"}])."
     :properties (:type (:type "string") :id (:type "string") :title (:type "string")
                  :source (:type "object"))
     :required ["type"]

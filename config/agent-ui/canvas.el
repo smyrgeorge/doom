@@ -291,6 +291,8 @@ error saying what's wrong. Its :type a string, as JSON gives it."
         (agent-ui--fail "a title is text, not %s" (agent-ui--show-value title))))
     (when-let* ((source (plist-get element :source)))
       (funcall agent-ui-check-source-function source))
+    (when-let* ((actions (plist-get element :actions)))
+      (agent-ui-check-actions actions))
     (let ((element (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type)))))
       ;; Its files by their full names: drawn later, wherever the agent was.
       (dolist (prop (agent-ui-type-props type))
