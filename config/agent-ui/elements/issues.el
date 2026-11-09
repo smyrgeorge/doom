@@ -115,13 +115,19 @@
           (cons "Done" (cl-sort (seq-filter (lambda (i) (equal (plist-get i :status) "closed")) issues)
                                 #'string> :key (lambda (i) (or (plist-get i :closed_at) "")))))))
 
-(defun agent-ui-issues--card (issue width dir)
-  "ISSUE as a line WIDTH wide: its id, its title; a button opening it."
+(defconst agent-ui-issues--lead "\\`[^:]\\{1,30\\}: "
+  "A title's lead (\"Agent UI element: \"), left out when they all have one.")
+
+(defun agent-ui-issues--card (issue width dir &optional short)
+  "ISSUE as a line WIDTH wide: its id, its title (without its lead if
+SHORT); a button opening it."
   (let* ((priority (plist-get issue :priority))
          (id (plist-get issue :id))
+         (title (plist-get issue :title))
+         (title (if short (replace-regexp-in-string agent-ui-issues--lead "" title) title))
          (line (agent-ui-truncate
                 (concat (propertize id 'face (if (and priority (<= priority 1)) 'agent-ui-warning 'agent-ui-muted))
-                        " " (plist-get issue :title))
+                        " " title)
                 width)))
     (agent-ui-button (agent-ui-pad line width)
                      (lambda () (funcall agent-ui-open-issue-function id dir))
@@ -139,11 +145,15 @@
       (let* ((columns (agent-ui-issues--columns props data))
              (wide (>= width 72))
              (col-width (if wide (/ (- width 6) 4) width))
+             ;; Their titles all led alike ("Agent UI element: ..."): the lead
+             ;; left out, the room kept for what tells them apart.
+             (all (apply #'append (mapcar #'cdr columns)))
+             (short (and all (cl-every (lambda (i) (string-match-p agent-ui-issues--lead (plist-get i :title))) all)))
              (drawn (mapcar (lambda (column)
                               (let ((issues (cdr column)))
                                 (append (list (propertize (agent-ui-pad (format "%s (%d)" (car column) (length issues)) col-width)
                                                           'face 'bold))
-                                        (mapcar (lambda (i) (agent-ui-issues--card i col-width dir)) (seq-take issues limit))
+                                        (mapcar (lambda (i) (agent-ui-issues--card i col-width dir short)) (seq-take issues limit))
                                         (when (> (length issues) limit)
                                           (list (propertize (agent-ui-pad (format "… %d more" (- (length issues) limit)) col-width)
                                                             'face 'agent-ui-muted))))))

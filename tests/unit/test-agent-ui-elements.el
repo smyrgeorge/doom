@@ -863,6 +863,11 @@ new file mode 100644
     (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
     (should (string-match-p "Ready (1)" (+test-aue-draw '(:type "issues" :dir "/proj/" :label "ui") :width 80)))
     ;; Not fetched yet; bd failing.
+    ;; All led alike: the lead left out.
+    (puthash "/proj/" '(:ready ("a") :issues ((:id "a" :title "Agent UI element: diff" :status "open")
+                                              (:id "b" :title "Agent UI: a bug" :status "in_progress")))
+             agent-ui-issues--cache)
+    (should (string-match-p "a diff +b a bug" (+test-aue-draw '(:type "issues" :dir "/proj/") :width 80)))
     (should (equal (+test-aue-draw '(:type "issues" :dir "/other/")) "fetching the issues…"))
     (puthash "/bad/" '(:error "no Beads issues here (bd failed)") agent-ui-issues--cache)
     (should (equal (+test-aue-draw '(:type "issues" :dir "/bad/")) "no Beads issues here (bd failed)"))))
