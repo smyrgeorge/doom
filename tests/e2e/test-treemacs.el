@@ -171,3 +171,36 @@ next file is selected, and shown."
       (execute-kbd-macro "j")
       (should (+test-wait-for (lambda () (equal (+test-treemacs--highlighted) "f02.txt")) 3))
       (should (+test-wait-for (lambda () (+test-treemacs--shows-p "f02.txt")) 3)))))
+
+(ert-deftest e2e-treemacs/a-refresh-after-its-project-switched-under-it ()
+  "The sidebar showing two projects, its cursor on a file of the first, which
+leaves the workspace without the tree redrawn (as the last workspace's tree,
+after SPC p p): a refresh draws the other one, the cursor at the top. It went
+up from / forever, Emacs hung (this test then times out)."
+  (+test-treemacs
+    (let* ((other (let ((root (file-name-as-directory (+test-tmp-file "other-project/"))))
+                    (make-directory root t)
+                    (with-temp-file (expand-file-name "README.md" root) (insert "# Other\n"))
+                    (directory-file-name (file-truename root))))
+           (buffer (window-buffer (+test-treemacs--window))))
+      (with-selected-window (+test-treemacs--window)
+        (let ((inhibit-message t))
+          (treemacs-do-add-project-to-workspace other "other-project"))
+        (let* ((workspace (treemacs-current-workspace))
+               (kept (seq-find (lambda (project) (equal (treemacs-project->path project) other))
+                               (treemacs-workspace->projects workspace))))
+          (should kept)
+          (goto-char (point-min))
+          (should (re-search-forward "f01\\.txt$" nil t))
+          (should (string-suffix-p "f01.txt" (treemacs-button-get (treemacs-current-button) :path)))
+          ;; The first project gone from under the tree, and from its index
+          ;; (a tree rebuilt for another project has none of it): walking up
+          ;; from f01.txt finds nothing of it.
+          (setf (treemacs-workspace->projects workspace) (list kept))
+          (let ((first (directory-file-name (file-truename +test-treemacs--root))))
+            (maphash (lambda (key _)
+                       (when (and (stringp key) (string-prefix-p first key))
+                         (remhash key treemacs-dom)))
+                     treemacs-dom))
+          (treemacs--do-refresh buffer 'all)
+          (should (string-match-p "other-project" (+test-treemacs--label (point)))))))))

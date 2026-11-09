@@ -1196,6 +1196,47 @@ without \"Refresh complete\"; files made outside show up."
           (+my/treemacs-refresh-all))
         (should (> +my/treemacs--last-refresh 0))))))
 
+(ert-deftest treemacs/refresh-all-only-the-trees-on-screen ()
+  "A tree not on screen (another workspace's): not refreshed."
+  (+test-treemacs
+    (+test-treemacs-refresh-state
+      (let ((root (+test-treemacs--project "hidden" "README.md"))
+            (calls 0))
+        (+test-treemacs--show-project root)
+        (cl-letf (((symbol-function 'treemacs--do-refresh) (lambda (&rest _) (cl-incf calls))))
+          (+my/treemacs-refresh-all)
+          (should (= calls 1))
+          (delete-window (treemacs-get-local-window))
+          (should (buffer-live-p (treemacs-get-local-buffer)))
+          (+my/treemacs-refresh-all)
+          (should (= calls 1)))))))
+
+(ert-deftest treemacs/a-refresh-starts-from-a-file-the-tree-has ()
+  "The cursor on a file of none of the tree's projects (the tree switched
+projects under it): the refresh starts at a project of the tree drawn there;
+none drawn, no refresh (it failed, or went up from / forever: Emacs hung). On
+a file of the tree: as it is."
+  (+test-treemacs
+    (let ((old (+test-treemacs--project "old" "README.md"))
+          (new (+test-treemacs--project "new" "README.md"))
+          (refreshed nil))
+      (should (advice-member-p #'+my/treemacs-refresh-from-the-tree-a 'treemacs--do-refresh))
+      (let ((buffer (+test-treemacs--show-project old))
+            (refresh (lambda (buffer project) (push (list buffer project (point)) refreshed))))
+        (+test-treemacs--goto "README.md")
+        (let ((on-readme (point)))
+          (should (> on-readme (point-min)))
+          ;; Its own file: as it is.
+          (+my/treemacs-refresh-from-the-tree-a refresh buffer 'all)
+          (should (equal refreshed (list (list buffer 'all on-readme))))
+          ;; Its project switched, not drawn: no refresh.
+          (setq refreshed nil)
+          (setf (treemacs-workspace->projects (treemacs-current-workspace))
+                (list (treemacs-project->create! :name "new" :path new :path-status 'local-readable)))
+          (+my/treemacs-refresh-from-the-tree-a refresh buffer 'all)
+          (should-not refreshed)
+          (should (= (point) on-readme)))))))
+
 ;; ====== REFRESH: THE GIT STATUS POLL ======
 
 (defmacro +test-treemacs-with-git-env (&rest body)

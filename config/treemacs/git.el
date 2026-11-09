@@ -33,15 +33,55 @@
     (wrong-type-argument nil)))
 
 (defun +my/treemacs-refresh-all ()
+  "Refresh the trees on screen. Not the hidden ones (another workspace's):
+their git colours wait until they're shown, when the poll compares their
+projects' status with the last one it saw."
   (when (featurep 'treemacs)
     (setq +my/treemacs--last-refresh (float-time))
     ;; Quietly: no "[Treemacs] Refresh complete." on every focus / git change
     ;; (a manual refresh, g in treemacs, still says it).
     (let ((treemacs-silent-refresh t))
       (treemacs-run-in-every-buffer
-       (ignore-errors
-         (treemacs-without-recenter
-          (treemacs--do-refresh (current-buffer) 'all)))))))
+       (when (get-buffer-window (current-buffer) t)
+         (ignore-errors
+           (treemacs-without-recenter
+            (treemacs--do-refresh (current-buffer) 'all))))))))
+
+;; A REFRESH FROM A FILE THE TREE STILL HAS
+;; After a refresh, treemacs puts the cursor back on the file it was on, else
+;; on the nearest folder above it the tree shows, going up until one is
+;; (`treemacs-save-position'). A file of none of the tree's projects (the tree
+;; switched to another project under it) has none: it went up from / forever,
+;; Emacs hung (a refresh of the last workspace's tree, after SPC p p). From
+;; such a file, the refresh starts at a project of the tree drawn there; with
+;; none drawn, there's nothing a refresh can redraw (it failed, or went up
+;; forever): none, the tree is drawn anew when it's shown.
+(defun +my/treemacs--in-tree-p (path)
+  "Non-nil if file PATH is one of the current treemacs workspace's projects,
+or in one."
+  (seq-some (lambda (project)
+              (let ((root (treemacs-project->path project)))
+                (or (string= path root)
+                    (string-prefix-p (file-name-as-directory root) path))))
+            (treemacs-workspace->projects (treemacs-current-workspace))))
+
+(defun +my/treemacs--drawn-project ()
+  "Where the first of the current workspace's projects drawn in this tree is,
+if one is."
+  (seq-some (lambda (project) (ignore-errors (treemacs-project->position project)))
+            (treemacs-workspace->projects (treemacs-current-workspace))))
+
+(defadvice! +my/treemacs-refresh-from-the-tree-a (fn buffer project)
+  :around #'treemacs--do-refresh
+  (if-let* ((path (with-current-buffer buffer
+                    (when-let* ((button (ignore-errors (treemacs-current-button))))
+                      (treemacs-button-get button :path))))
+            ((stringp path))
+            ((not (with-current-buffer buffer (+my/treemacs--in-tree-p path)))))
+      (when-let* ((drawn (with-current-buffer buffer (+my/treemacs--drawn-project))))
+        (with-current-buffer buffer (goto-char drawn))
+        (funcall fn buffer project))
+    (funcall fn buffer project)))
 
 (defun +my/treemacs-schedule-refresh (&rest _)
   (when (> (- (float-time) +my/treemacs--last-refresh) 3)
