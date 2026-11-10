@@ -571,6 +571,23 @@ drifted right and past it)."
              (column (string-width (substring labels 0 start))))
         (should (<= (abs (- (+ column 3) tick)) 1))))))
 
+(ert-deftest agent-ui-elements/chart-time-axis-over-years ()
+  "A span of years: a few ticks on months or years, labelled with the year
+(a tick every 30 days without it made a comb of ┬)."
+  (let* ((years (mapcar (lambda (i) (+ 1735689600 (* i 365 86400))) (number-sequence 0 24)))
+         (element (list :type "chart" :height 3 :values (number-sequence 1 25) :times years))
+         (text (+test-aue-draw element :width 60))
+         (axis (car (last (split-string text "\n") 2))))
+    (should (<= (cl-count ?┬ axis) 6))
+    (should (string-match-p "20[2-4][0-9]" (car (last (split-string text "\n")))))
+    (should (<= (cl-count ?\n (replace-regexp-in-string "<line" "\n" (+test-aue-svg element 60))) 12)))
+  ;; Two years, monthly: months with their years.
+  (let ((ticks (agent-ui-chart--ticks 1735689600 (+ 1735689600 (* 730 86400)) 6)))
+    (should (<= (length ticks) 6))
+    (should (cl-every (lambda (tick) (string-match-p "\\`[A-Za-z]+ 20[0-9][0-9]\\'" (cdr tick))) ticks)))
+  ;; Days apart: as before.
+  (should (string-match-p "\\`[A-Za-z]+ [0-9][0-9]\\'" (cdar (agent-ui-chart--ticks 1735689600 (+ 1735689600 (* 10 86400)) 6)))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."

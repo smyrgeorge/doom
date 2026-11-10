@@ -398,10 +398,35 @@ them, the text's plot drew nothing: it went left to right only)."
                                                                         (funcall pick (plist-get s :values))))
                                                  (plist-get props :series))))))))
 
+(defconst agent-ui-chart--month-steps '(1 2 3 6 12 24 60 120 240 600 1200)
+  "A time axis's steps between ticks past 30 days, in months.")
+
+(defun agent-ui-chart--month-ticks (t0 t1 most)
+  "Ticks between T0 and T1 a month apart or more, at most MOST, on the first
+of a month: labelled \"Jan 2026\", or the year alone a year apart or more."
+  (let* ((months (/ (- t1 t0) (* 30.44 86400)))
+         (step (or (seq-find (lambda (m) (<= (/ months m) most)) agent-ui-chart--month-steps)
+                   (car (last agent-ui-chart--month-steps))))
+         (start (decode-time (seconds-to-time t0)))
+         (index (* step (ceiling (+ (* 12 (decoded-time-year start)) (1- (decoded-time-month start))) step)))
+         (format (if (< step 12) "%b %Y" "%Y"))
+         (ticks nil))
+    (cl-loop for i from index by step
+             for time = (float-time (encode-time (list 0 0 0 1 (1+ (mod i 12)) (floor i 12) nil -1 nil)))
+             while (<= time t1)
+             do (when (>= time t0)
+                  (push (cons (/ (- time t0) (float (- t1 t0))) (format-time-string format (seconds-to-time time)))
+                        ticks)))
+    (nreverse ticks)))
+
 (defun agent-ui-chart--ticks (t0 t1 most)
   "Ticks between times T0 and T1, at most MOST, at round times (local
-midnights, hours, minutes): ((PLACE . LABEL) ...), PLACE 0 to 1."
-  (when (> t1 t0)
+midnights, hours, minutes; past 30 days apart, months and years):
+\((PLACE . LABEL) ...), PLACE 0 to 1."
+  (if (and (> t1 t0) (> (/ (- t1 t0) (float most)) 2592000))
+      ;; Over years, a tick every 30 days without its year made a comb.
+      (agent-ui-chart--month-ticks t0 t1 most)
+   (when (> t1 t0)
     (let* ((step (or (seq-find (lambda (s) (<= (/ (- t1 t0) s) most)) agent-ui-chart--steps)
                      (car (last agent-ui-chart--steps))))
            (offset (or (car (current-time-zone (seconds-to-time t0))) 0))
@@ -411,7 +436,7 @@ midnights, hours, minutes): ((PLACE . LABEL) ...), PLACE 0 to 1."
       (while (<= time t1)
         (push (cons (/ (- time t0) (float (- t1 t0))) (format-time-string format (seconds-to-time time))) ticks)
         (setq time (+ time step)))
-      (nreverse ticks))))
+      (nreverse ticks)))))
 
 (defun agent-ui-chart--time-axis (props columns)
   "Under a plot COLUMNS wide: its axis, ┬ at each tick, and the ticks'
