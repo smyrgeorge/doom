@@ -43,6 +43,12 @@ errors\", Maven's \"Errors: 0\", \"0 Warning(s)\".")
          (text (replace-regexp-in-string agent-ui-log--none " " text)))
     (car (seq-find (lambda (l) (string-match-p (nth 1 l) text)) agent-ui-log--levels))))
 
+(defun agent-ui-log--plain (text)
+  "TEXT without a terminal's escape sequences: colours (tools forcing them
+showed ^[[31m...), cursor moves, titles and links."
+  (replace-regexp-in-string
+   "\e\\(?:\\[[0-?]*[ -/]*[@-~]\\|\\][^\a\e]*\\(?:\a\\|\e\\\\\\)?\\|[@-Z\\\\-_]\\)" "" text t t))
+
 (defun agent-ui-log--as-list (lines)
   "LINES, text or a list, as a list: empty text, none."
   (cond ((not (stringp lines)) lines)
@@ -55,9 +61,10 @@ errors\", Maven's \"Errors: 0\", \"0 Warning(s)\".")
          (entries (agent-ui-log--as-list raw))
          (lines (mapcar (lambda (e)
                           (if (stringp e)
-                              (cons (agent-ui-log--level e) e)
+                              (let ((e (agent-ui-log--plain e)))
+                                (cons (agent-ui-log--level e) e))
                             (cons (let ((l (plist-get e :level))) (if (stringp l) (intern l) l))
-                                  (agent-ui-cell (plist-get e :text)))))
+                                  (agent-ui-log--plain (agent-ui-cell (plist-get e :text))))))
                         entries)))
     (last lines (plist-get props :keep))))
 

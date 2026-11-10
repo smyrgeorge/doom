@@ -1493,6 +1493,26 @@ cut last (never cut: 30 columns at 15)."
     (dolist (width (number-sequence 5 40))
       (should (<= (string-width (car (split-string (+test-aue-draw element :width width) "\n"))) width)))))
 
+;; doom-nwj.91
+(ert-deftest agent-ui-elements/log-without-terminal-codes ()
+  "Coloured tools' output reads as plain text: their escape sequences left
+out (shown raw: ^[[31m...), its level found in what's left."
+  (let ((element (list :type "log"
+                       :lines (concat "\e[1m\e[32m   Compiling\e[0m parser v0.1.0\n"
+                                      "\e[0;31mERROR\e[0m db: refused\n"
+                                      "\e]0;a title\afetched \e]8;;https://x.y\e\\link\e]8;;\e\\\n"
+                                      "\e[2K\e[1Gprogress 100%"))))
+    (should (equal (+test-aue-draw element)
+                   (concat "1 error · 4 lines\n"
+                           "   Compiling parser v0.1.0\n"
+                           "ERROR db: refused\n"
+                           "fetched link\n"
+                           "progress 100%")))
+    (should (eq (+test-aue-face-at element "ERROR db") 'agent-ui-error))
+    ;; Given as {level, text}: its text too.
+    (should (equal (+test-aue-draw '(:type "log" :lines ((:level "warning" :text "\e[33mslow\e[0m"))))
+                   "1 warning · 1 line\nslow"))))
+
 (ert-deftest agent-ui-elements/log-appended ()
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines "a\nb") '(:lines "c\n")) :lines) '("a" "b" "c")))
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines ("a")) '(:lines ("b" "c"))) :lines) '("a" "b" "c")))
