@@ -1804,6 +1804,20 @@ at their start, the file's name kept (never cut: 66 and 72 columns)."
                          "…file_name.txt.gone: not found")))
       (delete-directory dir t))))
 
+;; doom-nwj.77
+(ert-deftest agent-ui-elements/code-trailing-newlines-and-crlf ()
+  "Code ending in newlines, or with CRLF's, draws its lines only (a numbered
+empty line came after it, widening the gutter from 99; ^M at their ends)."
+  (should (equal (+test-aue-draw '(:type "code" :from 9 :code "int x;\nint y;\n"))
+                 " 9 │ int x;\n10 │ int y;"))
+  (should (equal (+test-aue-draw '(:type "code" :from 98 :code "int x;\nint y;\n\n"))
+                 "98 │ int x;\n99 │ int y;"))
+  (should (equal (+test-aue-draw '(:type "code" :from 1 :code "a\r\nb\r\n"))
+                 "1 │ a\n2 │ b"))
+  ;; Empty lines inside it: kept.
+  (should (equal (+test-aue-draw '(:type "code" :from 1 :code "a\n\nb\n"))
+                 "1 │ a\n2 │ \n3 │ b")))
+
 (ert-deftest agent-ui-elements/code-wrong ()
   (should (string-match-p "give code, or a file" (+test-aue-error '(:type "code"))))
   (should (string-match-p "from is a line" (+test-aue-error '(:type "code" :code "x" :from 0))))

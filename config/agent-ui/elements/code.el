@@ -50,7 +50,9 @@ emacs-lisp), else for FILE's name; nil if neither says."
   "The code: CODE, or FILE's lines FROM to TO; and what's wrong, said after
 FILE's name (\": not found\"), or nil."
   (if-let* ((code (plist-get props :code)))
-      (cons code nil)
+      ;; Its end's newlines aren't lines (a numbered empty one, widening the
+      ;; gutter), nor CRLF's returns (^M).
+      (cons (replace-regexp-in-string "\r$" "" (string-trim-right code "[\r\n]+")) nil)
     (let ((file (plist-get props :file)))
       (if (not (and file (file-readable-p file)))
           (cons "" ": not found")
