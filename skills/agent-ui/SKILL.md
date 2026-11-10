@@ -221,6 +221,17 @@ boolean true or false). Show it, say so in a line, end your turn. A single quest
 agent-ui show '{"id":"ticket","type":"form","title":"New ticket","question":"What should the ticket say?","fields":[{"name":"title","label":"Title","required":true},{"name":"priority","label":"Priority","type":"integer","min":0,"max":4,"value":2},{"name":"type","label":"Type","type":"select","options":["bug","task","feature"]}]}'
 ```
 
+### `rank`
+
+The user puts items in order (what to do first, which matters most): `items` (labels, or `{"label", "detail"}`) in
+your order; `"note": true` lets them add a note. They move items and press Answer: "Answer to rank ID (QUESTION): in
+this order: C, A, B. Note: ..." comes into your prompt (sent at once with `"submit": true`). Show it, say so in a
+line, end your turn; then work in that order.
+
+```sh
+agent-ui show '{"id":"prio","type":"rank","question":"What should I do first?","items":[{"label":"Fix the parser","detail":"the root cause"},"Update the docs","Release"]}'
+```
+
 ### `todo`
 
 A checklist you and the user both work through: a plan you agree on, what's left before a release. `items` are labels,

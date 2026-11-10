@@ -182,3 +182,19 @@ session is resumed."
       (agent-ui--flush)
       (should (string-search " [x] Fix it     you" (buffer-string)))
       (should (string-search "⏵ Send your changes (1)" (buffer-string))))))
+
+(ert-deftest agent-ui-persist/a-rank-the-user-ordered ()
+  "A rank's order, the user's: kept, and back when the session is resumed."
+  (+test-aup
+    (agent-ui-show '(:id "prio" :type "rank" :question "First?" :items ("Fix" "Docs" "Release")) :canvas name)
+    (with-current-buffer (agent-ui-canvas-buffer-name name)
+      (agent-ui--flush)
+      (goto-char (point-min))
+      (search-forward "Release")
+      (agent-ui-move-item-up))
+    (kill-buffer (agent-ui-canvas-buffer-name name))
+    (should (equal (plist-get (car (+test-aup-saved)) :order) '("Fix" "Release" "Docs")))
+    (should (= (agent-ui-persist-restore session) 1))
+    (with-current-buffer (agent-ui-canvas-buffer-name name)
+      (agent-ui--flush)
+      (should (string-search " 1. Fix\n 2. Release\n 3. Docs" (buffer-string))))))

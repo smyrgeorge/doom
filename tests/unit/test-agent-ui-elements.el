@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code confirm diff files form graph heatmap html image issues log markdown panel progress stats steps table text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code confirm diff files form graph heatmap html image issues log markdown panel progress rank stats steps table text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -1610,6 +1610,83 @@ form answered on the canvas, its buffer gone."
   "A form's buffer in Emacs's state (config/agent-ui.el), as beads.el's."
   (require 'evil)
   (should (eq (evil-initial-state 'agent-ui-form-mode) 'emacs)))
+
+(ert-deftest agent-ui-elements/rank ()
+  "Numbered in the user's order (an item new to it after, one gone left
+out); answered: Sent, the note; no hint nor button in a still picture."
+  (let ((rank '(:type "rank" :question "What first?"
+                :items ((:label "Fix the parser" :detail "the root cause") "Update the docs" "Release"))))
+    (should (equal (+test-aue-draw rank)
+                   (concat "What first?\n"
+                           " 1. Fix the parser  the root cause\n"
+                           " 2. Update the docs\n"
+                           " 3. Release\n"
+                           " M-↑ / M-↓ (K / J) move the item at the cursor\n"
+                           " ⏵ Answer")))
+    (should (equal (+test-aue-draw (append '(:order ("Release" "Gone" "Fix the parser")) rank) :still t)
+                   (concat "What first?\n"
+                           " 1. Release\n"
+                           " 2. Fix the parser  the root cause\n"
+                           " 3. Update the docs")))
+    (should (string-suffix-p " 3. Release\n ✓ Sent · note: soon"
+                             (+test-aue-draw (append '(:answered "x" :note-text "soon") rank)))))
+  ;; Ten or more: numbers aligned.
+  (should (string-search "  9. i9\n 10. i10"
+                         (+test-aue-draw (list :type "rank" :question "q"
+                                               :items (mapcar (lambda (i) (format "i%d" i)) (number-sequence 1 10))))))
+  (should (agent-ui-ask-waiting-p '(:type "rank" :question "q" :items ("a" "b")))))
+
+(ert-deftest agent-ui-elements/rank-moved-and-sent ()
+  "M-up / M-down move the item at the cursor (it stays on it; not past the
+ends); kept in the element; Answer sends the order and a note; then locked."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "prio" :type "rank" :question "What first?" :items ("Fix" "Docs" "Release") :note t))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "Release")
+        (agent-ui-move-item-up)
+        (should (equal (get-text-property (line-beginning-position) 'agent-ui-item) "Release"))
+        (agent-ui-move-item-up)
+        (agent-ui-move-item-up)
+        (should (equal (plist-get (agent-ui-get "prio") :order) '("Release" "Fix" "Docs")))
+        (should (string-search " 1. Release\n 2. Fix\n 3. Docs" (buffer-string)))
+        (search-forward "Fix")
+        (agent-ui-move-item-down)
+        (should (equal (plist-get (agent-ui-get "prio") :order) '("Release" "Docs" "Fix")))
+        ;; Not on an item: said.
+        (goto-char (point-min))
+        (search-forward "What first")
+        (should-error (agent-ui-move-item-up) :type 'user-error)
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "docs are quick")))
+          (+test-aue-press "Add a note"))
+        (+test-aue-press "⏵ Answer")
+        (should (equal sent '(("Answer to rank prio (What first?): in this order: Release, Docs, Fix. Note: docs are quick" nil))))
+        (agent-ui--flush)
+        (should (string-search "✓ Sent · note: docs are quick" (buffer-string)))
+        ;; Locked: nothing moves.
+        (goto-char (point-min))
+        (search-forward "Docs")
+        (should-error (agent-ui-move-item-up) :type 'user-error)))))
+
+(ert-deftest agent-ui-elements/rank-wrong ()
+  (should (string-match-p "two items at least" (+test-aue-error '(:type "rank" :question "q" :items ("a")))))
+  (should (string-match-p "item 2 must be" (+test-aue-error '(:type "rank" :question "q" :items ("a" 3)))))
+  (should (string-match-p "same label" (+test-aue-error '(:type "rank" :question "q" :items ("a" "a")))))
+  (should (string-match-p "order is the items' labels"
+                          (+test-aue-error '(:type "rank" :question "q" :items ("a" "b") :order (1))))))
+
+(ert-deftest agent-ui-elements/rank-keys ()
+  "M-up / M-down on the canvas; K / J in Vim's normal state (config/agent-ui.el)."
+  (should (eq (keymap-lookup agent-ui-canvas-mode-map "M-<up>") #'agent-ui-move-item-up))
+  (should (eq (keymap-lookup agent-ui-canvas-mode-map "M-<down>") #'agent-ui-move-item-down))
+  (require 'evil)
+  (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "K")
+              #'agent-ui-move-item-up))
+  (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "J")
+              #'agent-ui-move-item-down)))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.

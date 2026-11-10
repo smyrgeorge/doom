@@ -55,14 +55,14 @@ in its face."
   "Whether PROPS' answer was given (then it's locked)."
   (and (plist-get props :answered) t))
 
-(defvar agent-ui-ask-types '("choice" "confirm" "form")
+(defvar agent-ui-ask-types '("choice" "confirm" "form" "rank")
   "The types whose elements are questions (until answered), see
 `agent-ui-ask-waiting-p'.")
 
 (defun agent-ui-ask-waiting-p (element)
   "Whether ELEMENT asks the user and isn't answered yet: of a type that asks
-\(`agent-ui-ask-types': a choice, a confirm, a form), or with select (a
-table, files, issues)."
+\(`agent-ui-ask-types': a choice, a confirm, a form, a rank), or with
+select (a table, files, issues)."
   (and (not (plist-get element :answered))
        (or (member (plist-get element :type) agent-ui-ask-types) (plist-get element :select))
        t))
@@ -215,6 +215,49 @@ PLAIN: not a button, answered or in a still picture)."
                                                         (seq-remove (lambda (item) (agent-ui-ask-picked-p props item))
                                                                     items))))))
                        "RET: (un)check them all")))))
+
+;; ====== MOVING ITEMS ======
+;; An element whose items the user puts in order (a rank) marks each item's
+;; line: `agent-ui-move', a function of a direction (-1 up, 1 down) moving it;
+;; `agent-ui-item', the item's key. M-up / M-down (K / J in Vim's normal state)
+;; move the item at the cursor, the cursor staying on it.
+
+(defun agent-ui-move-item (direction)
+  "Move the item on point's line DIRECTION places (-1: up, 1: down), point
+on it after."
+  (let* ((at (or (text-property-not-all (line-beginning-position) (line-end-position) 'agent-ui-move nil)
+                 (point)))
+         (move (get-text-property at 'agent-ui-move))
+         (id (or (get-text-property at 'agent-ui-child) (get-text-property at 'agent-ui-id)))
+         (item (get-text-property at 'agent-ui-item))
+         (column (current-column)))
+    (unless move
+      (user-error "No item to move here"))
+    (funcall move direction)
+    (agent-ui--flush)
+    ;; Back on it, where it went.
+    (let ((pos (point-min)) found)
+      (while (and (not found) (setq pos (text-property-not-all pos (point-max) 'agent-ui-item nil)))
+        (if (and (equal (get-text-property pos 'agent-ui-item) item)
+                 (equal (or (get-text-property pos 'agent-ui-child) (get-text-property pos 'agent-ui-id)) id))
+            (setq found pos)
+          (setq pos (or (next-single-property-change pos 'agent-ui-item) (point-max)))))
+      (when found
+        (goto-char found)
+        (move-to-column column)))))
+
+(defun agent-ui-move-item-up ()
+  "Move the item at point up (an element whose items are put in order)."
+  (interactive)
+  (agent-ui-move-item -1))
+
+(defun agent-ui-move-item-down ()
+  "Move the item at point down (an element whose items are put in order)."
+  (interactive)
+  (agent-ui-move-item 1))
+
+(keymap-set agent-ui-canvas-mode-map "M-<up>" #'agent-ui-move-item-up)
+(keymap-set agent-ui-canvas-mode-map "M-<down>" #'agent-ui-move-item-down)
 
 ;; ====== REVIEW COMMENTS ======
 ;; On an element showing code (code, diff): the user writes comments on its

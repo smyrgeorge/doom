@@ -109,7 +109,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
   time an element is shown (tiling's `agent-ui` application, `+my/tiling-apps`), without taking the focus, and again if it was closed.
   With Doom's workspaces, it opens in its session's workspace: while you're in another, it waits there for you.
   `q` hides it, and so does emptying it (cleared, its last element removed); it closes with its session. `a` on an element puts it into the session's prompt; `b` on one files a bug in Agent UI ([below](#bugs-in-agent-ui)); `c` on a line of code or a diff (or a region's lines) writes a review comment under it (`c` on a comment edits it, `d` removes it), Send the review putting them all, with their places, into the session's prompt; `s` on a table's
-  column sorts it by it (again: the other way); `R` reviews the types the agent made.
+  column sorts it by it (again: the other way); `M-↑` / `M-↓` (`K` / `J`) move a rank's item; `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
   the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements
   and ids. They close with the session, and are kept and come back with it.
@@ -183,6 +183,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `choice` | A question for you: options to pick (one or several), a note; Answer puts "Answer to choice ID (question): …" into the session's prompt, then it shows the answer | `question`, `options`, `multiple`, `note`, `submit`, `selected` |
 | `confirm` | A yes / no gate before something risky (deploying, deleting, pushing): its question, what will happen (lines, or a diff), high danger in red; Proceed or Cancel sends "Answer to confirm ID (question): proceed" (or cancel) at once, then it shows the answer; at high danger, Proceed asks you to type a word first (the branch's name; `yes`), and refuses another | `question`, `details`, `diff`, `danger`, `word`, `proceed`, `cancel`, `submit` |
 | `form` | Several fields you answer together (a new ticket's details): text, a number within a range, yes / no, one of its options, a file. On the canvas, its fields and values and Fill in: `RET` opens it in a buffer of its own, in a new pane (vui.el's fields, checked as you type: `TAB` to the next, `C-c C-c` sends it, `C-c C-k` cancels, keeping what you typed). Sent: "Answer to form ID (question): {JSON of the values}" into the session's prompt, then it shows the values, answered | `question`, `fields` (`name`, `label`, `type`, `required`, `min`, `max`, `options`, `placeholder`, `value`), `submit` |
+| `rank` | Items you put in order (priorities, the order to do things in): numbered, `M-↑` / `M-↓` (`K` / `J`) move the one at the cursor; a note; Answer puts "Answer to rank ID (question): in this order: C, A, B" into the session's prompt, then it shows the order | `question`, `items`, `note`, `submit` |
 | `todo` | A checklist you and the agent both tick: the agent ticks items by appending them (by label), you tick them (`RET`, a click) and add some (Add); who did it shows after an item. Send your changes puts "Changes to todo ID by the user: done: …; not done: …; added: …" into the session's prompt; it goes on after (never locked) | `items`, `submit` |
 | `files` | Files with their state (changed, added, deleted, renamed, failing, passing) and counts, flat or a tree by folder (`RET` folds a folder); `RET` opens a file at its line; `select` asks you to pick files (a folder's mark picks its files) | `files`, `tree`, `dir`, `select` |
 | `stats` | A row of figures with their change (▲▼, green or red by whether a rise is good): tiles in the GUI, side by side as text | `figures` |
@@ -300,8 +301,8 @@ prompt is offered to queue (change it first if you like). A snapshot leaves the 
 
 ## A question waiting
 
-When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, a `form`,
-rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
+When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, a `form`, a
+`rank`, rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
 
 - the canvas's pane is shown (if it was closed), scrolled to the question, the cursor on it; the focus stays where it
   is;
@@ -425,7 +426,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm`, `form` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |

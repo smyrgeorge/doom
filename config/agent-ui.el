@@ -110,7 +110,12 @@
       :n "b"  #'agent-ui-report-bug
       :n "c"  #'agent-ui-comment
       :n "d"  #'agent-ui-uncomment
-      :n "s"  #'agent-ui-table-sort)
+      :n "s"  #'agent-ui-table-sort
+      ;; A rank's items moved (M-up / M-down in any state).
+      :n "K"  #'agent-ui-move-item-up
+      :n "J"  #'agent-ui-move-item-down
+      :n "M-<up>"   #'agent-ui-move-item-up
+      :n "M-<down>" #'agent-ui-move-item-down)
 
 ;; A FORM, filled in its buffer (config/agent-ui/elements/form.el): typed
 ;; into, so Emacs's keys there, as beads.el's forms (C-c C-c sends it, C-c
