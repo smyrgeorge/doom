@@ -134,14 +134,22 @@ tallest's; nil if none can be known)."
     height))
 
 (defun agent-ui-panel--side (text height ctx)
-  "TEXT, a side of the border (\"│ \" or \" │\"), shown HEIGHT pixels tall:
-its line drawn through it (a character is a line's height: beside a taller
-image, the border had gaps)."
+  "TEXT, a side of the border (\"│ \" or \" │\"), shown HEIGHT pixels tall
+\(a character is a line's height: beside a taller image, the border had
+gaps): the font's own │, as the text draws it, stretched to HEIGHT (as
+thick as the others); a line where the font isn't known."
   (let* ((cw (plist-get ctx :char-width))
+         (lh (plist-get ctx :line-height))
          (w (* cw (string-width text)))
-         (x (+ (* cw (string-search "│" text)) (/ cw 2.0)))
+         (column (string-search "│" text))
+         (color (agent-ui-color 'agent-ui-muted))
          (svg (svg-create w (round height))))
-    (svg-line svg x 0 x (round height) :stroke (agent-ui-color 'agent-ui-muted) :stroke-width 1)
+    (if-let* ((size (plist-get ctx :font-size))
+              (ascent (plist-get ctx :font-ascent)))
+        (svg-text svg "│" :x (* cw column) :y ascent :font-size size :font-family (agent-ui--svg-font)
+                  :fill color :transform (format "scale(1 %.4f)" (/ (round height) (float lh))))
+      (svg-line svg (+ (* cw column) (/ cw 2.0)) 0 (+ (* cw column) (/ cw 2.0)) (round height)
+                :stroke color :stroke-width 1))
     (propertize text 'face 'agent-ui-muted 'display (agent-ui-svg-image svg))))
 
 (defun agent-ui-panel--image-p (text)

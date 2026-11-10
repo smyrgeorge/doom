@@ -468,3 +468,12 @@ what's behind them, a selection too (it had gaps there)."
               (should (eq (car image) 'image))
               (should-not (plist-member (cdr image) :background)))))
       (advice-remove 'create-image 'test-solaire))))
+
+(ert-deftest agent-ui-core/the-context-knows-the-font ()
+  "The text's font size and ascent, both, if given (a canvas's window says
+them); else neither."
+  (let ((ctx (agent-ui-context :graphic t :font-size 19 :font-ascent 19)))
+    (should (= (plist-get ctx :font-size) 19))
+    (should (= (plist-get ctx :font-ascent) 19)))
+  (should-not (plist-member (agent-ui-context :graphic t :font-size 19) :font-size))
+  (should-not (plist-member (agent-ui-context) :font-ascent)))

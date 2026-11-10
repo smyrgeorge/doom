@@ -171,7 +171,8 @@ there."
 (defun agent-ui--context ()
   "The context the current canvas's elements are drawn in (`agent-ui-context')."
   (let* ((window (agent-ui--window))
-         (frame (if window (window-frame window) (selected-frame))))
+         (frame (if window (window-frame window) (selected-frame)))
+         (font (agent-ui--font-metrics window)))
     (agent-ui-context
      :width (if window
                 ;; One column short: a line as wide as the window wraps in a
@@ -181,7 +182,20 @@ there."
      :graphic (display-graphic-p frame)
      :tick agent-ui--tick
      :char-width (frame-char-width frame)
-     :line-height (frame-char-height frame))))
+     :line-height (frame-char-height frame)
+     ;; Its text's font, as the window shows it: its size and ascent.
+     :font-size (car font)
+     :font-ascent (cdr font))))
+
+(defun agent-ui--font-metrics (window)
+  "The current canvas's text's font as WINDOW shows it: (SIZE . ASCENT) in
+pixels, or nil (not in a window, empty, a terminal)."
+  (when-let* ((window window)
+              ((display-graphic-p (window-frame window)))
+              ((> (buffer-size) 0))
+              (font (ignore-errors (font-at (point-min) window)))
+              (info (query-font font)))
+    (cons (aref info 2) (aref info 4))))
 
 (defun agent-ui--places-in (start end)
   "Point, and the points and starts of the windows showing this buffer,

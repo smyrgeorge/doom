@@ -3930,7 +3930,16 @@ sides drawn as tall (a character is a line's height: gaps)."
       (let ((tall (funcall line 102.87 39)))
         (should (string-suffix-p " │" (substring-no-properties tall)))
         (should (string-match-p "height=\"39\".*<line x1=\"4.0\" x2=\"4.0\" y1=\"0\" y2=\"39\"" (funcall svg tall 0)))
-        (should (string-match-p "<line x1=\"12.0\" x2=\"12.0\" y1=\"0\" y2=\"39\"" (funcall svg tall (1- (length tall)))))))))
+        (should (string-match-p "<line x1=\"12.0\" x2=\"12.0\" y1=\"0\" y2=\"39\"" (funcall svg tall (1- (length tall))))))
+      ;; The font known: its own │ as the text draws it (size, baseline),
+      ;; stretched to the line's height only: as thick as the others.
+      (let* ((ctx (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16 :font-size 13 :font-ascent 12))
+             (tall (seq-find #'agent-ui-panel--image-p
+                             (split-string (agent-ui-render '(:type "panel" :children ((:type "picture" :w 40 :h 40))) ctx)
+                                           "\n"))))
+        (should (string-match-p "<text transform=\"scale(1 2.5000)\"[^>]*font-size=\"13\" y=\"12\" x=\"0\">&#9474;</text>"
+                                (funcall svg tall 0)))
+        (should (string-match-p "y=\"12\" x=\"8\">&#9474;</text>" (funcall svg tall (1- (length tall)))))))))
 
 (ert-deftest agent-ui-elements/panel-an-image-line-in-its-border ()
   ;; An image's line padded to the panel's width: a filler to its last

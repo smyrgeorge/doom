@@ -363,14 +363,18 @@ each list after ELEMENT's (its default's, if it has none). Signals
 
 ;; ====== DRAWING AN ELEMENT ======
 
-(cl-defun agent-ui-context (&key (width 80) graphic (tick 0) (char-width 8) (line-height 16) id still)
+(cl-defun agent-ui-context (&key (width 80) graphic (tick 0) (char-width 8) (line-height 16) font-size font-ascent
+                                 id still)
   "What an element's drawing knows of where it's drawn: WIDTH in characters,
 GRAPHIC (a graphic frame, else a terminal), TICK (counts up, for
 animations), and in a graphic frame a character's CHAR-WIDTH and a line's
-LINE-HEIGHT in pixels (for images sized to the text). STILL: a still
-picture of it (a snapshot), where buttons would do nothing: none drawn."
+LINE-HEIGHT in pixels (for images sized to the text), the text's
+FONT-SIZE and FONT-ASCENT in pixels if known (an image drawing a character
+as the text does). STILL: a still picture of it (a snapshot), where
+buttons would do nothing: none drawn."
   (append (list :width width :graphic graphic :tick tick
                 :char-width char-width :line-height line-height)
+          (when (and font-size font-ascent) (list :font-size font-size :font-ascent font-ascent))
           ;; The element's id, in a canvas: its buttons may change it.
           (when id (list :id id))
           (when still (list :still t))))
