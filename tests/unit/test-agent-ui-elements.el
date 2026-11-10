@@ -1212,6 +1212,24 @@ each line and curve; a box's own edge (2 px) not counted."
               (push (cons d box) crossings))))))
     crossings))
 
+(ert-deftest agent-ui-elements/graph-loops-and-cycles-shown ()
+  "A self-loop drawn out into the corridor after its box; an edge going back
+(a cycle) routed round through the corridors and a lane, back to the first
+layer too: shown, crossing no box (they were lines under the boxes)."
+  (dolist (element '((:type "graph" :nodes ("alpha" "beta") :edges (("alpha" "alpha") ("alpha" "beta")))
+                     (:type "graph" :nodes ("alpha" "beta") :edges (("alpha" "beta") ("beta" "alpha")))
+                     (:type "graph" :nodes ("a" "b" "c" "d") :edges (("a" "b") ("a" "c") ("b" "d") ("c" "d") ("d" "b")))))
+    (let ((svg (+test-aue-svg element 120)))
+      (should-not (+test-aue-crossings svg))))
+  ;; The self-loop: past its box's end, not within it.
+  (let* ((svg (+test-aue-svg '(:type "graph" :nodes ("alpha" "beta") :edges (("alpha" "alpha") ("alpha" "beta"))) 120))
+         (loop (progn (string-match "<path d=\"\\(M[^\"]*C[^\"]*\\)\"[^>]*marker-end" svg) (match-string 1 svg)))
+         (xs (cl-loop for (x _y) on (mapcar #'string-to-number (split-string loop "[^-0-9.]+" t)) by #'cddr collect x)))
+    (should (> (apply #'max xs) (+ (car xs) 10))))
+  ;; Back to the first layer: it ends at that box's start, from a corridor before it.
+  (let ((svg (+test-aue-svg '(:type "graph" :nodes ("alpha" "beta") :edges (("alpha" "beta") ("beta" "alpha"))) 120)))
+    (should (string-match-p "<path d=\"M[^\"]* L[^\"]* L[^\"]* L[^\"]* L[^\"]* L[^\"]*\"" svg))))
+
 (ert-deftest agent-ui-elements/graph-skip-edges-cross-no-box ()
   "An edge skipping a layer goes round through the corridors between layers
 and a lane beside the stacks, whatever its ends' places in them (from or to
