@@ -116,6 +116,7 @@ canvas's name (nil for the session's canvas); nil if none."
               (found (agent-ui--canvas-session name)))
     (setq agent-ui--session-buffer (car found)
           agent-ui--canvas-part (cdr found))
+    (add-hook 'kill-buffer-hook #'agent-ui--question-closed-h nil t)
     (with-current-buffer (car found)
       (add-hook 'kill-buffer-hook #'agent-ui--kill-canvas nil t))))
 
@@ -259,11 +260,12 @@ ID)...): said then, not again.")
 (defvar-local agent-ui--question-turn nil
   "In a session: its last turn's end, (EVENT . QUESTIONS-SAID).")
 
-(defun agent-ui--waiting (session)
-  "SESSION's questions waiting on its canvases (a panel's children too):
-\((CANVAS . ID)...), in their order."
+(defun agent-ui--waiting (session &optional except)
+  "SESSION's questions waiting on its canvases (a panel's children too), but
+EXCEPT's (a canvas being killed): ((CANVAS . ID)...), in their order."
   (cl-loop for canvas in (agent-ui-canvases)
-           when (eq (buffer-local-value 'agent-ui--session-buffer canvas) session)
+           when (and (not (eq canvas except))
+                     (eq (buffer-local-value 'agent-ui--session-buffer canvas) session))
            append (with-current-buffer canvas
                     (cl-loop for id in agent-ui--order
                              for element = (agent-ui--entry-element (gethash id agent-ui--entries))
@@ -304,11 +306,12 @@ for everyone looking at EVENT (its notification too)."
               agent-ui--question-turn (cons event new))
         new))))
 
-(defun agent-ui--question-check (session &optional event)
-  "SESSION's questions waiting looked at again: its mode line's mark set or
-cleared; at its turn's end (EVENT), the first new one shown and said."
+(defun agent-ui--question-check (session &optional event except)
+  "SESSION's questions waiting looked at again (but EXCEPT's, a canvas being
+killed): its mode line's mark set or cleared; at its turn's end (EVENT), the
+first new one shown and said."
   (when (buffer-live-p session)
-    (let ((waiting (agent-ui--waiting session)))
+    (let ((waiting (agent-ui--waiting session except)))
       (with-current-buffer session
         (setq agent-ui--question-waiting (and waiting t))
         (force-mode-line-update))
@@ -333,6 +336,13 @@ if it had one."
     (agent-ui--question-check agent-ui--session-buffer)))
 
 (add-hook 'agent-ui-changed-hook #'agent-ui--question-changed-h)
+
+(defun agent-ui--question-closed-h ()
+  "A canvas killed (q closes it): its session's mark looked at again,
+without it, if it had one (it stayed until the next turn's end)."
+  (when (and (buffer-live-p agent-ui--session-buffer)
+             (buffer-local-value 'agent-ui--question-waiting agent-ui--session-buffer))
+    (agent-ui--question-check agent-ui--session-buffer nil (current-buffer))))
 
 (defun agent-ui--question-mode-line ()
   "The mode line's mark, in a session with a question waiting."

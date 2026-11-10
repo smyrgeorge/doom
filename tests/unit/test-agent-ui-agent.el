@@ -403,6 +403,24 @@ it, said (the hook); the session's mode line says so until it's answered."
     (should-not (buffer-local-value 'agent-ui--question-waiting session))
     (should (equal (with-current-buffer session (agent-ui--question-mode-line)) ""))))
 
+(ert-deftest agent-ui-agent/a-canvas-closed-its-question-gone ()
+  "The canvas with the question waiting killed (q closes it): the session's
+mark gone at once (it stayed until the next turn's end); kept while another
+of its canvases has one."
+  (+test-aua-turns
+    (let ((other (agent-ui-sub-canvas name "more")))
+      (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?" :options ("Test" "Revert")) :canvas name)
+      (agent-ui-show '(:id "pick" :type "tags" :tags ("bug" "docs") :select (:question "Which?")) :canvas other)
+      (funcall turn-end)
+      (should (buffer-local-value 'agent-ui--question-waiting session))
+      ;; One closed, the other's still waiting: the mark stays.
+      (kill-buffer canvas)
+      (should (buffer-local-value 'agent-ui--question-waiting session))
+      ;; Both closed: gone, before any turn ends.
+      (kill-buffer (get-buffer (agent-ui-canvas-buffer-name other)))
+      (should-not (buffer-local-value 'agent-ui--question-waiting session))
+      (should (equal (with-current-buffer session (agent-ui--question-mode-line)) "")))))
+
 (ert-deftest agent-ui-agent/a-panels-question-and-rows-to-pick ()
   "A panel's child asking, a table's rows to pick: waiting too, the cursor on
 the child; the mark there until each is answered."

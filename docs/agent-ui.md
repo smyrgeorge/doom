@@ -332,7 +332,7 @@ When the agent's turn ends with a question on its session's canvases not answere
 
 - the canvas's pane is shown (if it was closed), scrolled to the question, the cursor on it; the focus stays where it
   is;
-- the session's mode line says `❓ question waiting` until it's answered;
+- the session's mode line says `❓ question waiting` until it's answered, or its canvas closed;
 - a notification says it while Emacs isn't in front (`SPC t N`: `agent-ui-question`), instead of "finished".
 
 Each question is brought up once: at the first turn's end it's waiting at, not at every one after.
