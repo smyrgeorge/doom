@@ -510,12 +510,17 @@ center."
       (_ (concat string (make-string space ?\s))))))
 
 (defun agent-ui-format-number (number)
-  "NUMBER as text: an integer as is, a float with at most 2 decimals."
+  "NUMBER as text: an integer as is, a float with at most 2 decimals; under
+1, 3 significant digits (0.004, 0.0112: with 2 decimals they read 0, 0.01)."
   (cond ((integerp number) (number-to-string number))
         ((and (floatp number) (= number (ffloor number)) (< (abs number) 1e15))
          (number-to-string (truncate number)))
         ((floatp number)
-         (string-trim-right (string-trim-right (format "%.2f" number) "0+") "\\."))
+         (let ((decimals (if (< (abs number) 1)
+                             (+ 2 (ceiling (- (log (abs number) 10))))
+                           2)))
+           (string-trim-right (string-trim-right (format (format "%%.%df" (min 20 decimals)) number) "0+")
+                              "\\.")))
         (t (format "%s" number))))
 
 (defvar agent-ui-clock #'float-time

@@ -588,6 +588,17 @@ drifted right and past it)."
   ;; Days apart: as before.
   (should (string-match-p "\\`[A-Za-z]+ [0-9][0-9]\\'" (cdar (agent-ui-chart--ticks 1735689600 (+ 1735689600 (* 10 86400)) 6)))))
 
+(ert-deftest agent-ui-elements/small-numbers-read-apart ()
+  "Values under 0.01: a histogram's bins, a progress bar's counts read apart
+\(with 2 decimals bins all read \"0.01–0.01 s\", 0.004 of 0.01 read \"0/0.01\")."
+  (let ((text (+test-aue-draw '(:type "chart" :kind "histogram" :unit "s"
+                                :values (0.0112 0.0123 0.0131 0.0135 0.0142 0.0151 0.0118 0.0127))
+                              :width 60)))
+    (should-not (string-match-p "0.01–0.01 s" text))
+    (should (string-match-p "0.0112–" text)))
+  (should (string-match-p "0.004/0.01 GB" (+test-aue-draw '(:type "progress" :value 0.004 :max 0.01 :unit "GB"))))
+  (should (string-match-p "0.00005/0.0001" (+test-aue-draw '(:type "progress" :value 0.00005 :max 0.0001)))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."

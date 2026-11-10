@@ -281,6 +281,13 @@
   (should (equal (agent-ui-pad "abcdef" 4) "abc…"))
   (should (equal (agent-ui-format-number 3.0) "3"))
   (should (equal (agent-ui-format-number 2.5) "2.5"))
+  ;; Under 1: 3 significant digits (2 decimals read 0.004 as 0).
+  (should (equal (agent-ui-format-number 0.004) "0.004"))
+  (should (equal (agent-ui-format-number 0.0112) "0.0112"))
+  (should (equal (agent-ui-format-number 0.00005) "0.00005"))
+  (should (equal (agent-ui-format-number -0.0123) "-0.0123"))
+  (should (equal (agent-ui-format-number 0.5) "0.5"))
+  (should (equal (agent-ui-format-number 1234.5678) "1234.57"))
   (should (equal (agent-ui-format-number 12) "12"))
   (should (equal (mapcar #'agent-ui-cell '(nil t :false 1.5 "x")) '("" "true" "false" "1.5" "x")))
   (should (equal (agent-ui-spinner (agent-ui-context :tick 11)) "⠙")))
