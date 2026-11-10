@@ -121,10 +121,21 @@ how long it ran, once done or failed. A step noted already: as it is."
       (agent-ui-format-duration (max 0 (- (funcall agent-ui-clock) started))))
      (t ""))))
 
+(defun agent-ui-steps--one-line (text)
+  "TEXT on one line: its line breaks as ⏎, its tabs as a space (a failing
+test's detail ran onto lines of its own, at column 0)."
+  (and text (replace-regexp-in-string "\t" " " (replace-regexp-in-string "\r?\n" "⏎" text))))
+
 (defun agent-ui-steps--text (props ctx)
   (let* ((steps (plist-get props :steps))
          (all (agent-ui-steps--flat steps 0))
-         (shown (seq-take all agent-ui-max-rows))
+         (shown (mapcar (lambda (s)
+                          (let ((step (copy-sequence (cdr s))))
+                            (setq step (plist-put step :name (agent-ui-steps--one-line (plist-get step :name))))
+                            (when (plist-get step :detail)
+                              (setq step (plist-put step :detail (agent-ui-steps--one-line (plist-get step :detail)))))
+                            (cons (car s) step)))
+                        (seq-take all agent-ui-max-rows)))
          (width (plist-get ctx :width))
          ;; The names' column, indents in it; the times', right-aligned.
          (names (min (apply #'max 0 (mapcar (lambda (s) (+ (* 2 (car s)) (string-width (plist-get (cdr s) :name))))

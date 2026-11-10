@@ -222,6 +222,18 @@
     (setq element (agent-ui--checked (agent-ui-append-to element '(:steps ((:name "a" :status "done"))))))
     (should (equal (plist-get (car (plist-get element :steps)) :seconds) 30.0))))
 
+(ert-deftest agent-ui-elements/steps-on-one-line-each ()
+  "A step's name or detail with line breaks (a failing test's): on its line
+(it ran onto lines of its own, at column 0)."
+  (let ((text (+test-aue-draw '(:type "steps" :steps ((:name "Run the tests" :status "failed" :seconds 3
+                                                      :detail "AssertionError: x\n  at foo.js:3")
+                                                     (:name "Build\nthe app" :status "done" :seconds 2)
+                                                     (:name "Ship")))
+                              :width 70)))
+    (should (= (length (split-string text "\n")) 3))
+    (should (string-match-p "AssertionError: x⏎  at foo.js:3" text))
+    (should (string-match-p "✓ Build⏎the app" text))))
+
 (ert-deftest agent-ui-elements/steps-with-steps-of-their-own ()
   (let ((agent-ui-clock (lambda () 0.0)))
     ;; Drawn under theirs, indented; the names' column fits them.
