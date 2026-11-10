@@ -2073,6 +2073,50 @@ rate either (it kept 4 MB/s and \"1s left\" forever)."
                          '(0 60))))
       (set-time-zone-rule zone))))
 
+;; doom-nwj.34
+(ert-deftest agent-ui-elements/image-keeps-its-reason ()
+  "Why an image isn't shown (not found, downloading, failed) is kept whole at
+widths 30 to 80: the alt goes first, then the path or URL is cut in its
+middle (cut from the right, the reason went first: \"(not fou…\")."
+  (let* ((agent-ui-image-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "images-") t)))
+         (agent-ui-image--fetches (make-hash-table :test #'equal))
+         (agent-ui-image-fetch-function #'ignore)
+         (missing '(:type "image" :file "/tmp/aui-verify/some/deeper/folder/missing.png"
+                    :alt "the login page after the fix"))
+         (url "https://img.shields.io/badge/build-passing-green.svg")
+         (failed (list :type "image" :url url :alt "the build's badge"))
+         (downloading '(:type "image" :url "https://example.com/a/rather/long/path/to/the/chart.png"
+                        :alt "Sales")))
+    (unwind-protect
+        (progn
+          (puthash url (list :error "404" :time (float-time)) agent-ui-image--fetches)
+          (dolist (width (number-sequence 30 80))
+            (dolist (case (list (cons missing "(not found)")
+                                (cons failed "(couldn't download it: 404)")
+                                (cons downloading "(downloading…)")))
+              (let ((line (+test-aue-draw (car case) :width width)))
+                (should (<= (string-width line) width))
+                (should (string-prefix-p "▣ " line))
+                ;; Whole, beside a name of 8 columns at least; else its end
+                ;; (the error's words) cut, that name kept.
+                (if (>= width (+ 2 8 2 (string-width (cdr case))))
+                    (should (string-suffix-p (concat "  " (cdr case)) line))
+                  (should (string-match-p "\\`▣ .\\{8\\}  (couldn't d[^)]*…\\'" line)))))
+            ;; In the GUI too (not shown: its line).
+            (when (>= width 39)
+              (should (string-suffix-p "(couldn't download it: 404)"
+                                       (+test-aue-draw failed :width width :graphic t :char-width 8 :line-height 16)))))
+          ;; The path: its start and its file's name kept.
+          (should (equal (+test-aue-draw missing :width 40)
+                         "▣ /tmp/aui-ver…/missing.png  (not found)"))
+          ;; Room for all: as it was.
+          (should (equal (+test-aue-draw missing :width 120)
+                         "▣ /tmp/aui-verify/some/deeper/folder/missing.png  the login page after the fix  (not found)"))
+          ;; The alt cut before the path.
+          (should (equal (+test-aue-draw missing :width 80)
+                         "▣ /tmp/aui-verify/some/deeper/folder/missing.png  the login page a…  (not found)")))
+      (delete-directory agent-ui-image-cache-directory t))))
+
 (ert-deftest agent-ui-elements/image-from-a-url ()
   (let* ((agent-ui-image-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "images-") t)))
          (agent-ui-image--fetches (make-hash-table :test #'equal))

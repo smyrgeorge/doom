@@ -474,6 +474,16 @@ so a canvas goes on with its other elements. No newline at its end."
       string
     (truncate-string-to-width string (max 0 width) nil nil (if (> width 0) "…" ""))))
 
+(defun agent-ui-truncate-middle (string width)
+  "STRING cut to WIDTH columns in its middle, with …: its start and its end
+kept (a path's folder and its file's name)."
+  (if (<= (string-width string) width)
+      string
+    (let* ((room (max 0 (1- width)))
+           (head (truncate-string-to-width string (- room (/ room 2))))
+           (tail (truncate-string-to-width (reverse string) (/ room 2))))
+      (if (> width 0) (concat head "…" (reverse tail)) ""))))
+
 (defun agent-ui-wrap (string width)
   "STRING with each line longer than WIDTH columns broken at spaces (a word
 wider than WIDTH, within it). Its lines are kept; their properties too. A

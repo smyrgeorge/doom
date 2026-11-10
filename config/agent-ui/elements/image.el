@@ -116,18 +116,28 @@ width at most."
   (let* ((source (agent-ui-image--source props))
          (file (car source))
          (url (plist-get props :url))
-         (alt (plist-get props :alt)))
+         (alt (plist-get props :alt))
+         (width (plist-get ctx :width))
+         (reason (if why (concat "  (" why ")") ""))
+         ;; Its reason kept whole (cut from the right, it went first: "(not
+         ;; fou…"), then its name, cut in its middle (8 columns at least),
+         ;; then the alt, in what's left (4 columns at least, or all of it).
+         (name (if url url (abbreviate-file-name file)))
+         (room (- width 2 (string-width reason)))
+         (name (agent-ui-truncate-middle name (max room (min 8 (string-width name)))))
+         (left (- room (string-width name) 2)))
     (agent-ui-truncate
      (concat (propertize "▣ " 'face 'agent-ui-accent)
-             (agent-ui-button (if url url (abbreviate-file-name file))
+             (agent-ui-button name
                               (lambda () (agent-ui-image--open file url))
                               "RET: open the image")
-             (if alt (concat "  " alt) "")
+             (if (and alt (>= left (min 4 (string-width alt))))
+                 (concat "  " (agent-ui-truncate alt left))
+               "")
              (if why
-                 (propertize (concat "  (" why ")")
-                             'face (if (string-prefix-p "couldn't" why) 'agent-ui-error 'agent-ui-muted))
+                 (propertize reason 'face (if (string-prefix-p "couldn't" why) 'agent-ui-error 'agent-ui-muted))
                ""))
-     (plist-get ctx :width))))
+     width)))
 
 (defun agent-ui-image--text (props ctx)
   (agent-ui-image--line props ctx (cdr (agent-ui-image--source props))))
