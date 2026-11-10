@@ -263,6 +263,18 @@
   ;; Wide characters: by their width.
   (should (equal (agent-ui-wrap "日本語 日本語" 6) "日本語\n日本語"))
   (should (equal (get-text-property 0 'face (agent-ui-wrap (propertize "aa bb" 'face 'bold) 2)) 'bold))
+  ;; Narrower than a character, or no width: a character a line, never stuck
+  ;; (it looped forever; a loop now fails instead of hanging the tests).
+  (let ((calls 0)
+        (truncate (symbol-function 'truncate-string-to-width)))
+    (cl-letf (((symbol-function 'truncate-string-to-width)
+               (lambda (&rest args)
+                 (when (> (cl-incf calls) 1000) (error "agent-ui-wrap loops"))
+                 (apply truncate args))))
+      (should (equal (agent-ui-wrap "中文" 1) "中\n文"))
+      (should (equal (agent-ui-wrap "ab" 0) "a\nb"))
+      (should (equal (agent-ui-wrap "a 😀b" -3) "a\n😀\nb"))
+      (should (equal (agent-ui-wrap "中 x" 1) "中\nx"))))
   (should (equal (agent-ui-pad "ab" 4) "ab  "))
   (should (equal (agent-ui-pad "ab" 4 'right) "  ab"))
   (should (equal (agent-ui-pad "ab" 5 'center) " ab  "))

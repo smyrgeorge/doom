@@ -476,21 +476,25 @@ so a canvas goes on with its other elements. No newline at its end."
 
 (defun agent-ui-wrap (string width)
   "STRING with each line longer than WIDTH columns broken at spaces (a word
-wider than WIDTH, within it). Its lines are kept; their properties too."
+wider than WIDTH, within it). Its lines are kept; their properties too. A
+line takes a character at least, even one wider than WIDTH (a CJK one in a
+column), and WIDTH is 1 at least: it always moves on."
+  (setq width (max 1 width))
   (mapconcat
    (lambda (line)
      (let ((lines nil))
        (while (> (string-width line) width)
          (let* ((head (truncate-string-to-width line width))
                 (space (string-match-p " [^ ]*\\'" head))
-                (cut (cond
-                      ;; It ends at a word's end.
-                      ((eq (aref line (length head)) ?\s) (length head))
-                      ((and space (> space 0)) space)
-                      (t (length head)))))
+                (cut (max 1 (cond
+                             ;; It ends at a word's end.
+                             ((eq (aref line (length head)) ?\s) (length head))
+                             ((and space (> space 0)) space)
+                             (t (length head))))))
            (push (substring line 0 cut) lines)
            (setq line (string-trim-left (substring line cut) " +"))))
-       (string-join (nreverse (cons line lines)) "\n")))
+       ;; Nothing left after a cut: no empty line for it.
+       (string-join (nreverse (if (and lines (string-empty-p line)) lines (cons line lines))) "\n")))
    (split-string string "\n")
    "\n"))
 
