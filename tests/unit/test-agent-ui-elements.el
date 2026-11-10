@@ -1311,6 +1311,96 @@ trimmed, its last cell's properties not past it (the next line's own)."
       (should (string-search "suc…" narrow))
       (should (eq (get-text-property (string-search "suc…" narrow) 'face narrow) 'agent-ui-success)))))
 
+;; doom-ord.4
+(defconst +test-aue-bugs
+  '(:id "bugs" :type "table" :columns ("ID" "P" "Bug") :key "ID"
+    :rows (("doom-1ms" "P2" "Tabs: a new buffer loses its tab")
+           ("doom-3z6" "P2" "Large Markdown freezes Emacs")
+           ("doom-nwj.22" "P2" "Stats: value and change overlap"))
+    :select (:question "Which should I fix?" :multiple t :note t :submit t))
+  "A table asking which bugs to fix.")
+
+(ert-deftest agent-ui-elements/table-select-picked-and-sent ()
+  "A table with select: a mark before each row, the row picking it (RET, a
+click), All / None, a note; Send puts its keys (in the table's order) and the
+note into the prompt, at once; then it's answered, locked, its marks kept."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show +test-aue-bugs)
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (should (string-search "Which should I fix?\n     ID          │ P  │ Bug\n    ──"
+                               (buffer-substring-no-properties (point-min) (point-max))))
+        (should (string-search "[ ]  doom-1ms" (buffer-string)))
+        (should-error (+test-aue-press "⏵ Send (0 chosen)") :type 'user-error)
+        ;; Picked by their rows, anywhere on them: the last first.
+        (+test-aue-press "Stats: value")
+        (+test-aue-press "doom-1ms")
+        (should (equal (plist-get (agent-ui-get "bugs") :selected) '("doom-nwj.22" "doom-1ms")))
+        (agent-ui--flush)
+        (should (string-search "[x]  doom-1ms" (buffer-string)))
+        (should (string-search "[ ]  doom-3z6" (buffer-string)))
+        (should (string-search "⏵ Send (2 chosen)   ⏵ All   ⏵ None" (buffer-string)))
+        ;; All, None, again.
+        (+test-aue-press "⏵ All")
+        (should (equal (plist-get (agent-ui-get "bugs") :selected) '("doom-1ms" "doom-3z6" "doom-nwj.22")))
+        (+test-aue-press "⏵ None")
+        (+test-aue-press "doom-nwj.22")
+        (+test-aue-press "doom-1ms")
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "the tabs first")))
+          (+test-aue-press "Add a note"))
+        ;; Sorted by another column: still picked (by key).
+        (agent-ui-update "bugs" '(:sort "Bug"))
+        (agent-ui--flush)
+        (should (string-search "[x]  doom-nwj.22" (buffer-string)))
+        (+test-aue-press "⏵ Send (2 chosen)")
+        (should (equal sent '(("Answer to bugs (Which should I fix?): doom-1ms, doom-nwj.22. Note: the tabs first" t))))
+        (agent-ui--flush)
+        (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+          (should (string-search "✓ Answered: doom-1ms, doom-nwj.22 · note: the tabs first" text))
+          (should (string-search "[x]  doom-1ms" text))
+          (should-not (string-search "⏵" text)))
+        ;; Locked: a row picks nothing now.
+        (goto-char (point-min))
+        (search-forward "doom-3z6")
+        (should-not (get-text-property (match-beginning 0) 'agent-ui-action))))))
+
+(ert-deftest agent-ui-elements/table-select-one-and-its-first-column ()
+  "One to pick: ( ) marks, another replacing it; without a key, rows answer
+with their first cell; in a still picture: marks, no buttons."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "pick" :type "table" :columns ("Approach" "Cost") :rows (("rewrite" "high") ("patch" "low"))
+                       :select (:question "Which?")))
+      (with-current-buffer canvas
+        (+test-aue-press "rewrite")
+        (+test-aue-press "patch")
+        (should (equal (plist-get (agent-ui-get "pick") :selected) '("patch")))
+        (agent-ui--flush)
+        (should (string-search "( )  rewrite" (buffer-string)))
+        (should (string-search "(•)  patch" (buffer-string)))
+        (should-not (string-search "⏵ All" (buffer-string)))
+        (+test-aue-press "⏵ Answer (1 chosen)")
+        (should (equal sent '(("Answer to pick (Which?): patch" nil)))))))
+  (let ((still (+test-aue-draw (append +test-aue-bugs '(:selected ("doom-3z6"))) :still t)))
+    (should (string-search "[x]  doom-3z6" still))
+    (should-not (string-search "⏵" still))
+    (should-not (string-search "Add a note" still))))
+
+(ert-deftest agent-ui-elements/table-select-wrong ()
+  (should (string-match-p "select is {\"question\""
+                          (+test-aue-error '(:type "table" :columns ("A") :rows (("a")) :select "yes"))))
+  (should (string-match-p "select has \"multi\""
+                          (+test-aue-error '(:type "table" :columns ("A") :rows (("a")) :select (:question "?" :multi t)))))
+  (should (string-match-p "select's question is required"
+                          (+test-aue-error '(:type "table" :columns ("A") :rows (("a")) :select (:multiple t)))))
+  (should (string-match-p "selected \"z\" isn't an option"
+                          (+test-aue-error '(:type "table" :columns ("A") :rows (("a")) :select (:question "?") :selected ("z")))))
+  (should (string-match-p "one option only"
+                          (+test-aue-error '(:type "table" :columns ("A") :rows (("a") ("b")) :select (:question "?") :selected ("a" "b"))))))
+
 (ert-deftest agent-ui-elements/files-flat-and-tree ()
   (let ((files '((:path "src/parser.c" :status "changed" :added 12 :removed 3)
                  (:path "src/lexer.h" :status "added" :added 40)

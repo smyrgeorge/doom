@@ -127,6 +127,15 @@ session's prompt, `{Column}` in it that row's cell, `{row}` all of them:
 agent-ui update tests '{"sort":"Time","descending":true,"row-actions":[{"label":"Fix","prompt":"Fix the failing test {Test}"}]}'
 ```
 
+**To have the user pick rows** (which bugs to fix, which files to change): `select`, with a `question`, `multiple`
+for several, `note` for a note, `submit` to send at once. Marks come before the rows, the user picks them (RET, a
+click, All, None) and presses Send: "Answer to ID (QUESTION): their keys. Note: ..." comes as your next prompt (the
+`key` column's cells, else the first column's). Say so in a line and end your turn:
+
+```sh
+agent-ui show '{"id":"bugs","type":"table","columns":["ID","P","Bug"],"key":"ID","rows":[["doom-1ms","P2","Tabs: a new buffer loses its tab"],["doom-3z6","P2","Large Markdown freezes Emacs"]],"select":{"question":"Which should I fix?","multiple":true,"note":true,"submit":true}}'
+```
+
 ### `chart`
 
 Numbers over time or side by side. `kind`: `line` (default; `values`, or several `series` each its colour),

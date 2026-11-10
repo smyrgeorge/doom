@@ -74,7 +74,31 @@ if there's no such column."
       (condition-case err
           (agent-ui-check-actions actions)
         (agent-ui-error (agent-ui--fail "table: row-%s" (agent-ui-error-message err)))))
-    (plist-put props :key (agent-ui-table--key-index (plist-get props :key) columns))))
+    (plist-put props :key (agent-ui-table--key-index (plist-get props :key) columns))
+    ;; Asking the user to pick rows (doom-ord): its settings; what's picked,
+    ;; each a row's key cell (or its first).
+    (when-let* ((select (plist-get props :select)))
+      (unless (agent-ui--plist-p select)
+        (agent-ui--fail "table: select is {\"question\": ..., \"multiple\", \"note\", \"submit\"}, not %s"
+                        (agent-ui--show-value select)))
+      (cl-loop for (k _) on select by #'cddr
+               unless (memq k '(:question :multiple :note :submit))
+               do (agent-ui--fail "table: select has %s: it has question, multiple, note, submit"
+                                  (agent-ui--show-value (substring (symbol-name k) 1))))
+      (unless (stringp (plist-get select :question))
+        (agent-ui--fail "table: select's question is required (text)"))
+      (agent-ui-ask-check "table" (plist-get props :selected) (agent-ui-table--answers props)
+                          (eq (plist-get select :multiple) t)))
+    props))
+
+(defun agent-ui-table--answer-index (props)
+  "The column a picked row answers with: its key, else its first."
+  (or (plist-get props :key) 0))
+
+(defun agent-ui-table--answers (props)
+  "Each row's answer, if picked (its key cell, else its first), in order."
+  (let ((i (agent-ui-table--answer-index props)))
+    (mapcar (lambda (row) (agent-ui-table--cell (nth i row))) (plist-get props :rows))))
 
 (defun agent-ui-table--cell-widths (header rows)
   "Each column's cells' widths, from HEADER's and ROWS' (their cells' widths,
@@ -244,7 +268,10 @@ widths, alignments, buttons beside or under)."
                                               (if descending " ↓" " ↑"))
                                     c))))
     (list :columns columns :n n :all all :rows rows :measured measured :header header
-          :actions actions :beside beside :shown shown :widths widths :align align)))
+          :actions actions :beside beside :shown shown :widths widths :align align
+          ;; Asking: the rows pickable (not once answered, nor in a still picture).
+          :props props :select (plist-get props :select)
+          :pick (and (plist-get props :select) (not (plist-get props :answered)) (not (plist-get ctx :still))))))
 
 (defun agent-ui-table--layout-key (layout ctx)
   "What of LAYOUT its drawn lines depend on (an append keeps them if it's
@@ -265,7 +292,10 @@ the whole table, its header, \"no rows yet\" and what's left out too."
         (beside (plist-get layout :beside))
         (shown (plist-get layout :shown))
         (widths (plist-get layout :widths))
-        (align (plist-get layout :align)))
+        (align (plist-get layout :align))
+        ;; Asking (select): a mark before each row, the row a button picking it.
+        (select (plist-get layout :select))
+        (props (plist-get layout :props)))
     ;; Its text made plain in a buffer, where its cells' faces and columns go
     ;; noted, then put on the string taken out once: each made once (joined
     ;; as strings, every cell's properties were copied at each join; put in
@@ -316,8 +346,9 @@ the whole table, its header, \"no rows yet\" and what's left out too."
                             (setq marks (nconc (nreverse kept) marks)))))))
             ;; No column named: no header, the rows alone.
             (when (and full (not (cl-every #'string-empty-p columns)))
+              (when select (insert "    "))
               (line header 'bold t)
-              (insert "\n"
+              (insert "\n" (if select "    " "")
                       ;; As wide as the lines: the last column's has no space after it.
                       (propertize (mapconcat (lambda (w) (make-string (+ w 2) ?─))
                                              (append (butlast widths) (list (1- (car (last widths)))))
@@ -329,13 +360,35 @@ the whole table, its header, \"no rows yet\" and what's left out too."
                          for row-widths in measured
                          for first = t then nil
                          do (unless first (insert "\n"))
-                         (cond
-                          (beside (line row nil nil row-widths)
-                                  (insert " " (agent-ui-table--row-buttons actions columns row)))
-                          (actions (line row nil t row-widths)
-                                   (insert "\n " (agent-ui-truncate (agent-ui-table--row-buttons actions columns row)
-                                                                    (1- (plist-get ctx :width)))))
-                          (t (line row nil t row-widths))))
+                         (let* ((row-start (point))
+                                (answer (and select (nth (agent-ui-table--answer-index props) row)))
+                                (multiple (and select (eq (plist-get select :multiple) t)))
+                                ;; The row (its mark and cells, not its buttons) a
+                                ;; button picking it, while it can be.
+                                (pickable (lambda ()
+                                            (when (plist-get layout :pick)
+                                              (let ((end (point))
+                                                    (toggled (agent-ui-ask-toggled props answer multiple)))
+                                                (dolist (prop (list (list 'agent-ui-action
+                                                                          (lambda () (agent-ui-ask-change
+                                                                                      ctx (list :selected toggled))))
+                                                                    (list 'keymap agent-ui-button-map)
+                                                                    (list 'mouse-face 'highlight)
+                                                                    (list 'help-echo (if multiple "RET: (un)check it"
+                                                                                       "RET: choose it"))))
+                                                  (push (list row-start end (car prop) (cadr prop)) marks)))))))
+                           (when select
+                             (insert (agent-ui-ask-mark (agent-ui-ask-picked-p props answer) multiple) " "))
+                           (cond
+                            (beside (line row nil nil row-widths)
+                                    (funcall pickable)
+                                    (insert " " (agent-ui-table--row-buttons actions columns row)))
+                            (actions (line row nil t row-widths)
+                                     (funcall pickable)
+                                     (insert "\n " (agent-ui-truncate (agent-ui-table--row-buttons actions columns row)
+                                                                      (1- (plist-get ctx :width)))))
+                            (t (line row nil t row-widths)
+                               (funcall pickable)))))
               (insert " " (propertize "no rows yet" 'face 'agent-ui-muted)))
             (when (and full (> (length all) (length rows)))
               (insert "\n " (propertize (format "… %d rows more" (- (length all) (length rows)))
@@ -355,11 +408,44 @@ the whole table, its header, \"no rows yet\" and what's left out too."
 
 
 (defun agent-ui-table--text (props ctx)
-  (let ((layout (agent-ui-table--layout props ctx)))
+  (let* ((select (plist-get props :select))
+         (width (plist-get ctx :width))
+         ;; Asking: a mark's 4 columns before each row.
+         (inner (if select (plist-put (copy-sequence ctx) :width (max 10 (- width 4))) ctx))
+         (layout (agent-ui-table--layout props inner)))
     ;; Its layout kept, by its rows: an append draws only its rows if it
     ;; stays (`agent-ui-table--extend').
-    (puthash (plist-get props :rows) (agent-ui-table--layout-key layout ctx) agent-ui-table--layouts)
-    (agent-ui-table--build layout ctx (plist-get layout :rows) (plist-get layout :measured) t)))
+    (puthash (plist-get props :rows) (agent-ui-table--layout-key layout inner) agent-ui-table--layouts)
+    (let ((table (agent-ui-table--build layout inner (plist-get layout :rows) (plist-get layout :measured) t)))
+      (if (not select)
+          table
+        (agent-ui-table--asking props ctx table)))))
+
+(defun agent-ui-table--asking (props ctx table)
+  "TABLE (drawn, its rows marked) asking the user (PROPS' select): its
+question above; under it the note and the Send, All and None buttons; once
+answered, the answer, locked (in a still picture, no buttons)."
+  (let* ((select (plist-get props :select))
+         (width (plist-get ctx :width))
+         (multiple (eq (plist-get select :multiple) t))
+         ;; The answers picked, in the table's order.
+         (answers (seq-filter (lambda (answer) (agent-ui-ask-picked-p props answer))
+                              (delete-dups (agent-ui-table--answers props))))
+         (submit (eq (plist-get select :submit) t)))
+    (concat (propertize (agent-ui-wrap (plist-get select :question) width) 'face 'bold)
+            "\n" table
+            (cond
+             ((agent-ui-ask-answered-p props) (concat "\n" (agent-ui-ask-answered-line props width)))
+             ((plist-get ctx :still) "")
+             (t (concat
+                 (if (eq (plist-get select :note) t) (concat "\n " (agent-ui-ask-note-button props ctx)) "")
+                 "\n "
+                 (agent-ui-ask-answer-button props ctx
+                                             :what (plist-get ctx :id) :question (plist-get select :question)
+                                             :submit submit :answers answers
+                                             :label (format "⏵ %s (%d chosen)" (if submit "Send" "Answer")
+                                                            (length answers)))
+                 (if multiple (concat "   " (agent-ui-ask-all-none ctx (delete-dups (agent-ui-table--answers props)))) "")))))))
 
 (defun agent-ui-table--extend (old new ctx)
   "OLD's drawing edited into NEW's, NEW being OLD with rows appended (else
@@ -369,6 +455,8 @@ buttons where they were), nothing sorts them, and all are drawn."
   (let ((old-rows (plist-get old :rows))
         (new-rows (plist-get new :rows)))
     (when (and old-rows
+               ;; Asking: drawn again (its marks and buttons).
+               (not (plist-get new :select))
                (> (length new-rows) (length old-rows))
                (<= (length new-rows) agent-ui-max-rows)
                (not (plist-get new :sort))
@@ -437,14 +525,20 @@ running, pending... are coloured. With KEY (a column's index or name),
 appending a row whose key is there replaces that row: append
 {\"rows\": [[\"parser\", \"failed\", \"1.2s\"]]}. SORT orders its rows by a
 column (DESCENDING the other way); ROW-ACTIONS are buttons on each row
-putting a prompt with its cells into the session's prompt."
+putting a prompt with its cells into the session's prompt. SELECT asks the
+user to pick rows (which to fix): marks before them, Send puts \"Answer to
+ID (QUESTION): their keys\" into your prompt."
   :props ((columns list "The columns' names (all \"\": no header, the rows alone)" :required t)
           (rows list "The rows, each an array of cells")
           (key any "The column (index from 0, or name) whose cell identifies a row")
           (align list "Each column's alignment: left, right, center (numbers: right)")
           (sort any "The column (index from 0, or name) its rows are sorted by (s on a column in the canvas)")
           (descending boolean "Sorted the other way: largest first")
-          (row-actions list "Buttons on each row: [{\"label\", \"prompt\", \"submit\"}], the prompt's {Column} its cell, {row} all"))
+          (row-actions list "Buttons on each row: [{\"label\", \"prompt\", \"submit\"}], the prompt's {Column} its cell, {row} all")
+          (select any "Ask the user to pick rows: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their KEY cells (else the first)")
+          (selected list "The rows picked so far (their key cells): a default, or the user's")
+          (note-text string "The user's note")
+          (answered string "The answer given (then it can't be changed)"))
   :example (:title "Tests" :columns ("Test" "Result" "Time") :key 0
             :rows (("lexer" "passed" "0.4s") ("parser" "running" nil)))
   :check #'agent-ui-table--check
