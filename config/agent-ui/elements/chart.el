@@ -527,7 +527,9 @@ labels under them (none on another's), as two lines; nil without times."
          (height (+ plot-height (if (or labels times) lh 0) (* lh (length legend)) (/ lh 2)))
          (muted (agent-ui-chart--color 'agent-ui-muted))
          (svg (svg-create width height)))
-    (cl-flet ((y-of (v) (+ top (* (- plot-height top) (- 1 (/ (- v low) span))))))
+    ;; Within the plot, past min or max at its edge (as in text: it left the
+    ;; image, and crossed the labels' row).
+    (cl-flet ((y-of (v) (+ top (* (- plot-height top) (- 1 (max 0 (min 1 (/ (- v low) span))))))))
       (svg-line svg left top left (+ top (- plot-height top)) :stroke muted :stroke-width 1)
       (agent-ui-chart--svg-text svg ctx high-label (- left (/ cw 2)) (+ top (/ lh 3))
                                 :fill muted :text-anchor "end")

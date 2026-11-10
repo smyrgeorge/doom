@@ -524,6 +524,15 @@ it (they ran past it); in the GUI the plot stays inside the image."
       (string-match "points=\"\\([0-9.]+\\)" svg)
       (should (< (string-to-number (match-string 1 svg)) 160)))))
 
+(ert-deftest agent-ui-elements/chart-svg-within-min-and-max ()
+  "Values past a line chart's min or max: at the plot's edge in the GUI (the
+line left the image at the top and crossed the labels' row)."
+  (let* ((svg (+test-aue-svg '(:type "chart" :height 4 :min 0 :max 10 :labels ("a" "b" "c" "d") :values (5 20 -10 5)) 40))
+         (points (progn (string-match "points=\"\\([^\"]+\\)\"" svg) (match-string 1 svg)))
+         (ys (mapcar (lambda (p) (string-to-number (cadr (split-string (string-trim p) " "))))
+                     (split-string points ","))))
+    (should (cl-every (lambda (y) (and (>= y 0) (<= y (* 4 16)))) ys))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."
