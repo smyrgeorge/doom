@@ -1148,6 +1148,14 @@ end in text, outside the image in the GUI)."
       (should (cl-every (lambda (x) (<= x width)) xs))))
   (should (string-match-p "3s\\'" (+test-aue-draw '(:type "timeline" :tasks ((:name "a" :start 0) (:name "b" :start 3))) :width 50))))
 
+(ert-deftest agent-ui-elements/timeline-gui-names-cut ()
+  "In the GUI a long task name is cut to its column (it ran under the bars)."
+  (let ((svg (+test-aue-svg '(:type "timeline" :tasks ((:name "integration-tests-shard-1" :start 0 :duration 8)
+                                                       (:name "unit" :start 4 :duration 10 :status "failed")))
+                            60)))
+    (should-not (string-match-p ">integration-tests-shard-1<" svg))
+    (should (string-match-p ">integration[^<]*&#8230;<" svg))))
+
 (ert-deftest agent-ui-elements/timeline-finished-stamped-spans-its-tasks ()
   "Finished tasks given timestamps: the axis spans them (it ran to now: a day
 later, 22 hours wide); one still running: to now."

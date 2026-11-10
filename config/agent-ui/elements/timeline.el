@@ -139,7 +139,9 @@
                  do (let* ((y (* i row)) (end (agent-ui-timeline--end task span))
                            (status (plist-get task :status))
                            (x0 (funcall x-of (plist-get task :start))) (x1 (max (+ x0 2) (funcall x-of end))))
-                      (agent-ui-chart--svg-text svg ctx (plist-get task :name) 0 (+ y (* 0.7 row)) :fill fg)
+                      ;; Cut to its column (whole, it ran under the bars).
+                      (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (plist-get task :name) (max 1 (- (/ name-width cw) 2)))
+                                                0 (+ y (* 0.7 row)) :fill fg)
                       (svg-rectangle svg x0 (+ y (* 0.2 row)) (- x1 x0) (* 0.6 row) :rx 2
                                      :fill (agent-ui-chart--color (cadr (assq status agent-ui-timeline--statuses)))
                                      :fill-opacity (if (eq status 'queued) 0.5 1))
