@@ -1145,6 +1145,25 @@ broke), the border left out where it can't fit, every line within the width."
   (should-not (string-match-p "<svg" (+test-aue-draw '(:type "panel" :layout "row" :min-width 8
                                                        :children ((:type "chart" :values (1 2)) (:type "text" :text "x")))))))
 
+(ert-deftest agent-ui-elements/panel-borderless-keeps-its-images ()
+  "Without a border, in the GUI: a row drawn as one SVG, and an image line in
+a column, kept (trimming the lines' spaces deleted them: an image is a
+space showing it); plain lines still trimmed."
+  (let* ((ctx (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16))
+         (row (agent-ui-render '(:type "panel" :layout "row" :border :false
+                                 :children ((:type "chart" :title "Latency" :values (1 3 2 5 4))
+                                            (:type "text" :text "hello")))
+                               ctx))
+         (column (agent-ui-render '(:type "panel" :border :false
+                                    :children ((:type "chart" :values (1 3 2)) (:type "text" :text "hi")))
+                                  ctx)))
+    (should (agent-ui-panel--image-p row))
+    (should (agent-ui-panel--image-p column))
+    (should (string-match-p "^hi$" (substring-no-properties column))))
+  (should (equal (agent-ui-panel--trim-right "ab   ") "ab"))
+  (let ((image (concat "x " (propertize " " 'display '(space :width (3))))))
+    (should (equal (agent-ui-panel--trim-right image) image))))
+
 (ert-deftest agent-ui-elements/panel-an-image-line-in-its-border ()
   ;; An image's line padded to the panel's width: a filler to its last
   ;; column's end, spaces, the border's right side.

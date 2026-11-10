@@ -117,6 +117,16 @@ marked as its (`agent-ui-child'), where a deeper child hasn't marked it."
   "Whether TEXT shows an image somewhere (a chart's, stats' tiles...)."
   (text-property-not-all 0 (length text) 'display nil text))
 
+(defun agent-ui-panel--trim-right (line)
+  "LINE without its trailing spaces, but those showing something (an image
+is a space with a display property: a row's SVG, an image element's)."
+  (let ((end (length line)))
+    (while (and (> end 0)
+                (eq (aref line (1- end)) ?\s)
+                (not (get-text-property (1- end) 'display line)))
+      (setq end (1- end)))
+    (substring line 0 end)))
+
 (defun agent-ui-panel--svg-row (texts widths ctx border)
   "TEXTS, a row's children drawn for the GUI at WIDTHS, as one SVG image
 \(a string showing it): each child its column (its SVG nested; its text as
@@ -207,7 +217,7 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
                                                       (agent-ui-panel--lines (agent-ui-panel--child child ctx inner) inner ctx)))
                                 children)))))))
     (if (not border)
-        (mapconcat (lambda (l) (string-trim-right l)) body "\n")
+        (mapconcat #'agent-ui-panel--trim-right body "\n")
       (let ((edge (lambda (s) (propertize s 'face 'agent-ui-muted))))
         (concat (funcall edge (concat "╭" (make-string (- width 2) ?─) "╮")) "\n"
                 (mapconcat (lambda (line)
