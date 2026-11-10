@@ -1161,6 +1161,52 @@ mark, one space, its words (it had two spaces)."
         (should (equal sent '(("Answer to choice pick (Which tests?): parser, checker. Note: only the slow ones" t))))
         (should (equal (plist-get (agent-ui-get "pick") :answered) "parser, checker · note: only the slow ones"))))))
 
+;; doom-nwj.71
+(ert-deftest agent-ui-elements/choice-options-fit ()
+  "Options are wrapped within the width, under their label's start; details
+in a column as wide as the labels that have one (all of them: a gap of 40
+before short ones'), or under their label when there's no room (a label
+without a detail was never cut nor wrapped: 66 columns at 30)."
+  (let ((element '(:type "choice" :question "Which fix?"
+                   :options ("Change the test so that it expects the new error message text"
+                             (:label "Revert" :detail "back to the old message")
+                             (:label "Both" :detail "a flag choosing one")))))
+    (dolist (width (number-sequence 15 120))
+      (let ((lines (split-string (+test-aue-draw element :width width) "\n")))
+        (dolist (line lines) (should (<= (string-width line) width)))
+        ;; Every word of every label.
+        (dolist (word '("Change" "expects" "text" "Revert" "Both"))
+          (should (seq-some (lambda (l) (string-search word l)) lines)))))
+    (should (equal (+test-aue-draw element :width 120)
+                   (concat "Which fix?\n"
+                           " ( ) Change the test so that it expects the new error message text\n"
+                           " ( ) Revert  back to the old message\n"
+                           " ( ) Both    a flag choosing one\n"
+                           " ⏵ Answer")))
+    (should (equal (+test-aue-draw element :width 30)
+                   (concat "Which fix?\n"
+                           " ( ) Change the test so that\n"
+                           "     it expects the new error\n"
+                           "     message text\n"
+                           " ( ) Revert  back to the old …\n"
+                           " ( ) Both    a flag choosing …\n"
+                           " ⏵ Answer")))
+    ;; No room for a column: its detail under its label.
+    (should (equal (+test-aue-draw element :width 20)
+                   (concat "Which fix?\n"
+                           " ( ) Change the test\n"
+                           "     so that it\n"
+                           "     expects the new\n"
+                           "     error message\n"
+                           "     text\n"
+                           " ( ) Revert\n"
+                           "     back to the old\n"
+                           "     message\n"
+                           " ( ) Both\n"
+                           "     a flag choosing\n"
+                           "     one\n"
+                           " ⏵ Answer")))))
+
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.
   (should (string-match-p "options is required" (+test-aue-error '(:type "choice" :question "Q?" :options ()))))

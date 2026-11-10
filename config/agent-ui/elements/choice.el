@@ -65,12 +65,24 @@
          (selected (plist-get props :selected))
          (on (member (car option) selected))
          (mark (if multiple (if on "[x]" "[ ]") (if on "(•)" "( )")))
-         (detail (and (cdr option)
-                      (concat "  " (propertize (agent-ui-truncate (cdr option) (max 0 (- width label-width 8)))
-                                               'face 'agent-ui-muted))))
-         ;; Padded only for a detail after it: no spaces at a line's end.
-         (line (concat " " (propertize mark 'face (if on 'agent-ui-accent 'agent-ui-muted)) " "
-                       (if detail (concat (agent-ui-pad (car option) label-width) detail) (car option))))
+         (head (concat " " (propertize mark 'face (if on 'agent-ui-accent 'agent-ui-muted)) " "))
+         ;; Wrapped in what's after its mark, its lines under the label's
+         ;; start (a label was never cut nor wrapped: 66 columns at 30).
+         (hang (lambda (text)
+                 (string-join (split-string (agent-ui-wrap text (- width 5)) "\n")
+                              (concat "\n" (make-string 5 ?\s)))))
+         (room (- width 5 label-width 2))
+         (line (cond
+                ;; Its detail in a column after the labels, if there's room.
+                ((and (cdr option) (>= room 10))
+                 (concat head (agent-ui-pad (car option) label-width) "  "
+                         (propertize (agent-ui-truncate (cdr option) room) 'face 'agent-ui-muted)))
+                ;; Else its label wrapped, its detail under it.
+                (t (concat head (funcall hang (car option))
+                           (if (cdr option)
+                               (concat "\n" (make-string 5 ?\s)
+                                       (propertize (funcall hang (cdr option)) 'face 'agent-ui-muted))
+                             "")))))
          (picked (cond (multiple (if on (remove (car option) selected) (append selected (list (car option)))))
                        (on nil)
                        (t (list (car option))))))
@@ -116,7 +128,10 @@
 (defun agent-ui-choice--draw (props ctx)
   (let* ((width (plist-get ctx :width))
          (options (agent-ui-choice--options props))
-         (label-width (min (apply #'max 0 (mapcar (lambda (o) (string-width (car o))) options))
+         ;; The labels' column, for details after them: as wide as the
+         ;; longest of those with one (all of them: a gap before the details).
+         (label-width (min (apply #'max 0 (mapcar (lambda (o) (string-width (car o)))
+                                                  (seq-filter #'cdr options)))
                            (/ width 2)))
          (question (propertize (agent-ui-wrap (plist-get props :question) width) 'face 'bold)))
     (if-let* ((answered (plist-get props :answered)))
