@@ -947,3 +947,87 @@ toggled off by a second click."
   (should (eq (lookup-key +md-preview-page-mode-map "q") #'kill-current-buffer))
   (should (eq (lookup-key +md-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
   (should (eq (+test-md--key +md-preview-page-mode-map 'visual "<drag-mouse-1>") #'ignore)))
+
+;; ====== REFLOWED ON SCREEN ======
+;; config/markdown/reflow.el: a paragraph's lines shown as one, wrapped at the
+;; pane's edge (a file filled at 120 in a narrower pane wrapped raggedly).
+;; Batch Emacs draws nothing: its jit-lock function is called by hand.
+
+(require 'treesit)                      ; Doom's grammars' folder, then (tests/helper.el)
+
+(defconst +test-md--reflow-sample
+  (concat "# Title\n\nA paragraph that is\nhard wrapped here.\n\n"
+          "1. An item that\n   goes on.\n2. Next item\n\n"
+          "> A quote\n> goes on.\n\n"
+          "```\ncode\nmore\n```\n\n"
+          "| a | b |\n|---|---|\n| 1 | 2 |\n\n"
+          "Hard  \nbreak and\\\nslash\n\nSetext\nheading\n======\n")
+  "Markdown with every kind of line break.")
+
+(defmacro +test-md--reflow (text &rest body)
+  "BODY in a markdown-ts-mode buffer of TEXT, its lines wrapping, unmodified."
+  (declare (indent 1))
+  `(progn
+     (skip-unless (and (treesit-language-available-p 'markdown) (treesit-language-available-p 'markdown-inline)))
+     (require 'markdown-ts-mode)
+     (with-temp-buffer
+       (insert ,text)
+       (markdown-ts-mode)
+       (setq-local word-wrap t truncate-lines nil)
+       (set-buffer-modified-p nil)
+       ,@body)))
+
+(defun +test-md--joined ()
+  "The line breaks shown as a space: (BEFORE . JOINED), BEFORE the six
+characters before each."
+  (+md-reflow--fontify (point-min) (point-max))
+  (let ((pos (point-min)) joined)
+    (while (setq pos (text-property-any pos (point-max) '+md-reflow t))
+      (let ((stop (text-property-not-all pos (point-max) '+md-reflow t)))
+        (should (equal (get-text-property pos 'display) " "))
+        (push (cons (buffer-substring-no-properties (max 1 (- pos 6)) pos)
+                    (buffer-substring-no-properties pos stop))
+              joined)
+        (setq pos stop)))
+    (nreverse joined)))
+
+(ert-deftest markdown/reflow-a-paragraphs-lines-joined ()
+  "Inside a paragraph (a list item's, a quote's): each line break with the
+next line's indentation and \"> \" shown as a space. Not a hard break (two
+spaces, a backslash), a code block, a table, a heading, between items or
+paragraphs. The buffer unmodified."
+  (should (eq (default-value '+my/markdown-reflow) t))
+  (+test-md--reflow +test-md--reflow-sample
+    (should +md-reflow-mode)
+    (should (equal (+test-md--joined)
+                   '(("hat is" . "\n") ("m that" . "\n   ") (" quote" . "\n> "))))
+    (should-not (buffer-modified-p))))
+
+(ert-deftest markdown/reflow-only-while-lines-wrap ()
+  "Lines truncated (not wrapping): nothing joined (a paragraph would be one
+long line); wrapping again: joined."
+  (+test-md--reflow "One\ntwo\n"
+    (setq-local truncate-lines t)
+    (should-not (+test-md--joined))
+    (setq-local truncate-lines nil)
+    (should (equal (+test-md--joined) '(("One" . "\n"))))))
+
+(ert-deftest markdown/reflow-follows-edits ()
+  "A paragraph split by a blank line: its break there no longer joined."
+  (+test-md--reflow "One\ntwo\nthree\n"
+    (should (= (length (+test-md--joined)) 2))
+    (goto-char (point-min))
+    (search-forward "two")
+    (insert "\n")
+    (should (equal (+test-md--joined) '(("One" . "\n"))))))
+
+(ert-deftest markdown/reflow-off ()
+  "+my/markdown-reflow nil: not turned on; turned off: nothing joined left."
+  (let ((+my/markdown-reflow nil))
+    (+test-md--reflow "One\ntwo\n"
+      (should-not +md-reflow-mode)))
+  (+test-md--reflow "One\ntwo\n"
+    (+test-md--joined)
+    (+md-reflow-mode -1)
+    (should-not (text-property-any (point-min) (point-max) '+md-reflow t))
+    (should-not (get-text-property 4 'display))))

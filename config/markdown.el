@@ -27,6 +27,16 @@
 (defvar +my/markdown-preview-notice t
   "Offer the live preview in a notice when a Markdown file opens.")
 
+;; REFLOWED ON SCREEN
+;; A file filled at 120 columns in a narrower pane wrapped raggedly (a short
+;; row after each source line). In markdown-ts-mode, a paragraph's lines (a
+;; list item's, a quote's) are shown as one line, wrapped at the pane's edge,
+;; the following rows under the item's text; the file isn't changed. Hard
+;; line breaks, code blocks, tables, headings are left as they are. In
+;; config.el, (setq +my/markdown-reflow nil) turns it off.
+(defvar +my/markdown-reflow t
+  "Show a Markdown paragraph's lines as one, wrapped at the pane's edge.")
+
 ;; Hide marksman's false "Ambiguous link" warnings (see markdown/marksman.el).
 (after! lsp-mode
   (setq lsp-diagnostic-filter #'+md--drop-false-link-warnings))
@@ -89,3 +99,4 @@
 (load! "markdown/preview")
 (load! "markdown/notice")
 (load! "markdown/marksman")
+(load! "markdown/reflow")
