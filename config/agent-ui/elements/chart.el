@@ -169,6 +169,12 @@ from 0)."
          (high (or (plist-get props :max) (if values (apply #'max values) 1))))
     (cons low (if (<= high low) (+ low 1) high))))
 
+(defun agent-ui-chart--bar-scale (props width)
+  "How long a bar of 1 is, WIDTH long for the highest: 0 if nothing's above
+0 (it divided by 0, and the drawing broke: values all 0 or below)."
+  (let ((high (cdr (agent-ui-chart--range props))))
+    (if (> high 0) (/ width (float high)) 0.0)))
+
 (defun agent-ui-chart--number (props number)
   "NUMBER as the chart shows it, with PROPS' unit."
   (let ((unit (plist-get props :unit)))
@@ -260,7 +266,7 @@ eighths)."
          (label-width (min (apply #'max 0 (mapcar (lambda (r) (string-width (car r))) rows)) (/ width 3)))
          (value-width (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)))
          (bar-width (max 5 (- width label-width value-width 4)))
-         (scale (/ bar-width (float (cdr (agent-ui-chart--range props)))))
+         (scale (agent-ui-chart--bar-scale props bar-width))
          (legend (and (cdr (plist-get props :series)) (agent-ui-chart--legend props))))
     (concat
      (mapconcat
@@ -517,7 +523,7 @@ labels under them (none on another's), as two lines; nil without times."
          (width (* cw columns))
          (bar-left (+ label-width (* 2 cw)))
          (bar-width (max (* 5 cw) (- width bar-left value-width (* 2 cw))))
-         (scale (/ bar-width (float (cdr (agent-ui-chart--range props)))))
+         (scale (agent-ui-chart--bar-scale props bar-width))
          (series (plist-get props :series))
          ;; Grouped: a group's bars closer, a gap between groups.
          (grouped (and (cdr series) (not (agent-ui-chart--stacked-p props))))

@@ -430,6 +430,17 @@ and a panel's border around it)."
 
 ;; ====== CHART ======
 
+(ert-deftest agent-ui-elements/chart-bars-of-nothing ()
+  "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
+and GUI (it divided by 0: \"Arithmetic overflow error\")."
+  (dolist (element '((:type "chart" :kind "bar" :labels ("a" "b" "c") :values (-2 -1 0))
+                     (:type "chart" :kind "bar" :min -10 :max 0 :values (-5 -3))
+                     (:type "chart" :kind "bar" :labels ("a") :values (0))))
+    (let ((text (+test-aue-draw element :width 40)))
+      (should-not (string-search "⚠" text))
+      (should-not (string-search "█" text)))
+    (should (+test-aue-svg element 40))))
+
 (ert-deftest agent-ui-elements/chart-bars ()
   (let ((element '(:type "chart" :kind "bar" :unit "ms" :labels ("mon" "tue" "wed" "thu")
                    :values (120 95 180 60))))
