@@ -1282,7 +1282,7 @@ no loop, no clash with a commit)."
       (cl-letf (((symbol-function 'make-process) (lambda (&rest a) (setq args a) nil)))
         (+my/treemacs--git-poll-project "/some/project/"))
       (should (equal (plist-get args :command)
-                     '("git" "--no-optional-locks" "-C" "/some/project/" "status" "--porcelain" "-z")))
+                     '("git" "--no-optional-locks" "-C" "/some/project/" "status" "--porcelain" "-z" "--branch")))
       (should (eq (plist-get args :noquery) t))
       (should (eq (plist-get args :connection-type) 'pipe))
       (should (functionp (plist-get args :sentinel)))
@@ -1329,7 +1329,8 @@ refresh 0.3 s later (the cooldown doesn't drop it)."
             (bytes (with-temp-buffer (set-buffer-multibyte nil)
                                      (insert-file-contents-literally index) (buffer-string))))
         (+test-treemacs--poll root)
-        (should (equal (gethash root +my/treemacs--git-poll-state) ""))   ; it ran: clean
+        ;; It ran: clean (only the branch line).
+        (should (string-match-p "\\`## [^\0]+\0\\'" (gethash root +my/treemacs--git-poll-state)))
         (should (equal (file-attribute-modification-time (file-attributes index)) before))
         (should (equal (with-temp-buffer (set-buffer-multibyte nil)
                                          (insert-file-contents-literally index) (buffer-string))
@@ -1402,6 +1403,178 @@ exists) checked."
       (cl-letf (((symbol-function 'treemacs-current-workspace) (lambda () (error "No workspace"))))
         (+my/treemacs--git-poll))
       (should-not polled))))
+
+;; ====== BRANCH ======
+
+(defun +test-treemacs--git (root &rest args)
+  "Git ARGS in ROOT; its output, trimmed."
+  (let ((default-directory root))
+    (with-temp-buffer
+      (should (zerop (apply #'call-process "git" nil t nil args)))
+      (string-trim (buffer-string)))))
+
+(defun +test-treemacs--committed (name)
+  "A git project NAME with a commit (README.md); its root."
+  (let ((root (+test-treemacs--project name "README.md")))
+    (+test-treemacs--git root "add" ".")
+    (+test-treemacs--git root "commit" "-qm" "first")
+    root))
+
+(defun +test-treemacs--root-line ()
+  "Treemacs' first line, as shown (trimmed)."
+  (car (+test-treemacs--lines)))
+
+(defun +test-treemacs--branch-wait ()
+  "Wait for the branch reads running to end."
+  (let ((end (+ (float-time) 10)))
+    (while (and (> (hash-table-count +my/treemacs--branch-running) 0) (< (float-time) end))
+      (accept-process-output nil 0.02)))
+  (should (zerop (hash-table-count +my/treemacs--branch-running))))
+
+(ert-deftest treemacs/branch-suffix ()
+  "The branch, then ↑ahead ↓behind when not 0; detached: the short commit."
+  (let ((ab (lambda (a b) (format "# branch.oid 0123456789abcdef\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +%d -%d\n" a b))))
+    (should (equal (+my/treemacs--branch-suffix (funcall ab 0 0)) "  main"))
+    (should (equal (+my/treemacs--branch-suffix (funcall ab 2 0)) "  main ↑2"))
+    (should (equal (+my/treemacs--branch-suffix (funcall ab 0 3)) "  main ↓3"))
+    (should (equal (+my/treemacs--branch-suffix (funcall ab 2 13)) "  main ↑2 ↓13"))
+    (let ((suffix (+my/treemacs--branch-suffix (funcall ab 1 1))))
+      (should (eq (get-text-property 2 'face suffix) '+my/treemacs-branch-face))
+      (should (eq (get-text-property (1- (length suffix)) 'face suffix) 'treemacs-git-commit-diff-face))))
+  (should (equal (+my/treemacs--branch-suffix "# branch.oid (initial)\n# branch.head main\n") "  main"))
+  (should (equal (+my/treemacs--branch-suffix "# branch.oid 0123456789abcdef\n# branch.head (detached)\n")
+                 "  0123456"))
+  (should (equal (+my/treemacs--branch-suffix "# branch.oid 0123456789abcdef\n# branch.head feature/x-1\n1 .M N... 100644 100644 100644 a b f\n")
+                 "  feature/x-1"))
+  (should-not (+my/treemacs--branch-suffix ""))
+  (should (eq (face-attribute '+my/treemacs-branch-face :inherit) 'shadow)))
+
+(ert-deftest treemacs/branch-after-the-name ()
+  "Shown after the project's name, and again after a switch (from a
+terminal: at the refresh); detached: the short commit; not a git project:
+nothing. The commit-diff mode stays off (its ↑↓ are here)."
+  (+test-treemacs
+    (+test-treemacs-with-git-env
+      (let* ((root (+test-treemacs--committed "branchy"))
+             (name (file-name-nondirectory (directory-file-name root)))
+             (branch (+test-treemacs--git root "branch" "--show-current")))
+        (+test-treemacs--show-project root)
+        (+test-treemacs--branch-wait)
+        (should (equal (+test-treemacs--root-line) (concat name "  " branch)))
+        (+test-treemacs--git root "checkout" "-qb" "feature/x")
+        (+my/treemacs-refresh-all)
+        (+test-treemacs--branch-wait)
+        (should (equal (+test-treemacs--root-line) (concat name "  feature/x")))
+        (+test-treemacs--git root "checkout" "-q" "--detach")
+        (+my/treemacs-refresh-all)
+        (+test-treemacs--branch-wait)
+        (should (equal (+test-treemacs--root-line)
+                       (concat name "  " (+test-treemacs--git root "rev-parse" "--short=7" "HEAD"))))
+        ;; The suffix is no part of the name's button.
+        (with-current-buffer (treemacs-get-local-buffer)
+          (let ((start (treemacs-project->position
+                        (car (treemacs-workspace->projects (treemacs-current-workspace))))))
+            (should (equal (buffer-substring-no-properties start (treemacs-button-end start))
+                           name))))
+        (should-not (bound-and-true-p treemacs-git-commit-diff-mode))))))
+
+(ert-deftest treemacs/branch-none-outside-git ()
+  (+test-treemacs
+    (+test-treemacs-with-git-env
+      (let* ((root (+test-treemacs--dir "plain" "README.md"))
+             (name (file-name-nondirectory (directory-file-name root))))
+        (+test-treemacs--show-project root)
+        (+test-treemacs--branch-wait)
+        (should (equal (+test-treemacs--root-line) name))
+        (should-not (+my/treemacs--branch-shown (directory-file-name root)))))))
+
+(ert-deftest treemacs/branch-ahead-behind ()
+  "↑ / ↓: commits ahead of / behind the upstream."
+  (+test-treemacs
+    (+test-treemacs-with-git-env
+      (let* ((origin (+test-treemacs--committed "origin"))
+             (clone (file-name-as-directory
+                     (file-truename (make-temp-file (+test-tmp-file "clone-") t))))
+             (name (file-name-nondirectory (directory-file-name clone))))
+        (+test-treemacs--git clone "clone" "-q" origin ".")
+        (let ((branch (+test-treemacs--git clone "branch" "--show-current")))
+          (+test-treemacs--git clone "commit" "-q" "--allow-empty" "-m" "mine")
+          (+test-treemacs--git clone "commit" "-q" "--allow-empty" "-m" "mine too")
+          (+test-treemacs--git origin "commit" "-q" "--allow-empty" "-m" "theirs")
+          (+test-treemacs--show-project clone)
+          (+test-treemacs--branch-wait)
+          (should (equal (+test-treemacs--root-line) (concat name "  " branch " ↑2")))
+          (+test-treemacs--git clone "fetch" "-q")
+          (+my/treemacs-refresh-all)
+          (+test-treemacs--branch-wait)
+          (should (equal (+test-treemacs--root-line) (concat name "  " branch " ↑2 ↓1"))))))))
+
+(ert-deftest treemacs/branch-kept-when-redrawn ()
+  "Another project followed, then this one again: its branch is back at
+once (as last known), before git is read again."
+  (+test-treemacs
+    (+test-treemacs-with-git-env
+      (let* ((a (+test-treemacs--committed "redraw-a"))
+             (b (+test-treemacs--committed "redraw-b"))
+             (name (file-name-nondirectory (directory-file-name a)))
+             (branch (+test-treemacs--git a "branch" "--show-current")))
+        (+test-treemacs--show-project a)
+        (+test-treemacs--branch-wait)
+        (+test-treemacs--show-project b)
+        (+test-treemacs--branch-wait)
+        (cl-letf (((symbol-function 'make-process) #'ignore))
+          (+test-treemacs--show-project a)
+          (should (equal (+test-treemacs--root-line) (concat name "  " branch))))
+        (clrhash +my/treemacs--branch-running)))))
+
+(ert-deftest treemacs/branch-one-read-at-a-time ()
+  "Asked while git runs: once more after it ends; a remote project: never."
+  (+test-treemacs-with-git-env
+    (let ((root (directory-file-name (+test-treemacs--committed "once")))
+          (started 0))
+      (cl-letf (((symbol-function '+my/treemacs--branch-set) #'ignore))
+        (advice-add 'make-process :before (lambda (&rest _) (cl-incf started)) '((name . count)))
+        (unwind-protect
+            (progn
+              (+my/treemacs-update-branch root)
+              (+my/treemacs-update-branch root)
+              (+my/treemacs-update-branch root)
+              (should (eq (gethash root +my/treemacs--branch-running) 'again))
+              (should (= started 1))
+              (+test-treemacs--branch-wait)
+              (should (= started 2))
+              (+my/treemacs-update-branch "/ssh:host:/project")
+              (should (= started 2))
+              (should-not (gethash "/ssh:host:/project" +my/treemacs--branch-running)))
+          (advice-remove 'make-process 'count))))))
+
+(ert-deftest treemacs/branch-after-refresh-and-magit ()
+  "Read again after a refresh (of one project or all), and after magit
+refreshes in a project treemacs shows (not another)."
+  (should (memq #'+my/treemacs-branch-after-refresh-h treemacs-post-refresh-hook))
+  (should (memq #'+my/treemacs-branch-after-magit-h magit-post-refresh-hook))
+  (let* ((a (+test-treemacs--dir "hook-a"))
+         (b (+test-treemacs--dir "hook-b"))
+         (pa (treemacs-project->create! :name "a" :path (directory-file-name a) :path-status 'local-readable))
+         (pb (treemacs-project->create! :name "b" :path (directory-file-name b) :path-status 'local-readable))
+         (workspace (treemacs-workspace->create! :name "test" :projects (list pa pb)))
+         (top nil) (read nil))
+    (cl-letf (((symbol-function 'treemacs-current-workspace) (lambda () workspace))
+              ((symbol-function 'magit-toplevel) (lambda (&rest _) top))
+              ((symbol-function '+my/treemacs-update-branch) (lambda (root) (push root read))))
+      (+my/treemacs-branch-after-refresh-h 'all)
+      (should (equal (nreverse read) (list (directory-file-name a) (directory-file-name b))))
+      (setq read nil)
+      (+my/treemacs-branch-after-refresh-h pb)
+      (should (equal read (list (directory-file-name b))))
+      (setq read nil top b)
+      (+my/treemacs-branch-after-magit-h)
+      (should (equal read (list (directory-file-name b))))
+      (setq read nil top (+test-treemacs--dir "elsewhere"))
+      (+my/treemacs-branch-after-magit-h)
+      (setq top nil)
+      (+my/treemacs-branch-after-magit-h)
+      (should-not read))))
 
 ;; ====== zR / zM ======
 

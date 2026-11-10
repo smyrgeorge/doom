@@ -89,5 +89,6 @@
 (load! "treemacs/selection")
 (load! "treemacs/follow")
 (load! "treemacs/git")
+(load! "treemacs/branch")
 (load! "treemacs/expand")
 (load! "treemacs/menu")

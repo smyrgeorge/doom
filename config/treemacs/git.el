@@ -115,7 +115,9 @@ if one is."
            :name "treemacs-git-poll" :buffer output :noquery t
            :connection-type 'pipe
            :command (list "git" "--no-optional-locks" "-C" root
-                          "status" "--porcelain" "-z")
+                          ;; --branch: its first line, the branch and ↑↓,
+                          ;; so a switch or a fetch elsewhere refreshes too.
+                          "status" "--porcelain" "-z" "--branch")
            :sentinel
            (lambda (process _event)
              (unless (process-live-p process)
