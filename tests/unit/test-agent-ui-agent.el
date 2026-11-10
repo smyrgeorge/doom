@@ -338,6 +338,37 @@ fetched: bd would read this repository's own issues."
     (goto-char (match-beginning 0))
     (agent-ui-button-press)))
 
+(ert-deftest agent-ui-agent/an-answer-sent-its-question-answered ()
+  "agent-shell, inserting an answer, selects its session's window, its
+buffer current then: the question is answered still, in its canvas (it was
+left asking, its buttons there, the mode line's mark on), the session's
+buffer still where agent-shell put it (doom-vb9)."
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ answer" "/tmp/answer/"))
+           (name (agent-ui--session-name session))
+           (canvas (agent-ui-canvas-buffer-name name))
+           (sent nil))
+      (agent-ui-show '(:id "plan" :type "steps" :approve t :steps ("Reproduce it" "Fix it")) :canvas name)
+      (agent-ui-show '(:id "push" :type "confirm" :question "Push?") :canvas name)
+      (cl-letf (((symbol-function 'agent-shell-insert)
+                 (lambda (&rest args)
+                   (push (plist-get args :text) sent)
+                   ;; As agent-shell--display-buffer's select-window does.
+                   (set-buffer (plist-get args :shell-buffer)))))
+        (+test-aua-press canvas "⏵ Approve")
+        (+test-aua-press canvas "⏵ Proceed"))
+      (should (equal (reverse sent)
+                     '("Answer to steps plan (Go ahead with this plan?): approved: 1. Reproduce it; 2. Fix it"
+                       "Answer to confirm push (Push?): proceed")))
+      (should (equal (plist-get (agent-ui-get "plan" :canvas name) :answered) "approved"))
+      (should (equal (plist-get (agent-ui-get "push" :canvas name) :answered) "proceed"))
+      (should-not (agent-ui-ask-waiting-p (agent-ui-get "plan" :canvas name)))
+      (should-not (agent-ui-ask-waiting-p (agent-ui-get "push" :canvas name)))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (should-not (string-search "⏵ Approve" (buffer-string)))
+        (should (string-search "✓ Approved" (buffer-string)))))))
+
 (ert-deftest agent-ui-agent/an-action-while-the-agent-works ()
   "While the session's prompt takes no text (its agent working): a button
 sending its prompt queues it; one putting it into the prompt offers it,

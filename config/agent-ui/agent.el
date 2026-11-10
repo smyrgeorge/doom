@@ -211,7 +211,10 @@ then has its say."
 
 (defun agent-ui--act (prompt submit)
   "An element's action pressed, in its canvas: PROMPT into the prompt of the
-canvas's session (sent if SUBMIT); while its agent works, queued (see above)."
+canvas's session (sent if SUBMIT); while its agent works, queued (see above).
+The canvas still current after it: agent-shell selects the session's window
+\(its buffer current then), and what the press does next (a question
+answered) is the canvas's."
   (let ((session (and (derived-mode-p 'agent-ui-canvas-mode) agent-ui--session-buffer)))
     (unless (buffer-live-p session)
       (user-error "This canvas has no agent-shell session"))
@@ -219,7 +222,8 @@ canvas's session (sent if SUBMIT); while its agent works, queued (see above)."
       (user-error "agent-shell isn't loaded"))
     (cond
      ((not (and (fboundp 'agent-shell-prompt-queue) (agent-ui--session-busy-p session)))
-      (agent-shell-insert :text prompt :submit submit :shell-buffer session))
+      (save-current-buffer
+        (agent-shell-insert :text prompt :submit submit :shell-buffer session)))
      (submit
       (with-current-buffer session
         (agent-shell-prompt-queue prompt))
