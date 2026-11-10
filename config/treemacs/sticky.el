@@ -10,7 +10,16 @@
 ;; came back when it stopped), and moved the tree down a line as it came. Its
 ;; :eval reads the title from the tree each time it's drawn: a new branch,
 ;; ↑↓, another project in view show at once. A click on it goes to the
-;; project's line.
+;; project's line (the first project's: the top of the tree).
+;;
+;; The tree's first line, the first project's, is hidden: the title shows it
+;; (not twice). Checked after each change to that line (only there: cheap),
+;; so it stays hidden however the tree changes (drawn anew for another
+;; project, a refresh, the project collapsed or expanded, its branch): a
+;; collapse takes its newline away, the expansion's comes back outside the
+;; overlay, which would show an empty line. (Not before each redisplay:
+;; `pre-redisplay-functions' runs only for the selected window, rarely the
+;; sidebar.) The other projects' lines stay: they divide the tree.
 ;;
 ;; As the tree: the header line starts at the window's edge, the tree after
 ;; the left fringe (and margin), so the title starts after a space as wide;
@@ -73,9 +82,46 @@ as the tree shows it (see above)."
     (when (window-live-p window)
       (select-window window)
       (when-let* ((bol (+my/treemacs--project-at (window-start window))))
-        (goto-char bol)
-        (treemacs--evade-image)
+        (if (= bol (point-min))
+            ;; Hidden: on its first node, the tree from the top.
+            (goto-char (+my/treemacs--hidden-end))
+          (goto-char bol))
+        (ignore-errors (treemacs--evade-image))
         (set-window-start window bol)))))
+
+(defvar-local +my/treemacs--hidden-root nil
+  "The overlay hiding the tree's first line (see above).")
+
+(defun +my/treemacs--hidden-end ()
+  "Where the tree's first line, if hidden, ends: else its start."
+  (if (and (overlayp +my/treemacs--hidden-root) (overlay-buffer +my/treemacs--hidden-root))
+      (overlay-end +my/treemacs--hidden-root)
+    (point-min)))
+
+(defun +my/treemacs--hide-top-root (&rest _)
+  "Hide the tree's first line if it's a project's (the title shows it), with
+its newline; else nothing hidden. Moved only when it changed."
+  (let ((end (and +my/treemacs-sticky-title
+                  (eql (ignore-errors (+my/treemacs--project-at (point-min))) (point-min))
+                  (save-excursion (goto-char (point-min)) (min (point-max) (line-beginning-position 2))))))
+    (cond
+     (end
+      (unless (overlayp +my/treemacs--hidden-root)
+        (add-to-invisibility-spec '+my/treemacs-title)
+        (setq +my/treemacs--hidden-root (make-overlay (point-min) end nil nil nil))
+        (overlay-put +my/treemacs--hidden-root 'invisible '+my/treemacs-title))
+      (unless (and (eq (overlay-buffer +my/treemacs--hidden-root) (current-buffer))
+                   (= (overlay-start +my/treemacs--hidden-root) (point-min))
+                   (= (overlay-end +my/treemacs--hidden-root) end))
+        (move-overlay +my/treemacs--hidden-root (point-min) end (current-buffer))))
+     ((overlayp +my/treemacs--hidden-root)
+      (delete-overlay +my/treemacs--hidden-root)
+      (setq +my/treemacs--hidden-root nil)))))
+
+(defun +my/treemacs--hide-after-change-h (beg _end _length)
+  "After a change in the tree's first line (or its newline): hide it again."
+  (when (<= beg (1+ (save-excursion (goto-char (point-min)) (line-end-position))))
+    (+my/treemacs--hide-top-root)))
 
 (defun +my/treemacs--background ()
   "The sidebar's background as shown: its default face's remapping's (solaire's),
@@ -105,7 +151,10 @@ else the default face's."
   (when (+my/treemacs--sidebar-p)
     (setq-local header-line-format
                 (and +my/treemacs-sticky-title '(:eval (+my/treemacs--sticky-title))))
-    (+my/treemacs--sticky-faces)))
+    (+my/treemacs--sticky-faces)
+    (remove-hook 'pre-redisplay-functions #'+my/treemacs--hide-top-root t)
+    (add-hook 'after-change-functions #'+my/treemacs--hide-after-change-h nil t)
+    (+my/treemacs--hide-top-root)))
 
 ;; Late: after solaire's remapping of the sidebar's faces, whose background
 ;; it takes.

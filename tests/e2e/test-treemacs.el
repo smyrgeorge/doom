@@ -330,5 +330,30 @@ to it.)"
       (+my/treemacs-sticky-goto (list 'mouse-1 (list sidebar 'header-line '(5 . 5) 0)))
       (should (eq (selected-window) sidebar))
       (should (equal (+test-treemacs--header sidebar) (+test-treemacs--label (point-min))))
-      (should (equal (+test-treemacs--label (point)) (+test-treemacs--label (point-min))))
+      ;; The project's line is hidden: on its first node.
+      (should (equal (+test-treemacs--label (point)) ".git"))
       (should (= (window-start sidebar) (point-min))))))
+
+(ert-deftest e2e-treemacs/the-first-project-line-is-hidden ()
+  "Not twice at the top: the tree's first line, the project's, hidden (the
+title shows it), its first node on the window's first line; still after a
+refresh, and when the tree is drawn anew."
+  (+test-treemacs
+    (let ((sidebar (+test-treemacs--window)))
+      (cl-flet ((first-shown ()
+                  (with-current-buffer (window-buffer sidebar)
+                    (save-excursion
+                      (goto-char (window-start sidebar))
+                      (while (and (invisible-p (point)) (not (eobp))) (forward-char))
+                      (+test-treemacs--label (point))))))
+        (should (+test-wait-for (lambda () (equal (first-shown) ".git")) 3))
+        (should (string-prefix-p (+test-treemacs--project-name) (+test-treemacs--header sidebar)))
+        (+my/treemacs-refresh-all)
+        (should (+test-wait-for (lambda () (equal (first-shown) ".git")) 3))
+        (with-current-buffer (window-buffer sidebar)
+          (let ((inhibit-message t))
+            (treemacs--do-refresh (current-buffer) 'all)))
+        (should (+test-wait-for (lambda () (equal (first-shown) ".git")) 3))
+        ;; Its newline hidden too: no empty line at the top.
+        (should (with-current-buffer (window-buffer sidebar)
+                  (invisible-p (save-excursion (goto-char (point-min)) (1- (line-beginning-position 2))))))))))

@@ -1666,10 +1666,49 @@ the left fringe; kept while the tree has none; a click goes to the project."
           (cl-letf (((symbol-function '+my/treemacs--project-at) #'ignore))
             (should (equal (+my/treemacs--sticky-title) title)))))
       (with-selected-window window (set-window-start window (+test-treemacs--line-start "b.txt")))
+      (with-current-buffer (window-buffer window) (+my/treemacs--hide-top-root))
       (+my/treemacs-sticky-goto (list 'mouse-1 (list window 'header-line '(1 . 1) 0)))
       (should (eq (selected-window) window))
       (should (= (window-start window) (point-min)))
-      (should (= (line-beginning-position) (point-min))))))
+      ;; The project's line hidden: on its first node.
+      (should (= (line-beginning-position) (+my/treemacs--hidden-end)))
+      (should (> (point) (point-min))))))
+
+(ert-deftest treemacs/sticky-hides-the-first-project-line ()
+  "The tree's first line, the first project's, hidden with its newline (the
+title shows it); the next project's line not; collapsed (the line alone),
+expanded again, drawn anew: still hidden; off: nothing hidden."
+  (+test-treemacs
+    (let* ((root (+test-treemacs--dir "hide-a" "README.md" "a.txt"))
+           (other (directory-file-name (+test-treemacs--dir "hide-b" "x.txt")))
+           (buffer (+test-treemacs--show-project root)))
+      (with-current-buffer buffer
+        (should (memq #'+my/treemacs--hide-after-change-h after-change-functions))
+        (let ((first-line (save-excursion (goto-char (point-min)) (line-beginning-position 2))))
+          (should (equal (list (overlay-start +my/treemacs--hidden-root) (overlay-end +my/treemacs--hidden-root))
+                         (list (point-min) first-line)))
+          (should (invisible-p (point-min)))
+          (should (invisible-p (1- first-line)))
+          (should-not (invisible-p first-line)))
+        ;; A second project: its line shown.
+        (let ((inhibit-message t))
+          (treemacs-do-add-project-to-workspace other "hide-b"))
+        (should-not (invisible-p (treemacs-project->position (cadr (treemacs-workspace->projects (treemacs-current-workspace))))))
+        ;; Collapsed, then expanded.
+        (let ((project (treemacs-project->position
+                        (car (treemacs-workspace->projects (treemacs-current-workspace))))))
+          (treemacs--collapse-root-node project)
+          (should (invisible-p (point-min)))
+          (should-not (invisible-p (treemacs-project->position (cadr (treemacs-workspace->projects (treemacs-current-workspace))))))
+          (treemacs--expand-root-node project)
+          (should (= (overlay-end +my/treemacs--hidden-root)
+                     (save-excursion (goto-char (point-min)) (line-beginning-position 2))))
+          (should-not (invisible-p (+test-treemacs--line-start "README.md"))))
+        ;; Off.
+        (let ((+my/treemacs-sticky-title nil))
+          (+my/treemacs--hide-top-root)
+          (should-not +my/treemacs--hidden-root)
+          (should-not (invisible-p (point-min))))))))
 
 ;; ====== zR / zM ======
 
