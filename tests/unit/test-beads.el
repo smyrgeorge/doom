@@ -631,6 +631,66 @@ Blocked section; a closed row dimmed."
         (should (memq 'shadow (+test-beads--faces-at "Old parser removed")))
         (should-not (memq 'shadow (+test-beads--faces-at "Crash on")))))))
 
+;; ====== THE PLACE KEPT ======
+
+(defun +test-beads--ids-at (window)
+  "The issues at WINDOW's top and at its cursor: (TOP . CURSOR)."
+  (with-current-buffer (window-buffer window)
+    (let ((start (window-start window))
+          (point (window-point window)))
+      (save-excursion
+        (cons (progn (goto-char start) (tabulated-list-get-id))
+              (progn (goto-char point) (tabulated-list-get-id)))))))
+
+(defun +test-beads--scroll (window top cursor)
+  "WINDOW scrolled to its list's TOP-th row, its cursor on the CURSOR-th."
+  (with-current-buffer (window-buffer window)
+    (save-excursion
+      (goto-char (point-min))
+      (forward-line (1- top))
+      (set-window-start window (point)))
+    (set-window-point window (save-excursion (goto-char (point-min)) (forward-line (1- cursor)) (point)))))
+
+(ert-deftest beads/bd-a-refresh-keeps-the-place ()
+  "A list scrolled down, its cursor on an issue; a P0 added (listed first: the
+rows under it a line lower): refreshed by gr, by the timer from another
+pane, shown in two windows: each keeps the same issue at its top and at its
+cursor."
+  (+test-beads-with-project
+    (+test-beads--bulk 40 0)
+    (+my/beads-project)
+    (let* ((list (+test-beads--list))
+           (window (get-buffer-window list)))
+      (+test-beads--scroll window 20 25)
+      (let ((place (+test-beads--ids-at window)))
+        (should (car place))
+        (should-not (equal (car place) (cdr place)))
+        ;; gr, in the list's window.
+        (+test-beads--create "Urgent" :priority 0)
+        (with-selected-window window (beads-list-refresh t))
+        (should (string-match-p "Urgent" (+test-beads--line "Urgent")))
+        (should (equal (+test-beads--ids-at window) place))
+        ;; The timer's, in the background, from another pane scrolled elsewhere.
+        (let ((other (split-window window nil 'left)))
+          (set-window-buffer other (get-buffer-create "*scratch*"))
+          (with-current-buffer "*scratch*" (insert (make-string 400 ?\n)))
+          (set-window-start other 200)
+          (select-window other)
+          (+test-beads--create "Urgent too" :priority 0)
+          (with-current-buffer list (beads-autoupdate--refresh))
+          (+test-beads--settle list)
+          (with-current-buffer list (should (+test-beads--line "Urgent too")))
+          (should (eq (selected-window) other))
+          (should (equal (+test-beads--ids-at window) place))
+          ;; Two windows on the list, each its own place.
+          (set-window-buffer other list)
+          (+test-beads--scroll other 5 8)
+          (let ((other-place (+test-beads--ids-at other)))
+            (+test-beads--create "Urgent three" :priority 0)
+            (with-selected-window window (beads-list-refresh t))
+            (should (equal (+test-beads--ids-at window) place))
+            (should (equal (+test-beads--ids-at other) other-place))))))))
+
 ;; ====== IN THE BACKGROUND ======
 
 (ert-deftest beads/the-timer-s-refresh-doesn-t-wait-for-bd ()
