@@ -903,6 +903,18 @@ weren't counted: 3 figures wrapped 2 and 1 from 50 to 79 columns)."
     ;; Too narrow: they wrap still.
     (should (= (funcall rows-of three 40) 2))))
 
+(ert-deftest agent-ui-elements/stats-narrow-pane-and-unit ()
+  "Under 16 columns a tile is no wider than the pane (it was 128 px in 96);
+a unit that isn't text is refused (it broke the drawing)."
+  (let ((svg (plist-get (cdr (get-text-property
+                              0 'display (agent-ui-render '(:type "stats" :figures ((:label "Heap" :value 512 :unit "MB")))
+                                                          (agent-ui-context :width 12 :graphic t :char-width 8 :line-height 16))))
+                        :data)))
+    (should (string-match-p "<svg width=\"96\"" svg))
+    (should (string-match-p "<rect width=\"96\"" svg)))
+  (should (string-match-p "figure 1 has unit 1024: a unit is text"
+                          (+test-aue-error '(:type "stats" :figures ((:label "Heap" :value 512 :unit 1024)))))))
+
 (ert-deftest agent-ui-elements/stats-wrong ()
   (should (string-match-p "figure 1 has no label" (+test-aue-error '(:type "stats" :figures ((:value 1))))))
   (should (string-match-p "figure 1 has no value" (+test-aue-error '(:type "stats" :figures ((:label "a"))))))

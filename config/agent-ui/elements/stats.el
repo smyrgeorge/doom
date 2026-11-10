@@ -25,6 +25,8 @@
                              (agent-ui--show-value (substring (symbol-name k) 1)))))
     (unless (stringp (plist-get entry :label)) (bad "has no label"))
     (unless (or (numberp (plist-get entry :value)) (stringp (plist-get entry :value))) (bad "has no value"))
+    (unless (or (null (plist-get entry :unit)) (stringp (plist-get entry :unit)))
+      (bad (format "has unit %s: a unit is text" (agent-ui--show-value (plist-get entry :unit)))))
     (let ((good (or (plist-get entry :good) "up")))
       (unless (member good '("up" "down" "none" up down none))
         (bad "'s good is up, down or none"))
@@ -100,7 +102,7 @@ the value's font 1.25 of a line (a character ~0.75 of it), the change's 0.8
          ;; Each tile its share of the width, less the gaps between them (not
          ;; counting those, 3 tiles that fit wrapped 2 and 1).
          (n (max 1 (length figures)))
-         (tile-width (max (* 16 cw) (min (* 26 cw) (/ (- width (* (1- n) gap)) n))))
+         (tile-width (min width (max (* 16 cw) (min (* 26 cw) (/ (- width (* (1- n) gap)) n)))))
          (per-row (max 1 (/ (+ width gap) (+ tile-width gap))))
          ;; Each row's tiles laid out; a row 4 lines tall when a change went
          ;; under its value, else 3.
