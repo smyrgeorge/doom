@@ -253,3 +253,9 @@ after (the tests' forgotten), no window shown, a canvas of its own."
   (should (equal agent-ui-staging-directory (expand-file-name "agent-ui/staged/" doom-cache-dir)))
   (should (equal agent-ui-kept-directory (expand-file-name "config/agent-ui/kept/" doom-user-dir)))
   (should (memq #'+my/agent-ui-kept-issue agent-ui-kept-functions)))
+
+(ert-deftest agent-ui-staging/a-comment-after-the-last-form ()
+  "A comment after a type's last form is a comment (it was read as one more
+form, cut short: \"the code ends inside a form\")."
+  (should (equal (agent-ui--read-forms "(defun agent-ui-x--a ())\n;; the end\n")
+                 '((defun agent-ui-x--a ())))))

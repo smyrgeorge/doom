@@ -397,8 +397,11 @@ and `:stop` run when it opens and closes; `:version` is 1. `agent-ui check NAME`
 as it's written, nothing run: its `:ui` as `show` would, its code compiled (its warnings), and the calls in it that
 wait, freezing Emacs (`shell-command-to-string`, `call-process`, `sleep-for`...).
 
-Its code runs as Emacs itself, so when it opens you're asked to let it (its elements' `source`s, commands, are its
-code too: not started before). Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes,
+Its code runs as Emacs itself, and comes from a repository: before it first runs, you're asked: `y` run it, `v` view
+its file first (read-only, then asked again), `n` not now (drawn, nothing run, said on it; `gR` asks again). Its
+elements' `source`s, commands, are its code too: not started before. A yes is remembered by the file's content
+(sha256), in Doom's `.local/etc/agent-ui/trusted-panels.eld` (`agent-ui-panel-trust-file`), not in the repository:
+the same file isn't asked about again, after a restart too; once it changes (a pull, an edit), it is. Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes,
 each called with the panel, in the project's root. It fills the panel with `agent-ui-panel-update` and
 `agent-ui-panel-append` (as `agent-ui update` and `append`, on its own elements), `agent-ui-panel-get`, and
 `agent-ui-panel-run`, a command run without waiting, its output given to a function once it ends well (parsed JSON

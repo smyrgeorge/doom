@@ -79,8 +79,11 @@ to load is said, the others go on."
     (goto-char (point-min))
     (let (forms)
       (condition-case err
-          (while (progn (forward-comment (buffer-size)) (not (eobp)))
-            (push (read (current-buffer)) forms))
+          ;; Lisp's comments skipped (a plain buffer has none: a comment
+          ;; after the last form was read as one, cut short).
+          (with-syntax-table emacs-lisp-mode-syntax-table
+            (while (progn (forward-comment (buffer-size)) (not (eobp)))
+              (push (read (current-buffer)) forms)))
         (end-of-file
          (agent-ui--fail "define: the code ends inside a form (a parenthesis or quote missing?)"))
         (error (agent-ui--fail "define: the code doesn't read, at line %d: %s"

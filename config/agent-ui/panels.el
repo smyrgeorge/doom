@@ -103,8 +103,11 @@ where it doesn't read."
     (goto-char (point-min))
     (let (forms)
       (condition-case err
-          (while (progn (forward-comment (buffer-size)) (not (eobp)))
-            (push (read (current-buffer)) forms))
+          ;; Lisp's comments skipped (a plain buffer has none: a comment
+          ;; after the last form was read as one, cut short).
+          (with-syntax-table emacs-lisp-mode-syntax-table
+            (while (progn (forward-comment (buffer-size)) (not (eobp)))
+              (push (read (current-buffer)) forms)))
         (end-of-file
          (agent-ui--fail "%s: its file ends inside a form (a parenthesis or a quote missing?)" what))
         (error (agent-ui--fail "%s: its file doesn't read, at line %d: %s"
@@ -298,15 +301,73 @@ to pick from. Returns its canvas."
 ;; commands killed. Each called with PANEL, in its root (`default-
 ;; directory'); an error of one kept in PANEL and said, the others go on.
 
-(defvar agent-ui-panel-allow-function #'agent-ui-panels--ask
+(defvar agent-ui-panel-allow-function #'agent-ui-panels--allowed-p
   "Called with a panel (an `agent-ui-panels--state') whose code (its script,
 its elements' sources) is to run: non-nil lets it.")
 
-(defun agent-ui-panels--ask (panel)
-  "Whether the user lets PANEL's code run, asked."
-  (yes-or-no-p (format "Panel %s runs code from %s, as Emacs itself (its commands too). Run it? "
-                       (agent-ui-panels--name panel)
-                       (abbreviate-file-name (agent-ui-panels--file panel)))))
+;; ====== TRUSTING ONE ======
+;; A panel's file comes from a repository and runs as Emacs itself: before
+;; its code first runs, the user is asked (run it, view its file first, or not
+;; now); run, it's remembered by its file's content (sha256), in
+;; `agent-ui-panel-trust-file': asked again once it changes. Not now: drawn,
+;; nothing run, said on it; gR asks again.
+
+(defcustom agent-ui-panel-trust-file (locate-user-emacs-file "agent-ui/trusted-panels.eld")
+  "Where the panels whose code the user let run are remembered: their
+files' content's sha256."
+  :type 'file :group 'agent-ui)
+
+(defun agent-ui-panels--hash (file)
+  "FILE's content's sha256."
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert-file-contents-literally file)
+    (secure-hash 'sha256 (current-buffer))))
+
+(defun agent-ui-panels--trusted ()
+  "The trusted panels: ((HASH FILE TIME) ...)."
+  (when (file-readable-p agent-ui-panel-trust-file)
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents agent-ui-panel-trust-file)
+          (let ((data (read (current-buffer))))
+            (and (listp data) data)))
+      (error nil))))
+
+(defun agent-ui-panel-trusted-p (file)
+  "Whether panel FILE's code, as it is now, was let run."
+  (and (assoc (agent-ui-panels--hash file) (agent-ui-panels--trusted)) t))
+
+(defun agent-ui-panel-trust (file)
+  "Remember panel FILE's code, as it is now, as let run (its older contents
+forgotten)."
+  (let* ((file (expand-file-name file))
+         (entries (cons (list (agent-ui-panels--hash file) file (format-time-string "%FT%T%z"))
+                        (seq-remove (lambda (e) (equal (nth 1 e) file)) (agent-ui-panels--trusted)))))
+    (make-directory (file-name-directory agent-ui-panel-trust-file) t)
+    (with-temp-file agent-ui-panel-trust-file
+      (let ((print-length nil) (print-level nil))
+        (insert ";; Agent UI: the project panels whose code was let run, by content (sha256).\n")
+        (prin1 entries (current-buffer))
+        (insert "\n")))))
+
+(defun agent-ui-panels--allowed-p (panel)
+  "Whether PANEL's code may run: its file trusted as it is; else the user
+asked (it view-ed first if they say), a yes remembered."
+  (let ((file (agent-ui-panels--file panel)))
+    (or (agent-ui-panel-trusted-p file)
+        (let ((answer nil))
+          (while (not answer)
+            (pcase (car (read-multiple-choice
+                         (format "Panel %s runs code from %s, as Emacs itself (its commands too). Run it?"
+                                 (agent-ui-panels--name panel) (abbreviate-file-name file))
+                         '((?y "run it" "Let its code run, remembered until its file changes")
+                           (?v "view it" "Its file first, read-only; asked again after")
+                           (?n "not now" "Drawn, nothing run (gR asks again)"))))
+              (?y (agent-ui-panel-trust file) (setq answer 'yes))
+              (?v (view-file-other-window file))
+              (_ (setq answer 'no))))
+          (eq answer 'yes)))))
 
 (defun agent-ui-panels--code-p (form ui)
   "Whether a panel (its FORM, its UI) has code to run: a script, or a source
@@ -370,7 +431,7 @@ evaluated, its :ui drawn again with its sources, :start, :fetch now and
 every :every seconds."
   (when (and (agent-ui-panels--code-p form (agent-ui-panels--ui panel))
              (or (funcall agent-ui-panel-allow-function panel)
-                 (agent-ui-panels--failed panel "its code" "not run: not allowed"))
+                 (agent-ui-panels--failed panel "its code" "not run, not let: gR asks again"))
              (agent-ui-panels--live-p panel))
     (let ((script (condition-case err
                       (let ((default-directory (agent-ui-panels--root panel)))

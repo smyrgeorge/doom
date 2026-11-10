@@ -32,8 +32,8 @@ One form, `agent-ui-panel`:
 
 ## Its code
 
-When it opens, the user is asked to let its code run (it runs as Emacs itself; its elements' `source`s are its code
-too: not started before). Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes: each
+Before its code first runs, the user is asked to let it (it runs as Emacs itself; its elements' `source`s are its
+code too: not started before), and again after each change to its file: after you edit it, they're asked once more. Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes: each
 called with `panel`, in the project's root (`default-directory`). An error in one is kept and said; the others go on.
 Its code fills it with:
 

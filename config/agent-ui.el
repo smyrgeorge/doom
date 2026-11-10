@@ -76,6 +76,8 @@
 
 ;; IMAGES FROM URLS: downloaded once, kept in Doom's cache.
 (setq agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir))
+;; The project panels whose code was let run (by content): kept, not a cache's.
+(setq agent-ui-panel-trust-file (expand-file-name "agent-ui/trusted-panels.eld" doom-data-dir))
 
 ;; BUGS IN AGENT UI
 ;; When Agent UI itself misbehaves (a wrong drawing, an error, a property

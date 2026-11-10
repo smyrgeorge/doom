@@ -118,7 +118,10 @@ as show has it; its form evaluated later gives its script, :ui quoted."
                           (+test-aup-error "(agent-ui-panel :ui (:type \"table\" :id \"t\" :colums (\"a\")))\n")))
   (should (string-match-p "its :ui is what it shows, an element"
                           (+test-aup-error "(agent-ui-panel :every 5)\n")))
-  (should (string-match-p "ends inside a form" (+test-aup-error "(agent-ui-panel :ui (:type \"text\"\n"))))
+  (should (string-match-p "ends inside a form" (+test-aup-error "(agent-ui-panel :ui (:type \"text\"\n")))
+  ;; A comment after its form: a comment.
+  (+test-aup '(("commented" . "(agent-ui-panel :ui (:type \"text\" :text \"x\"))\n;; the end\n"))
+    (should (agent-ui-panel-read (agent-ui-panel-file "commented")))))
 
 ;; ====== CHECKING ONE ======
 
@@ -296,7 +299,7 @@ with no code: not asked."
             (should-not (agent-ui-panels--script (buffer-local-value 'agent-ui-panels--state canvas)))
             (should-not +test-aup-calls)
             (should (equal (agent-ui-panels--error (buffer-local-value 'agent-ui-panels--state canvas))
-                           "its code: not run: not allowed")))
+                           "its code: not run, not let: gR asks again")))
         (kill-buffer canvas))
       (let ((canvas (save-window-excursion (agent-ui-open-panel "plain"))))
         (should (equal asked '("sourced")))
@@ -410,3 +413,47 @@ first); wrong now, said on it, going on as it was."
   (require 'evil)
   (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "g R")
               #'agent-ui-panel-reload)))
+
+;; ====== TRUSTING ONE ======
+
+(ert-deftest agent-ui-panels/trusted-by-its-content ()
+  "Its code runs once let (y), remembered by its file's content: not asked
+again, after a restart too; changed, asked again. Not now (n): nothing run,
+not remembered, said, gR asking again; view (v): its file shown, then asked
+again (doom-3q5.5)."
+  (+test-aup `(("counted" . ,(+test-aup-fixture "counted")))
+    (let* ((agent-ui-panel-trust-file (expand-file-name "trusted.eld" (make-temp-file "trust-" t)))
+           (agent-ui-panel-allow-function #'agent-ui-panels--allowed-p)
+           (file (agent-ui-panel-file "counted"))
+           (answers nil) (asked 0) (viewed nil))
+      (cl-letf (((symbol-function 'read-multiple-choice) (lambda (&rest _) (cl-incf asked) (list (pop answers))))
+                ((symbol-function 'view-file-other-window) (lambda (file) (push file viewed))))
+        (save-window-excursion
+          (setq answers (list ?n))
+          (let ((canvas (agent-ui-open-panel "counted")))
+            (should (= asked 1))
+            (should-not (agent-ui-panels--script (buffer-local-value 'agent-ui-panels--state canvas)))
+            (should (equal (+test-aup-status canvas) "⚠ its code: not run, not let: gR asks again"))
+            (should-not (agent-ui-panel-trusted-p file))
+            ;; gR: asked again; its file viewed first, then let.
+            (setq answers (list ?v ?y))
+            (with-current-buffer canvas (agent-ui-panel-reload))
+            (should (= asked 3))
+            (should (equal viewed (list file)))
+            (should (agent-ui-panels--script (buffer-local-value 'agent-ui-panels--state canvas)))
+            (should-not (+test-aup-status canvas))
+            (kill-buffer canvas))
+          ;; Remembered, in its file: not asked.
+          (should (agent-ui-panel-trusted-p file))
+          (should (string-match-p (regexp-quote (agent-ui-panels--hash file))
+                                  (with-temp-buffer (insert-file-contents agent-ui-panel-trust-file) (buffer-string))))
+          (kill-buffer (agent-ui-open-panel "counted" root))
+          (should (= asked 3))
+          ;; Changed: asked again.
+          (with-temp-file file (insert (+test-aup-fixture "counted") ";; changed\n"))
+          (should-not (agent-ui-panel-trusted-p file))
+          (setq answers (list ?n))
+          (kill-buffer (agent-ui-open-panel "counted" root))
+          (should (= asked 4))))))
+  ;; Kept out of the repository, where Doom keeps its data.
+  (should (equal agent-ui-panel-trust-file (expand-file-name "agent-ui/trusted-panels.eld" doom-data-dir))))
