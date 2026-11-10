@@ -44,6 +44,22 @@
                                   ((and (agent-ui--plist-p e) (stringp (plist-get e :from)) (stringp (plist-get e :to)))
                                    (list :from (plist-get e :from) :to (plist-get e :to) :label (plist-get e :label)))
                                   (t (agent-ui--fail "graph: edge %d must be [from, to], or {\"from\", \"to\", \"label\"}" i))))))
+    ;; A node listed twice: one, its later status and label taking over (it
+    ;; was drawn twice, its status lost); an edge listed twice, once.
+    (let ((merged nil))
+      (dolist (n nodes)
+        (let ((old (cl-find (plist-get n :id) merged :key (lambda (m) (plist-get m :id)) :test #'equal)))
+          (if (not old)
+              (push n merged)
+            (setq merged (cl-substitute
+                          (list :id (plist-get n :id)
+                                :label (if (equal (plist-get n :label) (plist-get n :id))
+                                           (plist-get old :label)
+                                         (plist-get n :label))
+                                :status (if (eq (plist-get n :status) 'none) (plist-get old :status) (plist-get n :status)))
+                          old merged)))))
+      (setq nodes (nreverse merged)))
+    (setq edges (cl-remove-duplicates edges :test #'equal :from-end t))
     ;; Nodes only edges name.
     (dolist (e edges)
       (dolist (id (list (plist-get e :from) (plist-get e :to)))

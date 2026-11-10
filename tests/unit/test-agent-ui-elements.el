@@ -1289,6 +1289,15 @@ crossing no box either."
                       :edges (("alpha" "alpha") ("alpha" "beta") ("beta" "alpha")))))
     (should-not (+test-aue-crossings (+test-aue-svg element 120)))))
 
+(ert-deftest agent-ui-elements/graph-listed-twice ()
+  "A node listed twice is one, its later status kept; an edge listed twice,
+once (each was drawn twice, the status lost)."
+  (should (equal (+test-aue-draw '(:type "graph" :nodes ("a" "a") :edges (("a" "b")))) "a ─▶ b\nb"))
+  (let ((nodes (plist-get (agent-ui-check "graph" '(:type "graph" :nodes ("a" (:id "a" :status "error")))) :nodes)))
+    (should (= (length nodes) 1))
+    (should (eq (plist-get (car nodes) :status) 'error)))
+  (should (equal (+test-aue-draw '(:type "graph" :nodes ("a" "b") :edges (("a" "b") ("a" "b")))) "a ─▶ b\nb")))
+
 (ert-deftest agent-ui-elements/graph-skip-edges-cross-no-box ()
   "An edge skipping a layer goes round through the corridors between layers
 and a lane beside the stacks, whatever its ends' places in them (from or to
