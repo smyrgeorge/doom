@@ -64,6 +64,7 @@ agent-ui define dial.el        # a type of the agent's own (below)
 agent-ui snapshot build        # the element as an image for the agent's reply (below)
 agent-ui list --canvas tests   # any of them, on another canvas of the session (below)
 agent-ui bug < bug.json        # a bug in Agent UI itself, into its own issues (below)
+agent-ui check service         # a project panel's file checked, nothing run (below)
 ```
 
 A batch is an array of operations, each an object with its `op` and what it takes, flat:
@@ -372,6 +373,30 @@ agent-shell's restart), its canvas comes back as it was. Its elements' sources a
 run twice. Closing a canvas, or its session, leaves what's saved; clearing it saves it empty. Its other canvases are
 kept beside it (`ID@tests.json`, the name hex-escaped) and come back with it.
 
+## Project panels
+
+A panel kept in a project's repository, opened again later (after its buffer is closed, after Emacs restarts), its
+data fetched afresh each time: none of it is kept (`config/agent-ui/panels.el`). Unlike a session's canvas, which
+comes back as it was. Each is a file, `PROJECT/.agent-ui/panels/NAME.el`, committed with the project, holding one
+form: what it shows and the code filling it, so its elements' ids are written and used in one place.
+
+```elisp
+;;; service.el --- Agent UI panel: the service -*- lexical-binding: t; -*-
+(agent-ui-panel
+ :version 1
+ :ui (:type "panel" :id "service" :title "Service" :layout "row"
+      :children ((:type "table" :id "ci" :title "CI" :columns ("Run" "Status"))
+                 (:type "gauge" :id "dirty" :title "Unsaved buffers" :value 0 :max 20)))
+ :every 30
+ :fetch (lambda (panel) ...))
+```
+
+`:ui` is what it shows, an element as `show` takes it (as a plist), its data left out. It's read as data, never
+evaluated: drawn before its code is trusted. `:every` is the seconds between fetches; `:fetch` fills it, `:start`
+and `:stop` run when it opens and closes; `:version` is 1. `agent-ui check NAME` (the MCP tool `check`) checks a file
+as it's written, nothing run: its `:ui` as `show` would, its code compiled (its warnings), and the calls in it that
+wait, freezing Emacs (`shell-command-to-string`, `call-process`, `sleep-for`...).
+
 ## In the conversation
 
 agent-shell owns its buffer's text, so an element isn't put there: it goes the ways agent-shell already has
@@ -453,6 +478,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/persist.el` | Kept with the session: saved as it changes, back when it's resumed |
 | `config/agent-ui/ask.el` | What the elements that ask share: picking, a note, the answer into the session's prompt, locked once given |
 | `config/agent-ui/snapshot.el` | In the conversation: an element as an SVG for the agent's reply, into the prompt |
+| `config/agent-ui/panels.el` | Project panels: a project's `.agent-ui/panels/NAME.el`, read, checked |
 | `config/agent-ui/source.el` | Sources: an element following a command, a file, a poll |
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |

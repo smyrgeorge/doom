@@ -117,10 +117,11 @@ mustn't have (see `agent-ui-stage')."
 
 ;; ====== STAGING ======
 
-(defun agent-ui--byte-compile (file &optional offset)
+(defun agent-ui--byte-compile (file &optional offset what)
   "Byte-compile FILE (nothing written, no log shown); its warnings, as
 strings, their lines OFFSET less (lines added before the agent's code).
-Signals `agent-ui-error' with its errors if it doesn't compile."
+Signals `agent-ui-error' with its errors if it doesn't compile, led by WHAT
+\(default \"define\")."
   (let* ((messages nil)
          (dest (make-temp-file "agent-ui-" nil ".elc"))
          (ok (let ((byte-compile-dest-file-function (lambda (_) dest))
@@ -145,7 +146,7 @@ Signals `agent-ui-error' with its errors if it doesn't compile."
                  (delete-file dest))))
          (messages (nreverse messages)))
     (unless (and ok (not (assq :error messages)))
-      (agent-ui--fail "define: it doesn't compile: %s"
+      (agent-ui--fail "%s: it doesn't compile: %s" (or what "define")
                       (string-join (or (mapcar #'cadr (seq-filter (lambda (m) (eq (car m) :error)) messages))
                                        '("(no message)"))
                                    "; ")))

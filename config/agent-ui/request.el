@@ -44,7 +44,7 @@ names start with it).")
   "While a request is answered: the agent's directory (its sources' default).")
 
 (defconst agent-ui-operations
-  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot" "bug")
+  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot" "bug" "check")
   "What cmd/agent-ui does.")
 
 ;; ====== THE CANVAS ======
@@ -142,6 +142,14 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
     ("snapshot"
      (append (list :ok t)
              (agent-ui-snapshot (agent-ui--need-id op id) :canvas canvas :directory agent-ui--request-cwd)))
+    ;; A project panel's file checked, nothing run (config/agent-ui/panels.el).
+    ("check"
+     (when (or (null id) (string-empty-p id))
+       (agent-ui--fail "check: which panel? agent-ui check NAME%s"
+                       (if-let* ((panels (agent-ui-panels agent-ui--request-cwd)))
+                           (format " (this project's: %s)" (string-join panels ", "))
+                         "")))
+     (agent-ui-panel-check (agent-ui-panel-file id agent-ui--request-cwd)))
     ;; A bug in Agent UI itself, filed in its own issues (config/agent-ui/bug.el).
     ("bug"
      (agent-ui-bug-reply (agent-ui--payload-object payload "bug") canvas))
@@ -180,7 +188,7 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
         (cond
          ((not (stringp op))
           (agent-ui--fail "batch: each operation has \"op\": show, update, append or remove"))
-         ((member op '("batch" "types" "list" "render" "define" "snapshot" "bug"))
+         ((member op '("batch" "types" "list" "render" "define" "snapshot" "bug" "check"))
           (agent-ui--fail "batch: %s isn't done in a batch" op)))
         (agent-ui-do op (plist-get rest :id)
                      (if (equal op "show") rest (agent-ui--plist-delete rest :id))

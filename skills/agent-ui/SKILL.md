@@ -54,6 +54,7 @@ agent-ui render JSON          # an element drawn as text, as the canvas would (n
 agent-ui define FILE          # a type of your own (references/custom-types.md), from FILE or stdin
 agent-ui snapshot ID          # the element as an image, for your reply: {"file":..., "markdown":"![...](...)"}
 agent-ui bug JSON             # a bug in Agent UI itself, filed in its own issues (references/bugs.md)
+agent-ui check NAME           # a project panel's file checked, nothing run (references/panels.md)
 ```
 
 The same operations are MCP tools too, where your session has the `agent-ui` server: same arguments (an `element`, an
@@ -172,5 +173,6 @@ element saying "running" for something that stopped: mark it `done` or `failed`.
 - Figures, charts, how things stand: [references/data.md](references/data.md).
 - Notes, code, a diff, an image, a page, files, a dashboard's layout: [references/content.md](references/content.md).
 - Following a long command, a file or a poll while you go on (`source`): [references/sources.md](references/sources.md).
+- A panel kept in the project, opened again later, its data fetched anew: [references/panels.md](references/panels.md).
 - None of the types fits: [references/custom-types.md](references/custom-types.md).
 - Agent UI itself misbehaves: [references/bugs.md](references/bugs.md).

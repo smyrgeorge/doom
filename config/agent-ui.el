@@ -159,6 +159,8 @@
 (load! "agent-ui/staging")
 (load! "agent-ui/review")
 (load! "agent-ui/source")
+;; Project panels: kept in a project's repository, opened on demand.
+(load! "agent-ui/panels")
 (load! "agent-ui/snapshot")
 (load! "agent-ui/bug")
 

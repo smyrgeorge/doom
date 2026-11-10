@@ -24,6 +24,10 @@
 #   agent-ui define [FILE]       a type of your own: its Emacs Lisp code
 #                                (one agent-ui-define), from FILE or stdin;
 #                                staged for the user to keep or discard
+#   agent-ui check NAME          a project panel's file (.agent-ui/panels/
+#                                NAME.el, or a FILE.el) checked, nothing
+#                                run: its UI, its code compiled, its calls
+#                                that wait: {"warnings", "blocking"}
 #   agent-ui bug [JSON]          a bug in Agent UI itself, filed in its own
 #                                issues (not this project's): {"title",
 #                                "description", "expected", "workaround",
@@ -97,6 +101,9 @@ case "$op" in
   remove|snapshot)
     [ $# -ne 1 ] && fail 2 "$op: agent-ui $op ID"
     id=$1 ;;
+  check)
+    [ $# -ne 1 ] && fail 2 "check: agent-ui check NAME (a panel of this project, or its file)"
+    id=$1 ;;
   types)
     [ $# -gt 1 ] && fail 2 "types: agent-ui types [TYPE]"
     id=${1:-} ;;
@@ -111,7 +118,7 @@ case "$op" in
   clear|list)
     [ $# -gt 0 ] && fail 2 "$op: takes no arguments" ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define, snapshot, bug" ;;
+    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define, snapshot, bug, check" ;;
 esac
 case "$id" in *$'\n'*) fail 2 "an id is one line" ;; esac
 

@@ -59,7 +59,7 @@ recorded, its reply REPLY (a plist)."
   (+test-aum '(:ok t :types [(:name "progress" :doc "A progress bar: VALUE of MAX.\nMore." :props [(:name "value" :kind "number")])])
     (let ((tools (append (plist-get (plist-get (+test-aum-handle "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}") :result) :tools) nil)))
       (should (equal (mapcar (lambda (tool) (plist-get tool :name)) tools)
-                     '("show" "update" "append" "remove" "clear" "list" "types" "render" "snapshot" "batch" "bug" "define")))
+                     '("show" "update" "append" "remove" "clear" "list" "types" "render" "snapshot" "batch" "bug" "check" "define")))
       ;; Each its schema; show's description has the types, from Emacs.
       (dolist (tool tools)
         (should (equal (plist-get (plist-get tool :inputSchema) :type) "object")))
@@ -69,7 +69,7 @@ recorded, its reply REPLY (a plist)."
       ;; Another canvas of the session: an argument of each tool that has one.
       (dolist (tool tools)
         (should (eq (and (plist-get (plist-get (plist-get tool :inputSchema) :properties) :canvas) t)
-                    (not (member (plist-get tool :name) '("types" "define")))))))))
+                    (not (member (plist-get tool :name) '("types" "define" "check")))))))))
 
 (ert-deftest agent-ui-mcp/each-tool-a-command-line ()
   (+test-aum '(:ok t :id "b")
@@ -85,6 +85,8 @@ recorded, its reply REPLY (a plist)."
                      '("append" "t" "{\"rows\":[[\"x\"]]}")))
       (should (equal (call "remove" "{\"id\":\"b\"}") '("remove" "b")))
       (should (equal (call "snapshot" "{\"id\":\"b\"}") '("snapshot" "b")))
+      ;; A project panel's file checked (doom-3q5.1).
+      (should (equal (call "check" "{\"name\":\"service\"}") '("check" "service")))
       (should (equal (call "clear" "{}") '("clear")))
       (should (equal (call "list" "{}") '("list")))
       (should (equal (call "types" "{}") '("types")))

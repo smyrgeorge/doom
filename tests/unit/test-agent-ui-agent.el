@@ -248,7 +248,7 @@ rest in references it points to, each read when the task needs it
     (dolist (type (agent-ui-types))
       (should (string-search (format "`%s`" type) catalog)))
     ;; Every reference linked from what to read when; every link a file.
-    (should (equal references '("asking.md" "bugs.md" "content.md" "custom-types.md" "data.md" "sources.md")))
+    (should (equal references '("asking.md" "bugs.md" "content.md" "custom-types.md" "data.md" "panels.md" "sources.md")))
     (let ((guide (substring core (string-search "## What to read when" core))))
       (dolist (file references)
         (should (string-search (format "(references/%s)" file) guide))))

@@ -67,7 +67,7 @@ nil if it can't be reached."
     (vconcat
      (mapcar
       (lambda (tool)
-        (if (member (plist-get tool :name) '("types" "define"))
+        (if (member (plist-get tool :name) '("types" "define" "check"))
             tool
           (agent-ui-mcp--with-canvas tool)))
       (list
@@ -104,6 +104,10 @@ nil if it can't be reached."
                                         :repro (:type "object" :description "An element showing it, with neutral data")
                                         :new (:type "boolean" :description "File it even if a similar bug is open"))
                            :required ["title" "description"]))
+      (list :name "check" :description "A project panel's file checked, nothing shown, nothing run: PROJECT/.agent-ui/panels/NAME.el (or a file ending .el), its :ui checked as show checks an element, its code compiled (errors refuse it; warnings), its calls that wait (blocking: Emacs frozen while they run) found. See the agent-ui skill's references/panels.md."
+            :inputSchema '(:type "object"
+                           :properties (:name (:type "string" :description "The panel's name (its file's, without .el), or its file"))
+                           :required ["name"]))
       (list :name "define" :description "A type of your own: Emacs Lisp code with one agent-ui-define and its definitions, each named agent-ui-NAME-... (see the agent-ui skill). Checked, compiled, loaded, its example drawn (the reply's preview); the user keeps or discards it."
             :inputSchema '(:type "object" :properties (:code (:type "string")) :required ["code"])))))))
 
@@ -139,6 +143,7 @@ an error reply if it said nothing readable)."
                    ("append" (list "append" (or (arg :id) "") (json (or (arg :patch) (make-hash-table)))))
                    ("remove" (list "remove" (or (arg :id) "")))
                    ("snapshot" (list "snapshot" (or (arg :id) "")))
+                   ("check" (list "check" (or (arg :name) "")))
                    ("clear" (list "clear"))
                    ("list" (list "list"))
                    ("types" (if (arg :type) (list "types" (arg :type)) (list "types")))
