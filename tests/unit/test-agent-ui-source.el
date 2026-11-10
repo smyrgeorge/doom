@@ -253,9 +253,7 @@ still running, its exit and patch not there; once run, done."
 (ert-deftest agent-ui-source/the-skills-sources-right ()
   "Each element with a source the skill shows (a heredoc): right, its source
 checked (not run), its rules matching a line as they should."
-  (let* ((skill (with-temp-buffer
-                  (insert-file-contents (expand-file-name "skills/agent-ui/SKILL.md" +test-root))
-                  (buffer-string)))
+  (let* ((skill (+test-agent-ui-skill))
          (pos 0)
          (elements nil))
     (while (string-match "^agent-ui show <<'EOF'\n\\(\\(?:.\\|\n\\)*?\\)\nEOF$" skill pos)

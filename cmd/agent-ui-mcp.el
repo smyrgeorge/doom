@@ -187,7 +187,7 @@ an error reply if it said nothing readable)."
         id (list :protocolVersion (or (plist-get params :protocolVersion) agent-ui-mcp-version)
                  :capabilities '(:tools (:listChanged :false))
                  :serverInfo '(:name "agent-ui" :version "1.0")
-                 :instructions "Show things to the user in Emacs, on a canvas beside your session: progress bars, checklists, tables, charts, text, Markdown, images, pages, updated in place. Use it for what changes over time or deserves watching, not for what a reply says once. The agent-ui skill (skills/agent-ui/SKILL.md) has the details. When Agent UI itself misbehaves (a wrong drawing, an error, a property it lacks), ask the user, then file it with the bug tool: it goes into Agent UI's own issues, never the project's; then carry on with a workaround.")))
+                 :instructions "Show things to the user in Emacs, on a canvas beside your session: progress bars, checklists, tables, charts, text, Markdown, images, pages, updated in place. Use it for what changes over time or deserves watching, not for what a reply says once. The agent-ui skill has the details: skills/agent-ui/SKILL.md first, then only the reference it points to for your task. When Agent UI itself misbehaves (a wrong drawing, an error, a property it lacks), ask the user, then file it with the bug tool: it goes into Agent UI's own issues, never the project's; then carry on with a workaround.")))
       ("ping" (agent-ui-mcp--answer id (make-hash-table)))
       ("tools/list" (agent-ui-mcp--answer id (list :tools (agent-ui-mcp--tools))))
       ("tools/call"

@@ -180,6 +180,8 @@ killed after."
                                      " update build '{\"value\":5}'")
                              text))
       (should (string-search (concat "read " (abbreviate-file-name agent-ui-skill)) text))
+      ;; Its references read only when needed (doom-9sf).
+      (should (string-search "which of its references to read only when needed" text))
       ;; Issues and plans: on the canvas without being asked, each in its form.
       (should (string-search "Issues and plans go there too, always, without being asked" text))
       (should (string-search "as the issues board" text))
@@ -207,14 +209,19 @@ agent hasn't the tool)."
       (should-not (string-search "AskUserQuestion" (agent-ui-agent-context))))))
 
 (defun +test-aua-skill ()
-  (with-temp-buffer
-    (insert-file-contents agent-ui-skill)
-    (buffer-string)))
+  "The skill's text, all of it: SKILL.md and its references."
+  (+test-agent-ui-skill))
+
+(defconst +test-aua-skill-budget (* 12 1024)
+  "The most SKILL.md may weigh, in bytes: read whole by each agent using
+the canvas, what's needed only at times goes into its references.")
 
 (ert-deftest agent-ui-agent/the-skill ()
-  (let ((skill (+test-aua-skill)))
-    (should (string-prefix-p "---\nname: agent-ui\ndescription: >-\n" skill))
-    ;; Each type has its section; each section a type.
+  (let ((skill (+test-aua-skill))
+        (core (+test-agent-ui-skill "SKILL.md")))
+    (should (string-prefix-p "---\nname: agent-ui\ndescription: >-\n" core))
+    ;; Each type has its section, in SKILL.md or a reference; each section a
+    ;; type, once.
     (should (equal (let ((pos 0) names)
                      (while (string-match "^### `\\([a-z-]+\\)`$" skill pos)
                        (push (intern (match-string 1 skill)) names)
@@ -222,10 +229,42 @@ agent hasn't the tool)."
                      (sort names (lambda (a b) (string< (symbol-name a) (symbol-name b)))))
                    (agent-ui-types)))
     ;; Issues and plans: shown without being asked (doom-nwj.20).
-    (should (string-search "**Issues and plans, always, without being asked:**" skill))
-    ;; Each operation it names, the command's.
+    (should (string-search "**Issues and plans, always, without being asked:**" core))
+    ;; Each operation it names, the command's, in the core.
     (dolist (op agent-ui-operations)
-      (should (string-match-p (concat "^agent-ui " op "\\b") skill)))))
+      (should (string-match-p (concat "^agent-ui " op "\\b") core)))))
+
+(ert-deftest agent-ui-agent/the-skill-loaded-as-needed ()
+  "SKILL.md, read whole, kept small: every type named in its catalog, the
+rest in references it points to, each read when the task needs it
+(doom-9sf)."
+  (let* ((dir (file-name-directory agent-ui-skill))
+         (core (+test-agent-ui-skill "SKILL.md"))
+         (catalog (progn (string-match "^## The types\n\\(\\(?:.\\|\n\\)*?\\)\n### " core)
+                         (match-string 1 core)))
+         (references (directory-files (expand-file-name "references/" dir) nil "\\.md\\'")))
+    (should (< (file-attribute-size (file-attributes agent-ui-skill)) +test-aua-skill-budget))
+    ;; Every type in the catalog.
+    (dolist (type (agent-ui-types))
+      (should (string-search (format "`%s`" type) catalog)))
+    ;; Every reference linked from what to read when; every link a file.
+    (should (equal references '("asking.md" "bugs.md" "content.md" "custom-types.md" "data.md" "sources.md")))
+    (let ((guide (substring core (string-search "## What to read when" core))))
+      (dolist (file references)
+        (should (string-search (format "(references/%s)" file) guide))))
+    (let ((pos 0))
+      (while (string-match "](references/\\([^)#]+\\))" core pos)
+        (should (file-exists-p (expand-file-name (concat "references/" (match-string 1 core)) dir)))
+        (setq pos (match-end 0))))
+    ;; Each reference says where it belongs, and links to files there.
+    (dolist (file references)
+      (let ((text (+test-agent-ui-skill (concat "references/" file)))
+            (pos 0))
+        (should (string-match-p "\\`# " text))
+        (should (string-search "read [SKILL.md](../SKILL.md) first" text))
+        (while (string-match "](\\([a-z-]+\\.md\\))" text pos)
+          (should (file-exists-p (expand-file-name (concat "references/" (match-string 1 text)) dir)))
+          (setq pos (match-end 0)))))))
 
 (ert-deftest agent-ui-agent/the-skills-examples-right ()
   "Each `agent-ui show/update/append ... '{...}'' in the skill: its JSON is

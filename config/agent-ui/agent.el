@@ -172,8 +172,10 @@ ask): it takes the user's focus and closes once answered.%s From your shell: %s 
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear; --canvas NAME on any of them uses \
 another canvas of this session, in a pane of its own. It replies with JSON. Before using it \
-the first time, read %s (its types, properties and examples; when none \
-fits, how to make one). Remove what stops helping, and never leave something \
+the first time, read %s: the core (when to use it, the command, every type \
+named, the everyday ones), and which of its references to read only when \
+needed (asking the user, charts, layouts, following a command, a type of \
+your own). Remove what stops helping, and never leave something \
 shown running once it stopped. When Agent UI itself misbehaves (a wrong drawing, \
 an error, a property it lacks), ask the user, then file it: %s bug \
 '{\"title\":...,\"description\":...,\"element\":\"ID\",\"repro\":{an element \

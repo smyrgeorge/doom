@@ -26,6 +26,8 @@ The agent then uses the skill on its own when you ask why Emacs is slow or hand 
 
 The [agent-ui skill](../skills/agent-ui/SKILL.md) teaches an agent running in Emacs (agent-shell) to show things on its
 session's canvas: progress bars, checklists, tables, text, Markdown, updated as it works ([Agent UI](agent-ui.md)).
+As `emacs-profiling`, it has reference files the agent reads only when it needs them: its `SKILL.md`, under a third
+of it, is what every session reads.
 Claude Code in agent-shell is told where it is, and reads it from there: no need to install it. Install it as above
 (`agent-ui` for `emacs-profiling`) for other agents, or to have it in Claude Code's list of skills.
 

@@ -422,10 +422,14 @@ a small question, with agent-shell's forms on, as AskUserQuestion in the convers
 an example, to read the skill before using it the first time, and,
 when Agent UI itself misbehaves, to ask you and file it with `agent-ui bug`
 ([Bugs in Agent UI](#bugs-in-agent-ui)). The MCP server's instructions, also in its system prompt, say the same of its
-`bug` tool. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), has each
-type with examples, how to follow a long command, and cleaning up; it's read from there, nothing to install (as other
-skills, it can be installed too: [AI agents](ai-agents.md)). A test runs each of its examples, so they stay right as
-the types change.
+`bug` tool. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), is read in parts, as the agent needs
+them: SKILL.md, read first, says when to use the canvas, the command, every type in a line and the everyday ones
+(`progress`, `steps`, `table`, `issues`) with examples; its `references/` the rest, each read only when a task needs
+it: asking you (`asking.md`), figures (`data.md`), content and layout (`content.md`), following a command
+(`sources.md`), a type of its own (`custom-types.md`), a bug in Agent UI (`bugs.md`). A type's every property comes
+from `agent-ui types TYPE`. It's read from there, nothing to install (as other skills, it can be installed too:
+[AI agents](ai-agents.md)). Tests run each of its examples, so they stay right as the types change, and keep
+SKILL.md under 12 KB.
 
 ## Later
 
@@ -456,7 +460,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |
-| `skills/agent-ui/SKILL.md` | The skill: the types with examples, for the agent |
+| `skills/agent-ui/SKILL.md`, `references/` | The skill, for the agent: the core, read first; the rest read when needed |
 
 None of `config/agent-ui/` uses Doom (`config/agent-ui.el` does: its settings, keys, the Beads issue for a kept type),
 so it can become a package of its own.

@@ -236,9 +236,7 @@ after (the tests' forgotten), no window shown, a canvas of its own."
 ;; The skill's example of a type: staged as the agent would.
 (ert-deftest agent-ui-staging/the-skills-type-right ()
   (+test-aus
-    (let* ((skill (with-temp-buffer
-                    (insert-file-contents (expand-file-name "skills/agent-ui/SKILL.md" +test-root))
-                    (buffer-string)))
+    (let* ((skill (+test-agent-ui-skill "references/custom-types.md"))
            (code (and (string-match "```elisp\n\\(\\(?:.\\|\n\\)*?\\)```" skill)
                       (match-string 1 skill)))
            (reply (agent-ui-stage code)))
