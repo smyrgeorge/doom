@@ -1401,6 +1401,69 @@ with their first cell; in a still picture: marks, no buttons."
   (should (string-match-p "one option only"
                           (+test-aue-error '(:type "table" :columns ("A") :rows (("a") ("b")) :select (:question "?") :selected ("a" "b"))))))
 
+;; doom-ord.5
+(ert-deftest agent-ui-elements/files-select ()
+  "Files asking: a mark before each, picking it (RET on its name still opens
+it); a folder's mark picks its files ([-]: some); Send names their paths in
+order."
+  (+test-aue-canvas
+    (let* ((sent nil) (opened nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent)))
+           (agent-ui-open-file-function (lambda (f) (push f opened))))
+      (agent-ui-show '(:id "f" :type "files" :tree t :dir "/work/"
+                       :files ((:path "src/parser.c" :status "changed") (:path "src/lexer.h" :status "added")
+                               (:path "tests/t.c" :status "failing"))
+                       :select (:question "Which should I change?" :multiple t)))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (should (string-search "Which should I change?\n[ ] ▾ src/\n[ ]     M parser.c" (buffer-string)))
+        ;; Its name opens it, its mark picks it.
+        (+test-aue-press "parser.c")
+        (should (equal opened '("/work/src/parser.c")))
+        (should-not (plist-get (agent-ui-get "f") :selected))
+        (goto-char (point-min))
+        (search-forward "parser.c")
+        (beginning-of-line)
+        (agent-ui-button-press)
+        (agent-ui--flush)
+        (should (equal (plist-get (agent-ui-get "f") :selected) '("src/parser.c")))
+        (should (string-search "[-] ▾ src/" (buffer-string)))
+        ;; The folder's mark: all its files, then none.
+        (goto-char (point-min)) (search-forward "▾ src/") (beginning-of-line) (agent-ui-button-press)
+        (should (equal (plist-get (agent-ui-get "f") :selected) '("src/parser.c" "src/lexer.h")))
+        (agent-ui--flush)
+        (should (string-search "[x] ▾ src/" (buffer-string)))
+        (goto-char (point-min)) (search-forward "▾ tests/") (beginning-of-line) (agent-ui-button-press)
+        (+test-aue-press "⏵ Answer (3 chosen)")
+        (should (equal sent '(("Answer to f (Which should I change?): src/parser.c, src/lexer.h, tests/t.c" nil))))
+        (agent-ui--flush)
+        (should (string-search "✓ Answered: src/parser.c, src/lexer.h, tests/t.c" (buffer-string))))))
+  (should (string-match-p "selected \"nope.c\" isn't an option"
+                          (+test-aue-error '(:type "files" :files ("a.c") :select (:question "?") :selected ("nope.c")))))
+  (should (string-match-p "select's question is required"
+                          (+test-aue-error '(:type "files" :files ("a.c") :select (:note t))))))
+
+(ert-deftest agent-ui-elements/issues-select ()
+  "The board asking: a mark before each card, picking its issue (RET on it
+still opens it); Send names their ids."
+  (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
+    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
+    (cl-letf (((symbol-function 'agent-ui-issues-refresh) #'ignore))
+      (+test-aue-canvas
+        (let* ((sent nil)
+               (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+          (agent-ui-show '(:id "board" :type "issues" :dir "/proj/" :select (:question "Which first?" :submit t)))
+          (with-current-buffer canvas
+            (agent-ui--flush)
+            (should (string-search "Which first?" (buffer-string)))
+            (should (string-search "( ) p-4 Urgent re" (buffer-string)))
+            (goto-char (point-min)) (search-forward "p-4") (goto-char (- (match-beginning 0) 4)) (agent-ui-button-press)
+            (should (equal (plist-get (agent-ui-get "board") :selected) '("p-4")))
+            (+test-aue-press "⏵ Send (1 chosen)")
+            (should (equal sent '(("Answer to board (Which first?): p-4" t))))))))
+    (should (string-match-p "select is {"
+                            (+test-aue-error '(:type "issues" :dir "/proj/" :select ("x")))))))
+
 (ert-deftest agent-ui-elements/files-flat-and-tree ()
   (let ((files '((:path "src/parser.c" :status "changed" :added 12 :removed 3)
                  (:path "src/lexer.h" :status "added" :added 40)

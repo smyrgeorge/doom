@@ -131,6 +131,75 @@ session's prompt, sent at once if SUBMIT; then the element answered (locked)."
           (propertize (agent-ui-wrap (concat "Answered: " (plist-get props :answered)) (- width 2))
                       'face 'agent-ui-muted)))
 
+;; ====== SELECT: A LIST ELEMENT ASKING ======
+;; A list element (a table, files, issues) asks with select: {"question",
+;; "multiple", "note", "submit"}: marks before its items, the question above,
+;; the note and Send / All / None under it (`agent-ui-ask-around').
+
+(defun agent-ui-ask-select-check (what select)
+  "SELECT (an element's select) checked: {question, multiple, note, submit},
+its question text; else an error naming WHAT."
+  (unless (agent-ui--plist-p select)
+    (agent-ui--fail "%s: select is {\"question\": ..., \"multiple\", \"note\", \"submit\"}, not %s"
+                    what (agent-ui--show-value select)))
+  (cl-loop for (k _) on select by #'cddr
+           unless (memq k '(:question :multiple :note :submit))
+           do (agent-ui--fail "%s: select has %s: it has question, multiple, note, submit"
+                              what (agent-ui--show-value (substring (symbol-name k) 1))))
+  (unless (stringp (plist-get select :question))
+    (agent-ui--fail "%s: select's question is required (text)" what)))
+
+(defun agent-ui-ask-multiple-p (select)
+  "Whether SELECT lets several be picked."
+  (eq (plist-get select :multiple) t))
+
+(defun agent-ui-ask-around (props ctx body all)
+  "BODY (an element drawn, its items marked) asking as PROPS' select says:
+its question above; under it the note, Send (N chosen) and, for several,
+All / None; once answered, the answer, locked; in a still picture, nothing
+under it. ALL: every item's answer, in order (what's picked answered so)."
+  (let* ((select (plist-get props :select))
+         (width (plist-get ctx :width))
+         (all (delete-dups (copy-sequence all)))
+         (answers (seq-filter (lambda (answer) (agent-ui-ask-picked-p props answer)) all))
+         (submit (eq (plist-get select :submit) t)))
+    (concat (propertize (agent-ui-wrap (plist-get select :question) width) 'face 'bold)
+            "\n" body
+            (cond
+             ((agent-ui-ask-answered-p props) (concat "\n" (agent-ui-ask-answered-line props width)))
+             ((plist-get ctx :still) "")
+             (t (concat
+                 (if (eq (plist-get select :note) t) (concat "\n " (agent-ui-ask-note-button props ctx)) "")
+                 "\n "
+                 (agent-ui-ask-answer-button props ctx
+                                             :what (plist-get ctx :id) :question (plist-get select :question)
+                                             :submit submit :answers answers
+                                             :label (format "⏵ %s (%d chosen)" (if submit "Send" "Answer")
+                                                            (length answers)))
+                 (if (agent-ui-ask-multiple-p select) (concat "   " (agent-ui-ask-all-none ctx all)) "")))))))
+
+(defun agent-ui-ask-group-mark (props items multiple ctx &optional plain)
+  "The mark of a group of ITEMS (a folder's files): [x] all picked, [-] some,
+[ ] none; a button picking them all, or none if all were (several only;
+PLAIN: not a button, answered or in a still picture)."
+  (let* ((picked (seq-filter (lambda (item) (agent-ui-ask-picked-p props item)) items))
+         (all (and items (= (length picked) (length items))))
+         (mark (propertize (cond (all "[x]") (picked "[-]") (t "[ ]"))
+                           'face (if picked 'agent-ui-accent 'agent-ui-muted))))
+    (cond
+     ((not multiple) "   ")
+     (plain mark)
+     (t
+      (agent-ui-button mark
+                       (lambda ()
+                         (agent-ui-ask-change
+                          ctx (list :selected (if all
+                                                  (seq-remove (lambda (s) (member s items)) (plist-get props :selected))
+                                                (append (plist-get props :selected)
+                                                        (seq-remove (lambda (item) (agent-ui-ask-picked-p props item))
+                                                                    items))))))
+                       "RET: (un)check them all")))))
+
 ;; ====== REVIEW COMMENTS ======
 ;; On an element showing code (code, diff): the user writes comments on its
 ;; lines (c on a line, or on a region's lines; c on a comment edits it, d

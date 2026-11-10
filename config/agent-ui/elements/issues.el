@@ -145,9 +145,12 @@ parent-child: any id) reaching it; BY-ID the issues by id."
 (defconst agent-ui-issues--lead "\\`[^:]\\{1,30\\}: "
   "A title's lead (\"Agent UI element: \"), left out when they all have one.")
 
-(defun agent-ui-issues--card (issue width dir &optional short)
+(defun agent-ui-issues--card (issue width dir &optional short pick)
   "ISSUE as a line WIDTH wide: its id, its title (without its lead if
-SHORT); a button opening it."
+SHORT); a button opening it. PICK: its pick mark's maker, before it (select)."
+  (if pick
+      (concat (funcall pick (plist-get issue :id))
+              (agent-ui-issues--card issue (max 1 (- width 4)) dir short))
   (let* ((priority (plist-get issue :priority))
          (id (plist-get issue :id))
          (title (plist-get issue :title))
@@ -158,7 +161,7 @@ SHORT); a button opening it."
                 width)))
     (agent-ui-button (agent-ui-pad line width)
                      (lambda () (funcall agent-ui-open-issue-function id dir))
-                     (format "RET: open %s" id))))
+                     (format "RET: open %s" id)))))
 
 (defun agent-ui-issues--draw (props ctx)
   (let* ((dir (file-name-as-directory (plist-get props :dir)))
@@ -176,23 +179,40 @@ SHORT); a button opening it."
              ;; left out, the room kept for what tells them apart.
              (all (apply #'append (mapcar #'cdr columns)))
              (short (and all (cl-every (lambda (i) (string-match-p agent-ui-issues--lead (plist-get i :title))) all)))
+             ;; Asking (select): a mark before each card, picking its issue.
+             (select (plist-get props :select))
+             (pick (when select
+                     (let ((multiple (agent-ui-ask-multiple-p select))
+                           (live (and (not (plist-get props :answered)) (not (plist-get ctx :still)))))
+                       (lambda (id)
+                         (let ((mark (agent-ui-ask-mark (agent-ui-ask-picked-p props id) multiple)))
+                           (concat (if live (agent-ui-ask-pick-button mark props ctx id multiple) mark) " "))))))
              (drawn (mapcar (lambda (column)
                               (let ((issues (cdr column)))
                                 (append (list (propertize (agent-ui-pad (format "%s (%d)" (car column) (length issues)) col-width)
                                                           'face 'bold))
-                                        (mapcar (lambda (i) (agent-ui-issues--card i col-width dir short)) (seq-take issues limit))
+                                        (mapcar (lambda (i) (agent-ui-issues--card i col-width dir short pick))
+                                                (seq-take issues limit))
                                         (when (> (length issues) limit)
                                           (list (propertize (agent-ui-pad (format "… %d more" (- (length issues) limit)) col-width)
                                                             'face 'agent-ui-muted))))))
                             columns)))
-        (if (not wide)
-            (mapconcat (lambda (lines) (mapconcat #'string-trim-right lines "\n")) drawn "\n\n")
-          ;; Side by side: line by line, each column padded to its width.
-          (let ((height (apply #'max (mapcar #'length drawn))))
-            (mapconcat (lambda (row)
-                         (string-trim-right
-                          (mapconcat (lambda (lines) (or (nth row lines) (make-string col-width ?\s))) drawn "  ")))
-                       (number-sequence 0 (1- height)) "\n"))))))))
+        (let ((board
+               (if (not wide)
+                   (mapconcat (lambda (lines) (mapconcat #'string-trim-right lines "\n")) drawn "\n\n")
+                 ;; Side by side: line by line, each column padded to its width.
+                 (let ((height (apply #'max (mapcar #'length drawn))))
+                   (mapconcat (lambda (row)
+                                (string-trim-right
+                                 (mapconcat (lambda (lines) (or (nth row lines) (make-string col-width ?\s))) drawn "  ")))
+                              (number-sequence 0 (1- height)) "\n")))))
+          (if select
+              ;; The ids shown, in the board's order: what All picks.
+              (agent-ui-ask-around props ctx board
+                                   (cl-loop for column in columns
+                                            append (mapcar (lambda (i) (plist-get i :id))
+                                                           (seq-take (cdr column) limit))))
+            board)))))))
 
 (agent-ui-define issues
   "The project's Beads issues as a board: Ready (open, nothing blocking),
@@ -203,11 +223,21 @@ in the background and refreshed after bd commands; RET opens an issue."
   :props ((dir file "The project (default: your directory)" :default :here)
           (parent string "An epic's id: its issues only")
           (label string "Only issues with this label")
-          (limit integer "The most issues a column shows" :default 8))
+          (limit integer "The most issues a column shows" :default 8)
+          (select any "Ask the user to pick issues: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their ids")
+          (selected list "The issues picked so far (their ids): a default, or the user's")
+          (note-text string "The user's note")
+          (answered string "The answer given (then it can't be changed)"))
   :example (:title "Agent UI's issues" :label "agent-ui" :limit 5)
   ;; Below 0: \"… 4 more\" for a column of 3.
   :check (lambda (props)
            (when (< (plist-get props :limit) 0)
              (agent-ui--fail "issues: limit must be 0 or more, not %d" (plist-get props :limit)))
+           ;; Asking: its select; its issues come later (fetched): one only
+           ;; checked, not which.
+           (when-let* ((select (plist-get props :select)))
+             (agent-ui-ask-select-check "issues" select)
+             (agent-ui-ask-check "issues" (plist-get props :selected) (plist-get props :selected)
+                                 (agent-ui-ask-multiple-p select)))
            props)
   :text #'agent-ui-issues--draw)

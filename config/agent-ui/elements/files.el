@@ -59,9 +59,16 @@ src/a.c; a tree grouped them in folders of their own)."
      (t (bad (format "is %s: a path, or {\"path\": ..., \"status\": ...}" (agent-ui--show-value entry)))))))
 
 (defun agent-ui-files--check (props)
-  (plist-put props :files (cl-loop for f in (plist-get props :files)
-                                   for i from 1
-                                   collect (agent-ui-files--file f i))))
+  (let ((props (plist-put props :files (cl-loop for f in (plist-get props :files)
+                                                for i from 1
+                                                collect (agent-ui-files--file f i)))))
+    ;; Asking: its select; what's picked, paths of its files.
+    (when-let* ((select (plist-get props :select)))
+      (agent-ui-ask-select-check "files" select)
+      (agent-ui-ask-check "files" (plist-get props :selected)
+                          (mapcar (lambda (f) (plist-get f :path)) (plist-get props :files))
+                          (agent-ui-ask-multiple-p select)))
+    props))
 
 (defun agent-ui-files--counts (file)
   "FILE's counts, coloured, then its note: (\"+12\" \"−3\" \"2 errors\")."
@@ -94,21 +101,34 @@ one misreads: \"+12…\" for +1200), its note cut (4 columns at least)."
       (goto-char (point-min))
       (forward-line (1- line)))))
 
-(defun agent-ui-files--line (props file name items indent name-width room)
+(defun agent-ui-files--pick (props ctx)
+  "When PROPS asks (select): a function of a file giving the mark before its
+line, a button picking it (while it can be); else nil."
+  (when-let* ((select (plist-get props :select)))
+    (let ((multiple (agent-ui-ask-multiple-p select))
+          (live (and (not (plist-get props :answered)) (not (plist-get ctx :still)))))
+      (lambda (file)
+        (let* ((path (plist-get file :path))
+               (mark (agent-ui-ask-mark (agent-ui-ask-picked-p props path) multiple)))
+          (concat (if live (agent-ui-ask-pick-button mark props ctx path multiple) mark) " "))))))
+
+(defun agent-ui-files--line (props file name items indent name-width room &optional pick)
   "FILE's line: INDENT, its mark, NAME in NAME-WIDTH columns, its counts
 ITEMS, those that fit; ROOM the columns after the mark (the name's all, if
-no count fits)."
+no count fits). PICK: its pick mark's maker, before it (select)."
   (pcase-let* ((`(,_ ,mark ,face) (assq (plist-get file :status) agent-ui-files--statuses))
                (counts (agent-ui-files--fit file items (- room name-width 2))))
-    (agent-ui-button
+    (concat
+     (if pick (funcall pick file) "")
+     (agent-ui-button
      (concat indent (propertize mark 'face face) " "
              (if (string-empty-p counts)
                  (agent-ui-truncate-start name room)
                (concat (agent-ui-pad (agent-ui-truncate-start name name-width) name-width) "  " counts)))
      (agent-ui-files--open (plist-get props :dir) file)
-     (format "RET: open %s" (plist-get file :path)))))
+     (format "RET: open %s" (plist-get file :path))))))
 
-(defun agent-ui-files--lines (props files names indent width)
+(defun agent-ui-files--lines (props files names indent width &optional pick)
   "FILES' lines, NAMES their names, after INDENT, WIDTH columns at most: the
 names beside counts in a column as wide as the longest, narrowed while the
 counts don't fit (8 columns at least; it was the width less 20, or 24:
@@ -119,7 +139,7 @@ nothing under that, and the counts never cut)."
                                            when c collect (string-width n))))
          (widest (apply #'max 0 (mapcar (lambda (c) (string-width (string-join c " "))) counts)))
          (w (min longest (max (min longest 8) (- room 2 widest)))))
-    (cl-mapcar (lambda (file name count) (agent-ui-files--line props file name count indent w room))
+    (cl-mapcar (lambda (file name count) (agent-ui-files--line props file name count indent w room pick))
                files names counts)))
 
 (defun agent-ui-files--toggle (ctx folder folded)
@@ -134,10 +154,14 @@ nothing under that, and the counts never cut)."
 (defun agent-ui-files--draw (props ctx)
   (let* ((files (seq-take (plist-get props :files) agent-ui-max-rows))
          (more (- (length (plist-get props :files)) (length files)))
-         (width (plist-get ctx :width))
+         ;; Asking (select): a mark before each line, its 4 columns.
+         (pick (agent-ui-files--pick props ctx))
+         (multiple (agent-ui-ask-multiple-p (plist-get props :select)))
+         (live (and (not (plist-get props :answered)) (not (plist-get ctx :still))))
+         (width (if pick (max 10 (- (plist-get ctx :width) 4)) (plist-get ctx :width)))
          (lines
           (if (not (plist-get props :tree))
-              (agent-ui-files--lines props files (mapcar (lambda (f) (plist-get f :path)) files) "" width)
+              (agent-ui-files--lines props files (mapcar (lambda (f) (plist-get f :path)) files) "" width pick)
             ;; A tree: files grouped by folder, in their order of first coming.
             ;; A path ending in / is a folder: its mark and counts on its line
             ;; (it was a file without a name, a blank row).
@@ -157,7 +181,7 @@ nothing under that, and the counts never cut)."
                                (closed (member folder folded))
                                (names (mapcar (lambda (f) (file-name-nondirectory (plist-get f :path))) (cdr entry))))
                           (if (equal folder "")
-                              (agent-ui-files--lines props (cdr entry) names "" width)
+                              (agent-ui-files--lines props (cdr entry) names "" width pick)
                             (let* ((count (if closed (format "  %d files" (length names)) ""))
                                    (self (cdr (assoc folder own)))
                                    (status (and self (assq (plist-get self :status) agent-ui-files--statuses)))
@@ -166,7 +190,15 @@ nothing under that, and the counts never cut)."
                                            ""))
                                    (counts (if self (string-join (agent-ui-files--counts self) " ") ""))
                                    (counts (if (string-empty-p counts) "" (concat "  " counts))))
-                              (cons (agent-ui-truncate
+                              (cons (concat
+                                     ;; Its mark picks its files.
+                                     (if pick
+                                         (concat (agent-ui-ask-group-mark
+                                                  props (mapcar (lambda (f) (plist-get f :path)) (cdr entry))
+                                                  multiple ctx (not live))
+                                                 " ")
+                                       "")
+                                     (agent-ui-truncate
                                      (agent-ui-button
                                       (concat (propertize (if closed "▸ " "▾ ") 'face 'agent-ui-muted)
                                               mark
@@ -180,17 +212,21 @@ nothing under that, and the counts never cut)."
                                               (propertize count 'face 'agent-ui-muted))
                                       (agent-ui-files--toggle ctx folder folded)
                                       "RET: fold or unfold it")
-                                     width)
+                                     width))
                                     (unless closed
-                                      (agent-ui-files--lines props (cdr entry) names "    " width)))))))
+                                      (agent-ui-files--lines props (cdr entry) names "    " width pick)))))))
                       (nreverse folders)))))))
-    (cond
-     ((null files) (propertize "no files" 'face 'agent-ui-muted))
-     (t (concat (string-join lines "\n")
-                (if (> more 0)
-                    (concat "\n" (agent-ui-truncate (propertize (format "… %d files more" more) 'face 'agent-ui-muted)
-                                                    width))
-                  ""))))))
+    (let ((body (cond
+                 ((null files) (propertize "no files" 'face 'agent-ui-muted))
+                 (t (concat (string-join lines "\n")
+                            (if (> more 0)
+                                (concat "\n" (agent-ui-truncate (propertize (format "… %d files more" more)
+                                                                            'face 'agent-ui-muted)
+                                                                width))
+                              ""))))))
+      (if (plist-get props :select)
+          (agent-ui-ask-around props ctx body (mapcar (lambda (f) (plist-get f :path)) files))
+        body))))
 
 (agent-ui-define files
   "Files, each with its state: a path, or {\"path\", \"status\", \"added\",
@@ -201,7 +237,11 @@ opens it, at its line. For what you touched, or where the errors are."
   :props ((files list "The files: paths, or {\"path\": ..., \"status\": ..., ...}")
           (tree boolean "Group them by folder, a tree" :default :false)
           (folded list "The folders folded (the user's)")
-          (dir file "Where they are (default: your directory)" :default :here))
+          (dir file "Where they are (default: your directory)" :default :here)
+          (select any "Ask the user to pick files: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their paths")
+          (selected list "The files picked so far (their paths): a default, or the user's")
+          (note-text string "The user's note")
+          (answered string "The answer given (then it can't be changed)"))
   :example (:title "What I changed" :tree t
             :files ((:path "src/parser.c" :status "changed" :added 12 :removed 3)
                     (:path "src/lexer.h" :status "added" :added 40)

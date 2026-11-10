@@ -203,6 +203,9 @@ user folds a folder with `RET`). `RET` on a file opens it, at its `line`. For wh
 agent-ui show '{"id":"touched","type":"files","title":"What I changed","tree":true,"files":[{"path":"src/parser.c","status":"changed","added":12,"removed":3},{"path":"src/lexer.h","status":"added","added":40},{"path":"tests/parser_test.c","status":"failing","errors":2,"line":88}]}'
 ```
 
+`select` (as a table's: `question`, `multiple`, `note`, `submit`) asks the user to pick files: a mark before each (a
+folder's picks its files), the answer their paths: `"select":{"question":"Which should I change?","multiple":true}`.
+
 ### `stats`
 
 A row of figures, each with its change: the summary at the top of a canvas. A figure is `{"label", "value", "unit",
@@ -273,6 +276,9 @@ commands; `RET` opens an issue. To keep the work's state in view while you go th
 ```sh
 agent-ui show '{"id":"board","type":"issues","title":"The epic","parent":"doom-erp","limit":6}'
 ```
+
+`select` (as a table's) asks the user to pick issues on the board, a mark before each card, the answer their ids:
+"which should I work on?" in one click.
 
 ### `heatmap`
 

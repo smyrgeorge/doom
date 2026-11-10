@@ -78,15 +78,7 @@ if there's no such column."
     ;; Asking the user to pick rows (doom-ord): its settings; what's picked,
     ;; each a row's key cell (or its first).
     (when-let* ((select (plist-get props :select)))
-      (unless (agent-ui--plist-p select)
-        (agent-ui--fail "table: select is {\"question\": ..., \"multiple\", \"note\", \"submit\"}, not %s"
-                        (agent-ui--show-value select)))
-      (cl-loop for (k _) on select by #'cddr
-               unless (memq k '(:question :multiple :note :submit))
-               do (agent-ui--fail "table: select has %s: it has question, multiple, note, submit"
-                                  (agent-ui--show-value (substring (symbol-name k) 1))))
-      (unless (stringp (plist-get select :question))
-        (agent-ui--fail "table: select's question is required (text)"))
+      (agent-ui-ask-select-check "table" select)
       (agent-ui-ask-check "table" (plist-get props :selected) (agent-ui-table--answers props)
                           (eq (plist-get select :multiple) t)))
     props))
@@ -419,33 +411,7 @@ the whole table, its header, \"no rows yet\" and what's left out too."
     (let ((table (agent-ui-table--build layout inner (plist-get layout :rows) (plist-get layout :measured) t)))
       (if (not select)
           table
-        (agent-ui-table--asking props ctx table)))))
-
-(defun agent-ui-table--asking (props ctx table)
-  "TABLE (drawn, its rows marked) asking the user (PROPS' select): its
-question above; under it the note and the Send, All and None buttons; once
-answered, the answer, locked (in a still picture, no buttons)."
-  (let* ((select (plist-get props :select))
-         (width (plist-get ctx :width))
-         (multiple (eq (plist-get select :multiple) t))
-         ;; The answers picked, in the table's order.
-         (answers (seq-filter (lambda (answer) (agent-ui-ask-picked-p props answer))
-                              (delete-dups (agent-ui-table--answers props))))
-         (submit (eq (plist-get select :submit) t)))
-    (concat (propertize (agent-ui-wrap (plist-get select :question) width) 'face 'bold)
-            "\n" table
-            (cond
-             ((agent-ui-ask-answered-p props) (concat "\n" (agent-ui-ask-answered-line props width)))
-             ((plist-get ctx :still) "")
-             (t (concat
-                 (if (eq (plist-get select :note) t) (concat "\n " (agent-ui-ask-note-button props ctx)) "")
-                 "\n "
-                 (agent-ui-ask-answer-button props ctx
-                                             :what (plist-get ctx :id) :question (plist-get select :question)
-                                             :submit submit :answers answers
-                                             :label (format "⏵ %s (%d chosen)" (if submit "Send" "Answer")
-                                                            (length answers)))
-                 (if multiple (concat "   " (agent-ui-ask-all-none ctx (delete-dups (agent-ui-table--answers props)))) "")))))))
+        (agent-ui-ask-around props ctx table (agent-ui-table--answers props))))))
 
 (defun agent-ui-table--extend (old new ctx)
   "OLD's drawing edited into NEW's, NEW being OLD with rows appended (else
