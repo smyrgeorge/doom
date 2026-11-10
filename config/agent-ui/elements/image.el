@@ -156,8 +156,9 @@ width at most."
         (concat (agent-ui-button (propertize " " 'display image)
                                  (lambda () (funcall agent-ui-open-file-function file))
                                  (format "%s: RET opens it" (or (plist-get props :url) (abbreviate-file-name file))))
+                ;; Its alt under it, wrapped to the width (it ran past it).
                 (if-let* ((alt (plist-get props :alt)))
-                    (concat "\n" (propertize alt 'face 'agent-ui-muted))
+                    (concat "\n" (propertize (agent-ui-wrap alt (plist-get ctx :width)) 'face 'agent-ui-muted))
                   "")))))))
 
 (agent-ui-define image

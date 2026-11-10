@@ -2117,6 +2117,21 @@ middle (cut from the right, the reason went first: \"(not fou…\")."
                          "▣ /tmp/aui-verify/some/deeper/folder/missing.png  the login page a…  (not found)")))
       (delete-directory agent-ui-image-cache-directory t))))
 
+;; doom-nwj.35
+(ert-deftest agent-ui-elements/image-alt-fits-in-the-gui ()
+  "The alt under a shown image is wrapped to the width (it was one line of
+78 columns at 30)."
+  (let* ((alt "After the fix: the login page shows the error under the password field, in red")
+         (text (agent-ui-render (list :type "image" :file +test-aue-image :alt alt)
+                                (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16)))
+         (lines (cdr (split-string (substring-no-properties text) "\n"))))
+    (should (eq (car (get-text-property 0 'display text)) 'image))
+    (should (> (length lines) 1))
+    (dolist (line lines) (should (<= (string-width line) 30)))
+    ;; All its words, in their order.
+    (should (equal (string-join lines " ") alt))
+    (should (eq (get-text-property (1+ (string-search "\n" text)) 'face text) 'agent-ui-muted))))
+
 (ert-deftest agent-ui-elements/image-from-a-url ()
   (let* ((agent-ui-image-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "images-") t)))
          (agent-ui-image--fetches (make-hash-table :test #'equal))
