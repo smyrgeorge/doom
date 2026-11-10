@@ -1024,6 +1024,30 @@ never cut."
                            "▾ lib/\n"
                            "    A x.c  +3")))))
 
+;; doom-nwj.90
+(ert-deftest agent-ui-elements/files-paths-written-differently ()
+  "./src/a.c, src//b.c and src/c.c are in one src/ folder (they made three),
+and a path ending in / is that folder, its mark and counts on its line (it
+was a file without a name: a blank row)."
+  (let ((files '("./src/a.c" "src//b.c" (:path "src/c.c" :status "changed" :added 2)
+                 (:path "build/" :status "deleted" :removed 40) "./README.md" "src/./d.c")))
+    (should (equal (+test-aue-draw (list :type "files" :files files :tree t))
+                   (concat "▾ src/\n"
+                           "      a.c\n"
+                           "      b.c\n"
+                           "    M c.c  +2\n"
+                           "      d.c\n"
+                           "▾ D build/  −40\n"
+                           "  README.md")))
+    ;; Flat: written one way too.
+    (should (equal (+test-aue-draw (list :type "files" :files '("./src/a.c" "src//b.c")))
+                   "  src/a.c\n  src/b.c"))
+    (should (equal (plist-get (agent-ui-check "files" '(:files ("./a//b.c" "../x.c" "./"))) :files)
+                   '((:path "a/b.c" :status none) (:path "../x.c" :status none) (:path "./" :status none))))
+    ;; No blank row: each line has a name.
+    (dolist (line (split-string (+test-aue-draw (list :type "files" :files files :tree t)) "\n"))
+      (should (string-match-p "[[:alnum:]]" line)))))
+
 (ert-deftest agent-ui-elements/files-open-and-fold ()
   (+test-aue-canvas
     (let* ((opened nil)

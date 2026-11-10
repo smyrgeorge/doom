@@ -23,12 +23,21 @@
     (none " " agent-ui-muted))
   "Each status: its mark and face.")
 
+(defun agent-ui-files--normal (path)
+  "PATH written one way: without ./ parts nor doubled slashes (./src//a.c is
+src/a.c; a tree grouped them in folders of their own)."
+  (let ((p (replace-regexp-in-string "/\\{2,\\}" "/" path)))
+    (while (string-match "\\(?:\\`\\|/\\)\\(\\./\\)" p)
+      (setq p (replace-match "" t t p 1)))
+    (if (string-empty-p p) path p)))
+
 (defun agent-ui-files--file (entry index)
   "ENTRY (a path, or an object) as (:path :status :added :removed :errors
 :line :note); an error naming file INDEX if it's wrong."
   (cl-flet ((bad (what) (agent-ui--fail "files: file %d %s" index what)))
     (cond
-     ((and (stringp entry) (not (string-blank-p entry))) (list :path entry :status 'none))
+     ((and (stringp entry) (not (string-blank-p entry)))
+      (list :path (agent-ui-files--normal entry) :status 'none))
      ((agent-ui--plist-p entry)
       (cl-loop for (k _) on entry by #'cddr
                unless (memq k '(:path :status :added :removed :errors :line :note))
@@ -42,7 +51,8 @@
         (dolist (k '(:added :removed :errors :line))
           (when (and (plist-get entry k) (not (natnump (plist-get entry k))))
             (bad (format "'s %s must be a count" (substring (symbol-name k) 1)))))
-        (plist-put (copy-sequence entry) :status status)))
+        (plist-put (plist-put (copy-sequence entry) :status status)
+                   :path (agent-ui-files--normal (plist-get entry :path)))))
      (t (bad (format "is %s: a path, or {\"path\": ..., \"status\": ...}" (agent-ui--show-value entry)))))))
 
 (defun agent-ui-files--check (props)
@@ -133,11 +143,17 @@ nothing under that, and the counts never cut)."
           (if (not (plist-get props :tree))
               (agent-ui-files--lines props files (mapcar (lambda (f) (plist-get f :path)) files) "" width)
             ;; A tree: files grouped by folder, in their order of first coming.
-            (let ((folders nil) (folded (plist-get props :folded)))
+            ;; A path ending in / is a folder: its mark and counts on its line
+            ;; (it was a file without a name, a blank row).
+            (let ((folders nil) (own nil) (folded (plist-get props :folded)))
               (dolist (f files)
-                (let ((folder (or (file-name-directory (plist-get f :path)) "")))
-                  (setf (alist-get folder folders nil nil #'equal)
-                        (append (alist-get folder folders nil nil #'equal) (list f)))))
+                (let* ((path (plist-get f :path))
+                       (folder (if (string-suffix-p "/" path) path (or (file-name-directory path) ""))))
+                  (unless (assoc folder folders) (push (list folder) folders))
+                  (if (string-suffix-p "/" path)
+                      (push (cons folder f) own)
+                    (setf (alist-get folder folders nil nil #'equal)
+                          (append (alist-get folder folders nil nil #'equal) (list f))))))
               (apply #'append
                      (mapcar
                       (lambda (entry)
@@ -146,15 +162,25 @@ nothing under that, and the counts never cut)."
                                (names (mapcar (lambda (f) (file-name-nondirectory (plist-get f :path))) (cdr entry))))
                           (if (equal folder "")
                               (agent-ui-files--lines props (cdr entry) names "" width)
-                            (let ((count (if closed (format "  %d files" (length names)) "")))
+                            (let* ((count (if closed (format "  %d files" (length names)) ""))
+                                   (self (cdr (assoc folder own)))
+                                   (status (and self (assq (plist-get self :status) agent-ui-files--statuses)))
+                                   (mark (if (and status (not (eq (car status) 'none)))
+                                             (concat (propertize (nth 1 status) 'face (nth 2 status)) " ")
+                                           ""))
+                                   (counts (if self (string-join (agent-ui-files--counts self) " ") ""))
+                                   (counts (if (string-empty-p counts) "" (concat "  " counts))))
                               (cons (agent-ui-truncate
                                      (agent-ui-button
                                       (concat (propertize (if closed "▸ " "▾ ") 'face 'agent-ui-muted)
+                                              mark
                                               ;; Cut at its start, as a file's name.
                                               (propertize (agent-ui-files--cut
                                                            folder (max (min (string-width folder) 8)
-                                                                       (- width 2 (string-width count))))
+                                                                       (- width 2 (string-width mark) (string-width counts)
+                                                                          (string-width count))))
                                                           'face 'bold)
+                                              counts
                                               (propertize count 'face 'agent-ui-muted))
                                       (agent-ui-files--toggle ctx folder folded)
                                       "RET: fold or unfold it")
