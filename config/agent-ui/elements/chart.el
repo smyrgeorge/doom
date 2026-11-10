@@ -296,7 +296,10 @@ eighths)."
              for rest on segments
              do (setq sum (+ sum v))
              (let* ((last (null (cdr rest)))
-                    (to (if last end (min width (round (* scale sum)))))
+                    ;; Earlier parts end at a whole cell before their end
+                    ;; (rounded up, a part could pass the bar's end: a stacked
+                    ;; 99.5 came out longer than a 100).
+                    (to (if last end (min width (floor (* scale sum)))))
                     (full (- (floor to) at))
                     (part (if (and last (< (floor to) width)) (floor (* (- to (floor to)) 8)) 0))
                     (text (concat (make-string (max 0 full) ?█)

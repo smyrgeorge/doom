@@ -545,6 +545,17 @@ whole; it was ignored, both near the full width); stacked bars from 0."
                                  :width 40)))
     (should (string-match-p "100" stacked))))
 
+(ert-deftest agent-ui-elements/chart-stacked-bars-not-too-long ()
+  "A stacked bar no longer than its total says: 99.5 not longer than 100 (it
+came out a cell too long, its line past the width)."
+  (let* ((text (+test-aue-draw '(:type "chart" :kind "bar" :stacked t :labels ("a" "b")
+                                 :series ((:name "x" :values (99 100)) (:name "y" :values (0.5 0))))
+                               :width 42))
+         (lines (split-string text "\n"))
+         (cells (lambda (line) (cl-count-if (lambda (c) (memq c '(?█ ?▉ ?▊ ?▋ ?▌ ?▍ ?▎ ?▏))) line))))
+    (dolist (line lines) (should (<= (string-width line) 42)))
+    (should (<= (funcall cells (car lines)) (funcall cells (cadr lines))))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."
