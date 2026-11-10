@@ -162,8 +162,10 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
 
 (defun agent-ui-panel--draw (props ctx)
   (let* ((children (plist-get props :children))
-         (border (plist-get props :border))
-         (width (plist-get ctx :width))
+         (width (max 1 (plist-get ctx :width)))
+         ;; A border where there's room for it and a column inside; no
+         ;; child at 0 columns or less (they broke, or hung wrapping).
+         (border (and (plist-get props :border) (>= width 6)))
          (inner (if border (- width 4) width))
          (n (length children))
          (weights (or (plist-get props :weights) (make-list n 1)))
@@ -174,7 +176,7 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
                    (append (butlast ws) (list (+ (car (last ws)) (- room (apply #'+ ws)))))))
          (row-image nil)
          (row (and (eq (plist-get props :layout) 'row) (> n 1)
-                   (cl-every (lambda (w) (>= w (plist-get props :min-width))) widths)))
+                   (cl-every (lambda (w) (>= w (max 1 (plist-get props :min-width)))) widths)))
          (body
           (cond
            ((null children) (list (propertize "no elements" 'face 'agent-ui-muted)))

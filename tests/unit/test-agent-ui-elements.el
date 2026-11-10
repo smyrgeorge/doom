@@ -1089,6 +1089,28 @@ taller), both cut to the tile: nothing overlaps, nothing spills out."
                           (let ((agent-ui-panel-depth 2))
                             (+test-aue-error '(:type "panel" :children ((:type "panel" :children ((:type "panel" :children ()))))))))))
 
+(ert-deftest agent-ui-elements/panel-never-under-a-column ()
+  "However narrow: no child laid out at 0 columns or less (they hung, or
+broke), the border left out where it can't fit, every line within the width."
+  (let ((calls 0)
+        (truncate (symbol-function 'truncate-string-to-width))
+        (row '(:type "panel" :layout "row" :min-width 0
+               :children ((:type "text" :text "Build ok") (:type "text" :text "Tests ok")
+                          (:type "text" :text "Lint ok"))))
+        (nested '(:type "panel" :children ((:type "panel" :children ((:type "panel" :children ((:type "text" :text "hi")))))))))
+    (cl-letf (((symbol-function 'truncate-string-to-width)
+               (lambda (&rest args)
+                 (when (> (cl-incf calls) 100000) (error "a loop"))
+                 (apply truncate args))))
+      (dolist (width (number-sequence 1 20))
+        (dolist (element (list row nested))
+          (let ((text (+test-aue-draw element :width width)))
+            (should-not (string-search "⚠" text))
+            (dolist (line (split-string text "\n"))
+              (should (<= (string-width line) (max width 1))))))))
+    ;; Wide enough: its border, as before.
+    (should (string-prefix-p "╭" (+test-aue-draw row :width 30)))))
+
 (ert-deftest agent-ui-elements/panel-row-with-a-chart-in-the-gui ()
   (let* ((element '(:type "panel" :layout "row" :min-width 8
                     :children ((:type "chart" :title "p95" :values (1 3 2)) (:type "text" :title "Note" :text "fine"))))
