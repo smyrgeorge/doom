@@ -1033,6 +1033,45 @@ rename to c b/a.txt
   ;; As before: a plain name.
   (should (equal (agent-ui-diff--git-name "a/src/x.c b/src/x.c") "src/x.c")))
 
+;; doom-nwj.86
+(ert-deftest agent-ui-elements/diff-combined ()
+  "A combined diff (git diff during a merge, diff --cc): its @@@ hunks' lines
+read, a mark for each parent (it was an empty file, \"+0 −0\")."
+  ;; As git writes a conflict.
+  (let ((diff "diff --cc f.c
+index 9740c89,a7bc997..0000000
+--- a/f.c
++++ b/f.c
+@@@ -1,5 -1,4 +1,11 @@@
+  a
+++<<<<<<< HEAD
+ +b2
+++||||||| 38bcd62
+++b
+++=======
++ B
+++>>>>>>> other
+  c
+  d
+ +e
+diff --cc g.c
+index 1,2..3
+--- a/g.c
++++ b/g.c
+@@@ -1,3 -1,3 +1,2 @@@
+  x
+- y
+ -z
+  w
+"))
+    (should (equal (+test-aue-draw (list :type "diff" :diff diff))
+                   (concat "▾ f.c  +8 −0\n  @@@ -1,5 -1,4 +1,11 @@@\n"
+                           "      1   a\n      2 + <<<<<<< HEAD\n      3 + b2\n      4 + ||||||| 38bcd62\n"
+                           "      5 + b\n      6 + =======\n      7 + B\n      8 + >>>>>>> other\n"
+                           "      9   c\n     10   d\n     11 + e\n"
+                           "▾ g.c  +0 −2\n  @@@ -1,3 -1,3 +1,2 @@@\n"
+                           "      1   x\n        − y\n        − z\n      2   w")))))
+
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).
   (let ((agent-ui-file-directory "/proj/")

@@ -76,8 +76,12 @@ A hunk ends when its lines are used up (its @@ line's counts): then a ---
 or +++ line is the next file's (`diff -u' outputs one after another, `diff
 -ru'), \"-- \" a patch's signature (they were read as its lines, the next
 file merged into it). Other lines past them (counts written wrong by hand)
-are still its."
-  (let (files file hunk old new (old-left 0) (new-left 0))
+are still its.
+
+A combined diff's (diff --cc, during a merge: @@@ hunks), its lines with a
+column of marks for each parent: added if one is +, removed if one is -
+(they were read as nothing, an empty file)."
+  (let (files file hunk old new (old-left 0) (new-left 0) (parents 1))
     (cl-flet* ((close-hunk () (when hunk
                                 (setf (plist-get file :hunks)
                                       (append (plist-get file :hunks)
@@ -96,6 +100,10 @@ are still its."
                        (string-prefix-p "--- " line) (string-prefix-p "+++ " line) (equal line "-- ")))
           (close-hunk))
         (cond
+         ((string-match "\\`diff --\\(?:cc\\|combined\\) \\(.*\\)\\'" line)
+          (new-file)
+          (let ((name (match-string 1 line)))
+            (plist-put file :file (or (car (agent-ui-diff--unquote name)) name))))
          ((string-prefix-p "diff --git " line)
           (new-file)
           (plist-put file :file (agent-ui-diff--git-name (substring line (length "diff --git ")))))
@@ -123,8 +131,30 @@ are still its."
                 ;; No count: 1.
                 old-left (if (match-string 2 line) (string-to-number (match-string 2 line)) 1)
                 new-left (if (match-string 4 line) (string-to-number (match-string 4 line)) 1)
+                parents 1
+                hunk (list :header line :lines nil)))
+         ;; A combined diff's: its result's counts (its parents' not kept).
+         ((string-match "\\`\\(@@@+\\) \\(?:-[0-9]+\\(?:,[0-9]+\\)? \\)+\\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? @@@+" line)
+          (close-hunk)
+          (unless file (new-file))
+          (setq parents (1- (length (match-string 1 line)))
+                new (string-to-number (match-string 2 line))
+                new-left (if (match-string 3 line) (string-to-number (match-string 3 line)) 1)
+                old-left 0
                 hunk (list :header line :lines nil)))
          ((not hunk))                   ; index, mode lines: not shown
+         ((and (> parents 1) (not (string-prefix-p "\\" line)))
+          (let ((marks (substring line 0 (min parents (length line))))
+                (text (if (> (length line) parents) (substring line parents) "")))
+            (cond ((string-search "+" marks)
+                   (push (list 'added new text) (plist-get hunk :lines))
+                   (cl-incf (plist-get file :added)) (cl-incf new) (cl-decf new-left))
+                  ((string-search "-" marks)
+                   (push (list 'removed new text) (plist-get hunk :lines))
+                   (cl-incf (plist-get file :removed)))
+                  ((not (and (string-empty-p line) (null (plist-get hunk :lines))))
+                   (push (list 'context new text) (plist-get hunk :lines))
+                   (cl-incf new) (cl-decf new-left)))))
          ((string-prefix-p "+" line)
           (push (list 'added new (substring line 1)) (plist-get hunk :lines))
           (cl-incf (plist-get file :added)) (cl-incf new) (cl-decf new-left))
