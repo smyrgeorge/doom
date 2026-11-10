@@ -6,8 +6,8 @@ My Emacs configuration, built on [Doom Emacs](https://github.com/doomemacs/core)
 
 It runs on **macOS** and **Linux** with **Emacs 31**, as a GUI app or in a terminal (`emacs -nw`). On top of Doom it
 adds a tiling layout, tabs per window, a three-way merge for Git conflicts, PDFs, images and Excalidraw drawings that
-open inside Emacs, a live Markdown preview, language servers set up for each language `init.el` enables, and Claude
-Code in a pane of its own. The keys use `Cmd` on macOS and `Ctrl` on Linux, as each system's apps do.
+open inside Emacs, a live Markdown preview, language servers set up for each language `init.el` enables, and your
+coding agent in a pane of its own. The keys use `Cmd` on macOS and `Ctrl` on Linux, as each system's apps do.
 
 ## A tour
 
@@ -16,24 +16,41 @@ own ([Examples](docs/examples.md)).
 
 ### Tiling
 
-Applications (Claude Code, the terminal, Magit, the Markdown preview, drawings, issues) open in a new pane where the
+Applications (your agent, the terminal, Magit, the Markdown preview, drawings, issues) open in a new pane where the
 tiling layout puts it: the main pane on the left, the others stacked on the right. Files open as tabs in the current
 pane, and a pane closes with its last tab. `SPC w SPC` opens a pane the same way ([more](docs/editor.md#tiling)).
 
 ![Tiling](examples/tiling.png)
 
-### Three-way merge
+### Issues
 
-`e` on a conflicted file in Magit shows Yours, the Result and Theirs side by side, lined up and scrolling together.
-Take a change with `>>` / `<<`, ignore it with `x`, or let the ✨ wand merge the words of both sides. It works in a
-terminal too, and from the shell with `cmd/diff` ([more](docs/git.md#resolving-conflicts)).
+`SPC o i` lists the project's issues, tracked with [Beads](https://github.com/gastownhall/beads) in its `.beads/`,
+the same ones your agent reads and writes: filter them, preview them as you move, edit them, follow
+their dependencies ([more](docs/issues.md)).
 
-![Three-way merge](examples/merge.png)
+![A project's issues in their list](examples/issues.png)
+
+### Agent UI
+
+Your agent keeps things in view on a canvas beside its session while it works: a checklist of its steps, a table of
+test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
+place. It draws them with `cmd/agent-ui`, which its system prompt tells it about ([more](docs/agent-ui.md)).
+
+![Agent UI: a canvas beside the conversation](examples/agent-ui.png)
+
+### Project panels
+
+A dashboard kept in a project's repository, `.agent-ui/panels/NAME.el`: what it shows and the Emacs Lisp filling it,
+in one file. `SPC o u` opens one, its data fetched afresh and refreshed as often as it says, its slow queries
+(a database's, minutes) each loading on its own without freezing Emacs. Your agent writes them, checks them and
+opens them too ([more](docs/agent-ui.md#project-panels)).
+
+![A project panel: this Mac's CPU, every second](examples/panel.png)
 
 ### Excalidraw drawings
 
 `*.excalidraw.svg` files open as drawings in Excalidraw, inside Emacs, and are saved as images that Markdown and
-GitHub show. In a Claude Code session, `C-c C-d` draws something for Claude to see ([more](docs/drawings.md)).
+GitHub show. In your agent's session, `C-c C-d` draws something for it to see ([more](docs/drawings.md)).
 
 ![Excalidraw](examples/excalidraw.png)
 
@@ -44,13 +61,6 @@ their colours' hues kept, and `SPC m d` turns them light ([more](docs/pdf.md)).
 
 ![PDF with dark pages](examples/pdf.png)
 
-### Images
-
-Images open with a toolbar: the folder's other images, zoom, rotate, flip, crop, sharp pixels, copy the image, and its
-version in Git's HEAD beside it with `SPC m g` ([more](docs/images.md)).
-
-![A picture beside its version in git's HEAD](examples/image.png)
-
 ### Markdown preview
 
 `SPC m p` shows the rendered file beside it, in GitHub's style, updated as you type and following the cursor
@@ -58,27 +68,20 @@ version in Git's HEAD beside it with `SPC m g` ([more](docs/images.md)).
 
 ![Markdown live preview](examples/markdown.png)
 
-### Issues
+### Three-way merge
 
-`SPC o i` lists the project's issues, tracked with [Beads](https://github.com/gastownhall/beads) in its `.beads/`,
-the same ones Claude Code and other agents read and write: filter them, preview them as you move, edit them, follow
-their dependencies ([more](docs/issues.md)).
+`e` on a conflicted file in Magit shows Yours, the Result and Theirs side by side, lined up and scrolling together.
+Take a change with `>>` / `<<`, ignore it with `x`, or let the ✨ wand merge the words of both sides. It works in a
+terminal too, and from the shell with `cmd/diff` ([more](docs/git.md#resolving-conflicts)).
 
-### Agent UI
+![Three-way merge](examples/merge.png)
 
-Claude Code keeps things in view on a canvas beside its session while it works: a checklist of its steps, a table of
-test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
-place. It draws them with `cmd/agent-ui`, which its system prompt tells it about ([more](docs/agent-ui.md)).
+### Images
 
-![Agent UI: a canvas beside the conversation](examples/agent-ui.png)
+Images open with a toolbar: the folder's other images, zoom, rotate, flip, crop, sharp pixels, copy the image, and its
+version in Git's HEAD beside it with `SPC m g` ([more](docs/images.md)).
 
-### Error stripe and notices
-
-A strip at the right edge of each file maps the whole file: errors, warnings, TODOs and Git changes, with a band for
-the part on screen. Click a mark to jump there. Notices at the top of a window offer actions, such as the Markdown
-preview ([more](docs/editor.md#error-stripe)).
-
-![The error stripe at the window's right edge](examples/stripe.png)
+![A picture beside its version in git's HEAD](examples/image.png)
 
 ## Installation
 
@@ -124,7 +127,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 
 ### Once, by hand
 
-- **Claude Code:** install the `claude` CLI, run it once in a terminal and log in; Emacs uses that login.
+- **Your agent:** install its command line, run it once in a terminal and log in; Emacs uses that login.
 - **Kotlin:** accept kotlin-lsp's licence once: read it with `kotlin-lsp --show-eula`, then run `kotlin-lsp --stdio`.
 - **Linux:** run `M-x nerd-icons-install-fonts` for the icons. `tools.sh` lists the few servers no distribution
   packages (marksman, kotlin-lsp, ktlint, lua-language-server), with where to get them.
@@ -149,9 +152,9 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Search](docs/search.md): Search Everywhere, find in files, projects
 - [Git](docs/git.md): Magit additions, a file's diff, resolving conflicts in three panes
 - [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md)
-- [Claude Code](docs/claude-code.md): sessions, drawing for Claude, profiling Emacs
-- [Agent UI](docs/agent-ui.md): what Claude shows on a canvas beside its session, and `cmd/agent-ui`
-- [Notifications](docs/notifications.md): on the desktop while you're in another app (Claude Code finished, needs you)
+- [Your agent](docs/claude-code.md): its sessions, drawing for it, profiling Emacs
+- [Agent UI](docs/agent-ui.md): what your agent shows on a canvas beside its session, and `cmd/agent-ui`
+- [Notifications](docs/notifications.md): on the desktop while you're in another app (your agent finished, needs you)
 - [Issues](docs/issues.md): the project's Beads issues
 - [AI agents](docs/ai-agents.md): the `emacs-profiling` skill
 - [Terminal](docs/terminal.md): what differs in `emacs -nw`
