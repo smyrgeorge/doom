@@ -144,7 +144,7 @@ each layer ordered by its nodes' parents' places."
              (gap-a (* 6 cw)) (gap-b (round (* 0.8 lh)))
              (where (make-hash-table :test #'equal))
              (depth (make-hash-table :test #'equal))
-             (extents nil)
+             (extents nil) (gaps nil)
              (along 0) (across-max 0))
         (cl-loop for layer in layers for d from 0 do (dolist (id layer) (puthash id d depth)))
         ;; Each layer a column (or a row, down); its nodes stacked across it.
@@ -156,10 +156,25 @@ each layer ordered by its nodes' parents' places."
               (let ((w (funcall box-w id)))
                 (puthash id (if down (list across along w box-h) (list along across w box-h)) where)
                 (setq across (+ across (if down w box-h) (if down gap-a gap-b)))))
-            (push (cons along (+ along size)) extents)
-            (setq across-max (max across-max across)
-                  along (+ along size (if down (* 2 gap-b) gap-a)))))
-        (setq extents (nreverse extents))
+            ;; The corridor after it as wide as its widest label from it (to
+            ;; the next layer, or a loop; ~0.5 of a line a character) and 2
+            ;; columns: 6 columns hid a longer label under the boxes.
+            (let ((gap (if down (* 2 gap-b)
+                         (max gap-a
+                              (+ (* 2 cw)
+                                 (apply #'max 0
+                                        (mapcar (lambda (e)
+                                                  (let ((d (gethash (plist-get e :from) depth)))
+                                                    (if (and (plist-get e :label) (member (plist-get e :from) layer)
+                                                             (memq (gethash (plist-get e :to) depth) (list d (1+ d))))
+                                                        (* 0.5 lh (string-width (plist-get e :label)))
+                                                      0)))
+                                                edges)))))))
+              (push (cons along (+ along size)) extents)
+              (push gap gaps)
+              (setq across-max (max across-max across)
+                    along (+ along size gap)))))
+        (setq extents (nreverse extents) gaps (nreverse gaps))
         (let* ((skip-p (lambda (e) (> (- (gethash (plist-get e :to) depth) (gethash (plist-get e :from) depth)) 1)))
                ;; Back (a cycle's edge): to its own layer or an earlier one.
                (back-p (lambda (e) (and (not (equal (plist-get e :from) (plist-get e :to)))
@@ -186,7 +201,10 @@ each layer ordered by its nodes' parents' places."
                (svg (svg-create (round (* scale natural-w)) (round (* scale natural-h))
                                 :viewBox (format "0 0 %d %d" natural-w natural-h)))
                (fg (agent-ui-chart--color 'default)) (muted (agent-ui-chart--color 'agent-ui-muted))
-               (fill (agent-ui-progress--blend (or (face-background 'default nil t) "black") fg 0.07)))
+               (fill (agent-ui-progress--blend (or (face-background 'default nil t) "black") fg 0.07))
+               ;; Edges' labels, drawn last, over everything (under the boxes,
+               ;; a label wider than its corridor was hidden).
+               (labels nil))
           (svg--append svg (dom-node 'defs nil
                                      (dom-node 'marker '((id . "arrow") (viewBox . "0 0 10 10") (refX . "10") (refY . "5")
                                                          (markerWidth . "7") (markerHeight . "7") (orient . "auto"))
@@ -210,7 +228,7 @@ each layer ordered by its nodes' parents' places."
                       (after (d) (if (< d 0)
                                      (/ lead 2.0)
                                    (let ((this (nth d extents)) (next (nth (1+ d) extents)))
-                                     (/ (+ (cdr this) (if next (car next) (+ (cdr this) (if down (* 2 gap-b) gap-a)))) 2.0))))
+                                     (/ (+ (cdr this) (if next (car next) (+ (cdr this) (nth d gaps)))) 2.0))))
                       ;; A point at ALONG, ACROSS on the screen.
                       (pt (a c) (if down (format "%.1f,%.1f" c a) (format "%.1f,%.1f" a c))))
             (let ((routed -1))
@@ -275,9 +293,9 @@ each layer ordered by its nodes' parents' places."
                     (svg--append svg (dom-node 'path `((d . ,d) (fill . "none") (stroke . ,muted) (stroke-width . "1.5")
                                                        (stroke-linejoin . "round") (marker-end . "url(#arrow)"))))
                     (when (plist-get e :label)
-                      (pcase-let ((`(,x ,y ,anchor) (or label-at (list (/ (+ sx tx) 2) (- (/ (+ sy ty) 2) 4) "middle"))))
-                        (agent-ui-chart--svg-text svg ctx (plist-get e :label) x y
-                                                  :fill muted :text-anchor anchor)))))))))
+                      (push (append (or label-at (list (/ (+ sx tx) 2) (- (/ (+ sy ty) 2) 4) "middle"))
+                                    (list (plist-get e :label)))
+                            labels))))))))
           (dolist (node nodes)
             (pcase-let ((`(,x ,y ,w ,h) (gethash (plist-get node :id) where))
                         (face (cadr (assq (plist-get node :status) agent-ui-graph--statuses))))
@@ -285,6 +303,8 @@ each layer ordered by its nodes' parents' places."
                              :stroke (if face (agent-ui-chart--color face) muted) :stroke-width (if face 2 1))
               (agent-ui-chart--svg-text svg ctx (plist-get node :label) (+ x (/ w 2.0)) (+ y (* 0.62 h))
                                         :fill (if face (agent-ui-chart--color face) fg) :text-anchor "middle")))
+          (pcase-dolist (`(,x ,y ,anchor ,text) (nreverse labels))
+            (agent-ui-chart--svg-text svg ctx text x y :fill muted :text-anchor anchor))
           (agent-ui-chart--image svg))))))
 
 (agent-ui-define graph

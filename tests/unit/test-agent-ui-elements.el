@@ -1249,6 +1249,25 @@ layer too: shown, crossing no box (they were lines under the boxes)."
                                             (and (< bx x (+ bx bw)) (< by y (+ by bh)))))
                               boxes))))))
 
+(ert-deftest agent-ui-elements/graph-edge-labels-whole ()
+  "An edge's label between two layers: its corridor wide enough for it, and
+drawn over the boxes (6 columns hid \"depends on\" but \"pends\" under them)."
+  (let* ((svg (+test-aue-svg '(:type "graph" :nodes ("parser" "checker")
+                               :edges ((:from "parser" :to "checker" :label "depends on")))
+                             120))
+         (label-x (progn (string-match "x=\"\\([0-9.]+\\)\">depends on<" svg)
+                         (string-to-number (match-string 1 svg))))
+         (boxes (let ((all nil) (start 0))
+                  (while (string-match "<rect width=\"\\([0-9.]+\\)\" height=\"[0-9.]+\" x=\"\\([0-9.]+\\)\"" svg start)
+                    (push (cons (string-to-number (match-string 2 svg)) (string-to-number (match-string 1 svg))) all)
+                    (setq start (match-end 0)))
+                  (sort all (lambda (a b) (< (car a) (car b)))))))
+    ;; ~8 px a character, centred: between parser's box's end and checker's start.
+    (should (<= (+ (caar boxes) (cdar boxes)) (- label-x (* 0.5 8 10))))
+    (should (<= (+ label-x (* 0.5 8 10)) (car (cadr boxes))))
+    ;; Over the boxes: after them in the SVG.
+    (should (> (string-search ">depends on<" svg) (string-search "<rect" svg)))))
+
 (ert-deftest agent-ui-elements/graph-skip-edges-cross-no-box ()
   "An edge skipping a layer goes round through the corridors between layers
 and a lane beside the stacks, whatever its ends' places in them (from or to
