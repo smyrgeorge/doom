@@ -313,11 +313,11 @@ at 20), for every type."
   (should (equal (agent-ui-format-number 1234.5678) "1234.57"))
   (should (equal (agent-ui-format-number 12) "12"))
   (should (equal (mapcar #'agent-ui-cell '(nil t :false 1.5 "x")) '("" "true" "false" "1.5" "x")))
-  ;; The spinner: a square going round, its frames block elements (a coding
-  ;; font's, not braille from a fallback font); another set, chosen.
+  ;; The spinner: a gap going round a square, its frames block elements (a
+  ;; coding font's, not braille from a fallback font); another set, chosen.
   (should (equal (mapcar (lambda (tick) (agent-ui-spinner (agent-ui-context :tick tick))) '(0 1 2 3 4 11))
-                 '("▖" "▘" "▝" "▗" "▖" "▗")))
-  (should (equal (agent-ui-spinner (agent-ui-context)) "▖"))
+                 '("▟" "▙" "▛" "▜" "▟" "▜")))
+  (should (equal (agent-ui-spinner (agent-ui-context)) "▟"))
   (let ((agent-ui-spinner-frames '("◌" "○" "◎")))
     (should (equal (agent-ui-spinner (agent-ui-context :tick 5)) "◎"))))
 

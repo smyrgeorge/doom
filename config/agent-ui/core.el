@@ -463,10 +463,11 @@ so a canvas goes on with its other elements. No newline at its end."
 (defface agent-ui-accent '((t :inherit font-lock-keyword-face))
   "What's going on: a bar filling, a step running.")
 
-(defcustom agent-ui-spinner-frames '("▖" "▘" "▝" "▗")
-  "A spinner's frames, one per animation tick: a square going round. Block
-elements, which coding and terminal fonts have (braille, ⠋⠙⠹..., came from
-a fallback font whose dots are tiny: every frame looked the same)."
+(defcustom agent-ui-spinner-frames '("▟" "▙" "▛" "▜")
+  "A spinner's frames, one per animation tick: a gap going round a square,
+clockwise. Block elements, which coding and terminal fonts have (braille,
+⠋⠙⠹..., came from a fallback font whose dots are tiny: every frame looked
+the same)."
   :type '(repeat string))
 
 (defun agent-ui-spinner (ctx)
