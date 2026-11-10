@@ -17,6 +17,46 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(defun agent-ui-diff--unquote (string)
+  "STRING's start, a name git quoted (core.quotePath: \"b/\\317\\203.md\",
+its octal escapes UTF-8 bytes; \\\" a quote): (NAME . REST), REST what's
+after it; nil if it isn't quoted."
+  (when (string-prefix-p "\"" string)
+    (let ((i 1) (n (length string)) (bytes nil))
+      (while (and (< i n) (not (eq (aref string i) ?\")))
+        (let ((c (aref string i)))
+          (if (and (eq c ?\\) (< (1+ i) n))
+              (let ((d (aref string (1+ i))))
+                (if (<= ?0 d ?7)
+                    ;; Up to 3 octal digits: a byte.
+                    (let ((j (1+ i)) (byte 0))
+                      (while (and (< j (min n (+ i 4))) (<= ?0 (aref string j) ?7))
+                        (setq byte (+ (* byte 8) (- (aref string j) ?0)) j (1+ j)))
+                      (push byte bytes)
+                      (setq i j))
+                  (push (pcase d (?n ?\n) (?t ?\t) (?a 7) (?b 8) (?f 12) (?r 13) (?v 11) (_ d)) bytes)
+                  (cl-incf i 2)))
+            (setq bytes (append (nreverse (append (encode-coding-string (string c) 'utf-8) nil)) bytes))
+            (cl-incf i))))
+      (cons (decode-coding-string (apply #'unibyte-string (nreverse bytes)) 'utf-8)
+            (substring string (min n (1+ i)))))))
+
+(defun agent-ui-diff--name (string prefix)
+  "A --- or +++ line's STRING as a name: unquoted (git's quoted ones), its
+date (diff -u's, after a tab) and PREFIX (a/ or b/) left out."
+  (let ((name (or (car (agent-ui-diff--unquote string)) (car (split-string string "\t")))))
+    (if (string-prefix-p prefix name) (substring name (length prefix)) name)))
+
+(defun agent-ui-diff--git-name (rest)
+  "diff --git's REST (its names): the new one, unquoted, without its b/."
+  (cond
+   ((agent-ui-diff--unquote rest)
+    (let ((second (string-trim-left (cdr (agent-ui-diff--unquote rest)))))
+      (agent-ui-diff--name second "b/")))
+   ((string-match " \\(\"b/.*\"\\)\\'" rest) (agent-ui-diff--name (match-string 1 rest) "b/"))
+   ((string-match " b/\\(.*\\)\\'" rest) (match-string 1 rest))
+   (t "")))
+
 (defun agent-ui-diff--parse (text)
   "TEXT, a unified diff, as files: (:file NAME :added N :removed N :hunks
 HUNKS), each hunk (:header TEXT :lines ((KIND NUMBER TEXT)...)), KIND one of
@@ -50,18 +90,18 @@ are still its."
         (cond
          ((string-prefix-p "diff --git " line)
           (new-file)
-          (plist-put file :file (if (string-match " b/\\(.*\\)\\'" line) (match-string 1 line) "")))
+          (plist-put file :file (agent-ui-diff--git-name (substring line (length "diff --git ")))))
          ((and (string-prefix-p "--- " line) (not hunk))
           ;; A file's, unless it's this one's (after diff --git).
           (when (or (null file) (plist-get file :hunks)) (new-file))
           (let ((name (string-remove-prefix "--- " line)))
             (when (and (equal (plist-get file :file) "") (not (equal name "/dev/null")))
-              (plist-put file :file (replace-regexp-in-string "\\`a/" "" (car (split-string name "\t")))))))
+              (plist-put file :file (agent-ui-diff--name name "a/")))))
          ((and (string-prefix-p "+++ " line) (not hunk))
           (when (or (null file) (plist-get file :hunks)) (new-file))
           (let ((name (string-remove-prefix "+++ " line)))
             (unless (equal name "/dev/null")
-              (plist-put file :file (replace-regexp-in-string "\\`b/" "" (car (split-string name "\t")))))))
+              (plist-put file :file (agent-ui-diff--name name "b/")))))
          ((string-match "\\`@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? @@\\(.*\\)\\'" line)
           (close-hunk)
           (unless file (new-file))

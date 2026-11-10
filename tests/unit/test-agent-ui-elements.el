@@ -940,6 +940,31 @@ signature not a line (they were merged into the first file)."
     (should (equal (+test-aue-draw (list :type "diff" :diff "--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n c\n+d\n"))
                    "▾ f  +2 −1\n  @@ -1 +1 @@\n        − a\n      1 + b\n      2   c\n      3 + d"))))
 
+;; doom-nwj.68
+(ert-deftest agent-ui-elements/diff-quoted-names ()
+  "git quotes names that aren't ASCII or have a quote (core.quotePath):
+unquoted, their octal escapes UTF-8 (shown escaped, and RET opened
+\".../\\\"b/\\317...\")."
+  (let* ((diff (concat "diff --git \"a/\\317\\203\\316\\267\\316\\274\\316\\265\\316\\271\\317\\216\\317\\203\\316\\265\\316\\271\\317\\202.md\" \"b/\\317\\203\\316\\267\\316\\274\\316\\265\\316\\271\\317\\216\\317\\203\\316\\265\\316\\271\\317\\202.md\"\nindex 1111..2222 100644\n"
+                       "--- \"a/\\317\\203\\316\\267\\316\\274\\316\\265\\316\\271\\317\\216\\317\\203\\316\\265\\316\\271\\317\\202.md\"\n+++ \"b/\\317\\203\\316\\267\\316\\274\\316\\265\\316\\271\\317\\216\\317\\203\\316\\265\\316\\271\\317\\202.md\"\n@@ -1 +1 @@\n-a\n+b\n"
+                       "diff --git \"a/with \\\"quote\\\".txt\" \"b/with \\\"quote\\\".txt\"\nnew file mode 100644\n"
+                       "--- /dev/null\n+++ \"b/with \\\"quote\\\".txt\"\n@@ -0,0 +1 @@\n+x\n"
+                       "diff --git a/plain.txt \"b/\\317\\203\\316\\267\\316\\274\\316\\265\\316\\271\\317\\216\\317\\203\\316\\265\\316\\271\\317\\202.md\"\nsimilarity index 100%\n"))
+         (opened nil)
+         (agent-ui-open-file-function (lambda (f) (push f opened)))
+         (text (agent-ui-render (list :type "diff" :diff diff :dir "/work/") (agent-ui-context :width 60))))
+    (should (equal (substring-no-properties text)
+                   (concat "▾ σημειώσεις.md  +1 −1\n  @@ -1 +1 @@\n        − a\n      1 + b\n"
+                           "▾ with \"quote\".txt  +1 −0\n  @@ -0,0 +1 @@\n      1 + x\n"
+                           "▾ σημειώσεις.md  +0 −0")))
+    (funcall (get-text-property 3 'agent-ui-action text))
+    (should (equal (car opened) "/work/σημειώσεις.md"))
+    (funcall (get-text-property (string-search "with" text) 'agent-ui-action text))
+    (should (equal (car opened) "/work/with \"quote\".txt"))
+    ;; A deleted one: its old name.
+    (should (string-prefix-p "▾ σημειώσεις.md  +0 −1"
+                             (+test-aue-draw '(:type "diff" :diff "--- \"a/\\317\\203\\316\\267\\316\\274\\316\\265\\316\\271\\317\\216\\317\\203\\316\\265\\316\\271\\317\\202.md\"\n+++ /dev/null\n@@ -1 +0,0 @@\n-a\n"))))))
+
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).
   (let ((agent-ui-file-directory "/proj/")
