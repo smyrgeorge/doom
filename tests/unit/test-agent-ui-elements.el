@@ -301,6 +301,17 @@ alone put 850ms between 41s and 2m 05s)."
                               :width 40)))
     (should (string-match-p "…? ↓" (car (split-string text "\n"))))))
 
+(ert-deftest agent-ui-elements/table-align-misspelt-refused ()
+  "A misspelt align is refused (it was taken as automatic, silently); left,
+right, center and null are taken."
+  (dolist (wrong '("rigth" "centre" "Right" "middle"))
+    (should (string-match-p "align is left, right, center or null"
+                            (+test-aue-error `(:type "table" :columns ("A") :rows (("x")) :align (,wrong))))))
+  (should (equal (plist-get (agent-ui-check "table" '(:type "table" :columns ("A" "B" "C") :rows (("x" "y" "z"))
+                                                       :align ("right" nil "center")))
+                            :align)
+                 '(right nil center))))
+
 (ert-deftest agent-ui-elements/table-cells-on-one-line ()
   "A cell's line breaks and tabs: on its line (they broke the table's lines,
 and a panel's border around it)."
@@ -376,7 +387,7 @@ and a panel's border around it)."
                           (+test-aue-error '(:type "table" :columns ("A") :key "B"))))
   (should (string-match-p "key must be a column"
                           (+test-aue-error '(:type "table" :columns ("A") :key 1))))
-  (should (string-match-p "align is left, right or center"
+  (should (string-match-p "align is left, right, center or null"
                           (+test-aue-error '(:type "table" :columns ("A") :align ("middle")))))
   (should (equal (+test-aue-error '(:type "table"))
                  "table: columns is required")))

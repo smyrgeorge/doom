@@ -56,12 +56,14 @@ if there's no such column."
       (when (> (length align) n)
         (agent-ui--fail "table: align has %d entries, for %d columns" (length align) n))
       (plist-put props :align
+                 ;; By their names (intern-soft took a misspelt one, not yet
+                 ;; a symbol, for nil: automatic); null: automatic.
                  (mapcar (lambda (a)
-                           (let ((sym (cond ((stringp a) (intern-soft a)) ((symbolp a) a))))
-                             (if (memq sym '(left right center nil))
-                                 sym
-                               (agent-ui--fail "table: align is left, right or center, not %s"
-                                               (agent-ui--show-value a)))))
+                           (cond ((null a) nil)
+                                 ((member a '("left" "right" "center")) (intern a))
+                                 ((memq a '(left right center)) a)
+                                 (t (agent-ui--fail "table: align is left, right, center or null, not %s"
+                                                    (agent-ui--show-value a)))))
                          align)))
     (when (plist-get props :sort)
       (condition-case err
