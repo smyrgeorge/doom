@@ -198,3 +198,19 @@ session is resumed."
     (with-current-buffer (agent-ui-canvas-buffer-name name)
       (agent-ui--flush)
       (should (string-search " 1. Fix\n 2. Release\n 3. Docs" (buffer-string))))))
+
+(ert-deftest agent-ui-persist/a-slider-the-user-moved ()
+  "A slider's value, the user's: kept, and back when the session is resumed."
+  (+test-aup
+    (agent-ui-show '(:id "t" :type "slider" :min 0 :max 1 :step 0.1 :value 0.5) :canvas name)
+    (with-current-buffer (agent-ui-canvas-buffer-name name)
+      (agent-ui--flush)
+      (goto-char (point-min))
+      (search-forward "●")
+      (agent-ui-slider-right))
+    (kill-buffer (agent-ui-canvas-buffer-name name))
+    (should (equal (plist-get (car (+test-aup-saved)) :value) 0.6))
+    (should (= (agent-ui-persist-restore session) 1))
+    (with-current-buffer (agent-ui-canvas-buffer-name name)
+      (agent-ui--flush)
+      (should (string-search "   0.6" (buffer-string))))))

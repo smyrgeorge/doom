@@ -242,6 +242,17 @@ line, end your turn; then work in that order.
 agent-ui show '{"id":"prio","type":"rank","question":"What should I do first?","items":[{"label":"Fix the parser","detail":"the root cause"},"Update the docs","Release"]}'
 ```
 
+### `slider`
+
+A number the user tunes in a range, when the right value is theirs to judge (a threshold, a timeout, how many to
+take): `label`, `min`, `max`, `step` (default 1), `unit`, `value` (where it starts). They move it and press Set:
+"Answer to slider ID (LABEL): 42 ms" comes into your prompt. With `"live": true`, no Set: each value comes, once the
+knob rests, as "Slider ID (LABEL) set to 42 ms", for something you redraw from it (a chart's threshold).
+
+```sh
+agent-ui show '{"id":"timeout","type":"slider","label":"Timeout","min":0,"max":120,"step":5,"unit":"s","value":30}'
+```
+
 ### `todo`
 
 A checklist you and the user both work through: a plan you agree on, what's left before a release. `items` are labels,

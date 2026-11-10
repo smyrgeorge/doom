@@ -68,7 +68,10 @@ diff's hunks)."
        (or (member (plist-get element :type) agent-ui-ask-types)
            (plist-get element :select)
            (not (memq (plist-get element :approve) '(nil :false)))
-           (not (memq (plist-get element :accept) '(nil :false))))
+           (not (memq (plist-get element :accept) '(nil :false)))
+           ;; A slider set by Set (a live one sends as it moves: no answer).
+           (and (equal (plist-get element :type) "slider")
+                (memq (plist-get element :live) '(nil :false))))
        t))
 
 (defun agent-ui-ask-question (element)

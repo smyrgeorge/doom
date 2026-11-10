@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code confirm diff files form graph heatmap html image issues log markdown panel progress rank stats steps table text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code confirm diff files form graph heatmap html image issues log markdown panel progress rank slider stats steps table text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -1925,6 +1925,98 @@ with the comments; then locked."
                           (+test-aue-error '(:type "diff" :diff "" :accept (:ask "x")))))
   (should (string-match-p "rejected is"
                           (+test-aue-error '(:type "diff" :diff "" :accept t :rejected ((:file "a")))))))
+
+(ert-deftest agent-ui-elements/slider ()
+  "Its track, the knob at its value (snapped to its steps), its ends and the
+value with its unit; the hint and Set; set: the value, nothing to move; a
+still picture: the track only."
+  (let ((slider '(:type "slider" :label "Timeout" :min 0 :max 120 :step 5 :unit "s" :value 31)))
+    (should (equal (+test-aue-draw slider :width 40)
+                   (concat "Timeout\n"
+                           " 0 ━━━━━━●────────────────── 120   30 s\n"
+                           " h / l move it (H / L ten steps), a\n"
+                           " click puts it there\n"
+                           " ⏵ Set")))
+    (should (equal (+test-aue-draw slider :width 40 :still t)
+                   "Timeout\n 0 ━━━━━━●────────────────── 120   30 s"))
+    (should (equal (+test-aue-draw (append '(:answered "30 s") slider) :width 40)
+                   "Timeout\n 0 ━━━━━━●────────────────── 120   30 s\n ✓ Set: 30 s"))
+    (should (agent-ui-ask-waiting-p slider))
+    (should-not (agent-ui-ask-waiting-p (append '(:answered "30 s") slider)))
+    (should-not (agent-ui-ask-waiting-p (append '(:live t) slider))))
+  ;; No value: at its min; a float's steps.
+  (should (string-search " 0 ●───" (+test-aue-draw '(:type "slider" :min 0 :max 1 :step 0.25) :width 30)))
+  (should (string-search "   0.5" (+test-aue-draw '(:type "slider" :min 0 :max 1 :step 0.25 :value 0.4)))))
+
+(ert-deftest agent-ui-elements/slider-moved-and-set ()
+  "On its track: h / l a step, H / L ten (its own keys there), never past
+its ends; a click there; Set sends the value; then locked."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "t" :type "slider" :label "Timeout" :min 0 :max 120 :step 5 :unit "s" :value 30))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "●")
+        (should (eq (key-binding (kbd "h")) #'agent-ui-slider-left))
+        (should (eq (key-binding (kbd "L")) #'agent-ui-slider-right-more))
+        (agent-ui-slider-right)
+        (should (= (plist-get (agent-ui-get "t") :value) 35))
+        (agent-ui-slider-left-more)
+        (should (= (plist-get (agent-ui-get "t") :value) 0))
+        (agent-ui-slider-right-more)
+        (agent-ui-slider-right-more)
+        (should (= (plist-get (agent-ui-get "t") :value) 100))
+        (agent-ui-slider-right-more)
+        (should (= (plist-get (agent-ui-get "t") :value) 120))
+        ;; A click on the track's middle.
+        (goto-char (point-min))
+        (search-forward "120 ")
+        (let* ((start (text-property-not-all (line-beginning-position) (line-end-position) 'agent-ui-slide-to nil))
+               ;; Each of its characters has its own: the first without one.
+               (end (text-property-any start (line-end-position) 'agent-ui-slide-to nil)))
+          (funcall (get-text-property (/ (+ start end) 2) 'agent-ui-slide-to)))
+        (should (= (plist-get (agent-ui-get "t") :value) 60))
+        ;; Elsewhere, h is the cursor's.
+        (goto-char (point-min))
+        (should-not (eq (key-binding (kbd "h")) #'agent-ui-slider-left))
+        (should-error (agent-ui-slider-left) :type 'user-error)
+        (+test-aue-press "⏵ Set")
+        (should (equal sent '(("Answer to slider t (Timeout): 60 s" t))))
+        (agent-ui--flush)
+        (should (string-search "✓ Set: 60 s" (buffer-string)))
+        (goto-char (point-min))
+        (search-forward "●")
+        (should-error (agent-ui-slider-left) :type 'user-error)))))
+
+(ert-deftest agent-ui-elements/slider-live ()
+  "Live: no Set; the value sent once the knob rests (moved twice: once, the
+last), at once; never locked."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-slider-live-delay 0.05)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "th" :type "slider" :label "Threshold" :min 0 :max 1 :step 0.1 :value 0.5 :live t))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (should-not (string-search "⏵ Set" (buffer-string)))
+        (goto-char (point-min))
+        (search-forward "●")
+        (agent-ui-slider-right)
+        (agent-ui-slider-right)
+        (should-not sent)
+        (let ((end (+ (float-time) 0.3)))
+          (while (and (not sent) (< (float-time) end)) (accept-process-output nil 0.02)))
+        (should (equal sent '(("Slider th (Threshold) set to 0.7" t))))
+        (agent-ui-slider-left)
+        (should (= (plist-get (agent-ui-get "th") :value) 0.6))))))
+
+(ert-deftest agent-ui-elements/slider-wrong ()
+  (should (string-match-p "min is required" (+test-aue-error '(:type "slider" :max 1))))
+  (should (string-match-p "min must be below max" (+test-aue-error '(:type "slider" :min 2 :max 1))))
+  (should (string-match-p "step must be above 0" (+test-aue-error '(:type "slider" :min 0 :max 1 :step 0))))
+  (should (string-match-p "value 12 is outside 0 to 10" (+test-aue-error '(:type "slider" :min 0 :max 10 :value 12)))))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.
