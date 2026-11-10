@@ -66,7 +66,10 @@
   (let* ((tasks (plist-get props :tasks))
          (from (apply #'min (mapcar (lambda (task) (plist-get task :start)) tasks)))
          (ends (delq nil (mapcar (lambda (task) (plist-get task :end)) tasks)))
-         (now (if (seq-some (lambda (task) (plist-get task :stamped)) tasks) (float-time)
+         ;; Now only while a task given timestamps runs (no end): finished,
+         ;; the axis stretched to now (yesterday's run over 22 hours).
+         (now (if (seq-some (lambda (task) (and (plist-get task :stamped) (null (plist-get task :end)))) tasks)
+                  (funcall agent-ui-clock)
                 (apply #'max from ends)))
          (to (apply #'max now ends)))
     (cons from (if (<= to from) (+ from 1) to))))

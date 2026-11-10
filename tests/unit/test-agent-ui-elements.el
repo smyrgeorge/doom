@@ -1133,6 +1133,19 @@ a unit that isn't text is refused (it broke the drawing)."
 
 ;; ====== TIMELINE ======
 
+(ert-deftest agent-ui-elements/timeline-finished-stamped-spans-its-tasks ()
+  "Finished tasks given timestamps: the axis spans them (it ran to now: a day
+later, 22 hours wide); one still running: to now."
+  (let* ((agent-ui-clock (lambda () (+ (float-time (date-to-time "2026-11-09T12:10:00Z")) 86400)))
+         (done '(:type "timeline" :tasks ((:name "build" :start "2026-11-09T12:00:00Z" :end "2026-11-09T12:05:00Z")
+                                          (:name "test" :start "2026-11-09T12:05:00Z" :end "2026-11-09T12:10:00Z"))))
+         (text (+test-aue-draw done :width 60)))
+    (should (string-match-p "10m 00s\\'" text))
+    (should-not (string-match-p "h " text))
+    ;; Running: to now, a day on.
+    (should (string-match-p "24h" (+test-aue-draw '(:type "timeline" :tasks ((:name "deploy" :start "2026-11-09T12:10:00Z")))
+                                                  :width 60)))))
+
 (ert-deftest agent-ui-elements/timeline ()
   (let ((element '(:type "timeline" :tasks ((:name "build" :start 0 :duration 10)
                                            (:name "test" :start 10 :end 20 :status "failed")
