@@ -35,7 +35,7 @@ from it in a new pane too, and the next ones in that pane, as its tabs. The prev
 | `H` | Its dependencies, as a tree |
 | `S` | The project's statistics |
 | `D` / `R` | Delete it / reopen it |
-| `gr` | Refresh (the list also refreshes every 30 seconds) |
+| `gr` | Refresh (while it's shown, the list also refreshes itself every 30 seconds, in the background) |
 | `?` | Every command, in a menu |
 | `q` | Close |
 

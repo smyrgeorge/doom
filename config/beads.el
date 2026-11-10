@@ -30,5 +30,6 @@
 
 (load! "beads/project")                 ; SPC o i, SPC o I
 (load! "beads/bd")                      ; mended for bd 1.x
+(load! "beads/refresh")                 ; in the background
 (load! "beads/evil")                    ; its keys over Vim's
 (load! "beads/theme")                   ; the theme's colours

@@ -77,6 +77,29 @@ on *scratch*, and again after (Beads' buffers killed)."
   (with-current-buffer buffer
     (buffer-substring-no-properties (point-min) (point-max))))
 
+(defun +test-beads--list ()
+  "The issue list's buffer."
+  (seq-find (lambda (b) (with-current-buffer b (derived-mode-p 'beads-list-mode)))
+            (buffer-list)))
+
+(defun +test-beads--settle (buffer &optional seconds)
+  "Wait (SECONDS at most, else 30) for BUFFER's refresh on its way to end."
+  (let ((end (+ (float-time) (or seconds 30))))
+    (while (and (buffer-local-value '+my/beads--fetching buffer) (< (float-time) end))
+      (accept-process-output nil 0.05))
+    (should-not (buffer-local-value '+my/beads--fetching buffer))))
+
+(defun +test-beads--slow-bd (seconds &optional code)
+  "A stand-in bd: sleeps SECONDS, then runs the real one (or fails with CODE)."
+  (let ((script (make-temp-file (+test-tmp-file "slow-bd-"))))
+    (with-temp-file script
+      (insert "#!/bin/sh\nsleep " (number-to-string seconds) "\n"
+              (if code
+                  (format "echo 'bd broke' >&2\nexit %d\n" code)
+                (format "exec %s \"$@\"\n" (shell-quote-argument (executable-find "bd"))))))
+    (set-file-modes script #o755)
+    script))
+
 (defun +test-beads--bar ()
   "The current issue list's bottom bar: its text (no window in batch to draw
 it in), its counts."
@@ -341,6 +364,123 @@ closed), not 0s."
         (should (string-match-p "Total Issues: +4" text))
         (should (string-match-p "Closed: +1" text))
         (should (string-match-p "Blocked: +1" text))))))
+
+;; ====== IN THE BACKGROUND ======
+
+(ert-deftest beads/the-timer-s-refresh-doesn-t-wait-for-bd ()
+  "beads-autoupdate's refresh, bd taking 2 s: returns at once; the list
+redrawn once bd answered, with what bd added meanwhile (its bar too)."
+  (+test-beads-with-project
+    (+test-beads--create "First")
+    (+my/beads-project)
+    (let ((list (+test-beads--list))
+          (slow (+test-beads--slow-bd 2)))
+      (should (get-buffer-window list 'visible))
+      (+test-beads--run "bd" "create" "Added by Claude" "--quiet")
+      (cl-letf (((symbol-function 'beads-backend-cli-program-path) (lambda (&rest _) slow)))
+        (with-current-buffer list
+          (let ((start (float-time)))
+            (beads-autoupdate--refresh)
+            (should (< (- (float-time) start) 1)))
+          (should +my/beads--fetching)
+          (should-not (string-match-p "Added by Claude" (+test-beads--text list)))
+          (should (string-match-p "1 total" (+test-beads--bar))))
+        (+test-beads--settle list))
+      (should (string-match-p "Added by Claude" (+test-beads--text list)))
+      (with-current-buffer list
+        (should (string-match-p "2 total" (+test-beads--bar)))))))
+
+(ert-deftest beads/a-refresh-on-its-way-not-started-again ()
+  "Asked again while on its way: the same one; gr meanwhile: waited for, and
+the one on its way cancelled (its older answer never drawn)."
+  (+test-beads-with-project
+    (+test-beads--create "First")
+    (+my/beads-project)
+    (let ((list (+test-beads--list))
+          (slow (+test-beads--slow-bd 2))
+          drawn)
+      (cl-letf (((symbol-function 'beads-backend-cli-program-path) (lambda (&rest _) slow)))
+        (with-current-buffer list
+          (+my/beads-refresh-async list)
+          (let ((fetching +my/beads--fetching))
+            (should (= (length (cdr fetching)) 2)) ; bd list, bd stats
+            (+my/beads-refresh-async list)
+            (should (eq +my/beads--fetching fetching))
+            ;; gr: bd asked and waited for (the real one), the other cancelled.
+            (cl-letf (((symbol-function 'beads-backend-cli-program-path) (lambda (&rest _) (executable-find "bd"))))
+              (+test-beads--run "bd" "create" "Second" "--quiet")
+              (beads-list-refresh t))
+            (should-not +my/beads--fetching)
+            (dolist (process (cdr fetching))
+              (should (process-get process 'cancelled))
+              (should-not (process-live-p process)))
+            (should (string-match-p "Second" (+test-beads--text list))))))
+      (cl-letf (((symbol-function '+my/beads--redraw) (lambda (&rest args) (push args drawn))))
+        (accept-process-output nil 0.3))
+      (should-not drawn))))
+
+(ert-deftest beads/not-shown-not-refreshed-until-shown ()
+  "A list in no window: no bd run, marked; shown again: refreshed."
+  (+test-beads-with-project
+    (+test-beads--create "First")
+    (+my/beads-project)
+    (let ((list (+test-beads--list)))
+      (should (memq #'+my/beads--shown-h (buffer-local-value 'window-buffer-change-functions list)))
+      (dolist (window (get-buffer-window-list list nil t))
+        (set-window-buffer window (get-buffer-create "*scratch*")))
+      (should-not (get-buffer-window list 'visible))
+      (+test-beads--run "bd" "create" "While hidden" "--quiet")
+      (with-current-buffer list
+        (cl-letf (((symbol-function 'make-process) (lambda (&rest _) (error "bd run"))))
+          (beads-autoupdate--refresh))
+        (should-not +my/beads--fetching)
+        (should +my/beads--stale))
+      ;; Shown (batch Emacs runs no window change functions: called as
+      ;; redisplay calls them).
+      (set-window-buffer (selected-window) list)
+      (with-current-buffer list
+        (+my/beads--shown-h (selected-window))
+        (should +my/beads--fetching)
+        (should-not +my/beads--stale))
+      (+test-beads--settle list)
+      (should (string-match-p "While hidden" (+test-beads--text list))))))
+
+(ert-deftest beads/an-issue-refreshed-in-the-background ()
+  "An issue's buffer (Claude's bd commands refresh it): bd show not waited
+for, the issue redrawn with bd's answer."
+  (+test-beads-with-project
+    (let ((id (+test-beads--create "Old title")))
+      (beads-detail-open (beads-client-show id))
+      (let ((detail (get-buffer (format "*Beads Detail: %s*" id))))
+        (should (get-buffer-window detail 'visible))
+        (+test-beads--run "bd" "update" id "--title" "New title" "--quiet")
+        (+my/beads-refresh-async detail t)
+        (should (buffer-local-value '+my/beads--fetching detail))
+        (should (string-match-p "Old title" (+test-beads--text detail)))
+        (+test-beads--settle detail)
+        (should (string-match-p "New title" (+test-beads--text detail)))))))
+
+(ert-deftest beads/bd-failing-in-the-background ()
+  "bd failing: said as beads.el says it, the list as it was, nothing on its way."
+  (+test-beads-with-project
+    (+test-beads--create "First")
+    (+my/beads-project)
+    (let ((list (+test-beads--list))
+          (failing (+test-beads--slow-bd 0 3))
+          messages)
+      (cl-letf (((symbol-function 'beads-backend-cli-program-path) (lambda (&rest _) failing))
+                ((symbol-function 'message)
+                 (lambda (format &rest args) (push (apply #'format-message format args) messages))))
+        (+my/beads-refresh-async list)
+        (+test-beads--settle list))
+      (should (seq-find (lambda (m) (string-match-p "Failed to fetch issues: .*bd broke" m)) messages))
+      (should (string-match-p "First" (+test-beads--text list))))))
+
+(ert-deftest beads/background-refresh-wired ()
+  (should (advice-member-p #'+my/beads-autoupdate-a 'beads-autoupdate--refresh))
+  (should (advice-member-p #'+my/beads-refresh-lists-a 'beads-detail--refresh-list-buffers))
+  (should (advice-member-p #'+my/beads-cancel-a 'beads-list-refresh))
+  (should (advice-member-p #'+my/beads-cancel-a 'beads-detail-refresh)))
 
 (ert-deftest beads/bd-an-issue-knows-its-issue ()
   "An issue opened (vui's view, beads.el's default): it keeps which issue it

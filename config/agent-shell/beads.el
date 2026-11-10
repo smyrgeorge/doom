@@ -38,7 +38,8 @@ told of them, Beads' guide after (see ISSUES FOR CLAUDE); else nil."
 
 ;; EMACS FOLLOWS CLAUDE'S CHANGES
 ;; Each of Claude's shell commands running bd, once done: the project's issue
-;; lists and issues open in Emacs refreshed (once for a burst of them).
+;; lists and issues open in Emacs refreshed (once for a burst of them), in the
+;; background (config/beads/refresh.el: those not shown, once shown again).
 
 (defconst +my/agent-shell-beads--command-regexp
   "\\(?:\\`\\|[;&|(`]\\|\\$(\\|[[:space:]]\\)bd\\(?:[[:space:]]\\|\\'\\)"
@@ -62,7 +63,8 @@ told of them, Beads' guide after (see ISSUES FOR CLAUDE); else nil."
     (with-current-buffer buffer
       (with-demoted-errors "Beads refresh: %S"
         (let ((inhibit-message t))
-          (cond ((derived-mode-p 'beads-list-mode) (beads-list-refresh))
+          (cond ((fboundp '+my/beads-refresh-async) (+my/beads-refresh-async buffer t))
+                ((derived-mode-p 'beads-list-mode) (beads-list-refresh))
                 ((fboundp 'beads-detail-refresh) (beads-detail-refresh))))))))
 
 (defun +my/agent-shell-beads--tool-call (root event)
