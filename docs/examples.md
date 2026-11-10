@@ -13,6 +13,7 @@
 | `tiling` | [Tiled panes](editor.md#tiling) |
 | `banner` | [Notices](editor.md#notices) |
 | `agent-ui` | [An agent's canvas](agent-ui.md) beside its conversation, filled in as it works |
+| `issues` | [A project's issues](issues.md) in their list (needs `bd`) |
 
 `scripts/screenshots.sh [NAME...]` takes the screenshots, on macOS only (macOS's `screencapture`; the terminal it runs
 from needs the Screen Recording permission). The examples themselves work on Linux too.

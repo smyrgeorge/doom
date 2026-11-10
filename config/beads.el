@@ -40,5 +40,6 @@
 (load! "beads/bd")                      ; mended for bd 1.x
 (load! "beads/refresh")                 ; in the background
 (load! "beads/hidden")                  ; closed issues, a filter: said
+(load! "beads/look")                    ; icons, badges, tags, epics
 (load! "beads/evil")                    ; its keys over Vim's
 (load! "beads/theme")                   ; the theme's colours

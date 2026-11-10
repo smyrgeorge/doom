@@ -42,12 +42,13 @@ not selected (a hollow box in the panes), a cursor that doesn't blink."
   (setq-default cursor-in-non-selected-windows nil)
   (let ((build (file-name-directory
                 (directory-file-name (file-name-directory (locate-library "magit"))))))
-    (dolist (package '("magit" "magit-section" "diff-hl"))
+    (dolist (package '("magit" "magit-section" "diff-hl" "beads" "nerd-icons"))
       (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
   (require 'doom-themes)
   (+test-load "config/childframe" "config/banner" "config/window" "config/editor"
               "config/webkit" "config/pdf" "config/image" "config/markdown" "config/excalidraw"
-              "config/stripe" "config/tiling" "config/merge" "config/agent-ui" "config/examples")
+              "config/stripe" "config/tiling" "config/merge" "config/agent-ui" "config/beads"
+              "config/examples")
   ;; PDF.js and Excalidraw: copies of Doom's, not downloaded again.
   (+test-pdfjs-dir)
   (+test-excalidraw-dir)

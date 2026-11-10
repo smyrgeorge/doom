@@ -10,8 +10,9 @@
   (dolist (package '("magit" "magit-section"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
+(load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
 (+test-load "config/childframe" "config/banner" "config/window" "config/tiling" "config/stripe"
-            "config/editor" "config/merge" "config/agent-ui" "config/examples")
+            "config/editor" "config/merge" "config/agent-ui" "config/beads" "config/examples")
 (require 'so-long)
 (require 'tab-line)
 
@@ -149,7 +150,7 @@ images/, always that name."
   "Each example listed has its file, its command, its line in
 config/examples.el's list and docs/examples.md's table."
   (should (equal (sort (+my/examples) #'string<)
-                 '("agent-ui" "banner" "excalidraw" "image" "markdown" "merge" "pdf" "stripe" "tiling")))
+                 '("agent-ui" "banner" "excalidraw" "image" "issues" "markdown" "merge" "pdf" "stripe" "tiling")))
   (let ((listed (with-temp-buffer
                   (insert-file-contents (expand-file-name "config/examples.el" +test-root))
                   (buffer-string)))
@@ -229,6 +230,33 @@ with its actions; an info and an error notice; gone once closed."
         (should (= (length +my/banner--list) 4))
         (funcall (cdr (assoc "Close them all" (nth 2 (assq 'example-error +my/banner--list)))))
         (should-not +my/banner--list))
+      (kill-buffer buffer)
+      (should-not (file-exists-p dir)))))
+
+;; ====== ISSUES ======
+
+(ert-deftest examples/issues-a-project-s-list ()
+  "A project tracked with bd (the real one; skipped without it): its list,
+the epics' issues under them, tags, a blocked one, the closed ones hidden
+and said; its folder gone once the list is closed."
+  (unless (executable-find "bd")
+    (ert-skip "No bd (scripts/tools.sh installs it)"))
+  (+test-examples
+    (let* ((buffer (+my/example-issues))
+           (dir (car (buffer-local-value '+my/example--closing buffer))))
+      (should (string-prefix-p (file-name-as-directory (file-truename temporary-file-directory)) dir))
+      (with-current-buffer buffer
+        (should (derived-mode-p 'beads-list-mode))
+        (should (eq (window-buffer) buffer))
+        (should (one-window-p))
+        (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+          (should (= (length (split-string text "\n" t)) 12))
+          (should (string-match-p "Parser rewrite +━━──── 1/4 +parser" text))
+          (should (string-match-p "└ Parser: recover from syntax errors" text))
+          (should (string-match-p "⊘ blocked by 1 .*Release 2.0" text))
+          (should (string-match-p "Crash on an empty file +crash +parser" text)))
+        (should (equal (mapcar (lambda (notice) (nth 1 notice)) +my/banner--list)
+                       '("3 closed issues hidden."))))
       (kill-buffer buffer)
       (should-not (file-exists-p dir)))))
 

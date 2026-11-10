@@ -3,7 +3,9 @@
 A project's issues, tracked with [Beads](https://github.com/gastownhall/beads) (`bd`): a git-backed issue tracker
 that keeps them in the project's `.beads/`, beside the code. Coding agents such as Claude Code use it as their memory
 across sessions; [beads.el](https://codeberg.org/ctietze/beads.el) shows the same issues in Emacs. `scripts/tools.sh`
-installs `bd` (Homebrew on macOS, npm on Linux).
+installs `bd` (Homebrew on macOS, npm on Linux). Try it: `M-x +my/example-issues`.
+
+![A project's issues: statuses, priorities and types as icons and badges, an epic's issues under it](../examples/issues.png)
 
 | Key | Action |
 |---|---|
@@ -21,6 +23,11 @@ typed is `+my/beads-init-command` in `config/beads.el`.
 
 The list opens in a new pane where [tiling](editor.md#tiling) puts it, as Claude Code and Magit do; an issue opened
 from it in a new pane too, and the next ones in that pane, as its tabs. The preview (`P`) stays beside the list.
+
+Each issue's status, priority and type are icons and badges in their colours: ○ ready (nothing open blocks it), ◔ in
+progress, ⊘ blocked (in the Blocked section, by how many open issues), ✓ closed; P0 and P1 stand out, P3 and P4 are
+muted. Labels follow the title as tags, an epic shows its progress (its closed issues too), and its open issues are
+listed under it.
 
 It shows the work still open: a notice over it says how many closed issues it hides, with **Show closed** (then
 **Hide closed**), and `f s closed` lists only them. With a filter on, a notice says which, with **Clear filter**.

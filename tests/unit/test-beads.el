@@ -20,6 +20,7 @@
 (require 'beads-hierarchy)
 (require 'beads-activity)               ; its faces
 (require 'doom-themes)                  ; doom-blend
+(require 'nerd-icons)                   ; the types' icons
 
 ;; ====== HELPERS ======
 
@@ -518,6 +519,117 @@ stats a refresh, in the background too."
   (should (equal (beads-backend-bd--operation-to-cli-args "ready" '((limit . 5))) '("ready" "--limit" "5")))
   (should (equal (beads-backend-bd--operation-to-cli-args "list" '((status . "open")))
                  '("list" "--status" "open" "--limit" "0"))))
+
+;; ====== THE LOOK ======
+
+(defun +test-beads--line (text)
+  "The current list's line showing TEXT, its text."
+  (save-excursion
+    (goto-char (point-min))
+    (and (search-forward text nil t)
+         (buffer-substring-no-properties (line-beginning-position) (line-end-position)))))
+
+(defun +test-beads--faces-at (text)
+  "The faces on TEXT's first character (its case), in the current buffer: a
+list of faces (names, plists)."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((case-fold-search nil))
+      (search-forward text))
+    (let ((face (get-text-property (match-beginning 0) 'face)))
+      (if (keywordp (car-safe face)) (list face) (ensure-list face)))))
+
+(ert-deftest beads/look-the-columns ()
+  "Statuses as icons in their colours (ready: open, nothing open blocking),
+priorities as badges, types with their icons in a graphic frame only."
+  (let ((+my/beads--statuses (make-hash-table :test #'equal)))
+    (puthash "t-2" "open" +my/beads--statuses)
+    (puthash "t-3" "closed" +my/beads--statuses)
+    (should (equal (+my/beads-format-status '((status . "open"))) "○ ready"))
+    (should (equal (+my/beads-format-status '((status . "in_progress"))) "◔ in progress"))
+    (should (equal (+my/beads-format-status '((status . "closed"))) "✓ closed"))
+    (should (equal (+my/beads-format-status '((status . "deferred"))) "◇ deferred"))
+    ;; Blocked by an open issue, not by a closed one.
+    (should (equal (+my/beads-format-status
+                    '((status . "open") (dependencies . [((type . "blocks") (depends_on_id . "t-2"))
+                                                         ((type . "blocks") (depends_on_id . "t-3"))
+                                                         ((type . "parent-child") (depends_on_id . "t-2"))])))
+                   "⊘ blocked by 1"))
+    ;; Being worked on: in progress, blockers or not.
+    (should (equal (+my/beads-format-status
+                    '((status . "in_progress") (dependencies . [((type . "blocks") (depends_on_id . "t-2"))])))
+                   "◔ in progress"))
+    (should (memq 'success (ensure-list (get-text-property 0 'face (+my/beads-format-status '((status . "open"))))))))
+  ;; Badges: the theme's red and orange (else its faces, inverted).
+  (should (equal (get-text-property 1 'face (+my/beads-format-priority '((priority . 0))))
+                 '(:inherit error :inverse-video t :weight bold)))
+  (cl-letf (((symbol-function 'doom-color) (lambda (name &rest _) (if (eq name 'orange) "#da8548" "#ff6c6b")))
+            ((symbol-function 'face-background)
+             (lambda (face &rest _) (if (eq face 'default) "#282c34" "#000000"))))
+    (should (equal (get-text-property 1 'face (+my/beads-format-priority '((priority . 1))))
+                   `(:foreground "#da8548" :background ,(doom-blend "#da8548" "#282c34" 0.25) :weight bold)))
+    (should (equal (get-text-property 1 'face (+my/beads--label-tag "parser"))
+                   `(:foreground "#ff6c6b" :background ,(doom-blend "#ff6c6b" "#282c34" 0.25)))))
+  (should (equal (+my/beads-format-priority '((priority . 2))) " P2 "))
+  (should (eq (get-text-property 1 'face (+my/beads-format-priority '((priority . 4)))) 'shadow))
+  ;; A type: its word in a terminal; its icon first in a graphic frame.
+  (should (equal (+my/beads-format-type '((issue_type . "bug"))) "bug"))
+  (should (eq (get-text-property 0 'face (+my/beads-format-type '((issue_type . "bug")))) 'error))
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+    (let ((type (+my/beads-format-type '((issue_type . "epic")))))
+      (should (string-suffix-p " epic" type))
+      (should (equal (plist-get (seq-find #'consp (ensure-list (get-text-property 0 'face type))) :family)
+                     "Symbols Nerd Font Mono")))))
+
+(ert-deftest beads/look-tags-and-progress ()
+  "Labels as tags, a colour each, the same each time; an epic's progress."
+  (let ((tag (+my/beads--label-tag "parser")))
+    (should (equal (substring-no-properties tag) " parser "))
+    (should (equal (get-text-property 0 'face tag) (get-text-property 0 'face (+my/beads--label-tag "parser"))))
+    (should-not (equal (get-text-property 0 'face tag) (get-text-property 0 'face (+my/beads--label-tag "crash")))))
+  (should (equal (substring-no-properties (+my/beads--progress 1 3)) "━━──── 1/3"))
+  (should (equal (substring-no-properties (+my/beads--progress 0 0)) "────── 0/0"))
+  (should (equal (substring-no-properties (+my/beads--progress 4 4)) "━━━━━━ 4/4")))
+
+(ert-deftest beads/bd-the-look ()
+  "An epic, its issues under it (indented, in its section), its progress
+counting its closed one; labels as tags; one blocked by an open bug in the
+Blocked section; a closed row dimmed."
+  (+test-beads-with-project
+    (let* ((epic (+test-beads--create "The parser rewrite" :issue-type "epic" :priority 1))
+           (lexer (+test-beads--create "Lexer: tokens" :issue-type "task" :parent epic))
+           (parser (+test-beads--create "Parser: recovery" :issue-type "feature" :parent epic))
+           (old (+test-beads--create "Old parser removed" :issue-type "chore" :parent epic))
+           (bug (+test-beads--create "Crash on an empty file" :issue-type "bug" :priority 0))
+           (release (+test-beads--create "Release 2.0")))
+      (ignore lexer parser)
+      (beads-client-request "label_add" `((id . ,bug) (label . "crash")))
+      (beads-client-request "dep_add" `((from_id . ,release) (to_id . ,bug)))
+      (beads-client-close old "Done")
+      (+my/beads-project)
+      (with-current-buffer (+test-beads--list)
+        (let ((lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n" t)))
+          ;; The epic, then its two open issues, indented.
+          (let ((at (seq-position lines (+test-beads--line "The parser rewrite"))))
+            (should (string-match-p "━━──── 1/3" (nth at lines)))
+            (should (string-match-p "└ Lexer: tokens" (nth (1+ at) lines)))
+            (should (string-match-p "└ Parser: recovery" (nth (+ 2 at) lines))))
+          ;; Blocked: last of the open ones, in its section.
+          (should (string-match-p "⊘ blocked by 1 .*Release 2.0" (car (last lines))))
+          (should (= (beads-list--issue-section (beads-client-show release)) 1))
+          (should (= (beads-list--issue-section (seq-find (lambda (i) (equal (alist-get 'id i) release))
+                                                          beads-list--issues))
+                     1)))
+        (should (string-match-p "Crash on an empty file +crash" (+test-beads--line "Crash on")))
+        ;; In a P0 row: the tag's face first, the row's tint under it.
+        (let ((faces (+test-beads--faces-at " crash ")))
+          (should (equal (car faces) (get-text-property 0 'face (+my/beads--label-tag "crash"))))
+          (should (memq 'beads-list-row-p0 faces)))
+        ;; Closed, shown: dimmed, in the Completed section (not under its epic).
+        (+my/beads-show-closed)
+        (should (string-match-p "✓ closed .*Old parser removed" (+test-beads--line "Old parser removed")))
+        (should (memq 'shadow (+test-beads--faces-at "Old parser removed")))
+        (should-not (memq 'shadow (+test-beads--faces-at "Crash on")))))))
 
 ;; ====== IN THE BACKGROUND ======
 
