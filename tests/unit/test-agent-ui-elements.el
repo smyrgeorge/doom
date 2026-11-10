@@ -2132,6 +2132,30 @@ middle (cut from the right, the reason went first: \"(not fou…\")."
     (should (equal (string-join lines " ") alt))
     (should (eq (get-text-property (1+ (string-search "\n" text)) 'face text) 'agent-ui-muted))))
 
+;; doom-nwj.36
+(ert-deftest agent-ui-elements/image-known-by-its-bytes ()
+  "In the GUI an image's type is known by its first bytes: a PNG without an
+extension is shown (it was refused, by its name); a text file named .png
+isn't an image."
+  (let* ((dir (make-temp-file (+test-tmp-file "images-") t))
+         (png (expand-file-name "shot" dir))
+         (fake (expand-file-name "fake.png" dir))
+         (ctx (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+    (unwind-protect
+        (progn
+          (copy-file (expand-file-name "images/splash.png" data-directory) png)
+          (with-temp-file fake (insert "hello, not a picture\n"))
+          (let ((image (get-text-property 0 'display (agent-ui-render (list :type "image" :file png) ctx))))
+            (should (eq (car image) 'image))
+            (should (eq (plist-get (cdr image) :type) 'png))
+            (should (equal (plist-get (cdr image) :file) png)))
+          (should (string-suffix-p "(not an image Emacs shows)"
+                                   (substring-no-properties (agent-ui-render (list :type "image" :file fake) ctx))))
+          ;; An SVG by its name too (its <svg can come late), and as before.
+          (let ((image (get-text-property 0 'display (agent-ui-render (list :type "image" :file +test-aue-image) ctx))))
+            (should (eq (plist-get (cdr image) :type) 'svg))))
+      (delete-directory dir t))))
+
 (ert-deftest agent-ui-elements/image-from-a-url ()
   (let* ((agent-ui-image-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "images-") t)))
          (agent-ui-image--fetches (make-hash-table :test #'equal))

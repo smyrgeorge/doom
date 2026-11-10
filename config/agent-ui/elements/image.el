@@ -142,17 +142,26 @@ width at most."
 (defun agent-ui-image--text (props ctx)
   (agent-ui-image--line props ctx (cdr (agent-ui-image--source props))))
 
+(defun agent-ui-image--type (file)
+  "FILE's image type, if Emacs shows it: by its first bytes (a PNG named
+\"shot\" is one, a text file named a.png isn't), else by its name for an
+SVG (its <svg can come past them); nil if it's none."
+  (let ((type (or (image-type-from-file-header file)
+                  (and (eq (image-supported-file-p file) 'svg) 'svg))))
+    (and type (image-type-available-p type) type)))
+
 (defun agent-ui-image--gui (props ctx)
   (let* ((source (agent-ui-image--source props))
-         (file (car source)))
+         (file (car source))
+         (type (and file (not (cdr source)) (agent-ui-image--type file))))
     (cond
      ((cdr source) (agent-ui-image--line props ctx (cdr source)))
-     ((not (image-supported-file-p file)) (agent-ui-image--line props ctx "not an image Emacs shows"))
+     ((not type) (agent-ui-image--line props ctx "not an image Emacs shows"))
      (t
       (let* ((width (round (* (plist-get ctx :width) (plist-get ctx :char-width)
                               (/ (plist-get props :width) 100.0))))
              (height (* (plist-get props :height) (plist-get ctx :line-height)))
-             (image (create-image file nil nil :max-width width :max-height height :ascent 'center)))
+             (image (create-image file type nil :max-width width :max-height height :ascent 'center)))
         (concat (agent-ui-button (propertize " " 'display image)
                                  (lambda () (funcall agent-ui-open-file-function file))
                                  (format "%s: RET opens it" (or (plist-get props :url) (abbreviate-file-name file))))
