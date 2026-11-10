@@ -880,6 +880,29 @@ taller), both cut to the tile: nothing overlaps, nothing spills out."
     (setq element (list :type "stats" :figures (butlast (plist-get element :figures))))
     (should (string-match-p "<svg[^>]* height=\"48\"" (funcall svg-of 160)))))
 
+(ert-deftest agent-ui-elements/stats-tiles-in-one-row-when-they-fit ()
+  "Tiles that fit side by side are drawn in one row (the gaps between them
+weren't counted: 3 figures wrapped 2 and 1 from 50 to 79 columns)."
+  (let ((rows-of (lambda (figures width)
+                   (let ((svg (plist-get (cdr (get-text-property
+                                               0 'display (agent-ui-render (list :type "stats" :figures figures)
+                                                                           (agent-ui-context :width width :graphic t
+                                                                                             :char-width 8 :line-height 16))))
+                                         :data))
+                         (ys nil) (start 0))
+                     (while (string-match "<rect [^>]*y=\"\\([0-9.]+\\)\"" svg start)
+                       (cl-pushnew (match-string 1 svg) ys :test #'equal)
+                       (setq start (match-end 0)))
+                     (length ys))))
+        (three '((:label "Coverage" :value 87.1 :unit "%" :change 2.3) (:label "Tests" :value 412 :change "all pass")
+                 (:label "Build" :value 29 :unit "s" :change -12 :good "down")))
+        (four '((:label "a" :value 1) (:label "b" :value 2) (:label "c" :value 3) (:label "d" :value 4))))
+    (dolist (width '(55 60 70 78))
+      (should (= (funcall rows-of three width) 1)))
+    (should (= (funcall rows-of four 80) 1))
+    ;; Too narrow: they wrap still.
+    (should (= (funcall rows-of three 40) 2))))
+
 (ert-deftest agent-ui-elements/stats-wrong ()
   (should (string-match-p "figure 1 has no label" (+test-aue-error '(:type "stats" :figures ((:value 1))))))
   (should (string-match-p "figure 1 has no value" (+test-aue-error '(:type "stats" :figures ((:label "a"))))))

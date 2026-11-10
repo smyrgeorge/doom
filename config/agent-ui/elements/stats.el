@@ -97,7 +97,10 @@ the value's font 1.25 of a line (a character ~0.75 of it), the change's 0.8
          (lh (plist-get ctx :line-height))
          (width (* cw (plist-get ctx :width)))
          (gap cw)
-         (tile-width (max (* 16 cw) (min (* 26 cw) (/ (- width gap) (max 1 (length figures))))))
+         ;; Each tile its share of the width, less the gaps between them (not
+         ;; counting those, 3 tiles that fit wrapped 2 and 1).
+         (n (max 1 (length figures)))
+         (tile-width (max (* 16 cw) (min (* 26 cw) (/ (- width (* (1- n) gap)) n))))
          (per-row (max 1 (/ (+ width gap) (+ tile-width gap))))
          ;; Each row's tiles laid out; a row 4 lines tall when a change went
          ;; under its value, else 3.
