@@ -1944,6 +1944,25 @@ each in its kind's colour (the first mark only was shown)."
     (puthash "/bad/" '(:error "no Beads issues here (bd failed)") agent-ui-issues--cache)
     (should (equal (+test-aue-draw '(:type "issues" :dir "/bad/")) "no Beads issues here (bd failed)"))))
 
+;; doom-nwj.73
+(ert-deftest agent-ui-elements/issues-an-epics-children-by-parent ()
+  "An epic's board has its children linked by bd dep add (their ids not
+under its own: they were left out), and their children."
+  (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
+    (puthash "/proj/" '(:ready ("t-fas.1" "t-um4" "t-zz9" "t-oth")
+                        :issues ((:id "t-fas" :title "The epic" :status "open" :issue_type "epic")
+                                 (:id "t-fas.1" :title "By its id" :status "open" :parent "t-fas")
+                                 (:id "t-um4" :title "Linked" :status "open" :parent "t-fas")
+                                 (:id "t-zz9" :title "Grandchild" :status "open" :parent "t-um4")
+                                 (:id "t-oth" :title "Elsewhere" :status "open" :parent "t-other")
+                                 (:id "t-cyc" :title "A loop" :status "open" :parent "t-cyc")))
+             agent-ui-issues--cache)
+    (let ((board (+test-aue-draw '(:type "issues" :dir "/proj/" :parent "t-fas") :width 40)))
+      (should (string-prefix-p "Ready (3)\n" board))
+      (dolist (id '("t-fas.1" "t-um4" "t-zz9")) (should (string-search id board)))
+      (should-not (string-search "t-oth" board))
+      (should-not (string-search "t-cyc" board)))))
+
 (ert-deftest agent-ui-elements/issues-open-one ()
   (let ((agent-ui-issues--cache (make-hash-table :test #'equal))
         (opened nil))

@@ -96,14 +96,31 @@ board stayed \"fetching the issues…\")."
 
 ;; ====== DRAWING ======
 
+(defun agent-ui-issues--under-p (issue parent by-id)
+  "Whether ISSUE is PARENT's (its child, or a child's): its id under
+PARENT's (p.1, p.1.2), or its parent field's chain (bd dep add --type
+parent-child: any id) reaching it; BY-ID the issues by id."
+  (let ((prefix (concat parent "."))
+        (up (plist-get issue :parent))
+        (seen nil)
+        (found (string-prefix-p (concat parent ".") (plist-get issue :id))))
+    (while (and (not found) up (not (member up seen)))
+      (push up seen)
+      (if (or (equal up parent) (string-prefix-p prefix up))
+          (setq found t)
+        (setq up (plist-get (gethash up by-id) :parent))))
+    found))
+
 (defun agent-ui-issues--columns (props data)
   "DATA's issues in their columns, as PROPS filters them: ((TITLE . ISSUES)...)."
   (let* ((parent (plist-get props :parent))
          (label (plist-get props :label))
          (ready (plist-get data :ready))
+         (by-id (let ((table (make-hash-table :test #'equal)))
+                  (dolist (i (plist-get data :issues) table) (puthash (plist-get i :id) i table))))
          (issues (seq-filter (lambda (i)
                                (and (not (equal (plist-get i :issue_type) "epic"))
-                                    (or (null parent) (string-prefix-p (concat parent ".") (plist-get i :id)))
+                                    (or (null parent) (agent-ui-issues--under-p i parent by-id))
                                     (or (null label) (member label (plist-get i :labels)))))
                              (plist-get data :issues)))
          (by-priority (lambda (l) (cl-sort (copy-sequence l) #'< :key (lambda (i) (or (plist-get i :priority) 9))))))
