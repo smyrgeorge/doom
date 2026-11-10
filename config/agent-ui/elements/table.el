@@ -164,7 +164,15 @@ space (they broke the table's lines and its border)."
          (actions-width (if actions
                             (+ 2 (apply #'+ (mapcar (lambda (a) (+ 4 (string-width (plist-get a :label)))) actions)))
                           0))
-         (widths (agent-ui-table--widths header rows (max 10 (- (plist-get ctx :width) actions-width))))
+         ;; Buttons at a row's end only while its cells keep their widths
+         ;; beside them; else on a line of their own under it (they squeezed
+         ;; the cells to 3 columns and the rows past the width).
+         (beside (and actions
+                      (let ((full (agent-ui-table--widths header rows most-positive-fixnum)))
+                        (<= (+ (apply #'+ full) (* 3 (length full)) -2 actions-width)
+                            (plist-get ctx :width)))))
+         (widths (agent-ui-table--widths header rows (max 10 (- (plist-get ctx :width)
+                                                                (if beside actions-width 0)))))
          (align (cl-loop for i below n
                          collect (or (nth i (plist-get props :align))
                                      ;; Numbers to the right.
@@ -201,9 +209,12 @@ space (they broke the table's lines and its border)."
           "\n"))
        (if rows
            (mapconcat (lambda (row)
-                        (if actions
-                            (concat (line row) " " (agent-ui-table--row-buttons actions columns row))
-                          (string-trim-right (line row))))
+                        (cond
+                         (beside (concat (line row) " " (agent-ui-table--row-buttons actions columns row)))
+                         (actions (concat (string-trim-right (line row)) "\n "
+                                          (agent-ui-truncate (agent-ui-table--row-buttons actions columns row)
+                                                             (1- (plist-get ctx :width)))))
+                         (t (string-trim-right (line row)))))
                       rows "\n")
          (concat " " (propertize "no rows yet" 'face 'agent-ui-muted)))
        (when (> (length all) (length rows))

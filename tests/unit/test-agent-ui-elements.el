@@ -250,6 +250,22 @@
 
 ;; ====== TABLE ======
 
+(ert-deftest agent-ui-elements/table-row-buttons-don-t-squeeze-it ()
+  "Row buttons beside the cells while the cells keep their widths; else on a
+line of their own under each row (they cut the cells to 3 columns, the rows
+past the width); clickable either way."
+  (let ((element '(:type "table" :columns ("Test" "Result" "Time") :rows (("lexer" "passed" "0.4s") ("parser" "failed" "1.2s"))
+                   :row-actions ((:label "Fix it" :prompt "Fix {Test}") (:label "Explain" :prompt "Explain {row}")))))
+    ;; Wide: beside.
+    (should (string-match-p "lexer +│ passed │ 0.4s +⏵ Fix it  ⏵ Explain" (+test-aue-draw element :width 60)))
+    ;; Narrow: under, the cells whole, every line within the width.
+    (let ((text (+test-aue-draw element :width 34)))
+      (should (string-match-p "lexer +│ passed │ 0.4s\n +⏵ Fix it  ⏵ Explain" text))
+      (dolist (line (split-string text "\n"))
+        (should (<= (string-width line) 34))))
+    (let ((text (agent-ui-render element (agent-ui-context :width 34))))
+      (should (get-text-property (string-search "⏵ Fix it" text) 'agent-ui-action text)))))
+
 (ert-deftest agent-ui-elements/table-cells-on-one-line ()
   "A cell's line breaks and tabs: on its line (they broke the table's lines,
 and a panel's border around it)."
