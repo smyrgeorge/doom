@@ -1953,6 +1953,33 @@ each in its kind's colour (the first mark only was shown)."
       (funcall (get-text-property (string-search "Working on" text) 'agent-ui-action text))
       (should (equal opened '(("p-2" "/proj/")))))))
 
+;; doom-nwj.72
+(ert-deftest agent-ui-elements/issues-in-a-panel-redrawn ()
+  "A board in a panel is redrawn once its issues are fetched (only boards
+on the canvas were: the panel's said \"fetching the issues…\" forever)."
+  (let ((agent-ui-issues--cache (make-hash-table :test #'equal))
+        (fetched nil))
+    (cl-letf (((symbol-function 'agent-ui-issues-refresh) (lambda (dir) (push dir fetched))))
+      (+test-aue-canvas
+        (agent-ui-show '(:id "box" :type "panel" :title "Work"
+                         :children ((:id "board" :type "issues" :dir "/proj/"))))
+        (agent-ui-show '(:id "other" :type "panel" :children ((:id "t" :type "text" :text "unrelated"))))
+        (with-current-buffer canvas
+          (agent-ui--flush)
+          (should (string-search "fetching the issues…" (buffer-string)))
+          ;; Shown: fetched.
+          (should (member "/proj/" fetched))
+          ;; Its answer: the panel redrawn, the other not.
+          (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
+          (let ((redrawn nil))
+            (cl-letf* ((dirty (symbol-function 'agent-ui--dirty))
+                       ((symbol-function 'agent-ui--dirty) (lambda (ids) (setq redrawn ids) (funcall dirty ids))))
+              (agent-ui-issues--redraw "/proj/"))
+            (should (equal redrawn '("box"))))
+          (agent-ui--flush)
+          (should-not (string-search "fetching the issues…" (buffer-string)))
+          (should (string-search "Urgent ready" (buffer-string))))))))
+
 (ert-deftest agent-ui-elements/issues-fetched-by-bd ()
   (unless (executable-find "bd") (ert-skip "No bd"))
   (let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "issues-home-") t)))

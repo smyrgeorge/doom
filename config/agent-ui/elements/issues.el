@@ -37,15 +37,18 @@
           :issues (ignore-errors (json-parse-string all :object-type 'plist :array-type 'list :null-object nil)))))
 
 (defun agent-ui-issues--redraw (dir)
-  "Redraw the issues elements of DIR, everywhere."
-  (dolist (canvas (agent-ui-canvases))
-    (with-current-buffer canvas
-      (agent-ui--dirty
-       (cl-loop for id in agent-ui--order
-                for element = (agent-ui--entry-element (gethash id agent-ui--entries))
-                when (and (equal (plist-get element :type) "issues")
-                          (equal (file-name-as-directory (or (plist-get element :dir) "")) dir))
-                collect id)))))
+  "Redraw the issues elements of DIR, everywhere: those in a panel too (its
+board stayed \"fetching the issues…\")."
+  (cl-flet ((board-p (element)
+              (and (equal (plist-get element :type) "issues")
+                   (equal (file-name-as-directory (or (plist-get element :dir) "")) dir))))
+    (dolist (canvas (agent-ui-canvases))
+      (with-current-buffer canvas
+        (agent-ui--dirty
+         (cl-loop for id in agent-ui--order
+                  for element = (agent-ui--entry-element (gethash id agent-ui--entries))
+                  when (or (board-p element) (seq-some #'board-p (agent-ui--descendants element)))
+                  collect id))))))
 
 (defun agent-ui-issues-refresh (dir)
   "Fetch DIR's issues again (in the background), its boards redrawn after."
