@@ -158,7 +158,10 @@ that keeps things in view while the conversation scrolls: progress bars, \
 checklists of steps, tables, charts, text, Markdown, each updated in place. Use it for \
 what changes over time or deserves watching (a long build or test run, a \
 multi-step task's progress, results arriving one by one), not for what a reply \
-says once. From your shell: %s show \
+says once. Issues and plans go there too, always, without being asked: a project's \
+or an epic's issues (bd ready, an epic's children) as the issues board, which \
+follows your bd commands; a search's results as a table; a plan, or the ticket \
+you're working on, as steps (its acceptance criteria), ticked as you go. From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear; --canvas NAME on any of them uses \

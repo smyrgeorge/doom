@@ -178,6 +178,10 @@ killed after."
                                      " update build '{\"value\":5}'")
                              text))
       (should (string-search (concat "read " (abbreviate-file-name agent-ui-skill)) text))
+      ;; Issues and plans: on the canvas without being asked, each in its form.
+      (should (string-search "Issues and plans go there too, always, without being asked" text))
+      (should (string-search "as the issues board" text))
+      (should (string-search "as steps (its acceptance criteria)" text))
       ;; A bug in Agent UI itself: asked, filed in its own issues.
       (should (string-search (concat "When Agent UI itself misbehaves") text))
       (should (string-search (concat (abbreviate-file-name agent-ui-command) " bug '{\"title\"") text))
@@ -201,6 +205,8 @@ killed after."
                        (setq pos (match-end 0)))
                      (sort names (lambda (a b) (string< (symbol-name a) (symbol-name b)))))
                    (agent-ui-types)))
+    ;; Issues and plans: shown without being asked (doom-nwj.20).
+    (should (string-search "**Issues and plans, always, without being asked:**" skill))
     ;; Each operation it names, the command's.
     (dolist (op agent-ui-operations)
       (should (string-match-p (concat "^agent-ui " op "\\b") skill)))))

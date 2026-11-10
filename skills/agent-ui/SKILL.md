@@ -23,6 +23,11 @@ quick round trip to Emacs; its reply is JSON on stdout.
 - **Yes:** what changes while you work or that the user will want to glance at: a build or test run you're watching,
   the steps of a longer task and where you are in them, results that come in one by one, a summary that should stay in
   view while the conversation goes on.
+- **Issues and plans, always, without being asked:** they stay worth seeing while the user decides and while the work
+  on them goes on. A project's or an epic's issues (`bd ready`, an epic's children, a label's): the `issues` board
+  (`parent`, `label`), which follows your bd commands by itself. A search's results or a few chosen tickets: a `table`
+  (`key` the id). A plan, or the ticket you're working on: `steps`, its acceptance criteria as the steps, ticked as you
+  go. Say so in a line of your reply rather than repeating the list there.
 - **No:** what you'd say once. Answers, explanations, code and reports go in your reply (Markdown), as usual. Don't
   duplicate your reply on the canvas.
 - Keep it tidy: a handful of elements, each worth looking at. Update rather than add; remove what stopped helping.
