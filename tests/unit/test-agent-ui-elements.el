@@ -1838,6 +1838,94 @@ ends); kept in the element; Answer sends the order and a note; then locked."
   (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "J")
               #'agent-ui-move-item-down)))
 
+(defconst +test-aue-two-hunks
+  (concat "diff --git a/src/parser.c b/src/parser.c\n--- a/src/parser.c\n+++ b/src/parser.c\n"
+          "@@ -40,3 +40,3 @@ parse_expr\n   int depth = 0;\n-  return NULL;\n+  return parse_term(p);\n }\n"
+          "diff --git a/src/lexer.c b/src/lexer.c\n--- a/src/lexer.c\n+++ b/src/lexer.c\n"
+          "@@ -10,2 +10,2 @@\n-  int n = 0;\n+  size_t n = 0;\n   return n;\n")
+  "A diff of two files, a hunk each.")
+
+(ert-deftest agent-ui-elements/diff-hunks-to-accept ()
+  "With accept: each hunk's mark (accepted, or rejected and dimmed), the
+hint, Send counting them, Accept all / Reject all; answered: what was sent,
+the marks kept; a still picture: the marks, no button."
+  (let ((diff (list :type "diff" :diff +test-aue-two-hunks :accept t
+                    :rejected '((:file "src/lexer.c" :hunk 1)))))
+    (should (equal (+test-aue-draw diff)
+                   (concat "▾ src/parser.c  +1 −1\n"
+                           "  ✓ @@ -40,3 +40,3 @@ parse_expr\n"
+                           "     40     int depth = 0;\n"
+                           "        −   return NULL;\n"
+                           "     41 +   return parse_term(p);\n"
+                           "     42   }\n"
+                           "▾ src/lexer.c  +1 −1\n"
+                           "  ✗ @@ -10,2 +10,2 @@\n"
+                           "        −   int n = 0;\n"
+                           "     10 +   size_t n = 0;\n"
+                           "     11     return n;\n"
+                           "x on a hunk rejects it (again: back), c comments on a line\n"
+                           "⏵ Send (1 accepted, 1 rejected)   ⏵ Accept all   ⏵ Reject all")))
+    ;; Rejected: dimmed.
+    (should (eq (+test-aue-face-at diff "size_t") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at diff "parse_term(p)") 'agent-ui-success))
+    (should (string-suffix-p "     11     return n;" (+test-aue-draw diff :still t)))
+    (should (string-suffix-p "     11     return n;\n✓ Sent: 1 accepted, 1 rejected"
+                             (+test-aue-draw (append '(:answered "1 accepted, 1 rejected") diff))))
+    (should (agent-ui-ask-waiting-p diff))
+    (should-not (agent-ui-ask-waiting-p (append '(:answered "x") diff))))
+  ;; Without accept: as ever.
+  (should-not (string-search "✓" (+test-aue-draw (list :type "diff" :diff +test-aue-two-hunks)))))
+
+(ert-deftest agent-ui-elements/diff-hunks-accepted-and-sent ()
+  "x on any line of a hunk rejects it (the cursor staying), again: back; RET
+on its mark too; Reject all, Accept all; Send names them by file and header,
+with the comments; then locked."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show (list :id "fix" :type "diff" :diff +test-aue-two-hunks :accept t))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "size_t")
+        (agent-ui-drop-item)
+        (should (looking-back "size_t" 6))
+        (should (equal (plist-get (agent-ui-get "fix") :rejected) '((:file "src/lexer.c" :hunk 1))))
+        (agent-ui-drop-item)
+        (should-not (plist-get (agent-ui-get "fix") :rejected))
+        ;; Its mark, pressed.
+        (goto-char (point-min))
+        (search-forward "@@ -40")
+        (goto-char (- (match-beginning 0) 2))
+        (agent-ui-button-press)
+        (should (equal (plist-get (agent-ui-get "fix") :rejected) '((:file "src/parser.c" :hunk 1))))
+        (+test-aue-press "⏵ Reject all")
+        (should (= (length (plist-get (agent-ui-get "fix") :rejected)) 2))
+        (+test-aue-press "⏵ Accept all")
+        (should-not (plist-get (agent-ui-get "fix") :rejected))
+        ;; One rejected, a comment, sent.
+        (goto-char (point-min))
+        (search-forward "size_t")
+        (agent-ui-drop-item)
+        (goto-char (point-min))
+        (search-forward "parse_term(p)")
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "check p for NULL")))
+          (agent-ui-comment (point) (point)))
+        (+test-aue-press "⏵ Send (1 accepted, 1 rejected, 1 comment)")
+        (should (equal sent '(("Answer to diff fix (Apply these changes?): accepted: src/parser.c @@ -40,3 +40,3 @@ parse_expr. rejected: src/lexer.c @@ -10,2 +10,2 @@. Review of fix: src/parser.c:41: check p for NULL" t))))
+        (agent-ui--flush)
+        (should (string-search "✓ Sent: 1 accepted, 1 rejected, 1 comment" (buffer-string)))
+        ;; Locked.
+        (goto-char (point-min))
+        (search-forward "size_t")
+        (should-error (agent-ui-drop-item) :type 'user-error)))))
+
+(ert-deftest agent-ui-elements/diff-hunks-wrong ()
+  (should (string-match-p "accept is true, or"
+                          (+test-aue-error '(:type "diff" :diff "" :accept (:ask "x")))))
+  (should (string-match-p "rejected is"
+                          (+test-aue-error '(:type "diff" :diff "" :accept t :rejected ((:file "a")))))))
+
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.
   (should (string-match-p "options is required" (+test-aue-error '(:type "choice" :question "Q?" :options ()))))

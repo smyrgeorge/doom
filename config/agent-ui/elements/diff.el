@@ -180,6 +180,129 @@ column of marks for each parent: added if one is +, removed if one is -
       (goto-char (point-min))
       (forward-line (1- line)))))
 
+;; ====== ACCEPTING HUNKS ======
+;; With accept: the user accepts or rejects each hunk of a diff the agent
+;; proposes. Each is accepted to begin with; x on any of its lines (or RET on
+;; its mark) rejects it, again: back; Accept all / Reject all. Send puts
+;; "Answer to diff ID (QUESTION): accepted: FILE @@ ... @@; ...; rejected:
+;; ..." into the session's prompt (at once unless accept's submit is false),
+;; with the review comments if there are; then it's answered. Applying them
+;; stays the agent's. Which are rejected is the element's own (:rejected,
+;; ({file, hunk}...), hunk counted from 1 in its file), saved with it.
+
+(defconst agent-ui-diff--question "Apply these changes?")
+
+(defun agent-ui-diff--accept-props (props)
+  "PROPS' accept as (:question :submit), or nil if it has none."
+  (let ((accept (plist-get props :accept)))
+    (cond ((memq accept '(nil :false)) nil)
+          ((eq accept t) (list :question agent-ui-diff--question :submit t))
+          (t (list :question (or (plist-get accept :question) agent-ui-diff--question)
+                   :submit (not (eq (plist-get accept :submit) :false)))))))
+
+(defun agent-ui-diff--check (props)
+  (agent-ui-review-check "diff" (plist-get props :comments))
+  (let ((accept (plist-get props :accept)))
+    (unless (or (memq accept '(nil t :false))
+                (and (agent-ui--plist-p accept)
+                     (cl-every (lambda (k) (memq k '(:question :submit)))
+                               (cl-loop for (k _) on accept by #'cddr collect k))
+                     (or (null (plist-get accept :question)) (stringp (plist-get accept :question)))
+                     (memq (plist-get accept :submit) '(nil t :false))))
+      (agent-ui--fail "diff: accept is true, or {\"question\": ..., \"submit\": ...}")))
+  (unless (cl-every (lambda (r) (and (agent-ui--plist-p r) (stringp (plist-get r :file))
+                                     (natnump (plist-get r :hunk))))
+                    (plist-get props :rejected))
+    (agent-ui--fail "diff: rejected is [{\"file\": ..., \"hunk\": N}]: a file's hunks counted from 1"))
+  props)
+
+(defun agent-ui-diff--rejected-p (props file n)
+  "Whether FILE's hunk N is rejected in PROPS."
+  (seq-find (lambda (r) (and (equal (plist-get r :file) file) (eql (plist-get r :hunk) n)))
+            (plist-get props :rejected)))
+
+(defun agent-ui-diff--toggle (props ctx file n)
+  "FILE's hunk N rejected, or accepted again."
+  (let ((rejected (plist-get props :rejected)))
+    (agent-ui-ask-change
+     ctx (list :rejected (if (agent-ui-diff--rejected-p props file n)
+                             (seq-remove (lambda (r) (and (equal (plist-get r :file) file) (eql (plist-get r :hunk) n)))
+                                         rejected)
+                           (append rejected (list (list :file file :hunk n))))))))
+
+(defun agent-ui-diff--hunks (files)
+  "FILES' hunks: ((FILE N HUNK)...), N counted from 1 in FILE."
+  (cl-loop for file in files
+           append (cl-loop for hunk in (plist-get file :hunks)
+                           for n from 1
+                           collect (list (plist-get file :file) n hunk))))
+
+(defun agent-ui-diff--decided (props files)
+  "FILES' hunks as PROPS has them: (ACCEPTED . REJECTED), each a list of
+\"FILE @@ ... @@\"."
+  (let (accepted rejected)
+    (pcase-dolist (`(,file ,n ,hunk) (agent-ui-diff--hunks files))
+      (let ((name (concat file " " (plist-get hunk :header))))
+        (if (agent-ui-diff--rejected-p props file n) (push name rejected) (push name accepted))))
+    (cons (nreverse accepted) (nreverse rejected))))
+
+(defun agent-ui-diff--counted (accepted rejected comments)
+  "\"2 accepted, 1 rejected, 1 comment\"."
+  (string-join (delq nil (list (format "%d accepted" (length accepted))
+                               (format "%d rejected" (length rejected))
+                               (and comments (format "%d comment%s" (length comments)
+                                                     (if (cdr comments) "s" "")))))
+               ", "))
+
+(defun agent-ui-diff--send (props ctx files)
+  "The hunks accepted and rejected (and the comments) into the session's
+prompt; answered."
+  (pcase-let* ((accept (agent-ui-diff--accept-props props))
+               (`(,accepted . ,rejected) (agent-ui-diff--decided props files))
+               (comments (plist-get props :comments)))
+    (funcall agent-ui-action-function
+             (concat (format "Answer to diff %s (%s): " (plist-get ctx :id) (plist-get accept :question))
+                     (string-join (delq nil (list (and accepted (concat "accepted: " (string-join accepted "; ")))
+                                                  (and rejected (concat "rejected: " (string-join rejected "; ")))))
+                                  ". ")
+                     (if comments
+                         (concat ". " (agent-ui-review-text (plist-get ctx :id) comments))
+                       ""))
+             (plist-get accept :submit))
+    (agent-ui-ask-change ctx (list :answered (agent-ui-diff--counted accepted rejected comments)))))
+
+(defun agent-ui-diff--accept-footer (props ctx files)
+  "Under a diff with accept: the hint, Send, Accept all, Reject all; once
+sent, saying so. Led by a newline."
+  (pcase-let ((`(,accepted . ,rejected) (agent-ui-diff--decided props files))
+              (width (plist-get ctx :width)))
+    (cond
+     ((agent-ui-ask-answered-p props)
+      (concat "\n" (propertize "✓ " 'face 'agent-ui-success)
+              (propertize (format "Sent: %s" (plist-get props :answered)) 'face 'agent-ui-muted)))
+     ((plist-get ctx :still) "")
+     (t
+      (concat "\n"
+              (propertize (agent-ui-wrap "x on a hunk rejects it (again: back), c comments on a line" width)
+                          'face 'agent-ui-muted)
+              "\n"
+              (agent-ui-button (propertize (format "⏵ Send (%s)" (agent-ui-diff--counted accepted rejected
+                                                                                          (plist-get props :comments)))
+                                           'face 'agent-ui-action)
+                               (lambda () (agent-ui-diff--send props ctx files))
+                               "RET: tell the agent which hunks to apply")
+              "   "
+              (agent-ui-button (propertize "⏵ Accept all" 'face 'agent-ui-action)
+                               (lambda () (agent-ui-ask-change ctx (list :rejected nil)))
+                               "RET: accept every hunk")
+              "   "
+              (agent-ui-button (propertize "⏵ Reject all" 'face 'agent-ui-action)
+                               (lambda ()
+                                 (agent-ui-ask-change
+                                  ctx (list :rejected (mapcar (lambda (h) (list :file (car h) :hunk (cadr h)))
+                                                              (agent-ui-diff--hunks files)))))
+                               "RET: reject every hunk"))))))
+
 (defun agent-ui-diff--draw (props ctx gui)
   (let* ((files (agent-ui-diff--parse (plist-get props :diff)))
          (dir (plist-get props :dir))
@@ -198,6 +321,9 @@ column of marks for each parent: added if one is +, removed if one is -
                                  (apply #'max 0 (cl-loop for file in files
                                                          append (cl-loop for hunk in (plist-get file :hunks)
                                                                          append (delq nil (mapcar #'cadr (plist-get hunk :lines))))))))))
+         (accept (and (agent-ui-diff--accept-props props) t))
+         ;; Its hunks to accept or reject here: not answered, not a picture.
+         (deciding (and accept (not (agent-ui-ask-answered-p props)) (not (plist-get ctx :still))))
          (out nil))
     (if (null files)
         (propertize "no changes" 'face 'agent-ui-muted)
@@ -218,10 +344,28 @@ column of marks for each parent: added if one is +, removed if one is -
                            counts)
                    width)
                   out))
-          (dolist (hunk (plist-get file :hunks))
+          (cl-loop
+           for hunk in (plist-get file :hunks)
+           for n from 1
+           do
+           ;; Its own (the loop's are one variable each, set again).
+           (let* ((hunk hunk)
+                  (name (plist-get file :file))
+                  (rejected (and accept (agent-ui-diff--rejected-p props name n)))
+                  (toggle (let ((n n)) (lambda () (agent-ui-diff--toggle props ctx name n)))))
             (when (funcall full) (throw 'full nil))
-            (push (concat "  " (propertize (agent-ui-truncate (plist-get hunk :header) (- width 2))
-                                           'face 'agent-ui-accent))
+            (push (if (not accept)
+                      (concat "  " (propertize (agent-ui-truncate (plist-get hunk :header) (- width 2))
+                                               'face 'agent-ui-accent))
+                    (let ((mark (if rejected (propertize "✗" 'face 'agent-ui-error) (propertize "✓" 'face 'agent-ui-success)))
+                          (header (propertize (agent-ui-truncate (plist-get hunk :header) (- width 4))
+                                              'face (if rejected 'agent-ui-muted 'agent-ui-accent))))
+                      (if deciding
+                          (propertize (concat "  " (agent-ui-button mark toggle (if rejected "RET or x: accept it again"
+                                                                                  "RET or x: reject it"))
+                                              " " header)
+                                      'agent-ui-drop toggle)
+                        (concat "  " mark " " header))))
                   out)
             (cl-loop
              for (line . rest) on (plist-get hunk :lines)
@@ -230,8 +374,11 @@ column of marks for each parent: added if one is +, removed if one is -
               (cl-incf count)
               (pcase-let* ((`(,kind ,number ,text) line)
                            (mark (pcase kind ('added "+") ('removed "−") ('note "\\") (_ " ")))
-                           (face (pcase kind ('added 'agent-ui-success) ('removed 'agent-ui-error)
-                                        ('note 'agent-ui-muted) (_ nil)))
+                           ;; A rejected hunk's lines dimmed.
+                           (face (if rejected
+                                     'agent-ui-muted
+                                   (pcase kind ('added 'agent-ui-success) ('removed 'agent-ui-error)
+                                          ('note 'agent-ui-muted) (_ nil))))
                            (gutter (if (and number (not (eq kind 'removed)))
                                        (format (format "%%%dd " digits) number)
                                      (make-string (1+ digits) ?\s)))
@@ -239,14 +386,16 @@ column of marks for each parent: added if one is +, removed if one is -
                                                     (- width 3 digits)))
                            (shown (concat "  " (propertize gutter 'face 'agent-ui-muted)
                                           (if face (propertize body 'face face) body))))
-                (when (and gui (memq kind '(added removed)))
+                (when (and gui (memq kind '(added removed)) (not rejected))
                   ;; A tint as wide as the pane, as code review tools have.
                   (setq shown (concat shown (make-string (max 0 (- width (string-width shown))) ?\s)))
                   (add-face-text-property 0 (length shown) (list :background (funcall tint face)) t shown))
                 ;; Where it is (c comments on it).
-                (push (propertize (agent-ui-button shown (agent-ui-diff--open dir (plist-get file :file) number)
-                                                   (format "RET: %s:%s" (plist-get file :file) (or number "")))
-                                  'agent-ui-line number 'agent-ui-file (plist-get file :file))
+                (push (apply #'propertize (agent-ui-button shown (agent-ui-diff--open dir (plist-get file :file) number)
+                                                           (format "RET: %s:%s" (plist-get file :file) (or number "")))
+                             'agent-ui-line number 'agent-ui-file (plist-get file :file)
+                             ;; x rejects its hunk (again: back).
+                             (and deciding (list 'agent-ui-drop toggle)))
                       out)
                 ;; Its comments under the last line of its number (a removed
                 ;; line has the next one's).
@@ -254,25 +403,32 @@ column of marks for each parent: added if one is +, removed if one is -
                   (let ((comments (agent-ui-review-lines props (plist-get file :file) number
                                                          (make-string (+ 3 digits) ?\s) width)))
                     (unless (string-empty-p comments)
-                      (push (substring comments 1) out)))))))))
+                      (push (substring comments 1) out))))))))))
       (when (> total count)
         (push (agent-ui-truncate (propertize (format "… %d lines more" (- total count)) 'face 'agent-ui-muted) width)
               out))
       (concat (string-join (nreverse out) "\n")
-              (agent-ui-review-footer props ctx)))))
+              (if accept
+                  (agent-ui-diff--accept-footer props ctx files)
+                (agent-ui-review-footer props ctx))))))
 
 (agent-ui-define diff
   "Changes, from a unified diff (git diff's): by file, its lines added and
 removed counted, and hunk; added lines green, removed red; each line's
 number in the new file. RET on a line opens its file there, relative to DIR
 \(your directory). To follow the work tree: a source
-{\"poll\": \"git diff\", \"every\": 5, \"into\": \"diff\"}."
+{\"poll\": \"git diff\", \"every\": 5, \"into\": \"diff\"}. With ACCEPT, changes you
+propose: the user accepts or rejects each hunk, and \"Answer to diff ID
+\(QUESTION): accepted: FILE @@ ... @@; ...; rejected: ...\" comes into your
+prompt; apply the accepted ones."
   :props ((diff string "The unified diff (git diff's output)" :default "")
           (dir file "Where its files are (default: your directory)" :default :here)
           (comments list "The user's review comments on its lines (c on a line): [{\"line\", \"end\", \"file\", \"text\"}]")
+          (accept any "Changes you propose, the user accepting or rejecting each hunk: true, or {\"question\": ..., \"submit\": ...}")
+          (rejected list "The hunks the user rejected: [{\"file\", \"hunk\": N}] (theirs)")
           (answered string "The review sent (then it can't be changed)"))
   :example (:title "My changes"
             :diff "diff --git a/src/parser.c b/src/parser.c\n--- a/src/parser.c\n+++ b/src/parser.c\n@@ -40,3 +40,3 @@ parse_expr\n   int depth = 0;\n-  return NULL;\n+  return parse_term(p);\n }\n")
-  :check (lambda (props) (agent-ui-review-check "diff" (plist-get props :comments)) props)
+  :check #'agent-ui-diff--check
   :text (lambda (props ctx) (agent-ui-diff--draw props ctx nil))
   :gui (lambda (props ctx) (agent-ui-diff--draw props ctx t)))

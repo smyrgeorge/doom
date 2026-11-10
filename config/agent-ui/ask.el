@@ -62,11 +62,13 @@ in its face."
 (defun agent-ui-ask-waiting-p (element)
   "Whether ELEMENT asks the user and isn't answered yet: of a type that asks
 \(`agent-ui-ask-types': a choice, a confirm, a form, a rank), with
-select (a table, files, issues), or approve (a plan, steps)."
+select (a table, files, issues), approve (a plan, steps) or accept (a
+diff's hunks)."
   (and (not (plist-get element :answered))
        (or (member (plist-get element :type) agent-ui-ask-types)
            (plist-get element :select)
-           (not (memq (plist-get element :approve) '(nil :false))))
+           (not (memq (plist-get element :approve) '(nil :false)))
+           (not (memq (plist-get element :accept) '(nil :false))))
        t))
 
 (defun agent-ui-ask-question (element)

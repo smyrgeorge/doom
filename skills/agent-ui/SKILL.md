@@ -384,6 +384,15 @@ agent-ui show <<'EOF'
 EOF
 ```
 
+**Changes to accept.** To propose changes before making them, show them as a diff with `"accept": true` (or
+`{"question": ..., "submit": false}`), say so in a line, and end your turn. The user accepts or rejects each hunk (and
+may comment on lines): "Answer to diff ID (QUESTION): accepted: src/parser.c @@ -40,2 +40,2 @@; rejected: ...
+Review of ID: ..." comes as your next prompt. Apply only the accepted hunks, and take the comments into account.
+
+```sh
+agent-ui show '{"id":"fix","type":"diff","title":"Proposed fix","accept":true,"diff":"--- a/src/parser.c\n+++ b/src/parser.c\n@@ -40,2 +40,2 @@\n   int depth = 0;\n-  return NULL;\n+  return parse_term(p);\n"}'
+```
+
 ### `text`
 
 Plain text, wrapped to the width, newlines kept. `face`: `plain` (default), `muted`, `success`, `warning`, `error`.

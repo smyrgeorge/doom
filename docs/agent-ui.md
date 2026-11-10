@@ -109,7 +109,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
   time an element is shown (tiling's `agent-ui` application, `+my/tiling-apps`), without taking the focus, and again if it was closed.
   With Doom's workspaces, it opens in its session's workspace: while you're in another, it waits there for you.
   `q` hides it, and so does emptying it (cleared, its last element removed); it closes with its session. `a` on an element puts it into the session's prompt; `b` on one files a bug in Agent UI ([below](#bugs-in-agent-ui)); `c` on a line of code or a diff (or a region's lines) writes a review comment under it (`c` on a comment edits it, `d` removes it), Send the review putting them all, with their places, into the session's prompt; `s` on a table's
-  column sorts it by it (again: the other way); `M-↑` / `M-↓` (`K` / `J`) move a rank's item; `x` drops a plan's step (again: back), `e` rewords it; `R` reviews the types the agent made.
+  column sorts it by it (again: the other way); `M-↑` / `M-↓` (`K` / `J`) move a rank's item; `x` drops a plan's step or rejects a diff's hunk (again: back), `e` rewords a step; `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
   the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements
   and ids. They close with the session, and are kept and come back with it.
@@ -194,7 +194,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `issues` | The project's Beads issues as a board (Ready, In progress, Blocked, Done), fetched by bd in the background and refreshed after the agent's bd commands; an epic's or a label's only; `RET` opens an issue in Emacs's issue view; `select` asks you to pick issues | `dir`, `parent`, `label`, `limit`, `select` |
 | `heatmap` | A grid of cells coloured by value (a scale: blue, green-red, red-green) or by state (passed, failed, flaky...), a legend; SVG cells with values in the GUI | `rows`, `columns`, `values`, `scale` |
 | `panel` | Elements laid out together: a row (side by side, by weights) or a column, in a border; panels nest; a row too narrow stacks; in the GUI, a row with a chart, graph or image is one image, its children side by side (their buttons not clickable there). Each child is an element of its own: updated, appended to, removed, shown again, snapshot, linked by its id (unique in the canvas), its source running with it | `children`, `layout`, `weights`, `border`, `min-width` |
-| `diff` | Changes from a unified diff: by file (lines added and removed) and hunk, coloured, line numbers; `RET` opens the file there; a source with `"into": "diff"` follows `git diff` | `diff`, `dir` |
+| `diff` | Changes from a unified diff: by file (lines added and removed) and hunk, coloured, line numbers; `RET` opens the file there; a source with `"into": "diff"` follows `git diff`. With `accept`, changes the agent proposes: each hunk accepted to begin with, `x` on one rejects it (again: back; or `RET` on its mark), Accept all / Reject all; Send puts "Answer to diff ID (question): accepted: FILE @@ … @@; rejected: …" (and your comments) into the session's prompt | `diff`, `dir`, `accept` |
 | `html` | A web page as a card: its title and the start of its text; `RET` opens it in WebKit in a pane (`config/html.el`), else the browser | `file` or `url`, `lines` |
 
 A `file` property is relative to the agent's directory, kept by its full name. A button (`agent-ui-button`) opens
@@ -302,7 +302,7 @@ prompt is offered to queue (change it first if you like). A snapshot leaves the 
 ## A question waiting
 
 When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, a `form`, a
-`rank`, a plan to approve, rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
+`rank`, a plan to approve, hunks to accept, rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
 
 - the canvas's pane is shown (if it was closed), scrolled to the question, the cursor on it; the focus stays where it
   is;
