@@ -226,6 +226,16 @@ column there (its last line at most)."
         (`(start . ,window) (set-window-start window (save-excursion (goto-char pos) (line-beginning-position)) t))
         (window (set-window-point window pos))))))
 
+(defun agent-ui--even (text)
+  "TEXT as the canvas shows it: its glyphs as wide as their columns, if the
+canvas is in the GUI (its window's frame, else the selected one):
+`agent-ui-even-glyphs'."
+  (let* ((window (agent-ui--window))
+         (frame (if window (window-frame window) (selected-frame))))
+    (cond ((not (display-graphic-p frame)) text)
+          ((eq frame (selected-frame)) (agent-ui-even-glyphs text))
+          (t (with-selected-frame frame (agent-ui-even-glyphs text))))))
+
 (defun agent-ui--draw (entry ctx)
   "Draw ENTRY again, in its place: point and the windows' inside it kept at
 their line and column (its text replaced, they went to its start)."
@@ -237,8 +247,8 @@ their line and column (its text replaced, they went to its start)."
       (delete-region start end)
       (goto-char start)
       ;; Its id in the context: an element's buttons may change it (a choice).
-      (insert (propertize (agent-ui-render (agent-ui--entry-element entry)
-                                           (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry)))
+      (insert (propertize (agent-ui--even (agent-ui-render (agent-ui--entry-element entry)
+                                                           (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry))))
                           'agent-ui-id (agent-ui--entry-id entry)))
       ;; The end follows what's inserted at it; the start stays before it.
       (set-marker end (point)))
@@ -262,7 +272,7 @@ place."
              (goto-char (point-min))
              (forward-line line)
              (delete-region (point) (line-end-position))
-             (insert (propertize text 'agent-ui-id id)))
+             (insert (propertize (agent-ui--even text) 'agent-ui-id id)))
             (`(delete ,line ,count)
              (goto-char (point-min))
              (forward-line line)
@@ -270,10 +280,10 @@ place."
             (`(insert ,before-end ,text)
              (goto-char (point-max))
              (if (= before-end 0)
-                 (insert (propertize (concat "\n" text) 'agent-ui-id id))
+                 (insert (propertize (concat "\n" (agent-ui--even text)) 'agent-ui-id id))
                (forward-line (- 1 before-end))
                (beginning-of-line)
-               (insert (propertize (concat text "\n") 'agent-ui-id id))))
+               (insert (propertize (concat (agent-ui--even text) "\n") 'agent-ui-id id))))
             (_ (error "Not an edit: %S" edit))))
         (set-marker (agent-ui--entry-end entry) (point-max))))
     (when places

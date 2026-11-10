@@ -49,3 +49,43 @@
               (with-current-buffer session
                 (should (string-match-p "question waiting" (format-mode-line mode-line-format)))))))
       (kill-buffer session))))
+
+(ert-deftest e2e-agent-ui/borders-in-line-whatever-the-glyphs ()
+  "A panel's borders and the │ between a row's children at their columns'
+pixels, on lines as high as the others, beside glyphs the default font
+lacks (✎ and ⏵ from fallback fonts were pixels wider or narrower than a
+column, their lines higher: the borders out of line, with gaps)."
+  (let ((agent-ui-display-function #'switch-to-buffer)
+        (agent-ui-default-canvas "e2e-glyphs"))
+    (delete-other-windows)
+    (set-frame-size (selected-frame) 100 40)
+    (agent-ui-show '(:id "row" :type "panel" :layout "row"
+                     :children ((:id "pick" :type "choice" :question "Which?" :options ("A" "B") :note t)
+                                (:id "order" :type "rank" :question "Order?" :items ("x" "y") :note t))))
+    (let* ((canvas (agent-ui-canvas))
+           (window (get-buffer-window canvas))
+           (cw (frame-char-width))
+           (lh (frame-char-height))
+           (borders 0))
+      (unwind-protect
+          (with-current-buffer canvas
+            (agent-ui--flush)
+            (set-window-start window (point-min))
+            (redisplay t)
+            (goto-char (point-min))
+            ;; Side by side, the glyphs on its lines.
+            (should (search-forward "│  ✎ Add a note" nil t))
+            (should (search-forward "⏵ Answer" nil t))
+            (goto-char (point-min))
+            (while (not (eobp))
+              (let ((bol (line-beginning-position)) (eol (line-end-position)))
+                (unless (= bol eol)
+                  (should (= (cdr (window-text-pixel-size window bol eol)) lh)))
+                (while (re-search-forward "[│╭╮╰╯]" eol t)
+                  (cl-incf borders)
+                  (let ((before (buffer-substring-no-properties bol (match-beginning 0))))
+                    (should (equal (list (line-number-at-pos) (car (window-text-pixel-size window bol (match-beginning 0))))
+                                   (list (line-number-at-pos) (* cw (string-width before))))))))
+              (forward-line 1))
+            (should (> borders 20)))
+        (kill-buffer canvas)))))

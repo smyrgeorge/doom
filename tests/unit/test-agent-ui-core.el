@@ -477,3 +477,95 @@ them); else neither."
     (should (= (plist-get ctx :font-ascent) 19)))
   (should-not (plist-member (agent-ui-context :graphic t :font-size 19) :font-size))
   (should-not (plist-member (agent-ui-context) :font-ascent)))
+
+;; ====== GLYPHS IN THEIR CELLS ======
+
+(defmacro +test-aui--glyphs (glyphs &rest body)
+  "BODY as in the GUI, a column 11 pixels wide, glyphs shown as GLYPHS says
+\((CHAR WIDTH . HEIGHT): WIDTH pixels at HEIGHT), others a column: the fonts
+of the user's Emacs (✎ from Arial Unicode MS, ⏵ from STIX Two Math, a line
+28 pixels high, beside JetBrains Mono's 25)."
+  (declare (indent 1))
+  `(cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _) t))
+             ((symbol-function 'frame-char-width) (lambda (&optional _) 11))
+             ((symbol-function 'agent-ui--glyph)
+              (lambda (char _face _buffer) (or (alist-get char ,glyphs) '(11)))))
+     ,@body))
+
+(defun +test-aui--display (text)
+  "TEXT's display properties: (POSITION . DISPLAY) for each character with one."
+  (cl-loop for i below (length text)
+           when (get-text-property i 'display text) collect (cons i it)))
+
+(ert-deftest agent-ui-core/glyphs-in-their-cells ()
+  "In the GUI, what follows a glyph from another font, wider or narrower
+than its columns, is at its column again (a panel's border, the │ between a
+row's children were pixels out of line): the space beside it as much
+narrower or wider; one taller than a line drawn smaller (its line was
+higher, a gap in the borders on it)."
+  (+test-aui--glyphs '((?✎ 17) (?⏵ 10) (?✚ 14) (?日 22) (?本 22) (?▶ 7 . 0.7))
+    ;; Wider (17 in 11): the space after it 5, the two 22, two columns.
+    (should (equal (+test-aui--display (agent-ui-even-glyphs "✎ Add a note"))
+                   '((1 space :width (5)))))
+    ;; Narrower: the space after it wider.
+    (should (equal (+test-aui--display (agent-ui-even-glyphs "⏵ Answer   ⏵ Cancel"))
+                   '((1 space :width (12)) (12 space :width (12)))))
+    ;; At a line's end: the space before it.
+    (should (equal (+test-aui--display (agent-ui-even-glyphs "note ✚"))
+                   '((4 space :width (8)))))
+    ;; No space beside a narrower one: itself padded to its column (its
+    ;; own list: `min-width' tells ranges apart by it).
+    (should (equal (+test-aui--display (agent-ui-even-glyphs "a⏵b"))
+                   '((1 min-width ((11))))))
+    ;; Taller than a line: drawn at the size it fits at, as wide as it is
+    ;; then; padded too, with no space beside it.
+    (should (equal (+test-aui--display (agent-ui-even-glyphs "▶ go"))
+                   '((0 height 0.7) (1 space :width (15)))))
+    (should (equal (+test-aui--display (agent-ui-even-glyphs "a▶b"))
+                   '((1 (height 0.7) (min-width ((11)))))))
+    ;; As wide as its columns (a wide character, two): as it is.
+    (should-not (+test-aui--display (agent-ui-even-glyphs "日本 x")))
+    (should-not (+test-aui--display (agent-ui-even-glyphs "plain │ ascii")))
+    ;; A space showing something else (an image's) is left alone; a glyph
+    ;; with a display of its own too.
+    (let ((text (concat "✎" (propertize " " 'display '(image :type svg :data "")) "x")))
+      (should (equal (+test-aui--display (agent-ui-even-glyphs text)) '((1 image :type svg :data "")))))
+    (should (equal (+test-aui--display (agent-ui-even-glyphs (propertize "✎ x" 'display "!")))
+                   '((0 . "!") (1 . "!") (2 . "!"))))
+    ;; Two on one line, beside each other's space: both counted.
+    (should (equal (+test-aui--display (agent-ui-even-glyphs "⏵ ⏵"))
+                   '((1 space :width (13)))))
+    ;; A copy: the text given unchanged; its other properties kept.
+    (let* ((text (propertize "✎ x" 'face 'bold))
+           (even (agent-ui-even-glyphs text)))
+      (should-not (+test-aui--display text))
+      (should (eq (get-text-property 1 'face even) 'bold))))
+  ;; In a terminal a glyph is its cell: the text itself.
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _) nil)))
+    (let ((text "✎ x"))
+      (should (eq (agent-ui-even-glyphs text) text)))))
+
+(ert-deftest agent-ui-core/a-glyph-measured-once ()
+  "A glyph is measured once a font, with its face (bold may be another
+font); again when the default font changes."
+  (let ((agent-ui--glyphs (make-hash-table :test #'equal))
+        (agent-ui--glyphs-font nil)
+        (measured nil)
+        (cw 11))
+    (cl-letf (((symbol-function 'frame-char-width) (lambda (&optional _) cw))
+              ((symbol-function 'face-font) (lambda (&rest _) "JetBrains Mono"))
+              ((symbol-function 'agent-ui--glyph-measure)
+               (lambda (char face _buffer) (push (list char face) measured) '(17))))
+      (should (equal (agent-ui--glyph ?✎ nil nil) '(17)))
+      (should (equal (agent-ui--glyph ?✎ nil nil) '(17)))
+      (should (equal (agent-ui--glyph ?✎ 'bold nil) '(17)))
+      (should (equal (reverse measured) '((?✎ nil) (?✎ bold))))
+      (setq cw 12)
+      (agent-ui--glyph ?✎ nil nil)
+      (should (= (length measured) 3)))))
+
+(ert-deftest agent-ui-core/a-glyph-measured ()
+  "A glyph's width measured beside a character of the default font (a
+terminal's: its cells), at its own size if no taller than a line."
+  (should (equal (agent-ui--glyph-measure ?✎ nil nil) '(1)))
+  (should (equal (agent-ui--glyph-measure ?日 'bold nil) '(2))))

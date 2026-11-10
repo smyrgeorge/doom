@@ -682,6 +682,107 @@ own (`agent-ui-image')."
   (let ((family (face-attribute 'default :family nil t)))
     (if (and (stringp family) (not (member family '("default" "unspecified")))) family "monospace")))
 
+;; ====== GLYPHS IN THEIR CELLS ======
+;; In the GUI, a character the default font lacks comes from another font,
+;; often wider or narrower than its columns (✎ 17 pixels where a column is
+;; 11, ⏵ 10), and taller (⏵'s font: a line 28 pixels high, not 25): what
+;; follows it on its line moved by as much, a panel's border, the │ between
+;; a row's children a few pixels out of line, with a gap in it on that line.
+;; Text going into a buffer is evened out: such a glyph drawn as large as a
+;; line holds (its line as high as the others), the space beside it as much
+;; narrower or wider as it is, what follows it at its column again.
+
+(defvar agent-ui--glyphs (make-hash-table :test #'equal)
+  "How glyphs are shown, measured: (CHAR FACE) to (WIDTH . HEIGHT), its
+width in pixels at HEIGHT, the size it's drawn at (nil: its own).")
+
+(defvar agent-ui--glyphs-font nil
+  "The font the glyphs in `agent-ui--glyphs' were measured with.")
+
+(defconst agent-ui--glyph-heights '(0.95 0.9 0.85 0.8 0.75 0.7 0.65 0.6 0.55 0.5)
+  "The sizes a glyph taller than a line is tried at, the largest first.")
+
+(defun agent-ui--glyph-measure (char face buffer)
+  "How CHAR with FACE is shown in BUFFER (its face remappings): (WIDTH .
+HEIGHT), HEIGHT the largest of `agent-ui--glyph-heights' drawing it no
+taller than a line of the default font, nil if it is no taller (or none
+does), WIDTH in pixels at that size."
+  (let ((remapping (and (buffer-live-p buffer) (buffer-local-value 'face-remapping-alist buffer))))
+    (with-current-buffer (get-buffer-create " *agent-ui-glyphs*")
+      (setq-local face-remapping-alist remapping)
+      (cl-flet ((size (&optional glyph height)
+                  ;; Beside a character of the default font: the line's
+                  ;; height is the taller of both.
+                  (erase-buffer)
+                  (insert "x")
+                  (when glyph
+                    (insert (propertize (string glyph) 'face face 'display (and height `(height ,height)))))
+                  (buffer-text-pixel-size nil nil t)))
+        (let* ((x (size))
+               (line (cdr x))
+               (own (size char)))
+          (if (<= (cdr own) line)
+              (cons (- (car own) (car x)) nil)
+            (or (cl-loop for height in agent-ui--glyph-heights
+                         for (width . high) = (size char height)
+                         when (<= high line) return (cons (- width (car x)) height))
+                (cons (- (car own) (car x)) nil))))))))
+
+(defun agent-ui--glyph (char face buffer)
+  "How CHAR with FACE is shown in BUFFER: (WIDTH . HEIGHT), as
+`agent-ui--glyph-measure' says, measured once a font."
+  (let ((font (list (frame-char-width) (frame-char-height) (face-font 'default))))
+    (unless (equal font agent-ui--glyphs-font)
+      (clrhash agent-ui--glyphs)
+      (setq agent-ui--glyphs-font font)))
+  (let ((key (list char face)))
+    (or (gethash key agent-ui--glyphs)
+        (puthash key (agent-ui--glyph-measure char face buffer) agent-ui--glyphs))))
+
+(defun agent-ui--plain-space-p (text pos)
+  "Whether TEXT has a space at POS, showing nothing else (not an image's)."
+  (and (>= pos 0) (< pos (length text))
+       (eq (aref text pos) ?\s)
+       (not (get-text-property pos 'display text))))
+
+(defun agent-ui-even-glyphs (text &optional buffer)
+  "TEXT, going into BUFFER (default: the current one), evened out in the GUI:
+a glyph taller than a line drawn smaller, as large as a line holds; what
+follows a glyph of another width than its columns at its column again, the
+space after it (else before it) as much narrower or wider; a narrower one
+with no space beside it padded to its columns. A copy; TEXT itself in a
+terminal, where a glyph is its cell."
+  (if (not (display-graphic-p))
+      text
+    (let ((text (copy-sequence text))
+          (buffer (or buffer (current-buffer)))
+          (cw (frame-char-width))
+          (spaces nil)
+          (pos 0))
+      (while (setq pos (string-match "[^\000-\177]" text pos))
+        (let ((char (aref text pos)))
+          (unless (get-text-property pos 'display text)
+            (pcase-let* ((columns (* cw (char-width char)))
+                         (`(,width . ,height) (agent-ui--glyph char (get-text-property pos 'face text) buffer))
+                         (delta (- columns width))
+                         (space (and (/= delta 0)
+                                     (cond ((agent-ui--plain-space-p text (1+ pos)) (1+ pos))
+                                           ((agent-ui--plain-space-p text (1- pos)) (1- pos)))))
+                         (display
+                          (delq nil (list (and height `(height ,height))
+                                          ;; Its own list: `min-width' tells
+                                          ;; its ranges apart by it.
+                                          (and (not space) (> delta 0)
+                                               (list 'min-width (list (list columns))))))))
+              (when space
+                (setf (alist-get space spaces) (+ delta (alist-get space spaces 0))))
+              (when display
+                (put-text-property pos (1+ pos) 'display (if (cdr display) display (car display)) text)))))
+        (setq pos (1+ pos)))
+      (pcase-dolist (`(,space . ,delta) spaces)
+        (put-text-property space (1+ space) 'display `(space :width (,(max 0 (+ cw delta)))) text))
+      text)))
+
 (defun agent-ui--gui-p (ctx)
   "Whether CTX draws for the GUI (and knows its cells' size)."
   (and (plist-get ctx :graphic) (plist-get ctx :char-width) (plist-get ctx :line-height) t))

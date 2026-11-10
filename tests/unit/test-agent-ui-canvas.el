@@ -235,6 +235,24 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
     (+test-auc-flush)
     (should (equal (+test-auc-text) "3/10\n\n"))))
 
+(ert-deftest agent-ui-canvas/glyphs-in-their-cells ()
+  "In the GUI, an element's text goes into the canvas evened out
+\(`agent-ui-even-glyphs'): the space after a glyph wider than its column
+narrower, a panel's border after it in line; in a terminal, as it is."
+  (+test-auc
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _) t))
+              ((symbol-function 'frame-char-width) (lambda (&optional _) 11))
+              ((symbol-function 'agent-ui--glyph)
+               (lambda (char _face _buffer) (if (eq char ?✎) '(17) '(11)))))
+      (agent-ui-show '(:id "a" :type "meter" :marks ("✎ a")))
+      (should (equal (+test-auc-text) "0/10 ✎ a\n\n"))
+      (with-current-buffer canvas
+        (should (equal (get-text-property 7 'display) '(space :width (5))))))
+    (agent-ui-show '(:id "a" :type "meter" :marks ("✎ b")))
+    (+test-auc-flush)
+    (with-current-buffer canvas
+      (should-not (get-text-property 7 'display)))))
+
 (ert-deftest agent-ui-canvas/redrawn-by-its-timer ()
   (+test-auc
     (let ((agent-ui-redraw-delay 0.01))

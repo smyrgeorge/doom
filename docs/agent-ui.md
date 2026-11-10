@@ -125,6 +125,10 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **The width** is the canvas window's; its elements are drawn again when it changes size.
 - **Terminal or GUI** is decided by the frame showing the canvas (`display-graphic-p`). A type without a GUI drawing
   draws as text in both.
+- **Glyphs in their cells:** in the GUI, a character the default font lacks (`✎`, `⏵`) comes from another font, often
+  wider or narrower than a column and taller than a line. A canvas draws such a glyph as large as a line holds, and
+  makes the space beside it narrower or wider by as much: borders and the `│` between columns stay at their columns'
+  pixels, every line the same height.
 
 ## Defining a type
 

@@ -153,7 +153,8 @@ what it is, its properties, its example drawn, its code."
                                       (t "")))))
             (insert "  none\n"))
           (insert "\n" (agent-ui-review--heading "Its example")
-                  (agent-ui-render (append (list :type (symbol-name name)) (agent-ui-type-example type)) ctx)
+                  (agent-ui-even-glyphs
+                   (agent-ui-render (append (list :type (symbol-name name)) (agent-ui-type-example type)) ctx))
                   "\n\n" (agent-ui-review--heading (format "Its code (%s)" (abbreviate-file-name file)))
                   (agent-ui-review--code file))
           (goto-char (point-min))))
