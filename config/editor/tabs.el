@@ -9,6 +9,27 @@
         (derived-mode-p 'agent-shell-mode 'dired-mode)
         (doom-real-buffer-p buffer))))
 
+;; A NEW BUFFER (SPC b N: evil-buffer-new, *new*): no file, and a name
+;; starting with *, so Doom called it unreal: shown, then gone from its tabs
+;; once another was shown, nor listed by SPC b b, nor gone back to. Real now,
+;; kept through a change of mode (M-x markdown-mode on what you wrote).
+(defvar-local +my/tabs--new-buffer nil
+  "Non-nil in a buffer SPC b N made (see above).")
+(put '+my/tabs--new-buffer 'permanent-local t)
+
+(defun +my/tabs-new-buffer-a (&optional file)
+  "After `evil-buffer-new': the new buffer (not FILE's) marked (see above)."
+  (unless file
+    (with-current-buffer (window-buffer)
+      (setq +my/tabs--new-buffer t))))
+
+(defun +my/tabs-new-buffer-real-p (buffer)
+  "For `doom-real-buffer-functions': BUFFER made by SPC b N (see above)."
+  (buffer-local-value '+my/tabs--new-buffer buffer))
+
+(advice-add 'evil-buffer-new :after #'+my/tabs-new-buffer-a)
+(add-hook 'doom-real-buffer-functions #'+my/tabs-new-buffer-real-p)
+
 (defun +my/tabs-in-workspace-p (buffer)
   "Non-nil if BUFFER is the current workspace's (Doom's workspaces), or
 without workspaces."

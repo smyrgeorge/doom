@@ -164,6 +164,34 @@ gt/gT wrap around."
       (setq-local doom-real-buffer-p t)
       (should (+my/tabs-p (current-buffer))))))
 
+(ert-deftest tabs/a-new-buffer-keeps-its-tab ()
+  "SPC b N's *new* (`evil-buffer-new'): Doom calls a buffer named *... without
+a file unreal; this one is real, through a change of mode too: its tab kept
+when another is shown, shown again when that one closes. A file it opens:
+not marked."
+  (+test-tabs
+    (require 'evil)
+    (should (memq #'+my/tabs-new-buffer-real-p doom-real-buffer-functions))
+    (should-not (doom-real-buffer-p (+test-tabs--plain "*new-ish*")))
+    (let ((a (+test-tabs--file "a.txt")))
+      (+test-tabs--show a)
+      (evil-buffer-new nil)
+      (let ((new (+test-tabs--on (window-buffer))))
+        (should (string-prefix-p "*new*" (buffer-name new)))
+        (should (doom-real-buffer-p new))
+        (with-current-buffer new
+          (insert "Some notes")
+          (text-mode))
+        (should (doom-real-buffer-p new))
+        (should (+my/tabs-p new))
+        (+test-tabs--show a)
+        (should (memq new (+test-tabs--tabs)))
+        (should (memq a (+test-tabs--tabs)))
+        (+my/tabs-close a)
+        (should (eq (window-buffer) new))))
+    (evil-buffer-new (+test-file "b.txt" "b\n"))
+    (should-not (buffer-local-value '+my/tabs--new-buffer (window-buffer)))))
+
 (ert-deftest tabs/tabs-in-the-order-first-shown ()
   (+test-tabs
     (let ((a (+test-tabs--file "a.txt"))
