@@ -368,6 +368,11 @@ the types change.
 
 ## Later
 
+Libraries considered (doom-n3q): vui.el doesn't draw the canvas (its full re-render gains nothing over redrawing one
+element, and an element's state is its own data, saved and snapshot), but a form's fields will be vui's (typed,
+validated); svg-lib isn't used (it needs a GUI frame to measure, fetches icons from the network), its status pills
+and progress pie to be drawn by Agent UI with svg.el.
+
 
 ## Files
 
