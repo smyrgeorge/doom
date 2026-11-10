@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code compare confirm diff files form gauge graph heatmap html image issues log markdown panel progress rank slider stats steps table tags text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code compare confirm countdown diff files form gauge graph heatmap html image issues log markdown panel progress rank slider stats steps table tags text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -2274,6 +2274,49 @@ target's tick, the value, the label and target under; too narrow: text."
   (should (string-match-p "value is required" (+test-aue-error '(:type "gauge"))))
   (should (string-match-p "min must be below max" (+test-aue-error '(:type "gauge" :value 1 :min 5 :max 5))))
   (should (string-match-p "threshold 1 is" (+test-aue-error '(:type "gauge" :value 1 :thresholds ((:at 0 :face "loud")))))))
+
+(ert-deftest agent-ui-elements/countdown ()
+  "Elapsed since a start; left until an end, in the warning colour its last
+WARN seconds; past it, ended so long ago (never negative). From the clock."
+  (let ((agent-ui-clock (lambda () 1800000000.0)))
+    (should (equal (+test-aue-draw '(:type "countdown" :label "Build" :since 1799999240.0)) "Build  12m 40s"))
+    (should (equal (+test-aue-draw '(:type "countdown" :label "Resets in" :until 1800000252.0)) "Resets in  4m 12s left"))
+    (should (eq (+test-aue-face-at '(:type "countdown" :until 1800000252.0 :warn 300) "4m") 'agent-ui-warning))
+    (should (eq (+test-aue-face-at '(:type "countdown" :until 1800000252.0 :warn 60) "4m") 'bold))
+    (should (equal (+test-aue-draw '(:type "countdown" :until 1799999875.0)) "ended 2m 05s ago"))
+    ;; Seconds from now, drawn without being shown: from now.
+    (should (equal (+test-aue-draw '(:type "countdown" :until 90)) "1m 30s left"))
+    (should (equal (+test-aue-draw '(:type "countdown" :label "a long label for a narrow pane" :until 90) :width 20)
+                   "a long label for a …"))
+    ;; The GUI: a tile, the time big.
+    (let ((text (agent-ui-render '(:type "countdown" :label "Resets in" :until 1800000252.0)
+                                 (agent-ui-context :width 40 :graphic t :char-width 8 :line-height 16))))
+      (should (string-match-p ">4m 12s</text>" (plist-get (cdr (get-text-property 0 'display text)) :data))))
+    (should (agent-ui-animated-p '(:type "countdown" :until 90)))))
+
+(ert-deftest agent-ui-elements/countdown-a-time-when-shown ()
+  "Shown, seconds from now become a time: it goes on from there (shown
+again or redrawn later, it doesn't start again); a timestamp in epoch
+seconds."
+  (+test-aue-canvas
+    (let* ((now 1800000000.0)
+           (agent-ui-clock (lambda () now)))
+      (agent-ui-show '(:id "rl" :type "countdown" :label "Resets in" :until 300))
+      (should (= (plist-get (agent-ui-get "rl") :until) 1800000300.0))
+      (setq now (+ now 61))
+      (agent-ui-update "rl" '(:label "Reset in"))
+      (should (= (plist-get (agent-ui-get "rl") :until) 1800000300.0))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (should (string-search "Reset in  3m 59s left" (buffer-string))))
+      (agent-ui-show '(:id "w" :type "countdown" :until "2026-11-10T18:30:00Z"))
+      (should (= (plist-get (agent-ui-get "w") :until) (float-time (parse-iso8601-time-string "2026-11-10T18:30:00Z")))))))
+
+(ert-deftest agent-ui-elements/countdown-wrong ()
+  (should (string-match-p "give since .* or until" (+test-aue-error '(:type "countdown"))))
+  (should (string-match-p "give since .* or until" (+test-aue-error '(:type "countdown" :since 1 :until 2))))
+  (should (string-match-p "until is a timestamp" (+test-aue-error '(:type "countdown" :until "soon"))))
+  (should (string-match-p "warn is seconds" (+test-aue-error '(:type "countdown" :until 10 :warn -1)))))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.

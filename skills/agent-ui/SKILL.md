@@ -269,6 +269,17 @@ knob rests, as "Slider ID (LABEL) set to 42 ms", for something you redraw from i
 agent-ui show --canvas ask '{"id":"timeout","type":"slider","label":"Timeout","min":0,"max":120,"step":5,"unit":"s","value":30}'
 ```
 
+### `countdown`
+
+Time that matters while waiting, ticking on its own: `since` a start (the time elapsed: a long job) or `until` an end
+(the time left: a deploy window, a rate limit's reset), each a timestamp (`"2026-11-10T18:30:00Z"`), epoch seconds,
+or seconds from now; `label`; `warn` seconds before the end in the warning colour. Past the end: "ended 2m ago". No
+updates needed: it ticks by itself.
+
+```sh
+agent-ui show '{"id":"rl","type":"countdown","label":"Rate limit resets in","until":252,"warn":60}'
+```
+
 ### `gauge`
 
 One value that matters against its range and limits: coverage against a target, a budget used, a latency against an

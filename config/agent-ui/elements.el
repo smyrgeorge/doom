@@ -20,6 +20,7 @@
 (load! "elements/slider")
 (load! "elements/tags")
 (load! "elements/gauge")
+(load! "elements/countdown")
 (load! "elements/files")
 (load! "elements/stats")
 (load! "elements/log")
