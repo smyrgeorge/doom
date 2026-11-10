@@ -609,7 +609,7 @@ not with the option off (the library's own default)."
 (ert-deftest agent-ui-agent/answered-the-question-goes ()
   "An answer sent: the question leaves its canvas; a canvas left empty is
 closed and killed, the cursor back in the session. Beside other elements,
-they stay; a plan approved stays (its steps run on); the option off (the
+they stay; a plan approved goes too (doom-q49); the option off (the
 library's own default), all stay."
   (should (memq #'agent-ui--close-answered-h (default-value 'agent-ui-changed-hook)))
   (should-not (default-value 'agent-ui-close-answered))
@@ -642,11 +642,12 @@ library's own default), all stay."
           (+test-aua-settle)
           (should (buffer-live-p canvas))
           (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas)) '("build")))
-          ;; A plan approved: its steps run on.
+          ;; A plan approved: it goes too (the agent shows its steps again,
+          ;; as its checklist, if it works through them).
           (agent-ui-show '(:id "plan" :type "steps" :approve t :steps ("Reproduce" "Fix")) :canvas name)
           (+test-aua-press canvas "⏵ Approve")
           (+test-aua-settle)
-          (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas)) '("build" "plan")))
+          (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas)) '("build")))
           ;; The option off: an answered question stays.
           (let ((agent-ui-close-answered nil))
             (agent-ui-show '(:id "go" :type "confirm" :question "Deploy?") :canvas name)

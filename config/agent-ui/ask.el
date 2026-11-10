@@ -81,10 +81,10 @@ answer)."
 
 (defun agent-ui-ask-done-p (element)
   "Whether ELEMENT asked the user and its answer was sent: nothing left to do
-with it; but a plan approved, whose steps run on."
+with it. A plan approved too: the agent shows its steps again as its
+checklist, to tick as it works."
   (and (plist-get element :answered)
        (agent-ui-ask-question-p element)
-       (memq (plist-get element :approve) '(nil :false))
        t))
 
 (defun agent-ui-ask-question (element)

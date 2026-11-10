@@ -92,12 +92,13 @@ agent-ui append plan '{"items":[{"label":"Reproduce the bug","done":true}]}'
 
 ## A plan to approve: `steps`
 
-Before a larger change, show your plan as steps with `"approve": true` (or `{"question": ..., "submit": false}`), say
-so in a line, and end your turn. It stays on your own canvas (its steps run on once approved). The user drops steps,
-rewords them, adds a note, then approves: "Answer to steps ID (QUESTION): approved: 1. A; 2. B (edited, was: X).
-Dropped: C. Note: ..." comes as your next prompt (sent at once), and the steps are now that plan: append statuses by
-those names as you work. Or "...: rejected. Note: why": rethink, don't start. A plan's steps are shown whole (a long
-one wraps), so say each in full.
+Before a larger change, show your plan as steps with `"approve": true` (or `{"question": ..., "submit": false}`) on
+your own canvas, say so in a line, and end your turn. The user drops steps, rewords them, adds a note, then approves:
+"Answer to steps ID (QUESTION): approved: 1. A; 2. B (edited, was: X). Dropped: C. Note: ..." comes as your next
+prompt (sent at once). Answered, the plan may close (as every question does). To work through it, show the approved
+steps again as an ordinary checklist (`steps`, the same id, their names as approved, no `approve`; it replaces the
+plan if it's still there) and tick them as you go. Or "...: rejected. Note: why": rethink, don't start. A plan's
+steps are shown whole (a long one wraps), so say each in full.
 
 ```sh
 agent-ui show '{"id":"plan","type":"steps","title":"The fix","approve":true,"steps":["Reproduce the bug","Fix the parser","Update the docs","Release"]}'

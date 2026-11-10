@@ -512,7 +512,9 @@ it in its place: append {\"steps\": [{\"name\": \"Build\", \"status\":
 \"done\"}]}; with \"parent\": \"Build\", among that step's own. With APPROVE,
 a plan the user approves first (dropping, rewording steps): \"Answer to steps
 ID (QUESTION): approved: 1. A; 2. B (edited, was: X). Dropped: C. Note: ...\"
-\(or rejected) comes into your prompt; the steps are then the approved ones."
+\(or rejected) comes into your prompt; the steps are then the approved ones,
+and the plan may close (as every question answered): to tick them, show
+them again, without APPROVE."
   :props ((steps list "The steps, in order")
           (approve any "A plan for the user to approve first: true, or {\"question\": ..., \"submit\": ...}")
           (dropped list "The steps the user dropped (theirs)")
