@@ -984,6 +984,24 @@ digits: lines from 100000 a column past the width)."
   ;; Up to 5 digits: as before.
   (should (string-match-p "^     40   a$" (+test-aue-draw '(:type "diff" :diff "@@ -40 +40 @@\n a\n")))))
 
+;; doom-nwj.79
+(ert-deftest agent-ui-elements/diff-stops-at-its-cap ()
+  "Past `agent-ui-max-rows' lines nothing more is drawn but what's left out
+(later files and hunks were drawn, empty, the note at the very end)."
+  (let ((agent-ui-max-rows 4)
+        (diff (concat "--- a/a.c\n+++ b/a.c\n@@ -1,3 +1,6 @@\n x\n+1\n+2\n+3\n y\n z\n"
+                      "--- a/b.c\n+++ b/b.c\n@@ -1 +1,2 @@\n p\n+q\n@@ -9 +10,2 @@\n r\n+s\n")))
+    (should (equal (+test-aue-draw (list :type "diff" :diff diff))
+                   (concat "▾ a.c  +3 −0\n  @@ -1,3 +1,6 @@\n"
+                           "      1   x\n      2 + 1\n      3 + 2\n      4 + 3\n"
+                           "… 6 lines more")))
+    ;; Ending at a hunk's end: the next file not begun.
+    (let ((agent-ui-max-rows 6))
+      (should (string-suffix-p "      6   z\n… 4 lines more" (+test-aue-draw (list :type "diff" :diff diff)))))
+    ;; All of it within the cap: all drawn, no note.
+    (let ((agent-ui-max-rows 10))
+      (should (string-suffix-p "     11 + s" (+test-aue-draw (list :type "diff" :diff diff)))))))
+
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).
   (let ((agent-ui-file-directory "/proj/")

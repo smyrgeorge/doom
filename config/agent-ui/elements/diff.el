@@ -142,6 +142,11 @@ are still its."
          (bg (or (face-background 'default nil t) "black"))
          (tint (lambda (face) (agent-ui-progress--blend bg (agent-ui-progress--color face) 0.18)))
          (count 0)
+         (total (cl-loop for file in files
+                         sum (cl-loop for hunk in (plist-get file :hunks) sum (length (plist-get hunk :lines)))))
+         ;; Lines up to the cap, then nothing but what's left out said (later
+         ;; files and hunks were drawn, empty, the note at the very end).
+         (full (lambda () (and (>= count agent-ui-max-rows) (> total count))))
          ;; The line numbers' digits: the largest's, 5 at least (it was 5:
          ;; lines from 100000 a column past the width).
          (digits (max 5 (length (number-to-string
@@ -151,28 +156,31 @@ are still its."
          (out nil))
     (if (null files)
         (propertize "no changes" 'face 'agent-ui-muted)
-      (dolist (file files)
-        (let* ((counts (concat "  " (propertize (format "+%d" (plist-get file :added)) 'face 'agent-ui-success)
-                               " " (propertize (format "−%d" (plist-get file :removed)) 'face 'agent-ui-error)))
-               ;; Its path cut at its start, its counts kept (it was never
-               ;; cut: the canvas cut it, the counts first).
-               (name (agent-ui-truncate-start (plist-get file :file)
-                                              (max 1 (- width 2 (string-width counts))))))
-          (push (agent-ui-truncate
-                 (concat (propertize "▾ " 'face 'agent-ui-muted)
-                         (agent-ui-button (propertize name 'face 'bold)
-                                          (agent-ui-diff--open dir (plist-get file :file) nil)
-                                          "RET: open the file")
-                         counts)
-                 width)
-                out))
-        (dolist (hunk (plist-get file :hunks))
-          (push (concat "  " (propertize (agent-ui-truncate (plist-get hunk :header) (- width 2))
-                                         'face 'agent-ui-accent))
-                out)
-          (dolist (line (plist-get hunk :lines))
-            (cl-incf count)
-            (when (<= count agent-ui-max-rows)
+      (catch 'full
+        (dolist (file files)
+          (when (funcall full) (throw 'full nil))
+          (let* ((counts (concat "  " (propertize (format "+%d" (plist-get file :added)) 'face 'agent-ui-success)
+                                 " " (propertize (format "−%d" (plist-get file :removed)) 'face 'agent-ui-error)))
+                 ;; Its path cut at its start, its counts kept (it was never
+                 ;; cut: the canvas cut it, the counts first).
+                 (name (agent-ui-truncate-start (plist-get file :file)
+                                                (max 1 (- width 2 (string-width counts))))))
+            (push (agent-ui-truncate
+                   (concat (propertize "▾ " 'face 'agent-ui-muted)
+                           (agent-ui-button (propertize name 'face 'bold)
+                                            (agent-ui-diff--open dir (plist-get file :file) nil)
+                                            "RET: open the file")
+                           counts)
+                   width)
+                  out))
+          (dolist (hunk (plist-get file :hunks))
+            (when (funcall full) (throw 'full nil))
+            (push (concat "  " (propertize (agent-ui-truncate (plist-get hunk :header) (- width 2))
+                                           'face 'agent-ui-accent))
+                  out)
+            (dolist (line (plist-get hunk :lines))
+              (when (funcall full) (throw 'full nil))
+              (cl-incf count)
               (pcase-let* ((`(,kind ,number ,text) line)
                            (mark (pcase kind ('added "+") ('removed "−") ('note "\\") (_ " ")))
                            (face (pcase kind ('added 'agent-ui-success) ('removed 'agent-ui-error)
@@ -191,8 +199,9 @@ are still its."
                 (push (agent-ui-button shown (agent-ui-diff--open dir (plist-get file :file) number)
                                        (format "RET: %s:%s" (plist-get file :file) (or number "")))
                       out))))))
-      (when (> count agent-ui-max-rows)
-        (push (propertize (format "… %d lines more" (- count agent-ui-max-rows)) 'face 'agent-ui-muted) out))
+      (when (> total count)
+        (push (agent-ui-truncate (propertize (format "… %d lines more" (- total count)) 'face 'agent-ui-muted) width)
+              out))
       (string-join (nreverse out) "\n"))))
 
 (agent-ui-define diff
