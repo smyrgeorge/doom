@@ -19,8 +19,8 @@
 ;; `agent-ui-redraw-delay' after (updates within it drawn together); animated
 ;; ones every `agent-ui-animation-interval'. It opens in a tiled pane (one of
 ;; tiling's applications, config/tiling.el) when an element is added while
-;; it's in no window, without taking the focus. In it: g r redraws it, q hides it. At
-;; most `agent-ui-max-elements'.
+;; it's in no window, without taking the focus. In it: g r redraws it, q
+;; kills it (its pane closed). At most `agent-ui-max-elements'.
 
 ;; SOURCES
 ;; An element can follow what changes by itself (config/agent-ui/source.el):
