@@ -10,11 +10,12 @@ installs `bd` (Homebrew on macOS, npm on Linux).
 | `SPC o i` | The project's issues |
 | `SPC o I` | A new issue: title, type, priority |
 
-In a project that doesn't track its issues yet, `SPC o i` and `SPC o I` offer a terminal at its root with `bd init`
-typed, not run: read it, run it with `RET`, then `SPC o i` again. `bd init` commits what it adds (and what's staged);
-add `--skip-hooks` before running it to install no git hooks, `--skip-agents` to add no files for agents (`CLAUDE.md`,
-`AGENTS.md`...). Claude Code in Emacs is told about the issues either way ([more](claude-code.md#issues-for-claude)).
-The command typed is `+my/beads-init-command` in `config/beads.el`.
+In a project that doesn't track its issues yet, `SPC o i` and `SPC o I` offer a terminal at its root with
+`bd init --skip-agents` typed, not run: read it, run it with `RET`, then `SPC o i` again. It adds `.beads/` and
+`.gitignore` and commits them (with what's staged), and no files for AI tools (`CLAUDE.md`, `AGENTS.md`, `.codex/`,
+`.cursor/`...). Claude Code in Emacs is told about the issues anyway ([more](claude-code.md#issues-for-claude)); run
+from a terminal, after `bd setup claude`. Add `--skip-hooks` before running it to install no git hooks. The command
+typed is `+my/beads-init-command` in `config/beads.el`.
 
 ## The list
 

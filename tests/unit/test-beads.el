@@ -192,10 +192,10 @@ bd init typed there, not run (no RET); nothing else done."
       (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (push prompt asked) t))
                 ((symbol-function 'beads-list) (lambda () (error "The list opened"))))
         (+my/beads-project))
-      (should (string-match-p "doesn't track its issues with Beads. Open a terminal with .bd init. to run\\?"
+      (should (string-match-p "doesn't track its issues with Beads. Open a terminal with .bd init --skip-agents. to run\\?"
                               (car asked)))
       (should (equal (mapcar #'cdr terminals) (list dir)))
-      (should (equal typed (list (cons (caar terminals) "bd init"))))
+      (should (equal typed (list (cons (caar terminals) "bd init --skip-agents"))))
       (should-not (string-match-p "[\r\n]" (cdar typed)))
       (should-not (file-exists-p (expand-file-name ".beads" dir))))))
 
@@ -213,7 +213,7 @@ bd init typed there, not run (no RET); nothing else done."
               ((symbol-function 'beads-create-issue) (lambda () (interactive) (error "Created"))))
       (+my/beads-new-issue))
     (should (= (length terminals) 1))
-    (should (equal (cdar typed) "bd init"))))
+    (should (equal (cdar typed) "bd init --skip-agents"))))
 
 (ert-deftest beads/typed-once-the-prompt-is-drawn ()
   "Not before the shell drew something and it settled; given up after a
@@ -242,7 +242,7 @@ while without one."
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
 (ert-deftest beads/the-command-typed ()
-  (should (equal +my/beads-init-command "bd init"))
+  (should (equal +my/beads-init-command "bd init --skip-agents"))
   (let ((+my/beads-init-command "bd init --skip-hooks"))
     (+test-beads--untracked
       (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t)))
@@ -256,7 +256,19 @@ while without one."
                (let ((fboundp (symbol-function 'fboundp)))
                  (lambda (f) (and (not (eq f 'ghostel-new)) (funcall fboundp f))))))
       (let ((err (should-error (+my/beads-project) :type 'user-error)))
-        (should (string-match-p "run .bd init. in" (cadr err)))))))
+        (should (string-match-p "run .bd init --skip-agents. in" (cadr err)))))))
+
+(ert-deftest beads/bd-the-command-typed-adds-no-agent-files ()
+  "The command typed, run: .beads/ and .gitignore committed, no files for AI
+tools."
+  (+test-beads-with-repo
+    (+test-beads--run "git" "commit" "-q" "--allow-empty" "-m" "First")
+    (apply #'+test-beads--run (split-string-shell-command +my/beads-init-command))
+    (should (file-directory-p (expand-file-name ".beads" repo)))
+    (dolist (file '("CLAUDE.md" "AGENTS.md" ".claude" ".codex" ".cursor" ".agents"))
+      (should-not (file-exists-p (expand-file-name file repo))))
+    (should (equal (split-string (+test-beads--run "git" "status" "--porcelain") "\n" t) nil))
+    (should (string-match-p "^\\.gitignore$" (+test-beads--run "git" "ls-files")))))
 
 ;; ====== BD 1.x ======
 

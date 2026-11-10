@@ -18,12 +18,14 @@
 
 ;; What SPC o i types (not runs) in a terminal where a project's issues aren't
 ;; tracked yet (config/beads/project.el). bd init commits what it adds (and
-;; what's staged). Flags to add here, or before running it: --skip-hooks, no
-;; git hooks (else bd's become the repository's core.hooksPath, run on every
-;; commit, merge, push); --skip-agents, no CLAUDE.md, AGENTS.md, .claude/,
-;; .codex/, .cursor/ (Claude Code in Emacs is told of the issues anyway, by
-;; config/agent-shell/beads.el).
-(defvar +my/beads-init-command "bd init"
+;; what's staged): with --skip-agents, .beads/ and .gitignore only, no files
+;; for every AI tool (CLAUDE.md, AGENTS.md, .claude/, .codex/, .cursor/,
+;; .agents/): Claude Code in Emacs is told of the issues anyway, by
+;; config/agent-shell/beads.el (from a terminal, it is after `bd setup
+;; claude'). A flag to add here, or before running it: --skip-hooks, no git
+;; hooks (else bd's become the repository's core.hooksPath, run on every
+;; commit, merge, push).
+(defvar +my/beads-init-command "bd init --skip-agents"
   "The command SPC o i types in a terminal to start tracking a project's issues.")
 
 ;; The issue list shows the work still open: its closed issues hidden, a
