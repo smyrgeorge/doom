@@ -965,6 +965,25 @@ unquoted, their octal escapes UTF-8 (shown escaped, and RET opened
     (should (string-prefix-p "▾ σημειώσεις.md  +0 −1"
                              (+test-aue-draw '(:type "diff" :diff "--- \"a/\\317\\203\\316\\267\\316\\274\\316\\265\\316\\271\\317\\216\\317\\203\\316\\265\\316\\271\\317\\202.md\"\n+++ /dev/null\n@@ -1 +0,0 @@\n-a\n"))))))
 
+;; doom-nwj.78
+(ert-deftest agent-ui-elements/diff-six-digit-line-numbers ()
+  "The line numbers' gutter is as wide as the largest number (it was 5
+digits: lines from 100000 a column past the width)."
+  (let ((element (list :type "diff" :diff (concat "--- a/big.c\n+++ b/big.c\n@@ -99999,2 +99999,3 @@\n"
+                                                  " a\n-" (make-string 40 ?o) "\n+" (make-string 40 ?n)
+                                                  "\n+b\n"))))
+    (dolist (gui '(nil t))
+      (dolist (line (split-string (+test-aue-draw element :width 30 :graphic gui) "\n"))
+        (should (<= (string-width line) 30))))
+    (should (equal (+test-aue-draw element :width 30)
+                   (concat "▾ big.c  +2 −1\n  @@ -99999,2 +99999,3 @@\n"
+                           "   99999   a\n"
+                           "         − oooooooooooooooooo…\n"
+                           "  100000 + nnnnnnnnnnnnnnnnnn…\n"
+                           "  100001 + b"))))
+  ;; Up to 5 digits: as before.
+  (should (string-match-p "^     40   a$" (+test-aue-draw '(:type "diff" :diff "@@ -40 +40 @@\n a\n")))))
+
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).
   (let ((agent-ui-file-directory "/proj/")

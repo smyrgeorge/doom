@@ -142,6 +142,12 @@ are still its."
          (bg (or (face-background 'default nil t) "black"))
          (tint (lambda (face) (agent-ui-progress--blend bg (agent-ui-progress--color face) 0.18)))
          (count 0)
+         ;; The line numbers' digits: the largest's, 5 at least (it was 5:
+         ;; lines from 100000 a column past the width).
+         (digits (max 5 (length (number-to-string
+                                 (apply #'max 0 (cl-loop for file in files
+                                                         append (cl-loop for hunk in (plist-get file :hunks)
+                                                                         append (delq nil (mapcar #'cadr (plist-get hunk :lines))))))))))
          (out nil))
     (if (null files)
         (propertize "no changes" 'face 'agent-ui-muted)
@@ -171,9 +177,11 @@ are still its."
                            (mark (pcase kind ('added "+") ('removed "−") ('note "\\") (_ " ")))
                            (face (pcase kind ('added 'agent-ui-success) ('removed 'agent-ui-error)
                                         ('note 'agent-ui-muted) (_ nil)))
-                           (gutter (if (and number (not (eq kind 'removed))) (format "%5d " number) "      "))
+                           (gutter (if (and number (not (eq kind 'removed)))
+                                       (format (format "%%%dd " digits) number)
+                                     (make-string (1+ digits) ?\s)))
                            (body (agent-ui-truncate (concat mark " " (string-replace "\t" "    " text))
-                                                    (- width 8)))
+                                                    (- width 3 digits)))
                            (shown (concat "  " (propertize gutter 'face 'agent-ui-muted)
                                           (if face (propertize body 'face face) body))))
                 (when (and gui (memq kind '(added removed)))
