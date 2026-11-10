@@ -148,15 +148,16 @@
     ;; Drawn as given (not kept on a canvas: no times noted).
     (should (equal (+test-aue-draw element :tick 2)
                    (concat "✓ Run the tests  412 passed\n"
-                           "⠹ Build\n"
+                           "▝ Build\n"
                            "○ Publish\n"
                            "✗ Tag            exists\n"
                            "– Notify")))
     ;; None timed: no times' column.
     (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "a" :status "done" :detail "x") "bb")))
                    "✓ a   x\n○ bb"))
-    ;; The spinner turns.
-    (should (string-match-p "⠼ Build" (+test-aue-draw element :tick 4)))
+    ;; The spinner turns, round (its 4 frames).
+    (should (string-match-p "▗ Build" (+test-aue-draw element :tick 3)))
+    (should (string-match-p "▖ Build" (+test-aue-draw element :tick 4)))
     (should (agent-ui-animated-p element))
     (should (eq (+test-aue-face-at element "✓") 'agent-ui-success))
     (should (eq (+test-aue-face-at element "exists") 'agent-ui-error))
@@ -199,7 +200,7 @@
                                                                             (:name "b" :status "running"))))))
     (should (equal (plist-get (car (plist-get element :steps)) :seconds) 41.0))
     (setq now 150.0)
-    (should (equal (+test-aue-draw element) "✓ a  41s\n⠋ b   9s"))
+    (should (equal (+test-aue-draw element) "✓ a  41s\n▖ b   9s"))
     ;; Kept again (a panel's re-check): nothing changes.
     (should (equal (agent-ui--checked element) element))
     ;; A panel's: noted too.

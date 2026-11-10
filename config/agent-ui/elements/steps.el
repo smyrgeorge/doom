@@ -6,9 +6,9 @@
 ;; to done or failed, or given), counting while it runs.
 ;;
 ;;   ✓ Run the tests      41s  412 passed
-;;   ⠹ Build              12s
+;;   ▝ Build              12s
 ;;     ✓ compile           8s
-;;     ⠹ link              4s
+;;     ▝ link              4s
 ;;   ○ Publish
 
 (require 'cl-lib)

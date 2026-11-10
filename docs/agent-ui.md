@@ -117,7 +117,8 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **Redraws are throttled:** an update marks the element dirty, and a timer (`agent-ui-redraw-delay`, 0.1s) redraws the
   dirty ones. A hundred updates a second cost ten redraws.
 - **Animated elements** (a spinner, an indeterminate bar) are redrawn by one timer of the canvas, running only while one
-  is shown in a window.
+  is shown in a window. The spinner is a square going round, `▖▘▝▗` (block elements: a coding font has them);
+  `agent-ui-spinner-frames` sets other frames, in `config.el`.
 - **The width** is the canvas window's; its elements are drawn again when it changes size.
 - **Terminal or GUI** is decided by the frame showing the canvas (`display-graphic-p`). A type without a GUI drawing
   draws as text in both.

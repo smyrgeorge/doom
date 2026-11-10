@@ -463,13 +463,16 @@ so a canvas goes on with its other elements. No newline at its end."
 (defface agent-ui-accent '((t :inherit font-lock-keyword-face))
   "What's going on: a bar filling, a step running.")
 
-(defconst agent-ui-spinner-frames ["⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"]
-  "A spinner's frames, one per animation tick.")
+(defcustom agent-ui-spinner-frames '("▖" "▘" "▝" "▗")
+  "A spinner's frames, one per animation tick: a square going round. Block
+elements, which coding and terminal fonts have (braille, ⠋⠙⠹..., came from
+a fallback font whose dots are tiny: every frame looked the same)."
+  :type '(repeat string))
 
 (defun agent-ui-spinner (ctx)
   "The spinner's frame for CTX's tick."
-  (aref agent-ui-spinner-frames
-        (mod (or (plist-get ctx :tick) 0) (length agent-ui-spinner-frames))))
+  (elt agent-ui-spinner-frames
+       (mod (or (plist-get ctx :tick) 0) (length agent-ui-spinner-frames))))
 
 (defun agent-ui-truncate (string width)
   "STRING cut to WIDTH columns, with … if it's cut."
