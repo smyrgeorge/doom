@@ -842,7 +842,7 @@ new file mode 100644
                            "     41 +   if (!p) return NULL;\n"
                            "     42 +   return parse_term(p);\n"
                            "     43   }\n"
-                           "        \\  No newline at end of file\n"
+                           "        \\ No newline at end of file\n"
                            "▾ README.md  +2 −0\n"
                            "  @@ -0,0 +1,2 @@\n"
                            "      1 + # Parser\n"
@@ -1071,6 +1071,18 @@ index 1,2..3
                            "      9   c\n     10   d\n     11 + e\n"
                            "▾ g.c  +0 −2\n  @@@ -1,3 -1,3 +1,2 @@@\n"
                            "      1   x\n        − y\n        − z\n      2   w")))))
+
+;; doom-nwj.87
+(ert-deftest agent-ui-elements/diff-no-newline-note-aligned ()
+  "git's \"\\ No newline at end of file\" is drawn like other lines: its
+mark, one space, its words (it had two spaces)."
+  (let ((lines (split-string (+test-aue-draw '(:type "diff" :diff "--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file\n"))
+                             "\n")))
+    (should (equal (nthcdr 2 lines)
+                   '("        − a" "        \\ No newline at end of file"
+                     "      1 + b" "        \\ No newline at end of file")))
+    ;; Its words start where other lines' do.
+    (should (= (string-search "No" (nth 3 lines)) (string-search "a" (nth 2 lines))))))
 
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).

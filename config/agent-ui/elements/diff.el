@@ -162,7 +162,9 @@ column of marks for each parent: added if one is +, removed if one is -
           (push (list 'removed new (substring line 1)) (plist-get hunk :lines))
           (cl-incf (plist-get file :removed)) (cl-incf old) (cl-decf old-left))
          ((string-prefix-p "\\" line)
-          (push (list 'note nil (substring line 1)) (plist-get hunk :lines)))
+          ;; Its words without git's space after the \ (drawn after the
+          ;; mark's own: two spaces).
+          (push (list 'note nil (string-remove-prefix " " (substring line 1))) (plist-get hunk :lines)))
          ((or (string-prefix-p " " line) (string-empty-p line))
           (unless (and (string-empty-p line) (null (plist-get hunk :lines)))
             (push (list 'context new (if (string-empty-p line) "" (substring line 1))) (plist-get hunk :lines))
