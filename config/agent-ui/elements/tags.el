@@ -8,7 +8,10 @@
 ;; rounded tag in the GUI). Wrapped to the width, a chip never split. A chip
 ;; with a PROMPT is a button putting it into the session's prompt (as an
 ;; action: queued while the agent works). Appending a tag whose label is
-;; there changes it in its place (its count).
+;; there changes it in its place (its count). With SELECT, the user picks
+;; chips (config/agent-ui/ask.el's select, as a table's): a picked one filled,
+;; the others outlined, RET or a click (un)picks one, Send answers with their
+;; labels.
 ;;
 ;;   [bug 12] [feature 4] [agent-ui 31] [P1 2]
 
@@ -60,7 +63,10 @@ an error naming it (the I-th) if it's wrong."
                        collect (agent-ui-tags--normalize tag i))))
     (let ((labels (mapcar (lambda (tag) (plist-get tag :label)) tags)))
       (when (/= (length labels) (length (delete-dups (copy-sequence labels))))
-        (agent-ui--fail "tags: two tags have the same label")))
+        (agent-ui--fail "tags: two tags have the same label"))
+      (when-let* ((select (plist-get props :select)))
+        (agent-ui-ask-select-check "tags" select)
+        (agent-ui-ask-check "tags" (plist-get props :selected) labels (agent-ui-ask-multiple-p select))))
     (plist-put props :tags tags)))
 
 (defun agent-ui-tags--chip (tag ctx width &optional filled)
@@ -90,9 +96,30 @@ an error naming it (the I-th) if it's wrong."
 (defun agent-ui-tags--draw (props ctx)
   (let* ((width (plist-get ctx :width))
          (still (plist-get ctx :still))
-         (tags (plist-get props :tags)))
-    (if (null tags)
-        (propertize "no tags" 'face 'agent-ui-muted)
+         (tags (plist-get props :tags))
+         (select (plist-get props :select)))
+    (cond
+     ((null tags) (propertize "no tags" 'face 'agent-ui-muted))
+     (select
+      ;; Picking chips: a picked one filled, the others outlined; RET or a
+      ;; click (un)picks one; the question above, Send under.
+      (let ((multiple (agent-ui-ask-multiple-p select))
+            (answered (agent-ui-ask-answered-p props)))
+        (agent-ui-ask-around
+         props ctx
+         (string-join
+          (agent-ui-tags--rows
+           (mapcar (lambda (tag)
+                     (let* ((label (plist-get tag :label))
+                            (chip (agent-ui-tags--chip tag ctx width (agent-ui-ask-picked-p props label))))
+                       (if (or still answered)
+                           chip
+                         (agent-ui-ask-pick-button chip props ctx label multiple))))
+                   tags)
+           width)
+          "\n")
+         (mapcar (lambda (tag) (plist-get tag :label)) tags))))
+     (t
       (string-join
        (agent-ui-tags--rows
         (mapcar (lambda (tag)
@@ -106,7 +133,7 @@ an error naming it (the I-th) if it's wrong."
                       chip)))
                 tags)
         width)
-       "\n"))))
+       "\n")))))
 
 (defun agent-ui-tags--append (element patch)
   "ELEMENT with PATCH's tags: one whose label is there changes in its place
@@ -133,8 +160,13 @@ an error naming it (the I-th) if it's wrong."
 warning, error, accent), \"color\", \"count\", \"prompt\"}: a project's labels,
 a run's statuses, the filters in use. A chip with a prompt is a button
 putting it into your prompt. Append a tag whose label is there to change it
-\(its count)."
-  :props ((tags list "The chips: labels, or {\"label\": ..., \"face\": ..., \"count\": ...}"))
+\(its count). With SELECT, the user picks chips (labels to apply, platforms to
+build for): \"Answer to ID (QUESTION): bug, docs\" comes into your prompt."
+  :props ((tags list "The chips: labels, or {\"label\": ..., \"face\": ..., \"count\": ...}")
+          (select any "Ask the user to pick chips: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their labels")
+          (selected list "The chips picked so far (labels): a default, or the user's")
+          (note-text string "The user's note")
+          (answered string "The answer given (then it can't be changed)"))
   :example (:title "Labels"
             :tags ((:label "bug" :face "error" :count 12)
                    (:label "feature" :face "success" :count 4)

@@ -2157,13 +2157,71 @@ whose label is there changes it in its place."
                                            (should-error (agent-ui-append "labels" '(:title "x"))
                                                          :type 'agent-ui-error)))))))
 
+(ert-deftest agent-ui-elements/tags-to-pick ()
+  "With select: the question, a picked chip filled (its text and the GUI's
+pill), the others outlined; the note, Answer, All / None; answered: the
+answer, locked; a still picture: the chips only."
+  (let ((tags '(:type "tags" :tags ("bug" "docs" "ci") :selected ("docs")
+                :select (:question "Which labels?" :multiple t :note t))))
+    (should (equal (+test-aue-draw tags)
+                   (concat "Which labels?\n"
+                           "[bug]  docs  [ci]\n"
+                           " ✎ Add a note\n"
+                           " ⏵ Answer (1 chosen)   ⏵ All   ⏵ None")))
+    (should (equal (+test-aue-face-at tags "docs") '(:inherit agent-ui-accent :inverse-video t)))
+    (should (equal (+test-aue-draw tags :still t) "Which labels?\n[bug]  docs  [ci]"))
+    (should (equal (+test-aue-draw (append '(:answered "docs") tags))
+                   "Which labels?\n[bug]  docs  [ci]\n✓ Answered: docs"))
+    (should (agent-ui-ask-waiting-p tags))
+    ;; The GUI: the picked one's pill filled, the others outlined on a tint.
+    (let* ((text (agent-ui-render tags (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+           (svg (lambda (word) (plist-get (cdr (get-text-property (string-search word (substring-no-properties text))
+                                                                   'display text))
+                                          :data)))
+           (color (regexp-quote (agent-ui-color 'agent-ui-accent))))
+      (should (string-match-p (format "<rect [^>]*fill=\"%s\"" color) (funcall svg "docs")))
+      (should-not (string-match-p (format "<rect [^>]*fill=\"%s\"" color) (funcall svg "bug"))))))
+
+(ert-deftest agent-ui-elements/tags-picked-and-sent ()
+  "RET on a chip (un)picks it; one only without multiple; Answer sends the
+labels picked; then locked."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "labels" :type "tags" :tags ("bug" "docs" "ci")
+                       :select (:question "Which labels?" :multiple t :submit t)))
+      (with-current-buffer canvas
+        (+test-aue-press "[bug]")
+        (+test-aue-press "[ci]")
+        (+test-aue-press " bug ")
+        (should (equal (plist-get (agent-ui-get "labels") :selected) '("ci")))
+        (+test-aue-press "[docs]")
+        (+test-aue-press "⏵ Send (2 chosen)")
+        (should (equal sent '(("Answer to labels (Which labels?): docs, ci" t))))
+        (agent-ui--flush)
+        (should (string-search "✓ Answered: docs, ci" (buffer-string)))
+        (goto-char (point-min))
+        (search-forward "[bug]")
+        (goto-char (match-beginning 0))
+        (should-error (agent-ui-button-press) :type 'user-error)))
+    ;; One only.
+    (agent-ui-show '(:id "os" :type "tags" :tags ("linux" "macos") :select (:question "Build for?")))
+    (with-current-buffer canvas
+      (+test-aue-press "[linux]")
+      (+test-aue-press "[macos]")
+      (should (equal (plist-get (agent-ui-get "os") :selected) '("macos"))))))
+
 (ert-deftest agent-ui-elements/tags-wrong ()
   (should (string-match-p "tag 2 must be a label" (+test-aue-error '(:type "tags" :tags ("a" 3)))))
   (should (string-match-p "tag 1 has no label" (+test-aue-error '(:type "tags" :tags ((:count 3))))))
   (should (string-match-p "tag 1's face is plain" (+test-aue-error '(:type "tags" :tags ((:label "a" :face "loud"))))))
   (should (string-match-p "tag 1's color isn't a colour" (+test-aue-error '(:type "tags" :tags ((:label "a" :color "notacolour"))))))
   (should (string-match-p "same label" (+test-aue-error '(:type "tags" :tags ("a" "a")))))
-  (should (string-match-p "tag 1 has \"size\"" (+test-aue-error '(:type "tags" :tags ((:label "a" :size 3)))))))
+  (should (string-match-p "tag 1 has \"size\"" (+test-aue-error '(:type "tags" :tags ((:label "a" :size 3))))))
+  (should (string-match-p "select's question is required"
+                          (+test-aue-error '(:type "tags" :tags ("a") :select (:multiple t)))))
+  (should (string-match-p "\"b\""
+                          (+test-aue-error '(:type "tags" :tags ("a") :select (:question "q") :selected ("b"))))))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.

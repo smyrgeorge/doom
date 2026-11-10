@@ -274,9 +274,11 @@ agent-ui show --canvas ask '{"id":"timeout","type":"slider","label":"Timeout","m
 A row of chips: a project's labels, a run's statuses, the filters in use, the versions involved. `tags` are labels,
 or `{"label", "face", "color", "count", "prompt"}`: `face` one of `muted`, `success`, `warning`, `error`, `accent`
 (the default), `plain`; or a `color`. A chip with a `prompt` is a button putting it into your prompt. Append a tag
-whose label is there to change it (its count).
+whose label is there to change it (its count). With `select` (`{"question", "multiple", "note", "submit"}`, as a
+table's), the user picks chips (labels to apply, platforms to build for): "Answer to ID (QUESTION): bug, docs".
 
 ```sh
+agent-ui show --canvas ask '{"id":"apply","type":"tags","tags":["bug","docs","agent-ui"],"select":{"question":"Which labels should the new ticket get?","multiple":true}}'
 agent-ui show '{"id":"labels","type":"tags","title":"Labels","tags":[{"label":"bug","face":"error","count":12},{"label":"feature","face":"success","count":4},{"label":"docs","face":"muted"}]}'
 agent-ui append labels '{"tags":[{"label":"bug","count":11}]}'
 ```
