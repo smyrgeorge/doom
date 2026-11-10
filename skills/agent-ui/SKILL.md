@@ -269,6 +269,18 @@ knob rests, as "Slider ID (LABEL) set to 42 ms", for something you redraw from i
 agent-ui show --canvas ask '{"id":"timeout","type":"slider","label":"Timeout","min":0,"max":120,"step":5,"unit":"s","value":30}'
 ```
 
+### `tags`
+
+A row of chips: a project's labels, a run's statuses, the filters in use, the versions involved. `tags` are labels,
+or `{"label", "face", "color", "count", "prompt"}`: `face` one of `muted`, `success`, `warning`, `error`, `accent`
+(the default), `plain`; or a `color`. A chip with a `prompt` is a button putting it into your prompt. Append a tag
+whose label is there to change it (its count).
+
+```sh
+agent-ui show '{"id":"labels","type":"tags","title":"Labels","tags":[{"label":"bug","face":"error","count":12},{"label":"feature","face":"success","count":4},{"label":"docs","face":"muted"}]}'
+agent-ui append labels '{"tags":[{"label":"bug","count":11}]}'
+```
+
 ### `todo`
 
 A checklist you and the user both work through: a plan you agree on, what's left before a release. `items` are labels,

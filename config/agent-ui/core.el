@@ -670,14 +670,27 @@ batch)."
   "Whether CTX draws for the GUI (and knows its cells' size)."
   (and (plist-get ctx :graphic) (plist-get ctx :char-width) (plist-get ctx :line-height) t))
 
+(defun agent-ui-face (name)
+  "The face a type's face NAME says (a symbol or a string): plain, muted,
+success, warning, error, accent; nil for plain or another."
+  (pcase (if (stringp name) (intern-soft name) name)
+    ('muted 'agent-ui-muted)
+    ('success 'agent-ui-success)
+    ('warning 'agent-ui-warning)
+    ('error 'agent-ui-error)
+    ('accent 'agent-ui-accent)
+    (_ nil)))
+
 (cl-defun agent-ui-pill (label ctx &key (face 'agent-ui-accent) filled count)
-  "LABEL as a pill in FACE: FILLED (its colour behind it) or outlined; COUNT
-after it. Its text \" LABEL COUNT \" (filled: FACE's colour behind) or
-\"[LABEL COUNT]\", as wide either way; in the GUI (CTX), a rounded tag over
-it."
+  "LABEL as a pill in FACE (a face, or a colour: \"#d19a66\"): FILLED (its
+colour behind it) or outlined; COUNT after it. Its text \" LABEL COUNT \"
+\(filled: FACE's colour behind) or \"[LABEL COUNT]\", as wide either way; in
+the GUI (CTX), a rounded tag over it."
   (let* ((count (and count (format "%s" (if (numberp count) (agent-ui-format-number count) count))))
          (inner (concat label (if count (concat " " count) "")))
-         (on `(:inherit ,face :inverse-video t))
+         (color (and (stringp face) face))
+         (face (if color `(:foreground ,color) face))
+         (on (if color `(:foreground ,color :inverse-video t) `(:inherit ,face :inverse-video t)))
          (text (if filled
                    (propertize (concat " " inner " ") 'face on)
                  (concat (propertize "[" 'face 'agent-ui-muted)
@@ -689,7 +702,7 @@ it."
       (let* ((cw (plist-get ctx :char-width))
              (lh (plist-get ctx :line-height))
              (w (* cw (string-width text)))
-             (color (agent-ui-color face))
+             (color (or color (agent-ui-color face)))
              (bg (agent-ui-background))
              (svg (svg-create w lh)))
         (svg-rectangle svg 0.5 1.5 (- w 1) (- lh 3) :rx (/ (- lh 3) 2.0)

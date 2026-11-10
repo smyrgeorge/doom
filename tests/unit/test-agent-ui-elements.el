@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code compare confirm diff files form graph heatmap html image issues log markdown panel progress rank slider stats steps table text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code compare confirm diff files form graph heatmap html image issues log markdown panel progress rank slider stats steps table tags text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -2105,6 +2105,65 @@ note nor Answer."
   (should (string-match-p "same label"
                           (+test-aue-error '(:type "compare" :question "q"
                                              :options ((:label "a" :element (:type "text" :text "x")) (:label "a" :element (:type "text" :text "y"))))))))
+
+(defconst +test-aue-labels
+  '(:type "tags" :tags ((:label "bug" :face "error" :count 12) (:label "feature" :face "success" :count 4)
+                        (:label "agent-ui" :count 31) (:label "P1" :face "warning" :count 2)
+                        (:label "docs" :face "plain")))
+  "A project's labels.")
+
+(ert-deftest agent-ui-elements/tags ()
+  "Chips, each in its face with its count; wrapped to the width, a chip
+never split (cut to fit when wider than it)."
+  (should (equal (+test-aue-draw +test-aue-labels) "[bug 12] [feature 4] [agent-ui 31] [P1 2] [docs]"))
+  (should (equal (+test-aue-draw +test-aue-labels :width 40)
+                 "[bug 12] [feature 4] [agent-ui 31]\n[P1 2] [docs]"))
+  (should (equal (+test-aue-draw +test-aue-labels :width 20)
+                 "[bug 12] [feature 4]\n[agent-ui 31] [P1 2]\n[docs]"))
+  (should (equal (+test-aue-draw '(:type "tags" :tags ("a-very-long-label")) :width 10) "[a-very-…]"))
+  (should (eq (+test-aue-face-at +test-aue-labels "bug") 'agent-ui-error))
+  (should (eq (+test-aue-face-at +test-aue-labels "agent-ui") 'agent-ui-accent))
+  (should (eq (+test-aue-face-at +test-aue-labels "docs") 'default))
+  (should (equal (get-text-property 1 'face (agent-ui-render '(:type "tags" :tags ((:label "x" :color "#d19a66")))
+                                                             (agent-ui-context :width 40)))
+                 '(:foreground "#d19a66")))
+  (should (equal (+test-aue-draw '(:type "tags")) "no tags"))
+  ;; The GUI: each chip a pill over its text.
+  (let ((text (agent-ui-render +test-aue-labels (agent-ui-context :width 80 :graphic t :char-width 8 :line-height 16))))
+    (should (equal (substring-no-properties text) "[bug 12] [feature 4] [agent-ui 31] [P1 2] [docs]"))
+    (should (string-match-p ">bug 12</text>" (plist-get (cdr (get-text-property 0 'display text)) :data)))))
+
+(ert-deftest agent-ui-elements/tags-a-chips-prompt-and-appended ()
+  "A chip with a prompt puts it into the session's prompt; appending a tag
+whose label is there changes it in its place."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "labels" :type "tags"
+                       :tags ((:label "bug" :count 12 :prompt "Show me the open bugs") "docs")))
+      (with-current-buffer canvas
+        (+test-aue-press "[bug 12]")
+        (should (equal sent '(("Show me the open bugs" nil))))
+        ;; A chip without one: nothing to press.
+        (goto-char (point-min))
+        (search-forward "[docs]")
+        (goto-char (match-beginning 0))
+        (should-error (agent-ui-button-press) :type 'user-error))
+      (agent-ui-append "labels" '(:tags ((:label "bug" :count 11) "ci")))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (should (string-search "[bug 11] [docs] [ci]" (buffer-string))))
+      (should (string-match-p "only tags" (agent-ui-error-message
+                                           (should-error (agent-ui-append "labels" '(:title "x"))
+                                                         :type 'agent-ui-error)))))))
+
+(ert-deftest agent-ui-elements/tags-wrong ()
+  (should (string-match-p "tag 2 must be a label" (+test-aue-error '(:type "tags" :tags ("a" 3)))))
+  (should (string-match-p "tag 1 has no label" (+test-aue-error '(:type "tags" :tags ((:count 3))))))
+  (should (string-match-p "tag 1's face is plain" (+test-aue-error '(:type "tags" :tags ((:label "a" :face "loud"))))))
+  (should (string-match-p "tag 1's color isn't a colour" (+test-aue-error '(:type "tags" :tags ((:label "a" :color "notacolour"))))))
+  (should (string-match-p "same label" (+test-aue-error '(:type "tags" :tags ("a" "a")))))
+  (should (string-match-p "tag 1 has \"size\"" (+test-aue-error '(:type "tags" :tags ((:label "a" :size 3)))))))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.

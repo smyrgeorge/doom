@@ -18,6 +18,7 @@
 (load! "elements/form")
 (load! "elements/rank")
 (load! "elements/slider")
+(load! "elements/tags")
 (load! "elements/files")
 (load! "elements/stats")
 (load! "elements/log")
