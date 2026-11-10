@@ -293,6 +293,49 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
       (should (looking-at "10\n"))
       (should (looking-back "2/" 2)))))
 
+(ert-deftest agent-ui-canvas/point-kept-in-a-redrawn-element ()
+  "Point, a window's point and its start inside an element drawn again:
+kept at their line and column in it (its text replaced, they went to its
+start); past its new end, at its end."
+  (+test-auc
+    (agent-ui-define lines "Its text." :props ((text string "The text")) :text (lambda (p _c) (plist-get p :text)))
+    (agent-ui-show '(:id "intro" :type "lines" :text "hello"))
+    (agent-ui-show '(:id "t" :type "lines" :text "one\ntwo\nthree\nfour"))
+    (with-current-buffer canvas
+      (agent-ui--flush)
+      (goto-char (point-min))
+      (search-forward "three")
+      (backward-char 2)
+      (agent-ui-update "t" '(:text "ONE\nTWO\nTHREE\nFOUR"))
+      (agent-ui--flush)
+      (should (looking-at "EE"))
+      ;; Shorter: on its last line.
+      (agent-ui-update "t" '(:text "just one"))
+      (agent-ui--flush)
+      (should (equal (buffer-substring-no-properties (line-beginning-position) (line-end-position)) "just one"))
+      ;; Before it: where it was.
+      (goto-char (+ (point-min) 2))
+      (agent-ui-update "t" '(:text "again\nand again"))
+      (agent-ui--flush)
+      (should (= (point) (+ (point-min) 2))))
+    ;; A window showing it, not selected: its point and start kept.
+    (save-window-excursion
+      (delete-other-windows)
+      (let ((window (split-window)))
+        (set-window-buffer window canvas)
+        (agent-ui-update "t" '(:text "a\nb\nc\nd\ne"))
+        (with-current-buffer canvas (agent-ui--flush))
+        (let ((d (with-current-buffer canvas
+                   (goto-char (point-min)) (search-forward "d") (match-beginning 0))))
+          (set-window-point window d)
+          (set-window-start window d)
+          (with-current-buffer canvas (goto-char (point-min)))
+          (agent-ui-update "t" '(:text "A\nB\nC\nD\nE"))
+          (with-current-buffer canvas (agent-ui--flush))
+          (with-current-buffer canvas
+            (should (equal (char-after (window-point window)) ?D))
+            (should (equal (char-after (window-start window)) ?D))))))))
+
 ;; ====== REMOVING ======
 
 (ert-deftest agent-ui-canvas/removed ()

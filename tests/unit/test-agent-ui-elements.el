@@ -1174,6 +1174,16 @@ mark, one space, its words (it had two spaces)."
         (should (string-match-p "Which fix\\?\n✓ Answered: Revert" (buffer-string)))
         (should-not (string-search "⏵ Answer" (buffer-string)))))))
 
+(ert-deftest agent-ui-elements/choice-the-cursor-stays-on-the-option ()
+  "An option pressed: the cursor stays on it (the choice drawn again)."
+  (+test-aue-canvas
+    (let ((agent-ui-action-function #'ignore))
+      (agent-ui-show '(:id "c" :type "choice" :question "Which?" :options ("Alpha" "Beta" "Gamma")))
+      (with-current-buffer canvas
+        (+test-aue-press "Gamma")
+        (agent-ui--flush)
+        (should (looking-at "Gamma"))))))
+
 (ert-deftest agent-ui-elements/choice-several-and-a-note ()
   (+test-aue-canvas
     (let* ((sent nil)
@@ -3335,6 +3345,7 @@ rate either (it kept 4 MB/s and \"1s left\" forever)."
             (agent-ui-table-sort)
             (should (equal (plist-get (agent-ui-get "t") :sort) "Size"))
             (should (equal (rows) '("c" "b" "a")))
+            (goto-char (point-min))
             (search-forward "Size")
             (agent-ui-table-sort)
             (should (eq (plist-get (agent-ui-get "t") :descending) t))

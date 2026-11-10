@@ -183,11 +183,42 @@ there."
      :char-width (frame-char-width frame)
      :line-height (frame-char-height frame))))
 
+(defun agent-ui--places-in (start end)
+  "Point, and the points and starts of the windows showing this buffer,
+that are within START..END: ((WHAT LINE . COLUMN)...), WHAT nil (point), a
+window (its point) or (start . WINDOW); LINE counted from START's line."
+  (cl-flet ((place (what pos)
+              (and (<= start pos end)
+                   (save-excursion
+                     (goto-char pos)
+                     (cons what (cons (count-lines start (line-beginning-position)) (current-column)))))))
+    (delq nil (cons (place nil (point))
+                    (mapcan (lambda (w) (list (place w (window-point w))
+                                              (place (cons 'start w) (window-start w))))
+                            (get-buffer-window-list (current-buffer) nil t))))))
+
+(defun agent-ui--restore-places (places start end)
+  "PLACES (`agent-ui--places-in') put back in START..END, at their line and
+column there (its last line at most)."
+  (pcase-dolist (`(,what ,line . ,column) places)
+    (let ((pos (save-excursion
+                 (goto-char start)
+                 (forward-line line)
+                 (when (> (point) end) (goto-char end))
+                 (move-to-column column)
+                 (min (point) end))))
+      (pcase what
+        ('nil (goto-char pos))
+        (`(start . ,window) (set-window-start window (save-excursion (goto-char pos) (line-beginning-position)) t))
+        (window (set-window-point window pos))))))
+
 (defun agent-ui--draw (entry ctx)
-  "Draw ENTRY again, in its place."
-  (let ((inhibit-read-only t)
-        (start (agent-ui--entry-start entry))
-        (end (agent-ui--entry-end entry)))
+  "Draw ENTRY again, in its place: point and the windows' inside it kept at
+their line and column (its text replaced, they went to its start)."
+  (let* ((inhibit-read-only t)
+         (start (agent-ui--entry-start entry))
+         (end (agent-ui--entry-end entry))
+         (places (agent-ui--places-in start end)))
     (save-excursion
       (delete-region start end)
       (goto-char start)
@@ -196,7 +227,9 @@ there."
                                            (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry)))
                           'agent-ui-id (agent-ui--entry-id entry)))
       ;; The end follows what's inserted at it; the start stays before it.
-      (set-marker end (point))))
+      (set-marker end (point)))
+    (when places
+      (agent-ui--restore-places places start end)))
   (setf (agent-ui--entry-drawn entry)
         (list (agent-ui--entry-element entry) (plist-get ctx :width) (plist-get ctx :graphic))))
 
@@ -204,7 +237,8 @@ there."
   "EDITS (see `agent-ui-define''s :extend) done on ENTRY's drawing, in its
 place."
   (let ((inhibit-read-only t)
-        (id (agent-ui--entry-id entry)))
+        (id (agent-ui--entry-id entry))
+        (places (agent-ui--places-in (agent-ui--entry-start entry) (agent-ui--entry-end entry))))
     (save-excursion
       (save-restriction
         (narrow-to-region (agent-ui--entry-start entry) (agent-ui--entry-end entry))
@@ -227,7 +261,9 @@ place."
                (beginning-of-line)
                (insert (propertize (concat text "\n") 'agent-ui-id id))))
             (_ (error "Not an edit: %S" edit))))
-        (set-marker (agent-ui--entry-end entry) (point-max))))))
+        (set-marker (agent-ui--entry-end entry) (point-max))))
+    (when places
+      (agent-ui--restore-places places (agent-ui--entry-start entry) (agent-ui--entry-end entry)))))
 
 (defun agent-ui--extend (entry ctx)
   "ENTRY drawn again by editing its drawing (its type's :extend), from the
