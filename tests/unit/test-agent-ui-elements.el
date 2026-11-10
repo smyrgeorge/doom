@@ -3864,6 +3864,45 @@ broke), the border left out where it can't fit, every line within the width."
   (should-not (string-match-p "<svg" (+test-aue-draw '(:type "panel" :layout "row" :min-width 8
                                                        :children ((:type "chart" :values (1 2)) (:type "text" :text "x")))))))
 
+(ert-deftest agent-ui-elements/panel-row-with-chips-stays-text ()
+  "A GUI row whose images are a line high at most (a tags element's chips):
+text, its children's marks and buttons there to press, each line its
+width's pixels (drawn as one SVG, none could be pressed); one taller (a
+chart): one SVG still."
+  (let* ((ctx (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16))
+         (gui (agent-ui-render '(:type "panel" :layout "row" :min-width 8
+                                 :children ((:type "files" :files ("a.el" "b.el") :select (:question "Which?" :multiple t))
+                                            (:type "tags" :tags ("bug" "docs") :select (:question "Labels?" :multiple t))))
+                               ctx))
+         (lines (split-string gui "\n"))
+         (chips (seq-find (lambda (line) (string-search "[bug] [docs]" line)) lines)))
+    ;; Lines of text, the chips images among them.
+    (should (> (length lines) 3))
+    (should chips)
+    (should (eq (car (get-text-property (string-search "[bug]" chips) 'display chips)) 'image))
+    (should (string-search "[ ]" gui))
+    ;; Pressable: the files' marks, the chips.
+    (should (get-text-property (string-search "[ ]" gui) 'keymap gui))
+    (should (get-text-property (string-search "[bug]" chips) 'keymap chips))
+    ;; Each line as wide as the panel, to the pixel: its borders in line.
+    (dolist (line lines)
+      (should (= (agent-ui-panel--pixels line 8) (* 60 8)))))
+  (let ((ctx (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16))
+        (chip (lambda (h) (propertize "[bug]" 'display (list 'image :type 'svg :scale 1
+                                                              :data (format "<svg width=\"40\" height=\"%d\"/>" h))))))
+    ;; A line high, as wide as its columns: inline.
+    (should (agent-ui-panel--inline-p (concat "a " (funcall chip 16) "\nb") 10 ctx))
+    (should (agent-ui-panel--inline-p (concat "x" (propertize " " 'display '(space :width (3)))) 10 ctx))
+    ;; A line of text wider than its room: inline still (cut to it).
+    (should (agent-ui-panel--inline-p (concat (funcall chip 16) "\nabcdefghijklmnop") 10 ctx))
+    ;; Taller, wider than its room, no images' sizes known: not.
+    (should-not (agent-ui-panel--inline-p (funcall chip 17) 10 ctx))
+    (should-not (agent-ui-panel--inline-p (concat "abcdefgh " (funcall chip 16)) 10 ctx))
+    (should-not (agent-ui-panel--inline-p "x" 10 (agent-ui-context :width 60 :graphic t :char-width nil)))
+    ;; A slice of a taller image: not (a row of one, as before).
+    (should-not (agent-ui-panel--inline-p (propertize "pic" 'display (list '(slice 0 0 20 16) '(image :type svg :data "<svg/>")))
+                                          10 ctx))))
+
 (ert-deftest agent-ui-elements/panel-borderless-keeps-its-images ()
   "Without a border, in the GUI: a row drawn as one SVG, and an image line in
 a column, kept (trimming the lines' spaces deleted them: an image is a

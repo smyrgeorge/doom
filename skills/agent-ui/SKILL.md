@@ -434,7 +434,8 @@ Elements laid out together: `children` are ordinary elements (each its `type`, `
 side, each its share of the width: `weights`, equal by default) or a `"column"` (the default), in a border (`"border":
 false` for none). Panels nest: rows of columns make a dashboard. A row too narrow (under `min-width` a child) stacks
 its children. In the GUI, a row holding a chart, graph or image is drawn as one image, side by side (its children's
-buttons not clickable there: put a `choice` in a row of its own); in a terminal, as text. Keep a dashboard's related
+buttons not clickable there: put a `choice` in a row of its own); a `tags` element's chips (a line high) keep the row
+text, clickable; in a terminal, as text. Keep a dashboard's related
 elements in one panel.
 
 **Each child is an element of its own**: give it an `id`, and `update`, `append`, `remove`, `show` (replacing it),

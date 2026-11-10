@@ -7,9 +7,10 @@
 ;; width: WEIGHTS, equal by default) or a COLUMN (one under another), in a
 ;; BORDER. Panels nest: rows of columns, a dashboard. A row too narrow for
 ;; its children (under MIN-WIDTH each) stacks them. In the GUI, a row with an
-;; image among its children (a chart, stats' tiles) is drawn as one SVG, each
-;; child's drawing in its column (their buttons not clickable there); other
-;; rows, as text.
+;; image taller than a line among its children (a chart, stats' tiles) is
+;; drawn as one SVG, each child's drawing in its column (their buttons not
+;; clickable there); other rows, as text, images a line high (a tags
+;; element's chips, a pie) in it.
 ;;
 ;;   ╭──────────────────────────────────────╮
 ;;   │ Build              │ Tests           │
@@ -200,6 +201,35 @@ thick as the others); a line where the font isn't known."
   "Whether TEXT shows an image somewhere (a chart's, stats' tiles...)."
   (text-property-not-all 0 (length text) 'display nil text))
 
+(defun agent-ui-panel--inline-p (text width ctx)
+  "Whether TEXT's images are inline: each a line high at most (a chip, a
+pie), its width known, its line no wider than WIDTH columns (a line of
+text is cut to them); then a row's text can hold it, its buttons kept (one
+SVG for the row, they weren't clickable). Not for a chart, a graph, an
+image taller than a line, nor their slices."
+  (let ((cw (plist-get ctx :char-width))
+        (lh (plist-get ctx :line-height)))
+    (and cw lh
+         (cl-every
+          (lambda (line)
+            (and (let ((pos 0) (ok t))
+                   (while (and ok (< pos (length line)))
+                     (let ((next (or (next-single-property-change pos 'display line) (length line)))
+                           (display (get-text-property pos 'display line)))
+                       (setq ok (pcase display
+                                  ('nil t)
+                                  (`(space . ,_) t)
+                                  (`(image . ,_)
+                                   (let ((size (agent-ui-panel--image-size display)))
+                                     (and size (<= (cdr size) lh))))
+                                  (_ nil))
+                             pos next)))
+                   ok)
+                 (or (not (agent-ui-panel--image-p line))
+                     (let ((pixels (agent-ui-panel--pixels line cw)))
+                       (and pixels (<= pixels (* width cw)))))))
+          (split-string text "\n")))))
+
 (defun agent-ui-panel--trim-right (line)
   "LINE without its trailing spaces, but those showing something (an image
 is a space with a display property: a row's SVG, an image element's)."
@@ -276,22 +306,31 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
          (row-image nil)
          (row (and (eq (plist-get props :layout) 'row) (> n 1)
                    (cl-every (lambda (w) (>= w (max 1 (plist-get props :min-width)))) widths)))
+         ;; In the GUI, a row's children drawn for it: with images among them,
+         ;; inline ones only (chips, pies) or not.
+         (texts (and row children (plist-get ctx :graphic)
+                     (cl-mapcar (lambda (child w) (agent-ui-panel--child child ctx w)) children widths)))
+         (images (seq-some #'agent-ui-panel--image-p texts))
+         (inline (and images (cl-every #'identity (cl-mapcar (lambda (text w) (agent-ui-panel--inline-p text w ctx))
+                                                             texts widths))))
          (body
           (cond
            ((null children) (list (propertize "no elements" 'face 'agent-ui-muted)))
-           ((and row (plist-get ctx :graphic)
-                (let ((texts (cl-mapcar (lambda (child w) (agent-ui-panel--child child ctx w)) children widths)))
-                  (and (seq-some #'agent-ui-panel--image-p texts)
-                       ;; Side by side with an image among them: one SVG (its
-                       ;; children's buttons, then, not clickable).
-                       (when-let* ((image (agent-ui-panel--svg-row texts widths ctx border)))
-                         (setq row-image image)))))
-           (list row-image))
-          (row
-            ;; Side by side, as text: line by line, each child its width.
+           ((and images (not inline)
+                 ;; Side by side with an image taller than a line among them
+                 ;; (a chart): one SVG (its children's buttons, then, not
+                 ;; clickable).
+                 (setq row-image (agent-ui-panel--svg-row texts widths ctx border)))
+            (list row-image))
+           (row
+            ;; Side by side, as text: line by line, each child its width; in
+            ;; the GUI with inline images (chips), as drawn for it, each line
+            ;; padded to its column's pixels.
             (let* ((text-ctx (plist-put (copy-sequence ctx) :graphic nil))
-                   (columns (cl-mapcar (lambda (child w) (agent-ui-panel--lines (agent-ui-panel--child child text-ctx w) w text-ctx))
-                                       children widths))
+                   (columns (if inline
+                                (cl-mapcar (lambda (text w) (agent-ui-panel--lines text w ctx)) texts widths)
+                              (cl-mapcar (lambda (child w) (agent-ui-panel--lines (agent-ui-panel--child child text-ctx w) w text-ctx))
+                                         children widths)))
                    (height (apply #'max (mapcar #'length columns))))
               (cl-loop for i below height
                        collect (mapconcat #'identity
@@ -342,7 +381,8 @@ title, id), as a ROW (side by side, each its share of the width, WEIGHTS
 equal by default) or a COLUMN, in a BORDER. Panels nest (rows of
 columns: a dashboard). A row too narrow (under MIN-WIDTH a child) stacks
 its children. In a row with a chart or an image (in the GUI), the row is one
-SVG: its children's buttons aren't clickable there."
+SVG: its children's buttons aren't clickable there (chips, a line high,
+stay text)."
   :props ((children list "The elements: {\"type\": ..., \"id\": ..., ...}")
           (layout (choice row column) "Side by side (row) or one under another (column)" :default column)
           (weights list "Each child's share of a row's width (default: equal)")
