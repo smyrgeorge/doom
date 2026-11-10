@@ -19,7 +19,8 @@
   :type 'function :group 'agent-ui)
 
 (defcustom agent-ui-issues-limit 200
-  "The most issues fetched (bd list --limit)."
+  "The most closed issues fetched, the latest (bd list --limit): every one
+not closed is."
   :type 'natnum :group 'agent-ui)
 
 (defvar agent-ui-issues--cache (make-hash-table :test #'equal)
@@ -30,11 +31,13 @@
 ;; ====== FETCHING ======
 
 (defun agent-ui-issues--parse (text)
-  "bd's output: its ready issues, a separator line, all its issues."
-  (pcase-let ((`(,ready ,all) (split-string text "^@@AGENT-UI@@$")))
-    (list :ready (mapcar (lambda (i) (plist-get i :id))
-                         (ignore-errors (json-parse-string ready :object-type 'plist :array-type 'list :null-object nil)))
-          :issues (ignore-errors (json-parse-string all :object-type 'plist :array-type 'list :null-object nil)))))
+  "bd's output: its ready issues, then those not closed, then the latest
+closed, after separator lines."
+  (cl-flet ((parse (json) (ignore-errors (json-parse-string json :object-type 'plist :array-type 'list
+                                                            :null-object nil))))
+    (pcase-let ((`(,ready ,open ,closed) (split-string text "^@@AGENT-UI@@$")))
+      (list :ready (mapcar (lambda (i) (plist-get i :id)) (parse ready))
+            :issues (append (parse open) (and closed (parse closed)))))))
 
 (defun agent-ui-issues--redraw (dir)
   "Redraw the issues elements of DIR, everywhere: those in a panel too (its
@@ -62,7 +65,11 @@ board stayed \"fetching the issues…\")."
                (output (generate-new-buffer " *agent-ui bd*")))
           (make-process
            :name "agent-ui-issues" :buffer output :noquery t :connection-type 'pipe
-           :command (list "sh" "-c" (format "bd ready --json; echo; echo @@AGENT-UI@@; bd list --all --json --limit %d"
+           ;; Every issue not closed (a limit over all of them, by priority,
+           ;; let closed ones push open ones off the board), the latest closed.
+           :command (list "sh" "-c" (format (concat "bd ready --json --limit 0; echo; echo @@AGENT-UI@@; "
+                                                    "bd list --json --limit 0; echo; echo @@AGENT-UI@@; "
+                                                    "bd list --status closed --sort closed --json --limit %d")
                                             agent-ui-issues-limit))
            :sentinel (lambda (process _event)
                        (when (memq (process-status process) '(exit signal))

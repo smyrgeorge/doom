@@ -2024,6 +2024,47 @@ on the canvas were: the panel's said \"fetching the issues…\" forever)."
           (should (string-match-p "Ready (1)" (buffer-string)))
           (should (string-match-p "t-[a-z0-9]+ First" (buffer-string))))))))
 
+;; doom-nwj.74
+(ert-deftest agent-ui-elements/issues-closed-ones-dont-push-open-ones-off ()
+  "Every issue not closed is fetched, the closed ones limited, the latest:
+with the limit over them all, by priority, closed P0 issues pushed open
+P4 ones off the board (Ready 1 of 6 where bd ready gave 6)."
+  (unless (executable-find "bd") (ert-skip "No bd"))
+  (let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "issues-home-") t)))
+         (root (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "issues-") t))))
+         (process-environment (append (list (concat "HOME=" home) (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
+                                            "GIT_CONFIG_NOSYSTEM=1" "BD_ACTOR=Tester")
+                                      process-environment))
+         (default-directory root)
+         (agent-ui-issues--cache (make-hash-table :test #'equal))
+         (agent-ui-issues-limit 2))
+    (with-temp-file (expand-file-name ".gitconfig" home)
+      (insert "[user]\n\tname = T\n\temail = t@example.invalid\n[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
+    (call-process "git" nil nil nil "init" "-q")
+    (should (zerop (call-process "bd" nil nil nil "init" "--quiet" "--prefix" "t")))
+    (cl-flet ((create (title priority)
+                (with-temp-buffer
+                  (call-process "bd" nil t nil "create" "--silent" (concat "--title=" title)
+                                (format "--priority=%d" priority))
+                  (string-trim (buffer-string)))))
+      (dotimes (i 3) (create (format "Open %d" i) 4))
+      (let ((closed (mapcar (lambda (i) (create (format "Closed %d" i) 0)) '(0 1 2))))
+        (call-process "bd" nil nil nil "close" (car closed))
+        ;; The others closed later (closed_at: seconds).
+        (sleep-for 1.1)
+        (apply #'call-process "bd" nil nil nil "close" (cdr closed))))
+    (agent-ui-issues-refresh root)
+    (with-timeout (30 (ert-fail "Not fetched"))
+      (while (not (gethash root agent-ui-issues--cache)) (accept-process-output nil 0.05)))
+    (let ((board (+test-aue-draw (list :type "issues" :dir root) :width 40)))
+      (should (string-prefix-p "Ready (3)\n" board))
+      (dolist (i '(0 1 2)) (should (string-search (format "Open %d" i) board)))
+      ;; Done: the latest 2.
+      (should (string-search "Done (2)" board))
+      (should (string-search "Closed 1" board))
+      (should (string-search "Closed 2" board))
+      (should-not (string-search "Closed 0" board)))))
+
 ;; ====== HEATMAP ======
 
 (defun +test-aue-svg (element width)
