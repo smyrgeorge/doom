@@ -314,6 +314,66 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
     (should (equal (+test-auc-text) ""))
     (should-not (agent-ui-elements))))
 
+(ert-deftest agent-ui-canvas/empty-its-pane-closes ()
+  "Cleared, or its last element removed: its pane closes (it stayed open,
+empty); shown again, it opens. A pane made for it (a new window: tiling's,
+with nothing before; display-buffer's, marked so) closes; a window that
+showed another buffer goes back to it; a frame's last window stays."
+  (+test-auc
+    (save-window-excursion
+      (delete-other-windows)
+      (let* ((window nil)
+             (agent-ui-display-function
+              (lambda (b)
+                (setq window (split-window (frame-root-window) nil 'right))
+                (set-window-buffer window b)
+                ;; As tiling makes it: nothing shown there before.
+                (set-window-prev-buffers window nil))))
+        (agent-ui-show '(:id "a" :type "meter"))
+        (agent-ui-show '(:id "b" :type "meter"))
+        (should (eq (window-buffer window) canvas))
+        (agent-ui-remove "a")
+        (should (eq (window-buffer window) canvas))
+        (agent-ui-remove "b")
+        (should-not (window-live-p window))
+        (should (one-window-p))
+        ;; Shown again: a pane; cleared: gone.
+        (agent-ui-show '(:id "c" :type "meter"))
+        (should (window-live-p window))
+        (agent-ui-clear)
+        (should-not (window-live-p window))
+        (should (buffer-live-p canvas)))
+      ;; Made by display-buffer for it (marked so): closes, though the split
+      ;; window showed another buffer first.
+      (let* ((window nil)
+             (agent-ui-display-function
+              (lambda (b)
+                (setq window (split-window (frame-root-window) nil 'right))
+                (set-window-buffer window b)
+                (set-window-parameter window 'quit-restore (list 'window 'window (selected-window) b)))))
+        (agent-ui-show '(:id "d" :type "meter"))
+        (agent-ui-clear)
+        (should-not (window-live-p window)))
+      ;; A window that showed another buffer: back to it.
+      (let ((other (get-buffer-create "*test-before*")))
+        (unwind-protect
+            (let* ((window (split-window (frame-root-window) nil 'right))
+                   (agent-ui-display-function (lambda (b) (set-window-buffer window b))))
+              (set-window-buffer window other)
+              (agent-ui-show '(:id "e" :type "meter"))
+              (should (eq (window-buffer window) canvas))
+              (agent-ui-clear)
+              (should (window-live-p window))
+              (should (eq (window-buffer window) other)))
+          (kill-buffer other)))
+      ;; The frame's last window: stays.
+      (delete-other-windows)
+      (let ((agent-ui-display-function (lambda (b) (set-window-buffer (selected-window) b)
+                                         (set-window-prev-buffers (selected-window) nil))))
+        (agent-ui-show '(:id "f" :type "meter"))
+        (agent-ui-clear)
+        (should (window-live-p (selected-window)))))))
+
 ;; ====== ANIMATION ======
 
 (ert-deftest agent-ui-canvas/animated-while-there-are ()

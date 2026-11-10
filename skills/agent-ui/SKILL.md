@@ -436,5 +436,6 @@ shown again, or the session's canvas closes. To show progress from a script of y
 ## Cleaning up
 
 Leave the final state of what the user will want to see (the finished bar, the test table) and remove the rest. When
-the work it followed is over and talked through, `agent-ui clear`. Never leave an element saying "running" for
+the work it followed is over and talked through, `agent-ui clear` (its pane closes once it's empty). Never leave an
+element saying "running" for
 something that stopped: mark it `done` or `failed`.

@@ -107,7 +107,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **Its buffer** is `Agent UI: SESSION`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
   time an element is shown (an application of `+my/tiling-apps`), without taking the focus, and again if it was closed.
   With Doom's workspaces, it opens in its session's workspace: while you're in another, it waits there for you.
-  `q` hides it; it closes with its session. `a` on an element puts it into the session's prompt; `s` on a table's
+  `q` hides it, and so does emptying it (cleared, its last element removed); it closes with its session. `a` on an element puts it into the session's prompt; `s` on a table's
   column sorts it by it (again: the other way); `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
   the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements

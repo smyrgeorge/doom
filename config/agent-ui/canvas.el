@@ -507,6 +507,22 @@ started or stopped as they came or went, redrawn soon. Returns ID."
   (agent-ui--in canvas
     (agent-ui--change id (lambda (element) (agent-ui-append-to element patch)))))
 
+(defun agent-ui--close-if-empty ()
+  "The current canvas, without elements now: its panes close, as a pane does
+with its last tab (it stayed open, empty, after a clear). A window that
+showed something else before goes back to it; one it alone showed is
+deleted, but a frame's last. The canvas itself stays, with its session; the
+next element shown opens a pane again."
+  (unless agent-ui--order
+    (let ((canvas (current-buffer)))
+      (dolist (window (get-buffer-window-list canvas nil t))
+        (let ((made (eq (car-safe (window-parameter window 'quit-restore)) 'window))
+              (before (seq-some (lambda (entry) (and (buffer-live-p (car entry)) (not (eq (car entry) canvas))))
+                                (window-prev-buffers window))))
+          (cond ((and (or made (not before)) (eq (window-deletable-p window) t))
+                 (delete-window window))
+                (before (switch-to-prev-buffer window 'bury))))))))
+
 (cl-defun agent-ui-remove (id &key canvas)
   "Remove element ID from CANVAS. Returns ID."
   (agent-ui--in canvas
@@ -535,6 +551,7 @@ started or stopped as they came or went, redrawn soon. Returns ID."
       (run-hook-with-args 'agent-ui-removed-functions id)
       (agent-ui--children-stopped (agent-ui--entry-element entry))
       (run-hooks 'agent-ui-changed-hook)
+      (agent-ui--close-if-empty)
       id)))))
 
 (cl-defun agent-ui-clear (&key canvas)
@@ -544,7 +561,8 @@ started or stopped as they came or went, redrawn soon. Returns ID."
     (dolist (id (copy-sequence agent-ui--order))
       (agent-ui-remove id :canvas (current-buffer)))
     (let ((inhibit-read-only t))
-      (erase-buffer))))
+      (erase-buffer))
+    (agent-ui--close-if-empty)))
   nil)
 
 (cl-defun agent-ui-get (id &key canvas)
