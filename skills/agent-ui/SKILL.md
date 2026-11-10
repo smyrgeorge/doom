@@ -35,6 +35,10 @@ quick round trip to Emacs; its reply is JSON on stdout.
   nothing to show): AskUserQuestion, in the conversation, if you have it.
 - **Before something risky** (a force-push, a deploy, deleting data): a `confirm`, then end your turn; go on only if
   the answer is proceed.
+- **Ask on a canvas of its own:** `--canvas ask` (the MCP tools' `canvas`) for a question (a `choice`, `confirm`,
+  `form`, `rank`, `compare`, `slider`, a `select` or a diff to `accept`): its pane takes the user's focus, and once
+  they answer, the question goes and the canvas closes. Your own canvas keeps your progress, tables and plans (a plan
+  to approve stays on it: its steps run on).
 - **No:** what you'd say once. Answers, explanations, code and reports go in your reply (Markdown), as usual. Don't
   duplicate your reply on the canvas.
 - Keep it tidy: a handful of elements, each worth looking at. Update rather than add; remove what stopped helping.
@@ -203,7 +207,7 @@ A question for the user, when you need a decision: which approach, approve a pla
 once with `"submit": true`). Then it shows the answer. Ask one question at a time, and wait for the answer.
 
 ```sh
-agent-ui show '{"id":"fix","type":"choice","question":"The checker test expects the old message. Which fix?","options":[{"label":"Change the test","detail":"keeps the new message"},{"label":"Revert the message","detail":"as before"}],"note":true}'
+agent-ui show --canvas ask '{"id":"fix","type":"choice","question":"The checker test expects the old message. Which fix?","options":[{"label":"Change the test","detail":"keeps the new message"},{"label":"Revert the message","detail":"as before"}],"note":true}'
 ```
 
 ### `compare`
@@ -214,7 +218,7 @@ pane is narrow). The user picks one (`"multiple": true`: several) and says why: 
 Note: ..." comes into your prompt. Show it, say so in a line, end your turn.
 
 ```sh
-agent-ui show '{"id":"ways","type":"compare","question":"Which version reads better?","options":[{"label":"A: a loop","element":{"type":"code","language":"python","code":"total = 0\nfor x in xs:\n    total += x"}},{"label":"B: sum","element":{"type":"code","language":"python","code":"total = sum(xs)"}}]}'
+agent-ui show --canvas ask '{"id":"ways","type":"compare","question":"Which version reads better?","options":[{"label":"A: a loop","element":{"type":"code","language":"python","code":"total = 0\nfor x in xs:\n    total += x"}},{"label":"B: sum","element":{"type":"code","language":"python","code":"total = sum(xs)"}}]}'
 ```
 
 ### `confirm`
@@ -226,7 +230,7 @@ proceed" (or cancel) comes as your next prompt, at once. Show it, say so in a li
 thing only on proceed.
 
 ```sh
-agent-ui show '{"id":"push","type":"confirm","question":"Force-push to origin/main?","details":["Rewrites the last 3 commits","Work others pushed to main may be lost"],"danger":"high","word":"main"}'
+agent-ui show --canvas ask '{"id":"push","type":"confirm","question":"Force-push to origin/main?","details":["Rewrites the last 3 commits","Work others pushed to main may be lost"],"danger":"high","word":"main"}'
 ```
 
 ### `form`
@@ -239,7 +243,7 @@ ID (QUESTION): {"title": ..., "priority": 2, ...}` comes into your prompt (JSON:
 boolean true or false). Show it, say so in a line, end your turn. A single question: a `choice`.
 
 ```sh
-agent-ui show '{"id":"ticket","type":"form","title":"New ticket","question":"What should the ticket say?","fields":[{"name":"title","label":"Title","required":true},{"name":"priority","label":"Priority","type":"integer","min":0,"max":4,"value":2},{"name":"type","label":"Type","type":"select","options":["bug","task","feature"]}]}'
+agent-ui show --canvas ask '{"id":"ticket","type":"form","title":"New ticket","question":"What should the ticket say?","fields":[{"name":"title","label":"Title","required":true},{"name":"priority","label":"Priority","type":"integer","min":0,"max":4,"value":2},{"name":"type","label":"Type","type":"select","options":["bug","task","feature"]}]}'
 ```
 
 ### `rank`
@@ -250,7 +254,7 @@ this order: C, A, B. Note: ..." comes into your prompt (sent at once with `"subm
 line, end your turn; then work in that order.
 
 ```sh
-agent-ui show '{"id":"prio","type":"rank","question":"What should I do first?","items":[{"label":"Fix the parser","detail":"the root cause"},"Update the docs","Release"]}'
+agent-ui show --canvas ask '{"id":"prio","type":"rank","question":"What should I do first?","items":[{"label":"Fix the parser","detail":"the root cause"},"Update the docs","Release"]}'
 ```
 
 ### `slider`
@@ -261,7 +265,7 @@ take): `label`, `min`, `max`, `step` (default 1), `unit`, `value` (where it star
 knob rests, as "Slider ID (LABEL) set to 42 ms", for something you redraw from it (a chart's threshold).
 
 ```sh
-agent-ui show '{"id":"timeout","type":"slider","label":"Timeout","min":0,"max":120,"step":5,"unit":"s","value":30}'
+agent-ui show --canvas ask '{"id":"timeout","type":"slider","label":"Timeout","min":0,"max":120,"step":5,"unit":"s","value":30}'
 ```
 
 ### `todo`

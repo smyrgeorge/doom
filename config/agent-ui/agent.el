@@ -165,7 +165,8 @@ you're working on, as steps (its acceptance criteria), ticked as you go. To have
 the user pick from a list (which to fix, which files, which approach), show it \
 there as a choice (multiple: several), say so in a line and end your turn: the \
 answer comes as your next prompt; before something risky (a force-push, a deploy, \
-deleting data), a confirm, the same way.%s From your shell: %s show \
+deleting data), a confirm, the same way. Ask on a canvas of its own (--canvas \
+ask): it takes the user's focus and closes once answered.%s From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear; --canvas NAME on any of them uses \
@@ -341,6 +342,73 @@ if it had one."
     ""))
 
 (add-to-list 'mode-line-misc-info '(:eval (agent-ui--question-mode-line)) t)
+
+;; ====== A QUESTION TAKES THE FOCUS; ANSWERED, IT GOES ======
+;; Options (the user's choice, in config.el): a question shown (an element
+;; that asks, `agent-ui-ask-waiting-p') takes the focus: its pane selected,
+;; the cursor on it, once Emacs is idle a moment (typing in the session isn't
+;; taken over: the canvas's keys act); not a resumed session's coming back.
+;; Its answer sent (`agent-ui-ask-done-p'), it leaves its canvas; a canvas
+;; left without elements is closed: its panes, its buffer killed, the cursor
+;; back in the session.
+
+(defvar agent-ui-focus-questions nil
+  "Non-nil: a question shown on a canvas takes the focus (see above).")
+
+(defvar agent-ui-focus-questions-delay 1.0
+  "Seconds Emacs is idle before a question shown takes the focus.")
+
+(defvar agent-ui-close-answered nil
+  "Non-nil: a question answered leaves its canvas, a canvas left empty is
+killed (see above).")
+
+(defvar agent-ui--restoring)            ; persist.el's: canvases coming back
+
+(defun agent-ui--focus-question (canvas id)
+  "CANVAS's question ID, if it still waits: its pane selected, the cursor on
+it."
+  (when (and (buffer-live-p canvas)
+             (ignore-errors (agent-ui-ask-waiting-p (agent-ui-get id :canvas canvas))))
+    (agent-ui--show-question canvas id t)))
+
+(defun agent-ui--focus-question-h (id element)
+  "A question shown (`agent-ui-shown-functions'): it takes the focus, once
+Emacs is idle a moment."
+  (when (and agent-ui-focus-questions
+             (not (bound-and-true-p agent-ui--restoring))
+             (agent-ui-ask-waiting-p element))
+    (run-with-idle-timer agent-ui-focus-questions-delay nil
+                         #'agent-ui--focus-question (current-buffer) id)))
+
+(add-hook 'agent-ui-shown-functions #'agent-ui--focus-question-h)
+
+(defun agent-ui--close-answered (canvas)
+  "CANVAS's questions answered gone; it left without elements: its panes
+closed, its buffer killed, the cursor back in its session (if it was in
+CANVAS's pane)."
+  (when (buffer-live-p canvas)
+    (with-current-buffer canvas
+      (let ((session agent-ui--session-buffer)
+            (focused (eq (window-buffer (selected-window)) canvas)))
+        (dolist (id (seq-filter (lambda (id)
+                                  (agent-ui-ask-done-p (agent-ui--entry-element (gethash id agent-ui--entries))))
+                                agent-ui--order))
+          (agent-ui-remove id :canvas canvas))
+        (unless agent-ui--order
+          ;; Its panes closed already (emptied: `agent-ui--close-if-empty').
+          (kill-buffer canvas)
+          (when-let* ((window (and focused (buffer-live-p session) (get-buffer-window session))))
+            (select-window window)))))))
+
+(defun agent-ui--close-answered-h ()
+  "A canvas changed (`agent-ui-changed-hook'): an answer sent, the question
+goes (after the command that sent it)."
+  (when (and agent-ui-close-answered
+             (seq-some (lambda (id) (agent-ui-ask-done-p (agent-ui--entry-element (gethash id agent-ui--entries))))
+                       agent-ui--order))
+    (run-with-timer 0 nil #'agent-ui--close-answered (current-buffer))))
+
+(add-hook 'agent-ui-changed-hook #'agent-ui--close-answered-h)
 
 (defun agent-ui-goto-question ()
   "Go to the question waiting on this session's canvases (in a canvas: its

@@ -286,6 +286,12 @@ fires one, so without that `load!' nothing notifies and nothing breaks."
                              (+test-config--forms))
                  '((load! "config/notify")))))
 
+(ert-deftest config/agent-ui-questions-focused-and-closed ()
+  "Agent UI's questions take the focus, and go once answered (the library's
+own default: neither)."
+  (should (eq agent-ui-focus-questions t))
+  (should (eq agent-ui-close-answered t)))
+
 (ert-deftest config/pdf-dark-pages ()
   "PDFs open with dark pages (config/pdf.el's own default: light)."
   (should (eq +my/pdf-dark-pages t)))
@@ -300,11 +306,13 @@ fires one, so without that `load!' nothing notifies and nothing breaks."
 
 (ert-deftest config/order-settings-before-files ()
   "The settings the files read when they load come first: the tiling strategy,
-dark PDF pages (their files' defvars keep them)."
+dark PDF pages, Agent UI's questions (their files' defvars keep them)."
   (should (< (+test-config--position '(setq +my/tiling-strategy 'tall))
              (+test-config--position '(load! "config/tiling"))))
   (should (< (+test-config--position '(setq +my/pdf-dark-pages t))
              (+test-config--position '(load! "config/pdf"))))
+  (should (< (+test-config--position '(setq agent-ui-focus-questions t agent-ui-close-answered t))
+             (+test-config--position '(load! "config/agent-ui"))))
   (should (< (+test-config--position '(setq-default fill-column 120))
              (+test-config--position '(load! "config/editor")))))
 

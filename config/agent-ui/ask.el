@@ -59,19 +59,32 @@ in its face."
   "The types whose elements are questions (until answered), see
 `agent-ui-ask-waiting-p'.")
 
-(defun agent-ui-ask-waiting-p (element)
-  "Whether ELEMENT asks the user and isn't answered yet: of a type that asks
+(defun agent-ui-ask-question-p (element)
+  "Whether ELEMENT asks the user something: of a type that asks
 \(`agent-ui-ask-types': a choice, a confirm, a form, a rank, a compare), with
 select (a table, files, issues), approve (a plan, steps) or accept (a
-diff's hunks)."
-  (and (not (plist-get element :answered))
-       (or (member (plist-get element :type) agent-ui-ask-types)
+diff's hunks), or a slider set by Set (a live one sends as it moves: no
+answer)."
+  (and (or (member (plist-get element :type) agent-ui-ask-types)
            (plist-get element :select)
            (not (memq (plist-get element :approve) '(nil :false)))
            (not (memq (plist-get element :accept) '(nil :false)))
-           ;; A slider set by Set (a live one sends as it moves: no answer).
            (and (equal (plist-get element :type) "slider")
                 (memq (plist-get element :live) '(nil :false))))
+       t))
+
+(defun agent-ui-ask-waiting-p (element)
+  "Whether ELEMENT asks the user and isn't answered yet
+\(`agent-ui-ask-question-p')."
+  (and (not (plist-get element :answered))
+       (agent-ui-ask-question-p element)))
+
+(defun agent-ui-ask-done-p (element)
+  "Whether ELEMENT asked the user and its answer was sent: nothing left to do
+with it; but a plan approved, whose steps run on."
+  (and (plist-get element :answered)
+       (agent-ui-ask-question-p element)
+       (memq (plist-get element :approve) '(nil :false))
        t))
 
 (defun agent-ui-ask-question (element)

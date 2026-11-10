@@ -188,6 +188,7 @@ killed after."
       (should (string-search "To have the user pick from a list" text))
       (should (string-search "end your turn: the answer comes as your next prompt" text))
       (should (string-search "before something risky (a force-push, a deploy, deleting data), a confirm" text))
+      (should (string-search "Ask on a canvas of its own (--canvas ask)" text))
       ;; A bug in Agent UI itself: asked, filed in its own issues.
       (should (string-search (concat "When Agent UI itself misbehaves") text))
       (should (string-search (concat (abbreviate-file-name agent-ui-command) " bug '{\"title\"") text))
@@ -236,7 +237,8 @@ fetched: bd would read this repository's own issues."
           (skill (+test-aua-skill))
           (pos 0)
           (count 0))
-      (while (string-match "^agent-ui \\(show\\|update\\|append\\) \\(?:\\([a-z]+\\) \\)?'\\({.*}\\)'$"
+      ;; A question's on a canvas of its own (--canvas ask): all on this one here.
+      (while (string-match "^agent-ui \\(show\\|update\\|append\\)\\(?: --canvas [a-z]+\\)? \\(?:\\([a-z]+\\) \\)?'\\({.*}\\)'$"
                            skill pos)
         (let ((op (match-string 1 skill))
               (id (match-string 2 skill))
@@ -468,3 +470,98 @@ question; none waiting: said."
     (agent-ui-update "fix" '(:answered "Test") :canvas canvas)
     (switch-to-buffer session)
     (should (equal (cadr (should-error (agent-ui-goto-question) :type 'user-error)) "No question waits"))))
+
+;; ====== A QUESTION TAKES THE FOCUS; ANSWERED, IT GOES ======
+
+(defun +test-aua-settle ()
+  "Timers due now run (an answer's question goes after its command)."
+  (let ((end (+ (float-time) 0.2)))
+    (while (< (float-time) end) (accept-process-output nil 0.02))))
+
+(ert-deftest agent-ui-agent/a-question-takes-the-focus ()
+  "A question shown: once Emacs is idle a moment, its pane selected, the
+cursor on it. Not another element, not one coming back with its session,
+not with the option off (the library's own default)."
+  (should (memq #'agent-ui--focus-question-h (default-value 'agent-ui-shown-functions)))
+  (should-not (default-value 'agent-ui-focus-questions))
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ focus" "/tmp/focus/"))
+           (name (agent-ui--session-name session))
+           (ask (concat name " / ask"))
+           (agent-ui-focus-questions t)
+           (agent-ui-display-function #'agent-ui-display-canvas)
+           (idle nil))
+      (cl-letf (((symbol-function 'run-with-idle-timer)
+                 (lambda (secs _repeat f &rest args) (push (cons secs (lambda () (apply f args))) idle))))
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer session)
+          (agent-ui-show '(:id "note" :type "text" :text "Working on it") :canvas name)
+          (should-not idle)
+          (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?" :options ("Test" "Revert")) :canvas ask)
+          (should (equal (mapcar #'car idle) (list agent-ui-focus-questions-delay)))
+          ;; Not before Emacs is idle: the focus where it was.
+          (should (eq (window-buffer (selected-window)) session))
+          (funcall (cdar idle))
+          (let ((canvas (get-buffer (agent-ui-canvas-buffer-name ask))))
+            (should (eq (window-buffer (selected-window)) canvas))
+            (should (equal (get-text-property (window-point) 'agent-ui-id canvas) "fix")))
+          ;; Answered before the moment came: nothing.
+          (select-window (get-buffer-window session))
+          (agent-ui-update "fix" '(:answered "Test") :canvas ask)
+          (funcall (cdar idle))
+          (should (eq (window-buffer (selected-window)) session))
+          ;; Coming back with its session; the option off: none.
+          (let ((agent-ui--restoring t))
+            (agent-ui-show '(:id "go" :type "confirm" :question "Go?") :canvas ask))
+          (let ((agent-ui-focus-questions nil))
+            (agent-ui-show '(:id "go2" :type "confirm" :question "Go?") :canvas ask))
+          (should (= (length idle) 1)))))))
+
+(ert-deftest agent-ui-agent/answered-the-question-goes ()
+  "An answer sent: the question leaves its canvas; a canvas left empty is
+closed and killed, the cursor back in the session. Beside other elements,
+they stay; a plan approved stays (its steps run on); the option off (the
+library's own default), all stay."
+  (should (memq #'agent-ui--close-answered-h (default-value 'agent-ui-changed-hook)))
+  (should-not (default-value 'agent-ui-close-answered))
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ close" "/tmp/close/"))
+           (name (agent-ui--session-name session))
+           (ask (concat name " / ask"))
+           (agent-ui-close-answered t)
+           (agent-ui-display-function #'agent-ui-display-canvas)
+           (sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (save-window-excursion
+        (delete-other-windows)
+        (switch-to-buffer session)
+        ;; On a canvas of its own.
+        (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?" :options ("Test" "Revert")) :canvas ask)
+        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name ask))))
+          (select-window (get-buffer-window canvas))
+          (+test-aua-press canvas "Test")
+          (+test-aua-press canvas "⏵ Answer")
+          (should (equal (caar sent) "Answer to choice fix (Which fix?): Test"))
+          (+test-aua-settle)
+          (should-not (buffer-live-p canvas))
+          (should (equal (mapcar #'window-buffer (window-list)) (list session))))
+        ;; Beside other elements: only the question goes.
+        (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+        (agent-ui-show '(:id "go" :type "confirm" :question "Deploy?") :canvas name)
+        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name))))
+          (+test-aua-press canvas "⏵ Proceed")
+          (+test-aua-settle)
+          (should (buffer-live-p canvas))
+          (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas)) '("build")))
+          ;; A plan approved: its steps run on.
+          (agent-ui-show '(:id "plan" :type "steps" :approve t :steps ("Reproduce" "Fix")) :canvas name)
+          (+test-aua-press canvas "⏵ Approve")
+          (+test-aua-settle)
+          (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas)) '("build" "plan")))
+          ;; The option off: an answered question stays.
+          (let ((agent-ui-close-answered nil))
+            (agent-ui-show '(:id "go" :type "confirm" :question "Deploy?") :canvas name)
+            (+test-aua-press canvas "⏵ Proceed")
+            (+test-aua-settle)
+            (should (member "go" (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas))))))))))

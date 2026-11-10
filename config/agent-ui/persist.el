@@ -124,6 +124,9 @@ again, their sources not started. Returns how many; nil if none was."
                    (if (cdr restored) "es" "") count (if (= count 1) "" "s")))
         count))))
 
+(defvar agent-ui--restoring nil
+  "Non-nil while a canvas's elements come back (see agent.el).")
+
 (defun agent-ui-persist--restore-canvas (session part)
   "SESSION's canvas (PART nil) or its other canvas PART back, if kept and
 empty: how many of its elements; nil if not."
@@ -137,7 +140,9 @@ empty: how many of its elements; nil if not."
                                                  (insert-file-contents file))
                                                (buffer-string)))
                       (agent-ui-error nil)))
-          (count 0))
+          (count 0)
+          ;; Coming back: its questions don't take the focus.
+          (agent-ui--restoring t))
       (dolist (element elements)
         (when (agent-ui--plist-p element)
           (condition-case nil

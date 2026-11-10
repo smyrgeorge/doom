@@ -113,6 +113,12 @@
 ;; off (Claude then asks in its replies, or on its canvas: Agent UI's choice).
 (setq agent-shell-elicitation--experimental-feature-enabled t)
 
+;; Agent UI's questions on a canvas (config/agent-ui.el): one shown takes the
+;; focus (its pane selected, the cursor on it, once you stop typing); answered,
+;; it goes, and a canvas left empty is closed and killed (not kept).
+(setq agent-ui-focus-questions t
+      agent-ui-close-answered t)
+
 ;; PDFs: dark pages (inverted to dark greys, the colours' hues kept) in the
 ;; first PDF opened; SPC m d turns them light (config/pdf.el).
 (setq +my/pdf-dark-pages t)

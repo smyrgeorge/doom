@@ -303,6 +303,17 @@ prompt is offered to queue (change it first if you like). A snapshot leaves the 
 
 ## A question waiting
 
+The agent asks on a canvas of its own (`--canvas ask`: `Agent UI: SESSION / ask`), its pane beside the session.
+
+- **Shown, it takes the focus:** its pane is selected, the cursor on the question, once you stop typing for a moment
+  (`agent-ui-focus-questions-delay`, 1s: what you type in the session isn't taken over by the canvas's keys). Not a
+  resumed session's questions coming back.
+- **Answered, it goes:** once you send the answer, the question leaves its canvas; a canvas left empty is closed, its
+  buffer killed, and the cursor goes back to the session. Beside other elements, they stay. A plan you approved stays:
+  its steps run on.
+
+In `config.el`: `(setq agent-ui-focus-questions t agent-ui-close-answered t)` (Agent UI's own default: neither).
+
 When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, a `form`, a
 `rank`, a `slider` to set, a `compare`, a plan to approve, hunks to accept, rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
 
