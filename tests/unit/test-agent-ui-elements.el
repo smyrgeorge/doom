@@ -210,7 +210,17 @@
                    150.0))
     ;; Given: as given; a step not run has none.
     (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "x" :status "done" :seconds 125) "y")))
-                   "✓ x  2m 05s\n○ y"))))
+                   "✓ x  2m 05s\n○ y"))
+    ;; Run again (failed, then running): timed anew, not with its first run's
+    ;; time (it stayed frozen at 41s).
+    (setq element (agent-ui--checked (agent-ui-append-to element '(:steps ((:name "a" :status "failed"))))))
+    (setq now 300.0)
+    (setq element (agent-ui--checked (agent-ui-append-to element '(:steps ((:name "a" :status "running"))))))
+    (setq now 312.0)
+    (should (string-match-p "a +12s" (+test-aue-draw element)))
+    (setq now 330.0)
+    (setq element (agent-ui--checked (agent-ui-append-to element '(:steps ((:name "a" :status "done"))))))
+    (should (equal (plist-get (car (plist-get element :steps)) :seconds) 30.0))))
 
 (ert-deftest agent-ui-elements/steps-with-steps-of-their-own ()
   (let ((agent-ui-clock (lambda () 0.0)))

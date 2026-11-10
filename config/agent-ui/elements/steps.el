@@ -180,7 +180,14 @@ merged so too), the others after."
                   (cond
                    ((stringp step) old)
                    ((stringp old) step)
-                   (t (cl-loop for (k v) on step by #'cddr
+                   (t
+                    ;; Running again (after done, failed...): timed anew,
+                    ;; not with its last run's start and time.
+                    (when (and (equal (format "%s" (plist-get step :status)) "running")
+                               (not (equal (format "%s" (plist-get old :status)) "running"))
+                               (not (plist-member step :started)))
+                      (setq old (agent-ui--plist-delete (agent-ui--plist-delete old :started) :seconds)))
+                    (cl-loop for (k v) on step by #'cddr
                                do (setq old (plist-put (copy-sequence old) k
                                                        (if (eq k :steps)
                                                            (agent-ui-steps--merge (plist-get old :steps) v)
