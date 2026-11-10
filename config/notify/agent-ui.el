@@ -20,7 +20,7 @@ a similar open one."
   "SESSION's turn ended with question ID waiting on CANVAS: said, a click
 showing the canvas (`agent-ui-question-waiting-functions')."
   (let ((question (and (buffer-live-p canvas)
-                       (with-current-buffer canvas (agent-ui-ask-question (agent-ui-get id))))))
+                       (agent-ui-ask-question (agent-ui-get id :canvas canvas)))))
     (+my/notify 'agent-ui-question
                 (format "%s asks: %s" (if (buffer-live-p session) (buffer-name session) "Claude Code")
                         (or question "a question"))

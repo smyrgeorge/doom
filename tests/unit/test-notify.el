@@ -8,6 +8,8 @@
 ;; own posting in tests/helper.el).
 
 (+test-load "config/notify")
+;; Agent UI's questions: the notification reads them from their canvas.
+(+test-load "config/agent-ui")
 
 ;; config/agent-shell.el's (what Claude Code is told about Emacs), not loaded
 ;; here: special, a test binds it.
@@ -264,12 +266,15 @@ showing the canvas; said instead of the turn's end, not with it."
                  '("Agent UI" "A question waits for you on a canvas")))
   (should (memq #'+my/notify-agent-ui--question (default-value 'agent-ui-question-waiting-functions)))
   (should (memq #'+my/notify-agent-ui--question-said-p (default-value '+my/notify-claude-turn-said-functions)))
-  (let ((canvas (generate-new-buffer "Agent UI: test"))
-        (new nil))
+  (let* ((agent-ui-display-function #'ignore)
+         ;; A canvas of its own, not the default one.
+         (name (make-temp-name "notify-"))
+         (canvas (progn (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?" :options ("a" "b"))
+                                       :canvas name)
+                        (get-buffer (agent-ui-canvas-buffer-name name))))
+         (new nil))
     (unwind-protect
-        (cl-letf (((symbol-function 'agent-ui-get) (lambda (_id) '(:type "choice" :question "Which fix?")))
-                  ((symbol-function 'agent-ui-ask-question) (lambda (e) (plist-get e :question)))
-                  ((symbol-function 'agent-ui-questions-new) (lambda (_session _event) new)))
+        (cl-letf (((symbol-function 'agent-ui-questions-new) (lambda (_session _event) new)))
           (+test-notify nil
             (+test-notify--session "doom"
               (+my/notify-agent-ui--question session canvas "fix")
