@@ -126,13 +126,14 @@ length, and the ways back."
           (should-not (string-search "unwrapped" (nth 1 notice))))))))
 
 (ert-deftest long-lines/open-normally-action ()
-  "Open normally: the file's own mode back, the notice gone."
+  "Opened in so-long-mode at once, its own mode never run
+(editor/large-files.el); Open normally: its own mode, the notice gone."
   (+test-long-lines
     (let ((buffer (+test-long-lines--file)))
       (switch-to-buffer buffer)
-      (should (eq major-mode 'emacs-lisp-mode))
-      (so-long)
       (should (eq major-mode 'so-long-mode))
+      (should (eq (so-long-original 'major-mode) 'emacs-lisp-mode))
+      (should (assq 'long-lines +my/banner--list))
       (+test-long-lines--click buffer "Open normally")
       (with-current-buffer buffer
         (should (eq major-mode 'emacs-lisp-mode))

@@ -21,6 +21,9 @@
 ;;   lines open in `so-long-mode', plain and unwrapped; "Wrap lines" wraps them
 ;;   again, "Open normally" goes back to the file's own mode (both can make
 ;;   scrolling slow again);
+;; - large files (warning, config/editor/large-files.el): opened without the
+;;   language server, spelling, syntax checking...; "Open normally" turns
+;;   them on;
 ;; - the Markdown preview (info, config/markdown/notice.el): a Markdown file
 ;;   offers it ("Open preview");
 ;; - the browser (info, config/html.el): an HTML file offers it ("Open in

@@ -186,6 +186,19 @@ mode.")
   (setq so-long-threshold +my/long-line-threshold)
   (setf (alist-get 'truncate-lines so-long-variable-overrides) t))
 
+;; LARGE FILES
+;; Decided before a file's mode runs, not after (editor/large-files.el): very
+;; long lines open in `so-long-mode' at once, the file's own mode never run; a
+;; large file (more lines than Doom's `doom-file-lines-threshold-alist', 20,000
+;; here, or bigger than this) opens in its own mode without the language
+;; server, spelling, syntax checking, the sticky header and the stripe, with a
+;; notice and Open normally (asked first over the second size).
+(defvar +my/large-file-size (* 1024 1024)
+  "Files bigger than this many bytes open light (see above).")
+
+(defvar +my/large-file-ask-size (* 10 1024 1024)
+  "Opening normally a large file bigger than this asks first.")
+
 ;; EVIL
 ;; Saving a buffer returns to normal state.
 (add-hook! 'after-save-hook #'evil-normal-state)
@@ -301,3 +314,4 @@ mode.")
 (load! "editor/spell")
 (load! "editor/tree-sitter")
 (load! "editor/long-lines")
+(load! "editor/large-files")
