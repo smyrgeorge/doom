@@ -908,6 +908,38 @@ kept (it was never cut: 49 columns at 20, the canvas hiding its counts)."
     (should (equal (car (split-string (+test-aue-draw element :width 60) "\n"))
                    "▾ src/components/very/deep/parser_module.c  +1 −1"))))
 
+;; doom-nwj.67
+(ert-deftest agent-ui-elements/diff-files-not-from-git ()
+  "A hunk ends when its counts are used up: diff -u outputs one after
+another, diff -ru and a patch (format-patch's) show each file apart, its
+signature not a line (they were merged into the first file)."
+  (let ((two (concat "--- x.c\t2024-01-01 10:00:00\n+++ x.c\t2024-01-02 10:00:00\n"
+                     "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+                     "--- y.c\t2024-01-01 10:00:00\n+++ y.c\t2024-01-02 10:00:00\n"
+                     "@@ -1,2 +1,2 @@\n-p\n+P\n q\n"))
+        (ru (concat "diff -ru a/x.c b/x.c\n--- a/x.c\t2024-01-01\n+++ b/x.c\t2024-01-02\n"
+                    "@@ -1 +1 @@\n-old\n+new\n"
+                    "diff -ru a/y.c b/y.c\n--- a/y.c\t2024-01-01\n+++ b/y.c\t2024-01-02\n"
+                    "@@ -1,2 +1,3 @@\n p\n+P\n q\n"
+                    "Only in b: z.c\n"))
+        (patch (concat "From 1234 Mon Sep 17 00:00:00 2001\nFrom: A <a@b.c>\nSubject: [PATCH] Fix it\n\n"
+                       "---\n x.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\n"
+                       "diff --git a/x.c b/x.c\nindex 1111..2222 100644\n--- a/x.c\n+++ b/x.c\n"
+                       "@@ -1,2 +1,2 @@\n-a\n+b\n c\n-- \n2.39.0\n\n")))
+    (should (equal (+test-aue-draw (list :type "diff" :diff two))
+                   (concat "▾ x.c  +1 −1\n  @@ -1,3 +1,3 @@\n"
+                           "      1   a\n        − b\n      2 + B\n      3   c\n"
+                           "▾ y.c  +1 −1\n  @@ -1,2 +1,2 @@\n"
+                           "        − p\n      1 + P\n      2   q")))
+    (should (equal (+test-aue-draw (list :type "diff" :diff ru))
+                   (concat "▾ x.c  +1 −1\n  @@ -1 +1 @@\n        − old\n      1 + new\n"
+                           "▾ y.c  +1 −0\n  @@ -1,2 +1,3 @@\n      1   p\n      2 + P\n      3   q")))
+    (should (equal (+test-aue-draw (list :type "diff" :diff patch))
+                   "▾ x.c  +1 −1\n  @@ -1,2 +1,2 @@\n        − a\n      1 + b\n      2   c"))
+    ;; Counts written wrong by hand (too few): its lines kept.
+    (should (equal (+test-aue-draw (list :type "diff" :diff "--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n c\n+d\n"))
+                   "▾ f  +2 −1\n  @@ -1 +1 @@\n        − a\n      1 + b\n      2   c\n      3 + d"))))
+
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).
   (let ((agent-ui-file-directory "/proj/")

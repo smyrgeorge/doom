@@ -22,51 +22,68 @@
 HUNKS), each hunk (:header TEXT :lines ((KIND NUMBER TEXT)...)), KIND one of
 context, added, removed, note; NUMBER the line's in the new file (for a
 removed line, where it was: the old file's number is another file's, off
-after a hunk that changed the count)."
-  (let (files file hunk old new)
-    (cl-flet ((close-hunk () (when hunk
-                               (setf (plist-get file :hunks)
-                                     (append (plist-get file :hunks)
-                                             (list (plist-put hunk :lines (nreverse (plist-get hunk :lines))))))
-                               (setq hunk nil)))
-              (close-file () (when file (push file files) (setq file nil))))
+after a hunk that changed the count).
+
+A hunk ends when its lines are used up (its @@ line's counts): then a ---
+or +++ line is the next file's (`diff -u' outputs one after another, `diff
+-ru'), \"-- \" a patch's signature (they were read as its lines, the next
+file merged into it). Other lines past them (counts written wrong by hand)
+are still its."
+  (let (files file hunk old new (old-left 0) (new-left 0))
+    (cl-flet* ((close-hunk () (when hunk
+                                (setf (plist-get file :hunks)
+                                      (append (plist-get file :hunks)
+                                              (list (plist-put hunk :lines (nreverse (plist-get hunk :lines))))))
+                                (setq hunk nil)))
+               (close-file () (when file (push file files) (setq file nil)))
+               (new-file () (close-hunk) (close-file)
+                         (setq file (list :file "" :added 0 :removed 0 :hunks nil))))
       ;; Its end's newline isn't a line (in a diff, an empty line of context
       ;; is a space).
       (dolist (line (split-string (string-trim-right text "\n+") "\n"))
+        ;; Past its counts: a line not of a hunk ends it.
+        (when (and hunk (<= old-left 0) (<= new-left 0)
+                   (not (string-prefix-p "\\" line))
+                   (or (not (string-match-p "\\`[-+ ]" line))
+                       (string-prefix-p "--- " line) (string-prefix-p "+++ " line) (equal line "-- ")))
+          (close-hunk))
         (cond
          ((string-prefix-p "diff --git " line)
-          (close-hunk) (close-file)
-          (setq file (list :file (if (string-match " b/\\(.*\\)\\'" line) (match-string 1 line) "")
-                           :added 0 :removed 0 :hunks nil)))
-         ((and (string-prefix-p "+++ " line) (not hunk))
-          (unless file (setq file (list :file "" :added 0 :removed 0 :hunks nil)))
-          (let ((name (string-remove-prefix "+++ " line)))
-            (unless (equal name "/dev/null")
-              (plist-put file :file (replace-regexp-in-string "\\`b/" "" (car (split-string name "\t")))))))
+          (new-file)
+          (plist-put file :file (if (string-match " b/\\(.*\\)\\'" line) (match-string 1 line) "")))
          ((and (string-prefix-p "--- " line) (not hunk))
-          (unless file (setq file (list :file "" :added 0 :removed 0 :hunks nil)))
+          ;; A file's, unless it's this one's (after diff --git).
+          (when (or (null file) (plist-get file :hunks)) (new-file))
           (let ((name (string-remove-prefix "--- " line)))
             (when (and (equal (plist-get file :file) "") (not (equal name "/dev/null")))
               (plist-put file :file (replace-regexp-in-string "\\`a/" "" (car (split-string name "\t")))))))
-         ((string-match "\\`@@ -\\([0-9]+\\)\\(?:,[0-9]+\\)? \\+\\([0-9]+\\)\\(?:,[0-9]+\\)? @@\\(.*\\)\\'" line)
+         ((and (string-prefix-p "+++ " line) (not hunk))
+          (when (or (null file) (plist-get file :hunks)) (new-file))
+          (let ((name (string-remove-prefix "+++ " line)))
+            (unless (equal name "/dev/null")
+              (plist-put file :file (replace-regexp-in-string "\\`b/" "" (car (split-string name "\t")))))))
+         ((string-match "\\`@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? \\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? @@\\(.*\\)\\'" line)
           (close-hunk)
-          (unless file (setq file (list :file "" :added 0 :removed 0 :hunks nil)))
+          (unless file (new-file))
           (setq old (string-to-number (match-string 1 line))
-                new (string-to-number (match-string 2 line))
+                new (string-to-number (match-string 3 line))
+                ;; No count: 1.
+                old-left (if (match-string 2 line) (string-to-number (match-string 2 line)) 1)
+                new-left (if (match-string 4 line) (string-to-number (match-string 4 line)) 1)
                 hunk (list :header line :lines nil)))
          ((not hunk))                   ; index, mode lines: not shown
          ((string-prefix-p "+" line)
           (push (list 'added new (substring line 1)) (plist-get hunk :lines))
-          (cl-incf (plist-get file :added)) (cl-incf new))
+          (cl-incf (plist-get file :added)) (cl-incf new) (cl-decf new-left))
          ((string-prefix-p "-" line)
           (push (list 'removed new (substring line 1)) (plist-get hunk :lines))
-          (cl-incf (plist-get file :removed)) (cl-incf old))
+          (cl-incf (plist-get file :removed)) (cl-incf old) (cl-decf old-left))
          ((string-prefix-p "\\" line)
           (push (list 'note nil (substring line 1)) (plist-get hunk :lines)))
          ((or (string-prefix-p " " line) (string-empty-p line))
           (unless (and (string-empty-p line) (null (plist-get hunk :lines)))
             (push (list 'context new (if (string-empty-p line) "" (substring line 1))) (plist-get hunk :lines))
-            (cl-incf old) (cl-incf new)))))
+            (cl-incf old) (cl-incf new) (cl-decf old-left) (cl-decf new-left)))))
       (close-hunk) (close-file))
     (nreverse files)))
 
