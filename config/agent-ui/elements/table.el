@@ -217,7 +217,13 @@ space (they broke the table's lines and its border)."
                                                           cells))
                                            'right
                                          'left)))))
-         (bar (propertize "│" 'face 'agent-ui-muted)))
+         (bar (propertize "│" 'face 'agent-ui-muted))
+         ;; The sorted column's name cut, its arrow kept (cut, it went first).
+         (header (cl-loop for c in header for name in columns for w in widths for i from 0
+                          collect (if (and (eql i sort) (> (string-width c) w))
+                                      (concat (agent-ui-truncate name (max 1 (- w 2)))
+                                              (if descending " ↓" " ↑"))
+                                    c))))
     (cl-flet ((line (cells &optional face)
                 ;; Each cell its column's (`s' there sorts by it).
                 (mapconcat #'identity

@@ -293,6 +293,14 @@ alone put 850ms between 41s and 2m 05s)."
   ;; Plain numbers: as numbers still.
   (should (string-match-p " 2\n.* 10" (+test-aue-draw '(:type "table" :columns ("N") :sort "N" :rows (("10") ("2")))))))
 
+(ert-deftest agent-ui-elements/table-sort-arrow-kept ()
+  "A sorted column's name cut to fit: its arrow kept (it was cut first)."
+  (let ((text (+test-aue-draw '(:type "table" :columns ("Name" "Status" "Duration" "Owner" "Branch" "Commit")
+                                :sort "Duration" :descending t
+                                :rows (("lexer" "passed" "0.4s" "me" "main" "abc123def") ("parser" "failed" "1.2s" "you" "dev" "def456abc")))
+                              :width 40)))
+    (should (string-match-p "…? ↓" (car (split-string text "\n"))))))
+
 (ert-deftest agent-ui-elements/table-cells-on-one-line ()
   "A cell's line breaks and tabs: on its line (they broke the table's lines,
 and a panel's border around it)."
