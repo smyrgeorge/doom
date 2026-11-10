@@ -385,8 +385,13 @@ one; the one it followed before, stopped."
     (when-let* ((state (agent-ui-source--state (agent-ui--buffer canvas) id)))
       (append
        (list :kind (symbol-name (agent-ui-source--state-kind state))
-             :running (if (or (process-live-p (agent-ui-source--state-process state))
-                              (timerp (agent-ui-source--state-timer state)))
+             ;; A command until its end is handled (its last lines, exit code
+             ;; and patch: `agent-ui-source--exited' clears its process), not
+             ;; only until it's dead: its sentinel runs a moment after.
+             :running (if (or (timerp (agent-ui-source--state-timer state))
+                              (if (eq (agent-ui-source--state-kind state) 'command)
+                                  (agent-ui-source--state-process state)
+                                (process-live-p (agent-ui-source--state-process state))))
                           t :false)
              :lines (agent-ui-source--state-count state))
        (when (agent-ui-source--state-exit state) (list :exit (agent-ui-source--state-exit state)))

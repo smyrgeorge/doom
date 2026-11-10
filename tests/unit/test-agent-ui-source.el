@@ -122,6 +122,26 @@
     (should (equal (plist-get (agent-ui-get "t") :rows) '(("a" "ok") ("b" "ok"))))
     (should (equal (plist-get (agent-ui-get "t") :title) "Tests: exit 1"))))
 
+(ert-deftest agent-ui-source/running-until-its-end-is-handled ()
+  "A command dead, its sentinel not run yet (Emacs runs it a moment after):
+still running, its exit and patch not there; once run, done."
+  (+test-ausrc
+    (let (held)
+      (cl-letf* ((exited (symbol-function 'agent-ui-source--exited))
+                 ((symbol-function 'agent-ui-source--exited)
+                  (lambda (&rest args) (push (lambda () (apply exited args)) held))))
+        (agent-ui-show '(:id "b" :type "progress" :max 4 :source (:command "exit 3")))
+        (+test-ausrc-wait (lambda () held))
+        (let ((status (agent-ui-source-status "b")))
+          (should (eq (plist-get status :running) t))
+          (should-not (plist-get status :exit)))
+        (should-not (plist-get (agent-ui-get "b") :status))
+        (funcall (car held))
+        (let ((status (agent-ui-source-status "b")))
+          (should (eq (plist-get status :running) :false))
+          (should (equal (plist-get status :exit) 3)))
+        (should (equal (plist-get (agent-ui-get "b") :status) "failed"))))))
+
 (ert-deftest agent-ui-source/a-tail ()
   (+test-ausrc
     (agent-ui-show '(:id "log" :type "text" :text "" :source (:command "seq 1 50" :tail 3)))
