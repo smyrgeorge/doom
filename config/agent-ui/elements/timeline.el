@@ -87,9 +87,22 @@
         (propertize "no tasks" 'face 'agent-ui-muted)
       (let* ((span (agent-ui-timeline--span props))
              (from (car span)) (length (- (cdr span) from))
-             (name-width (min (apply #'max (mapcar (lambda (task) (string-width (plist-get task :name))) tasks))
-                              (/ width 4)))
-             (bar-width (max 10 (- width name-width 14)))
+             (shown (seq-take tasks agent-ui-max-rows))
+             (times (mapcar (lambda (task)
+                              (if (eq (plist-get task :status) 'running) "running"
+                                (agent-ui-format-duration (- (agent-ui-timeline--end task span) (plist-get task :start)))))
+                            shown))
+             (time-width (apply #'max (mapcar #'string-width times)))
+             ;; The names' column shrinks first, then the bars, to a column
+             ;; each (the bars were 10 at least: lines past narrow widths).
+             (name-width (max 1 (min (apply #'max (mapcar (lambda (task) (string-width (plist-get task :name))) tasks))
+                                     (/ width 4)
+                                     (- width 3 4 time-width))))
+             ;; 10 columns kept for the times while the bars keep 10 (a time
+             ;; changing, the bars don't move), else only what they take.
+             (bar-width (if (>= (- width name-width 14) 10)
+                            (- width name-width 14)
+                          (max 1 (- width name-width 4 time-width))))
              (cell (lambda (time) (round (* bar-width (/ (- time from) length))))))
         (concat
          (mapconcat
@@ -103,19 +116,24 @@
                       (make-string a ?\s)
                       (propertize (make-string (- b a) (if (eq status 'queued) ?░ ?█)) 'face face)
                       (make-string (max 0 (- bar-width b)) ?\s) "  "
-                      (propertize (if (eq status 'running) "running"
-                                    (agent-ui-format-duration (- end (plist-get task :start))))
+                      (propertize (nth (cl-position task shown) times)
                                   'face (if (eq status 'failed) 'agent-ui-error 'agent-ui-muted)))))
-          (seq-take tasks agent-ui-max-rows) "\n")
+          shown "\n")
          "\n"
-         ;; The scale: its start, middle and end.
+         ;; The scale: its start, middle and end, within the bars' width; the
+         ;; middle only with a space each side, the end only if it fits after
+         ;; the start (they ran together: \"0s  13s26s\").
          (propertize
-          (let ((mid (agent-ui-format-duration (/ length 2)))
-                (end (agent-ui-format-duration length)))
-            (concat (make-string (+ name-width 2) ?\s)
-                    (agent-ui-pad "0s" (- (/ bar-width 2) (/ (string-width mid) 2)))
-                    (agent-ui-pad mid (- bar-width (- (/ bar-width 2) (/ (string-width mid) 2)) (string-width end)))
-                    end))
+          (let* ((mid (agent-ui-format-duration (/ length 2)))
+                 (end (agent-ui-format-duration length))
+                 (mid-at (- (/ bar-width 2) (/ (string-width mid) 2)))
+                 (end-at (- bar-width (string-width end)))
+                 (scale (cond
+                         ((and (>= mid-at 3) (>= end-at (+ mid-at (string-width mid) 1)))
+                          (concat (agent-ui-pad "0s" mid-at) (agent-ui-pad mid (- end-at mid-at)) end))
+                         ((>= end-at 3) (concat (agent-ui-pad "0s" end-at) end))
+                         (t (agent-ui-truncate "0s" bar-width)))))
+            (concat (make-string (+ name-width 2) ?\s) scale))
           'face 'agent-ui-muted))))))
 
 (defun agent-ui-timeline--gui (props ctx)

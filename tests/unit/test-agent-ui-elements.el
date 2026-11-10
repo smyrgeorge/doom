@@ -1156,6 +1156,20 @@ end in text, outside the image in the GUI)."
     (should-not (string-match-p ">integration-tests-shard-1<" svg))
     (should (string-match-p ">integration[^<]*&#8230;<" svg))))
 
+(ert-deftest agent-ui-elements/timeline-text-fits-narrow-widths ()
+  "Narrow: the names' column shrinks, then the bars, every line within the
+width, the scale's labels apart (\"0s  13s26s\"; 21 columns at 20)."
+  (dolist (element '((:type "timeline" :tasks ((:name "build" :start 0 :duration 8) (:name "test-1" :start 8 :duration 14)
+                                               (:name "test-2" :start 8 :duration 11 :status "failed")
+                                               (:name "deploy" :start 22 :duration 4 :status "queued")))
+                     (:type "timeline" :tasks ((:name "a" :start 0 :duration 48) (:name "b" :start 48 :duration 77)))))
+    (dolist (width '(15 20 25 30 36 40))
+      (let ((text (+test-aue-draw element :width width)))
+        (dolist (line (split-string text "\n"))
+          (should (<= (string-width line) width)))
+        ;; The scale: its labels a space apart at least.
+        (should-not (string-match-p "s[0-9]" (car (last (split-string text "\n")))))))))
+
 (ert-deftest agent-ui-elements/timeline-finished-stamped-spans-its-tasks ()
   "Finished tasks given timestamps: the axis spans them (it ran to now: a day
 later, 22 hours wide); one still running: to now."
