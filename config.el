@@ -101,6 +101,12 @@
 ;; stacked on the right (Amethyst's Tall).
 (setq +my/tiling-strategy 'tall)
 
+;; The applications tiling opens in a new pane (config/tiling.el): all of them,
+;; or a list of: claude (Claude Code), terminal, preview (the Markdown preview),
+;; drawings, magit, issues (Beads), agent-ui (Agent UI's canvas), html (a page in
+;; WebKit). One left out opens as it would without tiling.
+(setq +my/tiling-apps 'all)
+
 ;; PDFs: dark pages (inverted to dark greys, the colours' hues kept) in the
 ;; first PDF opened; SPC m d turns them light (config/pdf.el).
 (setq +my/pdf-dark-pages t)

@@ -25,6 +25,11 @@ Emacs is tiling first:
 - A pane closes with its last tab (`Cmd+W`, `SPC b k`). When one closes (however: `SPC w d`, `q`, its last tab), the
   stacked panes share its rows again, at equal heights.
 
+Which applications open in a new pane is chosen in `config.el`: `(setq +my/tiling-apps 'all)` (the default), or a list
+of `claude`, `terminal`, `preview`, `drawings`, `magit`, `issues`, `agent-ui`, `html` (`M-x customize-variable
++my/tiling-apps` ticks them). One left out opens as it would without tiling (the terminal as a popup); an unknown name
+is warned about at startup.
+
 The `tall` strategy keeps the main pane on the left and stacks the others on the right. `SPC w SPC` opens a new pane
 showing the current buffer, `SPC w a` arranges the panes again, and `SPC w RET` moves the current pane's buffer to the
 main pane (the main's to its place). `SPC w ]` / `SPC w [` make the main area bigger / smaller as the strategy has it

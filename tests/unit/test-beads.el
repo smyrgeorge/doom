@@ -880,7 +880,7 @@ issue, a new pane, the next one in it; the preview, beads.el's side window."
 
 (ert-deftest beads/issues-are-tiling-s-applications ()
   (dolist (mode '(beads-list-mode beads-detail-mode beads-detail-vui-mode))
-    (should (seq-find (lambda (app) (eq (if (consp app) (car app) app) mode)) +my/tiling-apps)))
+    (should (seq-find (lambda (app) (eq (if (consp app) (car app) app) mode)) (+my/tiling--apps))))
   (with-temp-buffer
     (rename-buffer "*Beads Preview*" t)
     (when (equal (buffer-name) "*Beads Preview*")

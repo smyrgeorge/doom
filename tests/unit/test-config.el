@@ -249,13 +249,14 @@ header says what loads it: config.el, or for a part its file (config/merge.el)."
 (ert-deftest config/tiling-first ()
   "Tiling first (config/tiling/apps.el): applications in new panes."
   (should (equal display-buffer-overriding-action '((+my/tiling--display))))
-  (should (memq 'ghostel-mode +my/tiling-apps))
-  (should (memq 'agent-shell-mode +my/tiling-apps)))
+  (should (eq +my/tiling-apps 'all))
+  (should (memq 'ghostel-mode (+my/tiling--apps)))
+  (should (memq 'agent-shell-mode (+my/tiling--apps))))
 
 (ert-deftest config/tiling-can-be-taken-out ()
   "Tiling first lives in config/tiling.el and config/tiling/: config.el loads
-it and chooses its strategy; no other file uses it, so without that `load!'
-each feature opens its windows as it does alone."
+it and chooses its strategy and applications; no other file uses it, so
+without that `load!' each feature opens its windows as it does alone."
   (let ((dir (expand-file-name "config/" +test-root))
         (users nil))
     (dolist (file (directory-files-recursively dir "\\.el\\'"))
@@ -267,7 +268,7 @@ each feature opens its windows as it does alone."
     (should-not users))
   (let ((forms (seq-filter (lambda (form) (string-match-p "+my/tiling" (format "%S" form)))
                            (+test-config--forms))))
-    (should (equal forms '((setq +my/tiling-strategy 'tall))))))
+    (should (equal forms '((setq +my/tiling-strategy 'tall) (setq +my/tiling-apps 'all))))))
 
 (ert-deftest config/notifications-can-be-taken-out ()
   "Notifications live in config/notify.el and config/notify/ (the desktop's

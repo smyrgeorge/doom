@@ -33,8 +33,9 @@
 ;; but one resized with SPC w } / {; Emacs gave the closed one's rows to its
 ;; neighbour).
 ;; TILING FIRST (config/tiling/apps.el)
-;; - Applications (`+my/tiling-apps': Claude Code, the terminal, the Markdown
-;;   preview, magit, drawings, issues) open in a new pane where the strategy
+;; - Applications (`+my/tiling-known-apps': Claude Code, the terminal, the
+;;   Markdown preview, magit, drawings, issues, Agent UI's canvas, a page in
+;;   WebKit; those chosen in config.el, `+my/tiling-apps') open in a new pane where the strategy
 ;;   puts it, whatever their own setting or Doom's popup rules say; one shown
 ;;   already, or a tab of a pane (a file over it): that pane. Magit's status (SPC g g), and any magit buffer opened
 ;;   from outside magit (SPC g d's diff, a log from a file), open so; inside
@@ -75,21 +76,35 @@
   "The share SPC w ] / [ add to or take from the main area, and SPC w } / {
 from the current pane (tall: of the width; of the stack's height).")
 
-(defvar +my/tiling-apps
-  '(agent-shell-mode                    ; Claude Code (SPC o c, SPC o C)
-    ghostel-mode                        ; the terminal (SPC o t)
-    +md-preview-page-mode               ; the Markdown preview (SPC m p)
-    +my/excalidraw-mode                 ; drawings (Option+Enter, C-c C-d)
-    (magit-mode . +my/tiling-magit-new-pane-p) ; magit (SPC g g, SPC g d...)
-    beads-list-mode                     ; issues (SPC o i, config/beads.el)
-    agent-ui-canvas-mode                ; Agent UI's canvas (config/agent-ui.el)
-    +my/html-page-mode                  ; a page in WebKit (config/html.el)
-    (beads-detail-mode . +my/tiling-beads-issue-new-pane-p) ; an issue (RET there)
-    (beads-detail-vui-mode . +my/tiling-beads-issue-new-pane-p))
-  "Applications (see TILING FIRST above): major modes (and the modes derived
-from them), whose buffers open in a new pane; or (MODE . PREDICATE), MODE's
-buffers an application's, opening in a new pane when PREDICATE, called in the
-buffer being shown, says so (else as they ask).")
+;; APPLICATIONS, by name (see TILING FIRST above). Which are is chosen in
+;; config.el: (setq +my/tiling-apps 'all), every one of them (the default), or
+;; a list of names, '(claude magit); M-x customize-variable +my/tiling-apps
+;; ticks them. One left out opens as it would without tiling (the terminal as
+;; Doom's popup...) and isn't one otherwise either (no tab kept under a file,
+;; not added to the workspace). A name unknown: a warning at startup.
+(defvar +my/tiling-known-apps
+  '((claude agent-shell-mode)                       ; Claude Code (SPC o c, SPC o C)
+    (terminal ghostel-mode)                         ; the terminal (SPC o t)
+    (preview +md-preview-page-mode)                 ; the Markdown preview (SPC m p)
+    (drawings +my/excalidraw-mode)                  ; drawings (Option+Enter, C-c C-d)
+    (magit (magit-mode . +my/tiling-magit-new-pane-p)) ; magit (SPC g g, SPC g d...)
+    (issues beads-list-mode                         ; issues (SPC o i, config/beads.el)
+            (beads-detail-mode . +my/tiling-beads-issue-new-pane-p) ; an issue (RET there)
+            (beads-detail-vui-mode . +my/tiling-beads-issue-new-pane-p))
+    (agent-ui agent-ui-canvas-mode)                 ; Agent UI's canvas (config/agent-ui.el)
+    (html +my/html-page-mode))                      ; a page in WebKit (config/html.el)
+  "Every application tiling knows (see TILING FIRST above): (NAME MODE...),
+each MODE a major mode (and the modes derived from it), whose buffers open in
+a new pane; or (MODE . PREDICATE), MODE's buffers an application's, opening
+in a new pane when PREDICATE, called in the buffer being shown, says so
+\(else as they ask).")
+
+(defcustom +my/tiling-apps 'all
+  "The applications (see APPLICATIONS above): all, every one of
+`+my/tiling-known-apps', or a list of their names. Chosen in config.el."
+  :type `(choice (const :tag "All of them" all)
+                 (set :tag "These" ,@(mapcar (lambda (app) (list 'const (car app))) +my/tiling-known-apps)))
+  :group 'windows)
 
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange

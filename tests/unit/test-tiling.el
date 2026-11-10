@@ -660,7 +660,8 @@ nothing changes."
   "BODY as `+test-tiling', the applications being `+test-tiling-app-mode''s."
   (declare (indent 0))
   `(+test-tiling
-     (let ((+my/tiling-apps '(+test-tiling-app-mode)))
+     (let ((+my/tiling-known-apps '((test +test-tiling-app-mode)))
+           (+my/tiling-apps 'all))
        ,@body)))
 
 (defconst +test-tiling--popup-action
@@ -674,10 +675,87 @@ nothing changes."
   ;; Applications are Doom's real buffers (their tabs kept, gone back to).
   (should (memq #'+my/tiling-app-p doom-real-buffer-functions))
   (should (memq #'+my/tiling-close-pane-h (default-value 'kill-buffer-hook)))
-  ;; The applications.
-  (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) +my/tiling-apps)
-                 '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-mode
-                   beads-list-mode agent-ui-canvas-mode +my/html-page-mode beads-detail-mode beads-detail-vui-mode))))
+  ;; The applications, by name; all of them chosen.
+  (should (equal (mapcar #'car +my/tiling-known-apps)
+                 '(claude terminal preview drawings magit issues agent-ui html)))
+  (should (eq (default-value '+my/tiling-apps) 'all))
+  (let ((+my/tiling-apps 'all))
+    (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) (+my/tiling--apps))
+                   '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-mode
+                     beads-list-mode beads-detail-mode beads-detail-vui-mode agent-ui-canvas-mode
+                     +my/html-page-mode)))))
+
+(ert-deftest tiling/apps-chosen-by-name ()
+  "A list of names: those applications only, their modes as known (a
+predicate kept); all: every one."
+  (let ((+my/tiling-apps '(claude magit)))
+    (should (equal (+my/tiling--apps) '(agent-shell-mode (magit-mode . +my/tiling-magit-new-pane-p)))))
+  (let ((+my/tiling-apps '(issues)))
+    (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) (+my/tiling--apps))
+                   '(beads-list-mode beads-detail-mode beads-detail-vui-mode))))
+  (let ((+my/tiling-apps nil))
+    (should-not (+my/tiling--apps)))
+  (let ((+my/tiling-apps 'all))
+    (should (= (length (+my/tiling--apps)) 10)))
+  ;; Not mended by them: the list known stays whole.
+  (let ((+my/tiling-apps '(issues)))
+    (setcar (+my/tiling--apps) 'changed)
+    (should (eq (nth 1 (assq 'issues +my/tiling-known-apps)) 'beads-list-mode))))
+
+(ert-deftest tiling/an-app-left-out-opens-as-without-tiling ()
+  "An application not chosen opens as it asks (Doom's popup, the current
+window...), and isn't one otherwise: not Doom's real buffer for it."
+  (+test-tiling
+    (let ((+my/tiling-known-apps '((test +test-tiling-app-mode) (other +test-tiling-sub-app-mode)))
+          (+my/tiling-apps '(other))
+          (app (+test-tiling--app "app")))
+      (should-not (+my/tiling-app-p app))
+      (should-not (+my/tiling--display app nil))
+      (let ((window (display-buffer app '(display-buffer-same-window))))
+        (should (eq window (selected-window)))
+        (should (= (length (+my/tiling--panes)) 1)))
+      ;; Chosen: in a new pane.
+      (let ((+my/tiling-apps 'all))
+        (should (+my/tiling-app-p app))))))
+
+(ert-deftest tiling/apps-unknown-name-warns ()
+  "A name tiling doesn't know (config.el's typo): a warning naming it and the
+ones it knows; all, or known names: none."
+  (let (warned)
+    (cl-letf (((symbol-function 'display-warning) (lambda (type message &rest _) (push (list type message) warned))))
+      (let ((+my/tiling-apps '(claude termnal)))
+        (+my/tiling--check-apps))
+      (should (equal (car warned)
+                     '(tiling "+my/tiling-apps: no application termnal; it's all, or a list of: claude, terminal, preview, drawings, magit, issues, agent-ui, html")))
+      (let ((+my/tiling-apps 'default))
+        (+my/tiling--check-apps))
+      (should (string-match-p "no application default;" (cadr (car warned))))
+      (setq warned nil)
+      (let ((+my/tiling-apps 'all)) (+my/tiling--check-apps))
+      (let ((+my/tiling-apps '(claude magit))) (+my/tiling--check-apps))
+      (should-not warned))))
+
+(ert-deftest tiling/apps-in-customize ()
+  "M-x customize-variable +my/tiling-apps: all, or the names ticked."
+  (should (equal (get '+my/tiling-apps 'custom-type)
+                 '(choice (const :tag "All of them" all)
+                          (set :tag "These" (const claude) (const terminal) (const preview) (const drawings)
+                               (const magit) (const issues) (const agent-ui) (const html)))))
+  (should (custom-variable-p '+my/tiling-apps)))
+
+(ert-deftest tiling/config-el-chooses-the-apps-before-loading ()
+  "config.el chooses the applications (all) before it loads config/tiling.el."
+  (let (forms)
+    (with-temp-buffer
+      (insert-file-contents (expand-file-name "config.el" +test-root))
+      (condition-case nil
+          (while t (push (read (current-buffer)) forms))
+        (end-of-file)))
+    (setq forms (nreverse forms))
+    (let ((setq-at (seq-position forms '(setq +my/tiling-apps 'all)))
+          (load-at (seq-position forms '(load! "config/tiling"))))
+      (should setq-at)
+      (should (< setq-at load-at)))))
 
 (ert-deftest tiling/what-is-an-application ()
   (+test-tiling-first
@@ -687,7 +765,7 @@ nothing changes."
     (should-not (+my/tiling-app-p (get-buffer "A")))
     ;; (MODE . PREDICATE): MODE's buffers an application's; a new pane when
     ;; PREDICATE says so, in the buffer.
-    (let ((+my/tiling-apps '((+test-tiling-app-mode . (lambda () (string-prefix-p "yes" (buffer-name)))))))
+    (let ((+my/tiling-known-apps '((test (+test-tiling-app-mode . (lambda () (string-prefix-p "yes" (buffer-name))))))))
       (should (+my/tiling-app-p (+test-tiling--app "yes-app")))
       (should (+my/tiling-app-p (+test-tiling--app "no-app")))
       (should (+my/tiling--new-pane-p (get-buffer "yes-app")))
@@ -942,7 +1020,8 @@ Emacs puts it, from an application's pane too."
   "BODY as `+test-tiling', the applications this config's."
   (declare (indent 0))
   `(+test-tiling
-     (let ((+my/tiling-apps (default-value '+my/tiling-apps)))
+     (let ((+my/tiling-apps 'all)
+           (+my/tiling-known-apps (default-value '+my/tiling-known-apps)))
        ,@body)))
 
 (ert-deftest tiling/magit-status-in-a-new-pane ()

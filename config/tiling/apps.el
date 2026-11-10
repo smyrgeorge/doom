@@ -25,11 +25,34 @@ in a new pane: not the list's preview (P), beads.el's side window. (A second
 issue goes to the first one's pane: config/beads/project.el.)"
   (not (equal (buffer-name) "*Beads Preview*")))
 
+(defun +my/tiling--apps ()
+  "The applications chosen (`+my/tiling-apps'): their modes, as
+`+my/tiling-known-apps' has them (MODE, or (MODE . PREDICATE))."
+  (mapcan (lambda (app)
+            (when (or (eq +my/tiling-apps 'all) (memq (car app) (ensure-list +my/tiling-apps)))
+              (copy-sequence (cdr app))))
+          +my/tiling-known-apps))
+
+(defun +my/tiling--check-apps ()
+  "Warn of names in `+my/tiling-apps' tiling doesn't know (config.el's), the
+ones it does said."
+  (unless (eq +my/tiling-apps 'all)
+    (when-let* ((unknown (seq-remove (lambda (name) (assq name +my/tiling-known-apps))
+                                     (ensure-list +my/tiling-apps))))
+      (display-warning
+       'tiling
+       (format "+my/tiling-apps: no application %s; it's all, or a list of: %s"
+               (mapconcat (lambda (name) (format "%s" name)) unknown ", ")
+               (mapconcat (lambda (app) (symbol-name (car app))) +my/tiling-known-apps ", "))))))
+
+(+my/tiling--check-apps)
+
 (defun +my/tiling--app (buffer)
-  "BUFFER's entry in `+my/tiling-apps', if it's an application's."
+  "BUFFER's entry among the applications chosen (`+my/tiling--apps'), if
+it's one's."
   (with-current-buffer buffer
     (seq-find (lambda (app) (derived-mode-p (if (consp app) (car app) app)))
-              +my/tiling-apps)))
+              (+my/tiling--apps))))
 
 (defun +my/tiling-app-p (buffer)
   "Non-nil if BUFFER is an application's (see `+my/tiling-apps')."
@@ -37,7 +60,7 @@ issue goes to the first one's pane: config/beads/project.el.)"
 
 (defun +my/tiling--new-pane-p (buffer)
   "Non-nil if application BUFFER, being shown, opens in a new pane (see
-`+my/tiling-apps')."
+`+my/tiling-known-apps')."
   (when-let* ((app (+my/tiling--app buffer)))
     (or (not (consp app))
         (with-current-buffer buffer (funcall (cdr app))))))

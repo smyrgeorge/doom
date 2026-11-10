@@ -422,7 +422,8 @@ the main pane's: the application wasn't real)."
     (+test-tiling
       (set-frame-parameter nil 'buffer-predicate #'doom-buffer-frame-predicate)
       (unwind-protect
-          (let* ((+my/tiling-apps (cons '+test-tiling-e2e-app-mode +my/tiling-apps))
+          (let* ((+my/tiling-known-apps (cons '(test +test-tiling-e2e-app-mode) +my/tiling-known-apps))
+                 (+my/tiling-apps 'all)
                  (app (with-current-buffer (get-buffer-create "*test app*")
                         (+test-tiling-e2e-app-mode)
                         (current-buffer)))
