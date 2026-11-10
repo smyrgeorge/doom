@@ -76,13 +76,20 @@ if there's no such column."
         (agent-ui-error (agent-ui--fail "table: row-%s" (agent-ui-error-message err)))))
     (plist-put props :key (agent-ui-table--key-index (plist-get props :key) columns))))
 
-(defun agent-ui-table--widths (header rows max-width)
-  "Each column's width: its widest cell's, the widest cut down until the
-table fits MAX-WIDTH (no column under 3)."
-  (let* ((widths (apply #'cl-mapcar
-                        (lambda (&rest cells) (apply #'max (mapcar #'string-width cells)))
-                        header rows))
-         (widths (vconcat widths)))
+(defun agent-ui-table--cell-widths (header rows)
+  "Each column's cells' widths, from HEADER's and ROWS' (their cells' widths,
+measured once): a list per column, its header's first."
+  (apply #'cl-mapcar #'list header rows))
+
+(defconst agent-ui-table--longest-state
+  (apply #'max (mapcar (lambda (s) (length (car s))) agent-ui-table--states))
+  "The longest cell coloured by its state: longer ones aren't looked up.")
+
+(defun agent-ui-table--widths (columns max-width)
+  "Each column's width (COLUMNS: their cells' widths, `--cell-widths'): its
+widest cell's, the widest cut down until the table fits MAX-WIDTH (no column
+under 3)."
+  (let* ((widths (vconcat (mapcar (lambda (cells) (apply #'max cells)) columns))))
     ;; A table's width: each column and a space either side, a │ between,
     ;; less the last one's trailing space.
     (cl-flet ((total () (+ (cl-reduce #'+ widths) (* 3 (length widths)) -2)))
@@ -92,13 +99,11 @@ table fits MAX-WIDTH (no column under 3)."
           (cl-decf (aref widths widest)))))
     (append widths nil)))
 
-(defun agent-ui-table--fitting (header rows max-width)
-  "How many of the columns (HEADER's, ROWS') fit MAX-WIDTH, each at its
-narrowest (3 columns, or less if its cells are): those on the left, one at
-least."
-  (let* ((narrowest (apply #'cl-mapcar
-                           (lambda (&rest cells) (min 3 (apply #'max (mapcar #'string-width cells))))
-                           header rows))
+(defun agent-ui-table--fitting (columns max-width)
+  "How many of the COLUMNS (their cells' widths, `--cell-widths') fit
+MAX-WIDTH, each at its narrowest (3 columns, or less if its cells are):
+those on the left, one at least."
+  (let* ((narrowest (mapcar (lambda (cells) (min 3 (apply #'max cells))) columns))
          (k (length narrowest)))
     (while (and (> k 1)
                 (> (+ (apply #'+ (seq-take narrowest k)) (* 3 k) -2) max-width))
@@ -174,9 +179,14 @@ text; DESCENDING the other way; empty cells last."
 
 (defun agent-ui-table--cell (value)
   "VALUE as a cell's text, on one line: a line break shown as ⏎, a tab as a
-space (they broke the table's lines and its border)."
-  (replace-regexp-in-string
-   "\t" " " (replace-regexp-in-string "\r?\n" "⏎" (agent-ui-cell value))))
+space (they broke the table's lines and its border). Most have neither: as
+they are (a copy for each, a table's drawing was most of its time in
+collecting garbage)."
+  (let ((text (agent-ui-cell value)))
+    (if (not (string-match-p "[\t\n\r]" text))
+        text
+      (replace-regexp-in-string
+       "\t" " " (replace-regexp-in-string "\r?\n" "⏎" text)))))
 
 (defun agent-ui-table--text (props ctx)
   (let* ((columns (plist-get props :columns))
@@ -199,16 +209,17 @@ space (they broke the table's lines and its border)."
          ;; Buttons at a row's end only while its cells keep their widths
          ;; beside them; else on a line of their own under it (they squeezed
          ;; the cells to 3 columns and the rows past the width).
+         ;; Each cell measured once.
+         (measured (mapcar (lambda (row) (mapcar #'string-width row)) rows))
+         (cell-widths (agent-ui-table--cell-widths (mapcar #'string-width header) measured))
          (beside (and actions
-                      (let ((full (agent-ui-table--widths header rows most-positive-fixnum)))
+                      (let ((full (agent-ui-table--widths cell-widths most-positive-fixnum)))
                         (<= (+ (apply #'+ full) (* 3 (length full)) -2 actions-width)
                             (plist-get ctx :width)))))
          (room (max 4 (- (plist-get ctx :width) (if beside actions-width 0))))
          ;; The columns that fit (the others left out, said under it).
-         (shown (agent-ui-table--fitting header rows room))
-         (widths (agent-ui-table--widths (seq-take header shown)
-                                         (mapcar (lambda (r) (seq-take r shown)) rows)
-                                         room))
+         (shown (agent-ui-table--fitting cell-widths room))
+         (widths (agent-ui-table--widths (seq-take cell-widths shown) room))
          (align (cl-loop for i below n
                          collect (or (nth i (plist-get props :align))
                                      ;; Numbers to the right.
@@ -219,54 +230,98 @@ space (they broke the table's lines and its border)."
                                                           cells))
                                            'right
                                          'left)))))
-         (bar (propertize "│" 'face 'agent-ui-muted))
          ;; The sorted column's name cut, its arrow kept (cut, it went first).
          (header (cl-loop for c in header for name in columns for w in widths for i from 0
                           collect (if (and (eql i sort) (> (string-width c) w))
                                       (concat (agent-ui-truncate name (max 1 (- w 2)))
                                               (if descending " ↓" " ↑"))
                                     c))))
-    (cl-flet ((line (cells &optional face)
-                ;; Each cell its column's (`s' there sorts by it).
-                (mapconcat #'identity
-                           (cl-loop for cell in cells
-                                    for width in widths
-                                    for a in align
-                                    for i from 0
-                                    collect (let ((text (agent-ui-pad cell width a))
-                                                  (state (cdr (assoc (downcase cell) agent-ui-table--states))))
-                                              (propertize (concat " " (propertize text 'face (or face state)) " ")
-                                                          'agent-ui-table-column i)))
-                           bar)))
-      (concat
-       ;; No column named: no header, the rows alone.
-       (unless (cl-every #'string-empty-p columns)
-         (concat
-          (string-trim-right (line header 'bold)) "\n"
-          ;; As wide as the lines: the last column's has no space after it.
-          (propertize (mapconcat (lambda (w) (make-string (+ w 2) ?─))
-                                 (append (butlast widths) (list (1- (car (last widths)))))
-                                 "┼")
-                      'face 'agent-ui-muted)
-          "\n"))
-       (if rows
-           (mapconcat (lambda (row)
-                        (cond
-                         (beside (concat (line row) " " (agent-ui-table--row-buttons actions columns row)))
-                         (actions (concat (string-trim-right (line row)) "\n "
-                                          (agent-ui-truncate (agent-ui-table--row-buttons actions columns row)
-                                                             (1- (plist-get ctx :width)))))
-                         (t (string-trim-right (line row)))))
-                      rows "\n")
-         (concat " " (propertize "no rows yet" 'face 'agent-ui-muted)))
-       (when (> (length all) (length rows))
-         (concat "\n " (propertize (format "… %d rows more" (- (length all) (length rows)))
-                                   'face 'agent-ui-muted)))
-       (when (< shown n)
-         (concat "\n " (propertize (agent-ui-truncate (format "… %d more %s: %s" (- n shown) (if (= (- n shown) 1) "column" "columns")
-                                                               (string-join (nthcdr shown columns) ", "))
-                                                       (1- (plist-get ctx :width)))
-                                   'face 'agent-ui-muted)))))))
+    ;; Its text made plain in a buffer, where its cells' faces and columns go
+    ;; noted, then put on the string taken out once: each made once (joined
+    ;; as strings, every cell's properties were copied at each join; put in
+    ;; the buffer, they were made twice: most of the drawing went in
+    ;; collecting that garbage). The same hidden buffer each time (made and
+    ;; killed each time, it cost as much again), no change hooks.
+    (let ((marks nil) (text nil))
+      (with-current-buffer (get-buffer-create " *agent-ui-table*")
+        (setq-local buffer-undo-list t)
+        (let ((inhibit-modification-hooks t))
+          (erase-buffer)
+          (cl-flet ((line (cells &optional face trim measured)
+                      ;; Each cell its column's (`s' there sorts by it); MEASURED
+                      ;; its cells' widths (else measured here); TRIM: the line's
+                      ;; trailing spaces left out, its marks cut there.
+                      (let ((start (point)))
+                        (cl-loop for cell in cells
+                                 for cell-width in (or measured (mapcar #'string-width cells))
+                                 for width in widths
+                                 for a in align
+                                 for i from 0
+                                 do (let* ((cut (> cell-width width))
+                                           (text (if cut (agent-ui-truncate cell width) cell))
+                                           (space (- width (if cut (string-width text) cell-width)))
+                                           (left (pcase a ('right space) ('center (/ space 2)) (_ 0)))
+                                           ;; Its colour by its whole text ("passed" cut).
+                                           (state (and (<= (length cell) agent-ui-table--longest-state)
+                                                       (cdr (assoc-string cell agent-ui-table--states t)))))
+                                      (unless (= i 0)
+                                        (push (list (point) (1+ (point)) 'face 'agent-ui-muted) marks)
+                                        (insert "│"))
+                                      (let ((from (point)))
+                                        (insert " " (make-string left ?\s) text (make-string (- space left) ?\s) " ")
+                                        (push (list from (point) 'agent-ui-table-column i) marks)
+                                        (when (or face state)
+                                          (push (list (1+ from) (1- (point)) 'face (or face state)) marks)))))
+                        (when trim
+                          (let ((end (point)))
+                            (skip-chars-backward " \t\n\r" start)
+                            (delete-region (point) end))
+                          ;; This line's marks (the latest) cut at its end.
+                          (let ((cut (point)) (kept nil))
+                            (while (and marks (>= (caar marks) start))
+                              (let ((m (pop marks)))
+                                (cond ((>= (car m) cut))
+                                      ((> (cadr m) cut) (push (list (car m) cut (nth 2 m) (nth 3 m)) kept))
+                                      (t (push m kept)))))
+                            (setq marks (nconc (nreverse kept) marks)))))))
+            ;; No column named: no header, the rows alone.
+            (unless (cl-every #'string-empty-p columns)
+              (line header 'bold t)
+              (insert "\n"
+                      ;; As wide as the lines: the last column's has no space after it.
+                      (propertize (mapconcat (lambda (w) (make-string (+ w 2) ?─))
+                                             (append (butlast widths) (list (1- (car (last widths)))))
+                                             "┼")
+                                  'face 'agent-ui-muted)
+                      "\n"))
+            (if rows
+                (cl-loop for row in rows
+                         for row-widths in measured
+                         for first = t then nil
+                         do (unless first (insert "\n"))
+                         (cond
+                          (beside (line row nil nil row-widths)
+                                  (insert " " (agent-ui-table--row-buttons actions columns row)))
+                          (actions (line row nil t row-widths)
+                                   (insert "\n " (agent-ui-truncate (agent-ui-table--row-buttons actions columns row)
+                                                                    (1- (plist-get ctx :width)))))
+                          (t (line row nil t row-widths))))
+              (insert " " (propertize "no rows yet" 'face 'agent-ui-muted)))
+            (when (> (length all) (length rows))
+              (insert "\n " (propertize (format "… %d rows more" (- (length all) (length rows)))
+                                        'face 'agent-ui-muted)))
+            (when (< shown n)
+              (insert "\n " (propertize (agent-ui-truncate (format "… %d more %s: %s" (- n shown)
+                                                                     (if (= (- n shown) 1) "column" "columns")
+                                                                     (string-join (nthcdr shown columns) ", "))
+                                                             (1- (plist-get ctx :width)))
+                                        'face 'agent-ui-muted)))
+            (setq text (buffer-string))
+            (erase-buffer))))
+      ;; Its cells' and bars' properties, on the string itself.
+      (dolist (m marks)
+        (put-text-property (1- (nth 0 m)) (1- (nth 1 m)) (nth 2 m) (nth 3 m) text))
+      text)))
 
 ;; ====== SORTING IN THE CANVAS ======
 

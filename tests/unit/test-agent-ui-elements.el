@@ -1277,6 +1277,40 @@ text: refused when shown (they were accepted, then drawing them failed:
 
 ;; ====== FILES ======
 
+;; doom-nkr
+(ert-deftest agent-ui-elements/table-properties-each-cells-own ()
+  "Its properties (put on the drawing once, not on each cell's string): each
+cell's column over the cell, faces over its text, bars muted; a line's end
+trimmed, its last cell's properties not past it (the next line's own)."
+  (let* ((text (agent-ui-render '(:type "table" :columns ("Name" "State" "Note")
+                                  :rows (("alpha" "passed" "") ("beta" "FAILED" "x")))
+                                (agent-ui-context :width 60)))
+         (lines (split-string (substring-no-properties text) "\n")))
+    (should (equal lines '(" Name  │ State  │ Note" "───────┼────────┼─────" " alpha │ passed │" " beta  │ FAILED │ x")))
+    (cl-flet ((at (line col) (+ (cl-loop for l in (seq-take lines line) sum (1+ (length l))) col))
+              (prop (pos p) (get-text-property pos p text)))
+      ;; The header: bold names, each its column, the bars muted.
+      (should (eq (prop (at 0 1) 'face) 'bold))
+      (should-not (prop (at 0 0) 'face))
+      (should (eql (prop (at 0 0) 'agent-ui-table-column) 0))
+      (should (eq (prop (at 0 7) 'face) 'agent-ui-muted))
+      (should-not (prop (at 0 7) 'agent-ui-table-column))
+      (should (eql (prop (at 0 9) 'agent-ui-table-column) 1))
+      (should (eql (prop (at 0 (1- (length (nth 0 lines)))) 'agent-ui-table-column) 2))
+      ;; A state's colour, by its whole text, any case.
+      (should (eq (prop (at 2 9) 'face) 'agent-ui-success))
+      (should (eq (prop (at 3 9) 'face) 'agent-ui-error))
+      (should-not (prop (at 2 1) 'face))
+      ;; "alpha"'s line ends at its bar (its empty last cell trimmed): the
+      ;; newline and the next line aren't that cell's.
+      (should-not (prop (at 2 (length (nth 2 lines))) 'agent-ui-table-column))
+      (should (eql (prop (at 3 0) 'agent-ui-table-column) 0))
+      (should (eql (prop (at 3 (1- (length (nth 3 lines)))) 'agent-ui-table-column) 2)))
+    ;; A cell cut to its column keeps its state's colour.
+    (let ((narrow (agent-ui-render '(:type "table" :columns ("N" "S") :rows (("a" "succeeded"))) (agent-ui-context :width 9))))
+      (should (string-search "suc…" narrow))
+      (should (eq (get-text-property (string-search "suc…" narrow) 'face narrow) 'agent-ui-success)))))
+
 (ert-deftest agent-ui-elements/files-flat-and-tree ()
   (let ((files '((:path "src/parser.c" :status "changed" :added 12 :removed 3)
                  (:path "src/lexer.h" :status "added" :added 40)
