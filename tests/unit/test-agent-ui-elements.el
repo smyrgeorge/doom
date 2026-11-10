@@ -457,6 +457,20 @@ their times too."
     ;; Together: fine.
     (should (agent-ui--checked (agent-ui-append-to element '(:values (410) :times ("2026-11-10T13:00:00")))))))
 
+(ert-deftest agent-ui-elements/chart-times-in-any-order ()
+  "Times newest first (git log's order) or unsorted: the same line as in
+order (the text's plot drew nothing for them)."
+  (let ((sorted '(:type "chart" :height 3 :values (10 20 30)
+                  :times ("2026-11-10T10:00:00" "2026-11-10T11:00:00" "2026-11-10T12:00:00")))
+        (newest-first '(:type "chart" :height 3 :values (30 20 10)
+                        :times ("2026-11-10T12:00:00" "2026-11-10T11:00:00" "2026-11-10T10:00:00")))
+        (unsorted '(:type "chart" :height 3 :values (20 10 30)
+                    :times ("2026-11-10T11:00:00" "2026-11-10T10:00:00" "2026-11-10T12:00:00"))))
+    (should (string-match-p "[⠀-⣿]" (+test-aue-draw newest-first :width 40)))
+    (should (equal (+test-aue-draw newest-first :width 40) (+test-aue-draw sorted :width 40)))
+    (should (equal (+test-aue-draw unsorted :width 40) (+test-aue-draw sorted :width 40)))
+    (should (equal (+test-aue-svg newest-first 40) (+test-aue-svg sorted 40)))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."

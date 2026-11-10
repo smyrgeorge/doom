@@ -341,6 +341,25 @@ across, 0 to 1 (by its time); else evenly."
     (let ((t0 (apply #'min times)) (t1 (apply #'max times)))
       (mapcar (lambda (time) (if (= t1 t0) 0.0 (/ (- time t0) (- t1 t0)))) times))))
 
+(defun agent-ui-chart--by-time (props)
+  "PROPS with its points in time order: its times ascending, each series'
+values and its labels moved with them (newest first, as git log gives
+them, the text's plot drew nothing: it went left to right only)."
+  (let ((times (plist-get props :times)))
+    (if (or (null (cdr times)) (apply #'<= times))
+        props
+      (let* ((order (sort (number-sequence 0 (1- (length times)))
+                          (lambda (a b) (< (nth a times) (nth b times)))))
+             (pick (lambda (list) (if (and list (= (length list) (length times)))
+                                      (mapcar (lambda (i) (nth i list)) order)
+                                    list))))
+        (thread-first (copy-sequence props)
+                      (plist-put :times (funcall pick times))
+                      (plist-put :labels (funcall pick (plist-get props :labels)))
+                      (plist-put :series (mapcar (lambda (s) (plist-put (copy-sequence s) :values
+                                                                        (funcall pick (plist-get s :values))))
+                                                 (plist-get props :series))))))))
+
 (defun agent-ui-chart--ticks (t0 t1 most)
   "Ticks between times T0 and T1, at most MOST, at round times (local
 midnights, hours, minutes): ((PLACE . LABEL) ...), PLACE 0 to 1."
@@ -426,7 +445,7 @@ labels under them (none on another's), as two lines; nil without times."
       ('sparkline (agent-ui-chart--sparkline props ctx))
       ('bar (agent-ui-chart--bar-text props ctx))
       ('histogram (agent-ui-chart--bar-text (agent-ui-chart--histogram props) ctx))
-      (_ (agent-ui-chart--line-text props ctx)))))
+      (_ (agent-ui-chart--line-text (agent-ui-chart--by-time props) ctx)))))
 
 ;; ====== AS SVG ======
 
@@ -609,7 +628,7 @@ its values'), each labelled with its range."
     (pcase (plist-get props :kind)
       ('bar (agent-ui-chart--bar-svg props ctx))
       ('histogram (agent-ui-chart--bar-svg (agent-ui-chart--histogram props) ctx))
-      ('line (agent-ui-chart--line-svg props ctx))
+      ('line (agent-ui-chart--line-svg (agent-ui-chart--by-time props) ctx))
       ;; A sparkline is a line of text: as in a terminal.
       (_ (agent-ui-chart--text props ctx)))))
 
