@@ -11,7 +11,9 @@
 panels are PANELS, ((NAME . TEXT) ...), their files written; removed after."
   (declare (indent 1))
   `(let* ((root (file-name-as-directory (make-temp-file "panels-" t)))
-          (default-directory root))
+          (default-directory root)
+          ;; Its code let run (asking: see the tests that ask).
+          (agent-ui-panel-allow-function (lambda (_panel) t)))
      (unwind-protect
          (progn
            (make-directory (expand-file-name agent-ui-panel-directory root) t)
@@ -20,6 +22,14 @@ panels are PANELS, ((NAME . TEXT) ...), their files written; removed after."
                (insert text)))
            ,@body)
        (delete-directory root t))))
+
+(defun +test-aup-fixture (name)
+  "The text of test panel NAME, tests/fixtures/agent-ui-panels/NAME.el."
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name (format "fixtures/agent-ui-panels/%s.el" name) +test-dir))
+    (buffer-string)))
+
+(defvar +test-aup-calls nil "What a test panel's script did, the latest first.")
 
 (defconst +test-aup-service
   ";;; service.el --- Agent UI panel -*- lexical-binding: t; -*-
@@ -124,7 +134,7 @@ accept-process-output with a timeout)."
    (accept-process-output nil 0.1)
    (mapc #'call-process '(\"a\"))
    (accept-process-output nil))"))
-               ("warned" . ,(+test-aup-panel ":fetch (lambda (_panel) (agent-ui-panel--no-such-function))"))
+               ("warned" . ,(+test-aup-panel ":fetch (lambda (_panel) (agent-ui-panels--no-such-function))"))
                ("broken" . ,(+test-aup-panel ":fetch (lambda (_panel) (cond 1))"))
                ("plain" . "(agent-ui-panel :ui (:type \"text\" :id \"t\" :text \"x\"))\n"))
     (let ((reply (agent-ui-panel-check (agent-ui-panel-file "service"))))
@@ -137,7 +147,7 @@ accept-process-output with a timeout)."
                    ["line 5: shell-command-to-string waits, Emacs frozen meanwhile: use agent-ui-panel-run"
                     "line 9: call-process waits, Emacs frozen meanwhile: use agent-ui-panel-run"
                     "line 10: accept-process-output waits, Emacs frozen meanwhile: use agent-ui-panel-run"]))
-    (should (seq-some (lambda (w) (string-match-p "agent-ui-panel--no-such-function.*not known to be defined" w))
+    (should (seq-some (lambda (w) (string-match-p "agent-ui-panels--no-such-function.*not known to be defined" w))
                       (plist-get (agent-ui-panel-check (agent-ui-panel-file "warned")) :warnings)))
     (should (string-match-p "panel broken: it doesn't compile"
                             (agent-ui-error-message
@@ -175,8 +185,8 @@ selected; opened again: the same; closed, opened again anew (doom-3q5.2)."
               (with-current-buffer canvas
                 (should (equal default-directory root))
                 (should-not agent-ui--session-buffer)
-                (should (equal (agent-ui-panel--name agent-ui-panel--state) "service"))
-                (should (equal (agent-ui-panel--root agent-ui-panel--state) root)))
+                (should (equal (agent-ui-panels--name agent-ui-panels--state) "service"))
+                (should (equal (agent-ui-panels--root agent-ui-panels--state) root)))
               (should (equal (buffer-local-value 'agent-ui--order canvas) '("service")))
               (should (equal (plist-get (agent-ui-get "ci" :canvas canvas) :columns) '("Run" "Status")))
               ;; Open already: its pane, the same canvas.
@@ -204,9 +214,108 @@ with none."
         (cl-letf (((symbol-function 'project-current) #'ignore))
           (let ((default-directory empty))
             (should (string-match-p "No project here"
-                                    (cadr (should-error (agent-ui-panel--read-name) :type 'user-error))))))
+                                    (cadr (should-error (agent-ui-panels--read-name) :type 'user-error))))))
       (delete-directory empty t))))
 
 (ert-deftest agent-ui-panels/its-key ()
   "SPC o u: one of the project's panels, opened."
   (should (eq (lookup-key doom-leader-map "ou") #'agent-ui-open-panel)))
+
+;; ====== ITS SCRIPT ======
+
+(ert-deftest agent-ui-panels/filled-by-its-script ()
+  "Its code let run: :start, :fetch at once and every :every seconds (in its
+root), filling it (agent-ui-panel-update, -append, -run: a command's JSON
+parsed); closed, :stop, nothing more fetched (doom-3q5.3)."
+  (+test-aup `(("live" . ,(+test-aup-fixture "live")))
+    (setq +test-aup-calls nil)
+    (let* ((asked 0)
+           (agent-ui-panel-allow-function (lambda (_panel) (cl-incf asked) t))
+           (canvas (save-window-excursion (agent-ui-open-panel "live"))))
+      (unwind-protect
+          (progn
+            (should (= asked 1))
+            (should (+test-wait-for (lambda () (plist-get (agent-ui-get "runs" :canvas canvas) :rows)) 5))
+            (should (equal (plist-get (agent-ui-get "runs" :canvas canvas) :rows)
+                           '(("#812" "passed") ("#811" "failed"))))
+            (should (equal (plist-get (agent-ui-get "where" :canvas canvas) :text) root))
+            (should (plist-get (agent-ui-get "errors" :canvas canvas) :values))
+            (should (equal (car (last +test-aup-calls)) 'start))
+            ;; Again, every :every seconds.
+            (should (+test-wait-for (lambda () (>= (cl-count 'fetch +test-aup-calls) 3)) 5))
+            (should-not (agent-ui-panels--error (buffer-local-value 'agent-ui-panels--state canvas))))
+        (kill-buffer canvas))
+      (should (eq (car +test-aup-calls) 'stop))
+      (let ((fetches (cl-count 'fetch +test-aup-calls)))
+        (+test-sleep 0.5)
+        (should (= (cl-count 'fetch +test-aup-calls) fetches))))))
+
+(ert-deftest agent-ui-panels/its-failures-said ()
+  "A command failing (its exit and what it said), a change of an element it
+hasn't: the panel's error, said; the callback not called."
+  (+test-aup `(("failing-run" . ,(+test-aup-fixture "failing-run"))
+               ("failing-update" . ,(+test-aup-fixture "failing-update")))
+    (setq +test-aup-calls nil)
+    (let ((canvas (save-window-excursion (agent-ui-open-panel "failing-run"))))
+      (unwind-protect
+          (let ((panel (buffer-local-value 'agent-ui-panels--state canvas)))
+            (should (+test-wait-for (lambda () (agent-ui-panels--error panel)) 5))
+            (should (equal (agent-ui-panels--error panel) "sh: exit 3: boom"))
+            (should-not +test-aup-calls)
+            (should (+test-messages "Agent UI: panel failing-run: sh: exit 3: boom")))
+        (kill-buffer canvas)))
+    (let ((canvas (save-window-excursion (agent-ui-open-panel "failing-update"))))
+      (unwind-protect
+          (should (string-match-p "\\`fetch: .*nope"
+                                  (agent-ui-panels--error (buffer-local-value 'agent-ui-panels--state canvas))))
+        (kill-buffer canvas)))))
+
+(ert-deftest agent-ui-panels/its-commands-killed-on-close ()
+  (+test-aup `(("slow" . ,(+test-aup-fixture "slow")))
+    (let* ((canvas (save-window-excursion (agent-ui-open-panel "slow")))
+           (process (car (agent-ui-panels--processes (buffer-local-value 'agent-ui-panels--state canvas)))))
+      (should (process-live-p process))
+      (kill-buffer canvas)
+      (should-not (process-live-p process)))))
+
+(ert-deftest agent-ui-panels/its-code-run-only-if-let ()
+  "Its code (its script, its elements' sources) runs only if let: refused,
+its :ui drawn without its sources, its script not evaluated, said; a panel
+with no code: not asked."
+  (+test-aup `(("sourced" . ,(+test-aup-fixture "sourced")) ("plain" . "(agent-ui-panel :ui (:type \"text\" :id \"t\" :text \"x\"))\n"))
+    (setq +test-aup-calls nil)
+    (let* ((asked nil)
+           (agent-ui-panel-allow-function (lambda (panel) (push (agent-ui-panels--name panel) asked) nil))
+           (canvas (save-window-excursion (agent-ui-open-panel "sourced"))))
+      (unwind-protect
+          (progn
+            (should (equal asked '("sourced")))
+            (should-not (agent-ui-source-status "log" :canvas canvas))
+            (should-not (plist-get (agent-ui-get "log" :canvas canvas) :source))
+            (should-not (agent-ui-panels--script (buffer-local-value 'agent-ui-panels--state canvas)))
+            (should-not +test-aup-calls)
+            (should (equal (agent-ui-panels--error (buffer-local-value 'agent-ui-panels--state canvas))
+                           "its code: not run: not allowed")))
+        (kill-buffer canvas))
+      (let ((canvas (save-window-excursion (agent-ui-open-panel "plain"))))
+        (should (equal asked '("sourced")))
+        (kill-buffer canvas)))
+    ;; Let: its sources run too.
+    (let ((canvas (save-window-excursion (agent-ui-open-panel "sourced"))))
+      (unwind-protect
+          (progn
+            (should (agent-ui-source-status "log" :canvas canvas))
+            (should (memq 'fetch +test-aup-calls)))
+        (kill-buffer canvas)))))
+
+(ert-deftest agent-ui-panels/the-panel-type-s-functions-its-own ()
+  "No function of the panel element's (elements/panel.el) redefined by
+another file loaded after it (the project panels' code once took
+agent-ui-panel--draw)."
+  (let ((file (seq-find (lambda (entry) (and (stringp (car entry))
+                                             (string-match-p "agent-ui/elements/panel\\.elc?\\'" (car entry))))
+                        load-history)))
+    (should file)
+    (dolist (item (cdr file))
+      (when (eq (car-safe item) 'defun)
+        (should (string-match-p "agent-ui/elements/panel\\.elc?\\'" (or (symbol-file (cdr item) 'defun) "")))))))

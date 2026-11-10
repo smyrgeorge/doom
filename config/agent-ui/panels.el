@@ -32,7 +32,7 @@
 (defconst agent-ui-panel-version 1
   "The panel files this Agent UI reads: their :version.")
 
-(defconst agent-ui-panel--keys '(:version :ui :every :fetch :start :stop)
+(defconst agent-ui-panels--keys '(:version :ui :every :fetch :start :stop)
   "What a panel's form has.")
 
 (defconst agent-ui-panel-blocking
@@ -48,9 +48,9 @@ every so often, in the user's Emacs). `agent-ui-panel-run' instead.")
   "A project panel (see the top of this file): PROPS, its :ui as it is
 \(data, not evaluated), the others evaluated (:fetch a function...)."
   (cl-loop for (key _) on props by #'cddr
-           unless (memq key agent-ui-panel--keys)
+           unless (memq key agent-ui-panels--keys)
            do (error "agent-ui-panel has %S: it has %s" key
-                     (mapconcat (lambda (k) (substring (symbol-name k) 1)) agent-ui-panel--keys ", ")))
+                     (mapconcat (lambda (k) (substring (symbol-name k) 1)) agent-ui-panels--keys ", ")))
   `(list ,@(cl-loop for (key value) on props by #'cddr
                     append (list key (if (eq key :ui) (list 'quote value) value)))))
 
@@ -94,7 +94,7 @@ none."
 
 ;; ====== READING ONE ======
 
-(defun agent-ui-panel--forms (file what)
+(defun agent-ui-panels--forms (file what)
   "FILE's top-level forms, read, not evaluated; an error for WHAT saying
 where it doesn't read."
   (with-temp-buffer
@@ -118,7 +118,7 @@ plist, :name (its file's), :file, :ui (its element, right as show has it),
 with it."
   (let* ((name (file-name-base file))
          (what (format "panel %s" name))
-         (forms (agent-ui-panel--forms file what))
+         (forms (agent-ui-panels--forms file what))
          (form (car forms))
          (props (cdr-safe form)))
     (unless (and (= (length forms) 1) (eq (car-safe form) 'agent-ui-panel))
@@ -129,9 +129,9 @@ with it."
     (unless (and (listp props) (cl-evenp (length props)))
       (agent-ui--fail "%s: agent-ui-panel takes keys and their values (:ui ..., :fetch ...)" what))
     (cl-loop for (key _) on props by #'cddr
-             unless (memq key agent-ui-panel--keys)
+             unless (memq key agent-ui-panels--keys)
              do (agent-ui--fail "%s has %s: a panel has %s" what (agent-ui--show-value key)
-                                (mapconcat (lambda (k) (substring (symbol-name k) 1)) agent-ui-panel--keys ", ")))
+                                (mapconcat (lambda (k) (substring (symbol-name k) 1)) agent-ui-panels--keys ", ")))
     (let ((version (plist-get props :version)))
       (unless (memql version (list nil agent-ui-panel-version))
         (agent-ui--fail "%s is version %s: this Agent UI reads version %d"
@@ -150,7 +150,7 @@ with it."
 
 ;; ====== CHECKING ONE ======
 
-(defun agent-ui-panel--blocking (file)
+(defun agent-ui-panels--blocking (file)
   "The calls in FILE's code that wait (`agent-ui-panel-blocking', and
 accept-process-output with no timeout), outside its comments and strings:
 \"line N: NAME ...\" each."
@@ -178,7 +178,7 @@ accept-process-output with no timeout), outside its comments and strings:
                     found))))
         (nreverse found)))))
 
-(defun agent-ui-panel--compile (file name)
+(defun agent-ui-panels--compile (file name)
   "FILE's code (panel NAME's) compiled, its warnings (an error if it doesn't
 compile), their lines FILE's. In a function: at top level, a lambda's body
 isn't looked at (its warnings unsaid)."
@@ -187,7 +187,7 @@ isn't looked at (its warnings unsaid)."
         (progn
           (with-temp-file temp
             (setq-local coding-system-for-write 'utf-8)
-            (insert ";;; -*- lexical-binding: t; -*-\n(defun agent-ui-panel--checking ()\n")
+            (insert ";;; -*- lexical-binding: t; -*-\n(defun agent-ui-panels--checking ()\n")
             (let ((coding-system-for-read 'utf-8))
               (insert-file-contents file))
             (goto-char (point-max))
@@ -207,12 +207,12 @@ its waiting calls found. Returns (:ok t :panel NAME :file FILE :type TYPE
                    (string-match-p "lexical-binding: *t" (buffer-substring (point-min) (line-end-position)))))
          (warnings (append (unless cookie
                              (list "line 1: no -*- lexical-binding: t; -*- there (its code is read so anyway)"))
-                           (agent-ui-panel--compile file name))))
+                           (agent-ui-panels--compile file name))))
     (append (list :ok t :panel name :file file
                   :type (format "%s" (plist-get (plist-get panel :ui) :type)))
             (when (plist-get panel :every) (list :every (plist-get panel :every)))
             (list :warnings (vconcat warnings)
-                  :blocking (vconcat (agent-ui-panel--blocking file))))))
+                  :blocking (vconcat (agent-ui-panels--blocking file))))))
 
 (declare-function agent-ui--byte-compile "staging")
 
@@ -224,20 +224,22 @@ its waiting calls found. Returns (:ok t :panel NAME :file FILE :type TYPE
 ;; while it's open: its pane shown. q kills it; opened later (after a
 ;; restart too), it's read again and fetched anew: nothing of it is kept.
 
-(cl-defstruct (agent-ui-panel--state (:constructor agent-ui-panel--make)
-                                     (:conc-name agent-ui-panel--))
-  "An open project panel, in its canvas (`agent-ui-panel--state')."
-  name file root canvas)
+(cl-defstruct (agent-ui-panels--state (:constructor agent-ui-panels--make)
+                                     (:conc-name agent-ui-panels--))
+  "An open project panel, in its canvas (`agent-ui-panels--state'): what its
+script is given as PANEL. Its :ui (read), its script (its form evaluated),
+its fetches' timer, its commands running, its last error."
+  name file root canvas ui script timer processes error)
 
-(defvar-local agent-ui-panel--state nil
-  "In a project panel's canvas: the panel (an `agent-ui-panel--state').")
+(defvar-local agent-ui-panels--state nil
+  "In a project panel's canvas: the panel (an `agent-ui-panels--state').")
 
 (defun agent-ui-panel-canvas-name (name root)
   "The name of panel NAME's canvas, of the project at ROOT: \"NAME (PROJECT)\"
 \(no session's: tied to none)."
   (format "%s (%s)" name (file-name-nondirectory (directory-file-name root))))
 
-(defun agent-ui-panel--read-name ()
+(defun agent-ui-panels--read-name ()
   "A panel of the current project, picked."
   (let ((panels (agent-ui-panels)))
     (unless panels
@@ -251,27 +253,210 @@ its waiting calls found. Returns (:ok t :panel NAME :file FILE :type TYPE
 ending .el: a file): its :ui drawn in a canvas of its own, in its pane,
 selected. Open already: its pane shown. Interactively, the project's panels
 to pick from. Returns its canvas."
-  (interactive (list (agent-ui-panel--read-name)))
+  (interactive (list (agent-ui-panels--read-name)))
   (let* ((file (agent-ui-panel-file name dir))
          (root (or (agent-ui-panel-root (file-name-directory file))
                    (file-name-directory file)))
          (canvas-name (agent-ui-panel-canvas-name (file-name-base file) root))
          (open (get-buffer (agent-ui-canvas-buffer-name canvas-name))))
-    (if (and open (buffer-local-value 'agent-ui-panel--state open))
+    (if (and open (buffer-local-value 'agent-ui-panels--state open))
         (progn (pop-to-buffer open) open)
       ;; Read first: a wrong one leaves no canvas behind.
-      (let* ((panel (agent-ui-panel-read file))
+      (let* ((read (agent-ui-panel-read file))
              (canvas (let ((default-directory root))
-                       (agent-ui-canvas canvas-name))))
+                       (agent-ui-canvas canvas-name)))
+             (panel (agent-ui-panels--make :name (plist-get read :name) :file file :root root
+                                          :canvas canvas :ui (plist-get read :ui))))
         (with-current-buffer canvas
           (setq default-directory root
-                agent-ui-panel--state (agent-ui-panel--make :name (plist-get panel :name) :file file
-                                                            :root root :canvas canvas)))
+                agent-ui-panels--state panel)
+          (add-hook 'kill-buffer-hook #'agent-ui-panels--closed nil t))
         (condition-case err
-            (let ((agent-ui-display-function #'ignore)
-                  (agent-ui-file-directory root))
-              (agent-ui-show (plist-get panel :ui) :canvas canvas))
+            ;; Its elements' sources (commands) not started yet: they're
+            ;; its code too, run once it's allowed to.
+            (agent-ui-panels--draw panel (agent-ui-persist--without-sources (plist-get read :ui)))
           (error (kill-buffer canvas)
                  (signal (car err) (cdr err))))
         (pop-to-buffer canvas)
+        (agent-ui-panels--start panel (plist-get read :form))
         canvas))))
+
+(defun agent-ui-panels--draw (panel ui)
+  "UI, PANEL's elements, shown in its canvas (its files its root's)."
+  (let ((agent-ui-display-function #'ignore)
+        (agent-ui-file-directory (agent-ui-panels--root panel)))
+    (agent-ui-show ui :canvas (agent-ui-panels--canvas panel))))
+
+;; ====== ITS SCRIPT ======
+;; Its code runs as Emacs itself: allowed first (`agent-ui-panel-allow-
+;; function'), then its form evaluated (lexical, nothing global defined), its
+;; :ui drawn again with its sources, :start called, :fetch at once and every
+;; :every seconds; :stop when its canvas closes, its timer stopped, its
+;; commands killed. Each called with PANEL, in its root (`default-
+;; directory'); an error of one kept in PANEL and said, the others go on.
+
+(defvar agent-ui-panel-allow-function #'agent-ui-panels--ask
+  "Called with a panel (an `agent-ui-panels--state') whose code (its script,
+its elements' sources) is to run: non-nil lets it.")
+
+(defun agent-ui-panels--ask (panel)
+  "Whether the user lets PANEL's code run, asked."
+  (yes-or-no-p (format "Panel %s runs code from %s, as Emacs itself (its commands too). Run it? "
+                       (agent-ui-panels--name panel)
+                       (abbreviate-file-name (agent-ui-panels--file panel)))))
+
+(defun agent-ui-panels--code-p (form ui)
+  "Whether a panel (its FORM, its UI) has code to run: a script, or a source
+in its elements."
+  (or (cl-some (lambda (key) (plist-get (cdr form) key)) '(:fetch :start :stop))
+      (let ((found nil))
+        (cl-labels ((walk (e)
+                      (when (agent-ui--plist-p e)
+                        (when (plist-get e :source) (setq found t))
+                        (mapc #'walk (plist-get e :children)))))
+          (walk ui))
+        found)))
+
+(defun agent-ui-panels--failed (panel what err)
+  "PANEL's WHAT (\"fetch\", a command...) failed with ERR (an error, or a
+message): kept, said."
+  (let ((text (format "%s: %s" what (if (stringp err) err (agent-ui-error-message err)))))
+    (setf (agent-ui-panels--error panel) text)
+    (message "Agent UI: panel %s: %s" (agent-ui-panels--name panel) text)
+    nil))
+
+(defun agent-ui-panels--call (panel key)
+  "PANEL's script's KEY (:fetch, :start, :stop) called with it, in its root;
+an error of it kept and said."
+  (when-let* ((fn (plist-get (agent-ui-panels--script panel) key)))
+    (let ((default-directory (agent-ui-panels--root panel)))
+      (condition-case err
+          (funcall fn panel)
+        (error (agent-ui-panels--failed panel (substring (symbol-name key) 1) err))))))
+
+(defun agent-ui-panels--live-p (panel)
+  (buffer-live-p (agent-ui-panels--canvas panel)))
+
+(defun agent-ui-panels--start (panel form)
+  "PANEL's code started, if it has some and it's allowed: FORM (its file's)
+evaluated, its :ui drawn again with its sources, :start, :fetch now and
+every :every seconds."
+  (when (and (agent-ui-panels--code-p form (agent-ui-panels--ui panel))
+             (or (funcall agent-ui-panel-allow-function panel)
+                 (agent-ui-panels--failed panel "its code" "not run: not allowed"))
+             (agent-ui-panels--live-p panel))
+    (let ((script (condition-case err
+                      (let ((default-directory (agent-ui-panels--root panel)))
+                        (eval form t))
+                    (error (agent-ui-panels--failed panel "its code" err)))))
+      (setf (agent-ui-panels--script panel) script)
+      (condition-case err
+          (agent-ui-panels--draw panel (agent-ui-panels--ui panel))
+        (error (agent-ui-panels--failed panel "its :ui" err)))
+      (when script
+        (agent-ui-panels--call panel :start)
+        (agent-ui-panels--fetch panel)
+        (when-let* ((every (plist-get script :every)))
+          (setf (agent-ui-panels--timer panel)
+                (run-with-timer every every #'agent-ui-panels--fetch panel)))))))
+
+(defun agent-ui-panels--fetch (panel)
+  "PANEL's :fetch, once (stopped if its canvas is gone)."
+  (if (agent-ui-panels--live-p panel)
+      (agent-ui-panels--call panel :fetch)
+    (agent-ui-panels--stop panel)))
+
+(defun agent-ui-panels--stop (panel)
+  "PANEL's timer stopped, its commands killed, its :stop called."
+  (when (timerp (agent-ui-panels--timer panel))
+    (cancel-timer (agent-ui-panels--timer panel)))
+  (setf (agent-ui-panels--timer panel) nil)
+  (dolist (process (agent-ui-panels--processes panel))
+    (when (process-live-p process) (delete-process process)))
+  (setf (agent-ui-panels--processes panel) nil)
+  (when (agent-ui-panels--script panel)
+    (agent-ui-panels--call panel :stop)
+    (setf (agent-ui-panels--script panel) nil)))
+
+(defun agent-ui-panels--closed ()
+  "A panel's canvas closes (`kill-buffer-hook'): its script stopped."
+  (when agent-ui-panels--state
+    (agent-ui-panels--stop agent-ui-panels--state)))
+
+;; ====== WHAT ITS SCRIPT CALLS ======
+
+(defun agent-ui-panels--change (panel id props change)
+  "Element ID of PANEL changed by PROPS (a plist) with CHANGE
+\(`agent-ui-update' or `agent-ui-append'); a closed panel: nothing."
+  (when (agent-ui-panels--live-p panel)
+    (funcall change id props :canvas (agent-ui-panels--canvas panel))))
+
+(defun agent-ui-panel-update (panel id &rest props)
+  "Change PANEL's element ID by PROPS, as agent-ui update does:
+\(agent-ui-panel-update panel \"ci\" :rows rows). A property nil: back to its
+default. An error if PANEL has no element ID or the change makes it wrong."
+  (agent-ui-panels--change panel id props #'agent-ui-update))
+
+(defun agent-ui-panel-append (panel id &rest props)
+  "Add PROPS' lists to PANEL's element ID, as agent-ui append does: a table's
+rows (replaced by its key), a chart's values: (agent-ui-panel-append panel
+\"errors\" :values (list 3))."
+  (agent-ui-panels--change panel id props #'agent-ui-append))
+
+(defun agent-ui-panel-get (panel id)
+  "PANEL's element ID, its properties as they are now (a plist)."
+  (agent-ui-get id :canvas (agent-ui-panels--canvas panel)))
+
+(defun agent-ui-panels--output (text)
+  "A command's output TEXT: parsed JSON (objects as alists, arrays as
+lists, null and false nil) when it reads so; else TEXT."
+  (or (and (string-match-p "\\`[ \t\n]*[[{]" text)
+           (condition-case nil
+               (json-parse-string text :object-type 'alist :array-type 'list
+                                  :null-object nil :false-object nil)
+             (error nil)))
+      text))
+
+(defun agent-ui-panel-run (panel command callback)
+  "Run COMMAND (a list: a program and its arguments; a string: by the shell)
+in PANEL's root, without waiting: CALLBACK then called with its output (see
+`agent-ui-panels--output'), if it ends well (exit 0); else its error is
+PANEL's, said. Killed when PANEL closes. Returns its process."
+  (let* ((default-directory (agent-ui-panels--root panel))
+         (name (format "agent-ui-panel-%s" (agent-ui-panels--name panel)))
+         (out (generate-new-buffer (format " *%s*" name) t))
+         (err (generate-new-buffer (format " *%s stderr*" name) t))
+         (program (if (stringp command) command (car command)))
+         (process
+          (make-process
+           :name name :buffer out :stderr err :noquery t :connection-type 'pipe
+           :command (if (stringp command) (list shell-file-name shell-command-switch command) command)
+           :sentinel
+           (lambda (process _event)
+             (unless (process-live-p process)
+               (setf (agent-ui-panels--processes panel) (delq process (agent-ui-panels--processes panel)))
+               (let ((text (with-current-buffer out (buffer-string)))
+                     (errors (string-trim (with-current-buffer err (buffer-string))))
+                     (code (process-exit-status process)))
+                 (kill-buffer out)
+                 (when (buffer-live-p err) (kill-buffer err))
+                 (when (agent-ui-panels--live-p panel)
+                   (if (and (eq (process-status process) 'exit) (= code 0))
+                       (let ((default-directory (agent-ui-panels--root panel)))
+                         (condition-case e
+                             (funcall callback (agent-ui-panels--output text))
+                           (error (agent-ui-panels--failed panel program e))))
+                     (agent-ui-panels--failed
+                      panel program
+                      (format "exit %s%s" code
+                              (let ((last (car (last (split-string (if (string-empty-p errors) text errors)
+                                                                   "\n" t)))))
+                                (if last (concat ": " last) ""))))))))))))
+    ;; Its stderr's pipe: no query, no "finished" line in what it said.
+    (when-let* ((stderr (get-buffer-process err)))
+      (set-process-query-on-exit-flag stderr nil)
+      (set-process-sentinel stderr #'ignore))
+    (push process (agent-ui-panels--processes panel))
+    process))
+
+(declare-function agent-ui-persist--without-sources "persist")

@@ -30,6 +30,39 @@ One form, `agent-ui-panel`:
 - `:fetch`: a function of the panel, filling it; `:start` and `:stop`: run when it opens and closes.
 - `:version`: 1.
 
+## Its code
+
+When it opens, the user is asked to let its code run (it runs as Emacs itself; its elements' `source`s are its code
+too: not started before). Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes: each
+called with `panel`, in the project's root (`default-directory`). An error in one is kept and said; the others go on.
+Its code fills it with:
+
+- `(agent-ui-panel-update panel ID :prop value ...)`: as `agent-ui update` (a value nil: back to its default).
+- `(agent-ui-panel-append panel ID :rows rows)`: as `agent-ui append` (a table's rows by key, a chart's values).
+- `(agent-ui-panel-get panel ID)`: the element's properties now.
+- `(agent-ui-panel-run panel COMMAND (lambda (output) ...))`: COMMAND (a list, or a string for the shell) run in the
+  root, **without waiting**; the function called with its output once it ends well: parsed JSON when it reads so
+  (objects as alists, `(alist-get 'name r)`; arrays as lists), else its text. A failing one (its exit, what it said)
+  is the panel's error. Killed when the panel closes. Any command, any language: a script of the project's too.
+
+Its code never waits (Emacs is frozen meanwhile, every `:every` seconds): no `shell-command-to-string`,
+`call-process`, `process-lines`, `url-retrieve-synchronously`, `sleep-for`. Emacs's own state it reads at once (its
+buffers, `project-current`, `vc`, flymake's diagnostics). Define nothing global: its helpers go inside the form
+(`cl-labels`).
+
+```elisp
+ :every 30
+ :fetch (lambda (panel)
+          (agent-ui-panel-run panel '("gh" "run" "list" "-L" "5" "--json" "number,conclusion")
+            (lambda (runs)
+              (agent-ui-panel-update panel "ci"
+                :rows (mapcar (lambda (r) (list (format "#%s" (alist-get 'number r))
+                                                (or (alist-get 'conclusion r) "running")))
+                              runs))))
+          (agent-ui-panel-update panel "dirty"
+            :value (length (seq-filter #'buffer-modified-p (project-buffers (project-current))))))
+```
+
 ## Checking it
 
 `agent-ui check NAME` (the MCP tool `check`) checks the file as you write it, nothing shown, nothing run: its `:ui` as

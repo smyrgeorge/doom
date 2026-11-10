@@ -397,6 +397,13 @@ and `:stop` run when it opens and closes; `:version` is 1. `agent-ui check NAME`
 as it's written, nothing run: its `:ui` as `show` would, its code compiled (its warnings), and the calls in it that
 wait, freezing Emacs (`shell-command-to-string`, `call-process`, `sleep-for`...).
 
+Its code runs as Emacs itself, so when it opens you're asked to let it (its elements' `source`s, commands, are its
+code too: not started before). Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes,
+each called with the panel, in the project's root. It fills the panel with `agent-ui-panel-update` and
+`agent-ui-panel-append` (as `agent-ui update` and `append`, on its own elements), `agent-ui-panel-get`, and
+`agent-ui-panel-run`, a command run without waiting, its output given to a function once it ends well (parsed JSON
+when it reads so), killed when the panel closes. An error in one is kept and said (`*Messages*`); the others go on.
+
 `SPC o u` lists the current project's panels; the one picked opens in a canvas of its own, `Agent UI: NAME (PROJECT)`,
 in its own pane, its directory the project's root, belonging to no session. Open already, its pane is shown. `q`
 closes it, its buffer killed; opened again later, after a restart too, it's read anew and drawn empty, its code
