@@ -126,7 +126,9 @@
                                           (+ label-w (* j cell-w) (/ cell-w 2)) (* 0.9 lh) :fill muted :text-anchor "middle"))
     (cl-loop for r in rows for row in (plist-get props :values) for i from 0
              do (let ((y (+ top (* i cell-h))))
-                  (agent-ui-chart--svg-text svg ctx r 0 (+ y (* 0.68 cell-h)) :fill fg)
+                  ;; Cut to its column (whole, it ran through the cells).
+                  (agent-ui-chart--svg-text svg ctx (agent-ui-truncate r (max 1 (- (/ label-w cw) 2)))
+                                            0 (+ y (* 0.68 cell-h)) :fill fg)
                   (cl-loop for v in row for j from 0
                            do (let ((color (agent-ui-heatmap--color props v range))
                                     (x (+ label-w (* j cell-w))))

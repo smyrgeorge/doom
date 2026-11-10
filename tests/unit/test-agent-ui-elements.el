@@ -1149,6 +1149,21 @@ a unit that isn't text is refused (it broke the drawing)."
 
 ;; ====== HEATMAP ======
 
+(defun +test-aue-svg (element width)
+  "ELEMENT drawn for the GUI at WIDTH columns (8 px, lines 16 px): its SVG."
+  (let ((text (agent-ui-render element (agent-ui-context :width width :graphic t :char-width 8 :line-height 16))))
+    (plist-get (cdr (get-text-property (text-property-not-all 0 (length text) 'display nil text) 'display text))
+               :data)))
+
+(ert-deftest agent-ui-elements/heatmap-gui-row-labels-cut ()
+  "In the GUI a long row label is cut to its column (it ran through the cells)."
+  (let ((svg (+test-aue-svg '(:type "heatmap" :rows ("test_parser_handles_unicode_identifiers" "lexer")
+                              :columns ("linux" "macos" "windows")
+                              :values (("passed" "failed" "passed") ("passed" "passed" "flaky")))
+                            40)))
+    (should-not (string-match-p "test_parser_handles_unicode_identifiers" svg))
+    (should (string-match-p ">test_parser[^<]*&#8230;</text>" svg))))
+
 (ert-deftest agent-ui-elements/heatmap-numbers ()
   (let ((element '(:type "heatmap" :rows ("a" "b") :columns ("mon" "tue") :values ((1 5) (nil 9)))))
     (should (equal (+test-aue-draw element)
