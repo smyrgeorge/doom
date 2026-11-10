@@ -430,6 +430,17 @@ and a panel's border around it)."
 
 ;; ====== CHART ======
 
+(ert-deftest agent-ui-elements/chart-equal-huge-values ()
+  "Equal huge values (1e17): a flat line, one bin (the range's widening was
+lost in float precision: a span of 0, \"Arithmetic overflow error\")."
+  (dolist (kind '("line" "sparkline" "histogram" "bar"))
+    (let ((element (list :type "chart" :kind kind :values '(1e17 1e17))))
+      (should-not (string-search "⚠" (+test-aue-draw element :width 30)))
+      (unless (equal kind "sparkline")
+        (should (+test-aue-svg element 30)))))
+  (should (> (agent-ui-chart--above 1e17) 1e17))
+  (should (= (agent-ui-chart--above 5) 6)))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."

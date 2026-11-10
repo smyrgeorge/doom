@@ -156,6 +156,13 @@ to each's (a new name, a new series); :labels to its labels."
     (cl-loop for i below n
              collect (apply #'+ (mapcar (lambda (s) (max 0 (or (nth i (plist-get s :values)) 0))) series)))))
 
+(defun agent-ui-chart--above (low)
+  "A number clearly above LOW, for a range of equal values: LOW + 1, or more
+for a huge LOW (1e17 + 1 is 1e17 as a float: a span of 0, and the drawing
+broke)."
+  (let ((high (+ low (max 1 (* 1e-6 (abs low))))))
+    (if (> high low) high (+ low (abs low)))))
+
 (defun agent-ui-chart--range (props)
   "(LOW . HIGH) the chart spans: PROPS' min and max, else its values' (bars
 from 0)."
@@ -167,7 +174,7 @@ from 0)."
                       (min 0 (apply #'min 0 values))
                     (if values (apply #'min values) 0))))
          (high (or (plist-get props :max) (if values (apply #'max values) 1))))
-    (cons low (if (<= high low) (+ low 1) high))))
+    (cons low (if (<= high low) (agent-ui-chart--above low) high))))
 
 (defun agent-ui-chart--bar-scale (props width)
   "How long a bar of 1 is, WIDTH long for the highest: 0 if nothing's above
@@ -574,7 +581,7 @@ its values'), each labelled with its range."
   (let* ((values (plist-get (car (plist-get props :series)) :values))
          (low (or (plist-get props :min) (apply #'min values)))
          (high (or (plist-get props :max) (apply #'max values)))
-         (high (if (<= high low) (+ low 1) high))
+         (high (if (<= high low) (agent-ui-chart--above low) high))
          (bins (or (plist-get props :bins) (max 5 (min 20 (ceiling (sqrt (length values)))))))
          (step (/ (- high low) (float bins)))
          (counts (make-vector bins 0)))
