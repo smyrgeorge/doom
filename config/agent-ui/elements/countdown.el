@@ -103,7 +103,7 @@ one, from the clock now; a timestamp in epoch seconds)."
       (when word
         (svg-text svg word :x (- w cw) :y (* 2.4 lh) :text-anchor "end" :font-size (round (* 0.8 lh))
                   :font-family font :fill (agent-ui-color 'agent-ui-muted)))
-      (propertize "countdown" 'display (svg-image svg :scale 1 :ascent 'center)))))
+      (propertize "countdown" 'display (agent-ui-svg-image svg)))))
 
 (agent-ui-define countdown
   "Time that matters while waiting, ticking: SINCE a start (the time

@@ -449,3 +449,22 @@ its colour or outlined on a tint."
     (should-not (string-match-p "<path" (+test-auc-svg (agent-ui-pie 0 gui))))
     ;; Full: the disc filled over its ring.
     (should (= 2 (with-temp-buffer (insert (+test-auc-svg (agent-ui-pie 1 gui))) (how-many "<circle" (point-min) (point-max)))))))
+
+(ert-deftest agent-ui-core/images-without-a-background-of-their-own ()
+  "Agent UI's images have no background of their own, whatever gives one
+\(solaire-mode's advice on `create-image'): their transparent parts show
+what's behind them, a selection too (it had gaps there)."
+  (let ((advice (lambda (image) (plist-put (cdr image) :background "#21242b") image))
+        (gui (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+    (advice-add 'create-image :filter-return advice '((name . test-solaire)))
+    (unwind-protect
+        (progn
+          (should (plist-get (cdr (svg-image (svg-create 4 4))) :background))
+          (dolist (text (list (agent-ui-pill "bug" gui)
+                              (agent-ui-pie 0.5 gui)
+                              (agent-ui-render '(:type "chart" :values (1 3 2)) gui)
+                              (agent-ui-render '(:type "gauge" :value 40) gui)))
+            (let ((image (get-text-property 0 'display text)))
+              (should (eq (car image) 'image))
+              (should-not (plist-member (cdr image) :background)))))
+      (advice-remove 'create-image 'test-solaire))))

@@ -159,7 +159,7 @@ rest of the track in each zone's, dimmed; its target a ┃."
                   :x (if (equal (cdr end) "start") (- cx r (/ stroke 2.0)) (+ cx r (/ stroke 2.0)))
                   :y (+ cy (* 0.9 lh)) :text-anchor (cdr end)
                   :font-size (round (* 0.7 lh)) :font-family font :fill (agent-ui-color 'agent-ui-muted)))
-      (propertize "gauge" 'display (svg-image svg :scale 1 :ascent 'center)))))
+      (propertize "gauge" 'display (agent-ui-svg-image svg)))))
 
 (agent-ui-define gauge
   "One value against its range and thresholds: coverage against a target, a

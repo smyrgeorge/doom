@@ -239,8 +239,9 @@ pixels), no wider than its width."
                svg t t))
     (let ((room (* (plist-get ctx :char-width) (- (plist-get ctx :width) (if (eq display 'block) 2 0)))))
       (propertize "math" 'display
-                  (create-image svg 'svg t :ascent 'center
-                                :scale (if (and width (> width room)) (/ room width) 1))))))
+                  (agent-ui-image
+                   (create-image svg 'svg t :ascent 'center
+                                 :scale (if (and width (> width room)) (/ room width) 1)))))))
 
 (defun agent-ui-math--draw (props ctx)
   (let* ((tex (string-trim (plist-get props :tex)))

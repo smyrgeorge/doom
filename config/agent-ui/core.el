@@ -661,6 +661,18 @@ batch)."
                                           '(2)))
       a)))
 
+(defun agent-ui-image (image)
+  "IMAGE (`create-image''s) without a background of its own: its transparent
+parts show what's behind them, the buffer's background, or a selection's
+\(solaire-mode gives every image its buffer's background: a selection left
+it out, gaps in it)."
+  (cons (car image) (agent-ui--plist-delete (cdr image) :background)))
+
+(defun agent-ui-svg-image (svg)
+  "SVG as an image on its line (centred on it), without a background of its
+own (`agent-ui-image')."
+  (agent-ui-image (svg-image svg :scale 1 :ascent 'center)))
+
 (defun agent-ui--svg-font ()
   "The default face's family, for SVG text."
   (let ((family (face-attribute 'default :family nil t)))
@@ -711,7 +723,7 @@ the GUI (CTX), a rounded tag over it."
         (svg-text svg inner :x (/ w 2.0) :y (* 0.72 lh) :text-anchor "middle"
                   :font-size (round (* 0.7 lh)) :font-family (agent-ui--svg-font)
                   :fill (if filled bg color))
-        (propertize text 'display (svg-image svg :scale 1 :ascent 'center))))))
+        (propertize text 'display (agent-ui-svg-image svg))))))
 
 (defun agent-ui-pie (fraction ctx &optional face)
   "FRACTION (0 to 1) as a pie in FACE (the accent's by default), two columns:
@@ -740,7 +752,7 @@ over it."
             (svg-node svg 'path :fill color
                       :d (format "M %.2f %.2f L %.2f %.2f A %.2f %.2f 0 %d 1 %.2f %.2f Z"
                                  cx cy cx (- cy r) r r (if (> f 0.5) 1 0) ex ey)))))
-        (propertize text 'display (svg-image svg :scale 1 :ascent 'center))))))
+        (propertize text 'display (agent-ui-svg-image svg))))))
 
 ;; ====== JSON ======
 

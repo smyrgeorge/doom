@@ -162,7 +162,8 @@ SVG (its <svg can come past them); nil if it's none."
       (let* ((width (round (* (plist-get ctx :width) (plist-get ctx :char-width)
                               (/ (plist-get props :width) 100.0))))
              (height (* (plist-get props :height) (plist-get ctx :line-height)))
-             (image (create-image file type nil :max-width width :max-height height :ascent 'center)))
+             (image (agent-ui-image
+                     (create-image file type nil :max-width width :max-height height :ascent 'center))))
         (concat (agent-ui-button (propertize " " 'display image)
                                  (lambda () (funcall agent-ui-open-file-function file))
                                  (format "%s: RET opens it" (or (plist-get props :url) (abbreviate-file-name file))))

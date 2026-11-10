@@ -142,7 +142,7 @@ image, the border had gaps)."
          (x (+ (* cw (string-search "│" text)) (/ cw 2.0)))
          (svg (svg-create w (round height))))
     (svg-line svg x 0 x (round height) :stroke (agent-ui-color 'agent-ui-muted) :stroke-width 1)
-    (propertize text 'face 'agent-ui-muted 'display (svg-image svg :scale 1 :ascent 'center))))
+    (propertize text 'face 'agent-ui-muted 'display (agent-ui-svg-image svg))))
 
 (defun agent-ui-panel--image-p (text)
   "Whether TEXT shows an image somewhere (a chart's, stats' tiles...)."
@@ -201,9 +201,10 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
           (push (format "<line x1=\"%.1f\" y1=\"0\" x2=\"%.1f\" y2=\"%d\" stroke=\"%s\"/>" side side height muted)
                 parts)))
       (propertize " " 'display
-                  (create-image (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\">%s</svg>"
-                                        width height (string-join (nreverse parts)))
-                                'svg t :scale 1 :ascent 'center)))))
+                  (agent-ui-image
+                   (create-image (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\">%s</svg>"
+                                         width height (string-join (nreverse parts)))
+                                 'svg t :scale 1 :ascent 'center))))))
 
 (defun agent-ui-panel--draw (props ctx)
   (let* ((children (plist-get props :children))

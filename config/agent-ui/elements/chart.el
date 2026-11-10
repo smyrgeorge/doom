@@ -532,7 +532,7 @@ labels under them (none on another's), as two lines; nil without times."
 
 (defun agent-ui-chart--image (svg)
   "SVG as text showing it."
-  (propertize "chart" 'display (svg-image svg :scale 1 :ascent 'center)))
+  (propertize "chart" 'display (agent-ui-svg-image svg)))
 
 (defun agent-ui-chart--svg-text (svg ctx text x y &rest args)
   (apply #'svg-text svg text :x x :y y
