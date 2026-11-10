@@ -791,6 +791,21 @@ and GUI (it divided by 0: \"Arithmetic overflow error\")."
   (should (string-match-p "give a file or a url" (+test-aue-error '(:type "html"))))
   (should (string-match-p "give a file or a url" (+test-aue-error '(:type "html" :file "a" :url "b")))))
 
+;; doom-nwj.82
+(ert-deftest agent-ui-elements/html-entities-once ()
+  "An HTML card reads its entities once (&amp;lt; is &lt;: it was <), the
+numeric ones and the common named ones (&mdash; &#8212; were kept as
+they were), and its title on one line (it kept its newlines)."
+  (let ((file (+test-aue-html "<html><head><title>Code coverage report for
+     src/parser</title></head><body>
+<p>Write &amp;lt;b&amp;gt; here; &amp;amp; is; &mdash; &#8212; &#x2014;</p>
+<p>&ldquo;Done&rdquo;&hellip; &copy; 2026 &unknown; &#0; &lt;tag&gt;</p></body></html>")))
+    (should (equal (+test-aue-draw (list :type "html" :file file :lines 2) :width 300)
+                   (concat "◫ Code coverage report for src/parser\n" (abbreviate-file-name file) "\n"
+                           "Write &lt;b&gt; here; &amp; is; — — —\n"
+                           "“Done”… © 2026 &unknown; &#0; <tag>")))
+    (should (equal (agent-ui-html--entities "&AMP; &amp;amp; &#65;&#x42;") "&AMP; &amp; AB"))))
+
 (ert-deftest agent-ui-elements/progress-seamless-in-the-gui ()
   ;; Its blocks as spaces on their colour (glyphs leave seams); the counts
   ;; and label as they are.

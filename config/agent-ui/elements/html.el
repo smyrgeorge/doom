@@ -24,6 +24,30 @@
       (browse-url page)
     (browse-url-of-file page)))
 
+(defconst agent-ui-html--entities
+  '(("nbsp" . " ") ("lt" . "<") ("gt" . ">") ("quot" . "\"") ("apos" . "'") ("amp" . "&")
+    ("mdash" . "—") ("ndash" . "–") ("hellip" . "…") ("copy" . "©") ("reg" . "®") ("trade" . "™")
+    ("laquo" . "«") ("raquo" . "»") ("lsquo" . "‘") ("rsquo" . "’") ("ldquo" . "“") ("rdquo" . "”")
+    ("bull" . "•") ("middot" . "·") ("times" . "×") ("divide" . "÷") ("deg" . "°") ("plusmn" . "±")
+    ("euro" . "€") ("pound" . "£") ("yen" . "¥") ("cent" . "¢") ("sect" . "§") ("para" . "¶")
+    ("larr" . "←") ("rarr" . "→") ("uarr" . "↑") ("darr" . "↓") ("le" . "≤") ("ge" . "≥") ("ne" . "≠")
+    ("check" . "✓") ("shy" . "") ("zwj" . "") ("zwnj" . "") ("thinsp" . " ") ("ensp" . " ") ("emsp" . " "))
+  "HTML's common named entities, as text.")
+
+(defun agent-ui-html--entities (text)
+  "TEXT with its entities read once (&amp;lt; is &lt;: it was read twice):
+&#N;, &#xN; and the common named ones; others as they are."
+  (let ((case-fold-search nil))
+    (replace-regexp-in-string
+     "&\\(?:#\\([0-9]\\{1,7\\}\\)\\|#[xX]\\([0-9a-fA-F]\\{1,6\\}\\)\\|\\([a-zA-Z][a-zA-Z0-9]*\\)\\);"
+     (lambda (m)
+       (let ((n (cond ((match-string 1 m) (string-to-number (match-string 1 m)))
+                      ((match-string 2 m) (string-to-number (match-string 2 m) 16)))))
+         (cond (n (if (and (> n 0) (<= n #x10FFFF)) (string n) m))
+               ((cdr (assoc (match-string 3 m) agent-ui-html--entities)))
+               (t m))))
+     text t t)))
+
 (defun agent-ui-html--text-of (html)
   "HTML's title and its text: (TITLE . TEXT), scripts, styles and tags left
 out, its entities read, its spaces one."
@@ -37,14 +61,12 @@ out, its entities read, its spaces one."
     ;; Blocks as lines; tags gone.
     (setq html (replace-regexp-in-string "<\\(?:br\\|/p\\|/h[1-6]\\|/li\\|/tr\\|/div\\)\\b[^>]*>" "\n" html))
     (setq html (replace-regexp-in-string "<[^>]*>" " " html))
-    (cl-flet ((entities (s)
-                (dolist (e '(("&nbsp;" . " ") ("&lt;" . "<") ("&gt;" . ">") ("&quot;" . "\"")
-                             ("&#39;" . "'") ("&apos;" . "'") ("&amp;" . "&")))
-                  (setq s (string-replace (car e) (cdr e) s)))
-                (string-trim (replace-regexp-in-string "[ \t\r]+" " " s))))
-      (cons (and title (entities title))
+    ;; Its entities read once; its title on one line (its newlines kept, it
+    ;; was two).
+    (cl-flet ((spaces (s) (string-trim (replace-regexp-in-string "[ \t\r]+" " " s))))
+      (cons (and title (spaces (replace-regexp-in-string "[\n\r]+" " " (agent-ui-html--entities title))))
             (string-join (seq-remove #'string-empty-p
-                                     (mapcar #'entities (split-string (entities html) "\n")))
+                                     (mapcar #'spaces (split-string (agent-ui-html--entities html) "\n")))
                          "\n")))))
 
 (defun agent-ui-html--text (props ctx)
