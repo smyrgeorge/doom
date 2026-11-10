@@ -31,6 +31,9 @@
                                             unless (memq k '(:id :label :status))
                                             do (agent-ui--fail "graph: node %d has %s: a node has id, label, status"
                                                                i (agent-ui--show-value (substring (symbol-name k) 1))))
+                                   (let ((label (plist-get n :label)))
+                                     (unless (or (null label) (stringp label))
+                                       (agent-ui--fail "graph: node %d's label is text, not %s" i (agent-ui--show-value label))))
                                    (let ((status (let ((s (plist-get n :status))) (if (stringp s) (intern-soft s) (or s 'none)))))
                                      (unless (assq status agent-ui-graph--statuses)
                                        (agent-ui--fail "graph: node %d's status is ok, error, warning, active or none" i))
@@ -42,6 +45,9 @@
                                   ((and (listp e) (not (agent-ui--plist-p e)) (= (length e) 2) (cl-every #'stringp e))
                                    (list :from (car e) :to (cadr e)))
                                   ((and (agent-ui--plist-p e) (stringp (plist-get e :from)) (stringp (plist-get e :to)))
+                                   (let ((label (plist-get e :label)))
+                                     (unless (or (null label) (stringp label))
+                                       (agent-ui--fail "graph: edge %d's label is text, not %s" i (agent-ui--show-value label))))
                                    (list :from (plist-get e :from) :to (plist-get e :to) :label (plist-get e :label)))
                                   (t (agent-ui--fail "graph: edge %d must be [from, to], or {\"from\", \"to\", \"label\"}" i))))))
     ;; A node listed twice: one, its later status and label taking over (it

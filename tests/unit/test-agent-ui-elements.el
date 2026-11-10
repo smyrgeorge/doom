@@ -1298,6 +1298,14 @@ once (each was drawn twice, the status lost)."
     (should (eq (plist-get (car nodes) :status) 'error)))
   (should (equal (+test-aue-draw '(:type "graph" :nodes ("a" "b") :edges (("a" "b") ("a" "b")))) "a ─▶ b\nb")))
 
+(ert-deftest agent-ui-elements/graph-labels-are-text ()
+  "A node's or an edge's label that isn't text is refused, saying so (it
+broke the drawing: \"stringp, 42\")."
+  (should (string-match-p "node 1's label is text, not 42"
+                          (+test-aue-error '(:type "graph" :nodes ((:id "a" :label 42))))))
+  (should (string-match-p "edge 1's label is text, not 7"
+                          (+test-aue-error '(:type "graph" :edges ((:from "a" :to "b" :label 7)))))))
+
 (ert-deftest agent-ui-elements/graph-skip-edges-cross-no-box ()
   "An edge skipping a layer goes round through the corridors between layers
 and a lane beside the stacks, whatever its ends' places in them (from or to
