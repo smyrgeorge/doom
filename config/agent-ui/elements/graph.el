@@ -144,9 +144,11 @@ each layer ordered by its nodes' parents' places."
              (gap-a (* 6 cw)) (gap-b (round (* 0.8 lh)))
              (where (make-hash-table :test #'equal))
              (depth (make-hash-table :test #'equal))
+             (extents nil)
              (along 0) (across-max 0))
         (cl-loop for layer in layers for d from 0 do (dolist (id layer) (puthash id d depth)))
         ;; Each layer a column (or a row, down); its nodes stacked across it.
+        ;; Its extent along noted: the corridors between layers hold no box.
         (dolist (layer layers)
           (let ((size (if down box-h (apply #'max (mapcar box-w layer))))
                 (across 0))
@@ -154,16 +156,18 @@ each layer ordered by its nodes' parents' places."
               (let ((w (funcall box-w id)))
                 (puthash id (if down (list across along w box-h) (list along across w box-h)) where)
                 (setq across (+ across (if down w box-h) (if down gap-a gap-b)))))
+            (push (cons along (+ along size)) extents)
             (setq across-max (max across-max across)
                   along (+ along size (if down (* 2 gap-b) gap-a)))))
-        (let* ((long (seq-some (lambda (e) (> (abs (- (gethash (plist-get e :to) depth) (gethash (plist-get e :from) depth))) 1))
-                               edges))
-               ;; Room for the arcs of edges skipping a layer: above the rows
-               ;; (beside the columns, down).
+        (setq extents (nreverse extents))
+        (let* ((skip-p (lambda (e) (> (- (gethash (plist-get e :to) depth) (gethash (plist-get e :from) depth)) 1)))
+               (long (seq-some skip-p edges))
+               ;; Lanes beside the stacks (above and below the rows; left and
+               ;; right of the columns, down), for edges skipping a layer.
                (arc (if long (round (* 0.9 box-h)) 0))
-               ;; Both sides: from the first row (column) an arc goes over it, from the others under them.
-               (natural-w (+ (if down across-max along) (if down (* 2 arc) 0)))
-               (natural-h (+ (if down along across-max) (if down 0 (* 2 arc))))
+               (natural-across (+ across-max (* 2 arc)))
+               (natural-w (if down natural-across along))
+               (natural-h (if down along natural-across))
                (pane (* cw (plist-get ctx :width)))
                (scale (min 1.0 (/ (float pane) (max 1 natural-w))))
                (svg (svg-create (round (* scale natural-w)) (round (* scale natural-h))
@@ -174,45 +178,58 @@ each layer ordered by its nodes' parents' places."
                                      (dom-node 'marker '((id . "arrow") (viewBox . "0 0 10 10") (refX . "10") (refY . "5")
                                                          (markerWidth . "7") (markerHeight . "7") (orient . "auto"))
                                                (dom-node 'path `((d . "M0,0 L10,5 L0,10 z") (fill . ,muted))))))
-          ;; The arcs' room: everything moved past it.
+          ;; The lanes' room: everything moved past the first.
           (when long
             (maphash (lambda (id box)
                        (puthash id (if down (cons (+ (car box) arc) (cdr box))
                                      (list (car box) (+ (cadr box) arc) (nth 2 box) (nth 3 box)))
                                 where))
                      where))
-          (dolist (e edges)
-            (pcase-let ((`(,x1 ,y1 ,w1 ,h1) (gethash (plist-get e :from) where))
-                        (`(,x2 ,y2 ,w2 ,h2) (gethash (plist-get e :to) where)))
-              (let* ((sx (if down (+ x1 (/ w1 2.0)) (+ x1 w1))) (sy (if down (+ y1 h1) (+ y1 (/ h1 2.0))))
-                     (tx (if down (+ x2 (/ w2 2.0)) x2)) (ty (if down y2 (+ y2 (/ h2 2.0))))
-                     (back (if down (<= ty sy) (<= tx sx)))
-                     (skip (> (abs (- (gethash (plist-get e :to) depth) (gethash (plist-get e :from) depth))) 1))
-                     ;; Skipping a layer: an arc over the boxes between, not through them.
-                     (bend (if back 60 (* 0.5 (if down (- ty sy) (- tx sx))))))
-                (svg--append svg (dom-node 'path `((d . ,(cond
-                                                          ((and skip down)
-                                                           (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" sx sy (- sx (+ arc (* 0.5 w1))) (+ sy bend) (- tx (+ arc (* 0.5 w2))) (- ty bend) tx ty))
-                                                          ((and skip (= y1 arc))
-                                                           ;; From the first row: over it.
-                                                           (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" (- sx (* 0.5 w1)) (- sy (* 0.5 h1))
-                                                                   (- sx (* 0.5 w1)) (- sy (* 0.5 h1) arc) (+ tx (* 0.5 w2)) (- ty (* 0.5 h2) arc)
-                                                                   (+ tx (* 0.5 w2)) (- ty (* 0.5 h2))))
-                                                          (skip
-                                                           ;; From another row: under the rows.
-                                                           (let ((under (+ arc across-max)))
-                                                             (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" (- sx (* 0.5 w1)) (+ sy (* 0.5 h1))
-                                                                     (- sx (* 0.5 w1)) (+ under arc) (+ tx (* 0.5 w2)) (+ under arc)
-                                                                     (+ tx (* 0.5 w2)) (+ ty (* 0.5 h2)))))
-                                                          (down
-                                                           (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" sx sy sx (+ sy bend) tx (- ty bend) tx ty))
-                                                          (t
-                                                           (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" sx sy (+ sx bend) sy (- tx bend) ty tx ty))))
-                                                   (fill . "none") (stroke . ,muted) (stroke-width . "1.5")
-                                                   (marker-end . "url(#arrow)"))))
-                (when (plist-get e :label)
-                  (agent-ui-chart--svg-text svg ctx (plist-get e :label) (/ (+ sx tx) 2) (- (/ (+ sy ty) 2) 4)
-                                            :fill muted :text-anchor "middle")))))
+          (cl-labels ((box (id) (gethash id where))
+                      ;; A box's start and end along, its middle across.
+                      (a-start (id) (if down (nth 1 (box id)) (nth 0 (box id))))
+                      (a-end (id) (+ (a-start id) (if down (nth 3 (box id)) (nth 2 (box id)))))
+                      (c-mid (id) (if down (+ (nth 0 (box id)) (/ (nth 2 (box id)) 2.0))
+                                    (+ (nth 1 (box id)) (/ (nth 3 (box id)) 2.0))))
+                      ;; The middle of the corridor after layer D (past the
+                      ;; last, its trailing gap's).
+                      (after (d) (let ((this (nth d extents)) (next (nth (1+ d) extents)))
+                                   (/ (+ (cdr this) (if next (car next) (+ (cdr this) (if down (* 2 gap-b) gap-a)))) 2.0)))
+                      ;; A point at ALONG, ACROSS on the screen.
+                      (pt (a c) (if down (format "%.1f,%.1f" c a) (format "%.1f,%.1f" a c))))
+            (dolist (e edges)
+              (let* ((from (plist-get e :from)) (to (plist-get e :to))
+                     (skip (funcall skip-p e)))
+                (pcase-let ((`(,x1 ,y1 ,w1 ,h1) (box from))
+                            (`(,x2 ,y2 ,w2 ,h2) (box to)))
+                  (let* ((sx (if down (+ x1 (/ w1 2.0)) (+ x1 w1))) (sy (if down (+ y1 h1) (+ y1 (/ h1 2.0))))
+                         (tx (if down (+ x2 (/ w2 2.0)) x2)) (ty (if down y2 (+ y2 (/ h2 2.0))))
+                         (back (if down (<= ty sy) (<= tx sx)))
+                         (bend (if back 60 (* 0.5 (if down (- ty sy) (- tx sx)))))
+                         (d (cond
+                             (skip
+                              ;; Through the corridors and a lane, never a box:
+                              ;; out into the corridor after its layer, to the
+                              ;; lane on its side, along it, down the corridor
+                              ;; before the target's, into it.
+                              (let* ((c1 (c-mid from)) (c2 (c-mid to))
+                                     (lane (if (< (/ (+ c1 c2) 2) (/ natural-across 2.0))
+                                               (/ arc 2.0)
+                                             (- natural-across (/ arc 2.0))))
+                                     (k1 (after (gethash from depth)))
+                                     (k2 (after (1- (gethash to depth)))))
+                                (format "M%s L%s L%s L%s L%s L%s"
+                                        (pt (a-end from) c1) (pt k1 c1) (pt k1 lane)
+                                        (pt k2 lane) (pt k2 c2) (pt (a-start to) c2))))
+                             (down
+                              (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" sx sy sx (+ sy bend) tx (- ty bend) tx ty))
+                             (t
+                              (format "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" sx sy (+ sx bend) sy (- tx bend) ty tx ty)))))
+                    (svg--append svg (dom-node 'path `((d . ,d) (fill . "none") (stroke . ,muted) (stroke-width . "1.5")
+                                                       (stroke-linejoin . "round") (marker-end . "url(#arrow)"))))
+                    (when (plist-get e :label)
+                      (agent-ui-chart--svg-text svg ctx (plist-get e :label) (/ (+ sx tx) 2) (- (/ (+ sy ty) 2) 4)
+                                                :fill muted :text-anchor "middle")))))))
           (dolist (node nodes)
             (pcase-let ((`(,x ,y ,w ,h) (gethash (plist-get node :id) where))
                         (face (cadr (assq (plist-get node :status) agent-ui-graph--statuses))))

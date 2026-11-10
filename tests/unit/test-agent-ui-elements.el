@@ -1172,6 +1172,57 @@ a unit that isn't text is refused (it broke the drawing)."
 
 ;; ====== GRAPH ======
 
+(defun +test-aue-crossings (svg)
+  "The edges of graph SVG (paths with an arrow) crossing a box (a rect): a
+list of (D . BOX), D the path's, BOX (X Y W H). Their points sampled along
+each line and curve; a box's own edge (2 px) not counted."
+  (let ((boxes nil) (crossings nil) (start 0))
+    (while (string-match "<rect width=\"\\([0-9.]+\\)\" height=\"\\([0-9.]+\\)\" x=\"\\([0-9.-]+\\)\" y=\"\\([0-9.-]+\\)\"" svg start)
+      (push (mapcar #'string-to-number (list (match-string 3 svg) (match-string 4 svg) (match-string 1 svg) (match-string 2 svg)))
+            boxes)
+      (setq start (match-end 0)))
+    (setq start 0)
+    (while (string-match "<path d=\"\\([^\"]+\\)\"[^>]*marker-end" svg start)
+      ;; Where it ended, first: split-string below changes the match data.
+      (let* ((end (match-end 0))
+             (d (match-string 1 svg))
+             (numbers (mapcar #'string-to-number (split-string d "[^-0-9.]+" t)))
+             (points (cl-loop for (x y) on numbers by #'cddr collect (cons x y)))
+             (samples nil))
+        (setq start end)
+        (if (string-search "C" d)
+            ;; A cubic: M p0 C p1 p2 p3.
+            (pcase-let ((`(,p0 ,p1 ,p2 ,p3) points))
+              (dotimes (i 41)
+                (let* ((u (/ i 40.0)) (v (- 1 u))
+                       (f (lambda (a b c e) (+ (* v v v a) (* 3 v v u b) (* 3 v u u c) (* u u u e)))))
+                  (push (cons (funcall f (car p0) (car p1) (car p2) (car p3))
+                              (funcall f (cdr p0) (cdr p1) (cdr p2) (cdr p3)))
+                        samples))))
+          ;; Lines: M p0 L p1 L p2 ...
+          (cl-loop for (a b) on points while b
+                   do (dotimes (i 31)
+                        (let ((u (/ i 30.0)))
+                          (push (cons (+ (car a) (* u (- (car b) (car a)))) (+ (cdr a) (* u (- (cdr b) (cdr a)))))
+                                samples)))))
+        (dolist (box boxes)
+          (pcase-let ((`(,x ,y ,w ,h) box))
+            (when (seq-some (lambda (p) (and (< (+ x 2) (car p) (- (+ x w) 2)) (< (+ y 2) (cdr p) (- (+ y h) 2))))
+                            samples)
+              (push (cons d box) crossings))))))
+    crossings))
+
+(ert-deftest agent-ui-elements/graph-skip-edges-cross-no-box ()
+  "An edge skipping a layer goes round through the corridors between layers
+and a lane beside the stacks, whatever its ends' places in them (from or to
+a box not at a stack's edge, it went straight through the boxes there)."
+  (dolist (element '((:type "graph" :nodes ("a" "b" "xxxx" "yyyy")
+                      :edges (("a" "b") ("b" "xxxx") ("b" "yyyy") ("a" "yyyy")))
+                     (:type "graph" :nodes ("r" "p" "q" "s" "z" "w")
+                      :edges (("r" "p") ("r" "q") ("r" "s") ("p" "w") ("w" "z") ("q" "z") ("s" "z") ("q" "w")))
+                     (:type "graph" :nodes ("a" "b" "c") :edges (("a" "b") ("b" "c") ("a" "c")))))
+    (should-not (+test-aue-crossings (+test-aue-svg element 120)))))
+
 (ert-deftest agent-ui-elements/graph-layout ()
   (cl-flet ((layout (nodes edges)
               (agent-ui-graph-layout (mapcar (lambda (id) (list :id id)) nodes)
