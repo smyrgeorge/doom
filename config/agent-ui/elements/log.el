@@ -122,7 +122,7 @@ showed ^[[31m...), cursor moves, titles and links."
        "\n"
        (mapconcat (lambda (line)
                     (let ((face (nth 2 (assq (car line) agent-ui-log--levels)))
-                          (text (agent-ui-truncate (string-replace "\t" "    " (cdr line)) width)))
+                          (text (agent-ui-truncate (agent-ui-untabify (cdr line)) width)))
                       (if face (propertize text 'face face) text)))
                   shown "\n")))))
 

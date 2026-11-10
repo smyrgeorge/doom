@@ -233,7 +233,7 @@ column of marks for each parent: added if one is +, removed if one is -
                            (gutter (if (and number (not (eq kind 'removed)))
                                        (format (format "%%%dd " digits) number)
                                      (make-string (1+ digits) ?\s)))
-                           (body (agent-ui-truncate (concat mark " " (string-replace "\t" "    " text))
+                           (body (agent-ui-truncate (concat mark " " (agent-ui-untabify text))
                                                     (- width 3 digits)))
                            (shown (concat "  " (propertize gutter 'face 'agent-ui-muted)
                                           (if face (propertize body 'face face) body))))

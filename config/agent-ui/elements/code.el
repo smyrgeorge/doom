@@ -120,7 +120,7 @@ FILE's name (\": not found\"), or nil."
                                         (cl-remove-if-not (lambda (m) (eql (plist-get m :line) n)) (plist-get props :marks))
                                         #'< :key (lambda (m) (cl-position (plist-get m :kind) agent-ui-code--marks :key #'car))))
                                 (kind (and marks (assq (plist-get (car marks) :kind) agent-ui-code--marks)))
-                                (text (string-replace "\t" "    " line))
+                                (text (agent-ui-untabify line))
                                 (body (agent-ui-truncate text (- width gutter 3)))
                                 (notes (cl-loop for m in marks
                                                 when (plist-get m :note)

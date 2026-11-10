@@ -491,6 +491,28 @@ file name: …/parser.c)."
         ((< width 1) "")
         (t (concat "…" (reverse (truncate-string-to-width (reverse string) (1- width)))))))
 
+(defun agent-ui-untabify (string &optional width)
+  "STRING with its tabs as spaces up to the next tab stop, every WIDTH
+columns (`tab-width''s default, 8): tab-aligned text stays aligned (each
+tab 4 spaces, whatever its column, it didn't)."
+  (if (not (string-search "\t" string))
+      string
+    (let ((width (or width (default-value 'tab-width))))
+      (mapconcat
+       (lambda (line)
+         (let ((column 0) (parts (split-string line "\t")) (out nil))
+           (while parts
+             (push (car parts) out)
+             (setq column (+ column (string-width (car parts))))
+             (when (cdr parts)
+               (let ((spaces (- width (% column width))))
+                 (push (make-string spaces ?\s) out)
+                 (setq column (+ column spaces))))
+             (setq parts (cdr parts)))
+           (apply #'concat (nreverse out))))
+       (split-string string "\n")
+       "\n"))))
+
 (defun agent-ui-wrap (string width)
   "STRING with each line longer than WIDTH columns broken at spaces (a word
 wider than WIDTH, within it). Its lines are kept; their properties too. A

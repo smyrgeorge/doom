@@ -2017,6 +2017,21 @@ each in its kind's colour (the first mark only was shown)."
     (should (equal (+test-aue-draw element :width 24)
                    "1 ✗ x = f(y)\n    ← y undefined;\n    called often"))))
 
+;; doom-nwj.83
+(ert-deftest agent-ui-elements/tabs-to-their-stops ()
+  "A tab is spaces up to the next tab stop (every 8 columns) in code, diff
+and log: tab-aligned text stays aligned (each was 4 spaces: \"a    b\" and
+\"abc    b\")."
+  (should (equal (agent-ui-untabify "a\tb\nabc\tb\n\tc\nabcdefgh\ti") "a       b\nabc     b\n        c\nabcdefgh        i"))
+  (should (equal (agent-ui-untabify "é\tx" 4) "é   x"))
+  (should (equal (+test-aue-draw '(:type "code" :code "a\tb\nabc\tb"))
+                 "1 │ a       b\n2 │ abc     b"))
+  (should (equal (+test-aue-draw '(:type "log" :lines "a\tb\nabc\tb"))
+                 "2 lines\na       b\nabc     b"))
+  ;; In a diff: from its line's start, past its mark.
+  (should (equal (cddr (split-string (+test-aue-draw '(:type "diff" :diff "@@ -1,2 +1,2 @@\n-a\tb\n+abc\tb\n")) "\n"))
+                 '("        − a       b" "      1 + abc     b"))))
+
 (ert-deftest agent-ui-elements/code-wrong ()
   (should (string-match-p "give code, or a file" (+test-aue-error '(:type "code"))))
   (should (string-match-p "from is a line" (+test-aue-error '(:type "code" :code "x" :from 0))))
