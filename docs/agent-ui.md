@@ -397,6 +397,16 @@ and `:stop` run when it opens and closes; `:version` is 1. `agent-ui check NAME`
 as it's written, nothing run: its `:ui` as `show` would, its code compiled (its warnings), and the calls in it that
 wait, freezing Emacs (`shell-command-to-string`, `call-process`, `sleep-for`...).
 
+`SPC o u` lists the current project's panels; the one picked opens in a canvas of its own, `Agent UI: NAME (PROJECT)`,
+in its own pane, its directory the project's root, belonging to no session. Open already, its pane is shown. `q`
+closes it, its buffer killed; opened again later, after a restart too, it's read anew and drawn empty, its code
+filling it.
+
+| Key | Action |
+|---|---|
+| `SPC o u` | Open one of the current project's panels (`M-x agent-ui-open-panel`) |
+| `q` (in it) | Close it |
+
 ## In the conversation
 
 agent-shell owns its buffer's text, so an element isn't put there: it goes the ways agent-shell already has

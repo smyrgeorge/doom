@@ -101,6 +101,10 @@
 
 ;; ====== KEY BINDINGS ======
 
+;; A PROJECT'S PANELS (config/agent-ui/panels.el): SPC o u opens one of the
+;; current project's (.agent-ui/panels/), picked from them.
+(map! :leader :desc "Project panel" "o u" #'agent-ui-open-panel)
+
 ;; THE CANVAS (see above): Vim's keys, as Doom's other buffers'.
 (map! :map agent-ui-canvas-mode-map
       ;; q closes it for good: its pane and its buffer (killed, its elements

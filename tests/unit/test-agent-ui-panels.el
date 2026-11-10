@@ -156,3 +156,57 @@ project's panels said."
       (should (string-match-p "check: which panel\\? agent-ui check NAME (this project's: service)"
                               (agent-ui-error-message
                                (should-error (agent-ui-do "check" nil nil nil) :type 'agent-ui-error)))))))
+
+;; ====== OPENING ONE ======
+
+(ert-deftest agent-ui-panels/opened-on-demand ()
+  "Opened: its :ui drawn as it is in a canvas of its own (named after it
+and its project, no session's, its directory the project's), in its pane,
+selected; opened again: the same; closed, opened again anew (doom-3q5.2)."
+  (+test-aup `(("service" . ,+test-aup-service))
+    (save-window-excursion
+      (delete-other-windows)
+      (let* ((canvas (agent-ui-open-panel "service"))
+             (project (file-name-nondirectory (directory-file-name root))))
+        (unwind-protect
+            (progn
+              (should (equal (buffer-name canvas) (format "Agent UI: service (%s)" project)))
+              (should (eq (window-buffer (selected-window)) canvas))
+              (with-current-buffer canvas
+                (should (equal default-directory root))
+                (should-not agent-ui--session-buffer)
+                (should (equal (agent-ui-panel--name agent-ui-panel--state) "service"))
+                (should (equal (agent-ui-panel--root agent-ui-panel--state) root)))
+              (should (equal (buffer-local-value 'agent-ui--order canvas) '("service")))
+              (should (equal (plist-get (agent-ui-get "ci" :canvas canvas) :columns) '("Run" "Status")))
+              ;; Open already: its pane, the same canvas.
+              (select-window (split-window))
+              (switch-to-buffer "*scratch*")
+              (should (eq (agent-ui-open-panel "service" root) canvas))
+              (should (eq (window-buffer (selected-window)) canvas))
+              (should (equal (buffer-local-value 'agent-ui--order canvas) '("service")))
+              ;; Closed, opened again: anew.
+              (agent-ui-update "ci" '(:rows (("#1" "passed"))) :canvas canvas)
+              (kill-buffer canvas)
+              (setq canvas (agent-ui-open-panel "service" root))
+              (should-not (plist-get (agent-ui-get "ci" :canvas canvas) :rows)))
+          (when (buffer-live-p canvas) (kill-buffer canvas)))))))
+
+(ert-deftest agent-ui-panels/a-wrong-one-opens-nothing ()
+  "A wrong panel: said, no canvas left behind; none picked from a project
+with none."
+  (+test-aup '(("bad" . "(agent-ui-panel :ui (:type \"table\" :id \"t\" :colums (\"a\")))\n"))
+    (let ((before (agent-ui-canvases)))
+      (should-error (agent-ui-open-panel "bad") :type 'agent-ui-error)
+      (should (equal (agent-ui-canvases) before))))
+  (let ((empty (file-name-as-directory (make-temp-file "no-panels-" t))))
+    (unwind-protect
+        (cl-letf (((symbol-function 'project-current) #'ignore))
+          (let ((default-directory empty))
+            (should (string-match-p "No project here"
+                                    (cadr (should-error (agent-ui-panel--read-name) :type 'user-error))))))
+      (delete-directory empty t))))
+
+(ert-deftest agent-ui-panels/its-key ()
+  "SPC o u: one of the project's panels, opened."
+  (should (eq (lookup-key doom-leader-map "ou") #'agent-ui-open-panel)))

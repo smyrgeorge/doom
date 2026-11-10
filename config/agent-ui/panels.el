@@ -215,3 +215,63 @@ its waiting calls found. Returns (:ok t :panel NAME :file FILE :type TYPE
                   :blocking (vconcat (agent-ui-panel--blocking file))))))
 
 (declare-function agent-ui--byte-compile "staging")
+
+;; ====== OPENING ONE ======
+;; On demand: a canvas of its own (no session's), named after the panel and
+;; its project, in its own pane (config/tiling places it), selected; its
+;; directory the project's root (its commands run there, its files are
+;; there). Its :ui drawn as it is, empty; its script fills it. Opened again
+;; while it's open: its pane shown. q kills it; opened later (after a
+;; restart too), it's read again and fetched anew: nothing of it is kept.
+
+(cl-defstruct (agent-ui-panel--state (:constructor agent-ui-panel--make)
+                                     (:conc-name agent-ui-panel--))
+  "An open project panel, in its canvas (`agent-ui-panel--state')."
+  name file root canvas)
+
+(defvar-local agent-ui-panel--state nil
+  "In a project panel's canvas: the panel (an `agent-ui-panel--state').")
+
+(defun agent-ui-panel-canvas-name (name root)
+  "The name of panel NAME's canvas, of the project at ROOT: \"NAME (PROJECT)\"
+\(no session's: tied to none)."
+  (format "%s (%s)" name (file-name-nondirectory (directory-file-name root))))
+
+(defun agent-ui-panel--read-name ()
+  "A panel of the current project, picked."
+  (let ((panels (agent-ui-panels)))
+    (unless panels
+      (user-error (if (agent-ui-panel-root)
+                      (format "This project has no panels (%s)" agent-ui-panel-directory)
+                    "No project here")))
+    (completing-read "Panel: " panels nil t)))
+
+(defun agent-ui-open-panel (name &optional dir)
+  "Open panel NAME of DIR's project (default: the current buffer's; NAME
+ending .el: a file): its :ui drawn in a canvas of its own, in its pane,
+selected. Open already: its pane shown. Interactively, the project's panels
+to pick from. Returns its canvas."
+  (interactive (list (agent-ui-panel--read-name)))
+  (let* ((file (agent-ui-panel-file name dir))
+         (root (or (agent-ui-panel-root (file-name-directory file))
+                   (file-name-directory file)))
+         (canvas-name (agent-ui-panel-canvas-name (file-name-base file) root))
+         (open (get-buffer (agent-ui-canvas-buffer-name canvas-name))))
+    (if (and open (buffer-local-value 'agent-ui-panel--state open))
+        (progn (pop-to-buffer open) open)
+      ;; Read first: a wrong one leaves no canvas behind.
+      (let* ((panel (agent-ui-panel-read file))
+             (canvas (let ((default-directory root))
+                       (agent-ui-canvas canvas-name))))
+        (with-current-buffer canvas
+          (setq default-directory root
+                agent-ui-panel--state (agent-ui-panel--make :name (plist-get panel :name) :file file
+                                                            :root root :canvas canvas)))
+        (condition-case err
+            (let ((agent-ui-display-function #'ignore)
+                  (agent-ui-file-directory root))
+              (agent-ui-show (plist-get panel :ui) :canvas canvas))
+          (error (kill-buffer canvas)
+                 (signal (car err) (cdr err))))
+        (pop-to-buffer canvas)
+        canvas))))
