@@ -138,6 +138,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
   :check (lambda (props) ...)       ; optional: more than each property's kind
   :append (lambda (element patch) ...) ; optional: how its lists grow
   :prepare (lambda (element) ...)   ; optional: the element as it's kept
+  :extend (lambda (old new ctx) ...) ; optional: its drawing edited, not drawn again
   :text (lambda (props ctx) ...)    ; a propertized string
   :gui  (lambda (props ctx) ...))   ; optional: a string with an image
 ```
@@ -150,6 +151,11 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **`:append`** says how `agent-ui append` adds to it (a table's rows by key); without it, each list is added to.
 - **`:prepare`** turns the element into what's kept, each time it's shown or changed: for what it notes as time
   passes (a step's start, then how long it ran). Called again on its result, it must change nothing.
+- **`:extend`**, when the element was drawn as OLD and is now NEW (lines appended to it), returns edits making OLD's
+  drawing NEW's (`(replace LINE TEXT)`, `(delete LINE COUNT)`, `(insert BEFORE-END TEXT)`), or nil to draw it again.
+  An append to a long log or table draws only what's appended: under a millisecond at 1000 lines, where drawing it
+  again took 13 to 20. Used only at the width and kind of frame it was drawn for; a test compares it with drawing
+  it again.
 - **`:text` and `:gui`** take the element's properties (checked, defaults filled) and a context: `:width` in
   characters, `:graphic`, `:tick` for animations, the theme's colours. They return the text to insert; they don't touch
   the buffer. So a type is tested by calling them.

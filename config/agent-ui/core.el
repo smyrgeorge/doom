@@ -60,7 +60,7 @@ buffer's): while a request is answered, the agent's.")
 
 (cl-defstruct (agent-ui-type (:constructor agent-ui--make-type))
   "An element type (see `agent-ui-define')."
-  name doc props example animated text gui append check prepare file)
+  name doc props example animated text gui append check prepare extend file)
 
 (defvar agent-ui--types (make-hash-table :test #'eq)
   "The element types, by name (a symbol).")
@@ -119,7 +119,7 @@ as an `agent-ui-prop'."
     (_ (agent-ui--fail "%s: %S isn't a property: (NAME KIND DOC [:default VALUE] [:required t])"
                        type entry))))
 
-(cl-defun agent-ui--register (name doc &key props example animated text gui append check prepare file)
+(cl-defun agent-ui--register (name doc &key props example animated text gui append check prepare extend file)
   "Define the element type NAME (see `agent-ui-define'); replaces one so named."
   (unless (and (symbolp name) (string-match-p "\\`[a-z][a-z0-9-]*\\'" (symbol-name name)))
     (agent-ui--fail "%S: a type's name is a symbol of a-z, 0-9 and -" name))
@@ -127,14 +127,15 @@ as an `agent-ui-prop'."
     (agent-ui--fail "%s: no documentation string" name))
   (unless (functionp text)
     (agent-ui--fail "%s: no :text function drawing it" name))
-  (dolist (fn (list gui append check prepare (and (not (eq animated t)) animated)))
+  (dolist (fn (list gui append check prepare extend (and (not (eq animated t)) animated)))
     (when (and fn (not (functionp fn)))
       (agent-ui--fail "%s: %S isn't a function" name fn)))
   (let* ((props (mapcar (lambda (entry) (agent-ui--parse-prop name entry)) props))
          (keys (mapcar #'agent-ui-prop-key props))
          (type (agent-ui--make-type :name name :doc doc :props props :example example
                                     :animated animated :text text :gui gui
-                                    :append append :check check :prepare prepare :file file)))
+                                    :append append :check check :prepare prepare :extend extend
+                                    :file file)))
     (when (/= (length keys) (length (delete-dups (copy-sequence keys))))
       (agent-ui--fail "%s: a property is named twice" name))
     ;; Its example must be right: the agent copies it.
@@ -170,11 +171,18 @@ ARGS are keywords:
             checked, each time it's shown or changed: for what it notes as
             time passes (a step's start). Called again on what it returned:
             a second call changes nothing.
+  :extend   (lambda (OLD NEW CTX) ...) when it was drawn as OLD and is now
+            NEW (lines appended to it, say), both checked: the edits making
+            OLD's drawing NEW's, or nil to draw it again (optional: else it's
+            drawn again). Edits, a list done in order on its drawing's lines
+            (from 0): (replace LINE TEXT), (delete LINE COUNT), (insert
+            BEFORE-END TEXT), TEXT lines put before its last BEFORE-END lines
+            (0: at its end). For drawing only what's appended to a long one.
 
 Defining a type again replaces it."
   (declare (indent defun) (doc-string 2))
   (let ((unknown (cl-loop for (k _) on args by #'cddr
-                          unless (memq k '(:props :example :text :gui :animated :append :check :prepare))
+                          unless (memq k '(:props :example :text :gui :animated :append :check :prepare :extend))
                           collect k)))
     (when unknown
       (error "agent-ui-define %s: unknown keys %S" name unknown)))
@@ -187,6 +195,7 @@ Defining a type again replaces it."
                        :append ,(plist-get args :append)
                        :check ,(plist-get args :check)
                        :prepare ,(plist-get args :prepare)
+                       :extend ,(plist-get args :extend)
                        :file (or load-file-name buffer-file-name)))
 
 (defun agent-ui-undefine (name)

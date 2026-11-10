@@ -188,7 +188,14 @@ collecting garbage)."
       (replace-regexp-in-string
        "\t" " " (replace-regexp-in-string "\r?\n" "⏎" text)))))
 
-(defun agent-ui-table--text (props ctx)
+(defvar agent-ui-table--layouts (make-hash-table :test #'eq :weakness 'key)
+  "The layouts tables were drawn in (`agent-ui-table--layout-key'), by their
+rows (the list): an append draws only its rows if the layout stays.")
+
+(defun agent-ui-table--layout (props ctx)
+  "How PROPS' table is laid out in CTX: a plist of its parts (its cells as
+text, the rows drawn and their cells' widths, its header, columns shown,
+widths, alignments, buttons beside or under)."
   (let* ((columns (plist-get props :columns))
          (n (length columns))
          (all (mapcar (lambda (row)
@@ -236,6 +243,29 @@ collecting garbage)."
                                       (concat (agent-ui-truncate name (max 1 (- w 2)))
                                               (if descending " ↓" " ↑"))
                                     c))))
+    (list :columns columns :n n :all all :rows rows :measured measured :header header
+          :actions actions :beside beside :shown shown :widths widths :align align)))
+
+(defun agent-ui-table--layout-key (layout ctx)
+  "What of LAYOUT its drawn lines depend on (an append keeps them if it's
+the same): the width, the header, the columns shown, their widths and
+alignments, the buttons."
+  (list (plist-get ctx :width) (plist-get layout :header) (plist-get layout :shown)
+        (plist-get layout :widths) (plist-get layout :align)
+        (and (plist-get layout :actions) t) (plist-get layout :beside)))
+
+(defun agent-ui-table--build (layout ctx rows measured &optional full)
+  "ROWS' lines (MEASURED their cells' widths) laid out as LAYOUT says; FULL:
+the whole table, its header, \"no rows yet\" and what's left out too."
+  (let ((columns (plist-get layout :columns))
+        (n (plist-get layout :n))
+        (all (plist-get layout :all))
+        (header (plist-get layout :header))
+        (actions (plist-get layout :actions))
+        (beside (plist-get layout :beside))
+        (shown (plist-get layout :shown))
+        (widths (plist-get layout :widths))
+        (align (plist-get layout :align)))
     ;; Its text made plain in a buffer, where its cells' faces and columns go
     ;; noted, then put on the string taken out once: each made once (joined
     ;; as strings, every cell's properties were copied at each join; put in
@@ -285,7 +315,7 @@ collecting garbage)."
                                       (t (push m kept)))))
                             (setq marks (nconc (nreverse kept) marks)))))))
             ;; No column named: no header, the rows alone.
-            (unless (cl-every #'string-empty-p columns)
+            (when (and full (not (cl-every #'string-empty-p columns)))
               (line header 'bold t)
               (insert "\n"
                       ;; As wide as the lines: the last column's has no space after it.
@@ -307,14 +337,14 @@ collecting garbage)."
                                                                     (1- (plist-get ctx :width)))))
                           (t (line row nil t row-widths))))
               (insert " " (propertize "no rows yet" 'face 'agent-ui-muted)))
-            (when (> (length all) (length rows))
+            (when (and full (> (length all) (length rows)))
               (insert "\n " (propertize (format "… %d rows more" (- (length all) (length rows)))
                                         'face 'agent-ui-muted)))
-            (when (< shown n)
+            (when (and full (< shown n))
               (insert "\n " (propertize (agent-ui-truncate (format "… %d more %s: %s" (- n shown)
-                                                                     (if (= (- n shown) 1) "column" "columns")
-                                                                     (string-join (nthcdr shown columns) ", "))
-                                                             (1- (plist-get ctx :width)))
+                                                                   (if (= (- n shown) 1) "column" "columns")
+                                                                   (string-join (nthcdr shown columns) ", "))
+                                                           (1- (plist-get ctx :width)))
                                         'face 'agent-ui-muted)))
             (setq text (buffer-string))
             (erase-buffer))))
@@ -322,6 +352,37 @@ collecting garbage)."
       (dolist (m marks)
         (put-text-property (1- (nth 0 m)) (1- (nth 1 m)) (nth 2 m) (nth 3 m) text))
       text)))
+
+
+(defun agent-ui-table--text (props ctx)
+  (let ((layout (agent-ui-table--layout props ctx)))
+    ;; Its layout kept, by its rows: an append draws only its rows if it
+    ;; stays (`agent-ui-table--extend').
+    (puthash (plist-get props :rows) (agent-ui-table--layout-key layout ctx) agent-ui-table--layouts)
+    (agent-ui-table--build layout ctx (plist-get layout :rows) (plist-get layout :measured) t)))
+
+(defun agent-ui-table--extend (old new ctx)
+  "OLD's drawing edited into NEW's, NEW being OLD with rows appended (else
+nil: drawn again): the new rows' lines put after the others (before what's
+left out), if the layout stays (no column wider, nor aligned otherwise, the
+buttons where they were), nothing sorts them, and all are drawn."
+  (let ((old-rows (plist-get old :rows))
+        (new-rows (plist-get new :rows)))
+    (when (and old-rows
+               (> (length new-rows) (length old-rows))
+               (<= (length new-rows) agent-ui-max-rows)
+               (not (plist-get new :sort))
+               (equal (agent-ui--plist-delete old :rows) (agent-ui--plist-delete new :rows))
+               (cl-every #'equal old-rows new-rows))
+      (let* ((before (gethash old-rows agent-ui-table--layouts))
+             (layout (agent-ui-table--layout new ctx))
+             (key (agent-ui-table--layout-key layout ctx)))
+        (when (equal before key)
+          (puthash new-rows key agent-ui-table--layouts)
+          (let ((added (- (length new-rows) (length old-rows))))
+            (list (list 'insert (if (< (plist-get layout :shown) (plist-get layout :n)) 1 0)
+                        (agent-ui-table--build layout ctx (last (plist-get layout :rows) added)
+                                               (last (plist-get layout :measured) added))))))))))
 
 ;; ====== SORTING IN THE CANVAS ======
 
@@ -388,4 +449,5 @@ putting a prompt with its cells into the session's prompt."
             :rows (("lexer" "passed" "0.4s") ("parser" "running" nil)))
   :check #'agent-ui-table--check
   :append #'agent-ui-table--append
+  :extend #'agent-ui-table--extend
   :text #'agent-ui-table--text)

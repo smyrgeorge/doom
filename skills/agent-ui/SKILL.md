@@ -390,7 +390,8 @@ start) or discards it (its elements go with it): say what you made and why.
   the user's Emacs, on each change.
 - Optional: `:gui` (the same, for a graphic frame: a string with an SVG image, see `svg.el`), `:check` (more than
   each property's kind: signal with `agent-ui--fail`), `:append` (how lists grow), `:animated` (t, or a function of
-  PROPS), `:prepare` (the element as it's kept: what it notes as time passes).
+  PROPS), `:prepare` (the element as it's kept: what it notes as time passes), `:extend` (for a long one appended to:
+  edits to its drawing instead of drawing it again; see docs/agent-ui.md).
 - Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-format-number`, `agent-ui-spinner`.
 
 ## Following a long command: sources

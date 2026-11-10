@@ -1597,6 +1597,113 @@ out (shown raw: ^[[31m...), its level found in what's left."
     (should (equal (+test-aue-draw '(:type "log" :lines ((:level "warning" :text "\e[33mslow\e[0m"))))
                    "1 warning · 1 line\nslow"))))
 
+;; doom-cer
+(defun +test-aue--region (id)
+  "Element ID's drawing in the current canvas, as it is there."
+  (let ((entry (gethash id agent-ui--entries)))
+    (buffer-substring (agent-ui--entry-start entry) (agent-ui--entry-end entry))))
+
+(defun +test-aue--drawn-whole (id)
+  "Element ID drawn whole now, as the canvas draws it (its id on it)."
+  (propertize (agent-ui-render (agent-ui-get id) (plist-put (agent-ui--context) :id id)) 'agent-ui-id id))
+
+(defun +test-aue--same-drawing-p (a b)
+  "Whether A and B have the same text and, at each position, the same
+properties (however they're split)."
+  (and (string= a b)
+       (cl-loop for i below (length a)
+                always (equal (sort (seq-partition (text-properties-at i a) 2) (lambda (x y) (string< (car x) (car y))))
+                              (sort (seq-partition (text-properties-at i b) 2) (lambda (x y) (string< (car x) (car y))))))))
+
+(defmacro +test-aue--counting-whole-draws (&rest body)
+  "BODY, the elements drawn whole counted in `whole' (by id)."
+  `(let ((whole nil))
+     (cl-letf* ((draw (symbol-function 'agent-ui--draw))
+                ((symbol-function 'agent-ui--draw)
+                 (lambda (entry ctx) (push (agent-ui--entry-id entry) whole) (funcall draw entry ctx))))
+       ,@body)))
+
+(ert-deftest agent-ui-elements/log-appended-draws-only-its-lines ()
+  "A line appended to a long log: its counts line again, the lines shown no
+more dropped, the new ones at its end; not drawn whole (each line read again:
+12.9 ms at 1000 lines). The same as drawn whole; drawn whole when it shows
+as many as were appended, or its width changed."
+  (+test-aue-canvas
+    (with-current-buffer canvas
+      (agent-ui-show (list :id "log" :type "log" :show 5
+                           :lines (mapcar (lambda (i) (format "12:00:%02d INFO line %d" (% i 60) i)) (number-sequence 1 1000))))
+      (agent-ui--flush)
+      (+test-aue--counting-whole-draws
+        (dolist (lines '(("13:00:00 ERROR db: refused") ("a" "WARN b" "c") ("d")))
+          (agent-ui-append "log" (list :lines lines))
+          (agent-ui--flush)
+          (should (+test-aue--same-drawing-p (+test-aue--region "log") (+test-aue--drawn-whole "log"))))
+        (should-not whole)
+        ;; Counted: the last 1000 kept (keep).
+        (should (string-prefix-p "1 error · 1 warning · 1000 lines\n" (+test-aue--region "log")))
+        ;; As many as it shows: drawn whole.
+        (agent-ui-append "log" (list :lines '("1" "2" "3" "4" "5")))
+        (agent-ui--flush)
+        (should (equal whole '("log")))
+        (should (+test-aue--same-drawing-p (+test-aue--region "log") (+test-aue--drawn-whole "log")))
+        ;; Another width: drawn whole.
+        (setq whole nil)
+        (cl-letf* ((context (symbol-function 'agent-ui--context))
+                   ((symbol-function 'agent-ui--context)
+                    (lambda () (plist-put (funcall context) :width 30))))
+          (agent-ui-append "log" (list :lines '("e")))
+          (agent-ui--flush)
+          (should (equal whole '("log")))
+          (should (+test-aue--same-drawing-p (+test-aue--region "log") (+test-aue--drawn-whole "log")))))
+      ;; The element after it untouched.
+      (agent-ui-show '(:id "after" :type "text" :text "below"))
+      (agent-ui--flush)
+      (agent-ui-append "log" (list :lines '("f")))
+      (agent-ui--flush)
+      (should (string-suffix-p "f\n\nbelow\n\n" (buffer-substring-no-properties (point-min) (point-max)))))))
+
+(ert-deftest agent-ui-elements/table-appended-draws-only-its-rows ()
+  "Rows appended to a table: their lines after the others (before what's
+left out), not drawn whole, the same as drawn whole; drawn whole when a
+column widens, it's sorted, or its rows are more than drawn."
+  (+test-aue-canvas
+    (with-current-buffer canvas
+      (agent-ui-show (list :id "t" :type "table" :columns '("Test" "Result" "Time")
+                           :rows (mapcar (lambda (i) (list (format "test_%03d" i) "passed" (format "%.1fs" (/ i 10.0))))
+                                         (number-sequence 1 300))))
+      (agent-ui--flush)
+      (+test-aue--counting-whole-draws
+        (agent-ui-append "t" '(:rows (("test_301" "FAILED" "0.2s"))))
+        (agent-ui--flush)
+        (agent-ui-append "t" '(:rows (("test_302" "passed" "1.0s") ("test_303" "error" ""))))
+        (agent-ui--flush)
+        (should-not whole)
+        (should (+test-aue--same-drawing-p (+test-aue--region "t") (+test-aue--drawn-whole "t")))
+        (should (string-suffix-p " test_303 │ error  │" (substring-no-properties (+test-aue--region "t"))))
+        ;; A wider cell: the column widens, drawn whole.
+        (agent-ui-append "t" '(:rows (("a much longer test name" "passed" "1s"))))
+        (agent-ui--flush)
+        (should (equal whole '("t")))
+        (should (+test-aue--same-drawing-p (+test-aue--region "t") (+test-aue--drawn-whole "t"))))
+      ;; Columns left out: the rows before their note.
+      (agent-ui-show (list :id "w" :type "table" :columns (mapcar (lambda (i) (format "C%d" i)) (number-sequence 1 30))
+                           :rows (list (mapcar (lambda (i) (format "cell%d" i)) (number-sequence 1 30)))))
+      (agent-ui--flush)
+      (+test-aue--counting-whole-draws
+        (agent-ui-append "w" (list :rows (list (mapcar (lambda (i) (format "x%d" i)) (number-sequence 1 30)))))
+        (agent-ui--flush)
+        (should-not whole)
+        (should (+test-aue--same-drawing-p (+test-aue--region "w") (+test-aue--drawn-whole "w")))
+        (should (string-match-p "\n … [0-9]+ more columns: .*\\'" (substring-no-properties (+test-aue--region "w")))))
+      ;; Sorted: drawn whole.
+      (agent-ui-show '(:id "s" :type "table" :columns ("N") :sort "N" :rows (("b") ("c"))))
+      (agent-ui--flush)
+      (+test-aue--counting-whole-draws
+        (agent-ui-append "s" '(:rows (("a"))))
+        (agent-ui--flush)
+        (should (equal whole '("s")))
+        (should (string-search " a\n b\n c" (substring-no-properties (+test-aue--region "s"))))))))
+
 (ert-deftest agent-ui-elements/log-appended ()
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines "a\nb") '(:lines "c\n")) :lines) '("a" "b" "c")))
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines ("a")) '(:lines ("b" "c"))) :lines) '("a" "b" "c")))

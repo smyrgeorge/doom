@@ -61,8 +61,9 @@ removed, cleared; not when the canvas closes.")
 canvas killed).")
 
 (cl-defstruct (agent-ui--entry (:constructor agent-ui--make-entry))
-  "An element of a canvas: its id, itself (a plist), where it's drawn."
-  id element start end)
+  "An element of a canvas: its id, itself (a plist), where it's drawn, and
+what's drawn there: (ELEMENT WIDTH GRAPHIC), its type's :extend editing it."
+  id element start end drawn)
 
 (defvar-local agent-ui--canvas-name nil "This canvas's name.")
 (defvar-local agent-ui--entries nil "This canvas's elements, by id.")
@@ -195,7 +196,62 @@ there."
                                            (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry)))
                           'agent-ui-id (agent-ui--entry-id entry)))
       ;; The end follows what's inserted at it; the start stays before it.
-      (set-marker end (point)))))
+      (set-marker end (point))))
+  (setf (agent-ui--entry-drawn entry)
+        (list (agent-ui--entry-element entry) (plist-get ctx :width) (plist-get ctx :graphic))))
+
+(defun agent-ui--edit (entry edits)
+  "EDITS (see `agent-ui-define''s :extend) done on ENTRY's drawing, in its
+place."
+  (let ((inhibit-read-only t)
+        (id (agent-ui--entry-id entry)))
+    (save-excursion
+      (save-restriction
+        (narrow-to-region (agent-ui--entry-start entry) (agent-ui--entry-end entry))
+        (dolist (edit edits)
+          (pcase edit
+            (`(replace ,line ,text)
+             (goto-char (point-min))
+             (forward-line line)
+             (delete-region (point) (line-end-position))
+             (insert (propertize text 'agent-ui-id id)))
+            (`(delete ,line ,count)
+             (goto-char (point-min))
+             (forward-line line)
+             (delete-region (point) (progn (forward-line count) (point))))
+            (`(insert ,before-end ,text)
+             (goto-char (point-max))
+             (if (= before-end 0)
+                 (insert (propertize (concat "\n" text) 'agent-ui-id id))
+               (forward-line (- 1 before-end))
+               (beginning-of-line)
+               (insert (propertize (concat text "\n") 'agent-ui-id id))))
+            (_ (error "Not an edit: %S" edit))))
+        (set-marker (agent-ui--entry-end entry) (point-max))))))
+
+(defun agent-ui--extend (entry ctx)
+  "ENTRY drawn again by editing its drawing (its type's :extend), from the
+element it was drawn as: an append draws only what's appended (a long log
+was drawn again whole, each line). Non-nil if so; nil if its type can't
+\(then it's drawn whole)."
+  (let* ((drawn (agent-ui--entry-drawn entry))
+         (old (car drawn))
+         (new (agent-ui--entry-element entry))
+         ;; Drawn at this width, for this kind of frame: else drawn whole.
+         (type (and old (not (eq old new))
+                    (equal (cdr drawn) (list (plist-get ctx :width) (plist-get ctx :graphic)))
+                    (equal (plist-get old :type) (plist-get new :type))
+                    (ignore-errors (agent-ui-type (plist-get new :type)))))
+         (extend (and type (agent-ui-type-extend type)))
+         (edits (and extend
+                     ;; Wrong, or failing: drawn whole, which says so.
+                     (ignore-errors
+                       (funcall extend (agent-ui-check type old) (agent-ui-check type new)
+                                (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry)))))))
+    (when edits
+      (agent-ui--edit entry edits)
+      (setf (car (agent-ui--entry-drawn entry)) new)
+      t)))
 
 (defun agent-ui--flush ()
   "Redraw the current canvas's dirty elements."
@@ -209,7 +265,9 @@ there."
             agent-ui--width (plist-get ctx :width))
       (dolist (id agent-ui--order)
         (when (member id dirty)
-          (agent-ui--draw (gethash id agent-ui--entries) ctx)))))
+          (let ((entry (gethash id agent-ui--entries)))
+            (or (agent-ui--extend entry ctx)
+                (agent-ui--draw entry ctx)))))))
   (agent-ui--animate))
 
 (defun agent-ui--dirty (ids)
