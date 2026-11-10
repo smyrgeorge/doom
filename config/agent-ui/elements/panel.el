@@ -171,9 +171,10 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
          (weights (or (plist-get props :weights) (make-list n 1)))
          (total (float (apply #'+ weights)))
          (room (- inner (* 3 (max 0 (1- n)))))
-         (widths (let ((ws (mapcar (lambda (w) (max 1 (floor (* room (/ w total))))) weights)))
-                   ;; What rounding left over, to the last.
-                   (append (butlast ws) (list (+ (car (last ws)) (- room (apply #'+ ws)))))))
+         (widths (when children
+                   (let ((ws (mapcar (lambda (w) (max 1 (floor (* room (/ w total))))) weights)))
+                     ;; What rounding left over, to the last.
+                     (append (butlast ws) (list (+ (car (last ws)) (- room (apply #'+ ws))))))))
          (row-image nil)
          (row (and (eq (plist-get props :layout) 'row) (> n 1)
                    (cl-every (lambda (w) (>= w (max 1 (plist-get props :min-width)))) widths)))

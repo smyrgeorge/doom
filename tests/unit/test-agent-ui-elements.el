@@ -1089,6 +1089,15 @@ taller), both cut to the tile: nothing overlaps, nothing spills out."
                           (let ((agent-ui-panel-depth 2))
                             (+test-aue-error '(:type "panel" :children ((:type "panel" :children ((:type "panel" :children ()))))))))))
 
+(ert-deftest agent-ui-elements/panel-empty ()
+  "No children (shown empty, appended to later): its placeholder, row or
+column, bordered or not (it broke working out widths for none)."
+  (dolist (element '((:type "panel" :layout "row") (:type "panel" :children ())
+                     (:type "panel" :layout "row" :border :false)))
+    (let ((text (+test-aue-draw element :width 30)))
+      (should-not (string-search "⚠" text))
+      (should (string-search "no elements" text)))))
+
 (ert-deftest agent-ui-elements/panel-never-under-a-column ()
   "However narrow: no child laid out at 0 columns or less (they hung, or
 broke), the border left out where it can't fit, every line within the width."
