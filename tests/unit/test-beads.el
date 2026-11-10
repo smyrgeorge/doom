@@ -591,6 +591,21 @@ priorities as badges, types with their icons in a graphic frame only."
   (should (equal (substring-no-properties (+my/beads--progress 0 0)) "────── 0/0"))
   (should (equal (substring-no-properties (+my/beads--progress 4 4)) "━━━━━━ 4/4")))
 
+(ert-deftest beads/an-epic-s-issues-in-a-steady-order ()
+  "Whatever order bd gives them in: in progress first, then by priority, then
+by id (.2 before .10)."
+  (let* ((epic '((id . "t-1") (status . "open") (priority . 1)))
+         (child (lambda (n status priority)
+                  `((id . ,(format "t-1.%d" n)) (status . ,status) (priority . ,priority) (parent . "t-1"))))
+         (issues (list epic (funcall child 10 "open" 2) (funcall child 2 "open" 2)
+                       (funcall child 3 "open" 1) (funcall child 4 "in_progress" 3)))
+         (ids (lambda (list) (mapcar (lambda (i) (alist-get 'id i)) list)))
+         (+my/beads--statuses nil))
+    (should (equal (funcall ids (+my/beads-nest-a issues)) '("t-1" "t-1.4" "t-1.3" "t-1.2" "t-1.10")))
+    (should (equal (funcall ids (+my/beads-nest-a (cons epic (reverse (cdr issues)))))
+                   '("t-1" "t-1.4" "t-1.3" "t-1.2" "t-1.10")))
+    (should (equal (gethash "t-1.10" +my/beads--depth) 1))))
+
 (ert-deftest beads/bd-the-look ()
   "An epic, its issues under it (indented, in its section), its progress
 counting its closed one; labels as tags; one blocked by an open bug in the

@@ -227,6 +227,17 @@ its labels as tags; cut to the room the window leaves it."
                 beads-list--column-defs)))
 
 ;; AN EPIC'S ISSUES UNDER IT
+(defun +my/beads--child< (a b)
+  "Whether issue A comes before B under their epic (see below)."
+  (let ((key (lambda (issue)
+               (list (if (equal (alist-get 'status issue) "in_progress") 0 1)
+                     (alist-get 'priority issue 2)))))
+    (let ((ka (funcall key a)) (kb (funcall key b)))
+      (if (equal ka kb)
+          (string-version-lessp (alist-get 'id a) (alist-get 'id b))
+        (or (< (car ka) (car kb))
+            (and (= (car ka) (car kb)) (< (cadr ka) (cadr kb))))))))
+
 (defun +my/beads-nest-a (issues)
   "`beads-list--sectioned-sort''s ISSUES, each issue right under its epic (if
 listed, in the same section), indented (`+my/beads--depth'); in order."
@@ -242,6 +253,11 @@ listed, in the same section), indented (`+my/beads--depth'); in order."
         (puthash (alist-get 'id parent)
                  (append (gethash (alist-get 'id parent) children) (list issue))
                  children)))
+    ;; In a steady order (bd's changes for issues made in the same second):
+    ;; in progress first, then by priority, then by id (.2 before .10).
+    (maphash (lambda (parent issues)
+               (puthash parent (sort issues #'+my/beads--child<) children))
+             children)
     (cl-labels ((walk (issue level)
                   (let ((id (alist-get 'id issue)))
                     (unless (gethash id depth)
