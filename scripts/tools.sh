@@ -45,8 +45,9 @@ esac
 # WHEN: doom (Doom itself), config (this config), or a module of init.el,
 #   ":CATEGORY MODULE" (when it's enabled) or ":CATEGORY MODULE +FLAG" (when
 #   it's enabled with FLAG).
-# PROGRAM: what shows it's there, for the check: a command (a/b: either), or
-#   font:NAME.
+# PROGRAM: what shows it's there, for the check: a command (a/b: either),
+#   font:NAME, or node:NAME (a global npm package without a command: a
+#   library node scripts use).
 # MACOS, APT, DNF: how this system gets it, space-separated:
 #   brew:NAME cask:NAME apt:NAME dnf:NAME   the system's packages
 #   npm:NAME uv:NAME pipx:NAME              npm -g, uv tool, pipx
@@ -69,6 +70,7 @@ TOOLS=(
   "config            | npm              | brew:node             | apt:nodejs apt:npm    | dnf:nodejs dnf:nodejs-npm | Claude Code's bridge, npm's servers"
   "config            | claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | Claude Code in Emacs (config/agent-shell.el)"
   "config            | bd               | brew:beads            | npm:@beads/bd         | npm:@beads/bd          | issues: Beads (config/beads.el)"
+  "config            | node:mathjax-full | npm:mathjax-full     | npm:mathjax-full      | npm:mathjax-full       | formulas typeset: Agent UI's math (config/agent-ui/elements/math.el)"
   "config            | python3          | builtin               | apt:python3           | dnf:python3            | treemacs's git status (config/treemacs.el)"
   "config            | xdg-open         | -                     | apt:xdg-utils         | dnf:xdg-utils          | other apps, the file manager (config/os.el)"
   "config            | lp               | -                     | apt:cups-client       | dnf:cups-client        | printing PDFs (config/os.el)"
@@ -384,10 +386,13 @@ fi
 
 # ====== CHECK ======
 
-# found PROGRAM: a command (a/b: either), or font:NAME.
+# found PROGRAM: a command (a/b: either), font:NAME, or node:NAME.
 found() {
   local program=$1 alternative
   case "$program" in
+    node:*)
+      local root
+      root=$(npm root -g 2>/dev/null) && [ -n "$root" ] && [ -d "$root/${program#node:}" ] ;;
     font:*)
       local name=${program#font:}
       # grep reads all (not -q): an early exit would kill fc-list, failing the

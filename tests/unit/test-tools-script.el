@@ -236,7 +236,8 @@ pipx, upgraded; packages-less servers named, to install by hand."
                  (+test-tools-script--run "macos" (+test-tools-script--init +test-tools-script--small)
                                           (concat "PATH=" bin ":/usr/bin:/bin") "--check")))
       (should (= status 0))
-      (should-not (seq-remove (lambda (call) (string-match-p "^brew \\(list\\|outdated\\)" call))
+      ;; Only questions: Homebrew's packages, npm's global modules.
+      (should-not (seq-remove (lambda (call) (string-match-p "^\\(brew \\(list\\|outdated\\)\\|npm root -g\\)" call))
                               (+test-tools-script--calls bin)))
       (should (string-match-p "^  ✔ git " output))
       (should (string-match-p "^  ✖ basedpyright .* missing$" output))
@@ -244,6 +245,33 @@ pipx, upgraded; packages-less servers named, to install by hand."
       (with-temp-buffer
         (insert output)
         (should (= (how-many "^  [✔✖] npm " (point-min) (point-max)) 1))))))
+
+(ert-deftest tools-script/mathjax-for-agent-ui-s-formulas ()
+  "MathJax (Agent UI's math): installed by npm, everywhere; checked as a
+global npm package (no command), in npm's global modules."
+  (let ((bin (+test-tools-script--fake-bin))
+        (modules (file-name-as-directory (make-temp-file (+test-tmp-file "tools-script/modules-") t))))
+    ;; npm root -g: this folder.
+    (with-temp-file (expand-file-name "npm" bin)
+      (insert "#!/bin/sh
+echo \"npm $*\" >> \"$(dirname \"$0\")/calls.log\"
+"
+              "[ \"$1\" = root ] && echo " (shell-quote-argument (directory-file-name modules)) "
+exit 0
+"))
+    (set-file-modes (expand-file-name "npm" bin) #o755)
+    (pcase-let ((`(,status . ,output)
+                 (+test-tools-script--run "macos" (+test-tools-script--init +test-tools-script--small)
+                                          (concat "PATH=" bin ":/usr/bin:/bin"))))
+      (should (= status 0))
+      (should (seq-some (lambda (call) (string-match-p "^npm install -g .*mathjax-full@latest" call))
+                        (+test-tools-script--calls bin)))
+      (should (string-match-p "^  ✖ node:mathjax-full .*math\\.el) missing$" output)))
+    (make-directory (expand-file-name "mathjax-full" modules))
+    (pcase-let ((`(,_ . ,output)
+                 (+test-tools-script--run "apt" (+test-tools-script--init +test-tools-script--small)
+                                          (concat "PATH=" bin ":/usr/bin:/bin") "--check")))
+      (should (string-match-p "^  ✔ node:mathjax-full " output)))))
 
 (ert-deftest tools-script/plain-without-a-terminal ()
   "Output to a file or a pipe (a log, these tests): no colour codes."
