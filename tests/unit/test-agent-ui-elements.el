@@ -1002,6 +1002,37 @@ digits: lines from 100000 a column past the width)."
     (let ((agent-ui-max-rows 10))
       (should (string-suffix-p "     11 + s" (+test-aue-draw (list :type "diff" :diff diff)))))))
 
+;; doom-nwj.85
+(ert-deftest agent-ui-elements/diff-names-with-b-slash ()
+  "A name with \" b/\" in it: a rename's new name from its rename to line,
+others' where diff --git's halves match (split at the first \" b/\", a
+rename of x b/y.txt to c b/a.txt was named \"y.txt b/c b/a.txt\")."
+  (should (equal (+test-aue-draw '(:type "diff" :diff "diff --git a/x b/y.txt b/c b/a.txt
+similarity index 100%
+rename from x b/y.txt
+rename to c b/a.txt
+"))
+                 "▾ c b/a.txt  +0 −0"))
+  (should (equal (+test-aue-draw '(:type "diff" :diff "diff --git a/p b/q.c b/p b/q.c
+old mode 100644
+new mode 100755
+"))
+                 "▾ p b/q.c  +0 −0"))
+  ;; A rename with changes: its +++ line agrees.
+  (should (string-prefix-p "▾ c b/a.txt  +1 −1"
+                           (+test-aue-draw '(:type "diff" :diff "diff --git a/x b/y.txt b/c b/a.txt
+similarity index 90%
+rename from x b/y.txt
+rename to c b/a.txt
+--- a/x b/y.txt
++++ b/c b/a.txt
+@@ -1 +1 @@
+-a
++b
+"))))
+  ;; As before: a plain name.
+  (should (equal (agent-ui-diff--git-name "a/src/x.c b/src/x.c") "src/x.c")))
+
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).
   (let ((agent-ui-file-directory "/proj/")

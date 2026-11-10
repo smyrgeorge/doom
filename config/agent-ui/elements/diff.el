@@ -48,14 +48,22 @@ date (diff -u's, after a tab) and PREFIX (a/ or b/) left out."
     (if (string-prefix-p prefix name) (substring name (length prefix)) name)))
 
 (defun agent-ui-diff--git-name (rest)
-  "diff --git's REST (its names): the new one, unquoted, without its b/."
-  (cond
-   ((agent-ui-diff--unquote rest)
-    (let ((second (string-trim-left (cdr (agent-ui-diff--unquote rest)))))
-      (agent-ui-diff--name second "b/")))
-   ((string-match " \\(\"b/.*\"\\)\\'" rest) (agent-ui-diff--name (match-string 1 rest) "b/"))
-   ((string-match " b/\\(.*\\)\\'" rest) (match-string 1 rest))
-   (t "")))
+  "diff --git's REST (its names): the new one, unquoted, without its b/.
+Unquoted, a/X b/X split where both halves match (at the first \" b/\", a
+name with one in it was misread); a rename's, by its rename to line."
+  (let* ((n (length rest))
+         (k (/ (- n 5) 2)))
+    (cond
+     ((agent-ui-diff--unquote rest)
+      (let ((second (string-trim-left (cdr (agent-ui-diff--unquote rest)))))
+        (agent-ui-diff--name second "b/")))
+     ((string-match " \\(\"b/.*\"\\)\\'" rest) (agent-ui-diff--name (match-string 1 rest) "b/"))
+     ((and (string-prefix-p "a/" rest) (>= k 0) (= n (+ 5 (* 2 k)))
+           (equal (substring rest (+ 2 k) (+ 5 k)) " b/")
+           (equal (substring rest 2 (+ 2 k)) (substring rest (+ 5 k))))
+      (substring rest (+ 5 k)))
+     ((string-match " b/\\(.*\\)\\'" rest) (match-string 1 rest))
+     (t ""))))
 
 (defun agent-ui-diff--parse (text)
   "TEXT, a unified diff, as files: (:file NAME :added N :removed N :hunks
@@ -91,6 +99,11 @@ are still its."
          ((string-prefix-p "diff --git " line)
           (new-file)
           (plist-put file :file (agent-ui-diff--git-name (substring line (length "diff --git ")))))
+         ;; A rename's (or copy's) new name: its own line (diff --git's
+         ;; can't always be split).
+         ((and file (not hunk) (string-match "\\`\\(?:rename\\|copy\\) to \\(.*\\)\\'" line))
+          (let ((name (match-string 1 line)))
+            (plist-put file :file (or (car (agent-ui-diff--unquote name)) name))))
          ((and (string-prefix-p "--- " line) (not hunk))
           ;; A file's, unless it's this one's (after diff --git).
           (when (or (null file) (plist-get file :hunks)) (new-file))
