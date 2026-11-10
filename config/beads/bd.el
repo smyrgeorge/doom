@@ -33,11 +33,21 @@ keys symbols: beads.el's client makes them strings, its CLI reads symbols."
 (defun +my/beads--flags-a (args)
   "bd's command line ARGS, with the flags bd renamed (see above); a delete
 forced: without --force bd 1.x only previews it (and exits 0: beads.el said
-\"Deleted\", nothing was), and beads.el has asked first."
+\"Deleted\", nothing was), and beads.el has asked first. A list or ready of
+every issue: bd 1.x lists 50 at most (ready 100), and no closed ones (the
+list's status filter couldn't show them), unless asked; the list hides the
+closed ones itself (config/beads/hidden.el)."
   (let ((args (mapcar (lambda (arg) (or (cdr (assoc arg +my/beads--flags)) arg)) args)))
-    (if (and (equal (car args) "delete") (not (member "--force" args)))
-        (append args '("--force"))
-      args)))
+    (pcase (car args)
+      ((and "delete" (guard (not (member "--force" args))))
+       (append args '("--force")))
+      ("list"
+       (append args
+               (unless (member "--limit" args) '("--limit" "0"))
+               (unless (member "--status" args) '("--all"))))
+      ((and "ready" (guard (not (member "--limit" args))))
+       (append args '("--limit" "0")))
+      (_ args))))
 
 (defun +my/beads--no-daemon-a (flags)
   "beads.el's extra FLAGS, without --no-daemon (bd 1.x has no daemon, nor the flag)."

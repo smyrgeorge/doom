@@ -9,7 +9,7 @@
 (load (expand-file-name "beads-autoloads"
                         (file-name-directory (locate-library "beads")))
       nil t)
-(+test-load "config/window" "config/tiling" "config/beads")
+(+test-load "config/window" "config/tiling" "config/childframe" "config/banner" "config/beads")
 
 (defconst +test-beads--loaded-before (featurep 'beads)
   "Whether loading config/beads.el loaded beads.el (it mustn't).")
@@ -105,6 +105,44 @@ on *scratch*, and again after (Beads' buffers killed)."
 it in), its counts."
   (mapconcat (lambda (part) (if (stringp part) (substring-no-properties part) ""))
              (flatten-tree (ensure-list mode-line-format)) ""))
+
+(defun +test-beads--bulk (open closed)
+  "OPEN + CLOSED new issues (t-1...), imported into bd at once: the first
+CLOSED closed, the others open (P2 tasks). Not made one by one (slow), nor by
+bd create -f: its short ids, chosen at random, can clash among a hundred."
+  (let ((file (make-temp-file (+test-tmp-file "issues-") nil ".jsonl"
+                              (mapconcat
+                               (lambda (i)
+                                 (json-encode
+                                  `((id . ,(format "t-%d" i)) (title . ,(format "Issue %d" i))
+                                    (status . ,(if (<= i closed) "closed" "open"))
+                                    (priority . 2) (issue_type . "task")
+                                    (created_at . "2026-11-01T10:00:00Z")
+                                    (updated_at . "2026-11-01T10:00:00Z")
+                                    ,@(and (<= i closed) '((closed_at . "2026-11-02T10:00:00Z"))))))
+                               (number-sequence 1 (+ open closed)) "\n"))))
+    (+test-beads--run "bd" "import" file "--quiet")))
+
+(defun +test-beads--rows ()
+  "How many issues the current list shows."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((rows 0))
+      (while (not (eobp))
+        (when (tabulated-list-get-id) (cl-incf rows))
+        (forward-line 1))
+      rows)))
+
+(defun +test-beads--notices ()
+  "The current buffer's notices: (TEXT ACTION-LABELS) each."
+  (mapcar (lambda (notice) (list (nth 1 notice) (mapcar #'car (nth 2 notice))))
+          +my/banner--list))
+
+(defun +test-beads--press (label)
+  "The notice action LABEL, pressed."
+  (let ((action (seq-some (lambda (notice) (assoc label (nth 2 notice))) +my/banner--list)))
+    (should action)
+    (funcall (cdr action))))
 
 ;; ====== KEYS ======
 
@@ -235,7 +273,7 @@ while without one."
                   "create" '((title . "T") (issue_type . "bug") (acceptance_criteria . "ok")))
                  '("create" "T" "--type" "bug" "--acceptance" "ok")))
   (should (equal (beads-backend-bd--operation-to-cli-args "list" '((issue_type . "epic")))
-                 '("list" "--type" "epic")))
+                 '("list" "--type" "epic" "--limit" "0" "--all")))
   (should-not (member "--no-daemon" (beads-backend-bd--cli-extra-flags "duplicates")))
   ;; A delete forced (bd 1.x only previews it otherwise), once.
   (should (equal (beads-backend-bd--operation-to-cli-args "delete" '((ids . ("t-1"))))
@@ -364,6 +402,110 @@ closed), not 0s."
         (should (string-match-p "Total Issues: +4" text))
         (should (string-match-p "Closed: +1" text))
         (should (string-match-p "Blocked: +1" text))))))
+
+;; ====== WHAT THE LIST HIDES ======
+
+(ert-deftest beads/bd-every-issue-the-closed-ones-hidden-said ()
+  "60 open and 44 closed issues: the 60 shown (more than bd's 50), a notice
+over the column titles says 44 closed are hidden; Show closed, Hide closed;
+f s closed shows them; a filter said, Clear filter; one bd list and one bd
+stats a refresh, in the background too."
+  (+test-beads-with-project
+    (+test-beads--bulk 58 44)
+    (should (= (length (beads-client-list)) 102))
+    (+test-beads--create "Urgent one" :priority 0)
+    (+test-beads--create "Urgent two" :priority 0)
+    (+my/beads-project)
+    (with-current-buffer (+test-beads--list)
+      (should (= (+test-beads--rows) 60))
+      (should (equal (+test-beads--notices) '(("44 closed issues hidden." ("Show closed")))))
+      ;; Over the list's column titles, kept under them.
+      (should (equal (car header-line-format) +my/banner--header))
+      (should (string-match-p "Title" (format "%s" (cadr header-line-format))))
+      ;; A refresh: bd list and bd stats, no more.
+      (let ((bd 0))
+        (cl-letf* ((call-process (symbol-function 'call-process))
+                   ((symbol-function 'call-process)
+                    (lambda (program &rest args)
+                      (when (equal (file-name-nondirectory program) "bd") (cl-incf bd))
+                      (apply call-process program args))))
+          (beads-list-refresh t))
+        (should (= bd 2)))
+      (should (equal (+test-beads--notices) '(("44 closed issues hidden." ("Show closed")))))
+      (+test-beads--press "Show closed")
+      (should (= (+test-beads--rows) 104))
+      (should (equal (+test-beads--notices) '(("44 closed issues shown." ("Hide closed")))))
+      (+test-beads--press "Hide closed")
+      (should (= (+test-beads--rows) 60))
+      ;; f s closed: the closed ones, the filter said.
+      (setq beads-list--filter (beads-filter-by-status "closed"))
+      (beads-list-refresh t)
+      (should (= (+test-beads--rows) 44))
+      (should (equal (+test-beads--notices) '(("Filtered: status closed." ("Clear filter")))))
+      (+test-beads--press "Clear filter")
+      (should-not beads-list--filter)
+      (should (= (+test-beads--rows) 60))
+      ;; Another filter: closed ones it'd show hidden (none here).
+      (setq beads-list--filter (beads-filter-by-priority 0))
+      (beads-list-refresh t)
+      (should (= (+test-beads--rows) 2))
+      (should (equal (+test-beads--notices) '(("Filtered: priority P0." ("Clear filter")))))
+      (setq beads-list--filter (beads-filter-by-priority 2))
+      (beads-list-refresh t)
+      (should (= (+test-beads--rows) 58))
+      (should (equal (sort (+test-beads--notices) (lambda (a b) (string< (car a) (car b))))
+                     '(("44 closed issues hidden." ("Show closed"))
+                       ("Filtered: priority P2." ("Clear filter")))))
+      (+test-beads--press "Clear filter")
+      ;; In the background: the same.
+      (+my/beads-refresh-async (current-buffer))
+      (+test-beads--settle (current-buffer))
+      (should (= (+test-beads--rows) 60))
+      (should (equal (+test-beads--notices) '(("44 closed issues hidden." ("Show closed")))))
+      ;; Sorted (beads.el draws its column titles again): still there.
+      (beads-list-cycle-sort)
+      (should (equal (car header-line-format) +my/banner--header))
+      (should (equal (+test-beads--notices) '(("44 closed issues hidden." ("Show closed"))))))))
+
+(ert-deftest beads/bd-nothing-hidden-no-notice ()
+  (+test-beads-with-project
+    (+test-beads--create "Open")
+    (+test-beads--create "Also open")
+    (+my/beads-project)
+    (with-current-buffer (+test-beads--list)
+      (should (= (+test-beads--rows) 2))
+      (should-not +my/banner--list)
+      (should-not (equal (car-safe header-line-format) +my/banner--header)))))
+
+(ert-deftest beads/the-closed-ones-shown-by-default-if-set ()
+  (+test-beads-with-project
+    (+test-beads--create "Open")
+    (beads-client-close (+test-beads--create "Closed") "Done")
+    (let ((+my/beads-closed-shown t))
+      (+my/beads-project))
+    (with-current-buffer (+test-beads--list)
+      (should (= (+test-beads--rows) 2))
+      (should (equal (+test-beads--notices) '(("1 closed issue shown." ("Hide closed"))))))))
+
+(ert-deftest beads/filters-said ()
+  (should-not +my/beads-closed-shown)
+  (should (equal (+my/beads--filter-text (beads-filter-by-status "in_progress")) "status in progress"))
+  (should (equal (+my/beads--filter-text (beads-filter-by-type "bug")) "type bug"))
+  (should (equal (+my/beads--filter-text (beads-filter-unassigned)) "unassigned"))
+  (should (equal (+my/beads--filter-text (beads-filter-by-search "parser")) "search \"parser\""))
+  (should (equal (+my/beads--filter-text (beads-filter-ready)) "ready"))
+  (should (equal (+my/beads--filter-text (beads-filter-compose (beads-filter-by-label "emacs")
+                                                               (beads-filter-by-priority 1)))
+                 "label emacs, priority P1"))
+  (should (+my/beads--status-filter-p (beads-filter-compose (beads-filter-by-type "bug")
+                                                            (beads-filter-by-status "closed"))))
+  (should-not (+my/beads--status-filter-p (beads-filter-by-type "bug"))))
+
+(ert-deftest beads/bd-ready-every-issue ()
+  (should (equal (beads-backend-bd--operation-to-cli-args "ready" nil) '("ready" "--limit" "0")))
+  (should (equal (beads-backend-bd--operation-to-cli-args "ready" '((limit . 5))) '("ready" "--limit" "5")))
+  (should (equal (beads-backend-bd--operation-to-cli-args "list" '((status . "open")))
+                 '("list" "--status" "open" "--limit" "0"))))
 
 ;; ====== IN THE BACKGROUND ======
 

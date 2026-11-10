@@ -26,10 +26,17 @@
 (defvar +my/beads-init-command "bd init"
   "The command SPC o i types in a terminal to start tracking a project's issues.")
 
+;; The issue list shows the work still open: its closed issues hidden, a
+;; notice over it saying how many, with Show closed (config/beads/hidden.el).
+;; t: shown when a list opens.
+(defvar +my/beads-closed-shown nil
+  "Whether a new issue list shows its closed issues.")
+
 ;; ====== CODE ======
 
 (load! "beads/project")                 ; SPC o i, SPC o I
 (load! "beads/bd")                      ; mended for bd 1.x
 (load! "beads/refresh")                 ; in the background
+(load! "beads/hidden")                  ; closed issues, a filter: said
 (load! "beads/evil")                    ; its keys over Vim's
 (load! "beads/theme")                   ; the theme's colours

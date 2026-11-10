@@ -21,6 +21,10 @@ The command typed is `+my/beads-init-command` in `config/beads.el`.
 The list opens in a new pane where [tiling](editor.md#tiling) puts it, as Claude Code and Magit do; an issue opened
 from it in a new pane too, and the next ones in that pane, as its tabs. The preview (`P`) stays beside the list.
 
+It shows the work still open: a notice over it says how many closed issues it hides, with **Show closed** (then
+**Hide closed**), and `f s closed` lists only them. With a filter on, a notice says which, with **Clear filter**.
+`(setq +my/beads-closed-shown t)` in `config.el` shows the closed ones from the start.
+
 | Key | Action |
 |---|---|
 | `RET` | Open the issue |
