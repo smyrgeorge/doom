@@ -34,7 +34,7 @@ src/a.c; a tree grouped them in folders of their own)."
 (defun agent-ui-files--file (entry index)
   "ENTRY (a path, or an object) as (:path :status :added :removed :errors
 :line :note); an error naming file INDEX if it's wrong."
-  (cl-flet ((bad (what) (agent-ui--fail "files: file %d %s" index what)))
+  (cl-flet ((bad (what) (agent-ui--fail "files: file %d%s%s" index (if (string-prefix-p "'" what) "" " ") what)))
     (cond
      ((and (stringp entry) (not (string-blank-p entry)))
       (list :path (agent-ui-files--normal entry) :status 'none))
@@ -51,6 +51,9 @@ src/a.c; a tree grouped them in folders of their own)."
         (dolist (k '(:added :removed :errors :line))
           (when (and (plist-get entry k) (not (natnump (plist-get entry k))))
             (bad (format "'s %s must be a count" (substring (symbol-name k) 1)))))
+        ;; Else accepted, then drawing it failed.
+        (when (and (plist-get entry :note) (not (stringp (plist-get entry :note))))
+          (bad "'s note must be text"))
         (plist-put (plist-put (copy-sequence entry) :status status)
                    :path (agent-ui-files--normal (plist-get entry :path)))))
      (t (bad (format "is %s: a path, or {\"path\": ..., \"status\": ...}" (agent-ui--show-value entry)))))))

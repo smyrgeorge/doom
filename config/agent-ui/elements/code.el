@@ -85,6 +85,9 @@ FILE's name (\": not found\"), or nil."
                                   (agent-ui--fail "code: mark %d must be {\"line\": N, \"kind\": ..., \"note\": ...}" i))
                                 (unless (assq kind agent-ui-code--marks)
                                   (agent-ui--fail "code: mark %d's kind is error, warning, change or info" i))
+                                ;; Else accepted, then drawing it failed.
+                                (when (and (plist-get m :note) (not (stringp (plist-get m :note))))
+                                  (agent-ui--fail "code: mark %d's note must be text" i))
                                 (list :line (plist-get m :line) :kind kind :note (plist-get m :note))))))
 
 (defun agent-ui-code--draw (props ctx)

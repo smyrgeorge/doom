@@ -1222,6 +1222,24 @@ without a detail was never cut nor wrapped: 66 columns at 30)."
                            "     one\n"
                            " ⏵ Answer")))))
 
+;; doom-nwj.80
+(ert-deftest agent-ui-elements/notes-and-details-are-text ()
+  "A file's note, a code mark's note and a choice option's detail must be
+text: refused when shown (they were accepted, then drawing them failed:
+\"Wrong type argument: stringp, 5\")."
+  (should (string-match-p "files: file 2's note must be text"
+                          (+test-aue-error '(:type "files" :files ("b.c" (:path "a.c" :note 5))))))
+  (should (string-match-p "code: mark 1's note must be text"
+                          (+test-aue-error '(:type "code" :code "x" :marks ((:line 1 :note 5))))))
+  (should (string-match-p "choice: option 2's detail must be text"
+                          (+test-aue-error '(:type "choice" :question "Q?" :options ("a" (:label "b" :detail 5))))))
+  ;; Shown: refused whole, nothing shown.
+  (+test-aue-canvas
+    (should-error (agent-ui-show '(:id "f" :type "files" :files ((:path "a.c" :note 5)))) :type 'agent-ui-error)
+    (should-error (agent-ui-get "f") :type 'agent-ui-error))
+  ;; Text: as before.
+  (should (equal (+test-aue-draw '(:type "files" :files ((:path "a.c" :note "ok")))) "  a.c  ok")))
+
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.
   (should (string-match-p "options is required" (+test-aue-error '(:type "choice" :question "Q?" :options ()))))
@@ -1353,7 +1371,7 @@ was a file without a name: a blank row)."
 (ert-deftest agent-ui-elements/files-wrong ()
   (should (string-match-p "file 2 has no path" (+test-aue-error '(:type "files" :files ("a" (:status "added"))))))
   (should (string-match-p "status \"edited\"" (+test-aue-error '(:type "files" :files ((:path "a" :status "edited"))))))
-  (should (string-match-p "added must be a count" (+test-aue-error '(:type "files" :files ((:path "a" :added -1))))))
+  (should (string-match-p "file 1's added must be a count" (+test-aue-error '(:type "files" :files ((:path "a" :added -1))))))
   (should (string-match-p "has \"size\"" (+test-aue-error '(:type "files" :files ((:path "a" :size 3)))))))
 
 ;; ====== STATS ======

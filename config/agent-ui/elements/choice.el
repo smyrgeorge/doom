@@ -34,6 +34,11 @@
                              (cl-every (lambda (k) (memq k '(:label :detail)))
                                        (cl-loop for (k _) on o by #'cddr collect k))))
              do (agent-ui--fail "choice: option %d must be a label, or {\"label\": ..., \"detail\": ...}" i))
+    ;; Else accepted, then drawing it failed.
+    (cl-loop for o in options
+             for i from 1
+             when (and (agent-ui--plist-p o) (plist-get o :detail) (not (stringp (plist-get o :detail))))
+             do (agent-ui--fail "choice: option %d's detail must be text" i))
     (let ((labels (mapcar #'car (agent-ui-choice--options props))))
       (when (/= (length labels) (length (delete-dups (copy-sequence labels))))
         (agent-ui--fail "choice: two options have the same label"))
