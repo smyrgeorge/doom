@@ -59,7 +59,12 @@ checking, the sticky header and the error stripe, and offer to open them normall
 ## Sticky header
 
 The header line shows the classes and functions the top line is inside (`class Api { › fun call(x: Int) {`); in
-Markdown, the headings.
+Markdown, the headings (`# Guide › ## Setup`); in a Dockerfile, the stage (its `FROM` line). Before any, the file's
+path in its project.
+
+A tree-sitter language gets it from its major mode: the functions it declares (Python, Java, TypeScript, Rust, C, Lua,
+CSS, JSON, YAML...), else its outline (Markdown, Dockerfile). A mode declaring neither needs its scopes' node types in
+`+my/sticky-defun-types` (Kotlin's are there); an entry there also replaces a mode's own, set in `config.el`.
 
 ## Code
 

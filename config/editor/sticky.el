@@ -2,13 +2,25 @@
 ;; Sticky function header in code windows.
 ;; Loaded from config/editor.el.
 
+(defun +my/sticky--outline (language)
+  "The buffer's outline (`treesit-outline-predicate', Emacs 30+) if it tells
+LANGUAGE's scopes: LANGUAGE is the buffer's own and its mode declares no
+defuns. markdown-ts-mode's: its sections; dockerfile-ts-mode's: its stages
+\(the outline Emacs derives from a mode's Imenu settings)."
+  (and (bound-and-true-p treesit-outline-predicate)
+       (bound-and-true-p treesit-primary-parser)
+       (eq language (treesit-parser-language treesit-primary-parser))
+       (not (bound-and-true-p treesit-defun-type-regexp))
+       (not (and (fboundp 'treesit-thing-defined-p) (treesit-thing-defined-p 'defun language)))
+       treesit-outline-predicate))
+
 (defun +my/sticky--language ()
   "The tree-sitter language whose scopes to show at point: the buffer's own if
-we know its scopes (in Markdown, not that of the text or code block at point),
-else the one at point."
+our list knows its scopes, or its outline tells them (in Markdown, not the
+language of the code block at point), else the one at point."
   (let ((host (and (bound-and-true-p treesit-primary-parser)
                    (treesit-parser-language treesit-primary-parser))))
-    (if (and host (alist-get host +my/sticky-defun-types))
+    (if (and host (or (alist-get host +my/sticky-defun-types) (+my/sticky--outline host)))
         host
       (treesit-language-at (point)))))
 
@@ -20,17 +32,35 @@ else the one at point."
          (or (alist-get language +my/sticky-defun-types)
              (bound-and-true-p treesit-defun-type-regexp) ; older ts modes
              (and (fboundp 'treesit-thing-defined-p)       ; Emacs 30+: `defun' thing
-                  (treesit-thing-defined-p 'defun language))))))
+                  (treesit-thing-defined-p 'defun language))
+             (+my/sticky--outline language)))))           ; else its outline
 
 (defun +my/sticky--defun-node-p (node)
-  "Non-nil if tree-sitter NODE is a function/class/..."
+  "Non-nil if tree-sitter NODE is a function/class/... (or, its mode declaring
+none, a heading of its outline)."
   (let ((type (treesit-node-type node)))
     (if-let* ((re (alist-get (treesit-node-language node) +my/sticky-defun-types)))
         (string-match-p re type)
-      (pcase (bound-and-true-p treesit-defun-type-regexp)
-        ((and (pred stringp) re) (string-match-p re type))
-        (`(,re . ,pred) (and (string-match-p re type) (funcall pred node)))
-        (_ (treesit-node-match-p node 'defun t))))))
+      (if-let* ((outline (+my/sticky--outline (treesit-node-language node))))
+          (treesit-node-match-p node outline t)
+        (pcase (bound-and-true-p treesit-defun-type-regexp)
+          ((and (pred stringp) re) (string-match-p re type))
+          (`(,re . ,pred) (and (string-match-p re type) (funcall pred node)))
+          (_ (treesit-node-match-p node 'defun t)))))))
+
+(defun +my/sticky--heading-above (node outline bol)
+  "The nearest node starting before BOL among NODE's and its ancestors'
+earlier siblings that OUTLINE matches: in a flat outline (a Dockerfile's
+stages) a heading's lines come after it, not inside it."
+  (let (found)
+    (while (and node (not found))
+      (let ((sibling (treesit-node-prev-sibling node)))
+        (while (and sibling (not found))
+          (if (and (< (treesit-node-start sibling) bol) (treesit-node-match-p sibling outline t))
+              (setq found sibling)
+            (setq sibling (treesit-node-prev-sibling sibling)))))
+      (setq node (treesit-node-parent node)))
+    found))
 
 (defun +my/sticky--scope-starts (start)
   "Start positions of the scopes the line at START is inside, outermost first,
@@ -40,12 +70,20 @@ leaving out those that begin on that line or below."
     (skip-chars-forward " \t")
     (let ((bol (line-beginning-position)))
       (if (+my/sticky--treesit-p)
-          (let ((node (treesit-node-at (point) (+my/sticky--language))) starts)
+          (let* ((language (+my/sticky--language))
+                 (at (treesit-node-at (point) language))
+                 (node at) starts own)
             (while node
-              (when (and (+my/sticky--defun-node-p node)
-                         (< (treesit-node-start node) bol))
-                (push (treesit-node-start node) starts))
+              (when (+my/sticky--defun-node-p node)
+                (if (< (treesit-node-start node) bol)
+                    (push (treesit-node-start node) starts)
+                  (setq own t)))      ; a scope of its own starts on the line
               (setq node (treesit-node-parent node)))
+            ;; None around it, in a flat outline: the heading above it.
+            (when-let* (((not (or starts own)))
+                        (outline (+my/sticky--outline language))
+                        (heading (+my/sticky--heading-above at outline bol)))
+              (push (treesit-node-start heading) starts))
             (delete-dups starts))
         ;; No tree-sitter: the defun around the line, if it starts above it.
         (let ((pos (point)))

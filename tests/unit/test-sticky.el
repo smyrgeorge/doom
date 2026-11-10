@@ -112,18 +112,17 @@ MODE, shown in the only window; files visited by their true name, as Doom does."
 ;; ====== SETTINGS ======
 
 (ert-deftest sticky/settings ()
+  "Our list: only Kotlin, whose mode declares neither its defuns nor an
+outline (Markdown's come from its outline)."
   (should (equal (default-value '+my/sticky-separator) " › "))
-  (let ((kotlin (alist-get 'kotlin +my/sticky-defun-types))
-        (markdown (alist-get 'markdown +my/sticky-defun-types)))
+  (should (equal (mapcar #'car +my/sticky-defun-types) '(kotlin)))
+  (let ((kotlin (alist-get 'kotlin +my/sticky-defun-types)))
     (dolist (type '("class_declaration" "object_declaration" "function_declaration"
                     "companion_object"))
       (should (string-match-p kotlin type)))
     (dolist (type '("property_declaration" "class_body" "my_class_declaration"
                     "companion_object_x"))
-      (should-not (string-match-p kotlin type)))
-    (should (string-match-p markdown "section"))
-    (should-not (string-match-p markdown "atx_heading"))
-    (should-not (string-match-p markdown "sections"))))
+      (should-not (string-match-p kotlin type)))))
 
 ;; ====== LANGUAGE ======
 
@@ -175,6 +174,61 @@ from our list, the mode's regexp, or its `defun' thing."
       (should-not treesit-defun-type-regexp)
       (should-not (treesit-thing-defined-p 'defun 'kotlin))
       (should (+my/sticky--treesit-p)))))
+
+;; ====== OUTLINE ======
+
+(defconst +test-sticky--dockerfile
+  "ARG GO=1.22
+FROM golang:${GO} AS build
+WORKDIR /src
+RUN go build -o /app
+
+FROM alpine:3.20
+COPY --from=build /app /app
+CMD [\"/app\"]
+"
+  "Stages starting on lines 2 and 6; line 1 before them.")
+
+(ert-deftest sticky/outline-when-no-defuns ()
+  "A mode declaring no defuns: its outline (`treesit-outline-predicate') tells
+the scopes, in the buffer's own language; a mode declaring defuns: those."
+  (+test-sticky--needs json)
+  ;; A parser, no defuns declared, an outline: its headings are the scopes.
+  (with-temp-buffer
+    (insert "{\"a\": {\"b\": 1}}")
+    (setq-local treesit-primary-parser (treesit-parser-create 'json))
+    (should-not (+my/sticky--treesit-p))
+    (setq-local treesit-outline-predicate "\\`pair\\'")
+    (should (equal (+my/sticky--outline 'json) "\\`pair\\'"))
+    (should-not (+my/sticky--outline 'python))      ; not the buffer's language
+    (should (+my/sticky--treesit-p))
+    (should (+my/sticky--defun-node-p (+test-sticky--node "pair")))
+    (should-not (+my/sticky--defun-node-p (+test-sticky--node "number"))))
+  ;; json-ts-mode declares its defuns: they win over an outline.
+  (with-temp-buffer
+    (insert "{\"a\": 1}")
+    (json-ts-mode)
+    (setq-local treesit-outline-predicate "\\`number\\'")
+    (should-not (+my/sticky--outline 'json))
+    (should-not (+my/sticky--defun-node-p (+test-sticky--node "number")))
+    (should (+my/sticky--defun-node-p (+test-sticky--node "pair")))))
+
+(ert-deftest sticky/outline-of-markdown ()
+  "markdown-ts-mode declares no defuns, only an outline (its sections): the
+scopes without an entry in our list."
+  (+test-sticky--needs markdown markdown-inline)
+  (with-temp-buffer
+    (insert +test-sticky--markdown)
+    (markdown-ts-mode)
+    (should-not (alist-get 'markdown +my/sticky-defun-types))
+    (should (+my/sticky--outline 'markdown))
+    (should (+my/sticky--treesit-p))
+    (cl-flet ((node (type)              ; in the block tree (not the inline one)
+                (treesit-search-subtree (treesit-buffer-root-node 'markdown)
+                                        (lambda (n) (equal (treesit-node-type n) type)))))
+      (should (+my/sticky--defun-node-p (node "section")))
+      (should-not (+my/sticky--defun-node-p (node "atx_heading")))
+      (should-not (+my/sticky--defun-node-p (node "paragraph"))))))
 
 (ert-deftest sticky/defun-node-p ()
   (+test-sticky--needs python)
@@ -557,6 +611,27 @@ block too."
                       (19 . "# Guide › ## Usage")))
         (set-window-start nil (+test-sticky--goto-line (car case)))
         (should (equal (substring-no-properties (+my/sticky-header)) (cdr case)))))))
+
+(ert-deftest sticky/dockerfile-stages ()
+  "A Dockerfile (its outline Emacs's, from its Imenu): the stage a line is in,
+its FROM line; a flat outline, its lines after it, not in it. Before the
+first stage, and on a FROM line: the path."
+  (+test-sticky--needs dockerfile)
+  (skip-unless (require 'dockerfile-ts-mode nil t))
+  (+test-sticky "sticky/Dockerfile" +test-sticky--dockerfile #'dockerfile-ts-mode
+    (setq-local display-line-numbers nil)
+    (should +my/sticky-header-mode)
+    (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) default-directory)))
+      (dolist (case '((1 . "Dockerfile")
+                      (2 . "Dockerfile")
+                      (3 . "FROM golang:${GO} AS build")
+                      (4 . "FROM golang:${GO} AS build")
+                      (5 . "FROM golang:${GO} AS build")
+                      (6 . "Dockerfile")
+                      (7 . "FROM alpine:3.20")
+                      (8 . "FROM alpine:3.20")))
+        (set-window-start nil (+test-sticky--goto-line (car case)))
+        (should (equal (cons (car case) (substring-no-properties (+my/sticky-header))) case))))))
 
 (ert-deftest sticky/python-without-tree-sitter ()
   "A mode without tree-sitter: the enclosing defun only."

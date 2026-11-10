@@ -129,11 +129,11 @@ The menu shows groups in this order.")
   "Between the scopes in the header.")
 
 (defvar +my/sticky-defun-types
-  '((kotlin . "\\`\\(class\\|object\\|function\\)_declaration\\'\\|\\`companion_object\\'")
-    (markdown . "\\`section\\'"))        ; a heading and what's under it
-  "Tree-sitter node types of classes/functions, for languages whose mode doesn't
-declare them (kotlin-ts-mode, markdown-ts-mode); the others come from the major
-mode.")
+  '((kotlin . "\\`\\(class\\|object\\|function\\)_declaration\\'\\|\\`companion_object\\'"))
+  "Tree-sitter node types of the scopes the sticky header shows (classes,
+functions), by language, for languages whose mode declares neither its
+defuns nor an outline (kotlin-ts-mode); the others' come from their mode.
+An entry overrides a mode's own (set in config.el).")
 
 ;; SPELLING
 ;; CAMELCASE
