@@ -1768,7 +1768,8 @@ fit, else under it, wrapped (the line was cut with its note: \"{  ← …\")."
          (opened nil)
          (agent-ui-open-file-function (lambda (f) (push f opened) (find-file f)))
          (element (list :type "code" :file file :from 5 :to 7))
-         (text (agent-ui-render element (agent-ui-context :width 60))))
+         ;; Wide: its temp file's long name whole.
+         (text (agent-ui-render element (agent-ui-context :width 300))))
     ;; Its lines FROM to TO, its file named above; python-mode's colours (by its name).
     (should (equal (substring-no-properties text)
                    (concat (abbreviate-file-name file) "\n5 │ x5 = 5\n6 │ x6 = 6\n7 │ x7 = 7")))
@@ -1779,6 +1780,29 @@ fit, else under it, wrapped (the line was cut with its note: \"{  ← …\")."
     (should (= (line-number-at-pos) 6))
     (kill-buffer (current-buffer))
     (should (string-suffix-p "not found" (+test-aue-draw '(:type "code" :file "/no/such.py"))))))
+
+;; doom-nwj.70
+(ert-deftest agent-ui-elements/code-file-name-fits ()
+  "Its file's name above it, and a missing file's line, are cut to the width
+at their start, the file's name kept (never cut: 66 and 72 columns)."
+  (let* ((dir (make-temp-file (+test-tmp-file "code-") t))
+         (deep (expand-file-name "some/deeper/directory/structure/" dir))
+         (file (expand-file-name "file_name.txt" deep)))
+    (unwind-protect
+        (progn
+          (make-directory deep t)
+          (with-temp-file file (insert "one\ntwo\n"))
+          (dolist (width '(15 20 30))
+            (let ((lines (split-string (+test-aue-draw (list :type "code" :file file :from 1 :to 2) :width width) "\n")))
+              (dolist (line lines) (should (<= (string-width line) width)))
+              (should (string-suffix-p "file_name.txt" (car lines)))
+              (should (equal (cdr lines) '("1 │ one" "2 │ two"))))
+            (let ((missing (+test-aue-draw (list :type "code" :file (concat file ".gone")) :width width)))
+              (should (<= (string-width missing) width))
+              (should (string-suffix-p ": not found" missing))))
+          (should (equal (+test-aue-draw (list :type "code" :file (concat file ".gone")) :width 30)
+                         "…file_name.txt.gone: not found")))
+      (delete-directory dir t))))
 
 (ert-deftest agent-ui-elements/code-wrong ()
   (should (string-match-p "give code, or a file" (+test-aue-error '(:type "code"))))

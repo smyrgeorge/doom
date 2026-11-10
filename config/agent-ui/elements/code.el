@@ -47,12 +47,13 @@ emacs-lisp), else for FILE's name; nil if neither says."
       (buffer-string))))
 
 (defun agent-ui-code--source (props)
-  "The code: CODE, or FILE's lines FROM to TO; and an error, or nil."
+  "The code: CODE, or FILE's lines FROM to TO; and what's wrong, said after
+FILE's name (\": not found\"), or nil."
   (if-let* ((code (plist-get props :code)))
       (cons code nil)
     (let ((file (plist-get props :file)))
       (if (not (and file (file-readable-p file)))
-          (cons "" (format "%s: not found" (and file (abbreviate-file-name file))))
+          (cons "" ": not found")
         (with-temp-buffer
           (insert-file-contents file)
           (goto-char (point-min))
@@ -87,10 +88,15 @@ emacs-lisp), else for FILE's name; nil if neither says."
                (last-number (+ from (length lines) -1))
                (gutter (length (number-to-string last-number))))
     (if err
-        (propertize err 'face 'agent-ui-muted)
+        ;; Its file's name cut at its start (never cut: 72 columns at 15).
+        (propertize (concat (agent-ui-truncate-start (abbreviate-file-name file)
+                                                     (max 1 (- width (string-width err))))
+                            err)
+                    'face 'agent-ui-muted)
       (concat
        (when file
-         (concat (propertize (abbreviate-file-name file) 'face 'agent-ui-muted) "\n"))
+         (concat (propertize (agent-ui-truncate-start (abbreviate-file-name file) width) 'face 'agent-ui-muted)
+                 "\n"))
        (string-join
         (cl-loop for line in (seq-take lines agent-ui-max-rows)
                  for n from from
