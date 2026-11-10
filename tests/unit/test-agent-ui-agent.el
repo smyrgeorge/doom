@@ -178,6 +178,10 @@ killed after."
                                      " update build '{\"value\":5}'")
                              text))
       (should (string-search (concat "read " (abbreviate-file-name agent-ui-skill)) text))
+      ;; A bug in Agent UI itself: asked, filed in its own issues.
+      (should (string-search (concat "When Agent UI itself misbehaves") text))
+      (should (string-search (concat (abbreviate-file-name agent-ui-command) " bug '{\"title\"") text))
+      (should (string-search "never this project's" text))
       ;; Its example is right.
       (string-match "show '\\([^']+\\)'" text)
       (should (agent-ui-check "progress" (agent-ui-parse-json (match-string 1 text)))))))

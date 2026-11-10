@@ -44,7 +44,7 @@ names start with it).")
   "While a request is answered: the agent's directory (its sources' default).")
 
 (defconst agent-ui-operations
-  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot")
+  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot" "bug")
   "What cmd/agent-ui does.")
 
 ;; ====== THE CANVAS ======
@@ -142,6 +142,9 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
     ("snapshot"
      (append (list :ok t)
              (agent-ui-snapshot (agent-ui--need-id op id) :canvas canvas :directory agent-ui--request-cwd)))
+    ;; A bug in Agent UI itself, filed in its own issues (config/agent-ui/bug.el).
+    ("bug"
+     (agent-ui-bug-reply (agent-ui--payload-object payload "bug") canvas))
     ("define"
      (unless (and (stringp payload) (not (string-empty-p (string-trim payload))))
        (agent-ui--fail "define: give a type's code (a file, or on stdin)"))
@@ -177,7 +180,7 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
         (cond
          ((not (stringp op))
           (agent-ui--fail "batch: each operation has \"op\": show, update, append or remove"))
-         ((member op '("batch" "types" "list" "render" "define" "snapshot"))
+         ((member op '("batch" "types" "list" "render" "define" "snapshot" "bug"))
           (agent-ui--fail "batch: %s isn't done in a batch" op)))
         (agent-ui-do op (plist-get rest :id)
                      (if (equal op "show") rest (agent-ui--plist-delete rest :id))
@@ -215,7 +218,7 @@ its reply written there, as JSON. Never signals: an error is the reply."
                                   (t (agent-ui-parse-json json))))))
                     ;; Its canvas named in its JSON (not a batch's: each
                     ;; operation its own), else on its command line.
-                    (taken (if (member op '("show" "update" "append" "render"))
+                    (taken (if (member op '("show" "update" "append" "render" "bug"))
                                (agent-ui--take-canvas payload)
                              (cons nil payload)))
                     (payload (cdr taken))

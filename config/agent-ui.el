@@ -77,6 +77,22 @@
 ;; IMAGES FROM URLS: downloaded once, kept in Doom's cache.
 (setq agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir))
 
+;; BUGS IN AGENT UI
+;; When Agent UI itself misbehaves (a wrong drawing, an error, a property
+;; missing), from a session in any project: the agent files it (cmd/agent-ui
+;; bug, the MCP tool bug: asking you first), or you do, b on the element in
+;; its canvas (M-x agent-ui-report-bug anywhere). It goes into this config's
+;; Beads issues (a bug, labelled agent-ui), never the project's: found from
+;; Agent UI's code, bd run there (config/beads/file.el). The report carries
+;; the element shown (its JSON, its drawing), a repro from the agent, and the
+;; environment. A similar open bug gets it as a note instead. A message, and
+;; a notification while Emacs isn't in front (config/notify/agent-ui.el).
+;; Without issues there (or bd): nothing filed, the report given back, written
+;; (to the agent; to you, in a buffer, copied), to report by hand.
+(setq agent-ui-bug-function
+      (lambda (title description library new)
+        (+my/beads-file-bug title description :from library :labels '("agent-ui") :new new)))
+
 ;; WHAT THE AGENT IS TOLD
 ;; Claude Code's system prompt in agent-shell (config/agent-shell/context.el)
 ;; gets a paragraph on the canvas (`agent-ui-agent-context'): what it's for, the
@@ -91,6 +107,7 @@
       :n "gr" #'agent-ui-canvas-redraw
       :n "R"  #'agent-ui-review
       :n "a"  #'agent-ui-send-element
+      :n "b"  #'agent-ui-report-bug
       :n "s"  #'agent-ui-table-sort)
 
 ;; TYPES THE AGENT MAKES (see above): the list, a preview.
@@ -123,6 +140,7 @@
 (load! "agent-ui/review")
 (load! "agent-ui/source")
 (load! "agent-ui/snapshot")
+(load! "agent-ui/bug")
 
 ;; TYPES THE AGENT MAKES (see above): the ones you kept.
 (agent-ui-load-kept)

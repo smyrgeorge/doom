@@ -96,6 +96,14 @@ nil if it can't be reached."
       (list :name "batch" :description "Several operations at once: [{\"op\": \"show\", ...element}, {\"op\": \"update\", \"id\": ..., ...patch}, {\"op\": \"append\", ...}, {\"op\": \"remove\", \"id\": ...}]."
             :inputSchema '(:type "object" :properties (:operations (:type "array" :items (:type "object")))
                            :required ["operations"]))
+      (list :name "bug" :description "A bug in Agent UI itself (a wrong drawing, an error, a property missing), filed in its own issues, not this project's: ask the user first, then carry on with a workaround. Its title and description; what you expected and the workaround used; the element on the canvas showing it (its JSON and drawing go with it); a repro, an element with neutral data showing it (drawn as text). Replies with the issue; a similar open bug gets the report as a note (new: true files it anyway). Not filed (no issues set up): the reply's report, written, for the user to report by hand."
+            :inputSchema '(:type "object"
+                           :properties (:title (:type "string") :description (:type "string")
+                                        :expected (:type "string") :workaround (:type "string")
+                                        :element (:type "string" :description "The id of the element on the canvas showing it")
+                                        :repro (:type "object" :description "An element showing it, with neutral data")
+                                        :new (:type "boolean" :description "File it even if a similar bug is open"))
+                           :required ["title" "description"]))
       (list :name "define" :description "A type of your own: Emacs Lisp code with one agent-ui-define and its definitions, each named agent-ui-NAME-... (see the agent-ui skill). Checked, compiled, loaded, its example drawn (the reply's preview); the user keeps or discards it."
             :inputSchema '(:type "object" :properties (:code (:type "string")) :required ["code"])))))))
 
@@ -134,7 +142,10 @@ an error reply if it said nothing readable)."
                    ("clear" (list "clear"))
                    ("list" (list "list"))
                    ("types" (if (arg :type) (list "types" (arg :type)) (list "types")))
-                   ("batch" (list "batch" (json (or (arg :operations) []))))))
+                   ("batch" (list "batch" (json (or (arg :operations) []))))
+                   ;; The bug as given, but its canvas (an argument of its own).
+                   ("bug" (list "bug" (json (cl-loop for (k v) on arguments by #'cddr
+                                                     unless (eq k :canvas) append (list k v)))))))
            (reply
             (cond
              (args

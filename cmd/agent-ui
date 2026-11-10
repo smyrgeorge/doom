@@ -24,6 +24,12 @@
 #   agent-ui define [FILE]       a type of your own: its Emacs Lisp code
 #                                (one agent-ui-define), from FILE or stdin;
 #                                staged for the user to keep or discard
+#   agent-ui bug [JSON]          a bug in Agent UI itself, filed in its own
+#                                issues (not this project's): {"title",
+#                                "description", "expected", "workaround",
+#                                "element": ID, "repro": {element}} ->
+#                                {"ok": true, "issue": ID}; not filed:
+#                                {"ok": false, "error", "report"}
 #
 # --canvas NAME (any operation): the session's other canvas NAME ("tests"),
 # in a pane of its own, instead of its canvas; "canvas": NAME in the JSON
@@ -78,7 +84,7 @@ op=$1; shift
 id="" json="" takes_json=0 options=""
 if [ "$op" = render ] && [ "${1:-}" = --ansi ]; then options=ansi; shift; fi
 case "$op" in
-  show|batch|render)
+  show|batch|render|bug)
     takes_json=1
     [ $# -gt 1 ] && fail 2 "$op: too many arguments (JSON only)"
     [ $# -eq 1 ] && json=$1 ;;
@@ -105,7 +111,7 @@ case "$op" in
   clear|list)
     [ $# -gt 0 ] && fail 2 "$op: takes no arguments" ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define, snapshot" ;;
+    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define, snapshot, bug" ;;
 esac
 case "$id" in *$'\n'*) fail 2 "an id is one line" ;; esac
 

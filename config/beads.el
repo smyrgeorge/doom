@@ -44,3 +44,4 @@
 (load! "beads/place")                   ; kept through a refresh
 (load! "beads/evil")                    ; its keys over Vim's
 (load! "beads/theme")                   ; the theme's colours
+(load! "beads/file")                    ; a bug filed from code (Agent UI's)

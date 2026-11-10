@@ -56,7 +56,7 @@ recorded, its reply REPLY (a plist)."
   (+test-aum '(:ok t :types [(:name "progress" :doc "A progress bar: VALUE of MAX.\nMore." :props [(:name "value" :kind "number")])])
     (let ((tools (append (plist-get (plist-get (+test-aum-handle "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}") :result) :tools) nil)))
       (should (equal (mapcar (lambda (tool) (plist-get tool :name)) tools)
-                     '("show" "update" "append" "remove" "clear" "list" "types" "render" "snapshot" "batch" "define")))
+                     '("show" "update" "append" "remove" "clear" "list" "types" "render" "snapshot" "batch" "bug" "define")))
       ;; Each its schema; show's description has the types, from Emacs.
       (dolist (tool tools)
         (should (equal (plist-get (plist-get tool :inputSchema) :type) "object")))
@@ -92,6 +92,10 @@ recorded, its reply REPLY (a plist)."
       (should (equal (call "types" "{\"canvas\":\"tests\"}") '("types")))
       (should (equal (call "batch" "{\"operations\":[{\"op\":\"remove\",\"id\":\"b\"}]}")
                      '("batch" "[{\"op\":\"remove\",\"id\":\"b\"}]")))
+      ;; A bug: as given, its canvas apart.
+      (should (equal (call "bug" "{\"title\":\"t\",\"description\":\"d\",\"repro\":{\"type\":\"text\"},\"new\":false,\"canvas\":\"tests\"}")
+                     '("bug" "{\"title\":\"t\",\"description\":\"d\",\"repro\":{\"type\":\"text\"},\"new\":false}"
+                       "--canvas" "tests")))
       ;; A type's code: in a file, gone after.
       (let ((run (call "define" "{\"code\":\"(agent-ui-define x)\"}")))
         (should (equal (car run) "define"))

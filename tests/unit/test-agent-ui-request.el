@@ -306,6 +306,23 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
       (should (= (car (+test-aur-run '("remove" "p"))) 0))
       (should-not (agent-ui-elements)))))
 
+(ert-deftest agent-ui-request/the-script-files-a-bug ()
+  "agent-ui bug: JSON as an argument or on stdin; filed: 0; not filed: 1,
+its reply with the report (config/agent-ui/bug.el, the filing stood in for)."
+  (+test-aur
+    (+test-aur-with-server
+      (let* ((answer '(:id "lib-1" :new t :dir "/lib/"))
+             (agent-ui-bug-filed-functions nil)
+             (agent-ui-bug-function (lambda (&rest _) (if (stringp answer) (error "%s" answer) answer))))
+        (should (equal (+test-aur-run '("bug" "{\"title\":\"x\",\"description\":\"y\"}"))
+                       '(0 . "{\"ok\":true,\"issue\":\"lib-1\",\"new\":true}")))
+        (setq answer "bd isn't installed")
+        (let ((run (+test-aur-run '("bug") "{\"title\":\"x\",\"description\":\"y\"}")))
+          (should (= (car run) 1))
+          (should (string-match-p "\"error\":\"Agent UI's bug wasn't filed: bd isn't installed" (cdr run)))
+          (should (string-match-p "\"report\":\"# Agent UI: x\\\\n\\\\ny\\\\n" (cdr run))))
+        (should (= (car (+test-aur-run '("bug" "a" "b"))) 2))))))
+
 (ert-deftest agent-ui-request/the-script-used-wrong ()
   (+test-aur
     (+test-aur-with-server

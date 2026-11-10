@@ -39,8 +39,9 @@ none off, what's shown recorded in `+test-notify--shown'."
 (ert-deftest notify/settings ()
   (should (eq (default-value '+my/notify-enabled) t))
   (should-not (default-value '+my/notify-off))
-  ;; Claude Code's, so far.
-  (should (equal (mapcar #'car +my/notify-kinds) '(claude-permission claude-turn-done claude))))
+  ;; Claude Code's, Agent UI's, so far.
+  (should (equal (mapcar #'car +my/notify-kinds)
+                 '(agent-ui-bug claude-permission claude-turn-done claude))))
 
 (ert-deftest notify/keys ()
   (should (eq (lookup-key doom-leader-map (kbd "t n")) #'+my/notify-toggle))
@@ -193,6 +194,22 @@ subscriptions recorded in `subscribed' ((EVENT . FUNCTION)...)."
   (should (equal (alist-get 'claude-permission +my/notify-kinds)
                  '("Claude Code" "A session asks for your permission")))
   (should (memq #'+my/notify-claude--watch-h (default-value 'agent-shell-mode-hook))))
+
+(ert-deftest notify/agent-ui-bug-filed ()
+  "A bug filed in Agent UI's own issues (config/notify/agent-ui.el): said while
+Emacs is away, a new one or added to a similar open one."
+  (should (equal (alist-get 'agent-ui-bug +my/notify-kinds)
+                 '("Agent UI" "A bug filed in Agent UI's own issues")))
+  (should (memq #'+my/notify-agent-ui--bug-filed (default-value 'agent-ui-bug-filed-functions)))
+  (+test-notify nil
+    (run-hook-with-args 'agent-ui-bug-filed-functions "doom-abc" "Agent UI: a tile overlaps" t "/lib/")
+    (should (equal (butlast (car +test-notify--shown)) '("Agent UI" "Filed doom-abc: Agent UI: a tile overlaps")))
+    (+my/notify-agent-ui--bug-filed "doom-abc" "Agent UI: again" nil "/lib/")
+    (should (equal (cadr (car +test-notify--shown)) "Added to doom-abc: Agent UI: again")))
+  ;; Emacs in front: nothing.
+  (+test-notify t
+    (+my/notify-agent-ui--bug-filed "doom-abc" "x" t "/lib/")
+    (should-not +test-notify--shown)))
 
 (ert-deftest notify/claude-finished-its-turn ()
   "A session's turn complete: named by its project, why it stopped; a click

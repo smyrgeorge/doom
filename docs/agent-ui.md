@@ -63,6 +63,7 @@ agent-ui render --ansi '{...}' # the same in its colours (24-bit ANSI), to print
 agent-ui define gauge.el       # a type of the agent's own (below)
 agent-ui snapshot build        # the element as an image for the agent's reply (below)
 agent-ui list --canvas tests   # any of them, on another canvas of the session (below)
+agent-ui bug < bug.json        # a bug in Agent UI itself, into its own issues (below)
 ```
 
 A batch is an array of operations, each an object with its `op` and what it takes, flat:
@@ -107,7 +108,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **Its buffer** is `Agent UI: SESSION`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
   time an element is shown (an application of `+my/tiling-apps`), without taking the focus, and again if it was closed.
   With Doom's workspaces, it opens in its session's workspace: while you're in another, it waits there for you.
-  `q` hides it, and so does emptying it (cleared, its last element removed); it closes with its session. `a` on an element puts it into the session's prompt; `s` on a table's
+  `q` hides it, and so does emptying it (cleared, its last element removed); it closes with its session. `a` on an element puts it into the session's prompt; `b` on one files a bug in Agent UI ([below](#bugs-in-agent-ui)); `s` on a table's
   column sorts it by it (again: the other way); `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
   the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements
@@ -259,7 +260,7 @@ update can't change a source: showing the element again does.
 ## MCP
 
 Each agent-shell session also gets the operations as MCP tools, with their schemas: `show`, `update`, `append`,
-`remove`, `clear`, `list`, `types`, `render`, `snapshot`, `batch`, `define` (`show`'s description lists the types,
+`remove`, `clear`, `list`, `types`, `render`, `snapshot`, `batch`, `define`, `bug` (`show`'s description lists the types,
 asked of Emacs). The server is `cmd/agent-ui-mcp.el`, run by a batch Emacs (this Emacs's binary) the agent starts,
 registered in `agent-shell-mcp-servers` with the session's name and directory; each call goes through
 `cmd/agent-ui`, so replies and errors are the command line's. The system prompt says the tools are there.
@@ -282,6 +283,27 @@ prompt is offered to queue (change it first if you like). A snapshot leaves the 
 2 tests failed.
 ⏵ Fix them   ⏵ Show the log
 ```
+
+## Bugs in Agent UI
+
+When Agent UI itself misbehaves (an element drawn wrong, an error, a property it lacks), it's filed from the session
+you're in, whatever its project, into Agent UI's own issues: this config's Beads (`.beads/`, found from Agent UI's
+code; bd run there, never with the session's `BEADS_DIR`), a bug labelled `agent-ui`. Nothing is pushed anywhere.
+
+| Who | How |
+|---|---|
+| The agent | `agent-ui bug JSON` (the MCP tool `bug`): `title`, `description`, `expected`, `workaround`, `element` (the id of the one showing it), `repro` (an element showing it with neutral data). It's told to ask you first, then carry on with a workaround |
+| You | `b` on the element in its canvas: what's wrong, what you expected (`M-x agent-ui-report-bug` anywhere) |
+
+The issue carries the element as shown (its JSON, its drawing, its error), the repro drawn as text, and the
+environment: GUI or terminal, the pane's width, Emacs's version, Agent UI's commit, the session. A bug that looks the
+same already open (most of its title's words) gets the report as a note instead (`"new": true` files it anyway).
+Filed: a message (`RET` right after it opens the issue), and a notification while Emacs isn't in front (`SPC t N`:
+`agent-ui-bug`).
+
+Not filed (no `.beads` there, no `bd`, bd failing): nothing is, and the report comes back written: to the agent in
+its reply (`{"ok": false, "error": ..., "report": ...}`), for you to file by hand; to you in a buffer, also copied.
+`agent-ui-bug-report-url` names where to report it then (none yet).
 
 ## Kept with the session
 

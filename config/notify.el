@@ -31,6 +31,9 @@
 ;; - claude: a message the caller words, `+my/notify-claude': Claude
 ;;   itself, through emacsclient (its system prompt says how and when: what
 ;;   you asked to be told, what needs you), or any code.
+;; And Agent UI's (config/notify/agent-ui.el):
+;; - agent-ui-bug: a bug filed in Agent UI's own issues (by the agent, or b
+;;   on a canvas element).
 (defvar +my/notify-enabled t
   "Desktop notifications on (see above); SPC t n toggles it.")
 
@@ -53,3 +56,4 @@ part that fires it (`+my/notify-define').")
 ;; define.
 (load! "notify/core")
 (load! "notify/claude")
+(load! "notify/agent-ui")

@@ -165,11 +165,15 @@ checklist's steps; remove ID; clear; --canvas NAME on any of them uses \
 another canvas of this session, in a pane of its own. It replies with JSON. Before using it \
 the first time, read %s (its types, properties and examples; when none \
 fits, how to make one). Remove what stops helping, and never leave something \
-shown running once it stopped.%s"
-              command command skill
+shown running once it stopped. When Agent UI itself misbehaves (a wrong drawing, \
+an error, a property it lacks), ask the user, then file it: %s bug \
+'{\"title\":...,\"description\":...,\"element\":\"ID\",\"repro\":{an element \
+showing it}}' goes into Agent UI's own issues, never this project's (not filed: \
+its reply's report, to show the user); then carry on with a workaround.%s"
+              command command skill command
               (if agent-ui-agent-mcp
                   " The same operations are MCP tools too (the agent-ui server: show, \
-update, append, remove, list, types, render, snapshot, batch, define), with \
+update, append, remove, list, types, render, snapshot, batch, define, bug), with \
 their schemas: use whichever you like."
                 "")))))
 
