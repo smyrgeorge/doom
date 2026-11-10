@@ -74,6 +74,23 @@
                  (string-trim-right (mapconcat (lambda (c) (agent-ui-pad (cadr c) cell-width)) row ""))))
        (seq-partition cells per-row) "\n\n"))))
 
+(defun agent-ui-stats--tile (f cw lh tile-width)
+  "Figure F's tile laid out in TILE-WIDTH pixels: (VALUE CHANGE UNDER), its
+value and change cut to fit, UNDER non-nil when the change goes on a line of
+its own under the value (they didn't fit side by side). Widths as drawn:
+the value's font 1.25 of a line (a character ~0.75 of it), the change's 0.8
+\(~0.5)."
+  (let* ((inner (- tile-width (* 2 cw)))
+         (value (agent-ui-truncate (agent-ui-stats--value f) (max 1 (floor inner (* 0.75 lh)))))
+         (value-width (* 0.75 lh (string-width value)))
+         (change (agent-ui-stats--change f))
+         (beside (and change (floor (- inner value-width cw) (* 0.5 lh)))))
+    (cond ((null change) (list value nil nil))
+          ((>= beside (string-width (car change))) (list value change nil))
+          (t (list value
+                   (cons (agent-ui-truncate (car change) (max 1 (floor inner (* 0.5 lh)))) (cdr change))
+                   t)))))
+
 (defun agent-ui-stats--gui (props ctx)
   (let* ((figures (plist-get props :figures))
          (cw (plist-get ctx :char-width))
@@ -82,33 +99,41 @@
          (gap cw)
          (tile-width (max (* 16 cw) (min (* 26 cw) (/ (- width gap) (max 1 (length figures))))))
          (per-row (max 1 (/ (+ width gap) (+ tile-width gap))))
-         (rows (seq-partition figures per-row))
-         (tile-height (* 3 lh))
-         (svg (svg-create width (- (* (length rows) (+ tile-height gap)) gap)))
+         ;; Each row's tiles laid out; a row 4 lines tall when a change went
+         ;; under its value, else 3.
+         (rows (mapcar (lambda (row)
+                         (mapcar (lambda (f) (cons f (agent-ui-stats--tile f cw lh tile-width))) row))
+                       (seq-partition figures per-row)))
+         (heights (mapcar (lambda (row) (* lh (if (seq-some (lambda (tile) (nth 3 tile)) row) 4 3))) rows))
+         (svg (svg-create width (- (apply #'+ (mapcar (lambda (h) (+ h gap)) heights)) gap)))
          (fg (agent-ui-chart--color 'default))
          (muted (agent-ui-chart--color 'agent-ui-muted))
          (fill (agent-ui-progress--blend (or (face-background 'default nil t) "black") fg 0.07)))
     (if (null figures)
         (agent-ui-stats--text props ctx)
-      (cl-loop for row in rows
-               for r from 0
-               do (cl-loop for f in row
-                           for c from 0
-                           do (let* ((x (* c (+ tile-width gap)))
-                                     (y (* r (+ tile-height gap)))
-                                     (change (agent-ui-stats--change f)))
-                                (svg-rectangle svg x y tile-width tile-height :rx 6 :fill fill)
-                                (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (plist-get f :label)
-                                                                             ;; In the label's own width (its font
-                                                                             ;; 0.8 of a line: wider than a cell).
-                                                                             (floor (- tile-width (* 2 cw)) (* 0.5 lh)))
-                                                          (+ x cw) (+ y (* 0.95 lh)) :fill muted)
-                                (svg-text svg (agent-ui-stats--value f) :x (+ x cw) :y (+ y (* 2.4 lh))
-                                          :font-size (round (* 1.25 lh)) :font-weight "bold" :fill fg
-                                          :font-family (or (face-attribute 'default :family nil t) "monospace"))
-                                (when change
-                                  (agent-ui-chart--svg-text svg ctx (car change) (- (+ x tile-width) cw) (+ y (* 2.4 lh))
-                                                            :fill (agent-ui-chart--color (cdr change)) :text-anchor "end")))))
+      (let ((y 0))
+        (cl-loop for row in rows
+                 for tile-height in heights
+                 do (cl-loop for (f value change under) in row
+                             for c from 0
+                             do (let ((x (* c (+ tile-width gap))))
+                                  (svg-rectangle svg x y tile-width tile-height :rx 6 :fill fill)
+                                  (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (plist-get f :label)
+                                                                               ;; In the label's own width (its font
+                                                                               ;; 0.8 of a line: wider than a cell).
+                                                                               (floor (- tile-width (* 2 cw)) (* 0.5 lh)))
+                                                            (+ x cw) (+ y (* 0.95 lh)) :fill muted)
+                                  (svg-text svg value :x (+ x cw) :y (+ y (* 2.4 lh))
+                                            :font-size (round (* 1.25 lh)) :font-weight "bold" :fill fg
+                                            :font-family (or (face-attribute 'default :family nil t) "monospace"))
+                                  (when change
+                                    (if under
+                                        (agent-ui-chart--svg-text svg ctx (car change) (+ x cw) (+ y (* 3.4 lh))
+                                                                  :fill (agent-ui-chart--color (cdr change)))
+                                      (agent-ui-chart--svg-text svg ctx (car change) (- (+ x tile-width) cw) (+ y (* 2.4 lh))
+                                                                :fill (agent-ui-chart--color (cdr change))
+                                                                :text-anchor "end")))))
+                 do (setq y (+ y tile-height gap))))
       (agent-ui-chart--image svg))))
 
 (agent-ui-define stats

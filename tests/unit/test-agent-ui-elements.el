@@ -741,6 +741,36 @@ new file mode 100644
       (should (string-match-p ">87.1%</text>" svg))))
   (should (equal (+test-aue-draw '(:type "stats")) "no figures")))
 
+(ert-deftest agent-ui-elements/stats-tiles-fit ()
+  "In the GUI, a tile's value and change side by side when they fit; in a
+narrow pane, the change on a line of its own under the value (its row a line
+taller), both cut to the tile: nothing overlaps, nothing spills out."
+  (let* ((element '(:type "stats" :figures ((:label "p50" :value 11.8 :unit "s" :change "max 36.6 s")
+                                          (:label "p95" :value 20.1 :unit "s" :change "max 40.2 s")
+                                          (:label "Runs" :value 412 :change 3)
+                                          (:label "Failed" :value 2 :change -1 :good "down")
+                                          (:label "Longest" :value "123456789012345" :change "x"))))
+         (svg-of (lambda (width)
+                   (plist-get (cdr (get-text-property 0 'display
+                                                      (agent-ui-render element (agent-ui-context :width width :graphic t
+                                                                                                :char-width 8 :line-height 16))))
+                              :data))))
+    ;; Narrow: 16-column tiles, 3 a row; "11.8 s" and "max 36.6 s" don't fit
+    ;; side by side: the change under, at the tile's left, rows 4 lines tall.
+    (let ((svg (funcall svg-of 60)))
+      (should (string-match-p "<svg[^>]* height=\"136\"" svg))
+      (should (string-match-p "<text[^>]* y=\"54.4\" x=\"8\">max 36.6 s</text>" svg))
+      (should-not (string-match-p "text-anchor=\"end\"[^>]*>max 36.6 s<" svg))
+      ;; A value wider than its tile: cut.
+      (should (string-match-p ">12345678&#8230;</text>" svg)))
+    ;; Wide: side by side, the change at the tile's right; 3 lines, but
+    ;; for a value as wide as its tile (its change under).
+    (let ((svg (funcall svg-of 160)))
+      (should (string-match-p "<svg[^>]* height=\"64\"" svg))
+      (should (string-match-p "text-anchor=\"end\"[^>]*>max 36.6 s</text>" svg)))
+    (setq element (list :type "stats" :figures (butlast (plist-get element :figures))))
+    (should (string-match-p "<svg[^>]* height=\"48\"" (funcall svg-of 160)))))
+
 (ert-deftest agent-ui-elements/stats-wrong ()
   (should (string-match-p "figure 1 has no label" (+test-aue-error '(:type "stats" :figures ((:value 1))))))
   (should (string-match-p "figure 1 has no value" (+test-aue-error '(:type "stats" :figures ((:label "a"))))))
