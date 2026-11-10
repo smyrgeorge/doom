@@ -108,6 +108,8 @@
       :n "R"  #'agent-ui-review
       :n "a"  #'agent-ui-send-element
       :n "b"  #'agent-ui-report-bug
+      :n "c"  #'agent-ui-comment
+      :n "d"  #'agent-ui-uncomment
       :n "s"  #'agent-ui-table-sort)
 
 ;; TYPES THE AGENT MAKES (see above): the list, a preview.

@@ -157,3 +157,88 @@ and in its saved JSON."
     (should-not (plist-get (agent-ui-get "q") :selected))
     ;; A wrong selection given: refused.
     (should-error (agent-ui-update "q" '(:selected ("a" "b"))) :type 'agent-ui-error)))
+
+;; ====== REVIEW COMMENTS (doom-ord.10) ======
+
+(defun +test-aua-goto (text)
+  (agent-ui--flush)
+  (goto-char (point-min))
+  (search-forward text)
+  (goto-char (match-beginning 0)))
+
+(ert-deftest agent-ui-ask/review-comments-on-code ()
+  "c on a line, or a region's lines: a comment under them; c on it edits it
+\(empty: gone), d removes it; Send the review puts them all, with their
+places, into the prompt; then sent, locked."
+  (+test-aua-canvas
+    (agent-ui-show '(:id "c" :type "code" :file "/work/x.c" :from 40
+                     :code "int parse(void) {\n  return NULL;\n}"))
+    (let ((answers nil))
+      (cl-letf (((symbol-function 'read-string) (lambda (&rest _) (pop answers))))
+        (setq answers '("never NULL here"))
+        (+test-aua-goto "return NULL")
+        (call-interactively #'agent-ui-comment)
+        (should (string-search "41 │   return NULL;\n     ✎ never NULL here\n42 │ }" (+test-aua-text)))
+        (should (string-search "⏵ Send the review (1 comment)   ⏵ Discard" (+test-aua-text)))
+        ;; Two lines: under the last.
+        (setq answers '("tidy this"))
+        (+test-aua-goto "int parse")
+        (let ((beg (point)))
+          (+test-aua-goto "return NULL")
+          (agent-ui-comment beg (point)))
+        (should (equal (plist-get (agent-ui-get "c") :comments)
+                       '((:line 41 :file "/work/x.c" :text "never NULL here")
+                         (:line 40 :end 41 :file "/work/x.c" :text "tidy this"))))
+        ;; Edited, then emptied: gone; d removes.
+        (setq answers '("never NULL: it can't be"))
+        (+test-aua-goto "✎ never NULL here")
+        (call-interactively #'agent-ui-comment)
+        (should (string-search "✎ never NULL: it can't be" (+test-aua-text)))
+        (setq answers '(""))
+        (+test-aua-goto "✎ tidy this")
+        (call-interactively #'agent-ui-comment)
+        (should-not (string-search "tidy this" (+test-aua-text)))
+        (setq answers '("again"))
+        (+test-aua-goto "}")
+        (call-interactively #'agent-ui-comment)
+        (+test-aua-goto "✎ again")
+        (call-interactively #'agent-ui-uncomment)
+        (should-not (string-search "✎ again" (+test-aua-text))))
+      ;; Sent: into the prompt (not sent at once), then locked.
+      (+test-aua-press "⏵ Send the review")
+      (should (equal sent '(("Review of c: /work/x.c:41: never NULL: it can't be" nil))))
+      (should (string-search "✓ Review sent (1 comment)" (+test-aua-text)))
+      (should-not (string-search "⏵" (+test-aua-text)))
+      (+test-aua-goto "int parse")
+      (should-error (call-interactively #'agent-ui-comment) :type 'user-error))))
+
+(ert-deftest agent-ui-ask/review-comments-on-a-diff ()
+  "On a diff: a comment under its line (a removed line's under the last of
+its number), its place the file and the new file's line; Discard drops them."
+  (+test-aua-canvas
+    (agent-ui-show '(:id "d" :type "diff" :diff "--- a/src/p.c\n+++ b/src/p.c\n@@ -40,3 +40,3 @@\n a\n-old\n+new\n b\n"))
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "why this?")))
+      (+test-aua-goto "− old")
+      (call-interactively #'agent-ui-comment))
+    (should (equal (plist-get (agent-ui-get "d") :comments) '((:line 41 :file "src/p.c" :text "why this?"))))
+    ;; Under the added line of the same number, not between them.
+    (should (string-search "− old\n     41 + new\n        ✎ why this?\n     42   b" (+test-aua-text)))
+    (+test-aua-press "⏵ Discard")
+    (should-not (plist-get (agent-ui-get "d") :comments))
+    (should-not (string-search "Send the review" (+test-aua-text)))
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "fine")))
+      (+test-aua-goto "42   b")
+      (call-interactively #'agent-ui-comment))
+    (+test-aua-press "⏵ Send the review")
+    (should (equal sent '(("Review of d: src/p.c:42: fine" nil))))))
+
+(ert-deftest agent-ui-ask/review-comments-wrong ()
+  (+test-aua-canvas
+    (agent-ui-show '(:id "t" :type "text" :text "plain"))
+    (+test-aua-goto "plain")
+    (should-error (agent-ui-comment (point) (point)) :type 'user-error)
+    (should-error (agent-ui-show '(:id "c" :type "code" :code "x" :comments ((:text "no line"))))
+                  :type 'agent-ui-error)
+    (should-error (agent-ui-show '(:id "d" :type "diff" :comments ("x"))) :type 'agent-ui-error)
+    (should (equal (agent-ui-review-place '(:line 3 :text "a")) "line 3"))
+    (should (equal (agent-ui-review-place '(:line 3 :end 5 :file "a.c")) "a.c:3-5"))))

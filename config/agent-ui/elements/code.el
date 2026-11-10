@@ -78,6 +78,7 @@ FILE's name (\": not found\"), or nil."
     (agent-ui--fail "code: give code, or a file (and from, to)"))
   (when (< (plist-get props :from) 1)
     (agent-ui--fail "code: from is a line, 1 or more"))
+  (agent-ui-review-check "code" (plist-get props :comments))
   (when (and (plist-get props :to) (< (plist-get props :to) (plist-get props :from)))
     (agent-ui--fail "code: to is before from"))
   (plist-put props :marks
@@ -144,16 +145,23 @@ FILE's name (\": not found\"), or nil."
                                                           (concat "\n" (make-string (+ gutter 3) ?\s) part))
                                                         (split-string (agent-ui-wrap note (max 1 (- width gutter 3))) "\n")
                                                         ""))))))
-                           (if file
-                               (agent-ui-button shown
-                                                (let ((n n))
-                                                  (lambda ()
-                                                    (funcall agent-ui-open-file-function file)
-                                                    (goto-char (point-min))
-                                                    (forward-line (1- n))))
-                                                (format "RET: %s:%d" (abbreviate-file-name file) n))
-                             shown)))
-        "\n")))))
+                           ;; Where it is (c comments on it), and its comments under it.
+                           (concat
+                            (propertize
+                             (if file
+                                 (agent-ui-button shown
+                                                  (let ((n n))
+                                                    (lambda ()
+                                                      (funcall agent-ui-open-file-function file)
+                                                      (goto-char (point-min))
+                                                      (forward-line (1- n))))
+                                                  (format "RET: %s:%d" (abbreviate-file-name file) n))
+                               shown)
+                             'agent-ui-line n 'agent-ui-file (and file (abbreviate-file-name file)))
+                            (agent-ui-review-lines props (and file (abbreviate-file-name file)) n
+                                                   (make-string (+ gutter 3) ?\s) width))))
+        "\n")
+       (agent-ui-review-footer props ctx)))))
 
 (agent-ui-define code
   "A code snippet, highlighted by its LANGUAGE's mode (python, c, rust,
@@ -167,7 +175,9 @@ an error is on, the code a change is about."
           (from integer "Its first line's number" :default 1)
           (to integer "With FILE and no CODE: its last line (default FROM + 19)")
           (language string "Its language: a mode's name without -mode")
-          (marks list "Marked lines: {\"line\", \"kind\", \"note\"}"))
+          (marks list "Marked lines: {\"line\", \"kind\", \"note\"}")
+          (comments list "The user's review comments on its lines (c on a line): [{\"line\", \"end\", \"file\", \"text\"}]")
+          (answered string "The review sent (then it can't be changed)"))
   :example (:title "Where it fails" :language "c" :from 40
             :code "int parse_expr(Parser *p) {\n  return NULL;\n}"
             :marks ((:line 41 :kind "error" :note "never NULL here")))

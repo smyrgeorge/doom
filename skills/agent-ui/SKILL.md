@@ -259,6 +259,10 @@ after the line. For the line an error is on, the code a change is about.
 agent-ui show '{"id":"where","type":"code","title":"Where it fails","language":"c","from":40,"code":"int parse_expr(Parser *p) {\n  return NULL;\n}","marks":[{"line":41,"kind":"error","note":"never NULL here"}]}'
 ```
 
+The user can review it: `c` on a line (or a region's lines) writes a comment under it, and Send the review puts
+them into your prompt as "Review of ID: file:line: comment; ...". The same on a `diff`.
+
+
 ### `issues`
 
 The project's Beads issues as a board: Ready (open, nothing blocking), In progress, Blocked, Done (the latest first),

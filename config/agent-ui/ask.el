@@ -130,3 +130,127 @@ session's prompt, sent at once if SUBMIT; then the element answered (locked)."
   (concat (propertize "✓ " 'face 'agent-ui-success)
           (propertize (agent-ui-wrap (concat "Answered: " (plist-get props :answered)) (- width 2))
                       'face 'agent-ui-muted)))
+
+;; ====== REVIEW COMMENTS ======
+;; On an element showing code (code, diff): the user writes comments on its
+;; lines (c on a line, or on a region's lines; c on a comment edits it, d
+;; removes it), shown under them; Send the review puts them all into the
+;; session's prompt, each with its place ("Review of ID: src/x.c:42: rename
+;; this; ..."), then the element is answered (locked). Its lines say where they
+;; are (text properties agent-ui-file, agent-ui-line), its comments' lines which
+;; they are (agent-ui-comment, an index). Its state, its own: :comments
+;; ((:file F :line L :end E :text T)...), :answered.
+
+(defun agent-ui-review-check (what comments)
+  "COMMENTS (an element's :comments) checked: each {line, end, file, text};
+else an error naming WHAT."
+  (cl-loop for c in comments
+           for i from 1
+           unless (and (agent-ui--plist-p c) (natnump (plist-get c :line)) (stringp (plist-get c :text))
+                       (or (null (plist-get c :end)) (natnump (plist-get c :end)))
+                       (or (null (plist-get c :file)) (stringp (plist-get c :file))))
+           do (agent-ui--fail "%s: comment %d must be {\"line\": N, \"text\": ..., \"end\", \"file\"}" what i)))
+
+(defun agent-ui-review-place (comment)
+  "COMMENT's place: file:line (or file:line-end), or line N without a file."
+  (let ((lines (if (and (plist-get comment :end) (/= (plist-get comment :end) (plist-get comment :line)))
+                   (format "%d-%d" (plist-get comment :line) (plist-get comment :end))
+                 (format "%d" (plist-get comment :line)))))
+    (if (plist-get comment :file)
+        (format "%s:%s" (plist-get comment :file) lines)
+      (concat "line " lines))))
+
+(defun agent-ui-review-lines (props file line indent width)
+  "PROPS' comments ending at LINE of FILE, drawn under it: each after INDENT,
+wrapped to WIDTH, its index on it; \"\" if none (each line led by a newline)."
+  (cl-loop for c in (plist-get props :comments)
+           for i from 0
+           when (and (eql (or (plist-get c :end) (plist-get c :line)) line)
+                     (equal (plist-get c :file) file))
+           concat (propertize
+                   (mapconcat (lambda (part) (concat "\n" indent part))
+                              (split-string (agent-ui-wrap (concat "✎ " (plist-get c :text))
+                                                           (max 10 (- width (string-width indent))))
+                                            "\n")
+                              "")
+                   'face 'agent-ui-accent 'agent-ui-comment i)))
+
+(defun agent-ui-review-text (id comments)
+  "COMMENTS as the agent reads them: Review of ID: place: text; ..."
+  (concat (format "Review of %s: " id)
+          (mapconcat (lambda (c) (format "%s: %s" (agent-ui-review-place c) (plist-get c :text))) comments "; ")))
+
+(defun agent-ui-review-footer (props ctx)
+  "Under an element with comments: Send the review and Discard (\"\" without
+comments, or in a still picture); once sent, saying so. Led by a newline."
+  (let ((comments (plist-get props :comments))
+        (count (lambda (n) (format "%d comment%s" n (if (= n 1) "" "s")))))
+    (cond
+     ((agent-ui-ask-answered-p props)
+      (concat "\n" (propertize "✓ " 'face 'agent-ui-success)
+              (propertize (format "Review sent (%s)" (plist-get props :answered)) 'face 'agent-ui-muted)))
+     ((or (null comments) (plist-get ctx :still)) "")
+     (t (concat "\n "
+                (agent-ui-button
+                 (propertize (format "⏵ Send the review (%s)" (funcall count (length comments))) 'face 'agent-ui-action)
+                 (lambda ()
+                   (funcall agent-ui-action-function (agent-ui-review-text (plist-get ctx :id) comments) nil)
+                   (agent-ui-ask-change ctx (list :answered (funcall count (length comments)))))
+                 "RET: put the review into the prompt")
+                "   "
+                (agent-ui-button (propertize "⏵ Discard" 'face 'agent-ui-action)
+                                 (lambda () (agent-ui-ask-change ctx (list :comments nil)))
+                                 "RET: drop its comments"))))))
+
+(defun agent-ui--review-target ()
+  "The element at point taking comments, and its props: (ID . PROPS); its
+review not sent yet."
+  (let* ((id (agent-ui--element-at-point))
+         (props (agent-ui-get id)))
+    (when (plist-get props :answered)
+      (user-error "Its review was sent"))
+    (cons id props)))
+
+(defun agent-ui-comment (beg end)
+  "Comment on the line at point, or the region's lines (BEG to END), of an
+element showing code in a canvas (code, a diff): the comment shown under
+them, sent with the others (Send the review). On a comment: edit it (empty:
+removed)."
+  (interactive (if (use-region-p) (list (region-beginning) (region-end)) (list (point) (point))))
+  (pcase-let* ((`(,id . ,props) (agent-ui--review-target))
+               (comments (plist-get props :comments))
+               (ctx (list :id id))
+               (index (get-text-property beg 'agent-ui-comment)))
+    (if index
+        (let ((text (read-string "Comment: " (plist-get (nth index comments) :text))))
+          (agent-ui-ask-change ctx (list :comments (if (string-blank-p text)
+                                                        (append (seq-take comments index) (nthcdr (1+ index) comments))
+                                                      (append (seq-take comments index)
+                                                              (list (plist-put (copy-sequence (nth index comments)) :text text))
+                                                              (nthcdr (1+ index) comments))))))
+      (let ((file (get-text-property beg 'agent-ui-file))
+            (lines nil))
+        (save-excursion
+          (goto-char beg)
+          (while (progn (when-let* ((n (get-text-property (point) 'agent-ui-line))) (push n lines))
+                        (and (zerop (forward-line 1)) (< (point) (max end (1+ beg)))))))
+        (unless lines
+          (user-error "Comment on a line of code or of a diff"))
+        (let* ((comment (append (list :line (apply #'min lines))
+                                (when (> (apply #'max lines) (apply #'min lines)) (list :end (apply #'max lines)))
+                                (when file (list :file file))))
+               (text (read-string (format "Comment on %s: " (agent-ui-review-place comment)))))
+          (unless (string-blank-p text)
+            (agent-ui-ask-change ctx (list :comments (append comments (list (plist-put comment :text text)))))))))))
+
+(defun agent-ui-uncomment ()
+  "Remove the comment at point (see `agent-ui-comment')."
+  (interactive)
+  (pcase-let* ((`(,id . ,props) (agent-ui--review-target))
+               (index (or (get-text-property (point) 'agent-ui-comment) (user-error "No comment here")))
+               (comments (plist-get props :comments)))
+    (agent-ui-ask-change (list :id id) (list :comments (append (seq-take comments index) (nthcdr (1+ index) comments))))))
+
+(declare-function agent-ui--element-at-point "agent-ui/snapshot")
+(keymap-set agent-ui-canvas-mode-map "c" #'agent-ui-comment)
+(keymap-set agent-ui-canvas-mode-map "d" #'agent-ui-uncomment)

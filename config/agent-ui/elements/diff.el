@@ -223,7 +223,9 @@ column of marks for each parent: added if one is +, removed if one is -
             (push (concat "  " (propertize (agent-ui-truncate (plist-get hunk :header) (- width 2))
                                            'face 'agent-ui-accent))
                   out)
-            (dolist (line (plist-get hunk :lines))
+            (cl-loop
+             for (line . rest) on (plist-get hunk :lines)
+             do
               (when (funcall full) (throw 'full nil))
               (cl-incf count)
               (pcase-let* ((`(,kind ,number ,text) line)
@@ -241,13 +243,23 @@ column of marks for each parent: added if one is +, removed if one is -
                   ;; A tint as wide as the pane, as code review tools have.
                   (setq shown (concat shown (make-string (max 0 (- width (string-width shown))) ?\s)))
                   (add-face-text-property 0 (length shown) (list :background (funcall tint face)) t shown))
-                (push (agent-ui-button shown (agent-ui-diff--open dir (plist-get file :file) number)
-                                       (format "RET: %s:%s" (plist-get file :file) (or number "")))
-                      out))))))
+                ;; Where it is (c comments on it).
+                (push (propertize (agent-ui-button shown (agent-ui-diff--open dir (plist-get file :file) number)
+                                                   (format "RET: %s:%s" (plist-get file :file) (or number "")))
+                                  'agent-ui-line number 'agent-ui-file (plist-get file :file))
+                      out)
+                ;; Its comments under the last line of its number (a removed
+                ;; line has the next one's).
+                (when (and number (not (eql (cadr (car rest)) number)))
+                  (let ((comments (agent-ui-review-lines props (plist-get file :file) number
+                                                         (make-string (+ 3 digits) ?\s) width)))
+                    (unless (string-empty-p comments)
+                      (push (substring comments 1) out)))))))))
       (when (> total count)
         (push (agent-ui-truncate (propertize (format "… %d lines more" (- total count)) 'face 'agent-ui-muted) width)
               out))
-      (string-join (nreverse out) "\n"))))
+      (concat (string-join (nreverse out) "\n")
+              (agent-ui-review-footer props ctx)))))
 
 (agent-ui-define diff
   "Changes, from a unified diff (git diff's): by file, its lines added and
@@ -256,8 +268,11 @@ number in the new file. RET on a line opens its file there, relative to DIR
 \(your directory). To follow the work tree: a source
 {\"poll\": \"git diff\", \"every\": 5, \"into\": \"diff\"}."
   :props ((diff string "The unified diff (git diff's output)" :default "")
-          (dir file "Where its files are (default: your directory)" :default :here))
+          (dir file "Where its files are (default: your directory)" :default :here)
+          (comments list "The user's review comments on its lines (c on a line): [{\"line\", \"end\", \"file\", \"text\"}]")
+          (answered string "The review sent (then it can't be changed)"))
   :example (:title "My changes"
             :diff "diff --git a/src/parser.c b/src/parser.c\n--- a/src/parser.c\n+++ b/src/parser.c\n@@ -40,3 +40,3 @@ parse_expr\n   int depth = 0;\n-  return NULL;\n+  return parse_term(p);\n }\n")
+  :check (lambda (props) (agent-ui-review-check "diff" (plist-get props :comments)) props)
   :text (lambda (props ctx) (agent-ui-diff--draw props ctx nil))
   :gui (lambda (props ctx) (agent-ui-diff--draw props ctx t)))
