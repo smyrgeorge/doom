@@ -1230,6 +1230,25 @@ layer too: shown, crossing no box (they were lines under the boxes)."
   (let ((svg (+test-aue-svg '(:type "graph" :nodes ("alpha" "beta") :edges (("alpha" "beta") ("beta" "alpha"))) 120)))
     (should (string-match-p "<path d=\"M[^\"]* L[^\"]* L[^\"]* L[^\"]* L[^\"]* L[^\"]*\"" svg))))
 
+(ert-deftest agent-ui-elements/graph-routed-labels-clear-of-boxes ()
+  "A routed edge's label on its lane, a loop's beside it: neither on a box
+(a skip edge's label sat on the node it skips, under its own label)."
+  (dolist (element '((:type "graph" :nodes ("a" "b" "c") :edges (("a" "b") ("b" "c") (:from "a" :to "c" :label "skip")))
+                     (:type "graph" :nodes ("a" "b") :edges (("a" "b") (:from "b" :to "a" :label "back")))
+                     (:type "graph" :nodes ("a" "b") :edges ((:from "a" :to "a" :label "again") ("a" "b")))))
+    (let* ((svg (+test-aue-svg element 120))
+           (name (seq-some (lambda (e) (and (agent-ui--plist-p e) (plist-get e :label))) (plist-get element :edges)))
+           (boxes nil) (start 0))
+      (while (string-match "<rect width=\"\\([0-9.]+\\)\" height=\"\\([0-9.]+\\)\" x=\"\\([0-9.-]+\\)\" y=\"\\([0-9.-]+\\)\"" svg start)
+        (push (mapcar #'string-to-number (list (match-string 3 svg) (match-string 4 svg) (match-string 1 svg) (match-string 2 svg)))
+              boxes)
+        (setq start (match-end 0)))
+      (should (string-match (format "y=\"\\([0-9.-]+\\)\" x=\"\\([0-9.-]+\\)\">%s<" name) svg))
+      (let ((x (string-to-number (match-string 2 svg))) (y (string-to-number (match-string 1 svg))))
+        (should-not (seq-some (lambda (b) (pcase-let ((`(,bx ,by ,bw ,bh) b))
+                                            (and (< bx x (+ bx bw)) (< by y (+ by bh)))))
+                              boxes))))))
+
 (ert-deftest agent-ui-elements/graph-skip-edges-cross-no-box ()
   "An edge skipping a layer goes round through the corridors between layers
 and a lane beside the stacks, whatever its ends' places in them (from or to

@@ -168,7 +168,14 @@ each layer ordered by its nodes' parents' places."
                ;; Lanes beside the stacks (above and below the rows; left and
                ;; right of the columns, down), for edges skipping a layer or
                ;; going back.
-               (arc (if long (round (* 0.9 box-h)) 0))
+               ;; (A line more for labels on them.)
+               (arc (if long
+                        (+ (round (* 0.9 box-h))
+                           (if (seq-some (lambda (e) (and (plist-get e :label)
+                                                          (or (funcall skip-p e) (funcall back-p e))))
+                                         edges)
+                               lh 0))
+                      0))
                ;; A corridor before the first layer, for edges going back to it.
                (lead (if (seq-some back-p edges) (if down (* 2 gap-b) gap-a) 0))
                (natural-across (+ across-max (* 2 arc)))
@@ -212,7 +219,11 @@ each layer ordered by its nodes' parents' places."
                      (skip (or (funcall skip-p e) (funcall back-p e)))
                      ;; Each routed edge its own track, a few pixels from the
                      ;; others' (on one line, two read as one).
-                     (track (if skip (mod (cl-incf routed) 4) 0)))
+                     (track (if skip (mod (cl-incf routed) 4) 0))
+                     ;; Where its label goes: (X Y ANCHOR), set below for
+                     ;; a loop or a routed edge (at the chord's middle, it sat
+                     ;; on a box the edge goes round).
+                     (label-at nil))
                 (pcase-let ((`(,x1 ,y1 ,w1 ,h1) (box from))
                             (`(,x2 ,y2 ,w2 ,h2) (box to)))
                   (let* ((sx (if down (+ x1 (/ w1 2.0)) (+ x1 w1))) (sy (if down (+ y1 h1) (+ y1 (/ h1 2.0))))
@@ -227,6 +238,9 @@ each layer ordered by its nodes' parents' places."
                                      (size (if down (nth 2 (box from)) (nth 3 (box from))))
                                      (q (* 0.25 size)) (o (* 0.35 size))
                                      (reach (+ end (* 1.3 (- (after (gethash from depth)) end)))))
+                                (setq label-at (if down
+                                                   (list (+ c q o 3) (+ end (* 0.75 (- reach end))) "start")
+                                                 (list (+ end (* 0.75 (- reach end)) 3) (+ c 4) "start")))
                                 (format "M%s C%s %s %s" (pt end (- c q)) (pt reach (- c q o)) (pt reach (+ c q o)) (pt end (+ c q)))))
                              (skip
                               ;; Through the corridors and a lane, never a box:
@@ -241,7 +255,16 @@ each layer ordered by its nodes' parents' places."
                                                (* arc (+ 0.2 (* 0.18 track)))
                                              (- natural-across (* arc (+ 0.2 (* 0.18 track))))))
                                      (k1 (+ (after (gethash from depth)) (nth track '(-8 8 -3 3))))
-                                     (k2 (+ (after (1- (gethash to depth))) (nth track '(-8 8 -3 3)))))
+                                     (k2 (+ (after (1- (gethash to depth))) (nth track '(-8 8 -3 3))))
+                                     (first-lane (< lane (/ natural-across 2.0))))
+                                ;; Its label on its lane's run, beside the line
+                                ;; (toward the boxes on the first lane, away on
+                                ;; the other), where no box is.
+                                (setq label-at
+                                      (if down
+                                          (list (if first-lane (+ lane 3) (- lane 3)) (/ (+ k1 k2) 2.0)
+                                                (if first-lane "start" "end"))
+                                        (list (/ (+ k1 k2) 2.0) (if first-lane (+ lane 11) (- lane 3)) "middle")))
                                 (format "M%s L%s L%s L%s L%s L%s"
                                         (pt (a-end from) c1) (pt k1 c1) (pt k1 lane)
                                         (pt k2 lane) (pt k2 c2) (pt (a-start to) c2))))
@@ -252,8 +275,9 @@ each layer ordered by its nodes' parents' places."
                     (svg--append svg (dom-node 'path `((d . ,d) (fill . "none") (stroke . ,muted) (stroke-width . "1.5")
                                                        (stroke-linejoin . "round") (marker-end . "url(#arrow)"))))
                     (when (plist-get e :label)
-                      (agent-ui-chart--svg-text svg ctx (plist-get e :label) (/ (+ sx tx) 2) (- (/ (+ sy ty) 2) 4)
-                                                :fill muted :text-anchor "middle"))))))))
+                      (pcase-let ((`(,x ,y ,anchor) (or label-at (list (/ (+ sx tx) 2) (- (/ (+ sy ty) 2) 4) "middle"))))
+                        (agent-ui-chart--svg-text svg ctx (plist-get e :label) x y
+                                                  :fill muted :text-anchor anchor)))))))))
           (dolist (node nodes)
             (pcase-let ((`(,x ,y ,w ,h) (gethash (plist-get node :id) where))
                         (face (cadr (assq (plist-get node :status) agent-ui-graph--statuses))))
