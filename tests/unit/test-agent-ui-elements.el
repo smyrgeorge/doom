@@ -1181,6 +1181,29 @@ its lines in the GUI too (only the last was kept)."
                 (agent-ui-render element (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16)))))
       (should (string-match-p "█ passed  █ flaky  █ failed\n█ skipped\\'" gui)))))
 
+(ert-deftest agent-ui-elements/heatmap-latest-columns-that-fit ()
+  "More columns than fit (a month of days): the latest that fit, the earlier
+ones said left out, text and GUI (it ran 97 columns wide at 60, the SVG 784
+px in 480)."
+  (let* ((days (mapcar (lambda (i) (format "d%d" i)) (number-sequence 1 30)))
+         (element (list :type "heatmap" :rows '("lexer" "parser") :columns days
+                        :values (list (make-list 30 "passed") (append (make-list 29 "passed") '("failed")))))
+         (text (+test-aue-draw element :width 60)))
+    (dolist (line (split-string text "\n"))
+      (should (<= (string-width line) 60)))
+    (should (string-match-p "… 13 earlier columns left out" text))
+    ;; The latest kept: the last day's failure among them (the legend says
+    ;; the states shown).
+    (should (string-match-p "█ failed" text))
+    (let ((svg (+test-aue-svg element 60)))
+      (string-match "<svg width=\"\\([0-9]+\\)\"" svg)
+      (should (<= (string-to-number (match-string 1 svg)) 480)))
+    (should (string-match-p "earlier columns left out\n.*█ failed"
+                            (substring-no-properties
+                             (agent-ui-render element (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))))
+    ;; Few columns: all of them, no note.
+    (should-not (string-match-p "left out" (+test-aue-draw '(:type "heatmap" :rows ("a") :columns ("x" "y") :values (("passed" "failed"))))))))
+
 (ert-deftest agent-ui-elements/heatmap-gui-row-labels-cut ()
   "In the GUI a long row label is cut to its column (it ran through the cells)."
   (let ((svg (+test-aue-svg '(:type "heatmap" :rows ("test_parser_handles_unicode_identifiers" "lexer")

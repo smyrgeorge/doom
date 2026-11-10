@@ -98,10 +98,32 @@ as text, a swatch was left at a line's end, its word on the next)."
     (when line (push line lines))
     (mapconcat (lambda (l) (agent-ui-truncate l width)) (nreverse lines) "\n")))
 
+(defun agent-ui-heatmap--latest (props room)
+  "PROPS with its latest columns only, those fitting ROOM columns at 3 each
+\(one at least), and how many earlier ones were left out: (PROPS . OUT). A
+month of days ran 97 columns wide at 60."
+  (let* ((columns (plist-get props :columns))
+         (k (max 1 (min (length columns) (floor room 3))))
+         (out (- (length columns) k)))
+    (if (zerop out)
+        (cons props 0)
+      (cons (plist-put (plist-put (copy-sequence props) :columns (nthcdr out columns))
+                       :values (mapcar (lambda (row) (nthcdr out row)) (plist-get props :values)))
+            out))))
+
+(defun agent-ui-heatmap--left-out (out width)
+  "The line saying OUT earlier columns were left out, in WIDTH; nil if none."
+  (when (> out 0)
+    (propertize (agent-ui-truncate (format "… %d earlier %s left out" out (if (= out 1) "column" "columns")) width)
+                'face 'agent-ui-muted)))
+
 (defun agent-ui-heatmap--text (props ctx)
-  (let* ((rows (plist-get props :rows)) (columns (plist-get props :columns))
-         (range (agent-ui-heatmap--range props))
-         (label-width (min (apply #'max (mapcar #'string-width rows)) (/ (plist-get ctx :width) 3)))
+  (let* ((range (agent-ui-heatmap--range props))
+         (label-width (min (apply #'max (mapcar #'string-width (plist-get props :rows))) (/ (plist-get ctx :width) 3)))
+         ;; The latest columns that fit (a cell 3 columns at least).
+         (latest (agent-ui-heatmap--latest props (- (plist-get ctx :width) label-width 1)))
+         (props (car latest))
+         (rows (plist-get props :rows)) (columns (plist-get props :columns))
          ;; A cell: its block, then a space; its label within the block.
          (cell (max 3 (min 7 (1+ (apply #'max (mapcar #'string-width columns)))
                            (/ (- (plist-get ctx :width) label-width 2) (max 1 (length columns))))))
@@ -116,15 +138,21 @@ as text, a swatch was left at a line's end, its word on the next)."
                           (mapconcat (lambda (v) (funcall block (agent-ui-heatmap--color props v range)))
                                      (cdr row) " ")))
                 (cl-mapcar #'cons rows (plist-get props :values)) "\n")
+     (when-let* ((note (agent-ui-heatmap--left-out (cdr latest) (plist-get ctx :width))))
+       (concat "\n" note))
      ;; The legend: the scale's ends, or the words used, fitted to the width.
      "\n"
      (agent-ui-heatmap--legend props range (plist-get ctx :width)))))
 
 (defun agent-ui-heatmap--gui (props ctx)
   (let* ((cw (plist-get ctx :char-width)) (lh (plist-get ctx :line-height))
-         (rows (plist-get props :rows)) (columns (plist-get props :columns))
          (range (agent-ui-heatmap--range props))
-         (label-w (* cw (+ 2 (min (apply #'max (mapcar #'string-width rows)) (/ (plist-get ctx :width) 3)))))
+         (label-w (* cw (+ 2 (min (apply #'max (mapcar #'string-width (plist-get props :rows)))
+                                  (/ (plist-get ctx :width) 3)))))
+         ;; The latest columns that fit (a cell 3 columns at least).
+         (latest (agent-ui-heatmap--latest props (- (plist-get ctx :width) (/ label-w cw))))
+         (props (car latest))
+         (rows (plist-get props :rows)) (columns (plist-get props :columns))
          (cell-w (max (* 3 cw) (min (* 8 cw) (/ (- (* cw (plist-get ctx :width)) label-w) (max 1 (length columns))))))
          (cell-h (round (* 1.5 lh)))
          (top (round (* 1.4 lh)))
@@ -153,6 +181,7 @@ as text, a swatch was left at a line's end, its word on the next)."
                                                                       "#1b1b1b" fg)
                                                             :text-anchor "middle"))))))
     (concat (agent-ui-chart--image svg) "\n"
+            (if-let* ((note (agent-ui-heatmap--left-out (cdr latest) (plist-get ctx :width)))) (concat note "\n") "")
             ;; The legend, as text: all its lines (only its last was kept).
             (agent-ui-heatmap--legend props range (plist-get ctx :width)))))
 
