@@ -234,6 +234,20 @@
     (should (string-match-p "AssertionError: x⏎  at foo.js:3" text))
     (should (string-match-p "✓ Build⏎the app" text))))
 
+(ert-deftest agent-ui-elements/steps-fit-narrow-widths ()
+  "From 10 columns, steps with times, details and sub-steps within the width
+(the names' column was 10 at least, past it under ~20)."
+  (let ((element (agent-ui--checked
+                  '(:type "steps" :steps ((:name "Build the project" :status "done" :seconds 100)
+                                          (:name "Run the tests" :status "failed" :seconds 3 :detail "2 failed")
+                                          (:name "Deploy" :steps ((:name "upload" :steps ((:name "chunks" :steps ((:name "chunk 1")))))))))))
+        (agent-ui-clock (lambda () 0.0)))
+    (dolist (width (number-sequence 10 24))
+      (dolist (line (split-string (+test-aue-draw element :width width) "\n"))
+        (should (<= (string-width line) width))))
+    ;; Wide: the times shown.
+    (should (string-match-p "1m 40s" (+test-aue-draw element :width 60)))))
+
 (ert-deftest agent-ui-elements/steps-with-steps-of-their-own ()
   (let ((agent-ui-clock (lambda () 0.0)))
     ;; Drawn under theirs, indented; the names' column fits them.

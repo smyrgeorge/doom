@@ -137,12 +137,16 @@ test's detail ran onto lines of its own, at column 0)."
                             (cons (car s) step)))
                         (seq-take all agent-ui-max-rows)))
          (width (plist-get ctx :width))
-         ;; The names' column, indents in it; the times', right-aligned.
-         (names (min (apply #'max 0 (mapcar (lambda (s) (+ (* 2 (car s)) (string-width (plist-get (cdr s) :name))))
-                                            shown))
-                     (max 10 (/ width 2))))
          (times (mapcar (lambda (s) (agent-ui-steps--time (cdr s))) shown))
-         (time-width (apply #'max 0 (mapcar #'string-width times))))
+         ;; The times' column, right-aligned; left out where it can't fit.
+         (time-width (let ((w (apply #'max 0 (mapcar #'string-width times))))
+                       (if (> (+ w 5) width) 0 w)))
+         ;; The names' column, indents in it: no wider than the width leaves
+         ;; (it was 10 at least: past the width under ~20 columns).
+         (names (max 1 (min (apply #'max 0 (mapcar (lambda (s) (+ (* 2 (car s)) (string-width (plist-get (cdr s) :name))))
+                                                   shown))
+                            (max 10 (/ width 2))
+                            (- width 4 time-width)))))
     (if (null steps)
         (propertize "no steps yet" 'face 'agent-ui-muted)
       (concat
