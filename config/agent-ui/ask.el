@@ -369,7 +369,7 @@ comments, or in a still picture); once sent, saying so. Led by a newline."
   "The element at point taking comments, and its props: (ID . PROPS); its
 review not sent yet."
   (let* ((id (agent-ui--element-at-point))
-         (props (agent-ui-get id)))
+         (props (agent-ui-get id :canvas (current-buffer))))
     (when (plist-get props :answered)
       (user-error "Its review was sent"))
     (cons id props)))

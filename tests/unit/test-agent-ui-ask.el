@@ -232,6 +232,32 @@ its number), its place the file and the new file's line; Discard drops them."
     (+test-aua-press "⏵ Send the review")
     (should (equal sent '(("Review of d: src/p.c:42: fine" nil))))))
 
+(ert-deftest agent-ui-ask/review-comments-on-a-named-canvas ()
+  "On a canvas other than the default one (a session's is named after it):
+c comments its element, d removes it (the default canvas's was asked for)."
+  (let* ((agent-ui-display-function #'ignore)
+         (name (make-temp-name "named-"))
+         (canvas (progn (agent-ui-show '(:id "d" :type "diff" :diff "--- a/x.c\n+++ b/x.c\n@@ -1 +1 @@\n-a\n+b\n")
+                                       :canvas name)
+                        (get-buffer (agent-ui-canvas-buffer-name name)))))
+    (unwind-protect
+        (with-current-buffer canvas
+          (agent-ui--flush)
+          (goto-char (point-min))
+          (search-forward "+ b")
+          (goto-char (match-beginning 0))
+          (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "why b?")))
+            (agent-ui-comment (point) (point)))
+          (should (equal (plist-get (agent-ui-get "d" :canvas canvas) :comments)
+                         '((:line 1 :file "x.c" :text "why b?"))))
+          (agent-ui--flush)
+          (goto-char (point-min))
+          (search-forward "✎ why b?")
+          (goto-char (match-beginning 0))
+          (agent-ui-uncomment)
+          (should-not (plist-get (agent-ui-get "d" :canvas canvas) :comments)))
+      (kill-buffer canvas))))
+
 (ert-deftest agent-ui-ask/review-comments-wrong ()
   (+test-aua-canvas
     (agent-ui-show '(:id "t" :type "text" :text "plain"))
