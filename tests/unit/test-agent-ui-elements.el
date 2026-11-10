@@ -556,6 +556,21 @@ came out a cell too long, its line past the width)."
     (dolist (line lines) (should (<= (string-width line) 42)))
     (should (<= (funcall cells (car lines)) (funcall cells (cadr lines))))))
 
+(ert-deftest agent-ui-elements/chart-time-labels-by-columns ()
+  "Time-axis labels with wide characters (a CJK locale's months): placed by
+their columns, under their ticks, within the width (by characters, they
+drifted right and past it)."
+  (cl-letf (((symbol-function 'agent-ui-chart--ticks)
+             (lambda (&rest _) (list (cons 0.0 "11月 01") (cons 0.5 "11月 04") (cons 1.0 "11月 07")))))
+    (let* ((axis (agent-ui-chart--time-axis '(:times (0 600)) 40))
+           (labels (cdr axis)))
+      (should (<= (string-width labels) 40))
+      ;; The middle one centred under its tick (column 19 or 20).
+      (let* ((tick (cl-position ?┬ (car axis) :start 1))
+             (start (string-search "11月 04" labels))
+             (column (string-width (substring labels 0 start))))
+        (should (<= (abs (- (+ column 3) tick)) 1))))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."
