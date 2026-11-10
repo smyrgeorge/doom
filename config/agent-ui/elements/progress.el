@@ -65,15 +65,20 @@ steady."
     (if (not (and id (numberp value) (derived-mode-p 'agent-ui-canvas-mode)))
         nil
       (let* ((samples (agent-ui-progress--note id value))
+             (now (funcall agent-ui-clock))
+             ;; Not moved for longer than the window: stalled, no rate (it
+             ;; kept its last one, and \"1s left\" forever).
              (rate (and (eq (plist-get props :status) 'running)
                         (not (and max (>= value max)))
+                        (<= (- now (caar samples)) agent-ui-progress-window)
                         (agent-ui-progress--rate samples))))
         (when (and rate (> rate 0))
           (cons (agent-ui-progress--per rate (plist-get props :unit))
                 (when max
-                  (let ((left (- (/ (- max (cdar samples)) rate)
-                                 (- (funcall agent-ui-clock) (caar samples)))))
-                    (list (concat (agent-ui-format-duration (max 1 left)) " left"))))))))))
+                  (let ((left (- (/ (- max (cdar samples)) rate) (- now (caar samples)))))
+                    ;; Past the end it foresaw: no time left to say.
+                    (when (>= left 1)
+                      (list (concat (agent-ui-format-duration left) " left")))))))))))
 
 ;; ====== DRAWING ======
 

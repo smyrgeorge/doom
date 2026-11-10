@@ -1784,6 +1784,28 @@ the width (the bar was 10 at least and nothing was cut: 44 columns at 40)."
     (should (string-match-p "✓" (+test-aue-draw '(:type "progress" :status "done") :width width)))
     (should (<= (string-width (+test-aue-draw '(:type "progress" :value 12 :max 12 :status "done") :width width)) width))))
 
+(ert-deftest agent-ui-elements/progress-stalled ()
+  "A bar not moving: past its foreseen end, no time left; past the window, no
+rate either (it kept 4 MB/s and \"1s left\" forever)."
+  (let* ((now 100.0)
+         (agent-ui-clock (lambda () now)))
+    (with-temp-buffer
+      (agent-ui-canvas-mode)
+      (cl-flet ((at (time value)
+                  (setq now time)
+                  (substring-no-properties
+                   (agent-ui-render (list :type "progress" :value value :max 100 :unit "MB")
+                                    (agent-ui-context :width 100 :id "dl")))))
+        (at 100.0 10) (at 101.0 14)
+        (should (string-match-p "4 MB/s  20s left" (at 102.0 18)))
+        ;; 25 s on, still 18: past the 20 s it foresaw, under the window.
+        (let ((text (at 127.0 18)))
+          (should (string-match-p "4 MB/s" text))
+          (should-not (string-match-p "left" text)))
+        ;; 98 s on: stalled.
+        (should-not (string-match-p "/s\\|left" (at 200.0 18)))
+        (should-not (string-match-p "/s\\|left" (at 1000.0 18)))))))
+
 (ert-deftest agent-ui-elements/progress-its-rate-and-time-left ()
   (let* ((now 100.0)
          (agent-ui-clock (lambda () now)))
