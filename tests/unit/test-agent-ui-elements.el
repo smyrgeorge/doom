@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code confirm diff files form graph heatmap html image issues log markdown panel progress rank slider stats steps table text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code compare confirm diff files form graph heatmap html image issues log markdown panel progress rank slider stats steps table text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -2017,6 +2017,78 @@ last), at once; never locked."
   (should (string-match-p "min must be below max" (+test-aue-error '(:type "slider" :min 2 :max 1))))
   (should (string-match-p "step must be above 0" (+test-aue-error '(:type "slider" :min 0 :max 1 :step 0))))
   (should (string-match-p "value 12 is outside 0 to 10" (+test-aue-error '(:type "slider" :min 0 :max 10 :value 12)))))
+
+(defconst +test-aue-two-ways
+  '(:type "compare" :question "Which reads better?"
+    :options ((:label "A: a loop" :element (:type "text" :text "for x in xs:\n    total += x"))
+              (:label "B: sum" :element (:type "text" :text "total = sum(xs)"))))
+  "Two alternatives to compare.")
+
+(ert-deftest agent-ui-elements/compare ()
+  "Side by side, each under its mark; stacked when a column would be too
+narrow; answered: the answer, the one picked marked; a still picture: no
+note nor Answer."
+  (should (equal (+test-aue-draw +test-aue-two-ways)
+                 (concat "Which reads better?\n"
+                         " ( ) A: a loop                │ ( ) B: sum\n"
+                         " for x in xs:                 │ total = sum(xs)\n"
+                         ;; The divider down to the longest's end, as a panel's.
+                         "     total += x               │\n"
+                         " ✎ Add a note\n"
+                         " ⏵ Answer")))
+  (should (equal (+test-aue-draw +test-aue-two-ways :width 40)
+                 (concat "Which reads better?\n"
+                         " ( ) A: a loop\n"
+                         "   for x in xs:\n"
+                         "       total += x\n"
+                         "\n"
+                         " ( ) B: sum\n"
+                         "   total = sum(xs)\n"
+                         " ✎ Add a note\n"
+                         " ⏵ Answer")))
+  (should (string-suffix-p " (•) B: sum\n   total = sum(xs)\n ✓ Answered: B: sum"
+                           (+test-aue-draw (append '(:selected ("B: sum") :answered "B: sum") +test-aue-two-ways)
+                                           :width 40)))
+  (should-not (string-search "Answer" (+test-aue-draw +test-aue-two-ways :still t)))
+  (should (agent-ui-ask-waiting-p +test-aue-two-ways))
+  ;; Images, in the GUI: one under another, to be seen.
+  (let ((charts '(:type "compare" :question "Which chart?"
+                  :options ((:label "Bars" :element (:type "chart" :kind "bar" :labels ("a" "b") :values (1 2)))
+                            (:label "Line" :element (:type "chart" :kind "line" :labels ("a" "b") :values (1 2)))))))
+    (should-not (string-search "│ ( ) Line" (+test-aue-draw charts :width 100 :graphic t)))
+    (should (string-search "│ ( ) Line" (+test-aue-draw charts :width 100)))))
+
+(ert-deftest agent-ui-elements/compare-picked-and-answered ()
+  "A mark picks its option; Answer sends its label and the note; locked."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show (append '(:id "ways") +test-aue-two-ways))
+      (with-current-buffer canvas
+        (+test-aue-press "( ) B: sum")
+        (should (equal (plist-get (agent-ui-get "ways") :selected) '("B: sum")))
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "shorter")))
+          (+test-aue-press "Add a note"))
+        (+test-aue-press "⏵ Answer")
+        (should (equal sent '(("Answer to compare ways (Which reads better?): B: sum. Note: shorter" nil))))
+        (agent-ui--flush)
+        (should (string-search "✓ Answered: B: sum · note: shorter" (buffer-string)))
+        (should-not (string-search "⏵ Answer" (buffer-string)))))))
+
+(ert-deftest agent-ui-elements/compare-wrong ()
+  (should (string-match-p "2 to 4 options"
+                          (+test-aue-error '(:type "compare" :question "q" :options ((:label "a" :element (:type "text" :text "x")))))))
+  (should (string-match-p "option 2 must be"
+                          (+test-aue-error '(:type "compare" :question "q"
+                                             :options ((:label "a" :element (:type "text" :text "x")) (:element (:type "text" :text "y")))))))
+  (should (string-match-p "option 1's element must be an element"
+                          (+test-aue-error '(:type "compare" :question "q" :options ((:label "a") (:label "b"))))))
+  (should (string-match-p "option 1: text: text is required"
+                          (+test-aue-error '(:type "compare" :question "q"
+                                             :options ((:label "a" :element (:type "text")) (:label "b" :element (:type "text" :text "y")))))))
+  (should (string-match-p "same label"
+                          (+test-aue-error '(:type "compare" :question "q"
+                                             :options ((:label "a" :element (:type "text" :text "x")) (:label "a" :element (:type "text" :text "y"))))))))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.

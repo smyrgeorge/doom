@@ -27,3 +27,5 @@
 (load! "elements/issues")
 (load! "elements/heatmap")
 (load! "elements/panel")
+;; Its options are elements of the others, laid out as a panel's row: last.
+(load! "elements/compare")

@@ -181,6 +181,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `chart` | Lines (several series; on a time axis, with `times`), bars (several series grouped, or stacked), a histogram or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window`, `stacked`, `bins`, `times` |
 | `image` | An image file (an `.excalidraw.svg` drawing too), or one from a URL (in the GUI, downloaded once with curl, kept in Doom's cache, `agent-ui/images/`), in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file` or `url`, `alt`, `width` (percent), `height` (lines) |
 | `choice` | A question for you: options to pick (one or several), a note; Answer puts "Answer to choice ID (question): …" into the session's prompt, then it shows the answer | `question`, `options`, `multiple`, `note`, `submit`, `selected` |
+| `compare` | Alternatives side by side (code versions, texts, approaches, diffs) for you to pick the better: each option an element in its column under its mark, stacked when narrow (and images, in the GUI); a note; Answer puts "Answer to compare ID (question): B. Note: …" into the session's prompt | `question`, `options` (`label`, `element`), `multiple`, `note`, `submit` |
 | `confirm` | A yes / no gate before something risky (deploying, deleting, pushing): its question, what will happen (lines, or a diff), high danger in red; Proceed or Cancel sends "Answer to confirm ID (question): proceed" (or cancel) at once, then it shows the answer; at high danger, Proceed asks you to type a word first (the branch's name; `yes`), and refuses another | `question`, `details`, `diff`, `danger`, `word`, `proceed`, `cancel`, `submit` |
 | `form` | Several fields you answer together (a new ticket's details): text, a number within a range, yes / no, one of its options, a file. On the canvas, its fields and values and Fill in: `RET` opens it in a buffer of its own, in a new pane (vui.el's fields, checked as you type: `TAB` to the next, `C-c C-c` sends it, `C-c C-k` cancels, keeping what you typed). Sent: "Answer to form ID (question): {JSON of the values}" into the session's prompt, then it shows the values, answered | `question`, `fields` (`name`, `label`, `type`, `required`, `min`, `max`, `options`, `placeholder`, `value`), `submit` |
 | `rank` | Items you put in order (priorities, the order to do things in): numbered, `M-↑` / `M-↓` (`K` / `J`) move the one at the cursor; a note; Answer puts "Answer to rank ID (question): in this order: C, A, B" into the session's prompt, then it shows the order | `question`, `items`, `note`, `submit` |
@@ -303,7 +304,7 @@ prompt is offered to queue (change it first if you like). A snapshot leaves the 
 ## A question waiting
 
 When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, a `form`, a
-`rank`, a `slider` to set, a plan to approve, hunks to accept, rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
+`rank`, a `slider` to set, a `compare`, a plan to approve, hunks to accept, rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
 
 - the canvas's pane is shown (if it was closed), scrolled to the question, the cursor on it; the focus stays where it
   is;
@@ -427,7 +428,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider`, `compare` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |

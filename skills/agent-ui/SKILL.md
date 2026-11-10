@@ -206,6 +206,17 @@ once with `"submit": true`). Then it shows the answer. Ask one question at a tim
 agent-ui show '{"id":"fix","type":"choice","question":"The checker test expects the old message. Which fix?","options":[{"label":"Change the test","detail":"keeps the new message"},{"label":"Revert the message","detail":"as before"}],"note":true}'
 ```
 
+### `compare`
+
+When the options need showing, not naming ("which of these do you prefer?"): 2 to 4 `options`, each `{"label",
+"element"}`, the element any type (code, markdown, a diff, text) drawn in its column, side by side (stacked when the
+pane is narrow). The user picks one (`"multiple": true`: several) and says why: "Answer to compare ID (QUESTION): B.
+Note: ..." comes into your prompt. Show it, say so in a line, end your turn.
+
+```sh
+agent-ui show '{"id":"ways","type":"compare","question":"Which version reads better?","options":[{"label":"A: a loop","element":{"type":"code","language":"python","code":"total = 0\nfor x in xs:\n    total += x"}},{"label":"B: sum","element":{"type":"code","language":"python","code":"total = sum(xs)"}}]}'
+```
+
 ### `confirm`
 
 Before something risky or hard to undo (a force-push, a deploy, deleting data, a migration): ask for a yes or no.
