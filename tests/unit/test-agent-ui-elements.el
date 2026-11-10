@@ -1133,6 +1133,21 @@ a unit that isn't text is refused (it broke the drawing)."
 
 ;; ====== TIMELINE ======
 
+(ert-deftest agent-ui-elements/timeline-a-late-running-task ()
+  "A running task (seconds) starting after the last end: the axis reaches its
+start, its bar there, inside the SVG (it lay past the axis: clamped to its
+end in text, outside the image in the GUI)."
+  (let ((element '(:type "timeline" :tasks ((:name "build" :start 0 :duration 8) (:name "test" :start 10)))))
+    (should (string-match-p "10s\\'" (+test-aue-draw element :width 50)))
+    (let* ((svg (+test-aue-svg element 60))
+           (width (progn (string-match "<svg width=\"\\([0-9]+\\)\"" svg) (string-to-number (match-string 1 svg))))
+           (start 0) (xs nil))
+      (while (string-match "<rect width=\"\\([0-9.]+\\)\"[^>]* x=\"\\([0-9.]+\\)\"" svg start)
+        (push (+ (string-to-number (match-string 2 svg)) (string-to-number (match-string 1 svg))) xs)
+        (setq start (match-end 0)))
+      (should (cl-every (lambda (x) (<= x width)) xs))))
+  (should (string-match-p "3s\\'" (+test-aue-draw '(:type "timeline" :tasks ((:name "a" :start 0) (:name "b" :start 3))) :width 50))))
+
 (ert-deftest agent-ui-elements/timeline-finished-stamped-spans-its-tasks ()
   "Finished tasks given timestamps: the axis spans them (it ran to now: a day
 later, 22 hours wide); one still running: to now."

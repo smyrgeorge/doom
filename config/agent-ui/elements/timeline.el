@@ -64,13 +64,16 @@
 (defun agent-ui-timeline--span (props)
   "The tasks' (FROM . TO), running ones ending now (or at the latest end)."
   (let* ((tasks (plist-get props :tasks))
-         (from (apply #'min (mapcar (lambda (task) (plist-get task :start)) tasks)))
+         (starts (mapcar (lambda (task) (plist-get task :start)) tasks))
+         (from (apply #'min starts))
          (ends (delq nil (mapcar (lambda (task) (plist-get task :end)) tasks)))
          ;; Now only while a task given timestamps runs (no end): finished,
          ;; the axis stretched to now (yesterday's run over 22 hours).
          (now (if (seq-some (lambda (task) (and (plist-get task :stamped) (null (plist-get task :end)))) tasks)
                   (funcall agent-ui-clock)
-                (apply #'max from ends)))
+                ;; The latest start too: a running task starting after the
+                ;; last end lay past the axis (outside the SVG).
+                (apply #'max from (append starts ends))))
          (to (apply #'max now ends)))
     (cons from (if (<= to from) (+ from 1) to))))
 
