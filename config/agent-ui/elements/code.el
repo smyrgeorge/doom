@@ -108,11 +108,20 @@ FILE's name (\": not found\"), or nil."
        (string-join
         (cl-loop for line in (seq-take lines agent-ui-max-rows)
                  for n from from
-                 collect (let* ((mark (cl-find n (plist-get props :marks) :key (lambda (m) (plist-get m :line))))
-                                (kind (and mark (assq (plist-get mark :kind) agent-ui-code--marks)))
+                 collect (let* (;; Its marks, the worst first: its sign; every note (it
+                                ;; showed the first mark only).
+                                (marks (cl-stable-sort
+                                        (cl-remove-if-not (lambda (m) (eql (plist-get m :line) n)) (plist-get props :marks))
+                                        #'< :key (lambda (m) (cl-position (plist-get m :kind) agent-ui-code--marks :key #'car))))
+                                (kind (and marks (assq (plist-get (car marks) :kind) agent-ui-code--marks)))
                                 (text (string-replace "\t" "    " line))
                                 (body (agent-ui-truncate text (- width gutter 3)))
-                                (note (and mark (plist-get mark :note) (concat "← " (plist-get mark :note))))
+                                (notes (cl-loop for m in marks
+                                                when (plist-get m :note)
+                                                collect (propertize (plist-get m :note) 'face
+                                                                    (nth 2 (assq (plist-get m :kind) agent-ui-code--marks)))))
+                                (note (and notes (concat (propertize "← " 'face (nth 2 kind))
+                                                         (string-join notes (propertize "; " 'face 'agent-ui-muted)))))
                                 (head (concat (propertize (format (format "%%%dd" gutter) n) 'face 'agent-ui-muted) " "
                                               (if kind (propertize (nth 1 kind) 'face (nth 2 kind))
                                                 (propertize "│" 'face 'agent-ui-muted))
@@ -122,12 +131,11 @@ FILE's name (\": not found\"), or nil."
                                   ((not note) (concat head body))
                                   ;; Its note after it, if both fit.
                                   ((<= (+ gutter 3 (string-width text) 2 (string-width note)) width)
-                                   (concat head text "  " (propertize note 'face (nth 2 kind))))
+                                   (concat head text "  " note))
                                   ;; Else under it, wrapped (cut with the line, it went).
                                   (t (concat head body
                                              (mapconcat (lambda (part)
-                                                          (concat "\n" (make-string (+ gutter 3) ?\s)
-                                                                  (propertize part 'face (nth 2 kind))))
+                                                          (concat "\n" (make-string (+ gutter 3) ?\s) part))
                                                         (split-string (agent-ui-wrap note (max 1 (- width gutter 3))) "\n")
                                                         ""))))))
                            (if file

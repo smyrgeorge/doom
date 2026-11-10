@@ -1832,6 +1832,22 @@ empty line came after it, widening the gutter from 99; ^M at their ends)."
     (should (string-suffix-p "past its end (1 line)" (+test-aue-draw (list :type "code" :file file :from 2) :width 300)))
     (should (string-suffix-p "\n1 │ only" (+test-aue-draw (list :type "code" :file file) :width 300)))))
 
+;; doom-nwj.89
+(ert-deftest agent-ui-elements/code-two-marks-on-a-line ()
+  "Marks on one line: the worst kind's sign, every note, the worst's first,
+each in its kind's colour (the first mark only was shown)."
+  (let ((element '(:type "code" :from 1 :code "x = f(y)"
+                   :marks ((:line 1 :kind "info" :note "called often")
+                           (:line 1 :kind "error" :note "y undefined")
+                           (:line 1 :kind "warning")))))
+    (should (equal (+test-aue-draw element) "1 ✗ x = f(y)  ← y undefined; called often"))
+    (should (eq (+test-aue-face-at element "✗") 'agent-ui-error))
+    (should (eq (+test-aue-face-at element "called") 'agent-ui-accent))
+    (should (eq (+test-aue-face-at element "y undefined") 'agent-ui-error))
+    ;; Under it when they don't fit: both, wrapped.
+    (should (equal (+test-aue-draw element :width 24)
+                   "1 ✗ x = f(y)\n    ← y undefined;\n    called often"))))
+
 (ert-deftest agent-ui-elements/code-wrong ()
   (should (string-match-p "give code, or a file" (+test-aue-error '(:type "code"))))
   (should (string-match-p "from is a line" (+test-aue-error '(:type "code" :code "x" :from 0))))
