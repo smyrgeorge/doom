@@ -160,3 +160,25 @@ window shown, saves at once; what it makes, killed after."
       (should (equal (plist-get (agent-ui-get "t" :canvas tests) :text) "ü"))
       (should (equal (buffer-local-value 'agent-ui--canvas-part (get-buffer (agent-ui-canvas-buffer-name tests)))
                      "my tests")))))
+
+(ert-deftest agent-ui-persist/a-todo-the-user-ticked ()
+  "A todo's items and the user's changes not sent: kept, and back when the
+session is resumed."
+  (+test-aup
+    (agent-ui-show '(:id "plan" :type "todo" :items ("Reproduce" "Fix it")) :canvas name)
+    (with-current-buffer (agent-ui-canvas-buffer-name name)
+      (agent-ui--flush)
+      (goto-char (point-min))
+      (search-forward "Fix it")
+      (goto-char (match-beginning 0))
+      (agent-ui-button-press))
+    (kill-buffer (agent-ui-canvas-buffer-name name))
+    (should (equal (+test-aup-saved)
+                   '((:id "plan" :type "todo"
+                      :items ((:label "Reproduce" :done nil) (:label "Fix it" :done t :by "user"))
+                      :changes ((:label "Fix it" :change "done"))))))
+    (should (= (agent-ui-persist-restore session) 1))
+    (with-current-buffer (agent-ui-canvas-buffer-name name)
+      (agent-ui--flush)
+      (should (string-search " [x] Fix it     you" (buffer-string)))
+      (should (string-search "⏵ Send your changes (1)" (buffer-string))))))

@@ -42,7 +42,7 @@ quick round trip to Emacs; its reply is JSON on stdout.
 ```sh
 agent-ui show JSON            # show an element; its id there already: replaced in place
 agent-ui update ID JSON       # change some of its properties; null puts one back to its default
-agent-ui append ID JSON       # add to its lists: a table's rows, a checklist's steps
+agent-ui append ID JSON       # add to its lists: a table's rows, a checklist's steps, a todo's items
 agent-ui remove ID            # remove it
 agent-ui clear                # remove every element
 agent-ui list                 # the canvas's elements: ids and types
@@ -192,6 +192,19 @@ once with `"submit": true`). Then it shows the answer. Ask one question at a tim
 
 ```sh
 agent-ui show '{"id":"fix","type":"choice","question":"The checker test expects the old message. Which fix?","options":[{"label":"Change the test","detail":"keeps the new message"},{"label":"Revert the message","detail":"as before"}],"note":true}'
+```
+
+### `todo`
+
+A checklist you and the user both work through: a plan you agree on, what's left before a release. `items` are labels,
+or `{"label", "done"}`. Tick one by appending it (by its label: `"done": false` unticks it); a new label adds it. The
+user ticks items too and adds some; when they press Send, "Changes to todo ID by the user: done: A; not done: B;
+added: C." comes into your prompt (sent at once with `"submit": true`): take it into account (an added item is
+theirs to do with you). It's never locked.
+
+```sh
+agent-ui show '{"id":"plan","type":"todo","title":"The fix","items":["Reproduce the bug","Write a failing test","Fix the parser"]}'
+agent-ui append plan '{"items":[{"label":"Reproduce the bug","done":true}]}'
 ```
 
 ### `files`

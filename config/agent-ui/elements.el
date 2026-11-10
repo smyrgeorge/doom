@@ -13,6 +13,7 @@
 (load! "elements/html")
 (load! "elements/diff")
 (load! "elements/choice")
+(load! "elements/todo")
 (load! "elements/files")
 (load! "elements/stats")
 (load! "elements/log")
