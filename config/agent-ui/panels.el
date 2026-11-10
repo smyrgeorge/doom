@@ -257,13 +257,14 @@ its fetches' timer, its commands running, its last error."
                     "No project here")))
     (completing-read "Panel: " panels nil t)))
 
-(defun agent-ui-open-panel (name &optional dir noselect)
+(defun agent-ui-open-panel (name &optional dir noselect here)
   "Open panel NAME of DIR's project (default: the current buffer's; NAME
 ending .el: a file): its :ui drawn in a canvas of its own, in its pane,
 selected (NOSELECT: shown only, its code started a moment later, after the
-agent's request is answered: asking to let it, if it must, then). Open
-already: its pane shown. Interactively, the project's panels to pick from.
-Returns its canvas."
+agent's request is answered: asking to let it, if it must, then; HERE: in
+the selected window instead, `agent-ui-open-panel-here'). Open already: its
+pane shown (HERE: shown here). Interactively, the project's panels to pick
+from. Returns its canvas."
   (interactive (list (agent-ui-panels--read-name)))
   (let* ((file (agent-ui-panel-file name dir))
          (root (or (agent-ui-panel-root (file-name-directory file))
@@ -271,7 +272,10 @@ Returns its canvas."
          (canvas-name (agent-ui-panel-canvas-name (file-name-base file) root))
          (open (get-buffer (agent-ui-canvas-buffer-name canvas-name))))
     (if (and open (buffer-local-value 'agent-ui-panels--state open))
-        (progn (if noselect (display-buffer open) (pop-to-buffer open)) open)
+        (progn (cond (noselect (display-buffer open))
+                     (here (switch-to-buffer open))
+                     (t (pop-to-buffer open)))
+               open)
       ;; Read first: a wrong one leaves no canvas behind.
       (let* ((read (agent-ui-panel-read file))
              (canvas (let ((default-directory root))
@@ -292,9 +296,15 @@ Returns its canvas."
         (if noselect
             (progn (display-buffer canvas)
                    (run-with-timer 0 nil #'agent-ui-panels--start panel (plist-get read :form)))
-          (pop-to-buffer canvas)
+          (if here (switch-to-buffer canvas) (pop-to-buffer canvas))
           (agent-ui-panels--start panel (plist-get read :form)))
         canvas))))
+
+(defun agent-ui-open-panel-here (name &optional dir)
+  "Open panel NAME of DIR's project as `agent-ui-open-panel' does, but in
+the selected window, not a pane of its own (SPC o U)."
+  (interactive (list (agent-ui-panels--read-name)))
+  (agent-ui-open-panel name dir nil t))
 
 (defun agent-ui-panel-canvas (name &optional dir)
   "The canvas of panel NAME of DIR's project, open; an error if it isn't."

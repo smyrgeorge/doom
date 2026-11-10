@@ -433,7 +433,8 @@ filling it.
 
 | Key | Action |
 |---|---|
-| `SPC o u` | Open one of the current project's panels (`M-x agent-ui-open-panel`) |
+| `SPC o u` | Open one of the current project's panels, in a pane of its own (`M-x agent-ui-open-panel`) |
+| `SPC o U` | The same, in the window you're in (`M-x agent-ui-open-panel-here`) |
 | `gR` (in it) | Read its file again and run it anew |
 | `S` (on a canvas) | Save the element at point as one of the project's panels |
 | `q` (in it) | Close it |

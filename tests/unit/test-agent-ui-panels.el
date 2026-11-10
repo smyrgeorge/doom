@@ -221,8 +221,31 @@ with none."
       (delete-directory empty t))))
 
 (ert-deftest agent-ui-panels/its-key ()
-  "SPC o u: one of the project's panels, opened."
-  (should (eq (lookup-key doom-leader-map "ou") #'agent-ui-open-panel)))
+  "SPC o u: one of the project's panels, opened in a pane of its own; SPC o
+U: in the window you're in."
+  (should (eq (lookup-key doom-leader-map "ou") #'agent-ui-open-panel))
+  (should (eq (lookup-key doom-leader-map "oU") #'agent-ui-open-panel-here)))
+
+(ert-deftest agent-ui-panels/opened-here ()
+  "Opened here: in the selected window, no other; open already, shown here
+too."
+  (+test-aup `(("service" . ,+test-aup-service))
+    (save-window-excursion
+      (delete-other-windows)
+      (switch-to-buffer "*scratch*")
+      (let* ((window (selected-window))
+             (canvas (agent-ui-open-panel-here "service" root)))
+        (unwind-protect
+            (progn
+              (should (eq (window-buffer window) canvas))
+              (should (eq (selected-window) window))
+              (should (= (length (window-list)) 1))
+              ;; Open already, in another window: shown here too.
+              (select-window (split-window))
+              (switch-to-buffer "*scratch*")
+              (should (eq (agent-ui-open-panel-here "service" root) canvas))
+              (should (eq (window-buffer (selected-window)) canvas)))
+          (kill-buffer canvas))))))
 
 ;; ====== ITS SCRIPT ======
 
