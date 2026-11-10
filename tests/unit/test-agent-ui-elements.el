@@ -2374,6 +2374,15 @@ another session reads it without the tool."
         (should (string-match-p "width=\"72.00\"" (plist-get (cdr image) :data)))
         (should (string-match-p (regexp-quote (agent-ui-math--color)) (plist-get (cdr image) :data)))
         (should-not (string-search "currentColor" (plist-get (cdr image) :data))))
+      ;; MathJax: node given its global modules (NODE_PATH).
+      (cl-letf (((symbol-function 'agent-ui-math--node-modules) (lambda () "/opt/node/lib/node_modules/"))
+                ((symbol-function 'agent-ui-math--command)
+                 (lambda (&rest _) (list "sh" "-c" "cat >/dev/null; printf '<svg width=\"1ex\" height=\"1ex\"><desc>%s</desc></svg>' \"$NODE_PATH\""))))
+        (agent-ui-render '(:type "math" :tex "y") gui)
+        (+test-aue-math-wait)
+        (should (string-search "<desc>/opt/node/lib/node_modules</desc>"
+                               (plist-get (cdr (get-text-property 2 'display (agent-ui-render '(:type "math" :tex "y") gui)))
+                                          :data))))
       ;; Another session: from the cache, no tool run.
       (clrhash agent-ui-math--results)
       (cl-letf (((symbol-function 'make-process) (lambda (&rest _) (error "Typeset again"))))

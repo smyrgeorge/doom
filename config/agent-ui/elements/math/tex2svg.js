@@ -1,12 +1,17 @@
 // Agent UI's math element (config/agent-ui/elements/math.el): TeX read from
-// stdin, typeset by MathJax (mathjax-full, installed globally: npm install -g
-// mathjax-full) as an SVG on stdout, its glyphs as paths (no fonts needed).
-// Argument: "block" (display style) or "inline". Exits 1 with the TeX error.
+// stdin, typeset by MathJax 3 (mathjax-full, installed globally: npm install
+// -g mathjax-full; found through NODE_PATH, which math.el sets) as an SVG on
+// stdout, its glyphs as paths (no fonts needed). Argument: "block" (display
+// style) or "inline". Exits 1 with the TeX error.
 const {mathjax} = require('mathjax-full/js/mathjax.js');
-const {TeX} = require('mathjax-full/js/input/tex-full.js');
+const {TeX} = require('mathjax-full/js/input/tex.js');
 const {SVG} = require('mathjax-full/js/output/svg.js');
 const {liteAdaptor} = require('mathjax-full/js/adaptors/liteAdaptor.js');
 const {RegisterHTMLHandler} = require('mathjax-full/js/handlers/html.js');
+// The TeX packages used: loading their configurations registers them.
+require('mathjax-full/js/input/tex/base/BaseConfiguration.js');
+require('mathjax-full/js/input/tex/ams/AmsConfiguration.js');
+require('mathjax-full/js/input/tex/newcommand/NewcommandConfiguration.js');
 
 let tex = '';
 process.stdin.on('data', (chunk) => { tex += chunk; });
@@ -15,6 +20,7 @@ process.stdin.on('end', () => {
   RegisterHTMLHandler(adaptor);
   const html = mathjax.document('', {
     InputJax: new TeX({packages: ['base', 'ams', 'newcommand'],
+                       // An error thrown, not typeset in red.
                        formatError: (jax, err) => { throw err; }}),
     OutputJax: new SVG({fontCache: 'none'}),
   });

@@ -89,6 +89,11 @@ m.tex for LaTeX), its SVG on stdout."
               (when (eq tool 'latex)
                 (with-temp-file (expand-file-name "m.tex" dir)
                   (insert (agent-ui-math--latex-source tex display color))))
+              (let ((process-environment
+                     ;; Node finds the global MathJax through NODE_PATH only.
+                     (if-let* ((modules (and (eq tool 'mathjax) (agent-ui-math--node-modules))))
+                         (cons (concat "NODE_PATH=" (directory-file-name modules)) process-environment)
+                       process-environment)))
               (make-process
                :name "agent-ui-math" :buffer out :stderr err :noquery t :connection-type 'pipe
                :command (agent-ui-math--command tool display dir)
@@ -112,7 +117,7 @@ m.tex for LaTeX), its SVG on stdout."
                    (kill-buffer out)
                    (when (buffer-live-p err) (kill-buffer err))
                    (delete-directory dir t)
-                   (agent-ui-math--redraw key)))))))
+                   (agent-ui-math--redraw key))))))))
       (when (eq tool 'mathjax)
         (process-send-string process tex)
         (process-send-eof process)))))
