@@ -1751,6 +1751,30 @@ title ran across the line between them into the next child)."
   ;; One named: the header, as before.
   (should (string-match-p "\\` +│ Time\n─+┼─+\n" (+test-aue-draw '(:type "table" :columns ("" "Time") :rows (("a" "1")))))))
 
+(ert-deftest agent-ui-elements/progress-fits-its-width ()
+  "However narrow: a bar of 3 cells at least, its figures left out from the
+end (time left, rate, percentage) and its counts cut last, every line within
+the width (the bar was 10 at least and nothing was cut: 44 columns at 40)."
+  (let* ((now 100.0)
+         (agent-ui-clock (lambda () now)))
+    (with-temp-buffer
+      (agent-ui-canvas-mode)
+      (cl-flet ((at (time value width)
+                  (setq now time)
+                  (substring-no-properties
+                   (agent-ui-render (list :type "progress" :value value :max 100 :unit "MB"
+                                          :label "downloading dependencies")
+                                    (agent-ui-context :width width :id "dl")))))
+        (at 100.0 10 40) (at 101.0 14 40)
+        (dolist (width '(10 20 30 40))
+          (should (<= (string-width (at 102.0 18 width)) width)))
+        ;; Wide: all of it.
+        (should (string-match-p "18/100 MB  18%  4 MB/s  [0-9]+s left" (at 102.0 18 100))))))
+  (dolist (element '((:type "progress" :value 7 :max 12 :label "linking the final binary")
+                     (:type "progress" :value 123456 :max 1000000 :unit "files" :label "indexing")))
+    (dolist (width '(10 15 20 30))
+      (should (<= (string-width (+test-aue-draw element :width width)) width)))))
+
 (ert-deftest agent-ui-elements/progress-its-rate-and-time-left ()
   (let* ((now 100.0)
          (agent-ui-clock (lambda () now)))

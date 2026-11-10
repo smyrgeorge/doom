@@ -56,24 +56,24 @@ seconds or more); else nil."
             (t (format "%s%s/h" (amount (* rate 3600)) unit))))))
 
 (defun agent-ui-progress--pace (props ctx)
-  "Its rate and time left (\"3.4 MB/s  19s left\"), from its values over
-time on its canvas (CTX's :id there); \"\" when not running, nor steady."
+  "Its rate and time left (\"3.4 MB/s\" \"19s left\"), from its values over
+time on its canvas (CTX's :id there): a list, nil when not running, nor
+steady."
   (let ((id (plist-get ctx :id))
         (value (plist-get props :value))
         (max (plist-get props :max)))
     (if (not (and id (numberp value) (derived-mode-p 'agent-ui-canvas-mode)))
-        ""
+        nil
       (let* ((samples (agent-ui-progress--note id value))
              (rate (and (eq (plist-get props :status) 'running)
                         (not (and max (>= value max)))
                         (agent-ui-progress--rate samples))))
-        (if (not (and rate (> rate 0)))
-            ""
-          (concat (agent-ui-progress--per rate (plist-get props :unit))
-                  (when max
-                    (let ((left (- (/ (- max (cdar samples)) rate)
-                                   (- (funcall agent-ui-clock) (caar samples)))))
-                      (concat "  " (agent-ui-format-duration (max 1 left)) " left")))))))))
+        (when (and rate (> rate 0))
+          (cons (agent-ui-progress--per rate (plist-get props :unit))
+                (when max
+                  (let ((left (- (/ (- max (cdar samples)) rate)
+                                 (- (funcall agent-ui-clock) (caar samples)))))
+                    (list (concat (agent-ui-format-duration (max 1 left)) " left"))))))))))
 
 ;; ====== DRAWING ======
 
@@ -137,30 +137,34 @@ frame, glyphs drawn one by one leave seams between them."
     (apply #'concat (nreverse out))))
 
 (defun agent-ui-progress--counts (props)
-  "\"7/12 files  58%\", or without a max \"37 files\" (\"\" if nothing done)."
+  "Its counts' parts: (\"7/12 files\" \"58%\"), or without a max (\"37 files\")
+\(none if nothing done)."
   (let* ((value (plist-get props :value))
          (max (plist-get props :max))
          (unit (plist-get props :unit))
          (unit (if (and unit (not (string-empty-p unit))) (concat " " unit) "")))
     (if max
-        (format "%s/%s%s  %d%%"
-                (agent-ui-format-number value) (agent-ui-format-number max) unit
-                (floor (* 100 (min 1.0 (max 0.0 (/ (float value) max))))))
-      (if (and (numberp value) (/= value 0))
-          (concat (agent-ui-format-number value) unit)
-        ""))))
+        (list (format "%s/%s%s" (agent-ui-format-number value) (agent-ui-format-number max) unit)
+              (format "%d%%" (floor (* 100 (min 1.0 (max 0.0 (/ (float value) max)))))))
+      (when (and (numberp value) (/= value 0))
+        (list (concat (agent-ui-format-number value) unit))))))
 
 (defun agent-ui-progress--text (props ctx)
   (let* ((status (plist-get props :status))
          (max (plist-get props :max))
          (face (agent-ui-progress--fill-face status))
-         (pace (agent-ui-progress--pace props ctx))
-         (counts (string-join (seq-remove #'string-empty-p
-                                          (list (agent-ui-progress--counts props)
-                                                (propertize pace 'face 'agent-ui-muted)))
-                              "  "))
-         (mark (pcase status ('done "✓") ('failed "✗") (_ "")))
          (width (plist-get ctx :width))
+         ;; Its figures, the last left out while they don't fit beside a bar of
+         ;; 3 cells (time left, rate, percentage), the counts cut last of all
+         ;; (they were never cut: lines past the width).
+         (parts (append (agent-ui-progress--counts props)
+                        (mapcar (lambda (p) (propertize p 'face 'agent-ui-muted))
+                                (agent-ui-progress--pace props ctx))))
+         (parts (progn (while (and (cdr parts) (> (+ 3 2 (string-width (string-join parts "  "))) width))
+                         (setq parts (butlast parts)))
+                       parts))
+         (counts (agent-ui-truncate (string-join parts "  ") (max 0 (- width 5))))
+         (mark (pcase status ('done "✓") ('failed "✗") (_ "")))
          (text (or (plist-get props :label) ""))
          (label (string-join (seq-remove #'string-empty-p
                                          (list (propertize mark 'face face) text))
@@ -168,9 +172,12 @@ frame, glyphs drawn one by one leave seams between them."
          ;; What's left after the counts: all the bar's without a label (but
          ;; its mark), else shared with it.
          (rest (- width (string-width counts) 4))
-         (bar-width (max 10 (min 40 (if (string-empty-p text)
-                                        (- rest (string-width label))
-                                      (floor (* rest 0.6))))))
+         ;; 3 cells at least (it was 10: past narrow widths), no more than
+         ;; the width leaves beside the counts.
+         (bar-width (max 1 (min (max 3 (min 40 (if (string-empty-p text)
+                                                    (- rest (string-width label))
+                                                  (floor (* rest 0.6)))))
+                                (- width (if (string-empty-p counts) 0 (+ 2 (string-width counts)))))))
          (bar (cond
                (max (agent-ui-progress--bar (/ (float (plist-get props :value)) max) bar-width face))
                ((eq status 'running)
