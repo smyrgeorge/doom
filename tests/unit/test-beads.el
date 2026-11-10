@@ -907,6 +907,29 @@ issue, a new pane, the next one in it; the preview, beads.el's side window."
     (should-not (eq (key-binding " ") #'scroll-up-command))
     (should (eq (key-binding "h") #'evil-backward-char))))
 
+(ert-deftest beads/an-issue-closed-for-good ()
+  "q in an issue's buffer kills it (beads.el's quit-window only hid it), in
+Vim's normal state and Emacs's; the list's q is its own (filters cleared
+first) (doom-gcg)."
+  (require 'beads-detail)
+  (dolist (mode '(beads-detail-mode beads-detail-vui-mode))
+    (let ((buffer (generate-new-buffer "*beads issue*")))
+      (save-window-excursion
+        (switch-to-buffer buffer)
+        (funcall mode)
+        (evil-normal-state)
+        (should (eq (key-binding "q") #'kill-current-buffer))
+        (evil-emacs-state)
+        (should (eq (key-binding "q") #'kill-current-buffer))
+        (evil-normal-state)
+        ;; Pressed, as in its window.
+        (execute-kbd-macro "q"))
+      (should-not (buffer-live-p buffer))))
+  (with-temp-buffer
+    (beads-list-mode)
+    (evil-normal-state)
+    (should (eq (key-binding "q") #'beads-list-quit))))
+
 (ert-deftest beads/forms-typed-into ()
   "beads.el's own: its forms in Emacs's state."
   (require 'beads-form)

@@ -63,7 +63,8 @@ Its description, design, acceptance criteria and notes, rendered as Markdown, wi
 | `c` | Add a comment |
 | `P` / `C` | Its parent / its children |
 | `H` | Its dependencies, as a tree |
-| `gr` / `q` | Refresh / close |
+| `gr` | Refresh |
+| `q` | Close it: its buffer killed, its pane with it (not kept in the background) |
 
 `M-x beads-stale`, `beads-orphans` (issues mentioned in commits but still open), `beads-duplicates` and `beads-lint`
 (issues missing their type's sections) are reports of their own.

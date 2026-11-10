@@ -11,6 +11,15 @@
       :desc "Issues (Beads)" "o i" #'+my/beads-project
       :desc "New issue"      "o I" #'+my/beads-new-issue)
 
+;; AN ISSUE (RET on one in the list): q closes it for good, its buffer killed
+;; (its pane with it, as config/tiling has a pane's last tab), as on Agent UI's
+;; canvas, images, Markdown and PDFs; beads.el's q only hid it, kept in the
+;; background. Emacs's key too: beads/evil.el copies a map's own keys into
+;; Vim's normal state.
+(map! :after beads-detail
+      :map (beads-detail-mode-map beads-detail-vui-mode-map)
+      :gn "q" #'kill-current-buffer)
+
 ;; ====== SETTINGS ======
 
 ;; bd's command line: bd 1.x runs no daemon (config/beads/bd.el).
