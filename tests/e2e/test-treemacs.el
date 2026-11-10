@@ -225,37 +225,44 @@ up from / forever, Emacs hung (this test then times out)."
     (+test--pump 0.02)))
 
 (defun +test-treemacs--top (window pos)
-  "WINDOW scrolled so POS's line is at its top, the cursor there."
+  "WINDOW scrolled so POS's line is at its top, the cursor a few lines below
+\(out of `scroll-margin', which would scroll it back)."
   (with-selected-window window
     (goto-char pos)
-    (set-window-start window (line-beginning-position)))
+    (let ((start (line-beginning-position)))
+      (forward-line 10)
+      (set-window-start window start)))
   (+test--pump 0.05))
 
 (defun +test-treemacs--project-name ()
   (file-name-nondirectory (directory-file-name +test-treemacs--root)))
 
-(ert-deftest e2e-treemacs/sticky-title-once-scrolled ()
-  "At the top: no header line (the title shows once). Scrolled: the
-project's line (name, branch) stays at the top, as a header line. Back to the
-top: gone again."
+(ert-deftest e2e-treemacs/sticky-title-always ()
+  "The project's line is the sidebar's header line: at the top, all the way
+while scrolling (never gone, not even for a frame), and back at the top. In
+the sidebar's background, starting where the tree does (after the fringe)."
   (+test-treemacs
-    (let ((sidebar (+test-treemacs--window))
-          (name (+test-treemacs--project-name)))
-      (should (+test-wait-for (lambda () (string-match-p "  [^ ]+\\'" (+test-treemacs--label (point-min)))) 5))
-      (let ((root-line (+test-treemacs--label (with-current-buffer (window-buffer sidebar) (point-min)))))
-        (should (string-match-p (concat (regexp-quote name) "  ") root-line))
-        (+test-sleep 0.2)
-        (should-not (+test-treemacs--header sidebar))
-        (+test-treemacs--wheel sidebar 2)
-        (should (+test-wait-for (lambda () (+test-treemacs--header sidebar)) 3))
+    (let* ((sidebar (+test-treemacs--window))
+           (top (with-current-buffer (window-buffer sidebar) (point-min))))
+      (should (+test-wait-for (lambda () (string-match-p "  [^ ]+\\'" (+test-treemacs--label top))) 5))
+      (let ((root-line (+test-treemacs--label top)))
+        (should (string-prefix-p (+test-treemacs--project-name) root-line))
         (should (equal (+test-treemacs--header sidebar) root-line))
-        (should-not (pos-visible-in-window-p (with-current-buffer (window-buffer sidebar) (point-min)) sidebar))
-        (+test-treemacs--wheel sidebar 30)
-        (+test-sleep 0.2)
-        (should (equal (+test-treemacs--header sidebar) root-line))
-        (+test-treemacs--wheel-up sidebar 40)
-        (should (+test-wait-for (lambda () (not (+test-treemacs--header sidebar))) 3))
-        (should (= (window-start sidebar) (with-current-buffer (window-buffer sidebar) (point-min))))))))
+        (dotimes (_ 12)
+          (+test-treemacs--wheel sidebar 1)
+          (should (equal (+test-treemacs--header sidebar) root-line)))
+        (should-not (pos-visible-in-window-p top sidebar))
+        (dotimes (_ 14)
+          (+test-treemacs--wheel-up sidebar 1)
+          (should (equal (+test-treemacs--header sidebar) root-line)))
+        (should (+test-wait-for (lambda () (= (window-start sidebar) top)) 3))
+        (should (equal (+test-treemacs--header sidebar) root-line)))
+      (with-current-buffer (window-buffer sidebar)
+        (should (equal (cadr (assq 'header-line-active face-remapping-alist))
+                       (list :background (+my/treemacs--background)
+                             :box nil :overline nil :underline nil))))
+      (should (equal (get-text-property 0 'display (+test-treemacs--header-text sidebar))
+                     `(space :width (,(car (window-fringes sidebar)))))))))
 
 (ert-deftest e2e-treemacs/sticky-title-follows-the-branch ()
   "The branch (and ↑↓) changing while scrolled: the title shows it at once."
@@ -270,10 +277,12 @@ top: gone again."
 
 (ert-deftest e2e-treemacs/sticky-title-of-the-project-in-view ()
   "Two projects: the title is the one whose files are at the top; a
-project's line at the top itself: no title. (Without following the project,
-which would show the current one alone.)"
+project's line at the top: that one. (Without following the project,
+which would show the current one alone, nor the file, which would scroll back
+to it.)"
   (+test-treemacs
-    (cl-letf (((symbol-function 'treemacs--do-follow-project) #'ignore))
+    (cl-letf (((symbol-function 'treemacs--do-follow-project) #'ignore)
+              ((symbol-function 'treemacs--follow) #'ignore))
       (let* ((other (let ((root (file-name-as-directory (+test-tmp-file "sticky-other/"))))
                       (make-directory root t)
                       (dolist (i (number-sequence 1 60))
@@ -296,8 +305,7 @@ which would show the current one alone.)"
                               ;; project's name moves the text after it.
                               (copy-marker (line-beginning-position))))))
           (+test-treemacs--top sidebar other-root)
-          (+test-sleep 0.3)
-          (should-not (+test-treemacs--header sidebar))
+          (should (+test-wait-for (lambda () (equal (+test-treemacs--header sidebar) (+test-treemacs--label other-root))) 3))
           (+test-treemacs--top sidebar (with-current-buffer buffer
                                          (save-excursion (goto-char other-root) (forward-line 5) (point))))
           (+test-wait-for (lambda () (equal (+test-treemacs--header sidebar) (+test-treemacs--label other-root))) 3)
@@ -321,6 +329,6 @@ which would show the current one alone.)"
                   #'+my/treemacs-sticky-goto))
       (+my/treemacs-sticky-goto (list 'mouse-1 (list sidebar 'header-line '(5 . 5) 0)))
       (should (eq (selected-window) sidebar))
-      (should (+test-wait-for (lambda () (not (+test-treemacs--header sidebar))) 3))
+      (should (equal (+test-treemacs--header sidebar) (+test-treemacs--label (point-min))))
       (should (equal (+test-treemacs--label (point)) (+test-treemacs--label (point-min))))
       (should (= (window-start sidebar) (point-min))))))

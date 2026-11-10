@@ -3,8 +3,9 @@
 The treemacs sidebar opens with a workspace's first project file, follows the current file and its project, and shows
 the git status, also of changes made outside Emacs. Each git project's branch follows its name, with the commits it is
 ahead (`↑`) and behind (`↓`) its upstream: `doom  main ↑2` (a detached HEAD: its short commit), updated after a refresh,
-a magit operation, or a switch made in a terminal. Scrolled down a long tree, that line (the project in view, its
-branch) stays at the sidebar's top; a click on it goes back to it.
+a magit operation, or a switch made in a terminal. That line (the project in view, its
+branch) stays at the sidebar's top while a long tree scrolls; a click on it goes back to it
+(`+my/treemacs-sticky-title`: nil turns it off).
 
 | macOS | Linux | Action |
 |---|---|---|

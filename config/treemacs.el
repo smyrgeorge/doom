@@ -33,6 +33,12 @@
 (defvar +my/treemacs-git-poll-interval 3
   "Seconds between checks of the shown projects' git status (nil: none).")
 
+;; STICKY TITLE
+;; The sidebar's top line shows the project in view, as its own line in the
+;; tree does (name, branch, ↑↓), while its files scroll (config/treemacs/sticky.el).
+(defvar +my/treemacs-sticky-title t
+  "Non-nil: the project's title stays at the sidebar's top (its header line).")
+
 ;; EXPAND / COLLAPSE ALL
 ;; `treemacs-expand-all' (zR in treemacs) opens every folder of the project(s)
 ;; in the sidebar; `treemacs-collapse-all' (zM) closes them all again but keeps
