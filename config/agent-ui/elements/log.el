@@ -100,12 +100,18 @@ errors\", Maven's \"Errors: 0\", \"0 Warning(s)\".")
     (if (null lines)
         (propertize "no lines yet" 'face 'agent-ui-muted)
       (concat
-       (string-join
-        (delq nil (list (and (> errors 0) (propertize (format "%d error%s" errors (if (= errors 1) "" "s")) 'face 'agent-ui-error))
-                        (and (> warnings 0) (propertize (format "%d warning%s" warnings (if (= warnings 1) "" "s"))
-                                                        'face 'agent-ui-warning))
-                        (propertize (format "%d line%s" (length lines) (if (= (length lines) 1) "" "s")) 'face 'agent-ui-muted)))
-        (propertize " · " 'face 'agent-ui-muted))
+       ;; Its counts, the last left out while they don't fit (the lines',
+       ;; the warnings'), the errors' cut last (never cut: 30 columns at 15).
+       (let ((parts (delq nil (list (and (> errors 0) (propertize (format "%d error%s" errors (if (= errors 1) "" "s"))
+                                                                  'face 'agent-ui-error))
+                                    (and (> warnings 0) (propertize (format "%d warning%s" warnings (if (= warnings 1) "" "s"))
+                                                                    'face 'agent-ui-warning))
+                                    (propertize (format "%d line%s" (length lines) (if (= (length lines) 1) "" "s"))
+                                                'face 'agent-ui-muted))))
+             (sep (propertize " · " 'face 'agent-ui-muted)))
+         (while (and (cdr parts) (> (string-width (string-join parts sep)) width))
+           (setq parts (butlast parts)))
+         (agent-ui-truncate (string-join parts sep) width))
        "\n"
        (mapconcat (lambda (line)
                     (let ((face (nth 2 (assq (car line) agent-ui-log--levels)))

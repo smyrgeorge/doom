@@ -1480,6 +1480,19 @@ a unit that isn't text is refused (it broke the drawing)."
   (should (equal (+test-aue-draw '(:type "log" :lines "running 12 tests\ntest result: ok. 12 passed; 0 failed; 0 ignored"))
                  "2 lines\nrunning 12 tests\ntest result: ok. 12 passed; 0 failed; 0 ignored")))
 
+;; doom-nwj.76
+(ert-deftest agent-ui-elements/log-counts-fit ()
+  "Its counts line fits the width: its last parts left out, the errors'
+cut last (never cut: 30 columns at 15)."
+  (let ((element '(:type "log" :lines "error a\nerror b\nerror c\nwarning d\ne\nf\ng")))
+    (should (equal (car (split-string (+test-aue-draw element :width 40) "\n"))
+                   "3 errors · 1 warning · 7 lines"))
+    (should (equal (car (split-string (+test-aue-draw element :width 25) "\n")) "3 errors · 1 warning"))
+    (should (equal (car (split-string (+test-aue-draw element :width 15) "\n")) "3 errors"))
+    (should (equal (car (split-string (+test-aue-draw element :width 6) "\n")) "3 err…"))
+    (dolist (width (number-sequence 5 40))
+      (should (<= (string-width (car (split-string (+test-aue-draw element :width width) "\n"))) width)))))
+
 (ert-deftest agent-ui-elements/log-appended ()
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines "a\nb") '(:lines "c\n")) :lines) '("a" "b" "c")))
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines ("a")) '(:lines ("b" "c"))) :lines) '("a" "b" "c")))
