@@ -205,4 +205,9 @@ in the background and refreshed after bd commands; RET opens an issue."
           (label string "Only issues with this label")
           (limit integer "The most issues a column shows" :default 8))
   :example (:title "Agent UI's issues" :label "agent-ui" :limit 5)
+  ;; Below 0: \"… 4 more\" for a column of 3.
+  :check (lambda (props)
+           (when (< (plist-get props :limit) 0)
+             (agent-ui--fail "issues: limit must be 0 or more, not %d" (plist-get props :limit)))
+           props)
   :text #'agent-ui-issues--draw)

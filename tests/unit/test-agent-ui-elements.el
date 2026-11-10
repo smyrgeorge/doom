@@ -1459,6 +1459,21 @@ a unit that isn't text is refused (it broke the drawing)."
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines ("a")) '(:lines ("b" "c"))) :lines) '("a" "b" "c")))
   (should (string-match-p "only lines" (agent-ui-error-message (should-error (agent-ui-append-to '(:type "log") '(:show 3)) :type 'agent-ui-error)))))
 
+;; doom-nwj.84
+(ert-deftest agent-ui-elements/negative-show-and-limit-refused ()
+  "A log's show and an issues board's limit below 0 are refused (a log showed
+no lines; a board said \"… 4 more\" for a column of 3)."
+  (should (string-match-p "log: show must be 0 or more, not -3"
+                          (+test-aue-error '(:type "log" :lines "a\nb" :show -3))))
+  (should (string-match-p "issues: limit must be 0 or more, not -1"
+                          (+test-aue-error '(:type "issues" :dir "/proj/" :limit -1))))
+  ;; 0: allowed (the counts only; the columns' heads only).
+  (should (equal (+test-aue-draw '(:type "log" :lines "a\nb" :show 0)) "2 lines"))
+  (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
+    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
+    (should (string-prefix-p "Ready (2)\n… 2 more\n\nIn progress (1)"
+                             (+test-aue-draw '(:type "issues" :dir "/proj/" :limit 0) :width 40)))))
+
 (ert-deftest agent-ui-elements/log-wrong ()
   (should (string-match-p "line 1 must be" (+test-aue-error '(:type "log" :lines ((:level "loud" :text "x"))))))
   (should (string-match-p "keep is 1 to 5000" (+test-aue-error '(:type "log" :keep 0))))

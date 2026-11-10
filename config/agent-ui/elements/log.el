@@ -61,6 +61,9 @@
                do (agent-ui--fail "log: line %d must be text, or {\"level\": error/warning/info/debug, \"text\": ...}" i))))
   (unless (<= 1 (plist-get props :keep) 5000)
     (agent-ui--fail "log: keep is 1 to 5000 lines"))
+  ;; Below 0: no lines shown, silently.
+  (when (< (plist-get props :show) 0)
+    (agent-ui--fail "log: show must be 0 or more, not %d" (plist-get props :show)))
   props)
 
 (defun agent-ui-log--append (element patch)
