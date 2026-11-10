@@ -266,6 +266,20 @@ past the width); clickable either way."
     (let ((text (agent-ui-render element (agent-ui-context :width 34))))
       (should (get-text-property (string-search "⏵ Fix it" text) 'agent-ui-action text)))))
 
+(ert-deftest agent-ui-elements/table-columns-that-fit ()
+  "More columns than fit, each cut to its narrowest: those on the left that
+fit, the others said under it (it stayed wider than its width)."
+  (let ((six '(:type "table" :columns ("Name" "Status" "Time" "Owner" "Branch" "Commit")
+               :rows (("a" "ok" "1s" "me" "main" "abc123") ("b" "ok" "2s" "you" "dev" "def456")))))
+    (dolist (width '(15 20 30))
+      (let ((text (+test-aue-draw six :width width)))
+        (dolist (line (split-string text "\n"))
+          (should (<= (string-width line) width)))
+        (should (string-match-p "… [0-9]+ more col" text))))
+    ;; Wide enough: all of them, no note.
+    (should-not (string-match-p "more columns" (+test-aue-draw six :width 60)))
+    (should (string-match-p "… 1 more column: Commit" (+test-aue-draw six :width 30)))))
+
 (ert-deftest agent-ui-elements/table-cells-on-one-line ()
   "A cell's line breaks and tabs: on its line (they broke the table's lines,
 and a panel's border around it)."

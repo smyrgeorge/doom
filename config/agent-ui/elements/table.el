@@ -90,6 +90,19 @@ table fits MAX-WIDTH (no column under 3)."
           (cl-decf (aref widths widest)))))
     (append widths nil)))
 
+(defun agent-ui-table--fitting (header rows max-width)
+  "How many of the columns (HEADER's, ROWS') fit MAX-WIDTH, each at its
+narrowest (3 columns, or less if its cells are): those on the left, one at
+least."
+  (let* ((narrowest (apply #'cl-mapcar
+                           (lambda (&rest cells) (min 3 (apply #'max (mapcar #'string-width cells))))
+                           header rows))
+         (k (length narrowest)))
+    (while (and (> k 1)
+                (> (+ (apply #'+ (seq-take narrowest k)) (* 3 k) -2) max-width))
+      (cl-decf k))
+    k))
+
 (defun agent-ui-table--number (cell)
   "CELL's leading number (\"0.4s\": 0.4, \"1,204\": 1204), or nil."
   (when (string-match "\\`[-+]?[0-9][0-9,]*\\(?:\\.[0-9]+\\)?" cell)
@@ -171,8 +184,12 @@ space (they broke the table's lines and its border)."
                       (let ((full (agent-ui-table--widths header rows most-positive-fixnum)))
                         (<= (+ (apply #'+ full) (* 3 (length full)) -2 actions-width)
                             (plist-get ctx :width)))))
-         (widths (agent-ui-table--widths header rows (max 10 (- (plist-get ctx :width)
-                                                                (if beside actions-width 0)))))
+         (room (max 4 (- (plist-get ctx :width) (if beside actions-width 0))))
+         ;; The columns that fit (the others left out, said under it).
+         (shown (agent-ui-table--fitting header rows room))
+         (widths (agent-ui-table--widths (seq-take header shown)
+                                         (mapcar (lambda (r) (seq-take r shown)) rows)
+                                         room))
          (align (cl-loop for i below n
                          collect (or (nth i (plist-get props :align))
                                      ;; Numbers to the right.
@@ -219,6 +236,11 @@ space (they broke the table's lines and its border)."
          (concat " " (propertize "no rows yet" 'face 'agent-ui-muted)))
        (when (> (length all) (length rows))
          (concat "\n " (propertize (format "… %d rows more" (- (length all) (length rows)))
+                                   'face 'agent-ui-muted)))
+       (when (< shown n)
+         (concat "\n " (propertize (agent-ui-truncate (format "… %d more %s: %s" (- n shown) (if (= (- n shown) 1) "column" "columns")
+                                                               (string-join (nthcdr shown columns) ", "))
+                                                       (1- (plist-get ctx :width)))
                                    'face 'agent-ui-muted)))))))
 
 ;; ====== SORTING IN THE CANVAS ======
