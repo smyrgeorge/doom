@@ -1268,6 +1268,27 @@ drawn over the boxes (6 columns hid \"depends on\" but \"pends\" under them)."
     ;; Over the boxes: after them in the SVG.
     (should (> (string-search ">depends on<" svg) (string-search "<rect" svg)))))
 
+(ert-deftest agent-ui-elements/graph-down ()
+  "Direction down: top to bottom (it was ignored, the same as right), its edges
+crossing no box either."
+  (let* ((right '(:type "graph" :nodes ("lexer" "parser" "codegen") :edges (("lexer" "parser") ("parser" "codegen"))))
+         (down (append right '(:direction "down")))
+         (svg (+test-aue-svg down 120))
+         (rects (let ((all nil) (start 0))
+                  (while (string-match "<rect width=\"[0-9.]+\" height=\"[0-9.]+\" x=\"\\([0-9.]+\\)\" y=\"\\([0-9.]+\\)\"" svg start)
+                    (push (cons (string-to-number (match-string 1 svg)) (string-to-number (match-string 2 svg))) all)
+                    (setq start (match-end 0)))
+                  (nreverse all))))
+    (should-not (equal svg (+test-aue-svg right 120)))
+    ;; Each layer lower than the one before, at the same x.
+    (should (< (cdr (nth 0 rects)) (cdr (nth 1 rects)) (cdr (nth 2 rects))))
+    (should (= (car (nth 0 rects)) (car (nth 1 rects)))))
+  (dolist (element '((:type "graph" :direction "down" :nodes ("x" "a" "b" "c" "m")
+                      :edges (("x" "a") ("x" "m") ("m" "b") ("a" "b") ("b" "c") ("a" "c") ("m" "c")))
+                     (:type "graph" :direction "down" :nodes ("alpha" "beta")
+                      :edges (("alpha" "alpha") ("alpha" "beta") ("beta" "alpha")))))
+    (should-not (+test-aue-crossings (+test-aue-svg element 120)))))
+
 (ert-deftest agent-ui-elements/graph-skip-edges-cross-no-box ()
   "An edge skipping a layer goes round through the corridors between layers
 and a lane beside the stacks, whatever its ends' places in them (from or to

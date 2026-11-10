@@ -137,7 +137,8 @@ each layer ordered by its nodes' parents' places."
     (if (null nodes)
         (agent-ui-graph--text props ctx)
       (let* ((cw (plist-get ctx :char-width)) (lh (plist-get ctx :line-height))
-             (down (equal (plist-get props :direction) "down"))
+             ;; The check makes it a symbol (compared with "down", never true).
+             (down (eq (plist-get props :direction) 'down))
              (layers (agent-ui-graph-layout nodes edges))
              (box-w (lambda (id) (* cw (+ 2 (string-width (plist-get (agent-ui-graph--node nodes id) :label))))))
              (box-h (* 2 lh))
