@@ -115,6 +115,7 @@
 (load! "agent-ui/canvas")
 (load! "agent-ui/request")
 (load! "agent-ui/agent")
+(load! "agent-ui/workspaces")
 (load! "agent-ui/persist")
 ;; The element types, a file each in agent-ui/elements/.
 (load! "agent-ui/elements")

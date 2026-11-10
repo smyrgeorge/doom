@@ -55,7 +55,9 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
   (should (= (default-value 'agent-ui-redraw-delay) 0.1))
   (should (= (default-value 'agent-ui-max-elements) 100))
   (should (equal (default-value 'agent-ui-default-canvas) "default"))
-  (should (eq (default-value 'agent-ui-display-function) #'agent-ui-display-canvas)))
+  ;; Its own default; the config's is the session's workspace's
+  ;; (config/agent-ui/workspaces.el, test-agent-ui-workspaces.el).
+  (should (eq (eval (car (get 'agent-ui-display-function 'standard-value)) t) #'agent-ui-display-canvas)))
 
 (ert-deftest agent-ui-canvas/a-canvas-made ()
   (+test-auc

@@ -106,6 +106,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 
 - **Its buffer** is `Agent UI: SESSION`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
   time an element is shown (an application of `+my/tiling-apps`), without taking the focus, and again if it was closed.
+  With Doom's workspaces, it opens in its session's workspace: while you're in another, it waits there for you.
   `q` hides it; it closes with its session. `a` on an element puts it into the session's prompt; `s` on a table's
   column sorts it by it (again: the other way); `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
@@ -351,6 +352,7 @@ the types change.
 | `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
+| `config/agent-ui/workspaces.el` | A session's canvas in its session's workspace (persp-mode), not the current one |
 | `config/agent-ui/persist.el` | Kept with the session: saved as it changes, back when it's resumed |
 | `config/agent-ui/snapshot.el` | In the conversation: an element as an SVG for the agent's reply, into the prompt |
 | `config/agent-ui/source.el` | Sources: an element following a command, a file, a poll |
