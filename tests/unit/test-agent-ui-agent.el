@@ -187,6 +187,7 @@ killed after."
       ;; Questions: a list to pick from on the canvas, the turn ended.
       (should (string-search "To have the user pick from a list" text))
       (should (string-search "end your turn: the answer comes as your next prompt" text))
+      (should (string-search "before something risky (a force-push, a deploy, deleting data), a confirm" text))
       ;; A bug in Agent UI itself: asked, filed in its own issues.
       (should (string-search (concat "When Agent UI itself misbehaves") text))
       (should (string-search (concat (abbreviate-file-name agent-ui-command) " bug '{\"title\"") text))

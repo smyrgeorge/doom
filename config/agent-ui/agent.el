@@ -164,7 +164,8 @@ follows your bd commands; a search's results as a table; a plan, or the ticket \
 you're working on, as steps (its acceptance criteria), ticked as you go. To have \
 the user pick from a list (which to fix, which files, which approach), show it \
 there as a choice (multiple: several), say so in a line and end your turn: the \
-answer comes as your next prompt.%s From your shell: %s show \
+answer comes as your next prompt; before something risky (a force-push, a deploy, \
+deleting data), a confirm, the same way.%s From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear; --canvas NAME on any of them uses \

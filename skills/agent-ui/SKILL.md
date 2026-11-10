@@ -33,6 +33,8 @@ quick round trip to Emacs; its reply is JSON on stdout.
   brought to it then (its pane shown, the cursor on it, a notification if they're away), and the answer comes as your
   next prompt ("Answer to choice ID (QUESTION): A, B. Note: ..."). A small question (2 to 4 options,
   nothing to show): AskUserQuestion, in the conversation, if you have it.
+- **Before something risky** (a force-push, a deploy, deleting data): a `confirm`, then end your turn; go on only if
+  the answer is proceed.
 - **No:** what you'd say once. Answers, explanations, code and reports go in your reply (Markdown), as usual. Don't
   duplicate your reply on the canvas.
 - Keep it tidy: a handful of elements, each worth looking at. Update rather than add; remove what stopped helping.
@@ -192,6 +194,18 @@ once with `"submit": true`). Then it shows the answer. Ask one question at a tim
 
 ```sh
 agent-ui show '{"id":"fix","type":"choice","question":"The checker test expects the old message. Which fix?","options":[{"label":"Change the test","detail":"keeps the new message"},{"label":"Revert the message","detail":"as before"}],"note":true}'
+```
+
+### `confirm`
+
+Before something risky or hard to undo (a force-push, a deploy, deleting data, a migration): ask for a yes or no.
+`question`, `details` (what will happen, a few lines) or a `diff`; `"danger": "high"` draws it in red and has the
+user type `word` (the branch's name; "yes" if none) before Proceed goes through. "Answer to confirm ID (QUESTION):
+proceed" (or cancel) comes as your next prompt, at once. Show it, say so in a line, end your turn, and do the risky
+thing only on proceed.
+
+```sh
+agent-ui show '{"id":"push","type":"confirm","question":"Force-push to origin/main?","details":["Rewrites the last 3 commits","Work others pushed to main may be lost"],"danger":"high","word":"main"}'
 ```
 
 ### `todo`

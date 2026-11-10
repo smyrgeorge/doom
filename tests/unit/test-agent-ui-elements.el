@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code diff files graph heatmap html image issues log markdown panel progress stats steps table text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code confirm diff files graph heatmap html image issues log markdown panel progress stats steps table text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -1382,6 +1382,100 @@ a new label after; its tick drops the user's change not sent of that item."
          (back (agent-ui-parse-json (json-serialize (agent-ui-to-json element)))))
     (should (equal (+test-aue-draw back) (+test-aue-draw element)))
     (should (equal (plist-get (agent-ui-check "todo" back) :changes) (plist-get element :changes)))))
+
+(ert-deftest agent-ui-elements/confirm ()
+  "Its question and what will happen; high danger in red, the word to type
+said; answered, the answer instead of its buttons; none in a still picture."
+  (let ((push '(:type "confirm" :question "Force-push to origin/main?"
+                :details ("Rewrites the last 3 commits" "Others' work on main may be lost")
+                :danger "high" :word "main")))
+    (should (equal (+test-aue-draw push)
+                   (concat "▲ Force-push to origin/main?\n"
+                           "  • Rewrites the last 3 commits\n"
+                           "  • Others' work on main may be lost\n"
+                           "⏵ Proceed   ⏵ Cancel   type \"main\" to proceed")))
+    (should (memq 'agent-ui-error (ensure-list (+test-aue-face-at push "Force-push"))))
+    (should (equal (+test-aue-draw push :still t)
+                   (concat "▲ Force-push to origin/main?\n"
+                           "  • Rewrites the last 3 commits\n"
+                           "  • Others' work on main may be lost")))
+    (should (equal (+test-aue-draw (append '(:answered "proceed") push))
+                   (concat "▲ Force-push to origin/main?\n"
+                           "  • Rewrites the last 3 commits\n"
+                           "  • Others' work on main may be lost\n"
+                           "✓ Answered: Proceed"))))
+  ;; Low: no word unless given; its labels; a detail wrapped under itself.
+  (should (equal (+test-aue-draw '(:type "confirm" :question "Deploy?" :proceed "Deploy" :cancel "Not now"))
+                 "Deploy?\n⏵ Deploy   ⏵ Not now"))
+  (should (equal (substring-no-properties
+                  (agent-ui-render '(:type "confirm" :question "Deploy?"
+                                     :details ("three services restart, one at a time") :answered "cancel")
+                                   (agent-ui-context :width 24)))
+                 "Deploy?\n  • three services\n    restart, one at a\n    time\n✗ Answered: Cancel"))
+  ;; A diff, as the diff element draws it.
+  (should (string-search "▾ db.sql  +1 −1"
+                         (+test-aue-draw '(:type "confirm" :question "Migrate?"
+                                           :diff "--- a/db.sql\n+++ b/db.sql\n@@ -1 +1 @@\n-a\n+b\n")))))
+
+(ert-deftest agent-ui-elements/confirm-proceed-or-cancel ()
+  "Proceed or Cancel sends its answer at once (or into the prompt, submit
+false); then locked."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "deploy" :type "confirm" :question "Deploy v2.3 to staging?"))
+      (agent-ui-show '(:id "cache" :type "confirm" :question "Delete the cache?" :submit :false))
+      (with-current-buffer canvas
+        (+test-aue-press "⏵ Proceed")
+        (should (equal sent '(("Answer to confirm deploy (Deploy v2.3 to staging?): proceed" t))))
+        (should (equal (plist-get (agent-ui-get "deploy") :answered) "proceed"))
+        (agent-ui--flush)
+        (should (string-search "✓ Answered: Proceed" (buffer-string)))
+        ;; The other's Cancel (the first's buttons gone).
+        (+test-aue-press "⏵ Cancel")
+        (should (equal (car sent) '("Answer to confirm cache (Delete the cache?): cancel" nil)))
+        (agent-ui--flush)
+        (should-not (string-search "⏵" (buffer-string)))))))
+
+(ert-deftest agent-ui-elements/confirm-typing-the-word ()
+  "High danger: Proceed asks to type the word (\"yes\" if none); a wrong one
+refused, nothing sent; Cancel asks nothing."
+  (+test-aue-canvas
+    (let* ((sent nil) (typed nil) (asked nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (cl-letf (((symbol-function 'read-string) (lambda (prompt &rest _) (push prompt asked) typed)))
+        (agent-ui-show '(:id "push" :type "confirm" :question "Force-push?" :danger "high" :word "main"))
+        (with-current-buffer canvas
+          (setq typed "master")
+          (should (equal (cadr (should-error (+test-aue-press "⏵ Proceed") :type 'user-error))
+                         "Not proceeding: type main to proceed"))
+          (should-not sent)
+          (should-not (plist-get (agent-ui-get "push") :answered))
+          (setq typed " main ")
+          (+test-aue-press "⏵ Proceed")
+          (should (equal (car asked) "Type main to proceed: "))
+          (should (equal sent '(("Answer to confirm push (Force-push?): proceed" t)))))
+        (agent-ui-show '(:id "drop" :type "confirm" :question "Drop the table?" :danger "high"))
+        (with-current-buffer canvas
+          (setq typed "yes")
+          (+test-aue-press "⏵ Proceed")
+          (should (equal (car asked) "Type yes to proceed: ")))
+        (agent-ui-show '(:id "wipe" :type "confirm" :question "Wipe it?" :danger "high"))
+        (with-current-buffer canvas
+          (setq asked nil)
+          (+test-aue-press "⏵ Cancel")
+          (should-not asked)
+          (should (equal (car sent) '("Answer to confirm wipe (Wipe it?): cancel" t))))))))
+
+(ert-deftest agent-ui-elements/confirm-wrong ()
+  (should (string-match-p "question is required" (+test-aue-error '(:type "confirm"))))
+  (should (string-match-p "details are lines" (+test-aue-error '(:type "confirm" :question "q" :details ("a" 2)))))
+  (should (string-match-p "danger" (+test-aue-error '(:type "confirm" :question "q" :danger "medium"))))
+  (should (string-match-p "word, if given" (+test-aue-error '(:type "confirm" :question "q" :word " "))))
+  (should (string-match-p "proceed\" or \"cancel" (+test-aue-error '(:type "confirm" :question "q" :answered "maybe"))))
+  ;; A question waiting until answered.
+  (should (agent-ui-ask-waiting-p '(:type "confirm" :question "q")))
+  (should-not (agent-ui-ask-waiting-p '(:type "confirm" :question "q" :answered "cancel"))))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.

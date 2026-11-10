@@ -181,6 +181,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `chart` | Lines (several series; on a time axis, with `times`), bars (several series grouped, or stacked), a histogram or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window`, `stacked`, `bins`, `times` |
 | `image` | An image file (an `.excalidraw.svg` drawing too), or one from a URL (in the GUI, downloaded once with curl, kept in Doom's cache, `agent-ui/images/`), in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file` or `url`, `alt`, `width` (percent), `height` (lines) |
 | `choice` | A question for you: options to pick (one or several), a note; Answer puts "Answer to choice ID (question): …" into the session's prompt, then it shows the answer | `question`, `options`, `multiple`, `note`, `submit`, `selected` |
+| `confirm` | A yes / no gate before something risky (deploying, deleting, pushing): its question, what will happen (lines, or a diff), high danger in red; Proceed or Cancel sends "Answer to confirm ID (question): proceed" (or cancel) at once, then it shows the answer; at high danger, Proceed asks you to type a word first (the branch's name; `yes`), and refuses another | `question`, `details`, `diff`, `danger`, `word`, `proceed`, `cancel`, `submit` |
 | `todo` | A checklist you and the agent both tick: the agent ticks items by appending them (by label), you tick them (`RET`, a click) and add some (Add); who did it shows after an item. Send your changes puts "Changes to todo ID by the user: done: …; not done: …; added: …" into the session's prompt; it goes on after (never locked) | `items`, `submit` |
 | `files` | Files with their state (changed, added, deleted, renamed, failing, passing) and counts, flat or a tree by folder (`RET` folds a folder); `RET` opens a file at its line; `select` asks you to pick files (a folder's mark picks its files) | `files`, `tree`, `dir`, `select` |
 | `stats` | A row of figures with their change (▲▼, green or red by whether a rise is good): tiles in the GUI, side by side as text | `figures` |
@@ -298,8 +299,8 @@ prompt is offered to queue (change it first if you like). A snapshot leaves the 
 
 ## A question waiting
 
-When the agent's turn ends with a question on its session's canvases not answered (a `choice`, rows to pick in a
-`table`, `files` or `issues`, a panel's child too), you see it:
+When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, rows to
+pick in a `table`, `files` or `issues`, a panel's child too), you see it:
 
 - the canvas's pane is shown (if it was closed), scrolled to the question, the cursor on it; the focus stays where it
   is;
@@ -423,7 +424,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |
