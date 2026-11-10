@@ -43,7 +43,10 @@ recorded, its reply REPLY (a plist)."
         (should (equal (plist-get result :protocolVersion) "2025-03-26"))
         (should (plist-get (plist-get result :capabilities) :tools))
         (should (equal (plist-get (plist-get result :serverInfo) :name) "agent-ui"))
-        (should (string-match-p "canvas beside your session" (plist-get result :instructions)))))
+        (should (string-match-p "canvas beside your session" (plist-get result :instructions)))
+        ;; A bug in Agent UI itself: how to file it, and where.
+        (should (string-match-p "file it with the bug tool: it goes into Agent UI's own issues, never the project's"
+                                (plist-get result :instructions)))))
     ;; A notification: no answer.
     (setq +test-aum-sent nil)
     (+test-aum-handle "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")

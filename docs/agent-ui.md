@@ -358,8 +358,10 @@ to have its tests and its section in the skill, which the filed issue is for.
 
 A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
 `+my/agent-shell-claude-context-functions`), while Emacs runs a server: the canvas, when to use it rather than Markdown
-in a reply (for what changes over time or deserves watching), the command's full path with an example, and to read the
-skill before using it the first time. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), has each
+in a reply (for what changes over time or deserves watching), the command's full path with an example, to read the
+skill before using it the first time, and, when Agent UI itself misbehaves, to ask you and file it with `agent-ui bug`
+([Bugs in Agent UI](#bugs-in-agent-ui)). The MCP server's instructions, also in its system prompt, say the same of its
+`bug` tool. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), has each
 type with examples, how to follow a long command, and cleaning up; it's read from there, nothing to install (as other
 skills, it can be installed too: [AI agents](ai-agents.md)). A test runs each of its examples, so they stay right as
 the types change.
