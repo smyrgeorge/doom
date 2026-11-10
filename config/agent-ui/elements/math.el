@@ -4,7 +4,7 @@
 ;;
 ;; In the GUI, an image typeset in the background by a tool, if one is
 ;; installed (`agent-ui-math-tool'): MathJax through node (npm install -g
-;; mathjax-full; config/agent-ui/math/tex2svg.js), or LaTeX and dvisvgm. Cached
+;; mathjax-full; elements/math/tex2svg.js), or LaTeX and dvisvgm. Cached
 ;; by the formula's hash (`agent-ui-math-cache-directory'), sized to the font,
 ;; in the theme's text colour; until it's there, its text. In a terminal, or
 ;; without a tool: a Unicode rendering where it's simple (α ≤ ∑ᵢ xᵢ²), else
@@ -25,7 +25,7 @@ MathJax's package in node's global modules, else latex and dvisvgm).")
   "Where typeset formulas are kept, by their hash.")
 
 (defconst agent-ui-math--script
-  (expand-file-name "../math/tex2svg.js" (file-name-directory (or load-file-name buffer-file-name)))
+  (expand-file-name "math/tex2svg.js" (file-name-directory (or load-file-name buffer-file-name)))
   "The MathJax script node runs.")
 
 (defvar agent-ui-math--results (make-hash-table :test #'equal)

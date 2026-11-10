@@ -2334,6 +2334,14 @@ indented."
   (should (equal (+test-aue-draw '(:type "math" :tex "E = mc^2" :display "inline")) "E = mc²"))
   (should (equal (+test-aue-draw '(:type "math" :tex "e^{i\\pi} + 1 = 0")) "  e^{i\\pi} + 1 = 0")))
 
+(ert-deftest agent-ui-elements/math-its-mathjax-script ()
+  "The MathJax script node runs: beside it, in elements/math/."
+  (should (equal agent-ui-math--script
+                 (expand-file-name "config/agent-ui/elements/math/tex2svg.js" +test-root)))
+  (should (file-readable-p agent-ui-math--script))
+  (should (equal (car (agent-ui-math--command 'mathjax 'block "/tmp")) "node"))
+  (should (equal (cdr (agent-ui-math--command 'mathjax 'inline "/tmp")) (list agent-ui-math--script "inline"))))
+
 (defmacro +test-aue-math (command &rest body)
   "BODY with a stand-in typesetting tool running COMMAND (its SVG on stdout),
 a cache of its own, nothing typeset yet."
