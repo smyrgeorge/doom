@@ -143,10 +143,17 @@
       (let* ((cw (plist-get ctx :char-width)) (lh (plist-get ctx :line-height))
              (span (agent-ui-timeline--span props))
              (from (car span)) (length (- (cdr span) from))
-             (name-width (* cw (+ 2 (min (apply #'max (mapcar (lambda (task) (string-width (plist-get task :name))) tasks))
-                                          (/ (plist-get ctx :width) 4)))))
-             (width (* cw (plist-get ctx :width)))
-             (bar-left name-width) (bar-width (- width name-width (* 10 cw)))
+             (columns (plist-get ctx :width))
+             ;; As in text: the names' column shrinks first, the bars keep a
+             ;; column (they went to 0 and below: drawn over the names).
+             (name-width (* cw (+ 2 (max 1 (min (apply #'max (mapcar (lambda (task) (string-width (plist-get task :name))) tasks))
+                                                 (/ columns 4)
+                                                 (- columns 3 10))))))
+             (width (* cw columns))
+             (bar-left name-width)
+             (bar-width (if (>= (- width name-width (* 10 cw)) (* 10 cw))
+                            (- width name-width (* 10 cw))
+                          (max cw (- width name-width (* 9 cw)))))
              (row (round (* 1.4 lh)))
              (shown (seq-take tasks agent-ui-max-rows))
              (svg (svg-create width (+ (* row (length shown)) lh)))
@@ -163,13 +170,18 @@
                       (svg-rectangle svg x0 (+ y (* 0.2 row)) (- x1 x0) (* 0.6 row) :rx 2
                                      :fill (agent-ui-chart--color (cadr (assq status agent-ui-timeline--statuses)))
                                      :fill-opacity (if (eq status 'queued) 0.5 1))
-                      (agent-ui-chart--svg-text svg ctx (if (eq status 'running) "running"
-                                                          (agent-ui-format-duration (- end (plist-get task :start))))
-                                                (+ x1 (/ cw 2)) (+ y (* 0.7 row)) :fill muted)))
+                      ;; Its time, where it fits in the image.
+                      (let ((time (if (eq status 'running) "running"
+                                    (agent-ui-format-duration (- end (plist-get task :start))))))
+                        (when (<= (+ x1 (/ cw 2) (* 0.5 lh (string-width time))) width)
+                          (agent-ui-chart--svg-text svg ctx time (+ x1 (/ cw 2)) (+ y (* 0.7 row)) :fill muted)))))
         (let ((y (+ (* row (length shown)) (* 0.8 lh))))
           (agent-ui-chart--svg-text svg ctx "0s" bar-left y :fill muted)
-          (agent-ui-chart--svg-text svg ctx (agent-ui-format-duration length) (+ bar-left bar-width) y
-                                    :fill muted :text-anchor "end"))
+          ;; Its end, where it clears \"0s\" (they overlapped, narrow).
+          (let ((end (agent-ui-format-duration length)))
+            (when (>= bar-width (* 0.5 lh (+ 3 (string-width end))))
+              (agent-ui-chart--svg-text svg ctx end (+ bar-left bar-width) y
+                                        :fill muted :text-anchor "end"))))
         (agent-ui-chart--image svg)))))
 
 (agent-ui-define timeline

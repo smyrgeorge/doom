@@ -1170,6 +1170,24 @@ width, the scale's labels apart (\"0s  13s26s\"; 21 columns at 20)."
         ;; The scale: its labels a space apart at least.
         (should-not (string-match-p "s[0-9]" (car (last (split-string text "\n")))))))))
 
+(ert-deftest agent-ui-elements/timeline-gui-narrow ()
+  "In the GUI at 10, 15, 20 columns: every bar inside the image, right of the
+names, the scale's labels apart (bars went left of their start, over their
+names; the end label outside the image, or on \"0s\")."
+  (let ((element '(:type "timeline" :tasks ((:name "build" :start 0 :duration 8) (:name "test-1" :start 8 :duration 14)
+                                            (:name "test-2" :start 8 :duration 11 :status "failed")))))
+    (dolist (columns '(10 15 20))
+      (let* ((svg (+test-aue-svg element columns))
+             (width (* 8 columns)) (start 0))
+        (while (string-match "<rect width=\"\\([0-9.]+\\)\"[^>]* x=\"\\([0-9.]+\\)\"" svg start)
+          (let ((x (string-to-number (match-string 2 svg))) (w (string-to-number (match-string 1 svg))))
+            (should (>= x 16))
+            (should (<= (+ x w) width)))
+          (setq start (match-end 0)))
+        ;; The end label, if shown, past \"0s\" and within the image.
+        (when (string-match "text-anchor=\"end\"[^>]*x=\"\\([0-9.]+\\)\">[0-9]" svg)
+          (should (<= (string-to-number (match-string 1 svg)) width)))))))
+
 (ert-deftest agent-ui-elements/timeline-finished-stamped-spans-its-tasks ()
   "Finished tasks given timestamps: the axis spans them (it ran to now: a day
 later, 22 hours wide); one still running: to now."
