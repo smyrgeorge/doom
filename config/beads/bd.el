@@ -7,7 +7,8 @@
 ;; bd 1.x has none, only its command line (`bd ... --json'), where beads.el
 ;; trips: its arguments built with string keys but read with symbols (create,
 ;; update, close, labels, dependencies all failed), flags bd renamed, `bd
-;; show' answering a list, `bd delete' only previewing without --force.
+;; show' answering a list, `bd delete' only previewing without --force, `bd
+;; stats' nesting its counts under summary (the list's bar and S said 0).
 ;; Mended here; the activity feed (`bd mutations')
 ;; and the merge conflicts view (`bd resolve-conflicts') are gone from bd and
 ;; say so. Only bd's command line is used (config/beads.el).
@@ -48,6 +49,15 @@ forced: without --force bd 1.x only previews it (and exits 0: beads.el said
       (car result)
     result))
 
+(defun +my/beads--stats-summary-a (stats)
+  "`bd stats''s STATS with its summary's counts at the top, where beads.el
+reads them (bd 0.49 had them there); the rest kept."
+  (if-let* (((consp stats))
+            (summary (alist-get 'summary stats))
+            ((consp summary)))
+      (append summary (assq-delete-all 'summary (copy-alist stats)))
+    stats))
+
 (defun +my/beads--gone (what)
   (user-error "Beads: bd %s has no %s (beads.el was written for bd 0.49)"
               (or (ignore-errors (car (process-lines "bd" "version"))) "1.x")
@@ -65,6 +75,7 @@ forced: without --force bd 1.x only previews it (and exits 0: beads.el said
   (advice-add 'beads-backend-bd--operation-to-cli-args :filter-return #'+my/beads--flags-a)
   (advice-add 'beads-backend-bd--cli-extra-flags :filter-return #'+my/beads--no-daemon-a))
 (after! beads-client
-  (advice-add 'beads-client-show :filter-return #'+my/beads--one-issue-a))
+  (advice-add 'beads-client-show :filter-return #'+my/beads--one-issue-a)
+  (advice-add 'beads-client-stats :filter-return #'+my/beads--stats-summary-a))
 (advice-add 'beads-activity :override #'+my/beads-activity-a)
 (advice-add 'beads-conflicts :override #'+my/beads-conflicts-a)

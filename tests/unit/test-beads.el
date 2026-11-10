@@ -77,6 +77,12 @@ on *scratch*, and again after (Beads' buffers killed)."
   (with-current-buffer buffer
     (buffer-substring-no-properties (point-min) (point-max))))
 
+(defun +test-beads--bar ()
+  "The current issue list's bottom bar: its text (no window in batch to draw
+it in), its counts."
+  (mapconcat (lambda (part) (if (stringp part) (substring-no-properties part) ""))
+             (flatten-tree (ensure-list mode-line-format)) ""))
+
 ;; ====== KEYS ======
 
 (ert-deftest beads/keys ()
@@ -219,6 +225,18 @@ while without one."
   (should (equal (+my/beads--one-issue-a '((id . "t-1") (title . "T"))) '((id . "t-1") (title . "T"))))
   (should-not (+my/beads--one-issue-a nil)))
 
+(ert-deftest beads/stats-summary-at-the-top ()
+  "bd 1.x's stats, its counts under summary: at the top, the rest kept; bd
+0.49's flat answer as it was."
+  (let ((stats (+my/beads--stats-summary-a
+                '((schema_version . 1) (summary (total_issues . 7) (open_issues . 3))))))
+    (should (eql (alist-get 'total_issues stats) 7))
+    (should (eql (alist-get 'open_issues stats) 3))
+    (should (eql (alist-get 'schema_version stats) 1))
+    (should-not (alist-get 'summary stats)))
+  (should (equal (+my/beads--stats-summary-a '((total_issues . 7))) '((total_issues . 7))))
+  (should-not (+my/beads--stats-summary-a nil)))
+
 (ert-deftest beads/gone-from-bd-say-so ()
   (should-error (beads-activity) :type 'user-error)
   (should-error (beads-conflicts) :type 'user-error))
@@ -295,6 +313,34 @@ while without one."
       (should (alist-get 'results (beads-core-cli-request "lint")))
       (should (beads-client-stats))
       (should (member "bug" (beads-get-types))))))
+
+(ert-deftest beads/bd-the-list-s-counts ()
+  "The list's bar and the S view: bd's counts (open, in progress, blocked,
+closed), not 0s."
+  (+test-beads-with-project
+    (let ((blocked (+test-beads--create "Blocked"))
+          (blocker (+test-beads--create "Blocker"))
+          (working (+test-beads--create "Working on it"))
+          (done (+test-beads--create "Done")))
+      (beads-client-request "dep_add" `((from_id . ,blocked) (to_id . ,blocker)))
+      (beads-client-update working :status "in_progress")
+      (beads-client-close done "Done")
+      (let ((stats (beads-client-stats)))
+        (should (eql (alist-get 'total_issues stats) 4))
+        (should (eql (alist-get 'closed_issues stats) 1))
+        (should (eql (alist-get 'in_progress_issues stats) 1))
+        (should (eql (alist-get 'blocked_issues stats) 1)))
+      (+my/beads-project)
+      (let ((list (seq-find (lambda (b) (with-current-buffer b (derived-mode-p 'beads-list-mode)))
+                            (buffer-list))))
+        (with-current-buffer list
+          (should (string-match-p "4 total | 2 open | 1 in progress | 1 blocked | 1 ready"
+                                  (+test-beads--bar)))))
+      (beads-stats)
+      (let ((text (+test-beads--text "*Beads Stats*")))
+        (should (string-match-p "Total Issues: +4" text))
+        (should (string-match-p "Closed: +1" text))
+        (should (string-match-p "Blocked: +1" text))))))
 
 ;; ====== PANES ======
 
