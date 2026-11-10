@@ -134,7 +134,11 @@
                                     (x (+ label-w (* j cell-w))))
                                 (svg-rectangle svg (+ x 1) (+ y 1) (- cell-w 2) (- cell-h 2) :rx 3
                                                :fill (or color "none") :stroke (if color "none" muted) :stroke-opacity 0.4)
-                                (when (and v (numberp v))
+                                ;; Its number, if it fits the cell (~0.5 of a
+                                ;; line a character): else its colour says it
+                                ;; (numbers overlapped the next cell's).
+                                (when (and v (numberp v)
+                                           (<= (* 0.5 lh (string-width (agent-ui-format-number v))) (- cell-w 4)))
                                   (agent-ui-chart--svg-text svg ctx (agent-ui-format-number v) (+ x (/ cell-w 2)) (+ y (* 0.68 cell-h))
                                                             :fill (if (> (/ (- v (car range)) (float (max 1e-9 (- (cdr range) (car range))))) 0.55)
                                                                       "#1b1b1b" fg)

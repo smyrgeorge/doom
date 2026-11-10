@@ -1155,6 +1155,19 @@ a unit that isn't text is refused (it broke the drawing)."
     (plist-get (cdr (get-text-property (text-property-not-all 0 (length text) 'display nil text) 'display text))
                :data)))
 
+(ert-deftest agent-ui-elements/heatmap-gui-numbers-fit-their-cells ()
+  "In the GUI a cell's number is shown only if it fits the cell (\"130.25\"
+overlapped the next cell's, \"1234\" spilled out of the last)."
+  (let ((svg (+test-aue-svg (list :type "heatmap" :rows '("build" "test")
+                                  :columns (mapcar (lambda (i) (format "c%d" i)) (number-sequence 1 12))
+                                  :values (list (list 12.5 130.25 14 1 2 3 4 5 6 7 22 1234)
+                                                (number-sequence 1 12)))
+                            50)))
+    ;; Cells of 28 px: two digits fit, five and four don't.
+    (should (string-match-p ">12</text>" svg))
+    (should-not (string-match-p ">130.25</text>" svg))
+    (should-not (string-match-p ">1234</text>" svg))))
+
 (ert-deftest agent-ui-elements/heatmap-gui-row-labels-cut ()
   "In the GUI a long row label is cut to its column (it ran through the cells)."
   (let ((svg (+test-aue-svg '(:type "heatmap" :rows ("test_parser_handles_unicode_identifiers" "lexer")
