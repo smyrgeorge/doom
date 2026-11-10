@@ -16,16 +16,31 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(defun agent-ui-log--words (&rest words)
+  "A regexp of WORDS, whole: not beside a letter, a digit or _ (with \\b,
+error_count was an error)."
+  (concat "\\(?:\\`\\|[^[:alnum:]_]\\)" (regexp-opt words) "\\(?:[^[:alnum:]_]\\|\\'\\)"))
+
 (defconst agent-ui-log--levels
-  '((error "\\b\\(?:error\\|err\\|fatal\\|panic\\|failed\\|failure\\|exception\\|critical\\)\\b" agent-ui-error)
-    (warning "\\b\\(?:warn\\|warning\\|deprecated\\)\\b" agent-ui-warning)
-    (debug "\\b\\(?:debug\\|trace\\)\\b" agent-ui-muted)
-    (info "\\b\\(?:info\\|notice\\)\\b" nil))
+  (list (list 'error (agent-ui-log--words "error" "err" "fatal" "panic" "failed" "failure" "exception" "critical")
+              'agent-ui-error)
+        (list 'warning (agent-ui-log--words "warn" "warning" "deprecated") 'agent-ui-warning)
+        (list 'debug (agent-ui-log--words "debug" "trace") 'agent-ui-muted)
+        (list 'info (agent-ui-log--words "info" "notice") nil))
   "Levels, the words finding them (in this order), their faces.")
 
+(defconst agent-ui-log--none
+  (concat "\\(?:\\`\\|[^[:alnum:]_.]\\)\\(?:0\\|no\\) +"
+          "\\(?:failed\\|failures?\\|errors?\\|warnings?\\)\\(?:(s)\\)?\\_>"
+          ;; Plural only: \"ERROR: 0 is not a port\" is one.
+          "\\|\\_<\\(?:failed\\|failures\\|errors\\|warnings\\) *[:=] *0\\(?:[^[:alnum:]_.]\\|\\'\\)")
+  "A count of none, not an error nor a warning: cargo's \"0 failed\", \"no
+errors\", Maven's \"Errors: 0\", \"0 Warning(s)\".")
+
 (defun agent-ui-log--level (text)
-  "TEXT's level, by its words; nil if none."
-  (let ((case-fold-search t))
+  "TEXT's level, by its words (counts of none aside); nil if none."
+  (let* ((case-fold-search t)
+         (text (replace-regexp-in-string agent-ui-log--none " " text)))
     (car (seq-find (lambda (l) (string-match-p (nth 1 l) text)) agent-ui-log--levels))))
 
 (defun agent-ui-log--as-list (lines)

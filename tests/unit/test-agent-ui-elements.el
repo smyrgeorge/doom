@@ -1454,6 +1454,32 @@ a unit that isn't text is refused (it broke the drawing)."
                  "1 warning · 3 lines\nc\nd"))
   (should (equal (+test-aue-draw '(:type "log")) "no lines yet")))
 
+;; doom-nwj.75
+(ert-deftest agent-ui-elements/log-summaries-of-none-arent-errors ()
+  "Success summaries aren't errors: a count of none (cargo's \"0 failed\",
+\"Errors: 0\") nor error_count (_ is part of a word); failures still are."
+  (dolist (line '("test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured"
+                  "============================== 12 passed in 0.12s =============================="
+                  "Tests:       12 passed, 12 total"
+                  "Tests run: 12, Failures: 0, Errors: 0, Skipped: 0"
+                  "error_count=0 warning_count=0"
+                  "    0 Warning(s)"
+                  "    0 Error(s)"
+                  "Compiled with no errors"
+                  "build: 0 errors, 0 warnings"))
+    (should-not (agent-ui-log--level line)))
+  (dolist (line '("test result: FAILED. 11 passed; 1 failed; 0 ignored"
+                  "========================= 1 failed, 11 passed in 0.31s ========================="
+                  "FAILED tests/test_parser.py::test_empty - AssertionError"
+                  "error[E0308]: mismatched types"
+                  "Tests run: 12, Failures: 0, Errors: 1, Skipped: 0 <<< FAILURE!"
+                  "10 failed"
+                  "ERROR: 0 is not a valid port"))
+    (should (eq (agent-ui-log--level line) 'error)))
+  (should (eq (agent-ui-log--level "12 passed, 1 warning in 0.5s") 'warning))
+  (should (equal (+test-aue-draw '(:type "log" :lines "running 12 tests\ntest result: ok. 12 passed; 0 failed; 0 ignored"))
+                 "2 lines\nrunning 12 tests\ntest result: ok. 12 passed; 0 failed; 0 ignored")))
+
 (ert-deftest agent-ui-elements/log-appended ()
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines "a\nb") '(:lines "c\n")) :lines) '("a" "b" "c")))
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines ("a")) '(:lines ("b" "c"))) :lines) '("a" "b" "c")))
