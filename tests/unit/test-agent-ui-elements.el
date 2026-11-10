@@ -533,16 +533,29 @@ line left the image at the top and crossed the labels' row)."
                      (split-string points ","))))
     (should (cl-every (lambda (y) (and (>= y 0) (<= y (* 4 16)))) ys))))
 
+(ert-deftest agent-ui-elements/chart-bars-start-at-min ()
+  "A bar chart's min: its bars start at it (95 and 100 from 90: half and
+whole; it was ignored, both near the full width); stacked bars from 0."
+  (let* ((text (+test-aue-draw '(:type "chart" :kind "bar" :min 90 :labels ("a" "b") :values (95 100)) :width 40))
+         (bars (mapcar (lambda (line) (cl-count-if (lambda (c) (memq c '(?█ ?▉ ?▊ ?▋ ?▌ ?▍ ?▎ ?▏))) line))
+                       (split-string text "\n"))))
+    (should (< (abs (- (* 2 (car bars)) (cadr bars))) 2)))
+  (let ((stacked (+test-aue-draw '(:type "chart" :kind "bar" :stacked t :min 90 :labels ("a")
+                                   :series ((:name "x" :values (50)) (:name "y" :values (50))))
+                                 :width 40)))
+    (should (string-match-p "100" stacked))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."
   (dolist (element '((:type "chart" :kind "bar" :labels ("a" "b" "c") :values (-2 -1 0))
-                     (:type "chart" :kind "bar" :min -10 :max 0 :values (-5 -3))
                      (:type "chart" :kind "bar" :labels ("a") :values (0))))
     (let ((text (+test-aue-draw element :width 40)))
       (should-not (string-search "⚠" text))
       (should-not (string-search "█" text)))
-    (should (+test-aue-svg element 40))))
+    (should (+test-aue-svg element 40)))
+  ;; Max 0 and a min below: bars from the min (doom-nwj.52), no break.
+  (should-not (string-search "⚠" (+test-aue-draw '(:type "chart" :kind "bar" :min -10 :max 0 :values (-5 -3)) :width 40))))
 
 (ert-deftest agent-ui-elements/chart-bars ()
   (let ((element '(:type "chart" :kind "bar" :unit "ms" :labels ("mon" "tue" "wed" "thu")

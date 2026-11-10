@@ -182,11 +182,20 @@ from 0)."
          (high (or (plist-get props :max) (if values (apply #'max values) 1))))
     (cons low (if (<= high low) (agent-ui-chart--above low) high))))
 
+(defun agent-ui-chart--bar-from (props)
+  "Where PROPS' bars start: their min if given (ignored, bars started at 0
+whatever it said), else 0; stacked bars at 0 (their parts add up from it)."
+  (if (and (plist-get props :min) (not (agent-ui-chart--stacked-p props)))
+      (plist-get props :min)
+    0))
+
 (defun agent-ui-chart--bar-scale (props width)
-  "How long a bar of 1 is, WIDTH long for the highest: 0 if nothing's above
-0 (it divided by 0, and the drawing broke: values all 0 or below)."
-  (let ((high (cdr (agent-ui-chart--range props))))
-    (if (> high 0) (/ width (float high)) 0.0)))
+  "How long a bar of 1 is, WIDTH long from where bars start to the highest:
+0 if nothing's above that (it divided by 0, and the drawing broke: values
+all 0 or below)."
+  (let ((high (cdr (agent-ui-chart--range props)))
+        (from (agent-ui-chart--bar-from props)))
+    (if (> high from) (/ width (float (- high from))) 0.0)))
 
 (defun agent-ui-chart--number (props number)
   "NUMBER as the chart shows it, with PROPS' unit."
@@ -260,7 +269,8 @@ stacked: a bar per label, its series end to end, their total its number."
   (let* ((series (plist-get props :series))
          (n (apply #'max 0 (mapcar (lambda (s) (length (plist-get s :values))) series)))
          (labels (plist-get props :labels))
-         (value (lambda (s i) (max 0 (or (nth i (plist-get s :values)) 0)))))
+         (from (agent-ui-chart--bar-from props))
+         (value (lambda (s i) (max 0 (- (or (nth i (plist-get s :values)) 0) from)))))
     (cl-loop
      for i below n
      for name = (or (nth i labels) (number-to-string (1+ i)))
@@ -693,7 +703,7 @@ latest so many."
           (series list "Several series: [{\"name\": ..., \"values\": [...]}]")
           (labels list "Names for the values, in order (x axis; a bar's name)")
           (unit string "What the numbers count (ms, MB), after them")
-          (min number "The lowest the axis shows (default: the values', bars from 0)")
+          (min number "The lowest the axis shows: bars start at it, but stacked ones (default: the values', bars from 0)")
           (max number "The highest the axis shows (default: the values')")
           (height integer "A line chart's height, in lines" :default 8)
           (window integer "Keep only the latest so many values (a live chart)")
