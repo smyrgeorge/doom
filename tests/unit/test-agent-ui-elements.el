@@ -1164,6 +1164,27 @@ space showing it); plain lines still trimmed."
   (let ((image (concat "x " (propertize " " 'display '(space :width (3))))))
     (should (equal (agent-ui-panel--trim-right image) image))))
 
+(ert-deftest agent-ui-elements/panel-gui-row-children-fit-their-columns ()
+  "A GUI row drawn as one SVG: each child's text fitted to its column (a long
+title ran across the line between them into the next child)."
+  (let* ((text (agent-ui-render '(:type "panel" :layout "row"
+                                  :children ((:type "table" :title "Slowest tests in the parser module this week"
+                                                    :columns ("Test" "Result") :rows (("lexer" "passed") ("parser" "failed")))
+                                             (:type "chart" :title "Latency" :values (1 3 2 5 4))))
+                                (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+         ;; The row's image: under the border's top line.
+         (svg (plist-get (cdr (get-text-property (text-property-not-all 0 (length text) 'display nil text)
+                                                 'display text))
+                         :data))
+         (nested (progn (string-match "<svg x=\"[0-9]+\" y=\"0\" [^>]*width=\"\\([0-9]+\\)\"" svg)
+                        (string-to-number (match-string 1 svg)))))
+    ;; The table's column: 26 of 60 (border and separator out), and the
+    ;; snapshot's padding (a column each side).
+    (should (<= nested (* 8 (+ 26 2))))
+    ;; The title cut (a word a <text>): its end gone.
+    (should (string-match-p "…\\|&#8230;" svg))
+    (should-not (string-match-p ">week<" svg))))
+
 (ert-deftest agent-ui-elements/panel-an-image-line-in-its-border ()
   ;; An image's line padded to the panel's width: a filler to its last
   ;; column's end, spaces, the border's right side.

@@ -136,7 +136,11 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
     (let* ((cw (plist-get ctx :char-width))
            (lh (plist-get ctx :line-height))
            (left (if border 2 0))
-           (svgs (cl-mapcar (lambda (text w) (agent-ui-snapshot-svg text (plist-put (copy-sequence ctx) :width w)))
+           ;; Each child's text fitted to its column first (a long title
+           ;; ran across the line between them, or over the border).
+           (svgs (cl-mapcar (lambda (text w)
+                              (agent-ui-snapshot-svg (string-join (agent-ui-panel--lines text w ctx) "\n")
+                                                     (plist-put (copy-sequence ctx) :width w)))
                             texts widths))
            (heights (mapcar (lambda (svg) (if (string-match "height=\"\\([0-9.]+\\)\"" svg)
                                               (string-to-number (match-string 1 svg)) lh))
