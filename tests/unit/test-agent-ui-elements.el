@@ -1775,6 +1775,15 @@ the width (the bar was 10 at least and nothing was cut: 44 columns at 40)."
     (dolist (width '(10 15 20 30))
       (should (<= (string-width (+test-aue-draw element :width width)) width)))))
 
+(ert-deftest agent-ui-elements/progress-done-shows-its-mark ()
+  "A done or failed bar without a label keeps its ✓ or ✗ at any width (under
+~58 columns it was left out: done and failed alike in a terminal)."
+  (dolist (width '(20 30 40 50 56 80))
+    (should (string-match-p "✓" (+test-aue-draw '(:type "progress" :value 12 :max 12 :status "done") :width width)))
+    (should (string-match-p "✗" (+test-aue-draw '(:type "progress" :value 3 :max 12 :status "failed") :width width)))
+    (should (string-match-p "✓" (+test-aue-draw '(:type "progress" :status "done") :width width)))
+    (should (<= (string-width (+test-aue-draw '(:type "progress" :value 12 :max 12 :status "done") :width width)) width))))
+
 (ert-deftest agent-ui-elements/progress-its-rate-and-time-left ()
   (let* ((now 100.0)
          (agent-ui-clock (lambda () now)))

@@ -185,7 +185,9 @@ frame, glyphs drawn one by one leave seams between them."
                (t (agent-ui-progress--bar 1.0 bar-width face))))
          (line (string-join (seq-remove #'string-empty-p (list bar counts)) "  "))
          (room (- width (string-width line) 2)))
-    (if (or (string-empty-p label) (< room 4))
+    ;; A label with room (4 columns, or less if it's only a mark: a done bar
+    ;; without a label lost its ✓, the bar taking all but its column).
+    (if (or (string-empty-p label) (< room (min 4 (string-width label))))
         line
       (concat line "  " (agent-ui-truncate label room)))))
 
