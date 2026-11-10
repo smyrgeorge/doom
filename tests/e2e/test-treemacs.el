@@ -204,3 +204,123 @@ up from / forever, Emacs hung (this test then times out)."
                      treemacs-dom))
           (treemacs--do-refresh buffer 'all)
           (should (string-match-p "other-project" (+test-treemacs--label (point)))))))))
+
+;; ====== STICKY TITLE ======
+
+(defun +test-treemacs--header (window)
+  "WINDOW's header line as shown (nil: none)."
+  (when (> (window-header-line-height window) 0)
+    (string-trim (+test-treemacs--header-text window))))
+
+(defun +test-treemacs--header-text (window)
+  "WINDOW's header line's text, with its properties."
+  (format-mode-line (or (window-parameter window 'header-line-format)
+                        (buffer-local-value 'header-line-format (window-buffer window)))
+                    nil window))
+
+(defun +test-treemacs--wheel-up (window n)
+  "N wheel notches up over WINDOW, through the command loop."
+  (dotimes (_ n)
+    (execute-kbd-macro (vector (list 'wheel-up (posn-at-point (window-start window) window))))
+    (+test--pump 0.02)))
+
+(defun +test-treemacs--top (window pos)
+  "WINDOW scrolled so POS's line is at its top, the cursor there."
+  (with-selected-window window
+    (goto-char pos)
+    (set-window-start window (line-beginning-position)))
+  (+test--pump 0.05))
+
+(defun +test-treemacs--project-name ()
+  (file-name-nondirectory (directory-file-name +test-treemacs--root)))
+
+(ert-deftest e2e-treemacs/sticky-title-once-scrolled ()
+  "At the top: no header line (the title shows once). Scrolled: the
+project's line (name, branch) stays at the top, as a header line. Back to the
+top: gone again."
+  (+test-treemacs
+    (let ((sidebar (+test-treemacs--window))
+          (name (+test-treemacs--project-name)))
+      (should (+test-wait-for (lambda () (string-match-p "  [^ ]+\\'" (+test-treemacs--label (point-min)))) 5))
+      (let ((root-line (+test-treemacs--label (with-current-buffer (window-buffer sidebar) (point-min)))))
+        (should (string-match-p (concat (regexp-quote name) "  ") root-line))
+        (+test-sleep 0.2)
+        (should-not (+test-treemacs--header sidebar))
+        (+test-treemacs--wheel sidebar 2)
+        (should (+test-wait-for (lambda () (+test-treemacs--header sidebar)) 3))
+        (should (equal (+test-treemacs--header sidebar) root-line))
+        (should-not (pos-visible-in-window-p (with-current-buffer (window-buffer sidebar) (point-min)) sidebar))
+        (+test-treemacs--wheel sidebar 30)
+        (+test-sleep 0.2)
+        (should (equal (+test-treemacs--header sidebar) root-line))
+        (+test-treemacs--wheel-up sidebar 40)
+        (should (+test-wait-for (lambda () (not (+test-treemacs--header sidebar))) 3))
+        (should (= (window-start sidebar) (with-current-buffer (window-buffer sidebar) (point-min))))))))
+
+(ert-deftest e2e-treemacs/sticky-title-follows-the-branch ()
+  "The branch (and ↑↓) changing while scrolled: the title shows it at once."
+  (+test-treemacs
+    (let ((sidebar (+test-treemacs--window))
+          (root (directory-file-name (file-truename +test-treemacs--root))))
+      (+test-treemacs--wheel sidebar 5)
+      (should (+test-wait-for (lambda () (+test-treemacs--header sidebar)) 3))
+      (with-current-buffer (window-buffer sidebar)
+        (+my/treemacs--branch-set root (+my/treemacs--branch-suffix "# branch.oid abc\n# branch.head topic\n# branch.ab +3 -0\n")))
+      (should (+test-wait-for (lambda () (string-suffix-p "  topic ↑3" (or (+test-treemacs--header sidebar) ""))) 3)))))
+
+(ert-deftest e2e-treemacs/sticky-title-of-the-project-in-view ()
+  "Two projects: the title is the one whose files are at the top; a
+project's line at the top itself: no title. (Without following the project,
+which would show the current one alone.)"
+  (+test-treemacs
+    (cl-letf (((symbol-function 'treemacs--do-follow-project) #'ignore))
+      (let* ((other (let ((root (file-name-as-directory (+test-tmp-file "sticky-other/"))))
+                      (make-directory root t)
+                      (dolist (i (number-sequence 1 60))
+                        (with-temp-file (expand-file-name (format "g%02d.txt" i) root) (insert "g\n")))
+                      (directory-file-name (file-truename root))))
+             (sidebar (+test-treemacs--window))
+             (buffer (window-buffer sidebar)))
+        (with-selected-window sidebar
+          (let ((inhibit-message t))
+            (treemacs-do-add-project-to-workspace other "sticky-other"))
+          (goto-char (point-min))
+          (re-search-forward "sticky-other")
+          (unless (eq (treemacs-button-get (treemacs-current-button) :state) 'root-node-open)
+            (treemacs-TAB-action)))
+        (let ((other-root (with-current-buffer buffer
+                            (save-excursion
+                              (goto-char (point-min))
+                              (re-search-forward "sticky-other")
+                              ;; A marker: the branch shown after the first
+                              ;; project's name moves the text after it.
+                              (copy-marker (line-beginning-position))))))
+          (+test-treemacs--top sidebar other-root)
+          (+test-sleep 0.3)
+          (should-not (+test-treemacs--header sidebar))
+          (+test-treemacs--top sidebar (with-current-buffer buffer
+                                         (save-excursion (goto-char other-root) (forward-line 5) (point))))
+          (+test-wait-for (lambda () (equal (+test-treemacs--header sidebar) (+test-treemacs--label other-root))) 3)
+          (should (equal (+test-treemacs--header sidebar) (+test-treemacs--label other-root)))
+          (should (equal (+test-treemacs--label (window-start sidebar)) "g05.txt"))
+          (+test-treemacs--top sidebar (with-current-buffer buffer
+                                         (save-excursion (goto-char other-root) (forward-line -5) (point))))
+          (+test-wait-for (lambda () (string-prefix-p (+test-treemacs--project-name)
+                                                      (or (+test-treemacs--header sidebar) "")))
+                          3)
+          (should (string-prefix-p (+test-treemacs--project-name)
+                                   (or (+test-treemacs--header sidebar) ""))))))))
+
+(ert-deftest e2e-treemacs/sticky-title-click-goes-to-the-project ()
+  (+test-treemacs
+    (let ((sidebar (+test-treemacs--window)))
+      (+test-treemacs--wheel sidebar 10)
+      (should (+test-wait-for (lambda () (+test-treemacs--header sidebar)) 3))
+      (should (eq (lookup-key (get-text-property 0 'local-map (+test-treemacs--header-text sidebar))
+                              [header-line mouse-1])
+                  #'+my/treemacs-sticky-goto))
+      (+my/treemacs-sticky-goto (list 'mouse-1 (list sidebar 'header-line '(5 . 5) 0)))
+      (should (eq (selected-window) sidebar))
+      (should (+test-wait-for (lambda () (not (+test-treemacs--header sidebar))) 3))
+      (should (equal (+test-treemacs--label (point)) (+test-treemacs--label (point-min))))
+      (should (= (window-start sidebar) (point-min))))))

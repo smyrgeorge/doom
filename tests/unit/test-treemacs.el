@@ -1576,6 +1576,69 @@ refreshes in a project treemacs shows (not another)."
       (+my/treemacs-branch-after-magit-h)
       (should-not read))))
 
+;; ====== STICKY TITLE ======
+
+(defun +test-treemacs--line-start (label)
+  "Where LABEL's line starts in treemacs' buffer."
+  (with-current-buffer (treemacs-get-local-buffer)
+    (save-excursion
+      (goto-char (point-min))
+      (re-search-forward (concat "^ *" (regexp-quote label)))
+      (line-beginning-position))))
+
+(ert-deftest treemacs/sticky-root-above ()
+  "The root line of the project whose nodes are at a window's top, if it's
+above; at a root line, or above every project: none."
+  (+test-treemacs
+    (let* ((root (+test-treemacs--dir "sticky" "README.md" "a.txt" "b.txt" "c.txt"))
+           (name (file-name-nondirectory (directory-file-name root))))
+      (+test-treemacs--show-project root)
+      (with-current-buffer (treemacs-get-local-buffer)
+        (let ((top (+test-treemacs--line-start name)))
+          (should (= top (point-min)))
+          (should-not (+my/treemacs--root-above top))
+          (should-not (+my/treemacs--root-above (1+ top)))
+          (dolist (file '("a.txt" "c.txt"))
+            (should (= (+my/treemacs--root-above (+test-treemacs--line-start file)) top)))
+          ;; Mid-line: its line counts.
+          (should (= (+my/treemacs--root-above (+ 3 (+test-treemacs--line-start "b.txt"))) top)))))))
+
+(ert-deftest treemacs/sticky-header-line-while-scrolled ()
+  "The sidebar's window gets the title as its header line while a root line
+is scrolled out, and none at the top; the title is the root line as shown
+(% escaped), a click on it goes there."
+  (+test-treemacs
+    (let* ((root (+test-treemacs--dir "sticky-title" "README.md" "a.txt" "b.txt"))
+           (name (file-name-nondirectory (directory-file-name root)))
+           (window (progn (+test-treemacs--show-project root) (treemacs-get-local-window))))
+      (with-current-buffer (window-buffer window)
+        (should (memq #'+my/treemacs--sticky-update window-scroll-functions)))
+      (should (memq #'+my/treemacs-sticky-after-refresh-h treemacs-post-refresh-hook))
+      (+my/treemacs--sticky-update window (+test-treemacs--line-start "a.txt"))
+      (should (equal (window-parameter window 'header-line-format)
+                     '(:eval (+my/treemacs--sticky-title))))
+      (+my/treemacs--branch-set (directory-file-name root) "  100%")
+      (with-selected-window window
+        (set-window-start window (+test-treemacs--line-start "a.txt"))
+        (let ((title (+my/treemacs--sticky-title)))
+          (should (equal (string-trim (substring-no-properties title))
+                         (concat name "  100%%")))
+          (should (eq (lookup-key (get-text-property 0 'local-map title) [header-line mouse-1])
+                      #'+my/treemacs-sticky-goto))))
+      (+my/treemacs--sticky-update window (+test-treemacs--line-start name))
+      (should-not (window-parameter window 'header-line-format))
+      ;; A click on the title.
+      (+my/treemacs--sticky-update window (+test-treemacs--line-start "b.txt"))
+      (with-selected-window window (set-window-start window (+test-treemacs--line-start "b.txt")))
+      (+my/treemacs-sticky-goto (list 'mouse-1 (list window 'header-line '(1 . 1) 0)))
+      (should (eq (selected-window) window))
+      (should (= (window-start window) (point-min)))
+      (should (= (line-beginning-position) (point-min)))
+      (should-not (window-parameter window 'header-line-format))
+      ;; Not treemacs' window, a dead one: nothing.
+      (+my/treemacs--sticky-update (next-window window) 1)
+      (should-not (window-parameter (next-window window) 'header-line-format)))))
+
 ;; ====== zR / zM ======
 
 (ert-deftest treemacs/count-dirs ()
