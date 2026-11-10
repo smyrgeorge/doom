@@ -16,9 +16,10 @@
 ;;   SPC w RET   the current pane's buffer to the main pane (the first one),
 ;;               the main's to where it was, the focus with it (Amethyst's
 ;;               swap with main); from the main pane, the next one's to it
-;;   SPC w ] / [ the main pane bigger / smaller (`+my/tiling-resize-step' of
-;;               the width), from any pane; ] and [ again repeat it. Kept: SPC w
-;;               a and new panes lay it out so (Amethyst's expand / shrink main)
+;;   SPC w ] / [ the main area bigger / smaller, as the strategy has it (tall:
+;;               the main pane's width, by `+my/tiling-resize-step' of it),
+;;               from any pane; ] and [ again repeat it. Kept: SPC w a and new
+;;               panes lay it out so (Amethyst's expand / shrink main)
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom.
 ;; A pane closed, however (SPC w d, q, its last tab...): the others laid out
@@ -64,7 +65,8 @@
   "The smallest and biggest share of the width SPC w [ / ] give the main pane.")
 
 (defvar +my/tiling-resize-step 0.05
-  "The share of the width SPC w ] / [ add to or take from the main pane.")
+  "The share SPC w ] / [ add to or take from the main area (tall: of the
+width).")
 
 (defvar +my/tiling-apps
   '(agent-shell-mode                    ; Claude Code (SPC o c, SPC o C)
@@ -84,12 +86,16 @@ buffer being shown, says so (else as they ask).")
 
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange
-          :resize +my/tiling-tall-resize :closed +my/tiling-tall-closed))
-  "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize
-FUNCTION] [:closed FUNCTION]). Each takes the panes in order (see above):
-:split opens a new pane and returns it, :arrange lays the panes out, :resize
-(also given a DELTA, a share of the width) makes the main pane bigger and
-returns its share, :closed lays out the panes left once one closed.")
+          :resize-main +my/tiling-tall-resize-main :closed +my/tiling-tall-closed))
+  "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize-main
+FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION]). Each takes the panes
+in order (see above): :split opens a new pane and returns it, :arrange lays
+the panes out, :closed lays out the panes left once one closed. Resizing, as
+the strategy has it, also given a DIRECTION (1 bigger, -1 smaller), keeping
+the size for SPC w a and new panes, and returning what to say (\"Main pane:
+55% of the width\"): :resize-main the main area (tall: its width; a strategy
+whose main pane is on top: its height); :resize-pane, also given the current
+pane, that pane within the others. Without one: nothing to resize, said.")
 
 ;; ====== KEY BINDINGS ======
 

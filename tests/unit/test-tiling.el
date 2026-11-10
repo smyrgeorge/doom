@@ -433,6 +433,91 @@ ratio kept for SPC w a; the focus where it was."
     (should-error (+my/tiling-main-bigger) :type 'user-error)
     (should (= +my/tiling-tall-ratio 0.5))))
 
+;; ====== RESIZING, THE STRATEGY'S ======
+
+(defmacro +test-tiling-resizing (&rest body)
+  "BODY with the strategy `stand-in': two panes one above the other, its
+main area (the top pane) resized in height, 2 lines a step; the current pane
+resized by recording it. What was asked in `asked', what was said in
+`said', the repeat map in `repeat'."
+  (declare (indent 0))
+  `(let* ((asked nil) (said nil) (repeat nil)
+          (+my/tiling-strategies
+           (cons (list 'stand-in
+                       :split (lambda (panes) (split-window (car (last panes)) nil 'below))
+                       :arrange #'ignore
+                       :resize-main (lambda (panes direction)
+                                      (push (list :main panes direction) asked)
+                                      (window-resize (car panes) (* 2 direction))
+                                      (format "Top pane: %d lines" (window-total-height (car panes))))
+                       :resize-pane (lambda (panes pane direction)
+                                      (push (list :pane panes pane direction) asked)
+                                      "Pane: resized"))
+                 +my/tiling-strategies))
+          (+my/tiling-strategy 'stand-in))
+     (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args))))
+               ((symbol-function 'set-transient-map) (lambda (map &rest _) (setq repeat map))))
+       ,@body)))
+
+(ert-deftest tiling/resize-main-the-strategys ()
+  "SPC w ] / [ ask the strategy's :resize-main (its main area: here a height,
+not the width), say what it did, and repeat."
+  (+test-tiling
+    (+test-tiling-resizing
+      (set-window-buffer (split-window nil nil 'below) "B")
+      (let* ((panes (+my/tiling--panes))
+             (height (window-total-height (car panes))))
+        (+my/tiling-main-bigger)
+        (should (equal (car asked) (list :main panes 1)))
+        (should (= (window-total-height (car panes)) (+ height 2)))
+        (should (equal said (format "Top pane: %d lines (] / [ again)" (+ height 2))))
+        (+my/tiling-main-smaller)
+        (should (equal (car asked) (list :main panes -1)))
+        (should (= (window-total-height (car panes)) height))
+        ;; ] [ } { again, after either.
+        (dolist (key '("]" "[" "}" "{"))
+          (should (lookup-key repeat key)))))))
+
+(ert-deftest tiling/resize-pane-the-strategys ()
+  "The current pane bigger / smaller: the strategy's :resize-pane, given the
+panes, the current one and the direction."
+  (+test-tiling
+    (+test-tiling-resizing
+      (set-window-buffer (split-window nil nil 'below) "B")
+      (select-window (cadr (+my/tiling--panes)))
+      (+my/tiling-pane-smaller)
+      (should (equal (car asked) (list :pane (+my/tiling--panes) (selected-window) -1)))
+      (should (equal said "Pane: resized (} / { again)"))
+      (+my/tiling-pane-bigger)
+      (should (equal (nth 3 (car asked)) 1)))))
+
+(ert-deftest tiling/resize-without-it-said ()
+  "A strategy without a resize: said, nothing done (tall has no pane resize
+yet); from a side panel, or with one pane: said."
+  (+test-tiling
+    (set-window-buffer (split-window nil nil 'right) "B")
+    (should (equal (cadr (should-error (+my/tiling-pane-bigger) :type 'user-error))
+                   (format-message "The tiling strategy `tall' has no pane to resize")))
+    (let* ((+my/tiling-strategies (cons '(bare :split ignore :arrange ignore) +my/tiling-strategies))
+           (+my/tiling-strategy 'bare))
+      (should (equal (cadr (should-error (+my/tiling-main-bigger) :type 'user-error))
+                     (format-message "The tiling strategy `bare' has no main area to resize"))))
+    (should (= +my/tiling-tall-ratio 0.5)))
+  (+test-tiling
+    (+test-tiling-resizing
+      (should-error (+my/tiling-main-bigger) :type 'user-error)
+      (should-not asked))))
+
+(ert-deftest tiling/tall-resize-main-says-its-share ()
+  "Tall's main area: the main pane's width, said as its share."
+  (+test-tiling
+    (+my/tiling-split)
+    (let (said)
+      (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args)))))
+        (+my/tiling-main-bigger))
+      (should (equal said "Main pane: 55% of the width (] / [ again)")))
+    (should (eq (plist-get (alist-get 'tall +my/tiling-strategies) :resize-main) #'+my/tiling-tall-resize-main))))
+
 ;; ====== KEYS ======
 
 (ert-deftest tiling/keys ()
