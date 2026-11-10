@@ -11,7 +11,10 @@ CLI's login.
 
 Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
 and Claude can ask Emacs what you're looking at. Claude can also keep things in view on a canvas beside its session:
-progress bars, checklists, tables, updated as work goes on ([Agent UI](agent-ui.md)). While you're in another app, a [notification](notifications.md) says
+progress bars, checklists, tables, updated as work goes on ([Agent UI](agent-ui.md)). Claude's small questions (2 to
+4 options) come as a form in the conversation, Claude waiting for your answer (agent-shell's experimental forms:
+`(setq agent-shell-elicitation--experimental-feature-enabled nil)` in `config.el` turns them off); a list to pick from
+comes on the canvas, your answer its next prompt. While you're in another app, a [notification](notifications.md) says
 when a session finished its turn or asks for your permission.
 
 ## Drawing for Claude

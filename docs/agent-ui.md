@@ -371,7 +371,9 @@ A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
 `+my/agent-shell-claude-context-functions`), while Emacs runs a server: the canvas, when to use it rather than Markdown
 in a reply (for what changes over time or deserves watching), that issues and plans go there without being asked (a
 project's or an epic's issues as the `issues` board, a search's as a table, a plan or the current ticket's acceptance
-criteria as `steps`), the command's full path with an example, to read the skill before using it the first time, and,
+criteria as `steps`), that a list to pick from goes there as a `choice` (the turn ended, the answer its next prompt;
+a small question, with agent-shell's forms on, as AskUserQuestion in the conversation), the command's full path with
+an example, to read the skill before using it the first time, and,
 when Agent UI itself misbehaves, to ask you and file it with `agent-ui bug`
 ([Bugs in Agent UI](#bugs-in-agent-ui)). The MCP server's instructions, also in its system prompt, say the same of its
 `bug` tool. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), has each

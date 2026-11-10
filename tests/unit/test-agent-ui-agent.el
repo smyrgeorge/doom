@@ -6,6 +6,8 @@
 
 (+test-load "config/agent-ui")
 (require 'agent-shell)
+;; agent-shell-elicitation.el's (loaded with agent-shell, or not): special.
+(defvar agent-shell-elicitation--experimental-feature-enabled)
 
 ;; ====== HELPERS ======
 
@@ -182,6 +184,9 @@ killed after."
       (should (string-search "Issues and plans go there too, always, without being asked" text))
       (should (string-search "as the issues board" text))
       (should (string-search "as steps (its acceptance criteria)" text))
+      ;; Questions: a list to pick from on the canvas, the turn ended.
+      (should (string-search "To have the user pick from a list" text))
+      (should (string-search "end your turn: the answer comes as your next prompt" text))
       ;; A bug in Agent UI itself: asked, filed in its own issues.
       (should (string-search (concat "When Agent UI itself misbehaves") text))
       (should (string-search (concat (abbreviate-file-name agent-ui-command) " bug '{\"title\"") text))
@@ -189,6 +194,15 @@ killed after."
       ;; Its example is right.
       (string-match "show '\\([^']+\\)'" text)
       (should (agent-ui-check "progress" (agent-ui-parse-json (match-string 1 text)))))))
+
+(ert-deftest agent-ui-agent/small-questions-in-the-conversation ()
+  "AskUserQuestion named only while agent-shell shows its forms (else the
+agent hasn't the tool)."
+  (cl-letf (((symbol-function 'server-running-p) (lambda (&rest _) t)))
+    (let ((agent-shell-elicitation--experimental-feature-enabled t))
+      (should (string-search "ask it with AskUserQuestion, in the conversation" (agent-ui-agent-context))))
+    (let ((agent-shell-elicitation--experimental-feature-enabled nil))
+      (should-not (string-search "AskUserQuestion" (agent-ui-agent-context))))))
 
 (defun +test-aua-skill ()
   (with-temp-buffer

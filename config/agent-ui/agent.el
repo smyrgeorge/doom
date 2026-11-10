@@ -161,7 +161,10 @@ multi-step task's progress, results arriving one by one), not for what a reply \
 says once. Issues and plans go there too, always, without being asked: a project's \
 or an epic's issues (bd ready, an epic's children) as the issues board, which \
 follows your bd commands; a search's results as a table; a plan, or the ticket \
-you're working on, as steps (its acceptance criteria), ticked as you go. From your shell: %s show \
+you're working on, as steps (its acceptance criteria), ticked as you go. To have \
+the user pick from a list (which to fix, which files, which approach), show it \
+there as a choice (multiple: several), say so in a line and end your turn: the \
+answer comes as your next prompt.%s From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear; --canvas NAME on any of them uses \
@@ -173,6 +176,11 @@ an error, a property it lacks), ask the user, then file it: %s bug \
 '{\"title\":...,\"description\":...,\"element\":\"ID\",\"repro\":{an element \
 showing it}}' goes into Agent UI's own issues, never this project's (not filed: \
 its reply's report, to show the user); then carry on with a workaround.%s"
+              ;; Questions in the conversation, while agent-shell shows them.
+              (if (bound-and-true-p agent-shell-elicitation--experimental-feature-enabled)
+                  " A small question (2 to 4 options, no list to show): ask it with \
+AskUserQuestion, in the conversation, and wait for the answer."
+                "")
               command command skill command
               (if agent-ui-agent-mcp
                   " The same operations are MCP tools too (the agent-ui server: show, \

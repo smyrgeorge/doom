@@ -107,6 +107,12 @@
 ;; WebKit). One left out opens as it would without tiling.
 (setq +my/tiling-apps 'all)
 
+;; Claude Code's questions (its AskUserQuestion tool) as forms in the
+;; conversation: 2 to 4 options, the agent waiting mid-turn for your answer
+;; (agent-shell's elicitation). Still experimental in agent-shell: nil turns it
+;; off (Claude then asks in its replies, or on its canvas: Agent UI's choice).
+(setq agent-shell-elicitation--experimental-feature-enabled t)
+
 ;; PDFs: dark pages (inverted to dark greys, the colours' hues kept) in the
 ;; first PDF opened; SPC m d turns them light (config/pdf.el).
 (setq +my/pdf-dark-pages t)
