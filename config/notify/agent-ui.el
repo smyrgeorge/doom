@@ -1,7 +1,7 @@
 ;;; $DOOMDIR/config/notify/agent-ui.el -*- lexical-binding: t; -*-
 ;; Notifications of Agent UI (config/agent-ui.el): a bug filed in its own
-;; issues, by the agent or you; a question waiting for you on a canvas. Loaded
-;; from config/notify.el.
+;; issues, by the agent or you; a question waiting for you on a canvas.
+;; Loaded from config/notify.el.
 
 ;; THE KIND (see config/notify.el)
 (+my/notify-define 'agent-ui-bug "Agent UI" "A bug filed in Agent UI's own issues")
