@@ -229,7 +229,9 @@ its waiting calls found. Returns (:ok t :panel NAME :file FILE :type TYPE
   "An open project panel, in its canvas (`agent-ui-panels--state'): what its
 script is given as PANEL. Its :ui (read), its script (its form evaluated),
 its fetches' timer, its commands running, its last error."
-  name file root canvas ui script timer processes error)
+  name file root canvas ui script timer processes error
+  ;; A fetch missed while it was hidden; one of this fetch's failed.
+  stale broke)
 
 (defvar-local agent-ui-panels--state nil
   "In a project panel's canvas: the panel (an `agent-ui-panels--state').")
@@ -270,7 +272,8 @@ to pick from. Returns its canvas."
         (with-current-buffer canvas
           (setq default-directory root
                 agent-ui-panels--state panel)
-          (add-hook 'kill-buffer-hook #'agent-ui-panels--closed nil t))
+          (add-hook 'kill-buffer-hook #'agent-ui-panels--closed nil t)
+          (add-hook 'window-buffer-change-functions #'agent-ui-panels--shown nil t))
         (condition-case err
             ;; Its elements' sources (commands) not started yet: they're
             ;; its code too, run once it's allowed to.
@@ -321,9 +324,33 @@ in its elements."
   "PANEL's WHAT (\"fetch\", a command...) failed with ERR (an error, or a
 message): kept, said."
   (let ((text (format "%s: %s" what (if (stringp err) err (agent-ui-error-message err)))))
-    (setf (agent-ui-panels--error panel) text)
+    (setf (agent-ui-panels--error panel) text
+          (agent-ui-panels--broke panel) t)
     (message "Agent UI: panel %s: %s" (agent-ui-panels--name panel) text)
+    (agent-ui-panels--status panel text)
     nil))
+
+(defconst agent-ui-panels--status-id "panel.status"
+  "The id of the line under a panel saying what went wrong.")
+
+(defun agent-ui-panels--status (panel text)
+  "PANEL's line under it saying TEXT (what went wrong), or gone (TEXT nil)."
+  (when (agent-ui-panels--live-p panel)
+    (let ((canvas (agent-ui-panels--canvas panel))
+          (agent-ui-display-function #'ignore))
+      (if text
+          (agent-ui-show (list :type "text" :id agent-ui-panels--status-id :face "error"
+                               :text (concat "⚠ " text))
+                         :canvas canvas)
+        (when (member agent-ui-panels--status-id (buffer-local-value 'agent-ui--order canvas))
+          (agent-ui-remove agent-ui-panels--status-id :canvas canvas))))))
+
+(defun agent-ui-panels--settled (panel)
+  "PANEL's fetch over, its commands done: its error and line gone if none of
+it failed."
+  (unless (or (agent-ui-panels--processes panel) (agent-ui-panels--broke panel))
+    (setf (agent-ui-panels--error panel) nil)
+    (agent-ui-panels--status panel nil)))
 
 (defun agent-ui-panels--call (panel key)
   "PANEL's script's KEY (:fetch, :start, :stop) called with it, in its root;
@@ -360,11 +387,42 @@ every :every seconds."
           (setf (agent-ui-panels--timer panel)
                 (run-with-timer every every #'agent-ui-panels--fetch panel)))))))
 
+(defcustom agent-ui-panel-slow 0.1
+  "Seconds a panel's fetch may take itself (its commands apart), Emacs
+frozen meanwhile, before it's said."
+  :type 'number :group 'agent-ui)
+
+(defun agent-ui-panels--visible-p (panel)
+  (get-buffer-window (agent-ui-panels--canvas panel) t))
+
 (defun agent-ui-panels--fetch (panel)
-  "PANEL's :fetch, once (stopped if its canvas is gone)."
-  (if (agent-ui-panels--live-p panel)
+  "PANEL's :fetch, once: not while it's hidden (fetched when it's shown
+again), nor while its last fetch's commands run (never two at once); its
+canvas gone, stopped. Taking long itself (Emacs frozen), said."
+  (cond
+   ((not (agent-ui-panels--live-p panel)) (agent-ui-panels--stop panel))
+   ((not (agent-ui-panels--visible-p panel)) (setf (agent-ui-panels--stale panel) t))
+   ((agent-ui-panels--processes panel))
+   (t
+    (setf (agent-ui-panels--stale panel) nil
+          (agent-ui-panels--broke panel) nil)
+    (let ((start (float-time)))
       (agent-ui-panels--call panel :fetch)
-    (agent-ui-panels--stop panel)))
+      (let ((took (- (float-time) start)))
+        (when (> took agent-ui-panel-slow)
+          (agent-ui-panels--failed
+           panel "fetch" (format "took %.2f s itself, Emacs frozen meanwhile: run commands with agent-ui-panel-run"
+                                 took)))))
+    (agent-ui-panels--settled panel))))
+
+(defun agent-ui-panels--shown (window)
+  "WINDOW shows a panel's canvas now (its `window-buffer-change-functions'):
+a fetch missed while it was hidden, done."
+  (when-let* ((buffer (window-buffer window))
+              (panel (buffer-local-value 'agent-ui-panels--state buffer))
+              ((agent-ui-panels--stale panel))
+              ((agent-ui-panels--script panel)))
+    (run-with-timer 0 nil #'agent-ui-panels--fetch panel)))
 
 (defun agent-ui-panels--stop (panel)
   "PANEL's timer stopped, its commands killed, its :stop called."
@@ -382,6 +440,34 @@ every :every seconds."
   "A panel's canvas closes (`kill-buffer-hook'): its script stopped."
   (when agent-ui-panels--state
     (agent-ui-panels--stop agent-ui-panels--state)))
+
+(defun agent-ui-panel-reload ()
+  "The project panel here read again from its file (edited), drawn anew,
+its code run again (gR). Its file wrong now: said on it, it goes on as it
+was."
+  (interactive)
+  (let ((panel agent-ui-panels--state))
+    (unless panel
+      (user-error "Not a project panel: gR reloads one (SPC o u opens one)"))
+    (condition-case err
+        (let* ((read (agent-ui-panel-read (agent-ui-panels--file panel)))
+               (ui (plist-get read :ui))
+               (canvas (agent-ui-panels--canvas panel)))
+          (agent-ui-panels--stop panel)
+          (setf (agent-ui-panels--ui panel) ui
+                (agent-ui-panels--error panel) nil
+                (agent-ui-panels--broke panel) nil
+                (agent-ui-panels--stale panel) nil)
+          ;; Drawn first, the others removed after: never empty (an empty
+          ;; canvas closes its pane).
+          (agent-ui-panels--draw panel (agent-ui-persist--without-sources ui))
+          (let ((id (plist-get ui :id)))
+            (dolist (old (buffer-local-value 'agent-ui--order canvas))
+              (unless (equal old id)
+                (agent-ui-remove old :canvas canvas))))
+          (agent-ui-panels--start panel (plist-get read :form))
+          (message "Panel %s: read again" (agent-ui-panels--name panel)))
+      (agent-ui-error (agent-ui-panels--failed panel "its file" err)))))
 
 ;; ====== WHAT ITS SCRIPT CALLS ======
 
@@ -445,7 +531,8 @@ PANEL's, said. Killed when PANEL closes. Returns its process."
                        (let ((default-directory (agent-ui-panels--root panel)))
                          (condition-case e
                              (funcall callback (agent-ui-panels--output text))
-                           (error (agent-ui-panels--failed panel program e))))
+                           (error (agent-ui-panels--failed panel program e)))
+                         (agent-ui-panels--settled panel))
                      (agent-ui-panels--failed
                       panel program
                       (format "exit %s%s" code

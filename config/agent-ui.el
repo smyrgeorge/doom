@@ -111,6 +111,8 @@
       ;; with it; a session's saved ones come back when it's resumed).
       :gn "q" #'kill-current-buffer
       :n "gr" #'agent-ui-canvas-redraw
+      ;; A project panel, read again from its file (edited) and run anew.
+      :n "gR" #'agent-ui-panel-reload
       :n "R"  #'agent-ui-review
       :n "a"  #'agent-ui-send-element
       :n "b"  #'agent-ui-report-bug

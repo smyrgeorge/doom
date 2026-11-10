@@ -229,9 +229,10 @@ root), filling it (agent-ui-panel-update, -append, -run: a command's JSON
 parsed); closed, :stop, nothing more fetched (doom-3q5.3)."
   (+test-aup `(("live" . ,(+test-aup-fixture "live")))
     (setq +test-aup-calls nil)
-    (let* ((asked 0)
+    (save-window-excursion
+     (let* ((asked 0)
            (agent-ui-panel-allow-function (lambda (_panel) (cl-incf asked) t))
-           (canvas (save-window-excursion (agent-ui-open-panel "live"))))
+           (canvas (agent-ui-open-panel "live")))
       (unwind-protect
           (progn
             (should (= asked 1))
@@ -248,7 +249,7 @@ parsed); closed, :stop, nothing more fetched (doom-3q5.3)."
       (should (eq (car +test-aup-calls) 'stop))
       (let ((fetches (cl-count 'fetch +test-aup-calls)))
         (+test-sleep 0.5)
-        (should (= (cl-count 'fetch +test-aup-calls) fetches))))))
+        (should (= (cl-count 'fetch +test-aup-calls) fetches)))))))
 
 (ert-deftest agent-ui-panels/its-failures-said ()
   "A command failing (its exit and what it said), a change of an element it
@@ -319,3 +320,93 @@ agent-ui-panel--draw)."
     (dolist (item (cdr file))
       (when (eq (car-safe item) 'defun)
         (should (string-match-p "agent-ui/elements/panel\\.elc?\\'" (or (symbol-file (cdr item) 'defun) "")))))))
+
+;; ====== ITS LIFE ======
+
+(defmacro +test-aup-open (name &rest body)
+  "BODY with test panel NAME (its fixture) open and shown (`canvas', `panel'),
+in a project of its own; closed after."
+  (declare (indent 1))
+  `(+test-aup (list (cons ,name (+test-aup-fixture ,name)))
+     (setq +test-aup-calls nil)
+     (save-window-excursion
+       (delete-other-windows)
+       (let* ((canvas (agent-ui-open-panel ,name))
+              (panel (buffer-local-value 'agent-ui-panels--state canvas)))
+         (unwind-protect (progn ,@body)
+           (when (buffer-live-p canvas) (kill-buffer canvas)))))))
+
+(defun +test-aup-status (canvas)
+  "The line under CANVAS's panel saying what went wrong, or nil."
+  (and (member agent-ui-panels--status-id (buffer-local-value 'agent-ui--order canvas))
+       (plist-get (agent-ui-get agent-ui-panels--status-id :canvas canvas) :text)))
+
+(ert-deftest agent-ui-panels/paused-while-hidden ()
+  "Hidden, no fetch (one missed, noted); shown again, one at once
+\(doom-3q5.4)."
+  (+test-aup-open "counted"
+    (should (+test-wait-for (lambda () (>= (cl-count 'fetch +test-aup-calls) 2)) 3))
+    (switch-to-buffer "*scratch*")
+    (+test-sleep 0.15)
+    (let ((fetches (cl-count 'fetch +test-aup-calls)))
+      (+test-sleep 0.5)
+      (should (= (cl-count 'fetch +test-aup-calls) fetches))
+      (should (agent-ui-panels--stale panel))
+      ;; Shown again (its window-buffer-change-functions, which batch Emacs's
+      ;; missing redisplay doesn't run): fetched at once.
+      (switch-to-buffer canvas)
+      (agent-ui-panels--shown (selected-window))
+      (should (+test-wait-for (lambda () (> (cl-count 'fetch +test-aup-calls) fetches)) 1))
+      (should-not (agent-ui-panels--stale panel)))
+    (should (memq #'agent-ui-panels--shown (buffer-local-value 'window-buffer-change-functions canvas)))))
+
+(ert-deftest agent-ui-panels/never-two-fetches-at-once ()
+  "Every 0.1 s, its command 0.6 s: the next fetch waits for it."
+  (+test-aup-open "waiting"
+    (+test-sleep 0.45)
+    (should (= (cl-count 'fetch +test-aup-calls) 1))
+    (should (+test-wait-for (lambda () (memq 'done +test-aup-calls)) 3))
+    (should (+test-wait-for (lambda () (>= (cl-count 'fetch +test-aup-calls) 2)) 2))))
+
+(ert-deftest agent-ui-panels/its-errors-on-it ()
+  "A failure: a line under it saying so, in the error face, until a fetch
+goes well."
+  (+test-aup-open "flaky"
+    (should (+test-wait-for (lambda () (+test-aup-status canvas)) 3))
+    (should (equal (+test-aup-status canvas) "⚠ sh: exit 1: no ok yet"))
+    (should (equal (plist-get (agent-ui-get agent-ui-panels--status-id :canvas canvas) :face) "error"))
+    (with-temp-file (expand-file-name "ok" root))
+    (should (+test-wait-for (lambda () (not (+test-aup-status canvas))) 3))
+    (should (equal (plist-get (agent-ui-get "t" :canvas canvas) :text) "ok"))
+    (should-not (agent-ui-panels--error panel))))
+
+(ert-deftest agent-ui-panels/a-slow-fetch-said ()
+  (+test-aup-open "frozen"
+    (should (string-match-p "\\`⚠ fetch: took 0\\.[0-9]+ s itself, Emacs frozen meanwhile"
+                            (+test-aup-status canvas)))))
+
+(ert-deftest agent-ui-panels/read-again ()
+  "gR: its file read again (edited), drawn anew, its code run again (stopped
+first); wrong now, said on it, going on as it was."
+  (+test-aup-open "counted"
+    (let ((file (agent-ui-panel-file "counted")))
+      (with-temp-file file
+        (insert (replace-regexp-in-string ":type \"text\" :id \"t\" :text \"\""
+                                          ":type \"text\" :id \"t\" :text \"edited\""
+                                          (+test-aup-fixture "counted"))))
+      (with-current-buffer canvas (agent-ui-panel-reload))
+      (should (equal (plist-get (agent-ui-get "t" :canvas canvas) :text) "edited"))
+      (should (equal (seq-filter (lambda (c) (memq c '(start stop))) (reverse +test-aup-calls))
+                     '(start stop start)))
+      ;; Wrong: said, the panel as it was.
+      (with-temp-file file (insert "(agent-ui-panel :ui (:type \"text\"\n"))
+      (with-current-buffer canvas (agent-ui-panel-reload))
+      (should (string-match-p "\\`⚠ its file: panel counted: its file ends inside a form" (+test-aup-status canvas)))
+      (should (equal (plist-get (agent-ui-get "t" :canvas canvas) :text) "edited"))
+      (should (agent-ui-panels--timer panel))))
+  (with-temp-buffer
+    (agent-ui-canvas-mode)
+    (should-error (agent-ui-panel-reload) :type 'user-error))
+  (require 'evil)
+  (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "g R")
+              #'agent-ui-panel-reload)))

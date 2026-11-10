@@ -45,7 +45,11 @@ Its code fills it with:
   (objects as alists, `(alist-get 'name r)`; arrays as lists), else its text. A failing one (its exit, what it said)
   is the panel's error. Killed when the panel closes. Any command, any language: a script of the project's too.
 
-Its code never waits (Emacs is frozen meanwhile, every `:every` seconds): no `shell-command-to-string`,
+It's fetched only while it's shown (hidden, it waits; shown again, it's fetched at once), and never twice at once: a
+fetch waits for the last one's commands. What goes wrong is shown under it, until a fetch goes well. After you edit
+its file, the user presses `gR` on it to read it again.
+
+Its code never waits (Emacs is frozen meanwhile, every `:every` seconds; a fetch over 0.1 s itself is said on it): no `shell-command-to-string`,
 `call-process`, `process-lines`, `url-retrieve-synchronously`, `sleep-for`. Emacs's own state it reads at once (its
 buffers, `project-current`, `vc`, flymake's diagnostics). Define nothing global: its helpers go inside the form
 (`cl-labels`).

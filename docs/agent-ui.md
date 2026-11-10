@@ -404,6 +404,12 @@ each called with the panel, in the project's root. It fills the panel with `agen
 `agent-ui-panel-run`, a command run without waiting, its output given to a function once it ends well (parsed JSON
 when it reads so), killed when the panel closes. An error in one is kept and said (`*Messages*`); the others go on.
 
+While it's hidden (another tab in its pane, another workspace), it isn't fetched; shown again, it's fetched at once. A
+fetch waits for the last one's commands: never two at once. What goes wrong is said on it, a line in the error face
+under it, until a fetch goes well; a fetch that takes long itself (over `agent-ui-panel-slow`, 0.1 s), Emacs frozen
+meanwhile, too. `gR` reads its file again (edited) and runs it anew; its file wrong, it's said there and the panel
+goes on as it was.
+
 `SPC o u` lists the current project's panels; the one picked opens in a canvas of its own, `Agent UI: NAME (PROJECT)`,
 in its own pane, its directory the project's root, belonging to no session. Open already, its pane is shown. `q`
 closes it, its buffer killed; opened again later, after a restart too, it's read anew and drawn empty, its code
@@ -412,6 +418,7 @@ filling it.
 | Key | Action |
 |---|---|
 | `SPC o u` | Open one of the current project's panels (`M-x agent-ui-open-panel`) |
+| `gR` (in it) | Read its file again and run it anew |
 | `q` (in it) | Close it |
 
 ## In the conversation
