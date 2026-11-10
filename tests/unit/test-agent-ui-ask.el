@@ -47,7 +47,7 @@
                           (list (agent-ui-ask-all-none ctx (plist-get props :items))
                                 (agent-ui-ask-note-button props ctx)
                                 (agent-ui-ask-answer-button props ctx :what (format "asker %s" (plist-get ctx :id))
-                                                            :question (plist-get props :question) :submit t)))
+                                                            :question (plist-get props :question))))
                   "\n"))))
      (unwind-protect (with-current-buffer canvas ,@body)
        (kill-buffer canvas))))
@@ -117,10 +117,10 @@ session's prompt (sent at once), then shown, locked; kept through a redraw
 and in its saved JSON."
   (+test-aua-canvas
     (agent-ui-show '(:id "q" :type "asker" :question "Which ones?" :items ("alpha" "beta" "gamma") :multiple t))
-    (should (string-search "[ ] alpha\n[ ] beta\n[ ] gamma\n⏵ All   ⏵ None\n✎ Add a note\n⏵ Send the answer"
+    (should (string-search "[ ] alpha\n[ ] beta\n[ ] gamma\n⏵ All   ⏵ None\n✎ Add a note\n⏵ Answer"
                            (+test-aua-text)))
     ;; Nothing picked: said.
-    (should-error (+test-aua-press "⏵ Send the answer") :type 'user-error)
+    (should-error (+test-aua-press "⏵ Answer") :type 'user-error)
     (+test-aua-press "beta")
     (+test-aua-press "alpha")
     (should (equal (plist-get (agent-ui-get "q") :selected) '("beta" "alpha")))
@@ -139,7 +139,7 @@ and in its saved JSON."
     (should (string-search "\"selected\":[\"gamma\"]"
                            (decode-coding-string (json-serialize (agent-ui-to-json (agent-ui-get "q"))) 'utf-8)))
     ;; Answered: sent at once, then locked.
-    (+test-aua-press "⏵ Send the answer")
+    (+test-aua-press "⏵ Answer")
     (should (equal sent '(("Answer to asker q (Which ones?): gamma. Note: only gamma" t))))
     (should (equal (plist-get (agent-ui-get "q") :answered) "gamma · note: only gamma"))
     (should (string-search "✓ Answered: gamma · note: only gamma" (+test-aua-text)))
@@ -206,7 +206,7 @@ places, into the prompt; then sent, locked."
         (should-not (string-search "✎ again" (+test-aua-text))))
       ;; Sent: into the prompt (not sent at once), then locked.
       (+test-aua-press "⏵ Send the review")
-      (should (equal sent '(("Review of c: /work/x.c:41: never NULL: it can't be" nil))))
+      (should (equal sent '(("Review of c: /work/x.c:41: never NULL: it can't be" t))))
       (should (string-search "✓ Review sent (1 comment)" (+test-aua-text)))
       (should-not (string-search "⏵" (+test-aua-text)))
       (+test-aua-goto "int parse")
@@ -230,7 +230,7 @@ its number), its place the file and the new file's line; Discard drops them."
       (+test-aua-goto "42   b")
       (call-interactively #'agent-ui-comment))
     (+test-aua-press "⏵ Send the review")
-    (should (equal sent '(("Review of d: src/p.c:42: fine" nil))))))
+    (should (equal sent '(("Review of d: src/p.c:42: fine" t))))))
 
 (ert-deftest agent-ui-ask/review-comments-on-a-named-canvas ()
   "On a canvas other than the default one (a session's is named after it):

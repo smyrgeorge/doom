@@ -322,30 +322,28 @@ a \"parent\" goes among that step's own."
 ;; note, then Approve: the steps become the plan as approved (dropped ones
 ;; gone, reworded ones renamed: the agent's appends use those names), and
 ;; "Answer to steps ID (QUESTION): approved: 1. A; 2. B (edited, was: X).
-;; Dropped: C. Note: ..." goes into the session's prompt (sent at once,
-;; unless approve's submit is false). Or Reject: "...: rejected. Note: why".
+;; Dropped: C. Note: ..." goes into the session's prompt (sent at once). Or Reject: "...: rejected. Note: why".
 ;; Then it's answered, and runs as usual. The user's changes are the
 ;; element's own (:dropped, :edits), saved with the session.
 
 (defconst agent-ui-steps--question "Go ahead with this plan?")
 
 (defun agent-ui-steps--approve-props (props)
-  "PROPS' approve as (:question :submit), or nil if it has none."
+  "PROPS' approve as (:question), or nil if it has none: its answer sent at
+once."
   (let ((approve (plist-get props :approve)))
     (cond ((memq approve '(nil :false)) nil)
-          ((eq approve t) (list :question agent-ui-steps--question :submit t))
-          (t (list :question (or (plist-get approve :question) agent-ui-steps--question)
-                   :submit (not (eq (plist-get approve :submit) :false)))))))
+          ((eq approve t) (list :question agent-ui-steps--question))
+          (t (list :question (or (plist-get approve :question) agent-ui-steps--question))))))
 
 (defun agent-ui-steps--check-approve (props)
   (let ((approve (plist-get props :approve)))
     (unless (or (memq approve '(nil t :false))
                 (and (agent-ui--plist-p approve)
-                     (cl-every (lambda (k) (memq k '(:question :submit)))
+                     (cl-every (lambda (k) (eq k :question))
                                (cl-loop for (k _) on approve by #'cddr collect k))
-                     (or (null (plist-get approve :question)) (stringp (plist-get approve :question)))
-                     (memq (plist-get approve :submit) '(nil t :false))))
-      (agent-ui--fail "steps: approve is true, or {\"question\": ..., \"submit\": ...}"))
+                     (or (null (plist-get approve :question)) (stringp (plist-get approve :question)))))
+      (agent-ui--fail "steps: approve is true, or {\"question\": ...} (its answer sent at once)"))
     (unless (cl-every #'stringp (plist-get props :dropped))
       (agent-ui--fail "steps: dropped is the steps' names"))
     (unless (cl-every (lambda (e) (and (agent-ui--plist-p e) (stringp (plist-get e :name)) (stringp (plist-get e :text))))
@@ -419,7 +417,7 @@ become it."
                       "; ")
                      (if gone (concat ". Dropped: " (mapconcat (lambda (s) (plist-get s :name)) gone "; ")) "")
                      (if note (concat ". Note: " note) ""))
-             (plist-get approve :submit))
+             t)
     (agent-ui-ask-change
      ctx (list :steps (mapcar (lambda (step)
                                 (if-let* ((text (agent-ui-steps--edited props (plist-get step :name))))
@@ -437,7 +435,7 @@ become it."
     (funcall agent-ui-action-function
              (format "Answer to steps %s (%s): rejected%s" (plist-get ctx :id) (plist-get approve :question)
                      (if note (concat ". Note: " note) ""))
-             (plist-get approve :submit))
+             t)
     (agent-ui-ask-change ctx (list :note-text note :answered "rejected"))))
 
 (defun agent-ui-steps--approve-text (props ctx)
@@ -516,7 +514,7 @@ ID (QUESTION): approved: 1. A; 2. B (edited, was: X). Dropped: C. Note: ...\"
 and the plan may close (as every question answered): to tick them, show
 them again, without APPROVE."
   :props ((steps list "The steps, in order")
-          (approve any "A plan for the user to approve first: true, or {\"question\": ..., \"submit\": ...}")
+          (approve any "A plan for the user to approve first: true, or {\"question\": ...}")
           (dropped list "The steps the user dropped (theirs)")
           (edits list "The steps the user reworded, {\"name\": ..., \"text\": ...} (theirs)")
           (note-text string "The user's note")

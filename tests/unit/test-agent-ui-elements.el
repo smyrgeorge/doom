@@ -285,7 +285,7 @@ refused."
   (+test-aue-canvas
     (let* ((sent nil)
            (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
-      (agent-ui-show '(:id "plan" :type "steps" :approve (:question "Start?" :submit :false) :steps ("a" "b")))
+      (agent-ui-show '(:id "plan" :type "steps" :approve (:question "Start?") :steps ("a" "b")))
       (with-current-buffer canvas
         (agent-ui--flush)
         (dolist (step '("○ a" "○ b"))
@@ -297,7 +297,7 @@ refused."
         (should-not sent)
         (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "too risky")))
           (+test-aue-press "⏵ Reject"))
-        (should (equal sent '(("Answer to steps plan (Start?): rejected. Note: too risky" nil))))
+        (should (equal sent '(("Answer to steps plan (Start?): rejected. Note: too risky" t))))
         (agent-ui--flush)
         (should (string-search "✗ Rejected · note: too risky" (buffer-string)))))))
 
@@ -1428,7 +1428,7 @@ mark, one space, its words (it had two spaces)."
         (agent-ui--flush)
         (should (string-match-p "(•) Revert" (buffer-string)))
         (+test-aue-press "⏵ Answer")
-        (should (equal sent '(("Answer to choice fix (Which fix?): Revert" nil))))
+        (should (equal sent '(("Answer to choice fix (Which fix?): Revert" t))))
         ;; Answered: said, no more buttons.
         (agent-ui--flush)
         (should (string-match-p "Which fix\\?\n✓ Answered: Revert" (buffer-string)))
@@ -1463,7 +1463,7 @@ press acted on the drawing before the first's change, undoing it)."
   (+test-aue-canvas
     (let* ((sent nil)
            (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
-      (agent-ui-show '(:id "pick" :type "choice" :question "Which tests?" :multiple t :note t :submit t
+      (agent-ui-show '(:id "pick" :type "choice" :question "Which tests?" :multiple t :note t
                        :options ("lexer" "parser" "checker") :selected ("lexer")))
       (with-current-buffer canvas
         (+test-aue-press "parser")
@@ -1474,7 +1474,7 @@ press acted on the drawing before the first's change, undoing it)."
         (should (string-match-p "\\[ \\] lexer\n \\[x\\] parser\n \\[x\\] checker" (buffer-string)))
         (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "only the slow ones")))
           (+test-aue-press "Add a note"))
-        (+test-aue-press "⏵ Send the answer")
+        (+test-aue-press "⏵ Answer")
         (should (equal sent '(("Answer to choice pick (Which tests?): parser, checker. Note: only the slow ones" t))))
         (should (equal (plist-get (agent-ui-get "pick") :answered) "parser, checker · note: only the slow ones"))))))
 
@@ -1604,20 +1604,21 @@ cleared; it goes on, never locked."
         (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "Fix it")))
           (should-error (+test-aue-press "Add an item") :type 'user-error))
         (+test-aue-press "Send your changes (3)")
-        (should (equal sent '(("Changes to todo plan by the user: done: Write a test; not done: Reproduce; added: Check Windows paths (done)." nil))))
+        (should (equal sent '(("Changes to todo plan by the user: done: Write a test; not done: Reproduce; added: Check Windows paths (done)." t))))
         (should-not (plist-get (agent-ui-get "plan") :changes))
         (agent-ui--flush)
         (should-not (string-search "Send your changes" (buffer-string)))
         ;; It goes on.
         (+test-aue-press "Fix it")
         (+test-aue-press "Send your changes (1)")
-        (should (equal (car sent) '("Changes to todo plan by the user: done: Fix it." nil)))))))
+        (should (equal (car sent) '("Changes to todo plan by the user: done: Fix it." t)))))))
 
 (ert-deftest agent-ui-elements/todo-sent-at-once ()
+  "The user's changes go straight to the agent (doom-ik2)."
   (+test-aue-canvas
     (let* ((sent nil)
            (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
-      (agent-ui-show '(:id "plan" :type "todo" :items ("a" "b") :submit t))
+      (agent-ui-show '(:id "plan" :type "todo" :items ("a" "b")))
       (with-current-buffer canvas
         (+test-aue-press "b")
         (+test-aue-press "Send your changes (1)")
@@ -1703,13 +1704,12 @@ said; answered, the answer instead of its buttons; none in a still picture."
                                            :diff "--- a/db.sql\n+++ b/db.sql\n@@ -1 +1 @@\n-a\n+b\n")))))
 
 (ert-deftest agent-ui-elements/confirm-proceed-or-cancel ()
-  "Proceed or Cancel sends its answer at once (or into the prompt, submit
-false); then locked."
+  "Proceed or Cancel sends its answer at once; then locked."
   (+test-aue-canvas
     (let* ((sent nil)
            (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
       (agent-ui-show '(:id "deploy" :type "confirm" :question "Deploy v2.3 to staging?"))
-      (agent-ui-show '(:id "cache" :type "confirm" :question "Delete the cache?" :submit :false))
+      (agent-ui-show '(:id "cache" :type "confirm" :question "Delete the cache?"))
       (with-current-buffer canvas
         (+test-aue-press "⏵ Proceed")
         (should (equal sent '(("Answer to confirm deploy (Deploy v2.3 to staging?): proceed" t))))
@@ -1718,9 +1718,27 @@ false); then locked."
         (should (string-search "✓ Answered: Proceed" (buffer-string)))
         ;; The other's Cancel (the first's buttons gone).
         (+test-aue-press "⏵ Cancel")
-        (should (equal (car sent) '("Answer to confirm cache (Delete the cache?): cancel" nil)))
+        (should (equal (car sent) '("Answer to confirm cache (Delete the cache?): cancel" t)))
         (agent-ui--flush)
         (should-not (string-search "⏵" (buffer-string)))))))
+
+(ert-deftest agent-ui-elements/answers-always-sent ()
+  "A question's answer goes straight to the agent: none takes submit (it
+only put the answer into the prompt), nor approve, accept or select
+(doom-ik2). Actions, rows' and chips' prompts keep theirs: suggestions."
+  (dolist (element '((:type "choice" :question "q" :options ("a") :submit :false)
+                     (:type "compare" :question "q" :submit :false
+                      :options ((:label "a" :element (:type "text" :text "x")) (:label "b" :element (:type "text" :text "y"))))
+                     (:type "confirm" :question "q" :submit :false)
+                     (:type "form" :question "q" :fields ((:name "a")) :submit :false)
+                     (:type "rank" :question "q" :items ("a" "b") :submit :false)
+                     (:type "slider" :label "x" :min 0 :max 10 :submit :false)
+                     (:type "todo" :items ("a") :submit :false)
+                     (:type "steps" :steps ("a") :approve (:question "q" :submit :false))
+                     (:type "diff" :diff "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n" :accept (:question "q" :submit :false))
+                     (:type "table" :columns ("a") :rows (("x")) :select (:question "q" :submit :false))))
+    (should-error (agent-ui-check (plist-get element :type) element) :type 'agent-ui-error))
+  (should (agent-ui-check "text" '(:type "text" :text "x" :actions ((:label "Go" :prompt "go" :submit :false))))))
 
 (ert-deftest agent-ui-elements/confirm-typing-the-word ()
   "High danger: Proceed asks to type the word (\"yes\" if none); a wrong one
@@ -1867,7 +1885,7 @@ form answered on the canvas, its buffer gone."
     (should-not sent)
     (+test-aue-type "priority" "3")
     (agent-ui-form-send)
-    (should (equal sent '(("Answer to form ticket (What should it say?): {\"title\":\"Fix the parser\",\"priority\":3,\"type\":null,\"blocking\":false}" nil))))
+    (should (equal sent '(("Answer to form ticket (What should it say?): {\"title\":\"Fix the parser\",\"priority\":3,\"type\":null,\"blocking\":false}" t))))
     (should-not (get-buffer "*Agent UI form: ticket*"))
     (with-current-buffer canvas
       (agent-ui--flush)
@@ -1948,7 +1966,7 @@ ends); kept in the element; Answer sends the order and a note; then locked."
         (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "docs are quick")))
           (+test-aue-press "Add a note"))
         (+test-aue-press "⏵ Answer")
-        (should (equal sent '(("Answer to rank prio (What first?): in this order: Release, Docs, Fix. Note: docs are quick" nil))))
+        (should (equal sent '(("Answer to rank prio (What first?): in this order: Release, Docs, Fix. Note: docs are quick" t))))
         (agent-ui--flush)
         (should (string-search "✓ Sent · note: docs are quick" (buffer-string)))
         ;; Locked: nothing moves.
@@ -2205,7 +2223,7 @@ note nor Answer."
         (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "shorter")))
           (+test-aue-press "Add a note"))
         (+test-aue-press "⏵ Answer")
-        (should (equal sent '(("Answer to compare ways (Which reads better?): B: sum. Note: shorter" nil))))
+        (should (equal sent '(("Answer to compare ways (Which reads better?): B: sum. Note: shorter" t))))
         (agent-ui--flush)
         (should (string-search "✓ Answered: B: sum · note: shorter" (buffer-string)))
         (should-not (string-search "⏵ Answer" (buffer-string)))))))
@@ -2308,14 +2326,14 @@ labels picked; then locked."
     (let* ((sent nil)
            (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
       (agent-ui-show '(:id "labels" :type "tags" :tags ("bug" "docs" "ci")
-                       :select (:question "Which labels?" :multiple t :submit t)))
+                       :select (:question "Which labels?" :multiple t)))
       (with-current-buffer canvas
         (+test-aue-press "[bug]")
         (+test-aue-press "[ci]")
         (+test-aue-press " bug ")
         (should (equal (plist-get (agent-ui-get "labels") :selected) '("ci")))
         (+test-aue-press "[docs]")
-        (+test-aue-press "⏵ Send (2 chosen)")
+        (+test-aue-press "⏵ Answer (2 chosen)")
         (should (equal sent '(("Answer to labels (Which labels?): docs, ci" t))))
         (agent-ui--flush)
         (should (string-search "✓ Answered: docs, ci" (buffer-string)))
@@ -2596,7 +2614,7 @@ trimmed, its last cell's properties not past it (the next line's own)."
     :rows (("doom-1ms" "P2" "Tabs: a new buffer loses its tab")
            ("doom-3z6" "P2" "Large Markdown freezes Emacs")
            ("doom-nwj.22" "P2" "Stats: value and change overlap"))
-    :select (:question "Which should I fix?" :multiple t :note t :submit t))
+    :select (:question "Which should I fix?" :multiple t :note t))
   "A table asking which bugs to fix.")
 
 (ert-deftest agent-ui-elements/table-select-picked-and-sent ()
@@ -2612,7 +2630,7 @@ note into the prompt, at once; then it's answered, locked, its marks kept."
         (should (string-search "Which should I fix?\n     ID          │ P  │ Bug\n    ──"
                                (buffer-substring-no-properties (point-min) (point-max))))
         (should (string-search "[ ]  doom-1ms" (buffer-string)))
-        (should-error (+test-aue-press "⏵ Send (0 chosen)") :type 'user-error)
+        (should-error (+test-aue-press "⏵ Answer (0 chosen)") :type 'user-error)
         ;; Picked by their rows, anywhere on them: the last first.
         (+test-aue-press "Stats: value")
         (+test-aue-press "doom-1ms")
@@ -2620,7 +2638,7 @@ note into the prompt, at once; then it's answered, locked, its marks kept."
         (agent-ui--flush)
         (should (string-search "[x]  doom-1ms" (buffer-string)))
         (should (string-search "[ ]  doom-3z6" (buffer-string)))
-        (should (string-search "⏵ Send (2 chosen)   ⏵ All   ⏵ None" (buffer-string)))
+        (should (string-search "⏵ Answer (2 chosen)   ⏵ All   ⏵ None" (buffer-string)))
         ;; All, None, again.
         (+test-aue-press "⏵ All")
         (should (equal (plist-get (agent-ui-get "bugs") :selected) '("doom-1ms" "doom-3z6" "doom-nwj.22")))
@@ -2633,7 +2651,7 @@ note into the prompt, at once; then it's answered, locked, its marks kept."
         (agent-ui-update "bugs" '(:sort "Bug"))
         (agent-ui--flush)
         (should (string-search "[x]  doom-nwj.22" (buffer-string)))
-        (+test-aue-press "⏵ Send (2 chosen)")
+        (+test-aue-press "⏵ Answer (2 chosen)")
         (should (equal sent '(("Answer to bugs (Which should I fix?): doom-1ms, doom-nwj.22. Note: the tabs first" t))))
         (agent-ui--flush)
         (let ((text (buffer-substring-no-properties (point-min) (point-max))))
@@ -2662,7 +2680,7 @@ with their first cell; in a still picture: marks, no buttons."
         (should (string-search "(•)  patch" (buffer-string)))
         (should-not (string-search "⏵ All" (buffer-string)))
         (+test-aue-press "⏵ Answer (1 chosen)")
-        (should (equal sent '(("Answer to pick (Which?): patch" nil)))))))
+        (should (equal sent '(("Answer to pick (Which?): patch" t)))))))
   (let ((still (+test-aue-draw (append +test-aue-bugs '(:selected ("doom-3z6"))) :still t)))
     (should (string-search "[x]  doom-3z6" still))
     (should-not (string-search "⏵" still))
@@ -2714,7 +2732,7 @@ order."
         (should (string-search "[x] ▾ src/" (buffer-string)))
         (goto-char (point-min)) (search-forward "▾ tests/") (beginning-of-line) (agent-ui-button-press)
         (+test-aue-press "⏵ Answer (3 chosen)")
-        (should (equal sent '(("Answer to f (Which should I change?): src/parser.c, src/lexer.h, tests/t.c" nil))))
+        (should (equal sent '(("Answer to f (Which should I change?): src/parser.c, src/lexer.h, tests/t.c" t))))
         (agent-ui--flush)
         (should (string-search "✓ Answered: src/parser.c, src/lexer.h, tests/t.c" (buffer-string))))))
   (should (string-match-p "selected \"nope.c\" isn't an option"
@@ -2731,14 +2749,14 @@ still opens it); Send names their ids."
       (+test-aue-canvas
         (let* ((sent nil)
                (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
-          (agent-ui-show '(:id "board" :type "issues" :dir "/proj/" :select (:question "Which first?" :submit t)))
+          (agent-ui-show '(:id "board" :type "issues" :dir "/proj/" :select (:question "Which first?")))
           (with-current-buffer canvas
             (agent-ui--flush)
             (should (string-search "Which first?" (buffer-string)))
             (should (string-search "( ) p-4 Urgent re" (buffer-string)))
             (goto-char (point-min)) (search-forward "p-4") (goto-char (- (match-beginning 0) 4)) (agent-ui-button-press)
             (should (equal (plist-get (agent-ui-get "board") :selected) '("p-4")))
-            (+test-aue-press "⏵ Send (1 chosen)")
+            (+test-aue-press "⏵ Answer (1 chosen)")
             (should (equal sent '(("Answer to board (Which first?): p-4" t))))))))
     (should (string-match-p "select is {"
                             (+test-aue-error '(:type "issues" :dir "/proj/" :select ("x")))))))

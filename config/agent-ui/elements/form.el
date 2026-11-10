@@ -7,7 +7,7 @@
 ;; text, a number within a range, yes / no, one of, a file), not inline (the
 ;; canvas redraws its regions itself: two renderers on one region would
 ;; fight). There, Send (C-c C-c) puts "Answer to form ID (QUESTION): {JSON of
-;; the values}" into the session's prompt (sent at once if SUBMIT); then the
+;; the values}" into the session's prompt (sent at once); then the
 ;; form is answered on the canvas, and can't be changed. Cancel (C-c C-k)
 ;; closes it, what was typed kept. Its values are the element's own (:values,
 ;; saved with the session), as each one is typed. In a terminal: the same
@@ -331,8 +331,7 @@ on CANVAS (the canvas follows, it's saved)."
   (agent-ui-form--close))
 
 (defun agent-ui-form-send ()
-  "Send the form: its answer into its session's prompt (sent at once if it
-says submit); the form answered on its canvas. Required fields empty, or a
+  "Send the form: its answer into its session's prompt (sent at once); the form answered on its canvas. Required fields empty, or a
 field wrong: said in the form, nothing sent."
   (interactive)
   (let* ((instance (vui-get-instance))
@@ -355,7 +354,7 @@ field wrong: said in the form, nothing sent."
        (t
         (let ((answer (agent-ui-form--answer id props values)))
           (with-current-buffer canvas
-            (funcall agent-ui-action-function answer (plist-get props :submit))
+            (funcall agent-ui-action-function answer t)
             (agent-ui-update id (list :values values :answered answer) :canvas canvas))
           (agent-ui-form--close)))))))
 
@@ -366,11 +365,10 @@ each {\"name\", \"label\", \"type\", \"required\", \"min\", \"max\", \"options\"
 max), boolean (yes / no), select (one of its options), file, directory. The
 user fills it in, in a buffer of its own (typed and checked as they type),
 and sends it: \"Answer to form ID (QUESTION): {\\\"name\\\": value, ...}\"
-comes into your prompt (sent at once if SUBMIT). Then it shows the values,
+comes into your prompt (sent at once). Then it shows the values,
 answered. Show it, say so in a line, end your turn."
   :props ((question string "What it's for")
           (fields list "The fields: {\"name\": ..., \"type\": ..., ...}" :required t)
-          (submit boolean "Send the answer at once (else it waits in the prompt)" :default :false)
           (values any "The values so far, {\"name\": value}: defaults, or the user's")
           (answered string "The answer given (then it can't be changed)"))
   :example (:title "New ticket"

@@ -6,7 +6,7 @@
 ;; with the session), M-up / M-down (K / J) moving the one at the cursor
 ;; (config/agent-ui/ask.el's moving items); a note if NOTE. Send puts "Answer
 ;; to rank ID (QUESTION): in this order: C, A, B. Note: ..." into the
-;; session's prompt (sent at once if SUBMIT); then it shows the order, and
+;; session's prompt (sent at once); then it shows the order, and
 ;; can't be changed.
 ;;
 ;;   What should I do first?
@@ -114,21 +114,18 @@ then the others as given."
                             props ctx
                             :what (format "rank %s" (plist-get ctx :id))
                             :question (plist-get props :question)
-                            :submit (plist-get props :submit)
-                            :answers (list (concat "in this order: " (string-join order ", ")))
-                            :label (if (plist-get props :submit) "⏵ Send the order" "⏵ Answer"))))))))
+                            :answers (list (concat "in this order: " (string-join order ", "))))))))))
      "\n")))
 
 (agent-ui-define rank
   "The user puts ITEMS in order (priorities, the order to do things in):
 labels, or {\"label\", \"detail\"}; a note if NOTE. They move items (M-up /
 M-down) and press Answer: \"Answer to rank ID (QUESTION): in this order: C, A,
-B. Note: ...\" comes into your prompt (sent at once if SUBMIT). Then it shows
+B. Note: ...\" comes into your prompt (sent at once). Then it shows
 the order. Show it, say so in a line, end your turn."
   :props ((question string "The question: what to order, by what" :required t)
           (items list "The items, in your order: labels, or {\"label\": ..., \"detail\": ...}" :required t)
           (note boolean "Let the user add a note" :default :false)
-          (submit boolean "Send the answer at once (else it waits in the prompt)" :default :false)
           (order list "The user's order so far (labels)")
           (note-text string "The user's note")
           (answered string "The answer given (then it can't be changed)"))

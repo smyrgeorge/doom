@@ -6,7 +6,7 @@
 ;; line, h / l (or ← / →) move it a STEP, H / L ten, a click puts it there:
 ;; its own keys there (a text property's map: elsewhere h and l are the
 ;; cursor's). Set puts "Answer to slider ID (LABEL): 42 ms" into the
-;; session's prompt (sent at once unless SUBMIT is false); then it shows the
+;; session's prompt (sent at once); then it shows the
 ;; value set, and can't be changed. LIVE: each value sent once the knob rests
 ;; (`agent-ui-slider-live-delay'), no Set: for a canvas the agent redraws from
 ;; it. Its value is the element's own (:value, saved with the session).
@@ -211,7 +211,7 @@ as its step and min have (0.1 six times: 0.6, not 0.6000000000000001)."
                                 (funcall agent-ui-action-function
                                          (format "Answer to slider %s (%s): %s" (plist-get ctx :id)
                                                  (or (plist-get props :label) "value") (agent-ui-slider--shown props value))
-                                         (plist-get props :submit))
+                                         t)
                                 (agent-ui-ask-change ctx (list :answered (agent-ui-slider--shown props value))))
                               "RET: send the value"))))))))
      "\n")))
@@ -220,7 +220,7 @@ as its step and min have (0.1 six times: 0.6, not 0.6000000000000001)."
   "A number the user tunes in a range (a threshold, a timeout, how many to
 take): LABEL, MIN, MAX, STEP, UNIT, VALUE (where it starts). They move the
 knob and press Set: \"Answer to slider ID (LABEL): 42 ms\" comes into your
-prompt (at once unless SUBMIT is false). LIVE: each value, once the knob
+prompt (at once). LIVE: each value, once the knob
 rests, comes as \"Slider ID (LABEL) set to 42 ms\", no Set: for something you
 redraw from it."
   :props ((label string "What it sets")
@@ -230,7 +230,6 @@ redraw from it."
           (unit string "Its unit, after the value (ms, %)")
           (value number "Its value: where it starts, then the user's")
           (live boolean "Send each value once the knob rests (no Set)" :default :false)
-          (submit boolean "Send the answer at once (else it waits in the prompt)" :default t)
           (answered string "The value set (then it can't be changed)"))
   :example (:title "Before I retry"
             :label "Timeout" :min 0 :max 120 :step 5 :unit "s" :value 30)

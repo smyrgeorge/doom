@@ -7,7 +7,7 @@
 ;; (RET, a click) and adds some (Add). The user's changes are the element's
 ;; own (:changes, saved with the session) until Send puts them into the
 ;; session's prompt, "Changes to todo ID by the user: done: A; not done: B;
-;; added: C" (sent at once if SUBMIT); then they're cleared, and both go on
+;; added: C" (sent at once); then they're cleared, and both go on
 ;; ticking: it's never locked. Who ticked an item, or added it, shows after
 ;; it. Its buttons work in a canvas (as the elements that ask:
 ;; config/agent-ui/ask.el).
@@ -133,11 +133,11 @@ A, B; not done: C; added: D (done).\""
                  :changes (agent-ui-todo--changed (plist-get props :changes) label "added"))))))
 
 (defun agent-ui-todo--send (props ctx)
-  "The user's changes into the session's prompt (sent at once if SUBMIT);
+  "The user's changes into the session's prompt (sent at once);
 then cleared."
   (funcall agent-ui-action-function
            (agent-ui-todo--changes-text (plist-get ctx :id) (plist-get props :items) (plist-get props :changes))
-           (plist-get props :submit))
+           t)
   (agent-ui-ask-change ctx (list :changes nil)))
 
 ;; ====== DRAWING ======
@@ -238,11 +238,10 @@ ticking or unticking an item drops the user's change of it not sent."
   "A checklist you and the user both tick: ITEMS, labels or {\"label\",
 \"done\"}. The user ticks them too and adds some; Send puts their changes
 into your prompt: \"Changes to todo ID by the user: done: A; not done: B;
-added: C.\" (sent at once if SUBMIT). Tick one by appending it:
+added: C.\" (sent at once). Tick one by appending it:
 {\"items\": [{\"label\": \"Write the tests\", \"done\": true}]}; a new label
 adds it. For a plan you work through together."
   :props ((items list "The items: labels, or {\"label\": ..., \"done\": true}")
-          (submit boolean "Send the user's changes at once (else they wait in the prompt)" :default :false)
           (changes list "The user's changes not sent yet (theirs)"))
   :example (:title "The fix"
             :items ((:label "Reproduce the bug" :done t)

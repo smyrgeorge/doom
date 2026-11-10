@@ -185,7 +185,7 @@ column of marks for each parent: added if one is +, removed if one is -
 ;; proposes. Each is accepted to begin with; x on any of its lines (or RET on
 ;; its mark) rejects it, again: back; Accept all / Reject all. Send puts
 ;; "Answer to diff ID (QUESTION): accepted: FILE @@ ... @@; ...; rejected:
-;; ..." into the session's prompt (at once unless accept's submit is false),
+;; ..." into the session's prompt (sent at once),
 ;; with the review comments if there are; then it's answered. Applying them
 ;; stays the agent's. Which are rejected is the element's own (:rejected,
 ;; ({file, hunk}...), hunk counted from 1 in its file), saved with it.
@@ -193,23 +193,22 @@ column of marks for each parent: added if one is +, removed if one is -
 (defconst agent-ui-diff--question "Apply these changes?")
 
 (defun agent-ui-diff--accept-props (props)
-  "PROPS' accept as (:question :submit), or nil if it has none."
+  "PROPS' accept as (:question), or nil if it has none: its answer sent at
+once."
   (let ((accept (plist-get props :accept)))
     (cond ((memq accept '(nil :false)) nil)
-          ((eq accept t) (list :question agent-ui-diff--question :submit t))
-          (t (list :question (or (plist-get accept :question) agent-ui-diff--question)
-                   :submit (not (eq (plist-get accept :submit) :false)))))))
+          ((eq accept t) (list :question agent-ui-diff--question))
+          (t (list :question (or (plist-get accept :question) agent-ui-diff--question))))))
 
 (defun agent-ui-diff--check (props)
   (agent-ui-review-check "diff" (plist-get props :comments))
   (let ((accept (plist-get props :accept)))
     (unless (or (memq accept '(nil t :false))
                 (and (agent-ui--plist-p accept)
-                     (cl-every (lambda (k) (memq k '(:question :submit)))
+                     (cl-every (lambda (k) (eq k :question))
                                (cl-loop for (k _) on accept by #'cddr collect k))
-                     (or (null (plist-get accept :question)) (stringp (plist-get accept :question)))
-                     (memq (plist-get accept :submit) '(nil t :false))))
-      (agent-ui--fail "diff: accept is true, or {\"question\": ..., \"submit\": ...}")))
+                     (or (null (plist-get accept :question)) (stringp (plist-get accept :question)))))
+      (agent-ui--fail "diff: accept is true, or {\"question\": ...} (its answer sent at once)")))
   (unless (cl-every (lambda (r) (and (agent-ui--plist-p r) (stringp (plist-get r :file))
                                      (natnump (plist-get r :hunk))))
                     (plist-get props :rejected))
@@ -268,7 +267,7 @@ prompt; answered."
                      (if comments
                          (concat ". " (agent-ui-review-text (plist-get ctx :id) comments))
                        ""))
-             (plist-get accept :submit))
+             t)
     (agent-ui-ask-change ctx (list :answered (agent-ui-diff--counted accepted rejected comments)))))
 
 (defun agent-ui-diff--accept-footer (props ctx files)
@@ -424,7 +423,7 @@ prompt; apply the accepted ones."
   :props ((diff string "The unified diff (git diff's output)" :default "")
           (dir file "Where its files are (default: your directory)" :default :here)
           (comments list "The user's review comments on its lines (c on a line): [{\"line\", \"end\", \"file\", \"text\"}]")
-          (accept any "Changes you propose, the user accepting or rejecting each hunk: true, or {\"question\": ..., \"submit\": ...}")
+          (accept any "Changes you propose, the user accepting or rejecting each hunk: true, or {\"question\": ...}")
           (rejected list "The hunks the user rejected: [{\"file\", \"hunk\": N}] (theirs)")
           (answered string "The review sent (then it can't be changed)"))
   :example (:title "My changes"

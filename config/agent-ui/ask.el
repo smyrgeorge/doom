@@ -15,8 +15,9 @@
 ;;   :note-text  the user's note
 ;;   :answered   the answer given, as shown (then it can't be changed)
 ;;
-;; Its settings (the question, multiple, note, submit) are the type's: choice's
-;; own properties, a table's select. Its buttons work in a canvas only.
+;; Its settings (the question, multiple, note) are the type's: choice's own
+;; properties, a table's select. Its answer is always sent at once: straight to
+;; the agent. Its buttons work in a canvas only.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -144,11 +145,12 @@ Note: NOTE\" (PICKED a list of what each picked item answers)."
               (concat (if picked " · " "") "note: " note)
             "")))
 
-(cl-defun agent-ui-ask-answer-button (props ctx &key what question submit (answers (plist-get props :selected))
-                                            (label (if submit "⏵ Send the answer" "⏵ Answer")))
+(cl-defun agent-ui-ask-answer-button (props ctx &key what question (answers (plist-get props :selected))
+                                            (label "⏵ Answer"))
   "The Answer button (LABEL): nothing picked nor noted, said; else the answer
 \(`agent-ui-ask-answer-text' of WHAT, QUESTION, ANSWERS and the note) into the
-session's prompt, sent at once if SUBMIT; then the element answered (locked)."
+session's prompt, sent at once (an answer goes straight to the agent); then
+the element answered (locked)."
   (agent-ui-button
    (propertize label 'face 'agent-ui-action)
    (lambda ()
@@ -156,7 +158,7 @@ session's prompt, sent at once if SUBMIT; then the element answered (locked)."
        (user-error "Choose an option first"))
      (funcall agent-ui-action-function
               (agent-ui-ask-answer-text what question answers (plist-get props :note-text))
-              submit)
+              t)
      (agent-ui-ask-change ctx (list :answered (agent-ui-ask-answered-text answers (plist-get props :note-text)))))
    "RET: put the answer into the prompt"))
 
@@ -169,18 +171,18 @@ session's prompt, sent at once if SUBMIT; then the element answered (locked)."
 
 ;; ====== SELECT: A LIST ELEMENT ASKING ======
 ;; A list element (a table, files, issues) asks with select: {"question",
-;; "multiple", "note", "submit"}: marks before its items, the question above,
-;; the note and Send / All / None under it (`agent-ui-ask-around').
+;; "multiple", "note"}: marks before its items, the question above, the note
+;; and Answer / All / None under it (`agent-ui-ask-around').
 
 (defun agent-ui-ask-select-check (what select)
-  "SELECT (an element's select) checked: {question, multiple, note, submit},
+  "SELECT (an element's select) checked: {question, multiple, note},
 its question text; else an error naming WHAT."
   (unless (agent-ui--plist-p select)
-    (agent-ui--fail "%s: select is {\"question\": ..., \"multiple\", \"note\", \"submit\"}, not %s"
+    (agent-ui--fail "%s: select is {\"question\": ..., \"multiple\", \"note\"}, not %s"
                     what (agent-ui--show-value select)))
   (cl-loop for (k _) on select by #'cddr
-           unless (memq k '(:question :multiple :note :submit))
-           do (agent-ui--fail "%s: select has %s: it has question, multiple, note, submit"
+           unless (memq k '(:question :multiple :note))
+           do (agent-ui--fail "%s: select has %s: it has question, multiple, note (answers are sent at once)"
                               what (agent-ui--show-value (substring (symbol-name k) 1))))
   (unless (stringp (plist-get select :question))
     (agent-ui--fail "%s: select's question is required (text)" what)))
@@ -197,8 +199,7 @@ under it. ALL: every item's answer, in order (what's picked answered so)."
   (let* ((select (plist-get props :select))
          (width (plist-get ctx :width))
          (all (delete-dups (copy-sequence all)))
-         (answers (seq-filter (lambda (answer) (agent-ui-ask-picked-p props answer)) all))
-         (submit (eq (plist-get select :submit) t)))
+         (answers (seq-filter (lambda (answer) (agent-ui-ask-picked-p props answer)) all)))
     (concat (propertize (agent-ui-wrap (plist-get select :question) width) 'face 'bold)
             "\n" body
             (cond
@@ -209,9 +210,8 @@ under it. ALL: every item's answer, in order (what's picked answered so)."
                  "\n "
                  (agent-ui-ask-answer-button props ctx
                                              :what (plist-get ctx :id) :question (plist-get select :question)
-                                             :submit submit :answers answers
-                                             :label (format "⏵ %s (%d chosen)" (if submit "Send" "Answer")
-                                                            (length answers)))
+                                             :answers answers
+                                             :label (format "⏵ Answer (%d chosen)" (length answers)))
                  (if (agent-ui-ask-multiple-p select) (concat "   " (agent-ui-ask-all-none ctx all)) "")))))))
 
 (defun agent-ui-ask-group-mark (props items multiple ctx &optional plain)
@@ -315,8 +315,8 @@ current drawing's (what changed drawn first)."
 ;; ====== REVIEW COMMENTS ======
 ;; On an element showing code (code, diff): the user writes comments on its
 ;; lines (c on a line, or on a region's lines; c on a comment edits it, d
-;; removes it), shown under them; Send the review puts them all into the
-;; session's prompt, each with its place ("Review of ID: src/x.c:42: rename
+;; removes it), shown under them; Send the review sends them all to the
+;; agent at once, each with its place ("Review of ID: src/x.c:42: rename
 ;; this; ..."), then the element is answered (locked). Its lines say where they
 ;; are (text properties agent-ui-file, agent-ui-line), its comments' lines which
 ;; they are (agent-ui-comment, an index). Its state, its own: :comments
@@ -375,9 +375,9 @@ comments, or in a still picture); once sent, saying so. Led by a newline."
                 (agent-ui-button
                  (propertize (format "⏵ Send the review (%s)" (funcall count (length comments))) 'face 'agent-ui-action)
                  (lambda ()
-                   (funcall agent-ui-action-function (agent-ui-review-text (plist-get ctx :id) comments) nil)
+                   (funcall agent-ui-action-function (agent-ui-review-text (plist-get ctx :id) comments) t)
                    (agent-ui-ask-change ctx (list :answered (funcall count (length comments)))))
-                 "RET: put the review into the prompt")
+                 "RET: send the review to the agent")
                 "   "
                 (agent-ui-button (propertize "⏵ Discard" 'face 'agent-ui-action)
                                  (lambda () (agent-ui-ask-change ctx (list :comments nil)))

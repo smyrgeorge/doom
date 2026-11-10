@@ -8,7 +8,7 @@
 ;; narrower than `agent-ui-compare-min-width'; images too, in the GUI, to be
 ;; seen). RET or a click on a mark picks it (MULTIPLE: several); Answer puts
 ;; "Answer to compare ID (QUESTION): B. Note: ..." into the session's prompt
-;; (sent at once if SUBMIT); then it shows the answer, and can't be changed.
+;; (sent at once); then it shows the answer, and can't be changed.
 ;; Its choice is the element's own (config/agent-ui/ask.el).
 ;;
 ;;   Which version reads better?
@@ -115,8 +115,7 @@
          (list (concat " " (agent-ui-ask-answer-button
                             props ctx
                             :what (format "compare %s" (plist-get ctx :id))
-                            :question (plist-get props :question)
-                            :submit (plist-get props :submit))))))))
+                            :question (plist-get props :question))))))))
      "\n")))
 
 (agent-ui-define compare
@@ -125,13 +124,12 @@ need showing, not naming (code versions, texts, approaches, diffs): QUESTION
 and 2 to 4 OPTIONS, each {\"label\", \"element\"} (an element of any type,
 drawn in its column); several picked if MULTIPLE; a note if NOTE. The user
 picks and presses Answer: \"Answer to compare ID (QUESTION): B. Note: ...\"
-comes into your prompt (sent at once if SUBMIT). Show it, say so in a line,
+comes into your prompt (sent at once). Show it, say so in a line,
 end your turn."
   :props ((question string "The question" :required t)
           (options list "The alternatives: [{\"label\": ..., \"element\": {\"type\": ..., ...}}]" :required t)
           (multiple boolean "Several can be picked" :default :false)
           (note boolean "Let the user add a note (why)" :default t)
-          (submit boolean "Send the answer at once (else it waits in the prompt)" :default :false)
           (selected list "The options picked so far (labels)")
           (note-text string "The user's note")
           (answered string "The answer given (then it can't be changed)"))

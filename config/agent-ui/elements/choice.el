@@ -5,7 +5,7 @@
 ;; One option (MULTIPLE false) or several; a note if NOTE (typed in the
 ;; minibuffer). RET or a click on an option selects it (toggles it); on
 ;; Answer, the answer goes into the session's prompt, "Answer to choice ID
-;; (QUESTION): A, B. Note: ...", sent at once if SUBMIT. Then it says the
+;; (QUESTION): A, B. Note: ...", sent at once. Then it says the
 ;; answer, and can't be changed. Its selection is the element's own (saved
 ;; with the session, in a snapshot). Its buttons work in a canvas. What it
 ;; shares with the other elements that ask (picking, the note, the answer):
@@ -92,22 +92,19 @@
                   (list (concat " " (agent-ui-ask-answer-button
                                      props ctx
                                      :what (format "choice %s" (plist-get ctx :id))
-                                     :question (plist-get props :question)
-                                     :submit (plist-get props :submit)))))))
+                                     :question (plist-get props :question)))))))
        "\n"))))
 
 (agent-ui-define choice
   "A question for the user: QUESTION and its OPTIONS (labels, or
 {\"label\", \"detail\"}), one to pick (or several, MULTIPLE), a note if
 NOTE. The user picks (RET, a click) and presses Answer: \"Answer to choice
-ID (QUESTION): A, B. Note: ...\" comes into your prompt (sent at once if
-SUBMIT). Then it shows the answer. For a decision you need from the user:
+ID (QUESTION): A, B. Note: ...\" comes into your prompt (sent at once). Then it shows the answer. For a decision you need from the user:
 which approach, approve a plan."
   :props ((question string "The question" :required t)
           (options list "The options: labels, or {\"label\": ..., \"detail\": ...}" :required t)
           (multiple boolean "Several can be chosen" :default :false)
           (note boolean "Let the user add a note" :default :false)
-          (submit boolean "Send the answer at once (else it waits in the prompt)" :default :false)
           (selected list "The options chosen so far (labels): a default, or the user's")
           (note-text string "The user's note")
           (answered string "The answer given (then it can't be changed)"))

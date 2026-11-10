@@ -6,8 +6,7 @@
 ;; by its DANGER: high, in the error face, Proceed asking to type a WORD (the
 ;; branch's name; "yes" if none) and refusing another. Proceed or Cancel
 ;; puts "Answer to confirm ID (QUESTION): proceed" (or cancel) into the
-;; session's prompt, sent at once (unless SUBMIT is false: the agent waits
-;; for it); then it shows the answer, and can't be changed. No default
+;; session's prompt, sent at once; then it shows the answer, and can't be changed. No default
 ;; answer: nothing happens on its own. Its state is the element's own
 ;; (:answered), as the elements that ask (config/agent-ui/ask.el).
 ;;
@@ -46,7 +45,7 @@ one refused."
   (funcall agent-ui-action-function
            (agent-ui-ask-answer-text (format "confirm %s" (plist-get ctx :id))
                                      (plist-get props :question) (list answer) nil)
-           (plist-get props :submit))
+           t)
   (agent-ui-ask-change ctx (list :answered answer)))
 
 (defun agent-ui-confirm--draw (props ctx)
@@ -100,8 +99,7 @@ one refused."
 migrating): QUESTION, what will happen (DETAILS, lines; or a DIFF), DANGER
 low or high (high: in red, the user types WORD, \"yes\" if none, to
 proceed). Proceed or Cancel: \"Answer to confirm ID (QUESTION): proceed\"
-(or cancel) comes as your next prompt (sent at once; with submit false, it
-waits in the prompt). Show it, say so in a line, end your turn; do the
+(or cancel) comes as your next prompt, sent at once. Show it, say so in a line, end your turn; do the
 risky thing only on proceed."
   :props ((question string "The question: what's about to happen" :required t)
           (details list "What will happen: lines of text")
@@ -110,7 +108,6 @@ risky thing only on proceed."
           (word string "A word to type to proceed (the branch's name); at high danger \"yes\" if none")
           (proceed string "The Proceed button's label" :default "Proceed")
           (cancel string "The Cancel button's label" :default "Cancel")
-          (submit boolean "Send the answer at once (else it waits in the prompt)" :default t)
           (answered string "The answer given, proceed or cancel (then it can't be changed)"))
   :example (:title "Before I push"
             :question "Force-push to origin/main?"
