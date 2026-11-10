@@ -363,13 +363,56 @@ in a project of its own; closed after."
       (should-not (agent-ui-panels--stale panel)))
     (should (memq #'agent-ui-panels--shown (buffer-local-value 'window-buffer-change-functions canvas)))))
 
-(ert-deftest agent-ui-panels/never-two-fetches-at-once ()
-  "Every 0.1 s, its command 0.6 s: the next fetch waits for it."
+(ert-deftest agent-ui-panels/a-query-not-started-twice ()
+  "Every 0.1 s, its command 0.6 s: not started again while it runs; the
+fetch goes on."
   (+test-aup-open "waiting"
     (+test-sleep 0.45)
-    (should (= (cl-count 'fetch +test-aup-calls) 1))
-    (should (+test-wait-for (lambda () (memq 'done +test-aup-calls)) 3))
-    (should (+test-wait-for (lambda () (>= (cl-count 'fetch +test-aup-calls) 2)) 2))))
+    (should (>= (cl-count 'fetch +test-aup-calls) 3))
+    (should (= (length (agent-ui-panels--processes panel)) 1))
+    (should (+test-wait-for (lambda () (memq 'done +test-aup-calls)) 3))))
+
+(defun +test-aup-title (canvas id)
+  (plist-get (agent-ui-get id :canvas canvas) :title))
+
+(ert-deftest agent-ui-panels/its-queries-each-their-own ()
+  "A slow query (1.5 s) doesn't hold a fast one's refreshes (every 0.1 s):
+the fast one refreshed meanwhile, Emacs's timers running; the slow
+element's title says it's loading and for how long, its data kept while it
+loads again, its title as it was once it's done (doom-hgl)."
+  (+test-aup-open "independent"
+    (should (+test-wait-for (lambda () (>= (cl-count 'fast +test-aup-calls) 5)) 1.2))
+    (should-not (memq 'slow +test-aup-calls))
+    (should (string-match-p "\\`Slow  ⟳ loading, [0-9]" (+test-aup-title canvas "slow")))
+    (should (equal (+test-aup-title canvas "fast") "Fast"))
+    ;; How long, said as it goes.
+    (let ((first (+test-aup-title canvas "slow")))
+      (should (+test-wait-for (lambda () (not (equal (+test-aup-title canvas "slow") first))) 2)))
+    (should (+test-wait-for (lambda () (memq 'slow +test-aup-calls)) 3))
+    (should (equal (plist-get (agent-ui-get "slow" :canvas canvas) :text) "slow done"))
+    ;; Loading again: its data kept meanwhile.
+    (should (+test-wait-for (lambda () (string-match-p "⟳" (or (+test-aup-title canvas "slow") ""))) 1))
+    (should (equal (plist-get (agent-ui-get "slow" :canvas canvas) :text) "slow done"))
+    (should-not (+test-aup-status canvas))))
+
+(ert-deftest agent-ui-panels/a-query-timed-out ()
+  "TIMEOUT: killed after it, said on its element."
+  (+test-aup-open "timeout"
+    (should (+test-wait-for (lambda () (string-match-p "⚠" (or (+test-aup-title canvas "t") ""))) 2))
+    (should (equal (+test-aup-title canvas "t") "Orders  ⚠ sleep: timed out after 0.3 s"))
+    (should-not (agent-ui-panels--processes panel))
+    (should-not (+test-aup-status canvas))))
+
+(ert-deftest agent-ui-panels/a-query-s-error-on-its-element ()
+  "A query of an element failing: said on its title (not the panel's line),
+until it goes well."
+  (+test-aup-open "flaky-element"
+    (should (+test-wait-for (lambda () (string-match-p "⚠" (or (+test-aup-title canvas "t") ""))) 3))
+    (should (equal (+test-aup-title canvas "t") "Deploy  ⚠ sh: exit 1: no ok yet"))
+    (should-not (+test-aup-status canvas))
+    (with-temp-file (expand-file-name "ok" root))
+    (should (+test-wait-for (lambda () (equal (plist-get (agent-ui-get "t" :canvas canvas) :text) "ok")) 3))
+    (should (+test-wait-for (lambda () (equal (+test-aup-title canvas "t") "Deploy")) 3))))
 
 (ert-deftest agent-ui-panels/its-errors-on-it ()
   "A failure: a line under it saying so, in the error face, until a fetch

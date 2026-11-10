@@ -40,14 +40,20 @@ Its code fills it with:
 - `(agent-ui-panel-update panel ID :prop value ...)`: as `agent-ui update` (a value nil: back to its default).
 - `(agent-ui-panel-append panel ID :rows rows)`: as `agent-ui append` (a table's rows by key, a chart's values).
 - `(agent-ui-panel-get panel ID)`: the element's properties now.
-- `(agent-ui-panel-run panel COMMAND (lambda (output) ...))`: COMMAND (a list, or a string for the shell) run in the
-  root, **without waiting**; the function called with its output once it ends well: parsed JSON when it reads so
-  (objects as alists, `(alist-get 'name r)`; arrays as lists), else its text. A failing one (its exit, what it said)
-  is the panel's error. Killed when the panel closes. Any command, any language: a script of the project's too.
+- `(agent-ui-panel-run panel COMMAND (lambda (output) ...) :element ID :timeout SECONDS)`: COMMAND (a list, or a
+  string for the shell) run in the root, **without waiting**, however long it takes (a database's query: minutes);
+  the function called with its output once it ends well: parsed JSON when it reads so (objects as alists,
+  `(alist-get 'name r)`; arrays as lists), else its text. Any command, any language: a script of the project's too.
+  Killed when the panel closes; with `:timeout`, after so many seconds.
 
-It's fetched only while it's shown (hidden, it waits; shown again, it's fetched at once), and never twice at once: a
-fetch waits for the last one's commands. What goes wrong is shown under it, until a fetch goes well. After you edit
-its file, the user presses `gR` on it to read it again.
+**Each query on its own.** Give each `agent-ui-panel-run` the `:element` it fills: while it runs, that element's
+title says it's loading and for how long (`⟳ loading, 1m 12s`), its last data still shown; its failure (its exit,
+what it said; a timeout) is said on its title, until it goes well. A query still running isn't started again by the
+next fetch; the others are, each at its own pace: a slow one never holds the others. Several queries in one panel:
+one `agent-ui-panel-run` each, in the same `:fetch`. Without `:element`, its failure is said under the panel.
+
+It's fetched only while it's shown (hidden, it waits; shown again, it's fetched at once). After you edit its file,
+the user presses `gR` on it to read it again.
 
 Its code never waits (Emacs is frozen meanwhile, every `:every` seconds; a fetch over 0.1 s itself is said on it): no `shell-command-to-string`,
 `call-process`, `process-lines`, `url-retrieve-synchronously`, `sleep-for`. Emacs's own state it reads at once (its

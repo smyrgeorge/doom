@@ -233,8 +233,12 @@ its waiting calls found. Returns (:ok t :panel NAME :file FILE :type TYPE
 script is given as PANEL. Its :ui (read), its script (its form evaluated),
 its fetches' timer, its commands running, its last error."
   name file root canvas ui script timer processes error
-  ;; A fetch missed while it was hidden; one of this fetch's failed.
-  stale broke)
+  ;; A fetch missed while it was hidden; what's wrong now, by key ((KEY TEXT
+  ;; . ELEMENT) ...: said on ELEMENT's title, else on its line); the queries
+  ;; running, by key (:process :start :element); the titles of its elements
+  ;; marked (loading, failed), as they were ((ID . TITLE) ...); the timer
+  ;; saying how long they've been loading.
+  stale errors (running (make-hash-table :test #'equal)) titles ticker)
 
 (defvar-local agent-ui-panels--state nil
   "In a project panel's canvas: the panel (an `agent-ui-panels--state').")
@@ -394,46 +398,105 @@ in its elements."
           (walk ui))
         found)))
 
-(defun agent-ui-panels--failed (panel what err)
+(defun agent-ui-panels--failed (panel what err &optional key element)
   "PANEL's WHAT (\"fetch\", a command...) failed with ERR (an error, or a
-message): kept, said."
-  (let ((text (format "%s: %s" what (if (stringp err) err (agent-ui-error-message err)))))
+message): kept by KEY (default WHAT) until it goes well, said: on ELEMENT's
+title if given, else on the panel's line."
+  (let ((text (format "%s: %s" what (if (stringp err) err (agent-ui-error-message err))))
+        (key (or key what)))
     (setf (agent-ui-panels--error panel) text
-          (agent-ui-panels--broke panel) t)
+          (alist-get key (agent-ui-panels--errors panel) nil nil #'equal) (cons text element))
     (message "Agent UI: panel %s: %s" (agent-ui-panels--name panel) text)
-    (agent-ui-panels--status panel text)
+    (agent-ui-panels--said panel)
     nil))
+
+(defun agent-ui-panels--well (panel key)
+  "PANEL's KEY (a query, \"fetch\") went well: its error gone."
+  (when (assoc key (agent-ui-panels--errors panel))
+    (setf (agent-ui-panels--errors panel)
+          (cl-remove key (agent-ui-panels--errors panel) :key #'car :test #'equal))
+    (unless (agent-ui-panels--errors panel)
+      (setf (agent-ui-panels--error panel) nil))
+    (agent-ui-panels--said panel)))
+
+(defun agent-ui-panels--said (panel)
+  "What's wrong with PANEL, and what's loading, said: its line (errors of no
+element, one line each), its elements' titles (loading, how long; failed)."
+  (when (agent-ui-panels--live-p panel)
+    (let ((lines (delq nil (mapcar (lambda (e) (unless (cddr e) (concat "⚠ " (cadr e))))
+                                   (reverse (agent-ui-panels--errors panel))))))
+      (agent-ui-panels--status panel (and lines (string-join lines "\n"))))
+    (agent-ui-panels--mark panel)))
+
+(defun agent-ui-panels--mark (panel)
+  "PANEL's elements' titles: one loading, \"⟳ loading, 1m 12s\" after it;
+one failed, its error; the others as they were."
+  (let ((canvas (agent-ui-panels--canvas panel))
+        (now (float-time))
+        (marks nil))
+    (maphash (lambda (_key run)
+               (when-let* ((id (plist-get run :element)))
+                 (let ((took (- now (plist-get run :start))))
+                   (unless (and (assoc id marks) (< took (cdr (assoc id marks))))
+                     (setf (alist-get id marks nil nil #'equal) took)))))
+             (agent-ui-panels--running panel))
+    (setq marks (mapcar (lambda (m) (cons (car m) (concat "⟳ loading, " (agent-ui-format-duration (cdr m)))))
+                        marks))
+    (dolist (e (agent-ui-panels--errors panel))
+      (when-let* ((id (cddr e)))
+        (unless (assoc id marks)
+          (push (cons id (concat "⚠ " (cadr e))) marks))))
+    (let ((agent-ui-display-function #'ignore))
+      (pcase-dolist (`(,id . ,mark) marks)
+        (unless (assoc id (agent-ui-panels--titles panel))
+          (when-let* ((element (ignore-errors (agent-ui-get id :canvas canvas))))
+            (push (cons id (plist-get element :title)) (agent-ui-panels--titles panel))))
+        (when-let* ((entry (assoc id (agent-ui-panels--titles panel))))
+          (ignore-errors
+            (agent-ui-update id (list :title (if (cdr entry) (concat (cdr entry) "  " mark) mark))
+                             :canvas canvas))))
+      ;; Marked no more: as it was.
+      (dolist (entry (agent-ui-panels--titles panel))
+        (unless (assoc (car entry) marks)
+          (ignore-errors (agent-ui-update (car entry) (list :title (cdr entry)) :canvas canvas))
+          (setf (agent-ui-panels--titles panel) (delq entry (agent-ui-panels--titles panel))))))))
+
+(defun agent-ui-panels--tick (panel)
+  "PANEL's loading elements' times, said; none loading: the ticker stops."
+  (let ((loading nil))
+    (maphash (lambda (_key run) (when (plist-get run :element) (setq loading t)))
+             (agent-ui-panels--running panel))
+    (if (and loading (agent-ui-panels--live-p panel))
+        (agent-ui-panels--mark panel)
+      (when (timerp (agent-ui-panels--ticker panel))
+        (cancel-timer (agent-ui-panels--ticker panel)))
+      (setf (agent-ui-panels--ticker panel) nil))))
 
 (defconst agent-ui-panels--status-id "panel.status"
   "The id of the line under a panel saying what went wrong.")
 
 (defun agent-ui-panels--status (panel text)
-  "PANEL's line under it saying TEXT (what went wrong), or gone (TEXT nil)."
+  "PANEL's lines under it saying TEXT (what went wrong, a line each, \"⚠\"
+before), or gone (TEXT nil)."
   (when (agent-ui-panels--live-p panel)
     (let ((canvas (agent-ui-panels--canvas panel))
           (agent-ui-display-function #'ignore))
       (if text
           (agent-ui-show (list :type "text" :id agent-ui-panels--status-id :face "error"
-                               :text (concat "⚠ " text))
+                               :text text)
                          :canvas canvas)
         (when (member agent-ui-panels--status-id (buffer-local-value 'agent-ui--order canvas))
           (agent-ui-remove agent-ui-panels--status-id :canvas canvas))))))
 
-(defun agent-ui-panels--settled (panel)
-  "PANEL's fetch over, its commands done: its error and line gone if none of
-it failed."
-  (unless (or (agent-ui-panels--processes panel) (agent-ui-panels--broke panel))
-    (setf (agent-ui-panels--error panel) nil)
-    (agent-ui-panels--status panel nil)))
-
 (defun agent-ui-panels--call (panel key)
   "PANEL's script's KEY (:fetch, :start, :stop) called with it, in its root;
-an error of it kept and said."
-  (when-let* ((fn (plist-get (agent-ui-panels--script panel) key)))
-    (let ((default-directory (agent-ui-panels--root panel)))
-      (condition-case err
-          (funcall fn panel)
-        (error (agent-ui-panels--failed panel (substring (symbol-name key) 1) err))))))
+an error of it kept and said. Non-nil if it went well."
+  (if-let* ((fn (plist-get (agent-ui-panels--script panel) key)))
+      (let ((default-directory (agent-ui-panels--root panel)))
+        (condition-case err
+            (progn (funcall fn panel) t)
+          (error (agent-ui-panels--failed panel (substring (symbol-name key) 1) err))))
+    t))
 
 (defun agent-ui-panels--live-p (panel)
   (buffer-live-p (agent-ui-panels--canvas panel)))
@@ -471,23 +534,23 @@ frozen meanwhile, before it's said."
 
 (defun agent-ui-panels--fetch (panel)
   "PANEL's :fetch, once: not while it's hidden (fetched when it's shown
-again), nor while its last fetch's commands run (never two at once); its
-canvas gone, stopped. Taking long itself (Emacs frozen), said."
+again); its canvas gone, stopped. Its queries each their own: one still
+running isn't started again, the others are (`agent-ui-panel-run'). Taking
+long itself (Emacs frozen), said."
   (cond
    ((not (agent-ui-panels--live-p panel)) (agent-ui-panels--stop panel))
    ((not (agent-ui-panels--visible-p panel)) (setf (agent-ui-panels--stale panel) t))
-   ((agent-ui-panels--processes panel))
    (t
-    (setf (agent-ui-panels--stale panel) nil
-          (agent-ui-panels--broke panel) nil)
-    (let ((start (float-time)))
-      (agent-ui-panels--call panel :fetch)
-      (let ((took (- (float-time) start)))
-        (when (> took agent-ui-panel-slow)
-          (agent-ui-panels--failed
-           panel "fetch" (format "took %.2f s itself, Emacs frozen meanwhile: run commands with agent-ui-panel-run"
-                                 took)))))
-    (agent-ui-panels--settled panel))))
+    (setf (agent-ui-panels--stale panel) nil)
+    (let* ((start (float-time))
+           (well (agent-ui-panels--call panel :fetch))
+           (took (- (float-time) start)))
+      (cond
+       ((> took agent-ui-panel-slow)
+        (agent-ui-panels--failed
+         panel "fetch" (format "took %.2f s itself, Emacs frozen meanwhile: run commands with agent-ui-panel-run"
+                               took)))
+       (well (agent-ui-panels--well panel "fetch")))))))
 
 (defun agent-ui-panels--shown (window)
   "WINDOW shows a panel's canvas now (its `window-buffer-change-functions'):
@@ -503,9 +566,13 @@ a fetch missed while it was hidden, done."
   (when (timerp (agent-ui-panels--timer panel))
     (cancel-timer (agent-ui-panels--timer panel)))
   (setf (agent-ui-panels--timer panel) nil)
+  (when (timerp (agent-ui-panels--ticker panel))
+    (cancel-timer (agent-ui-panels--ticker panel)))
+  (setf (agent-ui-panels--ticker panel) nil)
   (dolist (process (agent-ui-panels--processes panel))
     (when (process-live-p process) (delete-process process)))
   (setf (agent-ui-panels--processes panel) nil)
+  (clrhash (agent-ui-panels--running panel))
   (when (agent-ui-panels--script panel)
     (agent-ui-panels--call panel :stop)
     (setf (agent-ui-panels--script panel) nil)))
@@ -530,7 +597,8 @@ was."
           (agent-ui-panels--stop panel)
           (setf (agent-ui-panels--ui panel) ui
                 (agent-ui-panels--error panel) nil
-                (agent-ui-panels--broke panel) nil
+                (agent-ui-panels--errors panel) nil
+                (agent-ui-panels--titles panel) nil
                 (agent-ui-panels--stale panel) nil)
           ;; Drawn first, the others removed after: never empty (an empty
           ;; canvas closes its pane).
@@ -577,48 +645,77 @@ lists, null and false nil) when it reads so; else TEXT."
              (error nil)))
       text))
 
-(defun agent-ui-panel-run (panel command callback)
+(cl-defun agent-ui-panel-run (panel command callback &key element timeout)
   "Run COMMAND (a list: a program and its arguments; a string: by the shell)
-in PANEL's root, without waiting: CALLBACK then called with its output (see
-`agent-ui-panels--output'), if it ends well (exit 0); else its error is
-PANEL's, said. Killed when PANEL closes. Returns its process."
-  (let* ((default-directory (agent-ui-panels--root panel))
-         (name (format "agent-ui-panel-%s" (agent-ui-panels--name panel)))
-         (out (generate-new-buffer (format " *%s*" name) t))
-         (err (generate-new-buffer (format " *%s stderr*" name) t))
-         (program (if (stringp command) command (car command)))
-         (process
-          (make-process
-           :name name :buffer out :stderr err :noquery t :connection-type 'pipe
-           :command (if (stringp command) (list shell-file-name shell-command-switch command) command)
-           :sentinel
-           (lambda (process _event)
-             (unless (process-live-p process)
-               (setf (agent-ui-panels--processes panel) (delq process (agent-ui-panels--processes panel)))
-               (let ((text (with-current-buffer out (buffer-string)))
-                     (errors (string-trim (with-current-buffer err (buffer-string))))
-                     (code (process-exit-status process)))
-                 (kill-buffer out)
-                 (when (buffer-live-p err) (kill-buffer err))
-                 (when (agent-ui-panels--live-p panel)
-                   (if (and (eq (process-status process) 'exit) (= code 0))
-                       (let ((default-directory (agent-ui-panels--root panel)))
-                         (condition-case e
-                             (funcall callback (agent-ui-panels--output text))
-                           (error (agent-ui-panels--failed panel program e)))
-                         (agent-ui-panels--settled panel))
-                     (agent-ui-panels--failed
-                      panel program
-                      (format "exit %s%s" code
-                              (let ((last (car (last (split-string (if (string-empty-p errors) text errors)
-                                                                   "\n" t)))))
-                                (if last (concat ": " last) ""))))))))))))
-    ;; Its stderr's pipe: no query, no "finished" line in what it said.
-    (when-let* ((stderr (get-buffer-process err)))
-      (set-process-query-on-exit-flag stderr nil)
-      (set-process-sentinel stderr #'ignore))
-    (push process (agent-ui-panels--processes panel))
-    process))
+in PANEL's root, without waiting, however long it takes: CALLBACK then
+called with its output (see `agent-ui-panels--output'), if it ends well
+\(exit 0); else its error is said. ELEMENT: the id of the element it fills,
+its title saying it's loading (and how long) meanwhile, its data kept, its
+error said on it. A query (its ELEMENT, else its COMMAND) still running
+isn't started again: nil then; the others are, each on its own. TIMEOUT:
+seconds, it killed after them (an error). Killed when PANEL closes.
+Returns its process."
+  (let ((key (or element (if (stringp command) command (string-join command " "))))
+        (running (agent-ui-panels--running panel)))
+    (unless (gethash key running)
+      (let* ((default-directory (agent-ui-panels--root panel))
+             (name (format "agent-ui-panel-%s" (agent-ui-panels--name panel)))
+             (out (generate-new-buffer (format " *%s*" name) t))
+             (err (generate-new-buffer (format " *%s stderr*" name) t))
+             (program (if (stringp command) command (car command)))
+             (timed-out nil)
+             (process
+              (make-process
+               :name name :buffer out :stderr err :noquery t :connection-type 'pipe
+               :command (if (stringp command) (list shell-file-name shell-command-switch command) command)
+               :sentinel
+               (lambda (process _event)
+                 (unless (process-live-p process)
+                   (setf (agent-ui-panels--processes panel) (delq process (agent-ui-panels--processes panel)))
+                   (when (eq (plist-get (gethash key running) :process) process)
+                     (remhash key running))
+                   (let ((text (with-current-buffer out (buffer-string)))
+                         (errors (string-trim (with-current-buffer err (buffer-string))))
+                         (code (process-exit-status process)))
+                     (kill-buffer out)
+                     (when (buffer-live-p err) (kill-buffer err))
+                     (when (agent-ui-panels--live-p panel)
+                       (cond
+                        (timed-out
+                         (agent-ui-panels--failed panel program (format "timed out after %s s" timeout) key element))
+                        ((and (eq (process-status process) 'exit) (= code 0))
+                         (when (let ((default-directory (agent-ui-panels--root panel)))
+                                 (condition-case e
+                                     (progn (funcall callback (agent-ui-panels--output text)) t)
+                                   (error (agent-ui-panels--failed panel program e key element))))
+                           (agent-ui-panels--well panel key)))
+                        (t
+                         (agent-ui-panels--failed
+                          panel program
+                          (format "exit %s%s" code
+                                  (let ((last (car (last (split-string (if (string-empty-p errors) text errors)
+                                                                       "\n" t)))))
+                                    (if last (concat ": " last) "")))
+                          key element)))
+                       ;; Its element loading no more.
+                       (agent-ui-panels--mark panel))))))))
+        ;; Its stderr's pipe: no query, no "finished" line in what it said.
+        (when-let* ((stderr (get-buffer-process err)))
+          (set-process-query-on-exit-flag stderr nil)
+          (set-process-sentinel stderr #'ignore))
+        (push process (agent-ui-panels--processes panel))
+        (puthash key (list :process process :start (float-time) :element element) running)
+        (when timeout
+          (run-with-timer timeout nil (lambda ()
+                                        (when (process-live-p process)
+                                          (setq timed-out t)
+                                          (delete-process process)))))
+        (when element
+          (agent-ui-panels--mark panel)
+          (unless (timerp (agent-ui-panels--ticker panel))
+            (setf (agent-ui-panels--ticker panel)
+                  (run-with-timer 1 1 #'agent-ui-panels--tick panel))))
+        process))))
 
 (declare-function agent-ui-persist--without-sources "persist")
 

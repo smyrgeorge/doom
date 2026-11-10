@@ -407,12 +407,15 @@ elements' `source`s, commands, are its code too: not started before. A yes is re
 the same file isn't asked about again, after a restart too; once it changes (a pull, an edit), it is. Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes,
 each called with the panel, in the project's root. It fills the panel with `agent-ui-panel-update` and
 `agent-ui-panel-append` (as `agent-ui update` and `append`, on its own elements), `agent-ui-panel-get`, and
-`agent-ui-panel-run`, a command run without waiting, its output given to a function once it ends well (parsed JSON
-when it reads so), killed when the panel closes. An error in one is kept and said (`*Messages*`); the others go on.
+`agent-ui-panel-run`, a command run without waiting however long it takes (a database's query: minutes), its output
+given to a function once it ends well (parsed JSON when it reads so), killed when the panel closes or after its
+`:timeout`. An error in one is kept and said (`*Messages*`); the others go on.
 
-While it's hidden (another tab in its pane, another workspace), it isn't fetched; shown again, it's fetched at once. A
-fetch waits for the last one's commands: never two at once. What goes wrong is said on it, a line in the error face
-under it, until a fetch goes well; a fetch that takes long itself (over `agent-ui-panel-slow`, 0.1 s), Emacs frozen
+While it's hidden (another tab in its pane, another workspace), it isn't fetched; shown again, it's fetched at once.
+Its queries each load on their own: one given the `:element` it fills has that element's title say it's loading
+and for how long (`⟳ loading, 1m 12s`) while its last data stays, and its failure said there; a query still running
+isn't started again, the others go on at their pace (a slow one never holds the others). What goes wrong otherwise is
+said on it, a line in the error face under it, each until it goes well; a fetch that takes long itself (over `agent-ui-panel-slow`, 0.1 s), Emacs frozen
 meanwhile, too. `gR` reads its file again (edited) and runs it anew; its file wrong, it's said there and the panel
 goes on as it was.
 
