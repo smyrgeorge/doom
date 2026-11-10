@@ -27,6 +27,7 @@ Vim's and Doom's keys stay as they are there. `config/os.el` has the rules.
 | `SPC w SPC` / `SPC w a` | `SPC w SPC` / `SPC w a` | A new tiled pane / arrange the panes |
 | `SPC w RET` | `SPC w RET` | Swap the pane with the main one (focus follows) |
 | `SPC w ]` / `SPC w [` | `SPC w ]` / `SPC w [` | The main pane bigger / smaller (`]` / `[` repeat) |
+| `SPC w }` / `SPC w {` | `SPC w }` / `SPC w {` | The current pane taller / shorter, the others of the stack even (`}` / `{` repeat) |
 | `SPC w S` / `SPC w V` | `SPC w S` / `SPC w V` | Split, the cursor staying |
 | `SPC o t` | `SPC o t` | The terminal, in a new tiled pane |
 | `q` (transient menus) | `q` (transient menus) | Close |

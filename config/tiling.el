@@ -20,11 +20,18 @@
 ;;               the main pane's width, by `+my/tiling-resize-step' of it),
 ;;               from any pane; ] and [ again repeat it. Kept: SPC w a and new
 ;;               panes lay it out so (Amethyst's expand / shrink main)
+;;   SPC w } / { the current pane bigger / smaller, as the strategy has it
+;;               (tall: a pane of the stack taller / shorter, by
+;;               `+my/tiling-resize-step' of the stack's height, the others of
+;;               the stack at equal heights); } and { again repeat it, as do ]
+;;               and [. Kept: SPC w a, new panes and a closed pane keep its
+;;               height (one pane at a time: resizing another evens it out)
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom.
 ;; A pane closed, however (SPC w d, q, its last tab...): the others laid out
-;; again as the strategy has them (tall: the stack's panes at equal heights;
-;; Emacs gave the closed one's rows to its neighbour).
+;; again as the strategy has them (tall: the stack's panes at equal heights,
+;; but one resized with SPC w } / {; Emacs gave the closed one's rows to its
+;; neighbour).
 ;; TILING FIRST (config/tiling/apps.el)
 ;; - Applications (`+my/tiling-apps': Claude Code, the terminal, the Markdown
 ;;   preview, magit, drawings, issues) open in a new pane where the strategy
@@ -65,8 +72,8 @@
   "The smallest and biggest share of the width SPC w [ / ] give the main pane.")
 
 (defvar +my/tiling-resize-step 0.05
-  "The share SPC w ] / [ add to or take from the main area (tall: of the
-width).")
+  "The share SPC w ] / [ add to or take from the main area, and SPC w } / {
+from the current pane (tall: of the width; of the stack's height).")
 
 (defvar +my/tiling-apps
   '(agent-shell-mode                    ; Claude Code (SPC o c, SPC o C)
@@ -86,7 +93,8 @@ buffer being shown, says so (else as they ask).")
 
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange
-          :resize-main +my/tiling-tall-resize-main :closed +my/tiling-tall-closed))
+          :resize-main +my/tiling-tall-resize-main :resize-pane +my/tiling-tall-resize-pane
+          :closed +my/tiling-tall-closed))
   "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize-main
 FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION]). Each takes the panes
 in order (see above): :split opens a new pane and returns it, :arrange lays
@@ -106,7 +114,9 @@ pane, that pane within the others. Without one: nothing to resize, said.")
         :desc "Arrange panes (tiling)" "a"   #'+my/tiling-arrange
         :desc "Swap with main (tiling)" "RET" #'+my/tiling-swap-main
         :desc "Main pane bigger (tiling)" "]" #'+my/tiling-main-bigger
-        :desc "Main pane smaller (tiling)" "[" #'+my/tiling-main-smaller))
+        :desc "Main pane smaller (tiling)" "[" #'+my/tiling-main-smaller
+        :desc "Pane bigger (tiling)"       "}" #'+my/tiling-pane-bigger
+        :desc "Pane smaller (tiling)"      "{" #'+my/tiling-pane-smaller))
 
 ;; ====== CODE ======
 
