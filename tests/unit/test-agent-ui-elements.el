@@ -2090,11 +2090,12 @@ middle (cut from the right, the reason went first: \"(not fou…\")."
     (unwind-protect
         (progn
           (puthash url (list :error "404" :time (float-time)) agent-ui-image--fetches)
+          ;; In the GUI, where a URL's is downloaded (text only names it).
           (dolist (width (number-sequence 30 80))
             (dolist (case (list (cons missing "(not found)")
                                 (cons failed "(couldn't download it: 404)")
                                 (cons downloading "(downloading…)")))
-              (let ((line (+test-aue-draw (car case) :width width)))
+              (let ((line (+test-aue-draw (car case) :width width :graphic t :char-width 8 :line-height 16)))
                 (should (<= (string-width line) width))
                 (should (string-prefix-p "▣ " line))
                 ;; Whole, beside a name of 8 columns at least; else its end
@@ -2102,10 +2103,8 @@ middle (cut from the right, the reason went first: \"(not fou…\")."
                 (if (>= width (+ 2 8 2 (string-width (cdr case))))
                     (should (string-suffix-p (concat "  " (cdr case)) line))
                   (should (string-match-p "\\`▣ .\\{8\\}  (couldn't d[^)]*…\\'" line)))))
-            ;; In the GUI too (not shown: its line).
-            (when (>= width 39)
-              (should (string-suffix-p "(couldn't download it: 404)"
-                                       (+test-aue-draw failed :width width :graphic t :char-width 8 :line-height 16)))))
+            ;; In text too.
+            (should (string-suffix-p "  (not found)" (+test-aue-draw missing :width width))))
           ;; The path: its start and its file's name kept.
           (should (equal (+test-aue-draw missing :width 40)
                          "▣ /tmp/aui-ver…/missing.png  (not found)"))
@@ -2156,17 +2155,47 @@ isn't an image."
             (should (eq (plist-get (cdr image) :type) 'svg))))
       (delete-directory dir t))))
 
+;; doom-nwj.37
+(ert-deftest agent-ui-elements/image-as-text-downloads-nothing ()
+  "Drawn as text (a terminal, `agent-ui render'), an image from a URL is
+named, not downloaded: text never shows it (it was fetched, and said
+\"(downloading…)\")."
+  (let* ((agent-ui-image-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "images-") t)))
+         (agent-ui-image--fetches (make-hash-table :test #'equal))
+         (fetches nil)
+         (agent-ui-image-fetch-function (lambda (url _file _callback) (push url fetches)))
+         (element '(:type "image" :url "https://example.com/a.png" :alt "a chart")))
+    (unwind-protect
+        (progn
+          (should (equal (+test-aue-draw element) "▣ https://example.com/a.png  a chart"))
+          (should (equal (+test-aue-draw element :width 20) "▣ https://e…om/a.png"))
+          (should-not fetches)
+          (should (= (hash-table-count agent-ui-image--fetches) 0))
+          ;; Its button opens the URL.
+          (let ((opened nil))
+            (cl-letf (((symbol-function 'browse-url) (lambda (url &rest _) (setq opened url))))
+              (funcall (get-text-property 3 'agent-ui-action
+                                          (agent-ui-render element (agent-ui-context :width 60)))))
+            (should (equal opened "https://example.com/a.png")))
+          ;; In the GUI: downloaded.
+          (+test-aue-draw element :graphic t :char-width 8 :line-height 16)
+          (should (equal fetches '("https://example.com/a.png"))))
+      (delete-directory agent-ui-image-cache-directory t))))
+
 (ert-deftest agent-ui-elements/image-from-a-url ()
   (let* ((agent-ui-image-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "images-") t)))
          (agent-ui-image--fetches (make-hash-table :test #'equal))
          (fetches nil) (done nil)
          (agent-ui-image-fetch-function (lambda (url file callback) (push url fetches) (setq done (list file callback))))
-         (element '(:type "image" :url "https://example.com/chart?x=1" :alt "Sales")))
+         (element '(:type "image" :url "https://example.com/chart?x=1" :alt "Sales"))
+         ;; Downloaded to be shown: in the GUI (text only names it).
+         (gui '(:graphic t :char-width 8 :line-height 16)))
     (unwind-protect
         (progn
           ;; Not there yet: downloading, said; started once.
-          (should (string-match-p "▣ https://example.com/chart\\?x=1  Sales  (downloading…)" (+test-aue-draw element)))
-          (+test-aue-draw element)
+          (should (string-match-p "▣ https://example.com/chart\\?x=1  Sales  (downloading…)"
+                                  (apply #'+test-aue-draw element gui)))
+          (apply #'+test-aue-draw element gui)
           (should (equal fetches '("https://example.com/chart?x=1")))
           ;; Done: kept by its hash, its extension its type's; shown as a file.
           ;; (A PNG's signature: its type known by it.)
@@ -2175,28 +2204,32 @@ isn't an image."
           (should (equal (agent-ui-image--cached "https://example.com/chart?x=1")
                          (concat agent-ui-image-cache-directory (sha1 "https://example.com/chart?x=1") ".png")))
           (should (equal (+test-aue-draw element) "▣ https://example.com/chart?x=1  Sales"))
+          (should (eq (car (get-text-property
+                            0 'display (agent-ui-render element (apply #'agent-ui-context :width 60 gui))))
+                      'image))
           ;; Not downloaded again.
-          (+test-aue-draw element)
+          (apply #'+test-aue-draw element gui)
           (should (= (length fetches) 1))
           ;; Failed: said in its place; not an image, too.
           (let ((bad '(:type "image" :url "https://example.com/404.png")))
-            (+test-aue-draw bad)
+            (apply #'+test-aue-draw bad gui)
             (funcall (cadr done) "The requested URL returned error: 404")
-            (should (string-match-p "(couldn't download it: The requested URL returned error: 404)" (+test-aue-draw bad :width 120)))
-            (should (eq (+test-aue-face-at bad "(couldn't") 'agent-ui-error))
+            (should (string-match-p "(couldn't download it: The requested URL returned error: 404)"
+                                    (apply #'+test-aue-draw bad :width 120 gui)))
+            (should (eq (apply #'+test-aue-face-at bad "(couldn't" gui) 'agent-ui-error))
             ;; Shown again, within 30 seconds: not tried again; later: tried.
             (agent-ui--prepared bad)
-            (+test-aue-draw bad)
+            (apply #'+test-aue-draw bad gui)
             (should (= (length fetches) 2))
             (puthash "https://example.com/404.png" (list :error "x" :time 0) agent-ui-image--fetches)
             (agent-ui--prepared bad)
-            (+test-aue-draw bad)
+            (apply #'+test-aue-draw bad gui)
             (should (= (length fetches) 3)))
           (let ((page '(:type "image" :url "https://example.com/page")))
-            (+test-aue-draw page)
+            (apply #'+test-aue-draw page gui)
             (with-temp-file (car done) (insert "<html>nope</html>"))
             (funcall (cadr done) nil)
-            (should (string-match-p "(couldn't download it: not an image)" (+test-aue-draw page :width 120)))
+            (should (string-match-p "(couldn't download it: not an image)" (apply #'+test-aue-draw page :width 120 gui)))
             (should-not (file-exists-p (car done)))))
       (delete-directory agent-ui-image-cache-directory t)))
   ;; File or url, one; an http(s) url.

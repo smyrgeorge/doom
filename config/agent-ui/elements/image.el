@@ -89,14 +89,16 @@ under its type's extension if it's an image; the canvases redrawn."
                    (lambda (error) (agent-ui-image--fetched url part error)))
         (error (agent-ui-image--fetched url part (error-message-string err)))))))
 
-(defun agent-ui-image--source (props)
+(defun agent-ui-image--source (props &optional fetch)
   "PROPS' image: (FILE . WHY), WHY why it isn't shown (nil: it is). From a
-URL: its download, started if it isn't there."
+URL: its download, started if it isn't there, if FETCH (text never shows
+it: its URL is named, nothing downloaded)."
   (let ((file (plist-get props :file))
         (url (plist-get props :url)))
     (cond
      (file (cons file (unless (file-readable-p file) "not found")))
      ((agent-ui-image--cached url) (cons (agent-ui-image--cached url) nil))
+     ((not fetch) (cons nil nil))
      (t
       (agent-ui-image--fetch url)
       (let ((state (gethash url agent-ui-image--fetches)))
@@ -110,12 +112,10 @@ URL: its download, started if it isn't there."
   "Open the image: FILE, else URL in the browser."
   (if file (funcall agent-ui-open-file-function file) (browse-url url)))
 
-(defun agent-ui-image--line (props ctx &optional why)
-  "The line naming PROPS' image (in a terminal; WHY it isn't shown), CTX's
-width at most."
-  (let* ((source (agent-ui-image--source props))
-         (file (car source))
-         (url (plist-get props :url))
+(defun agent-ui-image--line (props ctx file &optional why)
+  "The line naming PROPS' image, FILE (in a terminal; WHY it isn't shown),
+CTX's width at most."
+  (let* ((url (plist-get props :url))
          (alt (plist-get props :alt))
          (width (plist-get ctx :width))
          (reason (if why (concat "  (" why ")") ""))
@@ -140,7 +140,8 @@ width at most."
      width)))
 
 (defun agent-ui-image--text (props ctx)
-  (agent-ui-image--line props ctx (cdr (agent-ui-image--source props))))
+  (let ((source (agent-ui-image--source props)))
+    (agent-ui-image--line props ctx (car source) (cdr source))))
 
 (defun agent-ui-image--type (file)
   "FILE's image type, if Emacs shows it: by its first bytes (a PNG named
@@ -151,12 +152,12 @@ SVG (its <svg can come past them); nil if it's none."
     (and type (image-type-available-p type) type)))
 
 (defun agent-ui-image--gui (props ctx)
-  (let* ((source (agent-ui-image--source props))
+  (let* ((source (agent-ui-image--source props t))
          (file (car source))
          (type (and file (not (cdr source)) (agent-ui-image--type file))))
     (cond
-     ((cdr source) (agent-ui-image--line props ctx (cdr source)))
-     ((not type) (agent-ui-image--line props ctx "not an image Emacs shows"))
+     ((cdr source) (agent-ui-image--line props ctx file (cdr source)))
+     ((not type) (agent-ui-image--line props ctx file "not an image Emacs shows"))
      (t
       (let* ((width (round (* (plist-get ctx :width) (plist-get ctx :char-width)
                               (/ (plist-get props :width) 100.0))))
