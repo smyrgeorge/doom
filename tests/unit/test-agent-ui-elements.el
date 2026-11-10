@@ -2476,7 +2476,7 @@ px in 480)."
     (should (agent-ui-animated-p element)))
   ;; A child's buttons get its id (they change it).
   (let (seen)
-    (cl-letf (((symbol-function 'agent-ui-choice--change) (lambda (ctx _patch) (setq seen (plist-get ctx :id)))))
+    (cl-letf (((symbol-function 'agent-ui-ask-change) (lambda (ctx _patch) (setq seen (plist-get ctx :id)))))
       (let ((text (agent-ui-render '(:type "panel" :children ((:id "q" :type "choice" :question "?" :options ("a"))))
                                    (agent-ui-context :width 40 :id "outer"))))
         (funcall (get-text-property (string-search "( ) a" text) 'agent-ui-action text))

@@ -134,6 +134,8 @@
 (load! "agent-ui/agent")
 (load! "agent-ui/workspaces")
 (load! "agent-ui/persist")
+;; What the elements that ask share (picking, a note, the answer).
+(load! "agent-ui/ask")
 ;; The element types, a file each in agent-ui/elements/.
 (load! "agent-ui/elements")
 (load! "agent-ui/staging")

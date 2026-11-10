@@ -7,7 +7,9 @@
 ;; Answer, the answer goes into the session's prompt, "Answer to choice ID
 ;; (QUESTION): A, B. Note: ...", sent at once if SUBMIT. Then it says the
 ;; answer, and can't be changed. Its selection is the element's own (saved
-;; with the session, in a snapshot). Its buttons work in a canvas.
+;; with the session, in a snapshot). Its buttons work in a canvas. What it
+;; shares with the other elements that ask (picking, the note, the answer):
+;; config/agent-ui/ask.el.
 ;;
 ;;   Which fix?
 ;;    (•) Change the test's message   keeps the new error text
@@ -42,35 +44,14 @@
     (let ((labels (mapcar #'car (agent-ui-choice--options props))))
       (when (/= (length labels) (length (delete-dups (copy-sequence labels))))
         (agent-ui--fail "choice: two options have the same label"))
-      (dolist (s (plist-get props :selected))
-        (unless (member s labels)
-          (agent-ui--fail "choice: selected %s isn't an option" (agent-ui--show-value s))))
-      (when (and (not (plist-get props :multiple)) (cdr (plist-get props :selected)))
-        (agent-ui--fail "choice: one option only can be selected (multiple is false)"))))
+      (agent-ui-ask-check "choice" (plist-get props :selected) labels (plist-get props :multiple))))
   props)
-
-(defun agent-ui-choice--change (ctx patch)
-  "Change this choice (CTX's element) by PATCH, in its canvas."
-  (let ((id (plist-get ctx :id)))
-    (unless (and id (derived-mode-p 'agent-ui-canvas-mode))
-      (user-error "A choice is answered in its canvas"))
-    (agent-ui-update id patch :canvas (current-buffer))))
-
-(defun agent-ui-choice--answer-text (props id)
-  (let ((picked (plist-get props :selected))
-        (note (plist-get props :note)))
-    (concat (format "Answer to choice %s (%s): " id (plist-get props :question))
-            (if picked (string-join picked ", ") "(none chosen)")
-            (if (and note (not (string-empty-p note))) (concat ". Note: " note) ""))))
 
 (defun agent-ui-choice--option (props ctx option label-width)
   "OPTION, (LABEL . DETAIL), as a line: its mark, a button choosing it."
   (let* ((width (plist-get ctx :width))
          (multiple (plist-get props :multiple))
-         (selected (plist-get props :selected))
-         (on (member (car option) selected))
-         (mark (if multiple (if on "[x]" "[ ]") (if on "(•)" "( )")))
-         (head (concat " " (propertize mark 'face (if on 'agent-ui-accent 'agent-ui-muted)) " "))
+         (head (concat " " (agent-ui-ask-mark (agent-ui-ask-picked-p props (car option)) multiple) " "))
          ;; Wrapped in what's after its mark, its lines under the label's
          ;; start (a label was never cut nor wrapped: 66 columns at 30).
          (hang (lambda (text)
@@ -87,48 +68,8 @@
                            (if (cdr option)
                                (concat "\n" (make-string 5 ?\s)
                                        (propertize (funcall hang (cdr option)) 'face 'agent-ui-muted))
-                             "")))))
-         (picked (cond (multiple (if on (remove (car option) selected) (append selected (list (car option)))))
-                       (on nil)
-                       (t (list (car option))))))
-    (agent-ui-button line (lambda () (agent-ui-choice--change ctx (list :selected picked)))
-                     (if multiple "RET: (un)check it" "RET: choose it"))))
-
-(defun agent-ui-choice--note (props ctx)
-  "The note's line: a button writing it."
-  (let ((note (plist-get props :note-text)))
-    (agent-ui-button
-     (concat (propertize "✎ " 'face 'agent-ui-accent)
-             (if (and note (not (string-empty-p note)))
-                 (concat "Note: " (agent-ui-truncate note (- (plist-get ctx :width) 10)))
-               (propertize "Add a note" 'face 'agent-ui-muted)))
-     (lambda () (agent-ui-choice--change ctx (list :note-text (read-string "Note: " note))))
-     "RET: write a note")))
-
-(defun agent-ui-choice--answered (props)
-  "What PROPS' answer says, once given: the options chosen, the note."
-  (let ((selected (plist-get props :selected))
-        (note (plist-get props :note-text)))
-    (concat (string-join selected ", ")
-            (if (and note (not (string-empty-p note)))
-                (concat (if selected " · " "") "note: " note)
-              ""))))
-
-(defun agent-ui-choice--answer (props ctx)
-  "The Answer button: the answer into the prompt, then shown as given."
-  (agent-ui-button
-   (propertize (if (plist-get props :submit) "⏵ Send the answer" "⏵ Answer") 'face 'agent-ui-action)
-   (lambda ()
-     (unless (or (plist-get props :selected) (plist-get props :note-text))
-       (user-error "Choose an option first"))
-     (funcall agent-ui-action-function
-              (agent-ui-choice--answer-text
-               (list :question (plist-get props :question) :selected (plist-get props :selected)
-                     :note (plist-get props :note-text))
-               (plist-get ctx :id))
-              (plist-get props :submit))
-     (agent-ui-choice--change ctx (list :answered (agent-ui-choice--answered props))))
-   "RET: put the answer into the prompt"))
+                             ""))))))
+    (agent-ui-ask-pick-button line props ctx (car option) multiple)))
 
 (defun agent-ui-choice--draw (props ctx)
   (let* ((width (plist-get ctx :width))
@@ -139,18 +80,20 @@
                                                   (seq-filter #'cdr options)))
                            (/ width 2)))
          (question (propertize (agent-ui-wrap (plist-get props :question) width) 'face 'bold)))
-    (if-let* ((answered (plist-get props :answered)))
-        (concat question "\n"
-                (propertize "✓ " 'face 'agent-ui-success)
-                (propertize (agent-ui-wrap (concat "Answered: " answered) (- width 2)) 'face 'agent-ui-muted))
+    (if (agent-ui-ask-answered-p props)
+        (concat question "\n" (agent-ui-ask-answered-line props width))
       (string-join
        (append (list question)
                (mapcar (lambda (o) (agent-ui-choice--option props ctx o label-width)) options)
                ;; Its note and Answer, buttons: not in a still picture.
                (unless (plist-get ctx :still)
                  (append
-                  (when (plist-get props :note) (list (concat " " (agent-ui-choice--note props ctx))))
-                  (list (concat " " (agent-ui-choice--answer props ctx))))))
+                  (when (plist-get props :note) (list (concat " " (agent-ui-ask-note-button props ctx))))
+                  (list (concat " " (agent-ui-ask-answer-button
+                                     props ctx
+                                     :what (format "choice %s" (plist-get ctx :id))
+                                     :question (plist-get props :question)
+                                     :submit (plist-get props :submit)))))))
        "\n"))))
 
 (agent-ui-define choice

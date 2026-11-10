@@ -392,7 +392,10 @@ start) or discards it (its elements go with it): say what you made and why.
   each property's kind: signal with `agent-ui--fail`), `:append` (how lists grow), `:animated` (t, or a function of
   PROPS), `:prepare` (the element as it's kept: what it notes as time passes), `:extend` (for a long one appended to:
   edits to its drawing instead of drawing it again; see docs/agent-ui.md).
-- Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-format-number`, `agent-ui-spinner`.
+- Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-format-number`, `agent-ui-spinner`. For a type
+  that asks the user (picks, a note, an answer into your prompt): `agent-ui-ask-pick-button`, `agent-ui-ask-mark`,
+  `agent-ui-ask-all-none`, `agent-ui-ask-note-button`, `agent-ui-ask-answer-button`, `agent-ui-ask-answered-line`,
+  its state in the element's `selected`, `note-text`, `answered` (see docs/agent-ui.md).
 
 ## Following a long command: sources
 

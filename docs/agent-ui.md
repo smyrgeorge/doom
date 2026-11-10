@@ -159,6 +159,11 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **`:text` and `:gui`** take the element's properties (checked, defaults filled) and a context: `:width` in
   characters, `:graphic`, `:tick` for animations, the theme's colours. They return the text to insert; they don't touch
   the buffer. So a type is tested by calling them.
+- **A type that asks** (picks, a note, an answer for the agent) uses `config/agent-ui/ask.el`: its state is the
+  element's own `:selected`, `:note-text` and `:answered` (saved with the session); `agent-ui-ask-pick-button`,
+  `agent-ui-ask-all-none`, `agent-ui-ask-note-button`, `agent-ui-ask-answer-button` draw its buttons,
+  `agent-ui-ask-answered-line` the answer once given (locked), `agent-ui-ask-check` checks a selection. `choice` is
+  made of them.
 - **Errors are contained:** a drawing that signals shows the error in the element's place, in the error face; the
   canvas and its other elements go on.
 - **Limits** keep a drawing quick, as it runs in Emacs's only thread: a table's rows, a chart's values, a text's length
@@ -393,6 +398,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
 | `config/agent-ui/workspaces.el` | A session's canvas in its session's workspace (persp-mode), not the current one |
 | `config/agent-ui/persist.el` | Kept with the session: saved as it changes, back when it's resumed |
+| `config/agent-ui/ask.el` | What the elements that ask share: picking, a note, the answer into the session's prompt, locked once given |
 | `config/agent-ui/snapshot.el` | In the conversation: an element as an SVG for the agent's reply, into the prompt |
 | `config/agent-ui/source.el` | Sources: an element following a command, a file, a poll |
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
