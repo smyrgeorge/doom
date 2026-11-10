@@ -280,6 +280,19 @@ fit, the others said under it (it stayed wider than its width)."
     (should-not (string-match-p "more columns" (+test-aue-draw six :width 60)))
     (should (string-match-p "… 1 more column: Commit" (+test-aue-draw six :width 30)))))
 
+(ert-deftest agent-ui-elements/table-sorted-by-durations ()
+  "Durations sorted by their length, units and all (the leading numbers
+alone put 850ms between 41s and 2m 05s)."
+  (let ((text (+test-aue-draw '(:type "table" :columns ("Test" "Time") :sort "Time" :descending t
+                                :rows (("a" "2m 05s") ("b" "41s") ("c" "850ms") ("d" "1.2s") ("e" "1h"))))))
+    (should (string-match-p "e .*1h\n.*a .*2m 05s\n.*b .*41s\n.*d .*1.2s\n.*c .*850ms" text)))
+  (should (= (agent-ui-table--duration "2m 05s") 125))
+  (should (= (agent-ui-table--duration "850ms") 0.85))
+  (should-not (agent-ui-table--duration "5 apples"))
+  (should-not (agent-ui-table--duration "12"))
+  ;; Plain numbers: as numbers still.
+  (should (string-match-p " 2\n.* 10" (+test-aue-draw '(:type "table" :columns ("N") :sort "N" :rows (("10") ("2")))))))
+
 (ert-deftest agent-ui-elements/table-cells-on-one-line ()
   "A cell's line breaks and tabs: on its line (they broke the table's lines,
 and a panel's border around it)."

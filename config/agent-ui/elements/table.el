@@ -108,15 +108,32 @@ least."
   (when (string-match "\\`[-+]?[0-9][0-9,]*\\(?:\\.[0-9]+\\)?" cell)
     (string-to-number (string-replace "," "" (match-string 0 cell)))))
 
+(defconst agent-ui-table--units '(("ms" . 0.001) ("s" . 1) ("min" . 60) ("m" . 60) ("h" . 3600) ("d" . 86400))
+  "A duration's units, in seconds.")
+
+(defun agent-ui-table--duration (cell)
+  "CELL as a duration in seconds (\"2m 05s\", \"850ms\", \"1.2s\", \"1h\"), or
+nil if it isn't one: numbers each with a unit, nothing else."
+  (let ((rest (string-trim cell)) (seconds 0) (case-fold-search nil))
+    (while (and rest (not (string-empty-p rest)))
+      (if (string-match "\\`\\([0-9]+\\(?:\\.[0-9]+\\)?\\) ?\\(ms\\|min\\|[smhd]\\)\\b *" rest)
+          (setq seconds (+ seconds (* (string-to-number (match-string 1 rest))
+                                      (cdr (assoc (match-string 2 rest) agent-ui-table--units))))
+                rest (substring rest (match-end 0)))
+        (setq rest nil seconds nil)))
+    (and (not (string-empty-p (string-trim cell))) seconds)))
+
 (defun agent-ui-table--sorted (rows column descending)
-  "ROWS (their cells as text) by COLUMN's cells: as numbers if they all
-start with one, else as text; DESCENDING the other way; empty cells last."
+  "ROWS (their cells as text) by COLUMN's cells: as durations if they all are
+\(\"2m 05s\", \"850ms\"), else as numbers if they all start with one, else as
+text; DESCENDING the other way; empty cells last."
   (let* ((cells (seq-remove #'string-empty-p (mapcar (lambda (r) (nth column r)) rows)))
+         (durations (and cells (cl-every #'agent-ui-table--duration cells)))
          (numbers (and cells (cl-every #'agent-ui-table--number cells)))
          (before (lambda (a b)
-                   (if numbers
-                       (< (agent-ui-table--number a) (agent-ui-table--number b))
-                     (string< (downcase a) (downcase b))))))
+                   (cond (durations (< (agent-ui-table--duration a) (agent-ui-table--duration b)))
+                         (numbers (< (agent-ui-table--number a) (agent-ui-table--number b)))
+                         (t (string< (downcase a) (downcase b)))))))
     (cl-stable-sort (copy-sequence rows)
                     (lambda (ra rb)
                       (let ((a (nth column ra)) (b (nth column rb)))
