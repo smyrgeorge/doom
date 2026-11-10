@@ -3904,6 +3904,34 @@ title ran across the line between them into the next child)."
     (should (string-match-p "…\\|&#8230;" svg))
     (should-not (string-match-p ">week<" svg))))
 
+(ert-deftest agent-ui-elements/panel-its-border-beside-an-image ()
+  "An image in a bordered panel, in the GUI: both sides of the border kept
+for a fractional width (a formula's); beside one taller than a line, the
+sides drawn as tall (a character is a line's height: gaps)."
+  (let ((agent-ui--types (copy-hash-table agent-ui--types)))
+    (agent-ui-define picture "An SVG, W by H." :props ((w number "Width") (h number "Height"))
+      :text (lambda (props _ctx)
+              (propertize "pic" 'display (list 'image :type 'svg :scale 1 :ascent 'center
+                                               :data (format "<svg width=\"%s\" height=\"%s\"/>"
+                                                             (plist-get props :w) (plist-get props :h))))))
+    (let* ((ctx (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16))
+           (line (lambda (w h)
+                   (seq-find #'agent-ui-panel--image-p
+                             (split-string (agent-ui-render (list :type "panel" :children (list (list :type "picture" :w w :h h)))
+                                                            ctx)
+                                           "\n"))))
+           (svg (lambda (text pos) (plist-get (cdr (get-text-property pos 'display text)) :data))))
+      ;; 102.87 px, a line high: the text's sides, both.
+      (let ((flat (funcall line 102.87 16)))
+        (should (string-prefix-p "│ " (substring-no-properties flat)))
+        (should (string-suffix-p " │" (substring-no-properties flat)))
+        (should-not (funcall svg flat 0)))
+      ;; 39 px high: each side a line 39 px high.
+      (let ((tall (funcall line 102.87 39)))
+        (should (string-suffix-p " │" (substring-no-properties tall)))
+        (should (string-match-p "height=\"39\".*<line x1=\"4.0\" x2=\"4.0\" y1=\"0\" y2=\"39\"" (funcall svg tall 0)))
+        (should (string-match-p "<line x1=\"12.0\" x2=\"12.0\" y1=\"0\" y2=\"39\"" (funcall svg tall (1- (length tall)))))))))
+
 (ert-deftest agent-ui-elements/panel-an-image-line-in-its-border ()
   ;; An image's line padded to the panel's width: a filler to its last
   ;; column's end, spaces, the border's right side.
@@ -3918,7 +3946,12 @@ title ran across the line between them into the next child)."
     (should (= (agent-ui-panel--pixels line 8) 80))
     (should (equal (cadr lines) "ab        "))
     ;; Wider than its room: as it is.
-    (should (equal (substring-no-properties (car (agent-ui-panel--lines (funcall image 200) 10 ctx))) "img")))
+    (should (equal (substring-no-properties (car (agent-ui-panel--lines (funcall image 200) 10 ctx))) "img"))
+    ;; A fraction of a pixel (a formula's 102.87): padded within its room.
+    (let ((line (car (agent-ui-panel--lines (propertize "img" 'display (list 'image :type 'svg :scale 1 :data "<svg width=\"38.87\" height=\"16\"/>"))
+                                            10 ctx))))
+      (should (<= (agent-ui-panel--pixels line 8) 80))
+      (should (equal (get-text-property 3 'display line) '(space :width (1))))))
   ;; A chart in a column panel, in the GUI: both sides of the border.
   (let* ((gui (agent-ui-render '(:type "panel" :children ((:type "chart" :values (1 3 2))))
                                (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16)))

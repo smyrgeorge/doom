@@ -93,7 +93,10 @@ spaces; kept as it is if wider, or its width unknown."
                   (if (or (null pixels) (> pixels (* width cw)))
                       line
                     (let* ((columns (ceiling pixels cw))
-                           (filler (round (- (* columns cw) pixels))))
+                           ;; Down: rounded up, a fraction of a pixel past
+                           ;; its room, it was taken for wider (its right side
+                           ;; left out).
+                           (filler (floor (- (* columns cw) pixels))))
                       (concat line
                               (if (> filler 0) (propertize " " 'display `(space :width (,filler))) "")
                               (make-string (- width columns) ?\s)))))))
@@ -112,6 +115,34 @@ marked as its (`agent-ui-child'), where a deeper child hasn't marked it."
               (put-text-property pos next 'agent-ui-child id text))
             (setq pos next)))))
     text))
+
+(defun agent-ui-panel--line-height (line)
+  "The height LINE is shown at, in pixels, if an image in it says (its
+tallest's; nil if none can be known)."
+  (let ((pos 0) (height nil))
+    (while (< pos (length line))
+      (let ((next (or (next-single-property-change pos 'display line) (length line)))
+            (display (get-text-property pos 'display line)))
+        (pcase display
+          (`(image . ,props)
+           (when-let* ((size (if-let* ((data (plist-get props :data))
+                                       ((eq (plist-get props :type) 'svg)))
+                                 (agent-ui-snapshot--svg-size data)
+                               (and (display-graphic-p) (ignore-errors (image-size display t))))))
+             (setq height (max (or height 0) (* (cdr size) (or (plist-get props :scale) 1)))))))
+        (setq pos next)))
+    height))
+
+(defun agent-ui-panel--side (text height ctx)
+  "TEXT, a side of the border (\"│ \" or \" │\"), shown HEIGHT pixels tall:
+its line drawn through it (a character is a line's height: beside a taller
+image, the border had gaps)."
+  (let* ((cw (plist-get ctx :char-width))
+         (w (* cw (string-width text)))
+         (x (+ (* cw (string-search "│" text)) (/ cw 2.0)))
+         (svg (svg-create w (round height))))
+    (svg-line svg x 0 x (round height) :stroke (agent-ui-color 'agent-ui-muted) :stroke-width 1)
+    (propertize text 'face 'agent-ui-muted 'display (svg-image svg :scale 1 :ascent 'center))))
 
 (defun agent-ui-panel--image-p (text)
   "Whether TEXT shows an image somewhere (a chart's, stats' tiles...)."
@@ -233,6 +264,13 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
                                     (let ((pixels (agent-ui-panel--pixels line (or (plist-get ctx :char-width) 8))))
                                       (or (null pixels) (> pixels (* inner (or (plist-get ctx :char-width) 8))))))
                                (concat (funcall edge "│ ") line))
+                              ;; Taller than a line (an image): its sides as tall.
+                              ((let ((height (and (plist-get ctx :graphic) (plist-get ctx :char-width)
+                                                  (agent-ui-panel--image-p line)
+                                                  (agent-ui-panel--line-height line))))
+                                 (and height (> height (or (plist-get ctx :line-height) 16))
+                                      (concat (agent-ui-panel--side "│ " height ctx) line
+                                              (agent-ui-panel--side " │" height ctx)))))
                               (t
                                (concat (funcall edge "│ ") line (funcall edge " │")))))
                            body "\n")
