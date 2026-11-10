@@ -117,6 +117,13 @@ terminal offered to start (see STARTING), and nothing more done."
 (advice-add 'beads-detail--render-vui :around #'+my/beads-draw-not-show-a)
 (advice-add 'vui-mount :filter-args #'+my/beads-vui-no-display-a)
 
+;; An issue's buffer notes its issue (`beads-detail-open'), then turns to vui's
+;; mode to draw it: a mode change forgets a buffer's variables, so it forgot
+;; which issue it shows (gr: "No issue to refresh"; Claude's bd commands
+;; didn't refresh it; C-c C-a found no issue). Kept across it.
+(put 'beads-detail--current-issue-id 'permanent-local t)
+(put 'beads-detail--current-issue 'permanent-local t)
+
 (defun +my/beads-new-issue ()
   "A new issue in the current project (see above)."
   (interactive)

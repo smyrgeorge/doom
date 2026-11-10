@@ -342,6 +342,20 @@ closed), not 0s."
         (should (string-match-p "Closed: +1" text))
         (should (string-match-p "Blocked: +1" text))))))
 
+(ert-deftest beads/bd-an-issue-knows-its-issue ()
+  "An issue opened (vui's view, beads.el's default): it keeps which issue it
+shows, so gr refreshes it."
+  (+test-beads-with-project
+    (let ((id (+test-beads--create "Old title")))
+      (beads-detail-open (beads-client-show id))
+      (with-current-buffer (format "*Beads Detail: %s*" id)
+        (should (derived-mode-p 'beads-detail-vui-mode))
+        (should (equal beads-detail--current-issue-id id))
+        (should (equal (alist-get 'id beads-detail--current-issue) id))
+        (+test-beads--run "bd" "update" id "--title" "New title" "--quiet")
+        (beads-detail-refresh)
+        (should (string-match-p "New title" (+test-beads--text (current-buffer))))))))
+
 ;; ====== PANES ======
 
 (ert-deftest beads/the-list-and-issues-in-panes ()
