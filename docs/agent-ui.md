@@ -122,7 +122,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **Animated elements** (a spinner, an indeterminate bar) are redrawn by one timer of the canvas, running only while one
   is shown in a window. The spinner is a gap going round a square, `▟▙▛▜` (block elements: a coding font has them);
   `agent-ui-spinner-frames` sets other frames, in `config.el`.
-- **The width** is the canvas window's; its elements are drawn again when it changes size.
+- **The width** is the canvas window's; its elements are drawn again when it changes size, or the font's size changes.
 - **Terminal or GUI** is decided by the frame showing the canvas (`display-graphic-p`). A type without a GUI drawing
   draws as text in both.
 - **Glyphs in their cells:** in the GUI, a character the default font lacks (`✎`, `⏵`) comes from another font, often

@@ -253,6 +253,36 @@ narrower, a panel's border after it in line; in a terminal, as it is."
     (with-current-buffer canvas
       (should-not (get-text-property 7 'display)))))
 
+(ert-deftest agent-ui-canvas/redrawn-when-the-font-changes ()
+  "A frame's font changed (its size): every canvas drawn again, for its new
+cells (its window's size in pixels the same, no size change said it); a
+size change with the same width in columns but other cells too."
+  (+test-auc
+    (agent-ui-show '(:id "a" :type "meter"))
+    (+test-auc-flush)
+    (let ((draws +test-auc-draws))
+      (run-hooks 'after-setting-font-hook)
+      (with-current-buffer canvas (should agent-ui--dirty))
+      (+test-auc-flush)
+      (should (= +test-auc-draws (1+ draws))))
+    (save-window-excursion
+      (delete-other-windows)
+      (switch-to-buffer canvas)
+      (agent-ui-canvas-redraw)
+      (+test-auc-flush)
+      (let ((draws +test-auc-draws))
+        ;; Same width, same cells: as it is.
+        (agent-ui--size-changed (selected-window))
+        (+test-auc-flush)
+        (should (= +test-auc-draws draws))
+        ;; Same width, other cells: drawn again.
+        (with-current-buffer canvas (setq agent-ui--cell '(11 25)))
+        (agent-ui--size-changed (selected-window))
+        (+test-auc-flush)
+        (should (= +test-auc-draws (1+ draws)))
+        (with-current-buffer canvas
+          (should (equal agent-ui--cell (list (frame-char-width) (frame-char-height)))))))))
+
 (ert-deftest agent-ui-canvas/redrawn-by-its-timer ()
   (+test-auc
     (let ((agent-ui-redraw-delay 0.01))

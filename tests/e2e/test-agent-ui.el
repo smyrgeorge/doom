@@ -50,42 +50,64 @@
                 (should (string-match-p "question waiting" (format-mode-line mode-line-format)))))))
       (kill-buffer session))))
 
+(defun +test-e2e-aui--borders-in-line (canvas)
+  "CANVAS's borders at their columns' pixels, its lines a line high, as its
+window shows them; how many borders."
+  (let* ((window (get-buffer-window canvas))
+         (cw (frame-char-width))
+         (lh (frame-char-height))
+         (borders 0))
+    (with-current-buffer canvas
+      (set-window-start window (point-min))
+      (redisplay t)
+      (goto-char (point-min))
+      ;; Side by side, the glyphs on its lines.
+      (should (search-forward "│  ✎ Add a note" nil t))
+      (should (search-forward "⏵ Answer" nil t))
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let ((bol (line-beginning-position)) (eol (line-end-position)))
+          (unless (= bol eol)
+            (should (equal (list (line-number-at-pos) (cdr (window-text-pixel-size window bol eol)))
+                           (list (line-number-at-pos) lh))))
+          (while (re-search-forward "[│╭╮╰╯]" eol t)
+            (cl-incf borders)
+            (let ((before (buffer-substring-no-properties bol (match-beginning 0))))
+              (should (equal (list (line-number-at-pos) (car (window-text-pixel-size window bol (match-beginning 0))))
+                             (list (line-number-at-pos) (* cw (string-width before))))))))
+        (forward-line 1)))
+    borders))
+
 (ert-deftest e2e-agent-ui/borders-in-line-whatever-the-glyphs ()
   "A panel's borders and the │ between a row's children at their columns'
 pixels, on lines as high as the others, beside glyphs the default font
 lacks (✎ and ⏵ from fallback fonts were pixels wider or narrower than a
-column, their lines higher: the borders out of line, with gaps)."
+column, their lines higher: the borders out of line, with gaps); again
+after the font's size changed (the frame's size in pixels kept, as Doom
+does: no window size change, the canvas was left drawn for the old cells)."
   (let ((agent-ui-display-function #'switch-to-buffer)
-        (agent-ui-default-canvas "e2e-glyphs"))
+        (agent-ui-default-canvas "e2e-glyphs")
+        (frame-inhibit-implied-resize t)
+        (font (frame-parameter nil 'font)))
     (delete-other-windows)
     (set-frame-size (selected-frame) 100 40)
     (agent-ui-show '(:id "row" :type "panel" :layout "row"
                      :children ((:id "pick" :type "choice" :question "Which?" :options ("A" "B") :note t)
                                 (:id "order" :type "rank" :question "Order?" :items ("x" "y") :note t))))
-    (let* ((canvas (agent-ui-canvas))
-           (window (get-buffer-window canvas))
-           (cw (frame-char-width))
-           (lh (frame-char-height))
-           (borders 0))
+    (let ((canvas (agent-ui-canvas)))
       (unwind-protect
-          (with-current-buffer canvas
-            (agent-ui--flush)
-            (set-window-start window (point-min))
-            (redisplay t)
-            (goto-char (point-min))
-            ;; Side by side, the glyphs on its lines.
-            (should (search-forward "│  ✎ Add a note" nil t))
-            (should (search-forward "⏵ Answer" nil t))
-            (goto-char (point-min))
-            (while (not (eobp))
-              (let ((bol (line-beginning-position)) (eol (line-end-position)))
-                (unless (= bol eol)
-                  (should (= (cdr (window-text-pixel-size window bol eol)) lh)))
-                (while (re-search-forward "[│╭╮╰╯]" eol t)
-                  (cl-incf borders)
-                  (let ((before (buffer-substring-no-properties bol (match-beginning 0))))
-                    (should (equal (list (line-number-at-pos) (car (window-text-pixel-size window bol (match-beginning 0))))
-                                   (list (line-number-at-pos) (* cw (string-width before))))))))
-              (forward-line 1))
-            (should (> borders 20)))
+          (progn
+            (with-current-buffer canvas (agent-ui--flush))
+            (should (> (+test-e2e-aui--borders-in-line canvas) 20))
+            ;; Settled: its window shown (a size change), drawn for it.
+            (with-current-buffer canvas
+              (agent-ui--flush)
+              (redisplay t)
+              (should-not agent-ui--dirty))
+            (let ((size (frame-char-height)))
+              (set-frame-font (font-spec :size (+ (font-get (font-spec :name font) :size) 4)) nil t)
+              (should (> (frame-char-height) size)))
+            (with-current-buffer canvas (agent-ui--flush))
+            (should (> (+test-e2e-aui--borders-in-line canvas) 20)))
+        (set-frame-font font nil t)
         (kill-buffer canvas)))))

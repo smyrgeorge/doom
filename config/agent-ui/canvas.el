@@ -73,6 +73,9 @@ what's drawn there: (ELEMENT WIDTH GRAPHIC), its type's :extend editing it."
 (defvar-local agent-ui--animation-timer nil)
 (defvar-local agent-ui--tick 0 "Counts animation frames.")
 (defvar-local agent-ui--width nil "The width its elements were drawn at.")
+(defvar-local agent-ui--cell nil
+  "The size of a character cell its elements were drawn for, in pixels:
+\(WIDTH HEIGHT) (their images, their glyphs evened out are sized from it).")
 (defvar-local agent-ui--counter 0 "For ids made for elements shown without one.")
 
 ;; ====== THE BUFFER ======
@@ -330,7 +333,8 @@ up (`agent-ui-before-press-hook')."
     (let ((ctx (agent-ui--context))
           (dirty agent-ui--dirty))
       (setq agent-ui--dirty nil
-            agent-ui--width (plist-get ctx :width))
+            agent-ui--width (plist-get ctx :width)
+            agent-ui--cell (agent-ui--cell-size ctx))
       (dolist (id agent-ui--order)
         (when (member id dirty)
           (let ((entry (gethash id agent-ui--entries)))
@@ -359,12 +363,30 @@ any others by then)."
     (setq agent-ui--dirty (copy-sequence agent-ui--order))
     (agent-ui--flush)))
 
+(defun agent-ui--cell-size (ctx)
+  "CTX's character cell: (WIDTH HEIGHT) in pixels."
+  (list (plist-get ctx :char-width) (plist-get ctx :line-height)))
+
 (defun agent-ui--size-changed (window)
-  "Its window's width changed: draw the elements at the new width."
+  "Its window's width changed, or its font's size: draw the elements at the
+new width, for the new cells."
   (with-current-buffer (window-buffer window)
-    (when (and agent-ui--order
-               (not (equal agent-ui--width (plist-get (agent-ui--context) :width))))
-      (agent-ui--dirty agent-ui--order))))
+    (let ((ctx (agent-ui--context)))
+      (when (and agent-ui--order
+                 (not (and (equal agent-ui--width (plist-get ctx :width))
+                           (equal agent-ui--cell (agent-ui--cell-size ctx)))))
+        (agent-ui--dirty agent-ui--order)))))
+
+(defun agent-ui--font-changed ()
+  "A frame's font changed (its size: Doom's font size commands,
+`set-frame-font'): the canvases drawn again, for their new cells. Their
+windows' size in pixels stays: `window-size-change-functions' doesn't say."
+  (dolist (buffer (agent-ui-canvases))
+    (with-current-buffer buffer
+      (when agent-ui--order
+        (agent-ui--dirty agent-ui--order)))))
+
+(add-hook 'after-setting-font-hook #'agent-ui--font-changed)
 
 ;; ====== ANIMATION ======
 
