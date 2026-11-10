@@ -103,7 +103,9 @@
 
 ;; THE CANVAS (see above): Vim's keys, as Doom's other buffers'.
 (map! :map agent-ui-canvas-mode-map
-      :n "q"  #'quit-window
+      ;; q closes it for good: its pane and its buffer (killed, its elements
+      ;; with it; a session's saved ones come back when it's resumed).
+      :gn "q" #'kill-current-buffer
       :n "gr" #'agent-ui-canvas-redraw
       :n "R"  #'agent-ui-review
       :n "a"  #'agent-ui-send-element

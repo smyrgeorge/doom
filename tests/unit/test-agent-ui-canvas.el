@@ -69,7 +69,9 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
       ;; Without Evil, and with it (normal state).
       (should (eq (lookup-key agent-ui-canvas-mode-map "g") #'agent-ui-canvas-redraw))
       (let ((normal (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal)))
-        (should (eq (lookup-key normal "q") #'quit-window))
+        ;; q kills it (config/agent-ui.el), in Vim's keys and Emacs's.
+        (should (eq (lookup-key normal "q") #'kill-current-buffer))
+        (should (eq (lookup-key agent-ui-canvas-mode-map "q") #'kill-current-buffer))
         (should (eq (lookup-key normal "gr") #'agent-ui-canvas-redraw))))
     ;; The same one again; others by name.
     (should (eq (agent-ui-canvas) canvas))
