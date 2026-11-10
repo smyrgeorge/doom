@@ -51,15 +51,28 @@
                                    collect (agent-ui-files--file f i))))
 
 (defun agent-ui-files--counts (file)
-  "FILE's counts, coloured: +12 −3, 2 errors."
-  (string-join
-   (delq nil (list (and (plist-get file :added) (propertize (format "+%d" (plist-get file :added)) 'face 'agent-ui-success))
-                   (and (plist-get file :removed) (propertize (format "−%d" (plist-get file :removed)) 'face 'agent-ui-error))
-                   (and (plist-get file :errors)
-                        (propertize (format "%d error%s" (plist-get file :errors) (if (= (plist-get file :errors) 1) "" "s"))
-                                    'face 'agent-ui-error))
-                   (and (plist-get file :note) (propertize (plist-get file :note) 'face 'agent-ui-muted))))
-   " "))
+  "FILE's counts, coloured, then its note: (\"+12\" \"−3\" \"2 errors\")."
+  (delq nil (list (and (plist-get file :added) (propertize (format "+%d" (plist-get file :added)) 'face 'agent-ui-success))
+                  (and (plist-get file :removed) (propertize (format "−%d" (plist-get file :removed)) 'face 'agent-ui-error))
+                  (and (plist-get file :errors)
+                       (propertize (format "%d error%s" (plist-get file :errors) (if (= (plist-get file :errors) 1) "" "s"))
+                                   'face 'agent-ui-error))
+                  (and (plist-get file :note) (propertize (plist-get file :note) 'face 'agent-ui-muted)))))
+
+(defun agent-ui-files--fit (file items room)
+  "FILE's counts ITEMS, in ROOM columns: whole counts while they fit (a cut
+one misreads: \"+12…\" for +1200), its note cut (4 columns at least)."
+  (let ((out "") (note (plist-get file :note)))
+    (catch 'full
+      (dolist (item items)
+        (let* ((sep (if (string-empty-p out) "" " "))
+               (left (- room (string-width out) (length sep))))
+          (cond ((<= (string-width item) left) (setq out (concat out sep item)))
+                ((and note (eq item (car (last items))) (>= left 4))
+                 (setq out (concat out sep (agent-ui-truncate item left)))
+                 (throw 'full nil))
+                (t (throw 'full nil))))))
+    out))
 
 (defun agent-ui-files--open (dir file)
   (lambda ()
@@ -68,15 +81,40 @@
       (goto-char (point-min))
       (forward-line (1- line)))))
 
-(defun agent-ui-files--line (props file name indent name-width)
-  "FILE's line: INDENT, its mark, NAME padded to NAME-WIDTH, its counts."
+(defun agent-ui-files--cut (name width)
+  "NAME cut to WIDTH columns at its start (…/parser.c): its end, the file's
+name, kept."
+  (cond ((<= (string-width name) width) name)
+        ((< width 1) "")
+        (t (concat "…" (reverse (truncate-string-to-width (reverse name) (1- width)))))))
+
+(defun agent-ui-files--line (props file name items indent name-width room)
+  "FILE's line: INDENT, its mark, NAME in NAME-WIDTH columns, its counts
+ITEMS, those that fit; ROOM the columns after the mark (the name's all, if
+no count fits)."
   (pcase-let* ((`(,_ ,mark ,face) (assq (plist-get file :status) agent-ui-files--statuses))
-               (counts (agent-ui-files--counts file)))
+               (counts (agent-ui-files--fit file items (- room name-width 2))))
     (agent-ui-button
      (concat indent (propertize mark 'face face) " "
-             (if (string-empty-p counts) name (concat (agent-ui-pad name name-width) "  " counts)))
+             (if (string-empty-p counts)
+                 (agent-ui-files--cut name room)
+               (concat (agent-ui-pad (agent-ui-files--cut name name-width) name-width) "  " counts)))
      (agent-ui-files--open (plist-get props :dir) file)
      (format "RET: open %s" (plist-get file :path)))))
+
+(defun agent-ui-files--lines (props files names indent width)
+  "FILES' lines, NAMES their names, after INDENT, WIDTH columns at most: the
+names beside counts in a column as wide as the longest, narrowed while the
+counts don't fit (8 columns at least; it was the width less 20, or 24:
+nothing under that, and the counts never cut)."
+  (let* ((room (- width (string-width indent) 2))
+         (counts (mapcar #'agent-ui-files--counts files))
+         (longest (apply #'max 0 (cl-loop for n in names for c in counts
+                                           when c collect (string-width n))))
+         (widest (apply #'max 0 (mapcar (lambda (c) (string-width (string-join c " "))) counts)))
+         (w (min longest (max (min longest 8) (- room 2 widest)))))
+    (cl-mapcar (lambda (file name count) (agent-ui-files--line props file name count indent w room))
+               files names counts)))
 
 (defun agent-ui-files--toggle (ctx folder folded)
   (lambda ()
@@ -93,9 +131,7 @@
          (width (plist-get ctx :width))
          (lines
           (if (not (plist-get props :tree))
-              (let ((w (min (apply #'max 0 (mapcar (lambda (f) (string-width (plist-get f :path))) files))
-                            (- width 20))))
-                (mapcar (lambda (f) (agent-ui-files--line props f (plist-get f :path) "" w)) files))
+              (agent-ui-files--lines props files (mapcar (lambda (f) (plist-get f :path)) files) "" width)
             ;; A tree: files grouped by folder, in their order of first coming.
             (let ((folders nil) (folded (plist-get props :folded)))
               (dolist (f files)
@@ -107,24 +143,32 @@
                       (lambda (entry)
                         (let* ((folder (car entry))
                                (closed (member folder folded))
-                               (names (mapcar (lambda (f) (file-name-nondirectory (plist-get f :path))) (cdr entry)))
-                               (w (min (apply #'max 0 (mapcar #'string-width names)) (- width 24))))
+                               (names (mapcar (lambda (f) (file-name-nondirectory (plist-get f :path))) (cdr entry))))
                           (if (equal folder "")
-                              (cl-mapcar (lambda (f n) (agent-ui-files--line props f n "" w)) (cdr entry) names)
-                            (cons (agent-ui-button
-                                   (concat (propertize (if closed "▸ " "▾ ") 'face 'agent-ui-muted)
-                                           (propertize folder 'face 'bold)
-                                           (if closed (propertize (format "  %d files" (length names)) 'face 'agent-ui-muted) ""))
-                                   (agent-ui-files--toggle ctx folder folded)
-                                   "RET: fold or unfold it")
-                                  (unless closed
-                                    (cl-mapcar (lambda (f n) (agent-ui-files--line props f n "    " w))
-                                               (cdr entry) names))))))
+                              (agent-ui-files--lines props (cdr entry) names "" width)
+                            (let ((count (if closed (format "  %d files" (length names)) "")))
+                              (cons (agent-ui-truncate
+                                     (agent-ui-button
+                                      (concat (propertize (if closed "▸ " "▾ ") 'face 'agent-ui-muted)
+                                              ;; Cut at its start, as a file's name.
+                                              (propertize (agent-ui-files--cut
+                                                           folder (max (min (string-width folder) 8)
+                                                                       (- width 2 (string-width count))))
+                                                          'face 'bold)
+                                              (propertize count 'face 'agent-ui-muted))
+                                      (agent-ui-files--toggle ctx folder folded)
+                                      "RET: fold or unfold it")
+                                     width)
+                                    (unless closed
+                                      (agent-ui-files--lines props (cdr entry) names "    " width)))))))
                       (nreverse folders)))))))
     (cond
      ((null files) (propertize "no files" 'face 'agent-ui-muted))
      (t (concat (string-join lines "\n")
-                (if (> more 0) (concat "\n" (propertize (format "… %d files more" more) 'face 'agent-ui-muted)) ""))))))
+                (if (> more 0)
+                    (concat "\n" (agent-ui-truncate (propertize (format "… %d files more" more) 'face 'agent-ui-muted)
+                                                    width))
+                  ""))))))
 
 (agent-ui-define files
   "Files, each with its state: a path, or {\"path\", \"status\", \"added\",

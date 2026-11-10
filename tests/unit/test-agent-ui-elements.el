@@ -981,6 +981,49 @@ new file mode 100644
     (should (eq (+test-aue-face-at (list :type "files" :files files) "✗") 'agent-ui-error))
     (should (equal (+test-aue-draw '(:type "files")) "no files"))))
 
+;; doom-nwj.64
+(ert-deftest agent-ui-elements/files-fit-the-width ()
+  "At widths 15 to 60, flat or a tree, folded or not: every line within the
+width, each file's name (or its end) shown. The name column was the width
+less 20 (or 24): under that, names went (\"M   +1200 −345 12 errors needs
+review\" at 20), and the counts, a name without them and folder lines were
+never cut."
+  (let ((files '((:path "src/components/very/deep/path/parser_module.c" :status "changed"
+                  :added 1200 :removed 345 :errors 12 :note "needs review")
+                 (:path "src/a_really_long_file_name_without_counts_at_all.c" :status "deleted")
+                 (:path "lib/x.c" :status "added" :added 3))))
+    (dolist (width (number-sequence 15 60))
+      (dolist (tree '(nil t))
+        (dolist (folded (if tree '(nil ("src/components/very/deep/path/")) '(nil)))
+          (let ((lines (split-string (+test-aue-draw (list :type "files" :files files :tree tree :folded folded)
+                                                     :width width)
+                                     "\n")))
+            (dolist (line lines) (should (<= (string-width line) width)))
+            (unless folded
+              ;; Each file's name, or its end.
+              (dolist (end '("le.c" "all.c" "x.c"))
+                (should (seq-some (lambda (line) (string-match-p (concat "[…/]?" (regexp-quote end) "\\b") line))
+                                  lines))))))))
+    ;; The name narrowed first (8 columns at least), then the note cut; the
+    ;; counts whole or left out (\"+12…\" misread +1200), the name taking
+    ;; their room.
+    (should (equal (+test-aue-draw (list :type "files" :files files) :width 50)
+                   (concat "M …ser_module.c  +1200 −345 12 errors needs review\n"
+                           "D …a_really_long_file_name_without_counts_at_all.c\n"
+                           "A lib/x.c        +3")))
+    (should (equal (+test-aue-draw (list :type "files" :files (list (car files))) :width 40)
+                   "M …odule.c  +1200 −345 12 errors needs …"))
+    (should (equal (+test-aue-draw (list :type "files" :files files) :width 15)
+                   "M …ser_module.c\nD …nts_at_all.c\nA lib/x.c   +3"))
+    ;; A tree's folder line: cut at its start too.
+    (should (equal (+test-aue-draw (list :type "files" :files files :tree t) :width 20)
+                   (concat "▾ …s/very/deep/path/\n"
+                           "    M …rser_module.c\n"
+                           "▾ src/\n"
+                           "    D …unts_at_all.c\n"
+                           "▾ lib/\n"
+                           "    A x.c  +3")))))
+
 (ert-deftest agent-ui-elements/files-open-and-fold ()
   (+test-aue-canvas
     (let* ((opened nil)
