@@ -1818,6 +1818,20 @@ empty line came after it, widening the gutter from 99; ^M at their ends)."
   (should (equal (+test-aue-draw '(:type "code" :from 1 :code "a\n\nb\n"))
                  "1 │ a\n2 │ \n3 │ b")))
 
+;; doom-nwj.88
+(ert-deftest agent-ui-elements/code-from-past-its-end ()
+  "FROM past its file's end is said (it was an empty line numbered FROM)."
+  (let ((file (make-temp-file (+test-tmp-file "code-") nil ".txt" "a\nb\nc\n")))
+    (should (equal (+test-aue-draw (list :type "code" :file file :from 40) :width 300)
+                   (concat (abbreviate-file-name file) ": lines 40–59 are past its end (3 lines)")))
+    (should (string-suffix-p ": lines 4–5 are past its end (3 lines)"
+                             (+test-aue-draw (list :type "code" :file file :from 4 :to 5) :width 300)))
+    ;; Its last line, and past it: what's there.
+    (should (string-suffix-p "\n3 │ c" (+test-aue-draw (list :type "code" :file file :from 3 :to 9) :width 300)))
+    (with-temp-file file (insert "only"))
+    (should (string-suffix-p "past its end (1 line)" (+test-aue-draw (list :type "code" :file file :from 2) :width 300)))
+    (should (string-suffix-p "\n1 │ only" (+test-aue-draw (list :type "code" :file file) :width 300)))))
+
 (ert-deftest agent-ui-elements/code-wrong ()
   (should (string-match-p "give code, or a file" (+test-aue-error '(:type "code"))))
   (should (string-match-p "from is a line" (+test-aue-error '(:type "code" :code "x" :from 0))))

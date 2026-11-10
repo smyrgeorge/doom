@@ -58,11 +58,17 @@ FILE's name (\": not found\"), or nil."
           (cons "" ": not found")
         (with-temp-buffer
           (insert-file-contents file)
-          (goto-char (point-min))
-          (forward-line (1- (plist-get props :from)))
-          (let ((start (point)))
-            (forward-line (- (or (plist-get props :to) (+ (plist-get props :from) 19)) (plist-get props :from) -1))
-            (cons (string-trim-right (buffer-substring start (point)) "\n") nil)))))))
+          (let* ((from (plist-get props :from))
+                 (to (or (plist-get props :to) (+ from 19)))
+                 (count (count-lines (point-min) (point-max))))
+            (if (> from count)
+                ;; Said (it was an empty line, numbered FROM).
+                (cons "" (format ": lines %d–%d are past its end (%d line%s)" from to count (if (= count 1) "" "s")))
+              (goto-char (point-min))
+              (forward-line (1- from))
+              (let ((start (point)))
+                (forward-line (- to from -1))
+                (cons (string-trim-right (buffer-substring start (point)) "\n") nil)))))))))
 
 (defun agent-ui-code--check (props)
   (unless (or (plist-get props :code) (plist-get props :file))
