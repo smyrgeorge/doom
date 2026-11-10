@@ -177,6 +177,122 @@
                              (should-error (agent-ui-append-to element '(:title "x"))
                                            :type 'agent-ui-error))))))
 
+(ert-deftest agent-ui-elements/steps-a-plan-to-approve ()
+  "With approve: its question, the plan as the user has it (dropped steps
+skipped, reworded ones renamed), x / e hinted, Approve and Reject; answered:
+what was, nothing to press; a still picture: no hint nor button."
+  (let ((plan '(:type "steps" :approve t
+                :steps ("Reproduce the bug" (:name "Fix the parser" :detail "tokenizer.el") "Update the docs")
+                :dropped ("Update the docs")
+                :edits ((:name "Fix the parser" :text "Fix the tokenizer")))))
+    (should (equal (+test-aue-draw plan)
+                   (concat "Go ahead with this plan?\n"
+                           "○ Reproduce the bug\n"
+                           "○ Fix the tokenizer  edited · tokenizer.el\n"
+                           "– Update the docs    dropped\n"
+                           "x drops the step at the cursor (again: back), e rewords it\n"
+                           "✎ Add a note\n"
+                           "⏵ Approve   ⏵ Reject")))
+    (should (equal (+test-aue-draw plan :still t)
+                   (concat "Go ahead with this plan?\n"
+                           "○ Reproduce the bug\n"
+                           "○ Fix the tokenizer  edited · tokenizer.el\n"
+                           "– Update the docs    dropped")))
+    (should (agent-ui-ask-waiting-p plan))
+    (should-not (agent-ui-ask-waiting-p (append '(:answered "approved") plan)))
+    (should-not (agent-ui-ask-waiting-p '(:type "steps" :approve :false :steps ("a")))))
+  (should (equal (+test-aue-draw '(:type "steps" :approve (:question "Start?") :steps ("a") :answered "rejected"
+                                   :note-text "too risky"))
+                 "○ a\n✗ Rejected · note: too risky"))
+  ;; Without approve: as ever.
+  (should (equal (+test-aue-draw '(:type "steps" :steps ("a"))) "○ a")))
+
+(ert-deftest agent-ui-elements/steps-a-plan-approved ()
+  "x drops a step (again: back), e rewords one; Approve sends the plan as
+the user has it, the steps becoming it (the agent's appends by the new
+names), answered."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "plan" :type "steps" :approve t
+                       :steps ("Reproduce the bug" "Fix the parser" "Update the docs" "Release")))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "Update the docs")
+        (agent-ui-drop-item)
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "Release")
+        (agent-ui-drop-item)
+        (agent-ui-drop-item)
+        (should (equal (plist-get (agent-ui-get "plan") :dropped) '("Update the docs")))
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "Fix the parser")
+        (cl-letf (((symbol-function 'read-string) (lambda (_prompt initial) (should (equal initial "Fix the parser"))
+                                                     " Fix the tokenizer ")))
+          (agent-ui-edit-item))
+        ;; Blank: refused.
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "Fix the tokenizer")
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) " ")))
+          (should-error (agent-ui-edit-item) :type 'user-error))
+        ;; Not on a step: said.
+        (goto-char (point-min))
+        (search-forward "Go ahead")
+        (should-error (agent-ui-drop-item) :type 'user-error)
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "docs later")))
+          (+test-aue-press "Add a note"))
+        (+test-aue-press "⏵ Approve")
+        (should (equal sent '(("Answer to steps plan (Go ahead with this plan?): approved: 1. Reproduce the bug; 2. Fix the tokenizer (edited, was: Fix the parser); 3. Release. Dropped: Update the docs. Note: docs later" t))))
+        (let ((element (agent-ui-get "plan")))
+          (should (equal (mapcar #'agent-ui-steps--name (plist-get element :steps))
+                         '("Reproduce the bug" "Fix the tokenizer" "Release")))
+          (should (equal (plist-get element :answered) "approved")))
+        (agent-ui--flush)
+        (should (string-search "✓ Approved · note: docs later" (buffer-string)))
+        (should-not (string-search "⏵" (buffer-string)))
+        ;; It runs as usual: the agent's appends, by the new names.
+        (agent-ui-append "plan" '(:steps ((:name "Fix the tokenizer" :status "done"))))
+        (agent-ui--flush)
+        (should (string-search "✓ Fix the tokenizer" (buffer-string)))
+        ;; Answered: nothing to drop.
+        (goto-char (point-min))
+        (search-forward "Release")
+        (should-error (agent-ui-drop-item) :type 'user-error)))))
+
+(ert-deftest agent-ui-elements/steps-a-plan-rejected ()
+  "Reject: asked why (none: no note), said; every step dropped: Approve
+refused."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "plan" :type "steps" :approve (:question "Start?" :submit :false) :steps ("a" "b")))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (dolist (step '("○ a" "○ b"))
+          (goto-char (point-min))
+          (search-forward step)
+          (agent-ui-drop-item)
+          (agent-ui--flush))
+        (should-error (+test-aue-press "⏵ Approve") :type 'user-error)
+        (should-not sent)
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "too risky")))
+          (+test-aue-press "⏵ Reject"))
+        (should (equal sent '(("Answer to steps plan (Start?): rejected. Note: too risky" nil))))
+        (agent-ui--flush)
+        (should (string-search "✗ Rejected · note: too risky" (buffer-string)))))))
+
+(ert-deftest agent-ui-elements/steps-a-plan-keys ()
+  "x / e on the canvas, in Emacs's keys and Vim's normal state."
+  (should (eq (keymap-lookup agent-ui-canvas-mode-map "x") #'agent-ui-drop-item))
+  (should (eq (keymap-lookup agent-ui-canvas-mode-map "e") #'agent-ui-edit-item))
+  (require 'evil)
+  (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "x") #'agent-ui-drop-item))
+  (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "e") #'agent-ui-edit-item)))
+
 (ert-deftest agent-ui-elements/steps-wrong ()
   (should (equal (+test-aue-error '(:type "steps" :steps ("a" (:name "b" :status "paused"))))
                  "steps: step 2 has status \"paused\"; one of: pending, running, done, failed, skipped"))
@@ -184,7 +300,16 @@
                  "steps: step 1 has no name"))
   (should (equal (+test-aue-error '(:type "steps" :steps ((:name "a" :state "done"))))
                  "steps: step 1 has \"state\": a step has name, status, detail, seconds, steps"))
-  (should (string-match-p "step 1 is 3" (+test-aue-error '(:type "steps" :steps (3))))))
+  (should (string-match-p "step 1 is 3" (+test-aue-error '(:type "steps" :steps (3)))))
+  ;; A plan to approve.
+  (should (string-match-p "approve is true, or"
+                          (+test-aue-error '(:type "steps" :steps ("a") :approve (:asks "x")))))
+  (should (string-match-p "dropped is the steps' names"
+                          (+test-aue-error '(:type "steps" :steps ("a") :approve t :dropped (1)))))
+  (should (string-match-p "edits are"
+                          (+test-aue-error '(:type "steps" :steps ("a") :approve t :edits ((:name "a"))))))
+  (should (string-match-p "answered is \"approved\" or \"rejected\""
+                          (+test-aue-error '(:type "steps" :steps ("a") :approve t :answered "maybe")))))
 
 (ert-deftest agent-ui-elements/steps-their-times ()
   (let* ((now 100.0)

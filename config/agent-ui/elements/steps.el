@@ -248,6 +248,188 @@ a \"parent\" goes among that step's own."
                                           (agent-ui--show-value (agent-ui-steps--name step))))))))
     (plist-put (copy-sequence element) :steps steps)))
 
+;; ====== APPROVING THE PLAN ======
+;; With approve: the steps are a plan the user approves before the work
+;; starts. They drop steps (x on one; again: back) and reword them (e), add a
+;; note, then Approve: the steps become the plan as approved (dropped ones
+;; gone, reworded ones renamed: the agent's appends use those names), and
+;; "Answer to steps ID (QUESTION): approved: 1. A; 2. B (edited, was: X).
+;; Dropped: C. Note: ..." goes into the session's prompt (sent at once,
+;; unless approve's submit is false). Or Reject: "...: rejected. Note: why".
+;; Then it's answered, and runs as usual. The user's changes are the
+;; element's own (:dropped, :edits), saved with the session.
+
+(defconst agent-ui-steps--question "Go ahead with this plan?")
+
+(defun agent-ui-steps--approve-props (props)
+  "PROPS' approve as (:question :submit), or nil if it has none."
+  (let ((approve (plist-get props :approve)))
+    (cond ((memq approve '(nil :false)) nil)
+          ((eq approve t) (list :question agent-ui-steps--question :submit t))
+          (t (list :question (or (plist-get approve :question) agent-ui-steps--question)
+                   :submit (not (eq (plist-get approve :submit) :false)))))))
+
+(defun agent-ui-steps--check-approve (props)
+  (let ((approve (plist-get props :approve)))
+    (unless (or (memq approve '(nil t :false))
+                (and (agent-ui--plist-p approve)
+                     (cl-every (lambda (k) (memq k '(:question :submit)))
+                               (cl-loop for (k _) on approve by #'cddr collect k))
+                     (or (null (plist-get approve :question)) (stringp (plist-get approve :question)))
+                     (memq (plist-get approve :submit) '(nil t :false))))
+      (agent-ui--fail "steps: approve is true, or {\"question\": ..., \"submit\": ...}"))
+    (unless (cl-every #'stringp (plist-get props :dropped))
+      (agent-ui--fail "steps: dropped is the steps' names"))
+    (unless (cl-every (lambda (e) (and (agent-ui--plist-p e) (stringp (plist-get e :name)) (stringp (plist-get e :text))))
+                      (plist-get props :edits))
+      (agent-ui--fail "steps: edits are {\"name\": ..., \"text\": ...}"))
+    (when (and (plist-get props :answered) (not (member (plist-get props :answered) '("approved" "rejected"))))
+      (agent-ui--fail "steps: answered is \"approved\" or \"rejected\""))))
+
+(defun agent-ui-steps--edited (props name)
+  "Step NAME's rewording in PROPS' edits, or nil."
+  (plist-get (seq-find (lambda (e) (equal (plist-get e :name) name)) (plist-get props :edits)) :text))
+
+(defun agent-ui-steps--as-planned (props)
+  "PROPS' steps as the user has them: a dropped one skipped, \"dropped\";
+a reworded one renamed, \"edited\"."
+  (mapcar (lambda (step)
+            (let* ((name (plist-get step :name))
+                   (dropped (member name (plist-get props :dropped)))
+                   (text (agent-ui-steps--edited props name))
+                   (step (copy-sequence step)))
+              (when text
+                (setq step (plist-put step :name text)))
+              (when (or dropped text)
+                (setq step (plist-put step :detail
+                                      (string-join (delq nil (list (and dropped "dropped") (and text "edited")
+                                                                   (plist-get step :detail)))
+                                                   " · "))))
+              (when dropped
+                (setq step (plist-put step :status 'skipped)))
+              step))
+          (plist-get props :steps)))
+
+(defun agent-ui-steps--toggle-drop (props ctx name)
+  (let ((dropped (plist-get props :dropped)))
+    (agent-ui-ask-change ctx (list :dropped (if (member name dropped)
+                                                (remove name dropped)
+                                              (append dropped (list name)))))))
+
+(defun agent-ui-steps--edit (props ctx name)
+  (let ((text (string-trim (read-string "Step: " (or (agent-ui-steps--edited props name) name)))))
+    (when (string-empty-p text)
+      (user-error "A step needs words: x drops it"))
+    (agent-ui-ask-change
+     ctx (list :edits (append (seq-remove (lambda (e) (equal (plist-get e :name) name)) (plist-get props :edits))
+                              (unless (equal text name) (list (list :name name :text text))))))))
+
+(defun agent-ui-steps--note (props)
+  (let ((note (plist-get props :note-text)))
+    (and note (not (string-blank-p note)) note)))
+
+(defun agent-ui-steps--approved (props ctx)
+  "Approve: the plan as the user has it into the session's prompt; the steps
+become it."
+  (let* ((approve (agent-ui-steps--approve-props props))
+         (dropped (plist-get props :dropped))
+         (kept (seq-remove (lambda (s) (member (plist-get s :name) dropped)) (plist-get props :steps)))
+         (gone (seq-filter (lambda (s) (member (plist-get s :name) dropped)) (plist-get props :steps)))
+         (note (agent-ui-steps--note props)))
+    (unless kept
+      (user-error "Every step is dropped: reject the plan instead"))
+    (funcall agent-ui-action-function
+             (concat (format "Answer to steps %s (%s): approved: " (plist-get ctx :id) (plist-get approve :question))
+                     (string-join
+                      (cl-loop for step in kept
+                               for n from 1
+                               collect (let* ((name (plist-get step :name))
+                                              (text (agent-ui-steps--edited props name)))
+                                         (if text
+                                             (format "%d. %s (edited, was: %s)" n text name)
+                                           (format "%d. %s" n name))))
+                      "; ")
+                     (if gone (concat ". Dropped: " (mapconcat (lambda (s) (plist-get s :name)) gone "; ")) "")
+                     (if note (concat ". Note: " note) ""))
+             (plist-get approve :submit))
+    (agent-ui-ask-change
+     ctx (list :steps (mapcar (lambda (step)
+                                (if-let* ((text (agent-ui-steps--edited props (plist-get step :name))))
+                                    (plist-put (copy-sequence step) :name text)
+                                  step))
+                              kept)
+               :dropped nil :edits nil :answered "approved"))))
+
+(defun agent-ui-steps--rejected (props ctx)
+  "Reject: said in the session's prompt, with a note (asked if none)."
+  (let* ((approve (agent-ui-steps--approve-props props))
+         (note (or (agent-ui-steps--note props)
+                   (let ((why (string-trim (read-string "Why not (for the agent; empty: no note): "))))
+                     (and (not (string-empty-p why)) why)))))
+    (funcall agent-ui-action-function
+             (format "Answer to steps %s (%s): rejected%s" (plist-get ctx :id) (plist-get approve :question)
+                     (if note (concat ". Note: " note) ""))
+             (plist-get approve :submit))
+    (agent-ui-ask-change ctx (list :note-text note :answered "rejected"))))
+
+(defun agent-ui-steps--approve-text (props ctx)
+  "PROPS' steps with approve: its question, the plan as the user has it
+\(x and e on a step), Approve and Reject; answered, what was."
+  (let* ((approve (agent-ui-steps--approve-props props))
+         (width (plist-get ctx :width))
+         (answered (plist-get props :answered))
+         (still (or answered (plist-get ctx :still)))
+         (lines (split-string (agent-ui-steps--text
+                               (if answered props (plist-put (copy-sequence props) :steps (agent-ui-steps--as-planned props)))
+                               ctx)
+                              "\n"))
+         (flat (agent-ui-steps--flat (plist-get props :steps) 0)))
+    (unless still
+      ;; A plan's step (not a sub-step): x drops it, e rewords it.
+      (setq lines (cl-loop for line in lines
+                           for entry = (pop flat)
+                           collect (if (and entry (= (car entry) 0))
+                                       (let ((name (plist-get (cdr entry) :name)))
+                                         (propertize line
+                                                     'agent-ui-drop (lambda () (agent-ui-steps--toggle-drop props ctx name))
+                                                     'agent-ui-edit (lambda () (agent-ui-steps--edit props ctx name))
+                                                     'help-echo "x: drop it (again: back), e: reword it"))
+                                     line))))
+    (string-join
+     (append
+      (unless answered
+        (list (propertize (agent-ui-wrap (plist-get approve :question) width) 'face 'bold)))
+      lines
+      (cond
+       (answered
+        (let ((note (agent-ui-steps--note props)))
+          (list (concat (if (equal answered "approved")
+                            (propertize "✓ " 'face 'agent-ui-success)
+                          (propertize "✗ " 'face 'agent-ui-muted))
+                        (propertize (agent-ui-truncate
+                                     (concat (if (equal answered "approved") "Approved" "Rejected")
+                                             (if note (concat " · note: " note) ""))
+                                     (- width 2))
+                                    'face 'agent-ui-muted)))))
+       ((plist-get ctx :still) nil)
+       (t
+        (list (propertize (agent-ui-wrap "x drops the step at the cursor (again: back), e rewords it" width)
+                          'face 'agent-ui-muted)
+              (agent-ui-ask-note-button props ctx)
+              (concat (agent-ui-button (propertize "⏵ Approve" 'face 'agent-ui-action)
+                                       (lambda () (agent-ui-steps--approved props ctx))
+                                       "RET: approve the plan as it is now")
+                      "   "
+                      (agent-ui-button (propertize "⏵ Reject" 'face 'agent-ui-action)
+                                       (lambda () (agent-ui-steps--rejected props ctx))
+                                       "RET: reject it, saying why"))))))
+     "\n")))
+
+(defun agent-ui-steps--draw (props ctx)
+  (if (agent-ui-steps--approve-props props)
+      (agent-ui-steps--approve-text props ctx)
+    (agent-ui-steps--text props ctx)))
+
 (agent-ui-define steps
   "A checklist whose steps change state as work goes on. A step is a name
 \(pending), or {\"name\", \"status\", \"detail\", \"seconds\", \"steps\"}:
@@ -255,8 +437,16 @@ status one of pending, running (a spinner), done, failed, skipped; detail a
 note after it; seconds how long it took (else timed from running to done);
 steps its own, drawn under it. Appending a step whose name is there changes
 it in its place: append {\"steps\": [{\"name\": \"Build\", \"status\":
-\"done\"}]}; with \"parent\": \"Build\", among that step's own."
-  :props ((steps list "The steps, in order"))
+\"done\"}]}; with \"parent\": \"Build\", among that step's own. With APPROVE,
+a plan the user approves first (dropping, rewording steps): \"Answer to steps
+ID (QUESTION): approved: 1. A; 2. B (edited, was: X). Dropped: C. Note: ...\"
+\(or rejected) comes into your prompt; the steps are then the approved ones."
+  :props ((steps list "The steps, in order")
+          (approve any "A plan for the user to approve first: true, or {\"question\": ..., \"submit\": ...}")
+          (dropped list "The steps the user dropped (theirs)")
+          (edits list "The steps the user reworded, {\"name\": ..., \"text\": ...} (theirs)")
+          (note-text string "The user's note")
+          (answered string "approved or rejected (then it can't be changed)"))
   :example (:title "Release"
             :steps ((:name "Run the tests" :status "done" :detail "412 passed" :seconds 41)
                     (:name "Build the release" :status "running"
@@ -266,6 +456,7 @@ it in its place: append {\"steps\": [{\"name\": \"Build\", \"status\":
               (seq-some (lambda (s) (eq (plist-get (cdr s) :status) 'running))
                         (agent-ui-steps--flat (plist-get props :steps) 0)))
   :check (lambda (props)
+           (agent-ui-steps--check-approve props)
            (plist-put props :steps
                       (cl-loop for step in (plist-get props :steps)
                                for i from 1
@@ -277,4 +468,4 @@ it in its place: append {\"steps\": [{\"name\": \"Build\", \"status\":
                    (plist-put (copy-sequence element) :steps
                               (agent-ui-steps--timed steps (funcall agent-ui-clock)))
                  element)))
-  :text #'agent-ui-steps--text)
+  :text #'agent-ui-steps--draw)

@@ -109,6 +109,16 @@ agent-ui append plan '{"steps":[{"name":"compile","parent":"Build","status":"run
 agent-ui append plan '{"steps":[{"name":"compile","parent":"Build","status":"done"},{"name":"link","parent":"Build","status":"running"}]}'
 ```
 
+**A plan to approve.** Before a larger change, show your plan as steps with `"approve": true` (or `{"question":
+..., "submit": false}`), say so in a line, and end your turn. The user drops steps, rewords them, adds a note, then
+approves: "Answer to steps ID (QUESTION): approved: 1. A; 2. B (edited, was: X). Dropped: C. Note: ..." comes as your
+next prompt (sent at once), and the steps are now that plan: append statuses by those names as you work. Or "...:
+rejected. Note: why": rethink, don't start.
+
+```sh
+agent-ui show '{"id":"plan","type":"steps","title":"The fix","approve":true,"steps":["Reproduce the bug","Fix the parser","Update the docs","Release"]}'
+```
+
 ### `table`
 
 `columns` (names) and `rows` (arrays of cells: text, numbers, true, false, null), fitted to the pane's width; numbers

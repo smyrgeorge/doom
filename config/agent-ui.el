@@ -115,7 +115,10 @@
       :n "K"  #'agent-ui-move-item-up
       :n "J"  #'agent-ui-move-item-down
       :n "M-<up>"   #'agent-ui-move-item-up
-      :n "M-<down>" #'agent-ui-move-item-down)
+      :n "M-<down>" #'agent-ui-move-item-down
+      ;; A plan's steps dropped (again: back), reworded, before approving it.
+      :n "x"  #'agent-ui-drop-item
+      :n "e"  #'agent-ui-edit-item)
 
 ;; A FORM, filled in its buffer (config/agent-ui/elements/form.el): typed
 ;; into, so Emacs's keys there, as beads.el's forms (C-c C-c sends it, C-c

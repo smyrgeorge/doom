@@ -61,10 +61,12 @@ in its face."
 
 (defun agent-ui-ask-waiting-p (element)
   "Whether ELEMENT asks the user and isn't answered yet: of a type that asks
-\(`agent-ui-ask-types': a choice, a confirm, a form, a rank), or with
-select (a table, files, issues)."
+\(`agent-ui-ask-types': a choice, a confirm, a form, a rank), with
+select (a table, files, issues), or approve (a plan, steps)."
   (and (not (plist-get element :answered))
-       (or (member (plist-get element :type) agent-ui-ask-types) (plist-get element :select))
+       (or (member (plist-get element :type) agent-ui-ask-types)
+           (plist-get element :select)
+           (not (memq (plist-get element :approve) '(nil :false))))
        t))
 
 (defun agent-ui-ask-question (element)
@@ -258,6 +260,35 @@ on it after."
 
 (keymap-set agent-ui-canvas-mode-map "M-<up>" #'agent-ui-move-item-up)
 (keymap-set agent-ui-canvas-mode-map "M-<down>" #'agent-ui-move-item-down)
+
+;; ====== DROPPING, EDITING ITEMS ======
+;; An element whose items the user drops or rewords before answering (a plan
+;; to approve) marks each item's line: `agent-ui-drop', a function of no
+;; argument dropping it (or bringing it back); `agent-ui-edit', one rewording
+;; it. x / e on the line call them.
+
+(defun agent-ui--item-action (prop what)
+  "The function PROP on point's line, or a user-error naming WHAT."
+  (or (get-text-property (or (text-property-not-all (line-beginning-position) (line-end-position) prop nil)
+                             (point))
+                         prop)
+      (user-error "No %s here" what)))
+
+(defun agent-ui-drop-item ()
+  "Drop the item on point's line (a plan's step), or bring it back."
+  (interactive)
+  (funcall (agent-ui--item-action 'agent-ui-drop "item to drop"))
+  ;; Drawn at once: pressed again, it acts on what it shows.
+  (agent-ui--flush))
+
+(defun agent-ui-edit-item ()
+  "Reword the item on point's line (a plan's step), in the minibuffer."
+  (interactive)
+  (funcall (agent-ui--item-action 'agent-ui-edit "item to edit"))
+  (agent-ui--flush))
+
+(keymap-set agent-ui-canvas-mode-map "x" #'agent-ui-drop-item)
+(keymap-set agent-ui-canvas-mode-map "e" #'agent-ui-edit-item)
 
 ;; ====== REVIEW COMMENTS ======
 ;; On an element showing code (code, diff): the user writes comments on its

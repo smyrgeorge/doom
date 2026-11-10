@@ -109,7 +109,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
   time an element is shown (tiling's `agent-ui` application, `+my/tiling-apps`), without taking the focus, and again if it was closed.
   With Doom's workspaces, it opens in its session's workspace: while you're in another, it waits there for you.
   `q` hides it, and so does emptying it (cleared, its last element removed); it closes with its session. `a` on an element puts it into the session's prompt; `b` on one files a bug in Agent UI ([below](#bugs-in-agent-ui)); `c` on a line of code or a diff (or a region's lines) writes a review comment under it (`c` on a comment edits it, `d` removes it), Send the review putting them all, with their places, into the session's prompt; `s` on a table's
-  column sorts it by it (again: the other way); `M-↑` / `M-↓` (`K` / `J`) move a rank's item; `R` reviews the types the agent made.
+  column sorts it by it (again: the other way); `M-↑` / `M-↓` (`K` / `J`) move a rank's item; `x` drops a plan's step (again: back), `e` rewords it; `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
   the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements
   and ids. They close with the session, and are kept and come back with it.
@@ -177,7 +177,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `markdown` | Markdown, drawn as agent-shell draws replies | `markdown` |
 | `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it; sorted by a column (`s` on it in the canvas); buttons on each row with its cells in their prompts; `select` asks you to pick rows (marks, RET or a click, All / None, a note), Send putting "Answer to ID (question): their keys" into the session's prompt | `columns`, `rows`, `key`, `align`, `sort`, `descending`, `row-actions`, `select` |
 | `progress` | A bar, or a run without an end; on a canvas, its rate and time left from its updates over time | `value`, `max`, `label`, `unit`, `status` |
-| `steps` | A checklist whose steps change state; appending a step by its name changes it; a step's time (timed from running to done), its own steps under it | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":..., "seconds":..., "steps": [...]}]` |
+| `steps` | A checklist whose steps change state; appending a step by its name changes it; a step's time (timed from running to done), its own steps under it. With `approve`, a plan you approve first: `x` on a step drops it (again: back), `e` rewords it, a note; Approve puts "Answer to steps ID (question): approved: 1. A; 2. B (edited, was: X). Dropped: C" into the session's prompt and the steps become that plan, or Reject says so with a note | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":..., "seconds":..., "steps": [...]}]`, `approve` |
 | `chart` | Lines (several series; on a time axis, with `times`), bars (several series grouped, or stacked), a histogram or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window`, `stacked`, `bins`, `times` |
 | `image` | An image file (an `.excalidraw.svg` drawing too), or one from a URL (in the GUI, downloaded once with curl, kept in Doom's cache, `agent-ui/images/`), in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file` or `url`, `alt`, `width` (percent), `height` (lines) |
 | `choice` | A question for you: options to pick (one or several), a note; Answer puts "Answer to choice ID (question): …" into the session's prompt, then it shows the answer | `question`, `options`, `multiple`, `note`, `submit`, `selected` |
@@ -302,7 +302,7 @@ prompt is offered to queue (change it first if you like). A snapshot leaves the 
 ## A question waiting
 
 When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, a `form`, a
-`rank`, rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
+`rank`, a plan to approve, rows to pick in a `table`, `files` or `issues`, a panel's child too), you see it:
 
 - the canvas's pane is shown (if it was closed), scrolled to the question, the cursor on it; the focus stays where it
   is;
