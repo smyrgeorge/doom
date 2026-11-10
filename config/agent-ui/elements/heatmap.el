@@ -72,6 +72,32 @@
         ('red-green (agent-ui-heatmap--mix (agent-ui-heatmap--hex 'agent-ui-error) (agent-ui-heatmap--hex 'agent-ui-success) share))
         (_ (agent-ui-heatmap--mix bg (agent-ui-heatmap--hex 'agent-ui-accent) (+ 0.15 (* 0.85 share)))))))))
 
+(defun agent-ui-heatmap--legend (props range width)
+  "The legend: the scale's ends, and each word used with its colour, packed
+into lines of WIDTH; an item (a swatch and its word) never split (wrapped
+as text, a swatch was left at a line's end, its word on the next)."
+  (let* ((values (apply #'append (plist-get props :values)))
+         (numbers (seq-filter #'numberp values))
+         (words (delete-dups (seq-filter #'stringp values)))
+         (items (append
+                 (when numbers
+                   (list (concat (propertize (agent-ui-format-number (car range)) 'face 'agent-ui-muted) " "
+                                 (mapconcat (lambda (i) (propertize "█" 'face (list :foreground (agent-ui-heatmap--color
+                                                                                                props (+ (car range) (* i 0.25 (- (cdr range) (car range))))
+                                                                                                range))))
+                                            '(0 1 2 3 4) "")
+                                 " " (propertize (agent-ui-format-number (cdr range)) 'face 'agent-ui-muted))))
+                 (mapcar (lambda (w) (concat (propertize "█" 'face (list :foreground (agent-ui-heatmap--color props w range)))
+                                             " " (propertize w 'face 'agent-ui-muted)))
+                         words)))
+         (lines nil) (line nil))
+    (dolist (item items)
+      (if (and line (> (+ (string-width line) 2 (string-width item)) width))
+          (progn (push line lines) (setq line item))
+        (setq line (if line (concat line "  " item) item))))
+    (when line (push line lines))
+    (mapconcat (lambda (l) (agent-ui-truncate l width)) (nreverse lines) "\n")))
+
 (defun agent-ui-heatmap--text (props ctx)
   (let* ((rows (plist-get props :rows)) (columns (plist-get props :columns))
          (range (agent-ui-heatmap--range props))
@@ -90,26 +116,9 @@
                           (mapconcat (lambda (v) (funcall block (agent-ui-heatmap--color props v range)))
                                      (cdr row) " ")))
                 (cl-mapcar #'cons rows (plist-get props :values)) "\n")
-     ;; The legend: the scale's ends, or the words used; wrapped to the width.
+     ;; The legend: the scale's ends, or the words used, fitted to the width.
      "\n"
-     (agent-ui-wrap
-     (let ((numbers (seq-filter #'numberp (apply #'append (plist-get props :values))))
-           (words (delete-dups (seq-filter #'stringp (apply #'append (plist-get props :values))))))
-       (string-join
-        (delq nil
-              (list (when numbers
-                      (concat (propertize (agent-ui-format-number (car range)) 'face 'agent-ui-muted) " "
-                              (mapconcat (lambda (i) (propertize "█" 'face (list :foreground (agent-ui-heatmap--color
-                                                                                             props (+ (car range) (* i 0.25 (- (cdr range) (car range))))
-                                                                                             range))))
-                                         '(0 1 2 3 4) "")
-                              " " (propertize (agent-ui-format-number (cdr range)) 'face 'agent-ui-muted)))
-                    (when words
-                      (mapconcat (lambda (w) (concat (propertize "█" 'face (list :foreground (agent-ui-heatmap--color props w range)))
-                                                     " " (propertize w 'face 'agent-ui-muted)))
-                                 words "  "))))
-        "   "))
-     (plist-get ctx :width)))))
+     (agent-ui-heatmap--legend props range (plist-get ctx :width)))))
 
 (defun agent-ui-heatmap--gui (props ctx)
   (let* ((cw (plist-get ctx :char-width)) (lh (plist-get ctx :line-height))
@@ -144,8 +153,8 @@
                                                                       "#1b1b1b" fg)
                                                             :text-anchor "middle"))))))
     (concat (agent-ui-chart--image svg) "\n"
-            ;; The legend, as text.
-            (car (last (split-string (agent-ui-heatmap--text props ctx) "\n"))))))
+            ;; The legend, as text: all its lines (only its last was kept).
+            (agent-ui-heatmap--legend props range (plist-get ctx :width)))))
 
 (agent-ui-define heatmap
   "A grid of cells coloured by their values: ROWS and COLUMNS (labels),

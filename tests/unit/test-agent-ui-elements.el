@@ -1168,6 +1168,19 @@ overlapped the next cell's, \"1234\" spilled out of the last)."
     (should-not (string-match-p ">130.25</text>" svg))
     (should-not (string-match-p ">1234</text>" svg))))
 
+(ert-deftest agent-ui-elements/heatmap-legend-whole ()
+  "A legend wider than the width: on more lines, each swatch with its word
+(\"█\" was left at a line's end, \"skipped\" alone on the next), and all of
+its lines in the GUI too (only the last was kept)."
+  (let* ((element '(:type "heatmap" :rows ("lexer" "parser" "checker") :columns ("linux" "macos" "windows")
+                    :values (("passed" "passed" "passed") ("passed" "flaky" "passed") ("failed" "passed" "skipped"))))
+         (text (+test-aue-draw element :width 30))
+         (legend (nthcdr 4 (split-string text "\n"))))
+    (should (equal legend '("█ passed  █ flaky  █ failed" "█ skipped")))
+    (let ((gui (substring-no-properties
+                (agent-ui-render element (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16)))))
+      (should (string-match-p "█ passed  █ flaky  █ failed\n█ skipped\\'" gui)))))
+
 (ert-deftest agent-ui-elements/heatmap-gui-row-labels-cut ()
   "In the GUI a long row label is cut to its column (it ran through the cells)."
   (let ((svg (+test-aue-svg '(:type "heatmap" :rows ("test_parser_handles_unicode_identifiers" "lexer")
