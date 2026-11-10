@@ -96,17 +96,26 @@ emacs-lisp), else for FILE's name; nil if neither says."
                  for n from from
                  collect (let* ((mark (cl-find n (plist-get props :marks) :key (lambda (m) (plist-get m :line))))
                                 (kind (and mark (assq (plist-get mark :kind) agent-ui-code--marks)))
-                                (body (agent-ui-truncate (string-replace "\t" "    " line) (- width gutter 3)))
-                                (shown (agent-ui-truncate
-                                        (concat (propertize (format (format "%%%dd" gutter) n) 'face 'agent-ui-muted) " "
-                                               (if kind (propertize (nth 1 kind) 'face (nth 2 kind))
-                                                 (propertize "│" 'face 'agent-ui-muted))
-                                               " " body
-                                               (if (and mark (plist-get mark :note))
-                                                   (concat "  " (propertize (concat "← " (plist-get mark :note)) 'face (nth 2 kind)))
-                                                 ""))
-                                        ;; Its note too: within the width.
-                                        width)))
+                                (text (string-replace "\t" "    " line))
+                                (body (agent-ui-truncate text (- width gutter 3)))
+                                (note (and mark (plist-get mark :note) (concat "← " (plist-get mark :note))))
+                                (head (concat (propertize (format (format "%%%dd" gutter) n) 'face 'agent-ui-muted) " "
+                                              (if kind (propertize (nth 1 kind) 'face (nth 2 kind))
+                                                (propertize "│" 'face 'agent-ui-muted))
+                                              " "))
+                                (shown
+                                 (cond
+                                  ((not note) (concat head body))
+                                  ;; Its note after it, if both fit.
+                                  ((<= (+ gutter 3 (string-width text) 2 (string-width note)) width)
+                                   (concat head text "  " (propertize note 'face (nth 2 kind))))
+                                  ;; Else under it, wrapped (cut with the line, it went).
+                                  (t (concat head body
+                                             (mapconcat (lambda (part)
+                                                          (concat "\n" (make-string (+ gutter 3) ?\s)
+                                                                  (propertize part 'face (nth 2 kind))))
+                                                        (split-string (agent-ui-wrap note (max 1 (- width gutter 3))) "\n")
+                                                        ""))))))
                            (if file
                                (agent-ui-button shown
                                                 (let ((n n))

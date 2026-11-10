@@ -1735,6 +1735,33 @@ a box not at a stack's edge, it went straight through the boxes there)."
     (should (eq (+test-aue-face-at element "✗") 'agent-ui-error))
     (should (eq (+test-aue-face-at element "← always") 'agent-ui-error))))
 
+;; doom-nwj.69
+(ert-deftest agent-ui-elements/code-long-line-keeps-its-note ()
+  "A mark's note is shown whole at widths 40 to 80: after its line if both
+fit, else under it, wrapped (the line was cut with its note: \"{  ← …\")."
+  (let ((element '(:type "code" :language "c" :from 40
+                   :code "static Node *parse_expr(Parser *p, int precedence, ParseFlags flags) {\n  return NULL;"
+                   :marks ((:line 40 :kind "error" :note "precedence unused")
+                           (:line 41 :kind "warning" :note "never NULL")))))
+    (dolist (width (number-sequence 40 80))
+      (let ((text (+test-aue-draw element :width width)))
+        (dolist (line (split-string text "\n")) (should (<= (string-width line) width)))
+        (should (string-search "← precedence unused" text))
+        (should (string-search "  return NULL;  ← never NULL" text))))
+    (should (equal (+test-aue-draw element :width 50)
+                   (concat "40 ✗ static Node *parse_expr(Parser *p, int prece…\n"
+                           "     ← precedence unused\n"
+                           "41 !   return NULL;  ← never NULL")))
+    (should (eq (+test-aue-face-at element "← precedence" :width 50) 'agent-ui-error))
+    ;; Under it: its line's button too.
+    (let ((text (agent-ui-render (append element '(:file "/tmp/x.c")) (agent-ui-context :width 50))))
+      (should (functionp (get-text-property (string-search "← precedence" text) 'agent-ui-action text))))
+    ;; A long note at a narrow width: wrapped under it.
+    (should (equal (+test-aue-draw '(:type "code" :from 1 :code "x = 1"
+                                     :marks ((:line 1 :kind "info" :note "this is set once and read everywhere")))
+                                   :width 30)
+                   "1 • x = 1\n    ← this is set once and\n    read everywhere"))))
+
 (ert-deftest agent-ui-elements/code-from-its-file ()
   (let* ((file (make-temp-file (+test-tmp-file "code-") nil ".py"
                                (mapconcat (lambda (n) (format "x%d = %d" n n)) (number-sequence 1 30) "\n")))
