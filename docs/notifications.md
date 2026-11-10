@@ -8,6 +8,8 @@ Linux's notifications. Only while Emacs isn't in front; in Emacs, you see it the
 | Claude Code | A session's message, in its own words: when you asked to be told, or something needs you |
 | Claude Code finished | A [Claude Code](claude-code.md) session finished its turn |
 | Claude Code needs you | A session asks for your permission (to run a command, edit a file...) |
+| Agent UI: a question | A session's turn ended with a [question waiting on its canvas](agent-ui.md#a-question-waiting), said instead of "finished" |
+| Agent UI: a bug | A bug filed in [Agent UI's own issues](agent-ui.md#bugs-in-agent-ui) |
 
 Claude sends its message itself (its system prompt says how and when):
 `emacsclient --eval '(+my/notify-claude "The tests pass" "/its/working/directory")'`. Any code can call

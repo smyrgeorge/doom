@@ -329,3 +329,141 @@ changed or not, to queue. Never agent-shell's \"Busy, try later\"."
           (+test-aua-press canvas "⏵ Fix")
           (should (equal inserted '(inserted)))
           (should (= (length queued) 2)))))))
+
+;; ====== A QUESTION WAITING ======
+
+(ert-deftest agent-ui-agent/what-waits-for-an-answer ()
+  "A choice, an element with select, not answered: waits. Answered, or not
+asking: doesn't."
+  (should (agent-ui-ask-waiting-p '(:type "choice" :question "q" :options ("a"))))
+  (should-not (agent-ui-ask-waiting-p '(:type "choice" :question "q" :options ("a") :answered "a")))
+  (should (agent-ui-ask-waiting-p '(:type "table" :rows (("x")) :select (:question "Which?"))))
+  (should-not (agent-ui-ask-waiting-p '(:type "table" :rows (("x")) :select (:question "Which?") :answered "x")))
+  (should-not (agent-ui-ask-waiting-p '(:type "text" :text "x")))
+  (should (equal (agent-ui-ask-question '(:type "choice" :question "Which fix?")) "Which fix?"))
+  (should (equal (agent-ui-ask-question '(:type "files" :select (:question "Which files?"))) "Which files?")))
+
+(defmacro +test-aua-turns (&rest body)
+  "BODY with a session (`session') and its canvas (`canvas'), its turn's end
+`turn-end' (a function of a new event), the panes shown recorded in
+`shown', `agent-ui-question-waiting-functions' calls in `said'."
+  (declare (indent 0))
+  `(+test-aua
+     (let* ((session (+test-aua-session "Claude Agent @ ask" "/tmp/ask/"))
+            (name (agent-ui--session-name session))
+            (shown nil) (said nil) (on-event nil)
+            (agent-ui-display-function (lambda (b) (push b shown)))
+            (agent-ui-question-waiting-functions (list (lambda (&rest args) (push args said)))))
+       (cl-letf (((symbol-function 'agent-shell-subscribe-to)
+                  (lambda (&rest args)
+                    (should (eq (plist-get args :event) 'turn-complete))
+                    (setq on-event (plist-get args :on-event)))))
+         (with-current-buffer session (agent-ui--watch-questions-h)))
+       (agent-ui-show '(:id "intro" :type "text" :text "Two ways to fix it:") :canvas name)
+       ;; Its first element showed its pane: not the question's.
+       (setq shown nil)
+       (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name)))
+             (turn-end (lambda () (let ((event (list (cons :event 'turn-complete))))
+                                    (with-current-buffer session (funcall on-event event))
+                                    event))))
+         (ignore canvas turn-end)
+         ,@body))))
+
+(ert-deftest agent-ui-agent/a-question-waiting-at-the-turns-end ()
+  "The turn ended with a question not answered: its pane shown, the cursor on
+it, said (the hook); the session's mode line says so until it's answered."
+  (should (memq #'agent-ui--watch-questions-h (default-value 'agent-shell-mode-hook)))
+  (should (member '(:eval (agent-ui--question-mode-line)) mode-line-misc-info))
+  (+test-aua-turns
+    ;; Nothing asked: nothing.
+    (funcall turn-end)
+    (should-not (or shown said (buffer-local-value 'agent-ui--question-waiting session)))
+    ;; A choice: shown, the cursor on it, said.
+    (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?" :options ("Test" "Revert")) :canvas name)
+    (setq shown nil)
+    (funcall turn-end)
+    (should (equal shown (list canvas)))
+    (should (equal said (list (list session canvas "fix"))))
+    (with-current-buffer canvas
+      (should (equal (get-text-property (point) 'agent-ui-id) "fix"))
+      (should (looking-at-p "Which fix?")))
+    (with-current-buffer session
+      (should agent-ui--question-waiting)
+      (should (string-match-p "question waiting" (agent-ui--question-mode-line))))
+    ;; Another turn, the same question still waiting: not said again.
+    (setq said nil shown nil)
+    (funcall turn-end)
+    (should-not (or said shown))
+    (should (buffer-local-value 'agent-ui--question-waiting session))
+    ;; Answered: the mark gone.
+    (agent-ui-update "fix" '(:answered "Test") :canvas canvas)
+    (should-not (buffer-local-value 'agent-ui--question-waiting session))
+    (should (equal (with-current-buffer session (agent-ui--question-mode-line)) ""))))
+
+(ert-deftest agent-ui-agent/a-panels-question-and-rows-to-pick ()
+  "A panel's child asking, a table's rows to pick: waiting too, the cursor on
+the child; the mark there until each is answered."
+  (+test-aua-turns
+    (agent-ui-show '(:id "box" :type "panel" :title "Decide"
+                     :children ((:id "note" :type "text" :text "Before I go on")
+                                (:id "how" :type "choice" :question "How?" :options ("A" "B"))))
+                   :canvas name)
+    (agent-ui-show '(:id "pick" :type "table" :columns ("Test") :rows (("a") ("b"))
+                     :select (:question "Which to rerun?" :multiple t))
+                   :canvas name)
+    (funcall turn-end)
+    ;; The first one: the panel's child.
+    (should (equal said (list (list session canvas "how"))))
+    (with-current-buffer canvas
+      (should (equal (get-text-property (point) 'agent-ui-child) "how")))
+    (agent-ui-update "how" '(:answered "A") :canvas canvas)
+    (should (buffer-local-value 'agent-ui--question-waiting session))
+    (agent-ui-update "pick" '(:answered "a") :canvas canvas)
+    (should-not (buffer-local-value 'agent-ui--question-waiting session))))
+
+(ert-deftest agent-ui-agent/a-new-question-said-once-the-same-for-all ()
+  "Each turn's end says the questions new since the last one; everyone
+looking at the same turn's end (its notification) gets the same."
+  (+test-aua-turns
+    (agent-ui-show '(:id "q1" :type "choice" :question "One?" :options ("a")) :canvas name)
+    (let ((event (funcall turn-end)))
+      ;; The same event asked again (the notification, after): the same.
+      (should (equal (agent-ui-questions-new session event) (list (cons canvas "q1"))))
+      (should (equal (agent-ui-questions-new session event) (list (cons canvas "q1")))))
+    ;; A second question, the first still waiting: the second said.
+    (agent-ui-show '(:id "q2" :type "choice" :question "Two?" :options ("b")) :canvas name)
+    (setq said nil)
+    (funcall turn-end)
+    (should (equal said (list (list session canvas "q2"))))
+    (with-current-buffer canvas
+      (should (equal (get-text-property (point) 'agent-ui-id) "q2")))
+    ;; Another session's canvas: not this one's.
+    (let* ((other (+test-aua-session "Claude Agent @ other" "/tmp/other/")))
+      (agent-ui-show '(:id "q3" :type "choice" :question "Three?" :options ("c"))
+                     :canvas (agent-ui--session-name other))
+      (should (equal (mapcar #'cdr (agent-ui--waiting session)) '("q1" "q2")))
+      (should (equal (mapcar #'cdr (agent-ui--waiting other)) '("q3"))))))
+
+(ert-deftest agent-ui-agent/going-to-the-question-waiting ()
+  "C-c C-q in a session: its canvas's pane selected, the cursor on its
+question; none waiting: said."
+  (should (eq (keymap-lookup agent-shell-mode-map "C-c C-q") #'agent-ui-goto-question))
+  (+test-aua-turns
+    (setq agent-ui-display-function #'agent-ui-display-canvas)
+    (dotimes (i 60)
+      (agent-ui-show (list :id (format "line%d" i) :type "text" :text (format "line %d" i)) :canvas name))
+    (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?" :options ("Test" "Revert")) :canvas name)
+    (delete-other-windows)
+    (switch-to-buffer session)
+    (with-current-buffer session
+      (agent-ui-goto-question))
+    (should (eq (window-buffer (selected-window)) canvas))
+    (should (equal (get-text-property (window-point) 'agent-ui-id canvas) "fix"))
+    ;; From the canvas, its session's.
+    (with-current-buffer canvas
+      (goto-char (point-min))
+      (agent-ui-goto-question)
+      (should (equal (get-text-property (point) 'agent-ui-id) "fix")))
+    (agent-ui-update "fix" '(:answered "Test") :canvas canvas)
+    (switch-to-buffer session)
+    (should (equal (cadr (should-error (agent-ui-goto-question) :type 'user-error)) "No question waits"))))

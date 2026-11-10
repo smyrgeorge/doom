@@ -295,6 +295,22 @@ prompt is offered to queue (change it first if you like). A snapshot leaves the 
 ⏵ Fix them   ⏵ Show the log
 ```
 
+## A question waiting
+
+When the agent's turn ends with a question on its session's canvases not answered (a `choice`, rows to pick in a
+`table`, `files` or `issues`, a panel's child too), you see it:
+
+- the canvas's pane is shown (if it was closed), scrolled to the question, the cursor on it; the focus stays where it
+  is;
+- the session's mode line says `❓ question waiting` until it's answered;
+- a notification says it while Emacs isn't in front (`SPC t N`: `agent-ui-question`), instead of "finished".
+
+Each question is brought up once: at the first turn's end it's waiting at, not at every one after.
+
+| Key | Action |
+|---|---|
+| `C-c C-q` (`SPC m q`) in a session | Go to its question waiting: the canvas's pane selected, the cursor on it (in a canvas: its session's; elsewhere: any session's) |
+
 ## Bugs in Agent UI
 
 When Agent UI itself misbehaves (an element drawn wrong, an error, a property it lacks), it's filed from the session

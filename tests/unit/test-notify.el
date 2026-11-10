@@ -41,7 +41,7 @@ none off, what's shown recorded in `+test-notify--shown'."
   (should-not (default-value '+my/notify-off))
   ;; Claude Code's, Agent UI's, so far.
   (should (equal (mapcar #'car +my/notify-kinds)
-                 '(agent-ui-bug claude-permission claude-turn-done claude))))
+                 '(agent-ui-question agent-ui-bug claude-permission claude-turn-done claude))))
 
 (ert-deftest notify/keys ()
   (should (eq (lookup-key doom-leader-map (kbd "t n")) #'+my/notify-toggle))
@@ -255,6 +255,47 @@ shows the session."
         (funcall (alist-get 'turn-complete subscribed) '((:data (:stop-reason . "end_turn"))))
         (funcall (alist-get 'permission-request subscribed) '((:data (:tool-call (:title . "x")))))
         (should (equal (mapcar #'cadr +test-notify--shown) '("doom needs your permission: x")))))))
+
+(ert-deftest notify/agent-ui-question-waiting ()
+  "A session's turn ended with a new question waiting on its canvas
+(config/notify/agent-ui.el): said, the question's own words, a click
+showing the canvas; said instead of the turn's end, not with it."
+  (should (equal (alist-get 'agent-ui-question +my/notify-kinds)
+                 '("Agent UI" "A question waits for you on a canvas")))
+  (should (memq #'+my/notify-agent-ui--question (default-value 'agent-ui-question-waiting-functions)))
+  (should (memq #'+my/notify-agent-ui--question-said-p (default-value '+my/notify-claude-turn-said-functions)))
+  (let ((canvas (generate-new-buffer "Agent UI: test"))
+        (new nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-ui-get) (lambda (_id) '(:type "choice" :question "Which fix?")))
+                  ((symbol-function 'agent-ui-ask-question) (lambda (e) (plist-get e :question)))
+                  ((symbol-function 'agent-ui-questions-new) (lambda (_session _event) new)))
+          (+test-notify nil
+            (+test-notify--session "doom"
+              (+my/notify-agent-ui--question session canvas "fix")
+              (should (equal (butlast (car +test-notify--shown))
+                             (list "Agent UI" (format "%s asks: Which fix?" (buffer-name session)))))
+              (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
+                (funcall (nth 2 (car +test-notify--shown)))
+                (should (eq (window-buffer (selected-window)) canvas)))
+              ;; The turn's end: a new question, not said as finished.
+              (setq +test-notify--shown nil new (list (cons canvas "fix")))
+              (funcall (alist-get 'turn-complete subscribed) '((:data (:stop-reason . "end_turn"))))
+              (should-not +test-notify--shown)
+              ;; None new: finished, as ever.
+              (setq new nil)
+              (funcall (alist-get 'turn-complete subscribed) '((:data (:stop-reason . "end_turn"))))
+              (should (equal (mapcar #'cadr +test-notify--shown) '("doom: finished")))
+              ;; The question's kind off: the turn's end said.
+              (let ((+my/notify-off '(agent-ui-question)))
+                (setq +test-notify--shown nil new (list (cons canvas "fix")))
+                (funcall (alist-get 'turn-complete subscribed) '((:data (:stop-reason . "end_turn"))))
+                (should (equal (mapcar #'cadr +test-notify--shown) '("doom: finished"))))))
+          ;; Emacs in front: nothing.
+          (+test-notify t
+            (+my/notify-agent-ui--question nil canvas "fix")
+            (should-not +test-notify--shown)))
+      (kill-buffer canvas))))
 
 ;; ====== A MESSAGE FROM CLAUDE CODE ======
 

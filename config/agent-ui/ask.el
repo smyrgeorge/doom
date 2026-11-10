@@ -55,6 +55,17 @@ in its face."
   "Whether PROPS' answer was given (then it's locked)."
   (and (plist-get props :answered) t))
 
+(defun agent-ui-ask-waiting-p (element)
+  "Whether ELEMENT asks the user and isn't answered yet: a choice, an
+element with select (a table, files, issues)."
+  (and (not (plist-get element :answered))
+       (or (equal (plist-get element :type) "choice") (plist-get element :select))
+       t))
+
+(defun agent-ui-ask-question (element)
+  "ELEMENT's question (a choice's, its select's), or nil."
+  (or (plist-get element :question) (plist-get (plist-get element :select) :question)))
+
 ;; ====== CHANGING IT ======
 
 (defun agent-ui-ask-change (ctx patch)

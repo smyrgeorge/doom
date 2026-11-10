@@ -221,6 +221,14 @@ session's name and directory read when the session starts (in its buffer)."
               (lambda (root) (agent-ui-issues-refresh root))
               '((name . agent-ui-issues))))
 
+;; A QUESTION WAITING: a session's turn ended with a question on its canvas
+;; (config/agent-ui/agent.el): C-c C-q in the session goes there.
+(map! :after agent-shell
+      :map agent-shell-mode-map
+      "C-c C-q" #'agent-ui-goto-question
+      :localleader
+      :desc "Question waiting" "q" #'agent-ui-goto-question)
+
 ;; WHAT THE AGENT IS TOLD (see above), after what's there (the theme's line, the
 ;; project's issues).
 (add-hook '+my/agent-shell-claude-context-functions #'agent-ui-agent-context t)

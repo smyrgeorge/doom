@@ -16,19 +16,25 @@
           (file-name-nondirectory (directory-file-name (agent-shell-cwd))))
         (buffer-name))))
 
+(defvar +my/notify-claude-turn-said-functions nil
+  "Called with a session's buffer and agent-shell's turn-complete event when
+its turn ends: one returning non-nil says it in a notification of its own
+\(Agent UI's question waiting), the turn's one not shown.")
+
 (defun +my/notify-claude--turn-done (buffer event)
   "BUFFER's session finished its turn (agent-shell's turn-complete EVENT)."
   (let ((reason (map-nested-elt event '(:data :stop-reason))))
-    (+my/notify 'claude-turn-done
-                (format "%s: %s" (+my/notify-claude--name buffer)
-                        (pcase reason
-                          ((or 'nil "end_turn") "finished")
-                          ("max_tokens" "stopped: the answer was too long")
-                          ("max_turn_requests" "stopped: too many steps")
-                          ("refusal" "stopped: it refused")
-                          ("cancelled" "cancelled")
-                          (_ (format "stopped (%s)" reason))))
-                :buffer buffer)))
+    (unless (run-hook-with-args-until-success '+my/notify-claude-turn-said-functions buffer event)
+      (+my/notify 'claude-turn-done
+                  (format "%s: %s" (+my/notify-claude--name buffer)
+                          (pcase reason
+                            ((or 'nil "end_turn") "finished")
+                            ("max_tokens" "stopped: the answer was too long")
+                            ("max_turn_requests" "stopped: too many steps")
+                            ("refusal" "stopped: it refused")
+                            ("cancelled" "cancelled")
+                            (_ (format "stopped (%s)" reason))))
+                  :buffer buffer))))
 
 (defun +my/notify-claude--permission (buffer event)
   "BUFFER's session asks for permission (agent-shell's permission-request

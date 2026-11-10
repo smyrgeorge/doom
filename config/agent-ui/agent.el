@@ -233,3 +233,122 @@ canvas's session (sent if SUBMIT); while its agent works, queued (see above)."
 (declare-function agent-shell--can-insert-into-prompt-p "agent-shell-prompt")
 (declare-function shell-maker-busy "shell-maker")
 (setq agent-ui-action-function #'agent-ui--act)
+
+;; ====== A QUESTION WAITING ======
+;; A session's turn ended with a question on its canvases not answered (a
+;; choice, an element with select: `agent-ui-ask-waiting-p'), new since its
+;; last turn's end: the user sees it, the canvas's pane shown, the cursor on
+;; it, said by
+;; `agent-ui-question-waiting-functions' (config/notify/agent-ui.el: a
+;; notification while Emacs is away); the session's mode line says so until
+;; it's answered; `agent-ui-goto-question' (C-c C-q in a session) goes there.
+
+(defvar agent-ui-question-waiting-functions nil
+  "Called when a session's turn ended with a question waiting on its canvas:
+with the session's buffer, the canvas and the question's id.")
+
+(defvar-local agent-ui--question-waiting nil
+  "In a session: non-nil while a question waits on its canvases.")
+
+(defvar-local agent-ui--question-said nil
+  "In a session: its questions waiting at its last turn's end, ((CANVAS .
+ID)...): said then, not again.")
+
+(defvar-local agent-ui--question-turn nil
+  "In a session: its last turn's end, (EVENT . QUESTIONS-SAID).")
+
+(defun agent-ui--waiting (session)
+  "SESSION's questions waiting on its canvases (a panel's children too):
+\((CANVAS . ID)...), in their order."
+  (cl-loop for canvas in (agent-ui-canvases)
+           when (eq (buffer-local-value 'agent-ui--session-buffer canvas) session)
+           append (with-current-buffer canvas
+                    (cl-loop for id in agent-ui--order
+                             for element = (agent-ui--entry-element (gethash id agent-ui--entries))
+                             append (cl-loop for e in (cons (plist-put (copy-sequence element) :id id)
+                                                            (agent-ui--descendants element))
+                                             when (agent-ui-ask-waiting-p e)
+                                             collect (cons canvas (plist-get e :id)))))))
+
+(defun agent-ui--show-question (canvas id &optional select)
+  "CANVAS's pane shown (SELECT: selected), the cursor on question ID, its
+line in view."
+  (unless (get-buffer-window canvas t)
+    (funcall agent-ui-display-function canvas))
+  (let ((window (get-buffer-window canvas t))
+        (pos (with-current-buffer canvas
+               (agent-ui--flush)
+               (agent-ui--element-start canvas id))))
+    (when pos
+      (with-current-buffer canvas (goto-char pos))
+      (when window
+        (set-window-point window pos)
+        (unless (pos-visible-in-window-p pos window)
+          (set-window-start window (with-current-buffer canvas
+                                     (save-excursion (goto-char pos) (line-beginning-position)))))))
+    (when (and select window)
+      (select-window window))))
+
+(defun agent-ui-questions-new (session event)
+  "SESSION's questions waiting at its turn's end, EVENT (agent-shell's
+turn-complete), that weren't at its last one: those said, once. The same
+for everyone looking at EVENT (its notification too)."
+  (with-current-buffer session
+    (if (and agent-ui--question-turn (eq (car agent-ui--question-turn) event))
+        (cdr agent-ui--question-turn)
+      (let* ((waiting (agent-ui--waiting session))
+             (new (cl-remove-if (lambda (q) (member q agent-ui--question-said)) waiting)))
+        (setq agent-ui--question-said waiting
+              agent-ui--question-turn (cons event new))
+        new))))
+
+(defun agent-ui--question-check (session &optional event)
+  "SESSION's questions waiting looked at again: its mode line's mark set or
+cleared; at its turn's end (EVENT), the first new one shown and said."
+  (when (buffer-live-p session)
+    (let ((waiting (agent-ui--waiting session)))
+      (with-current-buffer session
+        (setq agent-ui--question-waiting (and waiting t))
+        (force-mode-line-update))
+      (when-let* ((new (and event (car (agent-ui-questions-new session event)))))
+        (agent-ui--show-question (car new) (cdr new))
+        (run-hook-with-args 'agent-ui-question-waiting-functions session (car new) (cdr new))))))
+
+(defun agent-ui--watch-questions-h ()
+  "A new session: its questions waiting looked at when its turn ends."
+  (let ((session (current-buffer)))
+    (when (fboundp 'agent-shell-subscribe-to)
+      (agent-shell-subscribe-to :shell-buffer session :event 'turn-complete
+                                :on-event (lambda (event) (agent-ui--question-check session event))))))
+
+(add-hook 'agent-shell-mode-hook #'agent-ui--watch-questions-h)
+
+(defun agent-ui--question-changed-h ()
+  "A canvas changed (an answer given): its session's mark looked at again,
+if it had one."
+  (when (and (buffer-live-p agent-ui--session-buffer)
+             (buffer-local-value 'agent-ui--question-waiting agent-ui--session-buffer))
+    (agent-ui--question-check agent-ui--session-buffer)))
+
+(add-hook 'agent-ui-changed-hook #'agent-ui--question-changed-h)
+
+(defun agent-ui--question-mode-line ()
+  "The mode line's mark, in a session with a question waiting."
+  (if agent-ui--question-waiting
+      (propertize " ❓ question waiting " 'face 'agent-ui-warning
+                  'help-echo "A question waits on the canvas: agent-ui-goto-question (C-c C-q) goes there")
+    ""))
+
+(add-to-list 'mode-line-misc-info '(:eval (agent-ui--question-mode-line)) t)
+
+(defun agent-ui-goto-question ()
+  "Go to the question waiting on this session's canvases (in a canvas: its
+session's; else any session's): its pane selected, the cursor on it."
+  (interactive)
+  (let ((found (cl-loop for session in (cond ((derived-mode-p 'agent-shell-mode) (list (current-buffer)))
+                                             (agent-ui--session-buffer (list agent-ui--session-buffer))
+                                             (t (agent-ui--sessions)))
+                        thereis (car (agent-ui--waiting session)))))
+    (unless found
+      (user-error "No question waits"))
+    (agent-ui--show-question (car found) (cdr found) t)))

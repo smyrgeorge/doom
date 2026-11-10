@@ -29,8 +29,9 @@ quick round trip to Emacs; its reply is JSON on stdout.
   (`key` the id). A plan, or the ticket you're working on: `steps`, its acceptance criteria as the steps, ticked as you
   go. Say so in a line of your reply rather than repeating the list there.
 - **Questions with a list to pick from** (which bugs to fix, which files, which approach): a `choice` (`"multiple":
-  true` for several, `"note": true`, `"submit": true`); say in a line that it's there and end your turn: the answer
-  comes as your next prompt ("Answer to choice ID (QUESTION): A, B. Note: ..."). A small question (2 to 4 options,
+  true` for several, `"note": true`, `"submit": true`); say in a line that it's there and end your turn: the user is
+  brought to it then (its pane shown, the cursor on it, a notification if they're away), and the answer comes as your
+  next prompt ("Answer to choice ID (QUESTION): A, B. Note: ..."). A small question (2 to 4 options,
   nothing to show): AskUserQuestion, in the conversation, if you have it.
 - **No:** what you'd say once. Answers, explanations, code and reports go in your reply (Markdown), as usual. Don't
   duplicate your reply on the canvas.
