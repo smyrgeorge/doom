@@ -55,14 +55,14 @@ in its face."
   "Whether PROPS' answer was given (then it's locked)."
   (and (plist-get props :answered) t))
 
-(defvar agent-ui-ask-types '("choice" "confirm")
+(defvar agent-ui-ask-types '("choice" "confirm" "form")
   "The types whose elements are questions (until answered), see
 `agent-ui-ask-waiting-p'.")
 
 (defun agent-ui-ask-waiting-p (element)
   "Whether ELEMENT asks the user and isn't answered yet: of a type that asks
-\(`agent-ui-ask-types': a choice, a confirm), or with select (a table,
-files, issues)."
+\(`agent-ui-ask-types': a choice, a confirm, a form), or with select (a
+table, files, issues)."
   (and (not (plist-get element :answered))
        (or (member (plist-get element :type) agent-ui-ask-types) (plist-get element :select))
        t))

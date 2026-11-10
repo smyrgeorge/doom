@@ -208,6 +208,19 @@ thing only on proceed.
 agent-ui show '{"id":"push","type":"confirm","question":"Force-push to origin/main?","details":["Rewrites the last 3 commits","Work others pushed to main may be lost"],"danger":"high","word":"main"}'
 ```
 
+### `form`
+
+Several answers you need together (a new ticket's title, priority and type; a release's version and date): `fields`,
+each `{"name", "label", "type", "required", "min", "max", "options", "placeholder", "value"}`; type `text` (the
+default), `integer` or `number` (`min`, `max`), `boolean`, `select` (one of its `options`), `file`, `directory`;
+`value` a default. The user fills it in (in a buffer of its own, checked as they type) and sends it: `Answer to form
+ID (QUESTION): {"title": ..., "priority": 2, ...}` comes into your prompt (JSON: an empty field null, a
+boolean true or false). Show it, say so in a line, end your turn. A single question: a `choice`.
+
+```sh
+agent-ui show '{"id":"ticket","type":"form","title":"New ticket","question":"What should the ticket say?","fields":[{"name":"title","label":"Title","required":true},{"name":"priority","label":"Priority","type":"integer","min":0,"max":4,"value":2},{"name":"type","label":"Type","type":"select","options":["bug","task","feature"]}]}'
+```
+
 ### `todo`
 
 A checklist you and the user both work through: a plan you agree on, what's left before a release. `items` are labels,

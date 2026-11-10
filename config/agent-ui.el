@@ -112,6 +112,12 @@
       :n "d"  #'agent-ui-uncomment
       :n "s"  #'agent-ui-table-sort)
 
+;; A FORM, filled in its buffer (config/agent-ui/elements/form.el): typed
+;; into, so Emacs's keys there, as beads.el's forms (C-c C-c sends it, C-c
+;; C-k cancels, TAB to the next field).
+(after! evil
+  (evil-set-initial-state 'agent-ui-form-mode 'emacs))
+
 ;; TYPES THE AGENT MAKES (see above): the list, a preview.
 (map! :map agent-ui-review-mode-map
       :n "RET" #'agent-ui-review-preview

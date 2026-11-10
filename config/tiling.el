@@ -91,7 +91,8 @@ from the current pane (tall: of the width; of the stack's height).")
     (issues beads-list-mode                         ; issues (SPC o i, config/beads.el)
             (beads-detail-mode . +my/tiling-beads-issue-new-pane-p) ; an issue (RET there)
             (beads-detail-vui-mode . +my/tiling-beads-issue-new-pane-p))
-    (agent-ui agent-ui-canvas-mode)                 ; Agent UI's canvas (config/agent-ui.el)
+    (agent-ui agent-ui-canvas-mode                  ; Agent UI's canvas (config/agent-ui.el)
+              agent-ui-form-mode)                   ; a form of it, filled in (Fill in)
     (html +my/html-page-mode))                      ; a page in WebKit (config/html.el)
   "Every application tiling knows (see TILING FIRST above): (NAME MODE...),
 each MODE a major mode (and the modes derived from it), whose buffers open in

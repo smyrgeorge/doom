@@ -15,6 +15,7 @@
 (load! "elements/choice")
 (load! "elements/todo")
 (load! "elements/confirm")
+(load! "elements/form")
 (load! "elements/files")
 (load! "elements/stats")
 (load! "elements/log")

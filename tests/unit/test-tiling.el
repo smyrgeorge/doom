@@ -683,7 +683,7 @@ nothing changes."
     (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) (+my/tiling--apps))
                    '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-mode
                      beads-list-mode beads-detail-mode beads-detail-vui-mode agent-ui-canvas-mode
-                     +my/html-page-mode)))))
+                     agent-ui-form-mode +my/html-page-mode)))))
 
 (ert-deftest tiling/apps-chosen-by-name ()
   "A list of names: those applications only, their modes as known (a
@@ -696,7 +696,7 @@ predicate kept); all: every one."
   (let ((+my/tiling-apps nil))
     (should-not (+my/tiling--apps)))
   (let ((+my/tiling-apps 'all))
-    (should (= (length (+my/tiling--apps)) 10)))
+    (should (= (length (+my/tiling--apps)) 11)))
   ;; Not mended by them: the list known stays whole.
   (let ((+my/tiling-apps '(issues)))
     (setcar (+my/tiling--apps) 'changed)
