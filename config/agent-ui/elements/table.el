@@ -140,11 +140,17 @@ start with one, else as text; DESCENDING the other way; empty cells last."
                                 (truncate-string-to-width prompt 60 nil nil "…")))))
    actions "  "))
 
+(defun agent-ui-table--cell (value)
+  "VALUE as a cell's text, on one line: a line break shown as ⏎, a tab as a
+space (they broke the table's lines and its border)."
+  (replace-regexp-in-string
+   "\t" " " (replace-regexp-in-string "\r?\n" "⏎" (agent-ui-cell value))))
+
 (defun agent-ui-table--text (props ctx)
   (let* ((columns (plist-get props :columns))
          (n (length columns))
          (all (mapcar (lambda (row)
-                        (let ((cells (mapcar #'agent-ui-cell row)))
+                        (let ((cells (mapcar #'agent-ui-table--cell row)))
                           (append cells (make-list (- n (length cells)) ""))))
                       (plist-get props :rows)))
          (sort (agent-ui-table--key-index (plist-get props :sort) columns))

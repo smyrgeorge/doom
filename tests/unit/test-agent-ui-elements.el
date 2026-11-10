@@ -250,6 +250,17 @@
 
 ;; ====== TABLE ======
 
+(ert-deftest agent-ui-elements/table-cells-on-one-line ()
+  "A cell's line breaks and tabs: on its line (they broke the table's lines,
+and a panel's border around it)."
+  (let ((text (+test-aue-draw '(:type "table" :columns ("Test" "Error")
+                                :rows (("lexer" "AssertionError: x\n  at foo.js:3") ("parser" "got\tvalue")))
+                              :width 40)))
+    (should (= (length (split-string text "\n")) 4))
+    (should (string-match-p "AssertionError: x⏎  at foo" text))
+    (should (string-match-p "got value" text))
+    (should-not (string-match-p "\t" text))))
+
 (ert-deftest agent-ui-elements/table ()
   (let ((element '(:type "table" :columns ("Test" "Result" "Time" "N")
                    :rows (("lexer" "passed" "0.4s" 12) ("parser" "running" nil 3.5) ("x")))))
