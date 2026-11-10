@@ -485,6 +485,27 @@ GUI they were drawn over each other; in text the last ran past the width)."
     (let ((svg (+test-aue-svg element 100)))
       (should (string-match-p ">2026-11-10 nightly build<" svg)))))
 
+(ert-deftest agent-ui-elements/chart-legend-wraps ()
+  "A legend wider than the chart: on more lines (rows in the GUI), its items
+whole (one line ran past the width, and the SVG's right edge)."
+  (let ((bars '(:type "chart" :kind "bar" :labels ("v1" "v2")
+                :series ((:name "compile" :values (25 20)) (:name "test" :values (9 6))
+                         (:name "lint" :values (2 3)) (:name "package" :values (4 4)))))
+        (lines '(:type "chart" :height 3 :series ((:name "p50 latency" :values (1 2 3)) (:name "p95 latency" :values (2 3 4))
+                                                 (:name "p99 latency" :values (3 4 5))))))
+    (dolist (element (list bars lines))
+      (let ((text (+test-aue-draw element :width 30)))
+        (dolist (line (split-string text "\n"))
+          (should (<= (string-width line) 30)))
+        (should (string-match-p "● package\\|● p99 latency" text)))
+      ;; In the GUI: every legend name drawn inside the image.
+      (let* ((svg (+test-aue-svg element 30))
+             (width (progn (string-match "<svg width=\"\\([0-9]+\\)\"" svg) (string-to-number (match-string 1 svg))))
+             (start 0))
+        (while (string-match "x=\"\\([0-9.]+\\)\">\\(compile\\|test\\|lint\\|package\\|p[0-9]+ latency\\)<" svg start)
+          (should (< (+ (string-to-number (match-string 1 svg)) (* 8 (length (match-string 2 svg)))) (+ width 8)))
+          (setq start (match-end 0)))))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."

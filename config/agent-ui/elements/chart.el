@@ -200,15 +200,32 @@ from 0)."
 (defun agent-ui-chart--empty-p (props)
   (cl-every (lambda (s) (null (plist-get s :values))) (plist-get props :series)))
 
-(defun agent-ui-chart--legend (props)
-  "The series' names, each in its colour; nil if none is named."
+(defun agent-ui-chart--legend-rows (series columns)
+  "SERIES' names packed into rows of COLUMNS: ((INDEX . NAME) ...) each, an
+item 4 columns and its name (a dot, a space; two between items), a name cut
+to fit a row (one row, never cut, ran past the width)."
+  (let ((rows nil) (row nil) (used 0))
+    (cl-loop for s in series
+             for i from 0
+             do (let* ((name (agent-ui-truncate (or (plist-get s :name) "") (max 1 (- columns 4))))
+                       (w (+ 4 (string-width name))))
+                  (when (and row (> (+ used w) (+ columns 2)))
+                    (push (nreverse row) rows)
+                    (setq row nil used 0))
+                  (push (cons i name) row)
+                  (setq used (+ used w))))
+    (when row (push (nreverse row) rows))
+    (nreverse rows)))
+
+(defun agent-ui-chart--legend (props columns)
+  "The series' names, each in its colour, as lines of COLUMNS; nil if none is
+named."
   (let ((series (plist-get props :series)))
     (when (seq-some (lambda (s) (plist-get s :name)) series)
-      (string-join (cl-loop for s in series
-                            for i from 0
-                            collect (concat (propertize "●" 'face (agent-ui-chart--face i)) " "
-                                            (or (plist-get s :name) "")))
-                   "  "))))
+      (mapcar (lambda (row)
+                (mapconcat (lambda (item) (concat (propertize "●" 'face (agent-ui-chart--face (car item))) " " (cdr item)))
+                           row "  "))
+              (agent-ui-chart--legend-rows series columns)))))
 
 ;; ====== AS TEXT ======
 
@@ -280,7 +297,7 @@ eighths)."
          (value-width (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)))
          (bar-width (max 5 (- width label-width value-width 4)))
          (scale (agent-ui-chart--bar-scale props bar-width))
-         (legend (and (cdr (plist-get props :series)) (agent-ui-chart--legend props))))
+         (legend (and (cdr (plist-get props :series)) (agent-ui-chart--legend props (- width label-width 2)))))
     (concat
      (mapconcat
       (lambda (row)
@@ -288,7 +305,7 @@ eighths)."
                 (agent-ui-chart--bar-cells (nth 1 row) scale bar-width) "  "
                 (agent-ui-pad (nth 2 row) value-width 'right)))
       rows "\n")
-     (when legend (concat "\n" (make-string (+ label-width 2) ?\s) legend)))))
+     (mapconcat (lambda (line) (concat "\n" (make-string (+ label-width 2) ?\s) line)) legend ""))))
 
 (defun agent-ui-chart--plot (series range columns rows &optional xs)
   "SERIES' values drawn on a grid of braille characters, COLUMNS wide and
@@ -406,7 +423,7 @@ labels under them (none on another's), as two lines; nil without times."
          (plot (agent-ui-chart--plot (plist-get props :series) range columns rows (agent-ui-chart--xs props)))
          (labels (plist-get props :labels))
          (time-axis (agent-ui-chart--time-axis props columns))
-         (legend (agent-ui-chart--legend props)))
+         (legend (agent-ui-chart--legend props columns)))
     (concat
      (mapconcat
       (lambda (row)
@@ -438,7 +455,7 @@ labels under them (none on another's), as two lines; nil without times."
                  (propertize (agent-ui-pad first (- columns (string-width last) 1)) 'face 'agent-ui-muted)
                  " "
                  (propertize last 'face 'agent-ui-muted))))
-     (when legend (concat "\n" (make-string (+ label-width 2) ?\s) legend)))))
+     (mapconcat (lambda (line) (concat "\n" (make-string (+ label-width 2) ?\s) line)) legend ""))))
 
 (defun agent-ui-chart--text (props ctx)
   (if (agent-ui-chart--empty-p props)
@@ -481,14 +498,16 @@ labels under them (none on another's), as two lines; nil without times."
          (labels (plist-get props :labels))
          (xs (agent-ui-chart--xs props))
          (times (and xs (plist-get props :times)))
-         (legend (seq-some (lambda (s) (plist-get s :name)) (plist-get props :series)))
          (width (* cw (plist-get ctx :width)))
+         (left (+ label-width cw))
+         (right (- width cw))
+         ;; The legend's rows (it was one, past the image's right edge).
+         (legend (and (seq-some (lambda (s) (plist-get s :name)) (plist-get props :series))
+                      (agent-ui-chart--legend-rows (plist-get props :series) (floor (- right left) cw))))
          (plot-height (* lh (plist-get props :height)))
          ;; Room above the plot for its top label's letters.
          (top (round (* 0.8 lh)))
-         (height (+ plot-height (if (or labels times) lh 0) (if legend lh 0) (/ lh 2)))
-         (left (+ label-width cw))
-         (right (- width cw))
+         (height (+ plot-height (if (or labels times) lh 0) (* lh (length legend)) (/ lh 2)))
          (muted (agent-ui-chart--color 'agent-ui-muted))
          (svg (svg-create width height)))
     (cl-flet ((y-of (v) (+ top (* (- plot-height top) (- 1 (/ (- v low) span))))))
@@ -538,17 +557,15 @@ labels under them (none on another's), as two lines; nil without times."
         (when (cdr labels)
           (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (car (last labels)) half) right (+ plot-height lh)
                                     :fill muted :text-anchor "end"))))
-    (when legend
-      (let ((x left)
-            (y (+ plot-height (if (or labels times) lh 0) lh)))
-        (cl-loop for s in (plist-get props :series)
-                 for index from 0
-                 do (let ((name (or (plist-get s :name) "")))
-                      (svg-circle svg (+ x (/ cw 2)) (- y (/ lh 3)) (/ cw 2.5)
-                                  :fill (agent-ui-chart--color (agent-ui-chart--face index)))
-                      (agent-ui-chart--svg-text svg ctx name (+ x (* 1.5 cw)) y
-                                                :fill (agent-ui-chart--color 'default))
-                      (setq x (+ x (* cw (+ 4 (string-width name)))))))))
+    (cl-loop for row in legend
+             for y from (+ plot-height (if (or labels times) lh 0) lh) by lh
+             do (let ((x left))
+                  (dolist (item row)
+                    (svg-circle svg (+ x (/ cw 2)) (- y (/ lh 3)) (/ cw 2.5)
+                                :fill (agent-ui-chart--color (agent-ui-chart--face (car item))))
+                    (agent-ui-chart--svg-text svg ctx (cdr item) (+ x (* 1.5 cw)) y
+                                              :fill (agent-ui-chart--color 'default))
+                    (setq x (+ x (* cw (+ 4 (string-width (cdr item)))))))))
     (agent-ui-chart--image svg)))
 
 (defun agent-ui-chart--bar-svg (props ctx)
@@ -567,13 +584,16 @@ labels under them (none on another's), as two lines; nil without times."
          (grouped (and (cdr series) (not (agent-ui-chart--stacked-p props))))
          (row (round (* (if grouped 1.1 1.4) lh)))
          (gap (if grouped (round (* 0.5 lh)) 0))
-         (legend (and (cdr series) (seq-some (lambda (s) (plist-get s :name)) series)))
+         ;; The legend's rows (it was one, past the image's right edge).
+         (legend (and (cdr series) (seq-some (lambda (s) (plist-get s :name)) series)
+                      (agent-ui-chart--legend-rows series (floor (- width bar-left) cw))))
          (ys (let ((y 0))
                (mapcar (lambda (r)
                          (when (and grouped (not (string-empty-p (car r))) (> y 0)) (cl-incf y gap))
                          (prog1 y (cl-incf y row)))
                        rows)))
-         (height (+ (if rows (+ (car (last ys)) row) 0) (if legend (round (* 1.4 lh)) 0)))
+         (height (+ (if rows (+ (car (last ys)) row) 0)
+                    (if legend (+ (round (* 1.4 lh)) (* lh (1- (length legend)))) 0)))
          (svg (svg-create width height))
          (fg (agent-ui-chart--color 'default))
          (muted (agent-ui-chart--color 'agent-ui-muted)))
@@ -592,15 +612,14 @@ labels under them (none on another's), as two lines; nil without times."
                         (setq x (+ x length)))))
                   (agent-ui-chart--svg-text svg ctx (nth 2 r) (+ (max x (+ bar-left 1)) cw) (+ y (* 0.7 row))
                                             :fill muted)))
-    (when legend
-      (let ((x bar-left) (y (- height (round (* 0.4 lh)))))
-        (cl-loop for s in series
-                 for index from 0
-                 do (let ((name (or (plist-get s :name) "")))
-                      (svg-circle svg (+ x (/ cw 2)) (- y (/ lh 3)) (/ cw 2.5)
-                                  :fill (agent-ui-chart--color (agent-ui-chart--face index)))
-                      (agent-ui-chart--svg-text svg ctx name (+ x (* 1.5 cw)) y :fill fg)
-                      (setq x (+ x (* cw (+ 4 (string-width name)))))))))
+    (cl-loop for row in legend
+             for y from (- height (round (* 0.4 lh)) (* lh (1- (length legend)))) by lh
+             do (let ((x bar-left))
+                  (dolist (item row)
+                    (svg-circle svg (+ x (/ cw 2)) (- y (/ lh 3)) (/ cw 2.5)
+                                :fill (agent-ui-chart--color (agent-ui-chart--face (car item))))
+                    (agent-ui-chart--svg-text svg ctx (cdr item) (+ x (* 1.5 cw)) y :fill fg)
+                    (setq x (+ x (* cw (+ 4 (string-width (cdr item)))))))))
     (agent-ui-chart--image svg)))
 
 ;; ====== A HISTOGRAM ======
