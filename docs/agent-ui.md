@@ -379,7 +379,13 @@ kept beside it (`ID@tests.json`, the name hex-escaped) and come back with it.
 ## Project panels
 
 A panel kept in a project's repository, opened again later (after its buffer is closed, after Emacs restarts), its
-data fetched afresh each time: none of it is kept (`config/agent-ui/panels.el`). Unlike a session's canvas, which
+data fetched afresh each time: none of it is kept (`config/agent-ui/panels.el`).
+
+![A project panel: this Mac's CPU, every second](../examples/panel.png)
+
+This config has two of its own in `.agent-ui/panels/`, on macOS: `cpu` (above: how busy the CPU is, its load, its
+last minute, the processes using it most) and `memory` (where the memory goes, its pressure, the processes holding
+the most), each filled every second. `M-x +my/example-panel` opens the `cpu` one in a project of its own. Unlike a session's canvas, which
 comes back as it was. Each is a file, `PROJECT/.agent-ui/panels/NAME.el`, committed with the project, holding one
 form: what it shows and the code filling it, so its elements' ids are written and used in one place.
 

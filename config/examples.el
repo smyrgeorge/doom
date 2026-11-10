@@ -27,6 +27,8 @@
 ;;               conversation, filled in as it works
 ;;   issues      a small project's issues in their list (config/beads.el),
 ;;               tracked with bd
+;;   panel       a project's panel (config/agent-ui/panels.el): this config's
+;;               cpu panel, filled every second (macOS)
 ;; An example may define `+my/example-NAME-ready': non-nil once it's drawn
 ;; (a WebKit page loaded...), which the screenshots wait for.
 (defvar +my/examples-dir (expand-file-name "examples/" doom-user-dir)

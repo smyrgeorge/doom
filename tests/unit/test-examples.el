@@ -150,7 +150,7 @@ images/, always that name."
   "Each example listed has its file, its command, its line in
 config/examples.el's list and docs/examples.md's table."
   (should (equal (sort (+my/examples) #'string<)
-                 '("agent-ui" "banner" "excalidraw" "image" "issues" "markdown" "merge" "pdf" "stripe" "tiling")))
+                 '("agent-ui" "banner" "excalidraw" "image" "issues" "markdown" "merge" "panel" "pdf" "stripe" "tiling")))
   (let ((listed (with-temp-buffer
                   (insert-file-contents (expand-file-name "config/examples.el" +test-root))
                   (buffer-string)))
@@ -350,6 +350,22 @@ once both are closed."
       (kill-buffer canvas)
       (should (file-exists-p dir))
       (kill-buffer conversation)
+      (should-not (file-exists-p dir)))))
+
+(ert-deftest examples/panel-the-cpu-filled ()
+  "This config's cpu panel, in a project of its own, alone in the frame,
+filled by its code (not asked: this config's own); its folder gone once
+it's closed."
+  (+test-examples
+    (let* ((canvas (+my/example-panel))
+           (dir (car (buffer-local-value '+my/example--closing canvas))))
+      (should (equal (buffer-name canvas) "Agent UI: cpu (service)"))
+      (should (eq (window-buffer (selected-window)) canvas))
+      (should (= (length (window-list)) 1))
+      (should (+test-wait-for (lambda () (plist-get (agent-ui-get "processes" :canvas canvas) :rows)) 10))
+      (should (numberp (plist-get (agent-ui-get "cpu" :canvas canvas) :value)))
+      (should-not (agent-ui-panels--error (buffer-local-value 'agent-ui-panels--state canvas)))
+      (kill-buffer canvas)
       (should-not (file-exists-p dir)))))
 
 (ert-deftest examples/agent-ui-stops-when-closed ()
