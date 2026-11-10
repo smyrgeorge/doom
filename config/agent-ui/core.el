@@ -10,6 +10,8 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'color)
+(require 'svg)
 
 ;; ====== VARIABLES ======
 
@@ -632,6 +634,100 @@ empty."
         ((numberp value) (agent-ui-format-number value))
         ((stringp value) value)
         (t (format "%s" value))))
+
+;; ====== BADGES ======
+;; A pill (a rounded tag: PASSED, P1, a label, a count in it) and a pie (a
+;; compact progress), for any type. Their text, as wide in a terminal as in
+;; the GUI, where an SVG (svg.el, sized from the context's :char-width and
+;; :line-height, in the theme's colours) shows over it: the text stays
+;; underneath (searched, copied, a snapshot's).
+
+(defun agent-ui-color (face)
+  "FACE's foreground as a colour for SVG (a grey where faces have none: in
+batch)."
+  (let ((color (face-foreground face nil 'default)))
+    (if (and (stringp color) (not (string-prefix-p "unspecified" color))) color "#888888")))
+
+(defun agent-ui-background ()
+  "The default face's background, for SVG (black where there's none)."
+  (let ((color (face-background 'default nil t)))
+    (if (and (stringp color) (not (string-prefix-p "unspecified" color))) color "#000000")))
+
+(defun agent-ui-blend (a b share)
+  "Colour A with SHARE (0 to 1) of colour B in it."
+  (let ((ra (color-name-to-rgb a)) (rb (color-name-to-rgb b)))
+    (if (and ra rb)
+        (apply #'color-rgb-to-hex (append (cl-mapcar (lambda (x y) (+ (* x (- 1 share)) (* y share))) ra rb)
+                                          '(2)))
+      a)))
+
+(defun agent-ui--svg-font ()
+  "The default face's family, for SVG text."
+  (let ((family (face-attribute 'default :family nil t)))
+    (if (and (stringp family) (not (member family '("default" "unspecified")))) family "monospace")))
+
+(defun agent-ui--gui-p (ctx)
+  "Whether CTX draws for the GUI (and knows its cells' size)."
+  (and (plist-get ctx :graphic) (plist-get ctx :char-width) (plist-get ctx :line-height) t))
+
+(cl-defun agent-ui-pill (label ctx &key (face 'agent-ui-accent) filled count)
+  "LABEL as a pill in FACE: FILLED (its colour behind it) or outlined; COUNT
+after it. Its text \" LABEL COUNT \" (filled: FACE's colour behind) or
+\"[LABEL COUNT]\", as wide either way; in the GUI (CTX), a rounded tag over
+it."
+  (let* ((count (and count (format "%s" (if (numberp count) (agent-ui-format-number count) count))))
+         (inner (concat label (if count (concat " " count) "")))
+         (on `(:inherit ,face :inverse-video t))
+         (text (if filled
+                   (propertize (concat " " inner " ") 'face on)
+                 (concat (propertize "[" 'face 'agent-ui-muted)
+                         (propertize label 'face face)
+                         (if count (propertize (concat " " count) 'face 'agent-ui-muted) "")
+                         (propertize "]" 'face 'agent-ui-muted)))))
+    (if (not (agent-ui--gui-p ctx))
+        text
+      (let* ((cw (plist-get ctx :char-width))
+             (lh (plist-get ctx :line-height))
+             (w (* cw (string-width text)))
+             (color (agent-ui-color face))
+             (bg (agent-ui-background))
+             (svg (svg-create w lh)))
+        (svg-rectangle svg 0.5 1.5 (- w 1) (- lh 3) :rx (/ (- lh 3) 2.0)
+                       :fill (if filled color (agent-ui-blend bg color 0.14))
+                       :stroke color :stroke-width 1)
+        (svg-text svg inner :x (/ w 2.0) :y (* 0.72 lh) :text-anchor "middle"
+                  :font-size (round (* 0.7 lh)) :font-family (agent-ui--svg-font)
+                  :fill (if filled bg color))
+        (propertize text 'display (svg-image svg :scale 1 :ascent 'center))))))
+
+(defun agent-ui-pie (fraction ctx &optional face)
+  "FRACTION (0 to 1) as a pie in FACE (the accent's by default), two columns:
+its text a quarter's glyph (○◔◑◕●) and a space; in the GUI (CTX), a pie
+over it."
+  (let* ((face (or face 'agent-ui-accent))
+         (f (max 0.0 (min 1.0 (float fraction))))
+         (text (concat (propertize (string (aref "○◔◑◕●" (round (* f 4)))) 'face face) " ")))
+    (if (not (agent-ui--gui-p ctx))
+        text
+      (let* ((cw (plist-get ctx :char-width))
+             (lh (plist-get ctx :line-height))
+             (w (* 2 cw))
+             (r (- (/ (min w lh) 2.0) 1.5))
+             (cx (/ w 2.0)) (cy (/ lh 2.0))
+             (color (agent-ui-color face))
+             (svg (svg-create w lh)))
+        (svg-circle svg cx cy r :fill (agent-ui-blend (agent-ui-background) color 0.2)
+                    :stroke color :stroke-width 1)
+        (cond
+         ((>= f 1.0) (svg-circle svg cx cy r :fill color))
+         ((> f 0.0)
+          (let* ((angle (* 2 float-pi f))
+                 (ex (+ cx (* r (sin angle))))
+                 (ey (- cy (* r (cos angle)))))
+            (svg-node svg 'path :fill color
+                      :d (format "M %.2f %.2f L %.2f %.2f A %.2f %.2f 0 %d 1 %.2f %.2f Z"
+                                 cx cy cx (- cy r) r r (if (> f 0.5) 1 0) ex ey)))))
+        (propertize text 'display (svg-image svg :scale 1 :ascent 'center))))))
 
 ;; ====== JSON ======
 

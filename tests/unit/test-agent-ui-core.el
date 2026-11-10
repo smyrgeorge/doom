@@ -405,3 +405,47 @@ at 20), for every type."
     (should (string-match-p "at most 6" (wrong (make-list 7 '(:label "a" :prompt "p"))))))
   (should (agent-ui-check-actions '((:label "a" :prompt "p" :submit :false)))))
 
+
+;; ====== BADGES ======
+
+(defun +test-auc-svg (text)
+  "The SVG shown over TEXT (its display's data), or nil."
+  (plist-get (cdr (get-text-property 0 'display text)) :data))
+
+(ert-deftest agent-ui-core/pills ()
+  "A pill: its text outlined [LABEL COUNT] or filled \" LABEL COUNT \" (as
+wide), in its face; in the GUI a rounded tag over the same text, filled in
+its colour or outlined on a tint."
+  (let ((text (agent-ui-context :width 60))
+        (gui (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+    (should (equal (substring-no-properties (agent-ui-pill "bug" text :count 3)) "[bug 3]"))
+    (should (equal (substring-no-properties (agent-ui-pill "bug" text :count 3 :filled t)) " bug 3 "))
+    (should (eq (get-text-property 1 'face (agent-ui-pill "PASSED" text :face 'agent-ui-success)) 'agent-ui-success))
+    (should (equal (get-text-property 1 'face (agent-ui-pill "P1" text :face 'agent-ui-error :filled t))
+                   '(:inherit agent-ui-error :inverse-video t)))
+    (should-not (+test-auc-svg (agent-ui-pill "bug" text)))
+    ;; The GUI's: as wide as its text, its words in it.
+    (let* ((pill (agent-ui-pill "bug" gui :count 3))
+           (svg (+test-auc-svg pill)))
+      (should (equal (substring-no-properties pill) "[bug 3]"))
+      (should (string-match-p "<svg width=\"56\" height=\"16\"" svg))
+      (should (string-match-p "<rect [^>]*rx=" svg))
+      (should (string-match-p ">bug 3</text>" svg)))
+    ;; Filled: its colour behind, the words in the background's.
+    (let ((svg (+test-auc-svg (agent-ui-pill "P1" gui :filled t :face 'agent-ui-error))))
+      (should (string-match-p (format "fill=\"%s\"" (regexp-quote (agent-ui-color 'agent-ui-error))) svg))
+      (should (string-match-p (format "<text fill=\"%s\"" (regexp-quote (agent-ui-background))) svg)))))
+
+(ert-deftest agent-ui-core/pies ()
+  "A pie: two columns, a quarter's glyph; in the GUI a circle and its slice
+\(none at 0, a full disc at 1)."
+  (let ((text (agent-ui-context :width 60))
+        (gui (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+    (should (equal (mapcar (lambda (f) (substring-no-properties (agent-ui-pie f text))) '(0 0.25 0.5 0.75 1 1.5))
+                   '("○ " "◔ " "◑ " "◕ " "● " "● ")))
+    (should (eq (get-text-property 0 'face (agent-ui-pie 0.5 text 'agent-ui-success)) 'agent-ui-success))
+    (should (string-match-p "<path [^>]*d=\"M 8.00 8.00 L 8.00 1.50 A 6.50 6.50 0 0 1 14.50 8.00 Z\""
+                            (+test-auc-svg (agent-ui-pie 0.25 gui))))
+    (should-not (string-match-p "<path" (+test-auc-svg (agent-ui-pie 0 gui))))
+    ;; Full: the disc filled over its ring.
+    (should (= 2 (with-temp-buffer (insert (+test-auc-svg (agent-ui-pie 1 gui))) (how-many "<circle" (point-min) (point-max)))))))

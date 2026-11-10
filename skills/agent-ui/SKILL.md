@@ -83,7 +83,8 @@ without it). A wrong element is refused whole; nothing half-shown.
 A bar: `value` of `max`, with a `label` saying what's being done now, and an optional `unit` (files, MB). Without
 `max`, no end is known: a block goes to and fro. `status`: `running` (default), `done` or `failed` colours it and stops
 it. Its rate and the time left (`3.4 MB/s  19s left`) are worked out from your updates and shown once steady:
-update its `value` as it goes (every second or so) rather than once at the end.
+update its `value` as it goes (every second or so) rather than once at the end. `"pie": true` draws it small, on one
+line (`◑ 7/12  58%  linking`): for a panel's corner, or several side by side.
 
 ```sh
 agent-ui show '{"id":"build","type":"progress","title":"Build","max":12,"label":"configuring"}'
@@ -512,7 +513,9 @@ start) or discards it (its elements go with it): say what you made and why.
   each property's kind: signal with `agent-ui--fail`), `:append` (how lists grow), `:animated` (t, or a function of
   PROPS), `:prepare` (the element as it's kept: what it notes as time passes), `:extend` (for a long one appended to:
   edits to its drawing instead of drawing it again; see docs/agent-ui.md).
-- Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-format-number`, `agent-ui-spinner`. For a type
+- Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-format-number`, `agent-ui-spinner`;
+  badges: `(agent-ui-pill LABEL CTX :face F :filled t :count N)` a rounded tag, `(agent-ui-pie FRACTION CTX FACE)` a
+  pie (their text in a terminal, an SVG over it in the GUI). For a type
   that asks the user (picks, a note, an answer into your prompt): `agent-ui-ask-pick-button`, `agent-ui-ask-mark`,
   `agent-ui-ask-all-none`, `agent-ui-ask-note-button`, `agent-ui-ask-answer-button`, `agent-ui-ask-answered-line`,
   its state in the element's `selected`, `note-text`, `answered` (see docs/agent-ui.md).

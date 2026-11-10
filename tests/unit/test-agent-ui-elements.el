@@ -84,6 +84,22 @@
 
 ;; ====== PROGRESS ======
 
+(ert-deftest agent-ui-elements/progress-as-a-pie ()
+  "Pie: drawn small, one line: a pie (a spinner running without a max), its
+counts, its mark, its label; in the GUI the pie an SVG."
+  (should (equal (+test-aue-draw '(:type "progress" :value 7 :max 12 :label "linking" :pie t))
+                 "◑ 7/12  58%  linking"))
+  (should (equal (+test-aue-draw '(:type "progress" :value 12 :max 12 :status "done" :pie t))
+                 "● 12/12  100%  ✓"))
+  (should (equal (+test-aue-draw '(:type "progress" :value 3 :label "indexing" :pie t) :tick 0)
+                 "▟ 3  indexing"))
+  (should (equal (+test-aue-draw '(:type "progress" :value 7 :max 12 :label "a long label for a narrow pane" :pie t)
+                                 :width 20)
+                 "◑ 7/12  58%  a long…"))
+  (let ((text (agent-ui-render '(:type "progress" :value 7 :max 12 :pie t)
+                               (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16))))
+    (should (string-match-p "<path" (plist-get (cdr (get-text-property 0 'display text)) :data)))))
+
 (ert-deftest agent-ui-elements/progress ()
   (should (equal (+test-aue-draw '(:type "progress" :value 7 :max 12 :label "linking"))
                  "████████████████▎░░░░░░░░░░░  7/12  58%  linking"))

@@ -159,6 +159,9 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **`:text` and `:gui`** take the element's properties (checked, defaults filled) and a context: `:width` in
   characters, `:graphic`, `:tick` for animations, the theme's colours. They return the text to insert; they don't touch
   the buffer. So a type is tested by calling them.
+- **Badges** for any type (core.el): `agent-ui-pill` a rounded tag (a status, a label, a count in it), filled or
+  outlined, `agent-ui-pie` a fraction as a pie. Their text in a terminal (`[bug 3]`, `◑`), as wide in the GUI, where
+  an SVG shows over it (svg.el, sized from the context's `:char-width` and `:line-height`, in the theme's colours).
 - **A type that asks** (picks, a note, an answer for the agent) uses `config/agent-ui/ask.el`: its state is the
   element's own `:selected`, `:note-text` and `:answered` (saved with the session); `agent-ui-ask-pick-button`,
   `agent-ui-ask-all-none`, `agent-ui-ask-note-button`, `agent-ui-ask-answer-button` draw its buttons,
@@ -176,7 +179,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `text` | A paragraph | `text`, `face` (plain, muted, success, warning, error) |
 | `markdown` | Markdown, drawn as agent-shell draws replies | `markdown` |
 | `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it; sorted by a column (`s` on it in the canvas); buttons on each row with its cells in their prompts; `select` asks you to pick rows (marks, RET or a click, All / None, a note), Send putting "Answer to ID (question): their keys" into the session's prompt | `columns`, `rows`, `key`, `align`, `sort`, `descending`, `row-actions`, `select` |
-| `progress` | A bar, or a run without an end; on a canvas, its rate and time left from its updates over time | `value`, `max`, `label`, `unit`, `status` |
+| `progress` | A bar, or a run without an end; on a canvas, its rate and time left from its updates over time; `pie`: drawn small, one line (`◑ 7/12  58%  linking`, a pie in the GUI) | `value`, `max`, `label`, `unit`, `status`, `pie` |
 | `steps` | A checklist whose steps change state; appending a step by its name changes it; a step's time (timed from running to done), its own steps under it. With `approve`, a plan you approve first: `x` on a step drops it (again: back), `e` rewords it, a note; Approve puts "Answer to steps ID (question): approved: 1. A; 2. B (edited, was: X). Dropped: C" into the session's prompt and the steps become that plan, or Reject says so with a note | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":..., "seconds":..., "steps": [...]}]`, `approve` |
 | `chart` | Lines (several series; on a time axis, with `times`), bars (several series grouped, or stacked), a histogram or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window`, `stacked`, `bins`, `times` |
 | `image` | An image file (an `.excalidraw.svg` drawing too), or one from a URL (in the GUI, downloaded once with curl, kept in Doom's cache, `agent-ui/images/`), in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file` or `url`, `alt`, `width` (percent), `height` (lines) |

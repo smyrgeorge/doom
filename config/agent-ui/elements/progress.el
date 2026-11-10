@@ -9,6 +9,10 @@
 ;; the time left, once they're steady (a few values over a few seconds):
 ;;
 ;;   █████████▌░░░░░░░░░░░░░░░░  37/100 MB  37%  3.4 MB/s  19s left  downloading
+;;
+;; With pie, drawn small (a panel's corner; a pie in the GUI, core.el's):
+;;
+;;   ◑ 7/12  58%  linking
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -196,6 +200,26 @@ frame, glyphs drawn one by one leave seams between them."
         line
       (concat line "  " (agent-ui-truncate label room)))))
 
+(defun agent-ui-progress--pie (props ctx)
+  "PROPS drawn small (pie): a pie (a spinner while running without a max),
+its counts and label, on one line."
+  (let* ((status (plist-get props :status))
+         (max (plist-get props :max))
+         (face (agent-ui-progress--fill-face status))
+         (pie (cond (max (agent-ui-pie (/ (float (plist-get props :value)) max) ctx face))
+                    ((eq status 'running) (concat (propertize (agent-ui-spinner ctx) 'face face) " "))
+                    (t (agent-ui-pie 1.0 ctx face))))
+         (mark (pcase status ('done (propertize "✓" 'face face)) ('failed (propertize "✗" 'face face)) (_ nil)))
+         (rest (string-join (delq nil (append (agent-ui-progress--counts props)
+                                              (list mark (plist-get props :label))))
+                            "  ")))
+    (concat pie (agent-ui-truncate rest (max 1 (- (plist-get ctx :width) 2))))))
+
+(defun agent-ui-progress--draw (props ctx gui)
+  (cond ((plist-get props :pie) (agent-ui-progress--pie props ctx))
+        (gui (agent-ui-progress--seamless (agent-ui-progress--text props ctx)))
+        (t (agent-ui-progress--text props ctx))))
+
 (agent-ui-define progress
   "A progress bar: VALUE of MAX, with a LABEL saying what's being done.
 Without MAX, no end is known: a block goes to and fro while it's running.
@@ -206,7 +230,8 @@ over time give its rate and, with MAX, the time left."
           (label string "What's being done now, after the bar")
           (unit string "What VALUE counts (files, MB), after it")
           (status (choice running done failed) "running; done or failed colour it and stop it"
-                  :default running))
+                  :default running)
+          (pie boolean "Drawn small: a pie, its counts and label on one line (a panel's corner)" :default :false))
   :example (:title "Build" :value 7 :max 12 :label "linking")
   :animated (lambda (props)
               (and (null (plist-get props :max)) (eq (plist-get props :status) 'running)))
@@ -215,5 +240,5 @@ over time give its rate and, with MAX, the time left."
              (when (and max (<= max 0))
                (agent-ui--fail "progress: max must be above 0, not %s" (agent-ui-format-number max))))
            props)
-  :text #'agent-ui-progress--text
-  :gui (lambda (props ctx) (agent-ui-progress--seamless (agent-ui-progress--text props ctx))))
+  :text (lambda (props ctx) (agent-ui-progress--draw props ctx nil))
+  :gui (lambda (props ctx) (agent-ui-progress--draw props ctx t)))
