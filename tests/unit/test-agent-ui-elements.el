@@ -441,6 +441,22 @@ lost in float precision: a span of 0, \"Arithmetic overflow error\")."
   (should (> (agent-ui-chart--above 1e17) 1e17))
   (should (= (agent-ui-chart--above 5) 6)))
 
+(ert-deftest agent-ui-elements/chart-a-time-for-each-value ()
+  "Times and values counted the same, else refused, saying so (fewer times
+broke the drawing, more squeezed the line); an append of values without
+their times too."
+  (should (string-match-p "3 values but 2 times"
+                          (+test-aue-error '(:type "chart" :values (1 2 3) :times (0 600)))))
+  (should (string-match-p "3 values but 6 times"
+                          (+test-aue-error '(:type "chart" :values (1 2 3) :times (0 600 1200 1800 2400 3000)))))
+  (let ((element '(:type "chart" :times ("2026-11-10T09:00:00" "2026-11-10T12:00:00") :values (120 340))))
+    (should (string-match-p "3 values but 2 times"
+                            (agent-ui-error-message
+                             (should-error (agent-ui--checked (agent-ui-append-to element '(:values (410))))
+                                           :type 'agent-ui-error))))
+    ;; Together: fine.
+    (should (agent-ui--checked (agent-ui-append-to element '(:values (410) :times ("2026-11-10T13:00:00")))))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."

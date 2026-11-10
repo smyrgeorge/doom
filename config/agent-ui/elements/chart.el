@@ -114,6 +114,12 @@ if it's neither."
                                (plist-put (copy-sequence s) :values
                                           (if (> (length values) keep) (last values keep) values))))
                            series))
+      ;; A time for each value (fewer broke the drawing, more squeezed the
+      ;; line): an append of values without their times, refused.
+      (let ((values (apply #'max 0 (mapcar (lambda (s) (length (plist-get s :values))) series))))
+        (when (and times (/= (length times) values))
+          (agent-ui--fail "chart: %d values but %d times: give a time for each value (append them together)"
+                          values (length times))))
       (plist-put (plist-put (plist-put props :series series) :labels labels) :times times))))
 
 (defun agent-ui-chart--append (element patch)
