@@ -604,9 +604,17 @@ argument); HELP said in the echo area."
               'mouse-face 'highlight
               'help-echo (or help "RET: open")))
 
+(defvar agent-ui-before-press-hook nil
+  "Run in a button's buffer before its action is looked up: a canvas draws
+what changed first (canvas.el), so the action is its current drawing's, not
+the one before a change just made (pressed again at once).")
+
 (defun agent-ui-button-press (&optional event)
   "Call the action of the button at point (or EVENT's)."
   (interactive (list last-nonmenu-event))
+  (let ((buffer (if (mouse-event-p event) (window-buffer (posn-window (event-end event))) (current-buffer))))
+    (with-current-buffer buffer
+      (run-hooks 'agent-ui-before-press-hook)))
   (let* ((pos (if (mouse-event-p event) (posn-point (event-end event)) (point)))
          (buffer (if (mouse-event-p event) (window-buffer (posn-window (event-end event))) (current-buffer)))
          (action (get-text-property pos 'agent-ui-action buffer)))

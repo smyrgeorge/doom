@@ -227,6 +227,8 @@ PLAIN: not a button, answered or in a still picture)."
 (defun agent-ui-move-item (direction)
   "Move the item on point's line DIRECTION places (-1: up, 1: down), point
 on it after."
+  ;; The current drawing's (what changed drawn first).
+  (agent-ui--flush)
   (let* ((at (or (text-property-not-all (line-beginning-position) (line-end-position) 'agent-ui-move nil)
                  (point)))
          (move (get-text-property at 'agent-ui-move))
@@ -268,7 +270,9 @@ on it after."
 ;; it. x / e on the line call them.
 
 (defun agent-ui--item-action (prop what)
-  "The function PROP on point's line, or a user-error naming WHAT."
+  "The function PROP on point's line, or a user-error naming WHAT: the
+current drawing's (what changed drawn first)."
+  (agent-ui--flush)
   (or (get-text-property (or (text-property-not-all (line-beginning-position) (line-end-position) prop nil)
                              (point))
                          prop)

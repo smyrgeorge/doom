@@ -289,6 +289,14 @@ was drawn again whole, each line). Non-nil if so; nil if its type can't
       (setf (car (agent-ui--entry-drawn entry)) new)
       t)))
 
+(defun agent-ui--flush-before-press ()
+  "In a canvas: its dirty elements drawn, before a button's action is looked
+up (`agent-ui-before-press-hook')."
+  (when (derived-mode-p 'agent-ui-canvas-mode)
+    (agent-ui--flush)))
+
+(add-hook 'agent-ui-before-press-hook #'agent-ui--flush-before-press)
+
 (defun agent-ui--flush ()
   "Redraw the current canvas's dirty elements."
   (when (timerp agent-ui--redraw-timer)

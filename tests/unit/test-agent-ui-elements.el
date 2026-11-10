@@ -1309,6 +1309,21 @@ mark, one space, its words (it had two spaces)."
         (agent-ui--flush)
         (should (looking-at "Gamma"))))))
 
+(ert-deftest agent-ui-elements/pressed-again-before-a-redraw ()
+  "Two options pressed at once, no redraw between: both picked (the second
+press acted on the drawing before the first's change, undoing it)."
+  (+test-aue-canvas
+    (let ((agent-ui-action-function #'ignore))
+      (agent-ui-show '(:id "c" :type "choice" :question "Which?" :options ("Alpha" "Beta") :multiple t))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (dolist (option '("Alpha" "Beta"))
+          (goto-char (point-min))
+          (search-forward option)
+          (goto-char (match-beginning 0))
+          (agent-ui-button-press))
+        (should (equal (plist-get (agent-ui-get "c") :selected) '("Alpha" "Beta")))))))
+
 (ert-deftest agent-ui-elements/choice-several-and-a-note ()
   (+test-aue-canvas
     (let* ((sent nil)
