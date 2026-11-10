@@ -471,6 +471,20 @@ order (the text's plot drew nothing for them)."
     (should (equal (+test-aue-draw unsorted :width 40) (+test-aue-draw sorted :width 40)))
     (should (equal (+test-aue-svg newest-first 40) (+test-aue-svg sorted 40)))))
 
+(ert-deftest agent-ui-elements/chart-first-and-last-labels-fit ()
+  "A line chart's first and last labels each cut to half the plot (in the
+GUI they were drawn over each other; in text the last ran past the width)."
+  (let ((element '(:type "chart" :height 3 :labels ("2026-11-01 build" "x" "2026-11-10 nightly build") :values (1 3 2))))
+    (dolist (width '(20 30 40))
+      (dolist (line (split-string (+test-aue-draw element :width width) "\n"))
+        (should (<= (string-width line) width))))
+    (let ((svg (+test-aue-svg element 30)))
+      (should-not (string-match-p ">2026-11-10 nightly build<" svg))
+      (should-not (string-match-p ">2026-11-01 build<" svg)))
+    ;; Wide: whole.
+    (let ((svg (+test-aue-svg element 100)))
+      (should (string-match-p ">2026-11-10 nightly build<" svg)))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."

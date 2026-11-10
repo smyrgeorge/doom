@@ -430,8 +430,10 @@ labels under them (none on another's), as two lines; nil without times."
                "\n" (propertize (concat (make-string (+ label-width 2) ?\s) (cdr time-axis)) 'face 'agent-ui-muted)))
      ;; The first and last labels, under the plot's ends.
      (when (and labels (not time-axis))
+       ;; The last no more than half the plot (it was never cut: past the
+       ;; width), the first in the rest.
        (let ((first (car labels))
-             (last (if (cdr labels) (car (last labels)) "")))
+             (last (if (cdr labels) (agent-ui-truncate (car (last labels)) (max 1 (/ (1- columns) 2))) "")))
          (concat "\n" (make-string (+ label-width 2) ?\s)
                  (propertize (agent-ui-pad first (- columns (string-width last) 1)) 'face 'agent-ui-muted)
                  " "
@@ -528,10 +530,14 @@ labels under them (none on another's), as two lines; nil without times."
                                         :fill muted :text-anchor "middle")
               (setq free (+ center half cw)))))))
     (when (and labels (not times))
-      (agent-ui-chart--svg-text svg ctx (car labels) left (+ plot-height lh) :fill muted)
-      (when (cdr labels)
-        (agent-ui-chart--svg-text svg ctx (car (last labels)) right (+ plot-height lh)
-                                  :fill muted :text-anchor "end")))
+      ;; Each in half the plot's width less a gap (~0.5 of a line a
+      ;; character): whole, they were drawn over each other.
+      (let ((half (max 1 (floor (- (/ (- right left) 2.0) cw) (* 0.5 lh)))))
+        (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (car labels) (if (cdr labels) half (* 2 half)))
+                                  left (+ plot-height lh) :fill muted)
+        (when (cdr labels)
+          (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (car (last labels)) half) right (+ plot-height lh)
+                                    :fill muted :text-anchor "end"))))
     (when legend
       (let ((x left)
             (y (+ plot-height (if (or labels times) lh 0) lh)))
