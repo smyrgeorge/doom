@@ -55,10 +55,14 @@ earlier drawings")
   (concat (string-remove-suffix ".excalidraw.svg" file) ".png"))
 
 (defun +my/agent-shell-excalidraw--earlier-files ()
-  "The drawing's folder's other drawings, newest first (named by the time)."
+  "The drawing's folder's other drawings, newest first (named by the time).
+Itself left out by its true name: `file-equal-p' compares every attribute,
+its access time too, so a read of it meanwhile (Spotlight indexing it) had
+it listed among its own earlier drawings."
   (when buffer-file-name
-    (let ((dir (file-name-directory buffer-file-name)))
-      (sort (seq-remove (lambda (file) (file-equal-p file buffer-file-name))
+    (let ((dir (file-name-directory buffer-file-name))
+          (own (file-truename buffer-file-name)))
+      (sort (seq-remove (lambda (file) (equal (file-truename file) own))
                         (directory-files dir t "\\.excalidraw\\.svg\\'"))
             (lambda (a b) (string> (file-name-nondirectory a) (file-name-nondirectory b)))))))
 

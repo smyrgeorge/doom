@@ -118,6 +118,27 @@ minor mode on, no page); the buffer killed after."
                      '("drawing-2026-11-07-12-00-00.excalidraw.svg" "drawing-2026-11-07-09-00-00.excalidraw.svg"
                        "drawing-2026-11-06-09-00-00.excalidraw.svg"))))))
 
+(ert-deftest agent-shell-excalidraw/earlier-drawings-never-itself ()
+  "The drawing itself is never among its earlier ones, though its file is
+read meanwhile (its access time changing between two looks at it: it was
+listed, file-equal-p comparing every attribute)."
+  (let* ((dir (+test-ase--dir))
+         (own (expand-file-name "drawing-2026-11-07-10-00-00.excalidraw.svg" dir))
+         (other (expand-file-name "drawing-2026-11-07-09-00-00.excalidraw.svg" dir))
+         (attributes (symbol-function 'file-attributes))
+         (reads 0))
+    (+test-ase--write other)
+    (+test-ase--write own)
+    (+test-ase--drawing nil own
+      ;; Each look at it: a later access time, as if read meanwhile.
+      (cl-letf (((symbol-function 'file-attributes)
+                 (lambda (file &rest args)
+                   (let ((attrs (apply attributes file args)))
+                     (when attrs
+                       (setf (nth 4 attrs) (time-add (nth 4 attrs) (cl-incf reads))))
+                     attrs))))
+        (should (equal (+my/agent-shell-excalidraw--earlier-files) (list other)))))))
+
 ;; ====== STARTING ======
 
 (ert-deftest agent-shell-excalidraw/for-this-shell-or-agent-shell-s ()
