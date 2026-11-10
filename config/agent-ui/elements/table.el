@@ -153,7 +153,8 @@ start with one, else as text; DESCENDING the other way; empty cells last."
          ;; The sorted column's name marked.
          (header (cl-loop for c in columns for i from 0
                           collect (if (eql i sort) (concat c (if descending " ↓" " ↑")) c)))
-         (actions (plist-get props :row-actions))
+         ;; Its rows' buttons: not in a still picture (a snapshot).
+         (actions (and (not (plist-get ctx :still)) (plist-get props :row-actions)))
          (actions-width (if actions
                             (+ 2 (apply #'+ (mapcar (lambda (a) (+ 4 (string-width (plist-get a :label)))) actions)))
                           0))

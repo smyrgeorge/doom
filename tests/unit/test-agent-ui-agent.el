@@ -263,3 +263,45 @@ fetched: bd would read this repository's own issues."
           (should (string-match-p "no agent-shell session"
                                   (cadr (should-error (agent-ui-button-press) :type 'user-error)))))))))
 
+(defun +test-aua-press (canvas label)
+  "The button LABEL in CANVAS's buffer, pressed."
+  (with-current-buffer canvas
+    (agent-ui--flush)
+    (goto-char (point-min))
+    (search-forward label)
+    (goto-char (match-beginning 0))
+    (agent-ui-button-press)))
+
+(ert-deftest agent-ui-agent/an-action-while-the-agent-works ()
+  "While the session's prompt takes no text (its agent working): a button
+sending its prompt queues it; one putting it into the prompt offers it,
+changed or not, to queue. Never agent-shell's \"Busy, try later\"."
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ busy" "/tmp/busy/"))
+           (name (agent-ui--session-name session))
+           (busy t) inserted queued offered)
+      (agent-ui-show '(:id "t" :type "text" :text "2 failed"
+                       :actions ((:label "Retry" :prompt "Run them again" :submit t)
+                                 (:label "Fix" :prompt "Fix the 2 failing tests")))
+                     :canvas name)
+      (cl-letf (((symbol-function 'agent-shell--can-insert-into-prompt-p) (lambda (&rest _) (not busy)))
+                ((symbol-function 'agent-shell-insert)
+                 (lambda (&rest _) (if busy (user-error "Busy, try later") (push 'inserted inserted))))
+                ((symbol-function 'agent-shell-prompt-queue)
+                 (lambda (prompt) (push (list prompt (current-buffer)) queued)))
+                ((symbol-function 'agent-shell--prompt-queue-read)
+                 (lambda (&rest args) (push args offered) "Fix the 2 failing tests, the parser's first")))
+        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name))))
+          ;; Sent: queued as it is, in its session.
+          (+test-aua-press canvas "⏵ Retry")
+          (should (equal queued (list (list "Run them again" session))))
+          ;; Into the prompt: offered to queue, as changed.
+          (+test-aua-press canvas "⏵ Fix")
+          (should (equal offered '((:initial "Fix the 2 failing tests"))))
+          (should (equal (car queued) (list "Fix the 2 failing tests, the parser's first" session)))
+          (should-not inserted)
+          ;; Done working: into the prompt again.
+          (setq busy nil)
+          (+test-aua-press canvas "⏵ Fix")
+          (should (equal inserted '(inserted)))
+          (should (= (length queued) 2)))))))

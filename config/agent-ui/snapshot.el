@@ -4,7 +4,8 @@
 ;; agent-shell owns its buffer's text, so an element isn't put there: it goes
 ;; the ways agent-shell already has.
 ;; - From the agent: `agent-ui snapshot ID' saves the element as it's drawn,
-;;   an SVG image (its text in its colours, a chart's own SVG), in the
+;;   without its buttons (they'd do nothing in an image: they stay on the
+;;   canvas), an SVG image (its text in its colours, a chart's own SVG), in the
 ;;   session's .agent-shell/images/, and replies with a Markdown image link
 ;;   for its reply: agent-shell shows it inline, and its transcript keeps it.
 ;; - From you: a in a canvas puts the element at point into its session's
@@ -312,9 +313,11 @@ the theme's colours; text in the default face as the terminal has it."
 one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
   (let* ((element (agent-ui-get id :canvas canvas))
          (frame (selected-frame))
+         ;; Still: its buttons would do nothing in the conversation.
          (ctx (agent-ui-context :width agent-ui-snapshot-width :graphic (display-graphic-p frame)
                                 :char-width (if (display-graphic-p frame) (frame-char-width frame) 8)
-                                :line-height (if (display-graphic-p frame) (frame-char-height frame) 17)))
+                                :line-height (if (display-graphic-p frame) (frame-char-height frame) 17)
+                                :still t))
          (dir (expand-file-name agent-ui-snapshot-directory (or directory default-directory)))
          (stem (format "agent-ui-%s-%s" id (format-time-string "%Y%m%d-%H%M%S")))
          ;; Two in a second (a change between them): another name, not over it.

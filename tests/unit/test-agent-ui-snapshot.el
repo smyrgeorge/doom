@@ -139,6 +139,37 @@
                             (agent-ui-error-message
                              (should-error (agent-ui-snapshot "nope" :directory dir) :type 'agent-ui-error))))))
 
+(ert-deftest agent-ui-snapshot/no-buttons-in-it ()
+  "A snapshot is still: an element's actions, a table's row buttons, a
+choice's note and Answer left out (they'd do nothing in an image); the
+canvas keeps them."
+  (+test-aush
+    (agent-ui-show '(:id "t" :type "text" :text "2 failed"
+                     :actions ((:label "Fix them" :prompt "Fix the 2 failing tests"))))
+    (agent-ui-show '(:id "tab" :type "table" :columns ("Test" "Result") :rows (("lexer" "failed"))
+                     :row-actions ((:label "Show" :prompt "Show me {Test}"))))
+    (agent-ui-show '(:id "c" :type "choice" :question "Which fix?" :options ("Change the test" "Revert it")
+                     :note t))
+    (dolist (id '("t" "tab" "c"))
+      (let ((svg (+test-aush-read (plist-get (agent-ui-snapshot id :directory dir) :file))))
+        (should-not (string-match-p "⏵" svg))
+        (should-not (string-match-p "Add a note" svg))))
+    (let ((svg (+test-aush-read (plist-get (agent-ui-snapshot "tab" :directory dir) :file))))
+      (should (string-match-p "lexer" svg)))
+    (let ((svg (+test-aush-read (plist-get (agent-ui-snapshot "c" :directory dir) :file))))
+      ;; A word a <text> each.
+      (should (string-match-p ">fix\\?<" svg))
+      (should (string-match-p ">Revert<" svg)))
+    ;; On the canvas: there.
+    (with-current-buffer canvas
+      (agent-ui--flush)
+      (dolist (button '("⏵ Fix them" "⏵ Show" "⏵ Answer" "Add a note"))
+        (should (save-excursion (goto-char (point-min)) (search-forward button nil t)))))
+    ;; Drawn for a still picture: none; else, as on the canvas.
+    (let ((element '(:type "text" :text "x" :actions ((:label "Go" :prompt "go")))))
+      (should-not (string-match-p "⏵" (agent-ui-render element (agent-ui-context :still t))))
+      (should (string-match-p "⏵ Go" (agent-ui-render element (agent-ui-context)))))))
+
 ;; ====== INTO THE PROMPT ======
 
 (ert-deftest agent-ui-snapshot/an-element-into-the-prompt ()

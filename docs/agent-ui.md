@@ -268,7 +268,8 @@ registered in `agent-shell-mcp-servers` with the session's name and directory; e
 
 Any element can have `actions`: buttons under it, each a `label` and the `prompt` it puts into the session's prompt
 when pressed (`RET` or a click), for you to read and send; with `"submit": true`, sent at once. At most 6; they're
-checked when the element is shown.
+checked when the element is shown. While the agent works, a sent one is queued until it's done, and one for the
+prompt is offered to queue (change it first if you like). A snapshot leaves the buttons out: they stay on the canvas.
 
 ```json
 {"id": "result", "type": "text", "text": "2 tests failed.", "face": "error",
@@ -295,7 +296,7 @@ kept beside it (`ID@tests.json`, the name hex-escaped) and come back with it.
 agent-shell owns its buffer's text, so an element isn't put there: it goes the ways agent-shell already has
 (`config/agent-ui/snapshot.el`).
 
-- **From the agent:** `agent-ui snapshot ID` saves the element as it's drawn, an SVG (its text in its faces' colours,
+- **From the agent:** `agent-ui snapshot ID` saves the element as it's drawn, without its buttons, an SVG (its text in its faces' colours,
   a word at its column; a bar's blocks as rectangles; borders' box-drawing characters as lines through their cells,
   meeting from line to line; a chart's own SVG nested), in the session's `.agent-shell/images/`, and replies with a
   Markdown image link. In its reply, agent-shell shows it inline, and the transcript keeps it.

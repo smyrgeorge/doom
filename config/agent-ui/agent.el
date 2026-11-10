@@ -175,15 +175,46 @@ their schemas: use whichever you like."
 
 ;; ====== ACTIONS ======
 
+;; While the agent works, its prompt may take no text (agent-shell said "Busy,
+;; try later"): a button sending its prompt queues it, sent when the agent's
+;; done (agent-shell's queue); one putting it into the prompt offers it to
+;; queue, to read and change first, as agent-shell's own commands do then.
+(defun agent-ui--session-busy-p (session)
+  "Whether SESSION's prompt takes no text now (its agent working, no prompt
+kept live meanwhile). Not known (not a shell yet): not busy, agent-shell
+then has its say."
+  (ignore-errors
+    (with-current-buffer session
+      (if (fboundp 'agent-shell--can-insert-into-prompt-p)
+          (not (agent-shell--can-insert-into-prompt-p :shell-buffer session))
+        (and (fboundp 'shell-maker-busy) (shell-maker-busy))))))
+
 (defun agent-ui--act (prompt submit)
   "An element's action pressed, in its canvas: PROMPT into the prompt of the
-canvas's session (sent if SUBMIT)."
+canvas's session (sent if SUBMIT); while its agent works, queued (see above)."
   (let ((session (and (derived-mode-p 'agent-ui-canvas-mode) agent-ui--session-buffer)))
     (unless (buffer-live-p session)
       (user-error "This canvas has no agent-shell session"))
     (unless (fboundp 'agent-shell-insert)
       (user-error "agent-shell isn't loaded"))
-    (agent-shell-insert :text prompt :submit submit :shell-buffer session)))
+    (cond
+     ((not (and (fboundp 'agent-shell-prompt-queue) (agent-ui--session-busy-p session)))
+      (agent-shell-insert :text prompt :submit submit :shell-buffer session))
+     (submit
+      (with-current-buffer session
+        (agent-shell-prompt-queue prompt))
+      (message "Queued: sent once the agent's done"))
+     (t
+      (let ((prompt (with-current-buffer session
+                      (if (fboundp 'agent-shell--prompt-queue-read)
+                          (agent-shell--prompt-queue-read :initial prompt)
+                        (read-string "The agent's working; queue: " prompt)))))
+        (with-current-buffer session
+          (agent-shell-prompt-queue prompt)))))))
 
 (declare-function agent-shell-insert "agent-shell")
+(declare-function agent-shell-prompt-queue "agent-shell-prompt-queue")
+(declare-function agent-shell--prompt-queue-read "agent-shell-prompt-queue")
+(declare-function agent-shell--can-insert-into-prompt-p "agent-shell-prompt")
+(declare-function shell-maker-busy "shell-maker")
 (setq agent-ui-action-function #'agent-ui--act)

@@ -334,8 +334,9 @@ agent-ui render '{"type":"table","columns":["Test","Result"],"rows":[["lexer","p
 (`[the build](agent-ui://...)`), and clicking it brings up the canvas's pane, the cursor on the element.
 
 The canvas changes; the conversation stays. To keep an element's state in it (the final test table, a chart you're
-talking about), `agent-ui snapshot ID` saves it as it's drawn, an SVG in `.agent-shell/images/`, and replies with
-`markdown`: put that line in your reply, and agent-shell shows the image there (its transcript keeps it). The user can
+talking about), `agent-ui snapshot ID` saves it as it's drawn (its buttons left out: they'd do nothing in an image;
+pressed on the canvas), an SVG in `.agent-shell/images/`, and replies with `markdown`: put that line in your reply,
+and agent-shell shows the image there (its transcript keeps it). The user can
 also send you an element: `a` on it in the canvas puts it into your prompt as text, "Agent UI element ID (TYPE), as
 it's shown:" and its drawing.
 
@@ -378,7 +379,8 @@ start) or discards it (its elements go with it): say what you made and why.
 - `:text (lambda (PROPS CTX) ...)` returns a string, maybe with faces (`agent-ui-accent`, `agent-ui-muted`,
   `agent-ui-success`, `agent-ui-warning`, `agent-ui-error`, `bold`). PROPS: the properties, defaults filled; CTX:
   `:width` (columns: fit it), `:graphic`, `:tick` (counts up, for animations), `:char-width` and `:line-height`
-  (pixels, for an SVG). Keep it quick: it runs in the user's Emacs, on each change.
+  (pixels, for an SVG), `:still` (a snapshot: draw no buttons, they'd do nothing there). Keep it quick: it runs in
+  the user's Emacs, on each change.
 - Optional: `:gui` (the same, for a graphic frame: a string with an SVG image, see `svg.el`), `:check` (more than
   each property's kind: signal with `agent-ui--fail`), `:append` (how lists grow), `:animated` (t, or a function of
   PROPS), `:prepare` (the element as it's kept: what it notes as time passes).

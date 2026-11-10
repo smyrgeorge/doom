@@ -126,8 +126,11 @@
       (string-join
        (append (list question)
                (mapcar (lambda (o) (agent-ui-choice--option props ctx o label-width)) options)
-               (when (plist-get props :note) (list (concat " " (agent-ui-choice--note props ctx))))
-               (list (concat " " (agent-ui-choice--answer props ctx))))
+               ;; Its note and Answer, buttons: not in a still picture.
+               (unless (plist-get ctx :still)
+                 (append
+                  (when (plist-get props :note) (list (concat " " (agent-ui-choice--note props ctx))))
+                  (list (concat " " (agent-ui-choice--answer props ctx))))))
        "\n"))))
 
 (agent-ui-define choice
