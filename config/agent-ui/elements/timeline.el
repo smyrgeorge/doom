@@ -51,6 +51,9 @@
                               (agent-ui--fail "timeline: task %d's end must be seconds or a timestamp" i))
                             (when (and duration (not (and (numberp duration) (>= duration 0))))
                               (agent-ui--fail "timeline: task %d's duration must be seconds" i))
+                            (when (and (plist-get task :end)
+                                       (not (eq (stringp (plist-get task :start)) (stringp (plist-get task :end)))))
+                              (agent-ui--fail "timeline: task %d's start and end must both be seconds or both timestamps" i))
                             (when (and end (< end start))
                               (agent-ui--fail "timeline: task %d ends before it starts" i))
                             (when (and (plist-get task :status) (not (assq status agent-ui-timeline--statuses)))
@@ -59,6 +62,10 @@
                                   :end (or end (and duration (+ start duration)))
                                   :stamped (stringp (plist-get task :start))
                                   :status (or status (if (or end duration) 'done 'running))))))))
+    ;; Seconds and timestamps together made nonsense (an axis of 249209h).
+    (when (and (seq-some (lambda (task) (plist-get task :stamped)) tasks)
+               (seq-some (lambda (task) (not (plist-get task :stamped))) tasks))
+      (agent-ui--fail "timeline: tasks must all use seconds or all timestamps"))
     (plist-put props :tasks tasks)))
 
 (defun agent-ui-timeline--span (props)

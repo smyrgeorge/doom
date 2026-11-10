@@ -1188,6 +1188,15 @@ names; the end label outside the image, or on \"0s\")."
         (when (string-match "text-anchor=\"end\"[^>]*x=\"\\([0-9.]+\\)\">[0-9]" svg)
           (should (<= (string-to-number (match-string 1 svg)) width)))))))
 
+(ert-deftest agent-ui-elements/timeline-seconds-or-timestamps ()
+  "Tasks in seconds and others in timestamps (or one task's start and end
+mixed): refused, saying so (an axis of \"249209h 03m\")."
+  (should (string-match-p "all use seconds or all timestamps"
+                          (+test-aue-error '(:type "timeline" :tasks ((:name "secs" :start 0 :duration 10)
+                                                                      (:name "stamp" :start "2026-11-09T12:01:00Z" :duration 30))))))
+  (should (string-match-p "task 1's start and end must both be"
+                          (+test-aue-error '(:type "timeline" :tasks ((:name "x" :start "2026-11-09T12:01:00Z" :end 1762689700)))))))
+
 (ert-deftest agent-ui-elements/timeline-finished-stamped-spans-its-tasks ()
   "Finished tasks given timestamps: the axis spans them (it ran to now: a day
 later, 22 hours wide); one still running: to now."
