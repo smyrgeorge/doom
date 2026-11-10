@@ -309,6 +309,125 @@ refused."
   (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "x") #'agent-ui-drop-item))
   (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "e") #'agent-ui-edit-item)))
 
+(ert-deftest agent-ui-elements/steps-a-plan-readable ()
+  "A plan being decided on: its kept steps in the text's colour (they were
+muted, as the hint under them), a dropped one struck through; answered, or
+without approve, a step not started muted (doom-8fo)."
+  (let ((plan '(:type "steps" :approve t
+                :steps ("Reproduce the bug" "Fix the parser" "Update the docs")
+                :dropped ("Update the docs")
+                :edits ((:name "Fix the parser" :text "Fix the tokenizer")))))
+    (should-not (+test-aue-face-at plan "Reproduce the bug"))
+    (should-not (+test-aue-face-at plan "Fix the tokenizer"))
+    (should (eq (+test-aue-face-at plan "Update the docs") 'agent-ui-steps-dropped))
+    (should (face-attribute 'agent-ui-steps-dropped :strike-through nil t))
+    ;; Its notes and its hint muted.
+    (should (eq (+test-aue-face-at plan "edited") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at plan "dropped") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at plan "x drops") 'agent-ui-muted)))
+  ;; Answered: a checklist, its steps not started muted.
+  (should (eq (+test-aue-face-at '(:type "steps" :approve t :answered "approved"
+                                   :steps ("Write it" (:name "Ship it" :status "done")))
+                                 "Write it")
+              'agent-ui-muted))
+  ;; Without approve: as ever.
+  (let ((checklist '(:type "steps" :steps ("Write it" (:name "Ship it" :status "skipped")))))
+    (should (eq (+test-aue-face-at checklist "Write it") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at checklist "Ship it") 'agent-ui-muted))))
+
+(defconst +test-aue-long-step
+  "Trust: a repo's panel asks once before running any of its commands, remembered by the file's content"
+  "A plan's step longer than the width.")
+
+(ert-deftest agent-ui-elements/steps-a-plan-shown-whole ()
+  "A plan's long step wrapped, not cut with …: its lines after the first
+under its words; reworded or dropped, its note after it (it was cut to half
+the width for it); answered, still whole (doom-mri)."
+  (let* ((long +test-aue-long-step)
+         (plan `(:type "steps" :approve t :steps (,long "Ship it"))))
+    (should (equal (seq-take (split-string (+test-aue-draw plan :width 50) "\n") 5)
+                   '("Go ahead with this plan?"
+                     "○ Trust: a repo's panel asks once before running"
+                     "  any of its commands, remembered by the file's"
+                     "  content"
+                     "○ Ship it")))
+    ;; Reworded: its note on its last line.
+    (should (equal (seq-take (split-string (+test-aue-draw (append plan `(:edits ((:name ,long :text ,(concat long ", again if changed")))))
+                                                           :width 50)
+                                           "\n")
+                             5)
+                   '("Go ahead with this plan?"
+                     "○ Trust: a repo's panel asks once before running"
+                     "  any of its commands, remembered by the file's"
+                     "  content, again if changed  edited"
+                     "○ Ship it")))
+    ;; Dropped: struck through on each of its lines.
+    (let ((dropped (append plan `(:dropped (,long)))))
+      (should (equal (seq-take (split-string (+test-aue-draw dropped :width 46) "\n") 6)
+                     '("Go ahead with this plan?"
+                       "– Trust: a repo's panel asks once before"
+                       "  running any of its commands, remembered by"
+                       "  the file's content  dropped"
+                       "○ Ship it"
+                       "x drops the step at the cursor (again: back),")))
+      (should (eq (+test-aue-face-at dropped "the file's content" :width 46) 'agent-ui-steps-dropped)))
+    ;; A note that doesn't fit after its step's last line: on a line of its
+    ;; own, under its words.
+    (let ((full "Update the docs and the skill for project panels"))
+      (should (equal (seq-take (split-string (+test-aue-draw `(:type "steps" :approve t :steps (,full) :dropped (,full))
+                                                             :width 50)
+                                             "\n")
+                               3)
+                     (list "Go ahead with this plan?"
+                           (concat "– " full)
+                           "  dropped"))))
+    ;; From 10 columns, within the width, sub-steps and notes too.
+    (let ((nested `(:type "steps" :approve t :dropped ("Ship it")
+                    :steps ((:name ,long :detail "the panel's trust file" :steps ((:name ,long))) "Ship it"))))
+      (dolist (width (number-sequence 10 40))
+        (dolist (line (split-string (+test-aue-draw nested :width width :still t) "\n"))
+          (should (<= (string-width line) width)))))
+    ;; Answered: whole too, its time and detail after it.
+    (should (equal (+test-aue-draw `(:type "steps" :approve t :answered "approved"
+                                     :steps ((:name ,long :status "done" :seconds 41 :detail "ok") "Ship it"))
+                                   :width 50)
+                   (concat "✓ Trust: a repo's panel asks once before running\n"
+                           "  any of its commands, remembered by the file's\n"
+                           "  content  41s  ok\n"
+                           "○ Ship it\n"
+                           "✓ Approved")))))
+
+(ert-deftest agent-ui-elements/steps-a-plan-wrapped-step-keys ()
+  "x and e on any line of a wrapped step (doom-mri)."
+  (+test-aue-canvas
+    (let ((long +test-aue-long-step))
+      (agent-ui-show `(:id "plan" :type "steps" :approve t :steps (,long "Ship it")))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "content")
+        ;; On its last line, not its first.
+        (should-not (string-search "Trust" (buffer-substring (line-beginning-position) (line-end-position))))
+        (agent-ui-drop-item)
+        (should (equal (plist-get (agent-ui-get "plan") :dropped) (list long)))
+        (goto-char (point-min))
+        (search-forward "content")
+        (cl-letf (((symbol-function 'read-string) (lambda (_prompt initial) (should (equal initial long))
+                                                     "Trust: asked once")))
+          (agent-ui-edit-item))
+        (should (equal (plist-get (agent-ui-get "plan") :edits) `((:name ,long :text "Trust: asked once"))))))))
+
+(ert-deftest agent-ui-elements/steps-a-checklist-a-line-each ()
+  "Without approve, a step stays on its line, cut with … where too long (a
+checklist is glanced at, its times and details in columns); a name past
+half the width isn't cut for its detail's sake when the line fits."
+  (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "Open on demand, the project's panels listed" :status "done") "b"))
+                                 :width 30)
+                 "✓ Open on demand, the project…\n○ b"))
+  (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "Trust: a repo's panel asks once" :status "done" :detail "ok")
+                                                         "Lifecycle: polls paused while hidden")))
+                 "✓ Trust: a repo's panel asks once       ok\n○ Lifecycle: polls paused while hidden")))
+
 (ert-deftest agent-ui-elements/steps-wrong ()
   (should (equal (+test-aue-error '(:type "steps" :steps ("a" (:name "b" :status "paused"))))
                  "steps: step 2 has status \"paused\"; one of: pending, running, done, failed, skipped"))

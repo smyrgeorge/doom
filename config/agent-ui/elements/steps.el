@@ -96,6 +96,11 @@ how long it ran, once done or failed. A step noted already: as it is."
 
 ;; ====== DRAWING ======
 
+(defface agent-ui-steps-dropped '((t :inherit agent-ui-muted :strike-through t))
+  "A plan's step the user dropped, while the plan is decided on: struck
+through, unlike the steps kept."
+  :group 'agent-ui)
+
 (defun agent-ui-steps--icon (status ctx)
   (pcase status
     ('done (propertize "✓" 'face 'agent-ui-success))
@@ -126,9 +131,77 @@ how long it ran, once done or failed. A step noted already: as it is."
 test's detail ran onto lines of its own, at column 0)."
   (and text (replace-regexp-in-string "\t" " " (replace-regexp-in-string "\r?\n" "⏎" text))))
 
-(defun agent-ui-steps--text (props ctx)
-  (let* ((steps (plist-get props :steps))
-         (all (agent-ui-steps--flat steps 0))
+(defun agent-ui-steps--name-face (status asked)
+  "The face of the name of a step in STATUS: one not started yet, or
+skipped, muted. In a plan being decided on (ASKED), its steps are what's
+decided on: a kept one in the text's colour, a dropped one struck through."
+  (pcase status
+    ('pending (unless asked 'agent-ui-muted))
+    ('skipped (if asked 'agent-ui-steps-dropped 'agent-ui-muted))))
+
+(defun agent-ui-steps--detail-face (status)
+  (if (eq status 'failed) 'agent-ui-error 'agent-ui-muted))
+
+(defun agent-ui-steps--line (entry time names time-width width ctx asked)
+  "ENTRY, a (DEPTH . STEP), on one line of WIDTH: its name in a column
+NAMES wide (indents in it), its TIME right-aligned in one TIME-WIDTH wide,
+its detail after them; each cut with … to its room."
+  (let* ((depth (car entry))
+         (step (cdr entry))
+         (indent (make-string (* 2 depth) ?\s))
+         (status (plist-get step :status))
+         (detail (or (plist-get step :detail) ""))
+         (face (agent-ui-steps--name-face status asked))
+         (name (if face (propertize (plist-get step :name) 'face face) (plist-get step :name))))
+    (if (and (string-empty-p detail) (= time-width 0))
+        (concat indent (agent-ui-steps--icon status ctx) " "
+                (agent-ui-truncate name (max 1 (- width 2 (length indent)))))
+      (string-trim-right
+       (concat indent (agent-ui-steps--icon status ctx) " "
+               (agent-ui-pad name (max 1 (- names (length indent))))
+               (if (> time-width 0)
+                   (concat "  " (propertize (agent-ui-pad time time-width 'right) 'face 'agent-ui-muted))
+                 "")
+               (if (string-empty-p detail)
+                   ""
+                 (concat "  " (propertize (agent-ui-truncate detail (max 0 (- width names time-width 6)))
+                                          'face (agent-ui-steps--detail-face status)))))))))
+
+(defun agent-ui-steps--wrapped (entry time width ctx asked)
+  "ENTRY, a (DEPTH . STEP), its name wrapped at WIDTH, not cut: its lines
+after the first under its words (past its icon). Its TIME and detail after
+its last line, or on lines of their own (wrapped too) where they don't fit."
+  (let* ((depth (car entry))
+         (step (cdr entry))
+         (indent (make-string (* 2 depth) ?\s))
+         (under (concat indent "  "))
+         (room (max 1 (- width (length under))))
+         (status (plist-get step :status))
+         (face (agent-ui-steps--name-face status asked))
+         (detail (or (plist-get step :detail) ""))
+         (note (string-join
+                (append (unless (string-empty-p time) (list (propertize time 'face 'agent-ui-muted)))
+                        (unless (string-empty-p detail)
+                          (list (propertize detail 'face (agent-ui-steps--detail-face status)))))
+                "  "))
+         (lines (mapcar (lambda (line) (if face (propertize line 'face face) line))
+                        (split-string (agent-ui-wrap (plist-get step :name) room) "\n"))))
+    (unless (string-empty-p note)
+      (let ((last (car (last lines))))
+        (if (<= (+ (string-width last) 2 (string-width note)) room)
+            (setcar (last lines) (concat last "  " note))
+          (setq lines (append lines (split-string (agent-ui-wrap note room) "\n"))))))
+    (concat indent (agent-ui-steps--icon status ctx) " "
+            (string-join lines (concat "\n" under)))))
+
+(defun agent-ui-steps--drawn (props ctx &optional wrap asked)
+  "PROPS' steps drawn at CTX's width: (TEXTS . MORE), TEXTS a text for each
+step shown, in `agent-ui-steps--flat''s order, MORE the line saying how many
+more there are, or nil. Each step on its line, its name, time and detail in
+columns, cut with … where they don't fit; or, with WRAP, wrapped on lines of
+their own instead (see `agent-ui-steps--wrapped'). ASKED: a plan being
+decided on (see `agent-ui-steps--name-face')."
+  (let* ((all (agent-ui-steps--flat (plist-get props :steps) 0))
          (shown (mapcar (lambda (s)
                           (let ((step (copy-sequence (cdr s))))
                             (setq step (plist-put step :name (agent-ui-steps--one-line (plist-get step :name))))
@@ -141,43 +214,38 @@ test's detail ran onto lines of its own, at column 0)."
          ;; The times' column, right-aligned; left out where it can't fit.
          (time-width (let ((w (apply #'max 0 (mapcar #'string-width times))))
                        (if (> (+ w 5) width) 0 w)))
-         ;; The names' column, indents in it: no wider than the width leaves
-         ;; (it was 10 at least: past the width under ~20 columns).
-         (names (max 1 (min (apply #'max 0 (mapcar (lambda (s) (+ (* 2 (car s)) (string-width (plist-get (cdr s) :name))))
-                                                   shown))
-                            (max 10 (/ width 2))
-                            (- width 4 time-width)))))
-    (if (null steps)
-        (propertize "no steps yet" 'face 'agent-ui-muted)
-      (concat
-       (mapconcat
-        (lambda (pair)
-          (let* ((depth (car (car pair)))
-                 (step (cdr (car pair)))
-                 (time (cdr pair))
-                 (indent (make-string (* 2 depth) ?\s))
-                 (status (plist-get step :status))
-                 (detail (or (plist-get step :detail) ""))
-                 (name (plist-get step :name))
-                 (name (if (memq status '(pending skipped)) (propertize name 'face 'agent-ui-muted) name)))
-            (if (and (string-empty-p detail) (= time-width 0))
-                (concat indent (agent-ui-steps--icon status ctx) " "
-                        (agent-ui-truncate name (max 1 (- width 2 (length indent)))))
-              (string-trim-right
-               (concat indent (agent-ui-steps--icon status ctx) " "
-                       (agent-ui-pad name (max 1 (- names (length indent))))
-                       (if (> time-width 0)
-                           (concat "  " (propertize (agent-ui-pad time time-width 'right) 'face 'agent-ui-muted))
-                         "")
-                       (if (string-empty-p detail)
-                           ""
-                         (concat "  " (propertize (agent-ui-truncate
-                                                   detail (max 0 (- width names time-width 6)))
-                                                  'face (if (eq status 'failed) 'agent-ui-error 'agent-ui-muted)))))))))
-        (cl-mapcar #'cons shown times) "\n")
-       (when (> (length all) (length shown))
-         (concat "\n" (propertize (format "… %d steps more" (- (length all) (length shown)))
-                                  'face 'agent-ui-muted)))))))
+         (longest (apply #'max 0 (mapcar (lambda (s) (+ (* 2 (car s)) (string-width (plist-get (cdr s) :name))))
+                                         shown)))
+         ;; Each step whole on its line, the names' column as wide as the
+         ;; longest name (it was cut to half the width though it fit).
+         (whole (cl-every (lambda (s)
+                            (let ((detail (or (plist-get (cdr s) :detail) "")))
+                              (if (and (string-empty-p detail) (= time-width 0))
+                                  (<= (+ 2 (* 2 (car s)) (string-width (plist-get (cdr s) :name))) width)
+                                (and (<= longest (- width 4 time-width))
+                                     (<= (string-width detail) (- width longest time-width 6))))))
+                          shown))
+         ;; Else the names' column half the width, the details the rest, no
+         ;; wider than the width leaves (it was 10 at least: past the width
+         ;; under ~20 columns).
+         (names (max 1 (if whole
+                           longest
+                         (min longest (max 10 (/ width 2)) (- width 4 time-width))))))
+    (cons (cl-mapcar (lambda (s time)
+                       (if (and wrap (not whole))
+                           (agent-ui-steps--wrapped s time width ctx asked)
+                         (agent-ui-steps--line s time names time-width width ctx asked)))
+                     shown times)
+          (when (> (length all) (length shown))
+            (propertize (format "… %d steps more" (- (length all) (length shown))) 'face 'agent-ui-muted)))))
+
+(defun agent-ui-steps--text (props ctx)
+  "PROPS' steps, a checklist: a line each (cut with … where too long: what
+changes is glanced at, its times and details in columns)."
+  (if (null (plist-get props :steps))
+      (propertize "no steps yet" 'face 'agent-ui-muted)
+    (let ((drawn (agent-ui-steps--drawn props ctx)))
+      (string-join (append (car drawn) (and (cdr drawn) (list (cdr drawn)))) "\n"))))
 
 ;; ====== APPENDING ======
 
@@ -374,32 +442,36 @@ become it."
 
 (defun agent-ui-steps--approve-text (props ctx)
   "PROPS' steps with approve: its question, the plan as the user has it
-\(x and e on a step), Approve and Reject; answered, what was."
+\(x and e on a step), Approve and Reject; answered, what was. Its steps
+whole, wrapped where long (what's approved is read in full), in the
+text's colour until it's answered."
   (let* ((approve (agent-ui-steps--approve-props props))
          (width (plist-get ctx :width))
          (answered (plist-get props :answered))
          (still (or answered (plist-get ctx :still)))
-         (lines (split-string (agent-ui-steps--text
-                               (if answered props (plist-put (copy-sequence props) :steps (agent-ui-steps--as-planned props)))
-                               ctx)
-                              "\n"))
+         (drawn (agent-ui-steps--drawn
+                 (if answered props (plist-put (copy-sequence props) :steps (agent-ui-steps--as-planned props)))
+                 ctx t (not answered)))
+         (texts (car drawn))
          (flat (agent-ui-steps--flat (plist-get props :steps) 0)))
     (unless still
-      ;; A plan's step (not a sub-step): x drops it, e rewords it.
-      (setq lines (cl-loop for line in lines
+      ;; A plan's step (not a sub-step): x drops it, e rewords it, on any of
+      ;; its lines.
+      (setq texts (cl-loop for text in texts
                            for entry = (pop flat)
                            collect (if (and entry (= (car entry) 0))
                                        (let ((name (plist-get (cdr entry) :name)))
-                                         (propertize line
+                                         (propertize text
                                                      'agent-ui-drop (lambda () (agent-ui-steps--toggle-drop props ctx name))
                                                      'agent-ui-edit (lambda () (agent-ui-steps--edit props ctx name))
                                                      'help-echo "x: drop it (again: back), e: reword it"))
-                                     line))))
+                                     text))))
     (string-join
      (append
       (unless answered
         (list (propertize (agent-ui-wrap (plist-get approve :question) width) 'face 'bold)))
-      lines
+      (if (plist-get props :steps) texts (list (propertize "no steps yet" 'face 'agent-ui-muted)))
+      (and (cdr drawn) (list (cdr drawn)))
       (cond
        (answered
         (let ((note (agent-ui-steps--note props)))
