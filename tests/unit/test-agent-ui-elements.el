@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code compare confirm countdown diff files form gauge graph heatmap html image issues log markdown panel progress rank slider stats steps table tags text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code compare confirm countdown diff files form gauge graph heatmap html image issues log markdown math panel progress rank slider stats steps table tags text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -2317,6 +2317,88 @@ seconds."
   (should (string-match-p "give since .* or until" (+test-aue-error '(:type "countdown" :since 1 :until 2))))
   (should (string-match-p "until is a timestamp" (+test-aue-error '(:type "countdown" :until "soon"))))
   (should (string-match-p "warn is seconds" (+test-aue-error '(:type "countdown" :until 10 :warn -1)))))
+
+(ert-deftest agent-ui-elements/math-as-unicode ()
+  "In a terminal: Unicode where it's simple, else the source; a block
+indented."
+  (should (equal (agent-ui-math-unicode "E = mc^2") "E = mc²"))
+  (should (equal (agent-ui-math-unicode "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}") "∑ᵢ₌₁ⁿ i = (n(n+1))/2"))
+  (should (equal (agent-ui-math-unicode "\\alpha \\le \\beta_i^2") "α ≤ βᵢ²"))
+  (should (equal (agent-ui-math-unicode "\\sqrt{x^2 + y^2}") "√(x² + y²)"))
+  (should (equal (agent-ui-math-unicode "x \\in \\mathbb{R}") "x ∈ ℝ"))
+  (should (equal (agent-ui-math-unicode "P(A \\mid B)") "P(A | B)"))
+  ;; Not simple: nil (the source shown).
+  (should-not (agent-ui-math-unicode "e^{i\\pi} + 1 = 0"))
+  (should-not (agent-ui-math-unicode "\\begin{pmatrix} a \\end{pmatrix}"))
+  (should (equal (+test-aue-draw '(:type "math" :tex "E = mc^2")) "  E = mc²"))
+  (should (equal (+test-aue-draw '(:type "math" :tex "E = mc^2" :display "inline")) "E = mc²"))
+  (should (equal (+test-aue-draw '(:type "math" :tex "e^{i\\pi} + 1 = 0")) "  e^{i\\pi} + 1 = 0")))
+
+(defmacro +test-aue-math (command &rest body)
+  "BODY with a stand-in typesetting tool running COMMAND (its SVG on stdout),
+a cache of its own, nothing typeset yet."
+  (declare (indent 1))
+  `(let ((agent-ui-math-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "math-") t)))
+         (agent-ui-math--results (make-hash-table :test #'equal))
+         (agent-ui-math--running nil))
+     (cl-letf (((symbol-function 'agent-ui-math--tool) (lambda () 'mathjax))
+               ((symbol-function 'agent-ui-math--command) (lambda (&rest _) ,command)))
+       ,@body)))
+
+(defun +test-aue-math-wait ()
+  (let ((end (+ (float-time) 5)))
+    (while (and agent-ui-math--running (< (float-time) end)) (accept-process-output nil 0.02))))
+
+(ert-deftest agent-ui-elements/math-typeset-in-the-background ()
+  "In the GUI with a tool: its text and \"typesetting…\" at once (Emacs not
+waiting), then the image, sized to the font, in the text's colour; cached:
+another session reads it without the tool."
+  (let ((gui (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 20))
+        (element '(:type "math" :tex "E = mc^2")))
+    (+test-aue-math (list "sh" "-c" "cat >/dev/null; printf '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10ex\" height=\"2ex\"><path fill=\"currentColor\" d=\"M0 0h1v1z\"/></svg>'")
+      (should (equal (substring-no-properties (agent-ui-render element gui)) "  E = mc²\ntypesetting…"))
+      (should agent-ui-math--running)
+      (+test-aue-math-wait)
+      (let* ((text (agent-ui-render element gui))
+             (image (get-text-property 2 'display text)))
+        (should (eq (car image) 'image))
+        ;; 10ex at a 20-pixel line: 72 pixels; in the theme's colour.
+        (should (string-match-p "width=\"72.00\"" (plist-get (cdr image) :data)))
+        (should (string-match-p (regexp-quote (agent-ui-math--color)) (plist-get (cdr image) :data)))
+        (should-not (string-search "currentColor" (plist-get (cdr image) :data))))
+      ;; Another session: from the cache, no tool run.
+      (clrhash agent-ui-math--results)
+      (cl-letf (((symbol-function 'make-process) (lambda (&rest _) (error "Typeset again"))))
+        (should (eq (car (get-text-property 2 'display (agent-ui-render element gui))) 'image))))))
+
+(ert-deftest agent-ui-elements/math-not-typeset ()
+  "The tool failing: its text and why; no tool in the GUI: what to install;
+in a terminal: neither."
+  (let ((gui (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 20)))
+    (+test-aue-math (list "sh" "-c" "cat >/dev/null; printf '%s\\n' 'TeX error: Undefined control sequence \\foo' >&2; exit 1")
+      (agent-ui-render '(:type "math" :tex "\\foo") gui)
+      (+test-aue-math-wait)
+      (should (equal (substring-no-properties (agent-ui-render '(:type "math" :tex "\\foo") gui))
+                     "  \\foo\nNot typeset: TeX error: Undefined control sequence \\foo")))
+    (cl-letf (((symbol-function 'agent-ui-math--tool) #'ignore))
+      (should (string-match-p "npm install -g\\s-+mathjax-full"
+                              (substring-no-properties (agent-ui-render '(:type "math" :tex "e^{i\\pi}") gui))))
+      ;; Its Unicode enough: no hint.
+      (should (equal (substring-no-properties (agent-ui-render '(:type "math" :tex "x^2") gui)) "  x²"))
+      (should (equal (+test-aue-draw '(:type "math" :tex "x")) "  x")))))
+
+(ert-deftest agent-ui-elements/math-redrawn-when-typeset ()
+  "Typeset: the elements showing it marked to be drawn again (a panel's
+child too)."
+  (+test-aue-canvas
+    (+test-aue-math (list "true")
+      (agent-ui-show '(:id "f" :type "math" :tex "E = mc^2"))
+      (agent-ui-show '(:id "p" :type "panel" :children ((:id "g" :type "math" :tex "E = mc^2"))))
+      (agent-ui-show '(:id "other" :type "math" :tex "x"))
+      (with-current-buffer canvas (agent-ui--flush))
+      (agent-ui-math--redraw (agent-ui-math--key 'mathjax "E = mc^2" 'block (agent-ui-math--color)))
+      (with-current-buffer canvas
+        (should (equal (sort (copy-sequence agent-ui--dirty) #'string<) '("f" "p")))))))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.

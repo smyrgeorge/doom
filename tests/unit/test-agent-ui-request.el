@@ -77,7 +77,7 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
     (let ((reply (+test-aur-request "types")))
       (should (eq (plist-get reply :ok) t))
       (should (equal (mapcar (lambda (e) (plist-get e :name)) (plist-get reply :types))
-                     '("chart" "choice" "code" "compare" "confirm" "countdown" "diff" "files" "form" "gauge" "graph" "heatmap" "html" "image" "issues" "log" "markdown" "panel" "progress" "rank" "slider" "stats" "steps" "table" "tags" "text" "timeline" "todo"))))
+                     '("chart" "choice" "code" "compare" "confirm" "countdown" "diff" "files" "form" "gauge" "graph" "heatmap" "html" "image" "issues" "log" "markdown" "math" "panel" "progress" "rank" "slider" "stats" "steps" "table" "tags" "text" "timeline" "todo"))))
     (let ((reply (+test-aur-request "types" "table")))
       (should (equal (mapcar (lambda (e) (plist-get e :name)) (plist-get reply :types)) '("table"))))
     (should (string-match-p "unknown type \"tabel\""

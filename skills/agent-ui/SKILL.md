@@ -269,6 +269,17 @@ knob rests, as "Slider ID (LABEL) set to 42 ms", for something you redraw from i
 agent-ui show --canvas ask '{"id":"timeout","type":"slider","label":"Timeout","min":0,"max":120,"step":5,"unit":"s","value":30}'
 ```
 
+### `math`
+
+Formulas, when an explanation needs them (an algorithm's cost, a statistic, a physics law): `tex` is LaTeX math
+without `$` or `\[`; `display` `block` (the default: on its own) or `inline`. Typeset as an image in the GUI if the
+user has MathJax or LaTeX; else drawn in Unicode where simple, or as its source. In JSON, a backslash is written
+twice.
+
+```sh
+agent-ui show '{"id":"gauss","type":"math","title":"Gauss","tex":"\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}"}'
+```
+
 ### `countdown`
 
 Time that matters while waiting, ticking on its own: `since` a start (the time elapsed: a long job) or `until` an end
