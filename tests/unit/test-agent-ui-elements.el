@@ -887,6 +887,27 @@ old file's number: off by every earlier hunk's change in lines)."
           (should (equal (car opened) "/work/src/parser.c")))
       (kill-buffer " *opened*"))))
 
+;; doom-nwj.66
+(ert-deftest agent-ui-elements/diff-header-fits ()
+  "A file's header is cut to the width, its path at its start, its counts
+kept (it was never cut: 49 columns at 20, the canvas hiding its counts)."
+  (let ((element '(:type "diff" :diff "--- a/src/components/very/deep/parser_module.c
++++ b/src/components/very/deep/parser_module.c
+@@ -1,2 +1,2 @@
+-old
++new
+ same
+")))
+    (dolist (width '(12 15 20 30 40 60))
+      (dolist (gui '(nil t))
+        (let ((header (car (split-string (+test-aue-draw element :width width :graphic gui) "\n"))))
+          (should (<= (string-width header) width))
+          (should (string-suffix-p "  +1 −1" header)))))
+    (should (equal (car (split-string (+test-aue-draw element :width 30) "\n"))
+                   "▾ …deep/parser_module.c  +1 −1"))
+    (should (equal (car (split-string (+test-aue-draw element :width 60) "\n"))
+                   "▾ src/components/very/deep/parser_module.c  +1 −1"))))
+
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).
   (let ((agent-ui-file-directory "/proj/")

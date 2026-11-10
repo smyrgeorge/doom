@@ -89,15 +89,20 @@ after a hunk that changed the count)."
     (if (null files)
         (propertize "no changes" 'face 'agent-ui-muted)
       (dolist (file files)
-        (push (concat (propertize "▾ " 'face 'agent-ui-muted)
-                      (agent-ui-button (propertize (plist-get file :file) 'face 'bold)
-                                       (agent-ui-diff--open dir (plist-get file :file) nil)
-                                       "RET: open the file")
-                      "  "
-                      (propertize (format "+%d" (plist-get file :added)) 'face 'agent-ui-success)
-                      " "
-                      (propertize (format "−%d" (plist-get file :removed)) 'face 'agent-ui-error))
-              out)
+        (let* ((counts (concat "  " (propertize (format "+%d" (plist-get file :added)) 'face 'agent-ui-success)
+                               " " (propertize (format "−%d" (plist-get file :removed)) 'face 'agent-ui-error)))
+               ;; Its path cut at its start, its counts kept (it was never
+               ;; cut: the canvas cut it, the counts first).
+               (name (agent-ui-truncate-start (plist-get file :file)
+                                              (max 1 (- width 2 (string-width counts))))))
+          (push (agent-ui-truncate
+                 (concat (propertize "▾ " 'face 'agent-ui-muted)
+                         (agent-ui-button (propertize name 'face 'bold)
+                                          (agent-ui-diff--open dir (plist-get file :file) nil)
+                                          "RET: open the file")
+                         counts)
+                 width)
+                out))
         (dolist (hunk (plist-get file :hunks))
           (push (concat "  " (propertize (agent-ui-truncate (plist-get hunk :header) (- width 2))
                                          'face 'agent-ui-accent))

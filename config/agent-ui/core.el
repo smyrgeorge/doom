@@ -484,6 +484,13 @@ kept (a path's folder and its file's name)."
            (tail (truncate-string-to-width (reverse string) (/ room 2))))
       (if (> width 0) (concat head "…" (reverse tail)) ""))))
 
+(defun agent-ui-truncate-start (string width)
+  "STRING cut to WIDTH columns at its start, with …: its end kept (a path's
+file name: …/parser.c)."
+  (cond ((<= (string-width string) width) string)
+        ((< width 1) "")
+        (t (concat "…" (reverse (truncate-string-to-width (reverse string) (1- width)))))))
+
 (defun agent-ui-wrap (string width)
   "STRING with each line longer than WIDTH columns broken at spaces (a word
 wider than WIDTH, within it). Its lines are kept; their properties too. A

@@ -91,13 +91,6 @@ one misreads: \"+12…\" for +1200), its note cut (4 columns at least)."
       (goto-char (point-min))
       (forward-line (1- line)))))
 
-(defun agent-ui-files--cut (name width)
-  "NAME cut to WIDTH columns at its start (…/parser.c): its end, the file's
-name, kept."
-  (cond ((<= (string-width name) width) name)
-        ((< width 1) "")
-        (t (concat "…" (reverse (truncate-string-to-width (reverse name) (1- width)))))))
-
 (defun agent-ui-files--line (props file name items indent name-width room)
   "FILE's line: INDENT, its mark, NAME in NAME-WIDTH columns, its counts
 ITEMS, those that fit; ROOM the columns after the mark (the name's all, if
@@ -107,8 +100,8 @@ no count fits)."
     (agent-ui-button
      (concat indent (propertize mark 'face face) " "
              (if (string-empty-p counts)
-                 (agent-ui-files--cut name room)
-               (concat (agent-ui-pad (agent-ui-files--cut name name-width) name-width) "  " counts)))
+                 (agent-ui-truncate-start name room)
+               (concat (agent-ui-pad (agent-ui-truncate-start name name-width) name-width) "  " counts)))
      (agent-ui-files--open (plist-get props :dir) file)
      (format "RET: open %s" (plist-get file :path)))))
 
@@ -175,7 +168,7 @@ nothing under that, and the counts never cut)."
                                       (concat (propertize (if closed "▸ " "▾ ") 'face 'agent-ui-muted)
                                               mark
                                               ;; Cut at its start, as a file's name.
-                                              (propertize (agent-ui-files--cut
+                                              (propertize (agent-ui-truncate-start
                                                            folder (max (min (string-width folder) 8)
                                                                        (- width 2 (string-width mark) (string-width counts)
                                                                           (string-width count))))
