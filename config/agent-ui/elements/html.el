@@ -73,7 +73,10 @@ out, its entities read, its spaces one."
   (let* ((file (plist-get props :file))
          (page (or file (plist-get props :url)))
          (width (plist-get ctx :width))
-         (read (and file (file-readable-p file)
+         ;; Why it can't be read (a folder too: reading it failed).
+         (why (and file (cond ((not (file-readable-p file)) "not found")
+                              ((not (file-regular-p file)) "not a file"))))
+         (read (and file (not why)
                     (agent-ui-html--text-of
                      (with-temp-buffer
                        (let ((coding-system-for-read 'utf-8))
@@ -85,10 +88,10 @@ out, its entities read, its spaces one."
      (propertize "◫ " 'face 'agent-ui-accent)
      (agent-ui-button (propertize (agent-ui-truncate title (- width 2)) 'face 'bold) open "RET: open the page")
      "\n"
-     (propertize (agent-ui-truncate (abbreviate-file-name page) (if (and file (not read)) (- width 13) width))
+     (propertize (agent-ui-truncate (abbreviate-file-name page) (if why (- width 4 (string-width why)) width))
                  'face 'agent-ui-muted)
      (cond
-      ((and file (not read)) (propertize "  (not found)" 'face 'agent-ui-muted))
+      (why (propertize (format "  (%s)" why) 'face 'agent-ui-muted))
       ((and read (not (string-empty-p (cdr read))))
        (concat "\n" (string-join (seq-take (split-string (agent-ui-wrap (cdr read) width) "\n")
                                            (plist-get props :lines))

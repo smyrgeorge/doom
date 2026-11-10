@@ -806,6 +806,22 @@ they were), and its title on one line (it kept its newlines)."
                            "“Done”… © 2026 &unknown; &#0; <tag>")))
     (should (equal (agent-ui-html--entities "&AMP; &amp;amp; &#65;&#x42;") "&AMP; &amp; AB"))))
 
+;; doom-nwj.81
+(ert-deftest agent-ui-elements/a-folder-isnt-a-file ()
+  "A folder given as a code or html element's file is said not to be one
+(reading it failed: \"Read error: Is a directory\")."
+  (let ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "proj-") t))))
+    (unwind-protect
+        (progn
+          (should (equal (+test-aue-draw (list :type "code" :file dir :from 1) :width 300)
+                         (concat (abbreviate-file-name dir) ": not a file")))
+          (should (equal (+test-aue-draw (list :type "html" :file dir) :width 300)
+                         (concat "◫ " (file-name-nondirectory dir) "\n" (abbreviate-file-name dir) "  (not a file)")))
+          ;; Missing: as before.
+          (should (string-suffix-p ": not found" (+test-aue-draw (list :type "code" :file (concat dir "x.c")) :width 300)))
+          (should (string-suffix-p "  (not found)" (+test-aue-draw (list :type "html" :file (concat dir "x.html")) :width 300))))
+      (delete-directory dir t))))
+
 (ert-deftest agent-ui-elements/progress-seamless-in-the-gui ()
   ;; Its blocks as spaces on their colour (glyphs leave seams); the counts
   ;; and label as they are.

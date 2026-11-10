@@ -54,8 +54,11 @@ FILE's name (\": not found\"), or nil."
       ;; gutter), nor CRLF's returns (^M).
       (cons (replace-regexp-in-string "\r$" "" (string-trim-right code "[\r\n]+")) nil)
     (let ((file (plist-get props :file)))
-      (if (not (and file (file-readable-p file)))
-          (cons "" ": not found")
+      (cond
+       ((not (and file (file-readable-p file))) (cons "" ": not found"))
+       ;; A folder (readable too): reading it failed.
+       ((not (file-regular-p file)) (cons "" ": not a file"))
+       (t
         (with-temp-buffer
           (insert-file-contents file)
           (let* ((from (plist-get props :from))
@@ -68,7 +71,7 @@ FILE's name (\": not found\"), or nil."
               (forward-line (1- from))
               (let ((start (point)))
                 (forward-line (- to from -1))
-                (cons (string-trim-right (buffer-substring start (point)) "\n") nil)))))))))
+                (cons (string-trim-right (buffer-substring start (point)) "\n") nil))))))))))
 
 (defun agent-ui-code--check (props)
   (unless (or (plist-get props :code) (plist-get props :file))
