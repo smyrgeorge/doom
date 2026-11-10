@@ -506,6 +506,24 @@ whole (one line ran past the width, and the SVG's right edge)."
           (should (< (+ (string-to-number (match-string 1 svg)) (* 8 (length (match-string 2 svg)))) (+ width 8)))
           (setq start (match-end 0)))))))
 
+(ert-deftest agent-ui-elements/chart-labels-and-figures-fit ()
+  "Long units and values: a sparkline's figures left out from the end, bar
+values and line axis labels cut to a third of the width, every line within
+it (they ran past it); in the GUI the plot stays inside the image."
+  (let ((spark '(:type "chart" :kind "sparkline" :unit "ms" :values (1234.56 1500.25 1000.12 1300.5)))
+        (bars '(:type "chart" :kind "bar" :unit "requests per second" :labels ("api" "web") :values (1200 800)))
+        (line '(:type "chart" :height 3 :unit "requests per second" :values (1000.55 2000.25 1500))))
+    (dolist (element (list spark bars line))
+      (dolist (width '(20 30 40))
+        (dolist (text-line (split-string (+test-aue-draw element :width width) "\n"))
+          (should (<= (string-width text-line) width)))))
+    ;; Wide: the sparkline's figures all there.
+    (should (string-match-p "last 1300.5 ms  min 1000.12  max 1500.25" (+test-aue-draw spark :width 80)))
+    ;; The line's plot inside its image at 20 columns (its left was 232 in 160).
+    (let ((svg (+test-aue-svg line 20)))
+      (string-match "points=\"\\([0-9.]+\\)" svg)
+      (should (< (string-to-number (match-string 1 svg)) 160)))))
+
 (ert-deftest agent-ui-elements/chart-bars-of-nothing ()
   "Bars whose highest value is 0 (all 0 or below, or max 0): drawn, empty, text
 and GUI (it divided by 0: \"Arithmetic overflow error\")."

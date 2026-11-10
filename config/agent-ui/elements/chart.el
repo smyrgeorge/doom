@@ -233,11 +233,17 @@ named."
   (let* ((values (plist-get (car (plist-get props :series)) :values))
          (range (agent-ui-chart--range props))
          (low (car range)) (span (float (- (cdr range) low)))
-         (suffix (format "  last %s  min %s  max %s"
-                         (agent-ui-chart--number props (car (last values)))
-                         (agent-ui-format-number (apply #'min values))
-                         (agent-ui-format-number (apply #'max values))))
-         (room (max 4 (- (plist-get ctx :width) (string-width suffix))))
+         (width (plist-get ctx :width))
+         ;; Its figures, the last ones left out until the line fits (its
+         ;; suffix was never cut: 46 columns at 30).
+         (parts (list (format "last %s" (agent-ui-chart--number props (car (last values))))
+                      (format "min %s" (agent-ui-format-number (apply #'min values)))
+                      (format "max %s" (agent-ui-format-number (apply #'max values)))))
+         (suffix (progn
+                   (while (and parts (> (+ 4 2 (string-width (string-join parts "  "))) width))
+                     (setq parts (butlast parts)))
+                   (if parts (concat "  " (string-join parts "  ")) "")))
+         (room (max 1 (- width (string-width suffix))))
          (shown (last values room)))
     (concat (propertize (mapconcat (lambda (v)
                                      (aref agent-ui-chart--levels
@@ -294,8 +300,10 @@ eighths)."
   (let* ((rows (agent-ui-chart--bar-rows props))
          (width (plist-get ctx :width))
          (label-width (min (apply #'max 0 (mapcar (lambda (r) (string-width (car r))) rows)) (/ width 3)))
-         (value-width (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)))
-         (bar-width (max 5 (- width label-width value-width 4)))
+         ;; Values a third of the width at most, cut (a long unit ran the
+         ;; lines past the width); the bar a column at least.
+         (value-width (min (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)) (/ width 3)))
+         (bar-width (max 1 (- width label-width value-width 4)))
          (scale (agent-ui-chart--bar-scale props bar-width))
          (legend (and (cdr (plist-get props :series)) (agent-ui-chart--legend props (- width label-width 2)))))
     (concat
@@ -303,7 +311,7 @@ eighths)."
       (lambda (row)
         (concat (agent-ui-pad (agent-ui-truncate (car row) label-width) label-width) "  "
                 (agent-ui-chart--bar-cells (nth 1 row) scale bar-width) "  "
-                (agent-ui-pad (nth 2 row) value-width 'right)))
+                (agent-ui-pad (agent-ui-truncate (nth 2 row) value-width) value-width 'right)))
       rows "\n")
      (mapconcat (lambda (line) (concat "\n" (make-string (+ label-width 2) ?\s) line)) legend ""))))
 
@@ -417,7 +425,11 @@ labels under them (none on another's), as two lines; nil without times."
   (let* ((range (agent-ui-chart--range props))
          (high-label (agent-ui-chart--number props (cdr range)))
          (low-label (agent-ui-chart--number props (car range)))
-         (label-width (max (string-width high-label) (string-width low-label)))
+         ;; The axis's labels a third of the width at most, cut.
+         (label-width (min (max (string-width high-label) (string-width low-label))
+                           (max 1 (/ (plist-get ctx :width) 3))))
+         (high-label (agent-ui-truncate high-label label-width))
+         (low-label (agent-ui-truncate low-label label-width))
          (columns (max 4 (- (plist-get ctx :width) label-width 2)))
          (rows (plist-get props :height))
          (plot (agent-ui-chart--plot (plist-get props :series) range columns rows (agent-ui-chart--xs props)))
@@ -492,9 +504,14 @@ labels under them (none on another's), as two lines; nil without times."
          (lh (plist-get ctx :line-height))
          (range (agent-ui-chart--range props))
          (low (car range)) (span (float (- (cdr range) low)))
-         (high-label (agent-ui-chart--number props (cdr range)))
-         (low-label (agent-ui-chart--number props low))
-         (label-width (* cw (+ 1 (max (string-width high-label) (string-width low-label)))))
+         ;; The axis's labels a third of the width at most, cut (a long unit
+         ;; put the plot's left past its right, outside the image).
+         (label-columns (min (max (string-width (agent-ui-chart--number props (cdr range)))
+                                  (string-width (agent-ui-chart--number props low)))
+                             (max 1 (/ (plist-get ctx :width) 3))))
+         (high-label (agent-ui-truncate (agent-ui-chart--number props (cdr range)) label-columns))
+         (low-label (agent-ui-truncate (agent-ui-chart--number props low) label-columns))
+         (label-width (* cw (+ 1 label-columns)))
          (labels (plist-get props :labels))
          (xs (agent-ui-chart--xs props))
          (times (and xs (plist-get props :times)))
@@ -574,10 +591,12 @@ labels under them (none on another's), as two lines; nil without times."
          (rows (agent-ui-chart--bar-rows props))
          (columns (plist-get ctx :width))
          (label-width (* cw (min (apply #'max 0 (mapcar (lambda (r) (string-width (car r))) rows)) (/ columns 3))))
-         (value-width (* cw (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows))))
+         ;; Values a third of the width at most, cut; the bar a column at least.
+         (value-columns (min (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)) (/ columns 3)))
+         (value-width (* cw value-columns))
          (width (* cw columns))
          (bar-left (+ label-width (* 2 cw)))
-         (bar-width (max (* 5 cw) (- width bar-left value-width (* 2 cw))))
+         (bar-width (max cw (- width bar-left value-width (* 2 cw))))
          (scale (agent-ui-chart--bar-scale props bar-width))
          (series (plist-get props :series))
          ;; Grouped: a group's bars closer, a gap between groups.
@@ -610,7 +629,8 @@ labels under them (none on another's), as two lines; nil without times."
                                        :fill (agent-ui-chart--color (agent-ui-chart--face (cdr segment)))
                                        :rx (if (cdr (nth 1 r)) 0 2))
                         (setq x (+ x length)))))
-                  (agent-ui-chart--svg-text svg ctx (nth 2 r) (+ (max x (+ bar-left 1)) cw) (+ y (* 0.7 row))
+                  (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (nth 2 r) value-columns)
+                                            (+ (max x (+ bar-left 1)) cw) (+ y (* 0.7 row))
                                             :fill muted)))
     (cl-loop for row in legend
              for y from (- height (round (* 0.4 lh)) (* lh (1- (length legend)))) by lh
