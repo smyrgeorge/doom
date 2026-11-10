@@ -436,8 +436,11 @@ so a canvas goes on with its other elements. No newline at its end."
     ;; Only text: a title of another kind is the element's error to show.
     (unless (stringp title) (setq title nil))
     (concat
+     ;; One line, cut to the width (never cut: 56 columns at 20).
      (when (and title (not (equal title "")))
-       (concat (propertize (format "%s" title) 'face 'agent-ui-title) "\n"))
+       (let ((title (replace-regexp-in-string "[\n\r]+" " " title))
+             (width (plist-get ctx :width)))
+         (concat (propertize (if width (agent-ui-truncate title width) title) 'face 'agent-ui-title) "\n")))
      (condition-case err
          (let* ((type (agent-ui-type (plist-get element :type)))
                 (props (agent-ui-check type element))

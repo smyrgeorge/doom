@@ -211,6 +211,29 @@
     (should (equal (agent-ui-render '(:type "plain") (agent-ui-context :graphic t))
                    "plain"))))
 
+;; doom-nwj.105
+(ert-deftest agent-ui-core/a-title-fits ()
+  "An element's title is one line, cut to the width (never cut: 56 columns
+at 20), for every type."
+  (+test-aui
+    (agent-ui-define plain "Text." :text (lambda (_p _c) "body"))
+    (let ((title "A rather long title for what this element is all about"))
+      (dolist (width '(10 20 40))
+        (let ((first (car (split-string (substring-no-properties
+                                         (agent-ui-render (list :type "plain" :title title) (agent-ui-context :width width)))
+                                        "\n"))))
+          (should (<= (string-width first) width))
+          (should (string-suffix-p "…" first))))
+      (should (equal (substring-no-properties (agent-ui-render (list :type "plain" :title title) (agent-ui-context :width 20)))
+                     "A rather long title…\nbody"))
+      ;; Its face kept; room for it: whole.
+      (let ((text (agent-ui-render (list :type "plain" :title title) (agent-ui-context :width 80))))
+        (should (equal (substring-no-properties text) (concat title "\nbody")))
+        (should (eq (get-text-property 0 'face text) 'agent-ui-title)))
+      ;; Its newlines: spaces (it was two lines).
+      (should (equal (substring-no-properties (agent-ui-render '(:type "plain" :title "Two\nlines") (agent-ui-context :width 40)))
+                     "Two lines\nbody")))))
+
 (ert-deftest agent-ui-core/the-context-given ()
   (+test-aui
     (let (seen)
