@@ -864,6 +864,29 @@ new file mode 100644
   (let ((agent-ui-max-rows 3))
     (should (string-suffix-p "… 5 lines more" (+test-aue-draw (list :type "diff" :diff +test-aue-diff))))))
 
+;; doom-nwj.65
+(ert-deftest agent-ui-elements/diff-removed-lines-open-where-they-were ()
+  "RET on a removed line opens the new file where it was (it opened at the
+old file's number: off by every earlier hunk's change in lines)."
+  (let* ((diff (concat "--- a/src/parser.c\n+++ b/src/parser.c\n"
+                       "@@ -10,3 +10,5 @@\n a\n+b\n+c\n d\n e\n"
+                       "@@ -100,4 +102,3 @@\n x\n-gone1\n-gone2\n+new\n y\n"))
+         (opened nil)
+         (agent-ui-open-file-function (lambda (f) (push f opened) (set-buffer (get-buffer-create " *opened*"))))
+         (text (agent-ui-render (list :type "diff" :diff diff :dir "/work/") (agent-ui-context :width 60))))
+    (with-current-buffer (get-buffer-create " *opened*") (erase-buffer) (insert (make-string 200 ?\n)))
+    (unwind-protect
+        (cl-flet ((target (what)
+                    (funcall (get-text-property (string-search what text) 'agent-ui-action text))
+                    (with-current-buffer " *opened*" (line-number-at-pos))))
+          (should (= (target "x") 102))
+          (should (= (target "gone1") 103))
+          (should (= (target "gone2") 103))
+          (should (= (target "new") 103))
+          (should (= (target "y") 104))
+          (should (equal (car opened) "/work/src/parser.c")))
+      (kill-buffer " *opened*"))))
+
 (ert-deftest agent-ui-elements/diff-dir-the-agents ()
   ;; Its dir: the agent's directory, when shown (relative names resolve there).
   (let ((agent-ui-file-directory "/proj/")

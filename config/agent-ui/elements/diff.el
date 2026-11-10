@@ -20,8 +20,9 @@
 (defun agent-ui-diff--parse (text)
   "TEXT, a unified diff, as files: (:file NAME :added N :removed N :hunks
 HUNKS), each hunk (:header TEXT :lines ((KIND NUMBER TEXT)...)), KIND one of
-context, added, removed, note; NUMBER the line's in the new file (the old
-one's for a removed line)."
+context, added, removed, note; NUMBER the line's in the new file (for a
+removed line, where it was: the old file's number is another file's, off
+after a hunk that changed the count)."
   (let (files file hunk old new)
     (cl-flet ((close-hunk () (when hunk
                                (setf (plist-get file :hunks)
@@ -58,7 +59,7 @@ one's for a removed line)."
           (push (list 'added new (substring line 1)) (plist-get hunk :lines))
           (cl-incf (plist-get file :added)) (cl-incf new))
          ((string-prefix-p "-" line)
-          (push (list 'removed old (substring line 1)) (plist-get hunk :lines))
+          (push (list 'removed new (substring line 1)) (plist-get hunk :lines))
           (cl-incf (plist-get file :removed)) (cl-incf old))
          ((string-prefix-p "\\" line)
           (push (list 'note nil (substring line 1)) (plist-get hunk :lines)))
