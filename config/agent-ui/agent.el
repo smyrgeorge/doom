@@ -214,10 +214,16 @@ then has its say."
 canvas's session (sent if SUBMIT); while its agent works, queued (see above).
 The canvas still current after it: agent-shell selects the session's window
 \(its buffer current then), and what the press does next (a question
-answered) is the canvas's."
-  (let ((session (and (derived-mode-p 'agent-ui-canvas-mode) agent-ui--session-buffer)))
+answered) is the canvas's. A project's panel (config/agent-ui/panels.el),
+of no session: the session working in its project, the latest."
+  (let ((session (and (derived-mode-p 'agent-ui-canvas-mode)
+                      (or agent-ui--session-buffer
+                          (and (bound-and-true-p agent-ui-panels--state)
+                               (agent-ui--session-buffer nil default-directory))))))
     (unless (buffer-live-p session)
-      (user-error "This canvas has no agent-shell session"))
+      (user-error "%s" (if (bound-and-true-p agent-ui-panels--state)
+                      "No agent-shell session in this panel's project"
+                    "This canvas has no agent-shell session")))
     (unless (fboundp 'agent-shell-insert)
       (user-error "agent-shell isn't loaded"))
     (cond

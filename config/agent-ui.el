@@ -115,6 +115,8 @@
       :n "gr" #'agent-ui-canvas-redraw
       ;; A project panel, read again from its file (edited) and run anew.
       :n "gR" #'agent-ui-panel-reload
+      ;; The element at point saved as one of the project's panels.
+      :n "S"  #'agent-ui-save-panel
       :n "R"  #'agent-ui-review
       :n "a"  #'agent-ui-send-element
       :n "b"  #'agent-ui-report-bug

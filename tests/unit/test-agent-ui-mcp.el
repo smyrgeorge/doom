@@ -59,7 +59,7 @@ recorded, its reply REPLY (a plist)."
   (+test-aum '(:ok t :types [(:name "progress" :doc "A progress bar: VALUE of MAX.\nMore." :props [(:name "value" :kind "number")])])
     (let ((tools (append (plist-get (plist-get (+test-aum-handle "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}") :result) :tools) nil)))
       (should (equal (mapcar (lambda (tool) (plist-get tool :name)) tools)
-                     '("show" "update" "append" "remove" "clear" "list" "types" "render" "snapshot" "batch" "bug" "check" "define")))
+                     '("show" "update" "append" "remove" "clear" "list" "types" "render" "snapshot" "batch" "bug" "panels" "open" "check" "define")))
       ;; Each its schema; show's description has the types, from Emacs.
       (dolist (tool tools)
         (should (equal (plist-get (plist-get tool :inputSchema) :type) "object")))
@@ -69,7 +69,10 @@ recorded, its reply REPLY (a plist)."
       ;; Another canvas of the session: an argument of each tool that has one.
       (dolist (tool tools)
         (should (eq (and (plist-get (plist-get (plist-get tool :inputSchema) :properties) :canvas) t)
-                    (not (member (plist-get tool :name) '("types" "define" "check")))))))))
+                    (not (member (plist-get tool :name) '("types" "define" "check" "panels" "open")))))
+        ;; And one of the project's panels, open, the same tools (doom-3q5.6).
+        (should (eq (and (plist-get (plist-get (plist-get tool :inputSchema) :properties) :panel) t)
+                    (not (member (plist-get tool :name) '("types" "define" "check" "panels" "open")))))))))
 
 (ert-deftest agent-ui-mcp/each-tool-a-command-line ()
   (+test-aum '(:ok t :id "b")
@@ -87,6 +90,11 @@ recorded, its reply REPLY (a plist)."
       (should (equal (call "snapshot" "{\"id\":\"b\"}") '("snapshot" "b")))
       ;; A project panel's file checked (doom-3q5.1).
       (should (equal (call "check" "{\"name\":\"service\"}") '("check" "service")))
+      ;; The project's panels, opening one, working on one (doom-3q5.6).
+      (should (equal (call "panels" "{}") '("panels")))
+      (should (equal (call "open" "{\"name\":\"service\"}") '("open" "service")))
+      (should (equal (call "update" "{\"id\":\"ci\",\"patch\":{\"rows\":[]},\"panel\":\"service\"}")
+                     '("update" "ci" "{\"rows\":[]}" "--panel" "service")))
       (should (equal (call "clear" "{}") '("clear")))
       (should (equal (call "list" "{}") '("list")))
       (should (equal (call "types" "{}") '("types")))

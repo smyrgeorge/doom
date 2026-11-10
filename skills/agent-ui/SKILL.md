@@ -54,7 +54,9 @@ agent-ui render JSON          # an element drawn as text, as the canvas would (n
 agent-ui define FILE          # a type of your own (references/custom-types.md), from FILE or stdin
 agent-ui snapshot ID          # the element as an image, for your reply: {"file":..., "markdown":"![...](...)"}
 agent-ui bug JSON             # a bug in Agent UI itself, filed in its own issues (references/bugs.md)
-agent-ui check NAME           # a project panel's file checked, nothing run (references/panels.md)
+agent-ui panels               # the project's panels, kept in its repo (references/panels.md)
+agent-ui open NAME            # one opened for the user; --panel NAME: any operation on it
+agent-ui check NAME           # a panel's file checked, nothing run
 ```
 
 The same operations are MCP tools too, where your session has the `agent-ui` server: same arguments (an `element`, an

@@ -457,3 +457,122 @@ again (doom-3q5.5)."
           (should (= asked 4))))))
   ;; Kept out of the repository, where Doom keeps its data.
   (should (equal agent-ui-panel-trust-file (expand-file-name "agent-ui/trusted-panels.eld" doom-data-dir))))
+
+;; ====== THE AGENT AND PANELS ======
+
+(defun +test-aup-request (lines &optional payload)
+  "cmd/agent-ui's request: LINES (op id session cwd options canvas panel)
+and PAYLOAD (JSON), answered; its reply, parsed."
+  (let ((folder (make-temp-file "agent-ui-request-" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "request" folder) (insert (string-join lines "\n") "\n"))
+          (when payload
+            (with-temp-file (expand-file-name "payload" folder) (insert payload)))
+          (agent-ui-request folder)
+          (json-parse-string (with-temp-buffer (insert-file-contents (expand-file-name "reply" folder))
+                                               (buffer-string))
+                             :object-type 'plist :false-object :false))
+      (delete-directory folder t))))
+
+(ert-deftest agent-ui-panels/the-agent-opens-and-works-on-one ()
+  "agent-ui panels, open NAME (shown, not selected; its code started once
+the request is answered), --panel NAME on any operation (doom-3q5.6)."
+  (+test-aup `(("live" . ,(+test-aup-fixture "live")) ("service" . ,+test-aup-service))
+    (setq +test-aup-calls nil)
+    (save-window-excursion
+      (delete-other-windows)
+      (let ((agent-ui--request-cwd root)
+            (selected (selected-window)))
+        (should (equal (plist-get (agent-ui-do "panels" nil nil nil) :panels)
+                       [(:name "live" :open :false) (:name "service" :open :false)]))
+        (let* ((reply (agent-ui-do "open" "live" nil nil))
+               (canvas (get-buffer (plist-get reply :canvas))))
+          (unwind-protect
+              (progn
+                (should (eq (plist-get reply :ok) t))
+                ;; Its code not let yet (the test's let-everything aside).
+                (should (eq (plist-get reply :trusted) :false))
+                (should (eq (selected-window) selected))
+                (should (get-buffer-window canvas))
+                ;; Its code: a moment later, after the reply.
+                (should-not +test-aup-calls)
+                (should (+test-wait-for (lambda () (memq 'fetch +test-aup-calls)) 2))
+                (should (equal (plist-get (agent-ui-do "panels" nil nil nil) :panels)
+                               [(:name "live" :open t) (:name "service" :open :false)]))
+                ;; --panel NAME: the request's canvas, the panel's.
+                (let ((reply (+test-aup-request (list "update" "where" "" root "" "" "live") "{\"text\":\"from the agent\"}")))
+                  (should (eq (plist-get reply :ok) t))
+                  (should (equal (plist-get (agent-ui-get "where" :canvas canvas) :text) "from the agent")))
+                (should (string-match-p "panel service isn't open: agent-ui open service"
+                                        (plist-get (+test-aup-request (list "list" "" "" root "" "" "service")) :error))))
+            (kill-buffer canvas)))))))
+
+(ert-deftest agent-ui-panels/its-buttons-to-the-project-s-session ()
+  "A panel's button: its prompt into the latest session working in its
+project; none: said."
+  (+test-aup '(("act" . "(agent-ui-panel :ui (:type \"text\" :id \"t\" :text \"2 failed\" :actions ((:label \"Fix them\" :prompt \"Fix the 2 failing tests\" :submit t))))\n"))
+    (let* ((session (generate-new-buffer "Claude Agent @ act"))
+           (sessions (list session))
+           (inserted nil))
+      (with-current-buffer session (setq default-directory root))
+      (cl-letf (((symbol-function 'agent-ui--sessions) (lambda () sessions))
+                ((symbol-function 'agent-shell-cwd) (lambda () default-directory))
+                ((symbol-function 'agent-shell-insert) (lambda (&rest args) (push args inserted))))
+        (save-window-excursion
+          (let ((canvas (agent-ui-open-panel "act")))
+            (unwind-protect
+                (with-current-buffer canvas
+                  (agent-ui--flush)
+                  (goto-char (point-min))
+                  (search-forward "⏵ Fix them")
+                  (goto-char (match-beginning 0))
+                  (agent-ui-button-press)
+                  (should (equal (car inserted) (list :text "Fix the 2 failing tests" :submit t :shell-buffer session)))
+                  (setq sessions nil)
+                  (should (string-match-p "No agent-shell session in this panel's project"
+                                          (cadr (should-error (agent-ui-button-press) :type 'user-error)))))
+              (kill-buffer canvas)
+              (kill-buffer session))))))))
+
+(ert-deftest agent-ui-panels/an-element-saved-as-one ()
+  "S: the element at point saved as the project's panel, as it was shown
+(its updates, its data, left out), its code to write; trusted (the user
+made it); one there already, asked before replacing it."
+  (+test-aup '()
+    (let* ((agent-ui-panel-trust-file (expand-file-name "trusted.eld" (make-temp-file "trust-" t)))
+           (agent-ui-default-canvas (make-temp-name "save-"))
+           (agent-ui-display-function #'ignore))
+      (agent-ui-show '(:id "ci" :type "table" :title "CI" :columns ("Run" "Status") :key "Run"))
+      (agent-ui-update "ci" '(:rows (("#812" "passed"))))
+      (agent-ui-show '(:id "board" :type "panel" :title "Board"
+                       :children ((:id "count" :type "stats" :figures ((:label "Open" :value 0))))))
+      (agent-ui-update "count" '(:figures ((:label "Open" :value 9))))
+      (let ((canvas (agent-ui-canvas)))
+        (unwind-protect
+            (with-current-buffer canvas
+              (setq default-directory root)
+              (agent-ui--flush)
+              (goto-char (point-min))
+              (search-forward "CI")
+              (let ((file (agent-ui-save-panel "ci")))
+                (should (equal file (expand-file-name ".agent-ui/panels/ci.el" root)))
+                (let ((panel (agent-ui-panel-read file)))
+                  (should (equal (plist-get (plist-get panel :ui) :columns) '("Run" "Status")))
+                  (should-not (plist-get (plist-get panel :ui) :rows)))
+                (should (agent-ui-panel-trusted-p file))
+                (should (equal (plist-get (agent-ui-panel-check file) :blocking) [])))
+              ;; A panel's child at point: its panel, as shown.
+              (goto-char (point-min))
+              (search-forward "Open")
+              (agent-ui-save-panel "board")
+              (should (equal (plist-get (car (plist-get (car (plist-get (plist-get (agent-ui-panel-read (agent-ui-panel-file "board")) :ui) :children)) :figures)) :value)
+                             0))
+              ;; There already: asked.
+              (goto-char (point-min))
+              (search-forward "CI")
+              (cl-letf (((symbol-function 'y-or-n-p) #'ignore))
+                (should-error (agent-ui-save-panel "ci") :type 'user-error)))
+          (kill-buffer canvas)))))
+  (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "S")
+              #'agent-ui-save-panel)))

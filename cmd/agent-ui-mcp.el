@@ -28,12 +28,18 @@
   '(:type "string" :description "Optional: another canvas of your session, by name (\"tests\"), in a pane of its own; without it, your session's canvas")
   "The canvas argument's schema.")
 
+(defconst agent-ui-mcp--panel-schema
+  '(:type "string" :description "Optional: one of the project's panels, open (agent-ui open NAME), by name: its canvas instead")
+  "The panel argument's schema.")
+
 (defun agent-ui-mcp--with-canvas (tool)
-  "TOOL (a tools/list entry) taking a canvas argument too."
+  "TOOL (a tools/list entry) taking a canvas argument too, and a panel."
   (let* ((schema (copy-sequence (plist-get tool :inputSchema)))
          (properties (copy-sequence (plist-get schema :properties))))
     (plist-put tool :inputSchema
-               (plist-put schema :properties (plist-put properties :canvas agent-ui-mcp--canvas-schema)))))
+               (plist-put schema :properties
+                          (plist-put (plist-put properties :canvas agent-ui-mcp--canvas-schema)
+                                     :panel agent-ui-mcp--panel-schema)))))
 
 (defconst agent-ui-mcp--element-schema
   '(:type "object"
@@ -67,7 +73,7 @@ nil if it can't be reached."
     (vconcat
      (mapcar
       (lambda (tool)
-        (if (member (plist-get tool :name) '("types" "define" "check"))
+        (if (member (plist-get tool :name) '("types" "define" "check" "panels" "open"))
             tool
           (agent-ui-mcp--with-canvas tool)))
       (list
@@ -104,6 +110,12 @@ nil if it can't be reached."
                                         :repro (:type "object" :description "An element showing it, with neutral data")
                                         :new (:type "boolean" :description "File it even if a similar bug is open"))
                            :required ["title" "description"]))
+      (list :name "panels" :description "The project's panels (PROJECT/.agent-ui/panels/NAME.el, kept in its repository, opened on demand, their data fetched afresh): their names, which are open. See the agent-ui skill's references/panels.md."
+            :inputSchema '(:type "object"))
+      (list :name "open" :description "Open one of the project's panels in the user's Emacs, in a pane of its own (open already: shown). Its code, if the user hasn't let it run yet, is asked for then (the reply's trusted). The other tools work on it with their panel argument."
+            :inputSchema '(:type "object"
+                           :properties (:name (:type "string" :description "The panel's name"))
+                           :required ["name"]))
       (list :name "check" :description "A project panel's file checked, nothing shown, nothing run: PROJECT/.agent-ui/panels/NAME.el (or a file ending .el), its :ui checked as show checks an element, its code compiled (errors refuse it; warnings), its calls that wait (blocking: Emacs frozen while they run) found. See the agent-ui skill's references/panels.md."
             :inputSchema '(:type "object"
                            :properties (:name (:type "string" :description "The panel's name (its file's, without .el), or its file"))
@@ -136,6 +148,7 @@ an error reply if it said nothing readable)."
   (cl-flet ((arg (key) (plist-get arguments key))
             (json (value) (agent-ui-mcp--json value)))
     (let* ((canvas (let ((c (arg :canvas))) (and (stringp c) (not (string-empty-p c)) c)))
+           (panel (let ((p (arg :panel))) (and (stringp p) (not (string-empty-p p)) p)))
            (args (pcase name
                    ("show" (list "show" (json (arg :element))))
                    ("render" (list "render" (json (arg :element))))
@@ -144,20 +157,25 @@ an error reply if it said nothing readable)."
                    ("remove" (list "remove" (or (arg :id) "")))
                    ("snapshot" (list "snapshot" (or (arg :id) "")))
                    ("check" (list "check" (or (arg :name) "")))
+                   ("panels" (list "panels"))
+                   ("open" (list "open" (or (arg :name) "")))
                    ("clear" (list "clear"))
                    ("list" (list "list"))
                    ("types" (if (arg :type) (list "types" (arg :type)) (list "types")))
                    ("batch" (list "batch" (json (or (arg :operations) []))))
                    ;; The bug as given, but its canvas (an argument of its own).
                    ("bug" (list "bug" (json (cl-loop for (k v) on arguments by #'cddr
-                                                     unless (eq k :canvas) append (list k v)))))))
+                                                     unless (memq k '(:canvas :panel)) append (list k v)))))))
            (reply
             (cond
              (args
               ;; Another canvas of the session, if it names one.
-              (agent-ui-mcp--run (if (and canvas (not (equal name "types")))
-                                     (append args (list "--canvas" canvas))
-                                   args)))
+              (agent-ui-mcp--run (append args
+                                         (when (and canvas (not (equal name "types")))
+                                           (list "--canvas" canvas))
+                                         ;; One of the project's panels, open.
+                                         (when (and panel (not (member name '("types" "check" "panels" "open"))))
+                                           (list "--panel" panel)))))
              ((equal name "define")
               (let ((file (make-temp-file "agent-ui-type-" nil ".el")))
                 (unwind-protect

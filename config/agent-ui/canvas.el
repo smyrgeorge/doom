@@ -62,8 +62,10 @@ canvas killed).")
 
 (cl-defstruct (agent-ui--entry (:constructor agent-ui--make-entry))
   "An element of a canvas: its id, itself (a plist), where it's drawn, and
-what's drawn there: (ELEMENT WIDTH GRAPHIC), its type's :extend editing it."
-  id element start end drawn)
+what's drawn there: (ELEMENT WIDTH GRAPHIC), its type's :extend editing it;
+SHOWN, it as it was shown, before updates and its sources' changes (its
+data left out: what a panel saved from it keeps)."
+  id element start end drawn shown)
 
 (defvar-local agent-ui--canvas-name nil "This canvas's name.")
 (defvar-local agent-ui--entries nil "This canvas's elements, by id.")
@@ -576,10 +578,12 @@ end, drawn at once, and the canvas is shown if it's in no window
 \(`agent-ui-display-function'). Without an id, one is made. Returns the id.
 Signals `agent-ui-error' if ELEMENT is wrong."
   (with-current-buffer (agent-ui--buffer canvas t)
-    (let* ((element (agent-ui--checked element))
+    (let* ((given element)
+           (element (agent-ui--checked element))
            (id (or (plist-get element :id)
                    (agent-ui--new-id (plist-get element :type))))
            (element (plist-put element :id id))
+           (given (plist-put (plist-put (copy-sequence given) :id id) :type (plist-get element :type)))
            (entry (progn (agent-ui--check-id id) (gethash id agent-ui--entries)))
            (owner (and (not entry) (agent-ui--owner id))))
       (cond
@@ -589,7 +593,10 @@ Signals `agent-ui-error' if ELEMENT is wrong."
           (agent-ui--ids-free (agent-ui--replace-child (agent-ui--entry-element owner) id nil)
                               (agent-ui--entry-id owner))
           (setf (agent-ui--entry-element owner)
-                (agent-ui--checked (agent-ui--replace-child (agent-ui--entry-element owner) id element)))
+                (agent-ui--checked (agent-ui--replace-child (agent-ui--entry-element owner) id element))
+                (agent-ui--entry-shown owner)
+                (agent-ui--replace-child (or (agent-ui--entry-shown owner) (agent-ui--entry-element owner))
+                                         id given))
           (run-hook-with-args 'agent-ui-removed-functions id)
           (agent-ui--children-stopped old)
           (agent-ui--dirty (list (agent-ui--entry-id owner)))))
@@ -597,7 +604,8 @@ Signals `agent-ui-error' if ELEMENT is wrong."
           (progn
             (agent-ui--ids-free element id)
             (agent-ui--children-stopped (agent-ui--entry-element entry))
-            (setf (agent-ui--entry-element entry) element)
+            (setf (agent-ui--entry-element entry) element
+                  (agent-ui--entry-shown entry) given)
             (agent-ui--dirty (list id))))
        (t
         (agent-ui--ids-free element)
@@ -610,7 +618,7 @@ Signals `agent-ui-error' if ELEMENT is wrong."
             (let ((start (point-marker)))
               (insert "\n\n")
               (setq entry (agent-ui--make-entry :id id :element element :start start
-                                                :end (copy-marker start t)))))
+                                                :end (copy-marker start t) :shown given))))
           (puthash id entry agent-ui--entries)
           (setq agent-ui--order (append agent-ui--order (list id)))
           (unless (agent-ui--window)
@@ -678,7 +686,9 @@ next element shown opens a pane again."
     (`(,owner . ,(and child (pred identity)))
      ;; A panel's child: out of its panel, redrawn.
      (setf (agent-ui--entry-element owner)
-           (agent-ui--checked (agent-ui--replace-child (agent-ui--entry-element owner) id nil)))
+           (agent-ui--checked (agent-ui--replace-child (agent-ui--entry-element owner) id nil))
+           (agent-ui--entry-shown owner)
+           (and (agent-ui--entry-shown owner) (agent-ui--replace-child (agent-ui--entry-shown owner) id nil)))
      (run-hook-with-args 'agent-ui-removed-functions id)
      (agent-ui--children-stopped child)
      (agent-ui--dirty (list (agent-ui--entry-id owner)))
@@ -718,6 +728,14 @@ next element shown opens a pane again."
   (agent-ui--in canvas
     (pcase-let ((`(,entry . ,child) (agent-ui--resolve id)))
       (copy-sequence (or child (agent-ui--entry-element entry))))))
+
+(cl-defun agent-ui-shown-element (id &key canvas)
+  "Element ID of CANVAS as it was shown: before its updates, appends and its
+sources' changes (a panel's child as its panel, or itself, was shown)."
+  (agent-ui--in canvas
+    (pcase-let* ((`(,entry . ,child) (agent-ui--resolve id))
+                 (shown (or (agent-ui--entry-shown entry) (agent-ui--entry-element entry))))
+      (copy-sequence (if child (agent-ui--find-child shown id) shown)))))
 
 (cl-defun agent-ui-elements (&key canvas)
   "CANVAS's elements in order: plists (:id ID :type TYPE); none if it isn't

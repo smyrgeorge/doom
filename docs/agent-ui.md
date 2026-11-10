@@ -64,6 +64,9 @@ agent-ui define dial.el        # a type of the agent's own (below)
 agent-ui snapshot build        # the element as an image for the agent's reply (below)
 agent-ui list --canvas tests   # any of them, on another canvas of the session (below)
 agent-ui bug < bug.json        # a bug in Agent UI itself, into its own issues (below)
+agent-ui panels                # the project's panels, which are open (below)
+agent-ui open service          # one of them opened for the user
+agent-ui list --panel service  # any operation on an open one
 agent-ui check service         # a project panel's file checked, nothing run (below)
 ```
 
@@ -413,6 +416,13 @@ under it, until a fetch goes well; a fetch that takes long itself (over `agent-u
 meanwhile, too. `gR` reads its file again (edited) and runs it anew; its file wrong, it's said there and the panel
 goes on as it was.
 
+The agent lists them (`agent-ui panels`), opens one for you (`agent-ui open NAME`: its pane shown, not selected; its
+code asked for then, if it must be) and works on an open one with `--panel NAME` on any operation (the MCP tools'
+`panels`, `open` and `panel`). A panel's buttons put their prompt into the project's agent session, the latest one
+working in it. `S` on a canvas saves the element at point as one of the project's panels: its file,
+`.agent-ui/panels/NAME.el`, written with the element as it was first shown (before its updates and its sources'
+changes: no data) and an empty `:fetch` to write, trusted (you made it).
+
 `SPC o u` lists the current project's panels; the one picked opens in a canvas of its own, `Agent UI: NAME (PROJECT)`,
 in its own pane, its directory the project's root, belonging to no session. Open already, its pane is shown. `q`
 closes it, its buffer killed; opened again later, after a restart too, it's read anew and drawn empty, its code
@@ -422,6 +432,7 @@ filling it.
 |---|---|
 | `SPC o u` | Open one of the current project's panels (`M-x agent-ui-open-panel`) |
 | `gR` (in it) | Read its file again and run it anew |
+| `S` (on a canvas) | Save the element at point as one of the project's panels |
 | `q` (in it) | Close it |
 
 ## In the conversation

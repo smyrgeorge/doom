@@ -24,6 +24,10 @@
 #   agent-ui define [FILE]       a type of your own: its Emacs Lisp code
 #                                (one agent-ui-define), from FILE or stdin;
 #                                staged for the user to keep or discard
+#   agent-ui panels              the project's panels (.agent-ui/panels/):
+#                                {"panels": [{"name", "open"}]}
+#   agent-ui open NAME           one of them opened in the user's Emacs
+#                                (its code asked for, if it must be)
 #   agent-ui check NAME          a project panel's file (.agent-ui/panels/
 #                                NAME.el, or a FILE.el) checked, nothing
 #                                run: its UI, its code compiled, its calls
@@ -35,6 +39,7 @@
 #                                {"ok": true, "issue": ID}; not filed:
 #                                {"ok": false, "error", "report"}
 #
+# --panel NAME (any operation): the project's open panel NAME's canvas.
 # --canvas NAME (any operation): the session's other canvas NAME ("tests"),
 # in a pane of its own, instead of its canvas; "canvas": NAME in the JSON
 # (an element's, a change's, a batch's operation's) says the same.
@@ -71,16 +76,19 @@ fail() {  # fail STATUS MESSAGE: the reply for an error, and exit
 case "$1" in -h|--help|help) usage; exit 0 ;; esac
 
 # --canvas NAME, wherever it is: taken out.
-canvas="" args=()
+canvas="" panel="" args=()
 while [ $# -gt 0 ]; do
   case "$1" in
+    --panel) [ $# -lt 2 ] && fail 2 "--panel: which panel? --panel NAME"
+             panel=$2; shift 2 ;;
+    --panel=*) panel=${1#--panel=}; shift ;;
     --canvas) [ $# -lt 2 ] && fail 2 "--canvas: which canvas? --canvas NAME"
               canvas=$2; shift 2 ;;
     --canvas=*) canvas=${1#--canvas=}; shift ;;
     *) args+=("$1"); shift ;;
   esac
 done
-case "$canvas" in *$'\n'*) fail 2 "a canvas's name is one line" ;; esac
+case "$canvas$panel" in *$'\n'*) fail 2 "a canvas's or a panel's name is one line" ;; esac
 set -- ${args[@]+"${args[@]}"}
 [ $# -eq 0 ] && { usage >&2; exit 2; }
 
@@ -101,9 +109,11 @@ case "$op" in
   remove|snapshot)
     [ $# -ne 1 ] && fail 2 "$op: agent-ui $op ID"
     id=$1 ;;
-  check)
-    [ $# -ne 1 ] && fail 2 "check: agent-ui check NAME (a panel of this project, or its file)"
+  check|open)
+    [ $# -ne 1 ] && fail 2 "$op: agent-ui $op NAME (a panel of this project)"
     id=$1 ;;
+  panels)
+    [ $# -gt 0 ] && fail 2 "panels: takes no arguments" ;;
   types)
     [ $# -gt 1 ] && fail 2 "types: agent-ui types [TYPE]"
     id=${1:-} ;;
@@ -118,7 +128,7 @@ case "$op" in
   clear|list)
     [ $# -gt 0 ] && fail 2 "$op: takes no arguments" ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define, snapshot, bug, check" ;;
+    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define, snapshot, bug, check, panels, open" ;;
 esac
 case "$id" in *$'\n'*) fail 2 "an id is one line" ;; esac
 
@@ -129,7 +139,7 @@ fi
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-ui.XXXXXXXXXX") || fail 3 "no temp folder"
 trap 'rm -rf "$dir"' EXIT
-printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$op" "$id" "${AGENT_UI_SESSION:-}" "$PWD" "$options" "$canvas" >"$dir/request"
+printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$op" "$id" "${AGENT_UI_SESSION:-}" "$PWD" "$options" "$canvas" "$panel" >"$dir/request"
 [ "$takes_json" = 1 ] && printf '%s' "$json" >"$dir/payload"
 
 # The folder as a Lisp string.

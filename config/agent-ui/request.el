@@ -7,7 +7,8 @@
 ;;   request   lines: the operation, an id, the agent's session
 ;;             ($AGENT_UI_SESSION), its working directory, its options
 ;;             (render's ansi), the session's other canvas it's for
-;;             (--canvas NAME), each empty when none
+;;             (--canvas NAME), the project's open panel it's for (--panel
+;;             NAME), each empty when none
 ;;   payload   the agent's JSON, as it gave it (absent if none)
 ;; and runs emacsclient --eval '(agent-ui-request "FOLDER")'. Emacs writes
 ;; reply (JSON: {"ok": true, ...} or {"ok": false, "error": "..."}) there,
@@ -44,7 +45,7 @@ names start with it).")
   "While a request is answered: the agent's directory (its sources' default).")
 
 (defconst agent-ui-operations
-  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot" "bug" "check")
+  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot" "bug" "check" "panels" "open")
   "What cmd/agent-ui does.")
 
 ;; ====== THE CANVAS ======
@@ -142,6 +143,28 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
     ("snapshot"
      (append (list :ok t)
              (agent-ui-snapshot (agent-ui--need-id op id) :canvas canvas :directory agent-ui--request-cwd)))
+    ;; The project's panels (config/agent-ui/panels.el): which, opening one.
+    ("panels"
+     (list :ok t :panels
+           (vconcat (mapcar (lambda (name)
+                              (list :name name
+                                    :open (if (ignore-errors (agent-ui-panel-canvas name agent-ui--request-cwd)) t :false)))
+                            (agent-ui-panels agent-ui--request-cwd)))))
+    ("open"
+     (when (or (null id) (string-empty-p id))
+       (agent-ui--fail "open: which panel? agent-ui open NAME%s"
+                       (if-let* ((panels (agent-ui-panels agent-ui--request-cwd)))
+                           (format " (this project's: %s)" (string-join panels ", "))
+                         "")))
+     (let* ((canvas (agent-ui-open-panel id agent-ui--request-cwd t))
+            (file (agent-ui-panels--file (buffer-local-value 'agent-ui-panels--state canvas))))
+       (list :ok t :panel id :canvas (buffer-name canvas)
+             ;; Not: the user is asked to let its code run, now (a panel
+             ;; with no code: nothing to ask).
+             :trusted (if (or (agent-ui-panel-trusted-p file)
+                              (let ((read (agent-ui-panel-read file)))
+                                (not (agent-ui-panels--code-p (plist-get read :form) (plist-get read :ui)))))
+                          t :false))))
     ;; A project panel's file checked, nothing run (config/agent-ui/panels.el).
     ("check"
      (when (or (null id) (string-empty-p id))
@@ -188,7 +211,7 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
         (cond
          ((not (stringp op))
           (agent-ui--fail "batch: each operation has \"op\": show, update, append or remove"))
-         ((member op '("batch" "types" "list" "render" "define" "snapshot" "bug" "check"))
+         ((member op '("batch" "types" "list" "render" "define" "snapshot" "bug" "check" "panels" "open"))
           (agent-ui--fail "batch: %s isn't done in a batch" op)))
         (agent-ui-do op (plist-get rest :id)
                      (if (equal op "show") rest (agent-ui--plist-delete rest :id))
@@ -216,6 +239,7 @@ its reply written there, as JSON. Never signals: an error is the reply."
                     (cwd (nth 3 lines))
                     (options (split-string (or (nth 4 lines) "") " " t))
                     (part (nth 5 lines))
+                    (panel (nth 6 lines))
                     (payload-file (expand-file-name "payload" folder))
                     (payload (when (file-exists-p payload-file)
                                (let ((json (string-trim (agent-ui--read-file payload-file))))
@@ -235,7 +259,12 @@ its reply written there, as JSON. Never signals: an error is the reply."
                                    (unless (equal session "") session)
                                    (unless (equal cwd "") cwd)))
                     (base-name (if (bufferp base) (buffer-local-value 'agent-ui--canvas-name base) base))
-                    (canvas (if (member part '(nil "")) base (agent-ui-sub-canvas base-name part))))
+                    (canvas (cond
+                             ;; One of the project's panels, open.
+                             ((not (member panel '(nil "")))
+                              (agent-ui-panel-canvas panel (unless (equal cwd "") cwd)))
+                             ((member part '(nil "")) base)
+                             (t (agent-ui-sub-canvas base-name part)))))
                (let* ((agent-ui--request-options options)
                       (agent-ui--request-canvas base-name)
                       (agent-ui--request-cwd (unless (equal cwd "") cwd))

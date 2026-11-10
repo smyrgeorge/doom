@@ -253,11 +253,13 @@ its fetches' timer, its commands running, its last error."
                     "No project here")))
     (completing-read "Panel: " panels nil t)))
 
-(defun agent-ui-open-panel (name &optional dir)
+(defun agent-ui-open-panel (name &optional dir noselect)
   "Open panel NAME of DIR's project (default: the current buffer's; NAME
 ending .el: a file): its :ui drawn in a canvas of its own, in its pane,
-selected. Open already: its pane shown. Interactively, the project's panels
-to pick from. Returns its canvas."
+selected (NOSELECT: shown only, its code started a moment later, after the
+agent's request is answered: asking to let it, if it must, then). Open
+already: its pane shown. Interactively, the project's panels to pick from.
+Returns its canvas."
   (interactive (list (agent-ui-panels--read-name)))
   (let* ((file (agent-ui-panel-file name dir))
          (root (or (agent-ui-panel-root (file-name-directory file))
@@ -265,7 +267,7 @@ to pick from. Returns its canvas."
          (canvas-name (agent-ui-panel-canvas-name (file-name-base file) root))
          (open (get-buffer (agent-ui-canvas-buffer-name canvas-name))))
     (if (and open (buffer-local-value 'agent-ui-panels--state open))
-        (progn (pop-to-buffer open) open)
+        (progn (if noselect (display-buffer open) (pop-to-buffer open)) open)
       ;; Read first: a wrong one leaves no canvas behind.
       (let* ((read (agent-ui-panel-read file))
              (canvas (let ((default-directory root))
@@ -283,9 +285,20 @@ to pick from. Returns its canvas."
             (agent-ui-panels--draw panel (agent-ui-persist--without-sources (plist-get read :ui)))
           (error (kill-buffer canvas)
                  (signal (car err) (cdr err))))
-        (pop-to-buffer canvas)
-        (agent-ui-panels--start panel (plist-get read :form))
+        (if noselect
+            (progn (display-buffer canvas)
+                   (run-with-timer 0 nil #'agent-ui-panels--start panel (plist-get read :form)))
+          (pop-to-buffer canvas)
+          (agent-ui-panels--start panel (plist-get read :form)))
         canvas))))
+
+(defun agent-ui-panel-canvas (name &optional dir)
+  "The canvas of panel NAME of DIR's project, open; an error if it isn't."
+  (let* ((root (or (agent-ui-panel-root dir) (agent-ui--fail "panel %s: no project here" name)))
+         (buffer (get-buffer (agent-ui-canvas-buffer-name (agent-ui-panel-canvas-name name root)))))
+    (unless (and buffer (buffer-local-value 'agent-ui-panels--state buffer))
+      (agent-ui--fail "panel %s isn't open: agent-ui open %s" name name))
+    buffer))
 
 (defun agent-ui-panels--draw (panel ui)
   "UI, PANEL's elements, shown in its canvas (its files its root's)."
@@ -608,3 +621,52 @@ PANEL's, said. Killed when PANEL closes. Returns its process."
     process))
 
 (declare-function agent-ui-persist--without-sources "persist")
+
+;; ====== SAVING ONE ======
+;; S on a canvas: the element at point (a top-level one; a child: its panel)
+;; saved as one of the project's panels, as it was shown (its data, the
+;; updates and its sources' changes, left out), with a :fetch to write;
+;; the user made it: trusted as it's written.
+
+(defun agent-ui-panels--file-text (name ui)
+  "A panel file's text: panel NAME showing UI, its code to write."
+  (concat
+   (format ";;; %s.el --- Agent UI panel%s -*- lexical-binding: t; -*-\n" name
+           (if-let* ((title (plist-get ui :title))) (concat ": " title) ""))
+   ";; Saved from a canvas (S): what it shows, its data left out. Its code fills it:\n"
+   ";; see the agent-ui skill's references/panels.md (agent-ui check NAME checks it).\n"
+   "(agent-ui-panel\n :version 1\n :ui "
+   (string-trim (replace-regexp-in-string "\n" "\n     " (pp-to-string ui)))
+   "\n :every 30\n :fetch (lambda (panel)\n          ;; (agent-ui-panel-update panel \"ID\" :prop value)\n"
+   "          (ignore panel)))\n"))
+
+(defun agent-ui-save-panel (name)
+  "Save the element at point, as it was shown, as the project's panel NAME
+\(S): its file, .agent-ui/panels/NAME.el, written (asked before replacing
+one), trusted (the user made it)."
+  (interactive
+   (progn
+     (unless (derived-mode-p 'agent-ui-canvas-mode) (user-error "Not a canvas"))
+     (list (read-string "Save as the project's panel: "
+                        (agent-ui--entry-id (car (agent-ui--resolve (agent-ui--element-at-point))))))))
+  (unless (string-match-p "\\`[A-Za-z0-9][A-Za-z0-9_.-]*\\'" name)
+    (user-error "A panel's name: letters, digits, _ . -"))
+  (let* ((root (or (agent-ui-panel-root)
+                   (user-error "No project here (this canvas's folder: %s)" default-directory)))
+         (id (agent-ui--entry-id (car (agent-ui--resolve (agent-ui--element-at-point)))))
+         (ui (agent-ui-shown-element id :canvas (current-buffer)))
+         (folder (expand-file-name agent-ui-panel-directory root))
+         (file (expand-file-name (concat name ".el") folder)))
+    (when (and (file-exists-p file)
+               (not (y-or-n-p (format "Panel %s is there already: replace it? " name))))
+      (user-error "Not saved"))
+    (make-directory folder t)
+    (with-temp-file file
+      (setq-local coding-system-for-write 'utf-8)
+      (insert (agent-ui-panels--file-text name ui)))
+    (agent-ui-panel-trust file)
+    (message "Saved as panel %s (%s): SPC o u opens it; its :fetch is to write"
+             name (abbreviate-file-name file))
+    file))
+
+(declare-function agent-ui--element-at-point "snapshot")
