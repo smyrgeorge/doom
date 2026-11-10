@@ -19,6 +19,7 @@
 (load! "elements/rank")
 (load! "elements/slider")
 (load! "elements/tags")
+(load! "elements/gauge")
 (load! "elements/files")
 (load! "elements/stats")
 (load! "elements/log")

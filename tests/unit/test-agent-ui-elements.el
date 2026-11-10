@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code compare confirm diff files form graph heatmap html image issues log markdown panel progress rank slider stats steps table tags text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code compare confirm diff files form gauge graph heatmap html image issues log markdown panel progress rank slider stats steps table tags text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -2222,6 +2222,58 @@ labels picked; then locked."
                           (+test-aue-error '(:type "tags" :tags ("a") :select (:multiple t)))))
   (should (string-match-p "\"b\""
                           (+test-aue-error '(:type "tags" :tags ("a") :select (:question "q") :selected ("b"))))))
+
+(defconst +test-aue-coverage
+  '(:type "gauge" :value 78 :unit "%" :target 80 :label "covered"
+    :thresholds ((:at 0 :face "error") (:at 70 :face "warning") (:at 80 :face "success")))
+  "Coverage against a target.")
+
+(ert-deftest agent-ui-elements/gauge ()
+  "A bar: filled in its value's zone's face, the rest of the track in each
+zone's, the target a ┃; the value with its unit; the target, then the label
+left out when narrow."
+  (should (equal (+test-aue-draw +test-aue-coverage :width 60)
+                 ;; 34 cells: 27 filled, the target's, 6 not.
+                 (concat "covered  " (make-string 27 ?█) "┃" (make-string 6 ?░) "  78%  target 80%")))
+  (should (equal (+test-aue-draw +test-aue-coverage :width 30) "covered  ████████████┃░░░  78%"))
+  (should (equal (+test-aue-draw +test-aue-coverage :width 14) "███████┃░  78%"))
+  ;; Each zone's face: the fill's by the value; the track's by its place.
+  (let ((text (agent-ui-render +test-aue-coverage (agent-ui-context :width 60))))
+    (should (eq (get-text-property 9 'face text) 'agent-ui-warning))
+    ;; Past the target: the success zone's track.
+    (should (eq (get-text-property (string-search "░" text) 'face text) 'agent-ui-success))
+    (should (eq (get-text-property (1- (string-search "  78%" text)) 'face text) 'agent-ui-success)))
+  (dolist (case '((30 . agent-ui-error) (75 . agent-ui-warning) (95 . agent-ui-success)))
+    (should (eq (get-text-property 9 'face (agent-ui-render (plist-put (copy-sequence +test-aue-coverage) :value (car case))
+                                                         (agent-ui-context :width 60)))
+                (cdr case))))
+  ;; Lower is better: a latency.
+  (should (equal (+test-aue-draw '(:type "gauge" :value 230 :max 1000 :unit "ms") :width 30)
+                 "█████░░░░░░░░░░░░░░░░░  230 ms"))
+  ;; No zones: the accent's, the track muted.
+  (should (eq (get-text-property 0 'face (agent-ui-render '(:type "gauge" :value 50) (agent-ui-context :width 30)))
+              'agent-ui-accent))
+  ;; Past its range: the bar full, the value as it is.
+  (should (string-suffix-p "█  120%" (+test-aue-draw '(:type "gauge" :value 120 :unit "%") :width 30))))
+
+(ert-deftest agent-ui-elements/gauge-in-the-gui ()
+  "An arc: its zones' track, the value's arc in its zone's colour, the
+target's tick, the value, the label and target under; too narrow: text."
+  (let* ((text (agent-ui-render +test-aue-coverage (agent-ui-context :width 40 :graphic t :char-width 8 :line-height 16)))
+         (svg (plist-get (cdr (get-text-property 0 'display text)) :data)))
+    (should (= 4 (with-temp-buffer (insert svg) (how-many "<path" (point-min) (point-max)))))
+    (should (string-match-p (format "stroke=\"%s\"" (regexp-quote (agent-ui-color 'agent-ui-warning))) svg))
+    (should (string-match-p "<line" svg))
+    (should (string-match-p ">78%</text>" svg))
+    (should (string-match-p ">covered &#183; target 80%</text>" svg)))
+  (should (equal (substring-no-properties
+                  (agent-ui-render +test-aue-coverage (agent-ui-context :width 4 :graphic t :char-width 8 :line-height 16)))
+                 "██┃…")))
+
+(ert-deftest agent-ui-elements/gauge-wrong ()
+  (should (string-match-p "value is required" (+test-aue-error '(:type "gauge"))))
+  (should (string-match-p "min must be below max" (+test-aue-error '(:type "gauge" :value 1 :min 5 :max 5))))
+  (should (string-match-p "threshold 1 is" (+test-aue-error '(:type "gauge" :value 1 :thresholds ((:at 0 :face "loud")))))))
 
 (ert-deftest agent-ui-elements/choice-wrong ()
   ;; None, or an empty list (JSON's []: the same): required.

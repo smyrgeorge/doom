@@ -60,7 +60,7 @@ agent-ui types [TYPE]          # the catalog: each type, its properties, an exam
 agent-ui batch < ops.json      # several operations, one trip to Emacs
 agent-ui render '{"type":...}' # an element drawn as text, nothing shown: for the agent to see it
 agent-ui render --ansi '{...}' # the same in its colours (24-bit ANSI), to print in a terminal
-agent-ui define gauge.el       # a type of the agent's own (below)
+agent-ui define dial.el        # a type of the agent's own (below)
 agent-ui snapshot build        # the element as an image for the agent's reply (below)
 agent-ui list --canvas tests   # any of them, on another canvas of the session (below)
 agent-ui bug < bug.json        # a bug in Agent UI itself, into its own issues (below)
@@ -189,6 +189,7 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 | `form` | Several fields you answer together (a new ticket's details): text, a number within a range, yes / no, one of its options, a file. On the canvas, its fields and values and Fill in: `RET` opens it in a buffer of its own, in a new pane (vui.el's fields, checked as you type: `TAB` to the next, `C-c C-c` sends it, `C-c C-k` cancels, keeping what you typed). Sent: "Answer to form ID (question): {JSON of the values}" into the session's prompt, then it shows the values, answered | `question`, `fields` (`name`, `label`, `type`, `required`, `min`, `max`, `options`, `placeholder`, `value`), `submit` |
 | `rank` | Items you put in order (priorities, the order to do things in): numbered, `M-↑` / `M-↓` (`K` / `J`) move the one at the cursor; a note; Answer puts "Answer to rank ID (question): in this order: C, A, B" into the session's prompt, then it shows the order | `question`, `items`, `note`, `submit` |
 | `slider` | A number you tune in a range (a threshold, a timeout): its track, the knob at its value; on the track, `h` / `l` (or `←` / `→`) move it a step, `H` / `L` ten, a click puts it there; Set puts "Answer to slider ID (label): 42 ms" into the session's prompt. Live: each value sent once the knob rests, no Set | `label`, `min`, `max`, `step`, `unit`, `value`, `live`, `submit` |
+| `gauge` | One value against its range and thresholds (coverage against a target, a budget, a latency against an SLO): zones coloured by `thresholds` (each from its `at` up), the value in its zone's colour, the `target` a mark; a bar in text, a half-circle arc in the GUI; several side by side in a panel's row | `value`, `min`, `max`, `unit`, `label`, `thresholds`, `target` |
 | `tags` | A row of chips (a project's labels, a run's statuses, filters in use), each in its face or colour with a count in it: pills, `[bug 12]` in a terminal, a rounded tag in the GUI; wrapped, a chip never split; a chip with a `prompt` is a button putting it into the session's prompt; appending a tag by its label changes it. `select` asks you to pick chips: a picked one filled, `RET` or a click (un)picks one, Send putting "Answer to ID (question): their labels" into the session's prompt | `tags` (`label`, `face`, `color`, `count`, `prompt`), `select` |
 | `todo` | A checklist you and the agent both tick: the agent ticks items by appending them (by label), you tick them (`RET`, a click) and add some (Add); who did it shows after an item. Send your changes puts "Changes to todo ID by the user: done: …; not done: …; added: …" into the session's prompt; it goes on after (never locked) | `items`, `submit` |
 | `files` | Files with their state (changed, added, deleted, renamed, failing, passing) and counts, flat or a tree by folder (`RET` folds a folder); `RET` opens a file at its line; `select` asks you to pick files (a folder's mark picks its files) | `files`, `tree`, `dir`, `select` |
@@ -443,7 +444,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider`, `compare`, `tags` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider`, `compare`, `tags`, `gauge` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |

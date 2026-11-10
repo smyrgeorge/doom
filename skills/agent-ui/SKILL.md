@@ -269,6 +269,18 @@ knob rests, as "Slider ID (LABEL) set to 42 ms", for something you redraw from i
 agent-ui show --canvas ask '{"id":"timeout","type":"slider","label":"Timeout","min":0,"max":120,"step":5,"unit":"s","value":30}'
 ```
 
+### `gauge`
+
+One value that matters against its range and limits: coverage against a target, a budget used, a latency against an
+SLO. `value` of `min` (0) to `max` (100), `unit`, `label`; `thresholds` are zones, each `{"at", "face"}` colouring
+from `at` up to the next (coverage: error at 0, warning at 70, success at 80; a latency: success at 0, warning at 200,
+error at 500); `target` a mark. A bar in text, an arc in the GUI. Several: side by side in a panel's row.
+
+```sh
+agent-ui show '{"id":"cov","type":"gauge","title":"Coverage","value":78,"unit":"%","target":80,"thresholds":[{"at":0,"face":"error"},{"at":70,"face":"warning"},{"at":80,"face":"success"}]}'
+agent-ui update cov '{"value":81}'
+```
+
 ### `tags`
 
 A row of chips: a project's labels, a run's statuses, the filters in use, the versions involved. `tags` are labels,
@@ -484,7 +496,7 @@ it's shown:" and its drawing.
 
 ## A type of your own
 
-When none of the types fits (a gauge, a diff summary, a timeline...), write one: an Emacs Lisp file with **one**
+When none of the types fits (a dial, a calendar, a seating plan...), write one: an Emacs Lisp file with **one**
 `agent-ui-define`, and the definitions it uses, **each named after it** (`agent-ui-NAME-...`), nothing else (no
 `setq`, no code run at load; `require` only cl-lib, subr-x, seq, map, pcase, rx, svg). Then `agent-ui define FILE`.
 It's checked, compiled, loaded, and its `:example` drawn: the reply has that drawing (`preview`) and the compiler's
@@ -492,9 +504,9 @@ It's checked, compiled, loaded, and its `:example` drawn: the reply has that dra
 start) or discards it (its elements go with it): say what you made and why.
 
 ```elisp
-;;; gauge.el --- Agent UI type gauge -*- lexical-binding: t; -*-
+;;; dial.el --- Agent UI type dial -*- lexical-binding: t; -*-
 
-(defun agent-ui-gauge--text (props ctx)
+(defun agent-ui-dial--text (props ctx)
   "PROPS drawn in CTX's width: [#####.....] 50% LABEL."
   (let* ((value (plist-get props :value))
          (cells (min 20 (max 5 (- (plist-get ctx :width) 30))))
@@ -504,16 +516,16 @@ start) or discards it (its elements go with it): say what you made and why.
             (format "%d%%" value)
             (if-let* ((label (plist-get props :label))) (concat "  " label) ""))))
 
-(agent-ui-define gauge
-  "A gauge: VALUE percent, with a LABEL."
+(agent-ui-define dial
+  "A dial: VALUE percent, with a LABEL."
   :props ((value integer "Percent, 0 to 100" :default 0)
           (label string "What it measures"))
   :example (:value 42 :label "disk")
   :check (lambda (props)
            (unless (<= 0 (plist-get props :value) 100)
-             (agent-ui--fail "gauge: value must be from 0 to 100"))
+             (agent-ui--fail "dial: value must be from 0 to 100"))
            props)
-  :text #'agent-ui-gauge--text)
+  :text #'agent-ui-dial--text)
 ```
 
 - `:props`: `(NAME KIND DOC [:default V] [:required t])`, KIND one of `string`, `number`, `integer`, `boolean`,

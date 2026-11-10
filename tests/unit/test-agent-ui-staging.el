@@ -9,18 +9,18 @@
 
 ;; ====== HELPERS ======
 
-(defconst +test-aus-gauge
-  "(defun agent-ui-gauge--text (props _ctx)
+(defconst +test-aus-dial
+  "(defun agent-ui-dial--text (props _ctx)
   (format \"[%s%s] %d%%\"
           (make-string (/ (plist-get props :value) 10) ?#)
           (make-string (- 10 (/ (plist-get props :value) 10)) ?.)
           (plist-get props :value)))
 
-(agent-ui-define gauge
-  \"A gauge: VALUE percent.\"
+(agent-ui-define dial
+  \"A dial: VALUE percent.\"
   :props ((value integer \"Percent\" :default 0))
   :example (:value 42)
-  :text #'agent-ui-gauge--text)
+  :text #'agent-ui-dial--text)
 "
   "A right type's code.")
 
@@ -53,24 +53,24 @@ after (the tests' forgotten), no window shown, a canvas of its own."
 
 (ert-deftest agent-ui-staging/a-type-staged ()
   (+test-aus
-    (let ((reply (agent-ui-stage +test-aus-gauge)))
-      (should (equal (plist-get reply :type) "gauge"))
-      (should (equal (plist-get reply :file) (expand-file-name "gauge.el" agent-ui-staging-directory)))
+    (let ((reply (agent-ui-stage +test-aus-dial)))
+      (should (equal (plist-get reply :type) "dial"))
+      (should (equal (plist-get reply :file) (expand-file-name "dial.el" agent-ui-staging-directory)))
       ;; Its example drawn, for the agent to see.
       (should (equal (plist-get reply :preview) "[####......] 42%"))
       (should (equal (plist-get reply :warnings) [])))
     ;; In the folder, with lexical binding; usable at once, as any type.
-    (should (equal (agent-ui-staged-files) (list (expand-file-name "gauge.el" agent-ui-staging-directory))))
-    (should (string-prefix-p ";;; gauge.el --- Agent UI type gauge, made by the agent -*- lexical-binding: t; -*-"
+    (should (equal (agent-ui-staged-files) (list (expand-file-name "dial.el" agent-ui-staging-directory))))
+    (should (string-prefix-p ";;; dial.el --- Agent UI type dial, made by the agent -*- lexical-binding: t; -*-"
                              (with-temp-buffer (insert-file-contents (car (agent-ui-staged-files)))
                                                (buffer-string))))
-    (should (agent-ui-staged-p 'gauge))
+    (should (agent-ui-staged-p 'dial))
     (should-not (agent-ui-staged-p 'progress))
-    (agent-ui-show '(:id "g" :type "gauge" :value 70))
+    (agent-ui-show '(:id "g" :type "dial" :value 70))
     (with-current-buffer (agent-ui-canvas)
       (should (string-prefix-p "[#######...] 70%" (buffer-string))))
     ;; Again, changed: replaces it, its elements redrawn.
-    (agent-ui-stage (replace-regexp-in-string "%d%%" "%d percent" +test-aus-gauge))
+    (agent-ui-stage (replace-regexp-in-string "%d%%" "%d percent" +test-aus-dial))
     (with-current-buffer (agent-ui-canvas)
       (agent-ui--flush)
       (should (string-prefix-p "[#######...] 70 percent" (buffer-string))))))
@@ -114,33 +114,33 @@ after (the tests' forgotten), no window shown, a canvas of its own."
 
 (ert-deftest agent-ui-staging/a-wrong-change-keeps-the-one-there ()
   (+test-aus
-    (agent-ui-stage +test-aus-gauge)
+    (agent-ui-stage +test-aus-dial)
     (should (string-match-p "doesn't draw"
                             (agent-ui-error-message
-                             (should-error (agent-ui-stage "(agent-ui-define gauge \"G.\" :text (lambda (_p _c) (error \"no\")) :example (:title \"t\"))")
+                             (should-error (agent-ui-stage "(agent-ui-define dial \"G.\" :text (lambda (_p _c) (error \"no\")) :example (:title \"t\"))")
                                            :type 'agent-ui-error))))
     ;; The one staged before, still.
-    (should (equal (agent-ui-render '(:type "gauge" :value 10) (agent-ui-context)) "[#.........] 10%"))
-    (should (agent-ui-staged-p 'gauge))))
+    (should (equal (agent-ui-render '(:type "dial" :value 10) (agent-ui-context)) "[#.........] 10%"))
+    (should (agent-ui-staged-p 'dial))))
 
 ;; ====== KEEPING, DISCARDING ======
 
 (ert-deftest agent-ui-staging/kept ()
   (+test-aus
-    (agent-ui-stage +test-aus-gauge)
-    (let ((kept (agent-ui-keep 'gauge)))
-      (should (equal kept (expand-file-name "gauge.el" agent-ui-kept-directory)))
+    (agent-ui-stage +test-aus-dial)
+    (let ((kept (agent-ui-keep 'dial)))
+      (should (equal kept (expand-file-name "dial.el" agent-ui-kept-directory)))
       (should (file-exists-p kept))
       (should-not (agent-ui-staged-files))
-      (should-not (agent-ui-staged-p 'gauge))
-      (should (equal (agent-ui-type-file (agent-ui-type 'gauge)) kept))
-      (should (equal +test-aus-kept (list (list 'gauge kept))))
+      (should-not (agent-ui-staged-p 'dial))
+      (should (equal (agent-ui-type-file (agent-ui-type 'dial)) kept))
+      (should (equal +test-aus-kept (list (list 'dial kept))))
       ;; At the next start: loaded from there.
-      (agent-ui-undefine 'gauge)
+      (agent-ui-undefine 'dial)
       (agent-ui-load-kept)
-      (should (equal (agent-ui-render '(:type "gauge" :value 50) (agent-ui-context)) "[#####.....] 50%"))
+      (should (equal (agent-ui-render '(:type "dial" :value 50) (agent-ui-context)) "[#####.....] 50%"))
       ;; Now it's a kept type: the agent can't stage another so named.
-      (should (string-match-p "gauge is a type already" (+test-aus-refused +test-aus-gauge))))))
+      (should (string-match-p "dial is a type already" (+test-aus-refused +test-aus-dial))))))
 
 (ert-deftest agent-ui-staging/a-kept-type-failing-to-load-said ()
   (+test-aus
@@ -153,42 +153,42 @@ after (the tests' forgotten), no window shown, a canvas of its own."
 
 (ert-deftest agent-ui-staging/discarded ()
   (+test-aus
-    (agent-ui-stage +test-aus-gauge)
-    (agent-ui-show '(:id "g" :type "gauge"))
+    (agent-ui-stage +test-aus-dial)
+    (agent-ui-show '(:id "g" :type "dial"))
     (agent-ui-show '(:id "t" :type "text" :text "stays"))
-    (should (eq (agent-ui-discard 'gauge) 'gauge))
+    (should (eq (agent-ui-discard 'dial) 'dial))
     (should-not (agent-ui-staged-files))
-    (should-not (memq 'gauge (agent-ui-types)))
+    (should-not (memq 'dial (agent-ui-types)))
     ;; Its elements gone; the others stay.
     (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements)) '("t")))
-    (should (string-match-p "no staged type gauge"
-                            (agent-ui-error-message (should-error (agent-ui-discard 'gauge)
+    (should (string-match-p "no staged type dial"
+                            (agent-ui-error-message (should-error (agent-ui-discard 'dial)
                                                                   :type 'agent-ui-error))))))
 
 (ert-deftest agent-ui-staging/after-a-restart ()
   (+test-aus
-    (agent-ui-stage +test-aus-gauge)
+    (agent-ui-stage +test-aus-dial)
     ;; A restart: the file waits, the type isn't loaded.
-    (agent-ui-undefine 'gauge)
+    (agent-ui-undefine 'dial)
     (should (agent-ui-staged-files))
-    (should-not (agent-ui-staged-p 'gauge))
+    (should-not (agent-ui-staged-p 'dial))
     ;; Kept: loaded first.
-    (agent-ui-keep 'gauge)
-    (should (agent-ui-type 'gauge))))
+    (agent-ui-keep 'dial)
+    (should (agent-ui-type 'dial))))
 
 ;; ====== THE REVIEW ======
 
 (ert-deftest agent-ui-staging/the-review-list ()
   (+test-aus
-    (agent-ui-stage +test-aus-gauge)
+    (agent-ui-stage +test-aus-dial)
     (let ((buffer (save-window-excursion (agent-ui-review))))
       (with-current-buffer buffer
         (should (derived-mode-p 'agent-ui-review-mode))
-        (should (equal (mapcar #'car tabulated-list-entries) '(gauge)))
+        (should (equal (mapcar #'car tabulated-list-entries) '(dial)))
         (let ((columns (cadr (car tabulated-list-entries))))
-          (should (equal (aref columns 0) "gauge"))
+          (should (equal (aref columns 0) "dial"))
           (should (equal (aref columns 2) "yes"))
-          (should (equal (aref columns 3) "A gauge: VALUE percent.")))
+          (should (equal (aref columns 3) "A dial: VALUE percent.")))
         (should (string-match-p "keep" (format "%s" header-line-format)))
         ;; Keys, with Evil and without.
         (should (eq (lookup-key agent-ui-review-mode-map "a") #'agent-ui-review-keep))
@@ -197,27 +197,27 @@ after (the tests' forgotten), no window shown, a canvas of its own."
 
 (ert-deftest agent-ui-staging/a-preview ()
   (+test-aus
-    (agent-ui-stage +test-aus-gauge)
-    (let ((buffer (save-window-excursion (agent-ui-review-preview 'gauge))))
+    (agent-ui-stage +test-aus-dial)
+    (let ((buffer (save-window-excursion (agent-ui-review-preview 'dial))))
       (with-current-buffer buffer
         (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-          (should (string-prefix-p "gauge, made by the agent\nA gauge: VALUE percent.\n" text))
+          (should (string-prefix-p "dial, made by the agent\nA dial: VALUE percent.\n" text))
           (should (string-match-p "  value +integer +Percent (default 0)" text))
           (should (string-match-p "Its example\n\\[####......\\] 42%" text))
-          (should (string-match-p "(agent-ui-define gauge" text)))
-        (should (eq agent-ui-review--type 'gauge))))))
+          (should (string-match-p "(agent-ui-define dial" text)))
+        (should (eq agent-ui-review--type 'dial))))))
 
 (ert-deftest agent-ui-staging/kept-and-discarded-from-the-review ()
   (+test-aus
-    (agent-ui-stage +test-aus-gauge)
-    (agent-ui-stage (replace-regexp-in-string "gauge" "meter" +test-aus-gauge))
+    (agent-ui-stage +test-aus-dial)
+    (agent-ui-stage (replace-regexp-in-string "dial" "meter" +test-aus-dial))
     (save-window-excursion
       (agent-ui-review)
-      (agent-ui-review-keep 'gauge)
+      (agent-ui-review-keep 'dial)
       (agent-ui-review-discard 'meter)
       (with-current-buffer agent-ui-review-buffer
         (should-not tabulated-list-entries)))
-    (should (file-exists-p (expand-file-name "gauge.el" agent-ui-kept-directory)))
+    (should (file-exists-p (expand-file-name "dial.el" agent-ui-kept-directory)))
     (should-not (memq 'meter (agent-ui-types)))))
 
 (ert-deftest agent-ui-staging/the-canvas-says-so ()
@@ -226,10 +226,10 @@ after (the tests' forgotten), no window shown, a canvas of its own."
     (with-current-buffer (agent-ui-canvas)
       ;; None waiting: no header line (not an empty one).
       (should-not header-line-format)
-      (agent-ui-stage +test-aus-gauge)
-      (should (string-match-p "1 type made by the agent to review: gauge" header-line-format))
+      (agent-ui-stage +test-aus-dial)
+      (should (string-match-p "1 type made by the agent to review: dial" header-line-format))
       (should (eq (lookup-key agent-ui-canvas-mode-map "R") #'agent-ui-review))
-      (agent-ui-discard 'gauge)
+      (agent-ui-discard 'dial)
       (agent-ui-review--refresh)
       (should-not header-line-format))))
 
@@ -242,12 +242,12 @@ after (the tests' forgotten), no window shown, a canvas of its own."
            (code (and (string-match "```elisp\n\\(\\(?:.\\|\n\\)*?\\)```" skill)
                       (match-string 1 skill)))
            (reply (agent-ui-stage code)))
-      (should (equal (plist-get reply :type) "gauge"))
+      (should (equal (plist-get reply :type) "dial"))
       (should (equal (plist-get reply :warnings) []))
       (should (string-match-p "\\`\\[#+\\.+\\] 42%  disk\\'" (plist-get reply :preview)))
       (should (string-match-p "value must be from 0 to 100"
                               (agent-ui-error-message
-                               (should-error (agent-ui-check "gauge" '(:value 140)) :type 'agent-ui-error)))))))
+                               (should-error (agent-ui-check "dial" '(:value 140)) :type 'agent-ui-error)))))))
 
 ;; ====== THE CONFIG ======
 
