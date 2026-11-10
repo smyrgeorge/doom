@@ -59,6 +59,20 @@ an error saying which is wrong. Returns the ids seen."
 
 (declare-function agent-ui-snapshot--svg-size "agent-ui/snapshot")
 
+(defun agent-ui-panel--image-size (display)
+  "The size an image DISPLAY (`(image ...)', or a slice of one) is shown
+at, in pixels: (W . H), whole (Emacs shows an SVG of 192.8 pixels in 192:
+counted 192.8, its line came out a pixel short); nil if it can't be known."
+  (pcase display
+    (`((slice ,_ ,_ ,w ,h) . ,_) (cons w h))
+    (`(image . ,props)
+     (let ((size (if-let* ((data (plist-get props :data))
+                           ((eq (plist-get props :type) 'svg)))
+                     (agent-ui-snapshot--svg-size data)
+                   (and (display-graphic-p) (ignore-errors (image-size display t)))))
+           (scale (or (plist-get props :scale) 1)))
+       (and size (cons (floor (* (car size) scale)) (floor (* (cdr size) scale))))))))
+
 (defun agent-ui-panel--pixels (line cw)
   "How wide LINE is shown, in pixels (CW a column's): its images' widths, a
 filler's (a space of a given width), CW a column for the rest; nil if an
@@ -69,12 +83,9 @@ image's width can't be known."
              (display (get-text-property pos 'display line)))
         (setq pixels
               (pcase display
-                (`(image . ,props)
-                 (let ((size (if-let* ((data (plist-get props :data))
-                                       ((eq (plist-get props :type) 'svg)))
-                                 (agent-ui-snapshot--svg-size data)
-                               (and (display-graphic-p) (ignore-errors (image-size display t))))))
-                   (and size (+ pixels (* (car size) (or (plist-get props :scale) 1))))))
+                ((or `(image . ,_) `((slice . ,_) . ,_))
+                 (let ((size (agent-ui-panel--image-size display)))
+                   (and size (+ pixels (car size)))))
                 (`(space :width (,width)) (+ pixels width))
                 (_ (+ pixels (* cw (string-width (substring line pos next)))))))
         (setq pos next)))
@@ -122,16 +133,49 @@ tallest's; nil if none can be known)."
   (let ((pos 0) (height nil))
     (while (< pos (length line))
       (let ((next (or (next-single-property-change pos 'display line) (length line)))
-            (display (get-text-property pos 'display line)))
-        (pcase display
-          (`(image . ,props)
-           (when-let* ((size (if-let* ((data (plist-get props :data))
-                                       ((eq (plist-get props :type) 'svg)))
-                                 (agent-ui-snapshot--svg-size data)
-                               (and (display-graphic-p) (ignore-errors (image-size display t))))))
-             (setq height (max (or height 0) (* (cdr size) (or (plist-get props :scale) 1)))))))
+            (size (agent-ui-panel--image-size (get-text-property pos 'display line))))
+        (when size (setq height (max (or height 0) (cdr size))))
         (setq pos next)))
     height))
+
+(defun agent-ui-panel--sliced (line ctx)
+  "LINE as lines a text line high each, if an SVG in it is taller: cut into
+slices, one a line, the image padded (transparent) to whole lines, itself
+in their middle; on the first, what's beside it, on the others its blanks.
+A bordered panel's sides then are the font's │ on every line (beside a
+taller line, they had gaps; drawn beside it, they didn't align). LINE
+alone if it has none, or more than one, or another kind."
+  (let* ((lh (plist-get ctx :line-height))
+         (tall (let ((pos 0) (found nil))
+                 (while (< pos (length line))
+                   (let* ((next (or (next-single-property-change pos 'display line) (length line)))
+                          (display (get-text-property pos 'display line))
+                          (size (and (eq (car-safe display) 'image) (agent-ui-panel--image-size display))))
+                     (when (and size (> (cdr size) lh)) (push (list pos next display size) found))
+                     (setq pos next)))
+                 found)))
+    (pcase tall
+      (`((,start ,end (image . ,props) (,w . ,h)))
+       (if (not (and (eq (plist-get props :type) 'svg) (plist-get props :data)
+                     (memql (or (plist-get props :scale) 1) '(1 1.0))))
+           (list line)
+         (let* ((rows (ceiling h lh))
+                (padded (agent-ui-image
+                         (create-image (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\"><g transform=\"translate(0 %d)\">%s</g></svg>"
+                                               w (* rows lh) (/ (- (* rows lh) h) 2) (plist-get props :data))
+                                       'svg t :scale 1 :ascent 'center)))
+                (before (substring line 0 start))
+                (after (substring line end))
+                (text (substring-no-properties line start end)))
+           (cl-loop for k below rows
+                    collect (concat (if (= k 0) before (make-string (string-width before) ?\s))
+                                    (propertize text 'display (list (list 'slice 0 (* k lh) w lh) padded))
+                                    ;; What's after it: as it is if blank (a
+                                    ;; filler to its column's end, spaces).
+                                    (if (or (= k 0) (string-blank-p (substring-no-properties after)))
+                                        after
+                                      (make-string (string-width after) ?\s)))))))
+      (_ (list line)))))
 
 (defun agent-ui-panel--side (text height ctx)
   "TEXT, a side of the border (\"│ \" or \" │\"), shown HEIGHT pixels tall
@@ -260,6 +304,13 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
                         (mapcar (lambda (child) (cons (make-string inner ?\s)
                                                       (agent-ui-panel--lines (agent-ui-panel--child child ctx inner) inner ctx)))
                                 children)))))))
+    ;; In the GUI, a bordered line taller than a text line: cut in lines.
+    (when (and border (plist-get ctx :graphic) (plist-get ctx :char-width) (plist-get ctx :line-height))
+      (setq body (mapcan (lambda (line)
+                           (if (and (stringp line) (not (eq line row-image)) (agent-ui-panel--image-p line))
+                               (agent-ui-panel--sliced line ctx)
+                             (list line)))
+                         body)))
     (if (not border)
         (mapconcat #'agent-ui-panel--trim-right body "\n")
       (let ((edge (lambda (s) (propertize s 'face 'agent-ui-muted))))

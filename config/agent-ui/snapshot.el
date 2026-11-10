@@ -194,6 +194,9 @@ shown size: (SVG . (W . H)); nil if it isn't one, or its size can't be had."
   (let ((height lh) (pos 0))
     (while (< pos (length line))
       (let ((display (get-text-property pos 'display line)))
+        ;; A slice of an image (a tall one in a bordered panel): its height.
+        (pcase display
+          (`((slice ,_ ,_ ,_ ,h) . ,_) (setq height (max height (round h)))))
         (when (eq (car-safe display) 'image)
           (let ((size (if-let* ((data (plist-get (cdr display) :data)))
                           (agent-ui-snapshot--svg-size data)
@@ -230,6 +233,15 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
                  (file (and image (not data) (agent-ui-snapshot--image-file display)))
                  (x (+ pad (* col cw))))
             (cond
+             ;; A slice of an SVG: the SVG in a box of the slice's size,
+             ;; moved up to it (a box clips what's outside it).
+             ((and (eq (car-safe (car-safe display)) 'slice)
+                   (eq (plist-get (cdr (cadr display)) :type) 'svg))
+              (pcase-let ((`(slice ,sx ,sy ,sw ,sh) (car display)))
+                (push (format "<svg x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\"><g transform=\"translate(%d %d)\">%s</g></svg>"
+                              x y sw sh (- sx) (- sy) (plist-get (cdr (cadr display)) :data))
+                      spans)
+                (cl-incf col (ceiling sw cw))))
              (size
               (push (replace-regexp-in-string "\\`<svg " (format "<svg x=\"%d\" y=\"%d\" " x y) data) spans)
               (cl-incf col (ceiling (car size) cw)))

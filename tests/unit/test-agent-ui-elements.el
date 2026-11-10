@@ -3905,41 +3905,58 @@ title ran across the line between them into the next child)."
     (should-not (string-match-p ">week<" svg))))
 
 (ert-deftest agent-ui-elements/panel-its-border-beside-an-image ()
-  "An image in a bordered panel, in the GUI: both sides of the border kept
-for a fractional width (a formula's); beside one taller than a line, the
-sides drawn as tall (a character is a line's height: gaps)."
+  "An image in a bordered panel, in the GUI: both sides kept for a
+fractional width (a formula's: counted as Emacs shows it, whole). One
+taller than a line: cut into slices a line high each, the image padded to
+whole lines (itself in their middle), the sides the font's │ on every line
+\(beside a tall line they had gaps, drawn as images they didn't align). One
+that can't be cut (scaled): sides as tall, drawn."
   (let ((agent-ui--types (copy-hash-table agent-ui--types)))
-    (agent-ui-define picture "An SVG, W by H." :props ((w number "Width") (h number "Height"))
+    (agent-ui-define picture "An SVG, W by H." :props ((w number "Width") (h number "Height") (scale number "Scale"))
       :text (lambda (props _ctx)
-              (propertize "pic" 'display (list 'image :type 'svg :scale 1 :ascent 'center
-                                               :data (format "<svg width=\"%s\" height=\"%s\"/>"
-                                                             (plist-get props :w) (plist-get props :h))))))
+              (concat "  " (propertize "pic" 'display (list 'image :type 'svg :scale (or (plist-get props :scale) 1) :ascent 'center
+                                                            :data (format "<svg width=\"%s\" height=\"%s\"/>"
+                                                                          (plist-get props :w) (plist-get props :h)))))))
     (let* ((ctx (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16))
-           (line (lambda (w h)
-                   (seq-find #'agent-ui-panel--image-p
-                             (split-string (agent-ui-render (list :type "panel" :children (list (list :type "picture" :w w :h h)))
-                                                            ctx)
-                                           "\n"))))
-           (svg (lambda (text pos) (plist-get (cdr (get-text-property pos 'display text)) :data))))
-      ;; 102.87 px, a line high: the text's sides, both.
-      (let ((flat (funcall line 102.87 16)))
-        (should (string-prefix-p "│ " (substring-no-properties flat)))
-        (should (string-suffix-p " │" (substring-no-properties flat)))
-        (should-not (funcall svg flat 0)))
-      ;; 39 px high: each side a line 39 px high.
-      (let ((tall (funcall line 102.87 39)))
-        (should (string-suffix-p " │" (substring-no-properties tall)))
-        (should (string-match-p "height=\"39\".*<line x1=\"4.0\" x2=\"4.0\" y1=\"0\" y2=\"39\"" (funcall svg tall 0)))
-        (should (string-match-p "<line x1=\"12.0\" x2=\"12.0\" y1=\"0\" y2=\"39\"" (funcall svg tall (1- (length tall))))))
-      ;; The font known: its own │ as the text draws it (size, baseline),
-      ;; stretched to the line's height only: as thick as the others.
-      (let* ((ctx (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16 :font-size 13 :font-ascent 12))
-             (tall (seq-find #'agent-ui-panel--image-p
-                             (split-string (agent-ui-render '(:type "panel" :children ((:type "picture" :w 40 :h 40))) ctx)
-                                           "\n"))))
-        (should (string-match-p "<text transform=\"scale(1 2.5000)\"[^>]*font-size=\"13\" y=\"12\" x=\"0\">&#9474;</text>"
-                                (funcall svg tall 0)))
-        (should (string-match-p "y=\"12\" x=\"8\">&#9474;</text>" (funcall svg tall (1- (length tall)))))))))
+           (lines (lambda (w h &optional scale)
+                    (cdr (butlast (split-string (agent-ui-render (list :type "panel" :children (list (list :type "picture" :w w :h h :scale scale)))
+                                                                 ctx)
+                                                "\n")))))
+           (display (lambda (text) (get-text-property (string-search "pic" text) 'display text))))
+      (should (equal (agent-ui-panel--image-size '(image :type svg :scale 1 :data "<svg width=\"102.87\" height=\"16\"/>"))
+                     '(102 . 16)))
+      ;; A line high: one line, the font's sides; 102.87 counted 102.
+      (let ((flat (funcall lines 102.87 16)))
+        (should (= (length flat) 1))
+        (should (string-prefix-p "│   pic" (substring-no-properties (car flat))))
+        (should (string-suffix-p " │" (substring-no-properties (car flat))))
+        (should (= (agent-ui-panel--pixels (car flat) 8) (* 30 8))))
+      ;; 39 high: 3 lines of 16 (48: 4 above and 5 below), the sides text.
+      (let ((tall (funcall lines 102 39)))
+        (should (= (length tall) 3))
+        (dolist (line tall)
+          (should (string-prefix-p "│ " (substring-no-properties line)))
+          (should (string-suffix-p " │" (substring-no-properties line)))
+          (should-not (get-text-property 0 'display line))
+          (should (= (agent-ui-panel--pixels line 8) (* 30 8))))
+        (should (equal (mapcar (lambda (line) (car (funcall display line))) tall)
+                       '((slice 0 0 102 16) (slice 0 16 102 16) (slice 0 32 102 16))))
+        (let ((padded (cadr (funcall display (car tall)))))
+          (should-not (plist-member (cdr padded) :background))
+          (should (string-match-p "\\`<svg [^>]*width=\"102\" height=\"48\"><g transform=\"translate(0 4)\"><svg width=\"102\" height=\"39\"/>"
+                                  (plist-get (cdr padded) :data))))
+        ;; Its indent on the first line, blanks on the others.
+        (should (string-prefix-p "│   " (substring-no-properties (cadr tall)))))
+      ;; Scaled, it isn't cut: its sides drawn as tall.
+      (let* ((tall (funcall lines 80 78 0.5)))
+        (should (= (length tall) 1))
+        (should (string-match-p "<line x1=\"4.0\" x2=\"4.0\" y1=\"0\" y2=\"39\""
+                                (plist-get (cdr (get-text-property 0 'display (car tall))) :data))))))
+  ;; A snapshot draws a slice: the SVG in a box of its size, moved up to it.
+  (let* ((image (agent-ui-image (create-image "<svg width=\"20\" height=\"32\"/>" 'svg t)))
+         (line (propertize "pic" 'display (list '(slice 0 16 20 16) image)))
+         (svg (agent-ui-snapshot-svg line (agent-ui-context :width 10 :graphic t :char-width 8 :line-height 16))))
+    (should (string-match-p "<svg x=\"8\" y=\"8\" width=\"20\" height=\"16\"><g transform=\"translate(0 -16)\"><svg width=\"20\" height=\"32\"/></g></svg>" svg))))
 
 (ert-deftest agent-ui-elements/panel-an-image-line-in-its-border ()
   ;; An image's line padded to the panel's width: a filler to its last
@@ -3956,11 +3973,12 @@ sides drawn as tall (a character is a line's height: gaps)."
     (should (equal (cadr lines) "ab        "))
     ;; Wider than its room: as it is.
     (should (equal (substring-no-properties (car (agent-ui-panel--lines (funcall image 200) 10 ctx))) "img"))
-    ;; A fraction of a pixel (a formula's 102.87): padded within its room.
+    ;; A fraction of a pixel (a formula's 102.87): as Emacs shows it (38),
+    ;; padded to its column's end exactly.
     (let ((line (car (agent-ui-panel--lines (propertize "img" 'display (list 'image :type 'svg :scale 1 :data "<svg width=\"38.87\" height=\"16\"/>"))
                                             10 ctx))))
-      (should (<= (agent-ui-panel--pixels line 8) 80))
-      (should (equal (get-text-property 3 'display line) '(space :width (1))))))
+      (should (= (agent-ui-panel--pixels line 8) 80))
+      (should (equal (get-text-property 3 'display line) '(space :width (2))))))
   ;; A chart in a column panel, in the GUI: both sides of the border.
   (let* ((gui (agent-ui-render '(:type "panel" :children ((:type "chart" :values (1 3 2))))
                                (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16)))
