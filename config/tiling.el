@@ -27,7 +27,8 @@
 ;;               and [. Kept: SPC w a, new panes and a closed pane keep its
 ;;               height (one pane at a time: resizing another evens it out)
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
-;; in order: left to right, top to bottom.
+;; in order: left to right, top to bottom; the main pane is the first one, or
+;; where the strategy has it (tall-right: on the right).
 ;; A pane closed, however (SPC w d, q, its last tab...): the others laid out
 ;; again as the strategy has them (tall: the stack's panes at equal heights,
 ;; but one resized with SPC w } / {; Emacs gave the closed one's rows to its
@@ -65,12 +66,16 @@
 ;;   equal heights. The second pane opens on the right, the next ones at the
 ;;   bottom of the stack, from whichever pane. Panes laid out otherwise are
 ;;   arranged tall first.
+;; - tall-right (Amethyst's Tall-Right): tall with its sides swapped, the main
+;;   pane on the right (the same share of the width, `+my/tiling-tall-ratio'),
+;;   the others stacked on the left, top to bottom. The second pane opens on
+;;   the left, the next ones at the bottom of the stack.
 ;; More can be added to `+my/tiling-strategies'.
 (defvar +my/tiling-strategy 'tall
   "How SPC w SPC places new panes: a strategy of `+my/tiling-strategies'.")
 
 (defvar +my/tiling-tall-ratio 0.5
-  "The main pane's share of the width in the tall strategy.")
+  "The main pane's share of the width in the tall and tall-right strategies.")
 
 (defvar +my/tiling-tall-ratio-limits '(0.2 . 0.8)
   "The smallest and biggest share of the width SPC w [ / ] give the main pane.")
@@ -117,11 +122,17 @@ FIRST above): what they show goes where they ask, not in a new pane.")
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange
           :resize-main +my/tiling-tall-resize-main :resize-pane +my/tiling-tall-resize-pane
-          :closed +my/tiling-tall-closed))
+          :closed +my/tiling-tall-closed)
+    (tall-right :split +my/tiling-tall-right-split :arrange +my/tiling-tall-right-arrange
+                :resize-main +my/tiling-tall-right-resize-main
+                :resize-pane +my/tiling-tall-right-resize-pane
+                :closed +my/tiling-tall-right-closed :order +my/tiling-tall-right-order))
   "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize-main
-FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION]). Each takes the panes
-in order (see above): :split opens a new pane and returns it, :arrange lays
-the panes out, :closed lays out the panes left once one closed. Resizing, as
+FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION] [:order FUNCTION]). Each
+takes the panes in order, the main pane first (see above): :split opens a new
+pane and returns it, :arrange lays the panes out, :closed lays out the panes
+left once one closed; :order, given the panes in order on the screen, puts
+the main pane first if it isn't (tall-right's). Resizing, as
 the strategy has it, also given a DIRECTION (1 bigger, -1 smaller), keeping
 the size for SPC w a and new panes, and returning what to say (\"Main pane:
 55% of the width\"): :resize-main the main area (tall: its width; a strategy
@@ -146,6 +157,8 @@ pane, that pane within the others. Without one: nothing to resize, said.")
 ;; In config/tiling/, in this order: each part can use what the ones before it
 ;; define.
 (load! "tiling/panes")
+(load! "tiling/stack")                  ; a main pane and a stack: tall's, tall-right's
 (load! "tiling/tall")
+(load! "tiling/tall-right")
 (load! "tiling/commands")
 (load! "tiling/apps")

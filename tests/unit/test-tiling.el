@@ -627,6 +627,195 @@ nothing changes."
     (should (string-match-p "The only pane on the right"
                             (cadr (should-error (+my/tiling-pane-bigger) :type 'user-error))))))
 
+;; ====== THE MAIN PANE'S SHARE, TWO PANES ======
+
+(ert-deftest tiling/arrange-two-panes-keeps-the-ratio ()
+  "Two panes arranged: the main pane its share of the width, not half (the
+stack's one pane balanced with it undid it)."
+  (dolist (strategy '(tall tall-right))
+    (+test-tiling
+      (let ((+my/tiling-strategy strategy)
+            (+my/tiling-tall-ratio 0.7))
+        (set-window-buffer (split-window nil nil 'below) "B")
+        (+my/tiling-arrange)
+        (should (< (abs (- (/ (float (window-total-width (car (+my/tiling--ordered-panes))))
+                              (window-total-width (window-main-window)))
+                           0.7))
+                   0.03))))))
+
+(ert-deftest tiling/no-room-for-another-pane-said ()
+  "The stack full (each pane at its smallest): SPC w SPC says so, a user
+error, and opens nothing."
+  (+test-tiling
+    (let ((count 0) error)
+      (while (and (not error) (< count 50))
+        (condition-case err
+            (progn (+my/tiling-split) (cl-incf count))
+          (user-error (setq error err))))
+      (should error)
+      (should (equal (cadr error) "No room for another pane"))
+      (should (= (length (+my/tiling--panes)) (1+ count))))))
+
+;; ====== TALL-RIGHT ======
+
+(defmacro +test-tiling-tall-right (&rest body)
+  "BODY as `+test-tiling', the strategy tall-right."
+  (declare (indent 0))
+  `(+test-tiling
+     (let ((+my/tiling-strategy 'tall-right))
+       ,@body)))
+
+(defun +test-tiling--names (panes)
+  (mapcar (lambda (pane) (buffer-name (window-buffer pane))) panes))
+
+(defun +test-tiling--right-of-p (a b)
+  "Non-nil if window A is on the right of window B, beside it."
+  (>= (car (window-edges a)) (nth 2 (window-edges b))))
+
+(ert-deftest tiling/tall-right-is-a-strategy ()
+  (let ((strategy (alist-get 'tall-right +my/tiling-strategies)))
+    (dolist (key '(:split :arrange :resize-main :resize-pane :closed :order))
+      (should (functionp (plist-get strategy key))))))
+
+(ert-deftest tiling/tall-right-first-split-goes-left ()
+  "From one pane: the new one on its left, focused; the old one stays the
+main pane, on the right, its share of the width; first in order."
+  (+test-tiling-tall-right
+    (let* ((main (selected-window))
+           (width (window-total-width main))
+           (new (+my/tiling-split)))
+      (should (eq new (selected-window)))
+      (should (+test-tiling--right-of-p main new))
+      (should (= (cadr (window-edges new)) (cadr (window-edges main))))
+      (should (<= (abs (- (window-total-width main) (round (* 0.5 width)))) 1))
+      (should (equal (+my/tiling--panes) (list new main)))
+      (should (equal (+my/tiling--ordered-panes) (list main new))))))
+
+(ert-deftest tiling/tall-right-next-splits-stack-on-the-left ()
+  "The next panes at the bottom of the stack on the left, top to bottom in
+the order opened, at equal heights; the main pane on the right, as tall as
+the frame."
+  (+test-tiling-tall-right
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C" "D"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "C" "D")))
+      (should (equal (+test-tiling--names (+my/tiling--panes)) '("B" "C" "D" "A")))
+      (let ((stack (cdr (+my/tiling--ordered-panes))))
+        (dolist (pane stack)
+          (should (+test-tiling--right-of-p main pane)))
+        (should (< (cadr (window-edges (nth 0 stack))) (cadr (window-edges (nth 1 stack)))
+                   (cadr (window-edges (nth 2 stack)))))
+        (should (+test-tiling--even-p (mapcar #'window-total-height stack))))
+      (should (= (window-total-height main) (window-total-height (window-main-window)))))))
+
+(ert-deftest tiling/tall-right-arranges-other-layouts ()
+  "From tall (or panes of one's own): SPC w a puts the first pane, the main
+one, on the right, the others on the left in order; what they show, the
+focus, kept."
+  (+test-tiling
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (select-window (get-buffer-window "C"))
+      (let ((+my/tiling-strategy 'tall-right))
+        (+my/tiling-arrange)
+        (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "C")))
+        (should (+test-tiling--right-of-p (get-buffer-window "A") (get-buffer-window "B")))
+        (should (equal (buffer-name (window-buffer (selected-window))) "C"))
+        ;; And back: tall again.
+        (let ((+my/tiling-strategy 'tall))
+          (+my/tiling-arrange)
+          (should (equal (+test-tiling--names (+my/tiling--panes)) '("A" "B" "C")))
+          (should (+test-tiling--right-of-p (get-buffer-window "B") (get-buffer-window "A"))))))))
+
+(ert-deftest tiling/the-main-pane-found-without-its-mark ()
+  "No pane marked the main one (a workspace switched to makes its windows
+anew): tall-right finds it on the right (its :order), tall takes the first."
+  (+test-tiling-tall-right
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (should (window-parameter main '+my/tiling-main))
+      (dolist (pane (+my/tiling--panes))
+        (set-window-parameter pane '+my/tiling-main nil))
+      (should (eq (car (+my/tiling--ordered-panes)) main))
+      (let ((+my/tiling-strategy 'tall))
+        (should (equal (+my/tiling--ordered-panes) (+my/tiling--panes)))))))
+
+(ert-deftest tiling/tall-right-swap-main ()
+  "SPC w RET from a pane on the left: its buffer to the main pane on the
+right, the main's to it, the focus to the main pane."
+  (+test-tiling-tall-right
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (select-window (get-buffer-window "C"))
+      (+my/tiling-swap-main)
+      (should (eq (selected-window) main))
+      (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("C" "B" "A"))))))
+
+(ert-deftest tiling/tall-right-resize-main ()
+  "SPC w ] / [: the main pane on the right wider / narrower, tall's ratio
+kept (switching to tall keeps it)."
+  (+test-tiling-tall-right
+    (+my/tiling-split) (+my/tiling-split)
+    (let (said)
+      (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args))))
+                ((symbol-function 'set-transient-map) #'ignore))
+        (+my/tiling-main-bigger))
+      (should (equal said "Main pane: 55% of the width (] / [ again)")))
+    (should (= +my/tiling-tall-ratio 0.55))
+    (let ((main (car (+my/tiling--ordered-panes))))
+      (should (eq main (car (last (+my/tiling--panes)))))
+      (should (< (abs (- (/ (float (window-total-width main)) (window-total-width (window-main-window))) 0.55))
+                 0.02)))))
+
+(ert-deftest tiling/tall-right-resize-pane ()
+  "SPC w } / {: a pane on the left taller / shorter, the others even; from
+the main pane, or the stack's only one: said."
+  (+test-tiling-tall-right
+    (let ((main (selected-window)) said)
+      (pop-to-buffer "B" '(+my/tiling-display-buffer))
+      (select-window main)
+      (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args))))
+                ((symbol-function 'set-transient-map) #'ignore))
+        (select-window (get-buffer-window "B"))
+        (should (equal (cadr (should-error (+my/tiling-pane-bigger) :type 'user-error))
+                       "The only pane on the left is as tall as the frame"))
+        (dolist (name '("C" "D"))
+          (select-window main)
+          (pop-to-buffer name '(+my/tiling-display-buffer)))
+        (select-window main)
+        (should-error (+my/tiling-pane-bigger) :type 'user-error)
+        (select-window (get-buffer-window "C"))
+        (let ((before (window-total-height (selected-window))))
+          (+my/tiling-pane-bigger)
+          (should (> (window-total-height (selected-window)) before))
+          (should (string-match-p "\\`Pane: [0-9]+% of the stack's height" said))
+          (should (+test-tiling--even-p (mapcar #'window-total-height
+                                                (list (get-buffer-window "B") (get-buffer-window "D"))))))))))
+
+(ert-deftest tiling/tall-right-closed-pane-s-rows-shared ()
+  "A pane of the stack closed: the stack on the left at equal heights again;
+the main pane's width as it was."
+  (+test-tiling-tall-right
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C" "D"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (+my/tiling--closed-h (selected-frame))
+      (let ((width (window-total-width main)))
+        (delete-window (get-buffer-window "C"))
+        (+my/tiling--closed-h (selected-frame))
+        (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "D")))
+        (should (+test-tiling--even-p (mapcar #'window-total-height (cdr (+my/tiling--ordered-panes)))))
+        (should (= (window-total-width main) width))))))
+
 ;; ====== KEYS ======
 
 (ert-deftest tiling/keys ()

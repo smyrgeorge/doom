@@ -9,7 +9,7 @@
   "SPC w SPC: a new pane where the tiling strategy puts it (config/tiling.el)."
   (interactive)
   (let ((from (selected-window))
-        (panes (+my/tiling--panes))
+        (panes (+my/tiling--ordered-panes))
         (strategy (+my/tiling--strategy)))
     (unless (memq from panes)
       (user-error "Not in a pane: side panels aren't tiled"))
@@ -32,7 +32,7 @@
 (defun +my/tiling-arrange ()
   "SPC w a: lay the panes out as the tiling strategy does (config/tiling.el)."
   (interactive)
-  (let ((panes (+my/tiling--panes))
+  (let ((panes (+my/tiling--ordered-panes))
         (strategy (+my/tiling--strategy)))
     (unless (memq (selected-window) panes)
       (user-error "Not in a pane: side panels aren't tiled"))
@@ -40,13 +40,14 @@
       (funcall (plist-get strategy :arrange) panes))))
 
 (defun +my/tiling-swap-main ()
-  "SPC w RET: the selected pane's buffer to the main pane (the first one), the
-main's to where it was; the focus to the main pane. From the main pane: the
-next pane's buffer to it (config/tiling.el). Tabs, point and history move
-with each; the panes' sizes stay."
+  "SPC w RET: the selected pane's buffer to the main pane (the strategy's,
+first in `+my/tiling--ordered-panes'), the main's to where it was; the focus
+to the main pane. From the main pane: the next pane's buffer to it
+\(config/tiling.el). Tabs, point and history move with each; the panes'
+sizes stay."
   (interactive)
   (let ((from (selected-window))
-        (panes (+my/tiling--panes)))
+        (panes (+my/tiling--ordered-panes)))
     (unless (memq from panes)
       (user-error "Not in a pane: side panels aren't tiled"))
     (unless (cdr panes)
@@ -78,9 +79,9 @@ of them again (see config/tiling.el).")
   "Resize by the strategy's KEY (:resize-main or :resize-pane), WHAT it
 resizes (said if it has nothing so), in DIRECTION (1 bigger, -1 smaller);
 then KEYS repeat it, and what the strategy did is said."
-  (let* ((panes (+my/tiling--panes))
-         (pane (selected-window))
-         (resize (plist-get (+my/tiling--strategy) key)))
+  (let* ((resize (plist-get (+my/tiling--strategy) key))
+         (panes (+my/tiling--ordered-panes))
+         (pane (selected-window)))
     (unless resize
       (user-error "The tiling strategy `%s' has no %s to resize" +my/tiling-strategy what))
     (unless (memq pane panes)

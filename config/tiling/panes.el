@@ -27,6 +27,28 @@ order."
         (mapc #'walk (+my/tiling--children window))))
     (nreverse panes)))
 
+;; THE MAIN PANE FIRST
+;; The panes are in order on the screen, but the main pane first: where SPC w
+;; RET, SPC w a and resizing find it. It's the pane a strategy made the main
+;; one (marked when it laid the panes out, or split the only one): switching
+;; strategy (tall-right's on the right, tall's on the left) keeps it. None
+;; marked (a workspace switched to makes its windows anew): the strategy finds
+;; it (its :order: tall-right's is the last on the screen), else the first.
+(defun +my/tiling--mark-main (window)
+  "WINDOW the main pane (see above), the only one of its frame."
+  (dolist (pane (+my/tiling--panes (window-frame window)))
+    (set-window-parameter pane '+my/tiling-main nil))
+  (set-window-parameter window '+my/tiling-main t))
+
+(defun +my/tiling--ordered-panes (&optional frame)
+  "FRAME's panes (`+my/tiling--panes'), the main pane first (see above)."
+  (let* ((panes (+my/tiling--panes frame))
+         (main (seq-find (lambda (pane) (window-parameter pane '+my/tiling-main)) panes))
+         (order (plist-get (+my/tiling--strategy) :order)))
+    (cond (main (cons main (remq main panes)))
+          ((and order panes) (funcall order panes))
+          (t panes))))
+
 (defun +my/tiling--state (window)
   "What WINDOW shows, to show it again in another window."
   (list :buffer (window-buffer window)
@@ -62,6 +84,6 @@ stripe), nor down to one pane."
       (when (and before (< count before) (> count 1))
         (when-let* ((closed (plist-get (+my/tiling--strategy) :closed)))
           (with-selected-frame frame
-            (funcall closed (+my/tiling--panes))))))))
+            (funcall closed (+my/tiling--ordered-panes))))))))
 
 (add-hook 'window-state-change-functions #'+my/tiling--closed-h)

@@ -108,7 +108,7 @@ be (other rules', e.g. Doom's popups': the strategy decides)."
 (defun +my/tiling--new-pane ()
   "A new pane where the strategy puts it, with no tabs yet; nil in a frame
 without panes."
-  (when-let* ((panes (+my/tiling--panes)))
+  (when-let* ((panes (+my/tiling--ordered-panes)))
     (let ((new (funcall (plist-get (+my/tiling--strategy) :split) panes)))
       (set-window-prev-buffers new nil)
       (set-window-next-buffers new nil)

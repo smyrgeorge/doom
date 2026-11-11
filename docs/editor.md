@@ -34,12 +34,19 @@ of `claude`, `terminal`, `preview`, `drawings`, `magit`, `issues`, `agent-ui`, `
 +my/tiling-apps` ticks them). One left out opens as it would without tiling (the terminal as a popup); an unknown name
 is warned about at startup.
 
-The `tall` strategy keeps the main pane on the left and stacks the others on the right. `SPC w SPC` opens a new pane
-showing the current buffer, `SPC w a` arranges the panes again, and `SPC w RET` moves the current pane's buffer to the
-main pane (the main's to its place). `SPC w ]` / `SPC w [` make the main area bigger / smaller as the strategy has it
-(`tall`: the main pane's width), from any pane (`]` / `[` again repeat it). `SPC w }` / `SPC w {` make the current
-pane bigger / smaller (`tall`: a pane of the stack taller / shorter, the others of the stack at equal heights; `}` /
-`{` again repeat it); it keeps its height when you arrange the panes, open one or close another. Try it: `M-x
+The strategy, chosen in `config.el` (`(setq +my/tiling-strategy 'tall)`), says where the panes go:
+
+| Strategy | Layout |
+|---|---|
+| `tall` | The main pane on the left, the others stacked on the right |
+| `tall-right` | The main pane on the right, the others stacked on the left |
+
+`SPC w SPC` opens a new pane showing the current buffer, `SPC w a` arranges the panes again (in the strategy chosen,
+the main pane staying the main one), and `SPC w RET` moves the current pane's buffer to the main pane (the main's to
+its place). `SPC w ]` / `SPC w [` make the main area bigger / smaller as the strategy has it (`tall`, `tall-right`:
+the main pane's width, the same for both), from any pane (`]` / `[` again repeat it). `SPC w }` / `SPC w {` make the
+current pane bigger / smaller (`tall`, `tall-right`: a pane of the stack taller / shorter, the others of the stack at
+equal heights; `}` / `{` again repeat it); it keeps its height when you arrange the panes, open one or close another. Try it: `M-x
 +my/example-tiling`.
 
 Without `(load! "config/tiling")` in `config.el`, each opens where it would on its own.
