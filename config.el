@@ -100,7 +100,8 @@
 ;; manager (config/tiling.el). `tall': a main pane on the left, the others
 ;; stacked on the right (Amethyst's Tall); `tall-right': the main pane on the
 ;; right, the others on the left (Amethyst's Tall-Right); `wide': the main pane
-;; on top, the others in a row below (Amethyst's Wide).
+;; on top, the others in a row below (Amethyst's Wide); `fullscreen': the
+;; current pane alone, the others hidden (Amethyst's Fullscreen).
 (setq +my/tiling-strategy 'tall)
 
 ;; The applications tiling opens in a new pane (config/tiling.el): all of them,

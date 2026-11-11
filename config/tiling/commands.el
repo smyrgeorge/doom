@@ -8,9 +8,9 @@
 (defun +my/tiling-split ()
   "SPC w SPC: a new pane where the tiling strategy puts it (config/tiling.el)."
   (interactive)
-  (let ((from (selected-window))
-        (panes (+my/tiling--ordered-panes))
-        (strategy (+my/tiling--strategy)))
+  (let* ((strategy (+my/tiling--strategy))
+         (panes (+my/tiling--ready-panes))
+         (from (selected-window)))
     (unless (memq from panes)
       (user-error "Not in a pane: side panels aren't tiled"))
     (let ((buffer (window-buffer from))
@@ -32,8 +32,8 @@
 (defun +my/tiling-arrange ()
   "SPC w a: lay the panes out as the tiling strategy does (config/tiling.el)."
   (interactive)
-  (let ((panes (+my/tiling--ordered-panes))
-        (strategy (+my/tiling--strategy)))
+  (let* ((strategy (+my/tiling--strategy))
+         (panes (+my/tiling--ready-panes)))
     (unless (memq (selected-window) panes)
       (user-error "Not in a pane: side panels aren't tiled"))
     (when (cdr panes)
@@ -44,22 +44,26 @@
 first in `+my/tiling--ordered-panes'), the main's to where it was; the focus
 to the main pane. From the main pane: the next pane's buffer to it
 \(config/tiling.el). Tabs, point and history move with each; the panes'
-sizes stay."
+sizes stay. A strategy of its own (fullscreen's :swap-main): it says what it
+did."
   (interactive)
-  (let ((from (selected-window))
-        (panes (+my/tiling--ordered-panes)))
+  (let* ((swap (plist-get (+my/tiling--strategy) :swap-main))
+         (panes (+my/tiling--ready-panes))
+         (from (selected-window)))
     (unless (memq from panes)
       (user-error "Not in a pane: side panels aren't tiled"))
-    (unless (cdr panes)
-      (user-error "Only one pane"))
-    (let* ((main (car panes))
-           (other (if (eq from main) (cadr panes) from))
-           (main-state (+my/tiling--state main))
-           (other-state (+my/tiling--state other)))
-      (+my/tiling--restore main other-state)
-      (+my/tiling--restore other main-state)
-      (select-window main)
-      main)))
+    (if swap
+        (message "%s" (funcall swap))
+      (unless (cdr panes)
+        (user-error "Only one pane"))
+      (let* ((main (car panes))
+             (other (if (eq from main) (cadr panes) from))
+             (main-state (+my/tiling--state main))
+             (other-state (+my/tiling--state other)))
+        (+my/tiling--restore main other-state)
+        (+my/tiling--restore other main-state)
+        (select-window main)
+        main))))
 
 (defvar +my/tiling-resize-map
   (let ((map (make-sparse-keymap)))
@@ -80,7 +84,7 @@ of them again (see config/tiling.el).")
 resizes (said if it has nothing so), in DIRECTION (1 bigger, -1 smaller);
 then KEYS repeat it, and what the strategy did is said."
   (let* ((resize (plist-get (+my/tiling--strategy) key))
-         (panes (+my/tiling--ordered-panes))
+         (panes (and resize (+my/tiling--ready-panes)))
          (pane (selected-window)))
     (unless resize
       (user-error "The tiling strategy `%s' has no %s to resize" +my/tiling-strategy what))

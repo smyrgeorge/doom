@@ -108,12 +108,18 @@ be (other rules', e.g. Doom's popups': the strategy decides)."
 (defun +my/tiling--new-pane ()
   "A new pane where the strategy puts it, with no tabs yet; nil in a frame
 without panes."
-  (when-let* ((panes (+my/tiling--ordered-panes)))
+  (when-let* ((panes (+my/tiling--ready-panes)))
     (let ((new (funcall (plist-get (+my/tiling--strategy) :split) panes)))
       (set-window-prev-buffers new nil)
       (set-window-next-buffers new nil)
       (set-window-parameter new 'tab-line-buffers nil)
       new)))
+
+(defun +my/tiling--hidden-pane (buffer)
+  "A hidden pane holding BUFFER brought to the front (the strategy's :show:
+fullscreen's); its window, or nil."
+  (when-let* ((show (plist-get (alist-get +my/tiling-strategy +my/tiling-strategies) :show)))
+    (funcall show buffer)))
 
 (defun +my/tiling-display-buffer (buffer alist)
   "A `display-buffer' action: BUFFER in a new pane where the tiling strategy
@@ -124,8 +130,9 @@ puts it (config/tiling.el), its only tab; quitting it closes the pane. Nil
 
 ;; APPLICATIONS AND FILES SHOWN (`display-buffer', see config/tiling.el)
 (defun +my/tiling--display (buffer alist)
-  "`display-buffer-overriding-action': an application in its pane (shown, or
-one of its tabs), else a new one (as the strategy puts it); a file in the current pane, as a tab, from a
+  "`display-buffer-overriding-action': an application in its pane (shown, one
+of its tabs, or hidden: brought to the front), else a new one (as the
+strategy puts it); a file in the current pane, as a tab, from a
 popup or a side panel in the pane used last (a new pane without one). Nil
 for anything else (popups, *Completions*, transient menus, git's own
 files...), for a buffer shown in no window (ALIST's `allow-no-window'),
@@ -143,6 +150,8 @@ in): as it asks."
           ((+my/tiling--tab-pane buffer)
            (window--display-buffer buffer (+my/tiling--tab-pane buffer) 'reuse
                                    (+my/tiling--alist alist)))
+          ((when-let* ((window (+my/tiling--hidden-pane buffer)))
+             (window--display-buffer buffer window 'reuse (+my/tiling--alist alist))))
           ((+my/tiling--new-pane-p buffer)
            (+my/tiling-display-buffer buffer alist))))
    ((+my/tiling--file-p buffer)
@@ -175,12 +184,12 @@ tabs the only live buffer it showed."
 
 (defun +my/tiling-close-pane-h ()
   "The buffer killed: the panes it was the last tab of close, but a frame's
-last pane."
+last pane (one hidden then shown: config/tiling/hidden.el)."
   (let ((buffer (current-buffer)))
     (dolist (window (get-buffer-window-list buffer 'nomini t))
       (when (and (window-live-p window)
                  (not (window-parameter window 'window-side))
-                 (eq (window-deletable-p window) t)
+                 (or (eq (window-deletable-p window) t) (+my/tiling--shown-alone-p window))
                  (+my/tiling--last-tab-p window buffer))
         (delete-window window)))))
 
@@ -198,7 +207,7 @@ above). Non-nil if so (Doom's and Emacs's then skipped)."
     (when (and (eq (window-buffer window) buffer)
                (memq window (+my/tiling--panes))
                (not (window-parameter window 'window-side))
-               (eq (window-deletable-p window) t)
+               (or (eq (window-deletable-p window) t) (+my/tiling--shown-alone-p window))
                (not (and (fboundp 'doom-fallback-buffer) (eq buffer (doom-fallback-buffer))))
                (+my/tiling--last-tab-p window buffer))
       ;; A modified file's asked about first (`kill-buffer'): no, nothing.

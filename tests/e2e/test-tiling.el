@@ -640,3 +640,65 @@ pane; quit, the panes as they were."
         (+test-sleep 0.1)
         (should-not (get-buffer-window " *transient*"))
         (should (equal (+my/tiling--panes) panes))))))
+
+;; ====== FULLSCREEN ======
+
+(defmacro +test-tiling-fullscreen (&rest body)
+  "BODY as `+test-tiling', the strategy fullscreen; no pane hidden before or
+after."
+  (declare (indent 0))
+  `(+test-tiling
+     (set-frame-parameter nil '+my/tiling-hidden nil)
+     (unwind-protect
+         (let ((+my/tiling-strategy 'fullscreen))
+           ,@body)
+       (set-frame-parameter nil '+my/tiling-hidden nil))))
+
+(defun +test-tiling--shown ()
+  "The pane on the screen's buffer name; there must be only one."
+  (let ((panes (+my/tiling--panes)))
+    (should (= (length panes) 1))
+    (buffer-name (window-buffer (car panes)))))
+
+(ert-deftest e2e-tiling/fullscreen-panes-hidden-and-shown-again ()
+  "Fullscreen in a GUI frame: each new pane alone, its tabs its own; in turn
+with SPC w w; tall again, every pane a window, laid out tall, each its tabs."
+  (+test-tiling-fullscreen
+    (let ((b (+test-tiling--file "b.txt"))
+          (c (+test-tiling--file "c.txt")))
+      (+my/tiling-split)
+      (switch-to-buffer b)
+      (should (equal (+test-tiling--tabs (selected-window)) '("a.txt" "b.txt")))
+      (+my/tiling-split)
+      (switch-to-buffer c)
+      (should (equal (+test-tiling--shown) "c.txt"))
+      ;; Opened from b.txt's pane: b.txt, then c.txt.
+      (should (equal (+test-tiling--tabs (selected-window)) '("b.txt" "c.txt")))
+      (+my/tiling-next-pane)                ; wraps: the first
+      (should (equal (+test-tiling--shown) "a.txt"))
+      (+my/tiling-next-pane)
+      (should (equal (+test-tiling--shown) "b.txt"))
+      (should (equal (+test-tiling--tabs (selected-window)) '("a.txt" "b.txt")))
+      (let ((+my/tiling-strategy 'tall))
+        (+my/tiling-arrange)
+        (should-not (+my/tiling--hidden-p))
+        (should (equal (+test-tiling--layout) '("a.txt" "b.txt" "c.txt")))
+        (should (equal (+test-tiling--tabs (nth 1 (+my/tiling--panes))) '("a.txt" "b.txt")))
+        (should (equal (buffer-name (window-buffer (selected-window))) "b.txt"))))))
+
+(ert-deftest e2e-tiling/fullscreen-the-last-tab-closed-shows-the-next ()
+  "Cmd+W on the last tab of the pane on the screen: the next one shown; a file
+a hidden pane still has as a tab stays open."
+  (+test-tiling-fullscreen
+    (let ((b (+test-tiling--file "b.txt")))
+      (+my/tiling-split)                    ; a.txt again, alone
+      (switch-to-buffer b)
+      (+my/tiling-split)
+      (should (equal (+test-tiling--tabs (selected-window)) '("b.txt")))
+      (+my/tabs-close-current)              ; b.txt, its only tab: the pane closes
+      (should (equal (+test-tiling--shown) "b.txt"))
+      (should (buffer-live-p b))            ; the pane shown has it
+      (should (equal (+test-tiling--tabs (selected-window)) '("a.txt" "b.txt")))
+      (+my/tabs-close-current)              ; b.txt: a tab of this pane only now
+      (should-not (buffer-live-p b))
+      (should (equal (+test-tiling--shown) "a.txt")))))

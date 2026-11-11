@@ -983,6 +983,263 @@ nothing."
       (should (= (length (+my/tiling--panes)) (1+ count)))
       (should (<= window-min-width (apply #'min (mapcar #'window-total-width (cdr (+my/tiling--ordered-panes)))))))))
 
+;; ====== FULLSCREEN ======
+
+(defvar persp-mode)                     ; Doom's workspaces (persp-mode)
+
+(defmacro +test-tiling-fullscreen (&rest body)
+  "BODY as `+test-tiling', the strategy fullscreen; no pane hidden before or
+after."
+  (declare (indent 0))
+  `(+test-tiling
+     (set-frame-parameter nil '+my/tiling-hidden nil)
+     (unwind-protect
+         (let ((+my/tiling-strategy 'fullscreen))
+           (cl-letf (((symbol-function 'message) #'ignore))
+             ,@body))
+       (set-frame-parameter nil '+my/tiling-hidden nil))))
+
+(defun +test-tiling--slots ()
+  "The panes in order: each one's buffer name, the one on the screen with a *."
+  (mapcar (lambda (slot)
+            (if (eq slot :shown)
+                (concat "*" (buffer-name (window-buffer (car (+my/tiling--panes)))))
+              (buffer-name (plist-get slot :buffer))))
+          (or (+my/tiling--slots) (list :shown))))
+
+(defun +test-tiling--fullscreen-open (&rest names)
+  "Open a pane for each of NAMES (SPC w SPC, then the buffer shown in it)."
+  (dolist (name names)
+    (+my/tiling-split)
+    (switch-to-buffer name)))
+
+(ert-deftest tiling/fullscreen-is-a-strategy ()
+  (let ((strategy (alist-get 'fullscreen +my/tiling-strategies)))
+    (dolist (key '(:split :arrange :swap-main :show))
+      (should (functionp (plist-get strategy key))))
+    (should (plist-get strategy :hides))
+    (should-not (plist-get strategy :resize-main))
+    (should-not (plist-get strategy :resize-pane))))
+
+(ert-deftest tiling/fullscreen-a-new-pane-opens-alone ()
+  "SPC w SPC: the new pane alone in the frame, showing the current buffer, the
+one before it hidden just before it."
+  (+test-tiling-fullscreen
+    (let ((window (selected-window)))
+      (+my/tiling-split)
+      (should (equal (+my/tiling--panes) (list window)))
+      (should (equal (+test-tiling--slots) '("A" "*A")))
+      (switch-to-buffer "B")
+      (+my/tiling-split)
+      (switch-to-buffer "C")
+      (should (= (length (window-list)) 1))
+      (should (equal (+test-tiling--slots) '("A" "B" "*C")))
+      ;; From the middle: just after it.
+      (+my/tiling-previous-pane)
+      (+my/tiling-split)
+      (switch-to-buffer "D")
+      (should (equal (+test-tiling--slots) '("A" "B" "*D" "C"))))))
+
+(ert-deftest tiling/fullscreen-panes-in-turn ()
+  "SPC w w / W: the next / previous pane in front, wrapping, each with its
+buffer and point; what's said."
+  (+test-tiling-fullscreen
+    (with-current-buffer "B" (erase-buffer) (insert "line 1\nline 2\nline 3\n"))
+    (+test-tiling--fullscreen-open "B" "C")
+    (should (equal (+test-tiling--slots) '("A" "B" "*C")))
+    (+my/tiling-previous-pane)
+    (should (equal (+test-tiling--slots) '("A" "*B" "C")))
+    ;; Point moved in B's pane (as a command would: its buffer current).
+    (set-window-point nil (with-current-buffer "B" (goto-char (point-min)) (line-beginning-position 3)))
+    (let ((point (window-point)) said)
+      (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args)))))
+        (+my/tiling-next-pane)
+        (should (equal said "Pane 3/3"))
+        (+my/tiling-next-pane)
+        (should (equal said "Pane 1/3")))
+      (should (equal (+test-tiling--slots) '("*A" "B" "C")))
+      (+my/tiling-next-pane)
+      (should (equal (+test-tiling--slots) '("A" "*B" "C")))
+      (should (= (window-point) point)))))
+
+(ert-deftest tiling/fullscreen-arranges-other-layouts ()
+  "From tall: SPC w a keeps the selected pane alone, the others hidden in
+order; back to tall (its SPC w a), all shown again, laid out tall, the main
+pane the first."
+  (+test-tiling
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (select-window (get-buffer-window "B"))
+      (unwind-protect
+          (progn
+            (let ((+my/tiling-strategy 'fullscreen))
+              (+my/tiling-arrange)
+              (should (= (length (window-list)) 1))
+              (should (equal (+test-tiling--slots) '("A" "*B" "C"))))
+            (+my/tiling-arrange)
+            (should-not (+my/tiling--hidden-p))
+            (should (equal (+test-tiling--names (+my/tiling--panes)) '("A" "B" "C")))
+            (should (+my/tiling--tall-p (window-main-window)))
+            (should (equal (buffer-name (window-buffer (selected-window))) "B")))
+        (set-frame-parameter nil '+my/tiling-hidden nil)))))
+
+(ert-deftest tiling/fullscreen-left-by-a-new-pane-too ()
+  "Another strategy's SPC w SPC shows the hidden panes too, then opens its
+own."
+  (+test-tiling-fullscreen
+    (+test-tiling--fullscreen-open "B")
+    (let ((+my/tiling-strategy 'tall))
+      (+my/tiling-split)
+      (should-not (+my/tiling--hidden-p))
+      (should (= (length (+my/tiling--panes)) 3))
+      (should (+my/tiling--tall-p (window-main-window)))
+      (should (equal (buffer-name (window-buffer (car (+my/tiling--panes)))) "A")))))
+
+(ert-deftest tiling/fullscreen-swap-main ()
+  "SPC w RET: the pane on the screen first, the main one tall then lays out."
+  (+test-tiling-fullscreen
+    (+test-tiling--fullscreen-open "B" "C")
+    (let (said)
+      (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args)))))
+        (+my/tiling-swap-main))
+      (should (equal said "Pane 1/3, the main one")))
+    (should (equal (+test-tiling--slots) '("*C" "A" "B")))
+    (let ((+my/tiling-strategy 'tall))
+      (+my/tiling-arrange)
+      (should (equal (+test-tiling--names (+my/tiling--panes)) '("C" "A" "B"))))))
+
+(ert-deftest tiling/fullscreen-nothing-to-resize ()
+  (+test-tiling-fullscreen
+    (+test-tiling--fullscreen-open "B")
+    (should (equal (cadr (should-error (+my/tiling-main-bigger) :type 'user-error))
+                   (format-message "The tiling strategy `fullscreen' has no main area to resize")))
+    (should (equal (cadr (should-error (+my/tiling-pane-smaller) :type 'user-error))
+                   (format-message "The tiling strategy `fullscreen' has no pane to resize")))))
+
+(ert-deftest tiling/fullscreen-closing-shows-the-next ()
+  "SPC w d (`delete-window') on the pane on the screen: the next one shown
+(the one before, from the last); down to one, the frame's last window as
+ever."
+  (+test-tiling-fullscreen
+    (+test-tiling--fullscreen-open "B" "C")
+    (+my/tiling-previous-pane)
+    (delete-window)
+    (should (equal (+test-tiling--slots) '("A" "*C")))
+    (delete-window)
+    (should (equal (+test-tiling--slots) '("*A")))
+    (should-not (+my/tiling--hidden-p))
+    (should-error (delete-window))))
+
+(ert-deftest tiling/fullscreen-doom-s-spc-w-d-keeps-the-workspace ()
+  "Doom's SPC w d (`+workspace/close-window-or-workspace': from a workspace's
+only window, it kills the workspace): the pane closed, the next one shown."
+  (+test-tiling-fullscreen
+    (let ((killed nil))
+      (cl-letf* ((original (symbol-function '+workspace/close-window-or-workspace)))
+        (unwind-protect
+            (progn
+              ;; Stands in for Doom's (its module isn't loaded here), the
+              ;; tiling's advice kept on it.
+              (advice-remove '+workspace/close-window-or-workspace #'+my/tiling-close-shown-not-workspace-a)
+              (defalias '+workspace/close-window-or-workspace
+                (lambda () (interactive) (setq killed t)))
+              (advice-add '+workspace/close-window-or-workspace :before-until
+                          #'+my/tiling-close-shown-not-workspace-a)
+              (+test-tiling--fullscreen-open "B")
+              (call-interactively #'+workspace/close-window-or-workspace)
+              (should-not killed)
+              (should (equal (+test-tiling--slots) '("*A")))
+              ;; Nothing hidden: Doom's, as ever.
+              (call-interactively #'+workspace/close-window-or-workspace)
+              (should killed))
+          (advice-remove '+workspace/close-window-or-workspace #'+my/tiling-close-shown-not-workspace-a)
+          (fset '+workspace/close-window-or-workspace original)
+          (advice-add '+workspace/close-window-or-workspace :before-until
+                      #'+my/tiling-close-shown-not-workspace-a))))))
+
+(ert-deftest tiling/fullscreen-a-pane-closes-with-its-buffer ()
+  "Its last tab's buffer killed (SPC b k, a terminal ending): the next pane
+shown; a hidden pane's buffer killed: it shows the one it showed before, or
+is gone."
+  (+test-tiling-fullscreen
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C" "D"))
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (should (eq (selected-window) main))
+      (should (equal (+test-tiling--slots) '("A" "B" "C" "*D")))
+      (kill-buffer "D")
+      (should (equal (+test-tiling--slots) '("A" "B" "*C")))
+      (kill-buffer "B")
+      (should (equal (+my/tiling--show-next 1) "Pane 1/2"))
+      (should (equal (+test-tiling--slots) '("*A" "C"))))))
+
+(ert-deftest tiling/fullscreen-quit-closes-the-pane ()
+  "q on an application opened in a new pane: the pane closed, the next one
+shown; the buffer kept (killed with C-u q)."
+  (+test-tiling-fullscreen
+    (let ((app (+test-tiling--app "an app")))
+      (pop-to-buffer app '(+my/tiling-display-buffer))
+      (should (equal (+test-tiling--slots) '("A" "*an app")))
+      (quit-window)
+      (should (equal (+test-tiling--slots) '("*A")))
+      (should (buffer-live-p app))
+      (pop-to-buffer app '(+my/tiling-display-buffer))
+      (quit-window t)
+      (should-not (buffer-live-p app)))))
+
+(ert-deftest tiling/fullscreen-an-application-hidden-brought-to-the-front ()
+  "An application shown while its pane is hidden: that pane in front, no new
+one."
+  (+test-tiling-first
+    (set-frame-parameter nil '+my/tiling-hidden nil)
+    (unwind-protect
+        (let ((+my/tiling-strategy 'fullscreen)
+              (app (+test-tiling--app "an app")))
+          (cl-letf (((symbol-function 'message) #'ignore))
+            (pop-to-buffer app)
+            (switch-to-buffer "B")
+            (should (equal (+test-tiling--slots) '("A" "*B")))
+            (+my/tiling-previous-pane)
+            (pop-to-buffer app)
+            (should (equal (+test-tiling--slots) '("A" "*an app")))
+            (should (= (length (window-list)) 1))))
+      (set-frame-parameter nil '+my/tiling-hidden nil))))
+
+(ert-deftest tiling/fullscreen-hidden-panes-hold-their-buffers ()
+  "A hidden pane holds its buffer and tabs (a file's last tab closed
+elsewhere doesn't close it: config/editor/tabs.el asks)."
+  (+test-tiling-fullscreen
+    (+test-tiling--fullscreen-open "B")
+    (should (+my/tiling--hidden-holds-p (get-buffer "A")))
+    (should-not (+my/tiling--hidden-holds-p (get-buffer "C")))
+    (should (memq #'+my/tiling--hidden-holds-p +my/tabs-held-functions))))
+
+(ert-deftest tiling/fullscreen-each-workspace-its-panes ()
+  "Doom's workspaces each have their windows: their hidden panes too."
+  (+test-tiling-fullscreen
+    (let ((persp-mode t) (workspace 'one))
+      (cl-letf (((symbol-function 'get-current-persp) (lambda (&rest _) workspace)))
+        (+test-tiling--fullscreen-open "B")
+        (should (equal (+test-tiling--slots) '("A" "*B")))
+        (setq workspace 'two)
+        (should-not (+my/tiling--hidden-p))
+        (setq workspace 'one)
+        (should (equal (+test-tiling--slots) '("A" "*B")))))))
+
+(ert-deftest tiling/next-pane-else-evil-s-next-window ()
+  "SPC w w / W, another strategy (or no pane hidden): Evil's next / previous
+window."
+  (+test-tiling
+    (let (called)
+      (cl-letf (((symbol-function 'evil-window-next) (lambda (&rest _) (interactive) (push 'next called)))
+                ((symbol-function 'evil-window-prev) (lambda (&rest _) (interactive) (push 'prev called))))
+        (+my/tiling-split)
+        (+my/tiling-next-pane)
+        (+my/tiling-previous-pane)
+        (should (equal called '(prev next)))))))
+
 ;; ====== KEYS ======
 
 (ert-deftest tiling/keys ()
@@ -992,7 +1249,9 @@ nothing."
   (should (eq (lookup-key evil-window-map "]") #'+my/tiling-main-bigger))
   (should (eq (lookup-key evil-window-map "[") #'+my/tiling-main-smaller))
   (should (eq (lookup-key evil-window-map "}") #'+my/tiling-pane-bigger))
-  (should (eq (lookup-key evil-window-map "{") #'+my/tiling-pane-smaller)))
+  (should (eq (lookup-key evil-window-map "{") #'+my/tiling-pane-smaller))
+  (should (eq (lookup-key evil-window-map "w") #'+my/tiling-next-pane))
+  (should (eq (lookup-key evil-window-map "W") #'+my/tiling-previous-pane)))
 
 ;; ====== TILING FIRST ======
 

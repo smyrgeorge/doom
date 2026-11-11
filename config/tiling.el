@@ -26,6 +26,9 @@
 ;;               the stack at equal heights); } and { again repeat it, as do ]
 ;;               and [. Kept: SPC w a, new panes and a closed pane keep its
 ;;               height (one pane at a time: resizing another evens it out)
+;;   SPC w w / W the next / previous pane in front, in the fullscreen strategy
+;;               (its panes hidden but one, see below); else the next /
+;;               previous window, as Evil's
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom; the main pane is the first one, or
 ;; where the strategy has it (tall-right: on the right).
@@ -74,6 +77,14 @@
 ;;   (`+my/tiling-wide-ratio' of the height), the others in a row below it at
 ;;   equal widths, left to right. The second pane opens below, the next ones
 ;;   at the right end of the row (a full row: said).
+;; - fullscreen (Amethyst's Fullscreen): the current pane alone, the others
+;;   hidden in order (config/tiling/hidden.el), each workspace's. A new pane
+;;   opens alone, after the current one; SPC w w / W bring the others to the
+;;   front in turn ("Pane 2/4"); an application already open in a hidden pane:
+;;   that pane in front. SPC w RET makes the pane on the screen the first (the
+;;   main one); nothing to resize. Closing it (SPC w d, its last tab, its
+;;   buffer killed, q) shows the next one. Another strategy shows them all
+;;   again (its SPC w a, SPC w SPC...).
 ;; More can be added to `+my/tiling-strategies'.
 (defvar +my/tiling-strategy 'tall
   "How SPC w SPC places new panes: a strategy of `+my/tiling-strategies'.")
@@ -141,13 +152,19 @@ FIRST above): what they show goes where they ask, not in a new pane.")
                 :closed +my/tiling-tall-right-closed :order +my/tiling-tall-right-order)
     (wide :split +my/tiling-wide-split :arrange +my/tiling-wide-arrange
           :resize-main +my/tiling-wide-resize-main :resize-pane +my/tiling-wide-resize-pane
-          :closed +my/tiling-wide-closed))
+          :closed +my/tiling-wide-closed)
+    (fullscreen :split +my/tiling-fullscreen-split :arrange +my/tiling-fullscreen-arrange
+                :hides t :swap-main +my/tiling-fullscreen-swap-main
+                :show +my/tiling-fullscreen-show))
   "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize-main
 FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION] [:order FUNCTION]). Each
 takes the panes in order, the main pane first (see above): :split opens a new
 pane and returns it, :arrange lays the panes out, :closed lays out the panes
 left once one closed; :order, given the panes in order on the screen, puts
-the main pane first if it isn't (tall-right's). Resizing, as
+the main pane first if it isn't (tall-right's). A strategy that hides panes
+\(:hides t, fullscreen) also has :swap-main (SPC w RET, saying what it did)
+and :show (given a buffer, its hidden pane brought to the front: its window,
+or nil). Resizing, as
 the strategy has it, also given a DIRECTION (1 bigger, -1 smaller), keeping
 the size for SPC w a and new panes, and returning what to say (\"Main pane:
 55% of the width\"): :resize-main the main area (tall: its width; a strategy
@@ -165,16 +182,20 @@ pane, that pane within the others. Without one: nothing to resize, said.")
         :desc "Main pane bigger (tiling)" "]" #'+my/tiling-main-bigger
         :desc "Main pane smaller (tiling)" "[" #'+my/tiling-main-smaller
         :desc "Pane bigger (tiling)"       "}" #'+my/tiling-pane-bigger
-        :desc "Pane smaller (tiling)"      "{" #'+my/tiling-pane-smaller))
+        :desc "Pane smaller (tiling)"      "{" #'+my/tiling-pane-smaller
+        :desc "Next pane / window"         "w" #'+my/tiling-next-pane
+        :desc "Previous pane / window"     "W" #'+my/tiling-previous-pane))
 
 ;; ====== CODE ======
 
 ;; In config/tiling/, in this order: each part can use what the ones before it
 ;; define.
 (load! "tiling/panes")
+(load! "tiling/hidden")                 ; panes hidden: fullscreen's
 (load! "tiling/stack")                  ; a main pane and a stack: tall's, tall-right's, wide's
 (load! "tiling/tall")
 (load! "tiling/tall-right")
 (load! "tiling/wide")
+(load! "tiling/fullscreen")
 (load! "tiling/commands")
 (load! "tiling/apps")

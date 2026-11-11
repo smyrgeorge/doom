@@ -182,12 +182,19 @@ of them have unsaved changes."
               (tab-line-force-update t))))
 
 ;; CLOSING A TAB (see above)
+(defvar +my/tabs-held-functions nil
+  "Functions given a buffer: non-nil if something besides the windows holds
+it as a tab (a pane kept hidden: the tiling's fullscreen), so closing its
+last tab in a window doesn't close its file.")
+
 (defun +my/tabs-held-p (buffer)
-  "Non-nil if a window shows BUFFER or has it as a tab."
-  (seq-some (lambda (window)
-              (or (eq (window-buffer window) buffer)
-                  (assq buffer (window-prev-buffers window))))
-            (window-list-1 nil 'nomini t)))
+  "Non-nil if a window shows BUFFER or has it as a tab, or something else holds
+it so (`+my/tabs-held-functions')."
+  (or (seq-some (lambda (window)
+                  (or (eq (window-buffer window) buffer)
+                      (assq buffer (window-prev-buffers window))))
+                (window-list-1 nil 'nomini t))
+      (run-hook-with-args-until-success '+my/tabs-held-functions buffer)))
 
 (defun +my/tabs-close (tab)
   "Take TAB off the selected window's tabs, and close its file (or kill its
