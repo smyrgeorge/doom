@@ -2,8 +2,8 @@
 
 ## Tabs per window
 
-Each window has its own tabs: the files shown in it (and new buffers, `SPC b N`), of the current workspace. A file
-closes once no window has it as a tab.
+Each window has its own tabs: the files shown in it (and new buffers, `SPC b N`, and the buffer list, `SPC b i`), of
+the current workspace. A file, or the buffer list, closes once no window has it as a tab (the buffer list's `q` too).
 
 | macOS | Linux | Action |
 |---|---|---|

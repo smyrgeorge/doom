@@ -192,6 +192,75 @@ not marked."
     (evil-buffer-new (+test-file "b.txt" "b\n"))
     (should-not (buffer-local-value '+my/tabs--new-buffer (window-buffer)))))
 
+(ert-deftest tabs/the-buffer-list-keeps-its-tab ()
+  "SPC b i's *Ibuffer*: Doom calls a buffer named *... without a file unreal,
+so its tab went once another tab was clicked, and Doom's workspaces (which
+add only real buffers) left it out. A mode of `+my/tabs-real-modes', it's
+real: its tab kept, shown again by its tab; q closes it (killed)."
+  (+test-tabs
+    (require 'ibuffer)
+    (let ((a (+test-tabs--file "a.txt")))
+      ;; The tabs looked at after each step, as the tab line is drawn: their
+      ;; order is fixed then.
+      (+test-tabs--show a)
+      (should (equal (+test-tabs--tabs) (list a)))
+      (ibuffer)
+      (let ((list (+test-tabs--on (window-buffer))))
+        (should (eq (buffer-local-value 'major-mode list) 'ibuffer-mode))
+        (should (equal (+test-tabs--tabs) (list a list)))
+        (+test-tabs--show a)
+        (should (equal (+test-tabs--tabs) (list a list)))
+        (should (doom-real-buffer-p list))
+        (should-not (doom-unreal-buffer-p list)) ; what Doom's workspaces add
+        (+test-tabs--show list)
+        (should (equal (+test-tabs--tabs) (list a list)))
+        (quit-window)
+        (should (eq (window-buffer) a))
+        (should (equal (+test-tabs--tabs) (list a)))
+        (should-not (buffer-live-p list))))
+    (should (memq #'+my/tabs-real-mode-p doom-real-buffer-functions))
+    ;; Another mode: still unreal, its tab only while shown.
+    (should-not (doom-real-buffer-p (+test-tabs--plain "*Ibuffer-ish*")))))
+
+(ert-deftest tabs/the-buffer-list-closes-with-its-tab ()
+  "The buffer list (a mode of `+my/tabs-real-modes') is closed as a file is:
+killed once no window has it as a tab, by its ✕, a middle click or q; kept
+while another window still has it. Other buffers aren't."
+  (+test-tabs
+    (require 'ibuffer)
+    (let ((a (+test-tabs--file "a.txt"))
+          (help (+test-tabs--plain "*Help*")))
+      (+test-tabs--show a)
+      ;; Its ✕ (it not shown), then a middle click (it shown).
+      (dolist (click '(mouse-1 mouse-2))
+        (ibuffer)
+        (let ((list (+test-tabs--on (window-buffer))))
+          (should (equal (+test-tabs--tabs) (list a list)))
+          (when (eq click 'mouse-1) (+test-tabs--show a))
+          (tab-line-close-tab (+test-tabs--event (selected-window) list click))
+          (should (eq (window-buffer) a))
+          (should (equal (+test-tabs--tabs) (list a)))
+          (should-not (buffer-live-p list))))
+      ;; Another window has it as a tab too: q here keeps it; its tab closed
+      ;; there (the window's last), it goes.
+      (ibuffer)
+      (let ((list (+test-tabs--on (window-buffer)))
+            (other (split-window nil nil 'right)))
+        (+test-tabs--only other list)
+        (quit-window)
+        (should (eq (window-buffer) a))
+        (should (buffer-live-p list))
+        (with-selected-window other (+my/tabs-close list))
+        (should-not (window-live-p other))
+        (should-not (buffer-live-p list)))
+      ;; Any other buffer: q and its tab closed only take it off the tabs.
+      (+test-tabs--show help)
+      (quit-window)
+      (should (buffer-live-p help))
+      (+test-tabs--show help a)
+      (+my/tabs-close help)
+      (should (buffer-live-p help)))))
+
 (ert-deftest tabs/tabs-in-the-order-first-shown ()
   (+test-tabs
     (let ((a (+test-tabs--file "a.txt"))

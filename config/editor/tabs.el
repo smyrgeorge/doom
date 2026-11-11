@@ -30,6 +30,31 @@
 (advice-add 'evil-buffer-new :after #'+my/tabs-new-buffer-a)
 (add-hook 'doom-real-buffer-functions #'+my/tabs-new-buffer-real-p)
 
+;; THE BUFFER LIST (SPC b i: ibuffer, *Ibuffer*) and the other modes of
+;; `+my/tabs-real-modes': unreal for Doom too (no file, a *name*), so shown,
+;; then gone from its tabs once another tab was clicked, though still open:
+;; Doom's workspaces add only real buffers, and a tab not shown is kept only
+;; for one (and only in its workspace). Real now: kept, in the workspace,
+;; listed by SPC b b. Closed as a file is: killed once no window has it as a
+;; tab, its tab closed (see CLOSING A TAB below) or q (`quit-window', which
+;; only buried it).
+(defun +my/tabs-real-mode-p (buffer)
+  "For `doom-real-buffer-functions': BUFFER in a mode of `+my/tabs-real-modes'."
+  (provided-mode-derived-p (buffer-local-value 'major-mode buffer) +my/tabs-real-modes))
+
+(add-hook 'doom-real-buffer-functions #'+my/tabs-real-mode-p)
+
+(defun +my/tabs-quit-window-a (fn &optional kill window)
+  "`quit-window': a buffer of `+my/tabs-real-modes' quit is killed once no
+window has it as a tab (see above)."
+  (let ((buffer (window-buffer (window-normalize-window window))))
+    (funcall fn kill window)
+    (when (and (buffer-live-p buffer) (+my/tabs-real-mode-p buffer)
+               (not (+my/tabs-held-p buffer)))
+      (kill-buffer buffer))))
+
+(advice-add 'quit-window :around #'+my/tabs-quit-window-a)
+
 (defun +my/tabs-in-workspace-p (buffer)
   "Non-nil if BUFFER is the current workspace's (Doom's workspaces), or
 without workspaces."
@@ -165,9 +190,10 @@ of them have unsaved changes."
             (window-list-1 nil 'nomini t)))
 
 (defun +my/tabs-close (tab)
-  "Take TAB off the selected window's tabs, and close its file if no window
-has it any more (see above). Its last tab closes the window, unless it's the
-frame's only one (beside side panels), which shows Doom's dashboard instead."
+  "Take TAB off the selected window's tabs, and close its file (or kill its
+buffer of `+my/tabs-real-modes') if no window has it any more (see above).
+Its last tab closes the window, unless it's the frame's only one (beside side
+panels), which shows Doom's dashboard instead."
   (let* ((buffer (if (bufferp tab) tab (cdr (assq 'buffer tab))))
          (window (selected-window))
          (last (equal (+my/tabs-window-buffers) (list buffer))))
@@ -185,7 +211,8 @@ frame's only one (beside side panels), which shows Doom's dashboard instead."
              (set-window-next-buffers nil (delq buffer (window-next-buffers))))
            (set-window-parameter nil 'tab-line-buffers
                                  (delq buffer (window-parameter nil 'tab-line-buffers)))))
-    (when (and (buffer-live-p buffer) (buffer-file-name buffer)
+    (when (and (buffer-live-p buffer)
+               (or (buffer-file-name buffer) (+my/tabs-real-mode-p buffer))
                (not (+my/tabs-held-p buffer)))
       (kill-buffer buffer))))
 

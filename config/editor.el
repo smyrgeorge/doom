@@ -54,16 +54,16 @@ three times this.")
 ;; shown in it, in the order they first were (Emacs's tab line, instead of
 ;; Doom's centaur-tabs, whose tab groups were per project and shared by every
 ;; window). A split starts with one tab, the buffer it shows. Files, Claude
-;; sessions, dired, magit and new buffers (SPC b N) get tabs; other buffers
-;; only while shown. With
+;; sessions, dired, magit, new buffers (SPC b N) and the buffer list (SPC b i)
+;; get tabs; other buffers only while shown. With
 ;; Doom's workspaces, a window's tabs are the current workspace's buffers only
 ;; (a new workspace starts in the last one's window, its history with it).
 ;; Closing a tab (its ✕, a middle click) takes it off that window, which goes
 ;; back to the tab it showed before; closing its last tab closes the window
 ;; (the frame's only one, beside side panels, shows Doom's dashboard instead).
 ;; A file is closed too once no window has it as a tab any more (asking first
-;; if it has unsaved changes). A Claude session only leaves the tab line: close
-;; it with its own commands.
+;; if it has unsaved changes); so is the buffer list (SPC b i), q too. A
+;; Claude session only leaves the tab line: close it with its own commands.
 ;; Tabs look as they did: an icon, a bar on the current one, • when unsaved.
 ;; Right-clicking a tab: Emacs's Close and Close other tabs, and
 ;; Split Vertically (a pane on the right) and Split Horizontally (below): the
@@ -73,6 +73,11 @@ three times this.")
 
 (defvar +my/tabs-bar-width 2
   "Width of the bar marking the current tab, in pixels.")
+
+(defvar +my/tabs-real-modes '(ibuffer-mode)
+  "Major modes whose buffers keep a tab though they visit no file, as files
+do: in the workspace, listed by SPC b b, killed once no window has them as
+a tab (q too). The buffer list (SPC b i).")
 
 ;; The tab line drawn and closed as above (config/editor/tabs.el); none in the
 ;; sidebar or the dashboard.
