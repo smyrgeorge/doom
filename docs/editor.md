@@ -42,6 +42,7 @@ The strategy, chosen in `config.el` (`(setq +my/tiling-strategy 'tall)`), says w
 | `tall-right` | The main pane on the right, the others stacked on the left |
 | `wide` | The main pane on top, the others side by side below it |
 | `fullscreen` | The current pane alone, the others hidden behind it in order |
+| `bsp` | No main pane: each new pane halves the current one along its longer side |
 
 `SPC w SPC` opens a new pane showing the current buffer, `SPC w a` arranges the panes again (in the strategy chosen,
 the main pane staying the main one), and `SPC w RET` moves the current pane's buffer to the main pane (the main's to
@@ -54,10 +55,15 @@ it); it keeps its size when you arrange the panes, open one or close another.
 | `tall`, `tall-right` | The main pane's width (the same for both) | A stacked pane's height |
 | `wide` | The main pane's height | A pane's width in the row below |
 | `fullscreen` | Nothing to resize | Nothing to resize |
+| `bsp` | The current pane's half of its split | Its split's half of the one above |
 
 In `fullscreen`, a new pane opens alone, just after the current one, and closing it (`SPC w d`, its last tab, `q`)
 shows the next one. Each workspace keeps its own hidden panes. Choosing another strategy shows them all again at its
 next `SPC w a` or `SPC w SPC`, laid out its way.
+
+In `bsp`, `SPC w a` lays the panes out as a spiral, each halving the last, and when a pane closes, its space goes to
+its neighbour and every split runs along its longer side again. Splits are always even: a resize lasts until the
+panes are laid out again.
 
 | macOS | Linux | Action (`fullscreen`) |
 |---|---|---|

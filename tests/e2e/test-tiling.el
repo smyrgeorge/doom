@@ -702,3 +702,21 @@ a hidden pane still has as a tab stays open."
       (+my/tabs-close-current)              ; b.txt: a tab of this pane only now
       (should-not (buffer-live-p b))
       (should (equal (+test-tiling--shown) "a.txt")))))
+
+;; ====== BSP ======
+
+(ert-deftest e2e-tiling/bsp-halves-by-real-pixels ()
+  "bsp in a GUI frame: each pane halved along its longer side in pixels (the
+frame side by side, its right half one above the other), the tree binary."
+  (+test-tiling
+    (let ((+my/tiling-strategy 'bsp))
+      (let* ((left (selected-window))
+             (right (+my/tiling-split)))
+        (should (> (window-pixel-width (frame-root-window)) (window-pixel-height (frame-root-window))))
+        (should (= (cadr (window-edges right)) (cadr (window-edges left))))
+        (should (> (car (window-edges right)) (car (window-edges left))))
+        (should (< (window-pixel-width right) (window-pixel-height right)))
+        (let ((below (+my/tiling-split)))
+          (should (= (car (window-edges below)) (car (window-edges right))))
+          (should (> (cadr (window-edges below)) (cadr (window-edges right))))
+          (should (+my/tiling--bsp-p (window-main-window))))))))

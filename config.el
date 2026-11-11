@@ -101,7 +101,8 @@
 ;; stacked on the right (Amethyst's Tall); `tall-right': the main pane on the
 ;; right, the others on the left (Amethyst's Tall-Right); `wide': the main pane
 ;; on top, the others in a row below (Amethyst's Wide); `fullscreen': the
-;; current pane alone, the others hidden (Amethyst's Fullscreen).
+;; current pane alone, the others hidden (Amethyst's Fullscreen); `bsp': each
+;; new pane halves the current one (Amethyst's Binary Space Partitioning).
 (setq +my/tiling-strategy 'tall)
 
 ;; The applications tiling opens in a new pane (config/tiling.el): all of them,

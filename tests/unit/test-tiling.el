@@ -1240,6 +1240,178 @@ window."
         (+my/tiling-previous-pane)
         (should (equal called '(prev next)))))))
 
+;; ====== BSP ======
+
+(defmacro +test-tiling-bsp (&rest body)
+  "BODY as `+test-tiling', the strategy bsp. Batch Emacs's frame is a text
+terminal's: a line counted as two columns (as a GUI's characters, 8 pixels
+wide, 16 tall)."
+  (declare (indent 0))
+  `(+test-tiling
+     (let ((+my/tiling-strategy 'bsp))
+       ,@body)))
+
+(defun +test-tiling--bsp-open (&rest names)
+  "From the selected pane, a new pane for each of NAMES (SPC w SPC), showing it."
+  (dolist (name names)
+    (+my/tiling-split)
+    (switch-to-buffer name)))
+
+(defun +test-tiling--edges (name)
+  (window-edges (get-buffer-window name)))
+
+(ert-deftest tiling/bsp-is-a-strategy ()
+  (let ((strategy (alist-get 'bsp +my/tiling-strategies)))
+    (dolist (key '(:split :arrange :resize-main :resize-pane :closed))
+      (should (functionp (plist-get strategy key))))))
+
+(ert-deftest tiling/bsp-each-new-pane-halves-the-current-one ()
+  "SPC w SPC halves the current pane along its longer side in pixels, the new
+half on the right or below, focused: the frame side by side; the right half,
+taller than wide in pixels, one above the other; each split two halves."
+  (+test-tiling-bsp
+    (let ((width (window-total-width)))
+      (+test-tiling--bsp-open "B")
+      (should (equal (buffer-name) "B"))
+      (should (+test-tiling--right-of-p (get-buffer-window "B") (get-buffer-window "A")))
+      (should (<= (abs (- (window-total-width (get-buffer-window "A")) (/ width 2))) 1))
+      ;; B: 40 columns by 23 lines, 320 by 368 pixels: taller.
+      (+test-tiling--bsp-open "C")
+      (should (+test-tiling--below-p (get-buffer-window "C") (get-buffer-window "B")))
+      (should (= (car (+test-tiling--edges "C")) (car (+test-tiling--edges "B"))))
+      (should (+my/tiling--bsp-p (window-main-window)))
+      (should (equal (+test-tiling--names (+my/tiling--panes)) '("A" "B" "C"))))))
+
+(ert-deftest tiling/bsp-the-longer-side-as-seen ()
+  "More columns than lines, yet taller as seen: one above the other. In a GUI
+frame, in pixels; on a text terminal (a pixel a character), a line counted as
+two columns."
+  (+test-tiling-bsp
+    (split-window nil 30 'right)                         ; A: 30 columns by 23 lines
+    (should (> (window-total-width) (window-total-height)))
+    (should (eq (+my/tiling--bsp-side (selected-window)) 'below)) ; 30 by 46
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+              ((symbol-function 'window-pixel-height) (lambda (&optional w) (* 16 (window-total-height w)))))
+      (cl-letf (((symbol-function 'window-pixel-width) (lambda (&optional w) (* 8 (window-total-width w)))))
+        (should (eq (+my/tiling--bsp-side (selected-window)) 'below))) ; 240 by 368 pixels
+      (cl-letf (((symbol-function 'window-pixel-width) (lambda (&optional w) (* 16 (window-total-width w)))))
+        (should (eq (+my/tiling--bsp-side (selected-window)) 'right)))))) ; 480 by 368
+
+(ert-deftest tiling/bsp-from-any-pane ()
+  "The pane SPC w SPC is pressed in is the one halved."
+  (+test-tiling-bsp
+    (+test-tiling--bsp-open "B")
+    (select-window (get-buffer-window "A"))
+    (+test-tiling--bsp-open "C")
+    (should (+test-tiling--below-p (get-buffer-window "C") (get-buffer-window "A")))
+    (should (= (nth 2 (+test-tiling--edges "C")) (nth 2 (+test-tiling--edges "A"))))
+    (should (equal (+test-tiling--names (+my/tiling--panes)) '("A" "C" "B")))))
+
+(ert-deftest tiling/bsp-arranged-as-a-spiral ()
+  "SPC w a: each pane halves the last one, along its longer side, evenly: A |
+\(B / (C | D)); what each shows, the focus, kept."
+  (+test-tiling-bsp
+    (let ((main (selected-window)))
+      (let ((+my/tiling-strategy 'tall))
+        (dolist (name '("B" "C" "D"))
+          (select-window main)
+          (pop-to-buffer name '(+my/tiling-display-buffer))))
+      (select-window (get-buffer-window "C"))
+      (+my/tiling-arrange)
+      (should (equal (+test-tiling--names (+my/tiling--panes)) '("A" "B" "C" "D")))
+      (should (equal (buffer-name (window-buffer (selected-window))) "C"))
+      (should (+my/tiling--bsp-p (window-main-window)))
+      (let ((a (+test-tiling--edges "A")) (b (+test-tiling--edges "B"))
+            (c (+test-tiling--edges "C")) (d (+test-tiling--edges "D"))
+            (root (window-edges (window-main-window))))
+        (should (= (nth 1 a) (nth 1 root)))                               ; A: the whole height
+        (should (= (nth 3 a) (nth 3 root)))
+        (should (= (nth 0 b) (nth 2 a)))                                  ; B right of A
+        (should (= (nth 1 c) (nth 3 b)))                                  ; C below B
+        (should (= (nth 1 d) (nth 1 c)))                                  ; D beside C
+        (should (= (nth 0 d) (nth 2 c)))
+        ;; Even halves.
+        (should (<= (abs (- (- (nth 2 a) (nth 0 a)) (- (nth 2 d) (nth 0 b)))) 1))
+        (should (<= (abs (- (- (nth 3 b) (nth 1 b)) (- (nth 3 c) (nth 1 c)))) 1))
+        (should (<= (abs (- (- (nth 2 c) (nth 0 c)) (- (nth 2 d) (nth 0 d)))) 1))))))
+
+(ert-deftest tiling/bsp-a-closed-pane-s-space-to-its-sibling ()
+  "B closed in A | (B / (C | D)): C | D gets the right half, taller than wide
+now: laid out again one above the other, evenly; what each shows kept."
+  (+test-tiling-bsp
+    (+test-tiling--bsp-open "B" "C")
+    (+test-tiling--bsp-open "D")
+    (should (equal (+test-tiling--names (+my/tiling--panes)) '("A" "B" "C" "D")))
+    (+my/tiling--closed-h (selected-frame))
+    (delete-window (get-buffer-window "B"))
+    (+my/tiling--closed-h (selected-frame))
+    (should (equal (+test-tiling--names (+my/tiling--panes)) '("A" "C" "D")))
+    (should (+test-tiling--below-p (get-buffer-window "D") (get-buffer-window "C")))
+    (should (<= (abs (- (window-total-height (get-buffer-window "C"))
+                        (window-total-height (get-buffer-window "D"))))
+                1))
+    (should (+my/tiling--bsp-p (window-main-window)))))
+
+(ert-deftest tiling/bsp-resize-the-current-split-and-the-one-above ()
+  "SPC w ] / [: the current pane's half of its split; } / {: its split's half
+of the one above; said. Not kept: SPC w a evens them out."
+  (+test-tiling-bsp
+    (+test-tiling--bsp-open "B" "C")
+    (let (said)
+      (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args))))
+                ((symbol-function 'set-transient-map) #'ignore))
+        (let ((before (window-total-height)))
+          (+my/tiling-main-bigger)
+          (should (> (window-total-height) before))
+          (should (string-match-p "\\`Pane: 5[0-9]% of its split (] / \\[ again)" said)))
+        (let ((before (window-total-width)))
+          (+my/tiling-pane-bigger)
+          (should (> (window-total-width) before))
+          (should (string-match-p "\\`Its split: 5[0-9]% of the one above" said)))
+        (select-window (get-buffer-window "A"))
+        (should (equal (cadr (should-error (+my/tiling-pane-bigger) :type 'user-error))
+                       "No split above this one"))
+        (+my/tiling-arrange)
+        (should (<= (abs (- (window-total-width (get-buffer-window "A"))
+                            (window-total-width (get-buffer-window "B"))))
+                    1))))))
+
+(ert-deftest tiling/bsp-and-back-to-tall ()
+  "Switching tall -> bsp -> tall: SPC w a lays them out each way, the main
+pane the same."
+  (+test-tiling-bsp
+    (+test-tiling--bsp-open "B" "C")
+    (select-window (get-buffer-window "B"))
+    (+my/tiling-swap-main)
+    (should (equal (+test-tiling--names (+my/tiling--panes)) '("B" "A" "C")))
+    (let ((+my/tiling-strategy 'tall))
+      (+my/tiling-arrange)
+      (should (+my/tiling--tall-p (window-main-window)))
+      (should (equal (+test-tiling--names (+my/tiling--panes)) '("B" "A" "C"))))))
+
+(ert-deftest tiling/bsp-no-room-said ()
+  "Too many panes for the spiral: SPC w a says so and changes nothing; a pane
+too small to halve: SPC w SPC says so."
+  (+test-tiling-bsp
+    ;; Seven panes of one's own: four columns, the last two split in rows.
+    (let ((window (selected-window)))
+      (dotimes (_ 3) (split-window window nil 'right))
+      (let ((right (car (last (+my/tiling--panes)))))
+        (split-window right nil 'below)
+        (split-window right nil 'below))
+      (split-window (nth 2 (+my/tiling--panes)) nil 'below))
+    (should (= (length (+my/tiling--panes)) 7))
+    (let ((layout (+test-tiling--layout)))
+      (should (equal (cadr (should-error (+my/tiling-arrange) :type 'user-error))
+                     "No room for 7 panes"))
+      (should (equal (+test-tiling--layout) layout)))
+    (delete-other-windows)
+    (let (error)
+      (dotimes (_ 20)
+        (unless error
+          (condition-case err (+my/tiling-split) (user-error (setq error err)))))
+      (should (equal (cadr error) "No room for another pane")))))
+
 ;; ====== KEYS ======
 
 (ert-deftest tiling/keys ()

@@ -85,6 +85,11 @@
 ;;   main one); nothing to resize. Closing it (SPC w d, its last tab, its
 ;;   buffer killed, q) shows the next one. Another strategy shows them all
 ;;   again (its SPC w a, SPC w SPC...).
+;; - bsp (Amethyst's Binary Space Partitioning): no main pane; a new pane
+;;   halves the current one along its longer side (in pixels), on the right or
+;;   below. SPC w a lays them out as a spiral, every split even; a pane closed,
+;;   every split along its longer side again. SPC w ] / [ the current pane's
+;;   split, SPC w } / { the one above it (not kept: even again next time).
 ;; More can be added to `+my/tiling-strategies'.
 (defvar +my/tiling-strategy 'tall
   "How SPC w SPC places new panes: a strategy of `+my/tiling-strategies'.")
@@ -155,7 +160,10 @@ FIRST above): what they show goes where they ask, not in a new pane.")
           :closed +my/tiling-wide-closed)
     (fullscreen :split +my/tiling-fullscreen-split :arrange +my/tiling-fullscreen-arrange
                 :hides t :swap-main +my/tiling-fullscreen-swap-main
-                :show +my/tiling-fullscreen-show))
+                :show +my/tiling-fullscreen-show)
+    (bsp :split +my/tiling-bsp-split :arrange +my/tiling-bsp-arrange
+         :resize-main +my/tiling-bsp-resize-main :resize-pane +my/tiling-bsp-resize-pane
+         :closed +my/tiling-bsp-closed))
   "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize-main
 FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION] [:order FUNCTION]). Each
 takes the panes in order, the main pane first (see above): :split opens a new
@@ -197,5 +205,6 @@ pane, that pane within the others. Without one: nothing to resize, said.")
 (load! "tiling/tall-right")
 (load! "tiling/wide")
 (load! "tiling/fullscreen")
+(load! "tiling/bsp")
 (load! "tiling/commands")
 (load! "tiling/apps")
