@@ -623,10 +623,16 @@ rate, a step's time.")
           ((< s 3600) (format "%dm %02ds" (/ s 60) (% s 60)))
           (t (format "%dh %02dm" (/ s 3600) (/ (% s 3600) 60))))))
 
+;; A click on a button is mouse-2 (as button.el's): one on a link (follow-link)
+;; quicker than `mouse-1-click-follows-link' is made mouse-2, Evil's
+;; down-mouse-1 selecting again the window clicked from. Unbound, it was the
+;; global `mouse-yank-primary': the selection pasted at point there (with
+;; `mouse-yank-at-point', a session's prompt), the button not pressed.
 (defvar-keymap agent-ui-button-map
   :doc "Keys of an element's button: its action."
   "RET" #'agent-ui-button-press
   "<mouse-1>" #'agent-ui-button-press
+  "<mouse-2>" #'agent-ui-button-press
   "<follow-link>" 'mouse-face)
 
 (defun agent-ui-button (text action &optional help)

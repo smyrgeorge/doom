@@ -329,6 +329,57 @@ fetched: bd would read this repository's own issues."
           (should (string-match-p "no agent-shell session"
                                   (cadr (should-error (agent-ui-button-press) :type 'user-error)))))))))
 
+(ert-deftest agent-ui-agent/an-action-clicked-from-the-sessions-window ()
+  "A click on an action's button, the session's window selected: the button
+pressed, nothing pasted there. Evil's down-mouse-1 makes a quick click on a
+link mouse-2, the session's window selected again: mouse-2 unbound, it was
+`mouse-yank-primary', the selection pasted into the session's prompt
+\(`mouse-yank-at-point'), the button not pressed (doom-i8u)."
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ click" "/tmp/click/"))
+           (name (agent-ui--session-name session))
+           (mouse-1-click-follows-link 450)
+           (mouse-yank-at-point t)
+           (inserted nil))
+      (agent-ui-show '(:id "t" :type "text" :text "2 failed"
+                       :actions ((:label "Retry" :prompt "Run the 2 failing tests again")))
+                     :canvas name)
+      (with-current-buffer session (insert "Claude> "))
+      (save-window-excursion
+        (delete-other-windows)
+        (let* ((canvas (get-buffer (agent-ui-canvas-buffer-name name)))
+               (left (selected-window))
+               (right (split-window-right))
+               (pos (with-current-buffer canvas
+                      (agent-ui--flush)
+                      (goto-char (point-min))
+                      (search-forward "⏵ Retry")
+                      (1+ (match-beginning 0))))
+               (posn (lambda (time) (list right pos '(0 . 0) time nil pos '(0 . 0) nil '(0 . 0) '(1 . 1)))))
+          (set-window-buffer left session)
+          (set-window-buffer right canvas)
+          (select-window left)
+          (with-current-buffer session (goto-char (point-max)))
+          (cl-letf (((symbol-function 'agent-shell-insert) (lambda (&rest args) (push args inserted)))
+                    ((symbol-function 'gui-get-primary-selection) (lambda () "\n@@ -1,11 +1,13 @@\n")))
+            ;; Pressed and let go 100 ms later, on the button.
+            (setq unread-command-events (list (list 'mouse-1 (funcall posn 100))))
+            (evil-mouse-drag-region (list 'down-mouse-1 (funcall posn 0)))
+            (let ((event (pop unread-command-events)))
+              (should (eq (car event) 'mouse-2))
+              (should (eq (selected-window) left))
+              (should (eq (key-binding (vector event) t) #'agent-ui-button-press))
+              (let ((last-nonmenu-event event))
+                (call-interactively (key-binding (vector event) t)))))
+          (should (equal (car inserted) (list :text "Run the 2 failing tests again" :submit nil
+                                              :shell-buffer session)))
+          (should (equal (with-current-buffer session (buffer-string)) "Claude> "))
+          ;; A slow click (no link then), RET: the button too.
+          (dolist (key (list (vector (list 'mouse-1 (funcall posn 900))) (kbd "RET")))
+            (with-current-buffer canvas
+              (goto-char pos)
+              (should (eq (key-binding key t) #'agent-ui-button-press)))))))))
+
 (defun +test-aua-press (canvas label)
   "The button LABEL in CANVAS's buffer, pressed."
   (with-current-buffer canvas
