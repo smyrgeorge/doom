@@ -79,6 +79,13 @@ three times this.")
 do: in the workspace, listed by SPC b b, killed once no window has them as
 a tab (q too). The buffer list (SPC b i).")
 
+;; A MINIBUFFER LEFT OPEN (M-x, a prompt) while you're in another window:
+;; tinted with the theme's yellow, its prompt and input in their own colours,
+;; instead of Emacs's bold dark red on bright yellow
+;; (config/editor/minibuffer.el).
+(defvar +my/minibuffer-nonselected-tint 0.25
+  "How much of the theme's yellow the minibuffer left open is tinted with.")
+
 ;; THE BUFFER LIST (SPC b i)
 ;; Grouped by workspace: each buffer under the one it's in, Beads' issues and
 ;; Claude Code's sessions too; one in none under Default. Without workspaces,
@@ -319,6 +326,7 @@ An entry overrides a mode's own (set in config.el).")
 (load! "editor/modeline")
 (load! "editor/tabs")
 (load! "editor/buffer-list")
+(load! "editor/minibuffer")
 (load! "editor/actions")
 (load! "editor/navigation")
 (load! "editor/sticky")

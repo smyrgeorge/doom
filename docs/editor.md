@@ -15,6 +15,11 @@ the current workspace. A file, or the buffer list, closes once no window has it 
 The buffer list (`SPC b i`) is grouped by workspace: each buffer under the workspace it's in (the issues, a Claude
 session too), those in none under Default.
 
+## A minibuffer left open
+
+A prompt still open (`M-x`, a question) while you're in another window is tinted with the theme's yellow: it's waiting
+for you. Click it to answer (`C-g` there cancels it); the tint goes as soon as you're back.
+
 ## Tiling
 
 Emacs is tiling first:
