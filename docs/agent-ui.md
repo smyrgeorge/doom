@@ -383,9 +383,9 @@ data fetched afresh each time: none of it is kept (`config/agent-ui/panels.el`).
 
 ![A project panel: this Mac's CPU, every second](../examples/panel.png)
 
-This config has two of its own in `.agent-ui/panels/`, on macOS: `cpu` (above: how busy the CPU is, its load, its
-last minute, the processes using it most) and `memory` (where the memory goes, its pressure, the processes holding
-the most), each filled every second. `M-x +my/example-panel` opens the `cpu` one in a project of its own. Unlike a session's canvas, which
+This config has two of its own in `.agent-ui/panels/`: `cpu` (above: how busy the CPU is, its load, its last minute,
+the processes using it most; macOS and Linux) and `memory` (where the memory goes, its pressure, the processes
+holding the most; macOS), each filled every second. `M-x +my/example-panel` opens the `cpu` one in a project of its own. Unlike a session's canvas, which
 comes back as it was. Each is a file, `PROJECT/.agent-ui/panels/NAME.el`, committed with the project, holding one
 form: what it shows and the code filling it, so its elements' ids are written and used in one place.
 

@@ -35,11 +35,15 @@ if [ -z "${SKIP_BUILD:-}" ]; then
 fi
 
 # Doom's straight folder links into its repos by their absolute path: Doom's
-# folder is mounted there too.
+# folder is mounted there too. The container runs as root; mounted on Linux
+# (CI), the config's folder is its owner's, and git refuses a repository
+# another user owns ("dubious ownership"): any is safe here (set in git's
+# command scope, which the tests' own GIT_CONFIG_GLOBAL doesn't replace).
 args=(--rm --init
       -v "$ROOT:/root/.config/doom:ro"
       -v "$DOOM_EMACS:/root/.config/emacs:ro"
       -v "$DOOM_EMACS:$DOOM_EMACS:ro"
+      -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*'
       -e TMPDIR=/tmp -e "E2E_TIMEOUT=${E2E_TIMEOUT:-180}" -e "E2E_WINDOW=${E2E_WINDOW:-}")
 [ -t 1 ] && args+=(-t)
 

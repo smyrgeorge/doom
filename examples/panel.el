@@ -5,7 +5,7 @@
 ;; alone in the frame: how busy the CPU is, its load, its last minute and the
 ;; processes using it most, filled every second by its code, without waiting.
 ;; Its code runs without asking: it's this config's own. The folder is deleted
-;; once the panel is closed. macOS (sysctl, ps).
+;; once the panel is closed. macOS (sysctl, ps) and Linux (/proc, ps).
 
 ;; ====== CODE ======
 

@@ -91,6 +91,10 @@ does: no window size change, the canvas was left drawn for the old cells)."
         (font (frame-parameter nil 'font)))
     (delete-other-windows)
     (set-frame-size (selected-frame) 100 40)
+    ;; On X, the frame takes its size at the next redisplay: the canvas would
+    ;; be drawn for the one before (a test's before it: wider), its lines
+    ;; wrapping once it's resized.
+    (should (+test-wait-for (lambda () (= (frame-width) 100)) 5))
     (agent-ui-show '(:id "row" :type "panel" :layout "row"
                      :children ((:id "pick" :type "choice" :question "Which?" :options ("A" "B") :note t)
                                 (:id "order" :type "rank" :question "Order?" :items ("x" "y") :note t))))
