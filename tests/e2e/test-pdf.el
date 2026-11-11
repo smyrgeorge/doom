@@ -3,6 +3,8 @@
 ;; (a copy of Doom's, never downloaded here). Pages, splits, settings,
 ;; outline, history, search, zoom, copy, Option+Enter, the toolbar's
 ;; requests, places, links out, revert, no PDF.js, closing.
+;; run.sh: alone. PDF.js draws no page while its frame is covered (macOS
+;; takes it as hidden), and the frames of tests run beside it would be.
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit" "config/pdf")
 
