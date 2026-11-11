@@ -459,6 +459,19 @@ events are read and dropped: nothing types into a test."
   (redisplay t)
   (read-event nil nil seconds))
 
+(defun +test-process-sentinel (process _event)
+  "A test's process's sentinel: it ended, all its output read. A process is
+no longer live as soon as it exits, its last output maybe still unread (a
+reply missing, on a busy machine); Emacs reads what's left before it runs
+the sentinel. Wait with `+test-process-ended-p', not `process-live-p'."
+  (unless (process-live-p process)
+    (process-put process '+test-ended t)))
+
+(defun +test-process-ended-p (process)
+  "Whether PROCESS, made with `+test-process-sentinel', ended and all its
+output was read."
+  (process-get process '+test-ended))
+
 (defun +test-wait-for (predicate &optional timeout)
   "Wait until PREDICATE returns non-nil (timers, redisplay and WebKit's events
 run meanwhile, see `+test--pump'), TIMEOUT seconds at most (default 10);

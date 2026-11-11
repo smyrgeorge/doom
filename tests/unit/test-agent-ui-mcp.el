@@ -137,13 +137,14 @@ parsed."
                                                "--batch" "-Q" "-l"
                                                (expand-file-name "cmd/agent-ui-mcp.el" +test-root)
                                                "-f" "agent-ui-mcp-main")
-                                :connection-type 'pipe :noquery t :sentinel #'ignore
+                                :connection-type 'pipe :noquery t :sentinel #'+test-process-sentinel
                                 :coding 'utf-8
                                 :stderr (get-buffer-create " *mcp-stderr*"))))
     (process-send-string process (concat (string-join lines "\n") "\n"))
     (process-send-eof process)
     (with-timeout (30 (delete-process process) (ert-fail "The MCP server didn't end"))
-      (while (process-live-p process)
+      ;; Its output all read: not merely ended (`+test-process-sentinel').
+      (while (not (+test-process-ended-p process))
         (accept-process-output nil 0.02)))
     (prog1 (mapcar (lambda (line) (json-parse-string line :object-type 'plist :null-object nil :false-object :false))
                    (split-string (with-current-buffer output (buffer-string)) "\n" t))

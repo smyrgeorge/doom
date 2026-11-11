@@ -222,10 +222,12 @@ as tmux), quit it (C-x C-c) once it painted the theme's. What it wrote."
                    :command (list (expand-file-name invocation-name invocation-directory)
                                   "-nw" "-Q" (concat "--init-directory=" home)
                                   "-l" (expand-file-name "helper.el" +test-dir) "--eval" setup)
-                   :filter (lambda (_ string) (setq output (concat output string))))))
+                   :filter (lambda (_ string) (setq output (concat output string)))
+                   :sentinel #'+test-process-sentinel)))
     (set-process-window-size process 30 100)
     (with-timeout (40 (delete-process process) (error "The terminal Emacs didn't quit: %S" output))
-      (while (process-live-p process)
+      ;; What it wrote as it quit read too: not merely ended.
+      (while (not (+test-process-ended-p process))
         (accept-process-output process 0.1)
         (when (and reply (not answered) (string-search "\e]11;?" output))
           (setq answered t)
@@ -276,10 +278,12 @@ given its own colour back."
                (client (make-process
                         :name "emacsclient-t" :connection-type 'pty :coding 'binary :noquery t
                         :command (list "emacsclient" "-s" socket "-t")
-                        :filter (lambda (_ string) (setq output (concat output string))))))
+                        :filter (lambda (_ string) (setq output (concat output string)))
+                        :sentinel #'+test-process-sentinel)))
           (set-process-window-size client 30 100)
           (with-timeout (40 (delete-process client) (error "The client didn't end: %S" output))
-            (while (process-live-p client)
+            ;; What it wrote as it ended read too: not merely ended.
+            (while (not (+test-process-ended-p client))
               (accept-process-output client 0.1)
               (when (and (not answered) (string-search "\e]11;?" output))
                 (setq answered t)

@@ -246,12 +246,13 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
   (let* ((output (generate-new-buffer " *agent-ui-run*"))
          (process (make-process :name "agent-ui" :buffer output
                                 :command (cons +test-aur-script args)
-                                :connection-type 'pipe :noquery t :sentinel #'ignore
+                                :connection-type 'pipe :noquery t :sentinel #'+test-process-sentinel
                                 :stderr (get-buffer-create " *agent-ui-stderr*"))))
     (when stdin (process-send-string process stdin))
     (process-send-eof process)
     (with-timeout (20 (delete-process process) (ert-fail "cmd/agent-ui didn't end"))
-      (while (process-live-p process)
+      ;; Its output all read: not merely ended (`+test-process-sentinel').
+      (while (not (+test-process-ended-p process))
         (accept-process-output nil 0.02)))
     (prog1 (cons (process-exit-status process)
                  (with-current-buffer output (string-trim (buffer-string))))
