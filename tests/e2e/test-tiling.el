@@ -132,6 +132,25 @@ Doom's popup (40 columns); again, its pane closes."
         (should-not (window-live-p window))
         (should (equal (+test-tiling--layout) '("a.txt")))))))
 
+(ert-deftest e2e-tiling/spc-o-T-a-terminal-here ()
+  "SPC o T (Doom's): a new terminal in the pane you're in, not a new pane;
+the file there a tab under it, shown again once the terminal's killed."
+  (+test-tiling--needs-ghostel)
+  (+test-tiling
+    (+test-tiling--doom-projects
+      (let ((here (selected-window))
+            (file (window-buffer)))
+        (let ((this-command '+ghostel/here))
+          (call-interactively #'+ghostel/here))
+        (let ((terminal (window-buffer here)))
+          (should (eq (selected-window) here))
+          (should (with-current-buffer terminal (derived-mode-p 'ghostel-mode)))
+          (should (equal (+test-tiling--layout) (list (buffer-name terminal))))
+          (should (equal (+test-tiling--tabs here) (list "a.txt" (buffer-name terminal))))
+          (kill-buffer terminal)
+          (should (window-live-p here))
+          (should (eq (window-buffer here) file)))))))
+
 ;; ====== A PANE CLOSED ======
 
 (ert-deftest e2e-tiling/a-closed-pane-s-rows-shared-by-the-stack ()
@@ -211,6 +230,56 @@ a file shown in another pane too."
       (find-file (buffer-file-name file))
       (should (equal (+test-tiling--layout) '("d.txt")))
       (should (equal (+test-tiling--tabs (selected-window)) (list "a.txt" (buffer-name session) "d.txt"))))))
+
+(defmacro +test-tiling--starting-sessions (&rest body)
+  "BODY with agent-shell starting stand-in sessions (no agent), as it does
+before a session is picked: each with a state keeping its subscriptions.
+`sessions' holds them, newest first; killed after."
+  (declare (indent 0))
+  `(let ((sessions nil)
+         (agent-shell-prefer-viewport-interaction nil)
+         (agent-shell-session-strategy 'prompt))
+     (cl-letf (((symbol-function 'agent-shell--start)
+                (lambda (&rest _)
+                  (let ((session (+test-tiling--session
+                                  (format "*claude-code @ test %d*" (length sessions)))))
+                    (with-current-buffer session
+                      (setq-local agent-shell--state
+                                  (list (cons :buffer session) (cons :event-subscriptions nil))))
+                    (push session sessions)
+                    session)))
+               ((symbol-function 'agent-shell--context) (lambda (&rest _) nil)))
+       (unwind-protect (progn ,@body)
+         (mapc #'kill-buffer sessions)))))
+
+(defun +test-tiling--session-picked (session)
+  "SESSION's prompt answered (a new session, or one to resume): agent-shell
+says so, its subscribers show it."
+  (with-current-buffer session
+    (agent-shell--emit-event :event 'session-selected)))
+
+(ert-deftest e2e-tiling/spc-o-C-claude-code-here-once-a-session-is-picked ()
+  "SPC o C: Claude Code started as SPC o c starts it, shown once a session
+is picked (after the command, agent-shell's prompt answered): in the pane
+you were in, the file there a tab under it, no new pane. SPC o c then: in a
+new pane."
+  (+test-tiling
+    (+test-tiling--starting-sessions
+      (let ((here (selected-window)))
+        (+my/agent-shell-claude-here)
+        (should (= (length sessions) 1))
+        ;; Not shown before a session's picked.
+        (should (equal (+test-tiling--layout) '("a.txt")))
+        (+test-tiling--session-picked (car sessions))
+        (let ((name (buffer-name (car sessions))))
+          (should (eq (selected-window) here))
+          (should (equal (+test-tiling--layout) (list name)))
+          (should (equal (+test-tiling--tabs here) (list "a.txt" name))))
+        ;; SPC o c: a new pane.
+        (agent-shell-anthropic-start-claude-code)
+        (+test-tiling--session-picked (car sessions))
+        (should-not (eq (selected-window) here))
+        (should (equal (+test-tiling--layout) (reverse (mapcar #'buffer-name sessions))))))))
 
 ;; ====== THE MARKDOWN PREVIEW ======
 

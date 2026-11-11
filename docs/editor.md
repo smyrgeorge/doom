@@ -18,7 +18,8 @@ Emacs is tiling first:
 
 - Applications (Claude Code, the terminal, magit, the Markdown preview, drawings, issues) open in a new pane where the
   tiling strategy puts it; one already open (shown, or a tab under a file), in its pane. Inside magit, a log or a diff
-  stays in its pane; a commit opens in a new one.
+  stays in its pane; a commit opens in a new one. `SPC o C` (Claude Code) and `SPC o T` (a terminal) open in the window
+  you're in instead.
 - Then they behave as any buffer: a file opened in their pane is a tab there, and they keep theirs.
 - Files always open as a tab in the current pane, whatever pane it is. From a popup or the sidebar, in the last pane
   used.

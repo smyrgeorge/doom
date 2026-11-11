@@ -14,7 +14,7 @@ that make sense on their own (the panel doesn't show the subheadings).
 - =s-f= search this buffer (⌘F)
 - =SPC g d= git diff of this file
 - =SPC c ~= cycle case style of a word
-- =SPC o c= start Claude Code
+- =SPC o c= start Claude Code (=SPC o C=: in this window)
 - =SPC m p= Markdown live preview
 - =M-[= =M-]= previous/next buffer
 - =s-[= =s-]= jump back/forward

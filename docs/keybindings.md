@@ -39,7 +39,7 @@ Vim's and Doom's keys stay as they are there. `config/os.el` has the rules.
 | `e` (Magit, on a conflicted file) | the same | Resolve its conflicts |
 | `SPC m p` / `SPC m P` (Markdown) | the same | Live preview / in the browser |
 | `Cmd+C` (Markdown preview) | `Ctrl+Shift+C` | Copy the selection |
-| `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | A new Claude Code session / the project's |
+| `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | Claude Code in a new pane / in the window you're in |
 | `RET` (Claude Code, normal state) | the same | Send the prompt |
 | `n` / `p`, `y`, `RET` (Claude's diffs) | the same | The next / previous hunk, accept, open the file |
 | `C-c C-d`, `SPC m d` (Claude Code) | the same | Draw for Claude |

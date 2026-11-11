@@ -5,7 +5,7 @@
 ;; A session's canvas is data, its elements: as they change, saved (a moment
 ;; later, together) as JSON in the session's .agent-shell/agent-ui/, named by
 ;; its ACP session id, beside agent-shell's transcripts. When a session
-;; starts with that id (resumed: SPC o C with C-u C-u, agent-shell's
+;; starts with that id (resumed: picked when SPC o c asks, agent-shell's
 ;; restart), its canvas comes back, as it was. Its elements' sources aren't
 ;; started again (a command run twice): they come back as they last were.
 ;; Closing a canvas, or its session, doesn't change what's saved; clearing it

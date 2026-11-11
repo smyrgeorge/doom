@@ -812,6 +812,21 @@ current workspace, which Doom's frames go back to; none without workspaces."
           (display-buffer "B" +test-tiling--popup-action)
           (should (= (length added) 1)))))))
 
+(ert-deftest tiling/here-commands-where-they-ask ()
+  "From a command of `+my/tiling-here-commands' (Doom's SPC o T), an
+application where it asks (the window you're in), what was there kept under
+it, no new pane; from any other, in a new pane."
+  (should (equal (default-value '+my/tiling-here-commands) '(+ghostel/here)))
+  (+test-tiling-first
+    (let ((here (selected-window)))
+      (let ((this-command '+ghostel/here))
+        (should (eq (display-buffer (+test-tiling--app "app") '(display-buffer-same-window)) here)))
+      (should (equal (mapcar #'car (+test-tiling--layout)) '("app")))
+      (should (eq (car (car (window-prev-buffers here))) (get-buffer "A")))
+      (let ((this-command '+ghostel/toggle))
+        (should-not (eq (display-buffer (+test-tiling--app "app2") '(display-buffer-same-window)) here)))
+      (should (equal (mapcar #'car (+test-tiling--layout)) '("app" "app2"))))))
+
 (ert-deftest tiling/anything-else-as-it-asks ()
   (+test-tiling-first
     (let ((window (display-buffer "B" +test-tiling--popup-action)))

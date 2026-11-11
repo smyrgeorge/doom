@@ -138,12 +138,14 @@ file's tab in its pane showed another file. Nothing without workspaces."
 one of its tabs), else a new one (as the strategy puts it); a file in the current pane, as a tab, from a
 popup or a side panel in the pane used last (a new pane without one). Nil
 for anything else (popups, *Completions*, transient menus, git's own
-files...), for a buffer shown in no window (ALIST's `allow-no-window'), and
-while the minibuffer is open (previews put back what they showed): as it
-asks."
+files...), for a buffer shown in no window (ALIST's `allow-no-window'),
+while the minibuffer is open (previews put back what they showed), and from
+a command of `+my/tiling-here-commands' (Doom's SPC o T: the window you're
+in): as it asks."
   (cond
    ((active-minibuffer-window) nil)
    ((alist-get 'allow-no-window alist) nil)
+   ((memq this-command +my/tiling-here-commands) nil)
    ((+my/tiling-app-p buffer)
     (let ((window (cond ((get-buffer-window buffer)
                          (window--display-buffer buffer (get-buffer-window buffer) 'reuse

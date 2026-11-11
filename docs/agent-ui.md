@@ -377,7 +377,7 @@ its reply (`{"ok": false, "error": ..., "report": ...}`), for you to file by han
 
 A session's canvas is saved as it changes (a moment later, the changes together), as its elements' JSON, in the
 session's `.agent-shell/agent-ui/`, named by its ACP session id, beside agent-shell's transcripts
-(`config/agent-ui/persist.el`). When a session starts with that id (resumed: `SPC o C` with `C-u C-u`, or
+(`config/agent-ui/persist.el`). When a session starts with that id (resumed: picked when `SPC o c` asks, or
 agent-shell's restart), its canvas comes back as it was. Its elements' sources aren't started again: a command isn't
 run twice. Closing a canvas, or its session, leaves what's saved; clearing it saves it empty. Its other canvases are
 kept beside it (`ID@tests.json`, the name hex-escaped) and come back with it.

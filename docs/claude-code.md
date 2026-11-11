@@ -6,7 +6,7 @@ CLI's login.
 | Key | Action |
 |---|---|
 | `SPC o c` | A new session, in a new [tiled](editor.md#tiling) pane |
-| `SPC o C` | The project's session (`C-u`: a new one, `C-u C-u`: pick one) |
+| `SPC o C` | The same, in the window you're in (the file there kept as a tab) |
 | `Option+Enter` (Linux: `Alt+Enter`) | Send the error at point or the selection to Claude |
 | `RET` (normal state too) | Send the prompt (`S-RET`: a newline) |
 

@@ -128,9 +128,13 @@ KEYS above.")
 
 ;; ====== KEY BINDINGS ======
 
+;; CLAUDE CODE HERE (config/agent-shell/here.el): SPC o c starts Claude Code,
+;; agent-shell asking which session (a new one, one to resume), shown where
+;; agent-shell shows it (with tiling, config/tiling.el: a new pane); SPC o C
+;; the same, shown in the window you're in, what it showed kept as a tab.
 (map! :leader
       :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code
-      :desc "Agent shell"               "o C" #'agent-shell)
+      :desc "Claude Code, here"         "o C" #'+my/agent-shell-claude-here)
 
 ;; DRAWINGS FOR CLAUDE (see above): C-c C-d next to agent-shell's own C-c keys.
 (map! :after agent-shell
@@ -203,3 +207,4 @@ KEYS above.")
 (load! "agent-shell/excalidraw")
 (load! "agent-shell/beads")
 (load! "agent-shell/prompt")
+(load! "agent-shell/here")

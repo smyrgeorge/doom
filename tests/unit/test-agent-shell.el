@@ -1,7 +1,7 @@
 ;;; tests/unit/test-agent-shell.el -*- lexical-binding: t; -*-
 ;; config/agent-shell.el: Claude Code in Emacs (agent-shell): the CLI login,
-;; Claude Code as the default agent, SPC o c / SPC o C (C-u, C-u C-u), what
-;; Claude is told about Emacs (appended to its system prompt), image width.
+;; Claude Code as the default agent, SPC o c / SPC o C (here), what Claude is
+;; told about Emacs (appended to its system prompt), image width.
 ;; No agent ever starts: agent-shell's starting points are mocked, and any
 ;; process started fails the test.
 
@@ -131,13 +131,13 @@ folder in the temp folder. `calls' collects (FUNCTION . ARGS) in order;
 (ert-deftest agent-shell/keys ()
   (should (eq (lookup-key doom-leader-map (kbd "o c"))
               #'agent-shell-anthropic-start-claude-code))
-  (should (eq (lookup-key doom-leader-map (kbd "o C")) #'agent-shell)))
+  (should (eq (lookup-key doom-leader-map (kbd "o C")) #'+my/agent-shell-claude-here)))
 
 (ert-deftest agent-shell/keys-described-for-which-key ()
   (let ((o (lookup-key doom-leader-map (kbd "o"))))
     (should (equal (alist-get ?c (cdr o))
                    '("Claude Code (agent-shell)" . agent-shell-anthropic-start-claude-code)))
-    (should (equal (alist-get ?C (cdr o)) '("Agent shell" . agent-shell)))))
+    (should (equal (alist-get ?C (cdr o)) '("Claude Code, here" . +my/agent-shell-claude-here)))))
 
 (ert-deftest agent-shell/keys-are-commands ()
   (should (commandp (lookup-key doom-leader-map (kbd "o c"))))
@@ -480,84 +480,57 @@ loads a session: as JSON, {\"systemPrompt\": {\"append\": TEXT}}."
 
 ;; ====== SPC o C ======
 
-(ert-deftest agent-shell/spc-o-C-goes-to-the-projects-session ()
+(ert-deftest agent-shell/spc-o-C-starts-claude-code-as-spc-o-c ()
+  "As SPC o c: a new Claude Code session, agent-shell asking which (the
+project's sessions to resume or a new one), though the project has one."
   (+test-agent-shell--mocked
-    (let ((old (+test-buffer "Claude Agent @ old")))
-      (setq existing (list old))
-      (+test-agent-shell--press "o C")
-      (should-not (+test-agent-shell--calls calls 'start))
-      (should-not (+test-agent-shell--calls calls 'picker))
-      (should (equal (+test-agent-shell--calls calls 'display)
-                     (list (list 'display old nil)))))))
-
-(ert-deftest agent-shell/spc-o-C-starts-claude-code-without-asking ()
-  "No session in the project: one starts, Claude Code, in the project's folder,
-without asking which agent."
-  (+test-agent-shell--mocked
+    (setq existing (list (+test-buffer "Claude Agent @ old")))
     (+test-agent-shell--press "o C")
-    (should-not (+test-agent-shell--calls calls 'picker))
     (let ((starts (+test-agent-shell--calls calls 'start)))
       (should (= (length starts) 1))
       (let ((args (cdar starts)))
         (should (eq (map-elt (plist-get args :config) :identifier) 'claude-code))
-        (should (stringp (+test-agent-shell--system-prompt (plist-get args :config))))
         (should (plist-get args :new-session))
-        (should (equal (plist-get args :cwd) dir))))
+        (should (equal (+test-agent-shell--system-prompt (plist-get args :config))
+                       (string-join (delq nil (list +my/agent-shell-claude-context
+                                                    (+my/agent-shell-claude-theme)))
+                                    "\n\n")))))
     (should (equal (+test-agent-shell--calls calls 'display)
-                   (list (list 'display started nil))))))
-
-(ert-deftest agent-shell/spc-o-C-asks-without-a-default-agent ()
-  "What the default agent setting saves: without it, agent-shell asks."
-  (+test-agent-shell--mocked
-    (let ((agent-shell-preferred-agent-config nil))
-      (should-error (+test-agent-shell--press "o C"))
-      (should (+test-agent-shell--calls calls 'picker))
-      (should-not (+test-agent-shell--calls calls 'start)))))
-
-(ert-deftest agent-shell/c-u-spc-o-C-starts-a-new-one ()
-  "With C-u: a new Claude Code session, though the project has one."
-  (+test-agent-shell--mocked
-    (setq existing (list (+test-buffer "Claude Agent @ old")))
-    (+test-agent-shell--press "o C" '(4))
+                   (list (list 'display started nil))))
     (should-not (+test-agent-shell--calls calls 'picker))
-    (should-not (+test-agent-shell--calls calls 'read-shell))
-    (let ((starts (+test-agent-shell--calls calls 'start)))
-      (should (= (length starts) 1))
-      (should (eq (map-elt (plist-get (cdar starts) :config) :identifier) 'claude-code))
-      (should (plist-get (cdar starts) :new-session)))
-    (should (equal (+test-agent-shell--calls calls 'display)
-                   (list (list 'display started nil))))))
+    (should-not (+test-agent-shell--calls calls 'read-shell))))
 
-(ert-deftest agent-shell/c-u-c-u-spc-o-C-picks-an-open-one ()
+(ert-deftest agent-shell/spc-o-C-shows-it-here ()
+  "While SPC o C shows the session (agent-shell keeping the override for
+when a session is picked), the here action comes first, the override there
+was after it; then the override is as it was."
   (+test-agent-shell--mocked
-    (let ((other (+test-buffer "Claude Agent @ other")))
-      (setq existing (list other))
-      (+test-agent-shell--press "o C" '(16))
-      (should-not (+test-agent-shell--calls calls 'start))
-      (should (equal (+test-agent-shell--calls calls 'read-shell)
-                     '((read-shell :prompt "Switch to shell: "))))
-      (should (equal (+test-agent-shell--calls calls 'display)
-                     (list (list 'display other nil)))))))
-
-(ert-deftest agent-shell/spc-o-C-in-a-session-toggles-it ()
-  "From the Claude buffer itself, SPC o C hides it again (agent-shell's toggle)."
-  (+test-agent-shell--mocked
-    (with-current-buffer (+test-buffer "Claude Agent @ here")
-      (setq major-mode 'agent-shell-mode)
-      (+test-agent-shell--press "o C")
-      (should (+test-agent-shell--calls calls 'toggle))
-      (should-not (+test-agent-shell--calls calls 'start)))))
-
-(ert-deftest agent-shell/spc-o-C-brings-the-selection ()
-  "agent-shell's DWIM: the context at point (here: what `agent-shell--context'
-finds) goes into the session's prompt."
-  (+test-agent-shell--mocked
-    (let ((old (+test-buffer "Claude Agent @ old")))
-      (setq existing (list old))
-      (cl-letf (((symbol-function 'agent-shell--context)
-                 (lambda (&rest _) "code.el:1 (foo)")))
+    (let ((display-buffer-overriding-action '((+test-agent-shell--other) (some . thing)))
+          seen)
+      (cl-letf (((symbol-function 'agent-shell--display-and-insert-context)
+                 (lambda (&rest _) (setq seen (copy-tree display-buffer-overriding-action)))))
         (+test-agent-shell--press "o C"))
-      (should (equal (+test-agent-shell--calls calls 'display)
-                     (list (list 'display old "code.el:1 (foo)")))))))
+      (should (equal seen '((+my/agent-shell-here-display +test-agent-shell--other) (some . thing))))
+      (should (equal display-buffer-overriding-action '((+test-agent-shell--other) (some . thing))))
+      ;; Without an override, or one function alone.
+      (should (equal (+my/agent-shell--here-action nil) '((+my/agent-shell-here-display))))
+      (should (equal (+my/agent-shell--here-action '(ignore)) '((+my/agent-shell-here-display ignore)))))))
+
+(ert-deftest agent-shell/here-display-a-session-in-the-selected-window ()
+  "The here action: a session in the selected window, what it showed kept
+under it; any other buffer, or a window dedicated to its own, nil."
+  (+test-with-reset
+    (let ((file (+test-buffer "code.el" "(foo)\n" #'emacs-lisp-mode))
+          (session (+test-buffer "Claude Agent @ here")))
+      (with-current-buffer session (setq-local major-mode 'agent-shell-mode))
+      (switch-to-buffer file)
+      (should-not (+my/agent-shell-here-display (+test-buffer "other") nil))
+      (should (eq (window-buffer) file))
+      (set-window-dedicated-p nil t)
+      (should-not (+my/agent-shell-here-display session nil))
+      (set-window-dedicated-p nil nil)
+      (should (eq (+my/agent-shell-here-display session nil) (selected-window)))
+      (should (eq (window-buffer) session))
+      (should (eq (car (car (window-prev-buffers))) file)))))
 
 ;;; test-agent-shell.el ends here

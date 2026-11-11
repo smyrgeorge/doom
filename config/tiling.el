@@ -37,7 +37,10 @@
 ;;   Markdown preview, magit, drawings, issues, Agent UI's canvas, a page in
 ;;   WebKit; those chosen in config.el, `+my/tiling-apps') open in a new pane where the strategy
 ;;   puts it, whatever their own setting or Doom's popup rules say; one shown
-;;   already, or a tab of a pane (a file over it): that pane. Magit's status (SPC g g), and any magit buffer opened
+;;   already, or a tab of a pane (a file over it): that pane. But from a
+;;   command opening one in the window you're in (`+my/tiling-here-commands':
+;;   Doom's SPC o T, a new terminal there): where it asks, as without tiling.
+;;   Magit's status (SPC g g), and any magit buffer opened
 ;;   from outside magit (SPC g d's diff, a log from a file), open so; inside
 ;;   magit, a log or a diff from the status stays in its pane as magit has it,
 ;;   a commit or a stash (Doom: beside) opens in a new pane, its process log
@@ -106,6 +109,10 @@ in a new pane when PREDICATE, called in the buffer being shown, says so
   :type `(choice (const :tag "All of them" all)
                  (set :tag "These" ,@(mapcar (lambda (app) (list 'const (car app))) +my/tiling-known-apps)))
   :group 'windows)
+
+(defvar +my/tiling-here-commands '(+ghostel/here)
+  "Commands opening an application in the window you're in (see TILING
+FIRST above): what they show goes where they ask, not in a new pane.")
 
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange
