@@ -40,14 +40,20 @@ The strategy, chosen in `config.el` (`(setq +my/tiling-strategy 'tall)`), says w
 |---|---|
 | `tall` | The main pane on the left, the others stacked on the right |
 | `tall-right` | The main pane on the right, the others stacked on the left |
+| `wide` | The main pane on top, the others side by side below it |
 
 `SPC w SPC` opens a new pane showing the current buffer, `SPC w a` arranges the panes again (in the strategy chosen,
 the main pane staying the main one), and `SPC w RET` moves the current pane's buffer to the main pane (the main's to
-its place). `SPC w ]` / `SPC w [` make the main area bigger / smaller as the strategy has it (`tall`, `tall-right`:
-the main pane's width, the same for both), from any pane (`]` / `[` again repeat it). `SPC w }` / `SPC w {` make the
-current pane bigger / smaller (`tall`, `tall-right`: a pane of the stack taller / shorter, the others of the stack at
-equal heights; `}` / `{` again repeat it); it keeps its height when you arrange the panes, open one or close another. Try it: `M-x
-+my/example-tiling`.
+its place). `SPC w ]` / `SPC w [` make the main pane bigger / smaller, from any pane (`]` / `[` again repeat it).
+`SPC w }` / `SPC w {` make the current pane bigger / smaller among the others, which stay even (`}` / `{` again repeat
+it); it keeps its size when you arrange the panes, open one or close another.
+
+| Strategy | `SPC w ]` / `SPC w [` | `SPC w }` / `SPC w {` |
+|---|---|---|
+| `tall`, `tall-right` | The main pane's width (the same for both) | A stacked pane's height |
+| `wide` | The main pane's height | A pane's width in the row below |
+
+Try it: `M-x +my/example-tiling`.
 
 Without `(load! "config/tiling")` in `config.el`, each opens where it would on its own.
 

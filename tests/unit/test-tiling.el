@@ -816,6 +816,173 @@ the main pane's width as it was."
         (should (+test-tiling--even-p (mapcar #'window-total-height (cdr (+my/tiling--ordered-panes)))))
         (should (= (window-total-width main) width))))))
 
+;; ====== WIDE ======
+
+(defmacro +test-tiling-wide (&rest body)
+  "BODY as `+test-tiling', the strategy wide (its share of the height 0.5)."
+  (declare (indent 0))
+  `(+test-tiling
+     (let ((+my/tiling-strategy 'wide)
+           (+my/tiling-wide-ratio 0.5))
+       ,@body)))
+
+(defun +test-tiling--below-p (a b)
+  "Non-nil if window A is below window B."
+  (>= (cadr (window-edges a)) (nth 3 (window-edges b))))
+
+(defun +test-tiling--height-share (window)
+  (/ (float (window-total-height window)) (window-total-height (window-main-window))))
+
+(defun +test-tiling--wide-row (&rest names)
+  "A the main pane, NAMES opened after it (each from A, as an application)."
+  (let ((main (selected-window)))
+    (dolist (name names)
+      (select-window main)
+      (pop-to-buffer name '(+my/tiling-display-buffer)))
+    main))
+
+(ert-deftest tiling/wide-is-a-strategy ()
+  (let ((strategy (alist-get 'wide +my/tiling-strategies)))
+    (dolist (key '(:split :arrange :resize-main :resize-pane :closed))
+      (should (functionp (plist-get strategy key)))))
+  (should (= (default-value '+my/tiling-wide-ratio) 0.5)))
+
+(ert-deftest tiling/wide-first-split-goes-below ()
+  "From one pane: the new one below it, focused; the old one stays the main
+pane on top, its share of the height, as wide as the frame."
+  (+test-tiling-wide
+    (let* ((main (selected-window))
+           (height (window-total-height main))
+           (new (+my/tiling-split)))
+      (should (eq new (selected-window)))
+      (should (+test-tiling--below-p new main))
+      (should (= (car (window-edges new)) (car (window-edges main))))
+      (should (= (window-total-width main) (window-total-width (window-main-window))))
+      (should (<= (abs (- (window-total-height main) (round (* 0.5 height)))) 1))
+      (should (equal (+my/tiling--ordered-panes) (list main new))))))
+
+(ert-deftest tiling/wide-next-splits-in-a-row-below ()
+  "The next panes at the right end of the row below, left to right in the
+order opened, at equal widths; the main pane on top, as wide as the frame."
+  (+test-tiling-wide
+    (let* ((main (+test-tiling--wide-row "B" "C" "D"))
+           (row (cdr (+my/tiling--ordered-panes))))
+      (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "C" "D")))
+      (dolist (pane row)
+        (should (+test-tiling--below-p pane main)))
+      (should (= (cadr (window-edges (nth 0 row))) (cadr (window-edges (nth 1 row)))
+                 (cadr (window-edges (nth 2 row)))))
+      (should (< (car (window-edges (nth 0 row))) (car (window-edges (nth 1 row)))
+                 (car (window-edges (nth 2 row)))))
+      (should (+test-tiling--even-p (mapcar #'window-total-width row)))
+      (should (= (window-total-width main) (window-total-width (window-main-window)))))))
+
+(ert-deftest tiling/wide-arranges-other-layouts ()
+  "From tall: SPC w a puts the main pane on top, the others in a row below;
+back to tall, the same main pane on the left."
+  (+test-tiling
+    (let ((main (selected-window)))
+      (dolist (name '("B" "C"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (let ((+my/tiling-strategy 'wide)
+            (+my/tiling-wide-ratio 0.5))
+        (+my/tiling-arrange)
+        (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "C")))
+        (should (+test-tiling--below-p (get-buffer-window "B") (get-buffer-window "A")))
+        (should (+test-tiling--right-of-p (get-buffer-window "C") (get-buffer-window "B")))
+        (let ((+my/tiling-strategy 'tall))
+          (+my/tiling-arrange)
+          (should (equal (+test-tiling--names (+my/tiling--panes)) '("A" "B" "C")))
+          (should (+test-tiling--right-of-p (get-buffer-window "B") (get-buffer-window "A"))))))))
+
+(ert-deftest tiling/wide-swap-main ()
+  (+test-tiling-wide
+    (let ((main (+test-tiling--wide-row "B" "C")))
+      (select-window (get-buffer-window "C"))
+      (+my/tiling-swap-main)
+      (should (eq (selected-window) main))
+      (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("C" "B" "A"))))))
+
+(ert-deftest tiling/wide-resize-main-its-height ()
+  "SPC w ] / [: the main pane taller / shorter, wide's own ratio (tall's
+left as it is), said as its share of the height."
+  (+test-tiling-wide
+    (+test-tiling--wide-row "B" "C")
+    (let (said)
+      (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args))))
+                ((symbol-function 'set-transient-map) #'ignore))
+        (+my/tiling-main-bigger))
+      (should (equal said "Main pane: 55% of the height (] / [ again)")))
+    (should (= +my/tiling-wide-ratio 0.55))
+    (should (= +my/tiling-tall-ratio 0.5))
+    (should (< (abs (- (+test-tiling--height-share (car (+my/tiling--ordered-panes))) 0.55)) 0.05))
+    (+my/tiling-arrange)
+    (should (< (abs (- (+test-tiling--height-share (car (+my/tiling--ordered-panes))) 0.55)) 0.05))))
+
+(ert-deftest tiling/wide-two-panes-keep-the-ratio ()
+  (+test-tiling-wide
+    (let ((+my/tiling-wide-ratio 0.7))
+      (set-window-buffer (split-window nil nil 'right) "B")
+      (+my/tiling-arrange)
+      (should (< (abs (- (+test-tiling--height-share (car (+my/tiling--ordered-panes))) 0.7)) 0.05)))))
+
+(ert-deftest tiling/wide-resize-pane-its-width ()
+  "SPC w } / {: a pane of the row wider / narrower, the others even; from
+the main pane, or the row's only one: said."
+  (+test-tiling-wide
+    (let ((main (+test-tiling--wide-row "B")) said)
+      (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args))))
+                ((symbol-function 'set-transient-map) #'ignore))
+        (select-window (get-buffer-window "B"))
+        (should (equal (cadr (should-error (+my/tiling-pane-bigger) :type 'user-error))
+                       "The only pane below is as wide as the frame"))
+        (dolist (name '("C" "D"))
+          (select-window main)
+          (pop-to-buffer name '(+my/tiling-display-buffer)))
+        (select-window main)
+        (should (equal (cadr (should-error (+my/tiling-pane-bigger) :type 'user-error))
+                       "The main pane is as wide as the frame (SPC w ] / [ make it taller, shorter)"))
+        (select-window (get-buffer-window "C"))
+        (let ((before (window-total-width (selected-window))))
+          (+my/tiling-pane-bigger)
+          (should (> (window-total-width (selected-window)) before))
+          (should (string-match-p "\\`Pane: [0-9]+% of the stack's width" said))
+          (should (+test-tiling--even-p (mapcar #'window-total-width
+                                                (list (get-buffer-window "B") (get-buffer-window "D")))))
+          ;; Kept: SPC w a keeps it wider.
+          (let ((width (window-total-width (selected-window))))
+            (+my/tiling-arrange)
+            (should (<= (abs (- (window-total-width (get-buffer-window "C")) width)) 1))))))))
+
+(ert-deftest tiling/wide-closed-pane-s-columns-shared ()
+  "A pane of the row closed: the row at equal widths again; the main pane's
+height as it was."
+  (+test-tiling-wide
+    (let ((main (+test-tiling--wide-row "B" "C" "D")))
+      (+my/tiling--closed-h (selected-frame))
+      (let ((height (window-total-height main)))
+        (delete-window (get-buffer-window "C"))
+        (should-not (+test-tiling--even-p (mapcar #'window-total-width (cdr (+my/tiling--ordered-panes)))))
+        (+my/tiling--closed-h (selected-frame))
+        (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "D")))
+        (should (+test-tiling--even-p (mapcar #'window-total-width (cdr (+my/tiling--ordered-panes)))))
+        (should (= (window-total-height main) height))))))
+
+(ert-deftest tiling/wide-a-full-row-said ()
+  "The row full (each pane at its narrowest): SPC w SPC says so, and opens
+nothing."
+  (+test-tiling-wide
+    (let ((count 0) error)
+      (while (and (not error) (< count 50))
+        (condition-case err
+            (progn (+my/tiling-split) (cl-incf count))
+          (user-error (setq error err))))
+      (should (equal (cadr error) "No room for another pane"))
+      (should (> count 2))
+      (should (= (length (+my/tiling--panes)) (1+ count)))
+      (should (<= window-min-width (apply #'min (mapcar #'window-total-width (cdr (+my/tiling--ordered-panes)))))))))
+
 ;; ====== KEYS ======
 
 (ert-deftest tiling/keys ()

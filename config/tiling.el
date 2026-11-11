@@ -70,6 +70,10 @@
 ;;   pane on the right (the same share of the width, `+my/tiling-tall-ratio'),
 ;;   the others stacked on the left, top to bottom. The second pane opens on
 ;;   the left, the next ones at the bottom of the stack.
+;; - wide (Amethyst's Wide): tall turned on its side, the main pane on top
+;;   (`+my/tiling-wide-ratio' of the height), the others in a row below it at
+;;   equal widths, left to right. The second pane opens below, the next ones
+;;   at the right end of the row (a full row: said).
 ;; More can be added to `+my/tiling-strategies'.
 (defvar +my/tiling-strategy 'tall
   "How SPC w SPC places new panes: a strategy of `+my/tiling-strategies'.")
@@ -80,9 +84,17 @@
 (defvar +my/tiling-tall-ratio-limits '(0.2 . 0.8)
   "The smallest and biggest share of the width SPC w [ / ] give the main pane.")
 
+(defvar +my/tiling-wide-ratio 0.5
+  "The main pane's share of the height in the wide strategy.")
+
+(defvar +my/tiling-wide-ratio-limits '(0.2 . 0.8)
+  "The smallest and biggest share of the height SPC w [ / ] give wide's main
+pane.")
+
 (defvar +my/tiling-resize-step 0.05
   "The share SPC w ] / [ add to or take from the main area, and SPC w } / {
-from the current pane (tall: of the width; of the stack's height).")
+from the current pane (tall: of the width; of the stack's height; wide: of
+the height; of the row's width).")
 
 ;; APPLICATIONS, by name (see TILING FIRST above). Which are is chosen in
 ;; config.el: (setq +my/tiling-apps 'all), every one of them (the default), or
@@ -126,7 +138,10 @@ FIRST above): what they show goes where they ask, not in a new pane.")
     (tall-right :split +my/tiling-tall-right-split :arrange +my/tiling-tall-right-arrange
                 :resize-main +my/tiling-tall-right-resize-main
                 :resize-pane +my/tiling-tall-right-resize-pane
-                :closed +my/tiling-tall-right-closed :order +my/tiling-tall-right-order))
+                :closed +my/tiling-tall-right-closed :order +my/tiling-tall-right-order)
+    (wide :split +my/tiling-wide-split :arrange +my/tiling-wide-arrange
+          :resize-main +my/tiling-wide-resize-main :resize-pane +my/tiling-wide-resize-pane
+          :closed +my/tiling-wide-closed))
   "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize-main
 FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION] [:order FUNCTION]). Each
 takes the panes in order, the main pane first (see above): :split opens a new
@@ -157,8 +172,9 @@ pane, that pane within the others. Without one: nothing to resize, said.")
 ;; In config/tiling/, in this order: each part can use what the ones before it
 ;; define.
 (load! "tiling/panes")
-(load! "tiling/stack")                  ; a main pane and a stack: tall's, tall-right's
+(load! "tiling/stack")                  ; a main pane and a stack: tall's, tall-right's, wide's
 (load! "tiling/tall")
 (load! "tiling/tall-right")
+(load! "tiling/wide")
 (load! "tiling/commands")
 (load! "tiling/apps")
