@@ -1,5 +1,6 @@
 ;;; $DOOMDIR/config/projectile/workspaces.el -*- lexical-binding: t; -*-
-;; Each workspace remembers its project. Loaded from config/projectile.el.
+;; Each workspace remembers its project, and keeps the buffers shown in it.
+;; Loaded from config/projectile.el.
 
 ;; WORKSPACES REMEMBER THEIR PROJECT
 ;; What an empty workspace shows is Doom's dashboard, shared by the
@@ -63,3 +64,34 @@ workspace's."
 (defadvice! +my/workspace-dashboard-pwd-a (fn)
   :around #'+dashboard--pwd
   (or (+my/workspace-project) (funcall fn)))
+
+;; WORKSPACES KEEP WHAT'S SHOWN IN THEM
+;; Doom adds a buffer to the current workspace once a window shows it
+;; (`+workspaces-add-current-buffer-h'), but takes the current buffer for it:
+;; the one just shown only after a command. One shown later, from a timer or
+;; a process's callback (Claude Code's session once picked: agent-shell shows
+;; it after its prompt; SPC o C), finds the previous buffer current again:
+;; Doom added that one, or nothing (its hook skipped when that was the
+;; window's), and the buffer shown joined no workspace (persp-mode's hidden
+;; "none"): shown, but not the workspace's, so not kept as a tab, nor listed
+;; by SPC b b, nor gone back to. Now a real buffer newly shown in any window
+;; of the frame joins its workspace, whoever showed it and when (Doom's filter:
+;; its unreal buffers don't). Not a preview, in the window the minibuffer was
+;; opened from while it's open.
+(defun +my/workspace-add-shown-buffers-h (frame)
+  "For `window-buffer-change-functions': the real buffers FRAME's windows now
+show, and didn't, added to its workspace (see above)."
+  (when-let* (((bound-and-true-p persp-mode))
+              (persp (get-current-persp frame)))
+    (let ((preview (and (active-minibuffer-window) (minibuffer-selected-window))))
+      (dolist (window (window-list frame 'nomini))
+        (let ((buffer (window-buffer window)))
+          (unless (or (eq window preview)
+                      (eq buffer (window-old-buffer window))
+                      (persp-contain-buffer-p buffer persp)
+                      (persp-buffer-filtered-out-p
+                       (or (buffer-base-buffer buffer) buffer)
+                       persp-add-buffer-on-after-change-major-mode-filter-functions))
+            (persp-add-buffer buffer persp nil nil)))))))
+
+(add-hook 'window-buffer-change-functions #'+my/workspace-add-shown-buffers-h)

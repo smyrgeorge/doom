@@ -1,9 +1,11 @@
 ;;; tests/unit/test-projectile.el -*- lexical-binding: t; -*-
 ;; config/projectile.el: no search path of its own (config.el's); the project's
 ;; files listed without a cache; a project (SPC p p) opens on its README; each workspace
-;; remembers its project (the dashboard is in the current workspace's one).
-;; Projects are temp folders (with a .git); workspaces are persp-mode structs,
-;; `get-current-persp' mocked; Doom's dashboard functions come from its source.
+;; remembers its project (the dashboard is in the current workspace's one) and
+;; keeps the buffers shown in it. Projects are temp folders (with a .git);
+;; workspaces are persp-mode structs, `get-current-persp' mocked, but real
+;; persp-mode for the buffers kept; Doom's dashboard functions come from its
+;; source.
 
 ;; ====== LOADING ======
 
@@ -447,3 +449,134 @@ starts in ~, never in another's."
         (funcall switch w3)
         (should (equal (+test-projectile--dashboard-dir) (expand-file-name "~/")))
         (should-not (persp-parameter 'last-project-root w3))))))
+
+;; ====== WORKSPACES KEEP WHAT'S SHOWN IN THEM ======
+;; Real persp-mode (Doom's workspaces), nothing saved, Doom's settings and
+;; filter (its unreal buffers not added). Batch Emacs never redisplays, so it
+;; never runs `window-buffer-change-functions' and has no old buffers:
+;; `+test-projectile--redisplay' runs the hook as redisplay would, with the
+;; buffers the windows showed at the previous one.
+
+(defvar +test-projectile--old nil
+  "Each window's buffer at the last (simulated) redisplay: ((WINDOW . BUFFER)...).")
+
+(defmacro +test-projectile-real-workspaces (&rest body)
+  "BODY with persp-mode on, its workspaces A and B (A current); persp-mode off
+and the buffers made killed after."
+  (declare (indent 0))
+  `(+test-with-reset
+     (let ((before (buffer-list))
+           (+test-projectile--old nil)
+           (persp-auto-save-opt 0)
+           (persp-auto-resume-time -1)
+           (persp-reset-windows-on-nil-window-conf nil) ; Doom's
+           (persp-save-dir (file-name-as-directory (+test-tmp-file "persp")))
+           (persp-add-buffer-on-after-change-major-mode-filter-functions
+            (list #'doom-unreal-buffer-p)))
+       (persp-mode 1)
+       (persp-add-new "A")
+       (persp-add-new "B")
+       (persp-frame-switch "A")
+       (unwind-protect (progn ,@body)
+         (persp-mode -1)
+         (let ((kill-buffer-query-functions nil))
+           (dolist (buffer (buffer-list))
+             (unless (memq buffer before) (kill-buffer buffer))))))))
+
+(defun +test-projectile--redisplay ()
+  "Run `window-buffer-change-functions' on the selected frame as redisplay
+does (see above), in whatever buffer is current."
+  (cl-letf (((symbol-function 'window-old-buffer)
+             (lambda (&optional window)
+               (alist-get (window-normalize-window window) +test-projectile--old))))
+    (run-hook-with-args 'window-buffer-change-functions (selected-frame)))
+  (setq +test-projectile--old (mapcar (lambda (window) (cons window (window-buffer window)))
+                                      (window-list nil 'nomini))))
+
+(defun +test-projectile--in (buffer)
+  "The names of the workspaces BUFFER is in."
+  (sort (mapcar #'safe-persp-name (persp--buffer-in-persps buffer)) #'string<))
+
+(defun +test-projectile--real (name)
+  "A real buffer NAME (as Doom's are: a Claude session, through tiling)."
+  (with-current-buffer (+test-buffer name "text\n")
+    (setq-local doom-real-buffer-p t)
+    (current-buffer)))
+
+(ert-deftest projectile/a-buffer-shown-later-joins-the-workspace ()
+  "A buffer shown from a timer or a callback (Claude Code's session once
+picked; SPC o C), the previous buffer current again: it joins the current
+workspace, not the one current (Doom's hook took that one), nor another."
+  (should (memq #'+my/workspace-add-shown-buffers-h
+                (default-value 'window-buffer-change-functions)))
+  (+test-projectile-real-workspaces
+    (let ((file (find-file-noselect (+test-file "shown.txt" "x\n")))
+          (session (+test-projectile--real "Claude Agent @ shown")))
+      (switch-to-buffer file)
+      (+test-projectile--redisplay)
+      (should (equal (+test-projectile--in file) '("A")))
+      ;; The callback: the session shown and selected; then the file current.
+      (set-window-buffer nil session)
+      (with-current-buffer file
+        (+test-projectile--redisplay))
+      (should (equal (+test-projectile--in session) '("A")))
+      ;; In a window not selected (a pane opened without focus) too.
+      (let ((canvas (+test-projectile--real "canvas"))
+            (other (split-window-right)))
+        (set-window-buffer other canvas)
+        (+test-projectile--redisplay)
+        (should (equal (+test-projectile--in canvas) '("A")))))))
+
+(ert-deftest projectile/only-real-buffers-join-the-workspace ()
+  "Doom's filter: its unreal buffers (*Help*, a hidden one) join none."
+  (+test-projectile-real-workspaces
+    (dolist (name '("*Help*" " hidden"))
+      (let ((buffer (+test-buffer name "x\n")))
+        (set-window-buffer nil buffer)
+        (+test-projectile--redisplay)
+        (should-not (+test-projectile--in buffer))))))
+
+(ert-deftest projectile/a-preview-joins-no-workspace ()
+  "While the minibuffer is open, what its window shows is a preview (SPC b b,
+SPC SPC): not added; another window's buffer is."
+  (+test-projectile-real-workspaces
+    (let* ((here (selected-window))
+           (other (split-window-right))
+           (preview (+test-projectile--real "previewed"))
+           (shown (+test-projectile--real "shown meanwhile")))
+      (set-window-buffer here preview)
+      (set-window-buffer other shown)
+      (cl-letf (((symbol-function 'active-minibuffer-window) (lambda () (minibuffer-window)))
+                ((symbol-function 'minibuffer-selected-window) (lambda () here)))
+        (+test-projectile--redisplay))
+      (should-not (+test-projectile--in preview))
+      (should (equal (+test-projectile--in shown) '("A"))))))
+
+(ert-deftest projectile/switching-workspaces-mixes-no-buffers ()
+  "A new workspace starts in the windows the last one showed (Doom keeps
+them): their buffers stay the other's. Each keeps what's shown in it."
+  (+test-projectile-real-workspaces
+    (let ((a (+test-projectile--real "a's"))
+          (b (+test-projectile--real "b's")))
+      (switch-to-buffer a)
+      (+test-projectile--redisplay)
+      (persp-frame-switch "B")
+      (should (eq (window-buffer) a))
+      (+test-projectile--redisplay)
+      (should (equal (+test-projectile--in a) '("A")))
+      (switch-to-buffer b)
+      (+test-projectile--redisplay)
+      (persp-frame-switch "A")
+      (+test-projectile--redisplay)
+      (should (equal (+test-projectile--in a) '("A")))
+      (should (equal (+test-projectile--in b) '("B"))))))
+
+(ert-deftest projectile/a-buffer-shown-without-workspaces ()
+  "Without workspaces, nothing done."
+  (+test-with-reset
+    (let ((persp-mode nil)
+          (buffer (+test-projectile--real "no workspaces")))
+      (set-window-buffer nil buffer)
+      (+my/workspace-add-shown-buffers-h (selected-frame))
+      (should (buffer-live-p buffer))
+      (kill-buffer buffer))))

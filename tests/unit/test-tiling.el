@@ -792,26 +792,6 @@ popup 40 columns wide was the terminal's: narrow)."
       (quit-window nil window)
       (should-not (window-live-p window)))))
 
-(defvar persp-mode)
-
-(ert-deftest tiling/an-application-shown-joins-the-workspace ()
-  "An application shown in a pane (Claude Code's session by SPC o c): in the
-current workspace, which Doom's frames go back to; none without workspaces."
-  (+test-tiling-first
-    (let (added)
-      (cl-letf (((symbol-function 'get-current-persp) (lambda () 'the-workspace))
-                ((symbol-function 'persp-add-buffer)
-                 (lambda (buffer persp &rest _) (push (list (buffer-name buffer) persp) added))))
-        (let ((persp-mode nil))
-          (display-buffer (+test-tiling--app "app") nil)
-          (should-not added))
-        (let ((persp-mode t))
-          (display-buffer (+test-tiling--app "app2") nil)
-          (should (equal added '(("app2" the-workspace))))
-          ;; Not a file, nor anything else.
-          (display-buffer "B" +test-tiling--popup-action)
-          (should (= (length added) 1)))))))
-
 (ert-deftest tiling/here-commands-where-they-ask ()
   "From a command of `+my/tiling-here-commands' (Doom's SPC o T), an
 application where it asks (the window you're in), what was there kept under

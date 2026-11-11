@@ -1,8 +1,8 @@
 ;;; $DOOMDIR/config/projectile.el -*- lexical-binding: t; -*-
 ;; Projects: their files listed fresh, a project opening on its README, each
-;; workspace keeping its project. Loaded from config.el; its code is in
-;; config/projectile/. Where projects are found (SPC p D,
-;; `projectile-project-search-path') is set in config.el.
+;; workspace keeping its project and the buffers shown in it. Loaded from
+;; config.el; its code is in config/projectile/. Where projects are found
+;; (SPC p D, `projectile-project-search-path') is set in config.el.
 
 ;; ====== SETTINGS ======
 
@@ -20,4 +20,4 @@
 ;; ====== CODE ======
 
 (load! "projectile/readme")             ; SPC p p: the README
-(load! "projectile/workspaces")         ; each workspace its project
+(load! "projectile/workspaces")         ; each workspace its project, its buffers

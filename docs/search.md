@@ -15,4 +15,5 @@ too.
 - Projects under `~/dev` are found without adding them (`projectile-project-search-path`, set in `config.el`).
 - `SPC p p` opens the project's README, if it has one.
 - `SPC SPC` lists files created outside Emacs too.
-- Each workspace keeps its own project.
+- Each workspace keeps its own project, and what opens in it, even a moment later (a Claude session once picked,
+  `SPC o C`): its tab stays and `SPC b b` lists it.
