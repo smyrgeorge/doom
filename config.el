@@ -98,11 +98,10 @@
 
 ;; Tiling strategy: where SPC w SPC opens a new pane, like a tiling window
 ;; manager (config/tiling.el). `tall': a main pane on the left, the others
-;; stacked on the right (Amethyst's Tall); `tall-right': the main pane on the
-;; right, the others on the left (Amethyst's Tall-Right); `wide': the main pane
-;; on top, the others in a row below (Amethyst's Wide); `fullscreen': the
-;; current pane alone, the others hidden (Amethyst's Fullscreen); `bsp': each
-;; new pane halves the current one (Amethyst's Binary Space Partitioning).
+;; stacked on the right; `tall-right': the main pane on the right, the others
+;; on the left; `wide': the main pane on top, the others in a row below;
+;; `fullscreen': the current pane alone, the others hidden; `bsp': each new
+;; pane halves the current one (binary space partitioning).
 (setq +my/tiling-strategy 'tall)
 
 ;; The applications tiling opens in a new pane (config/tiling.el): all of them,

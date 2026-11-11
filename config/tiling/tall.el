@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/tiling/tall.el -*- lexical-binding: t; -*-
-;; The tall strategy (Amethyst's Tall): the main pane on the left, the others
-;; stacked on the right (config/tiling/stack.el). Loaded from config/tiling.el.
+;; The tall strategy: the main pane on the left, the others stacked on the
+;; right (config/tiling/stack.el). Loaded from config/tiling.el.
 
 (defconst +my/tiling--tall
   '(:main left :ratio +my/tiling-tall-ratio :limits +my/tiling-tall-ratio-limits)

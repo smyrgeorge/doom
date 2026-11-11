@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/tiling/wide.el -*- lexical-binding: t; -*-
-;; The wide strategy (Amethyst's Wide): the main pane on top, the others in a
-;; row below. Loaded from config/tiling.el.
+;; The wide strategy: the main pane on top, the others in a row below.
+;; Loaded from config/tiling.el.
 
 ;; WIDE
 ;; Tall turned on its side (config/tiling/stack.el): the main pane on top, as

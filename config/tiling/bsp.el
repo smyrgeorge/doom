@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/tiling/bsp.el -*- lexical-binding: t; -*-
-;; The bsp strategy (Amethyst's Binary Space Partitioning): each new pane
-;; halves the current one. Loaded from config/tiling.el.
+;; The bsp strategy (binary space partitioning): each new pane halves the
+;; current one. Loaded from config/tiling.el.
 
 ;; BSP
 ;; No main pane: the panes are the leaves of a binary tree, each split in two
@@ -10,13 +10,13 @@
 ;; tall, else one above the other. The tree is Emacs's own window tree: each split made with
 ;; `window-combination-limit' t has a parent of its own, two children. A new
 ;; pane halves the current one (the last one from a side panel), the new half
-;; on the right or below. SPC w a lays the panes out as Amethyst builds the
-;; tree from a list, each halving the last: a spiral, 1 | (2 / (3 | ...)).
+;; on the right or below. SPC w a lays the panes out as the tree is built
+;; from a list, each halving the last: a spiral, 1 | (2 / (3 | ...)).
 ;; A pane closed: Emacs gives its space to its sibling; every split laid out
 ;; again along its longer side then, the tree kept (Emacs can't turn a split
 ;; round: the panes made again, each showing what it showed). SPC w ] / [ the
-;; current pane's split, SPC w } / { the one above it: not kept (Amethyst's
-;; splits are all even), the next layout evens them out.
+;; current pane's split, SPC w } / { the one above it: not kept (the splits
+;; are all even), the next layout evens them out.
 
 (defun +my/tiling--bsp-extent (window)
   "WINDOW's (WIDTH . HEIGHT) as it's seen (see above)."
@@ -61,7 +61,7 @@ tall as it's seen, else below."
     (apply #'vector (mapcar #'+my/tiling--bsp-shape (+my/tiling--children window)))))
 
 (defun +my/tiling--bsp-spiral (states)
-  "The shape of STATES laid out as Amethyst's list: each halving the last."
+  "The shape of STATES laid out from a list: each halving the last."
   (if (cdr states)
       (vector (car states) (+my/tiling--bsp-spiral (cdr states)))
     (car states)))

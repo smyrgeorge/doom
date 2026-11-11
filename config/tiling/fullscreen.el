@@ -1,15 +1,15 @@
 ;;; $DOOMDIR/config/tiling/fullscreen.el -*- lexical-binding: t; -*-
-;; The fullscreen strategy (Amethyst's Fullscreen): the current pane alone,
-;; the others hidden. Loaded from config/tiling.el.
+;; The fullscreen strategy: the current pane alone, the others hidden.
+;; Loaded from config/tiling.el.
 
 ;; FULLSCREEN
 ;; Every pane fills the frame, one in front: Emacs's windows can't overlap, so
 ;; the pane on the screen is the frame's only window and the others are
 ;; hidden, in order (config/tiling/hidden.el). A new pane opens alone, just
 ;; after the current one; SPC w w / SPC w W bring the next / previous one to
-;; the front, in turn (Amethyst's focus next / previous), saying which ("Pane
-;; 2/4"). An application already in a hidden pane: that pane brought to the
-;; front. SPC w RET makes the pane on the screen the first, the main one
+;; the front, in turn, saying which ("Pane 2/4"). An application already in a
+;; hidden pane: that pane brought to the front. SPC w RET makes the pane on
+;; the screen the first, the main one
 ;; another strategy lays out so. Nothing to resize. Closing it shows the next
 ;; one. Another strategy chosen: its SPC w a (SPC w SPC...) shows them all
 ;; again, laid out its way.

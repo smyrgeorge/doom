@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/tiling/tall-right.el -*- lexical-binding: t; -*-
-;; The tall-right strategy (Amethyst's Tall-Right): the main pane on the right.
+;; The tall-right strategy: the main pane on the right.
 ;; Loaded from config/tiling.el.
 
 ;; TALL-RIGHT

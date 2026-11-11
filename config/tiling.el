@@ -1,12 +1,12 @@
 ;;; $DOOMDIR/config/tiling.el -*- lexical-binding: t; -*-
-;; Tiling, like a tiling window manager (Amethyst). Loaded from config.el; its
-;; code is in config/tiling/.
+;; Tiling, like a tiling window manager. Loaded from config.el; its code is in
+;; config/tiling/.
 
 ;; ====== VARIABLES ======
 
 ;; TILING
 ;; SPC w SPC opens a new pane where the tiling strategy puts it, like a tiling
-;; window manager does (Amethyst's layouts). The strategy is chosen in config.el
+;; window manager does (its layouts). The strategy is chosen in config.el
 ;; (`+my/tiling-strategy'). The usual splits (SPC w v, SPC w s...) don't
 ;; change: tiling only happens on these keys.
 ;;   SPC w SPC   a new pane where the strategy puts it, showing the current
@@ -14,12 +14,12 @@
 ;;   SPC w a     arrange the panes as the strategy lays them out (e.g. after
 ;;               splits of your own)
 ;;   SPC w RET   the current pane's buffer to the main pane (the first one),
-;;               the main's to where it was, the focus with it (Amethyst's
-;;               swap with main); from the main pane, the next one's to it
+;;               the main's to where it was, the focus with it (a swap with
+;;               the main); from the main pane, the next one's to it
 ;;   SPC w ] / [ the main area bigger / smaller, as the strategy has it (tall:
 ;;               the main pane's width, by `+my/tiling-resize-step' of it),
 ;;               from any pane; ] and [ again repeat it. Kept: SPC w a and new
-;;               panes lay it out so (Amethyst's expand / shrink main)
+;;               panes lay it out so (the main area expanded / shrunk)
 ;;   SPC w } / { the current pane bigger / smaller, as the strategy has it
 ;;               (tall: a pane of the stack taller / shorter, by
 ;;               `+my/tiling-resize-step' of the stack's height, the others of
@@ -64,32 +64,31 @@
 ;; Code in the current window, the terminal as Doom's popup, the preview and
 ;; the diff on the right, a drawing for Claude on its shell's left.
 ;; Strategies:
-;; - tall (Amethyst's Tall): the first pane is the main one, on the left
-;;   (`+my/tiling-tall-ratio' of the width), the others stacked on the right at
-;;   equal heights. The second pane opens on the right, the next ones at the
-;;   bottom of the stack, from whichever pane. Panes laid out otherwise are
-;;   arranged tall first.
-;; - tall-right (Amethyst's Tall-Right): tall with its sides swapped, the main
-;;   pane on the right (the same share of the width, `+my/tiling-tall-ratio'),
-;;   the others stacked on the left, top to bottom. The second pane opens on
-;;   the left, the next ones at the bottom of the stack.
-;; - wide (Amethyst's Wide): tall turned on its side, the main pane on top
+;; - tall: the first pane is the main one, on the left (`+my/tiling-tall-ratio'
+;;   of the width), the others stacked on the right at equal heights. The
+;;   second pane opens on the right, the next ones at the bottom of the stack,
+;;   from whichever pane. Panes laid out otherwise are arranged tall first.
+;; - tall-right: tall with its sides swapped, the main pane on the right (the
+;;   same share of the width, `+my/tiling-tall-ratio'), the others stacked on
+;;   the left, top to bottom. The second pane opens on the left, the next ones
+;;   at the bottom of the stack.
+;; - wide: tall turned on its side, the main pane on top
 ;;   (`+my/tiling-wide-ratio' of the height), the others in a row below it at
 ;;   equal widths, left to right. The second pane opens below, the next ones
 ;;   at the right end of the row (a full row: said).
-;; - fullscreen (Amethyst's Fullscreen): the current pane alone, the others
-;;   hidden in order (config/tiling/hidden.el), each workspace's. A new pane
-;;   opens alone, after the current one; SPC w w / W bring the others to the
-;;   front in turn ("Pane 2/4"); an application already open in a hidden pane:
-;;   that pane in front. SPC w RET makes the pane on the screen the first (the
-;;   main one); nothing to resize. Closing it (SPC w d, its last tab, its
-;;   buffer killed, q) shows the next one. Another strategy shows them all
-;;   again (its SPC w a, SPC w SPC...).
-;; - bsp (Amethyst's Binary Space Partitioning): no main pane; a new pane
-;;   halves the current one along its longer side (in pixels), on the right or
-;;   below. SPC w a lays them out as a spiral, every split even; a pane closed,
-;;   every split along its longer side again. SPC w ] / [ the current pane's
-;;   split, SPC w } / { the one above it (not kept: even again next time).
+;; - fullscreen: the current pane alone, the others hidden in order
+;;   (config/tiling/hidden.el), each workspace's. A new pane opens alone, after
+;;   the current one; SPC w w / W bring the others to the front in turn ("Pane
+;;   2/4"); an application already open in a hidden pane: that pane in front.
+;;   SPC w RET makes the pane on the screen the first (the main one); nothing
+;;   to resize. Closing it (SPC w d, its last tab, its buffer killed, q) shows
+;;   the next one. Another strategy shows them all again (its SPC w a, SPC w
+;;   SPC...).
+;; - bsp (binary space partitioning): no main pane; a new pane halves the
+;;   current one along its longer side (in pixels), on the right or below. SPC
+;;   w a lays them out as a spiral, every split even; a pane closed, every split
+;;   along its longer side again. SPC w ] / [ the current pane's split, SPC w }
+;;   / { the one above it (not kept: even again next time).
 ;; More can be added to `+my/tiling-strategies'.
 (defvar +my/tiling-strategy 'tall
   "How SPC w SPC places new panes: a strategy of `+my/tiling-strategies'.")

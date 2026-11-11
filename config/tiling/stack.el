@@ -1,7 +1,6 @@
 ;;; $DOOMDIR/config/tiling/stack.el -*- lexical-binding: t; -*-
 ;; A main pane and a stack of the others: what the tall, tall-right and wide
-;; strategies share (Amethyst's Tall, Tall-Right, Wide), each a LAYOUT here.
-;; Loaded from config/tiling.el.
+;; strategies share, each a LAYOUT here. Loaded from config/tiling.el.
 
 ;; A LAYOUT
 ;; (:main SIDE :ratio VARIABLE :limits VARIABLE): the main pane on SIDE, the
