@@ -55,6 +55,12 @@
     (and hl-line-overlay (overlay-buffer hl-line-overlay)
          (+test-treemacs--label (overlay-start hl-line-overlay)))))
 
+(defun +test-treemacs--selected ()
+  "The file name of the sidebar's selection (its node, not point's)."
+  (with-current-buffer (window-buffer (+test-treemacs--window))
+    (and (stringp (car-safe +my/treemacs--selection))
+         (file-name-nondirectory (car +my/treemacs--selection)))))
+
 (defun +test-treemacs--shows-p (label)
   "Non-nil if the sidebar's window shows LABEL's line."
   (let ((window (+test-treemacs--window)))
@@ -88,7 +94,15 @@ list), the sidebar refreshed."
          (treemacs-add-and-display-current-project-exclusively)))
      (set-frame-parameter nil '+my/treemacs-followed nil)
      (+my/treemacs-follow-project-soon)
-     (should (+test-wait-for (lambda () (equal (+test-treemacs--highlighted) "f01.txt")) 5))
+     ;; Followed: f01.txt the selection, the follow's timer done. Not only
+     ;; highlighted, which point's line is before (f01.txt's too): the
+     ;; follow then came during the test's first steps (its timer later on
+     ;; a slow runner, after the first test's startup), and a key in the
+     ;; sidebar acted from point.
+     (should (+test-wait-for (lambda () (and (equal (+test-treemacs--selected) "f01.txt")
+                                             (equal (+test-treemacs--highlighted) "f01.txt")
+                                             (not +my/treemacs--follow-timer)))
+                             5))
      (unwind-protect (progn ,@body)
        (dolist (buffer (buffer-list))
          (when (with-current-buffer buffer (derived-mode-p 'treemacs-mode))
