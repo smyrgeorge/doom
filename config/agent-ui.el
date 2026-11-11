@@ -169,6 +169,8 @@
 (load! "agent-ui/ask")
 ;; The element types, a file each in agent-ui/elements/.
 (load! "agent-ui/elements")
+;; A finished element closing itself, a countdown under it.
+(load! "agent-ui/finished")
 (load! "agent-ui/staging")
 (load! "agent-ui/review")
 (load! "agent-ui/source")

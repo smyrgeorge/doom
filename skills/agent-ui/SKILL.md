@@ -164,9 +164,10 @@ as it's shown:" and its drawing come into your prompt.
 
 ## Cleaning up
 
-Leave the final state of what the user will want to see (the finished bar, the test table) and remove the rest. When
-the work it followed is over and talked through, `agent-ui clear` (its pane closes once it's empty). Never leave an
-element saying "running" for something that stopped: mark it `done` or `failed`.
+A `steps`, `todo` or `progress` that finished well closes itself 10 s later, counting down: `"close": false` keeps it
+(a result to talk through), `"close": N` waits N seconds. One that failed stays. Remove the rest once it stops helping;
+`agent-ui clear` when the work is over (its pane closes once empty). Never leave an element saying "running" for
+something that stopped: mark it `done` or `failed`.
 
 ## What to read when
 

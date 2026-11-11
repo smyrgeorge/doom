@@ -240,5 +240,12 @@ over time give its rate and, with MAX, the time left."
              (when (and max (<= max 0))
                (agent-ui--fail "progress: max must be above 0, not %s" (agent-ui-format-number max))))
            props)
+  ;; Finished: done, or at its max (not failed); failed: failed.
+  :finished (lambda (props)
+              (pcase (plist-get props :status)
+                ('failed 'failed)
+                ('done 'done)
+                (_ (let ((max (plist-get props :max)))
+                     (and max (>= (plist-get props :value) max) 'done)))))
   :text (lambda (props ctx) (agent-ui-progress--draw props ctx nil))
   :gui (lambda (props ctx) (agent-ui-progress--draw props ctx t)))

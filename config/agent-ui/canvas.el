@@ -60,9 +60,15 @@ removed, cleared; not when the canvas closes.")
   "Called in a canvas with an element's id once it's gone (removed, or its
 canvas killed).")
 
+(defvar agent-ui-footer-functions nil
+  "Called in a canvas with an element's id as it's drawn: a line to draw
+under it (the canvas's, not the element's: a finished one's countdown), or
+nil. The first one's line is drawn.")
+
 (cl-defstruct (agent-ui--entry (:constructor agent-ui--make-entry))
   "An element of a canvas: its id, itself (a plist), where it's drawn, and
-what's drawn there: (ELEMENT WIDTH GRAPHIC), its type's :extend editing it;
+what's drawn there: (ELEMENT WIDTH GRAPHIC FOOTER), its type's :extend
+editing it (FOOTER: a line drawn under it, `agent-ui-footer-functions');
 SHOWN, it as it was shown, before updates and its sources' changes (its
 data left out: what a panel saved from it keeps)."
   id element start end drawn shown)
@@ -247,20 +253,22 @@ their line and column (its text replaced, they went to its start)."
   (let* ((inhibit-read-only t)
          (start (agent-ui--entry-start entry))
          (end (agent-ui--entry-end entry))
-         (places (agent-ui--places-in start end)))
+         (places (agent-ui--places-in start end))
+         (footer (run-hook-with-args-until-success 'agent-ui-footer-functions (agent-ui--entry-id entry))))
     (save-excursion
       (delete-region start end)
       (goto-char start)
       ;; Its id in the context: an element's buttons may change it (a choice).
-      (insert (propertize (agent-ui--even (agent-ui-render (agent-ui--entry-element entry)
-                                                           (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry))))
+      (insert (propertize (agent-ui--even (concat (agent-ui-render (agent-ui--entry-element entry)
+                                                                   (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry)))
+                                                  (when footer (concat "\n" footer))))
                           'agent-ui-id (agent-ui--entry-id entry)))
       ;; The end follows what's inserted at it; the start stays before it.
       (set-marker end (point)))
     (when places
-      (agent-ui--restore-places places start end)))
-  (setf (agent-ui--entry-drawn entry)
-        (list (agent-ui--entry-element entry) (plist-get ctx :width) (plist-get ctx :graphic))))
+      (agent-ui--restore-places places start end))
+    (setf (agent-ui--entry-drawn entry)
+          (list (agent-ui--entry-element entry) (plist-get ctx :width) (plist-get ctx :graphic) (and footer t)))))
 
 (defun agent-ui--edit (entry edits)
   "EDITS (see `agent-ui-define''s :extend) done on ENTRY's drawing, in its
@@ -302,9 +310,11 @@ was drawn again whole, each line). Non-nil if so; nil if its type can't
   (let* ((drawn (agent-ui--entry-drawn entry))
          (old (car drawn))
          (new (agent-ui--entry-element entry))
-         ;; Drawn at this width, for this kind of frame: else drawn whole.
+         ;; Drawn at this width, for this kind of frame, no line under it
+         ;; then or now: else drawn whole.
          (type (and old (not (eq old new))
-                    (equal (cdr drawn) (list (plist-get ctx :width) (plist-get ctx :graphic)))
+                    (equal (cdr drawn) (list (plist-get ctx :width) (plist-get ctx :graphic) nil))
+                    (not (run-hook-with-args-until-success 'agent-ui-footer-functions (agent-ui--entry-id entry)))
                     (equal (plist-get old :type) (plist-get new :type))
                     (ignore-errors (agent-ui-type (plist-get new :type)))))
          (extend (and type (agent-ui-type-extend type)))
@@ -542,6 +552,8 @@ error saying what's wrong. Its :type a string, as JSON gives it."
       (funcall agent-ui-check-source-function source))
     (when-let* ((actions (plist-get element :actions)))
       (agent-ui-check-actions actions))
+    (when-let* ((close (plist-get element :close)))
+      (agent-ui-check-close close type))
     (let ((element (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type)))))
       ;; Its files by their full names: drawn later, wherever the agent was.
       (dolist (prop (agent-ui-type-props type))

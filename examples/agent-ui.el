@@ -55,7 +55,8 @@
         (agent-ui-append "plan" '(:steps ((:name "Run the tests" :status "failed" :detail "4 passed, 1 failed")
                                           (:name "Build" :status "running")))
                          :canvas canvas)
-        (agent-ui-show '(:id "build" :type "progress" :title "Build" :max 12 :label "configuring")
+        ;; Kept once done (not closed by itself): the release talked through.
+        (agent-ui-show '(:id "build" :type "progress" :title "Build" :max 12 :label "configuring" :close :false)
                        :canvas canvas)))
      (mapcar (lambda (n)
                (lambda ()

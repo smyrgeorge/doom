@@ -534,6 +534,14 @@ them again, without APPROVE."
                                for i from 1
                                collect (agent-ui-steps--normalize step (format "step %d" i) 0))))
   :append #'agent-ui-steps--append
+  ;; Finished: every step (its own too) done or skipped; one failed: failed.
+  ;; A plan to approve isn't, nor is one without steps.
+  :finished (lambda (props)
+              (let ((statuses (mapcar (lambda (s) (plist-get (cdr s) :status))
+                                      (agent-ui-steps--flat (plist-get props :steps) 0))))
+                (cond ((or (null statuses) (agent-ui-steps--approve-props props)) nil)
+                      ((memq 'failed statuses) 'failed)
+                      ((seq-every-p (lambda (s) (memq s '(done skipped))) statuses) 'done))))
   :prepare (lambda (element)
              (let ((steps (plist-get element :steps)))
                (if (listp steps)

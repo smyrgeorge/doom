@@ -250,4 +250,11 @@ adds it. For a plan you work through together."
                     (:label "Check Windows paths" :added t)))
   :check #'agent-ui-todo--check
   :append #'agent-ui-todo--append
+  ;; Finished: every item ticked, none of the user's changes waiting to be
+  ;; sent (closing would lose them).
+  :finished (lambda (props)
+              (let ((items (plist-get props :items)))
+                (and items (null (plist-get props :changes))
+                     (seq-every-p (lambda (item) (plist-get item :done)) items)
+                     'done)))
   :text #'agent-ui-todo--draw)

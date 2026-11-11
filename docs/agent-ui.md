@@ -35,6 +35,7 @@ elements better (charts as SVG) and has elements of its own (images, drawings, w
 | `title` | Optional, any type: a heading line above the element |
 | `source` | Optional, any type: a command, file or poll it follows ([Sources](#sources)) |
 | `actions` | Optional, any type: buttons putting a prompt into the session's prompt ([Actions](#actions)) |
+| `close` | Optional, `steps`, `todo` and `progress`: seconds it stays once finished well, or `false` to keep it ([The canvas](#the-canvas)) |
 | anything else | The type's properties. An unknown one is an error naming the type's properties, so the agent learns them |
 
 **Updates** are partial: an object with the `id` and the properties that change, merged into the element's
@@ -119,6 +120,11 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
   the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements
   and ids. They close with the session, and are kept and come back with it.
+- **Finished, it closes:** a `steps`, `todo` or `progress` that finished well (every step done or skipped, every item
+  ticked, the bar at its end) closes itself 10 seconds later, a line under it counting down with a **Keep** button; the
+  pane closes with its last element. One that failed stays; a change meanwhile starts the countdown again or stops it.
+  The agent's `"close"` on it decides for it: seconds, or `false` to keep it. `(setq agent-ui-close-finished nil)` in
+  `config.el`: only those whose `close` asks. A project panel never closes.
 - **Each element** is the text between two markers, its id in a text property. Drawing replaces that text only;
   point and each window's scroll stay where they were.
 - **Redraws are throttled:** an update marks the element dirty, and a timer (`agent-ui-redraw-delay`, 0.1s) redraws the
@@ -531,6 +537,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/staging.el` | Types the agent makes: checked, compiled, loaded, kept or discarded |
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
+| `config/agent-ui/finished.el` | A finished element closing itself, a countdown under it |
 | `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider`, `compare`, `tags`, `gauge`, `countdown`, `math` (its MathJax script in `elements/math/tex2svg.js`) |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
