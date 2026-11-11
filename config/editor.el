@@ -79,6 +79,11 @@ three times this.")
 do: in the workspace, listed by SPC b b, killed once no window has them as
 a tab (q too). The buffer list (SPC b i).")
 
+;; THE BUFFER LIST (SPC b i)
+;; Grouped by workspace: each buffer under the one it's in, Beads' issues and
+;; Claude Code's sessions too; one in none under Default. Without workspaces,
+;; by project (Doom's).
+
 ;; The tab line drawn and closed as above (config/editor/tabs.el); none in the
 ;; sidebar or the dashboard.
 (after! tab-line
@@ -313,6 +318,7 @@ An entry overrides a mode's own (set in config.el).")
 (load! "editor/smooth")
 (load! "editor/modeline")
 (load! "editor/tabs")
+(load! "editor/buffer-list")
 (load! "editor/actions")
 (load! "editor/navigation")
 (load! "editor/sticky")

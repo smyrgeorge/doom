@@ -12,6 +12,9 @@ the current workspace. A file, or the buffer list, closes once no window has it 
 | `Cmd+W`, middle click | `Ctrl+Shift+W`, middle click | Close the tab, and the window with its last tab |
 | Right click | Right click | Close the others, split vertically / horizontally |
 
+The buffer list (`SPC b i`) is grouped by workspace: each buffer under the workspace it's in (the issues, a Claude
+session too), those in none under Default.
+
 ## Tiling
 
 Emacs is tiling first:
