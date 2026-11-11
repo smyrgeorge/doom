@@ -8,6 +8,10 @@ CLI's login.
 | `SPC o c` | A new session, in a new [tiled](editor.md#tiling) pane |
 | `SPC o C` | The project's session (`C-u`: a new one, `C-u C-u`: pick one) |
 | `Option+Enter` (Linux: `Alt+Enter`) | Send the error at point or the selection to Claude |
+| `RET` (normal state too) | Send the prompt (`S-RET`: a newline) |
+
+`(setq +my/agent-shell-insert-ret-newline t)` in `config.el` makes `RET` in insert state a newline instead, the prompt
+sent with `RET` from normal state.
 
 Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
 and Claude can ask Emacs what you're looking at. Claude can also keep things in view on a canvas beside its session:
@@ -16,6 +20,18 @@ progress bars, checklists, tables, updated as work goes on ([Agent UI](agent-ui.
 `(setq agent-shell-elicitation--experimental-feature-enabled nil)` in `config.el` turns them off); a list to pick from
 comes on the canvas, your answer its next prompt. While you're in another app, a [notification](notifications.md) says
 when a session finished its turn or asks for your permission.
+
+## Claude's diffs
+
+A change Claude asks permission for opens as a diff with `v`. The keys its header line names work in normal state:
+
+| Key | Action |
+|---|---|
+| `n` / `p` | The next / previous hunk |
+| `y` | Accept the change |
+| `RET` | Open the file at the change |
+
+While Claude waits for a permission, `n` in normal state rejects it and interrupts Claude.
 
 ## Drawing for Claude
 

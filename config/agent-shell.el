@@ -110,6 +110,22 @@ with Beads (see ISSUES FOR CLAUDE above), before `bd prime''s guide.")
   "Non-nil: Beads' guide for agents (`bd prime') follows
 `+my/agent-shell-beads-context' in the system prompt.")
 
+;; EVIL KEYS
+;; With Evil, RET sends the prompt in normal state too (it only moved down a
+;; line there), and in insert state as before, S-RET a newline. Or, with
+;; `+my/agent-shell-insert-ret-newline' set in config.el, RET in insert state
+;; is a newline, the prompt sent from normal state (agent-shell's README,
+;; evil-collection's REPLs). In a diff Claude shows (*agent-shell-diff*), the
+;; keys its header line names work in normal state, where it opens: n / p the
+;; next / previous hunk, y accept, RET open the file (C-c C-c reject and q
+;; quit already did). evil-collection's own keys stay: in normal state, while
+;; Claude waits for a permission, y allows it, n rejects it (and interrupts
+;; Claude), ! always allows, v views its diff.
+(defvar +my/agent-shell-insert-ret-newline nil
+  "With Evil, RET in insert state in agent-shell: nil sends the prompt (S-RET
+a newline), non-nil inserts a newline (RET in normal state sends). See EVIL
+KEYS above.")
+
 ;; ====== KEY BINDINGS ======
 
 (map! :leader
@@ -148,6 +164,20 @@ with Beads (see ISSUES FOR CLAUDE above), before `bd prime''s guide.")
       "C-c C-k" #'+my/agent-shell-excalidraw-discard
       "M-p"     #'+my/agent-shell-excalidraw-previous
       "M-n"     #'+my/agent-shell-excalidraw-next)
+
+;; EVIL KEYS (see above).
+(map! :after agent-shell
+      :map agent-shell-mode-map
+      :n "RET" #'agent-shell-submit
+      (:when +my/agent-shell-insert-ret-newline
+       :i "RET" #'newline))
+
+(map! :after agent-shell-diff
+      :map agent-shell-diff-mode-map
+      :n "n"   #'diff-hunk-next
+      :n "p"   #'diff-hunk-prev
+      :n "y"   #'agent-shell-diff-accept-all
+      :n "RET" #'agent-shell-diff-open-file)
 
 ;; ====== CODE ======
 

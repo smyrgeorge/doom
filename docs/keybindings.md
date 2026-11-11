@@ -40,6 +40,8 @@ Vim's and Doom's keys stay as they are there. `config/os.el` has the rules.
 | `SPC m p` / `SPC m P` (Markdown) | the same | Live preview / in the browser |
 | `Cmd+C` (Markdown preview) | `Ctrl+Shift+C` | Copy the selection |
 | `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | A new Claude Code session / the project's |
+| `RET` (Claude Code, normal state) | the same | Send the prompt |
+| `n` / `p`, `y`, `RET` (Claude's diffs) | the same | The next / previous hunk, accept, open the file |
 | `C-c C-d`, `SPC m d` (Claude Code) | the same | Draw for Claude |
 | `SPC o i` / `SPC o I` | `SPC o i` / `SPC o I` | The project's [issues](issues.md) / a new one |
 | `C-c C-i` (Claude Code), `C-c C-a` (an issue) | the same | An issue into Claude's prompt |
