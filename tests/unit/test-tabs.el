@@ -561,15 +561,46 @@ theme loaded drops every window's cache."
         (let* ((tabs (+test-tabs--tabs))
                (current (+my/tabs-format b tabs))
                (other (+my/tabs-format a tabs)))
-          ;; The bar first, then the icon, the tab's own one.
-          (should (equal (substring-no-properties current 0 5) "| B b"))
+          ;; The bar first, then the icon, the tab's own one; a tab but the
+          ;; first after a space of the tab line's.
+          (should (equal (substring-no-properties current 0 6) " | B b"))
+          (should (eq (get-text-property 0 'face current) 'tab-line))
+          (should-not (get-text-property 0 'tab current))
           (should (equal (substring-no-properties other 0 5) "| A a"))
           ;; The icon keeps its colour (the tab's face comes after it).
-          (should (eq (car (get-text-property 2 'face current)) 'error))
+          (should (eq (car (get-text-property 3 'face current)) 'error))
           ;; The bar: the accent colour on the current tab, the tab's own on others.
           (should (equal (reverse bars) '("bg-highlight" "bg-tab-line-tab-inactive")))
           ;; Clicks still find the tab.
           (should (eq (tab-line--get-tab-property 'tab current) b)))))))
+
+(ert-deftest tabs/no-gap-before-the-first-tab ()
+  "A graphical frame's tab line: the first tab's bar at the window's edge (no
+separator before it), a space between tabs as before. A text terminal's:
+tab-line's `|' separators, as ever."
+  (should (advice-member-p #'+my/tabs-no-separator-a 'tab-line-format-template))
+  (+test-tabs
+    (let ((a (+test-tabs--file "a.txt"))
+          (b (+test-tabs--file "b.txt")))
+      (+test-tabs--show a b)
+      (cl-letf (((symbol-function '+my/tabs-bar) (lambda (_) (propertize "|" 'display 'bar)))
+                ((symbol-function 'face-background) (lambda (&rest _) "black")))
+        (let ((tty (tab-line-format-template (+test-tabs--tabs))))
+          (should (string-prefix-p "| a.txt" (substring-no-properties (car tty))))
+          (should (string-prefix-p "| b.txt" (substring-no-properties (cadr tty)))))
+        (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                  ((symbol-function 'nerd-icons-icon-for-buffer) (lambda () nil)))
+          (let* ((gui (tab-line-format-template (+test-tabs--tabs)))
+                 (first (car gui))
+                 (second (cadr gui)))
+            ;; The first tab's bar first: its own, the tab clicked there.
+            (should (eq (get-text-property 0 'display first) 'bar))
+            (should (eq (get-text-property 0 'tab first) a))
+            ;; The second: a space of the tab line's, then its bar.
+            (should (equal (substring-no-properties second 0 2) " |"))
+            (should-not (get-text-property 0 'tab second))
+            (should (eq (get-text-property 1 'display second) 'bar))
+            (should (eq (tab-line--get-tab-property 'tab second) b))))))))
 
 (ert-deftest tabs/format-gui-icon-failing-or-missing ()
   (+test-tabs
