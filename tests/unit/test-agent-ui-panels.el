@@ -642,3 +642,50 @@ made it); one there already, asked before replacing it."
           (kill-buffer canvas)))))
   (should (eq (keymap-lookup (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) "S")
               #'agent-ui-save-panel)))
+
+;; ====== THIS CONFIG'S OWN ======
+
+(defun +test-aup-own (name)
+  "The text of this config's own panel NAME, .agent-ui/panels/NAME.el."
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name (format ".agent-ui/panels/%s.el" name) doom-user-dir))
+    (buffer-string)))
+
+(ert-deftest agent-ui-panels/this-config-s-demo-panels ()
+  "The cpu and memory demo panels, filled on this system (macOS or Linux),
+no error: their figures numbers, their processes listed; the memory one's
+pressure said, its breakdown by this system's names, its compressor's rate
+from its second fetch."
+  (+test-aup `(("cpu" . ,(+test-aup-own "cpu")) ("memory" . ,(+test-aup-own "memory")))
+    ;; Shown while they're checked: one hidden isn't fetched.
+    (save-window-excursion
+     (let ((canvas (agent-ui-open-panel "cpu")))
+      (unwind-protect
+          (progn
+            (should (+test-wait-for (lambda () (plist-get (agent-ui-get "processes" :canvas canvas) :rows)) 10))
+            (should (numberp (plist-get (agent-ui-get "cpu" :canvas canvas) :value)))
+            (should (<= 0 (plist-get (agent-ui-get "cpu" :canvas canvas) :value) 100))
+            (should (cl-every (lambda (figure) (numberp (plist-get figure :value)))
+                              (plist-get (agent-ui-get "load" :canvas canvas) :figures)))
+            (should (> (plist-get (nth 3 (plist-get (agent-ui-get "load" :canvas canvas) :figures)) :value) 0))
+            (should-not (agent-ui-panels--error (buffer-local-value 'agent-ui-panels--state canvas))))
+        (kill-buffer canvas))))
+    (save-window-excursion
+     (let ((canvas (agent-ui-open-panel "memory")))
+      (unwind-protect
+          (cl-flet ((get (id prop) (plist-get (agent-ui-get id :canvas canvas) prop)))
+            (should (+test-wait-for (lambda () (cdr (get "used-history" :values))) 10))
+            (should (get "processes" :rows))
+            (should (< 0 (get "used" :value) 100))
+            (should (> (plist-get (car (get "figures" :figures)) :value) 0))
+            (should (member (plist-get (car (get "pressure" :tags)) :label)
+                            '("normal" "warning" "critical" "not known")))
+            (should (equal (get "breakdown" :labels)
+                           (if (eq system-type 'darwin)
+                               '("App memory" "Wired" "Compressed" "Cached files" "Free")
+                             '("App memory" "Kernel" "Compressed" "Cached files" "Free"))))
+            (should (cl-every #'numberp (get "breakdown" :values)))
+            (should (> (car (get "breakdown" :values)) 0))
+            (should (cl-every (lambda (series) (plist-get series :values)) (get "compressor" :series)))
+            (should-not (agent-ui-panels--error (buffer-local-value 'agent-ui-panels--state canvas))))
+        (kill-buffer canvas))))))
