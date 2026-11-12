@@ -12,7 +12,9 @@
 
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
 (+test-load "config/childframe" "config/banner" "config/window" "config/tiling" "config/stripe"
-            "config/editor" "config/merge" "config/agent-ui" "config/beads" "config/examples")
+            "config/editor" "config/merge" "config/agent-ui" "config/beads" "config/webkit"
+            "config/mermaid" "config/examples")
+(require 'mermaid-mode)
 (require 'so-long)
 (require 'tab-line)
 
@@ -150,7 +152,8 @@ images/, always that name."
   "Each example listed has its file, its command, its line in
 config/examples.el's list and docs/examples.md's table."
   (should (equal (sort (+my/examples) #'string<)
-                 '("agent-ui" "banner" "excalidraw" "image" "issues" "markdown" "merge" "panel" "pdf" "stripe" "tiling")))
+                 '("agent-ui" "banner" "excalidraw" "image" "issues" "markdown" "merge" "mermaid" "panel" "pdf"
+                   "stripe" "tiling")))
   (let ((listed (with-temp-buffer
                   (insert-file-contents (expand-file-name "config/examples.el" +test-root))
                   (buffer-string)))
@@ -161,6 +164,30 @@ config/examples.el's list and docs/examples.md's table."
       (should (fboundp (intern (format "+my/example-%s" name))))
       (should (string-match-p (format "^;;   %s " (regexp-quote name)) listed))
       (should (string-match-p (format "^| `%s` |" (regexp-quote name)) docs)))))
+
+(ert-deftest examples/mermaid-a-diagram-to-preview ()
+  "The diagram in mermaid-mode; no preview where there's none (batch Emacs:
+no GUI), Mermaid's Live Editor said instead; the file gone once closed."
+  (+test-with-reset
+    (let* ((said nil)
+           (buffer (cl-letf (((symbol-function 'message)
+                              (lambda (format-string &rest args)
+                                (push (apply #'format format-string args) said))))
+                     (+my/example-mermaid)))
+           (file (buffer-file-name buffer))
+           (dir (car (buffer-local-value '+my/example--closing buffer))))
+      (with-current-buffer buffer
+        (should (eq major-mode 'mermaid-mode))
+        (should (string-prefix-p "%% The fruit shop's week" (buffer-string)))
+        (should (string-search "flowchart TD" (buffer-string)))
+        (should (string-search "subgraph report" (buffer-string)))
+        (should-not +my/mermaid-preview-mode))
+      (should (eq (window-buffer (selected-window)) buffer))
+      (should (seq-some (lambda (line) (string-search "SPC m o opens the diagram in Mermaid's Live Editor" line))
+                        said))
+      (kill-buffer buffer)
+      (should-not (file-exists-p file))
+      (should-not (file-exists-p dir)))))
 
 ;; ====== THE HELPERS ======
 

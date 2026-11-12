@@ -4,7 +4,10 @@
 diagrams' keywords coloured, `TAB` indenting. Its commands draw the diagram as an SVG with `mmdc` (mermaid-cli;
 `scripts/tools.sh` installs it), in the theme's colours, in the background: the SVG opens once drawn (a second or so),
 and an error shows Mermaid's message. ```` ```mermaid ```` blocks are coloured in Markdown files, and drawn in
-[Markdown's live preview](markdown.md) and in [Claude Code's replies](claude-code.md#diagrams-in-replies).
+[Markdown's live preview](markdown.md) and in [Claude Code's replies](claude-code.md#diagrams-in-replies). Try it:
+`M-x +my/example-mermaid`.
+
+![A Mermaid file beside its preview](../examples/mermaid.png)
 
 | Key | Action |
 |---|---|

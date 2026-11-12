@@ -8,6 +8,7 @@
 | `pdf` | [A PDF](pdf.md) with dark pages |
 | `image` | [The image viewer](images.md), a picture beside its version in git's HEAD |
 | `markdown` | [The live preview](markdown.md) |
+| `mermaid` | [A Mermaid diagram](mermaid.md) and its preview |
 | `excalidraw` | [A drawing](drawings.md) |
 | `stripe` | [The error stripe](editor.md#error-stripe) |
 | `tiling` | [Tiled panes](editor.md#tiling) |

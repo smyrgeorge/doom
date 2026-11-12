@@ -13,13 +13,15 @@
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/editor"
             "config/webkit" "config/pdf" "config/image" "config/markdown" "config/excalidraw" "config/stripe"
-            "config/tiling" "config/merge" "config/agent-ui" "config/examples")
+            "config/tiling" "config/merge" "config/agent-ui" "config/mermaid" "config/examples")
+(require 'mermaid-mode)
 (global-tab-line-mode 1)
 (global-so-long-mode 1)
 (setq markdown-css-paths '("https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css"))
 
 (defvar +test-examples--pdfjs (+test-pdfjs-dir))
 (defvar +test-examples--excalidraw (+test-excalidraw-dir))
+(defvar +test-examples--mermaid-js (+test-mermaid-js-dir))
 
 (defun +test-examples--folder (buffer)
   "The folder of the example BUFFER is part of."
@@ -104,6 +106,23 @@ the file gone."
            (dir (+test-examples--folder buffer)))
       (should (+test-wait-for #'+my/example-markdown-ready 20))
       (let ((preview (buffer-local-value '+md-preview--buffer buffer)))
+        (should (buffer-live-p preview))
+        (should (get-buffer-window preview))
+        (should (eq (window-buffer (selected-window)) buffer))
+        (kill-buffer buffer)
+        (should-not (buffer-live-p preview)))
+      (should-not (file-exists-p dir)))))
+
+(ert-deftest e2e-examples/mermaid-and-its-preview ()
+  "The diagram, its preview beside it, drawn; closed: the preview with it,
+the file gone."
+  (+test-needs-webkit)
+  (skip-unless +test-examples--mermaid-js)
+  (+test-with-reset
+    (let* ((buffer (+my/example-mermaid))
+           (dir (+test-examples--folder buffer)))
+      (should (+test-wait-for #'+my/example-mermaid-ready 20))
+      (let ((preview (buffer-local-value '+my/mermaid-preview--buffer buffer)))
         (should (buffer-live-p preview))
         (should (get-buffer-window preview))
         (should (eq (window-buffer (selected-window)) buffer))

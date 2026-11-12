@@ -68,6 +68,13 @@ their colours' hues kept, and `SPC m d` turns them light ([more](docs/pdf.md)).
 
 ![Markdown live preview](examples/markdown.png)
 
+### Mermaid diagrams
+
+`.mmd` files open with their diagram beside them, updated as you type, in the theme's colours. ```` ```mermaid ````
+blocks are drawn too: in the Markdown preview, in your agent's replies and on its canvas ([more](docs/mermaid.md)).
+
+![A Mermaid file beside its preview](examples/mermaid.png)
+
 ### Three-way merge
 
 `e` on a conflicted file in Magit shows Yours, the Result and Theirs side by side, lined up and scrolling together.

@@ -46,12 +46,14 @@ not selected (a hollow box in the panes), a cursor that doesn't blink."
       (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
   (require 'doom-themes)
   (+test-load "config/childframe" "config/banner" "config/window" "config/editor"
-              "config/webkit" "config/pdf" "config/image" "config/markdown" "config/excalidraw"
-              "config/stripe" "config/tiling" "config/merge" "config/agent-ui" "config/beads"
-              "config/examples")
-  ;; PDF.js and Excalidraw: copies of Doom's, not downloaded again.
+              "config/webkit" "config/pdf" "config/image" "config/markdown" "config/mermaid"
+              "config/excalidraw" "config/stripe" "config/tiling" "config/merge" "config/agent-ui"
+              "config/beads" "config/examples")
+  (require 'mermaid-mode)               ; *.mmd in it (its autoloads)
+  ;; PDF.js, Excalidraw and mermaid.js: copies of Doom's, not downloaded again.
   (+test-pdfjs-dir)
   (+test-excalidraw-dir)
+  (+test-mermaid-js-dir)
   ;; As Doom has them: line numbers in code, text and conf buffers; the
   ;; current line in every window; the git gutter (its ui/vc-gutter +pretty:
   ;; thin bars in the left fringe, flycheck's arrows in the right).

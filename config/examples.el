@@ -16,6 +16,7 @@
 ;;   image       a picture in the image viewer (config/image.el), changed
 ;;               since git's HEAD, its version there beside it
 ;;   markdown    a Markdown file and its live preview (config/markdown.el)
+;;   mermaid     a Mermaid file and its preview (config/mermaid.el)
 ;;   excalidraw  a drawing in Excalidraw (config/excalidraw.el)
 ;;   stripe      the error stripe (config/stripe.el) of a file with errors,
 ;;               warnings and git changes
