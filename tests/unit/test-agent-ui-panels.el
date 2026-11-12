@@ -524,6 +524,70 @@ again (doom-3q5.5)."
   ;; Kept out of the repository, where Doom keeps its data.
   (should (equal agent-ui-panel-trust-file (expand-file-name "agent-ui/trusted-panels.eld" doom-data-dir))))
 
+(ert-deftest agent-ui-panels/a-trusted-project-s-panels-unasked ()
+  "Its project trusted (p): its panels run unasked, after a change too, a new
+one too; another project's still asked about; the projects trusted listed,
+one forgotten: its panels asked about again (doom-a3g)."
+  (+test-aup `(("counted" . ,(+test-aup-fixture "counted"))
+               ("other" . ,(concat (+test-aup-fixture "counted") ";; another\n")))
+    (let* ((agent-ui-panel-trust-file (expand-file-name "trusted.eld" (make-temp-file "trust-" t)))
+           (agent-ui-panel-allow-function #'agent-ui-panels--allowed-p)
+           (file (agent-ui-panel-file "counted"))
+           (answers nil) (asked 0) (choices nil))
+      ;; A file let run by its content before: kept beside the project.
+      (agent-ui-panel-trust (agent-ui-panel-file "other" root))
+      (cl-letf (((symbol-function 'read-multiple-choice)
+                 (lambda (_prompt options &rest _)
+                   (cl-incf asked)
+                   (setq choices (mapcar #'car options))
+                   (list (pop answers)))))
+        (save-window-excursion
+          (setq answers (list ?p))
+          (let ((canvas (agent-ui-open-panel "counted")))
+            (should (= asked 1))
+            (should (equal choices '(?y ?p ?v ?n)))
+            (should (agent-ui-panels--script (buffer-local-value 'agent-ui-panels--state canvas)))
+            (kill-buffer canvas))
+          (should (agent-ui-panel-project-trusted-p root))
+          (should (equal (mapcar #'car (agent-ui-panel-trusted-projects)) (list (file-truename root))))
+          (should (agent-ui-panel-trusted-p (agent-ui-panel-file "other" root)))
+          ;; Changed, a new one: not asked; the agent told they're let run.
+          (with-temp-file file (insert (+test-aup-fixture "counted") ";; changed\n"))
+          (with-temp-file (expand-file-name "new.el" (expand-file-name agent-ui-panel-directory root))
+            (insert (+test-aup-fixture "counted")))
+          (should (agent-ui-panel-trusted-p file))
+          (kill-buffer (agent-ui-open-panel "counted" root))
+          (kill-buffer (agent-ui-open-panel "new" root))
+          (should (= asked 1))
+          ;; Another project: asked.
+          (let ((elsewhere (file-name-as-directory (make-temp-file "panels-elsewhere-" t))))
+            (unwind-protect
+                (progn
+                  (make-directory (expand-file-name agent-ui-panel-directory elsewhere) t)
+                  (with-temp-file (expand-file-name "counted.el" (expand-file-name agent-ui-panel-directory elsewhere))
+                    (insert (+test-aup-fixture "counted")))
+                  (should-not (agent-ui-panel-project-trusted-p elsewhere))
+                  (setq answers (list ?n))
+                  (kill-buffer (agent-ui-open-panel "counted" elsewhere))
+                  (should (= asked 2)))
+              (delete-directory elsewhere t)))
+          ;; Forgotten (M-x, the trusted ones to pick from): asked again; the
+          ;; file let run by its content still runs.
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_prompt collection &rest _)
+                       (should (equal collection (list (abbreviate-file-name (file-truename root)))))
+                       (car collection))))
+            (call-interactively #'agent-ui-panel-forget-project))
+          (should-not (agent-ui-panel-project-trusted-p root))
+          (should-not (agent-ui-panel-trusted-projects))
+          (should-not (agent-ui-panel-trusted-p file))
+          (should (agent-ui-panel-trusted-p (agent-ui-panel-file "other" root)))
+          (setq answers (list ?n))
+          (kill-buffer (agent-ui-open-panel "counted" root))
+          (should (= asked 3))
+          ;; None left: said so.
+          (should-error (call-interactively #'agent-ui-panel-forget-project) :type 'user-error))))))
+
 ;; ====== THE AGENT AND PANELS ======
 
 (defun +test-aup-request (lines &optional payload)

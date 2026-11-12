@@ -334,10 +334,16 @@ its elements' sources) is to run: non-nil lets it.")
 
 ;; ====== TRUSTING ONE ======
 ;; A panel's file comes from a repository and runs as Emacs itself: before
-;; its code first runs, the user is asked (run it, view its file first, or not
-;; now); run, it's remembered by its file's content (sha256), in
-;; `agent-ui-panel-trust-file': asked again once it changes. Not now: drawn,
-;; nothing run, said on it; gR asks again.
+;; its code first runs, the user is asked (run it, trust its project, view its
+;; file first, or not now); run, it's remembered by its file's content
+;; (sha256), in `agent-ui-panel-trust-file': asked again once it changes. Not
+;; now: drawn, nothing run, said on it; gR asks again.
+;; Its project trusted (p): every panel of the project runs without asking,
+;; whatever its file becomes (a panel being built, an agent editing it, asked
+;; about after each change), remembered by its root in the same file: the
+;; project's code trusted, the scripts its panels run too (which a panel's
+;; content never covered). M-x agent-ui-panel-forget-project lists the
+;; projects trusted and forgets one: its panels asked about again.
 
 (defcustom agent-ui-panel-trust-file (locate-user-emacs-file "agent-ui/trusted-panels.eld")
   "Where the panels whose code the user let run are remembered: their
@@ -352,7 +358,8 @@ files' content's sha256."
     (secure-hash 'sha256 (current-buffer))))
 
 (defun agent-ui-panels--trusted ()
-  "The trusted panels: ((HASH FILE TIME) ...)."
+  "The trusted panels, ((HASH FILE TIME) ...), and projects, (:project ROOT
+TIME)."
   (when (file-readable-p agent-ui-panel-trust-file)
     (condition-case nil
         (with-temp-buffer
@@ -361,37 +368,97 @@ files' content's sha256."
             (and (listp data) data)))
       (error nil))))
 
+(defun agent-ui-panels--write-trusted (entries)
+  "Make ENTRIES (see `agent-ui-panels--trusted') the trusted ones."
+  (make-directory (file-name-directory agent-ui-panel-trust-file) t)
+  (with-temp-file agent-ui-panel-trust-file
+    (let ((print-length nil) (print-level nil))
+      (insert ";; Agent UI: the project panels whose code was let run, by content (sha256),\n"
+              ";; and the projects whose panels all run, by root.\n")
+      (prin1 entries (current-buffer))
+      (insert "\n"))))
+
+(defun agent-ui-panels--project (root)
+  "ROOT, a project's, as it's remembered: its true name, a folder."
+  (file-name-as-directory (file-truename (expand-file-name root))))
+
+(defun agent-ui-panel-trusted-projects ()
+  "The projects whose panels all run: ((ROOT . TIME) ...), the latest first."
+  (cl-loop for entry in (agent-ui-panels--trusted)
+           when (eq (car-safe entry) :project)
+           collect (cons (nth 1 entry) (nth 2 entry))))
+
+(defun agent-ui-panel-project-trusted-p (root)
+  "Whether the project at ROOT is trusted: its panels all run."
+  (and root (assoc (agent-ui-panels--project root) (agent-ui-panel-trusted-projects)) t))
+
 (defun agent-ui-panel-trusted-p (file)
-  "Whether panel FILE's code, as it is now, was let run."
-  (and (assoc (agent-ui-panels--hash file) (agent-ui-panels--trusted)) t))
+  "Whether panel FILE's code may run unasked: its project trusted, or the
+file, as it is now, let run."
+  (and (or (agent-ui-panel-project-trusted-p (agent-ui-panel-root (file-name-directory (expand-file-name file))))
+           (assoc (agent-ui-panels--hash file) (agent-ui-panels--trusted)))
+       t))
 
 (defun agent-ui-panel-trust (file)
   "Remember panel FILE's code, as it is now, as let run (its older contents
 forgotten)."
-  (let* ((file (expand-file-name file))
-         (entries (cons (list (agent-ui-panels--hash file) file (format-time-string "%FT%T%z"))
-                        (seq-remove (lambda (e) (equal (nth 1 e) file)) (agent-ui-panels--trusted)))))
-    (make-directory (file-name-directory agent-ui-panel-trust-file) t)
-    (with-temp-file agent-ui-panel-trust-file
-      (let ((print-length nil) (print-level nil))
-        (insert ";; Agent UI: the project panels whose code was let run, by content (sha256).\n")
-        (prin1 entries (current-buffer))
-        (insert "\n")))))
+  (let ((file (expand-file-name file)))
+    (agent-ui-panels--write-trusted
+     (cons (list (agent-ui-panels--hash file) file (format-time-string "%FT%T%z"))
+           (seq-remove (lambda (e) (and (stringp (car-safe e)) (equal (nth 1 e) file)))
+                       (agent-ui-panels--trusted))))))
+
+(defun agent-ui-panel-trust-project (root)
+  "Trust the project at ROOT: its panels all run, unasked, whatever their
+files become."
+  (let ((root (agent-ui-panels--project root)))
+    (agent-ui-panels--write-trusted
+     (cons (list :project root (format-time-string "%FT%T%z"))
+           (seq-remove (lambda (e) (and (eq (car-safe e) :project) (equal (nth 1 e) root)))
+                       (agent-ui-panels--trusted))))))
+
+(defun agent-ui-panel-forget-project (root)
+  "Stop trusting the project at ROOT: its panels asked about again (those
+let run as they are now, by their content, still run). Interactively, the
+projects trusted to pick from."
+  (interactive
+   (let* ((projects (or (agent-ui-panel-trusted-projects)
+                        (user-error "No project is trusted: each panel is asked about")))
+          (names (mapcar (lambda (p) (abbreviate-file-name (car p))) projects))
+          (completion-extra-properties
+           (list :annotation-function
+                 (lambda (name)
+                   (concat "  trusted " (cdr (nth (seq-position names name) projects)))))))
+     (list (completing-read "Stop trusting the panels of: " names nil t))))
+  (let ((root (agent-ui-panels--project root)))
+    (unless (agent-ui-panel-project-trusted-p root)
+      (user-error "%s isn't trusted" (abbreviate-file-name root)))
+    (agent-ui-panels--write-trusted
+     (seq-remove (lambda (e) (and (eq (car-safe e) :project) (equal (nth 1 e) root)))
+                 (agent-ui-panels--trusted)))
+    (message "Agent UI: %s's panels asked about again" (abbreviate-file-name root))))
 
 (defun agent-ui-panels--allowed-p (panel)
-  "Whether PANEL's code may run: its file trusted as it is; else the user
-asked (it view-ed first if they say), a yes remembered."
-  (let ((file (agent-ui-panels--file panel)))
-    (or (agent-ui-panel-trusted-p file)
+  "Whether PANEL's code may run: its project trusted, or its file as it is;
+else the user asked (it view-ed first if they say), a yes remembered: for
+the file, or for its whole project."
+  (let ((file (agent-ui-panels--file panel))
+        (root (agent-ui-panels--root panel)))
+    (or (agent-ui-panel-project-trusted-p root)
+        (agent-ui-panel-trusted-p file)
         (let ((answer nil))
           (while (not answer)
             (pcase (car (read-multiple-choice
                          (format "Panel %s runs code from %s, as Emacs itself (its commands too). Run it?"
                                  (agent-ui-panels--name panel) (abbreviate-file-name file))
-                         '((?y "run it" "Let its code run, remembered until its file changes")
+                         `((?y "run it" "Let its code run, remembered until its file changes")
+                           (?p "trust the project"
+                               ,(format "Let all of %s's panels run, whatever they become (M-x agent-ui-panel-forget-project undoes it)"
+                                        (abbreviate-file-name root)))
                            (?v "view it" "Its file first, read-only; asked again after")
                            (?n "not now" "Drawn, nothing run (gR asks again)"))))
               (?y (agent-ui-panel-trust file) (setq answer 'yes))
+              (?p (agent-ui-panel-trust-project root) (setq answer 'yes))
               (?v (view-file-other-window file))
               (_ (setq answer 'no))))
           (eq answer 'yes)))))

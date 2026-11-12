@@ -413,11 +413,14 @@ and `:stop` run when it opens and closes; `:version` is 1. `agent-ui check NAME`
 as it's written, nothing run: its `:ui` as `show` would, its code compiled (its warnings), and the calls in it that
 wait, freezing Emacs (`shell-command-to-string`, `call-process`, `sleep-for`...).
 
-Its code runs as Emacs itself, and comes from a repository: before it first runs, you're asked: `y` run it, `v` view
-its file first (read-only, then asked again), `n` not now (drawn, nothing run, said on it; `gR` asks again). Its
-elements' `source`s, commands, are its code too: not started before. A yes is remembered by the file's content
-(sha256), in Doom's `.local/etc/agent-ui/trusted-panels.eld` (`agent-ui-panel-trust-file`), not in the repository:
-the same file isn't asked about again, after a restart too; once it changes (a pull, an edit), it is. Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes,
+Its code runs as Emacs itself, and comes from a repository: before it first runs, you're asked: `y` run it, `p` trust
+the project, `v` view its file first (read-only, then asked again), `n` not now (drawn, nothing run, said on it; `gR`
+asks again). Its elements' `source`s, commands, are its code too: not started before. A yes is remembered by the
+file's content (sha256), in Doom's `.local/etc/agent-ui/trusted-panels.eld` (`agent-ui-panel-trust-file`), not in the
+repository: the same file isn't asked about again, after a restart too; once it changes (a pull, an edit), it is. A
+trusted project's panels all run without asking, whatever their files become (while your agent builds one, say):
+the project's code is trusted, the scripts they run too. `M-x agent-ui-panel-forget-project` lists the trusted
+projects and stops trusting one. Then `:start`, `:fetch` at once and every `:every` seconds, `:stop` when it closes,
 each called with the panel, in the project's root. It fills the panel with `agent-ui-panel-update` and
 `agent-ui-panel-append` (as `agent-ui update` and `append`, on its own elements), `agent-ui-panel-get`, and
 `agent-ui-panel-run`, a command run without waiting however long it takes (a database's query: minutes), its output
