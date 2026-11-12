@@ -34,7 +34,9 @@
 ;; A page's script (`mmd'): mermaid.js set up with the theme's config, a
 ;; diagram drawn into an element. A drawing asked while another is under way:
 ;; the last asked wins (one finishing late doesn't replace it). Mermaid's
-;; message for an error: the element keeps what it showed.
+;; message for an error: the element keeps what it showed. Its SVG's root
+;; keeps the spaces a <tspan> starts with (xml:space): WebKitGTK dropped them,
+;; as librsvg does ("Write thecode", mermaid/render.el).
 (defconst +my/mermaid-page-js
   "window.mmd = (function () {
   var count = 0, latest = new WeakMap();
@@ -47,7 +49,8 @@
     latest.set(element, id);
     try {
       var result = await mermaid.render(id, source);
-      if (latest.get(element) === id) element.innerHTML = result.svg;
+      if (latest.get(element) === id)
+        element.innerHTML = result.svg.replace(/<svg\\b/, '<svg xml:space=\"preserve\"');
       return null;
     } catch (e) {
       return String((e && e.message) || e);

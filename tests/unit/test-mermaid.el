@@ -767,7 +767,10 @@ window on *scratch*, and again after."
       ;; A </script> in the diagram doesn't end the page's script.
       (should (= 3 (with-temp-buffer (insert page) (count-matches "</script>" (point-min) (point-max)))))
       (should (string-search "<\\/script>" page))
-      (should (string-search "window.mmd" page)))))
+      (should (string-search "window.mmd" page))
+      ;; Its diagrams keep their words' spaces: WebKitGTK dropped a
+      ;; <tspan>'s leading one ("Write thecode").
+      (should (string-search "result.svg.replace(/<svg\\b/, '<svg xml:space=\"preserve\"')" page)))))
 
 (ert-deftest mermaid/preview-follows-typing ()
   "Redrawn ≈0.3 s after typing stops, in each of its views, without reloading."
