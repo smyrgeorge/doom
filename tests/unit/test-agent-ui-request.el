@@ -248,8 +248,15 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
                                 :command (cons +test-aur-script args)
                                 :connection-type 'pipe :noquery t :sentinel #'+test-process-sentinel
                                 :stderr (get-buffer-create " *agent-ui-stderr*"))))
-    (when stdin (process-send-string process stdin))
-    (process-send-eof process)
+    ;; A wrong use may have exited already (at once, 2): a finished process
+    ;; can't be sent its input or its end ("Process agent-ui not running",
+    ;; CI's Linux once).
+    (when (process-live-p process)
+      (condition-case nil
+          (progn (when stdin (process-send-string process stdin))
+                 (process-send-eof process))
+        (error (when (process-live-p process)
+                 (error "Couldn't send cmd/agent-ui its input")))))
     (with-timeout (20 (delete-process process) (ert-fail "cmd/agent-ui didn't end"))
       ;; Its output all read: not merely ended (`+test-process-sentinel').
       (while (not (+test-process-ended-p process))
