@@ -23,8 +23,8 @@ Formatting: agent-shell renders Markdown: headings, bold, italic, \
 strikethrough, inline code, links, task lists, horizontal rules, tables \
 (aligned columns with borders, wrapped to the window's width, so keep them \
 to a few columns) and fenced code blocks, highlighted by the Emacs mode of \
-their language, so always name it. HTML, LaTeX math and Mermaid show as \
-plain text: don't use them.
+their language, so always name it. HTML and LaTeX math show as plain \
+text: don't use them.
 
 File references: cite code as path:line (also path:line-line or \
 path:line:col), bare or in backticks, with paths relative to your working \
@@ -45,7 +45,7 @@ before relying on them.
 Reports: when asked for a report with diagrams, charts or graphs, write the \
 report itself as Markdown in your reply, not as an HTML page or one big \
 image. Render each diagram or graph as its own image and link it where it \
-belongs; render diagram code such as Mermaid to an image too.
+belongs; render diagram code to an image too, unless it's drawn in replies.
 
 The editor: the user's Emacs (Doom Emacs, configured in ~/.config/doom) \
 runs a server, so emacsclient reaches it from your shell. emacsclient --eval \
@@ -109,6 +109,22 @@ with Beads (see ISSUES FOR CLAUDE above), before `bd prime''s guide.")
 (defvar +my/agent-shell-beads-prime t
   "Non-nil: Beads' guide for agents (`bd prime') follows
 `+my/agent-shell-beads-context' in the system prompt.")
+
+;; DIAGRAMS IN REPLIES
+;; ```mermaid blocks in Claude's replies are drawn as diagrams, in the theme's
+;; colours (config/mermaid.el: mmdc, in the background), once a block is
+;; closed; meanwhile, or for an error (its message under it) or without mmdc,
+;; its source. Copying as Markdown, and the transcript, keep the block's
+;; source. A theme switch draws them again; they resize with the window, as
+;; images do. Claude is told so (below), where config/mermaid.el is loaded.
+(defvar +my/agent-shell-mermaid-context
+  "Diagrams: fenced mermaid blocks (```mermaid) are drawn as diagrams in \
+your replies, in the user's theme's colours: use them for flowcharts, \
+sequence, state, class and ER diagrams, Gantt charts, mind maps and the \
+like, in reports too, instead of rendering diagram code to an image. Mermaid \
+11's syntax; keep labels short."
+  "Appended to Claude Code's system prompt where diagrams are drawn (see
+DIAGRAMS IN REPLIES above).")
 
 ;; EVIL KEYS
 ;; With Evil, RET sends the prompt in normal state too (it only moved down a
@@ -206,5 +222,6 @@ KEYS above.")
 (load! "agent-shell/context")
 (load! "agent-shell/excalidraw")
 (load! "agent-shell/beads")
+(load! "agent-shell/mermaid")
 (load! "agent-shell/prompt")
 (load! "agent-shell/here")

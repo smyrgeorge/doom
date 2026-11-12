@@ -223,9 +223,9 @@ puts it in a new pane (config/tiling/apps.el)."
   (let ((text +my/agent-shell-claude-context))
     (dolist (thing '("Markdown" "tables" "fenced code blocks" "always name it"))
       (should (string-match-p (regexp-quote thing) text)))
-    ;; What doesn't render.
-    (should (string-match-p "HTML, LaTeX math and Mermaid show as plain text: don't use them"
-                            text))))
+    ;; What doesn't render (Mermaid does: config/agent-shell/mermaid.el).
+    (should (string-match-p "HTML and LaTeX math show as plain text: don't use them" text))
+    (should-not (string-match-p "Mermaid" text))))
 
 (ert-deftest agent-shell/context-file-references ()
   (let ((text +my/agent-shell-claude-context))
@@ -247,7 +247,7 @@ puts it in a new pane (config/tiling/apps.el)."
     (should (string-match-p "report itself as Markdown in your reply, not as an HTML page or one big image"
                             text))
     (should (string-match-p "Render each diagram or graph as its own image" text))
-    (should (string-match-p "Mermaid to an image" text))))
+    (should (string-match-p "render diagram code to an image too, unless it's drawn in replies" text))))
 
 (ert-deftest agent-shell/context-the-editor ()
   (let ((text +my/agent-shell-claude-context))

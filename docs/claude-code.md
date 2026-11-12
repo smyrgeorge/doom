@@ -21,6 +21,12 @@ progress bars, checklists, tables, updated as work goes on ([Agent UI](agent-ui.
 comes on the canvas, your answer its next prompt. While you're in another app, a [notification](notifications.md) says
 when a session finished its turn or asks for your permission.
 
+## Diagrams in replies
+
+Claude's ```` ```mermaid ```` blocks are drawn as diagrams in its replies, in the theme's colours
+([Mermaid](mermaid.md)), once a block is complete: its source shows until then, and with an error, Mermaid's message
+under it. Copying a reply as Markdown, and its transcript, keep the source. Claude is told to use them for diagrams.
+
 ## Claude's diffs
 
 A change Claude asks permission for opens as a diff with `v`. The keys its header line names work in normal state:

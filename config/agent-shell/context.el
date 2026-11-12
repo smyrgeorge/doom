@@ -26,8 +26,8 @@ to read well on it: %s."
 (defvar +my/agent-shell-claude-context-functions (list #'+my/agent-shell-claude-theme)
   "Functions each returning more for Claude Code's system prompt, or nil,
 appended after `+my/agent-shell-claude-context' in this order: the theme's
-line; a project's issues (config/agent-shell/beads.el); the Agent UI canvas
-\(config/agent-ui.el).")
+line; a project's issues (config/agent-shell/beads.el); Mermaid's diagrams
+\(config/agent-shell/mermaid.el); the Agent UI canvas (config/agent-ui.el).")
 
 (defadvice! +my/agent-shell-claude-context-a (config)
   "Append `+my/agent-shell-claude-context' (and what

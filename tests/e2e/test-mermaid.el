@@ -8,13 +8,16 @@
 ;; WebKit (mermaid.js: Doom's, copied; skipped without it or xwidgets): drawn,
 ;; redrawn as you type, an error under the last drawing, re-themed, zoomed.
 ;; ```mermaid blocks in Markdown's live preview (pandoc too): drawn, only an
-;; edited one drawn again, an error in place, re-themed with the page.
+;; edited one drawn again, an error in place, re-themed with the page. In a
+;; reply of Claude Code's, as agent-shell renders it: drawn, copied back.
 
 (require 'markdown-mode)
 ;; The Markdown preview's stylesheets (Doom's markdown module sets GitHub's).
 (setq markdown-css-paths '("https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css"))
+(defvar doom-disabled-packages nil)     ; `use-package!' reads it (Doom's)
 (+test-load "config/childframe" "config/banner" "config/window" "config/webkit" "config/markdown"
-            "config/mermaid")
+            "config/agent-shell" "config/mermaid")
+(require 'agent-shell)
 
 ;; mermaid.js: Doom's, copied into the temp data folder.
 (defvar +test-mermaid--js (+test-mermaid-js-dir))
@@ -339,3 +342,29 @@ preview and files closed after."
                                              (downcase (+test-mermaid--page xwidget "document.querySelector('div.mermaid-diagram svg').outerHTML"))))
                    10)))
         (with-current-buffer md (+md-preview-mode -1))))))
+
+;; ====== IN CLAUDE CODE'S REPLIES ======
+
+(ert-deftest e2e-mermaid/a-reply-s-diagram ()
+  "A reply rendered as agent-shell renders it: its block drawn by the real
+mmdc, an image Emacs draws, as wide as the window at most; copied, the reply
+as it came."
+  (+test-mermaid--needs-mmdc)
+  (+test-mermaid--fresh
+    (let ((reply "Here:\n\n```mermaid\nsequenceDiagram\n    You->>Emacs: a reply\n```\n\nDone.\n"))
+      (with-current-buffer (get-buffer-create "*reply*")
+        (switch-to-buffer (current-buffer))
+        (unwind-protect
+            (progn
+              (insert reply)
+              (agent-shell-markdown-replace-markup)
+              (should (+test-wait-for
+                       (lambda () (when-let* ((region (car (+my/agent-shell-mermaid--regions))))
+                                    (eq (car-safe (get-text-property (car region) 'display)) 'image)))
+                       60))
+              (let* ((region (car (+my/agent-shell-mermaid--regions)))
+                     (size (image-size (get-text-property (car region) 'display) t)))
+                (should (> (car size) 100))
+                (should (<= (car size) (window-body-width nil t))))
+              (should (equal (agent-shell-markdown-reconstruct (point-min) (point-max)) reply)))
+          (kill-buffer))))))
