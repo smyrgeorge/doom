@@ -12,6 +12,9 @@ its pane was closed. `SPC m p` closes the preview when it's on screen.
 In the preview, `j` / `k`, `C-d` / `C-u` and `gg` / `G` scroll, `y` (or `Cmd+C`; Linux: `Ctrl+Shift+C`) copies and `q`
 closes it.
 
+```` ```mermaid ```` blocks show as diagrams in the preview, in the theme's colours ([Mermaid](mermaid.md)), redrawn as
+you edit them; one with an error shows Mermaid's message under its last drawing.
+
 The preview needs an Emacs with xwidgets (WebKit; see [PDFs](pdf.md)) and works with any pandoc (Debian's and Ubuntu's
 too). Without xwidgets, or in a terminal, `SPC m p` is markdown-mode's preview (eww), updated on save.
 

@@ -7,8 +7,14 @@
 ;; headless Chrome): each waits up to a minute. A Mermaid file's preview in
 ;; WebKit (mermaid.js: Doom's, copied; skipped without it or xwidgets): drawn,
 ;; redrawn as you type, an error under the last drawing, re-themed, zoomed.
+;; ```mermaid blocks in Markdown's live preview (pandoc too): drawn, only an
+;; edited one drawn again, an error in place, re-themed with the page.
 
-(+test-load "config/childframe" "config/banner" "config/window" "config/webkit" "config/mermaid")
+(require 'markdown-mode)
+;; The Markdown preview's stylesheets (Doom's markdown module sets GitHub's).
+(setq markdown-css-paths '("https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css"))
+(+test-load "config/childframe" "config/banner" "config/window" "config/webkit" "config/markdown"
+            "config/mermaid")
 
 ;; mermaid.js: Doom's, copied into the temp data folder.
 (defvar +test-mermaid--js (+test-mermaid-js-dir))
@@ -261,3 +267,75 @@ preview and files closed after."
             (+my/mermaid-preview-mode -1)
             (set-buffer-modified-p nil))
           (kill-buffer mmd))))))
+
+;; ====== IN MARKDOWN'S PREVIEW ======
+
+(defun +test-mermaid--md-xwidget (md)
+  "MD's Markdown preview's view, once its page has drawn its diagrams."
+  (+test-wait-for
+   (lambda ()
+     (let* ((preview (buffer-local-value '+md-preview--buffer md))
+            (window (and (buffer-live-p preview) (get-buffer-window preview))))
+       (when window
+         (with-current-buffer preview
+           (let ((xwidget (+my/webkit-xwidget window)))
+             (and xwidget
+                  (equal (+test-mermaid--page
+                          xwidget "document.querySelectorAll('div.mermaid-diagram svg').length")
+                         "2")
+                  xwidget))))))
+   20))
+
+(ert-deftest e2e-mermaid/markdown-preview-draws-its-blocks ()
+  (+test-mermaid--preview
+    (unless (executable-find "pandoc") (ert-skip "No pandoc"))
+    (let ((md (find-file (+test-file "mermaid/doc.md"
+                                     (concat "# Diagrams\n\n```mermaid\nflowchart LR\n    A[First] --> B\n```\n\n"
+                                             "Between.\n\n```mermaid\nsequenceDiagram\n    You->>Emacs: Second\n```\n")))))
+      (markdown-mode)
+      (let ((this-command '+my/markdown-preview-toggle))
+        (+my/markdown-preview-toggle))
+      (let ((xwidget (+test-mermaid--md-xwidget md))
+            (preview (buffer-local-value '+md-preview--buffer md)))
+        (should xwidget)
+        (should (string-search "First" (+test-mermaid--page xwidget "document.body.innerText")))
+        (should (string-search "Second" (+test-mermaid--page xwidget "document.body.innerText")))
+        ;; The theme's colours, the scroll's source lines kept.
+        (should (string-search (downcase (face-foreground 'font-lock-keyword-face))
+                               (downcase (+test-mermaid--page xwidget "document.querySelector('div.mermaid-diagram svg').outerHTML"))))
+        (should (equal (+test-mermaid--page xwidget "document.querySelector('div.mermaid-diagram').getAttribute('data-pos')")
+                       "3:1-7:1"))
+        ;; One block edited: only it is drawn again.
+        (+test-mermaid--page xwidget "(window.renders = 0, (function(r){ mermaid.render = function(){ renders++; return r.apply(this, arguments); }; })(mermaid.render), 0)")
+        (with-current-buffer md
+          (goto-char (point-min))
+          (search-forward "A[First]")
+          (replace-match "A[Edited]"))
+        (should (+test-wait-for
+                 (lambda () (string-search "Edited" (+test-mermaid--page xwidget "document.body.innerText")))
+                 10))
+        (should (equal (+test-mermaid--page xwidget "window.renders") "1"))
+        (should (string-search "Second" (+test-mermaid--page xwidget "document.body.innerText")))
+        ;; An error: Mermaid's message in place, its last drawing kept.
+        (with-current-buffer md
+          (search-forward "-->")
+          (replace-match "--> -->"))
+        (should (+test-wait-for
+                 (lambda () (string-search "Parse error"
+                                           (+test-mermaid--page xwidget "(document.querySelector('.mermaid-error') || {}).textContent")))
+                 10))
+        (should (string-search "Edited" (+test-mermaid--page xwidget "document.querySelector('div.mermaid-diagram').textContent")))
+        ;; Re-themed with the page.
+        (with-current-buffer md
+          (search-backward "--> -->")
+          (replace-match "-->"))
+        (should (+test-wait-for
+                 (lambda () (equal (+test-mermaid--page xwidget "document.querySelectorAll('.mermaid-error').length") "0"))
+                 10))
+        (+test-mermaid--theme 'doom-one-light)
+        (with-current-buffer preview
+          (should (+test-wait-for
+                   (lambda () (string-search (downcase (face-foreground 'font-lock-keyword-face))
+                                             (downcase (+test-mermaid--page xwidget "document.querySelector('div.mermaid-diagram svg').outerHTML"))))
+                   10)))
+        (with-current-buffer md (+md-preview-mode -1))))))

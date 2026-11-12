@@ -14,7 +14,7 @@
 (defvar-local +md-preview--file nil)
 
 (defconst +md-preview--highlight-js
-  "document.querySelectorAll('pre > code').forEach(function(c){
+  "document.querySelectorAll('pre:not(.mermaid) > code').forEach(function(c){
      var l=(c.parentElement.className||'').split(' ')[0];
      if(l && c.className.indexOf('language-')<0) c.classList.add('language-'+l);
      if(window.hljs && !c.dataset.highlighted) hljs.highlightElement(c);
@@ -111,6 +111,8 @@ GitHub's alerts get GitHub's markup (`+md-preview--alerts-filter')."
    "<script>" +md-preview--anchors-js
    "document.addEventListener('DOMContentLoaded',function(){"
    +md-preview--highlight-js "});</script>"
+   ;; ```mermaid blocks as diagrams (markdown/mermaid.el).
+   (+md-preview--mermaid-head)
    "</head><body class='markdown-body'>" fragment "</body></html>"))
 
 (defun +md-preview--live-p ()
@@ -132,6 +134,7 @@ config/webkit.el)."
 page as it was (swapping its content, not reloading it)."
   (concat "document.body.innerHTML=" (json-encode (+md-preview--fragment)) ";"
           +md-preview--highlight-js
+          (+md-preview--mermaid-draw-script)
           (format +md-preview--scroll-js (line-number-at-pos))))
 
 (defun +md-preview--update (buf)
@@ -191,7 +194,8 @@ otherwise follow the OS (one) or are light only (the other)."
      (mapconcat (lambda (css)
                   (format "var l=document.getElementById('md-css-%d');if(l)l.href=%S;" (cl-incf n) css))
                 (+md-preview--stylesheets)
-                ""))))
+                "")
+     (+md-preview--mermaid-theme-script))))
 
 (defvar-local +md-preview--background-cookie nil
   "The preview pane's background remap (`face-remap-add-relative').")

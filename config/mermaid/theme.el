@@ -120,15 +120,17 @@ it has one (a graphical frame)."
   (when background
     (format "[id*=\"_er-\"] circle { fill: %s; }" background)))
 
-(defun +my/mermaid-config ()
+(defun +my/mermaid-config (&optional background)
   "Mermaid's config in the current theme's colours: an alist for
 `json-serialize' (mmdc's -c file, mermaid.initialize in a page). Its base
 theme, every colour from a face (see `+my/mermaid--colours'): none written
 here. The classic look: the newer one's borders blend two colours and its
 shadows glow on a dark background. HTML labels off: SVG's own text, which
-Emacs's SVG library draws (it draws no HTML)."
+Emacs's SVG library draws (it draws no HTML). BACKGROUND (#rrggbb): what the
+diagram is drawn on, if not the theme's (a page's own colour): what default's
+background gives, and the tints blended into it."
   (let* ((frame (+my/mermaid--frame))
-         (background (+my/mermaid--face-colour 'default :background frame))
+         (background (or background (+my/mermaid--face-colour 'default :background frame)))
          (accents (+my/mermaid--accent-colours frame))
          (tints (and background
                      (mapcar (lambda (colour) (+my/mermaid--blend colour background 0.35)) accents)))
@@ -141,7 +143,9 @@ Emacs's SVG library draws (it draws no HTML)."
                                      t :false)))
            (+my/mermaid--font frame)
            (cl-loop for (variable face attribute amount) in +my/mermaid--colours
-                    for colour = (+my/mermaid--face-colour face attribute frame)
+                    for colour = (if (and (eq face 'default) (eq attribute :background))
+                                     background
+                                   (+my/mermaid--face-colour face attribute frame))
                     when (and colour (or (not amount) background))
                     collect (cons variable (if amount (+my/mermaid--blend colour background amount) colour)))
            (+my/mermaid--series "pie" 12 accents 1)
@@ -159,9 +163,9 @@ Emacs's SVG library draws (it draws no HTML)."
       (htmlLabels . :false)
       (flowchart (htmlLabels . :false)))))
 
-(defun +my/mermaid-config-json ()
-  "`+my/mermaid-config' as JSON."
-  (decode-coding-string (json-serialize (+my/mermaid-config)) 'utf-8))
+(defun +my/mermaid-config-json (&optional background)
+  "`+my/mermaid-config' as JSON (BACKGROUND: see there)."
+  (decode-coding-string (json-serialize (+my/mermaid-config background)) 'utf-8))
 
 (defvar +my/mermaid--json nil "The config's JSON as the last theme made it.")
 

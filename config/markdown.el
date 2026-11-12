@@ -27,6 +27,14 @@
 (defvar +my/markdown-preview-notice t
   "Offer the live preview in a notice when a Markdown file opens.")
 
+;; MERMAID DIAGRAMS
+;; ```mermaid blocks show as diagrams in the live preview, drawn by mermaid.js
+;; (config/mermaid.el: downloaded once), in the theme's colours on the page's
+;; background, redrawn as you edit them (only a block that changed), re-themed
+;; with the page; an error shows Mermaid's message under the block's last
+;; drawing. In the Markdown buffer a block stays text, coloured by
+;; mermaid-mode.
+
 ;; REFLOWED ON SCREEN
 ;; A file filled at 120 columns in a narrower pane wrapped raggedly (a short
 ;; row after each source line). In markdown-ts-mode, a paragraph's lines (a
@@ -96,6 +104,7 @@
 ;; In config/markdown/, in this order: each part can use what the ones before
 ;; it define.
 (load! "markdown/page")
+(load! "markdown/mermaid")
 (load! "markdown/preview")
 (load! "markdown/notice")
 (load! "markdown/marksman")

@@ -3,8 +3,8 @@
 [Mermaid](https://mermaid.js.org) diagrams. `.mmd` and `.mermaid` files open in mermaid-mode: flowcharts' and sequence
 diagrams' keywords coloured, `TAB` indenting. Its commands draw the diagram as an SVG with `mmdc` (mermaid-cli;
 `scripts/tools.sh` installs it), in the theme's colours, in the background: the SVG opens once drawn (a second or so),
-and an error shows Mermaid's message. ```` ```mermaid ```` blocks are coloured too, in Markdown files
-and in Claude Code's replies.
+and an error shows Mermaid's message. ```` ```mermaid ```` blocks are coloured too, in Markdown files and in Claude
+Code's replies, and drawn in [Markdown's live preview](markdown.md).
 
 | Key | Action |
 |---|---|
