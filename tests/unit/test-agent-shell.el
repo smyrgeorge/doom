@@ -8,6 +8,16 @@
 ;; Doom's `use-package!' reads it (Doom's package manager defines it).
 (defvar doom-disabled-packages nil)
 
+;; Doom's yasnippet setup, before the config's as in Doom (its modules load
+;; first): yasnippet on in every buffer as it loads (:editor snippets), its
+;; completion added as it turns on or off (:completion corfu).
+(with-eval-after-load 'yasnippet
+  (yas-global-mode +1))
+(defun +test-agent-shell--add-yasnippet-capf-h ()
+  "Doom's `+corfu-add-yasnippet-capf-h'."
+  (add-hook 'completion-at-point-functions #'yasnippet-capf 30 t))
+(add-hook 'yas-minor-mode-hook #'+test-agent-shell--add-yasnippet-capf-h)
+
 (+test-load "config/agent-shell")
 
 ;; As config.el left things, before anything loaded agent-shell.
@@ -312,24 +322,52 @@ Draw images to read well on it: a light or transparent background, dark text and
 
 ;; ====== THE PROMPT ======
 
+(defun +test-agent-shell--snippets-buffer (mode)
+  "A new buffer in MODE (agent-shell-mode only named), as yasnippet's global
+mode turns it on in a buffer whose major mode starts. Its own name:
+yasnippet skips temporary buffers."
+  (with-current-buffer (generate-new-buffer "yas-test")
+    (if (eq mode 'agent-shell-mode)
+        (setq-local major-mode 'agent-shell-mode)
+      (funcall mode))
+    (when (featurep 'yasnippet)
+      (yas-minor-mode-on))
+    (current-buffer)))
+
+(defun +test-agent-shell--snippets (buffer)
+  "In BUFFER: yasnippet on, and its completion there, as (YAS CAPF)."
+  (with-current-buffer buffer
+    (list (and (bound-and-true-p yas-minor-mode) t)
+          (and (memq #'yasnippet-capf completion-at-point-functions) t))))
+
 (ert-deftest agent-shell/no-snippets-in-the-prompt ()
-  "yasnippet stays off in Claude Code's buffers (its completion, Doom's
-`yasnippet-capf', stalled typing in long sessions); elsewhere as ever."
-  (require 'yasnippet)
-  (should (memq #'+my/agent-shell-no-snippets-p yas-dont-activate-functions))
-  ;; yasnippet's own still there.
-  (should (memq #'minibufferp yas-dont-activate-functions))
-  ;; Buffers of their own: yasnippet skips temporary ones.
-  (dolist (case '((agent-shell-mode . nil) (text-mode . t)))
-    (let ((buffer (generate-new-buffer "yas-test")))
-      (unwind-protect
-          (with-current-buffer buffer
-            (if (eq (car case) 'agent-shell-mode)
-                (setq-local major-mode 'agent-shell-mode)
-              (funcall (car case)))
-            (yas-minor-mode-on)
-            (should (eq (and yas-minor-mode t) (cdr case))))
-        (kill-buffer buffer)))))
+  "yasnippet stays off in Claude Code's buffers, its completion out (Doom's
+`yasnippet-capf' stalled typing in long sessions), in a session opened before
+yasnippet loads too; elsewhere as ever."
+  ;; Nothing here loaded it yet: the sessions opened at startup.
+  (should-not (featurep 'yasnippet))
+  (let* ((claude-before (+test-agent-shell--snippets-buffer 'agent-shell-mode))
+         (text-before (+test-agent-shell--snippets-buffer 'text-mode))
+         (_ (require 'yasnippet))
+         (claude-after (+test-agent-shell--snippets-buffer 'agent-shell-mode))
+         (text-after (+test-agent-shell--snippets-buffer 'text-mode))
+         (buffers (list claude-before text-before claude-after text-after)))
+    (unwind-protect
+        (progn
+          (should yas-global-mode)
+          (should (memq #'+my/agent-shell-no-snippets-p yas-dont-activate-functions))
+          ;; yasnippet's own still there.
+          (should (memq #'minibufferp yas-dont-activate-functions))
+          (should (equal (+test-agent-shell--snippets claude-before) '(nil nil)))
+          (should (equal (+test-agent-shell--snippets claude-after) '(nil nil)))
+          (should (equal (+test-agent-shell--snippets text-before) '(t t)))
+          (should (equal (+test-agent-shell--snippets text-after) '(t t)))
+          ;; yasnippet turned off again in a session, by hand: its completion
+          ;; doesn't come back with it.
+          (with-current-buffer claude-after
+            (yas-minor-mode -1))
+          (should (equal (+test-agent-shell--snippets claude-after) '(nil nil))))
+      (mapc #'kill-buffer buffers))))
 
 ;; ====== CONTEXT FROM THE CURRENT BUFFER ======
 
