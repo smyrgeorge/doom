@@ -159,6 +159,14 @@ Emacs's SVG library draws (it draws no HTML)."
   "`+my/mermaid-config' as JSON."
   (decode-coding-string (json-serialize (+my/mermaid-config)) 'utf-8))
 
+(defvar +my/mermaid--json nil "The config's JSON as the last theme made it.")
+
+(defun +my/mermaid-theme-json ()
+  "The current theme's config as JSON: made once per theme (a theme switch
+makes it anew, below)."
+  (or +my/mermaid--json
+      (setq +my/mermaid--json (+my/mermaid-config-json))))
+
 ;; THE CONFIG'S FILE (mmdc -c)
 (defvar +my/mermaid--written nil
   "The JSON last written to `+my/mermaid-config-file' (this session).")
@@ -166,7 +174,7 @@ Emacs's SVG library draws (it draws no HTML)."
 (defun +my/mermaid-write-config ()
   "Write the theme's config to `+my/mermaid-config-file', unless it's there as
 it is; return the file."
-  (let ((json (+my/mermaid-config-json)))
+  (let ((json (+my/mermaid-theme-json)))
     (unless (and (equal json +my/mermaid--written) (file-exists-p +my/mermaid-config-file))
       (make-directory (file-name-directory +my/mermaid-config-file) t)
       (let ((coding-system-for-write 'utf-8-unix))
@@ -178,8 +186,6 @@ it is; return the file."
 (defvar +my/mermaid-theme-hook nil
   "Run when a theme switch changed Mermaid's config (its file rewritten):
 previews re-themed, diagrams drawn again.")
-
-(defvar +my/mermaid--json nil "The config's JSON as the last theme made it.")
 
 (defun +my/mermaid-theme-h ()
   "The config made from the new theme; changed, its file rewritten (if this

@@ -71,6 +71,7 @@ TOOLS=(
   "config            | claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | Claude Code in Emacs (config/agent-shell.el)"
   "config            | bd               | brew:beads            | npm:@beads/bd         | npm:@beads/bd          | issues: Beads (config/beads.el)"
   "config            | node:mathjax-full | npm:mathjax-full     | npm:mathjax-full      | npm:mathjax-full       | formulas typeset: Agent UI's math (config/agent-ui/elements/math.el)"
+  "config            | mmdc             | npm:@mermaid-js/mermaid-cli | npm:@mermaid-js/mermaid-cli | npm:@mermaid-js/mermaid-cli | Mermaid diagrams drawn (config/mermaid.el)"
   "config            | python3          | builtin               | apt:python3           | dnf:python3            | treemacs's git status (config/treemacs.el)"
   "config            | xdg-open         | -                     | apt:xdg-utils         | dnf:xdg-utils          | other apps, the file manager (config/os.el)"
   "config            | lp               | -                     | apt:cups-client       | dnf:cups-client        | printing PDFs (config/os.el)"
@@ -293,6 +294,39 @@ dedupe() { # dedupe ARRAY: its values, each once (word list)
 
 # ====== INSTALL OR UPDATE ======
 
+# mmdc_browser: mermaid-cli's headless Chrome. puppeteer downloads it as it's
+# installed, unless npm runs no install scripts (npm 11 runs only those
+# allowed): downloaded here, by mermaid-cli's own puppeteer (there already:
+# left as it is). Linux on ARM has no build of it: the system's chromium
+# instead (config/mermaid.el runs mmdc with it there). ARCH (default: uname -m)
+# says which machine.
+mmdc_browser() {
+  case " ${NPM[*]} " in *" @mermaid-js/mermaid-cli"*) ;; *) return 0 ;; esac
+  case "$OS:${ARCH:-$(uname -m)}" in
+    apt:aarch64|apt:arm64|dnf:aarch64|dnf:arm64)
+      local install=(apt-get install -y -q chromium)
+      [ "$OS" = dnf ] && install=(dnf install -y -q chromium)
+      if run $SUDO "${install[@]}"; then
+        ui_ok "mmdc's browser: chromium (Chrome's headless shell has no Linux ARM build)"
+      else
+        ui_fail "mmdc's browser: chromium not installed"
+        OS_SKIPPED+=("chromium (mmdc's browser)")
+      fi
+      return 0 ;;
+  esac
+  local puppeteer
+  puppeteer="$(npm root -g 2>/dev/null || true)/@mermaid-js/mermaid-cli/node_modules/.bin/puppeteer"
+  if [ -z "${DRY_RUN:-}" ] && [ ! -x "$puppeteer" ]; then
+    return 0
+  fi
+  if quiet "$puppeteer" browsers install chrome-headless-shell; then
+    ui_ok "mmdc's browser (Chrome's headless shell)"
+  else
+    ui_fail "mmdc's browser: puppeteer browsers install failed"
+    OS_SKIPPED+=("chrome-headless-shell (mmdc's browser)")
+  fi
+}
+
 modules=$(grep -c . <<<"$MODULES")
 ui_step "init.el: $modules modules, every one known $(ui_dim "($OS${DRY_RUN:+, dry run})")"
 
@@ -365,6 +399,7 @@ if [ -z "$CHECK_ONLY" ]; then
     echo; ui_step "npm $(ui_dim "(${#NPM[@]} packages)")"
     if npm_global "${NPM[@]}"; then
       ui_ok "${#NPM[@]} packages, at their latest"
+      mmdc_browser
     else
       ui_fail "npm install failed"
       OS_SKIPPED+=("${NPM[*]} (npm)")

@@ -34,7 +34,8 @@
   "BODY with the faces' colours as FACES says: ((FACE :foreground C
 :background C)...), with no colour for any other face (or a default's)."
   (declare (indent 1))
-  `(let ((faces ,faces))
+  `(let ((faces ,faces)
+         (+my/mermaid--json nil))
      (cl-letf (((symbol-function 'face-foreground)
                 (lambda (face &rest _) (plist-get (alist-get face faces) :foreground)))
                ((symbol-function 'face-background)
@@ -104,75 +105,117 @@
   (should (equal (split-string mermaid-flags " " t)
                  (list "-c" +my/mermaid-config-file "-b" "transparent"))))
 
-;; ====== ITS COMMANDS ======
+;; ====== A STAND-IN MMDC ======
+;; A script taking mmdc's arguments: the source on its input, its SVG (the
+;; source and the config it was given in it) written to -o; a source saying
+;; ERROR fails as Mermaid does, SLOW takes 3 s. Each run's arguments logged.
 
-(defmacro +test-mermaid--mmdc (&rest body)
-  "BODY with mmdc faked: `runs' the arguments each run was given; the
-image it makes not opened (`shown' the buffers that would have been)."
+(defconst +test-mermaid--mmdc-script
+  "#!/bin/sh
+dir=$(dirname \"$0\")
+echo \"$*\" >> \"$dir/runs.log\"
+out= config=
+while [ $# -gt 0 ]; do
+  case \"$1\" in -o) out=$2; shift ;; -c) config=$2; shift ;; esac
+  shift
+done
+source=$(cat)
+case \"$source\" in *SLOW*) sleep 3 ;; esac
+case \"$source\" in
+  *ERROR*)
+    echo 'Error: Parse error on line 2:' >&2
+    echo '...A --> ERROR' >&2
+    echo \"Expecting 'SEMI', got 'NODE_STRING'\" >&2
+    echo 'Parser.parseError (https://mermaid-cli-intercept.invalid/mermaid.mjs:1:2)' >&2
+    echo '    at async renderMermaid (file:///mmdc/src/index.js:690:22)' >&2
+    exit 1 ;;
+esac
+{ printf '<svg id=\"my-svg\"><text><tspan>Write</tspan><tspan> the</tspan></text>'
+  printf '<desc>%s</desc><desc>' \"$source\"; cat \"$config\"; printf '</desc></svg>'; } > \"$out\"
+"
+  "The stand-in mmdc (see above).")
+
+(defun +test-mermaid--make-mmdc ()
+  "A stand-in mmdc in a folder of its own: its path."
+  (let ((file (expand-file-name "mmdc" (make-temp-file (+test-tmp-file "mermaid/bin-") t))))
+    (with-temp-file file (insert +test-mermaid--mmdc-script))
+    (set-file-modes file #o755)
+    file))
+
+(defmacro +test-mermaid--with-mmdc (&rest body)
+  "BODY with the stand-in mmdc, an empty cache, no drawing waiting: `mmdc' its
+path; `shown' the buffers the commands would show."
   (declare (indent 0))
-  `(let ((runs nil) (shown nil)
-         (+my/mermaid--written nil))
-     (ignore-errors (delete-file +my/mermaid-config-file))
-     (ignore-errors (delete-directory mermaid-tmp-dir t))
-     (cl-letf (((symbol-function 'call-process)
-                (lambda (program _infile _destination _display &rest args)
-                  (should (equal program mermaid-mmdc-location))
-                  (push args runs)
-                  (with-temp-file (cadr (member "-o" args)) (insert +test-mermaid--svg))
-                  0))
-               ((symbol-function 'find-file-noselect) (lambda (file &rest _) (get-buffer-create file)))
-               ((symbol-function 'display-buffer) (lambda (buffer &rest _) (push buffer shown) nil))
-               ((symbol-function 'auto-revert-mode) #'ignore))
+  `(let* ((mmdc (+test-mermaid--make-mmdc))
+          (+my/mermaid-mmdc mmdc)
+          (mermaid-mmdc-location mmdc)
+          (+my/mermaid-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "mermaid/cache-") t)))
+          (+my/mermaid--waiting (make-hash-table :test #'equal))
+          (+my/mermaid--queue nil)
+          (+my/mermaid--running 0)
+          (+my/mermaid--pruned t)
+          (+my/mermaid--written nil)
+          (shown nil))
+     (cl-letf (((symbol-function 'display-buffer) (lambda (buffer &rest _) (push buffer shown) nil)))
        (unwind-protect (progn ,@body)
-         (dolist (buffer shown) (kill-buffer buffer))))))
+         (dolist (process (process-list))
+           (when (equal (process-name process) "mmdc") (delete-process process)))
+         (dolist (buffer shown)
+           (when (buffer-live-p (get-buffer buffer))
+             (with-current-buffer buffer (set-buffer-modified-p nil))
+             (kill-buffer buffer)))))))
 
-(defconst +test-mermaid--svg
-  "<svg id=\"my-svg\" width=\"100%\"><text><tspan>Write</tspan><tspan> the</tspan></text></svg>"
-  "An SVG as mmdc writes it: each word of a label in a <tspan>.")
+(defun +test-mermaid--runs (mmdc)
+  "The stand-in MMDC's runs: each its arguments (a list), oldest first."
+  (let ((log (expand-file-name "runs.log" (file-name-directory mmdc))))
+    (when (file-exists-p log)
+      (mapcar #'split-string
+              (split-string (with-temp-buffer (insert-file-contents log) (buffer-string)) "\n" t)))))
+
+(defun +test-mermaid--wait (predicate &optional seconds)
+  "Wait (processes and timers running) until PREDICATE, SECONDS at most (10)."
+  (let ((end (+ (float-time) (or seconds 10))))
+    (while (and (not (funcall predicate)) (< (float-time) end))
+      (accept-process-output nil 0.05))
+    (funcall predicate)))
+
+(defun +test-mermaid--text (file)
+  (with-temp-buffer (insert-file-contents file) (buffer-string)))
 
 (defun +test-mermaid--arg (args flag)
   (cadr (member flag args)))
 
+;; ====== ITS COMMANDS ======
+;; Through the renderer: Emacs doesn't wait, the SVG opened once drawn.
+
+(defun +test-mermaid--shown-file (shown)
+  "The file of the buffer the commands showed last (SHOWN's first)."
+  (and shown (buffer-file-name (get-buffer (car shown)))))
+
 (ert-deftest mermaid/draw-the-buffer ()
   (+test-mermaid--theme +test-mermaid--dark
-    (+test-mermaid--mmdc
+    (+test-mermaid--with-mmdc
       (with-temp-buffer
         (insert "flowchart TD\n    A --> B\n")
         (mermaid-mode)
-        (mermaid-compile-buffer))
-      (should (= (length runs) 1))
-      (let ((args (car runs)))
-        ;; The theme's config written first, given to mmdc.
+        (mermaid-compile-buffer)
+        ;; Nothing waited for.
+        (should-not shown))
+      (should (+test-mermaid--wait (lambda () shown)))
+      (let ((args (car (+test-mermaid--runs mmdc)))
+            (svg (+test-mermaid--shown-file shown)))
+        ;; The theme's config given, the source on mmdc's input.
         (should (equal (+test-mermaid--arg args "-c") +my/mermaid-config-file))
         (should (equal (+test-mermaid--arg args "-b") "transparent"))
-        (should (equal (with-temp-buffer (insert-file-contents +my/mermaid-config-file) (buffer-string))
-                       (+my/mermaid-config-json)))
-        ;; The buffer, and its SVG, in Doom's cache.
-        (should (file-in-directory-p (+test-mermaid--arg args "-i") mermaid-tmp-dir))
-        (should (equal (with-temp-buffer (insert-file-contents (+test-mermaid--arg args "-i")) (buffer-string))
-                       "flowchart TD\n    A --> B\n"))
-        (should (string-suffix-p ".svg" (+test-mermaid--arg args "-o")))
-        (should (file-in-directory-p (+test-mermaid--arg args "-o") doom-cache-dir)))
-      (should (= (length shown) 1)))))
-
-(ert-deftest mermaid/drawn-svg-keeps-its-spaces ()
-  "Emacs's SVG library drops a <tspan>'s leading space (\"Writethecode\"):
-the SVG's root keeps them, once."
-  (+test-mermaid--theme +test-mermaid--dark
-    (+test-mermaid--mmdc
-      (with-temp-buffer
-        (insert "flowchart TD\n    A[Write the code]\n")
-        (mermaid-mode)
-        (mermaid-compile-buffer)
-        (let ((svg (+test-mermaid--arg (car runs) "-o")))
-          (should (string-prefix-p "<svg xml:space=\"preserve\" id=\"my-svg\""
-                                   (with-temp-buffer (insert-file-contents svg) (buffer-string))))
-          (+my/mermaid-fix-svg svg)
-          (should (= 1 (with-temp-buffer (insert-file-contents svg) (count-matches "xml:space" (point-min) (point-max))))))))))
+        (should (equal (+test-mermaid--arg args "-i") "-"))
+        ;; The buffer's SVG in Doom's cache.
+        (should (equal svg (expand-file-name "current-buffer.svg" mermaid-tmp-dir)))
+        (should (string-match-p "<desc>flowchart TD\n    A --> B\n*</desc>" (+test-mermaid--text svg)))
+        (should (string-search (+my/mermaid-config-json) (+test-mermaid--text svg)))))))
 
 (ert-deftest mermaid/draw-the-region ()
   (+test-mermaid--theme +test-mermaid--dark
-    (+test-mermaid--mmdc
+    (+test-mermaid--with-mmdc
       (with-temp-buffer
         (insert "%% not this\nflowchart TD\n    A --> B\n")
         (mermaid-mode)
@@ -182,13 +225,14 @@ the SVG's root keeps them, once."
         (push-mark (point) t t)
         (goto-char (point-max))
         (mermaid-compile-region))
-      (should (= (length runs) 1))
-      (should (equal (with-temp-buffer (insert-file-contents (+test-mermaid--arg (car runs) "-i")) (buffer-string))
-                     "flowchart TD\n    A --> B\n")))))
+      (should (+test-mermaid--wait (lambda () shown)))
+      (let ((text (+test-mermaid--text (+test-mermaid--shown-file shown))))
+        (should (string-search "flowchart TD" text))
+        (should-not (string-search "not this" text))))))
 
 (ert-deftest mermaid/draw-the-file-next-to-it ()
   (+test-mermaid--theme +test-mermaid--dark
-    (+test-mermaid--mmdc
+    (+test-mermaid--with-mmdc
       (let ((file (+test-file "mermaid/next/flow.mmd" "flowchart TD\n    A --> B\n")))
         (with-temp-buffer
           (insert-file-contents file)
@@ -196,23 +240,56 @@ the SVG's root keeps them, once."
           (mermaid-mode)
           (mermaid-compile)
           (set-buffer-modified-p nil))
-        (let ((args (car runs)))
-          (should (equal (+test-mermaid--arg args "-i") file))
-          (should (equal (+test-mermaid--arg args "-o") (concat (file-name-sans-extension file) ".svg")))
-          (should (equal (+test-mermaid--arg args "-c") +my/mermaid-config-file)))))))
+        (should (+test-mermaid--wait (lambda () shown)))
+        (should (equal (+test-mermaid--shown-file shown) (concat (file-name-sans-extension file) ".svg")))
+        ;; Its words' spaces kept (Emacs's SVG library dropped them).
+        (should (string-prefix-p "<svg xml:space=\"preserve\" id=\"my-svg\""
+                                 (+test-mermaid--text (+test-mermaid--shown-file shown))))
+        ;; Again: from the cache, shown at once, the open SVG shown anew.
+        (setq shown nil)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (setq buffer-file-name file)
+          (mermaid-mode)
+          (mermaid-compile)
+          (set-buffer-modified-p nil))
+        (should shown)
+        (should (= (length (+test-mermaid--runs mmdc)) 1))))))
 
-(ert-deftest mermaid/a-theme-switch-reaches-the-commands ()
+(ert-deftest mermaid/draw-in-the-new-theme ()
   "A command run after a theme switch draws in the new theme's colours."
-  (+test-mermaid--mmdc
+  (+test-mermaid--with-mmdc
     (with-temp-buffer
       (insert "flowchart TD\n    A --> B\n")
       (mermaid-mode)
-      (+test-mermaid--theme +test-mermaid--dark (mermaid-compile-buffer))
+      (+test-mermaid--theme +test-mermaid--dark
+        (mermaid-compile-buffer)
+        (should (+test-mermaid--wait (lambda () shown))))
+      (setq shown nil)
       (+test-mermaid--theme +test-mermaid--light
         (mermaid-compile-buffer)
-        (should (equal (with-temp-buffer (insert-file-contents +my/mermaid-config-file) (buffer-string))
-                       (+my/mermaid-config-json)))
-        (should (string-match-p "\"darkMode\":false" (+my/mermaid-config-json)))))))
+        (should (+test-mermaid--wait (lambda () shown)))
+        (should (= (length (+test-mermaid--runs mmdc)) 2))
+        (should (string-search "\"darkMode\":false" (+test-mermaid--text (+test-mermaid--shown-file shown))))))))
+
+(ert-deftest mermaid/draw-an-error ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (with-temp-buffer
+        (insert "flowchart TD\n    A --> ERROR\n")
+        (mermaid-mode)
+        (mermaid-compile-buffer))
+      (should (+test-mermaid--wait (lambda () shown)))
+      (should (equal (car shown) "*mmdc*"))
+      (should (string-prefix-p "Parse error on line 2:" (with-current-buffer "*mmdc*" (buffer-string)))))))
+
+(ert-deftest mermaid/draw-another-format-mermaid-mode-s-way ()
+  (let ((mermaid-output-format ".png")
+        (ran nil))
+    (cl-letf (((symbol-function 'call-process) (lambda (&rest args) (setq ran args) 1))
+              ((symbol-function 'pop-to-buffer) #'ignore))
+      (mermaid-compile-file (+test-file "mermaid/png/flow.mmd" "flowchart TD\n")))
+    (should ran)))
 
 (ert-deftest mermaid/org-blocks ()
   "Org's mermaid blocks: Doom loads mermaid-mode for them (its
@@ -230,7 +307,7 @@ org-babel-execute:mermaid), which draws in the theme's colours too."
     (cl-letf (((symbol-function 'org-babel-eval)
                (lambda (cmd _input)
                  (setq command cmd)
-                 (with-temp-file svg (insert +test-mermaid--svg))
+                 (with-temp-file svg (insert "<svg id=\"my-svg\"><text><tspan> the</tspan></text></svg>"))
                  "")))
       (+test-mermaid--theme +test-mermaid--dark
         (org-babel-execute:mermaid "flowchart TD\n    A --> B\n" `((:file . ,svg)))))
@@ -331,7 +408,9 @@ org-babel-execute:mermaid), which draws in the theme's colours too."
                                      (+test-mermaid--blend colour "#282c34" amount))))
       ;; Every colour #rrggbb: Mermaid's base theme takes no other.
       (dolist (pair variables)
-        (when (and (stringp (cdr pair)) (string-match-p "Color\\|Bkg\\|background\\|\\`pie[0-9]\\|\\`git\\|\\`cScale" (symbol-name (car pair))))
+        (when (and (stringp (cdr pair))
+                   (string-match-p "Color\\|Bkg\\|background\\|\\`pie[0-9]\\|\\`git\\|\\`cScale"
+                                   (symbol-name (car pair))))
           (should (string-match-p "\\`#[0-9a-f]\\{6\\}\\'" (cdr pair))))))))
 
 (ert-deftest mermaid/a-face-without-a-colour-takes-default-s ()
@@ -429,17 +508,19 @@ own instead; never one written in the code."
         (ran 0))
     (let ((+my/mermaid-theme-hook (list (lambda () (cl-incf ran)))))
       (should (memq #'+my/mermaid-theme-h doom-load-theme-hook))
+      ;; Its config made, then the same theme loaded again: nothing changed,
+      ;; nothing run.
       (+test-mermaid--theme +test-mermaid--dark
         (+my/mermaid-write-config)
         (+my/mermaid-theme-h))
-      (should (= ran 1))
+      (should (= ran 0))
       (+test-mermaid--theme +test-mermaid--light
         (+my/mermaid-theme-h)
-        (should (= ran 2))
+        (should (= ran 1))
         (should (equal (+test-mermaid--file-text) (+my/mermaid-config-json)))
-        ;; The same theme loaded again: nothing changed, nothing run.
+        (should (equal (+my/mermaid-theme-json) (+my/mermaid-config-json)))
         (+my/mermaid-theme-h)
-        (should (= ran 2))))))
+        (should (= ran 1))))))
 
 (ert-deftest mermaid/theme-switch-writes-nothing-before-mermaid-is-used ()
   (let ((+my/mermaid--written nil)
@@ -448,6 +529,198 @@ own instead; never one written in the code."
     (ignore-errors (delete-file +my/mermaid-config-file))
     (+test-mermaid--theme +test-mermaid--dark (+my/mermaid-theme-h))
     (should-not (file-exists-p +my/mermaid-config-file))))
+
+;; ====== THE RENDERER ======
+
+(defun +test-mermaid--render (source)
+  "Render SOURCE: (FILE . RESULTS), FILE what it returned (drawn already),
+RESULTS a list the callback pushes (FILE MESSAGE) on."
+  (let* ((results (list nil))
+         (file (+my/mermaid-render source (lambda (file message)
+                                            (push (list file message) (car results))))))
+    (cons file results)))
+
+(ert-deftest mermaid/render-draws-in-the-background ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let* ((start (float-time))
+             (asked (+test-mermaid--render "flowchart TD\n    A --> B\n"))
+             (results (cdr asked)))
+        ;; Not drawn yet: nothing returned, the callback later; Emacs didn't wait.
+        (should-not (car asked))
+        (should-not (car results))
+        (should (< (- (float-time) start) 0.5))
+        (should (+test-mermaid--wait (lambda () (car results))))
+        (pcase-let ((`(,file ,message) (caar results)))
+          (should-not message)
+          (should (file-in-directory-p file +my/mermaid-cache-directory))
+          (should (string-suffix-p ".svg" file))
+          (let ((text (+test-mermaid--text file)))
+            (should (string-prefix-p "<svg xml:space=\"preserve\"" text))
+            (should (string-search "<desc>flowchart TD\n    A --> B" text))
+            ;; The theme's config given.
+            (should (string-search (+my/mermaid-config-json) text))))
+        ;; Its part file gone.
+        (should-not (directory-files +my/mermaid-cache-directory nil "\\.part\\."))
+        (should (= +my/mermaid--running 0))))))
+
+(ert-deftest mermaid/render-from-the-cache ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let ((results (cdr (+test-mermaid--render "flowchart TD\n    A --> B\n"))))
+        (should (+test-mermaid--wait (lambda () (car results))))
+        (let ((again (+test-mermaid--render "flowchart TD\n    A --> B\n")))
+          ;; Its file at once, the callback not called.
+          (should (equal (car again) (car (caar results))))
+          (should (equal (+my/mermaid-cached "flowchart TD\n    A --> B\n") (car again)))
+          (accept-process-output nil 0.1)
+          (should-not (car (cdr again))))
+        (should (= (length (+test-mermaid--runs mmdc)) 1))
+        (should-not (+my/mermaid-cached "flowchart TD\n    C --> D\n"))))))
+
+(ert-deftest mermaid/render-again-in-a-new-theme ()
+  (+test-mermaid--with-mmdc
+    (let (dark light)
+      (+test-mermaid--theme +test-mermaid--dark
+        (let ((results (cdr (+test-mermaid--render "flowchart TD\n"))))
+          (should (+test-mermaid--wait (lambda () (car results))))
+          (setq dark (car (caar results)))))
+      (+test-mermaid--theme +test-mermaid--light
+        (should-not (+my/mermaid-cached "flowchart TD\n"))
+        (let ((results (cdr (+test-mermaid--render "flowchart TD\n"))))
+          (should (+test-mermaid--wait (lambda () (car results))))
+          (setq light (car (caar results)))))
+      (should-not (equal dark light))
+      (should (= (length (+test-mermaid--runs mmdc)) 2))
+      (should (string-search "\"darkMode\":false" (+test-mermaid--text light))))))
+
+(ert-deftest mermaid/render-the-same-diagram-once ()
+  "Asked again while it's drawn: one run, each callback called."
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let ((first (cdr (+test-mermaid--render "flowchart TD\n")))
+            (second (cdr (+test-mermaid--render "flowchart TD\n"))))
+        (should (+test-mermaid--wait (lambda () (and (car first) (car second)))))
+        (should (equal (caar first) (caar second)))
+        (should (= (length (+test-mermaid--runs mmdc)) 1))))))
+
+(ert-deftest mermaid/render-a-few-at-once ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let* ((+my/mermaid-jobs 1)
+             (all (mapcar (lambda (n) (cdr (+test-mermaid--render (format "flowchart TD\n    A%d\n" n))))
+                          '(1 2 3))))
+        (should (= +my/mermaid--running 1))
+        (should (= (length +my/mermaid--queue) 2))
+        (should (+test-mermaid--wait (lambda () (seq-every-p #'car all))))
+        (should (seq-every-p (lambda (results) (car (caar results))) all))
+        (should (= (length (+test-mermaid--runs mmdc)) 3))
+        (should (= +my/mermaid--running 0))))))
+
+(ert-deftest mermaid/render-an-error-mermaid-s-message ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let ((results (cdr (+test-mermaid--render "flowchart TD\n    A --> ERROR\n"))))
+        (should (+test-mermaid--wait (lambda () (car results))))
+        (pcase-let ((`(,file ,message) (caar results)))
+          (should-not file)
+          ;; Mermaid's lines, not "Error: ", nor the stack trace.
+          (should (equal message "Parse error on line 2:\n...A --> ERROR\nExpecting 'SEMI', got 'NODE_STRING'")))
+        ;; Not cached: asked again, drawn again.
+        (should-not (+my/mermaid-cached "flowchart TD\n    A --> ERROR\n"))
+        (should-not (directory-files +my/mermaid-cache-directory nil "\\.svg\\'"))))))
+
+(ert-deftest mermaid/render-without-mmdc-what-to-install ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let* ((+my/mermaid-mmdc (expand-file-name "no-such-mmdc" +test-tmp))
+             (results (cdr (+test-mermaid--render "flowchart TD\n"))))
+        ;; Later, as when drawn: a caller has one way to wait.
+        (should-not (car results))
+        (should (+test-mermaid--wait (lambda () (car results))))
+        (pcase-let ((`(,file ,message) (caar results)))
+          (should-not file)
+          (should (string-match-p "need mmdc: npm install -g @mermaid-js/mermaid-cli" message)))))))
+
+(ert-deftest mermaid/render-stopped-when-it-takes-too-long ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let* ((+my/mermaid-timeout 0.3)
+             (results (cdr (+test-mermaid--render "flowchart TD\n    SLOW\n"))))
+        (should (+test-mermaid--wait (lambda () (car results)) 2))
+        (should (string-match-p "longer than 0.3 s" (cadr (caar results))))
+        (should (= +my/mermaid--running 0))))))
+
+(defun +test-mermaid--puppeteer (args)
+  "The puppeteer config mmdc's ARGS name (-p), read; nil without one."
+  (when-let* ((file (+test-mermaid--arg args "-p")))
+    (json-parse-string (+test-mermaid--text file) :object-type 'alist :array-type 'list)))
+
+(ert-deftest mermaid/render-as-root-without-chrome-s-sandbox ()
+  (+test-mermaid--with-mmdc
+    (let ((+my/mermaid-chrome nil)
+          (system-type 'darwin))
+      (cl-letf (((symbol-function 'user-uid) (lambda () 0)))
+        (should (equal (+test-mermaid--puppeteer (+my/mermaid--arguments "out.svg"))
+                       '((args "--no-sandbox")))))
+      (cl-letf (((symbol-function 'user-uid) (lambda () 501)))
+        (should-not (member "-p" (+my/mermaid--arguments "out.svg")))))))
+
+(ert-deftest mermaid/render-on-linux-on-arm-with-chromium ()
+  "Chrome's headless shell has no Linux ARM build: the system's chromium."
+  (+test-mermaid--with-mmdc
+    (let ((+my/mermaid-chrome nil)
+          (system-type 'gnu/linux)
+          (system-configuration "aarch64-unknown-linux-gnu"))
+      (cl-letf (((symbol-function 'user-uid) (lambda () 1000))
+                ((symbol-function 'executable-find)
+                 (lambda (name &rest _) (and (equal name "chromium") "/usr/bin/chromium"))))
+        (should (equal (+test-mermaid--puppeteer (+my/mermaid--arguments "out.svg"))
+                       '((executablePath . "/usr/bin/chromium"))))
+        ;; Elsewhere (Linux on x86), puppeteer's own.
+        (let ((system-configuration "x86_64-pc-linux-gnu"))
+          (should-not (member "-p" (+my/mermaid--arguments "out.svg"))))
+        ;; One given in config.el: that one.
+        (let ((+my/mermaid-chrome "/opt/chrome/chrome")
+              (system-configuration "x86_64-pc-linux-gnu"))
+          (should (equal (+test-mermaid--puppeteer (+my/mermaid--arguments "out.svg"))
+                         '((executablePath . "/opt/chrome/chrome")))))))))
+
+(ert-deftest mermaid/render-prunes-the-cache-once-a-session ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let ((+my/mermaid--pruned nil)
+            (old (expand-file-name "old.svg" +my/mermaid-cache-directory))
+            (recent (expand-file-name "recent.svg" +my/mermaid-cache-directory)))
+        (write-region "<svg/>" nil old nil 'silent)
+        (write-region "<svg/>" nil recent nil 'silent)
+        (set-file-times old (time-subtract nil (days-to-time (1+ +my/mermaid-cache-days))))
+        (set-file-times recent (time-subtract nil (days-to-time (1- +my/mermaid-cache-days))))
+        (let ((results (cdr (+test-mermaid--render "flowchart TD\n"))))
+          (should (+test-mermaid--wait (lambda () (car results)))))
+        (should-not (file-exists-p old))
+        (should (file-exists-p recent))
+        (should +my/mermaid--pruned)))))
+
+(ert-deftest mermaid/render-a-used-diagram-kept ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let ((results (cdr (+test-mermaid--render "flowchart TD\n"))))
+        (should (+test-mermaid--wait (lambda () (car results))))
+        (let ((file (car (caar results))))
+          (set-file-times file (time-subtract nil (days-to-time 20)))
+          (should (+my/mermaid-cached "flowchart TD\n"))
+          (should (< (float-time (time-subtract nil (file-attribute-modification-time (file-attributes file))))
+                     60)))))))
+
+(ert-deftest mermaid/render-a-failing-callback-spares-the-others ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let ((got nil))
+        (+my/mermaid-render "flowchart TD\n" (lambda (&rest _) (error "Broken")))
+        (+my/mermaid-render "flowchart TD\n" (lambda (file _) (setq got file)))
+        (let ((inhibit-message t))
+          (should (+test-mermaid--wait (lambda () got))))))))
 
 ;; ====== NO COLOUR IN THE CODE ======
 

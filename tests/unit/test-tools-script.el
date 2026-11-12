@@ -40,7 +40,7 @@ esac\n"
     dir))
 
 (defconst +test-tools-script--unset
-  '("EMACS_VERSION" "XWIDGETS" "NO_DOOM" "DRY_RUN" "OS" "EMACS" "DOOM_INIT")
+  '("EMACS_VERSION" "XWIDGETS" "NO_DOOM" "DRY_RUN" "OS" "ARCH" "EMACS" "DOOM_INIT")
   "What the scripts read from their environment, unset for each run (a bare
 name in `process-environment'): a test sets what it means to, not what
 the shell running the tests had (CI's).")
@@ -272,6 +272,58 @@ exit 0
                  (+test-tools-script--run "apt" (+test-tools-script--init +test-tools-script--small)
                                           (concat "PATH=" bin ":/usr/bin:/bin") "--check")))
       (should (string-match-p "^  ✔ node:mathjax-full " output)))))
+
+(ert-deftest tools-script/mmdc-for-mermaid-and-its-browser ()
+  "mmdc (Mermaid's diagrams): installed by npm, everywhere, then its headless
+Chrome by mermaid-cli's own puppeteer (npm 11 runs no install script that
+isn't allowed); checked as a command."
+  (let ((bin (+test-tools-script--fake-bin))
+        (modules (file-name-as-directory (make-temp-file (+test-tmp-file "tools-script/modules-") t))))
+    (with-temp-file (expand-file-name "npm" bin)
+      (insert "#!/bin/sh
+echo \"npm $*\" >> \"$(dirname \"$0\")/calls.log\"
+"
+              "[ \"$1\" = root ] && echo " (shell-quote-argument (directory-file-name modules)) "
+exit 0
+"))
+    (set-file-modes (expand-file-name "npm" bin) #o755)
+    ;; mermaid-cli's puppeteer, there once npm installed it.
+    (let ((puppeteer (expand-file-name "@mermaid-js/mermaid-cli/node_modules/.bin/puppeteer" modules)))
+      (make-directory (file-name-directory puppeteer) t)
+      (with-temp-file puppeteer
+        (insert "#!/bin/sh\necho \"puppeteer $*\" >> " (shell-quote-argument (expand-file-name "calls.log" bin)) "\n"))
+      (set-file-modes puppeteer #o755))
+    (pcase-let ((`(,status . ,output)
+                 (+test-tools-script--run "macos" (+test-tools-script--init +test-tools-script--small)
+                                          (concat "PATH=" bin ":/usr/bin:/bin"))))
+      (should (= status 0))
+      (let ((calls (+test-tools-script--calls bin)))
+        (should (seq-some (lambda (call) (string-match-p "^npm install -g .*@mermaid-js/mermaid-cli@latest" call))
+                          calls))
+        ;; The browser after the package.
+        (should (< (seq-position calls "npm install" (lambda (call prefix) (string-prefix-p prefix call)))
+                   (seq-position calls "puppeteer browsers install chrome-headless-shell"))))
+      (should (string-match-p "^  ✔ mmdc's browser" output))
+      (should (string-match-p "^  ✖ mmdc .*config/mermaid\\.el) missing$" output)))
+    ;; Linux's: the same (dry: no system installer runs); on ARM, where
+    ;; Chrome's headless shell has no build, the system's chromium.
+    (dolist (os '("apt" "dnf"))
+      (pcase-let ((`(,status . ,output)
+                   (+test-tools-script--run os (+test-tools-script--init +test-tools-script--small)
+                                            (concat "PATH=" bin ":/usr/bin:/bin") "DRY_RUN=1" "ARCH=x86_64")))
+        (should (= status 0))
+        (should (string-match-p "\\$ npm install -g .*@mermaid-js/mermaid-cli@latest" output))
+        (should (string-match-p "\\$ .*/puppeteer browsers install chrome-headless-shell" output))
+        (should-not (string-search "chromium" output)))
+      (pcase-let ((`(,status . ,output)
+                   (+test-tools-script--run os (+test-tools-script--init +test-tools-script--small)
+                                            (concat "PATH=" bin ":/usr/bin:/bin") "DRY_RUN=1" "ARCH=aarch64")))
+        (should (= status 0))
+        (should (string-match-p (format "\\$ \\(sudo \\)?%s install -y -q chromium$"
+                                        (if (equal os "apt") "apt-get" "dnf"))
+                                output))
+        (should (string-search "✔ mmdc's browser: chromium" output))
+        (should-not (string-search "puppeteer browsers install" output))))))
 
 (ert-deftest tools-script/plain-without-a-terminal ()
   "Output to a file or a pipe (a log, these tests): no colour codes."

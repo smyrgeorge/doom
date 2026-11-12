@@ -17,8 +17,9 @@ ones (default: 4, at most `JOBS`; one at a time in `tests/linux/run.sh`, where t
 the others: the end-to-end frames share a corner of the screen, and PDF.js draws no page in a covered frame
 (`test-pdf.el`). `Ctrl+C` stops them all. The PDF and drawing tests copy
 PDF.js and Excalidraw from Doom's data folder, and skip without them: opening a PDF or a drawing once downloads them,
-or `emacs --batch -l tests/helper.el -l tests/assets.el` does. `E2E_WINDOW=front` shows the
-end-to-end tests' frame, which otherwise stays off screen. They run on macOS and on Linux; `EMACS_GUI` names the GUI
+or `emacs --batch -l tests/helper.el -l tests/assets.el` does. The Mermaid end-to-end tests draw with the real `mmdc`
+and skip without it (the unit tests use a stand-in). `E2E_WINDOW=front` shows the end-to-end tests' frame, which
+otherwise stays off screen. They run on macOS and on Linux; `EMACS_GUI` names the GUI
 Emacs for the end-to-end tests (default: macOS's `/Applications/Emacs.app`, else `emacs`). On Linux without a display,
 run those under Xvfb, one at a time: `E2E_JOBS=1 xvfb-run -a tests/run.sh e2e`.
 

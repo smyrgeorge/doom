@@ -14,29 +14,45 @@ runs mmdc."
   (+my/mermaid-write-config)
   (make-directory mermaid-tmp-dir t))
 
-;; Emacs's SVG library (librsvg) drops the space a <tspan> starts with, and
-;; Mermaid writes each word of a label in one: "Write the code" showed as
-;; "Writethecode". The SVG's root keeps them (xml:space), once mmdc wrote it.
-(defun +my/mermaid-fix-svg (file)
-  "FILE, an SVG mmdc wrote, made to show in Emacs (see above); a buffer
-visiting it shows it anew."
-  (when (and (stringp file) (string-suffix-p ".svg" file t) (file-exists-p file))
-    (with-temp-buffer
-      (insert-file-contents file)
-      (goto-char (point-min))
-      (when (and (re-search-forward "<svg\\b" nil t)
-                 (not (looking-at "[^>]*xml:space=")))
-        (insert " xml:space=\"preserve\"")
-        (let ((coding-system-for-write 'utf-8-unix))
-          (write-region nil nil file nil 'silent))))
-    (when-let* ((buffer (find-buffer-visiting file)))
-      (with-current-buffer buffer
-        (revert-buffer t t t)))))
+;; Drawing a file (the buffer's and region's write theirs first), through
+;; the renderer (mermaid/render.el): in the background, Emacs never waits; its
+;; SVG next to the file, opened once drawn (shown anew if it's open); an error
+;; in *mmdc*. Another format than SVG (`mermaid-output-format'): mermaid-mode's
+;; own way.
+(defadvice! +my/mermaid-compile-file-a (fn file-name)
+  "Draw FILE-NAME through the renderer (see above)."
+  :around #'mermaid-compile-file
+  (if (not (equal mermaid-output-format ".svg"))
+      (funcall fn file-name)
+    (let* ((input (expand-file-name file-name))
+           (output (concat (file-name-sans-extension input) ".svg"))
+           (done (lambda (file message) (+my/mermaid--compiled output file message))))
+      (if-let* ((file (+my/mermaid-render (with-temp-buffer
+                                            (insert-file-contents input)
+                                            (buffer-string))
+                                          done)))
+          (funcall done file nil)
+        (message "Drawing %s…" (file-name-nondirectory input))))))
 
-(defadvice! +my/mermaid-fix-compiled-svg-a (file-name)
-  "The SVG mermaid-mode drew FILE-NAME into, made to show in Emacs."
-  :after #'mermaid-compile-file
-  (+my/mermaid-fix-svg (concat (file-name-sans-extension file-name) mermaid-output-format)))
+(defun +my/mermaid--compiled (output file message)
+  "A file drawn: FILE copied to OUTPUT, opened; or MESSAGE in *mmdc*."
+  (if (not file)
+      (progn
+        (with-current-buffer (get-buffer-create "*mmdc*")
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert message "\n")))
+        (display-buffer "*mmdc*")
+        (message "Mermaid: %s" (car (split-string message "\n"))))
+    (copy-file file output t)
+    (let* ((open (find-buffer-visiting output))
+           (buffer (or open (find-file-noselect output t))))
+      (with-current-buffer buffer
+        (when (and open (not (buffer-modified-p)))
+          (revert-buffer t t t))
+        (auto-revert-mode 1))
+      (display-buffer buffer)
+      (message nil))))
 
 (defadvice! +my/mermaid-fix-org-svg-a (_body params)
   "The SVG an Org mermaid block drew (its :file), made to show in Emacs."
