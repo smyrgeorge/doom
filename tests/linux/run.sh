@@ -51,8 +51,11 @@ case "$KIND" in
   unit)
     exec docker run "${args[@]}" "$image" tests/run.sh unit "$@" ;;
   e2e|all)
-    # One X server for the run; a session D-Bus for WebKitGTK.
-    exec docker run "${args[@]}" --shm-size=1g -e EMACS_GUI=emacs "$image" \
+    # One X server for the run; a session D-Bus for WebKitGTK. Its end-to-end
+    # files one at a time (unless E2E_JOBS says): several at once on that one
+    # X server, on CI's 4 CPUs, one Emacs couldn't open the display, another's
+    # waits ran out (the unit files stay parallel).
+    exec docker run "${args[@]}" --shm-size=1g -e EMACS_GUI=emacs -e "E2E_JOBS=${E2E_JOBS:-1}" "$image" \
       dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1200x24' tests/run.sh "$KIND" "$@" ;;
   shell)
     exec docker run "${args[@]}" -i "$image" bash ;;

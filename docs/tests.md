@@ -12,14 +12,15 @@ XWIDGETS=no tests/linux/run.sh all # on an Emacs without xwidgets, as most distr
 
 Each test file runs in a throwaway Emacs, so your Emacs and its files are never touched. Test files run several at
 once, their results shown in file order: `JOBS` unit test files (default: the number of CPUs), `E2E_JOBS` end-to-end
-ones (default: 4, at most `JOBS`); `JOBS=1` or `E2E_JOBS=1` runs them one at a time. A test file with a line
-`;; run.sh: alone` runs with no other beside it, before the others: the end-to-end frames share a corner of the screen,
-and PDF.js draws no page in a covered frame (`test-pdf.el`). `Ctrl+C` stops them all. The PDF and drawing tests copy
+ones (default: 4, at most `JOBS`; one at a time in `tests/linux/run.sh`, where they share one X server); `JOBS=1` or
+`E2E_JOBS=1` runs them one at a time. A test file with a line `;; run.sh: alone` runs with no other beside it, before
+the others: the end-to-end frames share a corner of the screen, and PDF.js draws no page in a covered frame
+(`test-pdf.el`). `Ctrl+C` stops them all. The PDF and drawing tests copy
 PDF.js and Excalidraw from Doom's data folder, and skip without them: opening a PDF or a drawing once downloads them,
 or `emacs --batch -l tests/helper.el -l tests/assets.el` does. `E2E_WINDOW=front` shows the
 end-to-end tests' frame, which otherwise stays off screen. They run on macOS and on Linux; `EMACS_GUI` names the GUI
 Emacs for the end-to-end tests (default: macOS's `/Applications/Emacs.app`, else `emacs`). On Linux without a display,
-run those under Xvfb: `xvfb-run -a tests/run.sh e2e`.
+run those under Xvfb, one at a time: `E2E_JOBS=1 xvfb-run -a tests/run.sh e2e`.
 
 - `tests/unit/test-NAME.el` tests `config/NAME.el` or a part of it (`test-tabs.el`: `config/editor/tabs.el`); the
   language servers' settings, a file per language (`test-lsp-rust.el`: `config/lsp/rust.el`), sharing
