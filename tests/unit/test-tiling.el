@@ -1468,7 +1468,8 @@ too small to halve: SPC w SPC says so."
   (should (eq (default-value '+my/tiling-apps) 'all))
   (let ((+my/tiling-apps 'all))
     (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) (+my/tiling--apps))
-                   '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/excalidraw-mode magit-mode
+                   '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/mermaid-preview-page-mode
+                     +my/mermaid-preview-image-mode +my/excalidraw-mode magit-mode
                      beads-list-mode beads-detail-mode beads-detail-vui-mode agent-ui-canvas-mode
                      agent-ui-form-mode +my/html-page-mode)))))
 
@@ -1483,7 +1484,7 @@ predicate kept); all: every one."
   (let ((+my/tiling-apps nil))
     (should-not (+my/tiling--apps)))
   (let ((+my/tiling-apps 'all))
-    (should (= (length (+my/tiling--apps)) 11)))
+    (should (= (length (+my/tiling--apps)) 13)))
   ;; Not mended by them: the list known stays whole.
   (let ((+my/tiling-apps '(issues)))
     (setcar (+my/tiling--apps) 'changed)

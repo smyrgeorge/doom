@@ -8,6 +8,7 @@ and in Claude Code's replies.
 
 | Key | Action |
 |---|---|
+| `SPC m p` | The diagram beside the file, redrawn as you type; again, closed |
 | `SPC m c` | Draw the file as an SVG next to it, and open it |
 | `SPC m b` / `SPC m r` | Draw the buffer / the region |
 | `SPC m f` | Draw a file you pick |
@@ -15,6 +16,20 @@ and in Claude Code's replies.
 | `SPC m d` | Mermaid's docs |
 
 In Org, a `#+begin_src mermaid :file flow.svg` block draws with `C-c C-c`, in the theme's colours too.
+
+## Preview
+
+The notice at the top of a Mermaid file has an **Open preview** button: the diagram in a pane beside the file, redrawn
+as you type, in the theme's colours. An error shows Mermaid's message under the last drawing. It's drawn by mermaid.js
+in WebKit (downloaded once); in an Emacs without xwidgets, by `mmdc`, a second or so after you pause. In a terminal,
+`SPC m p` opens the Live Editor instead.
+
+| Key | Action |
+|---|---|
+| `+` / `-` | Zoom in / out |
+| `0` | As wide as it is, at most the pane |
+| `j` / `k`, `C-d` / `C-u`, `gg` / `G` | Scroll |
+| `q` | Close |
 
 ## The theme's colours
 

@@ -39,6 +39,7 @@ Vim's and Doom's keys stay as they are there. `config/os.el` has the rules.
 | `e` (Magit, on a conflicted file) | the same | Resolve its conflicts |
 | `SPC m p` / `SPC m P` (Markdown) | the same | Live preview / in the browser |
 | `Cmd+C` (Markdown preview) | `Ctrl+Shift+C` | Copy the selection |
+| `SPC m p` (Mermaid) | the same | The diagram beside the file, redrawn as you type |
 | `SPC m c` / `SPC m b` / `SPC m r` (Mermaid) | the same | Draw the file / buffer / region as an SVG |
 | `SPC m o` (Mermaid) | the same | Open in Mermaid's Live Editor |
 | `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | Claude Code in a new pane / in the window you're in |

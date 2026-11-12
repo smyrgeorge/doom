@@ -7,7 +7,8 @@
 ;; mmdc never runs: `call-process' is faked where a command would run it.
 
 (require 'json)
-(+test-load "config/mermaid")
+(require 'xwidget)                      ; before faking its functions
+(+test-load "config/window" "config/webkit" "config/mermaid")
 (require 'mermaid-mode)
 
 ;; ====== A STAND-IN THEME ======
@@ -461,6 +462,19 @@ own instead; never one written in the code."
       (should-not (assq 'xyChart variables))
       (should-not (assq 'themeCSS (+my/mermaid-config))))))
 
+(ert-deftest mermaid/colours-from-the-frame-not-a-notice-s ()
+  "The colours from the selected frame if it's graphical, else another: never
+a child frame (a notice's, its own colours)."
+  (let* ((main (selected-frame))
+         (child 'child) (other 'other) (tty 'tty)
+         (parents `((,child . ,main))))
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional frame) (memq frame (list main child other))))
+              ((symbol-function 'frame-parent) (lambda (&optional frame) (alist-get frame parents))))
+      (should (eq (+my/mermaid--frame) main))
+      (cl-letf (((symbol-function 'selected-frame) (lambda () tty))
+                ((symbol-function 'frame-list) (lambda () (list tty child other))))
+        (should (eq (+my/mermaid--frame) other))))))
+
 (ert-deftest mermaid/font-from-the-default-face ()
   (let ((face-attribute-fn (symbol-function 'face-attribute)))
     (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
@@ -721,6 +735,332 @@ RESULTS a list the callback pushes (FILE MESSAGE) on."
         (+my/mermaid-render "flowchart TD\n" (lambda (file _) (setq got file)))
         (let ((inhibit-message t))
           (should (+test-mermaid--wait (lambda () got))))))))
+
+;; ====== THE PREVIEW ======
+;; WebKit faked, as tests/unit/test-markdown.el does: views made, scripts
+;; recorded; notices recorded. mermaid.js not downloaded (said to be there).
+
+(cl-defstruct (+test-mermaid--xw (:constructor +test-mermaid--xw-new) (:copier nil))
+  "A fake WebKit view."
+  buffer props uri killed)
+
+(defvar +test-mermaid--made nil "The fake views made, oldest first.")
+(defvar +test-mermaid--scripts nil "(XWIDGET SCRIPT) run, oldest first.")
+(defvar +test-mermaid--notices nil "(ID TEXT ACTIONS BUFFER) shown, latest first.")
+
+(defmacro +test-mermaid--with-webkit (&rest body)
+  "BODY with WebKit faked and working (`+my/webkit-p' t), mermaid.js there,
+notices recorded, a stand-in theme, temp files in the test's folder; from one
+window on *scratch*, and again after."
+  (declare (indent 0))
+  `(let ((+test-mermaid--made nil)
+         (+test-mermaid--scripts nil)
+         (+test-mermaid--notices nil)
+         (temporary-file-directory
+          (file-name-as-directory (make-temp-file (expand-file-name "tmp" (+test-tmp-file "dirs/")) t)))
+         (+my/webkit--watch-timer nil)
+         (+my/webkit--tidy-timer nil)
+         (+my/mermaid-preview-notice t)
+         (+my/focus-new-windows t)
+         (this-command 'test))
+     (cl-letf (((symbol-function 'make-xwidget)
+                (lambda (_type _title _width _height &optional _arguments buffer _related)
+                  (let ((xw (+test-mermaid--xw-new :buffer buffer)))
+                    (setq +test-mermaid--made (append +test-mermaid--made (list xw)))
+                    xw)))
+               ((symbol-function 'xwidget-put)
+                (lambda (xw property value)
+                  (setf (+test-mermaid--xw-props xw) (plist-put (+test-mermaid--xw-props xw) property value))
+                  value))
+               ((symbol-function 'xwidget-get)
+                (lambda (xw property) (plist-get (+test-mermaid--xw-props xw) property)))
+               ((symbol-function 'xwidget-live-p) #'+test-mermaid--xw-p)
+               ((symbol-function 'kill-xwidget) (lambda (xw) (setf (+test-mermaid--xw-killed xw) t)))
+               ((symbol-function 'xwidget-buffer) #'+test-mermaid--xw-buffer)
+               ((symbol-function 'set-xwidget-buffer)
+                (lambda (xw buffer) (setf (+test-mermaid--xw-buffer xw) buffer)))
+               ((symbol-function 'set-xwidget-query-on-exit-flag) #'ignore)
+               ((symbol-function 'xwidget-webkit-goto-uri)
+                (lambda (xw uri) (setf (+test-mermaid--xw-uri xw) uri)))
+               ((symbol-function 'xwidget-webkit-uri) #'+test-mermaid--xw-uri)
+               ((symbol-function 'xwidget-webkit-title) (lambda (_xw) ""))
+               ((symbol-function 'xwidget-webkit-execute-script)
+                (lambda (xw script &optional _callback)
+                  (setq +test-mermaid--scripts (append +test-mermaid--scripts (list (list xw script))))))
+               ((symbol-function 'xwidget-webkit-adjust-size-to-window) #'ignore)
+               ((symbol-function 'xwidget-window-inside-pixel-width) (lambda (_window) 700))
+               ((symbol-function 'xwidget-window-inside-pixel-height) (lambda (_window) 500))
+               ((symbol-function 'xwidget-webkit-stop-loading) #'ignore)
+               ((symbol-function 'xwidget-webkit-goto-history) #'ignore)
+               ((symbol-function 'xwidget-webkit-callback) #'ignore)
+               ((symbol-function '+my/webkit-p) (lambda () t))
+               ((symbol-function '+my/mermaid-js-ensure) (lambda () t))
+               ((symbol-function '+my/banner-show)
+                (lambda (id text &rest args)
+                  (push (list id text (plist-get args :actions) (current-buffer)) +test-mermaid--notices))))
+       (+test-mermaid--theme +test-mermaid--dark
+         (unwind-protect
+             (+test-with-reset ,@body)
+           (dolist (timer (append timer-list timer-idle-list))
+             (let ((function (timer--function timer)))
+               (when (and (symbolp function)
+                          (string-match-p "\\`\\+my/\\(webkit\\|mermaid-preview\\)" (symbol-name function)))
+                 (cancel-timer timer)))))))))
+
+(defun +test-mermaid--timers (function)
+  (seq-filter (lambda (timer) (eq (timer--function timer) function))
+              (append timer-list timer-idle-list)))
+
+(defun +test-mermaid--fire (function)
+  "Run the pending timers calling FUNCTION now, once; how many."
+  (let ((timers (+test-mermaid--timers function)))
+    (mapc #'cancel-timer timers)
+    (dolist (timer timers)
+      (apply (timer--function timer) (timer--args timer)))
+    (length timers)))
+
+(defun +test-mermaid--redisplay ()
+  "What redisplay would do: each window showing a WebKit page gets its view."
+  (dolist (window (window-list nil 'nomini))
+    (when (with-current-buffer (window-buffer window) (derived-mode-p '+my/webkit-mode))
+      (+my/webkit--shown-h window)))
+  (+test-mermaid--fire #'+my/webkit--start))
+
+(defun +test-mermaid--file (name content)
+  "A Mermaid file NAME with CONTENT, visited in the selected window; its buffer."
+  (let ((buffer (find-file-noselect (+test-file (concat "mermaid/preview/" name) content))))
+    (switch-to-buffer buffer)
+    buffer))
+
+(defun +test-mermaid--scripts-matching (regexp)
+  (seq-filter (lambda (script) (string-match-p regexp (cadr script))) +test-mermaid--scripts))
+
+(ert-deftest mermaid/preview-opens-beside-the-file ()
+  (+test-mermaid--with-webkit
+    (let* ((mmd (+test-mermaid--file "flow.mmd" "flowchart TD\n    A --> B\n"))
+           (window (selected-window))
+           (width (window-total-width window)))
+      (call-interactively #'+my/mermaid-preview-toggle)
+      (let* ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd))
+             (pane (get-buffer-window preview)))
+        (should (equal (buffer-name preview) "Diagram: flow.mmd"))
+        (should pane)
+        ;; Right of the file, half its width; the cursor stays in the file.
+        (should (> (window-left-column pane) (window-left-column window)))
+        (should (<= (abs (- (window-total-width pane) (/ width 2))) 1))
+        (should (eq (selected-window) window))
+        (with-current-buffer preview
+          (should (eq major-mode '+my/mermaid-preview-page-mode))
+          (should (eq +my/mermaid-preview--source mmd)))
+        ;; Its page: written as the view starts, the diagram as it is.
+        (with-current-buffer mmd (insert "%% typed\n"))
+        (+test-mermaid--redisplay)
+        (should (= (length +test-mermaid--made) 1))
+        (let* ((file (buffer-local-value '+my/mermaid-preview--file mmd))
+               (page (+test-mermaid--text file)))
+          (should (equal (+test-mermaid--xw-uri (car +test-mermaid--made)) (+my/webkit-file-url file)))
+          (should (string-search "show(\"%% typed\\nflowchart TD\\n    A --> B\\n\")" page))
+          (should (string-search (+my/mermaid-js-url) page))
+          (should (string-search (concat "mmd.init(" (+my/mermaid-theme-json) ")") page)))
+        ;; Its colour: the cover's, and around the views.
+        (with-current-buffer preview
+          (should (equal (+my/webkit--background) "#282c34"))
+          (should (member (list :background "#282c34") (alist-get 'default face-remapping-alist))))))))
+
+(ert-deftest mermaid/preview-page ()
+  (+test-mermaid--theme +test-mermaid--dark
+    (let ((page (+my/mermaid-preview-page "flowchart TD\n    A[\"</script>\"]\n")))
+      (should (string-search "<script src=\"file://" page))
+      (should (string-search "mermaid-12.3.0/mermaid.min.js\"></script>" page))
+      ;; The theme's colours: the page's, its errors'.
+      (should (string-search "html{background:#282c34;color:#bbc2cf}" page))
+      (should (string-search "#error{color:#ff6c6b;" page))
+      ;; A </script> in the diagram doesn't end the page's script.
+      (should (= 3 (with-temp-buffer (insert page) (count-matches "</script>" (point-min) (point-max)))))
+      (should (string-search "<\\/script>" page))
+      (should (string-search "window.mmd" page)))))
+
+(ert-deftest mermaid/preview-follows-typing ()
+  "Redrawn ≈0.3 s after typing stops, in each of its views, without reloading."
+  (+test-mermaid--with-webkit
+    (let ((mmd (+test-mermaid--file "typing.mmd" "flowchart TD\n")))
+      (+my/mermaid-preview-show)
+      (+test-mermaid--redisplay)
+      (setq +test-mermaid--scripts nil)
+      (with-current-buffer mmd
+        (goto-char (point-max))
+        (insert "    A --> B\n"))
+      (should (= 1 (length (+test-mermaid--timers #'+my/mermaid-preview--update))))
+      (should (< (abs (- 0.3 (float-time (timer--time (car (+test-mermaid--timers #'+my/mermaid-preview--update)))))) 0.001))
+      (+test-mermaid--fire #'+my/mermaid-preview--update)
+      (should (equal (mapcar #'cadr +test-mermaid--scripts)
+                     (list (concat "show(\"flowchart TD\\n    A --> B\\n\");\n;void 0"))))
+      (should (= (length +test-mermaid--made) 1)))))
+
+(ert-deftest mermaid/preview-toggled-by-spc-m-p ()
+  (+test-mermaid--with-webkit
+    (let ((mmd (+test-mermaid--file "toggle.mmd" "flowchart TD\n")))
+      (should (eq (+test-mermaid--key "SPC m p") #'+my/mermaid-preview-toggle))
+      (with-current-buffer mmd
+        (call-interactively #'+my/mermaid-preview-toggle)
+        (should +my/mermaid-preview-mode)
+        (+test-mermaid--redisplay)
+        (let ((file +my/mermaid-preview--file)
+              (preview +my/mermaid-preview--buffer))
+          (call-interactively #'+my/mermaid-preview-toggle)
+          (should-not +my/mermaid-preview-mode)
+          (should-not (buffer-live-p preview))
+          (should-not (file-exists-p file))
+          (should-not (memq #'+my/mermaid-preview--after-change-h after-change-functions))
+          (should (= (length (window-list)) 1))
+          (should (seq-every-p #'+test-mermaid--xw-killed +test-mermaid--made)))))))
+
+(ert-deftest mermaid/preview-closed-turns-it-off ()
+  "Its pane closed (q kills it): the file's preview off; the file killed: the
+preview goes."
+  (+test-mermaid--with-webkit
+    (let ((mmd (+test-mermaid--file "closed.mmd" "flowchart TD\n")))
+      (with-current-buffer mmd (+my/mermaid-preview-mode 1))
+      (kill-buffer (buffer-local-value '+my/mermaid-preview--buffer mmd))
+      (with-current-buffer mmd (should-not +my/mermaid-preview-mode))
+      (with-current-buffer mmd (+my/mermaid-preview-mode 1))
+      (let ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd)))
+        (kill-buffer mmd)
+        (should-not (buffer-live-p preview))))))
+
+(ert-deftest mermaid/preview-shown-again-after-its-pane-closed ()
+  (+test-mermaid--with-webkit
+    (let ((mmd (+test-mermaid--file "again.mmd" "flowchart TD\n")))
+      (+my/mermaid-preview-show)
+      (let ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd)))
+        (delete-window (get-buffer-window preview))
+        (+my/mermaid-preview-show)
+        (should (get-buffer-window preview))
+        ;; On screen: nothing more.
+        (+my/mermaid-preview-show)
+        (should (= (length (get-buffer-window-list preview)) 1))))))
+
+(ert-deftest mermaid/preview-re-themed ()
+  (+test-mermaid--with-webkit
+    (let ((mmd (+test-mermaid--file "theme.mmd" "flowchart TD\n")))
+      (+my/mermaid-preview-show)
+      (+test-mermaid--redisplay)
+      (setq +test-mermaid--scripts nil)
+      (let ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd)))
+        (+test-mermaid--theme +test-mermaid--light
+          (run-hooks '+my/mermaid-theme-hook)
+          (let ((script (cadr (car (+test-mermaid--scripts-matching "\\`theme(")))))
+            (should script)
+            (should (string-search (+my/mermaid-theme-json) script))
+            (should (string-search "\"#fafafa\", \"#383a42\"" script)))
+          (with-current-buffer preview
+            (should (member (list :background "#fafafa") (alist-get 'default face-remapping-alist)))))))))
+
+(ert-deftest mermaid/preview-zoom ()
+  (+test-mermaid--with-webkit
+    (let ((mmd (+test-mermaid--file "zoom.mmd" "flowchart TD\n")))
+      (+my/mermaid-preview-show)
+      (+test-mermaid--redisplay)
+      (with-current-buffer (buffer-local-value '+my/mermaid-preview--buffer mmd)
+        (setq +test-mermaid--scripts nil)
+        (+my/mermaid-preview-zoom-in)
+        (+my/mermaid-preview-zoom-out)
+        (+my/mermaid-preview-zoom-reset)
+        (should (equal (mapcar (lambda (s) (car (split-string (cadr s) "\n"))) +test-mermaid--scripts)
+                       '("zoomBy(1.25);" "zoomBy(0.8);" "zoomBy(0);")))))))
+
+(ert-deftest mermaid/preview-keys ()
+  (pcase-dolist (`(,key . ,command)
+                 '(("j" . +my/webkit-scroll-down) ("k" . +my/webkit-scroll-up)
+                   ("C-d" . +my/webkit-half-screen-down) ("C-u" . +my/webkit-half-screen-up)
+                   ("gg" . +my/webkit-top) ("G" . +my/webkit-bottom)
+                   ("+" . +my/mermaid-preview-zoom-in) ("=" . +my/mermaid-preview-zoom-in)
+                   ("-" . +my/mermaid-preview-zoom-out) ("0" . +my/mermaid-preview-zoom-reset)
+                   ("q" . kill-current-buffer)))
+    (should (eq (lookup-key (evil-get-auxiliary-keymap +my/mermaid-preview-page-mode-map 'normal) (kbd key))
+                command)))
+  (should (eq (lookup-key +my/mermaid-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
+  (should (eq (lookup-key (evil-get-auxiliary-keymap +my/mermaid-preview-image-mode-map 'normal) "q")
+              #'kill-current-buffer)))
+
+;; Without WebKit: mmdc's SVG.
+
+(defmacro +test-mermaid--with-images (&rest body)
+  "BODY in a GUI without WebKit (faked), the stand-in mmdc drawing."
+  (declare (indent 0))
+  `(+test-mermaid--with-mmdc
+     (cl-letf (((symbol-function '+my/webkit-p) #'ignore)
+               ((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+               ((symbol-function 'image-type-available-p) (lambda (&rest _) t)))
+       (+test-mermaid--theme +test-mermaid--dark
+         (+test-with-reset ,@body)))))
+
+(defun +test-mermaid--image-file (preview)
+  "The SVG file PREVIEW's image shows, or nil."
+  (with-current-buffer preview
+    (let ((pos (text-property-not-all (point-min) (point-max) 'display nil)))
+      (and pos (plist-get (cdr (get-text-property pos 'display)) :file)))))
+
+(ert-deftest mermaid/preview-without-webkit-mmdc-s-svg ()
+  (+test-mermaid--with-images
+    (let ((mmd (+test-mermaid--file "image.mmd" "flowchart TD\n    A --> B\n")))
+      (should (+my/mermaid-preview-live-p))
+      (+my/mermaid-preview-show)
+      (let ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd)))
+        (with-current-buffer preview
+          (should (eq major-mode '+my/mermaid-preview-image-mode))
+          (should (string-search "Drawing" (buffer-string))))
+        (should (+test-mermaid--wait (lambda () (+test-mermaid--image-file preview))))
+        (let ((first (+test-mermaid--image-file preview)))
+          (should (string-search "flowchart TD" (+test-mermaid--text first)))
+          ;; Typed: drawn again once typing pauses (longer: mmdc takes a second).
+          (with-current-buffer mmd (goto-char (point-max)) (insert "    B --> C\n"))
+          (should (< (abs (- 0.6 (float-time (timer--time (car (+test-mermaid--timers #'+my/mermaid-preview--update)))))) 0.001))
+          (+test-mermaid--fire #'+my/mermaid-preview--update)
+          (should (+test-mermaid--wait (lambda () (not (equal (+test-mermaid--image-file preview) first)))))
+          (should (string-search "B --> C" (+test-mermaid--text (+test-mermaid--image-file preview))))
+          ;; An error: Mermaid's message under the last drawing.
+          (let ((last (+test-mermaid--image-file preview)))
+            (with-current-buffer mmd (insert "    ERROR\n"))
+            (+test-mermaid--fire #'+my/mermaid-preview--update)
+            (should (+test-mermaid--wait
+                     (lambda () (string-search "Parse error" (with-current-buffer preview (buffer-string))))))
+            (should (equal (+test-mermaid--image-file preview) last))))))))
+
+(ert-deftest mermaid/preview-in-a-terminal-the-live-editor ()
+  (+test-mermaid--with-mmdc
+    (cl-letf (((symbol-function '+my/webkit-p) #'ignore))
+      (let ((+test-browsed nil))
+        (+test-with-reset
+          (let ((mmd (+test-mermaid--file "terminal.mmd" "flowchart TD\n")))
+            (should-not (+my/mermaid-preview-live-p))
+            (with-current-buffer mmd (+my/mermaid-preview-toggle))
+            (should-not (buffer-local-value '+my/mermaid-preview-mode mmd))
+            (should (string-match-p "mermaid-live-editor" (car +test-browsed)))))))))
+
+;; The notice.
+
+(ert-deftest mermaid/notice-offers-the-preview ()
+  (should (eq (default-value '+my/mermaid-preview-notice) t))
+  (should (memq #'+my/mermaid-preview-notice-h mermaid-mode-hook))
+  (+test-mermaid--with-webkit
+    (let ((mmd (+test-mermaid--file "notice.mmd" "flowchart TD\n")))
+      (should (equal +test-mermaid--notices
+                     (list (list 'mermaid-preview
+                                 "See this diagram rendered next to it, updated as you type (SPC m p)."
+                                 '(("Open preview" . +my/mermaid-preview-show))
+                                 mmd)))))))
+
+(ert-deftest mermaid/notice-only-where-the-preview-works ()
+  (+test-mermaid--with-webkit
+    (let ((+my/mermaid-preview-notice nil))
+      (+test-mermaid--file "off.mmd" "flowchart TD\n"))
+    (with-current-buffer (+test-buffer "no file.mmd")
+      (mermaid-mode))
+    (let ((+my/mermaid-mmdc (expand-file-name "no-such-mmdc" +test-tmp)))
+      (cl-letf (((symbol-function '+my/webkit-p) #'ignore))
+        (+test-mermaid--file "terminal-notice.mmd" "flowchart TD\n")))
+    (should-not +test-mermaid--notices)))
 
 ;; ====== NO COLOUR IN THE CODE ======
 

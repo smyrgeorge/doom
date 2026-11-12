@@ -433,6 +433,17 @@ downloaded by a test); nil if Doom has none."
     (cond ((file-directory-p copy) copy)
           ((file-directory-p real) (copy-directory real copy nil t t) copy))))
 
+;; MERMAID.JS
+(defun +test-mermaid-js-dir ()
+  "A copy of mermaid.js in the temp Doom's data folder, from the real one
+\(never downloaded by a test); nil if Doom has none."
+  (let* ((version (if (boundp '+my/mermaid-js-version) +my/mermaid-js-version "12.3.0"))
+         (name (format "mermaid-%s" version))
+         (real (expand-file-name (concat ".local/etc/" name) +test-doom-emacs-dir))
+         (copy (expand-file-name name doom-data-dir)))
+    (cond ((file-directory-p copy) copy)
+          ((file-directory-p real) (copy-directory real copy nil t t) copy))))
+
 ;; AGENT UI'S SKILL
 (defun +test-agent-ui-skill (&optional file)
   "The agent-ui skill's text: FILE's (relative to skills/agent-ui/), else all

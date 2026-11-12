@@ -317,16 +317,19 @@ dark PDF pages, Agent UI's questions (their files' defvars keep them)."
              (+test-config--position '(load! "config/editor")))))
 
 (ert-deftest config/order-webkit-before-its-pages ()
-  "config/webkit.el, before the Markdown preview, the PDF viewer and drawings
-built on it (config/markdown.el binds its clicks as it loads)."
+  "config/webkit.el, before the Markdown and Mermaid previews, the PDF viewer
+and drawings built on it (config/markdown.el binds its clicks as it loads)."
   (should (< (+test-config--load-position "config/webkit")
              (+test-config--load-position "config/markdown")))
+  (should (< (+test-config--load-position "config/webkit")
+             (+test-config--load-position "config/mermaid")))
   (should (< (+test-config--load-position "config/webkit")
              (+test-config--load-position "config/pdf")))
   (should (< (+test-config--load-position "config/webkit")
              (+test-config--load-position "config/excalidraw")))
   (should (eq (lookup-key +my/excalidraw-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
-  (should (eq (lookup-key +md-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select)))
+  (should (eq (lookup-key +md-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
+  (should (eq (lookup-key +my/mermaid-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select)))
 
 (ert-deftest config/order-childframe-before-its-users ()
   "config/childframe.el before the notices, the error stripe and WebKit's

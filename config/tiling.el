@@ -38,7 +38,7 @@
 ;; neighbour).
 ;; TILING FIRST (config/tiling/apps.el)
 ;; - Applications (`+my/tiling-known-apps': Claude Code, the terminal, the
-;;   Markdown preview, magit, drawings, issues, Agent UI's canvas, a page in
+;;   Markdown and Mermaid previews, magit, drawings, issues, Agent UI's canvas, a page in
 ;;   WebKit; those chosen in config.el, `+my/tiling-apps') open in a new pane where the strategy
 ;;   puts it, whatever their own setting or Doom's popup rules say; one shown
 ;;   already, or a tab of a pane (a file over it): that pane. But from a
@@ -120,7 +120,9 @@ the height; of the row's width).")
 (defvar +my/tiling-known-apps
   '((claude agent-shell-mode)                       ; Claude Code (SPC o c, SPC o C)
     (terminal ghostel-mode)                         ; the terminal (SPC o t)
-    (preview +md-preview-page-mode)                 ; the Markdown preview (SPC m p)
+    (preview +md-preview-page-mode                  ; the Markdown preview (SPC m p)
+             +my/mermaid-preview-page-mode          ; a Mermaid file's (SPC m p)
+             +my/mermaid-preview-image-mode)
     (drawings +my/excalidraw-mode)                  ; drawings (Option+Enter, C-c C-d)
     (magit (magit-mode . +my/tiling-magit-new-pane-p)) ; magit (SPC g g, SPC g d...)
     (issues beads-list-mode                         ; issues (SPC o i, config/beads.el)

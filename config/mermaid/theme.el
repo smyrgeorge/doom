@@ -52,10 +52,14 @@
   "Faces whose foregrounds colour a diagram's series.")
 
 (defun +my/mermaid--frame ()
-  "The frame whose faces give the colours: a graphical one if there's one (the
-theme's true colours: the GUI's server makes terminal frames too), else the
-selected frame."
-  (or (seq-find #'display-graphic-p (frame-list)) (selected-frame)))
+  "The frame whose faces give the colours: the selected frame if it's a
+graphical one, else another (the theme's true colours: the GUI's server makes
+terminal frames too), else the selected frame. Never a child frame: a notice's
+has its own colours (config/banner.el)."
+  (let ((ours (lambda (frame) (and (display-graphic-p frame) (not (frame-parent frame))))))
+    (if (funcall ours (selected-frame))
+        (selected-frame)
+      (or (seq-find ours (frame-list)) (selected-frame)))))
 
 (defun +my/mermaid--rgb (colour &optional frame)
   "COLOUR (#rrggbb or a name) as (R G B), each 0 to 1; nil if unspecified. A
