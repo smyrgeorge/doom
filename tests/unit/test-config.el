@@ -148,6 +148,16 @@ lock files (.#NAME.el) and flycheck's (flycheck_NAME.el)."
   (seq-remove (lambda (file) (string-prefix-p "flycheck_" file))
               (directory-files dir nil "\\`[^.#].*\\.el\\'")))
 
+(defun +test-config--all-el-files ()
+  "Every Emacs Lisp file under config/, its folders' too, but an editor's own
+copies while a file is edited (`+test-config--el-files'): flycheck's, made
+and deleted as it checks (the user's Emacs on a file edited meanwhile), gone
+before a test read it."
+  (seq-remove (lambda (file)
+                (let ((name (file-name-nondirectory file)))
+                  (or (string-prefix-p "flycheck_" name) (string-prefix-p ".#" name))))
+              (directory-files-recursively (expand-file-name "config/" +test-root) "\\.el\\'")))
+
 (ert-deftest config/every-config-file-accounted-for ()
   "Each config/*.el is loaded or one of the disabled ones, and each
 config/NAME/*.el a part config/NAME.el loads: none forgotten."
@@ -257,9 +267,8 @@ header says what loads it: config.el, or for a part its file (config/merge.el)."
   "Tiling first lives in config/tiling.el and config/tiling/: config.el loads
 it and chooses its strategy and applications; no other file uses it, so
 without that `load!' each feature opens its windows as it does alone."
-  (let ((dir (expand-file-name "config/" +test-root))
-        (users nil))
-    (dolist (file (directory-files-recursively dir "\\.el\\'"))
+  (let ((users nil))
+    (dolist (file (+test-config--all-el-files))
       (unless (string-match-p "/config/tiling\\(?:\\.el\\|/\\)" file)
         (with-temp-buffer
           (insert-file-contents file)
@@ -275,7 +284,7 @@ without that `load!' each feature opens its windows as it does alone."
 side, `+my/os-notify', in config/os.el): config.el loads them, no other file
 fires one, so without that `load!' nothing notifies and nothing breaks."
   (let ((users nil))
-    (dolist (file (directory-files-recursively (expand-file-name "config/" +test-root) "\\.el\\'"))
+    (dolist (file (+test-config--all-el-files))
       (unless (string-match-p "/config/notify\\(?:\\.el\\|/\\)" file)
         (with-temp-buffer
           (insert-file-contents file)
