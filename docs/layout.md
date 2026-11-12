@@ -19,6 +19,7 @@
 | `config/git.el`, `git/` | [Magit](git.md#magit), [a file's diff](git.md#file-diff) |
 | `config/lsp.el`, `lsp/` | Language servers (each language's settings: `lsp/LANGUAGE.el`), the usages list |
 | `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
+| `config/mermaid.el`, `mermaid/` | [Mermaid](mermaid.md): mermaid-mode, diagrams in the theme's colours |
 | `config/html.el` | HTML files: a [notice](editor.md#notices) to open them in the browser; a page in WebKit (`+my/html-open-in-emacs`) |
 | `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |
 | `config/os.el` | What differs between macOS and Linux: [the keys](keybindings.md), other apps, the clipboard's images, notifications |

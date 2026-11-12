@@ -151,7 +151,8 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Project sidebar](docs/sidebar.md): treemacs following the current file
 - [Search](docs/search.md): Search Everywhere, find in files, projects
 - [Git](docs/git.md): Magit additions, a file's diff, resolving conflicts in three panes
-- [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md)
+- [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md),
+  [Mermaid](docs/mermaid.md)
 - [Your agent](docs/claude-code.md): its sessions, drawing for it, profiling Emacs
 - [Agent UI](docs/agent-ui.md): what your agent shows on a canvas beside its session, and `cmd/agent-ui`
 - [Notifications](docs/notifications.md): on the desktop while you're in another app (your agent finished, needs you)

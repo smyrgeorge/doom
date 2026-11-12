@@ -78,3 +78,7 @@
   :pin "9e9ffa2f631cf5f99ef28bccc1a667922ddd71c5")
 (package! beads :recipe (:host codeberg :repo "ctietze/beads.el" :files ("lisp/*.el"))
   :pin "f7ab243c3bd8c175a5bd9e68847d0d9b1b678735")
+
+;; Mermaid diagrams: mermaid-mode for .mmd / .mermaid files (config/mermaid.el),
+;; its compile commands through mmdc (scripts/tools.sh).
+(package! mermaid-mode)

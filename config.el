@@ -196,6 +196,10 @@
 ;; MARKDOWN
 (load! "config/markdown")
 
+;; MERMAID (.mmd files in mermaid-mode, its commands on SPC m; diagrams in the
+;; theme's colours)
+(load! "config/mermaid")
+
 ;; HTML (a notice: open this file in the browser)
 (load! "config/html")
 
