@@ -71,7 +71,7 @@ TOOLS=(
   "config            | claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | Claude Code in Emacs (config/agent-shell.el)"
   "config            | bd               | brew:beads            | npm:@beads/bd         | npm:@beads/bd          | issues: Beads (config/beads.el)"
   "config            | node:mathjax-full | npm:mathjax-full     | npm:mathjax-full      | npm:mathjax-full       | formulas typeset: Agent UI's math (config/agent-ui/elements/math.el)"
-  "config            | mmdc             | npm:@mermaid-js/mermaid-cli | npm:@mermaid-js/mermaid-cli | npm:@mermaid-js/mermaid-cli | Mermaid diagrams drawn (config/mermaid.el)"
+  "config            | mmdc             | npm:@mermaid-js/mermaid-cli | apt:unzip npm:@mermaid-js/mermaid-cli | dnf:unzip npm:@mermaid-js/mermaid-cli | Mermaid diagrams drawn (config/mermaid.el)"
   "config            | python3          | builtin               | apt:python3           | dnf:python3            | treemacs's git status (config/treemacs.el)"
   "config            | xdg-open         | -                     | apt:xdg-utils         | dnf:xdg-utils          | other apps, the file manager (config/os.el)"
   "config            | lp               | -                     | apt:cups-client       | dnf:cups-client        | printing PDFs (config/os.el)"
@@ -297,9 +297,13 @@ dedupe() { # dedupe ARRAY: its values, each once (word list)
 # mmdc_browser: mermaid-cli's headless Chrome. puppeteer downloads it as it's
 # installed, unless npm runs no install scripts (npm 11 runs only those
 # allowed): downloaded here, by mermaid-cli's own puppeteer (there already:
-# left as it is). Linux on ARM has no build of it: the system's chromium
-# instead (config/mermaid.el runs mmdc with it there). ARCH (default: uname -m)
-# says which machine.
+# left as it is). It unzips it with unzip (TOOLS has it): without it, the
+# download was left unfinished, its folder there, its program not, and later
+# ones gave up on it: removed, downloaded again. Then, on Debian-likes, the
+# system's libraries it needs, as its download lists them (deb.deps, which
+# puppeteer's own --install-deps reads; a desktop has most of them). Linux on
+# ARM has no build of it: the system's chromium instead (config/mermaid.el
+# runs mmdc with it there). ARCH (default: uname -m) says which machine.
 mmdc_browser() {
   case " ${NPM[*]} " in *" @mermaid-js/mermaid-cli"*) ;; *) return 0 ;; esac
   case "$OS:${ARCH:-$(uname -m)}" in
@@ -314,16 +318,29 @@ mmdc_browser() {
       fi
       return 0 ;;
   esac
-  local puppeteer
+  local puppeteer cache deps
   puppeteer="$(npm root -g 2>/dev/null || true)/@mermaid-js/mermaid-cli/node_modules/.bin/puppeteer"
   if [ -z "${DRY_RUN:-}" ] && [ ! -x "$puppeteer" ]; then
     return 0
   fi
-  if quiet "$puppeteer" browsers install chrome-headless-shell; then
+  cache=${PUPPETEER_CACHE_DIR:-$HOME/.cache/puppeteer}/chrome-headless-shell
+  if quiet "$puppeteer" browsers install chrome-headless-shell ||
+      { [ -z "${DRY_RUN:-}" ] && rm -rf "$cache" &&
+          quiet "$puppeteer" browsers install chrome-headless-shell; }; then
     ui_ok "mmdc's browser (Chrome's headless shell)"
   else
     ui_fail "mmdc's browser: puppeteer browsers install failed"
     OS_SKIPPED+=("chrome-headless-shell (mmdc's browser)")
+    return 0
+  fi
+  [ "$OS" = apt ] || return 0
+  deps=$(find "$cache" -name deb.deps 2>/dev/null | head -1)
+  [ -n "$deps" ] || return 0
+  if run $SUDO apt-get satisfy -y -q --no-install-recommends "$(paste -sd, "$deps")"; then
+    ui_ok "mmdc's browser's libraries"
+  else
+    ui_fail "mmdc's browser's libraries: apt-get satisfy failed"
+    OS_SKIPPED+=("$(paste -sd, "$deps") (mmdc's browser's libraries)")
   fi
 }
 

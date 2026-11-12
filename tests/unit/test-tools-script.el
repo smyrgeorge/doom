@@ -314,6 +314,10 @@ exit 0
         (should (= status 0))
         (should (string-match-p "\\$ npm install -g .*@mermaid-js/mermaid-cli@latest" output))
         (should (string-match-p "\\$ .*/puppeteer browsers install chrome-headless-shell" output))
+        ;; unzip first (puppeteer unzips Chrome with it), with the system's packages.
+        (should (string-match-p (format "\\$ \\(sudo \\)?%s install -y -q .*\\_<unzip\\_>"
+                                        (if (equal os "apt") "apt-get" "dnf"))
+                                output))
         (should-not (string-search "chromium" output)))
       (pcase-let ((`(,status . ,output)
                    (+test-tools-script--run os (+test-tools-script--init +test-tools-script--small)
