@@ -130,3 +130,5 @@ Spelling knows ~40k programming words and checks camelCase words part by part.
 - Saving returns to normal state.
 - `q` closes transient menus.
 - A thin line marks column 120, or a project's `.editorconfig` `max_line_length`.
+- The line you're on is always shown whole, at a window's bottom too (Claude Code's prompt); only a scroll leaves it
+  cut.

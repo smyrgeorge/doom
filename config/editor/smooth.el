@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/editor/smooth.el -*- lexical-binding: t; -*-
-;; Smooth mouse-wheel scrolling.
+;; Smooth mouse-wheel scrolling, and the line you're on kept whole.
 ;; Loaded from config/editor.el.
 
 (defvar +my/smooth--window nil "The window gliding.")
@@ -98,6 +98,42 @@
                               (cons (window-start window) (window-vscroll window t)))))))
 
 (add-hook 'pre-redisplay-functions #'+my/smooth--limit-h)
+
+;; THE LINE YOU'RE ON, WHOLE
+;; Smooth scrolling (ultra-scroll, through pixel-scroll-precision-mode) turns
+;; `make-cursor-line-fully-visible' off everywhere: otherwise redisplay undoes a
+;; scroll that leaves the cursor's line cut by the window's edge (Emacs's
+;; bug#65214), and slows down while scrolling (ultra-scroll's #32). But then a
+;; cut line counts as shown: typing at a window's bottom (Claude Code's prompt
+;; is always there) went on in the sliver of a row the window doesn't fit, and
+;; Emacs scrolled only as far as that sliver, line after line. Now redisplay
+;; shows the cursor's line whole again in the selected window after anything
+;; but a scroll; a scroll (the wheel, the trackpad, a glide, C-d, C-e...)
+;; still leaves it cut, and other windows aren't moved under it.
+(defun +my/smooth--scroll-command-p (command)
+  "Non-nil if COMMAND scrolls: the wheel, the trackpad, C-d, C-e..."
+  (and command (symbolp command)
+       (string-match-p "scroll" (symbol-name command))))
+
+(defun +my/smooth-cursor-line-whole-p (window)
+  "Non-nil if redisplay should scroll WINDOW to show the cursor's line whole
+\(`make-cursor-line-fully-visible'): the selected window, after anything but a
+scroll (see above). Between commands (a timer, a process's output), the last
+command decides."
+  (and (eq window (selected-window))
+       (not (+my/smooth--scroll-command-p (or this-command last-command)))))
+
+(defun +my/smooth-cursor-line-whole-h (&rest _)
+  "Once smooth scrolling has turned `make-cursor-line-fully-visible' off."
+  (when (or (bound-and-true-p ultra-scroll-mode)
+            (bound-and-true-p pixel-scroll-precision-mode))
+    (setq-default make-cursor-line-fully-visible #'+my/smooth-cursor-line-whole-p)))
+
+;; ultra-scroll turns it off after pixel-scroll-precision-mode's hook. Already
+;; on: the config loaded again.
+(add-hook 'pixel-scroll-precision-mode-hook #'+my/smooth-cursor-line-whole-h)
+(add-hook 'ultra-scroll-mode-hook #'+my/smooth-cursor-line-whole-h)
+(+my/smooth-cursor-line-whole-h)
 
 ;; GOOD-SCROLL, ONLY WHEN SCROLLING
 ;; good-scroll (Doom's +interpolate: it animates keyboard scrolling, C-d, C-v...)

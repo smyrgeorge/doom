@@ -1,7 +1,8 @@
 ;;; tests/unit/test-smooth.el -*- lexical-binding: t; -*-
 ;; config/editor/smooth.el: mouse-wheel notches glide (ultra-scroll), heavy idle jobs
-;; wait for a glide to end, every window's scroll limit past the end, good-scroll's
-;; timer only while scrolling, the wheel over the minibuffer.
+;; wait for a glide to end, every window's scroll limit past the end, the line
+;; you're on kept whole, good-scroll's timer only while scrolling, the wheel over
+;; the minibuffer.
 
 ;; What Doom's smooth-scroll module does to ultra-scroll; its config runs before
 ;; this config's `after!' blocks, as here.
@@ -449,6 +450,64 @@ manage their own view."
     (+my/smooth--limit-h (selected-window))
     (should (= (window-start) (+test-smooth--line-start 99)))
     (should (equal (window-parameter nil '+my/smooth-limit) (cons (window-start) 0)))))
+
+;; ====== THE LINE YOU'RE ON, WHOLE ======
+;; Redisplay scrolling to show it: tests/e2e/test-smooth.el.
+
+(ert-deftest smooth/scroll-command-p ()
+  "The wheel, the trackpad, a glide's, keyboard scrolling; nothing else."
+  (dolist (command '(ultra-scroll ultra-scroll-mac mwheel-scroll mac-mwheel-scroll
+                     pixel-scroll-precision pixel-scroll-interpolate-down
+                     scroll-up-command scroll-down-command scroll-other-window
+                     evil-scroll-down evil-scroll-up evil-scroll-line-down
+                     evil-scroll-line-up evil-scroll-page-down good-scroll-up))
+    (should (+my/smooth--scroll-command-p command)))
+  (dolist (command (list 'self-insert-command 'newline 'evil-next-line
+                         'evil-open-below 'mouse-set-point 'comint-send-input
+                         nil (lambda () (interactive))))
+    (should-not (+my/smooth--scroll-command-p command))))
+
+(ert-deftest smooth/cursor-line-whole-p ()
+  "Whole in the selected window after anything but a scroll; between commands,
+the last one decides; other windows aren't moved under it."
+  (+test-with-reset
+    (let* ((selected (selected-window))
+           (other (split-window)))
+      (dolist (case '((self-insert-command nil . t)
+                      (newline ultra-scroll . t)
+                      (ultra-scroll nil . nil)
+                      (evil-scroll-line-down nil . nil)
+                      ;; Between commands: a timer, a process's output.
+                      (nil evil-next-line . t)
+                      (nil ultra-scroll . nil)
+                      (nil evil-scroll-down . nil)
+                      (nil nil . t)))
+        (let ((this-command (nth 0 case))
+              (last-command (nth 1 case)))
+          (should (eq (and (+my/smooth-cursor-line-whole-p selected) t) (nthcdr 2 case)))
+          (should-not (+my/smooth-cursor-line-whole-p other)))))))
+
+(ert-deftest smooth/cursor-line-whole-with-smooth-scrolling ()
+  "Asked of redisplay once smooth scrolling has turned it off (ultra-scroll
+after pixel-scroll-precision-mode); without it, Emacs's own again."
+  (let ((ultra (bound-and-true-p ultra-scroll-mode))
+        (value (default-value 'make-cursor-line-fully-visible)))
+    (unwind-protect
+        (progn
+          (should (memq #'+my/smooth-cursor-line-whole-h ultra-scroll-mode-hook))
+          (should (memq #'+my/smooth-cursor-line-whole-h pixel-scroll-precision-mode-hook))
+          (ultra-scroll-mode 1)
+          (should (eq (default-value 'make-cursor-line-fully-visible)
+                      #'+my/smooth-cursor-line-whole-p))
+          (ultra-scroll-mode -1)
+          (should (eq (default-value 'make-cursor-line-fully-visible) t))
+          (pixel-scroll-precision-mode 1)
+          (should (eq (default-value 'make-cursor-line-fully-visible)
+                      #'+my/smooth-cursor-line-whole-p))
+          (pixel-scroll-precision-mode -1)
+          (should (eq (default-value 'make-cursor-line-fully-visible) t)))
+      (ultra-scroll-mode (if ultra 1 -1))
+      (setq-default make-cursor-line-fully-visible value))))
 
 ;; ====== GOOD-SCROLL ======
 
