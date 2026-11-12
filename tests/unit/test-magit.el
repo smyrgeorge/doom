@@ -466,6 +466,8 @@ TERM allows colours (terminal Emacs: rg runs on a pty)."
     (+test-magit--git "commit" "-qm" "code")
     (magit-status-setup-buffer default-directory)
     (with-current-buffer (magit-get-mode-buffer 'magit-status-mode)
-      (should (+test-magit--wait (lambda () (string-match-p "^TODOs (2)" (buffer-string)))))
+      ;; rg's first run on a fresh macOS (CI's) can take seconds (macOS scans
+      ;; a new program), other test files running beside: 10 s ran out once.
+      (should (+test-magit--wait (lambda () (string-match-p "^TODOs (2)" (buffer-string))) 30))
       (should (string-match-p "a\\.kt.*TODO.*handle errors" (buffer-string)))
       (should (string-match-p "b\\.py.*FIXME.*wrong value" (buffer-string))))))

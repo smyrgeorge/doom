@@ -79,6 +79,7 @@ after 90 s (STATUS then `timeout')."
            ;; command as arguments, util-linux's (Linux) as one string (-c),
            ;; its exit status passed on with -e.
            (process (make-process :name "diff" :buffer buffer :connection-type 'pipe
+                                  :sentinel #'+test-process-sentinel
                                   :command (if (eq system-type 'darwin)
                                                (append (list "script" "-q" "/dev/null") command)
                                              (list "script" "-q" "-e" "-c"
@@ -92,9 +93,11 @@ after 90 s (STATUS then `timeout')."
             (process-send-eof process)
           (error (when (process-live-p process)
                    (error "Couldn't end cmd/diff's input")))))
-      (while (and (process-live-p process) (< (float-time) end))
+      ;; Its output all read: not merely ended (`+test-process-sentinel'):
+      ;; --help's was read empty once, on CI's macOS.
+      (while (and (not (+test-process-ended-p process)) (< (float-time) end))
         (accept-process-output process 0.1))
-      (if (process-live-p process)
+      (if (not (+test-process-ended-p process))
           (progn (kill-process process) (cons 'timeout (buffer-string)))
         (cons (process-exit-status process) (buffer-string))))))
 
