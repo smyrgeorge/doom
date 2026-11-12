@@ -343,6 +343,87 @@ size change with the same width in columns but other cells too."
       (should (looking-at "10\n"))
       (should (looking-back "2/" 2)))))
 
+(ert-deftest agent-ui-canvas/the-mark-kept-in-a-redrawn-element ()
+  "The mark inside an element drawn again: kept at its line and column (its
+text replaced, it fell to the element's start: a region there, text being
+selected, stretched to it), as active as it was (doom-8gh)."
+  (+test-auc
+    (agent-ui-define lines "Its text." :props ((text string "The text")) :text (lambda (p _c) (plist-get p :text)))
+    (agent-ui-show '(:id "intro" :type "lines" :text "hello"))
+    (agent-ui-show '(:id "t" :type "lines" :text "one\ntwo\nthree"))
+    (with-current-buffer canvas
+      (agent-ui--flush)
+      (let ((transient-mark-mode t))
+        (goto-char (point-min))
+        (search-forward "two")
+        (backward-char 1)
+        (push-mark (point) t t)
+        (search-forward "thr")
+        (agent-ui-update "t" '(:text "ONE\nTWO\nTHREE"))
+        (agent-ui--flush)
+        (should (equal (buffer-substring-no-properties (region-beginning) (region-end)) "O\nTHR"))
+        (should (region-active-p))
+        ;; Not active: still where it was.
+        (deactivate-mark)
+        (agent-ui-update "t" '(:text "one\ntwo\nthree"))
+        (agent-ui--flush)
+        (should-not (region-active-p))
+        (should (equal (buffer-substring-no-properties (mark) (point)) "o\nthr"))))))
+
+(ert-deftest agent-ui-canvas/a-click-on-a-button-leaves-no-region ()
+  "A click on a button: its press, the drag's, left an active mark at the
+click, which the action's redraw moved to the element's start (everything
+above it highlighted); the button's press drops it, the redraw keeps the
+mark where it was (doom-8gh)."
+  (+test-auc
+    (let ((pressed 0))
+      (agent-ui-define clicky "A button redrawing it."
+        :props ((n integer "Pressed"))
+        :text (lambda (p _c)
+                (concat (format "line one\nline two %s\n" (plist-get p :n))
+                        (agent-ui-button "[press]" (lambda ()
+                                                     (cl-incf pressed)
+                                                     (agent-ui-update "c" `(:n ,pressed)))))))
+      (agent-ui-show '(:id "intro" :type "meter"))
+      (agent-ui-show '(:id "c" :type "clicky" :n 0))
+      (save-window-excursion
+        (delete-other-windows)
+        (set-window-buffer (selected-window) canvas)
+        (with-current-buffer canvas
+          (agent-ui--flush)
+          (let* ((transient-mark-mode t)
+                 (pos (progn (goto-char (point-min)) (search-forward "[press]") (1+ (match-beginning 0))))
+                 (posn (list (selected-window) pos '(0 . 0) 0 nil pos '(0 . 0) nil '(0 . 0) '(1 . 1)))
+                 (column (progn (goto-char pos) (current-column))))
+            ;; The press, as mouse-drag-track leaves it: point at the click,
+            ;; the mark pushed there, active (transient-mark-mode's (only . t)).
+            (goto-char pos)
+            (push-mark pos t t)
+            (setq transient-mark-mode (cons 'only t))
+            ;; The release: pressed, the element drawn again.
+            (let ((last-nonmenu-event (list 'mouse-1 posn)))
+              (call-interactively (key-binding (vector last-nonmenu-event) t)))
+            (agent-ui--flush)
+            (should (= pressed 1))
+            (should (string-search "line two 1" (buffer-string)))
+            ;; No region; the mark on the button, not at the element's start.
+            (should-not (region-active-p))
+            (should (equal (buffer-substring-no-properties (line-beginning-position) (line-end-position)) "[press]"))
+            (should (= (save-excursion (goto-char (mark t)) (current-column)) column))
+            (should (= (line-number-at-pos (mark t)) (line-number-at-pos (point))))
+            ;; Through Evil's press (a slow click: mouse-1 still), as clicked.
+            (goto-char (point-min))
+            (let ((posn (lambda (time) (list (selected-window) pos '(0 . 0) time nil pos '(0 . 0) nil '(0 . 0) '(1 . 1)))))
+              (setq unread-command-events (list (list 'mouse-1 (funcall posn 900))))
+              (evil-mouse-drag-region (list 'down-mouse-1 (funcall posn 0)))
+              (let ((last-nonmenu-event (pop unread-command-events)))
+                (should (eq (car last-nonmenu-event) 'mouse-1))
+                (call-interactively (key-binding (vector last-nonmenu-event) t))))
+            (agent-ui--flush)
+            (should (= pressed 2))
+            (should-not (region-active-p))
+            (should (= (line-number-at-pos (mark t)) (line-number-at-pos (point))))))))))
+
 (ert-deftest agent-ui-canvas/point-kept-in-a-redrawn-element ()
   "Point, a window's point and its start inside an element drawn again:
 kept at their line and column in it (its text replaced, they went to its

@@ -638,6 +638,11 @@ rate, a step's time.")
 ;; down-mouse-1 selecting again the window clicked from. Unbound, it was the
 ;; global `mouse-yank-primary': the selection pasted at point there (with
 ;; `mouse-yank-at-point', a session's prompt), the button not pressed.
+;; The press (down-mouse-1) is the global drag's, or Evil's (which win over a
+;; text property's keymap): it leaves an active mark at the click, a region
+;; the button's press drops (`agent-ui-button-press'; the action's redraw
+;; moved that mark to the element's start: everything above the button
+;; highlighted, a visual selection with Evil).
 (defvar-keymap agent-ui-button-map
   :doc "Keys of an element's button: its action."
   "RET" #'agent-ui-button-press
@@ -660,10 +665,13 @@ what changed first (canvas.el), so the action is its current drawing's, not
 the one before a change just made (pressed again at once).")
 
 (defun agent-ui-button-press (&optional event)
-  "Call the action of the button at point (or EVENT's)."
+  "Call the action of the button at point (or EVENT's). A click: the region
+its press left (see `agent-ui-button-map') dropped first."
   (interactive (list last-nonmenu-event))
   (let ((buffer (if (mouse-event-p event) (window-buffer (posn-window (event-end event))) (current-buffer))))
     (with-current-buffer buffer
+      (when (mouse-event-p event)
+        (deactivate-mark))
       (run-hooks 'agent-ui-before-press-hook)))
   (let* ((pos (if (mouse-event-p event) (posn-point (event-end event)) (point)))
          (buffer (if (mouse-event-p event) (window-buffer (posn-window (event-end event))) (current-buffer)))

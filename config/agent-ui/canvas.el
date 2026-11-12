@@ -209,18 +209,21 @@ pixels, or nil (not in a window, empty, a terminal)."
     (cons (aref info 2) (aref info 4))))
 
 (defun agent-ui--places-in (start end)
-  "Point, and the points and starts of the windows showing this buffer,
-that are within START..END: ((WHAT LINE . COLUMN)...), WHAT nil (point), a
-window (its point) or (start . WINDOW); LINE counted from START's line."
+  "Point, the mark, and the points and starts of the windows showing this
+buffer, that are within START..END: ((WHAT LINE . COLUMN)...), WHAT nil
+\(point), `mark', a window (its point) or (start . WINDOW); LINE counted
+from START's line. (The mark too: left to fall to the text's start, a region
+in it, text being selected, stretched to it.)"
   (cl-flet ((place (what pos)
               (and (<= start pos end)
                    (save-excursion
                      (goto-char pos)
                      (cons what (cons (count-lines start (line-beginning-position)) (current-column)))))))
     (delq nil (cons (place nil (point))
-                    (mapcan (lambda (w) (list (place w (window-point w))
-                                              (place (cons 'start w) (window-start w))))
-                            (get-buffer-window-list (current-buffer) nil t))))))
+                    (cons (and (mark t) (place 'mark (mark t)))
+                          (mapcan (lambda (w) (list (place w (window-point w))
+                                                    (place (cons 'start w) (window-start w))))
+                                  (get-buffer-window-list (current-buffer) nil t)))))))
 
 (defun agent-ui--restore-places (places start end)
   "PLACES (`agent-ui--places-in') put back in START..END, at their line and
@@ -234,6 +237,8 @@ column there (its last line at most)."
                  (min (point) end))))
       (pcase what
         ('nil (goto-char pos))
+        ;; Where it was, as active (or not) as it was.
+        ('mark (set-marker (mark-marker) pos))
         (`(start . ,window) (set-window-start window (save-excursion (goto-char pos) (line-beginning-position)) t))
         (window (set-window-point window pos))))))
 
