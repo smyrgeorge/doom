@@ -383,6 +383,31 @@ no error (dired took the line for a file's), no files."
     (let ((agent-shell-context-sources '(files)))
       (should-not (agent-shell--context)))))
 
+(ert-deftest agent-shell/a-new-session-s-prompt-starts-empty ()
+  "SPC o c and SPC o C from a file, nothing selected: nothing carried into
+the new prompt (agent-shell's default sources took the line you were on); a
+selection still is. With config.el's sources (test-config.el checks them)."
+  (let ((context (symbol-function 'agent-shell--context))
+        (agent-shell-context-sources '(files region))
+        (transient-mark-mode t))
+    (dolist (key '("o c" "o C"))
+      (+test-agent-shell--mocked
+        (cl-letf (((symbol-function 'agent-shell--context) context))
+          (setq buffer-file-name (expand-file-name "code.el" dir))
+          (goto-char (point-min))
+          (+test-agent-shell--press key)
+          (should (equal (+test-agent-shell--calls calls 'display)
+                         (list (list 'display started nil))))
+          ;; A selection.
+          (setq calls nil)
+          (set-mark (point))
+          (end-of-line)
+          (activate-mark)
+          (+test-agent-shell--press key)
+          (let ((text (nth 2 (car (+test-agent-shell--calls calls 'display)))))
+            (should (stringp text))
+            (should (string-match-p "(foo)" text))))))))
+
 (ert-deftest agent-shell/context-dired-s-files-in-dired ()
   "In dired: its file at point, as agent-shell has it."
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "ctx-") t)))

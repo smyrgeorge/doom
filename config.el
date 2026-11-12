@@ -117,6 +117,13 @@
 ;; off (Claude then asks in its replies, or on its canvas: Agent UI's choice).
 (setq agent-shell-elicitation--experimental-feature-enabled t)
 
+;; What SPC o c / SPC o C carry into a new Claude Code session's prompt
+;; (agent-shell's context): only what you chose, the selection, dired's marked
+;; files, the image you're on. Add `error' and `line' for the error at point,
+;; or else the line you're on (agent-shell's default: every new prompt started
+;; with that line).
+(setq agent-shell-context-sources '(files region))
+
 ;; Agent UI's questions on a canvas (config/agent-ui.el): one shown takes the
 ;; focus (its pane selected, the cursor on it, once you stop typing); answered,
 ;; it goes, and a canvas left empty is closed and killed (not kept).

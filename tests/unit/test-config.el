@@ -301,6 +301,12 @@ own default: neither)."
   (should (eq agent-ui-focus-questions t))
   (should (eq agent-ui-close-answered t)))
 
+(ert-deftest config/claude-carries-over-what-you-chose ()
+  "A new Claude Code session's prompt gets the selection, dired's marked
+files, an image; not the line you're on, nor the error there (agent-shell's
+default: every new prompt started with the line)."
+  (should (equal agent-shell-context-sources '(files region))))
+
 (ert-deftest config/pdf-dark-pages ()
   "PDFs open with dark pages (config/pdf.el's own default: light)."
   (should (eq +my/pdf-dark-pages t)))

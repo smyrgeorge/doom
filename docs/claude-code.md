@@ -13,6 +13,10 @@ CLI's login.
 `(setq +my/agent-shell-insert-ret-newline t)` in `config.el` makes `RET` in insert state a newline instead, the prompt
 sent with `RET` from normal state.
 
+A new session starts in insert state, its prompt empty but for what you chose: the selection, dired's marked files, the
+image you're on. `(setq agent-shell-context-sources '(files region error line))` in `config.el` brings the error at
+point too, or else the line you're on.
+
 Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
 and Claude can ask Emacs what you're looking at. Claude can also keep things in view on a canvas beside its session:
 progress bars, checklists, tables, updated as work goes on ([Agent UI](agent-ui.md)). Claude's small questions (2 to
