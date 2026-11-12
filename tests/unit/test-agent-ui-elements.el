@@ -3893,6 +3893,44 @@ px in 480)."
 
 ;; ====== PANEL ======
 
+(ert-deftest agent-ui-elements/panel-past-the-cap-its-frame-whole ()
+  "A panel past `agent-ui-max-chars' (doom-coj): each child cut, inside the
+frame, the children after it shown, the bottom border kept."
+  (let* ((agent-ui-max-chars 2000)
+         (row (make-string 60 ?a))
+         (element `(:type "panel" :id "cap"
+                    :children ((:type "table" :id "big" :columns ("Row" "Text")
+                                      :rows ,(mapcar (lambda (i) (list (format "row %d" i) row)) (number-sequence 1 180)))
+                               (:type "text" :id "after" :text "The text after the table"))))
+         (lines (split-string (+test-aue-draw element) "\n")))
+    (should (string-prefix-p "╭" (car lines)))
+    (should (string-prefix-p "╰" (car (last lines))))
+    ;; Each line inside the frame (no note outside it).
+    (dolist (line (butlast (cdr lines)))
+      (should (string-prefix-p "│" line))
+      (should (string-suffix-p "│" line)))
+    ;; The table's own cut, inside it; the child after it shown.
+    (should (seq-some (lambda (line) (string-match-p "│ … [0-9]+ characters more +│" line)) lines))
+    (should (seq-some (lambda (line) (string-search "The text after the table" line)) lines))))
+
+(ert-deftest agent-ui-elements/panel-its-own-limit ()
+  "A panel's lines past `agent-ui-panel-max-chars': cut, a line inside its
+frame saying how many more, its bottom border kept; nested ones too."
+  (let* ((agent-ui-panel-max-chars 600)
+         (child (lambda (id) `(:type "text" :id ,id :text ,(mapconcat (lambda (i) (format "line %d" i))
+                                                                       (number-sequence 1 30) "\n"))))
+         (element `(:type "panel" :id "outer"
+                    :children (,(funcall child "a")
+                               (:type "panel" :id "inner" :children (,(funcall child "b") ,(funcall child "c"))))))
+         (text (+test-aue-draw element))
+         (lines (split-string text "\n")))
+    ;; Its lines' characters within the limit (its frame's sides added):
+    ;; not the 90 lines' 5,000 of them.
+    (should (< (length text) (* 2 600)))
+    (should (string-prefix-p "╰" (car (last lines))))
+    (should (string-match-p "│ … [0-9]+ lines more +│" (car (last lines 2))))
+    (should (= (length (car (last lines 2))) (length (car lines))))))
+
 (ert-deftest agent-ui-elements/panel-row-and-column ()
   (let ((row '(:type "panel" :layout "row" :min-width 8
                :children ((:type "text" :title "A" :text "one") (:type "text" :title "B" :text "two\nlines")))))

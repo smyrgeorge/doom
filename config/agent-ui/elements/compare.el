@@ -141,4 +141,5 @@ end your turn."
                       (:label "B: sum"
                        :element (:type "code" :language "python" :code "total = sum(xs)"))))
   :check #'agent-ui-compare--check
+  :whole t                              ; 2 to 4 options, each cut: its buttons kept
   :text #'agent-ui-compare--draw)

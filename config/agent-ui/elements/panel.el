@@ -24,6 +24,30 @@
   "How deep panels may nest."
   :type 'natnum :group 'agent-ui)
 
+;; A panel's size: each child cut at `agent-ui-max-chars' (drawn by
+;; `agent-ui-render'), the panel itself not (its frame drawn whole: its
+;; bottom border was cut off, the note under it, outside), but its lines
+;; past this many characters, a line inside its frame saying how many more.
+(defcustom agent-ui-panel-max-chars 200000
+  "The most characters a panel's lines may have; the rest are left out, a
+line inside its frame saying so."
+  :type 'natnum :group 'agent-ui)
+
+(defun agent-ui-panel--cap (lines width)
+  "LINES, a panel's (each WIDTH columns), cut where they pass
+`agent-ui-panel-max-chars', a line saying how many more in their place."
+  (let ((total 0) (kept nil) (rest lines))
+    (while (and rest (<= (+ total (length (car rest)) 1) agent-ui-panel-max-chars))
+      (cl-incf total (1+ (length (car rest))))
+      (push (pop rest) kept))
+    (if (null rest)
+        lines
+      (nreverse
+       (cons (agent-ui-pad (propertize (agent-ui-truncate (format "… %d lines more" (length rest)) width)
+                                       'face 'agent-ui-muted)
+                           width)
+             kept)))))
+
 (defun agent-ui-panel--children-check (children depth ids)
   "CHILDREN checked (their types, properties, ids: unique, with IDS so far);
 an error saying which is wrong. Returns the ids seen."
@@ -343,6 +367,7 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
                         (mapcar (lambda (child) (cons (make-string inner ?\s)
                                                       (agent-ui-panel--lines (agent-ui-panel--child child ctx inner) inner ctx)))
                                 children)))))))
+    (setq body (agent-ui-panel--cap body inner))
     ;; In the GUI, a bordered line taller than a text line: cut in lines.
     (when (and border (plist-get ctx :graphic) (plist-get ctx :char-width) (plist-get ctx :line-height))
       (setq body (mapcan (lambda (line)
@@ -394,4 +419,5 @@ stay text)."
                             :rows (("lexer" "passed") ("parser" "failed")))))
   :animated (lambda (props) (seq-some #'agent-ui-animated-p (plist-get props :children)))
   :check #'agent-ui-panel--check
+  :whole t
   :text #'agent-ui-panel--draw)

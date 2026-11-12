@@ -63,7 +63,7 @@ buffer's): while a request is answered, the agent's.")
 
 (cl-defstruct (agent-ui-type (:constructor agent-ui--make-type))
   "An element type (see `agent-ui-define')."
-  name doc props example animated text gui append check prepare extend file finished)
+  name doc props example animated text gui append check prepare extend file finished whole)
 
 (defvar agent-ui--types (make-hash-table :test #'eq)
   "The element types, by name (a symbol).")
@@ -123,7 +123,7 @@ as an `agent-ui-prop'."
                        type entry))))
 
 (cl-defun agent-ui--register (name doc &key props example animated text gui append check prepare extend finished
-                                   file)
+                                   whole file)
   "Define the element type NAME (see `agent-ui-define'); replaces one so named."
   (unless (and (symbolp name) (string-match-p "\\`[a-z][a-z0-9-]*\\'" (symbol-name name)))
     (agent-ui--fail "%S: a type's name is a symbol of a-z, 0-9 and -" name))
@@ -139,7 +139,7 @@ as an `agent-ui-prop'."
          (type (agent-ui--make-type :name name :doc doc :props props :example example
                                     :animated animated :text text :gui gui
                                     :append append :check check :prepare prepare :extend extend
-                                    :finished finished :file file)))
+                                    :finished finished :whole whole :file file)))
     (when (/= (length keys) (length (delete-dups (copy-sequence keys))))
       (agent-ui--fail "%s: a property is named twice" name))
     ;; Its example must be right: the agent copies it.
@@ -186,12 +186,15 @@ ARGS are keywords:
             went well), `failed' (some of it didn't), nil (not yet). A type
             that finishes takes :close, and closes itself once done (see
             config/agent-ui/finished.el).
+  :whole    t: its drawing isn't cut at `agent-ui-max-chars' as a whole
+            (each element it draws in it is: a panel's children); it keeps
+            its own size in bounds (a panel cuts its lines inside its frame).
 
 Defining a type again replaces it."
   (declare (indent defun) (doc-string 2))
   (let ((unknown (cl-loop for (k _) on args by #'cddr
                           unless (memq k '(:props :example :text :gui :animated :append :check :prepare :extend
-                                               :finished))
+                                               :finished :whole))
                           collect k)))
     (when unknown
       (error "agent-ui-define %s: unknown keys %S" name unknown)))
@@ -206,6 +209,7 @@ Defining a type again replaces it."
                        :prepare ,(plist-get args :prepare)
                        :extend ,(plist-get args :extend)
                        :finished ,(plist-get args :finished)
+                       :whole ,(plist-get args :whole)
                        :file (or load-file-name buffer-file-name)))
 
 (defun agent-ui-undefine (name)
@@ -418,13 +422,16 @@ of TYPE: an error saying what's wrong, else itself."
     (error nil)))
 
 (defun agent-ui--cap (text)
-  "TEXT, cut at `agent-ui-max-chars' with a line saying what was left out."
+  "TEXT, cut at `agent-ui-max-chars' with a line saying what was left out:
+at the end of the last line that fits (a line longer than it all: in it)."
   (if (<= (length text) agent-ui-max-chars)
       text
-    (concat (substring text 0 agent-ui-max-chars)
-            "\n"
-            (propertize (format "… %d characters more" (- (length text) agent-ui-max-chars))
-                        'face 'agent-ui-muted))))
+    (let* ((end (or (cl-position ?\n text :end (1+ agent-ui-max-chars) :from-end t)
+                    agent-ui-max-chars)))
+      (concat (substring text 0 end)
+              "\n"
+              (propertize (format "… %d characters more" (- (length text) end))
+                          'face 'agent-ui-muted)))))
 
 (defface agent-ui-action '((t :inherit link))
   "An element's action: a button putting text into the session's prompt.")
@@ -493,7 +500,10 @@ so a canvas goes on with its other elements. No newline at its end."
            (unless (stringp text)
              (agent-ui--fail "%s: its drawing returned %s, not text"
                              (agent-ui-type-name type) (agent-ui--show-value text)))
-           (agent-ui--cap (string-trim-right text "\n+")))
+           ;; A type keeping its own size in bounds (`:whole'): as drawn.
+           (if (agent-ui-type-whole type)
+               (string-trim-right text "\n+")
+             (agent-ui--cap (string-trim-right text "\n+"))))
        (error
         (propertize (concat "⚠ " (agent-ui-error-message err)) 'face 'agent-ui-error)))
      ;; Its actions, buttons: not in a still picture (CTX's :still).

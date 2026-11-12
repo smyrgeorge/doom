@@ -265,6 +265,35 @@ at 20), for every type."
       (should (equal (substring-no-properties text) "xxxxxxxxxx\n… 40 characters more"))
       (should (eq (get-text-property (1- (length text)) 'face text) 'agent-ui-muted)))))
 
+(ert-deftest agent-ui-core/cut-at-a-line-s-end ()
+  "Past `agent-ui-max-chars', cut at the end of the last line that fits, not
+in a line (a frame's line, a table's row)."
+  (agent-ui-define capped "Lines." :props ((lines integer "How many")) :text
+    (lambda (props _ctx)
+      (mapconcat (lambda (i) (format "line %02d" i)) (number-sequence 1 (plist-get props :lines)) "\n")))
+  (unwind-protect
+      (let ((agent-ui-max-chars 30))
+        ;; 7 characters a line, 8 with its newline: 3 lines fit, a 4th would end at 31.
+        (should (equal (substring-no-properties (agent-ui-render '(:type "capped" :lines 6) (agent-ui-context)))
+                       "line 01\nline 02\nline 03\n… 24 characters more"))
+        ;; A line longer than it all: cut in it.
+        (let ((agent-ui-max-chars 4))
+          (should (equal (substring-no-properties (agent-ui-render '(:type "capped" :lines 2) (agent-ui-context)))
+                         "line\n… 11 characters more"))))
+    (agent-ui-undefine 'capped)))
+
+(ert-deftest agent-ui-core/a-whole-type-isn-t-cut ()
+  "A type drawn whole (`:whole': it keeps its size in bounds itself) isn't cut
+at `agent-ui-max-chars'."
+  (agent-ui-define whole-one "Long." :props () :whole t
+    :text (lambda (_props _ctx) (make-string 50 ?x)))
+  (unwind-protect
+      (let ((agent-ui-max-chars 10))
+        (should (agent-ui-type-whole (agent-ui-type 'whole-one)))
+        (should (equal (substring-no-properties (agent-ui-render '(:type "whole-one") (agent-ui-context)))
+                       (make-string 50 ?x))))
+    (agent-ui-undefine 'whole-one)))
+
 (ert-deftest agent-ui-core/animated ()
   (+test-aui
     (+test-aui--meter)
