@@ -158,3 +158,12 @@ stand-in theme, in a buffer shown in the selected window."
              (let ((original (symbol-function 'fboundp)))
                (lambda (symbol) (and (not (eq symbol '+my/mermaid-render)) (funcall original symbol))))))
     (should-not (+my/agent-shell-mermaid-context))))
+
+(ert-deftest agent-shell-mermaid/none-left-none-drawn ()
+  "A diagram no buffer shows by the time it's drawn (its reply's buffer gone,
+Agent UI's markdown drawing its own): mmdc isn't run."
+  (+test-as-mermaid
+    (+test-as-mermaid--render +test-as-mermaid--reply)
+    (let ((inhibit-read-only t)) (erase-buffer))
+    (accept-process-output nil 0.2)
+    (should-not (+test-mermaid--runs mmdc))))

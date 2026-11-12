@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code compare confirm countdown diff files form gauge graph heatmap html image issues log markdown math panel progress rank slider stats steps table tags text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code compare confirm countdown diff files form gauge graph heatmap html image issues log markdown math mermaid panel progress rank slider stats steps table tags text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))

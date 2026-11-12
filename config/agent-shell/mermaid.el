@@ -66,11 +66,21 @@ buffer, shows that."
             (widen)
             (+my/agent-shell-mermaid--show start end file message)))))))
 
+(defun +my/agent-shell-mermaid--shown-p (source)
+  "Non-nil if a buffer shows SOURCE's diagram (a region of it)."
+  (seq-some (lambda (buffer)
+              (seq-some (lambda (region) (equal (cddr region) source))
+                        (+my/agent-shell-mermaid--regions buffer)))
+            (buffer-list)))
+
 (defun +my/agent-shell-mermaid--draw (source)
-  "Draw SOURCE: its regions show it now if it's drawn already, else once it is."
-  (if-let* ((file (+my/mermaid-render source (lambda (file message)
-                                               (+my/agent-shell-mermaid--drawn source file message)))))
-      (+my/agent-shell-mermaid--drawn source file nil)))
+  "Draw SOURCE: its regions show it now if it's drawn already, else once it
+is. None left (a reply's buffer gone, Agent UI's markdown drawing its own):
+nothing drawn."
+  (when (+my/agent-shell-mermaid--shown-p source)
+    (if-let* ((file (+my/mermaid-render source (lambda (file message)
+                                                 (+my/agent-shell-mermaid--drawn source file message)))))
+        (+my/agent-shell-mermaid--drawn source file nil))))
 
 (defun +my/agent-shell-mermaid--claim (start end body)
   "The block START..END (closed, its source BODY): its source in its place,

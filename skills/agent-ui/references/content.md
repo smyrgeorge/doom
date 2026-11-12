@@ -62,6 +62,19 @@ twice.
 agent-ui show '{"id":"gauss","type":"math","title":"Gauss","tex":"\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}"}'
 ```
 
+### `mermaid`
+
+A diagram in Mermaid's syntax (`diagram`): a flowchart, a sequence, states, classes, an ER model, a Gantt chart, a mind
+map. Drawn in the user's theme's colours in the GUI (as their size, at most the pane's width); its source in a terminal,
+or until it's drawn (a second or so); an error shows Mermaid's message. For a diagram that stays in view and changes
+as you work (the architecture you're changing, a pipeline's state): update its `diagram`. A `markdown` element's
+```` ```mermaid ```` blocks are drawn too.
+
+```sh
+agent-ui show '{"id":"flow","type":"mermaid","title":"Release","diagram":"flowchart LR\n    build --> test --> deploy"}'
+agent-ui update flow '{"diagram":"flowchart LR\n    build --> test --> deploy\n    test -->|failed| fix --> test"}'
+```
+
 ### `image`
 
 An image file (PNG, JPEG, GIF, WebP, SVG; an Excalidraw drawing's `.excalidraw.svg` too) shown in a graphic Emacs, at

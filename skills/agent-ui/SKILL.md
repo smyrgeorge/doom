@@ -84,7 +84,7 @@ uses another canvas of your session, in a pane of its own: for a second subject 
   and their changes; `gauge` a value against its limits; `heatmap` a grid of cells; `timeline` tasks on a time axis;
   `countdown` time elapsed or left; `graph` nodes and edges; `tags` chips; `log` lines by level.
 - **Content and layout** ([content.md](references/content.md)): `text`; `markdown`; `code` a snippet, marked,
-  reviewed; `diff` changes; `math` formulas; `image`; `html` a page as a card; `files` files and their state;
+  reviewed; `diff` changes; `math` formulas; `mermaid` a diagram; `image`; `html` a page as a card; `files` files and their state;
   `panel` elements side by side or stacked: a dashboard.
 
 ### `progress`

@@ -10,13 +10,14 @@
 ;; ```mermaid blocks in Markdown's live preview (pandoc too): drawn, only an
 ;; edited one drawn again, an error in place, re-themed with the page. In a
 ;; reply of Claude Code's, as agent-shell renders it: drawn, copied back.
+;; Agent UI's mermaid element: drawn, in a snapshot as shown.
 
 (require 'markdown-mode)
 ;; The Markdown preview's stylesheets (Doom's markdown module sets GitHub's).
 (setq markdown-css-paths '("https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css"))
 (defvar doom-disabled-packages nil)     ; `use-package!' reads it (Doom's)
 (+test-load "config/childframe" "config/banner" "config/window" "config/webkit" "config/markdown"
-            "config/agent-shell" "config/mermaid")
+            "config/agent-shell" "config/mermaid" "config/agent-ui")
 (require 'agent-shell)
 
 ;; mermaid.js: Doom's, copied into the temp data folder.
@@ -368,3 +369,26 @@ as it came."
                 (should (<= (car size) (window-body-width nil t))))
               (should (equal (agent-shell-markdown-reconstruct (point-min) (point-max)) reply)))
           (kill-buffer))))))
+
+;; ====== ON AGENT UI'S CANVAS ======
+
+(ert-deftest e2e-mermaid/an-agent-ui-element-and-its-snapshot ()
+  (+test-mermaid--needs-mmdc)
+  (+test-mermaid--fresh
+    (let* ((element '(:type "mermaid" :id "flow" :diagram "flowchart LR\n    build --> test --> deploy"))
+           (ctx (agent-ui-context :width 60 :graphic t :char-width (frame-char-width) :line-height (frame-char-height)))
+           (drawn nil))
+      (cl-letf (((symbol-function 'agent-ui-mermaid--redraw) (lambda (&rest _) (setq drawn t))))
+        (agent-ui-render element ctx)
+        (should (+test-wait-for (lambda () drawn) 60)))
+      (let* ((text (agent-ui-render element ctx))
+             (pos (text-property-not-all 0 (length text) 'display nil text))
+             (image (get-text-property pos 'display text))
+             (size (image-size image t)))
+        ;; An image Emacs draws, at most the canvas's width.
+        (should (> (car size) 100))
+        (should (<= (car size) (* (frame-char-width) 60)))
+        ;; Its snapshot: the diagram nested, as shown.
+        (let ((svg (agent-ui-snapshot-svg text ctx)))
+          (should (string-search ">build<" svg))
+          (should (string-match-p "<svg x=\"[0-9]+\" y=\"[0-9]+\" width=\"[0-9]+\" height=\"[0-9]+\"" svg)))))))

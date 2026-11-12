@@ -22,6 +22,7 @@
 (load! "elements/gauge")
 (load! "elements/countdown")
 (load! "elements/math")
+(load! "elements/mermaid")
 (load! "elements/files")
 (load! "elements/stats")
 (load! "elements/log")
