@@ -173,9 +173,12 @@ preview and files closed after."
         (should (equal (+test-mermaid--page xwidget "document.title") "mmd drawn"))
         ;; mermaid.js's SVG, in the theme's colours.
         (should (equal (+test-mermaid--page xwidget "!!document.querySelector('#diagram svg')") "true"))
-        ;; Its words' spaces kept (no-break ones: WebKitGTK dropped them).
-        (should (string-search "Write the code"
-                               (+test-mermaid--page xwidget "document.body.innerText.replace(/\\u00a0/g, ' ')")))
+        ;; Its label's words, on one row or wrapped (WebKitGTK's text a little
+        ;; wider: "Write the" over "code", which innerText joins as "Write
+        ;; thecode").
+        (should (string-search "Writethecode"
+                               (replace-regexp-in-string
+                                "[[:space:]]+" "" (+test-mermaid--page xwidget "document.body.innerText"))))
         (should (string-search (downcase (face-foreground 'font-lock-keyword-face))
                                (downcase (+test-mermaid--page xwidget "document.querySelector('#diagram svg').outerHTML"))))
         ;; The cursor stayed in the file.
