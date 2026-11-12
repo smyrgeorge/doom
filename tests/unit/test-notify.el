@@ -43,7 +43,7 @@ none off, what's shown recorded in `+test-notify--shown'."
   (should-not (default-value '+my/notify-off))
   ;; Claude Code's, Agent UI's, so far.
   (should (equal (mapcar #'car +my/notify-kinds)
-                 '(agent-ui-question agent-ui-bug claude-permission claude-turn-done claude))))
+                 '(agent-ui-question agent-ui-bug claude-question claude-permission claude-turn-done claude))))
 
 (ert-deftest notify/keys ()
   (should (eq (lookup-key doom-leader-map (kbd "t n")) #'+my/notify-toggle))
@@ -246,6 +246,36 @@ shows the session."
                      '(("Claude Code" "rskit needs your permission")
                        ("Claude Code" "rskit needs your permission: Run npm test")))))))
 
+(ert-deftest notify/claude-asks-a-question ()
+  "A session asking you a question in its conversation (agent-shell's
+elicitation-request, a form; its turn waits for the answer, no turn-complete
+coming): the question, its first line; a click shows the session (doom-4zw)."
+  (should (equal (alist-get 'claude-question +my/notify-kinds)
+                 '("Claude Code" "A session asks you a question")))
+  (+test-notify nil
+    (+test-notify--session "rskit"
+      (let ((asks (alist-get 'elicitation-request subscribed)))
+        (should asks)
+        (funcall asks '((:event . elicitation-request)
+                        (:data (:request-id . 7) (:message . "  Which approach?\nA or B.  "))))
+        (funcall asks '((:event . elicitation-request) (:data (:request-id . 8) (:message))))
+        (should (equal (mapcar #'butlast +test-notify--shown)
+                       '(("Claude Code" "rskit asks you a question")
+                         ("Claude Code" "rskit asks: Which approach?"))))
+        (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
+          (funcall (nth 2 (car +test-notify--shown)))
+          (should (eq (window-buffer (selected-window)) session))))))
+  ;; Emacs in front, or the kind off (SPC t N): nothing.
+  (+test-notify t
+    (+test-notify--session "rskit"
+      (funcall (alist-get 'elicitation-request subscribed) '((:data (:message . "Which?"))))
+      (should-not +test-notify--shown)))
+  (+test-notify nil
+    (let ((+my/notify-off '(claude-question)))
+      (+test-notify--session "rskit"
+        (funcall (alist-get 'elicitation-request subscribed) '((:data (:message . "Which?"))))
+        (should-not +test-notify--shown)))))
+
 (ert-deftest notify/claude-in-front-or-off-nothing ()
   (+test-notify t
     (+test-notify--session "doom"
@@ -368,4 +398,7 @@ again: not twice)."
                  (insert +my/agent-shell-claude-context)
                  (count-matches "Notifications: " (point-min) (point-max)))
                1))
-    (should (string-search "emacsclient --eval '(+my/notify-claude " +my/agent-shell-claude-context))))
+    (should (string-search "emacsclient --eval '(+my/notify-claude " +my/agent-shell-claude-context))
+    ;; Not those it gets already: a turn's end, a permission, a question.
+    (should (string-search "when you finish a turn, when you ask for permission and when you ask a question in the conversation: don't send those again"
+                           +my/agent-shell-claude-context))))

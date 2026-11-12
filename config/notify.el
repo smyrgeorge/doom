@@ -28,6 +28,8 @@
 ;; - claude-turn-done: a Claude Code session finished its turn;
 ;; - claude-permission: a Claude Code session asks for your permission (to
 ;;   run a command, edit a file...);
+;; - claude-question: a Claude Code session asks you a question in its
+;;   conversation (a form; its turn waits for the answer);
 ;; - claude: a message the caller words, `+my/notify-claude': Claude
 ;;   itself, through emacsclient (its system prompt says how and when: what
 ;;   you asked to be told, what needs you), or any code.

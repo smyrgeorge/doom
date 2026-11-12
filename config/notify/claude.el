@@ -1,13 +1,19 @@
 ;;; $DOOMDIR/config/notify/claude.el -*- lexical-binding: t; -*-
 ;; Claude Code's notifications: a session finished its turn, asks for your
-;; permission, or sends a message of its own. Loaded from config/notify.el.
+;; permission, asks you a question, or sends a message of its own.
+;; Loaded from config/notify.el.
 
 ;; THE KINDS (see config/notify.el)
 (+my/notify-define 'claude "Claude Code" "A session's message, in its own words")
 (+my/notify-define 'claude-turn-done "Claude Code" "A session finished its turn")
 (+my/notify-define 'claude-permission "Claude Code" "A session asks for your permission")
+(+my/notify-define 'claude-question "Claude Code" "A session asks you a question")
 
-;; A TURN DONE, PERMISSION ASKED (agent-shell's events)
+;; A TURN DONE, PERMISSION ASKED, A QUESTION (agent-shell's events)
+;; A question in the conversation (AskUserQuestion, agent-shell's form) is
+;; agent-shell's elicitation-request: its turn waits for the answer, no
+;; turn-complete comes. With its forms off, the adapter asks it as a
+;; permission (claude-permission says it).
 
 (defun +my/notify-claude--name (buffer)
   "BUFFER's session, as a notification names it: its project's folder."
@@ -47,15 +53,31 @@ EVENT): what for, the tool call's title."
                           ""))
                 :buffer buffer)))
 
+(defun +my/notify-claude--question (buffer event)
+  "BUFFER's session asks you a question in its conversation (agent-shell's
+elicitation-request EVENT, a form): the question, its first line."
+  (let* ((message (map-nested-elt event '(:data :message)))
+         (question (and (stringp message)
+                        (string-trim (car (split-string (string-trim message) "\n"))))))
+    (+my/notify 'claude-question
+                (if (and question (not (string-empty-p question)))
+                    (format "%s asks: %s" (+my/notify-claude--name buffer) question)
+                  (format "%s asks you a question" (+my/notify-claude--name buffer)))
+                :buffer buffer)))
+
 (defun +my/notify-claude--watch-h ()
-  "A new session: notify when it finishes its turn, or asks for permission."
+  "A new session: notify when it finishes its turn, asks for permission, or
+asks you a question."
   (let ((buffer (current-buffer)))
     (agent-shell-subscribe-to
      :shell-buffer buffer :event 'turn-complete
      :on-event (lambda (event) (+my/notify-claude--turn-done buffer event)))
     (agent-shell-subscribe-to
      :shell-buffer buffer :event 'permission-request
-     :on-event (lambda (event) (+my/notify-claude--permission buffer event)))))
+     :on-event (lambda (event) (+my/notify-claude--permission buffer event)))
+    (agent-shell-subscribe-to
+     :shell-buffer buffer :event 'elicitation-request
+     :on-event (lambda (event) (+my/notify-claude--question buffer event)))))
 
 (add-hook 'agent-shell-mode-hook #'+my/notify-claude--watch-h)
 
@@ -96,7 +118,8 @@ notify them on their desktop: emacsclient --eval \
 '(+my/notify-claude \"The tests pass\" \"/absolute/working/directory\")', your \
 message and your working directory. It shows only while Emacs isn't in front \
 (it prints t if shown, nil if not). They already get one when you finish a \
-turn and when you ask for permission: don't send those again."
+turn, when you ask for permission and when you ask a question in the \
+conversation: don't send those again."
   "What Claude Code is told about notifying (see above).")
 
 (when (and (boundp '+my/agent-shell-claude-context)
