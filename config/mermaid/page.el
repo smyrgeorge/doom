@@ -34,9 +34,10 @@
 ;; A page's script (`mmd'): mermaid.js set up with the theme's config, a
 ;; diagram drawn into an element. A drawing asked while another is under way:
 ;; the last asked wins (one finishing late doesn't replace it). Mermaid's
-;; message for an error: the element keeps what it showed. Its SVG's root
-;; keeps the spaces a <tspan> starts with (xml:space): WebKitGTK dropped them,
-;; as librsvg does ("Write thecode", mermaid/render.el).
+;; message for an error: the element keeps what it showed. Mermaid writes each
+;; word of a label in a <tspan>, the space before it at its start, which
+;; WebKitGTK dropped ("Write thecode"; its xml:space too, unlike librsvg,
+;; mermaid/render.el): a no-break space there, which nothing collapses.
 (defconst +my/mermaid-page-js
   "window.mmd = (function () {
   var count = 0, latest = new WeakMap();
@@ -44,13 +45,22 @@
     mermaid.initialize(Object.assign({startOnLoad: false, securityLevel: 'strict',
                                       suppressErrorRendering: true}, config));
   }
+  function keepSpaces(element) {
+    element.querySelectorAll('svg text tspan').forEach(function (tspan) {
+      var text = tspan.firstChild;
+      if (text && text.nodeType === 3 && text.data.charAt(0) === ' ')
+        text.data = '\\u00a0' + text.data.slice(1);
+    });
+  }
   async function draw(element, source) {
     var id = 'mmd-' + (++count);
     latest.set(element, id);
     try {
       var result = await mermaid.render(id, source);
-      if (latest.get(element) === id)
-        element.innerHTML = result.svg.replace(/<svg\\b/, '<svg xml:space=\"preserve\"');
+      if (latest.get(element) === id) {
+        element.innerHTML = result.svg;
+        keepSpaces(element);
+      }
       return null;
     } catch (e) {
       return String((e && e.message) || e);

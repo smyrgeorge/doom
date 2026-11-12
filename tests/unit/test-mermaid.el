@@ -769,8 +769,9 @@ window on *scratch*, and again after."
       (should (string-search "<\\/script>" page))
       (should (string-search "window.mmd" page))
       ;; Its diagrams keep their words' spaces: WebKitGTK dropped a
-      ;; <tspan>'s leading one ("Write thecode").
-      (should (string-search "result.svg.replace(/<svg\\b/, '<svg xml:space=\"preserve\"')" page)))))
+      ;; <tspan>'s leading one ("Write thecode"): a no-break one.
+      (should (string-search "text.data = '\\u00a0' + text.data.slice(1);" page))
+      (should (string-search "keepSpaces(element);" page)))))
 
 (ert-deftest mermaid/preview-follows-typing ()
   "Redrawn ≈0.3 s after typing stops, in each of its views, without reloading."
