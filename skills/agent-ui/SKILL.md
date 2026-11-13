@@ -134,10 +134,10 @@ agent-ui update tests '{"sort":"Time","descending":true,"row-actions":[{"label":
 
 ### `issues`
 
-The project's Beads issues as a board: Ready, In progress, Blocked, Done (the latest first), each issue's id and
-title, P0/P1 marked. `parent` shows an epic's issues only, `label` those with it, `limit` per column; `dir` is the
-project (default: your directory). Fetched by bd in the background, refreshed after your bd commands; `RET` opens an
-issue. To keep the work's state in view while you go through an epic.
+The project's Beads issues as a board: Ready, In progress, Blocked, Done (the latest first), each issue a card: its
+title whole, what it's about, P0/P1 marked. `parent` shows an epic's issues only, `label` those with it, `limit` per
+column; `dir` is the project (default: your directory). Fetched by bd in the background, refreshed after your bd
+commands; `RET` opens an issue. To keep the work's state in view while you go through an epic.
 
 ```sh
 agent-ui show '{"id":"board","type":"issues","title":"The epic","parent":"doom-erp","limit":6}'

@@ -2753,7 +2753,8 @@ still opens it); Send names their ids."
           (with-current-buffer canvas
             (agent-ui--flush)
             (should (string-search "Which first?" (buffer-string)))
-            (should (string-search "( ) p-4 Urgent re" (buffer-string)))
+            (should (string-search "( ) p-4 P0" (buffer-string)))
+            (should (string-search "\n    Urgent ready" (buffer-string)))
             (goto-char (point-min)) (search-forward "p-4") (goto-char (- (match-beginning 0) 4)) (agent-ui-button-press)
             (should (equal (plist-get (agent-ui-get "board") :selected) '("p-4")))
             (+test-aue-press "⏵ Answer (1 chosen)")
@@ -3171,7 +3172,7 @@ no lines; a board said \"… 4 more\" for a column of 3)."
   (should (equal (+test-aue-draw '(:type "log" :lines "a\nb" :show 0)) "2 lines"))
   (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
     (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
-    (should (string-prefix-p "Ready (2)\n… 2 more\n\nIn progress (1)"
+    (should (string-prefix-p "Ready 2\n\n… 2 more\n\nIn progress 1"
                              (+test-aue-draw '(:type "issues" :dir "/proj/" :limit 0) :width 40)))))
 
 (ert-deftest agent-ui-elements/log-wrong ()
@@ -3635,44 +3636,96 @@ and log: tab-aligned text stays aligned (each was 4 spaces: \"a    b\" and
 
 (defconst +test-aue-issues
   '(:ready ("p-1" "p-4")
-    :issues ((:id "p-1" :title "Ready one" :status "open" :priority 2)
+    :issues ((:id "p-1" :title "Ready one" :status "open" :priority 2
+              :description "**Why** it matters.\n\nMore, not shown.")
              (:id "p-4" :title "Urgent ready" :status "open" :priority 0 :labels ("ui"))
              (:id "p-2" :title "Working on it" :status "in_progress" :priority 1)
-             (:id "p-3" :title "Waits on p-2" :status "open" :priority 2)
+             (:id "p-3" :title "Waits on p-2" :status "open" :priority 2
+              :dependencies ((:depends_on_id "p-2" :type "blocks") (:depends_on_id "p-5" :type "blocks")))
              (:id "p-5" :title "Old" :status "closed" :closed_at "2026-01-01T00:00:00Z")
              (:id "p-6" :title "New" :status "closed" :closed_at "2026-02-01T00:00:00Z")
              (:id "p-e" :title "An epic" :status "open" :issue_type "epic")))
-  "A project's issues as fetched: p-3 blocked (open, not ready).")
+  "A project's issues as fetched: p-3 blocked (open, not ready), waiting on
+p-2 (and p-5, closed).")
 
 (ert-deftest agent-ui-elements/issues-a-board ()
   (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
     (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
     (let ((element '(:type "issues" :dir "/proj/")))
-      ;; Side by side: by priority; done, the latest first; no epics.
+      ;; Side by side: by priority; done, the latest first; no epics. A card:
+      ;; its id (P0/P1), what it waits on or when it closed; its title; what
+      ;; it's about. A line between cards.
       (should (equal (+test-aue-draw element :width 80)
-                     (concat "Ready (2)           In progress (1)     Blocked (1)         Done (2)\n"
-                             "p-4 Urgent ready    p-2 Working on it   p-3 Waits on p-2    p-6 New\n"
-                             "p-1 Ready one                                               p-5 Old")))
+                     (string-join
+                      (mapcar (lambda (row) (string-trim-right (apply #'format "%-20s%-20s%-20s%s" row)))
+                              '(("Ready 2" "In progress 1" "Blocked 1" "Done 2")
+                                ("" "" "" "")
+                                ("p-4 P0" "p-2 P1" "p-3  ← p-2" "p-6  ✓ 2026-02-01")
+                                ("Urgent ready" "Working on it" "Waits on p-2" "New")
+                                ("" "" "" "")
+                                ("p-1" "" "" "p-5  ✓ 2026-01-01")
+                                ("Ready one" "" "" "Old")
+                                ("Why it matters." "" "" "")))
+                      "\n")))
       (should (eq (+test-aue-face-at element "p-4") 'agent-ui-warning))
+      (should (eq (+test-aue-face-at element "Why it") 'agent-ui-muted))
       ;; Narrow: one under another.
-      (should (string-prefix-p "Ready (2)\np-4 Urgent ready\np-1 Ready one\n\nIn progress (1)"
+      (should (string-prefix-p "Ready 2\n\np-4 P0\nUrgent ready\n\np-1\nReady one\nWhy it matters.\n\nIn progress 1"
                                (+test-aue-draw element :width 40))))
     ;; An epic's, a label's.
     (puthash "/proj/" (list :ready nil :issues '((:id "e.1" :title "child" :status "in_progress")
                                                  (:id "x" :title "other" :status "in_progress")))
              agent-ui-issues--cache)
-    (should (string-match-p "In progress (1)" (+test-aue-draw '(:type "issues" :dir "/proj/" :parent "e") :width 80)))
+    (should (string-match-p "In progress 1" (+test-aue-draw '(:type "issues" :dir "/proj/" :parent "e") :width 80)))
     (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
-    (should (string-match-p "Ready (1)" (+test-aue-draw '(:type "issues" :dir "/proj/" :label "ui") :width 80)))
+    (should (string-match-p "Ready 1" (+test-aue-draw '(:type "issues" :dir "/proj/" :label "ui") :width 80)))
     ;; Not fetched yet; bd failing.
     ;; All led alike: the lead left out.
     (puthash "/proj/" '(:ready ("a") :issues ((:id "a" :title "Agent UI element: diff" :status "open")
                                               (:id "b" :title "Agent UI: a bug" :status "in_progress")))
              agent-ui-issues--cache)
-    (should (string-match-p "a diff +b a bug" (+test-aue-draw '(:type "issues" :dir "/proj/") :width 80)))
+    (let ((board (+test-aue-draw '(:type "issues" :dir "/proj/") :width 80)))
+      (should (string-match-p "^diff +a bug" (nth 3 (split-string board "\n"))))
+      (should-not (string-search "Agent UI" board)))
     (should (equal (+test-aue-draw '(:type "issues" :dir "/other/")) "fetching the issues…"))
     (puthash "/bad/" '(:error "no Beads issues here (bd failed)") agent-ui-issues--cache)
     (should (equal (+test-aue-draw '(:type "issues" :dir "/bad/")) "no Beads issues here (bd failed)"))))
+
+;; doom-nz9
+(ert-deftest agent-ui-elements/issues-cards-read-whole ()
+  "A card's title is whole (wrapped), its description's first paragraph
+two lines at most (cut with …), and an empty column is as wide as its name:
+cards were one line, titles cut at 20 characters, and In progress 0 took a
+quarter of the board."
+  (let ((agent-ui-issues--cache (make-hash-table :test #'equal))
+        (long "a title long enough to need three lines in a column this narrow"))
+    (puthash "/proj/" (list :ready '("r")
+                            :issues (list (list :id "r" :title long :status "open"
+                                                :description (concat "# Heading\n- `code` and **bold** words, "
+                                                                     (string-join (make-list 30 "more") " ")))
+                                          '(:id "b" :title "Blocked" :status "open")
+                                          '(:id "d" :title "Done" :status "closed")))
+             agent-ui-issues--cache)
+    (let* ((board (+test-aue-draw '(:type "issues" :dir "/proj/") :width 80))
+           (lines (split-string board "\n")))
+      ;; In progress 0 takes its name's width; the other three share the rest.
+      (should (string-prefix-p (concat (format "%-22s" "Ready 1") "In progress 0  " (format "%-22s" "Blocked 1") "Done 1")
+                               (car lines)))
+      ;; Every word of the title; what it's about: its Markdown marks gone, two
+      ;; lines, the second cut.
+      (let* ((ready (mapcar (lambda (line) (string-trim-right (truncate-string-to-width line 20))) lines))
+             (about (cl-position "Heading code and" ready :test #'equal)))
+        (dolist (word (split-string long)) (should (member word (split-string (string-join ready " ")))))
+        (should about)
+        (should (string-match-p "\\`bold words, more.*…\\'" (nth (1+ about) ready)))
+        (should (member (nth (+ 2 about) ready) (quote (nil ""))))))))
+
+(ert-deftest agent-ui-elements/issues-ago ()
+  (let ((now (date-to-time "2026-11-13T12:00:00Z")))
+    (should (equal (agent-ui-issues--ago "2026-11-13T11:59:30Z" now) "1m ago"))
+    (should (equal (agent-ui-issues--ago "2026-11-13T09:00:00Z" now) "3h ago"))
+    (should (equal (agent-ui-issues--ago "2026-11-01T12:00:00Z" now) "12d ago"))
+    (should (equal (agent-ui-issues--ago "2026-01-01T12:00:00Z" now) "2026-01-01"))))
 
 ;; doom-nwj.73
 (ert-deftest agent-ui-elements/issues-an-epics-children-by-parent ()
@@ -3688,8 +3741,9 @@ under its own: they were left out), and their children."
                                  (:id "t-cyc" :title "A loop" :status "open" :parent "t-cyc")))
              agent-ui-issues--cache)
     (let ((board (+test-aue-draw '(:type "issues" :dir "/proj/" :parent "t-fas") :width 40)))
-      (should (string-prefix-p "Ready (3)\n" board))
-      (dolist (id '("t-fas.1" "t-um4" "t-zz9")) (should (string-search id board)))
+      (should (string-prefix-p "Ready 3\n" board))
+      ;; Its own children by their short ids; one linked, whole.
+      (dolist (id '("\n.1\n" "\nt-um4\n" "\nt-zz9\n")) (should (string-search id board)))
       (should-not (string-search "t-oth" board))
       (should-not (string-search "t-cyc" board)))))
 
@@ -3751,8 +3805,8 @@ on the canvas were: the panel's said \"fetching the issues…\" forever)."
           (while (not (gethash root agent-ui-issues--cache)) (accept-process-output nil 0.05)))
         (with-current-buffer canvas
           (agent-ui--flush)
-          (should (string-match-p "Ready (1)" (buffer-string)))
-          (should (string-match-p "t-[a-z0-9]+ First" (buffer-string))))))))
+          (should (string-match-p "Ready 1" (buffer-string)))
+          (should (string-match-p "t-[a-z0-9]+ P1\nFirst" (buffer-string))))))))
 
 ;; doom-nwj.74
 (ert-deftest agent-ui-elements/issues-closed-ones-dont-push-open-ones-off ()
@@ -3787,10 +3841,10 @@ P4 ones off the board (Ready 1 of 6 where bd ready gave 6)."
     (with-timeout (30 (ert-fail "Not fetched"))
       (while (not (gethash root agent-ui-issues--cache)) (accept-process-output nil 0.05)))
     (let ((board (+test-aue-draw (list :type "issues" :dir root) :width 40)))
-      (should (string-prefix-p "Ready (3)\n" board))
+      (should (string-prefix-p "Ready 3\n" board))
       (dolist (i '(0 1 2)) (should (string-search (format "Open %d" i) board)))
       ;; Done: the latest 2.
-      (should (string-search "Done (2)" board))
+      (should (string-search "Done 2" board))
       (should (string-search "Closed 1" board))
       (should (string-search "Closed 2" board))
       (should-not (string-search "Closed 0" board)))))

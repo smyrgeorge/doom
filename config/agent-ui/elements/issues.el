@@ -3,13 +3,18 @@
 ;; config/agent-ui/elements.el.
 ;;
 ;; Columns Ready (open, nothing blocking them: bd ready), In progress,
-;; Blocked (open, waiting on others), Done (closed, the latest first): each
-;; issue's id and title, P0/P1 marked. DIR is the project (the agent's
-;; directory); PARENT shows an epic's issues only, LABEL those with it. The
-;; issues are fetched by bd in the background, kept a while, and fetched
-;; again when the element is shown, or `agent-ui-issues-refresh' says (this
-;; config: after the agent's bd commands). RET on an issue opens it
-;; (`agent-ui-open-issue-function'). Narrow: the columns one under another.
+;; Blocked (open, waiting on others), Done (closed, the latest first). Each
+;; issue a card: its id (an epic's children's short: .14), P0/P1 marked, what
+;; it waits on or when it closed; its title whole; what it's about, its
+;; description's first lines. An empty column is as wide as its name, the
+;; others share the rest (doom-nz9: a card was one line, its title cut at 20
+;; characters, and an empty column took a quarter). DIR is the project (the
+;; agent's directory); PARENT shows an epic's issues only, LABEL those with
+;; it. The issues are fetched by bd in the background, kept a while, and
+;; fetched again when the element is shown, or `agent-ui-issues-refresh' says
+;; (this config: after the agent's bd commands). RET on a card opens its
+;; issue (`agent-ui-open-issue-function'). Narrow: the columns one under
+;; another.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -145,36 +150,127 @@ parent-child: any id) reaching it; BY-ID the issues by id."
 (defconst agent-ui-issues--lead "\\`[^:]\\{1,30\\}: "
   "A title's lead (\"Agent UI element: \"), left out when they all have one.")
 
-(defun agent-ui-issues--card (issue width dir &optional short pick)
-  "ISSUE as a line WIDTH wide: its id, its title (without its lead if
-SHORT); a button opening it. PICK: its pick mark's maker, before it (select)."
-  (if pick
-      (concat (funcall pick (plist-get issue :id))
-              (agent-ui-issues--card issue (max 1 (- width 4)) dir short))
-  (let* ((priority (plist-get issue :priority))
-         (id (plist-get issue :id))
+(defconst agent-ui-issues--about-lines 2
+  "How many lines of its description a card shows.")
+
+(defun agent-ui-issues--short-id (id parent)
+  "ID as an epic's (PARENT's) board shows it: .14 for PARENT.14, the rest
+whole (linked by bd dep add: any id)."
+  (if (and parent (string-prefix-p (concat parent ".") id))
+      (substring id (length parent))
+    id))
+
+(defun agent-ui-issues--about (issue)
+  "What ISSUE is about: its description's first paragraph as one line,
+without its Markdown marks (**, `, a heading's #, a bullet's -)."
+  (let* ((text (string-trim (or (plist-get issue :description) "")))
+         (paragraph (or (car (split-string text "\n[ \t]*\n")) "")))
+    (string-trim
+     (replace-regexp-in-string
+      "[ \t\n]+" " "
+      (replace-regexp-in-string "\\*\\*\\|`\\|^#+ +\\|^[ \t]*[-*] +" "" paragraph)))))
+
+(defun agent-ui-issues--ago (time &optional now)
+  "How long ago TIME (bd's, ISO 8601) was, from NOW (default: now): 5m, 3h,
+12d, a date past 99 days."
+  (let ((seconds (float-time (time-subtract (or now nil) (date-to-time time)))))
+    (cond ((< seconds 3600) (format "%dm ago" (max 1 (floor seconds 60))))
+          ((< seconds 86400) (format "%dh ago" (floor seconds 3600)))
+          ((< seconds (* 100 86400)) (format "%dd ago" (floor seconds 86400)))
+          (t (format-time-string "%Y-%m-%d" (date-to-time time))))))
+
+(defun agent-ui-issues--waits-on (issue by-id parent)
+  "The issues ISSUE waits on (bd dep add: blocks), not closed yet: their
+ids as the board shows them. One not fetched was closed long ago (every
+issue not closed is fetched)."
+  (cl-loop for dep in (plist-get issue :dependencies)
+           for on = (plist-get dep :depends_on_id)
+           for blocker = (gethash on by-id)
+           when (and (equal (plist-get dep :type) "blocks")
+                     blocker (not (equal (plist-get blocker :status) "closed")))
+           collect (agent-ui-issues--short-id on parent)))
+
+(defun agent-ui-issues--card (issue width dir by-id &optional parent short pick)
+  "ISSUE as lines WIDTH wide, each a button opening it: its id (P0 and P1
+marked), what it waits on or when it closed; its title whole (without its
+lead if SHORT); what it's about, muted. PARENT: the board's epic, its
+children's ids short. PICK: its pick mark's maker, before its first line
+(select), the others indented as much."
+  (let* ((id (plist-get issue :id))
+         (priority (plist-get issue :priority))
+         (urgent (and priority (<= priority 1)))
+         (mark (and pick (funcall pick id)))
+         (indent (if mark (string-width mark) 0))
+         (width (max 1 (- width indent)))
+         (note (if (equal (plist-get issue :status) "closed")
+                   (when-let* ((closed (plist-get issue :closed_at)))
+                     (concat "✓ " (agent-ui-issues--ago closed)))
+                 (when-let* ((on (agent-ui-issues--waits-on issue by-id parent)))
+                   (concat "← " (string-join on " ")))))
+         (head (concat (propertize (agent-ui-issues--short-id id parent)
+                                   'face (if urgent 'agent-ui-warning 'agent-ui-muted))
+                       (when urgent (propertize (format " P%d" priority) 'face 'agent-ui-warning))
+                       (when note (concat "  " (propertize note 'face 'agent-ui-muted)))))
          (title (plist-get issue :title))
          (title (if short (replace-regexp-in-string agent-ui-issues--lead "" title) title))
-         (line (agent-ui-truncate
-                (concat (propertize id 'face (if (and priority (<= priority 1)) 'agent-ui-warning 'agent-ui-muted))
-                        " " title)
-                width)))
-    (agent-ui-button (agent-ui-pad line width)
-                     (lambda () (funcall agent-ui-open-issue-function id dir))
-                     (format "RET: open %s" id)))))
+         (about (agent-ui-issues--about issue))
+         (about (unless (string-empty-p about)
+                  (let ((lines (split-string (agent-ui-wrap about width) "\n")))
+                    (mapcar (lambda (line) (propertize line 'face 'agent-ui-muted))
+                            (if (<= (length lines) agent-ui-issues--about-lines)
+                                lines
+                              (append (seq-take lines (1- agent-ui-issues--about-lines))
+                                      (list (agent-ui-truncate
+                                             (concat (nth (1- agent-ui-issues--about-lines) lines) " "
+                                                     (nth agent-ui-issues--about-lines lines))
+                                             width))))))))
+         (open (lambda () (funcall agent-ui-open-issue-function id dir)))
+         (help (format "RET: open %s" id)))
+    (cl-loop for line in (append (list head) (split-string (agent-ui-wrap title width) "\n") about)
+             for first = t then nil
+             collect (concat (cond ((and first mark)) (mark (make-string indent ?\s)))
+                             (agent-ui-button (agent-ui-pad line width) open help)))))
+
+(defun agent-ui-issues--column (column width limit dir by-id parent short pick)
+  "COLUMN, (TITLE . ISSUES), as lines WIDTH wide: its name and count (muted
+when empty), then its first LIMIT issues' cards, a line between them."
+  (let ((issues (cdr column))
+        (blank (make-string width ?\s)))
+    (append
+     (list (propertize (agent-ui-pad (format "%s %d" (car column) (length issues)) width)
+                       'face (if issues 'bold 'agent-ui-muted)))
+     (cl-loop for issue in (seq-take issues limit)
+              append (cons blank (agent-ui-issues--card issue width dir by-id parent short pick)))
+     (when (> (length issues) limit)
+       (list blank (propertize (agent-ui-pad (format "… %d more" (- (length issues) limit)) width)
+                               'face 'agent-ui-muted))))))
+
+(defun agent-ui-issues--widths (columns width)
+  "Side by side, each of COLUMNS' width out of WIDTH (2 between them): an
+empty one as wide as its name and count, the others sharing the rest."
+  (let* ((heads (mapcar (lambda (column) (string-width (format "%s %d" (car column) (length (cdr column)))))
+                        columns))
+         (full (cl-count-if #'cdr columns))
+         (fixed (cl-loop for column in columns for head in heads unless (cdr column) sum head))
+         (share (and (> full 0) (/ (- width fixed (* 2 (1- (length columns)))) full))))
+    (cl-loop for column in columns for head in heads
+             collect (if (cdr column) (max head share) head))))
 
 (defun agent-ui-issues--draw (props ctx)
   (let* ((dir (file-name-as-directory (plist-get props :dir)))
          (data (gethash dir agent-ui-issues--cache))
          (width (plist-get ctx :width))
-         (limit (plist-get props :limit)))
+         (limit (plist-get props :limit))
+         (parent (plist-get props :parent)))
     (cond
      ((null data) (propertize "fetching the issues…" 'face 'agent-ui-muted))
      ((plist-get data :error) (propertize (plist-get data :error) 'face 'agent-ui-muted))
      (t
       (let* ((columns (agent-ui-issues--columns props data))
+             (by-id (let ((table (make-hash-table :test #'equal)))
+                      (dolist (i (plist-get data :issues) table) (puthash (plist-get i :id) i table))))
              (wide (>= width 72))
-             (col-width (if wide (/ (- width 6) 4) width))
+             (widths (if wide (agent-ui-issues--widths columns width) (make-list (length columns) width)))
              ;; Their titles all led alike ("Agent UI element: ..."): the lead
              ;; left out, the room kept for what tells them apart.
              (all (apply #'append (mapcar #'cdr columns)))
@@ -187,16 +283,8 @@ SHORT); a button opening it. PICK: its pick mark's maker, before it (select)."
                        (lambda (id)
                          (let ((mark (agent-ui-ask-mark (agent-ui-ask-picked-p props id) multiple)))
                            (concat (if live (agent-ui-ask-pick-button mark props ctx id multiple) mark) " "))))))
-             (drawn (mapcar (lambda (column)
-                              (let ((issues (cdr column)))
-                                (append (list (propertize (agent-ui-pad (format "%s (%d)" (car column) (length issues)) col-width)
-                                                          'face 'bold))
-                                        (mapcar (lambda (i) (agent-ui-issues--card i col-width dir short pick))
-                                                (seq-take issues limit))
-                                        (when (> (length issues) limit)
-                                          (list (propertize (agent-ui-pad (format "… %d more" (- (length issues) limit)) col-width)
-                                                            'face 'agent-ui-muted))))))
-                            columns)))
+             (drawn (cl-loop for column in columns for w in widths
+                             collect (agent-ui-issues--column column w limit dir by-id parent short pick))))
         (let ((board
                (if (not wide)
                    (mapconcat (lambda (lines) (mapconcat #'string-trim-right lines "\n")) drawn "\n\n")
@@ -204,7 +292,8 @@ SHORT); a button opening it. PICK: its pick mark's maker, before it (select)."
                  (let ((height (apply #'max (mapcar #'length drawn))))
                    (mapconcat (lambda (row)
                                 (string-trim-right
-                                 (mapconcat (lambda (lines) (or (nth row lines) (make-string col-width ?\s))) drawn "  ")))
+                                 (mapconcat (lambda (pair) (or (nth row (car pair)) (make-string (cdr pair) ?\s)))
+                                            (cl-mapcar #'cons drawn widths) "  ")))
                               (number-sequence 0 (1- height)) "\n")))))
           (if select
               ;; The ids shown, in the board's order: what All picks.
@@ -216,8 +305,9 @@ SHORT); a button opening it. PICK: its pick mark's maker, before it (select)."
 
 (agent-ui-define issues
   "The project's Beads issues as a board: Ready (open, nothing blocking),
-In progress, Blocked, Done (the latest first), each issue's id and title
-\(P0/P1 marked). DIR the project (default: your directory); PARENT an
+In progress, Blocked, Done (the latest first). Each issue a card: its id
+\(P0/P1 marked), what it waits on or when it closed, its title whole, its
+description's first lines. DIR the project (default: your directory); PARENT an
 epic's issues only; LABEL those with it; LIMIT per column. Fetched by bd
 in the background and refreshed after bd commands; RET opens an issue."
   :props ((dir file "The project (default: your directory)" :default :here)
