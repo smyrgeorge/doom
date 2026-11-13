@@ -516,17 +516,39 @@ so a canvas goes on with its other elements. No newline at its end."
 (defface agent-ui-accent '((t :inherit font-lock-keyword-face))
   "What's going on: a bar filling, a step running.")
 
-(defcustom agent-ui-spinner-frames '("▟" "▙" "▛" "▜")
-  "A spinner's frames, one per animation tick: a gap going round a square,
-clockwise. Block elements, which coding and terminal fonts have (braille,
-⠋⠙⠹..., came from a fallback font whose dots are tiny: every frame looked
-the same)."
+(defcustom agent-ui-spinner-frames '("●")
+  "A spinner's frames, one per animation tick, each a column wide: one, a
+dot that stays put while its colour glows (`agent-ui-spinner-pulse'),
+picked by the user from a live demo of eight (doom-43m: the gap going
+round a square, ▟▙▛▜, wasn't liked). A coding font's glyphs: braille,
+⠋⠙⠹..., came from a fallback font whose dots are tiny, every frame alike."
   :type '(repeat string))
 
-(defun agent-ui-spinner (ctx)
-  "The spinner's frame for CTX's tick."
-  (elt agent-ui-spinner-frames
-       (mod (or (plist-get ctx :tick) 0) (length agent-ui-spinner-frames))))
+(defcustom agent-ui-spinner-pulse 8
+  "The spinner's glow: its colour brightening and fading over this many
+animation ticks (8: 1.2 s at `agent-ui-animation-interval''s 0.15), from a
+fifth of its face's colour, on the background, to all of it. nil: it keeps
+its face's colour (frames that move, ▟▙▛▜, need none)."
+  :type '(choice (const :tag "No glow" nil) natnum))
+
+(defun agent-ui-spinner (ctx &optional face)
+  "The spinner's frame for CTX's tick, in FACE (the accent's by default),
+glowing (`agent-ui-spinner-pulse'): its foreground FACE's colour blended
+with the background, all of it at tick 0 (a still picture's), a fifth
+half a cycle later; FACE's other attributes kept."
+  (let* ((tick (or (plist-get ctx :tick) 0))
+         (face (or face 'agent-ui-accent))
+         (frame (elt agent-ui-spinner-frames (mod tick (length agent-ui-spinner-frames))))
+         (cycle agent-ui-spinner-pulse))
+    (propertize frame 'face
+                (if (and (natnump cycle) (> cycle 1))
+                    ;; Rounded: the same colour at the same point of the
+                    ;; cycle, rising or falling, and a few colours only.
+                    (let ((glow (/ (fround (* 50 (+ 1 (cos (/ (* 2 float-pi (mod tick cycle)) cycle))))) 100)))
+                      (list (list :foreground (agent-ui-blend (agent-ui-background) (agent-ui-color face)
+                                                              (+ 0.2 (* 0.8 glow))))
+                            face))
+                  face))))
 
 (defun agent-ui-truncate (string width)
   "STRING cut to WIDTH columns, with … if it's cut."

@@ -207,7 +207,7 @@ its counts and label, on one line."
          (max (plist-get props :max))
          (face (agent-ui-progress--fill-face status))
          (pie (cond (max (agent-ui-pie (/ (float (plist-get props :value)) max) ctx face))
-                    ((eq status 'running) (concat (propertize (agent-ui-spinner ctx) 'face face) " "))
+                    ((eq status 'running) (concat (agent-ui-spinner ctx face) " "))
                     (t (agent-ui-pie 1.0 ctx face))))
          (mark (pcase status ('done (propertize "✓" 'face face)) ('failed (propertize "✗" 'face face)) (_ nil)))
          (rest (string-join (delq nil (append (agent-ui-progress--counts props)

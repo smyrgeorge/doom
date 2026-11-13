@@ -342,13 +342,25 @@ at `agent-ui-max-chars'."
   (should (equal (agent-ui-format-number 1234.5678) "1234.57"))
   (should (equal (agent-ui-format-number 12) "12"))
   (should (equal (mapcar #'agent-ui-cell '(nil t :false 1.5 "x")) '("" "true" "false" "1.5" "x")))
-  ;; The spinner: a gap going round a square, its frames block elements (a
-  ;; coding font's, not braille from a fallback font); another set, chosen.
-  (should (equal (mapcar (lambda (tick) (agent-ui-spinner (agent-ui-context :tick tick))) '(0 1 2 3 4 11))
-                 '("▟" "▙" "▛" "▜" "▟" "▜")))
-  (should (equal (agent-ui-spinner (agent-ui-context)) "▟"))
-  (let ((agent-ui-spinner-frames '("◌" "○" "◎")))
-    (should (equal (agent-ui-spinner (agent-ui-context :tick 5)) "◎"))))
+  ;; The spinner: a dot (a coding font's, not braille from a fallback font)
+  ;; whose colour glows: its face's, on the background, all of it at tick 0,
+  ;; a fifth half a cycle later, its other attributes kept (doom-43m).
+  (cl-letf (((symbol-function 'agent-ui-background) (lambda () "#000000"))
+            ((symbol-function 'agent-ui-color) (lambda (_face) "#ffffff")))
+    (cl-flet ((glow (tick) (get-text-property 0 'face (agent-ui-spinner (agent-ui-context :tick tick) 'bold))))
+      (should (equal (agent-ui-spinner (agent-ui-context :tick 3)) "●"))
+      (should (equal (glow 0) '((:foreground "#ffffff") bold)))
+      (should (equal (glow 4) '((:foreground "#333333") bold)))
+      (should (equal (glow 8) (glow 0)))
+      (should (equal (glow 2) (glow 6)))
+      (should (equal (car (get-text-property 0 'face (agent-ui-spinner (agent-ui-context))))
+                     '(:foreground "#ffffff")))
+      (should (eq (cadr (get-text-property 0 'face (agent-ui-spinner (agent-ui-context)))) 'agent-ui-accent))))
+  ;; Another set, without a glow.
+  (let ((agent-ui-spinner-frames '("◌" "○" "◎"))
+        (agent-ui-spinner-pulse nil))
+    (should (equal (agent-ui-spinner (agent-ui-context :tick 5)) "◎"))
+    (should (eq (get-text-property 0 'face (agent-ui-spinner (agent-ui-context :tick 5) 'bold)) 'bold))))
 
 ;; ====== JSON ======
 

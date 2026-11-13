@@ -105,7 +105,7 @@ through, unlike the steps kept."
   (pcase status
     ('done (propertize "✓" 'face 'agent-ui-success))
     ('failed (propertize "✗" 'face 'agent-ui-error))
-    ('running (propertize (agent-ui-spinner ctx) 'face 'agent-ui-accent))
+    ('running (agent-ui-spinner ctx 'agent-ui-accent))
     ('skipped (propertize "–" 'face 'agent-ui-muted))
     (_ (propertize "○" 'face 'agent-ui-muted))))
 

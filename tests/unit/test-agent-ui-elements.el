@@ -92,7 +92,7 @@ counts, its mark, its label; in the GUI the pie an SVG."
   (should (equal (+test-aue-draw '(:type "progress" :value 12 :max 12 :status "done" :pie t))
                  "● 12/12  100%  ✓"))
   (should (equal (+test-aue-draw '(:type "progress" :value 3 :label "indexing" :pie t) :tick 0)
-                 "▟ 3  indexing"))
+                 "● 3  indexing"))
   (should (equal (+test-aue-draw '(:type "progress" :value 7 :max 12 :label "a long label for a narrow pane" :pie t)
                                  :width 20)
                  "◑ 7/12  58%  a long…"))
@@ -164,16 +164,20 @@ counts, its mark, its label; in the GUI the pie an SVG."
     ;; Drawn as given (not kept on a canvas: no times noted).
     (should (equal (+test-aue-draw element :tick 2)
                    (concat "✓ Run the tests  412 passed\n"
-                           "▛ Build\n"
+                           "● Build\n"
                            "○ Publish\n"
                            "✗ Tag            exists\n"
                            "– Notify")))
     ;; None timed: no times' column.
     (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "a" :status "done" :detail "x") "bb")))
                    "✓ a   x\n○ bb"))
-    ;; The spinner turns, round (its 4 frames).
-    (should (string-match-p "▜ Build" (+test-aue-draw element :tick 3)))
-    (should (string-match-p "▟ Build" (+test-aue-draw element :tick 4)))
+    ;; The spinner glows: the same dot, its colour changing tick by tick.
+    (should (string-match-p "● Build" (+test-aue-draw element :tick 3)))
+    (let ((at (lambda (tick)
+                (let ((text (agent-ui-render element (agent-ui-context :width 60 :tick tick))))
+                  (get-text-property (string-search "● Build" text) 'face text)))))
+      (should-not (equal (funcall at 0) (funcall at 4)))
+      (should (eq (cadr (funcall at 4)) 'agent-ui-accent)))
     (should (agent-ui-animated-p element))
     (should (eq (+test-aue-face-at element "✓") 'agent-ui-success))
     (should (eq (+test-aue-face-at element "exists") 'agent-ui-error))
@@ -460,7 +464,7 @@ half the width isn't cut for its detail's sake when the line fits."
                                                                             (:name "b" :status "running"))))))
     (should (equal (plist-get (car (plist-get element :steps)) :seconds) 41.0))
     (setq now 150.0)
-    (should (equal (+test-aue-draw element) "✓ a  41s\n▟ b   9s"))
+    (should (equal (+test-aue-draw element) "✓ a  41s\n● b   9s"))
     ;; Kept again (a panel's re-check): nothing changes.
     (should (equal (agent-ui--checked element) element))
     ;; A panel's: noted too.
