@@ -11,6 +11,13 @@
       :desc "Issues (Beads)" "o i" #'+my/beads-project
       :desc "New issue"      "o I" #'+my/beads-new-issue)
 
+;; THE LIST: j and k go from issue to issue, a title on several lines one row
+;; (config/beads/look.el).
+(map! :after beads-list
+      :map beads-list-mode-map
+      :n "j" #'+my/beads-next-row
+      :n "k" #'+my/beads-previous-row)
+
 ;; AN ISSUE (RET on one in the list): q closes it for good, its buffer killed
 ;; (its pane with it, as config/tiling has a pane's last tab), as on Agent UI's
 ;; canvas, images, Markdown and PDFs; beads.el's q only hid it, kept in the

@@ -540,25 +540,33 @@ list of faces (names, plists)."
       (if (keywordp (car-safe face)) (list face) (ensure-list face)))))
 
 (ert-deftest beads/look-the-columns ()
-  "Statuses as icons in their colours (ready: open, nothing open blocking),
-priorities as badges, types with their icons in a graphic frame only."
+  "Statuses as icons in their colours (ready: open, nothing open blocking), a
+blocked one's count of blockers after it, their words in their help;
+priorities as badges; types as their icons alone in a graphic frame, their
+words in a terminal."
   (let ((+my/beads--statuses (make-hash-table :test #'equal)))
     (puthash "t-2" "open" +my/beads--statuses)
     (puthash "t-3" "closed" +my/beads--statuses)
-    (should (equal (+my/beads-format-status '((status . "open"))) "○ ready"))
-    (should (equal (+my/beads-format-status '((status . "in_progress"))) "◔ in progress"))
-    (should (equal (+my/beads-format-status '((status . "closed"))) "✓ closed"))
-    (should (equal (+my/beads-format-status '((status . "deferred"))) "◇ deferred"))
+    (should (equal (+my/beads-format-status '((status . "open"))) "○"))
+    (should (equal (+my/beads-format-status '((status . "in_progress"))) "◔"))
+    (should (equal (+my/beads-format-status '((status . "closed"))) "✓"))
+    (should (equal (+my/beads-format-status '((status . "deferred"))) "◇"))
+    (should (equal (get-text-property 0 'help-echo (+my/beads-format-status '((status . "in_progress"))))
+                   "in progress"))
     ;; Blocked by an open issue, not by a closed one.
     (should (equal (+my/beads-format-status
                     '((status . "open") (dependencies . [((type . "blocks") (depends_on_id . "t-2"))
                                                          ((type . "blocks") (depends_on_id . "t-3"))
                                                          ((type . "parent-child") (depends_on_id . "t-2"))])))
-                   "⊘ blocked by 1"))
+                   "⊘1"))
+    (should (equal (get-text-property
+                    0 'help-echo (+my/beads-format-status
+                                  '((status . "open") (dependencies . [((type . "blocks") (depends_on_id . "t-2"))]))))
+                   "blocked by 1"))
     ;; Being worked on: in progress, blockers or not.
     (should (equal (+my/beads-format-status
                     '((status . "in_progress") (dependencies . [((type . "blocks") (depends_on_id . "t-2"))])))
-                   "◔ in progress"))
+                   "◔"))
     (should (memq 'success (ensure-list (get-text-property 0 'face (+my/beads-format-status '((status . "open"))))))))
   ;; Badges: the theme's red and orange (else its faces, inverted).
   (should (equal (get-text-property 1 'face (+my/beads-format-priority '((priority . 0))))
@@ -572,12 +580,13 @@ priorities as badges, types with their icons in a graphic frame only."
                    `(:foreground "#ff6c6b" :background ,(doom-blend "#ff6c6b" "#282c34" 0.25)))))
   (should (equal (+my/beads-format-priority '((priority . 2))) " P2 "))
   (should (eq (get-text-property 1 'face (+my/beads-format-priority '((priority . 4)))) 'shadow))
-  ;; A type: its word in a terminal; its icon first in a graphic frame.
+  ;; A type: its word in a terminal; its icon alone in a graphic frame.
   (should (equal (+my/beads-format-type '((issue_type . "bug"))) "bug"))
   (should (eq (get-text-property 0 'face (+my/beads-format-type '((issue_type . "bug")))) 'error))
   (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
     (let ((type (+my/beads-format-type '((issue_type . "epic")))))
-      (should (string-suffix-p " epic" type))
+      (should (= (length type) 1))
+      (should (equal (get-text-property 0 'help-echo type) "epic"))
       (should (equal (plist-get (seq-find #'consp (ensure-list (get-text-property 0 'face type))) :family)
                      "Symbols Nerd Font Mono")))))
 
@@ -587,9 +596,74 @@ priorities as badges, types with their icons in a graphic frame only."
     (should (equal (substring-no-properties tag) " parser "))
     (should (equal (get-text-property 0 'face tag) (get-text-property 0 'face (+my/beads--label-tag "parser"))))
     (should-not (equal (get-text-property 0 'face tag) (get-text-property 0 'face (+my/beads--label-tag "crash")))))
-  (should (equal (substring-no-properties (+my/beads--progress 1 3)) "━━──── 1/3"))
-  (should (equal (substring-no-properties (+my/beads--progress 0 0)) "────── 0/0"))
-  (should (equal (substring-no-properties (+my/beads--progress 4 4)) "━━━━━━ 4/4")))
+  (should (equal (substring-no-properties (+my/beads--progress 1 3)) "1/3"))
+  (should (eq (get-text-property 0 'face (+my/beads--progress 1 3)) 'shadow))
+  (should (equal (substring-no-properties (+my/beads--progress 0 0)) "0/0"))
+  (should (eq (get-text-property 0 'face (+my/beads--progress 4 4)) 'success)))
+
+;; doom-o5t.1
+(ert-deftest beads/look-a-title-whole ()
+  "A title too long for the window goes on to the next lines, under itself
+\(at its column, its indent's width on); its progress and tags after it,
+each kept whole; an epic's issue without the lead it shares with it."
+  (should (equal (+my/beads--wrap '("aa" "bb" "cc" "dd") 5) '("aa bb" "cc dd")))
+  (should (equal (+my/beads--wrap '("aa" " tag one ") 9) '("aa" " tag one ")))
+  (should (equal (+my/beads--wrap '("abcdefghij") 4) '("abc…")))
+  (should (equal (+my/beads--lead-less "Agent workspace: core" "Agent workspace: a crew") "core"))
+  (should (equal (+my/beads--lead-less "Agent UI: core" "Agent workspace: a crew") "Agent UI: core"))
+  (should (equal (+my/beads--lead-less "Agent workspace: " "Agent workspace: a crew") "Agent workspace: "))
+  (let ((+my/beads--depth (make-hash-table :test #'equal))
+        (+my/beads--titles (make-hash-table :test #'equal))
+        (+my/beads--children (make-hash-table :test #'equal))
+        (+my/beads--wrapped-at nil))
+    (puthash "e.1" 1 +my/beads--depth)
+    (puthash "e" "Parser: the rewrite" +my/beads--titles)
+    (puthash "e" '(1 . 3) +my/beads--children)
+    (cl-letf (((symbol-function '+my/beads--title-width) (lambda (&rest _) 24))
+              ((symbol-function '+my/beads--title-column) (lambda () 30)))
+      ;; An epic: its title on two lines, its progress after it.
+      (let ((title (+my/beads-format-title '((id . "e") (title . "Parser: the rewrite of the lexer")))))
+        (should (equal (substring-no-properties title) "Parser: the rewrite of\n the lexer 1/3"))
+        (should (equal (get-text-property (string-search "\n" title) 'display title) nil))
+        (should (equal (get-text-property (1+ (string-search "\n" title)) 'display title) '(space :align-to 30))))
+      ;; Its issue, indented, its lead left out, its next line under its text.
+      (let ((title (+my/beads-format-title '((id . "e.1") (parent . "e") (labels . ["ui"])
+                                             (title . "Parser: errors recovered from, line by line")))))
+        (should (equal (substring-no-properties title) "└ errors recovered from,\n   line by line  ui ")))
+      (should (equal +my/beads--wrapped-at 24)))
+    ;; Under 20 columns for it: on one line.
+    (cl-letf (((symbol-function '+my/beads--title-width) (lambda (&rest _) 19)))
+      (should (equal (substring-no-properties (+my/beads-format-title '((id . "x") (title . "One line, however long"))))
+                     "One line, however long")))
+    ;; No window: on one line.
+    (cl-letf (((symbol-function '+my/beads--title-width) #'ignore))
+      (should (equal (substring-no-properties (+my/beads-format-title '((id . "x") (title . "One line, however long"))))
+                     "One line, however long")))))
+
+(ert-deftest beads/look-a-row-on-several-lines ()
+  "A row on several lines: j and k go from row to row, hl-line highlights it
+whole."
+  (with-temp-buffer
+    (dolist (row '(("a" "a one") ("b" "b one\n  b two\n  b three") ("c" "c one")))
+      (insert (propertize (concat (cadr row) "\n") 'tabulated-list-id (car row))))
+    (goto-char (point-min))
+    (+my/beads-next-row)
+    (should (equal (tabulated-list-get-id) "b"))
+    (should (looking-at "b one"))
+    (should (equal (buffer-substring (car (+my/beads--hl-range)) (cdr (+my/beads--hl-range)))
+                   "b one\n  b two\n  b three\n"))
+    (forward-line 2)
+    (should (equal (car (+my/beads--hl-range)) (save-excursion (search-backward "b one"))))
+    (+my/beads-next-row)
+    (should (looking-at "c one"))
+    (+my/beads-next-row)
+    (should (looking-at "c one"))
+    (+my/beads-previous-row)
+    (should (looking-at "b one"))
+    (+my/beads-previous-row 1)
+    (should (looking-at "a one"))
+    (+my/beads-previous-row)
+    (should (looking-at "a one"))))
 
 (ert-deftest beads/an-epic-s-issues-in-a-steady-order ()
   "Whatever order bd gives them in: in progress first, then by priority, then
@@ -626,11 +700,11 @@ Blocked section; a closed row dimmed."
         (let ((lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n" t)))
           ;; The epic, then its two open issues, indented.
           (let ((at (seq-position lines (+test-beads--line "The parser rewrite"))))
-            (should (string-match-p "━━──── 1/3" (nth at lines)))
+            (should (string-match-p "The parser rewrite 1/3" (nth at lines)))
             (should (string-match-p "└ Lexer: tokens" (nth (1+ at) lines)))
             (should (string-match-p "└ Parser: recovery" (nth (+ 2 at) lines))))
           ;; Blocked: last of the open ones, in its section.
-          (should (string-match-p "⊘ blocked by 1 .*Release 2.0" (car (last lines))))
+          (should (string-match-p "⊘1 .*Release 2.0" (car (last lines))))
           (should (= (beads-list--issue-section (beads-client-show release)) 1))
           (should (= (beads-list--issue-section (seq-find (lambda (i) (equal (alist-get 'id i) release))
                                                           beads-list--issues))
@@ -642,7 +716,7 @@ Blocked section; a closed row dimmed."
           (should (memq 'beads-list-row-p0 faces)))
         ;; Closed, shown: dimmed, in the Completed section (not under its epic).
         (+my/beads-show-closed)
-        (should (string-match-p "✓ closed .*Old parser removed" (+test-beads--line "Old parser removed")))
+        (should (string-match-p "✓ .*Old parser removed" (+test-beads--line "Old parser removed")))
         (should (memq 'shadow (+test-beads--faces-at "Old parser removed")))
         (should-not (memq 'shadow (+test-beads--faces-at "Crash on")))))))
 
@@ -891,7 +965,8 @@ issue, a new pane, the next one in it; the preview, beads.el's side window."
 ;; ====== EVIL ======
 
 (ert-deftest beads/keys-over-vim-s ()
-  "In the list, normal state: its letters, gr refreshing; Vim's gg and j."
+  "In the list, normal state: its letters, gr refreshing; Vim's gg; j and k
+from row to row (a title on several lines one)."
   (with-temp-buffer
     (beads-list-mode)
     (evil-normal-state)
@@ -901,7 +976,8 @@ issue, a new pane, the next one in it; the preview, beads.el's side window."
     (should (eq (key-binding "P") #'beads-preview-mode))
     (should (eq (key-binding "gr") #'beads-list-refresh))
     (should (eq (key-binding "gg") #'evil-goto-first-line))
-    (should (eq (key-binding "j") #'evil-next-line))
+    (should (eq (key-binding "j") #'+my/beads-next-row))
+    (should (eq (key-binding "k") #'+my/beads-previous-row))
     (should (eq (key-binding (kbd "RET")) #'beads-list-goto-issue))
     ;; Not what it inherits: SPC (Doom's leader) and h stay Vim's.
     (should-not (eq (key-binding " ") #'scroll-up-command))

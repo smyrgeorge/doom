@@ -25,9 +25,11 @@ The list opens in a new pane where [tiling](editor.md#tiling) puts it, as Claude
 from it in a new pane too, and the next ones in that pane, as its tabs. The preview (`P`) stays beside the list.
 
 Each issue's status, priority and type are icons and badges in their colours: ○ ready (nothing open blocks it), ◔ in
-progress, ⊘ blocked (in the Blocked section, by how many open issues), ✓ closed; P0 and P1 stand out, P3 and P4 are
-muted. Labels follow the title as tags, an epic shows its progress (its closed issues too), and its open issues are
-listed under it.
+progress, ⊘3 blocked by 3 open issues (in the Blocked section), ✓ closed; P0 and P1 stand out, P3 and P4 are muted; the
+type is its icon (its word in a terminal). The columns are narrow so the title keeps most of the width, and it's shown
+whole: a title too long for the pane goes on to the next line, under itself. Labels follow it as tags, an epic shows
+its progress (`3/11`, its closed issues too), and its open issues are listed under it, without the lead they share
+with it (`Agent workspace: `).
 
 It shows the work still open: a notice over it says how many closed issues it hides, with **Show closed** (then
 **Hide closed**), and `f s closed` lists only them. With a filter on, a notice says which, with **Clear filter**.
@@ -35,6 +37,7 @@ It shows the work still open: a notice over it says how many closed issues it hi
 
 | Key | Action |
 |---|---|
+| `j` / `k` | The next / previous issue (a title on two lines is one) |
 | `RET` | Open the issue |
 | `P` | Preview the issue under the cursor, beside the list, as you move |
 | `c` / `C` | A new issue / a new one, previewed first |
@@ -80,5 +83,5 @@ beads.el was written for bd 0.49, which ran a daemon; bd 1.x has only its comman
 changed, and the tests run each command against the real `bd`. The activity feed and the merge conflicts view need
 commands bd no longer has: they say so.
 
-In normal state the buffers' own letters win over Vim's (Vim's `j`, `k`, `gg`, `gt` and `SPC` stay), and refreshing is
+In normal state the buffers' own letters win over Vim's (Vim's `gg`, `gt` and `SPC` stay), and refreshing is
 `gr`. Statuses and types take the theme's colours, and a P0 issue's row is tinted with its red.

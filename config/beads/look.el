@@ -4,19 +4,25 @@
 
 ;; THE LOOK
 ;; beads.el shows its columns as words (a status, "P1", a type); here, through
-;; its own columns (their formatters replaced, not forked), easier to scan:
+;; its own columns (their formatters replaced, not forked), easier to scan,
+;; and narrow, the title keeping most of the width (doom-o5t.1: at 99
+;; columns, 59 went before the title, titles cut at ~20):
 ;; - a status: an icon in its colour (○ ready, nothing blocking it; ◔ in
-;;   progress; ⊘ blocked, by how many open issues; ✓ closed; ◇ deferred), the
-;;   blocked ones in the Blocked section, by their blockers too;
+;;   progress; ⊘3 blocked, by 3 open issues; ✓ closed; ◇ deferred), its word
+;;   in its help; the blocked ones in the Blocked section, by their blockers
+;;   too;
 ;; - a priority: P0 and P1 as red and orange badges, P2 plain, P3/P4 muted;
-;; - a type: its icon (nerd-icons, in a graphic frame) in its colour;
-;; - a title: as wide as the window leaves it, its labels as tags after it (a
-;;   colour each, the same each time), an epic's progress (its issues done of
-;;   all, closed ones too); an epic's issues under it, indented (sections
-;;   kept: where they're in the epic's);
+;; - a type: its icon (nerd-icons) in its colour in a graphic frame, its word
+;;   in a terminal;
+;; - no date (its column there, empty: beads.el sorts by it);
+;; - a title: whole, a long one going on to the next lines under itself;
+;;   after it an epic's progress (its issues done of all, closed ones too)
+;;   and its labels as tags (a colour each, the same each time); an epic's
+;;   issues under it, indented, without the lead they share with it
+;;   ("Agent workspace: "); sections kept: where they're in the epic's);
 ;; - a closed issue's row dimmed; a P0's tinted under its badges and tags.
-;; In a terminal the same, the types as words. Symbols the usual coding fonts
-;; have (JetBrains Mono: not ◐ ❄ ⛓ ▰, drawn small from another font).
+;; Symbols the usual coding fonts have (JetBrains Mono: not ◐ ❄ ⛓ ▰, drawn
+;; small from another font).
 (defvar-local +my/beads--statuses nil
   "This list's issues' statuses, closed ones too: a table, id -> status.")
 
@@ -26,15 +32,21 @@
 (defvar-local +my/beads--depth nil
   "How deep each issue is drawn under its epic: a table, id -> depth.")
 
+(defvar-local +my/beads--titles nil
+  "This list's issues' titles: a table, id -> title (an epic's, for its
+issues' lead).")
+
 (defun +my/beads--note-issues-a (issues)
   "`beads-client-list''s ISSUES, while a list is refreshed: their statuses and
 their epics' counts noted (before the closed ones are hidden,
 config/beads/hidden.el)."
   (when (and +my/beads--listing (eq (current-buffer) +my/beads--listing))
     (let ((statuses (make-hash-table :test #'equal))
-          (children (make-hash-table :test #'equal)))
+          (children (make-hash-table :test #'equal))
+          (titles (make-hash-table :test #'equal)))
       (dolist (issue issues)
         (puthash (alist-get 'id issue) (alist-get 'status issue) statuses)
+        (puthash (alist-get 'id issue) (alist-get 'title issue) titles)
         (when-let* ((parent (alist-get 'parent issue)))
           (let ((counts (gethash parent children (cons 0 0))))
             (puthash parent (cons (+ (car counts) (if (+my/beads--closed-p issue) 1 0))
@@ -42,6 +54,7 @@ config/beads/hidden.el)."
                      children))))
       (setq +my/beads--statuses statuses
             +my/beads--children children
+            +my/beads--titles titles
             +my/beads--depth nil)))
   issues)
 
@@ -101,19 +114,19 @@ both are known (#rrggbb)."
 nothing open blocking it.")
 
 (defun +my/beads-format-status (issue)
-  "ISSUE's status: its icon in its colour, its word (see above)."
+  "ISSUE's status: its icon in its colour, a blocked one's count of open
+blockers after it (⊘3); its word in its help (see above)."
   (let* ((status (alist-get 'status issue))
          (blockers (+my/beads--blockers issue))
          (status (cond ((and (equal status "open") (> blockers 0)) "blocked")
                        ((equal status "open") "ready")
                        (t status)))
-         (look (or (assoc status +my/beads--statuses-look) (list status "•" 'default))))
-    (concat (propertize (nth 1 look) 'face (nth 2 look))
-            " "
-            (propertize (or (nth 3 look) status)
-                        'face (if (member status '("ready" "closed")) 'default (nth 2 look)))
-            (if (and (equal status "blocked") (> blockers 0))
-                (propertize (format " by %d" blockers) 'face 'beads-status-blocked) ""))))
+         (look (or (assoc status +my/beads--statuses-look) (list status "•" 'default)))
+         (blocked (and (equal status "blocked") (> blockers 0))))
+    (propertize (concat (nth 1 look) (if blocked (format "%d" blockers) ""))
+                'face (nth 2 look)
+                'help-echo (concat (or (nth 3 look) status)
+                                   (if blocked (format " by %d" blockers) "")))))
 
 (defun +my/beads-format-priority (issue)
   "ISSUE's priority: P0 and P1 badges, P2 plain, P3/P4 muted."
@@ -133,19 +146,24 @@ nothing open blocking it.")
     ("decision" "nf-cod-law"       font-lock-type-face))
   "(TYPE ICON FACE): how a type is drawn, ICON a codicon (nerd-icons).")
 
+(defun +my/beads--graphic-p ()
+  "Whether the list is drawn in a graphic frame: the one of a window showing
+it, else the selected one."
+  (display-graphic-p (window-frame (or (get-buffer-window (current-buffer) 'visible) (selected-window)))))
+
 (defun +my/beads-format-type (issue)
-  "ISSUE's type: its icon (a graphic frame) and its word, in its colour."
+  "ISSUE's type in its colour: its icon alone in a graphic frame (its word in
+its help), its word in a terminal."
   (let* ((type (or (alist-get 'issue_type issue) ""))
          (look (assoc type +my/beads--types-look))
          (face (or (nth 2 look) 'default))
-         (icon (and look (display-graphic-p) (fboundp 'nerd-icons-codicon)
+         (icon (and look (+my/beads--graphic-p) (fboundp 'nerd-icons-codicon)
                     (ignore-errors (nerd-icons-codicon (nth 1 look))))))
-    (concat (if icon
-                (let ((icon (copy-sequence icon)))
-                  (add-face-text-property 0 (length icon) face nil icon)
-                  (concat icon " "))
-              "")
-            (propertize type 'face face))))
+    (if icon
+        (let ((icon (copy-sequence icon)))
+          (add-face-text-property 0 (length icon) face nil icon)
+          (propertize icon 'help-echo type))
+      (propertize type 'face face))))
 
 (defconst +my/beads--tag-colours
   '((blue . font-lock-keyword-face) (magenta . font-lock-function-name-face)
@@ -168,53 +186,109 @@ letters)."
                         `(:inherit ,face :inverse-video t)))))
 
 (defun +my/beads--progress (done all)
-  "An epic's progress: DONE of ALL as a bar and figures."
-  (let* ((cells 6)
-         (full (if (> all 0) (round (* cells (/ (float done) all))) 0)))
-    (concat (propertize (make-string full ?━) 'face 'success)
-            (propertize (make-string (- cells full) ?─) 'face 'shadow)
-            (propertize (format " %d/%d" done all) 'face (if (= done all) 'success 'shadow)))))
+  "An epic's progress: DONE of ALL, short (1/11), green once all are done."
+  (propertize (format "%d/%d" done all) 'face (if (= done all) 'success 'shadow)))
 
-(defun +my/beads--title-width ()
-  "Columns the title has, the window's width less those before it (the
-title the last column), or nil (no window, or not the last)."
-  (when-let* ((window (get-buffer-window (current-buffer) 'visible))
-              (format tabulated-list-format)
+(defvar-local +my/beads--wrapped-at nil
+  "The title's width the list's rows were drawn for: drawn again (in the
+background) when its window's width makes it another.")
+
+(defun +my/beads--title-column ()
+  "Where the title starts in a row, in columns (the title the last column),
+or nil if it isn't the last."
+  (when-let* ((format tabulated-list-format)
               ((equal (car (aref format (1- (length format)))) "Title")))
-    (- (window-body-width window)
-       tabulated-list-padding
-       (seq-reduce (lambda (sum column) (+ sum (nth 1 column) 1))
+    (+ tabulated-list-padding
+       (seq-reduce (lambda (sum column) (+ sum (nth 1 column) (or (plist-get (nthcdr 3 column) :pad-right) 1)))
                    (seq-take format (1- (length format)))
-                   0)
-       1)))
+                   0))))
+
+(defun +my/beads--title-width (&optional window)
+  "Columns the title has in WINDOW (default: one showing the list), the
+window's width less those before it, or nil (no window, the title not the
+last column)."
+  (when-let* ((window (or window (get-buffer-window (current-buffer) 'visible)))
+              (column (+my/beads--title-column)))
+    (- (window-body-width window) column 1)))
+
+(defun +my/beads--wrap (words width)
+  "WORDS (strings, each kept whole: a tag, an epic's progress) in lines of
+WIDTH columns at most, a space between two; a word wider than WIDTH alone on
+its line, cut. A list of lines."
+  (let ((lines nil) (line nil) (used 0))
+    (dolist (word words)
+      (let ((w (string-width word)))
+        (when (and line (> (+ used 1 w) width))
+          (push (string-join (nreverse line) " ") lines)
+          (setq line nil used 0))
+        (if (and (null line) (> w width))
+            (push (truncate-string-to-width word width nil nil "…") lines)
+          (push word line)
+          (setq used (+ used (if (cdr line) 1 0) w)))))
+    (when line (push (string-join (nreverse line) " ") lines))
+    (nreverse lines)))
+
+(defun +my/beads--lead-less (title parent)
+  "TITLE without the lead (\"Agent workspace: \") it shares with its epic
+PARENT's title."
+  (let ((case-fold-search nil))
+    (if (and parent
+             (string-match "\\`[^:\n]\\{1,30\\}: " parent)
+             (string-prefix-p (match-string 0 parent) title)
+             (> (length title) (match-end 0)))
+        (substring title (match-end 0))
+      title)))
 
 (defun +my/beads-format-title (issue)
-  "ISSUE's title, under its epic's indented; its progress if it's an epic,
-its labels as tags; cut to the room the window leaves it."
+  "ISSUE's title, under its epic's indented and without the lead it shares
+with it; after it its progress if it's an epic, its labels as tags. Whole: a
+title too long for the window goes on to the next lines, under itself (no
+window, or under 20 columns for it: on one line)."
   (let* ((id (alist-get 'id issue))
          (depth (or (and +my/beads--depth (gethash id +my/beads--depth)) 0))
          (indent (if (> depth 0)
                      (concat (make-string (* 2 (1- depth)) ?\s) (propertize "└ " 'face 'shadow))
                    ""))
          (counts (and +my/beads--children (gethash id +my/beads--children)))
-         (progress (if counts (concat "  " (+my/beads--progress (car counts) (cdr counts))) ""))
-         (labels (append (alist-get 'labels issue) nil))
-         (tags (if labels (concat " " (mapconcat #'+my/beads--label-tag labels " ")) ""))
          (title (or (alist-get 'title issue) ""))
-         (room (+my/beads--title-width)))
-    ;; Cut for its tags and progress to be seen, if it keeps 20 columns: in a
-    ;; narrower window the title first, cut at its edge.
-    (let ((left (and room (- room (string-width indent) (string-width progress) (string-width tags)))))
-      (when (and left (>= left 20) (> (string-width title) left))
-        (setq title (truncate-string-to-width title left nil nil "…"))))
-    (concat indent title progress tags)))
+         (title (if (> depth 0)
+                    (+my/beads--lead-less title (and +my/beads--titles
+                                                     (gethash (alist-get 'parent issue) +my/beads--titles)))
+                  title))
+         (words (append (split-string title " " t)
+                        (and counts (list (+my/beads--progress (car counts) (cdr counts))))
+                        (mapcar #'+my/beads--label-tag (append (alist-get 'labels issue) nil))))
+         (room (+my/beads--title-width))
+         (column (+my/beads--title-column)))
+    (setq +my/beads--wrapped-at room)
+    ;; No window, or one so narrow the title would be a word a line: on one
+    ;; line, cut at the window's edge.
+    (if (or (not room) (< (- room (string-width indent)) 20))
+        (concat indent (string-join words " "))
+      (let ((lines (+my/beads--wrap words (- room (string-width indent)))))
+        (concat indent (car lines)
+                ;; The next lines under the first: at the title's column (as
+                ;; tabulated-list places its columns), its indent's width on.
+                (mapconcat (lambda (line)
+                             (concat "\n" (propertize " " 'display `(space :align-to ,column))
+                                     (make-string (string-width indent) ?\s) line))
+                           (cdr lines) ""))))))
 
 (defconst +my/beads--columns
-  '((status 14 +my/beads-format-status)
+  '((date 0 +my/beads--no-date)
+    (status 3 +my/beads-format-status "St")
     (priority 4 +my/beads-format-priority)
-    (type 10 +my/beads-format-type)
+    (type 8 +my/beads-format-type)
     (title 50 +my/beads-format-title))
-  "beads.el's list columns drawn here: (COLUMN WIDTH FORMATTER).")
+  "beads.el's list columns drawn here: (COLUMN WIDTH FORMATTER [HEADER]).
+The date's empty, its column kept: beads.el's column sort names it. The type's 2
+columns wide in a graphic frame (its icon), 8 in a terminal (its word).")
+
+(defun +my/beads--no-date (_issue)
+  "The date's column: empty (see `+my/beads--columns'). Its text would show
+anyway, tabulated-list letting it spill over the room beside it; beads.el's
+date sort doesn't read it (it compares the rows' second column)."
+  "")
 
 (defun +my/beads-columns ()
   "beads.el's list columns with the look above (see `+my/beads--columns')."
@@ -222,9 +296,105 @@ its labels as tags; cut to the room the window leaves it."
         (mapcar (lambda (def)
                   (pcase-let ((`(,column ,header ,width ,sortable ,formatter) def))
                     (if-let* ((look (assq column +my/beads--columns)))
-                        (list column header (nth 1 look) sortable (nth 2 look))
+                        (list column (or (nth 3 look) header) (nth 1 look) sortable (nth 2 look))
                       (list column header width sortable formatter))))
                 beads-list--column-defs)))
+
+(defun +my/beads-format-a (format)
+  "`beads-list--build-format''s FORMAT: the type's column as wide as its
+icon in a graphic frame (see `+my/beads--columns')."
+  (if (not (+my/beads--graphic-p))
+      format
+    (let ((format (copy-sequence format)))
+      (dotimes (n (length format))
+        (pcase (aref format n)
+          (`("Type" ,_ . ,rest) (aset format n (cons "Type" (cons 2 rest))))))
+      format)))
+
+(defun +my/beads--header-string (format)
+  "The column headers' string in a header line's FORMAT (tabulated-list's,
+maybe within another's: config/banner's), or nil."
+  (cond ((and (stringp format) (text-property-not-all 0 (length format) 'tabulated-list-column-name nil format))
+         format)
+        ((consp format)
+         (or (+my/beads--header-string (car format)) (+my/beads--header-string (cdr format))))))
+
+(defun +my/beads-header-a (&rest _)
+  "`tabulated-list-init-header', in a list: the date's header shown as
+nothing, its column being empty (tabulated-list put \"Date…\" over the
+status's header: its 0 columns can't cut it)."
+  (when-let* (((derived-mode-p 'beads-list-mode))
+              (header (+my/beads--header-string (or tabulated-list--header-string header-line-format)))
+              (start (let ((pos 0))
+                       ;; By `equal' (`text-property-any' compares with `eq').
+                       (while (and pos (not (equal (get-text-property pos 'tabulated-list-column-name header) "Date")))
+                         (setq pos (next-single-property-change pos 'tabulated-list-column-name header)))
+                       pos))
+              (end (next-single-property-change start 'tabulated-list-column-name header (length header))))
+    ;; In place: the header line holds this string.
+    (put-text-property start end 'display "" header)))
+
+;; A ROW ON SEVERAL LINES: moved over and highlighted whole
+(defun +my/beads--row-bounds ()
+  "Where the row at point starts and ends: (START . END), its lines' (a
+title on several), or nil off a row."
+  (when-let* ((id (tabulated-list-get-id)))
+    (save-excursion
+      (let ((start (line-beginning-position)) (end (line-end-position)))
+        (while (and (not (bobp)) (equal (get-text-property (1- start) 'tabulated-list-id) id))
+          (goto-char (1- start))
+          (setq start (line-beginning-position)))
+        (goto-char end)
+        (while (and (not (eobp)) (equal (get-text-property (1+ end) 'tabulated-list-id) id))
+          (forward-line 1)
+          (setq end (line-end-position)))
+        (cons start (min (point-max) (1+ end)))))))
+
+(defun +my/beads-next-row (&optional n)
+  "To the Nth next row's first line (a title on several lines is a row)."
+  (interactive "p")
+  (dotimes (_ (abs (or n 1)))
+    (if (> (or n 1) 0)
+        (let ((bounds (+my/beads--row-bounds)))
+          (if bounds (goto-char (cdr bounds)) (forward-line 1))
+          (when (eobp) (forward-line -1)))
+      (let ((bounds (+my/beads--row-bounds)))
+        (goto-char (or (car bounds) (line-beginning-position)))
+        (forward-line -1))))
+  (when-let* ((bounds (+my/beads--row-bounds)))
+    (goto-char (car bounds))))
+
+(defun +my/beads-previous-row (&optional n)
+  "To the Nth previous row's first line."
+  (interactive "p")
+  (+my/beads-next-row (- (or n 1))))
+
+(defun +my/beads--hl-range ()
+  "The current line's highlight (hl-line): its whole row."
+  (or (+my/beads--row-bounds)
+      (cons (line-beginning-position) (line-beginning-position 2))))
+
+(defvar-local +my/beads--rewrap-timer nil)
+
+(defun +my/beads--resized-h (window)
+  "WINDOW showing the list, resized: its titles wrapped again for its width
+\(in the background, a moment after its last change: a border dragged)."
+  (let ((buffer (window-buffer window)))
+    (with-current-buffer buffer
+      (when (and +my/beads--wrapped-at
+                 (not (equal (+my/beads--title-width window) +my/beads--wrapped-at)))
+        (when (timerp +my/beads--rewrap-timer) (cancel-timer +my/beads--rewrap-timer))
+        (setq +my/beads--rewrap-timer
+              (run-with-timer 0.3 nil (lambda ()
+                                        (when (buffer-live-p buffer)
+                                          (with-current-buffer buffer
+                                            (setq +my/beads--rewrap-timer nil)
+                                            (+my/beads-refresh-async buffer t))))))))))
+
+(defun +my/beads--rows-h ()
+  "A list: its rows highlighted whole, redrawn when its window's width changes."
+  (setq-local hl-line-range-function #'+my/beads--hl-range)
+  (add-hook 'window-size-change-functions #'+my/beads--resized-h nil t))
 
 ;; AN EPIC'S ISSUES UNDER IT
 (defun +my/beads--child< (a b)
@@ -294,6 +464,9 @@ closed issue's in the theme's muted colour."
   (advice-add 'beads-client-list :filter-return #'+my/beads--note-issues-a '((depth . -40))))
 (after! beads-list
   (+my/beads-columns)
+  (advice-add 'beads-list--build-format :filter-return #'+my/beads-format-a)
+  (advice-add 'tabulated-list-init-header :after #'+my/beads-header-a)
+  (add-hook 'beads-list-mode-hook #'+my/beads--rows-h)
   (advice-add 'beads-list--issue-section :around #'+my/beads-section-a)
   (advice-add 'beads-list--sectioned-sort :filter-return #'+my/beads-nest-a)
   (advice-add 'beads-list--print-entry :override #'+my/beads-print-entry-a))
