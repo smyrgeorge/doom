@@ -63,30 +63,77 @@
     (write-region text nil path nil 'silent)
     path))
 
-(defvar-local +my/example--closing nil
-  "In an example's buffer: (DIR BUFFERS THEN), see
+(defvar +my/example--folders nil
+  "The examples' folders not deleted yet: (DIR THEN) each, see
 `+my/example-delete-when-closed'.")
+
+(defvar-local +my/example--closing nil
+  "In an example's buffer: its folder's entry in `+my/example--folders',
+\(DIR THEN).")
 (put '+my/example--closing 'permanent-local t)
+
+(defun +my/example--in-p (dir buffer)
+  "Non-nil if BUFFER visits a file in DIR (a true name)."
+  (when-let* ((true (buffer-local-value 'buffer-file-truename buffer)))
+    (string-prefix-p dir (expand-file-name true))))
+
+(defun +my/example--buffers (dir)
+  "The live buffers of example folder DIR: given it, or visiting a file in
+it."
+  (seq-filter (lambda (buffer)
+                (or (equal (car (buffer-local-value '+my/example--closing buffer)) dir)
+                    (+my/example--in-p dir buffer)))
+              (buffer-list)))
+
+(defun +my/example--track (buffer entry)
+  "BUFFER one of ENTRY's folder's (see `+my/example--folders'): its folder
+deleted once it's closed, if it's the last."
+  (with-current-buffer buffer
+    (setq +my/example--closing entry)
+    (add-hook 'kill-buffer-hook #'+my/example--closed-h nil t)))
 
 (defun +my/example-delete-when-closed (dir buffers &optional then)
   "Delete DIR once BUFFERS are all closed (killed): the example's files go
 with it. THEN, a function, is called then too. Kept through a change of
-mode (a buffer going to `so-long-mode'...)."
-  (let ((buffers (seq-filter #'buffer-live-p buffers)))
-    (dolist (buffer buffers)
-      (with-current-buffer buffer
-        (setq +my/example--closing (list dir buffers then))
-        (add-hook 'kill-buffer-hook #'+my/example--closed-h nil t)))))
+mode (a buffer going to `so-long-mode'...). Each buffer visiting a file in
+DIR, now or later (J in the image example, a file opened from its
+folder), counts too; none: deleted now."
+  (let ((entry (list dir then)))
+    (push entry +my/example--folders)
+    (dolist (buffer (seq-uniq (append (seq-filter #'buffer-live-p buffers)
+                                      (+my/example--buffers dir))))
+      (+my/example--track buffer entry))
+    (+my/example--delete-if-closed entry)))
 
-(defun +my/example--closed-h ()
-  "An example's buffer closed: the last one? Its folder deleted (see
-`+my/example-delete-when-closed')."
-  (pcase-let ((`(,dir ,buffers ,then) +my/example--closing))
-    (unless (seq-some (lambda (buffer) (and (not (eq buffer (current-buffer))) (buffer-live-p buffer)))
-                      buffers)
+(defun +my/example--delete-if-closed (entry &optional closing)
+  "Delete ENTRY's folder (see `+my/example--folders') if none of its
+buffers is left, but CLOSING (one being killed); call its THEN."
+  (pcase-let ((`(,dir ,then) entry))
+    (when (and (memq entry +my/example--folders)
+               (not (delq closing (+my/example--buffers dir))))
+      (setq +my/example--folders (delq entry +my/example--folders))
       (ignore-errors (delete-directory dir t))
       (when then (funcall then)))))
+
+(defun +my/example--closed-h ()
+  "An example's buffer closed: the last of its folder's? Its folder deleted
+\(see `+my/example-delete-when-closed'). Replaced by another of its files
+\(`find-alternate-file', which runs this before visiting it: J / K in the
+image example), once that's open."
+  (let ((entry +my/example--closing))
+    (if (bound-and-true-p find-alternate-file-dont-kill-client)
+        (run-at-time 0 nil #'+my/example--delete-if-closed entry)
+      (+my/example--delete-if-closed entry (current-buffer)))))
 (put '+my/example--closed-h 'permanent-local-hook t)
+
+(defun +my/example--visited-h ()
+  "A file visited in an example's folder: one of its buffers."
+  (when-let* (((and +my/example--folders (not +my/example--closing)))
+              (entry (seq-find (lambda (entry) (+my/example--in-p (car entry) (current-buffer)))
+                               +my/example--folders)))
+    (+my/example--track (current-buffer) entry)))
+
+(add-hook 'find-file-hook #'+my/example--visited-h)
 
 ;; M-x +my/example-NAME: each loads its file when first run.
 (dolist (name (+my/examples))

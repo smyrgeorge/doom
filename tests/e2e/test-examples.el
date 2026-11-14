@@ -96,6 +96,33 @@ both with the toolbar; closed: the HEAD's pane with it, the repository gone."
         (should-not (buffer-live-p head)))
       (should-not (file-exists-p dir)))))
 
+(ert-deftest e2e-examples/image-j-k-in-its-folder ()
+  "J: the folder's next picture, night.png, in the image viewer (its file
+there); K: back to landscape.png. The folder kept while one of its pictures
+is open, deleted once the last is closed."
+  (+test-with-reset
+    (let* ((buffer (+my/example-image))
+           (dir (+test-examples--folder buffer)))
+      (should (+test-wait-for #'+my/example-image-ready 20))
+      (with-current-buffer (window-buffer (selected-window))
+        (+my/image-next))
+      (+test-sleep 0.2)
+      (with-current-buffer (window-buffer (selected-window))
+        (should (equal (file-name-nondirectory buffer-file-name) "night.png"))
+        (should (file-exists-p buffer-file-name))
+        (should +my/image-mode)
+        (should (equal (+my/image-size) '(240 . 150)))
+        (+my/image-previous))
+      (+test-sleep 0.2)
+      (let ((landscape (window-buffer (selected-window))))
+        (with-current-buffer landscape
+          (should (equal (file-name-nondirectory buffer-file-name) "landscape.png"))
+          (should +my/image-mode)
+          (should (equal (+my/image-size) '(480 . 300))))
+        (should (file-directory-p dir))
+        (kill-buffer landscape))
+      (should-not (file-exists-p dir)))))
+
 (ert-deftest e2e-examples/markdown-and-its-preview ()
   "The README, its preview beside it, loaded; closed: the preview with it,
 the file gone."

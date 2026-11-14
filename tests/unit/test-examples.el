@@ -209,6 +209,41 @@ of mode too; THEN called then."
     (should-not (file-exists-p dir))
     (should (= then 1))))
 
+(ert-deftest examples/folder-kept-while-another-of-its-files-is-open ()
+  "A buffer replaced by another file of its folder (`find-alternate-file': J
+/ K in the image example, which closes it before visiting the other): the
+folder kept, the new buffer one of its own; a file opened from the folder
+too; deleted with the last of them, THEN called once."
+  (+test-with-reset
+    (let* ((dir (+my/example-folder "test"))
+           (a (+my/example-write dir "a.txt" "a\n"))
+           (b (+my/example-write dir "b.txt" "b\n"))
+           (c (+my/example-write dir "sub/c.txt" "c\n"))
+           (then 0))
+      (find-file a)
+      (+my/example-delete-when-closed dir (list (current-buffer)) (lambda () (cl-incf then)))
+      (find-alternate-file b)
+      (should (equal buffer-file-name b))
+      (should (equal (buffer-string) "b\n"))
+      (+test-sleep 0.1)
+      (should (file-exists-p b))
+      (should (equal (car +my/example--closing) dir))
+      (let ((other (find-file-noselect c)))
+        (kill-buffer (get-file-buffer b))
+        (should (file-exists-p c))
+        (should (= then 0))
+        (kill-buffer other))
+      (should-not (file-exists-p dir))
+      (should (= then 1))
+      (should-not (assoc dir +my/example--folders)))))
+
+(ert-deftest examples/folder-of-no-buffers-deleted-at-once ()
+  "Given no buffer (none live): nothing to wait for, deleted now."
+  (let ((dir (+my/example-folder "test")))
+    (+my/example-delete-when-closed dir nil)
+    (should-not (file-exists-p dir))
+    (should-not (assoc dir +my/example--folders))))
+
 ;; ====== TILING ======
 
 (ert-deftest examples/tiling-a-project-tall ()
