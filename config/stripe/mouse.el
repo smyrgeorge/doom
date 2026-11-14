@@ -21,9 +21,45 @@
                         (window-parameter window '+my/stripe-geometry))))
     (pcase geometry
       (`(cells ,rows ,lines)
-       (when-let* ((string (posn-string posn))
-                   (row (get-text-property (or (cdr string) 0) '+my/stripe-row (car string))))
+       (when-let* ((row (if-let* ((string (posn-string posn)))
+                            (get-text-property (or (cdr string) 0) '+my/stripe-row (car string))
+                          ;; Reported in the text (see `+my/stripe--on-tty-strip').
+                          (and (+my/stripe--tty-strip-click-p event) (cdr (posn-col-row posn)))))
+                   ((< -1 row rows)))
          (+my/stripe--goto-line window (+my/stripe--row-to-line row lines rows)))))))
+
+(defun +my/stripe--tty-strip-click-p (event)
+  "Non-nil if mouse EVENT is on the strip of a terminal window, reported as
+in its text: past the end of its text's columns (see `+my/stripe-tty-click-map')."
+  (when-let* (((consp event))
+              (posn (event-start event))
+              (window (posn-window posn))
+              ((window-live-p window))
+              ((null (posn-area posn)))
+              ((eq (car-safe (window-parameter window '+my/stripe-geometry)) 'cells)))
+    (>= (car (posn-col-row posn)) (window-body-width window))))
+
+(defun +my/stripe--on-tty-strip (command)
+  "COMMAND if the mouse event being read is on a terminal window's strip,
+reported as in its text (a filter of `+my/stripe-tty-click-map')."
+  (and (+my/stripe--tty-strip-click-p last-input-event) command))
+
+;; Before Evil's keys (and general's): first among the emulation keymaps.
+;; Evil puts its own first the first time it's on in a buffer, so it's
+;; checked again as the stripe comes on in one.
+(defvar +my/stripe--emulation-alist nil
+  "The stripe's emulation keymaps (see `+my/stripe-tty-click-map').")
+
+(setq +my/stripe--emulation-alist `((+my/stripe-mode . ,+my/stripe-tty-click-map)))
+
+(defun +my/stripe--keys-first ()
+  "The stripe's terminal clicks first among `emulation-mode-map-alists'."
+  (unless (eq (car emulation-mode-map-alists) '+my/stripe--emulation-alist)
+    (setq emulation-mode-map-alists
+          (cons '+my/stripe--emulation-alist
+                (delq '+my/stripe--emulation-alist emulation-mode-map-alists)))))
+
+(+my/stripe--keys-first)
 
 (defun +my/stripe--window-of (event)
   "The window whose strip EVENT happened on."

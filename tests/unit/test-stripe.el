@@ -1671,6 +1671,62 @@ given that window (its pixel deltas kept)."
       (should (= (+my/stripe--line-to-row (line-number-at-pos) 101 rows) 11))
       (should (bolp)))))
 
+(defun +test-stripe--text-click (window column row &optional type)
+  "A mouse event (TYPE, default mouse-1) in WINDOW's text area at COLUMN, ROW,
+as a terminal reports one."
+  (let ((pos (with-current-buffer (window-buffer window) (point-min))))
+    `(,(or type 'mouse-1) (,window ,pos (,column . ,row) 0 nil ,pos (,column . ,row) nil (0 . 0) (1 . 1)))))
+
+(ert-deftest stripe/click-on-the-strip-reported-in-the-text-jumps ()
+  "A terminal reports a click on the strip of a window with another to its
+right as in its text, past its columns: it jumps to its cell's lines. A click
+on the text's last column doesn't."
+  (+test-stripe (+test-stripe--text 100)
+    (let* ((left (selected-window))
+           (right (split-window-right 30)))
+      (set-window-buffer right (current-buffer))
+      (+my/stripe--render left)
+      (let* ((rows (window-body-height left))
+             (column (window-body-width left))
+             (strip (+test-stripe--text-click left column 11))
+             (text (+test-stripe--text-click left (1- column) 11)))
+        (should (+my/stripe--tty-strip-click-p strip))
+        (should-not (+my/stripe--tty-strip-click-p text))
+        (should-not (+my/stripe--tty-strip-click-p (+test-stripe--text-click right column 11)))
+        (select-window right)
+        (+my/stripe-jump text)
+        (should (eq (selected-window) right))
+        (+my/stripe-jump strip)
+        (should (eq (selected-window) left))
+        (should (= (line-number-at-pos) (+my/stripe--row-to-line 11 101 rows)))))))
+
+(ert-deftest stripe/clicks-on-the-strip-in-the-text-before-evil ()
+  "Those clicks are the stripe's, before Evil's (its region drag, the cursor
+moved): the press and a double click do nothing, the release jumps. Clicks in
+the text stay Evil's."
+  (require 'evil)
+  (+test-stripe (+test-stripe--text 100)
+    (evil-local-mode 1)
+    (unwind-protect
+        (let ((left (selected-window)))
+          (+my/stripe-mode -1)
+          (setq emulation-mode-map-alists (append (delq '+my/stripe--emulation-alist emulation-mode-map-alists)
+                                                  '(+my/stripe--emulation-alist)))
+          (+my/stripe-mode 1)
+          (should (eq (car emulation-mode-map-alists) '+my/stripe--emulation-alist))
+          (set-window-buffer (split-window-right 30) (current-buffer))
+          (+my/stripe--render left)
+          (cl-flet ((binding (type column)
+                      (let ((last-input-event (+test-stripe--text-click left column 3 type)))
+                        (key-binding (vector type) t nil (event-start last-input-event)))))
+            (let ((strip (window-body-width left)))
+              (should (eq (binding 'down-mouse-1 strip) #'ignore))
+              (should (eq (binding 'mouse-1 strip) #'+my/stripe-jump))
+              (should (eq (binding 'double-mouse-1 strip) #'ignore))
+              (should (eq (binding 'down-mouse-1 (1- strip)) #'evil-mouse-drag-region))
+              (should (eq (binding 'mouse-1 (1- strip)) #'mouse-set-point)))))
+      (evil-local-mode -1))))
+
 (ert-deftest stripe/goto-line-selects-the-window-and-marks-the-jump ()
   "A jump from the strip: its window selected, the line in its middle, `C-o'
 going back (a better-jumper jump)."

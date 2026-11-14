@@ -95,6 +95,21 @@ none (the last line stops at the bottom), or t for no limit.")
   "Keymap on the stripe's margin strings (terminal). A keymap on the clicked
 text wins over mode keymaps, e.g. outline-minor-mode's margin buttons.")
 
+;; In a terminal, Emacs reports a click on the strip of a window with another
+;; to its right as a click in its text, past the end of the row (the rightmost
+;; window's alone comes as the margin's): Evil dragged a region, and the
+;; cursor went to that line's end, which in a narrow window scrolled it
+;; sideways. Those clicks jump too, these keys before Evil's
+;; (`+my/stripe--on-tty-strip').
+(defvar +my/stripe-tty-click-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mouse-1] '(menu-item "" +my/stripe-jump :filter +my/stripe--on-tty-strip))
+    (dolist (event '(down-mouse-1 drag-mouse-1 double-down-mouse-1 double-mouse-1
+                     triple-down-mouse-1 triple-mouse-1))
+      (define-key map (vector event) '(menu-item "" ignore :filter +my/stripe--on-tty-strip)))
+    map)
+  "Keys on the strip of terminal windows, as clicks in their text (see above).")
+
 (defvar +my/stripe--strip-map
   (let ((map (make-sparse-keymap)))
     (define-key map [down-mouse-1] #'+my/stripe-press)

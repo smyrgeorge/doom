@@ -10,6 +10,7 @@
       (progn
         ;; The strip's room: its frame lies over it (a terminal: the cells).
         (setq-local right-margin-width 1)
+        (+my/stripe--keys-first)
         ;; Scrolls that redisplay itself decides on (point left the window);
         ;; everything else is caught by `+my/stripe--pre-redisplay'.
         (add-hook 'window-scroll-functions #'+my/stripe--scrolled nil t)
