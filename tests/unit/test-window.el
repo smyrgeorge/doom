@@ -368,6 +368,31 @@ window, it goes on in the file's (recentring it) up to its prompt, q there."
                               (funcall frame-parameter frame parameter)))))
                    '(8 . 16)))))
 
+(ert-deftest window/right-fringe-once-doom-sets-the-font ()
+  "Doom sets the font after config.el: the fringe set again then, and on each
+change of font (doom/reload-font, big-font mode), for its width; not in a
+terminal, nor with no padding."
+  (should (memq #'+my/right-fringe-h after-setting-font-hook))
+  (let (got)
+    (cl-letf (((symbol-function 'fringe-mode) (lambda (value) (push value got)))
+              ((symbol-function 'frame-char-width) (lambda (&rest _) 8)))
+      ;; A terminal: nothing.
+      (run-hooks 'after-setting-font-hook)
+      (should-not got)
+      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+        (run-hooks 'after-setting-font-hook)
+        (should (equal got '((8 . 16))))
+        ;; Big-font mode: a wider character.
+        (cl-letf (((symbol-function 'frame-char-width) (lambda (&rest _) 11)))
+          (run-hooks 'after-setting-font-hook))
+        (should (equal (car got) '(8 . 19)))
+        (let ((+my/right-fringe-padding 2))
+          (run-hooks 'after-setting-font-hook))
+        (should (equal (car got) '(8 . 24)))
+        (let ((+my/right-fringe-padding nil))
+          (run-hooks 'after-setting-font-hook))
+        (should (= (length got) 3))))))
+
 ;; ====== LOADED ======
 
 (ert-deftest window/config-el-loads-it ()

@@ -1,7 +1,8 @@
 ;;; tests/e2e/test-window.el -*- lexical-binding: t; -*-
 ;; config/window.el in a GUI Emacs, its commands run by the command loop (keys
 ;; typed): a command's new window selected once it ends; TAB's *Completions*
-;; leaving the focus in the minibuffer, typing going on there.
+;; leaving the focus in the minibuffer, typing going on there; the right
+;; fringe following the font.
 
 (+test-load "config/window")
 
@@ -56,3 +57,17 @@ typed next goes on into it."
       (cancel-timer timer)
       (should shown)
       (should (equal answer "forward-c")))))
+
+(ert-deftest e2e-window/the-right-fringe-follows-the-font ()
+  "Each font Doom sets (`after-setting-font-hook': at startup, after this file
+loaded; doom/reload-font, big-font mode): the right fringe a character of it
+wider than 8 pixels."
+  (let ((height (face-attribute 'default :height)))
+    (unwind-protect
+        (dolist (new '(220 140))
+          (set-face-attribute 'default nil :height new)
+          (run-hooks 'after-setting-font-hook)
+          (+test-sleep 0.1)
+          (should (= (nth 1 (window-fringes)) (+ 8 (frame-char-width)))))
+      (set-face-attribute 'default nil :height height)
+      (run-hooks 'after-setting-font-hook))))

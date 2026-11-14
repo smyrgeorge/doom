@@ -44,11 +44,27 @@
 (add-hook 'window-setup-hook #'+my/maximize-frame-h)
 
 ;; FRINGES (see above). A frame's character width is known once it's
-;; graphical; a terminal's has no fringes.
-(when +my/right-fringe-padding
+;; graphical and its font set; a terminal's has no fringes. As this file
+;; loads, Doom hasn't set the font yet (it does after config.el), so the
+;; width was the startup font's (15 px, not 16): set again whenever Doom sets
+;; the font (`after-setting-font-hook': at startup, a daemon's first frame,
+;; doom/reload-font, big-font mode, a bigger or smaller font).
+(defun +my/right-fringe (width)
+  "Every window's right fringe `+my/right-fringe-padding' characters of WIDTH
+pixels wider than Doom's 8 (see above)."
   (fringe-mode (cons (or (frame-parameter nil 'left-fringe) 8)
-                     (+ 8 (* +my/right-fringe-padding
-                             (if (display-graphic-p) (frame-char-width) 8))))))
+                     (+ 8 (* +my/right-fringe-padding width)))))
+
+(defun +my/right-fringe-h ()
+  "The right fringe for the font Doom has set (see above), in a graphical
+frame."
+  (when (and +my/right-fringe-padding (display-graphic-p))
+    (+my/right-fringe (frame-char-width))))
+
+(when +my/right-fringe-padding
+  (+my/right-fringe (if (display-graphic-p) (frame-char-width) 8)))
+
+(add-hook 'after-setting-font-hook #'+my/right-fringe-h)
 
 ;; NEW WINDOWS GET FOCUS (see above). The command's end: once
 ;; `post-command-hook' runs at the level it ran at (a prompt it shows runs
