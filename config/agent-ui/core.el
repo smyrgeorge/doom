@@ -599,25 +599,68 @@ tab 4 spaces, whatever its column, it didn't)."
   "STRING with each line longer than WIDTH columns broken at spaces (a word
 wider than WIDTH, within it). Its lines are kept; their properties too. A
 line takes a character at least, even one wider than WIDTH (a CJK one in a
-column), and WIDTH is 1 at least: it always moves on."
+column), and WIDTH is 1 at least: it always moves on. Past
+`agent-ui-max-chars' of it, the rest is left as it is (cut there when
+drawn): a line of megabytes is wrapped as quickly as a page."
   (setq width (max 1 width))
-  (mapconcat
-   (lambda (line)
-     (let ((lines nil))
-       (while (> (string-width line) width)
-         (let* ((head (truncate-string-to-width line width))
-                (space (string-match-p " [^ ]*\\'" head))
-                (cut (max 1 (cond
-                             ;; It ends at a word's end.
-                             ((eq (aref line (length head)) ?\s) (length head))
-                             ((and space (> space 0)) space)
-                             (t (length head))))))
-           (push (substring line 0 cut) lines)
-           (setq line (string-trim-left (substring line cut) " +"))))
-       ;; Nothing left after a cut: no empty line for it.
-       (string-join (nreverse (if (and lines (string-empty-p line)) lines (cons line lines))) "\n")))
-   (split-string string "\n")
-   "\n"))
+  (let ((left agent-ui-max-chars))
+    (mapconcat
+     (lambda (line)
+       (prog1 (if (or (<= left 0) (<= (string-width line) width))
+                  line
+                (agent-ui--wrap-line line width left))
+         (setq left (- left (length line) 1))))
+     (split-string string "\n")
+     "\n")))
+
+(defun agent-ui--wrap-line (line width left)
+  "LINE, wider than WIDTH, broken at spaces (see `agent-ui-wrap'), walked
+once by index: its first LEFT characters at least, the rest as it is."
+  (let ((len (length line))
+        (start 0)
+        (lines nil))
+    (while (and (< start len)
+                (> left 0)
+                (agent-ui--wrap-wider-p line start width))
+      (let* ((end (agent-ui--wrap-head line start width))
+             (space (cl-position ?\s line :start start :end end :from-end t))
+             (cut (max 1 (cond
+                          ;; It ends at a word's end.
+                          ((and (< end len) (eq (aref line end) ?\s)) (- end start))
+                          ((and space (> space start)) (- space start))
+                          (t (- end start))))))
+        (push (substring line start (+ start cut)) lines)
+        (setq left (- left cut)
+              start (+ start cut))
+        (while (and (< start len) (eq (aref line start) ?\s))
+          (setq start (1+ start)))))
+    ;; Nothing left after a cut: no empty line for it.
+    (let ((rest (substring line start)))
+      (string-join (nreverse (if (and lines (string-empty-p rest)) lines (cons rest lines))) "\n"))))
+
+(defun agent-ui--wrap-wider-p (line start width)
+  "Whether LINE from START is wider than WIDTH columns: measured on enough of
+it (a few widths), all of it only when that's narrower but not its end
+\(characters of no width, or drawn together)."
+  (let* ((len (length line))
+         (end (min len (+ start (* 2 width) 8)))
+         (wide (string-width line start end)))
+    (cond ((> wide width) t)
+          ((= end len) nil)
+          (t (> (string-width line start len) width)))))
+
+(defun agent-ui--wrap-head (line start width)
+  "The end of what of LINE from START fits in WIDTH columns, as
+`truncate-string-to-width' cuts it (by `char-width'), but without measuring
+the rest of LINE."
+  (let ((len (length line))
+        (i start) (column 0) (last start))
+    (while (and (< i len) (< column width))
+      (setq last i
+            column (+ column (char-width (aref line i)))
+            i (1+ i)))
+    ;; The last character went past it: not taken.
+    (if (> column width) last i)))
 
 (defun agent-ui-pad (string width &optional align)
   "STRING in WIDTH columns (cut if wider): ALIGN left (default), right or

@@ -318,15 +318,17 @@ at `agent-ui-max-chars'."
   ;; Narrower than a character, or no width: a character a line, never stuck
   ;; (it looped forever; a loop now fails instead of hanging the tests).
   (let ((calls 0)
-        (truncate (symbol-function 'truncate-string-to-width)))
-    (cl-letf (((symbol-function 'truncate-string-to-width)
+        (head (symbol-function 'agent-ui--wrap-head)))
+    (cl-letf (((symbol-function 'agent-ui--wrap-head)
                (lambda (&rest args)
                  (when (> (cl-incf calls) 1000) (error "agent-ui-wrap loops"))
-                 (apply truncate args))))
+                 (apply head args))))
       (should (equal (agent-ui-wrap "中文" 1) "中\n文"))
       (should (equal (agent-ui-wrap "ab" 0) "a\nb"))
       (should (equal (agent-ui-wrap "a 😀b" -3) "a\n😀\nb"))
       (should (equal (agent-ui-wrap "中 x" 1) "中\nx"))))
+  ;; Spaces at a cut dropped, a word's end at the width, the last line's.
+  (should (equal (agent-ui-wrap "aaa   bbb ccc " 3) "aaa\nbbb\nccc"))
   (should (equal (agent-ui-pad "ab" 4) "ab  "))
   (should (equal (agent-ui-pad "ab" 4 'right) "  ab"))
   (should (equal (agent-ui-pad "ab" 5 'center) " ab  "))
@@ -363,6 +365,38 @@ at `agent-ui-max-chars'."
     (should (eq (get-text-property 0 'face (agent-ui-spinner (agent-ui-context :tick 5) 'bold)) 'bold))))
 
 ;; ====== JSON ======
+
+(ert-deftest agent-ui-core/a-long-line-wrapped-quickly ()
+  "A line of megabytes wrapped as quickly as a page: walked once, only as far
+as `agent-ui-max-chars', the rest left as it is, cut when drawn (each pass
+measured and copied the rest of the line: a 3 MB text took minutes, Emacs
+frozen)."
+  (+test-aui
+    (agent-ui-define wrapped "Wrapped." :props ((text string "Text"))
+      :text (lambda (props ctx) (agent-ui-wrap (plist-get props :text) (plist-get ctx :width))))
+    (let* ((words (mapconcat (lambda (i) (format "w%d" (% i 10))) (number-sequence 1 1000000) " "))
+           (calls 0)
+           (head (symbol-function 'agent-ui--wrap-head))
+           (start (float-time))
+           text)
+      (should (> (length words) 2900000))
+      (cl-letf (((symbol-function 'agent-ui--wrap-head)
+                 (lambda (&rest args) (cl-incf calls) (apply head args))))
+        (setq text (agent-ui-render (list :type "wrapped" :text words) (agent-ui-context :width 24))))
+      ;; 0.1 s here; minutes before.
+      (should (< (- (float-time) start) 1.5))
+      ;; As far as it's drawn: a cut a line, no more.
+      (should (< calls (/ agent-ui-max-chars 20)))
+      (let ((lines (split-string (substring-no-properties text) "\n")))
+        (should (equal (car lines) "w1 w2 w3 w4 w5 w6 w7 w8"))
+        (should (cl-every (lambda (line) (<= (string-width line) 24)) (butlast lines)))
+        (should (string-match-p "\\`… [0-9]+ characters more\\'" (car (last lines)))))
+      ;; A line of one word: the same.
+      (setq start (float-time))
+      (should (string-prefix-p (concat (make-string 24 ?x) "\n")
+                               (agent-ui-render (list :type "wrapped" :text (make-string 3000000 ?x))
+                                                (agent-ui-context :width 24))))
+      (should (< (- (float-time) start) 1.5)))))
 
 (ert-deftest agent-ui-core/json-read ()
   (should (equal (agent-ui-parse-json
