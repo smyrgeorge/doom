@@ -58,7 +58,7 @@ closed."
        (cl-letf (((symbol-function 'lsp-request)
                   (lambda (_method _params)
                     (vconcat (cl-loop for i from 1 to ,usages
-                                      for line = (+ 66 (* 3 (1- i)))
+                                      for line = (+ 65 (* 3 (1- i))) ; "return target_function"
                                       collect (+test-peek--loc file line 11 line 26)))))
                  ((symbol-function 'lsp-workspace-root)
                   (lambda (&rest _) (file-name-directory file))))
@@ -87,6 +87,59 @@ closed."
   "How many rows the peek takes (its own, the separators and the footer)."
   (cl-count ?\n (overlay-get lsp-ui-peek--overlay 'after-string)))
 
+(defun +test-peek--pane-wide (columns)
+  "The selected window made COLUMNS columns wide (of text), another beside
+it."
+  (delete-other-windows)
+  (let ((window (selected-window)))
+    (split-window window (+ columns (- (window-total-width window) (window-body-width window))) 'right)
+    (dotimes (_ 5)
+      (let ((delta (- columns (window-body-width window))))
+        (unless (zerop delta) (ignore-errors (window-resize window delta t)))))
+    (should (= (window-body-width window) columns))
+    window))
+
+(defun +test-peek--row-widths ()
+  "The peek's rows, each laid out in its window as it shows there (lines
+not wrapped): ((TEXT . PIXEL-WIDTH)...), TEXT with what's shown as a space
+as a space."
+  (let* ((window (selected-window))
+         (shown (overlay-get lsp-ui-peek--overlay 'after-string))
+         (old (window-buffer window))
+         (start (window-start window))
+         (point (window-point window))
+         (rows nil))
+    (with-current-buffer (get-buffer-create " *test-peek-rows*")
+      (erase-buffer)
+      (setq-local truncate-lines t)
+      (insert shown)
+      (set-window-buffer window (current-buffer))
+      (set-window-start window (point-min))
+      (redisplay t)
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let ((bol (point)) (eol (line-end-position)))
+          (push (cons (mapconcat (lambda (pos)
+                                   (if (eq (car-safe (get-text-property pos 'display)) 'space)
+                                       " "
+                                     (char-to-string (char-after pos))))
+                                 (number-sequence bol (1- eol)) "")
+                      (car (window-text-pixel-size window bol eol 100000)))
+                rows))
+        (forward-line 1)))
+    (set-window-buffer window old)
+    (set-window-start window start)
+    (set-window-point window point)
+    (redisplay t)
+    (nreverse rows)))
+
+(defun +test-peek--fits-the-pane ()
+  "Each row of the peek no wider than its window; its rows."
+  (let ((rows (+test-peek--row-widths)))
+    (dolist (row rows)
+      (should (<= (cdr row) (window-body-width nil t))))
+    (mapcar #'car rows)))
+
 ;; ====== HEIGHT ======
 
 (ert-deftest e2e-peek/whole-in-short-panes ()
@@ -113,5 +166,54 @@ scrolling; in a tall pane as tall as lsp-ui's (20 rows)."
   (+test-peek-with-long (+test-peek--pane 40) 3 30
     (should (= lsp-ui-peek-peek-height 20))
     (should (= (+test-peek--row (point)) 3))))
+
+;; ====== WIDTH ======
+
+(ert-deftest e2e-peek/fits-narrow-panes ()
+  "At 100, 60, 40 and 25 columns no row of the peek wider than its pane: the
+title with its counts, the footer, at 40 the usage's code (15 characters at
+least)."
+  (dolist (columns '(100 60 40 25))
+    (+test-peek-with-long (+test-peek--pane-wide columns) 3 3
+      (let ((rows (+test-peek--fits-the-pane)))
+        (should (string-match-p "3 in 1 file\\'" (string-trim-right (nth 1 rows))))
+        (should (string-match-p "j/k  next/previous" (nth (- (length rows) 2) rows)))
+        (when (= columns 40)
+          (should (seq-find (lambda (row) (string-match-p "return target_f" row)) rows)))))))
+
+(ert-deftest e2e-peek/its-own-rows-in-a-wrapping-buffer ()
+  "In a buffer that wraps (visual-line-mode, Markdown...), the peek takes
+its own rows, none wrapped."
+  (dolist (columns '(50 35))
+    (+test-peek-with-long (+test-peek--pane-wide columns) 3 3
+      (setq-local truncate-lines nil)
+      (visual-line-mode 1)
+      (lsp-ui-peek--select-next)
+      (lsp-ui-peek--select-prev)
+      (redisplay t)
+      (let ((point-row (+test-peek--row (line-beginning-position)))
+            (after-row (+test-peek--row (overlay-start lsp-ui-peek--overlay))))
+        (should (= (- after-row point-row 1) (+test-peek--peek-rows)))))))
+
+(ert-deftest e2e-peek/drawn-again-when-its-pane-is-resized ()
+  "Opened at 100 columns, the pane then 60 (a pane opened beside it): its
+rows laid out for 60, no key pressed. Closed, it no longer follows; its
+buffer killed while open, no error."
+  (+test-peek-with-long (+test-peek--pane-wide 100) 3 3
+    (let ((window (selected-window)))
+      (should (memq #'+my/peek-redraw-h window-size-change-functions))
+      (window-resize window (- 60 (window-body-width window)) t)
+      (redisplay t)
+      (should (= (window-body-width window) 60))
+      (+test-peek--fits-the-pane)
+      (lsp-ui-peek--disable)
+      (should-not (memq #'+my/peek-redraw-h window-size-change-functions))))
+  (+test-peek-with-long (+test-peek--pane-wide 100) 3 3
+    (let ((window (selected-window))
+          (errors (+test-messages "^Error")))
+      (kill-buffer (current-buffer))
+      (window-resize window (- 60 (window-body-width window)) t)
+      (redisplay t)
+      (should (= (+test-messages "^Error") errors)))))
 
 ;;; test-peek.el ends here

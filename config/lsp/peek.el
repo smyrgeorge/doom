@@ -185,9 +185,41 @@ preview (:first-line)."
   "STRING cut or padded to WIDTH columns."
   (truncate-string-to-width string width nil ?\s "…"))
 
+(defun +my/peek--fit-left (string width)
+  "STRING cut from the left or padded to WIDTH columns: a function's own name
+is its last part (\"…method ×3\")."
+  (if (<= (string-width string) width)
+      (+my/peek--fit string width)
+    (let ((cut string))
+      (while (> (string-width cut) (1- width))
+        (setq cut (substring cut 1)))
+      (+my/peek--fit (concat "…" cut) width))))
+
+(defun +my/peek--row (parts &optional width)
+  "A row of the list from PARTS, (NUMBER LABEL LABELS-WIDTH CODE): the line
+number, the function column (as wide as the file's widest label,
+LABELS-WIDTH, up to `+my/peek-scope-width'), the code. In WIDTH columns
+\(nil: any) the function column gives way so the code shows 15 (it goes
+under 4), and the code is cut to fit."
+  (pcase-let* ((`(,number ,label ,labels-width ,code) parts)
+               (wanted (min +my/peek-scope-width labels-width))
+               (room (if width (- width (string-width number) 4 16) wanted))
+               (scope-width (cond ((>= room wanted) wanted)
+                                  ((>= room 4) room)
+                                  (t 0)))
+               (row (concat number "  "
+                            (when (> scope-width 0)
+                              (concat (propertize (+my/peek--fit-left label scope-width)
+                                                  'face 'font-lock-function-name-face)
+                                      "  ")))))
+    (concat row (if width
+                    (truncate-string-to-width code (max 0 (- width (string-width row))) nil nil "…")
+                  code))))
+
 (defun +my/peek--ref-lines (items)
   "The list's lines for ITEMS (one file's usages, in order): line number, the
-function/class on the first usage of each (×N when it has several), the code."
+function/class on the first usage of each (×N when it has several), the code.
+Each keeps its parts (`+my/peek-row') to be laid out again for the pane."
   (let* ((runs (let (runs)                ; ((SCOPE . COUNT) ...) in order
                  (dolist (item items (nreverse runs))
                    (let ((scope (or (plist-get item :scope) "")))
@@ -199,8 +231,7 @@ function/class on the first usage of each (×N when it has several), the code."
                                (format "%s ×%d" (car run) (cdr run))
                              (car run)))
                          runs))
-         (scope-width (min +my/peek-scope-width
-                           (apply #'max 0 (mapcar #'string-width labels))))
+         (labels-width (apply #'max 0 (mapcar #'string-width labels)))
          (number-width (length (number-to-string
                                 (1+ (apply #'max 0 (mapcar (lambda (i) (plist-get i :line)) items))))))
          (lines nil))
@@ -208,19 +239,15 @@ function/class on the first usage of each (×N when it has several), the code."
              for label in labels
              do (dotimes (i (cdr run))
                   (let* ((item (pop items))
-                         (string (concat
-                                  (propertize (format (format "%%%dd" number-width)
-                                                      (1+ (plist-get item :line)))
-                                              'face 'lsp-ui-peek-line-number)
-                                  "  "
-                                  (when (> scope-width 0)
-                                    (concat (propertize (+my/peek--fit (if (= i 0) label "")
-                                                                       scope-width)
-                                                        'face 'font-lock-function-name-face)
-                                            "  "))
-                                  (string-trim (plist-get item :summary)))))
+                         (parts (list (propertize (format (format "%%%dd" number-width)
+                                                          (1+ (plist-get item :line)))
+                                                  'face 'lsp-ui-peek-line-number)
+                                      (if (= i 0) label "")
+                                      labels-width
+                                      (string-trim (plist-get item :summary)))))
                     (push (lsp-ui-peek--add-prop
-                           `(lsp-ui-peek ,item file ,(plist-get item :file)) string)
+                           `(lsp-ui-peek ,item file ,(plist-get item :file) +my/peek-row ,parts)
+                           (+my/peek--row parts))
                           lines))))
     (nreverse lines)))
 
@@ -233,20 +260,72 @@ function/class on the first usage of each (×N when it has several), the code."
                                                   lsp-ui-peek--list)))
     (lsp-ui-peek--add-prop '(xrefs nil))))
 
+;;; Width
+
+;; The peek is as wide as its pane, but lsp-ui's list was 60 columns whatever
+;; the pane, its preview the rest: in a narrow pane the preview showed "..",
+;; rows ran past the pane's edge (or on to more rows, in a buffer that wraps),
+;; the footer was cut. Now each time it's drawn the list gets half the pane, at
+;; most `lsp-ui-peek-list-width' (config/lsp.el), and in a pane narrower than
+;; `+my/peek-preview-min-width' all of it, no preview; the function column
+;; gives way to the code, the title and footer are fitted. It's drawn again
+;; when the pane's size changes (a pane opened beside it...), not only at the
+;; next key.
+(defun +my/peek--preview-p ()
+  "Whether the peek in the selected window shows its preview (see above)."
+  (>= (window-text-width) +my/peek-preview-min-width))
+
+(defun +my/peek--list-width ()
+  "The list's width in the peek in the selected window (see above)."
+  (if (+my/peek--preview-p)
+      (min lsp-ui-peek-list-width (/ (window-text-width) 2))
+    (1- (window-text-width))))
+
+(defadvice! +my/peek-fit-width-a (fn &rest args)
+  "Draw the peek for its pane's width (see above)."
+  :around #'lsp-ui-peek--peek
+  (let ((lsp-ui-peek-list-width (+my/peek--list-width)))
+    (apply fn args)))
+
+(defun +my/peek-redraw-h (window)
+  "For the buffer-local `window-size-change-functions' of a buffer with a
+peek: draw it again for WINDOW's new size (see above)."
+  (with-current-buffer (window-buffer window)
+    (when (and (bound-and-true-p lsp-ui-peek-mode)
+               (overlayp lsp-ui-peek--overlay)
+               (eq (overlay-get lsp-ui-peek--overlay 'window) window))
+      (with-selected-window window
+        (lsp-ui-peek--peek)))))
+
+(defun +my/peek-watch-size-h ()
+  "While a peek is open, draw it again when its pane's size changes."
+  (if (bound-and-true-p lsp-ui-peek-mode)
+      (add-hook 'window-size-change-functions #'+my/peek-redraw-h nil t)
+    (remove-hook 'window-size-change-functions #'+my/peek-redraw-h t)))
+
+(add-hook 'lsp-ui-peek-mode-hook #'+my/peek-watch-size-h)
+
 ;;; Header, preview, footer
 
-(defun +my/peek--title ()
-  "E.g. \"Usages of HOLD1 · 22 in 1 file\"."
-  (let ((kind (pcase lsp-ui-peek--method
-                ("textDocument/references" "Usages")
-                ("textDocument/definition" "Definitions")
-                ("textDocument/implementation" "Implementations")
-                (method (capitalize (replace-regexp-in-string "\\`.*/" "" method)))))
-        (files (cl-count-if-not (lambda (s) (get-text-property 0 'lsp-ui-peek s))
-                                lsp-ui-peek--list)))
-    (format " %s%s · %d in %d file%s" kind
-            (if +my/peek--symbol (format " of %s" +my/peek--symbol) "")
-            lsp-ui-peek--size-list files (if (= files 1) "" "s"))))
+(defun +my/peek--title (&optional width)
+  "E.g. \" Usages of HOLD1 · 22 in 1 file\"; in WIDTH columns, the symbol cut
+to fit (or left out, then the kind), never the counts."
+  (let* ((kind (pcase lsp-ui-peek--method
+                 ("textDocument/references" "Usages")
+                 ("textDocument/definition" "Definitions")
+                 ("textDocument/implementation" "Implementations")
+                 (method (capitalize (replace-regexp-in-string "\\`.*/" "" method)))))
+         (files (cl-count-if-not (lambda (s) (get-text-property 0 'lsp-ui-peek s))
+                                 lsp-ui-peek--list))
+         (head (concat " " kind))
+         (of (if +my/peek--symbol (format " of %s" +my/peek--symbol) ""))
+         (counts (format " · %d in %d file%s"
+                         lsp-ui-peek--size-list files (if (= files 1) "" "s")))
+         (room (and width (- width (string-width head) (string-width counts)))))
+    (cond ((or (null width) (>= room (string-width of))) (concat head of counts))
+          ((>= room 6) (concat head (truncate-string-to-width of room nil nil "…") counts))
+          ((>= room 0) (concat head counts))
+          (t (concat " " (string-remove-prefix " · " counts))))))
 
 (defun +my/peek--preview (src)
   "The preview (SRC: header, then lines) with line numbers, the usage's line
@@ -279,19 +358,39 @@ highlighted, cut to the peek's height around it."
                                  string)))))))
 
 (defadvice! +my/peek-frame-a (args)
+  "The preview numbered (none in a narrow pane), the title, the list's rows,
+laid out for the pane (see Width)."
   :filter-args #'lsp-ui-peek--peek-new
-  (pcase-let ((`(,src1 ,src2) args))
-    (list (+my/peek--preview src1)
-          (cons (+my/peek--title) (cdr src2)))))
+  (pcase-let ((`(,src1 ,src2) args)
+              ;; Where lsp-ui cuts the list's rows (with "..").
+              (width (- lsp-ui-peek-list-width 2)))
+    (list (if (+my/peek--preview-p)
+              (+my/peek--preview src1)
+            (make-list (length src1) ""))
+          (cons (+my/peek--title width)
+                (mapcar (lambda (row)
+                          (if-let* ((parts (get-text-property 0 '+my/peek-row row)))
+                              (+my/peek--row parts width)
+                            row))
+                        (cdr src2))))))
+
+(defconst +my/peek--keys
+  '(("j/k" . "next/previous") ("C-j/C-k" . "file") ("RET" . "open")
+    ("M-RET" . "other window") ("Esc" . "close"))
+  "The peek's keys, as its footer lists them.")
 
 (defadvice! +my/peek-footer-a ()
-  "The keys, instead of an empty bar."
+  "The keys, instead of an empty bar: as many as the pane has room for."
   :override #'lsp-ui-peek--make-footer
-  (list (concat (propertize "  j/k  next/previous   C-j/C-k  file   RET  open   M-RET  other window   Esc  close"
-                            'face 'lsp-ui-peek-footer)
-                (propertize " " 'face 'lsp-ui-peek-footer
-                            'display '(space :align-to (- right-fringe 0)))
-                (propertize "\n" 'face 'lsp-ui-peek-footer))))
+  (let ((text ""))
+    (cl-loop for (key . action) in +my/peek--keys
+             for item = (concat (if (string-empty-p text) "  " "   ") key "  " action)
+             while (< (string-width (concat text item)) (window-text-width))
+             do (setq text (concat text item)))
+    (list (concat (propertize text 'face 'lsp-ui-peek-footer)
+                  (propertize " " 'face 'lsp-ui-peek-footer
+                              'display '(space :align-to (- right-fringe 0)))
+                  (propertize "\n" 'face 'lsp-ui-peek-footer)))))
 
 ;;; Separators
 

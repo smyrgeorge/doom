@@ -195,6 +195,7 @@ other.py, in one project). The peek is closed after."
                    (+my/peek-item-a . lsp-ui-peek--xref-make-item)
                    (+my/peek-insert-xrefs-a . lsp-ui-peek--insert-xrefs)
                    (+my/peek-frame-a . lsp-ui-peek--peek-new)
+                   (+my/peek-fit-width-a . lsp-ui-peek--peek)
                    (+my/peek-footer-a . lsp-ui-peek--make-footer)
                    (+my/peek-separators-a . lsp-ui-peek--peek-new)
                    (+my/indent-guides-peek-guard-a . +indent-guides--restore-after-lsp-ui-peek-a)))
@@ -711,18 +712,69 @@ hooks, no local variables)."
   (should-not (+my/peek--ref-lines nil)))
 
 (ert-deftest peek/ref-lines-function-column-width ()
-  "At most `+my/peek-scope-width' columns, cut with …"
+  "At most `+my/peek-scope-width' columns, cut from the left with … (the
+function's own name is its last part)."
   (let ((lines (+my/peek--ref-lines
                 (list (+test-peek--item 0 "VeryLongClassName.veryLongMethodName")
                       (+test-peek--item 1 "Short")))))
     (should (equal (mapcar #'substring-no-properties lines)
-                   (list "1  VeryLongClassName.veryL…  code0"
+                   (list "1  …Name.veryLongMethodName  code0"
                          (concat "2  Short" (make-string 19 ?\s) "  code1")))))
   (let ((+my/peek-scope-width 6))
     (should (equal (mapcar #'substring-no-properties
                            (+my/peek--ref-lines (list (+test-peek--item 0 "Foo.bar") (+test-peek--item 1 "Foo.bar")
                                                       (+test-peek--item 2 "K.m") (+test-peek--item 3 "K.m"))))
-                   '("1  Foo.b…  code0" "2          code1" "3  K.m ×2  code2" "4          code3")))))
+                   '("1  …ar ×2  code0" "2          code1" "3  K.m ×2  code2" "4          code3")))))
+
+(ert-deftest peek/fit-left ()
+  (should (equal (+my/peek--fit-left "abc" 5) "abc  "))
+  (should (equal (+my/peek--fit-left "abcdefgh" 5) "…efgh"))
+  (should (equal (+my/peek--fit-left "Outer.inner ×3" 9) "…inner ×3")))
+
+(ert-deftest peek/row-in-a-narrow-list ()
+  "In a narrow list the function column gives way so the code shows 15
+columns (and an ellipsis), and goes when under 4; the code is cut to fit."
+  (let ((parts (list " 67" "Klass1.method_with_a_long_name ×2" 33 "return target_function(1, 2)")))
+    (should (equal (substring-no-properties (+my/peek--row parts))
+                   " 67  …hod_with_a_long_name ×2  return target_function(1, 2)"))
+    ;; 37 columns: the column 14, the code 16.
+    (let ((row (substring-no-properties (+my/peek--row parts 37))))
+      (should (equal row " 67  …_long_name ×2  return target_f…"))
+      (should (= (string-width row) 37)))
+    ;; 22: no column.
+    (should (equal (substring-no-properties (+my/peek--row parts 22))
+                   " 67  return target_fu…")))
+  ;; A short label keeps its width where there's room.
+  (should (equal (substring-no-properties (+my/peek--row (list "1" "A" 1 "code") 40))
+                 "1  A  code")))
+
+(ert-deftest peek/list-width-from-the-pane ()
+  "Half the pane, at most `lsp-ui-peek-list-width'; under
+`+my/peek-preview-min-width' columns all of it, and no preview."
+  (dolist (case '((140 60 t) (100 50 t) (80 40 t) (70 35 t) (69 68 nil) (40 39 nil) (25 24 nil)))
+    (cl-letf (((symbol-function 'window-text-width) (lambda (&rest _) (car case))))
+      (should (= (+my/peek--list-width) (nth 1 case)))
+      (should (eq (+my/peek--preview-p) (nth 2 case))))))
+
+(ert-deftest peek/drawn-for-the-pane ()
+  "Each time it's drawn: the list's width from the pane, its preview gone in
+a narrow one."
+  (let (seen)
+    (cl-letf (((symbol-function 'window-text-width) (lambda (&rest _) 40)))
+      (+my/peek-fit-width-a (lambda () (setq seen lsp-ui-peek-list-width))))
+    (should (= seen 39))
+    (should (= lsp-ui-peek-list-width 60))))
+
+(ert-deftest peek/title-fitted ()
+  "In the list's width, the symbol cut, never the counts."
+  (should (equal (+test-peek--title "textDocument/references" "compute_the_total" 7 2 43)
+                 " Usages of compute_the_total · 7 in 2 files"))
+  (should (equal (+test-peek--title "textDocument/references" "compute_the_total" 7 2 30)
+                 " Usages of com… · 7 in 2 files"))
+  (should (equal (+test-peek--title "textDocument/references" "compute_the_total" 7 2 25)
+                 " Usages · 7 in 2 files"))
+  (should (equal (+test-peek--title "textDocument/references" "compute_the_total" 7 2 15)
+                 " 7 in 2 files")))
 
 (ert-deftest peek/ref-lines-number-width ()
   "Line numbers (1-based) right-aligned to the widest."
@@ -780,8 +832,9 @@ under it; the file marked open."
 
 ;; ====== TITLE ======
 
-(defun +test-peek--title (method symbol size files)
-  "The title for SIZE usages in FILES files, found with METHOD about SYMBOL."
+(defun +test-peek--title (method symbol size files &optional width)
+  "The title for SIZE usages in FILES files, found with METHOD about SYMBOL
+\(in WIDTH columns)."
   (with-temp-buffer
     (setq lsp-ui-peek--method method
           +my/peek--symbol symbol
@@ -789,7 +842,7 @@ under it; the file marked open."
           lsp-ui-peek--list (append (cl-loop repeat files collect (copy-sequence "file"))
                                     (cl-loop repeat size collect
                                              (propertize "usage" 'lsp-ui-peek '(:line 0)))))
-    (+my/peek--title)))
+    (+my/peek--title width)))
 
 (ert-deftest peek/title-says-what-is-listed ()
   (should (equal (+test-peek--title "textDocument/references" "HOLD1" 22 1)
@@ -937,10 +990,20 @@ its preview's first line: lsp-ui's preview as it is."
 
 ;; ====== FOOTER, SEPARATORS ======
 
+(ert-deftest peek/footer-fitted ()
+  "As many keys as the pane has room for."
+  (cl-letf (((symbol-function 'window-text-width) (lambda (&rest _) 40)))
+    (should (equal (substring-no-properties (car (lsp-ui-peek--make-footer)))
+                   "  j/k  next/previous   C-j/C-k  file \n")))
+  (cl-letf (((symbol-function 'window-text-width) (lambda (&rest _) 21)))
+    (should (equal (substring-no-properties (car (lsp-ui-peek--make-footer)))
+                   "  j/k  next/previous \n"))))
+
 (ert-deftest peek/footer-shows-the-keys ()
   "The keys instead of an empty bar, in terminals too (lsp-ui showed none)."
   (should-not (display-graphic-p))
-  (let ((footer (lsp-ui-peek--make-footer)))
+  (let ((footer (cl-letf (((symbol-function 'window-text-width) (lambda (&rest _) 120)))
+                  (lsp-ui-peek--make-footer))))
     (should (= (length footer) 1))
     (let ((row (car footer)))
       (should (string-prefix-p

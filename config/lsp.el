@@ -50,6 +50,10 @@
 ;; - the preview has line numbers, with the usage's line highlighted;
 ;; - the peek is only as tall as its list needs (up to `lsp-ui-peek-peek-height')
 ;;   and the window lets: it shows whole, below the declaration;
+;; - it fits its pane's width: the list takes half of it (at most
+;;   `lsp-ui-peek-list-width'), all of it in a pane narrower than
+;;   `+my/peek-preview-min-width' (no preview); drawn again as the pane's size
+;;   changes;
 ;; - each usage shows the function/class it's in, grouped: the name on the
 ;;   first of its usages, with how many there are;
 ;; - usages don't list the declaration itself (where you are).
@@ -59,8 +63,11 @@
 (defvar +my/peek-scope-width 24
   "Widest the function/class column of the list gets.")
 
+(defvar +my/peek-preview-min-width 70
+  "The narrowest pane the peek shows its preview in, in columns.")
+
 (after! lsp-ui-peek
-  (setq lsp-ui-peek-list-width 60))     ; room for the function column
+  (setq lsp-ui-peek-list-width 60))     ; the widest: room for the function column
 
 (defface +my/peek-separator '((t :inherit lsp-ui-peek-header))
   "The rows above and below the peek.")
