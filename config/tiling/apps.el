@@ -121,6 +121,29 @@ fullscreen's); its window, or nil."
   (when-let* ((show (plist-get (alist-get +my/tiling-strategy +my/tiling-strategies) :show)))
     (funcall show buffer)))
 
+(defun +my/tiling--behind (buffer)
+  "Application BUFFER shown by Emacs on its own (no command running: a
+timer, a process, a request to the server, an agent's canvas) under a
+strategy that hides panes (fullscreen), its pane on the screen alone: not
+put in front of it (it took the screen and the keys from what you were
+doing), but behind it, hidden just after it, said; a hidden pane holding it
+already left so. `fail' then (`display-buffer' shows it nowhere), else nil."
+  (when (and (null this-command)
+             (plist-get (+my/tiling--strategy) :hides)
+             (let ((panes (+my/tiling--panes))) (and panes (null (cdr panes)))))
+    (cond
+     ((+my/tiling--hidden-holds-p buffer) 'fail)
+     ((+my/tiling--new-pane-p buffer)
+      (let* ((slots (or (+my/tiling--slots) (list :shown)))
+             (index (seq-position slots :shown)))
+        (+my/tiling--set-slots
+         (append (seq-take slots (1+ index))
+                 (list (with-current-buffer buffer
+                         (list :buffer buffer :point (point) :start (point-min) :hscroll 0)))
+                 (seq-drop slots (1+ index))))
+        (message "Pane %d/%d, behind this one: %s" (+ 2 index) (1+ (length slots)) (buffer-name buffer))
+        'fail)))))
+
 (defun +my/tiling-display-buffer (buffer alist)
   "A `display-buffer' action: BUFFER in a new pane where the tiling strategy
 puts it (config/tiling.el), its only tab; quitting it closes the pane. Nil
@@ -132,7 +155,8 @@ puts it (config/tiling.el), its only tab; quitting it closes the pane. Nil
 (defun +my/tiling--display (buffer alist)
   "`display-buffer-overriding-action': an application in its pane (shown, one
 of its tabs, or hidden: brought to the front), else a new one (as the
-strategy puts it); a file in the current pane, as a tab, from a
+strategy puts it; fullscreen, shown by Emacs on its own: behind the current
+one, `+my/tiling--behind'); a file in the current pane, as a tab, from a
 popup or a side panel in the pane used last (a new pane without one). Nil
 for anything else (popups, *Completions*, transient menus, git's own
 files...), for a buffer shown in no window (ALIST's `allow-no-window'),
@@ -150,6 +174,7 @@ in): as it asks."
           ((+my/tiling--tab-pane buffer)
            (window--display-buffer buffer (+my/tiling--tab-pane buffer) 'reuse
                                    (+my/tiling--alist alist)))
+          ((+my/tiling--behind buffer))
           ((when-let* ((window (+my/tiling--hidden-pane buffer)))
              (window--display-buffer buffer window 'reuse (+my/tiling--alist alist))))
           ((+my/tiling--new-pane-p buffer)

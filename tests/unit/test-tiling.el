@@ -1390,6 +1390,40 @@ one."
             (should (= (length (window-list)) 1))))
       (set-frame-parameter nil '+my/tiling-hidden nil))))
 
+(ert-deftest tiling/fullscreen-opened-on-its-own-behind ()
+  "An application Emacs shows on its own (no command running: an agent's
+canvas, from the server or a timer): its pane behind the one on the screen,
+hidden just after it, said; that one staying in front, selected (it covered
+it, the keys going to it). Shown again so: left hidden. SPC w w brings it up;
+shown for a command: in front, as ever."
+  (+test-tiling-first
+    (set-frame-parameter nil '+my/tiling-hidden nil)
+    (unwind-protect
+        (let ((+my/tiling-strategy 'fullscreen)
+              (app (+test-tiling--app "an app"))
+              (window (selected-window))
+              said)
+          (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args)))))
+            (let ((this-command nil))
+              (should-not (display-buffer app '(nil (inhibit-same-window . t))))
+              (should (equal said "Pane 2/2, behind this one: an app"))
+              (should (equal (+test-tiling--slots) '("*A" "an app")))
+              (should (eq (selected-window) window))
+              (should (eq (window-buffer window) (get-buffer "A")))
+              (setq said nil)
+              (should-not (display-buffer app))
+              (should-not said)
+              (should (equal (+test-tiling--slots) '("*A" "an app"))))
+            (+my/tiling-next-pane)
+            (should (equal (+test-tiling--slots) '("A" "*an app")))
+            (should (eq (window-buffer (selected-window)) app))
+            ;; For a command: in front.
+            (+my/tiling-next-pane)
+            (should (equal (+test-tiling--slots) '("*A" "an app")))
+            (pop-to-buffer app)
+            (should (equal (+test-tiling--slots) '("A" "*an app")))))
+      (set-frame-parameter nil '+my/tiling-hidden nil))))
+
 (ert-deftest tiling/fullscreen-hidden-panes-hold-their-buffers ()
   "A hidden pane holds its buffer and tabs (a file's last tab closed
 elsewhere doesn't close it: config/editor/tabs.el asks)."

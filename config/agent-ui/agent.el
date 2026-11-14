@@ -417,7 +417,10 @@ moment again (the keys typed there aren't the canvas's)."
         (agent-ui-after-minibuffer
          (lambda ()
            (run-with-idle-timer agent-ui-focus-questions-delay nil #'agent-ui--focus-question canvas id)))
-      (agent-ui--show-question canvas id t))))
+      ;; As C-c C-q would: a command going there (a pane shown with none
+      ;; running stays behind the one on the screen, tiling's fullscreen).
+      (let ((this-command 'agent-ui-goto-question))
+        (agent-ui--show-question canvas id t)))))
 
 (defun agent-ui--focus-question-h (id element)
   "A question shown (`agent-ui-shown-functions'): it takes the focus, once

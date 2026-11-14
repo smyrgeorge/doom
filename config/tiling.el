@@ -80,6 +80,9 @@
 ;;   (config/tiling/hidden.el), each workspace's. A new pane opens alone, after
 ;;   the current one; SPC w w / W bring the others to the front in turn ("Pane
 ;;   2/4"); an application already open in a hidden pane: that pane in front.
+;;   One Emacs opens on its own (no command: an agent's canvas, from a timer or
+;;   a process) goes behind the current one instead, hidden just after it,
+;;   said ("Pane 2/2, behind this one"): what you were doing stays in front.
 ;;   SPC w RET makes the pane on the screen the first (the main one); nothing
 ;;   to resize. Closing it (SPC w d, its last tab, its buffer killed, q) shows
 ;;   the next one. Another strategy shows them all again (its SPC w a, SPC w
