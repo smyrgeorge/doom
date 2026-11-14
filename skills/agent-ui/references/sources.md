@@ -43,6 +43,7 @@ EOF
 ```
 
 `agent-ui list` says how each source goes: `running`, `exit`, `lines` read, its `log`, and the `error` of a change its
-rules made that the element refused (a value that isn't a number...). A source stops when its element is removed or
-shown again, or the session's canvas closes. To show progress from a script of your own, update the element from it
+rules made that the element refused (a value that isn't a number...), or why it couldn't run (its `dir` missing: the
+element is shown without it, the `show` reply's `source` says so). A source stops when its element is removed or
+shown again, or the session's canvas closes; its log is deleted then. To show progress from a script of your own, update the element from it
 (`agent-ui update ...` in its loop; `batch` for many at once).

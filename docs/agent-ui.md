@@ -298,7 +298,8 @@ lines. A chunk of output is one update, however many lines it has.
 ```
 
 `agent-ui list` gives each source's state: running, its exit code, how many lines, its log, and the error of a
-change the element refused. A source stops when its element is removed or shown again, or its canvas closed. An
+change the element refused, or why it couldn't run (its `dir` missing: the element shown without it, `show`'s reply
+saying so). A source stops when its element is removed or shown again, or its canvas closed; its log is deleted then. An
 update can't change a source: showing the element again does.
 
 ## MCP

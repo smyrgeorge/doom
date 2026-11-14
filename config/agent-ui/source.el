@@ -18,7 +18,11 @@
 ;; last N lines; "into": PROP sets PROP to all of them (a diff's diff, as a
 ;; poll of git diff gives it), or the last N with tail. When a command ends: "done" (exit 0) or "failed" (else),
 ;; patches with $code; a progress bar is done or failed by itself. A source
-;; stops when its element is removed or shown again, or its canvas closed.
+;; stops when its element is removed or shown again, or its canvas closed;
+;; its log is deleted then. One that can't run (its dir missing, a command
+;; failing to start) stops, its error said in its status (the element shown
+;; all the same): it was an error out of the show after the element was in,
+;; or a poll's timer failing every time, said running.
 ;; No Doom here.
 
 (require 'cl-lib)
@@ -307,47 +311,79 @@ logged), ON-EXIT called with its exit code."
     (setf (agent-ui-source--state-process state) process)
     process))
 
+(defun agent-ui-source--failed (state err)
+  "STATE's source can't go on (ERR, an error): stopped, ERR its error."
+  (when (timerp (agent-ui-source--state-timer state))
+    (cancel-timer (agent-ui-source--state-timer state)))
+  (setf (agent-ui-source--state-timer state) nil
+        (agent-ui-source--state-process state) nil
+        (agent-ui-source--state-error state)
+        (concat "source: " (if (eq (car err) 'agent-ui-error) (agent-ui-error-message err) (error-message-string err)))))
+
 (defun agent-ui-source--poll (canvas id)
-  "Element ID's poll, once (not while the last one runs)."
+  "Element ID's poll, once (not while the last one runs). Failing to run
+(its dir gone): stopped, said (`agent-ui-source--failed')."
   (when-let* ((state (agent-ui-source--state canvas id)))
     (unless (process-live-p (agent-ui-source--state-process state))
       ;; Each run's lines: its tail its own.
       (setf (agent-ui-source--state-lines state) nil)
-      (agent-ui-source--run canvas id state (agent-ui-source--state-what state)
-                            (lambda (code)
-                              (agent-ui-source--feed canvas id "" t)
-                              (setf (agent-ui-source--state-exit state) code))))))
+      (condition-case err
+          (progn
+            (agent-ui-source--check-dir state)
+            (agent-ui-source--run canvas id state (agent-ui-source--state-what state)
+                                  (lambda (code)
+                                    (agent-ui-source--feed canvas id "" t)
+                                    (setf (agent-ui-source--state-exit state) code))))
+        (error (agent-ui-source--failed state err))))))
 
 (defun agent-ui-source--look (canvas id)
-  "Element ID's file: what it gained since the last look, fed."
+  "Element ID's file: what it gained since the last look, fed. Unreadable:
+said, looked at again next time."
   (when-let* ((state (agent-ui-source--state canvas id)))
-    (let* ((file (expand-file-name (agent-ui-source--state-what state)
-                                   (agent-ui-source--state-dir state)))
-           (size (file-attribute-size (file-attributes file)))
-           (offset (agent-ui-source--state-offset state)))
-      (cond
-       ((null size))
-       ;; From its end: what's there now doesn't count.
-       ((eq offset 'end) (setf (agent-ui-source--state-offset state) size))
-       (t
-        ;; Truncated (written again): from its start.
-        (when (< size offset) (setq offset 0))
-        (setf (agent-ui-source--state-offset state) size)
-        (when (> size offset)
-          (agent-ui-source--feed canvas id
-                                 (with-temp-buffer
-                                   (let ((coding-system-for-read 'utf-8))
-                                     (insert-file-contents file nil offset size))
-                                   (buffer-string)))))))))
+    (condition-case err
+        (agent-ui-source--look-1 canvas id state)
+      (error (setf (agent-ui-source--state-error state)
+                   (concat "source: " (error-message-string err)))))))
+
+(defun agent-ui-source--look-1 (canvas id state)
+  "Element ID's file, of STATE, looked at (`agent-ui-source--look')."
+  (let* ((file (expand-file-name (agent-ui-source--state-what state)
+                                 (agent-ui-source--state-dir state)))
+         (size (file-attribute-size (file-attributes file)))
+         (offset (agent-ui-source--state-offset state)))
+    (cond
+     ((null size))
+     ;; From its end: what's there now doesn't count.
+     ((eq offset 'end) (setf (agent-ui-source--state-offset state) size))
+     (t
+      ;; Truncated (written again): from its start.
+      (when (< size offset) (setq offset 0))
+      (setf (agent-ui-source--state-offset state) size)
+      (when (> size offset)
+        (agent-ui-source--feed canvas id
+                               (with-temp-buffer
+                                 (let ((coding-system-for-read 'utf-8))
+                                   (insert-file-contents file nil offset size))
+                                 (buffer-string))))))))
 
 (defun agent-ui-source-stop (id)
-  "Stop element ID's source, in the current canvas."
+  "Stop element ID's source, in the current canvas: its log deleted (they
+stayed in the temporary folder, every command's)."
   (when-let* ((state (and agent-ui-source--states (gethash id agent-ui-source--states))))
     (when (process-live-p (agent-ui-source--state-process state))
       (delete-process (agent-ui-source--state-process state)))
     (when (timerp (agent-ui-source--state-timer state))
       (cancel-timer (agent-ui-source--state-timer state)))
+    (when-let* ((log (agent-ui-source--state-log state)))
+      (ignore-errors (delete-file log)))
     (remhash id agent-ui-source--states)))
+
+(defun agent-ui-source--check-dir (state)
+  "An error if STATE's command's directory isn't there."
+  (let ((dir (agent-ui-source--state-dir state)))
+    (unless (file-directory-p dir)
+      (agent-ui--fail "no directory %s to run %s in" (directory-file-name dir)
+                      (agent-ui--show-value (agent-ui-source--state-what state))))))
 
 (defun agent-ui-source--start (id element)
   "Element ID (shown in the current canvas) follows its :source, if it has
@@ -361,19 +397,24 @@ one; the one it followed before, stopped."
       (unless (agent-ui-source--state-dir state)
         (setf (agent-ui-source--state-dir state) (file-name-as-directory default-directory)))
       (puthash id state agent-ui-source--states)
-      (pcase (agent-ui-source--state-kind state)
-        ('command
-         (make-directory agent-ui-source-log-directory t)
-         (setf (agent-ui-source--state-log state)
-               (make-temp-file (expand-file-name (format "%s-" id) agent-ui-source-log-directory) nil ".log"))
-         (agent-ui-source--run canvas id state (agent-ui-source--state-what state)
-                               (lambda (code) (agent-ui-source--exited canvas id code))))
-        ('file
-         (setf (agent-ui-source--state-timer state)
-               (run-with-timer 0 agent-ui-source-file-interval #'agent-ui-source--look canvas id)))
-        ('poll
-         (setf (agent-ui-source--state-timer state)
-               (run-with-timer 0 (agent-ui-source--state-every state) #'agent-ui-source--poll canvas id)))))))
+      ;; Not run: said in its status, the element shown all the same.
+      (condition-case err
+          (pcase (agent-ui-source--state-kind state)
+            ('command
+             (agent-ui-source--check-dir state)
+             (make-directory agent-ui-source-log-directory t)
+             (setf (agent-ui-source--state-log state)
+                   (make-temp-file (expand-file-name (format "%s-" id) agent-ui-source-log-directory) nil ".log"))
+             (agent-ui-source--run canvas id state (agent-ui-source--state-what state)
+                                   (lambda (code) (agent-ui-source--exited canvas id code))))
+            ('file
+             (setf (agent-ui-source--state-timer state)
+                   (run-with-timer 0 agent-ui-source-file-interval #'agent-ui-source--look canvas id)))
+            ('poll
+             (agent-ui-source--check-dir state)
+             (setf (agent-ui-source--state-timer state)
+                   (run-with-timer 0 (agent-ui-source--state-every state) #'agent-ui-source--poll canvas id))))
+        (error (agent-ui-source--failed state err))))))
 
 (add-hook 'agent-ui-shown-functions #'agent-ui-source--start)
 (add-hook 'agent-ui-removed-functions #'agent-ui-source-stop)

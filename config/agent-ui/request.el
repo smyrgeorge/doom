@@ -91,8 +91,8 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
        ;; Its sources (a panel's children's too) run in the agent's directory
        ;; (`agent-ui-file-directory'), unless they say.
        (let* ((id (agent-ui-show element :canvas canvas))
-              (log (and (fboundp 'agent-ui-source-status)
-                        (plist-get (agent-ui-source-status id :canvas canvas) :log)))
+              (source (and (fboundp 'agent-ui-source-status) (agent-ui-source-status id :canvas canvas)))
+              (log (plist-get source :log))
               (hidden (buffer-local-value 'agent-ui--hidden (agent-ui--buffer canvas))))
          (append (list :ok t :id id)
                  ;; A link to it, for the agent's reply (config/agent-ui/snapshot.el).
@@ -101,6 +101,8 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
                                                 agent-ui--canvas-name)
                                               id)))
                  (when log (list :log log))
+                 ;; Shown, its source not run (its dir missing): why.
+                 (when (plist-get source :error) (list :source source))
                  ;; Shown, but its pane couldn't open: for the agent to say.
                  (when hidden
                    (list :hidden (format "the canvas's pane couldn't open (%s): it opens at its next change, once there's room"

@@ -655,6 +655,15 @@ error saying what's wrong. Its :type a string, as JSON gives it."
         (agent-ui--fail "a title is text, not %s" (agent-ui--show-value title))))
     (when-let* ((source (plist-get element :source)))
       (funcall agent-ui-check-source-function source))
+    ;; Its panel's children's too: started once it's in, a wrong one failed
+    ;; then, half shown.
+    (dolist (child (agent-ui--descendants element))
+      (when-let* ((source (plist-get child :source)))
+        (condition-case err
+            (funcall agent-ui-check-source-function source)
+          (agent-ui-error
+           (agent-ui--fail "panel: child %s: %s" (or (plist-get child :id) (plist-get child :type))
+                           (agent-ui-error-message err))))))
     (when-let* ((actions (plist-get element :actions)))
       (agent-ui-check-actions actions))
     (when-let* ((close (plist-get element :close)))

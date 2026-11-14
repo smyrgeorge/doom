@@ -231,6 +231,75 @@ still running, its exit and patch not there; once run, done."
       (with-temp-file file (insert "7"))
       (+test-ausrc-wait (lambda () (equal (plist-get (agent-ui-get "p") :values) '(1 7))) 4))))
 
+(ert-deftest agent-ui-source/one-that-cant-run-said ()
+  "A command or a poll in a directory that isn't there: the element shown,
+its source stopped, its error said (the show was an error out of it, the
+element in all the same; a poll said running forever, its timer failing at
+each run). A wrong source among a panel's children: the show refused, nothing
+added."
+  (+test-ausrc
+    (let* ((gone (expand-file-name "not-there/" (+test-tmp-file "")))
+           (timer-errors 0))
+      (cl-letf* ((message-fn (symbol-function 'message))
+                 ((symbol-function 'message)
+                  (lambda (format-string &rest args)
+                    (when (and format-string (string-match-p "Error running timer" format-string))
+                      (cl-incf timer-errors))
+                    (apply message-fn format-string args))))
+        (dolist (source (list (list :command "pwd" :tail 1 :dir gone)
+                              (list :poll "pwd" :every 1 :tail 1 :dir gone)))
+          (should (equal (agent-ui-show (list :id "p" :type "text" :text "" :source source)) "p"))
+          (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements)) '("p")))
+          (let ((status (agent-ui-source-status "p")))
+            (should (eq (plist-get status :running) :false))
+            (should (string-match-p "no directory .*not-there" (plist-get status :error))))
+          (agent-ui-remove "p"))
+        ;; Its dir gone after it started: stopped at its next run, said.
+        (let ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "polled-") t))))
+          (agent-ui-show (list :id "q" :type "text" :text "" :source (list :poll "pwd" :every 1 :tail 1 :dir dir)))
+          (+test-ausrc-wait (lambda () (plist-get (agent-ui-get "q") :text)))
+          (delete-directory dir t)
+          (+test-ausrc-wait (lambda () (eq (plist-get (agent-ui-source-status "q") :running) :false)) 3)
+          (should (string-match-p "no directory" (plist-get (agent-ui-source-status "q") :error))))
+        (should (= timer-errors 0)))
+      ;; Through a request: ok, the reply says why.
+      (let ((reply (agent-ui-do "show" nil (list :id "r" :type "text" :text ""
+                                                 :source (list :command "pwd" :dir gone))
+                                canvas)))
+        (should (eq (plist-get reply :ok) t))
+        (should (string-match-p "no directory" (plist-get (plist-get reply :source) :error))))
+      ;; A panel's child's source wrong: refused, nothing added.
+      (should (string-match-p "panel: child c: source: give one of command, file, poll"
+                              (agent-ui-error-message
+                               (should-error (agent-ui-show '(:id "panel" :type "panel"
+                                                              :children ((:id "c" :type "text" :text "" :source (:tail 3)))))
+                                             :type 'agent-ui-error))))
+      (should-not (member "panel" (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements)))))))
+
+(ert-deftest agent-ui-source/its-log-deleted-when-it-stops ()
+  "A command's log: kept while its element is shown (for the agent to read),
+deleted when it's removed, shown again, its canvas killed (they stayed in
+the temporary folder)."
+  (+test-ausrc
+    (cl-flet ((log-of (id) (plist-get (agent-ui-source-status id) :log)))
+      (agent-ui-show '(:id "a" :type "text" :text "" :source (:command "echo a" :tail 1)))
+      (+test-ausrc-ended "a")
+      (let ((log (log-of "a")))
+        (should (file-exists-p log))
+        (agent-ui-remove "a")
+        (should-not (file-exists-p log)))
+      (agent-ui-show '(:id "b" :type "text" :text "" :source (:command "echo b" :tail 1)))
+      (let ((log (log-of "b")))
+        (agent-ui-show '(:id "b" :type "text" :text "" :source (:command "echo again" :tail 1)))
+        (should-not (file-exists-p log))
+        (should (file-exists-p (log-of "b"))))
+      ;; A panel's child's too, with its canvas.
+      (agent-ui-show '(:id "p" :type "panel" :children ((:id "c" :type "text" :text "" :source (:command "echo c" :tail 1)))))
+      (let ((logs (list (log-of "b") (log-of "c"))))
+        (should (cl-every #'file-exists-p logs))
+        (kill-buffer canvas)
+        (should-not (cl-some #'file-exists-p logs))))))
+
 ;; ====== THROUGH THE COMMAND LINE ======
 
 (ert-deftest agent-ui-source/in-a-request ()
