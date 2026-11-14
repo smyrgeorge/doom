@@ -1694,13 +1694,14 @@ expanded again, drawn anew: still hidden; off: nothing hidden."
         (let ((inhibit-message t))
           (treemacs-do-add-project-to-workspace other "hide-b"))
         (should-not (invisible-p (treemacs-project->position (cadr (treemacs-workspace->projects (treemacs-current-workspace))))))
-        ;; Collapsed, then expanded.
+        ;; Collapsed: shown (the line to open it from), then expanded: hidden.
         (let ((project (treemacs-project->position
                         (car (treemacs-workspace->projects (treemacs-current-workspace))))))
           (treemacs--collapse-root-node project)
-          (should (invisible-p (point-min)))
+          (should-not (invisible-p (point-min)))
           (should-not (invisible-p (treemacs-project->position (cadr (treemacs-workspace->projects (treemacs-current-workspace))))))
           (treemacs--expand-root-node project)
+          (should (invisible-p (point-min)))
           (should (= (overlay-end +my/treemacs--hidden-root)
                      (save-excursion (goto-char (point-min)) (line-beginning-position 2))))
           (should-not (invisible-p (+test-treemacs--line-start "README.md"))))
@@ -1709,6 +1710,60 @@ expanded again, drawn anew: still hidden; off: nothing hidden."
           (+my/treemacs--hide-top-root)
           (should-not +my/treemacs--hidden-root)
           (should-not (invisible-p (point-min))))))))
+
+(defun +test-treemacs--select (label)
+  "LABEL's node selected in the sidebar, point on it."
+  (+test-treemacs--goto label)
+  (+my/treemacs--select-here))
+
+(defun +test-treemacs--keys (keys)
+  "KEYS typed in the sidebar (selected), through the command loop: its
+pre- and post-command hooks run."
+  (select-window (treemacs-get-local-window))
+  (execute-kbd-macro keys))
+
+(defun +test-treemacs--name (label)
+  "LABEL without a folder's sign (\"+ \" closed, \"- \" open: no icons in batch)."
+  (replace-regexp-in-string "\\`[-+] " "" label))
+
+(defun +test-treemacs--at-point ()
+  "The name on point's line in the sidebar, and whether point is hidden."
+  (with-current-buffer (+test-treemacs--sidebar)
+    (list (+test-treemacs--name (+test-treemacs--line-label (point))) (invisible-p (point)))))
+
+(ert-deftest treemacs/sticky-nothing-goes-to-the-hidden-line ()
+  "↑ or k on the first node shown, ← or h to a top-level node's parent (the
+hidden project line): on the first node shown, selected; a TAB or RET then
+doesn't collapse the project."
+  (+test-treemacs
+    (let ((root (+test-treemacs--project "hidden-keys" "README.md" "a.txt" "src/b.txt")))
+      (+test-treemacs--show-project root)
+      (dolist (keys (list [up] "k" "gg"))
+        (+test-treemacs--select ".git")
+        (+test-treemacs--keys keys)
+        (should (equal (+test-treemacs--at-point) '(".git" nil)))
+        (should (equal (+test-treemacs--selected) (expand-file-name ".git" root)))
+        (should (equal (+test-treemacs--name (+test-treemacs--highlighted)) ".git")))
+      (+test-treemacs--keys [tab])
+      (+test-treemacs--keys [return])
+      (should (eq (car (+test-treemacs--states)) 'root-node-open))
+      (should (member "README.md" (+test-treemacs--lines)))
+      ;; ← / h on a top-level closed folder: the parent is the hidden line.
+      (dolist (keys (list [left] "h"))
+        (+test-treemacs--select "src")
+        (+test-treemacs--keys keys)
+        (should (equal (+test-treemacs--at-point) '(".git" nil)))
+        (+test-treemacs--keys [tab])
+        (should (eq (car (+test-treemacs--states)) 'root-node-open)))
+      ;; The project collapsed: its line is shown, where the cursor goes.
+      (with-current-buffer (+test-treemacs--sidebar)
+        (treemacs--collapse-root-node (treemacs-project->position
+                                       (car (treemacs-workspace->projects (treemacs-current-workspace))))))
+      (+test-treemacs--keys [down])
+      (should-not (cadr (+test-treemacs--at-point)))
+      (+test-treemacs--keys [right])
+      (should (eq (car (+test-treemacs--states)) 'root-node-open))
+      (should (equal (+test-treemacs--at-point) '(".git" nil))))))
 
 ;; ====== zR / zM ======
 

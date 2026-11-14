@@ -19,7 +19,12 @@
 ;; collapse takes its newline away, the expansion's comes back outside the
 ;; overlay, which would show an empty line. (Not before each redisplay:
 ;; `pre-redisplay-functions' runs only for the selected window, rarely the
-;; sidebar.) The other projects' lines stay: they divide the tree.
+;; sidebar.) The other projects' lines stay: they divide the tree. Hidden only
+;; while the project is open: collapsed, its line is all there is to open it
+;; from. Nothing goes there: keys that would (↑ or k on the first node, ← or h
+;; to a top-level node's parent, gg) land on the first node shown. They left
+;; the cursor on the hidden line, nothing highlighted, and a TAB or RET right
+;; after collapsed the project, the tree gone but for its title.
 ;;
 ;; As the tree: the header line starts at the window's edge, the tree after
 ;; the left fringe (and margin), so the title starts after a space as wide;
@@ -99,10 +104,14 @@ as the tree shows it (see above)."
     (point-min)))
 
 (defun +my/treemacs--hide-top-root (&rest _)
-  "Hide the tree's first line if it's a project's (the title shows it), with
-its newline; else nothing hidden. Moved only when it changed."
+  "Hide the tree's first line if it's an open project's (the title shows it),
+with its newline; else nothing hidden. Moved only when it changed."
   (let ((end (and +my/treemacs-sticky-title
                   (eql (ignore-errors (+my/treemacs--project-at (point-min))) (point-min))
+                  (eq (ignore-errors (save-excursion
+                                       (goto-char (point-min))
+                                       (treemacs-button-get (treemacs-current-button) :state)))
+                      'root-node-open)
                   (save-excursion (goto-char (point-min)) (min (point-max) (line-beginning-position 2))))))
     (cond
      (end
@@ -122,6 +131,14 @@ its newline; else nothing hidden. Moved only when it changed."
   "After a change in the tree's first line (or its newline): hide it again."
   (when (<= beg (1+ (save-excursion (goto-char (point-min)) (line-end-position))))
     (+my/treemacs--hide-top-root)))
+
+(defun +my/treemacs--off-hidden-root-h ()
+  "Point on the hidden first line: onto the first node shown (see above)."
+  (when (and (overlayp +my/treemacs--hidden-root)
+             (overlay-buffer +my/treemacs--hidden-root)
+             (< (point) (overlay-end +my/treemacs--hidden-root)))
+    (goto-char (overlay-end +my/treemacs--hidden-root))
+    (ignore-errors (treemacs--evade-image))))
 
 (defun +my/treemacs--background ()
   "The sidebar's background as shown: its default face's remapping's (solaire's),
@@ -154,6 +171,10 @@ else the default face's."
     (+my/treemacs--sticky-faces)
     (remove-hook 'pre-redisplay-functions #'+my/treemacs--hide-top-root t)
     (add-hook 'after-change-functions #'+my/treemacs--hide-after-change-h nil t)
+    ;; Before a key's command (the tree drawn anew leaves the cursor at its
+    ;; top), and after it, before what it went to is selected (selection.el).
+    (add-hook 'pre-command-hook #'+my/treemacs--off-hidden-root-h -10 t)
+    (add-hook 'post-command-hook #'+my/treemacs--off-hidden-root-h -60 t)
     (+my/treemacs--hide-top-root)))
 
 ;; Late: after solaire's remapping of the sidebar's faces, whose background
