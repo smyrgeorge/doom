@@ -219,6 +219,53 @@ up from / forever, Emacs hung (this test then times out)."
           (treemacs--do-refresh buffer 'all)
           (should (string-match-p "other-project" (+test-treemacs--label (point)))))))))
 
+(defun +test-treemacs--tree-lines ()
+  (with-current-buffer (window-buffer (+test-treemacs--window))
+    (mapcar #'string-trim (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n" t))))
+
+(ert-deftest e2e-treemacs/back-from-another-project-s-magit ()
+  "A deep file, another project's magit (the tree drawn for it), back to the
+file: its project's tree drawn again, the file shown and highlighted."
+  (require 'magit)
+  (+test-with-reset
+    (let* ((a (let ((root (file-name-as-directory (+test-tmp-file "magit-a/"))))
+                (make-directory (expand-file-name "src/deep" root) t)
+                (with-temp-file (expand-file-name "src/deep/x.txt" root) (insert "x\n"))
+                (let ((default-directory root)) (call-process "git" nil nil nil "init" "-q"))
+                root))
+           (b (let ((root (file-name-as-directory (+test-tmp-file "magit-b/"))))
+                (make-directory root t)
+                (with-temp-file (expand-file-name "b.txt" root) (insert "b\n"))
+                (let ((default-directory root)) (call-process "git" nil nil nil "init" "-q"))
+                root))
+           (x (find-file (expand-file-name "src/deep/x.txt" a)))
+           (magit (get-buffer-create "magit: magit-b")))
+      (unwind-protect
+          (progn
+            (save-selected-window
+              (let ((inhibit-message t))
+                (treemacs-add-and-display-current-project-exclusively)))
+            (set-frame-parameter nil '+my/treemacs-followed nil)
+            (+my/treemacs-follow-project-soon)
+            (should (+test-wait-for (lambda () (equal (+test-treemacs--highlighted) "x.txt")) 5))
+            (with-current-buffer magit
+              (setq default-directory b)
+              (magit-mode))
+            (switch-to-buffer magit)
+            (should (+test-wait-for (lambda () (member "b.txt" (+test-treemacs--tree-lines))) 5))
+            (+test-sleep 0.3)
+            (switch-to-buffer x)
+            (should (+test-wait-for (lambda () (and (member "x.txt" (+test-treemacs--tree-lines))
+                                                    (equal (+test-treemacs--highlighted) "x.txt")))
+                                    5))
+            ;; Still there a moment later (no follow came after).
+            (+test-sleep 2)
+            (should (equal (+test-treemacs--highlighted) "x.txt")))
+        (kill-buffer magit)
+        (dolist (buffer (buffer-list))
+          (when (with-current-buffer buffer (derived-mode-p 'treemacs-mode))
+            (kill-buffer buffer)))))))
+
 ;; ====== STICKY TITLE ======
 
 (defun +test-treemacs--header (window)

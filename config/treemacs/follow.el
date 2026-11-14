@@ -72,6 +72,34 @@ selected window since the last time (see above)."
   (when (or buffer-file-name (derived-mode-p 'dired-mode 'magit-mode))
     (apply fn args)))
 
+;; ANOTHER PROJECT DRAWN: ITS FILE SHOWN AGAIN
+;; The file follow (above) skips the buffer it followed last, but only files
+;; and dired buffers count as followed: from a deep file to another project's
+;; magit (the tree drawn for that project) and back, the file was still the
+;; last one followed, so it wasn't shown in its project's tree drawn again:
+;; its folders closed, the highlight on the hidden project line. Now drawing
+;; another project's tree forgets the last one followed.
+(defun +my/treemacs--shown-projects ()
+  "The paths of the projects in the sidebar's workspace."
+  (ignore-errors
+    (mapcar #'treemacs-project->path
+            (treemacs-workspace->projects (treemacs-current-workspace)))))
+
+(defadvice! +my/treemacs-follow-project-redrawn-a (fn &rest args)
+  :around #'treemacs--do-follow-project
+  (let ((before (+my/treemacs--shown-projects)))
+    (prog1 (apply fn args)
+      (unless (equal before (+my/treemacs--shown-projects))
+        (set-frame-parameter nil '+my/treemacs-followed nil)))))
+
+;; Treemacs's own project follow, 1.5 s idle after a switch, came after the
+;; one above had followed already: nothing left to do, but when it drew a
+;; project after all (switched again meanwhile), the one above could run in
+;; the middle of it, the sidebar selected, and lose the file to show.
+(defadvice! +my/treemacs-follow-project-only-soon-a (&rest _)
+  :override #'treemacs--follow-project
+  nil)
+
 ;; Same race for the follow timer with two frames on different workspaces (e.g.
 ;; a terminal client next to the GUI): one frame's treemacs switched projects,
 ;; and the follow looked for a file in a tree not redrawn yet: "Error running

@@ -352,6 +352,8 @@ on a line without a path."
   (should (advice-member-p #'+my/lsp-treemacs-select-panel-a 'lsp-treemacs-errors-list))
   (should (advice-member-p #'+my/lsp-treemacs-select-panel-a 'lsp-treemacs-symbols))
   (should (advice-member-p #'+my/treemacs-follow-project-buffers-a #'treemacs--do-follow-project))
+  (should (advice-member-p #'+my/treemacs-follow-project-redrawn-a #'treemacs--do-follow-project))
+  (should (advice-member-p #'+my/treemacs-follow-project-only-soon-a #'treemacs--follow-project))
   (should (advice-member-p #'+my/treemacs-stale-annotations-a #'treemacs--apply-annotations-deferred))
   (should (advice-member-p #'+my/treemacs-follow-guard-a #'treemacs--follow))
   (should (advice-member-p #'+my/treemacs-menu-reveal-a #'treemacs-rightclick-menu)))
@@ -711,6 +713,13 @@ git poll's) follows no more: it scrolled the sidebar back to the file."
     (generate-new-buffer " *any*")
     (should-not treemacs--follow-timer)))
 
+(ert-deftest treemacs/no-project-follow-later ()
+  "Treemacs's own project follow (1.5 s idle after a switch) is gone: the one
+right away did it, and it could run in the middle of that one."
+  (let ((treemacs--project-follow-timer nil))
+    (treemacs--follow-project nil)
+    (should-not treemacs--project-follow-timer)))
+
 (ert-deftest treemacs/follow-file-once-per-buffer ()
   "The file is shown when the selected window's buffer is new since the last
 time: not again for the same buffer (back from the sidebar, a popup)."
@@ -944,6 +953,50 @@ in a third project's folder doesn't; a dired buffer does."
       (with-current-buffer (switch-to-buffer (dired-noselect c))
         (treemacs--do-follow-project))
       (should (equal (file-name-as-directory (+test-treemacs--current-root)) c)))))
+
+(defun +test-treemacs--switch-and-follow (buffer)
+  "BUFFER in the selected window, then the follow a moment after (fired now)."
+  (switch-to-buffer buffer)
+  (+my/treemacs-follow-project-soon)
+  (+test-treemacs--fire-follow))
+
+(ert-deftest treemacs/follow-back-from-another-project-s-magit ()
+  "A deep file, another project's magit (its tree drawn), the file again: the
+file shown and selected in its project's tree, drawn again. Magit of the same
+project and back: the file isn't followed again (no jump)."
+  (require 'magit)
+  (+test-treemacs
+    (let* ((process-environment (+test-treemacs--git-environment))
+           (treemacs-follow-mode t)
+           (treemacs-project-follow-mode t)
+           (+my/treemacs--follow-timer nil)
+           (a (+test-treemacs--project "back-a" "README.md" "src/deep/x.txt"))
+           (b (+test-treemacs--project "back-b" "b.txt"))
+           (x (expand-file-name "src/deep/x.txt" a))
+           (magit (lambda (root)
+                    (let ((buffer (+test-buffer (concat "magit: " root))))
+                      (with-current-buffer buffer
+                        (magit-status-mode)
+                        (setq default-directory root))
+                      buffer))))
+      (+test-treemacs--show-project a "src/deep/x.txt")
+      (set-frame-parameter nil '+my/treemacs-followed nil)
+      (+test-treemacs--switch-and-follow (get-file-buffer x))
+      (should (equal (+test-treemacs--selected) x))
+      (+test-treemacs--switch-and-follow (funcall magit b))
+      (should (equal (file-name-as-directory (+test-treemacs--current-root)) b))
+      (+test-treemacs--switch-and-follow (get-file-buffer x))
+      (should (equal (file-name-as-directory (+test-treemacs--current-root)) a))
+      (should (member "x.txt" (+test-treemacs--lines)))
+      (should (equal (+test-treemacs--selected) x))
+      (should (equal (+test-treemacs--highlighted) "x.txt"))
+      ;; The same project's magit: nothing drawn again, nor followed.
+      (let ((follows 0))
+        (+test-treemacs-with-original treemacs--follow () (cl-incf follows)
+          (+test-treemacs--switch-and-follow (funcall magit a))
+          (+test-treemacs--switch-and-follow (get-file-buffer x)))
+        (should (= follows 0))
+        (should (eq (frame-parameter nil '+my/treemacs-followed) (get-file-buffer x)))))))
 
 ;; ====== RACES ======
 
