@@ -4458,7 +4458,14 @@ column, bordered or not (it broke working out widths for none)."
                      (:type "panel" :layout "row" :border :false)))
     (let ((text (+test-aue-draw element :width 30)))
       (should-not (string-search "⚠" text))
-      (should (string-search "no elements" text)))))
+      (should (string-search "no elements" text))))
+  ;; Bordered: its sides in line with its frame (the text wasn't padded).
+  (dolist (width '(100 60 24))
+    (let ((lines (split-string (+test-aue-draw '(:type "panel" :border t :children ()) :width width) "\n")))
+      (should (= (length lines) 3))
+      (dolist (line lines)
+        (should (= (string-width line) width)))
+      (should (string-match-p "\\`│ no elements +│\\'" (nth 1 lines))))))
 
 (ert-deftest agent-ui-elements/panel-never-under-a-column ()
   "However narrow: no child laid out at 0 columns or less (they hung, or

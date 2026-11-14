@@ -339,7 +339,8 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
                                                              texts widths))))
          (body
           (cond
-           ((null children) (list (propertize "no elements" 'face 'agent-ui-muted)))
+           ;; As wide as the inside: its right border in line with the frame.
+           ((null children) (list (propertize (agent-ui-pad "no elements" inner) 'face 'agent-ui-muted)))
            ((and images (not inline)
                  ;; Side by side with an image taller than a line among them
                  ;; (a chart): one SVG (its children's buttons, then, not
