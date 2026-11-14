@@ -307,16 +307,47 @@ the toolbar's labels: see pdf/options-labels-per-system)."
 
 (ert-deftest pdf/p-a-local-file-in-webkit ()
   (+test-pdf
-    (with-temp-buffer
-      (should-not (+my/pdf-p))                    ; no file
-      (setq buffer-file-name "/tmp/x.pdf")
-      (should (+my/pdf-p))
-      (setq buffer-file-name "/ssh:host:/tmp/x.pdf")
-      (should-not (+my/pdf-p))                    ; remote
-      (setq buffer-file-name "/tmp/x.pdf")
-      (cl-letf (((symbol-function '+my/webkit-p) #'ignore))
-        (should-not (+my/pdf-p)))                 ; terminal
-      (setq buffer-file-name nil))))
+    (let ((file (+test-pdf--pdf "x.pdf")))
+      (with-temp-buffer
+        (should-not (+my/pdf-p))                  ; no file
+        (setq buffer-file-name file)
+        (should (+my/pdf-p))
+        (setq buffer-file-name "/ssh:host:/tmp/x.pdf")
+        (should-not (+my/pdf-p))                  ; remote
+        (setq buffer-file-name (expand-file-name "not-written-yet.pdf" (file-name-directory file)))
+        (should-not (+my/pdf-p))                  ; not written yet
+        (setq buffer-file-name file)
+        (cl-letf (((symbol-function '+my/webkit-p) #'ignore))
+          (should-not (+my/pdf-p)))               ; terminal
+        (setq buffer-file-name nil)))))
+
+(ert-deftest pdf/a-new-pdf-file-not-shown-no-error-no-page-folder ()
+  "A .pdf not written yet (a new file's name): as doc-view leaves it,
+in fundamental-mode, not WebKit's (whose page would fail to read it, in a
+timer, its folder left each time it's shown); no endless fallback between
+doc-view and this config, in the GUI or a terminal."
+  (+test-pdf
+    (dolist (webkit '(t nil))
+      (cl-letf (((symbol-function '+my/webkit-p) (lambda () webkit)))
+        (ert-info ((if webkit "GUI" "terminal"))
+          (+test-clear-messages)
+          (let* ((file (expand-file-name "new.pdf" (+test-pdf--new-dir "new")))
+                 (buffer (find-file-noselect file)))
+            (should (eq (buffer-local-value 'major-mode buffer) 'fundamental-mode))
+            (should (zerop (+test-messages "File mode specification error")))
+            (+test-pdf--show buffer)
+            (should (zerop (+test-pdf--fire #'+my/webkit--start)))
+            (kill-buffer buffer)
+            (should-not (directory-files temporary-file-directory nil "\\`pdf-"))))))))
+
+(ert-deftest pdf/a-pdf-gone-before-it-s-shown-leaves-no-page-folder ()
+  (+test-pdf
+    (let* ((file (+test-pdf--pdf "gone.pdf"))
+           (buffer (find-file-noselect file)))
+      (delete-file file)
+      (should-error (+test-pdf--show buffer) :type 'file-missing)
+      (should-not (buffer-local-value '+my/pdf--dir buffer))
+      (should-not (directory-files temporary-file-directory nil "\\`pdf-")))))
 
 (ert-deftest pdf/no-large-file-prompt-for-pdfs ()
   "Only WebKit reads a PDF: no \"File is large, really open?\"."

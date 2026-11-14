@@ -74,7 +74,12 @@ PDF.js, the PDF's own (WebKit's viewer)."
     (setq +my/pdf--native nil
           +my/pdf--dir (make-temp-file "pdf-" t)
           +my/pdf--data 0)
-    (+my/pdf--write-page (+my/pdf--write-data))
+    ;; The PDF gone since it was opened: no folder left behind.
+    (condition-case err
+        (+my/pdf--write-page (+my/pdf--write-data))
+      (error (delete-directory +my/pdf--dir t)
+             (setq +my/pdf--dir nil)
+             (signal (car err) (cdr err))))
     (+my/webkit-file-url (expand-file-name "index.html" +my/pdf--dir))))
 
 (defun +my/pdf--url (_window)

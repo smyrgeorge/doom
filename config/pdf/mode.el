@@ -2,16 +2,24 @@
 ;; The PDF mode, and which buffers get it. Loaded from config/pdf.el.
 
 (defun +my/pdf-p ()
-  "Non-nil if this buffer's PDF can show in WebKit: a local file, in the GUI,
-in an Emacs with xwidgets."
+  "Non-nil if this buffer's PDF can show in WebKit: a local file that's there
+\(not a new one, not written yet), in the GUI, in an Emacs with xwidgets."
   (and buffer-file-name (not (file-remote-p buffer-file-name))
+       (file-readable-p buffer-file-name)
        (+my/webkit-p)))
 
+(defvar +my/pdf--falling-back nil
+  "Non-nil while doc-view picks another mode for a PDF it can't show.")
+
 (defun +my/pdf-mode-maybe ()
-  "PDFs' major mode: WebKit where it works, doc-view otherwise (see config/pdf.el)."
-  (if (+my/pdf-p)
-      (+my/pdf-mode)
-    (doc-view-mode-maybe)))
+  "PDFs' major mode: WebKit where it works, doc-view otherwise (see
+config/pdf.el). Asked again by doc-view, falling back on another mode for a
+PDF it can't show (a new file, empty): `fundamental-mode', where doc-view
+alone ends, not doc-view over and over."
+  (cond ((+my/pdf-p) (+my/pdf-mode))
+        (+my/pdf--falling-back (fundamental-mode))
+        (t (let ((+my/pdf--falling-back t))
+             (doc-view-mode-maybe)))))
 
 ;; No "File is large, really open?" for PDFs, as with Doom's pdf module: only
 ;; WebKit reads them.
