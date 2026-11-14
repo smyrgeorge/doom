@@ -39,9 +39,10 @@ diagrams for CTX; nil without agent-shell."
   (let ((markdown (plist-get props :markdown))
         (width (plist-get ctx :width)))
     ;; Its lines wrapped: agent-shell leaves that to its window, and a
-    ;; canvas's lines are cut (its tables already fit).
-    (agent-ui-wrap (or (agent-ui-markdown--render markdown width ctx) markdown)
-                   width)))
+    ;; canvas's lines are cut (its tables already fit). Each line's rest
+    ;; under its text's start: a list item's, a code line's indent.
+    (agent-ui-wrap-hanging (or (agent-ui-markdown--render markdown width ctx) markdown)
+                           width)))
 
 (agent-ui-define markdown
   "Markdown, drawn as your replies are in agent-shell: headings, bold,

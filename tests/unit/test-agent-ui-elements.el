@@ -76,6 +76,38 @@
     (dolist (line (split-string text "\n"))
       (should (<= (string-width line) 40)))))
 
+(ert-deftest agent-ui-elements/markdown-wrapped-under-its-indent ()
+  "Wrapped, a list item's, a task's and a code line's next lines stay under
+their text's start (they began at column 0: at 24 a task's box alone, a
+code line's indent lost)."
+  (let ((text (+test-aue-draw '(:type "markdown"
+                                :markdown "- [ ] Write the migration for the users table\n- a list item long enough to wrap\n\n```\n    return parse_term(p, depth + 1);\n```")
+                              :width 24)))
+    (should (string-search "□ Write the migration\n  for the users table\n" text))
+    (should (string-search "• a list item long\n  enough to wrap\n" text))
+    (should (string-search "    return parse_term(p,\n    depth + 1);" text))
+    (dolist (line (split-string text "\n"))
+      (should (<= (string-width line) 24))))
+  (should (equal (agent-ui-wrap-hanging "  1. one two three four" 12) "  1. one two\n     three\n     four"))
+  ;; A start wider than half the width: not hung under.
+  (should (equal (agent-ui-wrap-hanging "            abc def" 16) "            abc\ndef")))
+
+(ert-deftest agent-ui-elements/math-source-broken-between-commands ()
+  "A formula's source shown as text is broken at spaces and before its
+commands, never within one, each line indented (\\delt / a\\epsilon, its
+next lines at column 0)."
+  (let ((text (+test-aue-draw '(:type "math" :tex "\\mathcal{L}=\\frac{\\partial\\delta}{\\partial\\epsilon}\\left(\\overbrace{a+b}^{n}\\right)")
+                              :width 24)))
+    (should (equal text (concat "  \\mathcal{L}=\\frac{\n"
+                                "  \\partial\\delta}{\n"
+                                "  \\partial\\epsilon}\n"
+                                "  \\left(\n"
+                                "  \\overbrace{a+b}^{n}\n"
+                                "  \\right)"))))
+  ;; A piece wider than the width: cut within it, still indented.
+  (should (equal (+test-aue-draw '(:type "math" :tex "\\verylongcommandname") :width 10)
+                 "  \\verylon\n  gcommand\n  name")))
+
 (ert-deftest agent-ui-elements/markdown-without-agent-shell ()
   ;; As written, wrapped.
   (cl-letf (((symbol-function 'agent-ui-markdown--render) #'ignore))

@@ -64,8 +64,12 @@ most CTX's width. Sized in its data: a snapshot nests it as it's shown."
 (defun agent-ui-mermaid-draw (diagram ctx)
   "DIAGRAM (Mermaid) drawn for CTX: its image, or its source (see above)."
   (let* ((diagram (string-trim diagram))
-         (text (agent-ui-mermaid--highlight diagram))
-         (width (plist-get ctx :width)))
+         (width (plist-get ctx :width))
+         ;; Its source wrapped, each line's rest under its indent (whole, a
+         ;; line ran 190 columns past the width).
+         (text (if width
+                   (agent-ui-wrap-hanging (agent-ui-mermaid--highlight diagram) width)
+                 (agent-ui-mermaid--highlight diagram))))
     (if (not (and (plist-get ctx :graphic) (plist-get ctx :char-width) (agent-ui-mermaid--p)))
         text
       (let* ((key (concat (+my/mermaid-theme-json) "\n" diagram))

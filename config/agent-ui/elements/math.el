@@ -261,13 +261,38 @@ pixels), no wider than its width."
                    (create-image svg 'svg t :ascent 'center
                                  :scale (if (and width (> width room)) (/ room width) 1)))))))
 
+(defun agent-ui-math--wrap (text width indent)
+  "TEXT (a formula's source, or its Unicode) in lines WIDTH wide, each led
+by INDENT: broken at its spaces and before its commands (\\alpha), not
+within one (it broke \\delt / a, its next lines not indented)."
+  (let ((room (max 1 (- width (string-width indent))))
+        (atoms nil) (start 0) (lines nil) (line ""))
+    ;; Its pieces: each up to a space's end or a command's start.
+    (dotimes (i (length text))
+      (when (and (> i start)
+                 (or (eq (aref text (1- i)) ?\s)
+                     (and (eq (aref text i) ?\\) (not (eq (aref text (1- i)) ?\\)))))
+        (push (substring text start i) atoms)
+        (setq start i)))
+    (push (substring text start) atoms)
+    (dolist (atom (nreverse atoms))
+      (if (and (not (string-empty-p line))
+               (> (+ (string-width line) (string-width (string-trim-right atom))) room))
+          (progn (push (string-trim-right line) lines)
+                 (setq line (string-trim-left atom)))
+        (setq line (concat line atom))))
+    (push (string-trim-right line) lines)
+    ;; A piece wider than the room: cut within it.
+    (mapconcat (lambda (l) (concat indent (replace-regexp-in-string "\n" (concat "\n" indent) (agent-ui-wrap l room) t t)))
+               (nreverse lines) "\n")))
+
 (defun agent-ui-math--draw (props ctx)
   (let* ((tex (string-trim (plist-get props :tex)))
          (display (agent-ui-math--display props))
          (indent (if (eq display 'block) "  " ""))
          (width (plist-get ctx :width))
          (unicode (agent-ui-math-unicode tex))
-         (as-text (concat indent (agent-ui-wrap (or unicode tex) (max 1 (- width (length indent))))))
+         (as-text (agent-ui-math--wrap (or unicode tex) width indent))
          (gui (and (plist-get ctx :graphic) (plist-get ctx :line-height) (plist-get ctx :char-width)))
          (tool (and gui (agent-ui-math--tool))))
     (cond

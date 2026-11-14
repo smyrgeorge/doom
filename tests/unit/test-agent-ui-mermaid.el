@@ -52,6 +52,21 @@ were to be redrawn."
     (should (equal (substring-no-properties text) "flowchart LR\n    build --> test"))
     (should (memq 'font-lock-keyword-face (ensure-list (get-text-property 0 'face text))))))
 
+(ert-deftest agent-ui-mermaid/its-source-fits-the-width ()
+  "Its source, shown in a terminal or until drawn, wrapped to the width,
+each line's rest under its indent (a line ran 190 columns at every width)."
+  (let* ((element '(:type "mermaid" :diagram "flowchart LR\n    parser[The parser module] --> checker[The type checker, slow on big files]"))
+         (text (substring-no-properties (agent-ui-render element (agent-ui-context :width 24)))))
+    (should (equal text (concat "flowchart LR\n"
+                                "    parser[The parser\n"
+                                "    module] -->\n"
+                                "    checker[The type\n"
+                                "    checker, slow on big\n"
+                                "    files]")))
+    (+test-aum
+      (dolist (line (split-string (substring-no-properties (+test-aum--draw element (+test-aum--gui 24))) "\n"))
+        (should (<= (string-width line) 24))))))
+
 (ert-deftest agent-ui-mermaid/drawn-in-the-background ()
   (+test-aum
     (let ((text (+test-aum--draw +test-aum--flow)))

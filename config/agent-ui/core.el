@@ -616,6 +616,35 @@ drawn): a line of megabytes is wrapped as quickly as a page."
      (split-string string "\n")
      "\n")))
 
+(defconst agent-ui--hang-regexp
+  (concat "\\`[ \t]*\\(?:\\(?:[-*+•◦▪‣]\\|[0-9]+[.)]\\)[ \t]+\\)?"
+          "\\(?:\\(?:\\[[ xX]\\]\\|[□☐☑☒✓✔■]\\)[ \t]+\\)?")
+  "A line's start its wrapped lines hang under: its indent, a list item's
+bullet or number, a task's box.")
+
+(defun agent-ui-wrap-hanging (string width)
+  "STRING wrapped as `agent-ui-wrap' does, each line's next lines under its
+text's start: after its indent, a list item's bullet or number, a task's
+box (they began at column 0: a code line's indent lost, a task's box alone
+on its line). A start wider than half WIDTH: not hung under."
+  (setq width (max 1 width))
+  (mapconcat
+   (lambda (line)
+     (if (<= (string-width line) width)
+         line
+       (string-match agent-ui--hang-regexp line)
+       (let* ((head (match-string 0 line))
+              (hang (string-width head)))
+         (if (or (zerop hang) (> hang (/ width 2)))
+             (agent-ui-wrap line width)
+           (concat head
+                   (replace-regexp-in-string
+                    "\n" (concat "\n" (make-string hang ?\s))
+                    (agent-ui-wrap (substring line (match-end 0)) (- width hang))
+                    t t))))))
+   (split-string string "\n")
+   "\n"))
+
 (defun agent-ui--wrap-line (line width left)
   "LINE, wider than WIDTH, broken at spaces (see `agent-ui-wrap'), walked
 once by index: its first LEFT characters at least, the rest as it is."

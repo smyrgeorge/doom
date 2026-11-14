@@ -45,7 +45,8 @@ start) or discards it (its elements go with it): say what you made and why.
   each property's kind: signal with `agent-ui--fail`), `:append` (how lists grow), `:animated` (t, or a function of
   PROPS), `:prepare` (the element as it's kept: what it notes as time passes), `:extend` (for a long one appended to:
   edits to its drawing instead of drawing it again; see docs/agent-ui.md).
-- Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-format-number`, `agent-ui-spinner`,
+- Helpers: `agent-ui-pad`, `agent-ui-truncate`, `agent-ui-wrap`, `agent-ui-wrap-hanging` (a list item's or an indented
+  line's rest under its text), `agent-ui-format-number`, `agent-ui-spinner`,
   `(agent-ui-button-row BUTTONS WIDTH)` (buttons on a line, broken between them to the width: never one line wider);
   badges: `(agent-ui-pill LABEL CTX :face F :filled t :count N)` a rounded tag, `(agent-ui-pie FRACTION CTX FACE)` a
   pie (their text in a terminal, an SVG over it in the GUI). For a type
