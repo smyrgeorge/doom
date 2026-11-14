@@ -127,7 +127,7 @@ the system's chromium.")
       :nm "="       #'+my/mermaid-preview-zoom-in
       :nm "-"       #'+my/mermaid-preview-zoom-out
       :nm "0"       #'+my/mermaid-preview-zoom-reset
-      :gnm "q"      #'kill-current-buffer)
+      :gnm "q"      #'+my/mermaid-preview-quit)
 
 ;; Clicks are WebKit's: Emacs only selects the window (config/webkit.el).
 (+my/webkit-bind-clicks +my/mermaid-preview-page-mode-map)
@@ -136,7 +136,7 @@ the system's chromium.")
   "Keys of a Mermaid preview's image (see `+my/mermaid-preview-image-mode').")
 
 (map! :map +my/mermaid-preview-image-mode-map
-      :gnm "q" #'kill-current-buffer)
+      :gnm "q" #'+my/mermaid-preview-quit)
 
 (after! evil
   (evil-set-initial-state '+my/mermaid-preview-page-mode 'normal)

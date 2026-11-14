@@ -202,6 +202,19 @@ stays in the Mermaid buffer: the preview follows it."
                       (direction . right)
                       (window-width . ,(/ (window-total-width) 2))))))
 
+(defun +my/mermaid-preview--kill (preview)
+  "PREVIEW killed, its panes quit as `quit-window' does: a pane made for it
+closes, unless other tabs are under it (they show instead); one it took
+over shows what it showed before. SPC m p and q close it so, the same."
+  (let ((kill-buffer-quit-windows t)
+        (kill-buffer-query-functions nil))
+    (kill-buffer preview)))
+
+(defun +my/mermaid-preview-quit ()
+  "q in the preview: closed, as SPC m p in its file closes it."
+  (interactive)
+  (+my/mermaid-preview--kill (current-buffer)))
+
 (defun +my/mermaid-preview--off-h ()
   "The Mermaid buffer killed, or its mode set again: its preview goes too."
   (+my/mermaid-preview-mode -1))
@@ -235,10 +248,7 @@ PREVIEW in config/mermaid.el)."
     (when (+my/mermaid-preview--live-p)
       (let ((preview +my/mermaid-preview--buffer))
         (setq +my/mermaid-preview--buffer nil)
-        (dolist (window (get-buffer-window-list preview nil t))
-          (ignore-errors (delete-window window)))
-        (let ((kill-buffer-query-functions nil))
-          (kill-buffer preview))))
+        (+my/mermaid-preview--kill preview)))
     (when (and +my/mermaid-preview--file (file-exists-p +my/mermaid-preview--file))
       (delete-file +my/mermaid-preview--file))
     (setq +my/mermaid-preview--file nil)))

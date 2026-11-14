@@ -817,6 +817,42 @@ preview goes."
         (kill-buffer mmd)
         (should-not (buffer-live-p preview))))))
 
+(ert-deftest mermaid/preview-closed-by-q-as-by-spc-m-p ()
+  "q in the preview closes its pane, as SPC m p does: the file's preview off,
+its page deleted."
+  (+test-mermaid--with-webkit
+    (let ((mmd (+test-mermaid--file "q.mmd" "flowchart TD\n")))
+      (+my/mermaid-preview-show)
+      (let ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd))
+            (file (buffer-local-value '+my/mermaid-preview--file mmd)))
+        (select-window (get-buffer-window preview))
+        (call-interactively #'+my/mermaid-preview-quit)
+        (should-not (buffer-live-p preview))
+        (should (equal (mapcar #'window-buffer (window-list)) (list mmd)))
+        (should-not (buffer-local-value '+my/mermaid-preview-mode mmd))
+        (should-not (file-exists-p file))))))
+
+(ert-deftest mermaid/preview-closed-gives-back-the-pane-it-took ()
+  "From a pane too narrow to split, the preview takes its neighbour's: closed
+\(SPC m p, q), that pane shows what it showed before, not deleted."
+  (dolist (close '(toggle quit))
+    (+test-mermaid--with-webkit
+      (let* ((other (+test-buffer "other.txt" "other"))
+             (left (selected-window))
+             (right (split-window left 18 'right)))
+        (set-window-buffer right other)
+        (let ((mmd (+test-mermaid--file "narrow.mmd" "flowchart TD\n")))
+          (+my/mermaid-preview-show)
+          (let ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd)))
+            (should (eq (window-buffer right) preview))
+            (if (eq close 'toggle)
+                (with-current-buffer mmd (+my/mermaid-preview-toggle))
+              (with-selected-window right (+my/mermaid-preview-quit)))
+            (should-not (buffer-live-p preview))
+            (should (window-live-p right))
+            (should (eq (window-buffer right) other))
+            (should (eq (window-buffer left) mmd))))))))
+
 (ert-deftest mermaid/preview-shown-again-after-its-pane-closed ()
   (+test-mermaid--with-webkit
     (let ((mmd (+test-mermaid--file "again.mmd" "flowchart TD\n")))
@@ -865,12 +901,12 @@ preview goes."
                    ("gg" . +my/webkit-top) ("G" . +my/webkit-bottom)
                    ("+" . +my/mermaid-preview-zoom-in) ("=" . +my/mermaid-preview-zoom-in)
                    ("-" . +my/mermaid-preview-zoom-out) ("0" . +my/mermaid-preview-zoom-reset)
-                   ("q" . kill-current-buffer)))
+                   ("q" . +my/mermaid-preview-quit)))
     (should (eq (lookup-key (evil-get-auxiliary-keymap +my/mermaid-preview-page-mode-map 'normal) (kbd key))
                 command)))
   (should (eq (lookup-key +my/mermaid-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
   (should (eq (lookup-key (evil-get-auxiliary-keymap +my/mermaid-preview-image-mode-map 'normal) "q")
-              #'kill-current-buffer)))
+              #'+my/mermaid-preview-quit)))
 
 ;; Without WebKit: mmdc's SVG.
 
