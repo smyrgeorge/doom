@@ -48,7 +48,8 @@
 ;; - the header says what's listed: "Usages of HOLD1 · 22 in 1 file";
 ;; - the footer shows the keys;
 ;; - the preview has line numbers, with the usage's line highlighted;
-;; - the peek is only as tall as its list needs (up to `lsp-ui-peek-peek-height');
+;; - the peek is only as tall as its list needs (up to `lsp-ui-peek-peek-height')
+;;   and the window lets: it shows whole, below the declaration;
 ;; - each usage shows the function/class it's in, grouped: the name on the
 ;;   first of its usages, with how many there are;
 ;; - usages don't list the declaration itself (where you are).

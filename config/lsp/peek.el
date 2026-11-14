@@ -59,15 +59,36 @@ bright blue in Doom's themes)."
 
 ;;; Height
 
-(defadvice! +my/peek-fit-height-a (fn xrefs)
-  "As tall as the list needs (files and usages), within the usual bounds."
-  :around #'lsp-ui-peek--show
+(defun +my/peek--height (xrefs room)
+  "The peek's height for XREFS (lsp-ui's, by file), ROOM rows below the
+declaration's line: as tall as the list needs (files and usages), from
+`+my/peek-min-height' to lsp-ui's height, but never more than ROOM less
+the 3 rows around it (the separators, the footer), the minimum giving way.
+Even, as lsp-ui wants it."
   (let* ((rows (+ 1 (length xrefs)
                   (cl-loop for file in xrefs sum (or (plist-get file :count) 0))))
-         (height (max +my/peek-min-height
-                      (min (default-value 'lsp-ui-peek-peek-height) (1+ rows)))))
-    (setq-local lsp-ui-peek-peek-height (+ height (logand height 1))) ; even
-    (funcall fn xrefs)))
+         (wanted (max +my/peek-min-height
+                      (min (default-value 'lsp-ui-peek-peek-height) (1+ rows))))
+         (most (- room 3)))
+    (max 2 (min (+ wanted (logand wanted 1))
+                (- most (logand most 1))))))
+
+;; lsp-ui makes room below the declaration by putting it on the window's row
+;; 15, whatever the window: in a short one its last row, the peek below it off
+;; screen (and lsp-ui's own test, by buffer lines, misses wrapped ones). Only
+;; when the peek doesn't fit below it, the window scrolls so it just does.
+(defadvice! +my/peek-fit-height-a (fn xrefs)
+  "As tall as the list needs, within the usual bounds and the window, which
+scrolls if the peek doesn't fit below the declaration (see above)."
+  :around #'lsp-ui-peek--show
+  (let* ((above (count-screen-lines (window-start) (line-beginning-position 2)))
+         (room (- (window-body-height) above))
+         (height (+my/peek--height xrefs (1- (window-body-height)))))
+    (setq-local lsp-ui-peek-peek-height height)
+    (prog1 (cl-letf (((symbol-function 'recenter) #'ignore))
+             (funcall fn xrefs))
+      (when (< room (+ height 3))
+        (recenter (- (+ height 4)))))))
 
 (defadvice! +my/peek-reset-height-a (&rest _)
   :after #'lsp-ui-peek--peek-hide

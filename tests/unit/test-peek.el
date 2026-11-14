@@ -369,21 +369,28 @@ heading's face), set before the server is asked."
 
 ;; ====== HEIGHT ======
 
-(defun +test-peek--fit (counts)
-  "The height the peek gets for files with COUNTS usages (nil: no :count)."
+(defun +test-peek--xrefs (counts)
+  "lsp-ui's xrefs for files with COUNTS usages (nil: no :count)."
+  (cl-loop for count in counts for i from 1
+           collect (append (list :file (format "/p/%d.py" i))
+                           (and count (list :count count)))))
+
+(defun +test-peek--fit (counts &optional body)
+  "The height the peek gets for files with COUNTS usages (nil: no :count), in
+a window BODY rows tall (default: tall enough for any)."
   (with-temp-buffer
-    (let* ((xrefs (cl-loop for count in counts for i from 1
-                           collect (append (list :file (format "/p/%d.py" i))
-                                           (and count (list :count count)))))
+    (let* ((xrefs (+test-peek--xrefs counts))
            (seen nil)
-           (value (+my/peek-fit-height-a
-                   (lambda (arg)
-                     (should (eq arg xrefs))
-                     (setq seen lsp-ui-peek-peek-height)
-                     'shown)
-                   xrefs)))
+           (value (cl-letf (((symbol-function 'window-body-height) (lambda (&rest _) (or body 60))))
+                    (+my/peek-fit-height-a
+                     (lambda (arg)
+                       (should (eq arg xrefs))
+                       (setq seen lsp-ui-peek-peek-height)
+                       'shown)
+                     xrefs))))
       (should (eq value 'shown))
       (should (local-variable-p 'lsp-ui-peek-peek-height))
+      (should (= seen (+my/peek--height xrefs (1- (or body 60)))))
       seen)))
 
 (ert-deftest peek/height-fits-the-list ()
@@ -412,12 +419,42 @@ even (as lsp-ui wants it)."
   (cl-letf (((default-value 'lsp-ui-peek-peek-height) 21))
     (should (= (+test-peek--fit '(30)) 22))))   ; even, as lsp-ui makes it
 
+(ert-deftest peek/height-the-window-lets ()
+  "Never taller than the window lets below the declaration's line: its
+rows less 4 (the line, the separators, the footer), the minimum giving way;
+even; 2 at least."
+  (should (= (+test-peek--fit '(30) 40) 20))
+  (should (= (+test-peek--fit '(30) 24) 20))
+  (should (= (+test-peek--fit '(30) 23) 18))    ; 19 rows: made even, down
+  (should (= (+test-peek--fit '(30) 15) 10))
+  (should (= (+test-peek--fit '(3) 15) 10))
+  (should (= (+test-peek--fit '(3) 13) 8))      ; under the minimum
+  (should (= (+test-peek--fit '(3) 11) 6))
+  (should (= (+test-peek--fit '(3) 5) 2)))
+
+(ert-deftest peek/height-scrolls-only-without-room ()
+  "lsp-ui's recenter to row 15 is left out; the window scrolls only when the
+peek doesn't fit below the declaration, so that it just does."
+  (+test-with-reset
+    (with-current-buffer (+test-buffer "scroll.txt" (mapconcat #'number-to-string (number-sequence 1 100) "\n"))
+      (switch-to-buffer (current-buffer))
+      (let ((recentred nil)
+            (xrefs (+test-peek--xrefs '(3))))
+        (cl-letf (((symbol-function 'recenter) (lambda (&optional arg _) (push arg recentred))))
+          (forward-line 2)
+          (+my/peek-fit-height-a (lambda (_) (recenter 15)) xrefs)
+          (should-not recentred)        ; row 3 of 23: room for 10 + 3
+          (forward-line 8)              ; row 11: 12 rows below, 13 needed
+          (+my/peek-fit-height-a (lambda (_) (recenter 15)) xrefs)
+          (should (equal recentred '(-14))))))))
+
 (ert-deftest peek/height-from-the-default-not-the-last-peek ()
   (with-temp-buffer
     (setq-local lsp-ui-peek-peek-height 10)
     (let (seen)
-      (+my/peek-fit-height-a (lambda (_) (setq seen lsp-ui-peek-peek-height))
-                             (list (list :file "/p/a.py" :count 30)))
+      (cl-letf (((symbol-function 'window-body-height) (lambda (&rest _) 60)))
+        (+my/peek-fit-height-a (lambda (_) (setq seen lsp-ui-peek-peek-height))
+                               (list (list :file "/p/a.py" :count 30))))
       (should (= seen 20)))))
 
 (ert-deftest peek/height-back-when-closed ()
@@ -1067,11 +1104,14 @@ highlighted."
     (should (= lsp-ui-peek-peek-height 20))))
 
 (ert-deftest peek/usages-peek-many ()
-  "Many usages: as tall as lsp-ui's peek, the list scrolls."
+  "Many usages: as tall as lsp-ui's peek, or as the window lets (its rows
+less 4, even: batch Emacs's is short), the list scrolls."
   (+test-peek--with-usages
       (cl-loop for i from 0 below 30
                collect (+test-peek--loc main (mod i 10) 0 (mod i 10) 1))
-    (should (= lsp-ui-peek-peek-height 20))
+    (let ((most (- (window-body-height) 4)))
+      (should (< most 20))
+      (should (= lsp-ui-peek-peek-height (- most (logand most 1)))))
     (should (string-match-p "Usages of foo · 30 in 1 file" (nth 1 (+test-peek--rows (+test-peek--shown)))))))
 
 (ert-deftest peek/usages-peek-tree-sitter-scopes ()
