@@ -31,9 +31,9 @@
 ;; ```mermaid blocks show as diagrams in the live preview, drawn by mermaid.js
 ;; (config/mermaid.el: downloaded once), in the theme's colours on the page's
 ;; background, redrawn as you edit them (only a block that changed), re-themed
-;; with the page; an error shows Mermaid's message under the block's last
-;; drawing. In the Markdown buffer a block stays text, coloured by
-;; mermaid-mode.
+;; with the page; one too wide for the pane scrolls sideways in its box; an
+;; error shows Mermaid's message under the block's last drawing. In the
+;; Markdown buffer a block stays text, coloured by mermaid-mode.
 
 ;; REFLOWED ON SCREEN
 ;; A file filled at 120 columns in a narrower pane wrapped raggedly (a short

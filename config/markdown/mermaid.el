@@ -8,7 +8,10 @@
 ;; swapped) draws only a block that changed; one being drawn shows its last
 ;; drawing meanwhile (no flash of its source). An error: Mermaid's message
 ;; under the block's last drawing. mermaid.js is loaded only once a page has
-;; a block (a page without one doesn't parse it).
+;; a block (a page without one doesn't parse it). A diagram is as wide as its
+;; natural size, at most the page's, but never under four fifths of its
+;; natural size (shrunk to fit, a wide one's labels would be specks): wider, it
+;; scrolls sideways in its box.
 (defconst +md-preview--mermaid-js
   "window.mdMermaid = (function () {
   var config = null, url = null, loading = false, drawn = new Map(), last = [];
@@ -24,6 +27,13 @@
     script.onload = function () { mmd.init(config); draw(); };
     script.onerror = function () { loading = false; };
     document.head.appendChild(script);
+  }
+  function size(element) {
+    var svg = element.querySelector('svg'), view = svg && svg.viewBox && svg.viewBox.baseVal;
+    if (!view || !view.width) return;
+    svg.style.width = '100%';
+    svg.style.maxWidth = view.width + 'px';
+    svg.style.minWidth = Math.round(view.width * 0.8) + 'px';
   }
   function show(box, svg, error) {
     box.innerHTML = svg || '';
@@ -52,6 +62,7 @@
       mmd.draw(target, source).then(function (error) {
         if (!box.isConnected) return;
         if (error) { show(box, last[index], error); return; }
+        size(target);
         drawn.set(source, target.innerHTML);
         last[index] = target.innerHTML;
         show(box, target.innerHTML);
@@ -87,8 +98,8 @@
 when a block shows up), their look; empty without config/mermaid.el."
   (if (not (+md-preview--mermaid-p))
       ""
-    (concat "<style>.mermaid-diagram{text-align:center;margin:0 0 16px}"
-            ".mermaid-diagram svg{max-width:100%;height:auto}"
+    (concat "<style>.mermaid-diagram{text-align:center;margin:0 0 16px;overflow-x:auto}"
+            ".mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}"
             (format ".mermaid-error{color:%s;background:none;text-align:left;font-size:12px;white-space:pre-wrap}"
                     (nth 2 (+my/mermaid-page-colours)))
             "</style>"
