@@ -315,13 +315,18 @@ caller's function."
       (should-not (plist-member plain :on-action)))))
 
 (ert-deftest os/notify-on-linux-without-dbus ()
-  "No D-Bus notifications: notify-send; neither: none (nil)."
+  "No D-Bus notifications: notify-send, the title and body after --: one
+starting with - isn't taken for an option; neither: none (nil)."
   (let ((+test-os-runs nil)
         (+test-notifications nil))
     (cl-letf (((symbol-function '+my/os--dbus-notifications-p) #'ignore))
       (+test-os--with-programs '("notify-send")
-        (+test-on-linux (should (+my/os-notify "Title" "Body"))))
+        (+test-on-linux
+          (should (+my/os-notify "Title" "Body"))
+          (should (+my/os-notify "Claude Code" "-1 test still failing"))))
       (+test-os--with-programs '()
         (+test-on-linux (should-not (+my/os-notify "Title" "Body")))))
     (should-not +test-notifications)
-    (should (equal +test-os-runs '(("notify-send" "--app-name=Emacs" "--icon=emacs" "Title" "Body"))))))
+    (should (equal +test-os-runs
+                   '(("notify-send" "--app-name=Emacs" "--icon=emacs" "--" "Claude Code" "-1 test still failing")
+                     ("notify-send" "--app-name=Emacs" "--icon=emacs" "--" "Title" "Body"))))))

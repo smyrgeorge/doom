@@ -184,7 +184,8 @@ can show it."
                            :on-action (lambda (_id _action) (funcall on-click)))))
          t)
         ((executable-find "notify-send")
-         (+my/os--run "notify-send" "--app-name=Emacs" "--icon=emacs" title body)
+         ;; "--": a title or body starting with "-" isn't an option.
+         (+my/os--run "notify-send" "--app-name=Emacs" "--icon=emacs" "--" title body)
          t)))
 
 (defun +my/os-notify (title body &optional on-click)
