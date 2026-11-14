@@ -3596,6 +3596,41 @@ crossing no box either."
                       :edges (("alpha" "alpha") ("alpha" "beta") ("beta" "alpha")))))
     (should-not (+test-aue-crossings (+test-aue-svg element 120)))))
 
+(ert-deftest agent-ui-elements/graph-never-shrunk-unreadable ()
+  "In the GUI a graph is shrunk to 0.6 at most: else laid out downwards
+(no taller than the pane is wide), else drawn as text (an 11-node chain was
+11 pixels high at 24 columns)."
+  (let ((chain (list :type "graph" :nodes (mapcar (lambda (i) (format "step%d" i)) (number-sequence 1 11))
+                     :edges (cl-loop for i from 1 below 11
+                                     collect (list (format "step%d" i) (format "step%d" (1+ i))))))
+        (two '(:type "graph" :edges (("a request handler" "the validation step")
+                                     ("the validation step" "the database writer")))))
+    (cl-flet ((drawn (element width)
+                ;; (WIDTH HEIGHT VIEW-WIDTH VIEW-HEIGHT) of its image, or its text.
+                (let ((text (agent-ui-render element (agent-ui-context :width width :graphic t
+                                                                       :char-width 8 :line-height 16))))
+                  (if-let* ((image (get-text-property 0 'display text))
+                            (svg (plist-get (cdr image) :data)))
+                      (progn (string-match "<svg width=\"\\([0-9]+\\)\" height=\"\\([0-9]+\\)\"[^>]*viewBox=\"0 0 \\([0-9]+\\) \\([0-9]+\\)\"" svg)
+                             (mapcar (lambda (i) (string-to-number (match-string i svg))) '(1 2 3 4)))
+                    (substring-no-properties text)))))
+      (dolist (element (list chain two))
+        (dolist (width (number-sequence 16 120 4))
+          (let ((drawn (drawn element width)))
+            (when (consp drawn)
+              (should (>= (/ (float (nth 0 drawn)) (nth 2 drawn)) 0.6))))))
+      ;; The chain: an image at 120, text at 24 and 40.
+      (should (consp (drawn chain 120)))
+      (should (string-prefix-p "step1  ─▶ step2\nstep2  ─▶ step3" (drawn chain 24)))
+      (should (stringp (drawn chain 40)))
+      ;; Two edges at 40: downwards (three layers of boxes two lines high,
+      ;; a row of them at 120), not shrunk.
+      (should (< (nth 1 (drawn two 120)) (* 4 16)))
+      (let ((drawn (drawn two 40)))
+        (should (consp drawn))
+        (should (> (nth 1 drawn) (* 3 2 16)))
+        (should (= (nth 0 drawn) (nth 2 drawn)))))))
+
 (ert-deftest agent-ui-elements/graph-listed-twice ()
   "A node listed twice is one, its later status kept; an edge listed twice,
 once (each was drawn twice, the status lost)."
