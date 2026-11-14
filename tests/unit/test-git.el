@@ -223,6 +223,52 @@ summary magit starts the diff with)."
           (should range)
           (should (<= (car range) (cdr case) (+ (car range) (cadr range)))))))))
 
+(defun +test-git--stat-width ()
+  "The widest line of the diff's --stat summary (in the current buffer): the
+lines after \"N file changed\" down to the first empty one."
+  (save-excursion
+    (goto-char (point-min))
+    (re-search-forward "file changed")
+    (forward-line 1)
+    (let ((widest 0))
+      (while (not (or (eobp) (looking-at-p "$")))
+        (setq widest (max widest (string-width (buffer-substring (point) (line-end-position)))))
+        (forward-line 1))
+      widest)))
+
+(ert-deftest git/pane-stat-as-wide-as-the-pane ()
+  "The diff's --stat summary no wider than the pane (git's is 80 columns), in
+panes of 40 and 60 columns; the pane resized, a save fits it again."
+  (+test-git-with-repo
+    (let ((file (expand-file-name "a/long/path/to-a-file-with-a-long-name.el"))
+          (size (window-total-width (frame-root-window))))
+      (+test-git--write file (+test-git--lines 200))
+      (+test-git--git "add" ".")
+      (+test-git--git "commit" "-qm" "long")
+      (+test-git--write file (+test-git--lines 200 (number-sequence 1 200 2)))
+      (unwind-protect
+          (dolist (width '(80 120))
+            (+test-reset)
+            (set-frame-size nil width (frame-height))
+            (let ((code (selected-window))
+                  (buffer (+test-git--visit file 1)))
+              (+my/git-diff-pane)
+              (let ((pane (selected-window)))
+                (should (<= (abs (- (window-total-width pane) (/ width 2))) 1))
+                (with-current-buffer (window-buffer pane)
+                  (should (> (+test-git--stat-width) 20))
+                  (should (<= (+test-git--stat-width) (window-body-width pane))))
+                ;; Narrower, then the file saved.
+                (window-resize pane -10 t)
+                (select-window code)
+                (with-current-buffer buffer
+                  (goto-char (point-max))
+                  (insert "more\n")
+                  (save-buffer))
+                (with-current-buffer (window-buffer pane)
+                  (should (<= (+test-git--stat-width) (window-body-width pane)))))))
+        (set-frame-size nil size (frame-height))))))
+
 (ert-deftest git/pane-saves-the-buffer-first ()
   "Magit diffs the file on disk: the buffer is saved first."
   (+test-git-with-repo

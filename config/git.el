@@ -39,6 +39,12 @@
   (add-to-list 'magit-section-initial-visibility-alist '(recent . show))
   (add-to-list 'magit-section-initial-visibility-alist '(unpushed . show)))
 
+;; A diff's --stat summary (SPC g d's) as wide as its window, not git's 80
+;; columns cut at a narrow pane's edge; fitted again on each refresh (a save,
+;; g).
+(after! magit-diff
+  (setq magit-diff-extra-stat-arguments #'magit-diff-use-window-width-as-stat-width))
+
 ;; ====== KEY BINDINGS ======
 
 ;; SPC g d: the current file's diff in a pane (config/git/diff-pane.el).
