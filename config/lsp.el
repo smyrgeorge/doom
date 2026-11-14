@@ -41,7 +41,8 @@
 
 ;; CODE LENSES
 ;; lsp-mode shows the code lenses a server sends (which: its language's file)
-;; at the end of the line, placed there without measuring the line.
+;; at the end of the line, placed there without measuring the line; above the
+;; line when the line and its lens don't fit the pane.
 
 ;; PEEK
 ;; - colours: a soft selection and soft matches instead of bright blue boxes;

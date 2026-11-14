@@ -139,6 +139,52 @@ their part needs a server.)"
                                           (overlay-get theirs 'after-string)))
       (should (equal (overlay-get ours 'lsp-original) (overlay-get theirs 'lsp-original))))))
 
+(ert-deftest lsp/lens-above-a-line-too-long-for-the-pane ()
+  "A line and its lens wider than the pane: the lens above the line, at its
+indentation (it was cut, or pushed the code down); one that fits keeps it
+at its end; the pane widened, back at the end. Counted in characters,
+nothing measured."
+  (+test-with-reset
+    (let* ((lsp-lens-place-position 'end-of-line)
+           (lens "▶ Run | 3 implementations | 12 references")
+           (ov (+test-lsp--lens-overlay "    pub fn compute_total(items: &[Item]) -> u64 {\n        0\n" lens))
+           (short (with-current-buffer (overlay-buffer ov)
+                    (save-excursion (goto-char (point-max)) (insert "    x\n")
+                                    (forward-line -1)
+                                    (let ((o (make-overlay (line-end-position) (line-end-position) nil t t)))
+                                      (overlay-put o 'lsp--lens-contents "1 reference")
+                                      o))))
+           (width 60)
+           (measured nil))
+      (switch-to-buffer (overlay-buffer ov))
+      (cl-letf (((symbol-function 'window-text-width) (lambda (&rest _) width))
+                ((symbol-function 'beginning-of-visual-line) (lambda (&rest _) (setq measured t)))
+                ((symbol-function 'lsp-lens--text-width) (lambda (&rest _) (setq measured t) 0)))
+        (lsp-lens--update ov)
+        (lsp-lens--update short)
+        (should (equal (overlay-get ov 'before-string) (concat "    " lens "\n")))
+        ;; Its lenses (lsp-mode's metadata) wider than the pane: on more rows.
+        (overlay-put ov 'lsp--metadata '("▶ Run" "3 implementations" "12 references"))
+        (overlay-put ov 'lsp--lens-contents "▶ Run|3 implementations|12 references")
+        (setq width 30)
+        (lsp-lens--update ov)
+        (should (equal (substring-no-properties (overlay-get ov 'before-string))
+                       "    ▶ Run|3 implementations\n    12 references\n"))
+        (overlay-put ov 'lsp--metadata nil)
+        (overlay-put ov 'lsp--lens-contents lens)
+        (setq width 60)
+        (lsp-lens--update ov)
+        (should-not (overlay-get ov 'after-string))
+        (should (= (overlay-start ov) 1))
+        (should (equal (overlay-get short 'after-string) " 1 reference"))
+        (should (equal (overlay-get ov 'lsp-original) lens))
+        (setq width 100)
+        (lsp-lens--update ov)
+        (should (equal (overlay-get ov 'after-string) (concat " " lens)))
+        (should-not (overlay-get ov 'before-string))
+        (should (= (overlay-start ov) (save-excursion (goto-char 1) (line-end-position)))))
+      (should-not measured))))
+
 (ert-deftest lsp/lens-update-again-replaces ()
   "New contents (e.g. a count that changed) replace the old ones."
   (+test-with-reset
