@@ -120,6 +120,9 @@ errors or the diff-hl highlights change."
               (let ((line (flycheck-error-line err))
                     (kind (+my/stripe--level err)))
                 (when (and line (memq kind +my/stripe-diagnostic-levels))
+                  ;; Line 0 (Emacs Lisp's "End of file during parsing"):
+                  ;; flycheck shows it on the first.
+                  (setq line (max 1 line))
                   (push (list line line kind) marks)))))
           (dolist (line (+my/stripe--todo-lines))
             (push (list line line 'todo) marks))

@@ -229,6 +229,20 @@ without Doom's colour functions or with colours not in hex."
     (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks)))
                    '((3 3 error) (7 7 warning) (9 9 info) (12 12 error))))))
 
+(ert-deftest stripe/marks-an-error-on-line-0-on-the-first ()
+  "Flycheck's Emacs Lisp checker puts unbalanced parens on line 0: marked on
+the first line, and a short file's cells drawn (no \"Stripe:\" error)."
+  (+test-stripe (+test-stripe--text 5)
+    (+test-stripe--errors '(0 error) '(3 warning))
+    (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks)))
+                   '((1 1 error) (3 3 warning))))
+    (+test-clear-messages)
+    (+my/stripe--render (selected-window))
+    (should (= (+test-messages "Stripe:") 0))
+    (let ((overlays (+test-stripe--row-overlays)))
+      (should (equal (+test-stripe--cell-color (overlay-get (car overlays) 'before-string))
+                     (+test-stripe--color 'error))))))
+
 (ert-deftest stripe/marks-lsp-hints-are-suggestions ()
   "lsp-mode gives flycheck its hints (severity 4) as `info', tagged ones
 (unnecessary, deprecated) as levels of their own of the same severity."
