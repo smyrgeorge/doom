@@ -11,6 +11,11 @@
 (ert-deftest e2e-agent-ui/a-question-waiting-brought-into-view ()
   (let* ((session (generate-new-buffer "Claude Agent @ e2e"))
          (agent-ui-display-function #'agent-ui-display-canvas)
+         ;; What the turn's end does, alone: a question shown taking the focus
+         ;; once Emacs is idle (test-agent-ui-agent.el) off, as config.el can.
+         ;; The tests run while Emacs has been idle for a while, so its timer
+         ;; was due at once and fired in the redisplay below.
+         (agent-ui-focus-questions nil)
          (on-event nil))
     (unwind-protect
         (cl-letf (((symbol-function 'agent-ui--sessions) (lambda () (list session)))

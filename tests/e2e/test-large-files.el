@@ -3,6 +3,8 @@
 ;; very long lines (an agent-shell transcript's kind) and one of 60,000 short
 ;; lines, each opened and drawn within a second, light, with its notice laid
 ;; over the window (the banner's frame).
+;; run.sh: alone. Its seconds are the clock's: beside other GUI Emacsen (on
+;; GitHub's macOS runner, 3 cores, 4 at once) a 0.07 s opening took over 1 s.
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/editor")
 (require 'so-long)

@@ -1999,11 +1999,14 @@ its width there."
     (should (<= 6 (+my/treemacs--count-dirs wide 15) 30))))
 
 (defmacro +test-treemacs-with-locked (dir &rest body)
-  "BODY with folder DIR unreadable (mode 000), readable again after."
+  "BODY with folder DIR unreadable (mode 000), readable again after. Skipped
+where it stays readable: as root (the Linux tests, in Docker), any folder is."
   (declare (indent 1))
   `(progn
      (set-file-modes ,dir #o000)
-     (unwind-protect (progn ,@body)
+     (unwind-protect
+         (progn (skip-unless (not (file-accessible-directory-p ,dir)))
+                ,@body)
        (set-file-modes ,dir #o755))))
 
 (ert-deftest treemacs/count-dirs-skips-unreadable-folders ()

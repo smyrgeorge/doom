@@ -1339,13 +1339,15 @@ place), the page written for views to come."
       (with-temp-buffer
         (should-not (+my/context-actions-pdf)))
       (with-current-buffer buffer
-        (should (equal (mapcar #'butlast (+my/context-actions-pdf))
-                       '(("PDF" "Open in Preview") ("PDF" "Print..."))))
-        (setq-local +my/pdf--selection "some text")
-        (should (equal (mapcar #'butlast (+my/context-actions-pdf))
-                       '(("PDF" "Copy") ("PDF" "Search the PDF for it") ("PDF" "Search the web for it")
-                         ("Claude" "Explain selection with Claude") ("Claude" "Add selection to Claude prompt")
-                         ("PDF" "Open in Preview") ("PDF" "Print..."))))
+        ;; As on macOS: on Linux the app is named otherwise (below).
+        (+test-on-macos
+          (should (equal (mapcar #'butlast (+my/context-actions-pdf))
+                         '(("PDF" "Open in Preview") ("PDF" "Print..."))))
+          (setq-local +my/pdf--selection "some text")
+          (should (equal (mapcar #'butlast (+my/context-actions-pdf))
+                         '(("PDF" "Copy") ("PDF" "Search the PDF for it") ("PDF" "Search the web for it")
+                           ("Claude" "Explain selection with Claude") ("Claude" "Add selection to Claude prompt")
+                           ("PDF" "Open in Preview") ("PDF" "Print...")))))
         (should (seq-every-p (lambda (action) (functionp (nth 2 action))) (+my/context-actions-pdf)))
         (setq-local +my/pdf--selection nil)
         ;; The app it opens in, by its name here.
