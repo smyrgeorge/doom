@@ -59,6 +59,49 @@ terminal offered to start (see STARTING), and nothing more done."
       (progn (+my/beads-init-in-terminal (+my/beads--project-root))
              nil)))
 
+;; EACH PROJECT ITS LIST
+;; beads.el named a project's list by its folder's name alone (*Beads:
+;; NAME*), and kept the list's buffer, and its folder, where bd runs: two
+;; projects of the same name (~/work/api, ~/play/api) shared one list, which
+;; showed the first one's issues, and c created issues there. A project's
+;; list is its own now: *Beads: NAME*, or where another project's list has
+;; that name, *Beads: PARENT/NAME* (else its whole path); bd run at its root.
+(defun +my/beads--list-root (&optional dir)
+  "The root of the project whose issues are listed from DIR (else
+`default-directory'): the folder with .beads/ from there up, else DIR."
+  (let ((dir (or dir default-directory)))
+    (file-name-as-directory (expand-file-name (or (locate-dominating-file dir ".beads") dir)))))
+
+(defun +my/beads--list-of-p (buffer root)
+  "Whether BUFFER is the issue list of ROOT's project (where it was opened:
+its folder may be bound to another for a moment)."
+  (with-current-buffer buffer
+    (and (derived-mode-p 'beads-list-mode)
+         (equal (+my/beads--list-root (or beads-list--project-root default-directory)) root))))
+
+(defun +my/beads-list-name (root)
+  "The name of ROOT's issue list (see above): the one open for it, else the
+first of *Beads: NAME*, *Beads: PARENT/NAME* and *Beads: PATH* no buffer has."
+  (or (seq-some (lambda (buffer) (and (+my/beads--list-of-p buffer root) (buffer-name buffer)))
+                (buffer-list))
+      (let* ((dir (directory-file-name root))
+             (name (file-name-nondirectory dir))
+             (names (mapcar (lambda (name) (format "*Beads: %s*" name))
+                            (list name
+                                  (file-name-concat (file-name-nondirectory
+                                                     (directory-file-name (file-name-directory dir)))
+                                                    name)
+                                  (abbreviate-file-name dir)))))
+        (or (seq-find (lambda (name) (not (get-buffer name))) names)
+            (generate-new-buffer-name (car (last names)))))))
+
+(defun +my/beads-list-name-a (&rest _)
+  "`beads-project-buffer-name': the list's name for the project of
+`default-directory' (see above)."
+  (+my/beads-list-name (+my/beads--list-root)))
+
+(advice-add 'beads-project-buffer-name :override #'+my/beads-list-name-a)
+
 ;; PANES
 ;; Issues are an application (config/tiling.el's TILING FIRST): SPC o i
 ;; opens the list in a new pane where tiling puts it (its pane, shown
@@ -75,6 +118,10 @@ terminal offered to start (see STARTING), and nothing more done."
           (switch-to-buffer-obey-display-actions t))
       ;; All of beads.el: its list uses beads.el's own (`beads-show-hint').
       (require 'beads)
+      ;; Its list's bd run at its root (see EACH PROJECT ITS LIST).
+      (when-let* ((list (get-buffer (+my/beads-list-name root))))
+        (with-current-buffer list
+          (setq default-directory root)))
       (beads-list))))
 
 (defun +my/beads--issue-window ()

@@ -882,6 +882,58 @@ and the issue at point are its own, the other refreshed after it."
         (search-forward "Crash")
         (should (equal (alist-get 'id (beads-list--get-issue-at-point)) bug))))))
 
+;; doom-o5t.6
+(ert-deftest beads/bd-same-named-projects-each-its-list ()
+  "Two projects of the same folder name: two lists, each with its own issues
+when opened and after gr, bd run at its root (an issue made from it is its
+project's); SPC o i again, the same list (beads.el named a list by the
+folder's name only: one list, the first project's issues)."
+  (+test-beads-with-project
+    (let* ((name (file-name-nondirectory (directory-file-name repo)))
+           (other (file-name-as-directory
+                   (expand-file-name name (file-truename (make-temp-file (+test-tmp-file "beads-elsewhere-") t)))))
+           (here (+test-beads--create "Here"))
+           (ids (lambda (list) (with-current-buffer list (sort (mapcar #'car tabulated-list-entries) #'string<))))
+           elsewhere first second)
+      (make-directory other)
+      (let ((default-directory other))
+        (+test-beads--run "git" "init" "-q")
+        (+test-beads--run "bd" "init" "--quiet" "--prefix" "u")
+        (setq elsewhere (+test-beads--create "Elsewhere")))
+      (+my/beads-project)
+      (setq first (window-buffer (selected-window)))
+      ;; From a file of the other project.
+      (let ((file (find-file-noselect (expand-file-name "README" other))))
+        (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) other)))
+          (switch-to-buffer file)
+          (+my/beads-project)
+          (setq second (window-buffer (selected-window)))
+          (switch-to-buffer file)
+          (+my/beads-project)
+          (should (eq (window-buffer (selected-window)) second)))
+        (kill-buffer file))
+      (should (with-current-buffer second (derived-mode-p 'beads-list-mode)))
+      (should-not (eq first second))
+      (should (equal (buffer-name first) (format "*Beads: %s*" name)))
+      (should (equal (buffer-name second)
+                     (format "*Beads: %s/%s*" (file-name-nondirectory (directory-file-name (file-name-directory (directory-file-name other)))) name)))
+      (should (equal (buffer-local-value 'default-directory first) repo))
+      (should (equal (buffer-local-value 'default-directory second) other))
+      (should (equal (funcall ids first) (list here)))
+      (should (equal (funcall ids second) (list elsewhere)))
+      ;; gr in each.
+      (dolist (list (list first second))
+        (with-current-buffer list (beads-list-refresh t)))
+      (should (equal (funcall ids first) (list here)))
+      (should (equal (funcall ids second) (list elsewhere)))
+      ;; c (bd run where the list is): in its own project.
+      (let ((new (with-current-buffer second (+test-beads--create "Made from the second list"))))
+        (should (string-prefix-p "u-" new))
+        (with-current-buffer second (beads-list-refresh t))
+        (with-current-buffer first (beads-list-refresh t))
+        (should (equal (funcall ids second) (sort (list elsewhere new) #'string<)))
+        (should (equal (funcall ids first) (list here)))))))
+
 ;; ====== THE PLACE KEPT ======
 
 (defun +test-beads--ids-at (window)
