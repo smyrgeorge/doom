@@ -617,11 +617,27 @@ error saying what's wrong. Its :type a string, as JSON gives it."
                                         (expand-file-name (or agent-ui-file-directory default-directory))))))))))
       (agent-ui--prepared element))))
 
+(defun agent-ui--source-dir (element)
+  "ELEMENT with its source's dir a full name, while `agent-ui-file-directory'
+is known (a request: the agent's directory; a project panel's root): a
+relative one under it, none it. Its source ran in its canvas's directory
+\(that of whatever buffer was current when the canvas was made)."
+  (let ((source (plist-get element :source)))
+    (if (and agent-ui-file-directory
+             (agent-ui--plist-p source)
+             (or (null (plist-get source :dir)) (stringp (plist-get source :dir))))
+        (plist-put (copy-sequence element) :source
+                   (plist-put (copy-sequence source) :dir
+                              (file-name-as-directory
+                               (expand-file-name (or (plist-get source :dir) ".") agent-ui-file-directory))))
+      element)))
+
 (defun agent-ui--prepared (element)
-  "ELEMENT as it's kept: its type's :prepare, if it has one, its panel's
-children's too."
+  "ELEMENT as it's kept: its type's :prepare, if it has one, its source's
+dir (`agent-ui--source-dir'); its panel's children's too."
   (let* ((type (agent-ui-type (plist-get element :type)))
          (element (if-let* ((fn (agent-ui-type-prepare type))) (funcall fn element) element))
+         (element (agent-ui--source-dir element))
          (children (plist-get element :children)))
     (if (and children (listp children))
         (plist-put (copy-sequence element) :children

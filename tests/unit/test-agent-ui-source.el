@@ -236,7 +236,9 @@ still running, its exit and patch not there; once run, done."
 (ert-deftest agent-ui-source/in-a-request ()
   (+test-ausrc
     (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "req-dir-") t)))
+           ;; As `agent-ui-request' has them.
            (agent-ui--request-cwd dir)
+           (agent-ui-file-directory dir)
            (reply (agent-ui-do "show" nil
                                '(:id "p" :type "text" :text "" :source (:command "pwd" :tail 1))
                                canvas)))
@@ -247,6 +249,34 @@ still running, its exit and patch not there; once run, done."
                      (file-truename dir)))
       (let ((listed (aref (plist-get (agent-ui-do "list" nil nil canvas) :elements) 0)))
         (should (equal (plist-get (plist-get listed :source) :exit) 0))))))
+
+(ert-deftest agent-ui-source/a-panels-children-in-the-agents-directory ()
+  "Through a request from the agent's directory: a panel's child's source
+runs there, a relative dir under it, an absolute one as it is (they ran in
+the canvas's directory, whatever buffer's it was when it was made: /usr/,
+/usr/sub/)."
+  (+test-ausrc
+    (let* ((cwd (file-name-as-directory (make-temp-file (+test-tmp-file "agent-cwd-") t)))
+           (other (file-name-as-directory (make-temp-file (+test-tmp-file "elsewhere-") t)))
+           (folder (make-temp-file (+test-tmp-file "req-") t)))
+      (make-directory (expand-file-name "sub" cwd))
+      (with-current-buffer canvas (setq default-directory other))
+      (with-temp-file (expand-file-name "request" folder)
+        (insert (format "show\n\n\n%s\n" cwd)))
+      (with-temp-file (expand-file-name "payload" folder)
+        (insert (json-serialize
+                 (agent-ui-to-json
+                  `(:id "p" :type "panel"
+                   :children ((:id "here" :type "text" :text "" :source (:command "pwd" :tail 1))
+                              (:id "sub" :type "text" :text "" :source (:command "pwd" :tail 1 :dir "sub"))
+                              (:id "abs" :type "text" :text "" :source (:command "pwd" :tail 1 :dir ,other))))))))
+      (let ((agent-ui-canvas-function (lambda (_session _cwd) canvas)))
+        (agent-ui-request folder))
+      (dolist (id '("here" "sub" "abs")) (+test-ausrc-ended id))
+      (cl-flet ((ran-in (id) (file-truename (file-name-as-directory (plist-get (agent-ui-get id) :text)))))
+        (should (equal (ran-in "here") (file-truename cwd)))
+        (should (equal (ran-in "sub") (file-truename (expand-file-name "sub/" cwd))))
+        (should (equal (ran-in "abs") (file-truename other)))))))
 
 ;; ====== THE SKILL ======
 

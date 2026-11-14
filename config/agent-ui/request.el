@@ -88,11 +88,8 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
      (let ((element (agent-ui--payload-object payload "show")))
        (when (and id (not (string-empty-p id)))
          (setq element (plist-put (copy-sequence element) :id id)))
-       ;; A source runs in the agent's directory, unless it says.
-       (let ((source (plist-get element :source)))
-         (when (and (agent-ui--plist-p source) (not (plist-get source :dir)) agent-ui--request-cwd)
-           (setq element (plist-put (copy-sequence element) :source
-                                    (plist-put (copy-sequence source) :dir agent-ui--request-cwd)))))
+       ;; Its sources (a panel's children's too) run in the agent's directory
+       ;; (`agent-ui-file-directory'), unless they say.
        (let* ((id (agent-ui-show element :canvas canvas))
               (log (and (fboundp 'agent-ui-source-status)
                         (plist-get (agent-ui-source-status id :canvas canvas) :log))))
