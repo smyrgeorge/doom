@@ -26,7 +26,8 @@ transcripts' folder, kept out of git)."
   :type 'string :group 'agent-ui)
 
 (defcustom agent-ui-snapshot-width 80
-  "The width snapshots are drawn at, in columns."
+  "The width snapshots are drawn at, in columns, at most: narrower to fit
+their session's window (`agent-ui-snapshot--width')."
   :type 'natnum :group 'agent-ui)
 
 ;; ====== TEXT AS SVG ======
@@ -319,14 +320,27 @@ the theme's colours; text in the default face as the terminal has it."
 
 ;; ====== A SNAPSHOT ======
 
+(defun agent-ui-snapshot--width (canvas)
+  "The width a snapshot of CANVAS's is drawn at: `agent-ui-snapshot-width',
+narrower to fit its session's window, its padding too (agent-shell scales
+an image down to its window: drawn at 80 columns, a 40-column session showed
+it at half size); 20 at least."
+  (let* ((session (buffer-local-value 'agent-ui--session-buffer (agent-ui--buffer canvas)))
+         (window (and (buffer-live-p session) (get-buffer-window session t))))
+    (if window
+        ;; A column short, as the canvas, and its padding's two.
+        (max 20 (min agent-ui-snapshot-width (- (window-max-chars-per-line window) 3)))
+      agent-ui-snapshot-width)))
+
 (cl-defun agent-ui-snapshot (id &key canvas directory)
-  "Save element ID of CANVAS as it's drawn, an SVG file in DIRECTORY's
+  "Save element ID of CANVAS as it's drawn (at `agent-ui-snapshot--width'),
+an SVG file in DIRECTORY's
 `agent-ui-snapshot-directory' (DIRECTORY: the agent's, else the current
 one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
   (let* ((element (agent-ui-get id :canvas canvas))
          (frame (selected-frame))
          ;; Still: its buttons would do nothing in the conversation.
-         (ctx (agent-ui-context :width agent-ui-snapshot-width :graphic (display-graphic-p frame)
+         (ctx (agent-ui-context :width (agent-ui-snapshot--width canvas) :graphic (display-graphic-p frame)
                                 :char-width (if (display-graphic-p frame) (frame-char-width frame) 8)
                                 :line-height (if (display-graphic-p frame) (frame-char-height frame) 17)
                                 :still t))

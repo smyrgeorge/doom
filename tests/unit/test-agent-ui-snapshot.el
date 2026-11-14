@@ -139,6 +139,35 @@
                             (agent-ui-error-message
                              (should-error (agent-ui-snapshot "nope" :directory dir) :type 'agent-ui-error))))))
 
+(ert-deftest agent-ui-snapshot/as-wide-as-its-session ()
+  "Taken from a 40-column session: drawn to fit it, padding included, not
+at 80 columns (agent-shell scales it to its window: its text at half
+size); without a session's window, at 80."
+  (+test-aush
+    (let ((session (generate-new-buffer "Claude Agent @ snap"))
+          (text (mapconcat (lambda (i) (format "word%d" i)) (number-sequence 1 40) " ")))
+      (unwind-protect
+          (save-window-excursion
+            (agent-ui-show (list :id "long" :type "text" :text text))
+            (cl-flet ((svg-columns ()
+                        (let ((svg (+test-aush-read (plist-get (agent-ui-snapshot "long" :directory dir) :file))))
+                          (string-match "<svg[^>]* width=\"\\([0-9]+\\)\"" svg)
+                          ;; A terminal's cells: 8 pixels wide.
+                          (/ (string-to-number (match-string 1 svg)) 8))))
+              (should (> (svg-columns) 70))
+              (with-current-buffer canvas (setq agent-ui--session-buffer session))
+              (delete-other-windows)
+              (switch-to-buffer session)
+              (split-window-right 40)
+              (should (<= (window-max-chars-per-line (get-buffer-window session)) 40))
+              (should (<= (svg-columns) (window-max-chars-per-line (get-buffer-window session))))
+              (should (> (svg-columns) 30))
+              ;; Its window gone: at 80 again.
+              (delete-window (get-buffer-window session))
+              (switch-to-buffer "*scratch*")
+              (should (> (svg-columns) 70))))
+        (kill-buffer session)))))
+
 (ert-deftest agent-ui-snapshot/no-buttons-in-it ()
   "A snapshot is still: an element's actions, a table's row buttons, a
 choice's note and Answer left out (they'd do nothing in an image); the
