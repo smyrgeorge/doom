@@ -104,7 +104,7 @@ In the pane itself, close it."
       (+my/git-diff-pane--close)
     (let* ((file (or (+my/git-diff-pane--file)
                      (user-error "Not a file in a git repository")))
-           (line (line-number-at-pos))
+           (line (line-number-at-pos nil t)) ; in the file, narrowed or not
            (column (current-column))
            (magit-display-buffer-function #'+my/git-diff-pane--display))
       (magit-diff-buffer-file)          ; selects the pane

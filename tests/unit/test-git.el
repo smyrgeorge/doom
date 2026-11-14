@@ -223,6 +223,23 @@ summary magit starts the diff with)."
           (should range)
           (should (<= (car range) (cdr case) (+ (car range) (cadr range)))))))))
 
+(ert-deftest git/pane-cursor-on-the-hunk-of-the-line-narrowed ()
+  "In a narrowed buffer: the hunk of the line you're on, counted from the
+file's start, not the narrowing's."
+  (+test-git-with-repo
+    (+test-git--write "a.txt" (+test-git--lines 30 '(6 25)))
+    (let ((buffer (+test-git--visit "a.txt" 20)))
+      (narrow-to-region (point) (point-max))
+      (forward-line 5)                  ; line 25, the 6th of the narrowing
+      (should (= (line-number-at-pos nil t) 25))
+      (+my/git-diff-pane)
+      (with-current-buffer (window-buffer (selected-window))
+        (let ((range (+test-git--hunk-at-point)))
+          (should range)
+          (should (<= (car range) 25 (+ (car range) (cadr range))))))
+      (with-current-buffer buffer
+        (should (buffer-narrowed-p))))))
+
 (defun +test-git--stat-width ()
   "The widest line of the diff's --stat summary (in the current buffer): the
 lines after \"N file changed\" down to the first empty one."
