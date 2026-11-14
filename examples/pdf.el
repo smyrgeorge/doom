@@ -87,6 +87,13 @@ RGB), in points from the bottom left of a US Letter page.")
 (defconst +my/example-pdf--outline '(("Sales" . 1) ("Costs" . 2) ("Outlook" . 3))
   "The report's outline: (TITLE . PAGE).")
 
+(defvar +my/example-pdf--buffers nil
+  "The example's PDFs (buffers), while one is open.")
+
+(defvar +my/example-pdf--dark nil
+  "Dark pages as they were before the example's PDFs opened (taken while
+none is: a second run starts with them on), put back once the last closes.")
+
 ;; ====== CODE ======
 
 (defun +my/example-pdf--string (text)
@@ -200,13 +207,18 @@ didn't open so (15 s at most); the example's message again."
                             (+my/pdf-fit-page))))
                       (message "%s" +my/example-pdf--message)))))))))
 
+(defun +my/example-pdf--open-p ()
+  "Non-nil while one of the example's PDFs is open."
+  (setq +my/example-pdf--buffers (seq-filter #'buffer-live-p +my/example-pdf--buffers)))
+
 (defun +my/example-pdf ()
   "Example: a PDF in WebKit, its pages dark (deleted once closed). See
 examples/pdf.el."
   (interactive)
   (let* ((dir (+my/example-folder "pdf"))
-         (file (+my/example-pdf--write (expand-file-name "report.pdf" dir)))
-         (dark +my/pdf-dark-pages))
+         (file (+my/example-pdf--write (expand-file-name "report.pdf" dir))))
+    (unless (+my/example-pdf--open-p)
+      (setq +my/example-pdf--dark +my/pdf-dark-pages))
     ;; Dark and a whole page from its first frame: as the page starts (its
     ;; settings, a place kept for it), not turned so once it's open, a light
     ;; page flashing first.
@@ -216,13 +228,16 @@ examples/pdf.el."
     (+my/example-alone)
     (find-file file)
     (let ((buffer (current-buffer)))
+      (push buffer +my/example-pdf--buffers)
       (+my/example-pdf--dark buffer)
       (+my/example-delete-when-closed
        dir (list buffer)
-       ;; After the PDF's own closing (which keeps its place and settings).
+       ;; After the PDF's own closing (which keeps its place and settings;
+       ;; its views closing may run this before the buffer's gone).
        (lambda ()
          (run-at-time 0 nil (lambda ()
-                              (setq +my/pdf-dark-pages dark)
+                              (unless (remq buffer (+my/example-pdf--open-p))
+                                (setq +my/pdf-dark-pages +my/example-pdf--dark))
                               (+my/pdf--forget-place file)))))
       (message "%s" +my/example-pdf--message)
       buffer)))

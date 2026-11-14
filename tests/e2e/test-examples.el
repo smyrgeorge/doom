@@ -78,6 +78,28 @@ kept, dark pages as they were."
       (should (eq +my/pdf-dark-pages dark))
       (should-not (assoc (abbreviate-file-name file) (+my/pdf--read-places))))))
 
+(ert-deftest e2e-examples/pdf-twice-dark-pages-put-back ()
+  "Run twice, closed in either order: dark pages as they were before the
+first, off or on (not as the second found them, on)."
+  (+test-needs-webkit)
+  (skip-unless +test-examples--pdfjs)
+  (let ((saved +my/pdf-dark-pages))
+    (unwind-protect
+        (pcase-dolist (`(,dark . ,order) '((nil . first) (nil . last) (t . first)))
+          (+test-with-reset
+            (setq +my/pdf-dark-pages dark)
+            (let* ((dark-p (lambda (buffer)
+                             (lambda () (with-current-buffer buffer (plist-get (+my/pdf--state) :dark)))))
+                   (a (+my/example-pdf))
+                   (_ (should (+test-wait-for (funcall dark-p a) 20)))
+                   (b (+my/example-pdf)))
+              (should (+test-wait-for (funcall dark-p b) 20))
+              (dolist (buffer (if (eq order 'first) (list a b) (list b a)))
+                (kill-buffer buffer)
+                (+test-sleep 0.3))
+              (should (eq +my/pdf-dark-pages dark)))))
+      (setq +my/pdf-dark-pages saved))))
+
 (ert-deftest e2e-examples/image-beside-its-head ()
   "The picture in the image viewer, its version in git's HEAD on its left,
 both with the toolbar; closed: the HEAD's pane with it, the repository gone."
