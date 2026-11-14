@@ -620,9 +620,9 @@ question; none waiting: said."
 (ert-deftest agent-ui-agent/a-question-takes-the-focus ()
   "A question shown: once Emacs is idle a moment, its pane selected, the
 cursor on it. Not another element, not one coming back with its session,
-not with the option off (the library's own default)."
+not with the option off (on: its own default)."
   (should (memq #'agent-ui--focus-question-h (default-value 'agent-ui-shown-functions)))
-  (should-not (default-value 'agent-ui-focus-questions))
+  (should (eq (default-value 'agent-ui-focus-questions) t))
   (+test-aua
     (let* ((session (+test-aua-session "Claude Agent @ focus" "/tmp/focus/"))
            (name (agent-ui--session-name session))
@@ -660,10 +660,10 @@ not with the option off (the library's own default)."
 (ert-deftest agent-ui-agent/answered-the-question-goes ()
   "An answer sent: the question leaves its canvas; a canvas left empty is
 closed and killed, the cursor back in the session. Beside other elements,
-they stay; a plan approved goes too (doom-q49); the option off (the
-library's own default), all stay."
+they stay; a plan approved goes too (doom-q49); the option off (on: its
+own default), all stay."
   (should (memq #'agent-ui--close-answered-h (default-value 'agent-ui-changed-hook)))
-  (should-not (default-value 'agent-ui-close-answered))
+  (should (eq (default-value 'agent-ui-close-answered) t))
   (+test-aua
     (let* ((session (+test-aua-session "Claude Agent @ close" "/tmp/close/"))
            (name (agent-ui--session-name session))

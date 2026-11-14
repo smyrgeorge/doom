@@ -366,21 +366,21 @@ without it, if it had one (it stayed until the next turn's end)."
 (add-to-list 'mode-line-misc-info '(:eval (agent-ui--question-mode-line)) t)
 
 ;; ====== A QUESTION TAKES THE FOCUS; ANSWERED, IT GOES ======
-;; Options (the user's choice, in config.el): a question shown (an element
-;; that asks, `agent-ui-ask-waiting-p') takes the focus: its pane selected,
-;; the cursor on it, once Emacs is idle a moment (typing in the session isn't
-;; taken over: the canvas's keys act); not a resumed session's coming back.
-;; Its answer sent (`agent-ui-ask-done-p'), it leaves its canvas; a canvas
-;; left without elements is closed: its panes, its buffer killed, the cursor
-;; back in the session.
+;; Options, both on (nil in config.el turns one off): a question shown (an
+;; element that asks, `agent-ui-ask-waiting-p') takes the focus: its pane
+;; selected, the cursor on it, once Emacs is idle a moment (typing in the
+;; session isn't taken over: the canvas's keys act); not a resumed session's
+;; coming back. Its answer sent (`agent-ui-ask-done-p'), it leaves its canvas;
+;; a canvas left without elements is closed: its panes, its buffer killed, the
+;; cursor back in the session.
 
-(defvar agent-ui-focus-questions nil
+(defvar agent-ui-focus-questions t
   "Non-nil: a question shown on a canvas takes the focus (see above).")
 
 (defvar agent-ui-focus-questions-delay 1.0
   "Seconds Emacs is idle before a question shown takes the focus.")
 
-(defvar agent-ui-close-answered nil
+(defvar agent-ui-close-answered t
   "Non-nil: a question answered leaves its canvas, a canvas left empty is
 killed (see above).")
 

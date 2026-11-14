@@ -338,7 +338,8 @@ The agent asks on a canvas of its own (`--canvas ask`: `Agent UI: SESSION / ask`
   buffer killed, and the cursor goes back to the session. Beside other elements, they stay. A plan you approved goes
   too: the agent shows its steps again as an ordinary checklist, ticked as it works.
 
-In `config.el`: `(setq agent-ui-focus-questions t agent-ui-close-answered t)` (Agent UI's own default: neither).
+Both are on; in `config.el`, `(setq agent-ui-focus-questions nil)` keeps the focus where it is, and
+`(setq agent-ui-close-answered nil)` keeps answered questions on their canvas.
 
 When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, a `form`, a
 `rank`, a `slider` to set, a `compare`, a plan to approve, hunks to accept, rows to pick in a `table`, `files` or `issues`, chips to pick in `tags`, a panel's child too), you see it:
