@@ -14,12 +14,30 @@
 ;; With tiling (config/tiling), the strategy places it.
 ;; Another file's diff takes the place of the one shown: the pane keeps one
 ;; diff, its only tab (magit makes a buffer per file), so q closes it.
+;; The pane is found by that diff, marked as SPC g d's (a commit limited to a
+;; file, from its log, is a diff of that file too, not the pane): the pane
+;; showing it, or having it as a tab (a file opened over it, RET), or hidden
+;; (tiling's fullscreen: brought to the front).
+(defvar-local +my/git-diff-pane--diff nil
+  "Non-nil in the diff buffer SPC g d shows (see above).")
+(put '+my/git-diff-pane--diff 'permanent-local t)
+
+(defun +my/git-diff-pane--buffer ()
+  "The diff buffer SPC g d shows, or nil."
+  (seq-find (lambda (buffer) (buffer-local-value '+my/git-diff-pane--diff buffer))
+            (buffer-list)))
+
 (defun +my/git-diff-pane--window ()
-  "Return the window in this frame showing a single-file magit diff."
-  (seq-find (lambda (win)
-              (with-current-buffer (window-buffer win)
-                (and (derived-mode-p 'magit-diff-mode) magit-buffer-diff-files)))
-            (window-list)))
+  "The window of this frame showing SPC g d's diff, or nil."
+  (when-let* ((buffer (+my/git-diff-pane--buffer)))
+    (get-buffer-window buffer)))
+
+(defun +my/git-diff-pane--holder (buffer)
+  "The window of this frame showing BUFFER, else one having it as a tab (a
+file shown over it); nil if none."
+  (or (get-buffer-window buffer)
+      (seq-find (lambda (window) (assq buffer (window-prev-buffers window)))
+                (window-list))))
 
 (defun +my/git-diff-pane--file ()
   "The current file, relative to its repository, or nil."
@@ -28,43 +46,51 @@
        (magit-toplevel)
        (magit-file-relative-name)))
 
-(defun +my/git-diff-pane--switch (window buffer)
-  "Show BUFFER, another file's diff, in WINDOW, the pane, in place of the one
-it shows (see above): that one taken off its buffers (its tabs) and killed
-unless shown elsewhere; quitting WINDOW closes it as before. Return WINDOW."
-  (let ((old (window-buffer window)))
-    (set-window-buffer window buffer)
-    (unless (eq old buffer)
-      (let ((quit (window-parameter window 'quit-restore)))
-        (when (eq (nth 3 quit) old)
-          (set-window-parameter window 'quit-restore
-                                (append (seq-take quit 3) (list buffer) (nthcdr 4 quit)))))
-      (set-window-prev-buffers window (seq-remove (lambda (entry) (eq (car entry) old))
-                                                  (window-prev-buffers window)))
-      (set-window-next-buffers window (remq old (window-next-buffers window)))
-      (set-window-parameter window 'tab-line-buffers
-                            (remq old (window-parameter window 'tab-line-buffers)))
-      (unless (get-buffer-window old t)
-        (kill-buffer old)))
-    window))
+(defun +my/git-diff-pane--switch (window buffer old)
+  "Show BUFFER, another file's diff, in WINDOW, the pane, in place of OLD, the
+diff it shows or has as a tab (see above): OLD taken off its buffers (its
+tabs) and killed, unless shown elsewhere (then no longer the pane's);
+quitting WINDOW closes it as before. Return WINDOW."
+  (set-window-buffer window buffer)
+  (let ((quit (window-parameter window 'quit-restore)))
+    (when (eq (nth 3 quit) old)
+      (set-window-parameter window 'quit-restore
+                            (append (seq-take quit 3) (list buffer) (nthcdr 4 quit)))))
+  (set-window-prev-buffers window (seq-remove (lambda (entry) (eq (car entry) old))
+                                              (window-prev-buffers window)))
+  (set-window-next-buffers window (remq old (window-next-buffers window)))
+  (set-window-parameter window 'tab-line-buffers
+                        (remq old (window-parameter window 'tab-line-buffers)))
+  (if (get-buffer-window old t)
+      (with-current-buffer old (setq +my/git-diff-pane--diff nil))
+    (kill-buffer old))
+  window)
+
+(defun +my/git-diff-pane--display (buffer)
+  "Show BUFFER, the diff SPC g d asked magit for, in the pane (see above): the
+one holding its diff, else a new one, on the right. Its window."
+  (let* ((old (or (+my/git-diff-pane--buffer) buffer))
+         (window (or (+my/git-diff-pane--holder old)
+                     ;; Hidden (brought to the front by tiling), or a new pane.
+                     (display-buffer old '((display-buffer-in-direction)
+                                           (direction . right))))))
+    (with-current-buffer buffer
+      (setq +my/git-diff-pane--diff t))
+    (if (eq old buffer)
+        (progn (set-window-buffer window buffer) window)
+      (+my/git-diff-pane--switch window buffer old))))
 
 (defun +my/git-diff-pane ()
   "Show the current file's git diff in a pane on the right and focus it.
 In the pane itself, close it."
   (interactive)
-  (if (eq (selected-window) (+my/git-diff-pane--window))
+  (if (buffer-local-value '+my/git-diff-pane--diff (window-buffer))
       (if (one-window-p) (quit-window) (delete-window))
     (let* ((file (or (+my/git-diff-pane--file)
                      (user-error "Not a file in a git repository")))
            (line (line-number-at-pos))
            (column (current-column))
-           (win (+my/git-diff-pane--window))
-           (magit-display-buffer-function
-            (lambda (buffer)
-              (if (window-live-p win)
-                  (+my/git-diff-pane--switch win buffer)
-                (display-buffer buffer '((display-buffer-in-direction)
-                                         (direction . right)))))))
+           (magit-display-buffer-function #'+my/git-diff-pane--display))
       (magit-diff-buffer-file)          ; selects the pane
       ;; Put the cursor on the hunk of the line we came from. magit tries this
       ;; itself but gives up when the diff starts with a --stat summary.
@@ -77,7 +103,7 @@ In the pane itself, close it."
 (defun +my/git-diff-pane-escape ()
   "Esc in the diff pane: close it. In other magit diffs, Esc as usual."
   (interactive)
-  (if (eq (selected-window) (+my/git-diff-pane--window))
+  (if (buffer-local-value '+my/git-diff-pane--diff (window-buffer))
       (+my/git-diff-pane)
     (call-interactively #'doom/escape)))
 

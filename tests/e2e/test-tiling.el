@@ -458,6 +458,44 @@ diff (the others killed); q closes the pane."
         (should-not (window-live-p pane))
         (should (= (length (+my/tiling--panes)) 1))))))
 
+(defun +test-tiling--repo (dir &rest names)
+  "A git repo in DIR with files NAMES committed (two lines each), then a
+line added to each (not committed)."
+  (let ((files (mapcar (lambda (name) (expand-file-name name dir)) names)))
+    (+test-tiling--git "init" "-q")
+    (dolist (file files)
+      (with-temp-file file (insert "one\ntwo\n")))
+    (+test-tiling--git "add" ".")
+    (+test-tiling--git "commit" "-qm" "files")
+    (dolist (file files)
+      (with-temp-file file (insert "one\ntwo\nthree\n")))
+    files))
+
+(ert-deftest e2e-tiling/file-diff-pane-found-under-a-tab ()
+  "RET in the diff (its file a tab over it), then SPC g d on another file from
+the first pane: that pane shows its diff, the file's tab kept; no third pane."
+  (+test-tiling
+    (let* ((dir (+test-tiling--dir))
+           (default-directory dir)
+           (left (selected-window))
+           (files (+test-tiling--repo dir "f.txt" "g.txt")))
+      (find-file (car files))
+      (+my/git-diff-pane)
+      (let ((pane (selected-window)))
+        (set-buffer (window-buffer pane))
+        (goto-char (point-min))
+        (should (search-forward "+three" nil t))
+        (call-interactively #'magit-diff-visit-file)
+        (should (eq (window-buffer pane) (get-file-buffer (car files))))
+        (select-window left)
+        (find-file (cadr files))
+        (+my/git-diff-pane)
+        (should (= (length (+my/tiling--panes)) 2))
+        (should (eq (selected-window) pane))
+        (should (equal (buffer-local-value 'magit-buffer-diff-files (window-buffer pane)) '("g.txt")))
+        (should (seq-set-equal-p (+test-tiling--tabs pane)
+                                 (list "f.txt" (buffer-name (window-buffer pane)))))))))
+
 (ert-deftest e2e-tiling/magit-status-and-its-buffers ()
   "SPC g g from a file: magit's status in a new pane; its log in that pane; a
 commit from the log in a new pane, q closes it; RET on a file in the status:
@@ -719,6 +757,25 @@ with SPC w w; tall again, every pane a window, laid out tall, each its tabs."
         (should (equal (+test-tiling--layout) '("a.txt" "b.txt" "c.txt")))
         (should (equal (+test-tiling--tabs (nth 1 (+my/tiling--panes))) '("a.txt" "b.txt")))
         (should (equal (buffer-name (window-buffer (selected-window))) "b.txt"))))))
+
+(ert-deftest e2e-tiling/fullscreen-file-diff-pane-reused ()
+  "Fullscreen: SPC g d on a second file brings the diff's hidden pane to the
+front, showing that file's diff; no pane more."
+  (+test-tiling-fullscreen
+    (let* ((dir (+test-tiling--dir))
+           (default-directory dir)
+           (files (+test-tiling--repo dir "f.txt" "g.txt")))
+      (find-file (car files))
+      (+my/git-diff-pane)
+      (let ((diff (window-buffer)))
+        (should (= (length (+my/tiling--slots)) 2))
+        (+my/tiling-next-pane)
+        (should (equal (+test-tiling--shown) "f.txt"))
+        (find-file (cadr files))
+        (+my/git-diff-pane)
+        (should (= (length (+my/tiling--slots)) 2))
+        (should (equal (buffer-local-value 'magit-buffer-diff-files (window-buffer)) '("g.txt")))
+        (should-not (buffer-live-p diff))))))
 
 (ert-deftest e2e-tiling/fullscreen-the-last-tab-closed-shows-the-next ()
   "Cmd+W on the last tab of the pane on the screen: the next one shown; a file

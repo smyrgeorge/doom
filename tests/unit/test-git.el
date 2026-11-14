@@ -1,7 +1,8 @@
 ;;; tests/unit/test-git.el -*- lexical-binding: t; -*-
 ;; config/git.el, config/git/diff-pane.el: SPC g d shows the current file's git diff in a pane on the
 ;; right (focused, on the hunk of the line you were on); from another file it
-;; switches the pane to that one; in the pane SPC g d, q or Esc closes it; it
+;; switches the pane to that one (the pane found by its diff, marked: shown,
+;; or a tab under a file); in the pane SPC g d, q or Esc closes it; it
 ;; refreshes when the file is saved. Real git and magit in temp repos, with a
 ;; temp HOME and global gitconfig (the user's are never read).
 
@@ -134,7 +135,8 @@ window on *scratch*, and again after (the repo's buffers killed)."
         (should-not (+my/git-diff-pane--file))))))
 
 (ert-deftest git/window-is-a-single-file-diff ()
-  "The pane: a window showing a magit diff of files; not a whole-repo diff."
+  "The pane: the window showing SPC g d's diff; not another magit diff (the
+whole repo's)."
   (+test-git-with-repo
     (+test-git--write "a.txt" (+test-git--lines 30 '(3)))
     (should-not (+my/git-diff-pane--window))
@@ -307,6 +309,65 @@ one before."
         (should (buffer-live-p diff))
         (should (eq (window-buffer) diff))
         (should (equal (+test-git--diff-buffers) (list diff)))))))
+
+(ert-deftest git/pane-under-a-file-reused ()
+  "A file shown over the diff in its pane (as RET there): SPC g d on another
+file from the code's window shows its diff in that pane, the file kept."
+  (+test-git-with-repo
+    (+test-git--write "a.txt" (+test-git--lines 30 '(2)))
+    (+test-git--write "b.txt" (+test-git--lines 30 '(9)))
+    (let ((code (selected-window))
+          (a (expand-file-name "a.txt"))
+          (b (expand-file-name "b.txt")))
+      (+test-git--visit a 2)
+      (+my/git-diff-pane)
+      (let ((pane (selected-window))
+            (diff (window-buffer)))
+        (switch-to-buffer (find-file-noselect a))
+        (should-not (+my/git-diff-pane--window))
+        (select-window code)
+        (+test-git--visit b 9)
+        (+my/git-diff-pane)
+        (should (= (length (window-list)) 2))
+        (should (eq (selected-window) pane))
+        (should (equal (+test-git--pane-files) '("b.txt")))
+        (should-not (buffer-live-p diff))
+        (should (assq (get-file-buffer a) (window-prev-buffers pane)))))))
+
+(ert-deftest git/a-commit-of-a-file-is-not-the-pane ()
+  "A commit limited to a file (as from its log) is a diff of that file, not
+the pane: Esc there is Doom's, nothing closed; SPC g d opens a pane of its
+own, the commit still shown."
+  (+test-git-with-repo
+    (+test-git--write "a.txt" (+test-git--lines 30 '(4)))
+    (+test-git--git "commit" "-qam" "change a")
+    (+test-git--write "b.txt" (+test-git--lines 30 '(9)))
+    (let ((code (selected-window))
+          (escaped 0))
+      (+test-git--visit "a.txt" 4)
+      (let ((magit-display-buffer-function
+             (lambda (buffer)
+               (let ((window (split-window-right)))
+                 (set-window-buffer window buffer)
+                 window))))
+        (magit-show-commit "HEAD" nil '("a.txt")))
+      (let ((commit (window-buffer))
+            (window (selected-window)))
+        (should (derived-mode-p 'magit-revision-mode))
+        (should (equal magit-buffer-diff-files '("a.txt")))
+        (should-not (+my/git-diff-pane--window))
+        (cl-letf (((symbol-function 'doom/escape)
+                   (lambda (&rest _) (interactive) (cl-incf escaped))))
+          (+my/git-diff-pane-escape))
+        (should (= escaped 1))
+        (should (= (length (window-list)) 2))
+        (select-window code)
+        (+test-git--visit "b.txt" 9)
+        (+my/git-diff-pane)
+        (should (= (length (window-list)) 3))
+        (should-not (eq (selected-window) window))
+        (should (eq (window-buffer window) commit))
+        (should (equal (+test-git--pane-files) '("b.txt")))))))
 
 (ert-deftest git/pane-closes-from-itself ()
   "SPC g d in the pane closes it; the code's window stays."
