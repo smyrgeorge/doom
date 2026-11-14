@@ -16,6 +16,10 @@ set), new windows getting focus."
            (+my/focus-new-windows t))
        ,@body)))
 
+(defun +test-window--ends ()
+  "The command ending, as the command loop has it: `post-command-hook' run."
+  (run-hooks 'post-command-hook))
+
 (defun +test-window--fringe-mode-args (&rest bindings)
   "What config/window.el gives `fringe-mode' when loaded, BINDINGS
 \((FUNCTION . DEFINITION)...) standing in meanwhile; :none if not called."
@@ -84,12 +88,14 @@ left so, not made small again."
            (window (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))))
       (should (window-live-p window))
       (should-not (eq window old))
+      (+test-window--ends)
       (should (eq (selected-window) window))
       (should (eq (window-buffer) (get-buffer "B"))))))
 
 (ert-deftest window/new-window-below-gets-focus ()
   (+test-window
     (let ((window (display-buffer (+test-buffer "B") '(display-buffer-below-selected))))
+      (+test-window--ends)
       (should (eq (selected-window) window)))))
 
 (ert-deftest window/other-window-commands-get-focus ()
@@ -97,6 +103,7 @@ left so, not made small again."
   (+test-window
     (let ((window (display-buffer (+test-buffer "B") '(nil (inhibit-same-window . t)))))
       (should (window-live-p window))
+      (+test-window--ends)
       (should (eq (selected-window) window))
       (should (= (length (window-list)) 2)))))
 
@@ -105,16 +112,105 @@ left so, not made small again."
     (let ((window (display-buffer (+test-buffer "B")
                                   '(display-buffer-pop-up-window (dedicated . t)))))
       (should (window-dedicated-p window))
+      (+test-window--ends)
       (should (eq (selected-window) window)))))
+
+(ert-deftest window/focus-once-the-command-ends ()
+  "While the command runs, its window and buffer stay as they were (it may go
+on working in them); the new window selected once it ends, once."
+  (+test-window
+    (let* ((old (selected-window))
+           (a (current-buffer))
+           (window (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))))
+      (should (eq (selected-window) old))
+      (should (eq (current-buffer) a))
+      (+test-window--ends)
+      (should (eq (selected-window) window))
+      (should-not +my/focus--pending)
+      (should-not (memq #'+my/focus-new-window-h post-command-hook))
+      (should-not (memq #'+my/focus-forget-h pre-command-hook))
+      ;; The next command's end: nothing more.
+      (select-window old)
+      (+test-window--ends)
+      (should (eq (selected-window) old)))))
+
+(ert-deftest window/two-new-windows-the-last-one-focused ()
+  (+test-window
+    (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))
+    (let ((last (display-buffer (+test-buffer "C") '(display-buffer-pop-up-window))))
+      (+test-window--ends)
+      (should (eq (selected-window) last)))))
+
+(ert-deftest window/another-window-the-command-selects-stays ()
+  "A command selecting a window of its own after showing one: its choice
+kept. The new window gone by its end: nothing selected."
+  (+test-window
+    (let* ((other (split-window nil nil 'below))
+           (window (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))))
+      (should (window-live-p window))
+      (select-window other)
+      (+test-window--ends)
+      (should (eq (selected-window) other)))
+    (let* ((old (selected-window))
+           (window (display-buffer (+test-buffer "C") '(display-buffer-pop-up-window))))
+      (delete-window window)
+      (+test-window--ends)
+      (should (eq (selected-window) old)))))
+
+(ert-deftest window/a-prompt-s-commands-aren-t-its-end ()
+  "A command showing a window, then prompting: the commands typed at the
+prompt (a level deeper) don't select it; the command's own end does."
+  (+test-window
+    (let* ((old (selected-window))
+           (window (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window)))
+           (depth (recursion-depth)))
+      (cl-letf (((symbol-function 'recursion-depth) (lambda () (1+ depth))))
+        (run-hooks 'pre-command-hook)
+        (+test-window--ends)
+        (should (eq (selected-window) old)))
+      (+test-window--ends)
+      (should (eq (selected-window) window)))))
+
+(ert-deftest window/a-command-that-failed-forgotten ()
+  "A command that never ended (an error: no `post-command-hook'): its window
+forgotten as the next command starts, not selected at that one's end."
+  (+test-window
+    (let ((old (selected-window)))
+      (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))
+      (run-hooks 'pre-command-hook)
+      (should-not +my/focus--pending)
+      (+test-window--ends)
+      (should (eq (selected-window) old)))))
+
+(ert-deftest window/checkdoc-reaches-its-prompt ()
+  "M-x checkdoc on a file with a docstring problem: its status shown in a new
+window, it goes on in the file's (recentring it) up to its prompt, q there."
+  (+test-window
+    (let ((file (+test-file "window/bad-doc.el"
+                            (concat ";;; bad-doc.el --- Test -*- lexical-binding: t; -*-\n\n"
+                                    ";;; Commentary:\n\n;;; Code:\n\n"
+                                    "(defun bad-doc-f ()\n  \"no capital, no period\")\n\n"
+                                    "(provide 'bad-doc)\n;;; bad-doc.el ends here\n"))))
+      (with-current-buffer (find-file-noselect file)
+        (switch-to-buffer (current-buffer))
+        (+test-clear-messages)
+        (let ((this-command 'checkdoc)
+              (unread-command-events (list ?q)))
+          (checkdoc)
+          (should (= (+test-messages "should end with punctuation (C-h,f,e,n,p,q)") 1))
+          (should-not unread-command-events))
+        (set-buffer-modified-p nil)))))
 
 (ert-deftest window/returns-what-display-buffer-does ()
   (+test-window
     (let ((window (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))))
-      (should (eq window (get-buffer-window "B"))))
+      (should (eq window (get-buffer-window "B")))
+      (+test-window--ends))
     ;; No window: nil, nothing selected.
     (let ((old (selected-window)))
       (should-not (display-buffer (+test-buffer "C")
                                   '(display-buffer-no-window (allow-no-window . t))))
+      (+test-window--ends)
       (should (eq (selected-window) old)))))
 
 (ert-deftest window/a-window-already-there-isnt-selected ()
@@ -129,12 +225,14 @@ left so, not made small again."
       (should (eq (display-buffer (+test-buffer "C") '(display-buffer-use-some-window
                                                        (inhibit-same-window . t)))
                   other))
+      (+test-window--ends)
       (should (eq (selected-window) old)))))
 
 (ert-deftest window/same-window-stays-selected ()
   (+test-window
     (let ((old (selected-window)))
       (should (eq (display-buffer (+test-buffer "B") '(display-buffer-same-window)) old))
+      (+test-window--ends)
       (should (eq (selected-window) old)))))
 
 (ert-deftest window/side-windows-arent-selected ()
@@ -145,6 +243,7 @@ left so, not made small again."
                                    '(display-buffer-in-side-window (side . bottom)))))
       (should (window-live-p window))
       (should (window-parameter window 'window-side))
+      (+test-window--ends)
       (should (eq (selected-window) old)))))
 
 (ert-deftest window/child-frames-arent-selected ()
@@ -160,6 +259,7 @@ left so, not made small again."
                      (funcall frame-parameter frame parameter)))))
         (setq window (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))))
       (should (window-live-p window))
+      (+test-window--ends)
       (should (eq (selected-window) old)))))
 
 (ert-deftest window/no-command-no-focus ()
@@ -169,6 +269,7 @@ left so, not made small again."
            (old (selected-window))
            (window (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))))
       (should (window-live-p window))
+      (+test-window--ends)
       (should (eq (selected-window) old)))))
 
 (ert-deftest window/from-a-timer-no-focus ()
@@ -181,6 +282,7 @@ left so, not made small again."
                                                           '(display-buffer-pop-up-window)))))
         (should (+test-wait-for (lambda () window) 2)))
       (should (window-live-p window))
+      (+test-window--ends)
       (should (eq (selected-window) old)))))
 
 (ert-deftest window/setting-off-no-focus ()
@@ -190,6 +292,7 @@ left so, not made small again."
            (old (selected-window))
            (window (display-buffer (+test-buffer "B") '(display-buffer-pop-up-window))))
       (should (window-live-p window))
+      (+test-window--ends)
       (should (eq (selected-window) old)))))
 
 (ert-deftest window/pop-to-buffer-still-selects ()

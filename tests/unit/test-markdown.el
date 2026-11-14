@@ -423,6 +423,7 @@ look (scheme, background, stylesheets), not reloaded; the pane too."
       (should (> (window-left-column pane) (window-left-column window)))
       (should (= (window-top-line pane) (window-top-line window)))
       (should (<= (abs (- (window-total-width pane) (/ width 2))) 1))
+      (run-hooks 'post-command-hook)
       (should (eq (selected-window) window))
       (should (eq (current-buffer) md))
       (with-current-buffer preview
@@ -505,10 +506,12 @@ the preview on its right; another pane as it was."
           (should (eq (window-buffer right) other)))))))
 
 (ert-deftest markdown/new-windows-would-take-focus ()
-  "Control for the test above: here, a command's new window is selected."
+  "Control for the test above: here, a command's new window is selected (once
+the command ends: config/window.el)."
   (+test-md
     (let ((window (selected-window)))
       (display-buffer (+test-buffer "other") '(display-buffer-in-direction (direction . right)))
+      (run-hooks 'post-command-hook)
       (should-not (eq (selected-window) window)))))
 
 (ert-deftest markdown/preview-page-is-the-markdown-as-it-is ()

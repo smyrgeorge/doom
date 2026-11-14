@@ -10,7 +10,10 @@
       evil-vsplit-window-right t)
 
 ;; Anything else a command shows in a newly created window (diffs, file
-;; previews, other-window commands...) is selected too. Not affected: side
+;; previews, other-window commands...) is selected too, once the command is
+;; done: not while it runs, as a command may go on working in its own window
+;; (M-x checkdoc, its status shown, recentred its file in the status's window
+;; and failed); another window it selects itself stays so. Not affected: side
 ;; windows (Doom popups follow their own :select rules; treemacs, which-key and
 ;; transient menus live there), child frames, windows opened from timers or
 ;; process output (no command running), and code that binds
@@ -45,6 +48,38 @@
                      (+ 8 (* +my/right-fringe-padding
                              (if (display-graphic-p) (frame-char-width) 8))))))
 
+;; NEW WINDOWS GET FOCUS (see above). The command's end: once
+;; `post-command-hook' runs at the level it ran at (a prompt it shows runs
+;; commands of its own, a level deeper); a command that never ended (an
+;; error) is forgotten as the next one starts.
+(defvar +my/focus--pending nil
+  "The window `display-buffer' made for the command running: (NEW SELECTED
+DEPTH), the window selected then and the `recursion-depth'; NEW is selected
+once the command ends.")
+
+(defun +my/focus--forget ()
+  (remove-hook 'post-command-hook #'+my/focus-new-window-h)
+  (remove-hook 'pre-command-hook #'+my/focus-forget-h)
+  (setq +my/focus--pending nil))
+
+(defun +my/focus-new-window-h ()
+  "Once a command ends: the window it showed something new in selected
+\(see above), still there, unless it selected another itself."
+  (pcase-let ((`(,new ,selected ,depth) +my/focus--pending))
+    (unless (and depth (> (recursion-depth) depth))
+      (+my/focus--forget)
+      (when (and (eql (recursion-depth) depth)
+                 (window-live-p new)
+                 (eq (selected-window) selected))
+        (select-window new)))))
+
+(defun +my/focus-forget-h ()
+  "As a command starts at the level of one that showed a new window: that
+one never ended (see above), its window forgotten."
+  (pcase-let ((`(,_ ,_ ,depth) +my/focus--pending))
+    (unless (and depth (> (recursion-depth) depth))
+      (+my/focus--forget))))
+
 (defadvice! +my/focus-new-window-a (fn buffer &rest args)
   :around #'display-buffer
   (let* ((before (window-list-1 nil 'nomini t))
@@ -55,5 +90,7 @@
                (not (memq window before))
                (not (window-parameter window 'window-side))
                (not (frame-parameter (window-frame window) 'parent-frame)))
-      (select-window window))
+      (setq +my/focus--pending (list window (selected-window) (recursion-depth)))
+      (add-hook 'post-command-hook #'+my/focus-new-window-h)
+      (add-hook 'pre-command-hook #'+my/focus-forget-h))
     window))
