@@ -1273,7 +1273,7 @@ shows, so gr refreshes it."
 
 (ert-deftest beads/the-list-and-issues-in-panes ()
   "Tiling's applications: SPC o i, a new pane (its own, shown already); an
-issue, a new pane, the next one in it; the preview, beads.el's side window."
+issue, a new pane, the next one in it (not the list's preview's)."
   (+test-beads-with-project
     (let ((this-command 'test)
           (+my/tiling-strategy 'tall)
@@ -1304,11 +1304,66 @@ issue, a new pane, the next one in it; the preview, beads.el's side window."
           (beads-detail-open (beads-client-show second))
           (should (= (length (+my/tiling--panes)) 3))
           (should (eq (selected-window) issue-window))
-          (should (string-match-p second (buffer-name (window-buffer issue-window)))))
-        ;; The preview: beads.el's side window, no pane.
-        (beads-detail-show (beads-client-show first))
-        (should (= (length (+my/tiling--panes)) 3))
-        (should (window-parameter (get-buffer-window "*Beads Preview*") 'window-side))))))
+          (should (string-match-p second (buffer-name (window-buffer issue-window)))))))))
+
+;; doom-o5t.10
+(ert-deftest beads/bd-the-preview-beside-its-list ()
+  "P in a list in a 40-column pane, another pane beside it: the preview opens
+next to the list, its room taken from the other pane (the list kept at 40);
+each row asked of bd in the background (a row doesn't wait for it, one moved
+over before its answer came is dropped); the list's own (its project's
+folder); gone with the list. beads.el's: on the frame's right edge, 40% of
+it, the list squeezed to 21; bd waited for on each row; left behind."
+  (+test-beads-with-project
+    (let ((first (+test-beads--create "First"))
+          (second (+test-beads--create "Second" :priority 0))
+          (slow (+test-beads--slow-bd 1)))
+      (+my/beads-project)
+      (let* ((list (+test-beads--list))
+             (window (get-buffer-window list))
+             (other (progn (delete-other-windows window)
+                           (split-window window nil 'right)))
+             (goto (lambda (id) (goto-char (point-min)) (search-forward id) (beginning-of-line))))
+        (set-window-buffer other (get-buffer-create "*scratch*"))
+        (+test-beads--width window 40)
+        (select-window window)
+        (with-current-buffer list
+          (funcall goto first)
+          (beads-preview-mode 1)
+          (should-not (get-buffer-window "*Beads Preview*"))
+          ;; As its timer does once the cursor stops: bd not waited for.
+          (cl-letf (((symbol-function 'beads-backend-cli-program-path) (lambda (&rest _) slow)))
+            (let ((start (float-time)))
+              (+my/beads--preview-issue list (beads-list--get-issue-at-point))
+              (should (< (- (float-time) start) 0.5)))
+            (let ((preview +my/beads--preview))
+              (should (buffer-local-value '+my/beads--fetching preview))
+              ;; Another row before its answer came: that one dropped.
+              (funcall goto second)
+              (+my/beads--preview-issue list (beads-list--get-issue-at-point))
+              (+test-beads--settle preview)))
+          (let* ((preview +my/beads--preview)
+                 (shown (get-buffer-window preview)))
+            (should (equal (buffer-name preview)
+                           (replace-regexp-in-string "\\`\\*Beads: " "*Beads Preview: " (buffer-name list))))
+            (should (equal (buffer-local-value 'default-directory preview) repo))
+            (should (equal (buffer-local-value 'beads-detail--current-issue-id preview) second))
+            (should (string-match-p "Second" (+test-beads--text preview)))
+            (should shown)
+            (should (= (window-body-width window) 40))
+            (should (eq (window-in-direction 'right window) shown))
+            (should (eq (window-in-direction 'right shown) other))
+            ;; An issue opened from the list: in a pane of its own, not the
+            ;; preview's (tiling lays the panes out again: the preview one).
+            (beads-list-goto-issue)
+            (setq shown (get-buffer-window preview))
+            (should shown)
+            (should-not (eq (selected-window) shown))
+            (should (string-match-p "Beads Detail" (buffer-name (window-buffer (selected-window)))))
+            ;; The list killed: its preview gone.
+            (kill-buffer list)
+            (should-not (buffer-live-p preview))
+            (should-not (window-live-p shown))))))))
 
 (ert-deftest beads/issues-are-tiling-s-applications ()
   (dolist (mode '(beads-list-mode beads-detail-mode beads-detail-vui-mode))

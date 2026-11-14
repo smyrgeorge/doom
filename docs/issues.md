@@ -22,7 +22,8 @@ typed is `+my/beads-init-command` in `config/beads.el`.
 ## The list
 
 The list opens in a new pane where [tiling](editor.md#tiling) puts it, as Claude Code and Magit do; an issue opened
-from it in a new pane too, and the next ones in that pane, as its tabs. The preview (`P`) stays beside the list.
+from it in a new pane too, and the next ones in that pane, as its tabs. The preview (`P`) opens beside the list, its
+room taken from the pane next to it when the list's is narrow, and closes with the list.
 
 Each issue's status, priority and type are icons and badges in their colours: ○ ready (nothing open blocks it), ◔ in
 progress, ⊘3 blocked by 3 open issues (in the Blocked section), ✓ closed; P0 and P1 stand out, P3 and P4 are muted; the

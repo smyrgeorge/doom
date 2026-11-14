@@ -154,7 +154,7 @@ first of *Beads: NAME*, *Beads: PARENT/NAME* and *Beads: PATH* no buffer has."
   (seq-find (lambda (window)
               (with-current-buffer (window-buffer window)
                 (and (derived-mode-p '(beads-detail-mode beads-detail-vui-mode))
-                     (not (equal (buffer-name) "*Beads Preview*")))))
+                     (not (string-prefix-p "*Beads Preview" (buffer-name))))))
             (window-list nil 'nomini)))
 
 (defun +my/beads-issue-pane-a (fn &rest args)

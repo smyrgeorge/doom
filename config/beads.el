@@ -65,6 +65,7 @@
 (load! "beads/look")                    ; icons, badges, tags, epics
 (load! "beads/place")                   ; kept through a refresh
 (load! "beads/issue")                   ; an issue's view: all of it
+(load! "beads/preview")                 ; P: beside the list, its own
 (load! "beads/evil")                    ; its keys over Vim's
 (load! "beads/theme")                   ; the theme's colours
 (load! "beads/file")                    ; a bug filed from code (Agent UI's)
