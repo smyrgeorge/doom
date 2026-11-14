@@ -1,7 +1,7 @@
 ;;; tests/e2e/test-banner.el -*- lexical-binding: t; -*-
 ;; config/banner.el in a GUI Emacs: notices laid over a window's header line by
 ;; real child frames, under the tabs; splits, other buffers, closing, resizing,
-;; clicks on their actions.
+;; narrow windows, clicks on their actions.
 
 (+test-load "config/window" "config/editor" "config/childframe" "config/banner" "config/html")
 
@@ -182,6 +182,102 @@ mouse-1 command run."
       (emacs-lisp-mode)
       (should-not +my/banner--list)
       (should (+test-wait-for (lambda () (not (+my/childframe-shown-p frame))) 3)))))
+
+;; ====== NARROW WINDOWS ======
+
+(defconst +test-banner--narrow
+  '((drawing "Drawing for Claude: C-c C-c inserts it into the prompt, C-c C-k discards it"
+             (("Insert into the prompt" . +test-banner--action) ("Discard" . +test-banner--action)) info)
+    (long-lines "Very long lines: opened plain and unwrapped, as scrolling them can be slow"
+                (("Wrap lines" . +test-banner--action) ("Open normally" . +test-banner--action)) warning))
+  "The Drawing for Claude's notice and the long lines', standing in.")
+
+(defun +test-banner--inside (frame help)
+  "Positions on FRAME's rows whose help is HELP, each drawn whole inside the
+frame: nil if one is off it (or none has it)."
+  (let ((window (frame-root-window frame))
+        (found nil))
+    (with-current-buffer (window-buffer window)
+      (cl-loop for pos from (point-min) below (point-max)
+               when (equal (get-text-property pos 'help-echo) help)
+               do (push pos found)
+               and unless (let ((posn (posn-at-point pos window)))
+                            (and posn
+                                 (<= (+ (car (posn-x-y posn)) (car (posn-object-width-height posn)))
+                                     (window-body-width window t))))
+               return nil
+               finally return found))))
+
+(defun +test-banner--room-p (frame window)
+  "Non-nil if WINDOW's header line has room for FRAME's rows, its own text
+\(if it has one) under them."
+  (= (window-header-line-height window)
+     (+ (frame-pixel-height frame)
+        (if (buffer-local-value '+my/banner--saved-header (window-buffer window))
+            (+my/banner--row-height window)
+          0))))
+
+(defun +test-banner--laid-out-p (frame window)
+  "Non-nil once FRAME lies over WINDOW with as many rows as its notices take
+there, and the header line has room for them."
+  (let ((rows (+my/banner--rows (buffer-local-value '+my/banner--list (window-buffer window))
+                                (+my/banner--columns window))))
+    (and (+test-banner--over-p frame window rows)
+         (+test-banner--room-p frame window))))
+
+(ert-deftest e2e-banner/narrow-windows-keep-the-actions-and-x ()
+  "At 100, 60, 40 and 25 columns every action and ✕ of the Drawing for
+Claude's notice and the long lines' inside the frame, clickable; the header
+line's room as tall as the frame's rows."
+  (+test-banner
+    (+test-banner--file "narrow.txt")
+    (pcase-dolist (`(,id ,text ,actions ,type) +test-banner--narrow)
+      (+my/banner-show id text :type type :actions actions))
+    (let ((window (selected-window)))
+      (dolist (columns '(100 60 40 25))
+        (delete-other-windows window)
+        (split-window window columns 'right)
+        (let ((frame (+test-banner--shown window)))
+          (should (+test-wait-for (lambda () (+test-banner--laid-out-p frame window)) 3))
+          ;; Each notice on two rows at 40 and 25, on one at 100.
+          (when (/= columns 60)
+            (should (= (frame-pixel-height frame)
+                       (* (if (< columns 50) 4 2) (+my/banner--row-height window)))))
+          (pcase-dolist (`(,_ ,_ ,actions) +test-banner--narrow)
+            (dolist (action actions)
+              (should (+test-banner--inside frame (concat "mouse-1: " (car action))))))
+          (should (= (length (+test-banner--inside frame "mouse-1: close")) (* 3 2)))
+          ;; Clicking a cut label runs its action.
+          (setq +test-banner--ran nil)
+          (let ((pos (car (last (+test-banner--inside frame "mouse-1: Discard")))))
+            (call-interactively
+             (lookup-key (get-text-property pos 'keymap (window-buffer (frame-root-window frame)))
+                         [mouse-1])))
+          (should (eq (nth 1 +test-banner--ran) window)))))))
+
+(ert-deftest e2e-banner/resized-the-room-follows ()
+  "Narrowed to 25 columns and widened again: the frame's rows and the header
+line's room follow, both ways."
+  (+test-banner
+    (+test-banner--file "resized.txt")
+    (setq-local header-line-format "the file's own header")
+    (pcase-let ((`(,id ,text ,actions ,type) (car +test-banner--narrow)))
+      (+my/banner-show id text :type type :actions actions))
+    (let* ((window (selected-window))
+           (other (split-window window 100 'right))
+           (frame (+test-banner--shown window))
+           (row (+my/banner--row-height window)))
+      (should (+test-wait-for (lambda () (+test-banner--laid-out-p frame window)) 3))
+      (should (= (frame-pixel-height frame) row))
+      (window-resize window (- 25 (window-total-width window)) t)
+      (should (+test-wait-for (lambda () (and (= (frame-pixel-height frame) (* 2 row))
+                                              (+test-banner--laid-out-p frame window)))
+                              3))
+      (window-resize window (- 100 (window-total-width window)) t)
+      (should (+test-wait-for (lambda () (and (= (frame-pixel-height frame) row)
+                                              (+test-banner--laid-out-p frame window)))
+                              3))
+      (ignore other))))
 
 ;; ====== CLICKS ======
 

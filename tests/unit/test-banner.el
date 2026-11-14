@@ -1,9 +1,9 @@
 ;;; tests/unit/test-banner.el -*- lexical-binding: t; -*-
 ;; config/banner.el: notices at the top of a window: showing, replacing and closing them, per buffer; their rows
-;; (icon, message cut short, actions, ✕) and where clicks run; room in the header
-;; line; the terminal's header line; the GUI's notices' frames (child frames:
-;; stood in for here, batch Emacs can't make frames); theme colours. The long
-;; lines notice: test-long-lines.el.
+;; (icon, message cut short, actions, ✕; fitted to narrow windows, on two rows)
+;; and where clicks run; room in the header line; the terminal's header line;
+;; the GUI's notices' frames (child frames: stood in for here, batch Emacs can't
+;; make frames); theme colours. The long lines notice: test-long-lines.el.
 
 (+test-load "config/childframe" "config/banner")
 
@@ -406,13 +406,176 @@ window's edge past the margin and fringe, and how many more notices."
       (let ((row (+my/banner--row (list 'id (make-string 20 ?日) nil 'info) buffer nil nil 40)))
         (should (<= (string-width (funcall message row)) 28))
         (should (string-suffix-p "…" (funcall message row))))
-      ;; No room at all: the … still.
-      (let ((row (+my/banner--row (list 'id "Message" '(("Action" . ignore)) 'info) buffer nil nil 10)))
-        (should (equal (funcall message row) "…"))
-        (should (string-search "Action" row)))
+      ;; Down to 10 columns, the actions and ✕ on the same row.
+      (let ((row (+my/banner--row (list 'id (make-string 30 ?x) '(("Do" . ignore)) 'info) buffer nil nil 28)))
+        (should (= (string-width (funcall message row)) 10))
+        (should-not (string-search "\n" row)))
+      ;; A shorter message isn't cut (to fewer columns than it has) at all.
+      (let ((row (+my/banner--row (list 'id "Short" '(("Do" . ignore)) 'info) buffer nil nil 23)))
+        (should (equal (funcall message row) "Short")))
+      ;; No actions: the message still takes the row, down to nothing.
+      (let ((row (+my/banner--row (list 'id "Message" nil 'info) buffer nil nil 15)))
+        (should (equal (funcall message row) "Me…"))
+        (should-not (string-search "\n" row)))
+      (let ((row (+my/banner--row (list 'id "Message" nil 'info) buffer nil nil 12)))
+        (should (equal (+test-banner--text row) "  I    ✕  ")))
       ;; No width: never cut.
       (let ((row (+my/banner--row (list 'id (make-string 300 ?x) nil 'info) buffer)))
         (should (string-search (make-string 300 ?x) row))))))
+
+;; A NARROW WINDOW
+;; Two of the config's notices: the Drawing for Claude's
+;; (config/agent-shell/excalidraw.el) and the long lines' (config/editor).
+(defconst +test-banner--narrow
+  '((drawing "Drawing for Claude: C-c C-c inserts it into the prompt, C-c C-k discards it"
+             (("Insert into the prompt" . ignore) ("Discard" . ignore)) info)
+    (long-lines "Very long lines: opened plain and unwrapped, as scrolling them can be slow"
+                (("Wrap lines" . ignore) ("Open normally" . ignore)) warning)
+    (three "Three actions" (("First one" . ignore) ("Second one" . ignore) ("Third one" . ignore)) info)
+    (plain "A notice without actions, long enough to be cut short" nil info)))
+
+(defun +test-banner--before-space (line)
+  "The columns LINE takes before its first stretch of space (the ✕'s, or the
+row's colour to the edge)."
+  (string-width (substring-no-properties
+                 line 0 (or (text-property-not-all 0 (length line) 'display nil line)
+                            (length line)))))
+
+(defun +test-banner--action-at (row label)
+  "Where the action LABEL is in ROW (shown whole or cut short): by its help."
+  (let ((help (concat "mouse-1: " label)))
+    (cl-loop for pos below (length row)
+             when (equal (get-text-property pos 'help-echo row) help) return pos)))
+
+(defun +test-banner--fits (row width &optional header)
+  "Check that ROW fits WIDTH columns: its ✕ on its last line, 4 columns from
+the edge after a gap of 2 at least; each line before it within the row."
+  (let ((lines (split-string row "\n")))
+    (should (<= (length lines) (if header 1 2)))
+    (dolist (line (butlast lines))
+      (should-not (string-search "✕" line))
+      (should (<= (+test-banner--before-space line) (- width 2))))
+    (let ((last (car (last lines))))
+      (should (<= (+test-banner--before-space last) (- width 6)))
+      (should (equal (get-text-property (+test-banner--before-space last) 'display last)
+                     '(space :align-to (- right 4))))
+      (should (string-search " ✕ " last)))))
+
+(ert-deftest banner/row-fits-narrow-windows ()
+  "At any width from 12 columns, each notice's actions and ✕ on screen: its
+message cut short, then on a row of its own, the labels cut short (…) if need
+be, each action still clickable, its full label in its help."
+  (+test-banner
+    (let ((buffer (+test-buffer "B")))
+      (dolist (notice +test-banner--narrow)
+        (cl-loop
+         for width from 12 to 110 do
+         (let ((row (+my/banner--row notice buffer nil nil width)))
+           (+test-banner--fits row width)
+           ;; Rows: as many as counted for the frame's height.
+           (should (= (1+ (cl-count ?\n row)) (+my/banner--rows (list notice) width)))
+           ;; From 25 columns, every action.
+           (when (>= width 25)
+             (dolist (action (nth 2 notice))
+               (let ((pos (+test-banner--action-at row (car action))))
+                 (should pos)
+                 (should (commandp (lookup-key (get-text-property pos 'keymap row) [mouse-1]))))))))))))
+
+(ert-deftest banner/row-on-two-rows ()
+  "The message would get fewer than 10 columns: a row of its own, the actions
+and ✕ on the next, under it; the labels cut short if still too wide."
+  (+test-banner
+    (let* ((buffer (+test-buffer "B"))
+           (notice (assq 'drawing +test-banner--narrow)))
+      ;; 60 columns: on one row, the message cut to 11.
+      (let ((row (+my/banner--row notice buffer nil nil 60)))
+        (should (equal (+test-banner--text row)
+                       "  I  Drawing fo…    Insert into the prompt    Discard  ✕  ")))
+      ;; 40: two rows, the message on the first, cut to its width.
+      (let ((row (+my/banner--row notice buffer nil nil 40)))
+        (should (equal (+test-banner--text row)
+                       (concat "  I  Drawing for Claude: C-c C-c ins… \n"
+                               "      Insert into the…    Discard  ✕  ")))
+        ;; The first row's colour to the edge too.
+        (let ((first (car (split-string row "\n"))))
+          (should (equal (get-text-property (1- (length first)) 'display first) '(space :align-to right)))
+          (should (eq (get-text-property (1- (length first)) 'face first) '+my/banner-info))))
+      ;; 25: the labels cut shorter, the longest first.
+      (let ((row (+my/banner--row notice buffer nil nil 25)))
+        (should (equal (+test-banner--text row)
+                       (concat "  I  Drawing for Clau… \n"
+                               "      Ins…    Dis…  ✕  ")))
+        (should (equal (get-text-property (+test-banner--pos row "Ins…") 'help-echo row)
+                       "mouse-1: Insert into the prompt"))
+        (should (equal (get-text-property (+test-banner--pos row "Dis…") 'help-echo row)
+                       "mouse-1: Discard"))))
+    ;; A short label kept whole while the long one is cut.
+    (should (equal (+my/banner--most '("Insert into the prompt" "Discard") 30) 15))
+    (should (equal (+test-banner--text
+                    (cadr (split-string (+my/banner--row (assq 'drawing +test-banner--narrow)
+                                                         (+test-buffer "B") nil nil 38)
+                                        "\n")))
+                   "      Insert into th…    Discard  ✕  "))
+    ;; All fit: nothing cut.
+    (should-not (+my/banner--most '("Insert into the prompt" "Discard") 37))
+    ;; Never under a … each.
+    (should (= (+my/banner--most '("Insert" "Discard") 2) 1))))
+
+(ert-deftest banner/rows ()
+  "The rows notices take at a width: 1 each, 2 for one on two rows."
+  (let ((notices +test-banner--narrow))
+    (should (= (+my/banner--rows notices 120) 4))
+    (should (= (+my/banner--rows notices 70) 4))
+    ;; The three actions' on two rows.
+    (should (= (+my/banner--rows notices 60) 5))
+    ;; The Drawing for Claude's and the long lines' too; the one without
+    ;; actions never.
+    (should (= (+my/banner--rows notices 50) 7))
+    (should (= (+my/banner--rows notices 30) 7))
+    (should (= (+my/banner--rows nil 30) 0))))
+
+(ert-deftest banner/header-row-fits-a-terminal ()
+  "A terminal's header line has one row: the message cut to 10 columns, then
+gaps of 2, \"+N\", the message and labels cut shorter: the ✕ always on
+screen."
+  (+test-banner
+    (let ((buffer (+test-buffer "B")))
+      (dolist (notice +test-banner--narrow)
+        (dolist (more '(0 1 12))
+          (cl-loop
+           for width from 12 to 110 do
+           (let ((row (+my/banner--row notice buffer t more width)))
+             (+test-banner--fits row width t)
+             (when (>= width 40)
+               (dolist (action (nth 2 notice))
+                 (should (+test-banner--action-at row (car action))))))))))
+    (let ((notice (assq 'drawing +test-banner--narrow))
+          (buffer (+test-buffer "B")))
+      (should (equal (+test-banner--text (+my/banner--row notice buffer t 1 100))
+                     "  I  Drawing for Claude: C-c C-c inserts it…    Insert into the prompt    Discard    (1 more)  ✕  "))
+      (should (equal (+test-banner--text (+my/banner--row notice buffer t 1 60))
+                     "  I  Drawing f…  Insert into the prompt  Discard  +1  ✕  "))
+      (should (equal (+test-banner--text (+my/banner--row notice buffer t 1 40))
+                     "  I  Drawing f…  Inse…  Disc…  +1  ✕  "))
+      (should (equal (+test-banner--text (+my/banner--row notice buffer t 1 25))
+                     "  I  …  I…  D…  +1  ✕  "))
+      ;; +N says what it is.
+      (let ((row (+my/banner--row notice buffer t 3 40)))
+        (should (equal (get-text-property (+test-banner--pos row "+3") 'help-echo row) "(3 more)"))))))
+
+(ert-deftest banner/header-line-in-a-terminal-fits-its-window ()
+  "The terminal's header line fits the window's width, however narrow."
+  (+test-banner
+    (with-current-buffer (+test-buffer "B")
+      (switch-to-buffer (current-buffer))
+      (pcase-dolist (`(,id ,text ,actions ,type) +test-banner--narrow)
+        (+my/banner-show id text :type type :actions actions))
+      (split-window nil 30 'right)
+      (let ((row (+my/banner--header-line)))
+        (should (< (window-body-width) 31))
+        (+test-banner--fits row (window-body-width) t)
+        (should (string-search "+3" row))
+        (should (+test-banner--action-at row "Discard"))))))
 
 (ert-deftest banner/icon ()
   (+test-banner
@@ -701,6 +864,42 @@ area (no divider, no scroll bar), a row per notice."
                      (setq columns width) "row")))
           (+my/banner-show 'a "A"))
         (should (= columns (/ (window-pixel-width) 2)))))))
+
+(ert-deftest banner/frame-and-header-room-follow-the-rows ()
+  "A notice on two rows in a narrow window: its frame a row taller, and the
+header line's room the same; widened again, both back to a row each."
+  (+test-banner
+    (+test-banner--gui
+      (let ((buffer (+test-buffer "B"))
+            (char-width 2)
+            (spaced nil))
+        (switch-to-buffer buffer)
+        (cl-letf (((symbol-function 'frame-char-width) (lambda (&rest _) char-width))
+                  ((symbol-function '+my/banner--spacer)
+                   (lambda (rows _alone) (setq spaced rows) "SPACER")))
+          (pcase-dolist (`(,id ,text ,actions ,type) (list (assq 'drawing +test-banner--narrow)
+                                                            '(short "Short" nil info)))
+            (with-current-buffer buffer (+my/banner-show id text :type type :actions actions)))
+          (let ((frame (+test-banner--frame-of (selected-window)))
+                (columns (/ (window-pixel-width) 2)))
+            (should (< columns 48))
+            (should (= (nth 1 (+test-banner--frame-size frame)) (* 3 20)))
+            (should (= (length (split-string (+test-banner--frame-text frame) "\n")) 3))
+            (with-current-buffer buffer (+my/banner--header-line))
+            (should (= spaced 3))
+            ;; Wider: a row each.
+            (setq char-width 1)
+            (+my/banner--sync)
+            (should (= (nth 1 (+test-banner--frame-size frame)) (* 2 20)))
+            (should (= (length (split-string (+test-banner--frame-text frame) "\n")) 2))
+            (with-current-buffer buffer (+my/banner--header-line))
+            (should (= spaced 2))
+            ;; Narrow again.
+            (setq char-width 2)
+            (+my/banner--sync)
+            (should (= (nth 1 (+test-banner--frame-size frame)) (* 3 20)))
+            (with-current-buffer buffer (+my/banner--header-line))
+            (should (= spaced 3))))))))
 
 (ert-deftest banner/frame-redrawn-only-when-needed ()
   "Same notices, theme, width: nothing redone; else its rows written again

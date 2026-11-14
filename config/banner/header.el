@@ -8,6 +8,14 @@
   (or (ignore-errors (window-font-height window 'header-line))
       (frame-char-height (window-frame window))))
 
+(defun +my/banner--columns (window)
+  "The columns of WINDOW's notices' frame: as wide as its text area (no
+divider, no scroll bar), in its frame's font."
+  (/ (- (window-pixel-width window)
+        (window-right-divider-width window)
+        (window-scroll-bar-width window))
+     (frame-char-width (window-frame window))))
+
 (defun +my/banner--descent (&optional window)
   "The descent of the header line's font in WINDOW."
   (or (ignore-errors
@@ -42,11 +50,13 @@ header line that much taller, its text in the bottom row."
                  +my/banner--spacers))))
 
 (defun +my/banner--header-line ()
-  "Before the header line's own content: room for the notices (in a terminal,
-the first one, which takes the whole row)."
+  "Before the header line's own content: room for the notices, as many rows as
+they take at the window's width (in a terminal, the first one, which takes the
+whole row). Its window is the selected one while it's drawn."
   (when +my/banner--list
     (if (display-graphic-p)
-        (+my/banner--spacer (length +my/banner--list) (null +my/banner--saved-header))
+        (+my/banner--spacer (+my/banner--rows +my/banner--list (+my/banner--columns (selected-window)))
+                            (null +my/banner--saved-header))
       (+my/banner--row (car +my/banner--list) (current-buffer) t
                        (length (cdr +my/banner--list))
                        (window-body-width (selected-window))))))

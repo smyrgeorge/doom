@@ -13,8 +13,10 @@
 ;; M-x +my/banner-close closes the first one.
 ;; (A header line is a single row of text. So it grows a row per notice, with
 ;; its own text in the bottom one, and a small frame without borders lays the
-;; notices over the rows above. In a terminal the header line shows the first
-;; notice instead, saying how many more there are.)
+;; notices over the rows above. In a narrow window a notice whose message would
+;; be cut too short takes two rows, its actions and ✕ on the second. In a
+;; terminal the header line shows the first notice instead, saying how many
+;; more there are.)
 ;;
 ;; Notices so far:
 ;; - long lines (warning, config/editor/long-lines.el): files with very long
