@@ -30,9 +30,37 @@ drawn (see above).")
       (treemacs-button-get button :path))))
 
 (defun +my/treemacs--select-here ()
-  "Select the node at point (see above)."
+  "Select the node at point (see above), its name scrolled into view."
   (when-let* ((path (+my/treemacs--path-at (point))))
-    (setq +my/treemacs--selection (cons path (copy-marker (line-beginning-position))))))
+    (setq +my/treemacs--selection (cons path (copy-marker (line-beginning-position))))
+    (when-let* ((window (get-buffer-window (current-buffer))))
+      (+my/treemacs--show-name window))))
+
+;; SIDEWAYS
+;; A node deep in the tree starts past a narrow sidebar's edge: selected, its
+;; line looked blank. The sidebar scrolls sideways to the selected node, its
+;; icon and name from the left edge (a column of the indentation before
+;; them), if they don't fit unscrolled; back to the edge for one that does.
+;; Emacs's own sideways scrolling, which follows the cursor, is off there: it
+;; scrolled back to the cursor, at the line's start.
+(defun +my/treemacs--show-name (window)
+  "Scroll WINDOW, the sidebar, sideways to the selected node (see above)."
+  (when-let* ((start (+my/treemacs--selection-start)))
+    (save-excursion
+      (goto-char start)
+      (let ((eol (line-end-position))
+            (width (lambda (end)
+                     ;; Not cut at the window's edge.
+                     (car (window-text-pixel-size window start end most-positive-fixnum)))))
+        ;; The indentation: spaces, before the icon (a space shown as an image).
+        (while (and (< (point) eol) (eq (char-after) ?\s) (not (get-text-property (point) 'display)))
+          (forward-char))
+        (set-window-hscroll
+         window
+         (if (<= (funcall width eol) (window-body-width window t))
+             0
+           (max 0 (1- (/ (funcall width (point))
+                         (frame-char-width (window-frame window)))))))))))
 
 (defun +my/treemacs--selection-start ()
   "Where the selected node's line starts, if it's drawn (its folders open)."
@@ -89,6 +117,7 @@ away from it, which it acts on (a click acts where it clicks)."
           (defun +my/treemacs-selection-h ()
             (when (+my/treemacs--sidebar-p)
               (setq-local hl-line-range-function #'+my/treemacs--highlight-range)
+              (setq-local auto-hscroll-mode nil) ; see SIDEWAYS
               ;; Before hl-line's own, which then highlights the new one.
               (add-hook 'post-command-hook #'+my/treemacs--select-h -50 t)
               (add-hook 'pre-command-hook #'+my/treemacs--to-selection-h nil t))))

@@ -910,6 +910,51 @@ found again by its path."
     (should-not (memq #'+my/treemacs--select-h post-command-hook))
     (kill-buffer)))
 
+(defun +test-treemacs--name-shown-p (window label)
+  "Non-nil if WINDOW (the sidebar, scrolled sideways) shows LABEL's line from
+the start of its name: the columns scrolled away end before it, the window's
+width after it."
+  (with-current-buffer (window-buffer window)
+    (save-excursion
+      (goto-char (point-min))
+      (re-search-forward (concat " " (regexp-quote label) "$"))
+      (let ((column (- (current-column) (length label))))
+        (and (<= (window-hscroll window) column)
+             (<= (- (current-column) (window-hscroll window)) (window-body-width window)))))))
+
+(ert-deftest treemacs/a-deep-selection-scrolled-to-sideways ()
+  "A node selected past the narrow sidebar's edge: scrolled sideways to show
+its name; a shallow one selected: back to the edge. Emacs's own sideways
+scroll (to the cursor) off there."
+  (+test-treemacs-selecting
+    (let* ((deep "l1/l2/l3/l4/l5/l6/l7/l8/l9/l10/")
+           (file (expand-file-name (concat deep "a-deep-file.txt") root))
+           (sidebar (treemacs-get-local-window)))
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file (insert "deep\n"))
+      (with-temp-file (expand-file-name (concat deep "b-deep-file.txt") root) (insert "deep\n"))
+      (with-current-buffer (+test-treemacs--sidebar)
+        (should-not auto-hscroll-mode)
+        (let ((inhibit-message t))
+          (treemacs--do-refresh (current-buffer) 'all)))
+      (should (= (window-hscroll sidebar) 0))
+      (find-file file)
+      (+my/treemacs--follow-file (current-buffer))
+      (should (equal (+test-treemacs--selected) file))
+      (should (> (window-hscroll sidebar) 0))
+      (should (+test-treemacs--name-shown-p sidebar "a-deep-file.txt"))
+      ;; Its neighbour: as far.
+      (let ((hscroll (window-hscroll sidebar)))
+        (with-current-buffer (+test-treemacs--sidebar)
+          (+test-treemacs--goto "b-deep-file.txt")
+          (+my/treemacs--select-here))
+        (should (= (window-hscroll sidebar) hscroll)))
+      ;; A shallow one: unscrolled.
+      (with-current-buffer (+test-treemacs--sidebar)
+        (+test-treemacs--goto "f02.txt")
+        (+my/treemacs--select-here))
+      (should (= (window-hscroll sidebar) 0)))))
+
 ;; ====== FOLLOW: PROJECT BUFFERS ONLY ======
 
 (ert-deftest treemacs/follow-only-project-buffers ()

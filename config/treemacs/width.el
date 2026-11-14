@@ -61,11 +61,16 @@ frame's width (see `+my/treemacs-width-h')."
   "After FRAME's windows changed size: the sidebar to its width there if the
 frame's width changed, else its new width kept if it was resized (see above)."
   (when-let* ((window (+my/treemacs--sidebar-window frame)))
-    (cond ((not (eql (frame-width frame) (frame-parameter frame '+my/treemacs-frame-width)))
-           (+my/treemacs--set-window-width window (+my/treemacs--width-in frame)))
-          ((not (eql (window-total-width window) (window-parameter window '+my/treemacs-width)))
-           (setq treemacs-width (window-total-width window)
-                 +my/treemacs--width-set-at (frame-width frame))
-           (+my/treemacs--keep-width window)))))
+    (when (cond ((not (eql (frame-width frame) (frame-parameter frame '+my/treemacs-frame-width)))
+                 (+my/treemacs--set-window-width window (+my/treemacs--width-in frame))
+                 t)
+                ((not (eql (window-total-width window) (window-parameter window '+my/treemacs-width)))
+                 (setq treemacs-width (window-total-width window)
+                       +my/treemacs--width-set-at (frame-width frame))
+                 (+my/treemacs--keep-width window)
+                 t))
+      ;; The selected node in view at its new width (selection.el, SIDEWAYS).
+      (with-current-buffer (window-buffer window)
+        (+my/treemacs--show-name window)))))
 
 (add-hook 'window-size-change-functions #'+my/treemacs-width-h)
