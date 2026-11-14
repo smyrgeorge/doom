@@ -16,7 +16,7 @@ pane shows that one's. It refreshes when the file is saved.
 |---|---|
 | `s` / `u` / `x` | Stage, unstage or discard the hunk |
 | `RET` | Go to the line |
-| `SPC g d` / `q` / `Esc` | Close the pane |
+| `SPC g d` / `q` / `Esc` | Close the diff (its pane too, unless it has other tabs) |
 
 ## Resolving conflicts
 

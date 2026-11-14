@@ -18,6 +18,10 @@
 ;; file, from its log, is a diff of that file too, not the pane): the pane
 ;; showing it, or having it as a tab (a file opened over it, RET), or hidden
 ;; (tiling's fullscreen: brought to the front).
+;; Closing it (SPC g d, Esc) closes the diff's tab (config/editor/tabs.el): the
+;; pane keeps its other tabs, and closes with its last. Without tabs, the pane
+;; closes; the frame's only window beside side panels (a sidebar), it shows
+;; what it showed before. The diff is killed.
 (defvar-local +my/git-diff-pane--diff nil
   "Non-nil in the diff buffer SPC g d shows (see above).")
 (put '+my/git-diff-pane--diff 'permanent-local t)
@@ -80,12 +84,24 @@ one holding its diff, else a new one, on the right. Its window."
         (progn (set-window-buffer window buffer) window)
       (+my/git-diff-pane--switch window buffer old))))
 
+(defun +my/git-diff-pane--close ()
+  "Close the diff pane, the selected window (see above)."
+  (let ((buffer (window-buffer)))
+    (cond ((and (bound-and-true-p tab-line-mode) (fboundp '+my/tabs-close-current))
+           (+my/tabs-close-current))
+          ((eq (window-deletable-p) t)
+           (delete-window))
+          (t
+           (quit-window)))
+    (when (and (buffer-live-p buffer) (not (get-buffer-window buffer t)))
+      (kill-buffer buffer))))
+
 (defun +my/git-diff-pane ()
   "Show the current file's git diff in a pane on the right and focus it.
 In the pane itself, close it."
   (interactive)
   (if (buffer-local-value '+my/git-diff-pane--diff (window-buffer))
-      (if (one-window-p) (quit-window) (delete-window))
+      (+my/git-diff-pane--close)
     (let* ((file (or (+my/git-diff-pane--file)
                      (user-error "Not a file in a git repository")))
            (line (line-number-at-pos))

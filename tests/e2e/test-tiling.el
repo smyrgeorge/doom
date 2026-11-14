@@ -389,7 +389,8 @@ discarded, the pane closes."
 
 (ert-deftest e2e-tiling/file-diff-in-a-new-pane-ret-there ()
   "SPC g d: the diff in a new pane; RET on a line opens the file there, a tab
-beside the diff's; the diff's tab again, SPC g d closes its pane."
+beside the diff's; the diff's tab again, SPC g d closes that tab, the pane
+kept with the file's."
   (+test-tiling
     (let* ((dir (+test-tiling--dir))
            (default-directory dir)
@@ -418,11 +419,51 @@ beside the diff's; the diff's tab again, SPC g d closes its pane."
           (should (eq (window-buffer diff) file))
           (should (equal (+test-tiling--tabs diff) (list (buffer-name diff-buffer) "f.txt")))
           (should (eq (window-buffer left) file))
-          ;; Its tab again; SPC g d there closes the pane.
+          ;; Its tab again; SPC g d there closes it, the file's tab left.
           (switch-to-buffer diff-buffer)
           (+my/git-diff-pane)
-          (should-not (window-live-p diff))
-          (should (= (length (+my/tiling--panes)) 1)))))))
+          (should (window-live-p diff))
+          (should (= (length (+my/tiling--panes)) 2))
+          (should (eq (window-buffer diff) file))
+          (should (equal (+test-tiling--tabs diff) '("f.txt")))
+          (should-not (buffer-live-p diff-buffer)))))))
+
+(ert-deftest e2e-tiling/file-diff-pane-closes-with-its-only-tab ()
+  "SPC g d, or Esc, in a diff's pane with no other tab: the pane closes, the
+diff killed. The frame's only pane beside a side panel: the dashboard there,
+no error."
+  (+test-tiling
+    (let* ((dir (+test-tiling--dir))
+           (default-directory dir)
+           (left (selected-window))
+           (files (+test-tiling--repo dir "f.txt")))
+      (find-file (car files))
+      (dolist (close (list #'+my/git-diff-pane #'+my/git-diff-pane-escape))
+        (select-window left)
+        (+my/git-diff-pane)
+        (let ((pane (selected-window))
+              (diff (window-buffer)))
+          (should-not (eq pane left))
+          (funcall close)
+          (should-not (window-live-p pane))
+          (should-not (buffer-live-p diff))
+          (should (equal (+my/tiling--panes) (list left)))))
+      ;; Beside a side panel.
+      (let ((side (display-buffer-in-side-window (get-buffer-create "*side*") '((side . left)))))
+        (unwind-protect
+            (progn
+              (select-window left)
+              (+my/git-diff-pane)
+              (let ((pane (selected-window))
+                    (diff (window-buffer)))
+                (delete-window left)
+                (should (equal (+my/tiling--panes) (list pane)))
+                (+my/git-diff-pane)
+                (should (window-live-p pane))
+                (should (window-live-p side))
+                (should (eq (window-buffer pane) (doom-fallback-buffer)))
+                (should-not (buffer-live-p diff))))
+          (kill-buffer "*side*"))))))
 
 (ert-deftest e2e-tiling/file-diff-one-tab-whichever-files ()
   "SPC g d on f.txt, g.txt, then h.txt: the diff's pane has one tab, h.txt's

@@ -370,7 +370,7 @@ own, the commit still shown."
         (should (equal (+test-git--pane-files) '("b.txt")))))))
 
 (ert-deftest git/pane-closes-from-itself ()
-  "SPC g d in the pane closes it; the code's window stays."
+  "SPC g d in the pane closes it, the diff killed; the code's window stays."
   (+test-git-with-repo
     (+test-git--write "a.txt" (+test-git--lines 30 '(2)))
     (let ((code (selected-window))
@@ -380,7 +380,8 @@ own, the commit still shown."
       (should (= (length (window-list)) 1))
       (should (eq (selected-window) code))
       (should (eq (window-buffer code) buffer))
-      (should-not (+my/git-diff-pane--window)))))
+      (should-not (+my/git-diff-pane--window))
+      (should-not (+test-git--diff-buffers)))))
 
 (ert-deftest git/pane-alone-quits ()
   "The pane as the only window: closing it shows what was there before."
@@ -393,6 +394,30 @@ own, the commit still shown."
       (should (= (length (window-list)) 1))
       (should-not (+my/git-diff-pane--window))
       (should (eq (window-buffer (selected-window)) buffer)))))
+
+(ert-deftest git/pane-beside-a-side-panel-closes ()
+  "The pane the frame's only window beside a side panel (a sidebar): SPC g d
+or Esc there shows what it showed before, no error; the diff killed, the
+panel kept."
+  (+test-git-with-repo
+    (+test-git--write "a.txt" (+test-git--lines 30 '(2)))
+    (dolist (close (list #'+my/git-diff-pane #'+my/git-diff-pane-escape))
+      (+test-reset)
+      (let* ((code (selected-window))
+             (buffer (+test-git--visit (expand-file-name "a.txt") 2))
+             (side (display-buffer-in-side-window (+test-buffer "*side*") '((side . left)))))
+        (+my/git-diff-pane)
+        (delete-window code)
+        (let ((pane (selected-window))
+              (diff (window-buffer)))
+          (should (window-live-p side))
+          (should-not (eq (window-deletable-p pane) t))
+          (cl-letf (((symbol-function 'doom/escape) (lambda (&rest _) (interactive) (error "Doom's Esc"))))
+            (funcall close))
+          (should (window-live-p pane))
+          (should (window-live-p side))
+          (should (eq (window-buffer pane) buffer))
+          (should-not (buffer-live-p diff)))))))
 
 ;; ====== Q ======
 
