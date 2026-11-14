@@ -672,6 +672,21 @@ their leading number alone, ties left in their order: 2026-11-14 before
   (should-not (agent-ui-table--number "2026-11-14"))
   (should-not (agent-ui-table--number "1.2.10")))
 
+(ert-deftest agent-ui-elements/table-numbers-to-the-right-versions-and-dates-not ()
+  "A column of numbers aligned right (a sign, decimals, commas, % maybe);
+one of versions, dates or times left, as text (versions were taken for
+numbers: right)."
+  (let ((lines (split-string (+test-aue-draw '(:type "table" :columns ("Version" "Date" "Time" "N" "Pct")
+                                               :rows (("1.2.10" "2026-11-14" "12:01:03" "1,204" "-4.5%")
+                                                      ("2.0.0" "2026-1-2" "9:59" "7" "45%"))))
+                             "\n")))
+    (should (equal (nth 2 lines) " 1.2.10  │ 2026-11-14 │ 12:01:03 │ 1,204 │ -4.5%"))
+    (should (equal (nth 3 lines) " 2.0.0   │ 2026-1-2   │ 9:59     │     7 │   45%")))
+  (dolist (cell '("12" "-3" "+5" "1,204" "3.5" ".5" "45%"))
+    (should (agent-ui-table--right-p cell)))
+  (dolist (cell '("1.2.10" "2026-11-14" "12:01:03" "0.4s" "12 MB" "v2"))
+    (should-not (agent-ui-table--right-p cell))))
+
 (ert-deftest agent-ui-elements/table-sort-arrow-kept ()
   "A sorted column's name cut to fit: its arrow kept (it was cut first)."
   (let ((text (+test-aue-draw '(:type "table" :columns ("Name" "Status" "Duration" "Owner" "Branch" "Commit")
@@ -1060,6 +1075,25 @@ window of 3 kept 2000, each append copying them all); no window: all."
     (should (equal (plist-get element :times) '(200 300))))
   (should (equal (plist-get (agent-ui-append-to '(:type "chart" :values (1 2)) '(:values (3))) :values)
                  '(1 2 3))))
+
+(ert-deftest agent-ui-elements/chart-without-window-keeps-what-it-draws ()
+  "A live chart without a window keeps as many of its latest values as it
+draws (`agent-ui-max-rows'), not every one appended, each append copying
+them all; a histogram, which counts them all, many more."
+  (let ((element '(:type "chart" :values ())))
+    (dotimes (i 10000)
+      (setq element (agent-ui-append-to element (list :values (list i)))))
+    (should (= (length (plist-get element :values)) agent-ui-max-rows))
+    (should (equal (last (plist-get element :values) 2) '(9998 9999)))
+    ;; Drawn as before: its latest.
+    (should (equal (plist-get (car (plist-get (agent-ui-check "chart" element) :series)) :values)
+                   (plist-get element :values))))
+  (let ((element (agent-ui-append-to '(:type "chart" :series ((:name "a" :values ())))
+                                     (list :series (list (list :name "a" :values (number-sequence 1 (* 2 agent-ui-max-rows))))))))
+    (should (= (length (plist-get (car (plist-get element :series)) :values)) agent-ui-max-rows)))
+  (let ((element (agent-ui-append-to '(:type "chart" :kind "histogram" :values ())
+                                     (list :values (number-sequence 1 (* 2 agent-ui-max-rows))))))
+    (should (= (length (plist-get element :values)) (* 2 agent-ui-max-rows)))))
 
 (ert-deftest agent-ui-elements/chart-wrong ()
   (should (equal (+test-aue-error '(:type "chart" :values (1 "x")))

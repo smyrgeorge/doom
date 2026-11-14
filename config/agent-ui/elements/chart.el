@@ -7,7 +7,7 @@
 ;; placed by them, an axis of ticks under it (minutes, hours, days). In a terminal, drawn with characters
 ;; (braille dots for lines, blocks for bars); in a graphic frame, as SVG in the
 ;; theme's colours, sized to the text. Values appended to it (a live chart)
-;; keep their latest WINDOW.
+;; keep their latest WINDOW (none: as many as it draws).
 ;;
 ;;   180 ┤    ⢀⠔⠢⡀
 ;;       │ ⡠⠊    ⠈⠢⡀
@@ -101,8 +101,7 @@ if it's neither."
                            collect (or (agent-ui-chart--time time)
                                        (agent-ui--fail "chart: time %d is %s: a date and time (2026-11-10T14:30:00) or seconds since 1970"
                                                        i (agent-ui--show-value time)))))
-           ;; A histogram keeps all its values: it counts them.
-           (keep (or window (if (eq kind 'histogram) 100000 agent-ui-max-rows))))
+           (keep (agent-ui-chart--keep (list :window window :kind kind))))
       ;; The latest KEEP values; labels as many from the end as the longest
       ;; series lost.
       (let ((longest (apply #'max 0 (mapcar (lambda (s) (length (plist-get s :values))) series))))
@@ -122,11 +121,20 @@ if it's neither."
                           values (length times))))
       (plist-put (plist-put (plist-put props :series series) :labels labels) :times times))))
 
+(defun agent-ui-chart--keep (element)
+  "How many of ELEMENT's latest values it keeps and draws: its window, else
+`agent-ui-max-rows' (a histogram 100000: it counts them all)."
+  (let ((window (plist-get element :window)))
+    (cond ((and (numberp window) (>= window 1)) (floor window))
+          ((equal (format "%s" (plist-get element :kind)) "histogram") 100000)
+          (t agent-ui-max-rows))))
+
 (defun agent-ui-chart--windowed (element)
-  "ELEMENT with only the latest of its values kept, as many as its window
-says (none: all), and of its labels and times as many from the end as its
-longest series lost (as drawn: `agent-ui-chart--check')."
-  (let* ((window (and (numberp (plist-get element :window)) (floor (plist-get element :window))))
+  "ELEMENT with only the latest of its values kept, as many as it draws
+\(`agent-ui-chart--keep': without a window, a live chart kept every value,
+each append copying them all), and of its labels and times as many from
+the end as its longest series lost (as drawn: `agent-ui-chart--check')."
+  (let* ((window (agent-ui-chart--keep element))
          (series (plist-get element :series))
          (longest (apply #'max (length (plist-get element :values))
                          (mapcar (lambda (s) (if (agent-ui--plist-p s) (length (plist-get s :values)) 0)) series))))
@@ -148,9 +156,9 @@ longest series lost (as drawn: `agent-ui-chart--check')."
 
 (defun agent-ui-chart--append (element patch)
   "ELEMENT with PATCH's values added: :values to its values; :series by name
-to each's (a new name, a new series); :labels to its labels. Its window's
-latest values kept only (all were, only those drawn trimmed: 2000 appends
-to a window of 3 kept 2000, each append copying them all)."
+to each's (a new name, a new series); :labels to its labels. Only the
+latest values it draws kept (all were, only those drawn trimmed: 2000
+appends to a window of 3 kept 2000, each append copying them all)."
   (cl-loop for (k _) on patch by #'cddr
            unless (memq k '(:id :values :series :labels :times))
            do (agent-ui--fail "chart: only values, series, labels and times can be appended to"))

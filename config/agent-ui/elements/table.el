@@ -177,6 +177,12 @@ those on the left, one at least."
                       (string-trim cell))
     (string-to-number (string-replace "," "" (string-trim cell)))))
 
+(defun agent-ui-table--right-p (cell)
+  "Non-nil if CELL is a number, aligned right: digits, a sign, a decimal
+point, thousands' commas, % maybe; not a version or a date (\"1.2.10\",
+\"2026-11-14\": they were, as numbers)."
+  (string-match-p "\\`[-+]?\\(?:[0-9][0-9,]*\\(?:\\.[0-9]*\\)?\\|\\.[0-9]+\\)%?\\'" cell))
+
 (defconst agent-ui-table--units '(("ms" . 0.001) ("s" . 1) ("min" . 60) ("m" . 60) ("h" . 3600) ("d" . 86400))
   "A duration's units, in seconds.")
 
@@ -298,9 +304,7 @@ widths, alignments, buttons beside or under)."
                                      ;; Numbers to the right.
                                      (let ((cells (seq-remove #'string-empty-p
                                                               (mapcar (lambda (r) (nth i r)) rows))))
-                                       (if (and cells
-                                                (cl-every (lambda (c) (string-match-p "\\`[-+]?[0-9.,]+%?\\'" c))
-                                                          cells))
+                                       (if (and cells (cl-every #'agent-ui-table--right-p cells))
                                            'right
                                          'left)))))
          ;; The sorted column's name cut, its arrow kept (cut, it went first).
