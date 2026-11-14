@@ -6,10 +6,23 @@
 (defvar-local +my/excalidraw--dir nil
   "The page's folder (index.html).")
 
+;; NARROW PANES
+;; Under 730 px Excalidraw lays out for a phone, yet a pane under ~48 columns
+;; is narrower still. Its library's panel (294 px) is as wide as the page at
+;; most, else it went past the left edge; its toolbar scrolls sideways, else
+;; its last tools went past the right one, and its More tools menu is laid
+;; under it as wide as the page (its items' names cut short), out of its
+;; scrolling. (!important: Excalidraw's own styles come later.)
 (defconst +my/excalidraw--page-template
   "<!doctype html>
 <html><head><meta charset=\"utf-8\">
-<style>html,body,#app{margin:0;height:100%%;overflow:hidden;background:%b}</style>
+<style>html,body,#app{margin:0;height:100%%;overflow:hidden;background:%b}
+.excalidraw .sidebar{width:min(calc(302px - var(--space-factor) * 2),100%%)!important}
+.excalidraw--mobile .App-toolbar-container{overflow-x:auto!important;width:max-content!important;max-width:calc(100vw - 8px)!important}
+.excalidraw--mobile .App-toolbar{position:static!important}
+.excalidraw--mobile .App-toolbar__extra-tools-dropdown{top:2.75rem!important;min-width:0!important}
+.excalidraw--mobile .App-toolbar__extra-tools-dropdown .dropdown-menu-container{grid-template-columns:minmax(0,1fr)!important}
+.excalidraw--mobile .App-toolbar__extra-tools-dropdown .dropdown-menu-item__text{overflow:hidden;text-overflow:ellipsis}</style>
 <script>window.EXCALIDRAW_ASSET_PATH = %a;</script>
 <script src=\"%preact.production.min.js\"></script>
 <script src=\"%preact-dom.production.min.js\"></script>

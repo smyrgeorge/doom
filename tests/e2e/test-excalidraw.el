@@ -500,6 +500,98 @@ theme loaded (dark, then light); a canvas chosen (light) stays."
       (should (string-match-p "saving replaces the file" (nth 1 (assq 'excalidraw +my/banner--list))))
       (should-not (buffer-modified-p)))))
 
+;; ====== NARROW PANES ======
+
+(defconst +test-exd--fits-js
+  "(() => {
+  const w = window.innerWidth;
+  // In the page, and not hidden (under another element, scrolled out).
+  const inside = (e) => {
+    const b = e.getBoundingClientRect();
+    return b.left >= 0 && b.right <= w
+      && e.contains(document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2));
+  };
+  const bar = document.querySelector('.App-toolbar-container');
+  const out = {mobile: document.querySelector('.excalidraw').classList.contains('excalidraw--mobile'),
+               unreachable: []};
+  // Each tool: in the page, or once the toolbar is scrolled to it.
+  for (const tool of document.querySelectorAll('.App-top-bar .App-toolbar label.ToolIcon, .App-top-bar .App-toolbar button, .mobile-misc-tools-container label.ToolIcon, .mobile-misc-tools-container button')) {
+    if (!inside(tool) && bar && bar.contains(tool)) {
+      bar.scrollLeft += tool.getBoundingClientRect().right - bar.getBoundingClientRect().right + 1;
+    }
+    if (!inside(tool)) out.unreachable.push(tool.title || tool.getAttribute('aria-label'));
+  }
+  if (bar) bar.scrollLeft = 0;
+  return JSON.stringify(out);
+})()"
+  "Whether the page lays out for a phone, and the tools it can't show.")
+
+(defconst +test-exd--library-panel-js
+  "(() => {
+  const w = window.innerWidth;
+  const box = (e) => { const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.right)]; };
+  const panel = document.querySelector('.sidebar');
+  const browse = [...document.querySelectorAll('a, button')].find(e => /Browse libraries/.test(e.textContent));
+  const items = [...document.querySelectorAll('.library-unit')].map(box);
+  return JSON.stringify({width: w, panel: panel && box(panel), browse: browse && box(browse), items});
+})()"
+  "The library panel's, its Browse libraries' and its items' left and right.")
+
+(defconst +test-exd--more-tools-js
+  "(() => {
+  const items = [...document.querySelectorAll('.App-toolbar__extra-tools-dropdown .dropdown-menu-item')];
+  const shown = (e) => {
+    const b = e.getBoundingClientRect();
+    return b.left >= 0 && b.right <= window.innerWidth
+      && e.contains(document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2));
+  };
+  const out = items.map(e => { const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.right), shown(e)]; });
+  return items.length && items.every(shown) ? 'inside' : JSON.stringify({width: window.innerWidth, items: out});
+})()"
+  "\"inside\" if More tools' menu is open, inside the page and not hidden;
+else its items' left and right, and whether each is.")
+
+(defun +test-exd--js-json (script)
+  (json-parse-string (+test-exd--js script) :object-type 'plist :array-type 'list
+                     :false-object nil :null-object nil))
+
+(ert-deftest e2e-exd/narrow-panes-show-it-all ()
+  "At 100, 60, 40 and 25 columns: every tool on the page or scrolled to,
+More tools' menu inside it; the library panel inside it (294 px wide when
+there's room)."
+  (+test-exd
+    (+test-exd--with-library-file
+      (make-directory (file-name-directory +my/excalidraw-library-file) t)
+      (with-temp-file +my/excalidraw-library-file (insert +test-exd--library))
+      (let ((file (+test-exd--file "narrow.excalidraw.svg")))
+        (dolist (columns '(100 60 40 25))
+          (delete-other-windows)
+          (split-window nil columns 'right)
+          (+test-exd--open file)
+          (let ((fits (+test-exd--js-json +test-exd--fits-js)))
+            (should (plist-get fits :mobile))
+            (should (equal (list columns (plist-get fits :unreachable)) (list columns nil))))
+          ;; More tools' menu.
+          (+test-exd--js "(() => { document.querySelector('.App-toolbar button[title=\"More tools\"]').click(); return 'ok' })()")
+          (unless (+test-wait-for
+                   (lambda ()
+                     (equal (+test-exd--js +test-exd--more-tools-js) "inside"))
+                   3)
+            (ert-fail (list columns "More tools" (+test-exd--js +test-exd--more-tools-js))))
+          (+test-exd--js "(() => { document.querySelector('.App-toolbar button[title=\"More tools\"]').click(); return 'ok' })()")
+          ;; The library panel.
+          (+test-exd--js "(() => { exd.api().toggleSidebar({name: 'default', tab: 'library', force: true}); return 'ok' })()")
+          (should (+test-wait-for
+                   (lambda () (plist-get (+test-exd--js-json +test-exd--library-panel-js) :items))
+                   5))
+          (pcase-let (((map :width :panel :browse :items) (+test-exd--js-json +test-exd--library-panel-js)))
+            (dolist (box (append (list panel browse) items))
+              (should (equal (list columns (>= (car box) 0) (<= (cadr box) width)) (list columns t t))))
+            (when (>= columns 60)
+              (should (= (- (cadr panel) (car panel)) 294))))
+          (set-buffer-modified-p nil)
+          (kill-buffer))))))
+
 ;; ====== LIBRARIES ======
 
 (defconst +test-exd--library

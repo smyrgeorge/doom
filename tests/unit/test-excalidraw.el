@@ -385,6 +385,10 @@ mode, and why."
           (should (string-match-p "<div id=\"app\"></div>" page))
           (should (string-match-p "height:100%;" page))
           (should (string-match-p "background:#ffffff" page))
+          ;; Narrow panes: the library's panel as wide as the page at most,
+          ;; the toolbar scrolling sideways.
+          (should (string-match-p (regexp-quote ".excalidraw .sidebar{width:min(calc(302px - var(--space-factor) * 2),100%)!important}") page))
+          (should (string-match-p (regexp-quote ".excalidraw--mobile .App-toolbar-container{overflow-x:auto!important;") page))
           (should (equal (+test-exd--page-options page)
                          '(:kind "svg" :dark nil :exportDelay 300
                            :fonts "https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw@0.17.6"
