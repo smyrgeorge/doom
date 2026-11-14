@@ -152,25 +152,40 @@ unless NOCONFIRM)."
 ;; Every 0.1 s, for each window showing a drawing, from its view's title (see
 ;; WATCHING in config/webkit/js.el): its changes (see SAVING), the mouse pointer
 ;; the page wants (the hand over buttons and what can be moved, the I-beam
-;; over text, else the arrow), its error in a notice.
+;; over text, else the arrow), an error in a notice: the first of the buffer's
+;; views' (the notice is the buffer's: split, one view's error and another's
+;; none showed it and closed it in turn).
 (defun +my/excalidraw--watch (window xwidget)
   "WINDOW shows XWIDGET's view of the drawing (see above)."
   (when-let* ((state (+my/excalidraw--sync xwidget)))
     (+my/webkit-pointer window (pcase (plist-get state :cursor)
                                  ("hand" 'hand) ("text" 'text) (_ 'arrow)))
-    (+my/excalidraw--show-error (plist-get state :error))))
+    (+my/excalidraw--show-error
+     (seq-some (lambda (view) (plist-get (if (eq view xwidget) state (+my/excalidraw--state view))
+                                         :error))
+               (+my/webkit-xwidgets)))))
+
+(defun +my/excalidraw--error-text (error)
+  "What a notice says of ERROR, the page's (see excalidraw.js): what it means
+for the drawing, by its kind."
+  (pcase error
+    ((rx bos "Export: " (let why (* anything)))
+     (format "The drawing can't be saved: %s" why))
+    ((rx bos "Library: " (let why (* anything)))
+     (format "The library wasn't added: %s" why))
+    ((rx bos "Not shown: " (let why (+ anything)))
+     (format "%s%s: the drawing shown is still the one before"
+             (upcase (substring why 0 1)) (substring why 1)))
+    ((rx bos "Not a drawing")
+     (format "%s: shown blank, saving replaces the file with what you draw" error))
+    (_ error)))
 
 (defun +my/excalidraw--show-error (error)
   "Show ERROR (a string, the page's) in a notice above the drawing; nil: none."
   (unless (equal error +my/excalidraw--error)
     (setq +my/excalidraw--error error)
     (cond ((not (fboundp '+my/banner-show))
-           (when error (message "%s" error)))
+           (when error (message "%s" (+my/excalidraw--error-text error))))
           (error
-           (+my/banner-show 'excalidraw
-                            (if (string-prefix-p "Export" error)
-                                (format "The drawing can't be saved: %s" error)
-                              (format "%s: shown blank, saving replaces the file with what you draw"
-                                      error))
-                            :type 'error))
+           (+my/banner-show 'excalidraw (+my/excalidraw--error-text error) :type 'error))
           (t (+my/banner-close 'excalidraw)))))

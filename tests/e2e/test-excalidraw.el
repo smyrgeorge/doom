@@ -359,6 +359,21 @@ its own; the drawings closed after."
 
 ;; ====== CLOSING ======
 
+(ert-deftest e2e-exd/changed-on-disk-to-what-isnt-a-drawing ()
+  "Read again, its file no longer a drawing: the drawing before stays shown,
+and its notice says so."
+  (+test-exd
+    (let* ((file (+test-exd--make (+test-exd--file "mine.excalidraw.svg") "[{type: 'diamond', x: 0, y: 0, width: 50, height: 50}]"))
+           (buffer (+test-exd--open file)))
+      (with-temp-file file
+        (insert "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"/>\n"))
+      (revert-buffer t t)
+      (should (+test-wait-for (lambda () (assq 'excalidraw +my/banner--list)) 5))
+      (should (string-match-p "\\`Not a drawing Excalidraw opens .*: the drawing shown is still the one before\\'"
+                              (nth 1 (assq 'excalidraw +my/banner--list))))
+      (should (equal (+test-exd--elements) '("diamond")))
+      (should (eq (window-buffer) buffer)))))
+
 (ert-deftest e2e-exd/closed-right-after-a-change ()
   "Closed while its page's export may be on its way to Emacs: no crash (a
 view killed while an answer was pending crashed Emacs), the views go once
@@ -591,6 +606,39 @@ there's room)."
               (should (= (- (cadr panel) (car panel)) 294))))
           (set-buffer-modified-p nil)
           (kill-buffer))))))
+
+(ert-deftest e2e-exd/an-error-in-one-of-two-panes ()
+  "Split, a library not added in one pane: a notice saying so, on one line,
+shown once and steady; closed once, as that pane's next change is saved."
+  (+test-exd
+    (let* ((file (+test-exd--file "error.excalidraw.svg"))
+           (buffer (+test-exd--open file))
+           (left (selected-window))
+           (right (split-window-right))
+           (shown 0)
+           (closed 0))
+      (should (+test-exd--ready right))
+      (cl-letf* ((show (symbol-function '+my/banner-show))
+                 (close (symbol-function '+my/banner-close))
+                 ((symbol-function '+my/banner-show)
+                  (lambda (id &rest args) (when (eq id 'excalidraw) (cl-incf shown)) (apply show id args)))
+                 ((symbol-function '+my/banner-close)
+                  (lambda (&optional id) (when (eq id 'excalidraw) (cl-incf closed)) (funcall close id))))
+        (+test-exd--js "(() => { exd.addLibrary(btoa('{\"type\": \"excalidrawlib\", \"libraryItems\": 5}')); return 'ok' })()" left)
+        (should (+test-wait-for (lambda () (assq 'excalidraw (buffer-local-value '+my/banner--list buffer))) 5))
+        (+test-sleep 2)
+        (should (= shown 1))
+        (should (= closed 0))
+        (let ((text (nth 1 (assq 'excalidraw (buffer-local-value '+my/banner--list buffer)))))
+          (should (string-prefix-p "The library wasn't added: " text))
+          (should-not (string-match-p "\n" text)))
+        ;; A change in that pane, exported: no error.
+        (+test-exd--add "[{type: 'rectangle', x: 0, y: 0, width: 80, height: 40}]" left)
+        (should (+test-wait-for (lambda () (not (assq 'excalidraw (buffer-local-value '+my/banner--list buffer)))) 5))
+        (+test-sleep 0.5)
+        (should (= shown 1))
+        (should (= closed 1)))
+      (with-current-buffer buffer (set-buffer-modified-p nil)))))
 
 ;; ====== LIBRARIES ======
 

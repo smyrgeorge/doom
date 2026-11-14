@@ -874,11 +874,58 @@ Without a view: at once."
         (+test-exd--say xw :ready t :version 1 :exported 0 :error "Export: TypeError")
         (+my/excalidraw--watch (selected-window) xw)
         (should (equal (car +test-exd--notices)
-                       (list 'show 'excalidraw "The drawing can't be saved: Export: TypeError" 'error buffer)))
+                       (list 'show 'excalidraw "The drawing can't be saved: TypeError" 'error buffer)))
         (+test-exd--say xw :ready t :version 1 :exported 1)
         (+my/excalidraw--watch (selected-window) xw)
         (should (equal (car +test-exd--notices) (list 'close 'excalidraw buffer)))
         (should (= (length +test-exd--notices) 3))))))
+
+;; What the notice says, by the error's kind.
+(ert-deftest exd/error-notices-say-what-it-means ()
+  (should (equal (+my/excalidraw--error-text "Export: TypeError: x is null")
+                 "The drawing can't be saved: TypeError: x is null"))
+  ;; A library not added: the drawing is as it was.
+  (should (equal (+my/excalidraw--error-text "Library: Invalid attempt to iterate non-iterable instance.\nIn order to be iterable...")
+                 "The library wasn't added: Invalid attempt to iterate non-iterable instance.\nIn order to be iterable..."))
+  ;; Opening the file: shown blank.
+  (should (equal (+my/excalidraw--error-text "Not a drawing Excalidraw opens (no scene)")
+                 "Not a drawing Excalidraw opens (no scene): shown blank, saving replaces the file with what you draw"))
+  ;; Another drawing instead (read again, M-p): the one before stays.
+  (should (equal (+my/excalidraw--error-text "Not shown: not a drawing Excalidraw opens (no scene)")
+                 "Not a drawing Excalidraw opens (no scene): the drawing shown is still the one before"))
+  ;; Others as they are.
+  (should (equal (+my/excalidraw--error-text "Excalidraw did not load") "Excalidraw did not load")))
+
+(ert-deftest exd/error-of-one-view-of-two ()
+  "Split, one view's page has an error, the other's none: the notice shown
+once, kept while both are watched; closed once neither has one."
+  (+test-exd
+    (let* ((buffer (+test-exd--open (+test-exd--file "split.excalidraw.svg" +test-exd--svg)))
+           (w1 (selected-window))
+           (w2 (+test-exd--show buffer (split-window nil nil 'right)))
+           (x1 (+test-exd--xw buffer w1))
+           (x2 (+test-exd--xw buffer w2)))
+      (with-current-buffer buffer
+        (+test-exd--say x1 :ready t :version 0 :exported 0 :error "Library: broken")
+        (+test-exd--say x2 :ready t :version 0 :exported 0)
+        (dotimes (_ 5)
+          (+my/excalidraw--watch w1 x1)
+          (+my/excalidraw--watch w2 x2))
+        (should (equal +test-exd--notices
+                       (list (list 'show 'excalidraw "The library wasn't added: broken" 'error buffer))))
+        ;; The other's error too: still the one notice.
+        (+test-exd--say x2 :ready t :version 0 :exported 0 :error "Library: broken")
+        (+my/excalidraw--watch w2 x2)
+        (+test-exd--say x1 :ready t :version 1 :exported 1)
+        (+my/excalidraw--watch w1 x1)
+        (should (= (length +test-exd--notices) 1))
+        ;; Neither: closed, once.
+        (+test-exd--say x2 :ready t :version 1 :exported 1)
+        (dotimes (_ 3)
+          (+my/excalidraw--watch w1 x1)
+          (+my/excalidraw--watch w2 x2))
+        (should (equal (car +test-exd--notices) (list 'close 'excalidraw buffer)))
+        (should (= (length +test-exd--notices) 2))))))
 
 ;; ====== KEYS ======
 

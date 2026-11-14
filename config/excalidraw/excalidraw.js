@@ -277,7 +277,8 @@
     try {
       scene = await sceneOf(decode(base64));
     } catch (e) {
-      state.error = 'Not a drawing Excalidraw opens (' + (e && e.message ? e.message : e) + ')';
+      // The drawing shown stays.
+      state.error = 'Not shown: not a drawing Excalidraw opens (' + (e && e.message ? e.message : e) + ')';
       publish();
       return;
     }
