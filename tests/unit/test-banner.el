@@ -387,6 +387,21 @@ one, and closing the notices leaves the new one."
       ;; Not in a header line: no header line keys.
       (should-not (text-property-not-all 0 (length row) 'local-map nil row)))))
 
+(ert-deftest banner/row-message-whole-in-its-help ()
+  "The icon and message say the whole message when hovered, cut short or not,
+on the notices' frame and in a terminal's header line."
+  (+test-banner
+    (let ((buffer (+test-buffer "B"))
+          (text "Library: not a library: shown as it was, saving keeps it"))
+      (dolist (header '(nil t))
+        (dolist (width '(nil 100 40 25))
+          (let* ((row (+my/banner--row (list 'id text '(("Do" . ignore)) 'error) buffer header 0 width))
+                 (message (+test-banner--pos row (substring text 0 1))))
+            (should (equal (get-text-property 2 'help-echo row) text))
+            (should (equal (get-text-property message 'help-echo row) text))
+            (should (equal (get-text-property (1- (+test-banner--pos row "Do")) 'help-echo row) nil))
+            (should (equal (get-text-property (+test-banner--pos row "Do") 'help-echo row) "mouse-1: Do"))))))))
+
 (ert-deftest banner/row-help-echo-trims-the-label ()
   (+test-banner
     (let ((row (+my/banner--row '(id "M" ((" Spaced " . ignore)) info) (+test-buffer "B"))))

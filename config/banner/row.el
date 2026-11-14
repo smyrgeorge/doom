@@ -135,12 +135,17 @@ ROW): on the notices' frame it may take two rows."
                                (append props (unless header
                                                (list 'keymap +my/banner--row-map))))))
                (message (+my/banner--cut text room "…"))
+               ;; The whole message in the icon's and message's help: cut
+               ;; short, it's read there.
                (start (concat
                        (funcall plain "  ")
                        (let ((icon (+my/banner--icon type face)))
-                         (unless header (add-text-properties 0 (length icon) (list 'keymap +my/banner--row-map) icon))
+                         (add-text-properties 0 (length icon)
+                                              (append (list 'help-echo text)
+                                                      (unless header (list 'keymap +my/banner--row-map)))
+                                              icon)
                          icon)
-                       (funcall plain (concat "  " message))))
+                       (funcall plain (concat "  " message) 'help-echo text)))
                (end (concat
                      (mapconcat (lambda (action)
                                   (concat (funcall plain (if tight "  " "    "))
