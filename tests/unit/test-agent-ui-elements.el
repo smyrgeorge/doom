@@ -3179,7 +3179,7 @@ taller), both cut to the tile: nothing overlaps, nothing spills out."
                                           (:label "p95" :value 20.1 :unit "s" :change "max 40.2 s")
                                           (:label "Runs" :value 412 :change 3)
                                           (:label "Failed" :value 2 :change -1 :good "down")
-                                          (:label "Longest" :value "123456789012345" :change "x"))))
+                                          (:label "Longest" :value "123456789012345678901234567890" :change "x"))))
          (svg-of (lambda (width)
                    (plist-get (cdr (get-text-property 0 'display
                                                       (agent-ui-render element (agent-ui-context :width width :graphic t
@@ -3191,8 +3191,8 @@ taller), both cut to the tile: nothing overlaps, nothing spills out."
       (should (string-match-p "<svg[^>]* height=\"136\"" svg))
       (should (string-match-p "<text[^>]* y=\"54.4\" x=\"8\">max 36.6 s</text>" svg))
       (should-not (string-match-p "text-anchor=\"end\"[^>]*>max 36.6 s<" svg))
-      ;; A value wider than its tile: cut.
-      (should (string-match-p ">12345678&#8230;</text>" svg)))
+      ;; A text value wider than its tile even smaller: cut.
+      (should (string-match-p "font-size=\"12\"[^>]*>12345678901234&#8230;</text>" svg)))
     ;; Wide: side by side, the change at the tile's right; 3 lines, but
     ;; for a value as wide as its tile (its change under).
     (let ((svg (funcall svg-of 160)))
@@ -3200,6 +3200,35 @@ taller), both cut to the tile: nothing overlaps, nothing spills out."
       (should (string-match-p "text-anchor=\"end\"[^>]*>max 36.6 s</text>" svg)))
     (setq element (list :type "stats" :figures (butlast (plist-get element :figures))))
     (should (string-match-p "<svg[^>]* height=\"48\"" (funcall svg-of 160)))))
+
+(ert-deftest agent-ui-elements/numbers-never-cut ()
+  "No number cut with … at 24 columns: a line chart's axis (its unit over
+it, the numbers compact: \"34567…\" for 3456789), a bar's values, a
+histogram's bins (rounded, their unit over them: all \"200.8–4…\"), a stats
+tile's value (compact, or smaller: \"1234567…\", \"29 seco…\"); text and GUI."
+  (let ((line '(:type "chart" :unit "requests" :height 4 :values (1234567 2345678 3456789 123)))
+        (bars '(:type "chart" :kind "bar" :unit "requests" :labels ("a" "b") :values (1234567 3456789)))
+        (histogram '(:type "chart" :kind "histogram" :unit "ms" :bins 5
+                     :values (12 15 18 22 25 31 33 41 58 90 1000 1004)))
+        (stats '(:type "stats" :figures ((:label "Tests" :value 123456789)
+                                         (:label "Build" :value 29 :unit "seconds" :change -12 :good "down")))))
+    (dolist (element (list line bars histogram stats))
+      (dolist (width '(18 24 30))
+        (let ((text (+test-aue-draw element :width width)))
+          (should-not (string-search "…" text))
+          (dolist (row (split-string text "\n"))
+            (should (<= (string-width row) width))))
+        (let ((svg (+test-aue-svg element width)))
+          (should-not (string-search "&#8230;" svg)))))
+    (should (string-prefix-p "requests\n3.46M ┤" (+test-aue-draw line :width 18)))
+    (should (string-prefix-p "requests\n3456789 ┤" (+test-aue-draw line :width 30)))
+    (should (string-prefix-p "ms\n10–210    █" (+test-aue-draw histogram :width 24)))
+    (should (string-match-p "\n810–1000  █+ +2\\'" (+test-aue-draw histogram :width 24)))
+    (should (string-match-p ">123456789</text>" (+test-aue-svg stats 24)))
+    (should (string-match-p ">29 seconds</text>" (+test-aue-svg stats 24)))
+    ;; Wide: as before, the unit with each number.
+    (should (string-prefix-p "3456789 requests ┤" (+test-aue-draw line :width 60)))
+    (should (string-prefix-p "10–210 ms  " (+test-aue-draw histogram :width 60)))))
 
 (ert-deftest agent-ui-elements/stats-tiles-in-one-row-when-they-fit ()
   "Tiles that fit side by side are drawn in one row (the gaps between them

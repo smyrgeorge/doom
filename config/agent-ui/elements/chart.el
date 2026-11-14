@@ -203,6 +203,21 @@ all 0 or below)."
     (concat (agent-ui-format-number number)
             (if (and unit (not (string-empty-p unit))) (concat " " unit) ""))))
 
+(defun agent-ui-chart--fit-numbers (props numbers columns)
+  "NUMBERS as the chart shows them in COLUMNS each, never cut: with PROPS'
+unit if they fit so; else without it (said once, over them), compact when
+need be (3.46M; \"34567…\" misread 3456789). (TEXTS . UNIT), UNIT the unit
+taken out of them, or nil."
+  (let ((unit (plist-get props :unit))
+        (fits (lambda (texts) (<= (apply #'max 0 (mapcar #'string-width texts)) columns))))
+    (cl-flet ((plain (n) (agent-ui-format-number n))
+              (compact (n) (agent-ui-format-compact n)))
+      (let ((full (mapcar (lambda (n) (agent-ui-chart--number props n)) numbers))
+            (unit (and unit (not (string-empty-p unit)) unit)))
+        (cond ((funcall fits full) (cons full nil))
+              ((funcall fits (mapcar #'plain numbers)) (cons (mapcar #'plain numbers) unit))
+              (t (cons (mapcar (lambda (n) (agent-ui-truncate (compact n) columns)) numbers) unit)))))))
+
 (defun agent-ui-chart--face (index)
   (nth (mod index (length agent-ui-chart-faces)) agent-ui-chart-faces))
 
@@ -262,7 +277,7 @@ named."
             (propertize suffix 'face 'agent-ui-muted))))
 
 (defun agent-ui-chart--bar-rows (props)
-  "PROPS' bars, a row each: (NAME SEGMENTS NUMBER), SEGMENTS ((VALUE .
+  "PROPS' bars, a row each: (NAME SEGMENTS VALUE), SEGMENTS ((VALUE .
 SERIES-INDEX) ...) from the left. One series: a bar per value; several,
 grouped: a bar per series under each label (its name on the first);
 stacked: a bar per label, its series end to end, their total its number."
@@ -278,13 +293,13 @@ stacked: a bar per label, its series end to end, their total its number."
              ((agent-ui-chart--stacked-p props)
               (list (list name
                           (cl-loop for s in series for k from 0 collect (cons (funcall value s i) k))
-                          (agent-ui-chart--number props (apply #'+ (mapcar (lambda (s) (funcall value s i)) series))))))
+                          (apply #'+ (mapcar (lambda (s) (funcall value s i)) series)))))
              (t
               (cl-loop for s in series
                        for k from 0
                        collect (list (if (= k 0) name "")
                                      (list (cons (funcall value s i) k))
-                                     (agent-ui-chart--number props (or (nth i (plist-get s :values)) 0)))))))))
+                                     (or (nth i (plist-get s :values)) 0))))))))
 
 (defun agent-ui-chart--bar-cells (segments scale width)
   "SEGMENTS ((VALUE . INDEX) ...) as text, SCALE cells a unit, at most WIDTH
@@ -309,22 +324,54 @@ eighths)."
     (let ((bar (apply #'concat (nreverse parts))))
       (concat bar (make-string (max 0 (- width (string-width bar))) ?\s)))))
 
-(defun agent-ui-chart--bar-text (props ctx)
+(defun agent-ui-chart--bar-parts (props columns)
+  "PROPS' bars' rows (`agent-ui-chart--bar-rows'), their names and values as
+text, each a third of COLUMNS at most, never cut where a number (a long unit
+said once over them, `agent-ui-chart--fit-numbers'; a histogram's bins
+without theirs, its :bin-labels, or their starts, :bin-starts): (ROWS
+LABEL-UNIT VALUE-UNIT)."
   (let* ((rows (agent-ui-chart--bar-rows props))
-         (width (plist-get ctx :width))
-         (label-width (min (apply #'max 0 (mapcar (lambda (r) (string-width (car r))) rows)) (/ width 3)))
-         ;; Values a third of the width at most, cut (a long unit ran the
-         ;; lines past the width); the bar a column at least.
-         (value-width (min (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)) (/ width 3)))
-         (bar-width (max 1 (- width label-width value-width 4)))
-         (scale (agent-ui-chart--bar-scale props bar-width))
-         (legend (and (cdr (plist-get props :series)) (agent-ui-chart--legend props (- width label-width 2)))))
+         (third (max 1 (/ columns 3)))
+         (values (agent-ui-chart--fit-numbers props (mapcar (lambda (r) (nth 2 r)) rows) third))
+         (widest (lambda (labels) (apply #'max 0 (mapcar #'string-width labels))))
+         ;; A histogram's bins: their ranges with their unit; else without
+         ;; it; else their starts alone.
+         (bins (and (plist-get props :bin-labels)
+                    (> (funcall widest (mapcar #'car rows)) third)
+                    (if (<= (funcall widest (plist-get props :bin-labels)) third)
+                        (plist-get props :bin-labels)
+                      (plist-get props :bin-starts)))))
+    (list (cl-loop for r in rows for v in (car values) for i from 0
+                   collect (list (if bins (nth i bins) (car r)) (nth 1 r) v))
+          (and bins (plist-get props :bin-unit))
+          (cdr values))))
+
+(defun agent-ui-chart--bar-text (props ctx)
+  (pcase-let* ((width (plist-get ctx :width))
+               (`(,rows ,label-unit ,value-unit) (agent-ui-chart--bar-parts props width))
+               (label-width (min (apply #'max 0 (mapcar (lambda (r) (string-width (car r))) rows)) (/ width 3)))
+               ;; Values a third of the width at most (a long unit ran the
+               ;; lines past the width); the bar a column at least.
+               (value-width (min (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)) (/ width 3)))
+               (bar-width (max 1 (- width label-width value-width 4)))
+               (scale (agent-ui-chart--bar-scale props bar-width))
+               (legend (and (cdr (plist-get props :series)) (agent-ui-chart--legend props (- width label-width 2)))))
     (concat
+     ;; The units taken out of the names and values, over them.
+     (if (or label-unit value-unit)
+         (concat (propertize (string-trim-right
+                              (concat (agent-ui-pad (or label-unit "") label-width)
+                                      (if value-unit
+                                          (agent-ui-pad value-unit (- width label-width) 'right)
+                                        "")))
+                             'face 'agent-ui-muted)
+                 "\n")
+       "")
      (mapconcat
       (lambda (row)
         (concat (agent-ui-pad (agent-ui-truncate (car row) label-width) label-width) "  "
                 (agent-ui-chart--bar-cells (nth 1 row) scale bar-width) "  "
-                (agent-ui-pad (agent-ui-truncate (nth 2 row) value-width) value-width 'right)))
+                (agent-ui-pad (nth 2 row) value-width 'right)))
       rows "\n")
      (mapconcat (lambda (line) (concat "\n" (make-string (+ label-width 2) ?\s) line)) legend ""))))
 
@@ -466,14 +513,12 @@ labels under them (none on another's), as two lines; nil without times."
         (cons (concat axis) line)))))
 
 (defun agent-ui-chart--line-text (props ctx)
-  (let* ((range (agent-ui-chart--range props))
-         (high-label (agent-ui-chart--number props (cdr range)))
-         (low-label (agent-ui-chart--number props (car range)))
-         ;; The axis's labels a third of the width at most, cut.
-         (label-width (min (max (string-width high-label) (string-width low-label))
-                           (max 1 (/ (plist-get ctx :width) 3))))
-         (high-label (agent-ui-truncate high-label label-width))
-         (low-label (agent-ui-truncate low-label label-width))
+  (pcase-let* ((range (agent-ui-chart--range props))
+         ;; The axis's labels a third of the width at most, never cut: its
+         ;; unit over them if need be, the numbers compact.
+         (`((,high-label ,low-label) . ,unit)
+          (agent-ui-chart--fit-numbers props (list (cdr range) (car range)) (max 1 (/ (plist-get ctx :width) 3))))
+         (label-width (max (string-width high-label) (string-width low-label)))
          (columns (max 4 (- (plist-get ctx :width) label-width 2)))
          (rows (plist-get props :height))
          (plot (agent-ui-chart--plot (plist-get props :series) range columns rows (agent-ui-chart--xs props)))
@@ -481,6 +526,13 @@ labels under them (none on another's), as two lines; nil without times."
          (time-axis (agent-ui-chart--time-axis props columns))
          (legend (agent-ui-chart--legend props columns)))
     (concat
+     ;; The unit taken out of the labels: over them, ending with them.
+     (if unit
+         (concat (propertize (agent-ui-pad unit (max label-width (min (string-width unit) (plist-get ctx :width)))
+                                           'right)
+                             'face 'agent-ui-muted)
+                 "\n")
+       "")
      (mapconcat
       (lambda (row)
         (concat
@@ -544,17 +596,16 @@ labels under them (none on another's), as two lines; nil without times."
          args))
 
 (defun agent-ui-chart--line-svg (props ctx)
-  (let* ((cw (plist-get ctx :char-width))
+  (pcase-let* ((cw (plist-get ctx :char-width))
          (lh (plist-get ctx :line-height))
          (range (agent-ui-chart--range props))
          (low (car range)) (span (float (- (cdr range) low)))
-         ;; The axis's labels a third of the width at most, cut (a long unit
-         ;; put the plot's left past its right, outside the image).
-         (label-columns (min (max (string-width (agent-ui-chart--number props (cdr range)))
-                                  (string-width (agent-ui-chart--number props low)))
-                             (max 1 (/ (plist-get ctx :width) 3))))
-         (high-label (agent-ui-truncate (agent-ui-chart--number props (cdr range)) label-columns))
-         (low-label (agent-ui-truncate (agent-ui-chart--number props low) label-columns))
+         ;; The axis's labels a third of the width at most (a long unit put
+         ;; the plot's left past its right, outside the image), never cut:
+         ;; the unit over them if need be, the numbers compact.
+         (`((,high-label ,low-label) . ,unit)
+          (agent-ui-chart--fit-numbers props (list (cdr range) low) (max 1 (/ (plist-get ctx :width) 3))))
+         (label-columns (max (string-width high-label) (string-width low-label)))
          (label-width (* cw (+ 1 label-columns)))
          (labels (plist-get props :labels))
          (xs (agent-ui-chart--xs props))
@@ -565,14 +616,20 @@ labels under them (none on another's), as two lines; nil without times."
          ;; The legend's rows (it was one, past the image's right edge).
          (legend (and (seq-some (lambda (s) (plist-get s :name)) (plist-get props :series))
                       (agent-ui-chart--legend-rows (plist-get props :series) (floor (- right left) cw))))
-         (plot-height (* lh (plist-get props :height)))
-         ;; Room above the plot for its top label's letters.
-         (top (round (* 0.8 lh)))
+         ;; Room above the plot for its top label's letters (and a line for
+         ;; the unit taken out of the labels).
+         (head (if unit lh 0))
+         (plot-height (+ head (* lh (plist-get props :height))))
+         (top (+ head (round (* 0.8 lh))))
          (height (+ plot-height (if (or labels times) lh 0) (* lh (length legend)) (/ lh 2)))
          (muted (agent-ui-chart--color 'agent-ui-muted))
          (svg (svg-create width height)))
     ;; Within the plot, past min or max at its edge (as in text: it left the
     ;; image, and crossed the labels' row).
+    (when unit
+      (agent-ui-chart--svg-text svg ctx unit (if (<= (string-width unit) (1+ label-columns)) (- left (/ cw 2)) 0)
+                                (* 0.8 lh) :fill muted
+                                :text-anchor (if (<= (string-width unit) (1+ label-columns)) "end" "start")))
     (cl-flet ((y-of (v) (+ top (* (- plot-height top) (- 1 (max 0 (min 1 (/ (- v low) span))))))))
       (svg-line svg left top left (+ top (- plot-height top)) :stroke muted :stroke-width 1)
       (agent-ui-chart--svg-text svg ctx high-label (- left (/ cw 2)) (+ top (/ lh 3))
@@ -632,10 +689,12 @@ labels under them (none on another's), as two lines; nil without times."
     (agent-ui-chart--image svg)))
 
 (defun agent-ui-chart--bar-svg (props ctx)
-  (let* ((cw (plist-get ctx :char-width))
+  (pcase-let* ((cw (plist-get ctx :char-width))
          (lh (plist-get ctx :line-height))
-         (rows (agent-ui-chart--bar-rows props))
          (columns (plist-get ctx :width))
+         ;; Names and values never cut where numbers: units over them.
+         (`(,rows ,label-unit ,value-unit) (agent-ui-chart--bar-parts props columns))
+         (head (if (or label-unit value-unit) lh 0))
          (label-width (* cw (min (apply #'max 0 (mapcar (lambda (r) (string-width (car r))) rows)) (/ columns 3))))
          ;; Values a third of the width at most, cut; the bar a column at least.
          (value-columns (min (apply #'max 0 (mapcar (lambda (r) (string-width (nth 2 r))) rows)) (/ columns 3)))
@@ -652,12 +711,12 @@ labels under them (none on another's), as two lines; nil without times."
          ;; The legend's rows (it was one, past the image's right edge).
          (legend (and (cdr series) (seq-some (lambda (s) (plist-get s :name)) series)
                       (agent-ui-chart--legend-rows series (floor (- width bar-left) cw))))
-         (ys (let ((y 0))
+         (ys (let ((y head))
                (mapcar (lambda (r)
                          (when (and grouped (not (string-empty-p (car r))) (> y 0)) (cl-incf y gap))
                          (prog1 y (cl-incf y row)))
                        rows)))
-         (height (+ (if rows (+ (car (last ys)) row) 0)
+         (height (+ (if rows (+ (car (last ys)) row) head)
                     (if legend (+ (round (* 1.4 lh)) (* lh (1- (length legend)))) 0)))
          (svg (svg-create width height))
          (fg (agent-ui-chart--color 'default))
@@ -675,9 +734,13 @@ labels under them (none on another's), as two lines; nil without times."
                                        :fill (agent-ui-chart--color (agent-ui-chart--face (cdr segment)))
                                        :rx (if (cdr (nth 1 r)) 0 2))
                         (setq x (+ x length)))))
-                  (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (nth 2 r) value-columns)
+                  (agent-ui-chart--svg-text svg ctx (nth 2 r)
                                             (+ (max x (+ bar-left 1)) cw) (+ y (* 0.7 row))
                                             :fill muted)))
+    (when label-unit
+      (agent-ui-chart--svg-text svg ctx label-unit 0 (* 0.8 lh) :fill muted))
+    (when value-unit
+      (agent-ui-chart--svg-text svg ctx value-unit (- width cw) (* 0.8 lh) :fill muted :text-anchor "end"))
     (cl-loop for row in legend
              for y from (- height (round (* 0.4 lh)) (* lh (1- (length legend)))) by lh
              do (let ((x bar-left))
@@ -705,13 +768,23 @@ its values'), each labelled with its range."
       (when (<= low v high)
         (cl-incf (aref counts (min (1- bins) (floor (/ (- v low) step)))))))
     ;; Its min and max are its bins' span, not the counts' axis.
-    (append (list :kind 'bar :unit nil :min nil :max nil
-                  :series (list (list :name nil :values (append counts nil)))
-                  :labels (cl-loop for i below bins
-                                   collect (format "%s–%s"
-                                                   (agent-ui-format-number (+ low (* i step)))
-                                                   (agent-ui-chart--number props (+ low (* (1+ i) step))))))
-            props)))
+    ;; Its bins' edges rounded to two digits of their width (12–210.4,
+    ;; 210.4–408.8...: cut, they all read "210.…"), compact when large.
+    (let* ((precision (expt 10.0 (- (floor (log step 10)) 1)))
+           (edge (lambda (i) (agent-ui-format-compact
+                              (let ((x (* precision (round (/ (+ low (* i step)) precision)))))
+                                (if (= x (ffloor x)) (truncate x) x)))))
+           (bin-labels (cl-loop for i below bins collect (format "%s–%s" (funcall edge i) (funcall edge (1+ i)))))
+           (unit (plist-get props :unit)))
+      (append (list :kind 'bar :unit nil :min nil :max nil
+                    :series (list (list :name nil :values (append counts nil)))
+                    :labels (if (and unit (not (string-empty-p unit)))
+                                (mapcar (lambda (label) (concat label " " unit)) bin-labels)
+                              bin-labels)
+                    ;; Without their unit, said once over them, if they don't fit.
+                    :bin-labels bin-labels :bin-unit unit
+                    :bin-starts (cl-loop for i below bins collect (funcall edge i)))
+              props))))
 
 (defun agent-ui-chart--gui (props ctx)
   (if (agent-ui-chart--empty-p props)

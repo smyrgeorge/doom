@@ -77,21 +77,29 @@
        (seq-partition cells per-row) "\n\n"))))
 
 (defun agent-ui-stats--tile (f cw lh tile-width)
-  "Figure F's tile laid out in TILE-WIDTH pixels: (VALUE CHANGE UNDER), its
-value and change cut to fit, UNDER non-nil when the change goes on a line of
-its own under the value (they didn't fit side by side). Widths as drawn:
-the value's font 1.25 of a line (a character ~0.75 of it), the change's 0.8
-\(~0.5)."
+  "Figure F's tile laid out in TILE-WIDTH pixels: (VALUE CHANGE UNDER SIZE),
+its value at SIZE (1.25 of a line, down to 0.75 if that fits it: a number
+compact first, 123M; cut, it misread: \"1234567…\", \"29 seco…\"; text cut
+at last), its change cut to fit, UNDER non-nil when the change goes on a
+line of its own under the value (they didn't fit side by side). Widths as
+drawn: a character ~0.6 of its font, the change's 0.8 of a line (~0.5)."
   (let* ((inner (- tile-width (* 2 cw)))
-         (value (agent-ui-truncate (agent-ui-stats--value f) (max 1 (floor inner (* 0.75 lh)))))
-         (value-width (* 0.75 lh (string-width value)))
+         (value (agent-ui-stats--value f))
+         (value (if (and (numberp (plist-get f :value))
+                         (> (agent-ui-svg-text-width value (* 0.75 lh)) inner))
+                    (agent-ui-stats--value (plist-put (copy-sequence f) :value
+                                                      (agent-ui-format-compact (plist-get f :value))))
+                  value))
+         (size (max (* 0.75 lh) (agent-ui-svg-fit-size value (* 1.25 lh) inner)))
+         (value (agent-ui-truncate value (max 1 (floor (+ (/ inner (* 0.6 size)) 1e-6)))))
+         (value-width (agent-ui-svg-text-width value size))
          (change (agent-ui-stats--change f))
          (beside (and change (floor (- inner value-width cw) (* 0.5 lh)))))
-    (cond ((null change) (list value nil nil))
-          ((>= beside (string-width (car change))) (list value change nil))
+    (cond ((null change) (list value nil nil size))
+          ((>= beside (string-width (car change))) (list value change nil size))
           (t (list value
                    (cons (agent-ui-truncate (car change) (max 1 (floor inner (* 0.5 lh)))) (cdr change))
-                   t)))))
+                   t size)))))
 
 (defun agent-ui-stats--gui (props ctx)
   (let* ((figures (plist-get props :figures))
@@ -119,7 +127,7 @@ the value's font 1.25 of a line (a character ~0.75 of it), the change's 0.8
       (let ((y 0))
         (cl-loop for row in rows
                  for tile-height in heights
-                 do (cl-loop for (f value change under) in row
+                 do (cl-loop for (f value change under size) in row
                              for c from 0
                              do (let ((x (* c (+ tile-width gap))))
                                   (svg-rectangle svg x y tile-width tile-height :rx 6 :fill fill)
@@ -129,7 +137,7 @@ the value's font 1.25 of a line (a character ~0.75 of it), the change's 0.8
                                                                                (floor (- tile-width (* 2 cw)) (* 0.5 lh)))
                                                             (+ x cw) (+ y (* 0.95 lh)) :fill muted)
                                   (svg-text svg value :x (+ x cw) :y (+ y (* 2.4 lh))
-                                            :font-size (round (* 1.25 lh)) :font-weight "bold" :fill fg
+                                            :font-size (round size) :font-weight "bold" :fill fg
                                             :font-family (or (face-attribute 'default :family nil t) "monospace"))
                                   (when change
                                     (if under

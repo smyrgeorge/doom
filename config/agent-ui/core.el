@@ -690,6 +690,27 @@ center."
                               "\\.")))
         (t (format "%s" number))))
 
+(defun agent-ui-format-compact (number)
+  "NUMBER as text in a few characters: as `agent-ui-format-number' under
+10000, else with 3 significant digits and k, M, B or T (12.3k, 3.46M,
+123M): a number that would be cut to fit."
+  (let ((size (abs number)))
+    (if (or (not (numberp number)) (< size 10000))
+        (agent-ui-format-number number)
+      (let* ((units '((1e12 . "T") (1e9 . "B") (1e6 . "M") (1e3 . "k")))
+             (unit (seq-find (lambda (u) (>= size (car u))) units))
+             (scaled (/ number (car unit)))
+             ;; 3 significant digits; 999.95k is 1M.
+             (digits (cond ((>= (abs scaled) 99.95) 0) ((>= (abs scaled) 9.995) 1) (t 2)))
+             (text (format (format "%%.%df" digits) scaled)))
+        (when (and (>= (abs (string-to-number text)) 1000) (not (equal (cdr unit) "T")))
+          (let ((next (car (seq-filter (lambda (u) (= (car u) (* 1000 (car unit)))) units))))
+            (setq text (format "%.2f" (/ number (car next))) unit next)))
+        (concat (if (string-search "." text)
+                    (string-trim-right (string-trim-right text "0+") "\\.")
+                  text)
+                (cdr unit))))))
+
 (defvar agent-ui-clock #'float-time
   "What gives the time now, in seconds (tests stub it): a progress bar's
 rate, a step's time.")
