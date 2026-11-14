@@ -99,6 +99,27 @@ notice."
         (should (derived-mode-p 'so-long-mode)))
       (should (+test-html--offered-p buffer)))))
 
+(ert-deftest html/not-for-a-remote-file ()
+  "A remote file (TRAMP's): not offered; neither the browser nor WebKit can
+open it (its URL broken), so the commands say so."
+  (+test-html
+    (let ((remote "/ssh:host:/tmp/a b.html"))
+      (with-temp-buffer
+        (setq buffer-file-name remote)
+        (html-mode)
+        (should (+my/html-file-p))
+        (should-not (+test-html--offered-p (current-buffer)))
+        (should-error (+my/html-open-in-browser) :type 'user-error)
+        (setq buffer-file-name nil))
+      (should-error (+my/html-open-in-emacs remote) :type 'user-error)
+      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                ((symbol-function 'featurep) (let ((featurep (symbol-function 'featurep)))
+                                               (lambda (f &rest r) (or (eq f 'xwidget-internal)
+                                                                       (apply featurep f r))))))
+        (should-error (+my/html-open-in-emacs remote) :type 'user-error))
+      (should-not +test-browsed)
+      (should-not (get-buffer "Page: a b.html")))))
+
 (ert-deftest html/turned-off ()
   (+test-html
     (let ((+my/html-browser-notice nil))

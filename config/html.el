@@ -10,7 +10,9 @@
 ;; (`browse-url-of-file': the file as saved; changes not saved yet, it says
 ;; so). The notice stays until its ✕. Its modes: Doom's web-mode, Emacs's
 ;; HTML modes, and the long lines' mode (an HTML report with its data on one
-;; line, config/editor/long-lines.el), its notice under that one's.
+;; line, config/editor/long-lines.el), its notice under that one's. Not for a
+;; remote file (TRAMP's): the browser can't reach it, nor its images and
+;; links (nor can WebKit, see below).
 (defvar +my/html-browser-notice t
   "Offer to open an HTML file in the browser, in a notice (see above).")
 
@@ -88,17 +90,24 @@
        (let ((case-fold-search t))
          (string-match-p "\\.x?html?\\'" buffer-file-name))))
 
+(defun +my/html--not-remote (file)
+  "FILE, if it's on this machine; else a user error (see above)."
+  (when (file-remote-p file)
+    (user-error "%s is on another machine: no browser here can open it" file))
+  file)
+
 (defun +my/html-open-in-browser ()
   "Open the buffer's HTML file in the default browser."
   (interactive)
   (unless (+my/html-file-p)
     (user-error "Not an HTML file"))
-  (browse-url-of-file buffer-file-name))
+  (browse-url-of-file (+my/html--not-remote buffer-file-name)))
 
 (defun +my/html-browser-notice-h ()
   "Offer to open the buffer's HTML file in the browser (see above)."
   (when (and +my/html-browser-notice
              (+my/html-file-p)
+             (not (file-remote-p buffer-file-name))
              (fboundp '+my/banner-show))
     (+my/banner-show 'html-browser "Open this file in your browser."
                      :actions '(("Open in browser" . +my/html-open-in-browser)))))
@@ -251,6 +260,8 @@ EMACS above); where WebKit can't, in the browser. Returns its buffer, if
 it's Emacs's."
   (interactive (list (+my/html--read-page)))
   (let ((url-p (+my/html--url-p page)))
+    (unless url-p
+      (+my/html--not-remote page))
     (if (not (and (display-graphic-p) (featurep 'xwidget-internal) (fboundp '+my/webkit-file-url)))
         (progn (if url-p (browse-url page) (browse-url-of-file page))
                nil)
