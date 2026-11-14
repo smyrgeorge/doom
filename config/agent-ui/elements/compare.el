@@ -54,12 +54,14 @@
       (agent-ui-ask-check "compare" (plist-get props :selected) labels (plist-get props :multiple))))
   props)
 
-(defun agent-ui-compare--head (props ctx option width still)
-  "OPTION's line over its column: its mark and label, a button picking it."
+(defun agent-ui-compare--head (props ctx option width still &optional indent)
+  "OPTION's lines over its column, WIDTH wide after INDENT: its mark and
+label (wrapped, its lines under the label's start), a button picking it."
   (let* ((label (plist-get option :label))
          (multiple (plist-get props :multiple))
-         (line (concat (agent-ui-ask-mark (agent-ui-ask-picked-p props label) multiple) " "
-                       (propertize (agent-ui-truncate label (max 1 (- width 4))) 'face 'bold))))
+         (line (agent-ui-ask-item-lines
+                (concat indent (agent-ui-ask-mark (agent-ui-ask-picked-p props label) multiple) " ")
+                (propertize label 'face 'bold) nil 0 (+ width (length indent)))))
     (if still line (agent-ui-ask-pick-button line props ctx label multiple))))
 
 (defun agent-ui-compare--image-p (option)
@@ -96,7 +98,7 @@
             (cdr (apply #'append
                         (mapcar (lambda (option)
                                   (cons ""
-                                        (cons (concat " " (agent-ui-compare--head props ctx option (- width 1) still))
+                                        (cons (agent-ui-compare--head props ctx option (- width 1) still " ")
                                               (mapcar (lambda (line) (concat "   " line))
                                                       (split-string (agent-ui-panel--child (plist-get option :element)
                                                                                            ctx (- width 3))

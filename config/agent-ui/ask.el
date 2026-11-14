@@ -52,6 +52,44 @@ in its face."
   (propertize (if multiple (if on "[x]" "[ ]") (if on "(•)" "( )"))
               'face (if on 'agent-ui-accent 'agent-ui-muted)))
 
+(defun agent-ui-ask-label-width (items head-width width)
+  "The labels' column for ITEMS ((LABEL . DETAIL) each) in WIDTH columns
+after HEAD-WIDTH's, their details beside it: as wide as the longest label
+with a detail, half the width at most; 0 (each detail under its label) if
+the details' column would be too narrow for them (20, or the widest)."
+  (let* ((detailed (seq-filter #'cdr items))
+         (label-width (min (apply #'max 0 (mapcar (lambda (i) (string-width (car i))) detailed))
+                           (/ width 2)))
+         (widest (apply #'max 0 (mapcar (lambda (i) (string-width (cdr i))) detailed))))
+    (if (>= (- width head-width label-width 2) (min 20 widest)) label-width 0)))
+
+(defun agent-ui-ask-item-lines (head label detail label-width width)
+  "An item's lines in WIDTH columns: HEAD (its mark, its number), LABEL, and
+DETAIL (muted, or nil) beside it in a column after LABEL-WIDTH's (see
+`agent-ui-ask-label-width'), each wrapped in its column; DETAIL under LABEL
+if LABEL-WIDTH is 0.
+The lines after the first hang under LABEL's start: nothing is cut (a long
+label or detail lost its end to a …)."
+  (let* ((indent (make-string (string-width head) ?\s))
+         (room (- width (string-width head) label-width 2))
+         (wrap (lambda (text width) (split-string (agent-ui-wrap text (max 1 width)) "\n")))
+         (muted (lambda (text) (propertize text 'face 'agent-ui-muted))))
+    (concat
+     head
+     (string-join
+      (if (and detail (> label-width 0) (> room 0))
+          ;; Side by side, line by line.
+          (let ((labels (funcall wrap label label-width))
+                (details (funcall wrap detail room)))
+            (cl-loop for i below (max (length labels) (length details))
+                     collect (let ((label (or (nth i labels) "")) (detail (nth i details)))
+                               (if detail
+                                   (concat (agent-ui-pad label label-width) "  " (funcall muted detail))
+                                 label))))
+        (append (funcall wrap label (- width (string-width head)))
+                (and detail (mapcar muted (funcall wrap detail (- width (string-width head)))))))
+      (concat "\n" indent)))))
+
 (defun agent-ui-ask-answered-p (props)
   "Whether PROPS' answer was given (then it's locked)."
   (and (plist-get props :answered) t))

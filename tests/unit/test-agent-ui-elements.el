@@ -1528,6 +1528,76 @@ press acted on the drawing before the first's change, undoing it)."
         (should (equal sent '(("Answer to choice pick (Which tests?): parser, checker. Note: only the slow ones" t))))
         (should (equal (plist-get (agent-ui-get "pick") :answered) "parser, checker · note: only the slow ones"))))))
 
+(ert-deftest agent-ui-elements/options-wrapped-never-cut ()
+  "Choice's, rank's and todo's labels and details, and compare's labels, are
+wrapped at every width, never cut with …, their lines hanging under the
+label's start (a wide canvas cut a long label at 50, its detail too; a rank
+always cut its labels)."
+  (let ((choice '(:type "choice" :question "Which fix?"
+                  :options ((:label "Change the test's expected message to the new one"
+                             :detail "keeps the new error text, which reads better for users who hit it")
+                            (:label "Revert" :detail "as it was"))))
+        (rank '(:type "rank" :question "First?"
+                :items ("supercalifragilisticexpialidocious handler refactor"
+                        (:label "Fix the parser" :detail "the root cause of the three failing tests") "Docs")))
+        (todo '(:type "todo" :items ((:label "Write the migration for the new users table and backfill it"
+                                      :done t :by "user")
+                                     (:label "Docs"))))
+        (compare '(:type "compare" :question "Which?"
+                   :options ((:label "A: the loop version, explicit and step by step"
+                              :element (:type "text" :text "for x in xs: t += x"))
+                             (:label "B: sum" :element (:type "text" :text "t = sum(xs)"))))))
+    (dolist (element (list choice rank todo compare))
+      (dolist (width '(24 30 40 60 100))
+        (let ((text (+test-aue-draw element :width width)))
+          (should-not (string-search "…" text))
+          (dolist (line (split-string text "\n"))
+            (should (<= (string-width line) width)))
+          ;; Every word there (whole, those narrower than the width).
+          (dolist (word (append '("expected" "users" "hit" "refactor" "failing" "backfill" "step")
+                                (and (>= width 40) '("supercalifragilisticexpialidocious"))))
+            (when (string-search word (format "%S" element))
+              (should (string-search word (replace-regexp-in-string "\n *" " " text))))))))
+    ;; Continuation lines under the label's start; details in their column.
+    (should (string-prefix-p
+             (concat "Which fix?\n"
+                     " ( ) Change the test's expected message to the new one  keeps the new error text, which reads better\n"
+                     "                                                        for users who hit it\n"
+                     " ( ) Revert                                             as it was\n")
+             (+test-aue-draw choice :width 100)))
+    (should (string-search (concat " 1. supercalifragilisticexpialidocious\n"
+                                   "    handler refactor\n"
+                                   " 2. Fix the parser  the root cause of\n"
+                                   "                    the three failing\n"
+                                   "                    tests\n")
+                           (+test-aue-draw rank :width 40)))
+    (should (string-prefix-p (concat " [x] Write the migration for the     you\n"
+                                     "     new users table and backfill\n"
+                                     "     it\n")
+                             (+test-aue-draw todo :width 40)))
+    (should (string-search (concat " ( ) A: the loop version, explicit and\n"
+                                   "     step by step\n")
+                           (+test-aue-draw compare :width 40)))))
+
+(ert-deftest agent-ui-elements/rank-wrapped-item-moved ()
+  "A wrapped item moves with M-up / M-down (K / J) from any of its lines."
+  (let ((agent-ui-default-width 40)
+        (long "Fix the parser, the lexer and the checker, which all fail on the new grammar"))
+    (+test-aue-canvas
+      (agent-ui-show `(:id "prio" :type "rank" :question "First?" :items ("Docs" ,long)))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "grammar")
+        ;; Its last line, not its first.
+        (should-not (string-search "2." (buffer-substring (line-beginning-position) (line-end-position))))
+        (agent-ui-move-item-up)
+        (should (equal (plist-get (agent-ui-get "prio") :order) (list long "Docs")))
+        (should (string-prefix-p " 1. Fix the parser" (buffer-substring (line-beginning-position) (line-end-position))))
+        (forward-line 2)
+        (agent-ui-move-item-down)
+        (should (equal (plist-get (agent-ui-get "prio") :order) (list "Docs" long)))))))
+
 ;; doom-nwj.71
 (ert-deftest agent-ui-elements/choice-options-fit ()
   "Options are wrapped within the width, under their label's start; details
@@ -1550,13 +1620,17 @@ without a detail was never cut nor wrapped: 66 columns at 30)."
                            " ( ) Revert  back to the old message\n"
                            " ( ) Both    a flag choosing one\n"
                            " ⏵ Answer")))
+    ;; Too little room for a column (20 at least, or the widest detail):
+    ;; each detail under its label.
     (should (equal (+test-aue-draw element :width 30)
                    (concat "Which fix?\n"
                            " ( ) Change the test so that\n"
                            "     it expects the new error\n"
                            "     message text\n"
-                           " ( ) Revert  back to the old …\n"
-                           " ( ) Both    a flag choosing …\n"
+                           " ( ) Revert\n"
+                           "     back to the old message\n"
+                           " ( ) Both\n"
+                           "     a flag choosing one\n"
                            " ⏵ Answer")))
     ;; No room for a column: its detail under its label.
     (should (equal (+test-aue-draw element :width 20)

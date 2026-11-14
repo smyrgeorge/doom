@@ -65,9 +65,7 @@ then the others as given."
          (answered (agent-ui-ask-answered-p props))
          (still (or answered (plist-get ctx :still)))
          (number-width (length (number-to-string (length order))))
-         (head-width (+ 1 number-width 2))
-         (label-width (min (apply #'max 0 (mapcar (lambda (o) (string-width (car o))) (seq-filter #'cdr items)))
-                           (/ width 2)))
+         (label-width (agent-ui-ask-label-width items (+ 3 number-width) width))
          (lines
           (cl-loop
            for label in order
@@ -75,13 +73,10 @@ then the others as given."
            collect
            ;; Its own label (the loop's is one variable, set again for each).
            (let* ((label label)
-                  (detail (cdr (assoc label items)))
-                  (room (- width head-width label-width 2))
-                  (line (concat " " (propertize (format (format "%%%dd." number-width) n) 'face 'agent-ui-accent) " "
-                                (if (and detail (>= room 10))
-                                    (concat (agent-ui-pad (agent-ui-truncate label label-width) label-width) "  "
-                                            (propertize (agent-ui-truncate detail room) 'face 'agent-ui-muted))
-                                  (agent-ui-truncate label (max 1 (- width head-width)))))))
+                  ;; Its label and detail wrapped, never cut.
+                  (line (agent-ui-ask-item-lines
+                         (concat " " (propertize (format (format "%%%dd." number-width) n) 'face 'agent-ui-accent) " ")
+                         label (cdr (assoc label items)) label-width width)))
              (if still
                  line
                (propertize line

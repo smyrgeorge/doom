@@ -171,14 +171,11 @@ then cleared."
            for tag in tags
            collect
            (let* ((done (plist-get item :done))
-                  (label (agent-ui-truncate (plist-get item :label) (max 1 label-width)))
-                  (line (concat " " (agent-ui-ask-mark done t) " "
-                                (if (or (> tag-width 0) (string-empty-p tag))
-                                    (if (string-empty-p tag)
-                                        label
-                                      (concat (agent-ui-pad label label-width) "  "
-                                              (propertize tag 'face 'agent-ui-muted)))
-                                  label))))
+                  ;; Its label wrapped (never cut), its tag beside it.
+                  (line (agent-ui-ask-item-lines (concat " " (agent-ui-ask-mark done t) " ")
+                                                 (plist-get item :label)
+                                                 (and (> tag-width 0) (not (string-empty-p tag)) tag)
+                                                 (max 1 label-width) width)))
              (if still
                  line
                (let ((label (plist-get item :label)))

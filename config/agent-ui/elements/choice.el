@@ -48,37 +48,20 @@
   props)
 
 (defun agent-ui-choice--option (props ctx option label-width)
-  "OPTION, (LABEL . DETAIL), as a line: its mark, a button choosing it."
-  (let* ((width (plist-get ctx :width))
-         (multiple (plist-get props :multiple))
-         (head (concat " " (agent-ui-ask-mark (agent-ui-ask-picked-p props (car option)) multiple) " "))
-         ;; Wrapped in what's after its mark, its lines under the label's
-         ;; start (a label was never cut nor wrapped: 66 columns at 30).
-         (hang (lambda (text)
-                 (string-join (split-string (agent-ui-wrap text (- width 5)) "\n")
-                              (concat "\n" (make-string 5 ?\s)))))
-         (room (- width 5 label-width 2))
-         (line (cond
-                ;; Its detail in a column after the labels, if there's room.
-                ((and (cdr option) (>= room 10))
-                 (concat head (agent-ui-pad (car option) label-width) "  "
-                         (propertize (agent-ui-truncate (cdr option) room) 'face 'agent-ui-muted)))
-                ;; Else its label wrapped, its detail under it.
-                (t (concat head (funcall hang (car option))
-                           (if (cdr option)
-                               (concat "\n" (make-string 5 ?\s)
-                                       (propertize (funcall hang (cdr option)) 'face 'agent-ui-muted))
-                             ""))))))
-    (agent-ui-ask-pick-button line props ctx (car option) multiple)))
+  "OPTION, (LABEL . DETAIL), as lines: its mark, its label and detail
+wrapped (`agent-ui-ask-item-lines'), a button choosing it."
+  (let* ((multiple (plist-get props :multiple))
+         (head (concat " " (agent-ui-ask-mark (agent-ui-ask-picked-p props (car option)) multiple) " ")))
+    (agent-ui-ask-pick-button
+     (agent-ui-ask-item-lines head (car option) (cdr option) label-width (plist-get ctx :width))
+     props ctx (car option) multiple)))
 
 (defun agent-ui-choice--draw (props ctx)
   (let* ((width (plist-get ctx :width))
          (options (agent-ui-choice--options props))
          ;; The labels' column, for details after them: as wide as the
          ;; longest of those with one (all of them: a gap before the details).
-         (label-width (min (apply #'max 0 (mapcar (lambda (o) (string-width (car o)))
-                                                  (seq-filter #'cdr options)))
-                           (/ width 2)))
+         (label-width (agent-ui-ask-label-width options 5 width))
          (question (propertize (agent-ui-wrap (plist-get props :question) width) 'face 'bold)))
     (if (agent-ui-ask-answered-p props)
         (concat question "\n" (agent-ui-ask-answered-line props width))
