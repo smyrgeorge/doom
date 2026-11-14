@@ -62,9 +62,10 @@ removed, cleared; not when the canvas closes.")
 canvas killed).")
 
 (defvar agent-ui-footer-functions nil
-  "Called in a canvas with an element's id as it's drawn: a line to draw
-under it (the canvas's, not the element's: a finished one's countdown), or
-nil. The first one's line is drawn.")
+  "Called in a canvas with an element's id and the width it's drawn at (nil:
+any), as it's drawn: lines to draw under it, that wide at most (the
+canvas's, not the element's: a finished one's countdown), or nil. The first
+one's are drawn.")
 
 (cl-defstruct (agent-ui--entry (:constructor agent-ui--make-entry))
   "An element of a canvas: its id, itself (a plist), where it's drawn, and
@@ -319,7 +320,8 @@ their line and column (its text replaced, they went to its start)."
          (start (agent-ui--entry-start entry))
          (end (agent-ui--entry-end entry))
          (places (agent-ui--places-in start end))
-         (footer (run-hook-with-args-until-success 'agent-ui-footer-functions (agent-ui--entry-id entry))))
+         (footer (run-hook-with-args-until-success 'agent-ui-footer-functions (agent-ui--entry-id entry)
+                                                   (plist-get ctx :width))))
     (save-excursion
       (delete-region start end)
       (goto-char start)
@@ -379,7 +381,8 @@ was drawn again whole, each line). Non-nil if so; nil if its type can't
          ;; then or now: else drawn whole.
          (type (and old (not (eq old new))
                     (equal (cdr drawn) (list (plist-get ctx :width) (plist-get ctx :graphic) nil))
-                    (not (run-hook-with-args-until-success 'agent-ui-footer-functions (agent-ui--entry-id entry)))
+                    (not (run-hook-with-args-until-success 'agent-ui-footer-functions (agent-ui--entry-id entry)
+                                                           (plist-get ctx :width)))
                     (equal (plist-get old :type) (plist-get new :type))
                     (ignore-errors (agent-ui-type (plist-get new :type)))))
          (extend (and type (agent-ui-type-extend type)))

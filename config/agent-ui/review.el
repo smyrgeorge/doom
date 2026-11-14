@@ -202,14 +202,29 @@ elements of it removed (`agent-ui-discard')."
 ;; ====== THE CANVAS SAYS SO ======
 
 (defun agent-ui-review--header ()
-  "A canvas's header while types the agent made wait for review (nil else)."
+  "A canvas's header while types the agent made wait for review (nil else):
+fitted to its window's width as it's drawn (`agent-ui-review--header-line')."
   (when-let* ((files (agent-ui-staged-files)))
-    (let ((names (mapcar #'file-name-base files)))
-      (concat " "
-              (propertize (format "%d type%s made by the agent to review: %s"
-                                  (length names) (if (cdr names) "s" "") (string-join names ", "))
-                          'face 'agent-ui-warning)
-              (substitute-command-keys "   \\<agent-ui-canvas-mode-map>\\[agent-ui-review] review")))))
+    `(:eval (agent-ui-review--header-line ',(mapcar #'file-name-base files)
+                                          (1- (window-max-chars-per-line nil 'header-line))))))
+
+(defun agent-ui-review--header-line (names width)
+  "The header saying NAMES, the types made by the agent, wait for review, in
+WIDTH columns: shortened as it must be, their names cut, its key kept (it
+was cut off in a narrow pane)."
+  (let* ((key (substitute-command-keys "\\<agent-ui-canvas-mode-map>\\[agent-ui-review]"))
+         (count (format "%d type%s" (length names) (if (cdr names) "s" "")))
+         (list (string-join names ", "))
+         (fit (lambda (text hint)
+                (and (<= (+ 1 (string-width text) (string-width hint)) width)
+                     (concat " " (propertize text 'face 'agent-ui-warning) hint))))
+         (room (- width 1 (string-width (concat count " to review: ")) (string-width (concat "   " key " review")))))
+    (or (funcall fit (format "%s made by the agent to review: %s" count list) (concat "   " key " review"))
+        (and (>= room 8)
+             (funcall fit (format "%s to review: %s" count (agent-ui-truncate list room)) (concat "   " key " review")))
+        (funcall fit (format "%s to review" count) (concat "  " key))
+        (funcall fit (format "%d to review" (length names)) (concat " " key))
+        (concat " " key))))
 
 (defun agent-ui-review--canvas-header ()
   "The current canvas's header: none while no type waits (not an empty line)."

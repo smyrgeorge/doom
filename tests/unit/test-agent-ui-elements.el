@@ -2021,7 +2021,9 @@ the marks kept; a still picture: the marks, no button."
                            "     10 +   size_t n = 0;\n"
                            "     11     return n;\n"
                            "x on a hunk rejects it (again: back), c comments on a line\n"
-                           "⏵ Send (1 accepted, 1 rejected)   ⏵ Accept all   ⏵ Reject all")))
+                           ;; 61 columns on a line: broken to the width (60).
+                           "⏵ Send (1 accepted, 1 rejected)   ⏵ Accept all\n"
+                           "⏵ Reject all")))
     ;; Rejected: dimmed.
     (should (eq (+test-aue-face-at diff "size_t") 'agent-ui-muted))
     (should (eq (+test-aue-face-at diff "parse_term(p)") 'agent-ui-success))

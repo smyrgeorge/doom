@@ -220,6 +220,13 @@ after (the tests' forgotten), no window shown, a canvas of its own."
     (should (file-exists-p (expand-file-name "dial.el" agent-ui-kept-directory)))
     (should-not (memq 'meter (agent-ui-types)))))
 
+(defun +test-aus-header ()
+  "The current canvas's header as its window (the selected one) draws it:
+`format-mode-line' gives nothing in batch."
+  (pcase header-line-format
+    (`(:eval ,form) (eval form t))
+    (_ (format "%s" header-line-format))))
+
 (ert-deftest agent-ui-staging/the-canvas-says-so ()
   (+test-aus
     (agent-ui-show '(:id "t" :type "text" :text "x"))
@@ -227,11 +234,44 @@ after (the tests' forgotten), no window shown, a canvas of its own."
       ;; None waiting: no header line (not an empty one).
       (should-not header-line-format)
       (agent-ui-stage +test-aus-dial)
-      (should (string-match-p "1 type made by the agent to review: dial" header-line-format))
+      (should (string-match-p "1 type made by the agent to review: dial" (+test-aus-header)))
       (should (eq (lookup-key agent-ui-canvas-mode-map "R") #'agent-ui-review))
       (agent-ui-discard 'dial)
       (agent-ui-review--refresh)
       (should-not header-line-format))))
+
+(ert-deftest agent-ui-staging/the-canvas-header-fits-its-window ()
+  "The header saying types wait for review, in a narrow pane: shortened, the
+names cut, its key (R) kept, never wider than the window (74 columns in a
+40-column pane: R review cut off)."
+  (let ((names '("sparkline" "timeline-heat" "ownership-graph")))
+    (dolist (width '(25 40 60 100))
+      (let ((line (agent-ui-review--header-line names width)))
+        (should (<= (string-width line) width))
+        (should (string-match-p " R\\( review\\)?\\'" line))
+        (should (string-match-p "\\b3\\b" line))))
+    (should (equal (agent-ui-review--header-line names 100)
+                   " 3 types made by the agent to review: sparkline, timeline-heat, ownership-graph   R review"))
+    (should (string-prefix-p " 3 types to review: sparkl" (agent-ui-review--header-line names 40)))
+    (should (string-suffix-p "…   R review" (agent-ui-review--header-line names 40)))
+    (should (equal (agent-ui-review--header-line names 25) " 3 types to review  R"))
+    (should (equal (agent-ui-review--header-line '("dial") 14) " 1 to review R")))
+  ;; As its window shows it: that window's width.
+  (+test-aus
+    (agent-ui-show '(:id "t" :type "text" :text "x"))
+    (agent-ui-stage +test-aus-dial)
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (let ((canvas (agent-ui-canvas))
+                (window (split-window-right (- (window-total-width) 26))))
+            (set-window-buffer window canvas)
+            (with-selected-window window
+              (let ((line (+test-aus-header)))
+                (should (< (window-max-chars-per-line window) 30))
+                (should (<= (string-width line) (window-max-chars-per-line window)))
+                (should (string-match-p " R\\'" line))))))
+      (agent-ui-discard 'dial))))
 
 ;; The skill's example of a type: staged as the agent would.
 (ert-deftest agent-ui-staging/the-skills-type-right ()

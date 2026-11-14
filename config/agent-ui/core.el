@@ -464,18 +464,21 @@ session's prompt).")
              (agent-ui--fail "actions: action %d's submit is true or false" i)))
   actions)
 
-(defun agent-ui--actions (actions)
-  "ACTIONS as a line of buttons; nil if there are none (or they're wrong)."
+(defun agent-ui--actions (actions width)
+  "ACTIONS as a row of buttons, broken to WIDTH (`agent-ui-button-row'); nil
+if there are none (or they're wrong)."
   (when (and actions (ignore-errors (agent-ui-check-actions actions)))
-    (mapconcat
-     (lambda (action)
-       (let ((prompt (plist-get action :prompt))
-             (submit (eq (plist-get action :submit) t)))
-         (agent-ui-button (propertize (concat "⏵ " (plist-get action :label)) 'face 'agent-ui-action)
-                          (lambda () (funcall agent-ui-action-function prompt submit))
-                          (format "RET: %s \"%s\"" (if submit "send" "put into the prompt")
-                                  (truncate-string-to-width prompt 60 nil nil "…")))))
-     actions "   ")))
+    (agent-ui-button-row
+     (mapcar
+      (lambda (action)
+        (let ((prompt (plist-get action :prompt))
+              (submit (eq (plist-get action :submit) t)))
+          (agent-ui-button (propertize (concat "⏵ " (plist-get action :label)) 'face 'agent-ui-action)
+                           (lambda () (funcall agent-ui-action-function prompt submit))
+                           (format "RET: %s \"%s\"" (if submit "send" "put into the prompt")
+                                   (truncate-string-to-width prompt 60 nil nil "…")))))
+      actions)
+     width)))
 
 (defun agent-ui-render (element ctx)
   "ELEMENT drawn as text, its title on a line above: by its type's :gui in a
@@ -508,7 +511,7 @@ so a canvas goes on with its other elements. No newline at its end."
         (propertize (concat "⚠ " (agent-ui-error-message err)) 'face 'agent-ui-error)))
      ;; Its actions, buttons: not in a still picture (CTX's :still).
      (when-let* (((not (plist-get ctx :still)))
-                 (buttons (agent-ui--actions (plist-get element :actions))))
+                 (buttons (agent-ui--actions (plist-get element :actions) (plist-get ctx :width))))
        (concat "\n" buttons)))))
 
 ;; ====== HELPERS FOR TYPES ======
@@ -723,6 +726,37 @@ argument); HELP said in the echo area."
               'keymap agent-ui-button-map
               'mouse-face 'highlight
               'help-echo (or help "RET: open")))
+
+(defun agent-ui-button-row (buttons width &optional indent)
+  "BUTTONS (texts: buttons, or a word beside them) on a line led by INDENT
+\(\"\" by default), three spaces between them; broken between them onto
+more lines, each led by INDENT, where a line would be wider than WIDTH (nil:
+never). One wider than that alone on its line, cut to it, still a button.
+A canvas cuts its lines at its width: a row of buttons wider than it lost
+the last ones."
+  (let ((indent (or indent ""))
+        (lines nil)
+        (line nil))
+    (dolist (button (delq nil buttons))
+      (let* ((room (and width (max 1 (- width (string-width indent)))))
+             (button (if (and room (> (string-width button) room))
+                         (agent-ui--cut-button button room)
+                       button)))
+        (if (and line room (> (+ (string-width line) 3 (string-width button)) room))
+            (progn (push line lines) (setq line button))
+          (setq line (if line (concat line "   " button) button)))))
+    (when line (push line lines))
+    (mapconcat (lambda (line) (concat indent line)) (nreverse lines) "\n")))
+
+(defun agent-ui--cut-button (button width)
+  "BUTTON cut to WIDTH columns with …, the … pressing it too."
+  (let* ((cut (truncate-string-to-width button width nil nil "…"))
+         (end (length cut)))
+    (when (> end 0)
+      (set-text-properties (1- end) end (text-properties-at (max 0 (- end 2)) cut) cut)
+      (unless (get-text-property (1- end) 'agent-ui-action cut)
+        (set-text-properties (1- end) end (text-properties-at 0 button) cut)))
+    cut))
 
 (defvar agent-ui-before-press-hook nil
   "Run in a button's buffer before its action is looked up: a canvas draws

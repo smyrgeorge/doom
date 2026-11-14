@@ -285,22 +285,23 @@ sent, saying so. Led by a newline."
               (propertize (agent-ui-wrap "x on a hunk rejects it (again: back), c comments on a line" width)
                           'face 'agent-ui-muted)
               "\n"
-              (agent-ui-button (propertize (format "⏵ Send (%s)" (agent-ui-diff--counted accepted rejected
-                                                                                          (plist-get props :comments)))
-                                           'face 'agent-ui-action)
-                               (lambda () (agent-ui-diff--send props ctx files))
-                               "RET: tell the agent which hunks to apply")
-              "   "
-              (agent-ui-button (propertize "⏵ Accept all" 'face 'agent-ui-action)
-                               (lambda () (agent-ui-ask-change ctx (list :rejected nil)))
-                               "RET: accept every hunk")
-              "   "
-              (agent-ui-button (propertize "⏵ Reject all" 'face 'agent-ui-action)
-                               (lambda ()
-                                 (agent-ui-ask-change
-                                  ctx (list :rejected (mapcar (lambda (h) (list :file (car h) :hunk (cadr h)))
-                                                              (agent-ui-diff--hunks files)))))
-                               "RET: reject every hunk"))))))
+              (agent-ui-button-row
+               (list
+                (agent-ui-button (propertize (format "⏵ Send (%s)" (agent-ui-diff--counted accepted rejected
+                                                                                           (plist-get props :comments)))
+                                             'face 'agent-ui-action)
+                                 (lambda () (agent-ui-diff--send props ctx files))
+                                 "RET: tell the agent which hunks to apply")
+                (agent-ui-button (propertize "⏵ Accept all" 'face 'agent-ui-action)
+                                 (lambda () (agent-ui-ask-change ctx (list :rejected nil)))
+                                 "RET: accept every hunk")
+                (agent-ui-button (propertize "⏵ Reject all" 'face 'agent-ui-action)
+                                 (lambda ()
+                                   (agent-ui-ask-change
+                                    ctx (list :rejected (mapcar (lambda (h) (list :file (car h) :hunk (cadr h)))
+                                                                (agent-ui-diff--hunks files)))))
+                                 "RET: reject every hunk"))
+               width))))))
 
 (defun agent-ui-diff--draw (props ctx gui)
   (let* ((files (agent-ui-diff--parse (plist-get props :diff)))

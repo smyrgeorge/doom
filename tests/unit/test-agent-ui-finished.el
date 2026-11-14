@@ -209,3 +209,19 @@ and finished again, it counts down again."
       (setq-local agent-ui-panels--state 'a-panel))
     (agent-ui-show +test-auf-done)
     (should-not (+test-auf-left "plan"))))
+
+(ert-deftest agent-ui-finished/its-line-fits-the-width ()
+  "The countdown's line in a narrow canvas: shortened, Keep on a line of its
+own if need be, never wider than the width (35 columns at 24: Keep cut off)."
+  (with-temp-buffer
+    (setq agent-ui--closing (make-hash-table :test #'equal))
+    (puthash "p" (cons nil 10) agent-ui--closing)
+    (should (equal (substring-no-properties (agent-ui--closing-footer "p" 60))
+                   "✓ All done, closing in 10s   ⏵ Keep"))
+    (should (equal (substring-no-properties (agent-ui--closing-footer "p" 24))
+                   "✓ Closing in 10s\n⏵ Keep"))
+    (dolist (width '(24 39 60))
+      (let ((line (agent-ui--closing-footer "p" width)))
+        (should (cl-every (lambda (l) (<= (string-width l) width)) (split-string line "\n")))
+        (should (get-text-property (string-search "⏵ Keep" line) 'agent-ui-action line))))))
+

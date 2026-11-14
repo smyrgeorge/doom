@@ -108,15 +108,18 @@ buttons work there only (a render's are text)."
                    (lambda () (agent-ui-ask-change ctx (list :selected (agent-ui-ask-toggled props item multiple))))
                    (if multiple "RET: (un)check it" "RET: choose it")))
 
+(defun agent-ui-ask-all-none-buttons (ctx items)
+  "The All and None buttons, a list: every one of ITEMS picked, or none."
+  (list (agent-ui-button (propertize "⏵ All" 'face 'agent-ui-action)
+                         (lambda () (agent-ui-ask-change ctx (list :selected items)))
+                         "RET: pick them all")
+        (agent-ui-button (propertize "⏵ None" 'face 'agent-ui-action)
+                         (lambda () (agent-ui-ask-change ctx (list :selected nil)))
+                         "RET: pick none")))
+
 (defun agent-ui-ask-all-none (ctx items)
-  "The All and None buttons: every one of ITEMS picked, or none."
-  (concat (agent-ui-button (propertize "⏵ All" 'face 'agent-ui-action)
-                           (lambda () (agent-ui-ask-change ctx (list :selected items)))
-                           "RET: pick them all")
-          "   "
-          (agent-ui-button (propertize "⏵ None" 'face 'agent-ui-action)
-                           (lambda () (agent-ui-ask-change ctx (list :selected nil)))
-                           "RET: pick none")))
+  "The All and None buttons on a line (`agent-ui-ask-all-none-buttons')."
+  (agent-ui-button-row (agent-ui-ask-all-none-buttons ctx items) nil))
 
 (defun agent-ui-ask-note-button (props ctx)
   "The note's line: a button writing it (the minibuffer), the note shown."
@@ -207,12 +210,14 @@ under it. ALL: every item's answer, in order (what's picked answered so)."
              ((plist-get ctx :still) "")
              (t (concat
                  (if (eq (plist-get select :note) t) (concat "\n " (agent-ui-ask-note-button props ctx)) "")
-                 "\n "
-                 (agent-ui-ask-answer-button props ctx
-                                             :what (plist-get ctx :id) :question (plist-get select :question)
-                                             :answers answers
-                                             :label (format "⏵ Answer (%d chosen)" (length answers)))
-                 (if (agent-ui-ask-multiple-p select) (concat "   " (agent-ui-ask-all-none ctx all)) "")))))))
+                 "\n"
+                 (agent-ui-button-row
+                  (cons (agent-ui-ask-answer-button props ctx
+                                                    :what (plist-get ctx :id) :question (plist-get select :question)
+                                                    :answers answers
+                                                    :label (format "⏵ Answer (%d chosen)" (length answers)))
+                        (and (agent-ui-ask-multiple-p select) (agent-ui-ask-all-none-buttons ctx all)))
+                  width " ")))))))
 
 (defun agent-ui-ask-group-mark (props items multiple ctx &optional plain)
   "The mark of a group of ITEMS (a folder's files): [x] all picked, [-] some,
@@ -371,17 +376,19 @@ comments, or in a still picture); once sent, saying so. Led by a newline."
       (concat "\n" (propertize "✓ " 'face 'agent-ui-success)
               (propertize (format "Review sent (%s)" (plist-get props :answered)) 'face 'agent-ui-muted)))
      ((or (null comments) (plist-get ctx :still)) "")
-     (t (concat "\n "
-                (agent-ui-button
-                 (propertize (format "⏵ Send the review (%s)" (funcall count (length comments))) 'face 'agent-ui-action)
-                 (lambda ()
-                   (funcall agent-ui-action-function (agent-ui-review-text (plist-get ctx :id) comments) t)
-                   (agent-ui-ask-change ctx (list :answered (funcall count (length comments)))))
-                 "RET: send the review to the agent")
-                "   "
-                (agent-ui-button (propertize "⏵ Discard" 'face 'agent-ui-action)
-                                 (lambda () (agent-ui-ask-change ctx (list :comments nil)))
-                                 "RET: drop its comments"))))))
+     (t (concat "\n"
+                (agent-ui-button-row
+                 (list (agent-ui-button
+                        (propertize (format "⏵ Send the review (%s)" (funcall count (length comments)))
+                                    'face 'agent-ui-action)
+                        (lambda ()
+                          (funcall agent-ui-action-function (agent-ui-review-text (plist-get ctx :id) comments) t)
+                          (agent-ui-ask-change ctx (list :answered (funcall count (length comments)))))
+                        "RET: send the review to the agent")
+                       (agent-ui-button (propertize "⏵ Discard" 'face 'agent-ui-action)
+                                        (lambda () (agent-ui-ask-change ctx (list :comments nil)))
+                                        "RET: drop its comments"))
+                 (plist-get ctx :width) " "))))))
 
 (defun agent-ui--review-target ()
   "The element at point taking comments, and its props: (ID . PROPS); its

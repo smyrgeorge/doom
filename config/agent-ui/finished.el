@@ -125,16 +125,20 @@ session if it was in CANVAS's pane, closed now."
 
 ;; ====== ITS LINE ======
 
-(defun agent-ui--closing-footer (id)
-  "Element ID's countdown, a line under it, while it counts down
+(defun agent-ui--closing-footer (id &optional width)
+  "Element ID's countdown, a line under it (two if WIDTH is too narrow for
+one, its words shortened if need be), while it counts down
 \(`agent-ui-footer-functions')."
   (when-let* ((counting (and agent-ui--closing (gethash id agent-ui--closing))))
-    (concat (propertize "✓ " 'face 'agent-ui-success)
-            (propertize (format "All done, closing in %ds" (cdr counting)) 'face 'agent-ui-muted)
-            "   "
-            (agent-ui-button (propertize "⏵ Keep" 'face 'agent-ui-action)
-                             (lambda () (agent-ui-keep-finished id))
-                             "RET: keep it, not closed"))))
+    (let ((said (format "All done, closing in %ds" (cdr counting))))
+      (when (and width (> (+ 2 (string-width said)) width))
+        (setq said (format "Closing in %ds" (cdr counting))))
+      (agent-ui-button-row
+       (list (concat (propertize "✓ " 'face 'agent-ui-success) (propertize said 'face 'agent-ui-muted))
+             (agent-ui-button (propertize "⏵ Keep" 'face 'agent-ui-action)
+                              (lambda () (agent-ui-keep-finished id))
+                              "RET: keep it, not closed"))
+       width))))
 
 (add-hook 'agent-ui-footer-functions #'agent-ui--closing-footer)
 

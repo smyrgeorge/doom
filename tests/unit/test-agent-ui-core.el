@@ -468,6 +468,23 @@ frozen)."
     ;; None: no line for them.
     (should (equal (agent-ui-render '(:type "plain") (agent-ui-context)) "body"))))
 
+(ert-deftest agent-ui-core/actions-fit-the-width ()
+  "Actions broken between their buttons to the width (one line of 44 columns
+at 24: cut off by the canvas), each still a button."
+  (+test-aui
+    (+test-aui--meter)
+    (let ((element '(:type "meter" :max 4 :actions ((:label "Fix them" :prompt "Fix")
+                                                    (:label "Show the log" :prompt "log")
+                                                    (:label "Re-run tests" :prompt "rerun")))))
+      (dolist (width '(24 39 60))
+        (let* ((text (agent-ui-render element (agent-ui-context :width width)))
+               (lines (cdr (split-string text "\n"))))
+          (should (cl-every (lambda (line) (<= (string-width line) width)) lines))
+          (dolist (label '("⏵ Fix them" "⏵ Show the log" "⏵ Re-run tests"))
+            (should (get-text-property (string-search label text) 'agent-ui-action text)))))
+      (should (equal (cdr (split-string (substring-no-properties (agent-ui-render element (agent-ui-context :width 39))) "\n"))
+                     '("⏵ Fix them   ⏵ Show the log" "⏵ Re-run tests"))))))
+
 (ert-deftest agent-ui-core/wrong-actions-explained ()
   (cl-flet ((wrong (actions) (agent-ui-error-message
                               (should-error (agent-ui-check-actions actions) :type 'agent-ui-error))))
