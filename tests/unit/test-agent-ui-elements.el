@@ -996,7 +996,7 @@ and GUI (it divided by 0: \"Arithmetic overflow error\")."
   ;; Values appended, the latest WINDOW kept.
   (let* ((element '(:type "chart" :window 3 :values (1 2)))
          (more (agent-ui-append-to element '(:values (3 4 5)))))
-    (should (equal (plist-get more :values) '(1 2 3 4 5)))
+    (should (equal (plist-get more :values) '(3 4 5)))
     (should (equal (plist-get (car (plist-get (agent-ui-check "chart" more) :series)) :values) '(3 4 5))))
   ;; Series by name; a new one added.
   (let ((more (agent-ui-append-to '(:type "chart" :series ((:name "a" :values (1))))
@@ -1006,6 +1006,28 @@ and GUI (it divided by 0: \"Arithmetic overflow error\")."
                           (agent-ui-error-message
                            (should-error (agent-ui-append-to '(:type "chart") '(:unit "x"))
                                          :type 'agent-ui-error)))))
+
+(ert-deftest agent-ui-elements/chart-window-keeps-only-its-values ()
+  "Appending keeps only the window's latest values, a series' too, and as
+many labels and times (only those drawn were trimmed: 2000 appends to a
+window of 3 kept 2000, each append copying them all); no window: all."
+  (let ((element '(:type "chart" :window 3 :values ())))
+    (dotimes (i 2000)
+      (setq element (agent-ui-append-to element (list :values (list i)))))
+    (should (equal (plist-get element :values) '(1997 1998 1999))))
+  (let ((element '(:type "chart" :window 2 :series ((:name "a" :values (1)) (:name "b" :values ())))))
+    (dotimes (i 100)
+      (setq element (agent-ui-append-to element (list :series (list (list :name "a" :values (list i))
+                                                                    (list :name "b" :values (list (- i))))))))
+    (should (equal (plist-get element :series) '((:name "a" :values (98 99)) (:name "b" :values (-98 -99))))))
+  (let ((element (agent-ui-append-to '(:type "chart" :window 2 :values (1 2) :labels ("a" "b")
+                                       :times (100 200))
+                                     '(:values (3) :labels ("c") :times (300)))))
+    (should (equal (plist-get element :values) '(2 3)))
+    (should (equal (plist-get element :labels) '("b" "c")))
+    (should (equal (plist-get element :times) '(200 300))))
+  (should (equal (plist-get (agent-ui-append-to '(:type "chart" :values (1 2)) '(:values (3))) :values)
+                 '(1 2 3))))
 
 (ert-deftest agent-ui-elements/chart-wrong ()
   (should (equal (+test-aue-error '(:type "chart" :values (1 "x")))

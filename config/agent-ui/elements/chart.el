@@ -122,9 +122,35 @@ if it's neither."
                           values (length times))))
       (plist-put (plist-put (plist-put props :series series) :labels labels) :times times))))
 
+(defun agent-ui-chart--windowed (element)
+  "ELEMENT with only the latest of its values kept, as many as its window
+says (none: all), and of its labels and times as many from the end as its
+longest series lost (as drawn: `agent-ui-chart--check')."
+  (let* ((window (and (numberp (plist-get element :window)) (floor (plist-get element :window))))
+         (series (plist-get element :series))
+         (longest (apply #'max (length (plist-get element :values))
+                         (mapcar (lambda (s) (if (agent-ui--plist-p s) (length (plist-get s :values)) 0)) series))))
+    (if (not (and window (> window 0) (> longest window)))
+        element
+      (let ((result (copy-sequence element)))
+        (cl-flet ((latest (list) (if (and (listp list) (> (length list) window)) (last list window) list)))
+          (dolist (key '(:values :labels :times))
+            (when (plist-get result key)
+              (setq result (plist-put result key (latest (plist-get result key))))))
+          (when series
+            (setq result (plist-put result :series
+                                    (mapcar (lambda (s)
+                                              (if (agent-ui--plist-p s)
+                                                  (plist-put (copy-sequence s) :values (latest (plist-get s :values)))
+                                                s))
+                                            series)))))
+        result))))
+
 (defun agent-ui-chart--append (element patch)
   "ELEMENT with PATCH's values added: :values to its values; :series by name
-to each's (a new name, a new series); :labels to its labels."
+to each's (a new name, a new series); :labels to its labels. Its window's
+latest values kept only (all were, only those drawn trimmed: 2000 appends
+to a window of 3 kept 2000, each append copying them all)."
   (cl-loop for (k _) on patch by #'cddr
            unless (memq k '(:id :values :series :labels :times))
            do (agent-ui--fail "chart: only values, series, labels and times can be appended to"))
@@ -147,7 +173,7 @@ to each's (a new name, a new series); :labels to its labels."
                                  (append (plist-get (nth at series) :values) (plist-get s :values))))
               (setq series (append series (list s))))))
         (setq result (plist-put result :series series))))
-    result))
+    (agent-ui-chart--windowed result)))
 
 ;; ====== SCALE ======
 
