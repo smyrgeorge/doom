@@ -6,12 +6,13 @@
 ;; The page's script (`mdMermaid'): each <pre class="mermaid"> pandoc wrote
 ;; becomes its diagram. Kept by their source: an update (the page's content
 ;; swapped) draws only a block that changed; one being drawn shows its last
-;; drawing meanwhile (no flash of its source). An error: Mermaid's message
-;; under the block's last drawing. mermaid.js is loaded only once a page has
-;; a block (a page without one doesn't parse it). A diagram is as wide as its
-;; natural size, at most the page's, but never under four fifths of its
-;; natural size (shrunk to fit, a wide one's labels would be specks): wider, it
-;; scrolls sideways in its box.
+;; drawing meanwhile (no flash of its source); a drawing whose block is gone
+;; from the page is forgotten. An error: Mermaid's message under the block's
+;; last drawing. mermaid.js is loaded only once a page has a block (a page
+;; without one doesn't parse it). A diagram is as wide as its natural size, at
+;; most the page's, but never under four fifths of its natural size (shrunk to
+;; fit, a wide one's labels would be specks): wider, it scrolls sideways in
+;; its box.
 (defconst +md-preview--mermaid-js
   "window.mdMermaid = (function () {
   var config = null, url = null, loading = false, drawn = new Map(), last = [];
@@ -68,6 +69,12 @@
         show(box, target.innerHTML);
       });
     });
+    // Drawings of blocks still on the page kept, no others (an edited
+    // block's every version would stay).
+    var shown = new Set();
+    document.querySelectorAll('div.mermaid-diagram').forEach(function (box) { shown.add(box.dataset.source); });
+    drawn.forEach(function (svg, source) { if (!shown.has(source)) drawn.delete(source); });
+    last.length = blocks.length;
   }
   // Each diagram drawn anew (the theme changed): back to its block first.
   function redraw() {
@@ -81,7 +88,7 @@
     });
     draw();
   }
-  return {setup: setup, draw: draw, redraw: redraw};
+  return {setup: setup, draw: draw, redraw: redraw, drawn: drawn};
 })();"
   "JavaScript drawing a Markdown page's mermaid blocks (see above).")
 

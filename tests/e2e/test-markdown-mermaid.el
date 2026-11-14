@@ -2,7 +2,8 @@
 ;; config/markdown/mermaid.el in a GUI Emacs: ```mermaid blocks in Markdown's
 ;; live preview, drawn by mermaid.js (Doom's, copied; skipped without it,
 ;; xwidgets or pandoc): a wide diagram in a narrow pane, readable, scrolled
-;; in its box. Drawing, redrawing and re-theming: tests/e2e/test-mermaid.el.
+;; in its box; an edited one's versions not kept. Drawing, redrawing and
+;; re-theming: tests/e2e/test-mermaid.el.
 
 (require 'markdown-mode)
 ;; The preview's stylesheets (Doom's markdown module sets GitHub's).
@@ -110,3 +111,25 @@ centred."
         (should (< (abs (string-to-number
                          (+test-mdm--js md (format "(function(b){ var s=b.querySelector('svg').getBoundingClientRect(), r=b.getBoundingClientRect(); return (s.left - r.left) - (r.right - s.right); })(%s)" narrow))))
                    2))))))
+
+;; ====== EDITED ======
+
+(ert-deftest e2e-markdown-mermaid/an-edited-diagram-s-versions-forgotten ()
+  "A block edited 50 times (each drawn): only the drawings of the blocks on
+the page kept, the other block's still drawn from them."
+  (+test-mdm
+    (let ((md (+test-mdm--open "edited.md" (concat "# Edited\n\n```mermaid\nflowchart LR\n    A[Version 0] --> B\n```\n\n"
+                                                   +test-mdm--narrow))))
+      (should (+test-mdm--drawn md 2))
+      (dotimes (i 50)
+        (with-current-buffer md
+          (goto-char (point-min))
+          (re-search-forward "Version [0-9]+")
+          (replace-match (format "Version %d" (1+ i)))
+          (+md-preview--update md))
+        (should (+test-wait-for
+                 (lambda () (string-search (format "Version %d" (1+ i))
+                                           (+test-mdm--js md "document.querySelector('div.mermaid-diagram svg') && document.querySelector('div.mermaid-diagram svg').textContent")))
+                 5)))
+      (should (<= (string-to-number (+test-mdm--js md "mdMermaid.drawn.size")) 2))
+      (should (equal (+test-mdm--js md "document.querySelectorAll('div.mermaid-diagram svg').length") "2")))))
