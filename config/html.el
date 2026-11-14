@@ -204,11 +204,42 @@ it closes, unless other tabs are under it."
 (defun +my/html--url-p (page)
   (string-match-p "\\`[a-z]+://" page))
 
+;; Read as a file's name, a URL typed after the folder offered ("~/dir/" then
+;; "https://...") is the URL: its `//' doesn't start a name from the root
+;; (Emacs's `substitute-in-file-name'), which also left the minibuffer with
+;; the host's name alone (the folder before it shadowed, then deleted).
+(defconst +my/html--url-regexp "[[:alpha:]][[:alnum:]+.-]*://"
+  "A URL's start, in a name read (see above).")
+
+(defun +my/html--url-name-handler (operation &rest args)
+  "While a page is read (see above): a name holding a URL substituted as the
+URL; the rest as usual."
+  (let ((inhibit-file-name-handlers
+         (cons #'+my/html--url-name-handler
+               (and (eq inhibit-file-name-operation operation) inhibit-file-name-handlers)))
+        (inhibit-file-name-operation operation))
+    (if (eq operation 'substitute-in-file-name)
+        (let ((name (car args)))
+          (substring name (string-match +my/html--url-regexp name)))
+      (apply operation args))))
+
+(defun +my/html--read-page ()
+  "An HTML file or a URL, read (see above)."
+  (let ((handler (cons +my/html--url-regexp #'+my/html--url-name-handler)))
+    ;; Not let-bound: what's added meanwhile (TRAMP, loaded) stays.
+    (push handler file-name-handler-alist)
+    (unwind-protect
+        (let ((page (read-file-name "Page (a file or a URL): ")))
+          (if (string-match +my/html--url-regexp page)
+              (substring page (match-beginning 0))
+            (expand-file-name page)))
+      (setq file-name-handler-alist (delq handler file-name-handler-alist)))))
+
 (defun +my/html-open-in-emacs (page)
   "Show PAGE, an HTML file or a URL, in WebKit in a pane (see A PAGE IN
 EMACS above); where WebKit can't, in the browser. Returns its buffer, if
 it's Emacs's."
-  (interactive (list (read-file-name "Page: " nil nil t)))
+  (interactive (list (+my/html--read-page)))
   (let ((url-p (+my/html--url-p page)))
     (if (not (and (display-graphic-p) (featurep 'xwidget-internal) (fboundp '+my/webkit-file-url)))
         (progn (if url-p (browse-url page) (browse-url-of-file page))

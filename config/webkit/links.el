@@ -5,19 +5,44 @@
 ;; A link elsewhere than the view's page would take WebKit away from it: its
 ;; first step (load-started) is stopped and the link given to
 ;; `+my/webkit-link-function' (the browser); had it gone further, WebKit goes
-;; back to the page.
+;; back to the page. A file's page is left for another file (by the file, not
+;; the URL text: WebKit may encode it otherwise) or the web; a web page's for
+;; another URL (its #fragment aside), but while it first loads: a redirect
+;; (http to https, say), its page then the one it came to.
 (defvar-local +my/webkit--followed nil
   "(URL . TIME): the link out of the page last followed.")
 
+(defun +my/webkit--web-p (url)
+  "Non-nil if URL is a web page's (http, https)."
+  (string-match-p "\\`https?:" url))
+
+(defun +my/webkit--sans-fragment (url)
+  "URL without its #fragment."
+  (replace-regexp-in-string "#.*\\'" "" url t t))
+
 (defun +my/webkit--elsewhere-p (xwidget url)
-  "Non-nil if XWIDGET at URL has left its page (by the file, not the URL text:
-WebKit may encode it otherwise)."
+  "Non-nil if XWIDGET at URL has left its page (see above)."
   (let ((home (xwidget-get xwidget 'home)))
     (and (stringp url) home
-         (or (string-match-p "\\`\\(?:https?\\|ftp\\|mailto\\):" url)
-             (and (string-prefix-p "file:" url)
-                  (not (equal (file-truename (+my/webkit-url-file url))
-                              (file-truename (+my/webkit-url-file home)))))))))
+         (cond ((string-prefix-p "file:" url)
+                (not (and (string-prefix-p "file:" home)
+                          (equal (file-truename (+my/webkit-url-file url))
+                                 (file-truename (+my/webkit-url-file home))))))
+               ((+my/webkit--web-p url)
+                (not (and (+my/webkit--web-p home)
+                          (or (not (xwidget-get xwidget '+my/webkit-loaded))
+                              (equal (+my/webkit--sans-fragment url)
+                                     (+my/webkit--sans-fragment home))))))
+               ((string-match-p "\\`\\(?:ftp\\|mailto\\):" url))))))
+
+(defun +my/webkit--arrived (xwidget url)
+  "XWIDGET's page has loaded, at URL: its first load done, a web page's home
+where it came to (see above)."
+  (unless (xwidget-get xwidget '+my/webkit-loaded)
+    (xwidget-put xwidget '+my/webkit-loaded t)
+    (when (and (stringp url) (+my/webkit--web-p url)
+               (+my/webkit--web-p (xwidget-get xwidget 'home)))
+      (xwidget-put xwidget 'home url))))
 
 (defun +my/webkit--link-out (xwidget url status)
   "WebKit is following a link out of the page, to URL (see above)."
@@ -49,6 +74,7 @@ js.el): Linux's Emacs can't read a killed view."
                (cond ((+my/webkit--elsewhere-p xwidget url)
                       (+my/webkit--link-out xwidget url status))
                      ((equal status "load-finished")
+                      (+my/webkit--arrived xwidget url)
                       ;; A moment for WebKit to paint it.
                       (run-at-time 0.05 nil #'+my/webkit--uncover xwidget)
                       (run-hook-with-args '+my/webkit-load-functions xwidget)))))))))

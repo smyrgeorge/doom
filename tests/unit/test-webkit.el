@@ -1034,6 +1034,56 @@ mode has said what its page is."
       (xwidget-put xw 'home nil)
       (should-not (+my/webkit--elsewhere-p xw "https://example.com/")))))
 
+(ert-deftest webkit/elsewhere-p-from-a-web-page ()
+  "A web page's view: another URL (its #fragment aside) is elsewhere, but
+while it first loads (a redirect); a file, mailto: too."
+  (+test-webkit
+    (let ((xw (+test-webkit--xw-new)))
+      (xwidget-put xw 'home "http://127.0.0.1:8000/page.html")
+      ;; Loading: its own URL, a redirect's.
+      (dolist (url '("http://127.0.0.1:8000/page.html" "https://127.0.0.1:8000/page.html"
+                     "http://127.0.0.1:8000/en/page.html"))
+        (should-not (+my/webkit--elsewhere-p xw url)))
+      (xwidget-put xw '+my/webkit-loaded t)
+      (should-not (+my/webkit--elsewhere-p xw "http://127.0.0.1:8000/page.html"))
+      (should-not (+my/webkit--elsewhere-p xw "http://127.0.0.1:8000/page.html#part"))
+      (dolist (url '("http://127.0.0.1:8000/other.html" "https://127.0.0.1:8000/page.html"
+                     "https://example.com/" "file:///tmp/page.html" "mailto:me@example.com"))
+        (should (+my/webkit--elsewhere-p xw url)))
+      (should-not (+my/webkit--elsewhere-p xw "about:blank")))))
+
+(ert-deftest webkit/a-web-page-where-its-first-load-came-to ()
+  "Loaded: a web page's view is home where it came to (redirected), once; a
+file's keeps its URL."
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (+test-browsed nil)
+           (+test-webkit--page-url "http://127.0.0.1:8000/old.html")
+           (xw (progn (+test-webkit--show page) (car +test-webkit--made))))
+      (dolist (step '(("load-started" . "http://127.0.0.1:8000/old.html")
+                      ("load-committed" . "https://127.0.0.1:8000/new.html")
+                      ("load-finished" . "https://127.0.0.1:8000/new.html")))
+        (setf (+test-webkit--xw-uri xw) (cdr step))
+        (let ((last-input-event (+test-webkit--event xw (car step))))
+          (+my/webkit--callback xw 'load-changed)))
+      (should-not +test-browsed)
+      (should-not (+test-webkit--calls 'stop-loading))
+      (should (equal (xwidget-get xw 'home) "https://127.0.0.1:8000/new.html"))
+      ;; A link to another page now: the browser's.
+      (setf (+test-webkit--xw-uri xw) "https://127.0.0.1:8000/other.html")
+      (let ((last-input-event (+test-webkit--event xw "load-started")))
+        (+my/webkit--callback xw 'load-changed))
+      (should (equal +test-browsed '("https://127.0.0.1:8000/other.html")))
+      ;; Its home stays where the first load came to.
+      (+my/webkit--arrived xw "https://127.0.0.1:8000/later.html")
+      (should (equal (xwidget-get xw 'home) "https://127.0.0.1:8000/new.html"))
+      ;; A file's: its URL.
+      (let ((file (+test-webkit--xw-new)))
+        (xwidget-put file 'home "file:///tmp/a.html")
+        (+my/webkit--arrived file "file:///tmp/a%2Ehtml")
+        (should (xwidget-get file '+my/webkit-loaded))
+        (should (equal (xwidget-get file 'home) "file:///tmp/a.html"))))))
+
 (ert-deftest webkit/elsewhere-p-with-odd-file-names ()
   (+test-webkit
     (let* ((home (+test-file "links/odd dir #1/ü page.html" "<p>home</p>"))

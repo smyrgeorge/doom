@@ -151,6 +151,34 @@ page so named replaces it."
           (should (equal (buffer-local-value '+my/html-page-url other) "file:///tmp/b/report.html"))
           (kill-buffer other))))))
 
+(ert-deftest html/a-page-read-a-file-or-a-url ()
+  "M-x +my/html-open-in-emacs: a file's name, or a URL typed after the
+folder offered, its `//' not a name from the root."
+  (should (equal (interactive-form #'+my/html-open-in-emacs) '(interactive (list (+my/html--read-page)))))
+  (let ((substituted nil))
+    (cl-letf (((symbol-function 'read-file-name)
+               (lambda (prompt &rest _)
+                 (should (equal prompt "Page (a file or a URL): "))
+                 ;; What the minibuffer does as it's typed (its shadow).
+                 (setq substituted (list (substitute-in-file-name "~/dir/https://example.com/a.html")
+                                         (substitute-in-file-name "~/dir//tmp/b.html")
+                                         (substitute-in-file-name "~/dir/c.html")))
+                 "~/dir/https://example.com/a.html")))
+      (should (equal (+my/html--read-page) "https://example.com/a.html"))
+      (should (equal substituted '("https://example.com/a.html" "/tmp/b.html" "~/dir/c.html")))
+      ;; Only while reading.
+      (should-not (rassq #'+my/html--url-name-handler file-name-handler-alist))
+      (should (equal (substitute-in-file-name "~/dir/https://example.com/a.html") "/example.com/a.html"))))
+  (pcase-dolist (`(,typed . ,page) `(("https://example.com/" . "https://example.com/")
+                                     ("/tmp/a.html" . "/tmp/a.html")
+                                     ("~/a.html" . ,(expand-file-name "~/a.html"))))
+    (cl-letf (((symbol-function 'read-file-name) (lambda (&rest _) typed)))
+      (should (equal (+my/html--read-page) page))))
+  ;; Quit: the handler gone too.
+  (cl-letf (((symbol-function 'read-file-name) (lambda (&rest _) (signal 'quit nil))))
+    (should (condition-case nil (progn (+my/html--read-page) nil) (quit t)))
+    (should-not (rassq #'+my/html--url-name-handler file-name-handler-alist))))
+
 (ert-deftest html/the-page-mode ()
   (should (eq (get '+my/html-page-mode 'derived-mode-parent) '+my/webkit-mode)))
 
