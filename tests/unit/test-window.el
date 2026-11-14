@@ -182,6 +182,23 @@ forgotten as the next command starts, not selected at that one's end."
       (+test-window--ends)
       (should (eq (selected-window) old)))))
 
+(ert-deftest window/the-minibuffer-keeps-the-focus ()
+  "A window shown by a command typed in the minibuffer (TAB's
+*Completions*): not selected, the focus stays with what's typed."
+  (+test-window
+    (let* ((old (selected-window))
+           (minibuffer-p (symbol-function 'window-minibuffer-p))
+           (window nil))
+      ;; Shown with the minibuffer selected (asked without a window).
+      (cl-letf (((symbol-function 'window-minibuffer-p)
+                 (lambda (&optional w) (if w (funcall minibuffer-p w) t))))
+        (+my/focus-new-window-a (lambda (&rest _) (setq window (split-window)))
+                                (+test-buffer "*Completions*")))
+      (should (window-live-p window))
+      (should-not +my/focus--pending)
+      (+test-window--ends)
+      (should (eq (selected-window) old)))))
+
 (ert-deftest window/checkdoc-reaches-its-prompt ()
   "M-x checkdoc on a file with a docstring problem: its status shown in a new
 window, it goes on in the file's (recentring it) up to its prompt, q there."

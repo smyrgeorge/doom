@@ -16,8 +16,10 @@
 ;; and failed); another window it selects itself stays so. Not affected: side
 ;; windows (Doom popups follow their own :select rules; treemacs, which-key and
 ;; transient menus live there), child frames, windows opened from timers or
-;; process output (no command running), and code that binds
-;; `+my/focus-new-windows' to nil (e.g. the live Markdown preview).
+;; process output (no command running), windows a command typed in the
+;; minibuffer shows (TAB's *Completions*: the focus stays with what you're
+;; typing), and code that binds `+my/focus-new-windows' to nil (e.g. the live
+;; Markdown preview).
 (defvar +my/focus-new-windows t
   "When non-nil, select windows that `display-buffer' creates for a command.")
 
@@ -86,6 +88,7 @@ one never ended (see above), its window forgotten."
          (window (apply fn buffer args)))
     (when (and +my/focus-new-windows
                this-command
+               (not (window-minibuffer-p))
                (window-live-p window)
                (not (memq window before))
                (not (window-parameter window 'window-side))
