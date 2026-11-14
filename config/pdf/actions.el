@@ -74,7 +74,7 @@ always Preview and print."
                          (agent-shell-insert
                           :text (funcall (+my/pdf--claude-context text) (agent-shell-cwd))
                           :shell-buffer (agent-shell-shell-buffer)))))))
-       (list (list "PDF" "Open in Preview"
+       (list (list "PDF" (concat "Open in " (+my/os-app-name 'viewer))
                    (lambda () (with-current-buffer buffer (+my/pdf-open-in-preview))))
              (list "PDF" "Print..."
                    (lambda () (with-current-buffer buffer (+my/pdf-print)))))))))

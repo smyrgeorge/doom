@@ -556,7 +556,7 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
       (should (member '("PDF" "Search the web for it") actions))
       (should (member '("Claude" "Explain selection with Claude") actions))
       (should (member '("Claude" "Add selection to Claude prompt") actions))
-      (should (member '("PDF" "Open in Preview") actions))
+      (should (member (list "PDF" (concat "Open in " (+my/os-app-name 'viewer))) actions))
       (should (member '("PDF" "Print...") actions)))
     ;; The provider comes first in the menu (config/editor.el's list).
     (should (eq (car +my/context-action-providers) #'+my/context-actions-pdf))))
@@ -565,7 +565,7 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
     (should (equal (+test-pdf--actions)
-                   '(("PDF" "Open in Preview") ("PDF" "Print..."))))))
+                   `(("PDF" ,(concat "Open in " (+my/os-app-name 'viewer))) ("PDF" "Print..."))))))
 
 (ert-deftest e2e-pdf/claude-is-told-the-file-and-page ()
   (+test-pdf

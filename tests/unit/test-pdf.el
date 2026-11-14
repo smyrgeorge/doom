@@ -1347,7 +1347,12 @@ place), the page written for views to come."
                          ("Claude" "Explain selection with Claude") ("Claude" "Add selection to Claude prompt")
                          ("PDF" "Open in Preview") ("PDF" "Print..."))))
         (should (seq-every-p (lambda (action) (functionp (nth 2 action))) (+my/context-actions-pdf)))
-        (setq-local +my/pdf--selection nil)))))
+        (setq-local +my/pdf--selection nil)
+        ;; The app it opens in, by its name here.
+        (+test-on-macos
+          (should (member '("PDF" "Open in Preview") (mapcar #'butlast (+my/context-actions-pdf)))))
+        (+test-on-linux
+          (should (member '("PDF" "Open in the default app") (mapcar #'butlast (+my/context-actions-pdf)))))))))
 
 (defun +test-pdf--choose (buffer text label)
   "Pick LABEL in BUFFER's Option+Enter menu, TEXT selected in its page."
