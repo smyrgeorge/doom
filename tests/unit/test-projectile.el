@@ -574,21 +574,84 @@ workspace, not the one current (Doom's hook took that one), nor another."
         (+test-projectile--redisplay)
         (should-not (+test-projectile--in buffer))))))
 
+(defun +test-projectile--prompt (buffer keys)
+  "A command prompting as C-x 4 b does, with consult's preview: <f8> shows
+BUFFER in another window (the screen then redisplayed), put back as the
+prompt closes; \"pick\" RET shows it there, an empty RET nothing. KEYS
+typed into it (`kbd' syntax); the screen redisplayed after."
+  (let* ((origin (selected-window))
+         (other nil)
+         (keys-map (make-sparse-keymap))
+         (minibuffer-local-map (make-composed-keymap keys-map minibuffer-local-map))
+         (command-map (make-sparse-keymap)))
+    (define-key keys-map (kbd "<f8>")
+                (lambda ()
+                  (interactive)
+                  (with-selected-window origin
+                    (setq other (or other (split-window-right)))
+                    (set-window-buffer other buffer))
+                  (+test-projectile--redisplay)))
+    (define-key command-map (kbd "<f5>")
+                (lambda ()
+                  (interactive)
+                  (let ((input (minibuffer-with-setup-hook
+                                   (lambda ()
+                                     (add-hook 'minibuffer-exit-hook
+                                               (lambda ()
+                                                 (when other
+                                                   (set-window-buffer other (window-buffer origin))))
+                                               nil t))
+                                 (read-from-minibuffer "Buffer: "))))
+                    ;; The window the preview opened is gone (Emacs puts
+                    ;; the windows back as the prompt closes).
+                    (when (equal input "pick")
+                      (set-window-buffer (split-window-right) buffer)))))
+    (use-local-map command-map)
+    (execute-kbd-macro (vconcat (kbd "<f5>") (kbd keys)))
+    (use-local-map nil)
+    (+test-projectile--redisplay)))
+
 (ert-deftest projectile/a-preview-joins-no-workspace ()
-  "While the minibuffer is open, what its window shows is a preview (SPC b b,
-SPC SPC): not added; another window's buffer is."
+  "While a prompt is open (SPC b b, SPC SPC, C-x 4 b), what the windows show
+may be a preview: not added, in another window either, nor once the prompt
+closes without picking it (C-x 4 b's preview joined). Picked, it joins."
   (+test-projectile-real-workspaces
-    (let* ((here (selected-window))
-           (other (split-window-right))
-           (preview (+test-projectile--real "previewed"))
-           (shown (+test-projectile--real "shown meanwhile")))
-      (set-window-buffer here preview)
-      (set-window-buffer other shown)
-      (cl-letf (((symbol-function 'active-minibuffer-window) (lambda () (minibuffer-window)))
-                ((symbol-function 'minibuffer-selected-window) (lambda () here)))
-        (+test-projectile--redisplay))
-      (should-not (+test-projectile--in preview))
-      (should (equal (+test-projectile--in shown) '("A"))))))
+    (let ((theirs (+test-projectile--real "theirs only"))
+          (here (+test-projectile--real "here")))
+      (switch-to-buffer here)
+      (+test-projectile--redisplay)
+      (+test-projectile--prompt theirs "<f8> RET")
+      (should-not (+test-projectile--in theirs))
+      (+test-projectile--prompt theirs "<f8> p i c k RET")
+      (should (equal (+test-projectile--in theirs) '("A")))
+      (should (equal (+test-projectile--in here) '("A"))))))
+
+(ert-deftest projectile/shown-after-prompts-joins-once-the-command-is-done ()
+  "A command prompting twice, then showing a buffer: it joins once the
+command is done; one shown with no prompt open joins right away."
+  (should (memq #'+my/workspace-prompt-opened-h minibuffer-setup-hook))
+  (should (memq #'+my/workspace-prompt-closed-h minibuffer-exit-hook))
+  (+test-projectile-real-workspaces
+    (let ((after (+test-projectile--real "shown after its prompts"))
+          (later (+test-projectile--real "shown later")))
+      (+test-projectile--redisplay)
+      (use-local-map (let ((map (make-sparse-keymap)))
+                       (define-key map (kbd "<f5>")
+                                   (lambda ()
+                                     (interactive)
+                                     (read-from-minibuffer "One? ")
+                                     (read-from-minibuffer "Two? ")
+                                     (set-window-buffer (split-window-right) after)))
+                       map))
+      (execute-kbd-macro (kbd "<f5> RET RET"))
+      (use-local-map nil)
+      (should (equal (+test-projectile--in after) '("A")))
+      (should-not +my/workspace--before-prompt)
+      (should-not (memq #'+my/workspace-after-prompt-h post-command-hook))
+      ;; No prompt open: right away.
+      (set-window-buffer nil later)
+      (+test-projectile--redisplay)
+      (should (equal (+test-projectile--in later) '("A"))))))
 
 (ert-deftest projectile/switching-workspaces-mixes-no-buffers ()
   "A new workspace starts in the windows the last one showed (Doom keeps

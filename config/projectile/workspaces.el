@@ -78,22 +78,66 @@ shown is still the previous workspace's."
 ;; "none"): shown, but not the workspace's, so not kept as a tab, nor listed
 ;; by SPC b b, nor gone back to. Now a real buffer newly shown in any window
 ;; of the frame joins its workspace, whoever showed it and when (Doom's filter:
-;; its unreal buffers don't). Not a preview, in the window the minibuffer was
-;; opened from while it's open.
-(defun +my/workspace-add-shown-buffers-h (frame)
-  "For `window-buffer-change-functions': the real buffers FRAME's windows now
-show, and didn't, added to its workspace (see above)."
+;; its unreal buffers don't).
+(defun +my/workspace--add-shown (frame old-buffer)
+  "Add to FRAME's workspace the real buffers its windows show that aren't
+what (OLD-BUFFER WINDOW) says they showed."
   (when-let* (((bound-and-true-p persp-mode))
               (persp (get-current-persp frame)))
-    (let ((preview (and (active-minibuffer-window) (minibuffer-selected-window))))
-      (dolist (window (window-list frame 'nomini))
-        (let ((buffer (window-buffer window)))
-          (unless (or (eq window preview)
-                      (eq buffer (window-old-buffer window))
-                      (persp-contain-buffer-p buffer persp)
-                      (persp-buffer-filtered-out-p
-                       (or (buffer-base-buffer buffer) buffer)
-                       persp-add-buffer-on-after-change-major-mode-filter-functions))
-            (persp-add-buffer buffer persp nil nil)))))))
+    (dolist (window (window-list frame 'nomini))
+      (let ((buffer (window-buffer window)))
+        (unless (or (eq buffer (funcall old-buffer window))
+                    (persp-contain-buffer-p buffer persp)
+                    (persp-buffer-filtered-out-p
+                     (or (buffer-base-buffer buffer) buffer)
+                     persp-add-buffer-on-after-change-major-mode-filter-functions))
+          (persp-add-buffer buffer persp nil nil))))))
+
+(defun +my/workspace-add-shown-buffers-h (frame)
+  "For `window-buffer-change-functions': the real buffers FRAME's windows now
+show, and didn't, added to its workspace (see above); none while a prompt is
+open (see below)."
+  (unless (active-minibuffer-window)
+    (+my/workspace--add-shown frame #'window-old-buffer)))
 
 (add-hook 'window-buffer-change-functions #'+my/workspace-add-shown-buffers-h)
+
+;; While a prompt is open, what the windows show may be a preview (SPC b b,
+;; SPC SPC, C-x 4 b's in another window): none joins then. A buffer previewed
+;; in another window joined, even with the prompt cancelled. Once the command
+;; that prompted is done, what the windows show then, and didn't as its
+;; prompt opened, joins: what was picked.
+(defvar +my/workspace--before-prompt nil
+  "The frame and its windows' buffers as the outermost prompt opened:
+\(FRAME (WINDOW . BUFFER)...), until the command that prompted is done.")
+
+(defun +my/workspace-prompt-opened-h ()
+  "For `minibuffer-setup-hook': note what the windows show (see above), as
+the first of a command's prompts opens."
+  (when (and (= (minibuffer-depth) 1) (not +my/workspace--before-prompt))
+    (setq +my/workspace--before-prompt
+          (cons (selected-frame)
+                (mapcar (lambda (window) (cons window (window-buffer window)))
+                        (window-list nil 'nomini))))))
+
+(add-hook 'minibuffer-setup-hook #'+my/workspace-prompt-opened-h)
+
+(defun +my/workspace-prompt-closed-h ()
+  "For `minibuffer-exit-hook': once the command is done, add what's shown
+(see above)."
+  (when (= (minibuffer-depth) 1)
+    (add-hook 'post-command-hook #'+my/workspace-after-prompt-h)))
+
+(add-hook 'minibuffer-exit-hook #'+my/workspace-prompt-closed-h)
+
+(defun +my/workspace-after-prompt-h ()
+  "Run once after a command that prompted: the real buffers the windows show,
+and didn't as its prompt opened, added to the workspace (see above)."
+  ;; Not yet if the command opened another prompt.
+  (unless (active-minibuffer-window)
+    (remove-hook 'post-command-hook #'+my/workspace-after-prompt-h)
+    (when-let* ((before (prog1 +my/workspace--before-prompt
+                          (setq +my/workspace--before-prompt nil)))
+                ((frame-live-p (car before))))
+      (+my/workspace--add-shown (car before)
+                                (lambda (window) (alist-get window (cdr before)))))))
