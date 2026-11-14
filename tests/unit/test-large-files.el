@@ -132,6 +132,54 @@ its hooks), the long-lines notice; Open normally runs it."
         (should (member '(mode markdown-mode) +test-lf-ran))
         (should (member '(local-vars markdown-mode) +test-lf-ran))))))
 
+(defvar yaml-ts-mode-hook)
+(defvar go-ts-mode-hook)
+(defvar conf-mode-hook)
+(defvar js-mode-hook)
+(defvar typescript-ts-mode-hook)
+
+(ert-deftest large-files/long-lines-whatever-the-mode-looked-up ()
+  "The mode looked up a function choosing one (-maybe) or an alias (not loaded
+yet): so-long-mode at once all the same, the mode it stands for never run
+\(nor its hooks); the one looked up kept, Open normally runs it (it chooses)."
+  (+test-lf
+    (let ((ran nil))
+      (cl-flet ((note (mode) (lambda () (push mode ran))))
+        (let ((yaml-ts-mode-hook (list (note 'yaml-ts-mode)))
+              (go-ts-mode-hook (list (note 'go-ts-mode)))
+              (conf-mode-hook (list (note 'conf-mode)))
+              (js-mode-hook (list (note 'js-mode)))
+              (typescript-ts-mode-hook (list (note 'typescript-ts-mode)))
+              (long (concat "key: " (make-string 6000 ?x) "\n")))
+          (pcase-dolist (`(,name . ,mode) '(("long.yaml" . yaml-ts-mode-maybe)
+                                            ("long.go" . go-ts-mode-maybe)
+                                            ("long.conf" . conf-mode-maybe)
+                                            ("long.cfg" . conf-mode-maybe)
+                                            ("long.js" . javascript-mode)
+                                            ("long.ts" . typescript-ts-mode-maybe)))
+            (should (eq (assoc-default name auto-mode-alist #'string-match-p) mode))
+            (with-current-buffer (car (+test-lf--open (+test-file (concat "large/" name) long)))
+              (should (eq major-mode 'so-long-mode))
+              (should (eq (so-long-original 'major-mode) mode))
+              (should (+test-lf--notice 'long-lines))))
+          (should-not ran)
+          ;; Open normally: the mode the one looked up chooses.
+          (with-current-buffer (get-file-buffer (+test-tmp-file "large/long.yaml"))
+            (+my/long-lines--open-normally)
+            (should (eq major-mode (if (treesit-language-available-p 'yaml) 'yaml-ts-mode 'fundamental-mode)))
+            (when (eq major-mode 'yaml-ts-mode)
+              (should (equal ran '(yaml-ts-mode))))))))))
+
+(ert-deftest large-files/the-mode-a-name-stands-for ()
+  (should (eq (+my/large-files--major-mode 'markdown-mode) 'markdown-mode))
+  (should (eq (+my/large-files--major-mode 'javascript-mode) 'js-mode))
+  (should (eq (+my/large-files--major-mode 'yaml-ts-mode-maybe) 'yaml-ts-mode))
+  (should (eq (+my/large-files--major-mode 'conf-mode-maybe) 'conf-mode))
+  ;; Unknown: none, as before (set-auto-mode-0 says so).
+  (should-not (+my/large-files--major-mode '+test-lf-no-such-mode))
+  (should-not (+my/large-files--major-mode '+test-lf-no-such-mode-maybe))
+  (should-not (+my/large-files--target-p '+test-lf-no-such-mode)))
+
 (ert-deftest large-files/large-light-at-once ()
   "60,000 short lines: its own mode, its hooks run, but not the local-vars ones
 \(the language server); so-long-minor-mode at once; the heavy modes off; a

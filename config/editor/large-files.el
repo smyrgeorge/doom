@@ -61,16 +61,42 @@
                  (> (buffer-size) +my/large-file-size))
              'large)))))
 
+;; THE MODE LOOKED UP may not be a major mode itself: an alias (.js's
+;; javascript-mode, of js-mode, not loaded yet), or a function choosing one
+;; (yaml-ts-mode-maybe: yaml-ts-mode with its grammar; go-ts-mode-maybe,
+;; conf-mode-maybe...). Taken as such, it was no code, text or config: a file
+;; with very long lines (a Kubernetes YAML's base64 lines) opened in its own
+;; mode, its hooks run, and so-long switched later. The mode it stands for is
+;; tested: the alias followed, a -maybe function's name without -maybe; the
+;; file's own mode (Open normally) still the one looked up, which chooses.
+(defun +my/large-files--definition (function)
+  "FUNCTION's definition, its file loaded first if it's only autoloaded."
+  (let ((definition (symbol-function function)))
+    (if (not (autoloadp definition))
+        definition
+      (ignore-errors (autoload-do-load definition function))
+      (symbol-function function))))
+
+(defun +my/large-files--major-mode (mode)
+  "The major mode MODE (looked up for a file) stands for (see above), its file
+loaded if it's only autoloaded, to know what it derives from; nil if none."
+  (let ((function (major-mode-remap mode))
+        seen)
+    (while (and (symbolp function) (not (memq function seen)))
+      (push function seen)
+      (let ((definition (+my/large-files--definition function))
+            (chosen (and (string-suffix-p "-maybe" (symbol-name function))
+                         (intern-soft (string-remove-suffix "-maybe" (symbol-name function))))))
+        (cond ((and definition (symbolp definition)) (setq function definition))
+              ((and chosen (+my/large-files--definition chosen)) (setq function chosen)))))
+    (and (symbolp function) (fboundp function) function)))
+
 (defun +my/large-files--target-p (mode)
-  "Whether MODE (a major mode) is one so-long acts on: code, text, config;
-its file loaded first if it's only autoloaded, to know what it derives from."
-  (when (and mode (symbolp mode))
-    (let ((function (major-mode-remap mode)))
-      (when (autoloadp (symbol-function function))
-        (ignore-errors (autoload-do-load (symbol-function function) function)))
-      (and (fboundp function)
-           (or (eq so-long-target-modes t)
-               (apply #'provided-mode-derived-p function so-long-target-modes))))))
+  "Whether MODE (looked up for a file: a major mode, or one it stands for, see
+above) is one so-long acts on: code, text, config."
+  (when-let* ((function (and mode (symbolp mode) (+my/large-files--major-mode mode))))
+    (or (eq so-long-target-modes t)
+        (apply #'provided-mode-derived-p function so-long-target-modes))))
 
 (defun +my/large-files-look-up-a (fn mode &optional keep-mode-if-same)
   "`set-auto-mode-0': while the mode is looked up, MODE noted, not applied."
