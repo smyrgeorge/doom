@@ -206,15 +206,25 @@ error), the panes as they were."
                                            (+my/tiling--stack-side layout))
             (+my/tiling--mark-main root)))
       (let* ((stack (+my/tiling--stack-panes layout root))
-             (last (car (last stack))))
-        (when (< (apply #'+ (mapcar (lambda (pane) (+my/tiling--stack-length layout pane)) stack))
-                 (* (1+ (length stack)) (+my/tiling--stack-least layout)))
+             (total (apply #'+ (mapcar (lambda (pane) (+my/tiling--stack-length layout pane)) stack)))
+             (count (1+ (length stack)))
+             ;; Each pane's share of the stack's length, the new one's too.
+             (sizes (cl-loop for index below count
+                             collect (+ (/ total count) (if (< index (% total count)) 1 0)))))
+        (when (< total (* count (+my/tiling--stack-least layout)))
           (user-error "No room for another pane"))
-        ;; Even first: a pane bigger (SPC w }) left the last one too small to
-        ;; split.
-        (when (cdr stack)
-          (balance-windows (window-parent last)))
-        (let ((new (+my/tiling--split-window last nil (+my/tiling--stack-direction layout))))
+        ;; The stack at those sizes first, the last pane with the new one's
+        ;; room too, then split there: halved (evened first), the last pane
+        ;; was too small long before the stack was (24 lines: 5 panes, not
+        ;; 7), and a pane made bigger (SPC w }) left it too small at once.
+        (cl-loop for pane in (butlast stack)
+                 for size in sizes
+                 do (ignore-errors
+                      (adjust-window-trailing-edge
+                       pane (- size (+my/tiling--stack-length layout pane))
+                       (not (+my/tiling--across-p layout)))))
+        (let ((new (+my/tiling--split-window (car (last stack)) (nth (1- (length stack)) sizes)
+                                             (+my/tiling--stack-direction layout))))
           (set-window-parameter new '+my/tiling-share nil)
           (+my/tiling--stack-sizes layout (+my/tiling--stack-panes layout root))
           new)))))

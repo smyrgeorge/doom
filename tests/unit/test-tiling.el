@@ -337,10 +337,10 @@ buffer and its tabs, SELECTED's pane selected."
                   (+my/tiling--stack-panes layout (window-main-window)))))))
 
 (ert-deftest tiling/arrange-every-pane-spc-w-spc-opens ()
-  "However many panes SPC w SPC opened (the stack full: 5 tall in 24 lines,
-6 wide in 80 columns, more than halving the last pane makes room for), SPC w
-a lays them all out, the stack even again, each showing what it showed, its
-tabs kept, the selected one still so: tall, tall-right, wide."
+  "However many panes SPC w SPC opened (the stack full: 7 tall in 24 lines,
+9 wide in 80 columns), SPC w a lays them all out, the stack even again, each
+showing what it showed, its tabs kept, the selected one still so: tall,
+tall-right, wide."
   (dolist (strategy '(tall tall-right wide))
     (+test-tiling
       (let* ((+my/tiling-strategy strategy)
@@ -361,8 +361,8 @@ main one and as many as the stack's length has room for, each at least
 
 (ert-deftest tiling/arrange-as-many-as-fit ()
   "Panes of one's own, as many as the stack has room for (tall's: 6 in 24
-lines, 4 the smallest; wide's: 8 in 80 columns, 10 the smallest), more than
-SPC w SPC opens: SPC w a lays them all out."
+lines, 4 the smallest; wide's: 8 in 80 columns, 10 the smallest), as SPC w
+SPC opens too: SPC w a lays them all out."
   (dolist (strategy '(tall tall-right wide))
     (+test-tiling
       (let* ((+my/tiling-strategy strategy)
@@ -789,6 +789,28 @@ error, and opens nothing."
       (should error)
       (should (equal (cadr error) "No room for another pane"))
       (should (= (length (+my/tiling--panes)) (1+ count))))))
+
+(ert-deftest tiling/spc-w-spc-fills-the-stack ()
+  "SPC w SPC adds panes as long as the stack has room for them at its
+smallest (tall: 6 in 24 lines with `window-min-height' 4, 7 panes), none
+under it; then says there's no room."
+  (dolist (strategy '(tall tall-right wide))
+    (+test-tiling
+      (let* ((+my/tiling-strategy strategy)
+             (layout (symbol-value (intern (format "+my/tiling--%s" strategy))))
+             (least (+my/tiling--stack-least layout))
+             (count 0)
+             error)
+        (while (and (not error) (< count 50))
+          (condition-case err
+              (progn (+my/tiling-split) (cl-incf count))
+            (user-error (setq error err))))
+        (should (equal (cadr error) "No room for another pane"))
+        (should (= (length (+my/tiling--panes)) (+test-tiling--room strategy)))
+        (let ((lengths (mapcar (lambda (pane) (+my/tiling--stack-length layout pane))
+                               (+my/tiling--stack-panes layout (window-main-window)))))
+          (should (+test-tiling--even-p lengths))
+          (should (>= (apply #'min lengths) least)))))))
 
 (ert-deftest tiling/a-narrow-main-area-no-room-said ()
   "A main area too narrow for two panes (the sidebar beside it), or too short
