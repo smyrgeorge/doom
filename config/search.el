@@ -10,11 +10,14 @@
 ;; type its key then SPC (or `<' then the key): c Classes, f Files, s Symbols,
 ;; a Actions. `<<' (or DEL on an empty input) goes back to all.
 ;; - Classes / Symbols: the language server's workspace symbols, queried as you
-;;   type (from 2 characters; only in buffers with an LSP server). Classes are
-;;   classes, interfaces/traits, structs, enums and objects.
-;; - Files: the project's files, recently opened ones first.
-;; - Actions: every command (what M-x runs), recently used ones first, with
-;;   their key bindings and docs.
+;;   type (from 2 characters; only in buffers with an LSP server): each one's
+;;   name, kind and container, then its file and line. Classes are classes,
+;;   interfaces/traits, structs, enums and objects.
+;; - Files: the project's files, recently opened ones first: each one's name,
+;;   then its folder.
+;; - Actions: every command (what M-x runs), as M-x lists them (recently used
+;;   ones first, then the shortest), with their key bindings and docs.
+;; What tells rows apart comes first: a narrow frame still shows it.
 ;; Emacs can't see a lone Shift key press on macOS, so there is no double Shift.
 
 (defconst +my/search-everywhere--class-kinds '(5 10 11 19 23)

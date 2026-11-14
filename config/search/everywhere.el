@@ -16,17 +16,24 @@
          (workspaces (and (bound-and-true-p lsp-mode)
                           (require 'consult-lsp nil t)
                           (lsp-workspaces)))
+         ;; Classes, Files and Symbols show all in their rows, not in
+         ;; annotations (Files not marginalia's either: their own category):
+         ;; marginalia aligns the Actions' docs after the longest row it
+         ;; annotated, off a narrow frame after a file's long path.
          (symbols (lambda (name key classes token)
                     (when workspaces
                       (list :name name :narrow key :category 'consult-lsp-symbols
                             :async (+my/search-everywhere--lsp-async workspaces token classes)
-                            :annotate #'+my/search-everywhere--annotate-symbol
+                            :annotate #'ignore
                             :action #'+my/search-everywhere--goto-symbol)))))
     (consult--multi
      (list (funcall symbols "Classes" ?c t :+my/search-everywhere-classes)
            (when root
-             (list :name "Files" :narrow ?f :category 'file :face 'consult-file
-                   :items (lambda () (+my/search-everywhere--files root))
+             (list :name "Files" :narrow ?f :category '+my/search-everywhere-file
+                   :face 'consult-file :annotate #'ignore
+                   :items (lambda ()
+                            (+my/search-everywhere--file-items
+                             (+my/search-everywhere--files root)))
                    :action (lambda (file) (find-file (expand-file-name file root)))))
            (funcall symbols "Symbols" ?s nil :+my/search-everywhere-symbols)
            (list :name "Actions" :narrow ?a :category 'command

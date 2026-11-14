@@ -3,7 +3,10 @@
 ;; Loaded from config/search.el.
 
 (defun +my/search-everywhere--commands ()
-  "Names of all commands M-x would offer here, recently used ones first."
+  "Names of all commands M-x would offer here, in its order: recently used
+ones first, then the shortest. marginalia aligns their docs after the longest
+name shown: alphabetically, long names came first, the docs off a narrow
+frame."
   (let* ((buffer (current-buffer))
          (offered-p (lambda (sym)
                       (and (commandp sym)
@@ -19,7 +22,10 @@
      ;; (e.g. dired's) used there aren't listed in other buffers.
      (append (seq-filter (lambda (name) (funcall offered-p (intern-soft name)))
                          extended-command-history)
-             (sort all #'string<)))))
+             (sort all (lambda (a b)
+                         (if (= (length a) (length b))
+                             (string< a b)
+                           (< (length a) (length b)))))))))
 
 (defun +my/search-everywhere--run-command (name)
   "Run command NAME as M-x would."

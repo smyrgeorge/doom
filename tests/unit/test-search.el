@@ -9,7 +9,7 @@
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "consult"))))))
-  (dolist (package '("consult" "consult-lsp" "lsp-mode" "projectile"))
+  (dolist (package '("consult" "consult-lsp" "lsp-mode" "projectile" "marginalia"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
 (defvar lsp-use-plists t)               ; as Doom builds lsp-mode (LSP_USE_PLISTS)
@@ -21,6 +21,7 @@
 (require 'consult-lsp)
 (require 'projectile)
 (require 'recentf)
+(require 'marginalia)
 
 ;; Doom's Find in Files (SPC s p), from its source: what Cmd+Shift+F runs.
 (defconst +test-search--doom-modules
@@ -101,18 +102,24 @@ the dynamic settings it ran with."
                          +my/search-everywhere--class-kinds)
                  '("Class" "Enum" "Interface" "Object" "Struct"))))
 
-(ert-deftest search/annotate-symbol ()
-  "The symbol's kind and container, e.g. \"Method  UserService\"."
-  (let* ((file (+test-file "search/A.kt" "x\n"))
-         (method (+test-search--candidate (+test-search--symbol "save" 6 file 0 0) "UserService"))
-         (class (+test-search--candidate (+test-search--symbol "UserService" 5 file 0 0))))
-    (let ((annotation (+my/search-everywhere--annotate-symbol method)))
-      (should (equal (substring-no-properties annotation) " Method  UserService"))
-      (should (eq (get-text-property 1 'face annotation) 'font-lock-type-face))
-      (should (eq (get-text-property (1- (length annotation)) 'face annotation)
-                  'completions-annotations)))
-    (should (equal (substring-no-properties (+my/search-everywhere--annotate-symbol class))
-                   " Class"))))
+(ert-deftest search/symbol-row ()
+  "A symbol's row: its name, kind and container first (a narrow frame shows
+them), then its file, relative to the server's root, and line; the
+symbol's information in `consult--candidate'."
+  (let* ((root (+test-search--dir "search-row" "src/Service.kt"))
+         (file (expand-file-name "src/Service.kt" root))
+         (workspace (make-lsp--workspace :root (directory-file-name root)))
+         (method (+test-search--symbol "save" 6 file 11 4 "UserService"))
+         (class (+test-search--symbol "UserService" 5 file 2 0)))
+    (let ((row (+my/search-everywhere--symbol-row workspace method)))
+      (should (equal (substring-no-properties row) "save  Method  UserService  src/Service.kt:12"))
+      (should (eq (get-text-property 0 'consult--candidate row) method))
+      (should-not (get-text-property 0 'face row))
+      (should (eq (get-text-property 6 'face row) 'font-lock-type-face))
+      (should (eq (get-text-property 14 'face row) 'completions-annotations))
+      (should (eq (get-text-property (1- (length row)) 'face row) 'completions-annotations)))
+    (should (equal (substring-no-properties (+my/search-everywhere--symbol-row workspace class))
+                   "UserService  Class  src/Service.kt:3"))))
 
 (ert-deftest search/goto-symbol ()
   "Picking a symbol: its file at its position, a jump recorded first."
@@ -283,6 +290,23 @@ files elsewhere (a sibling folder with the same prefix too) or gone."
                (lambda (dir) (should (equal dir root)) '("src/a.kt" "b.txt" "README.md"))))
       (should (equal (+my/search-everywhere--files root) '("b.txt" "README.md" "src/a.kt"))))))
 
+(ert-deftest search/file-items-name-first ()
+  "Each file's name first, then its folder, dimmed (a narrow frame shows the
+name); picking one gives its relative path."
+  (let ((items (+my/search-everywhere--file-items
+                '("src/test/kotlin/io/github/example/service/UserServiceIntegrationTest.kt"
+                  "README.md"))))
+    (should (equal (mapcar #'cdr items)
+                   '("src/test/kotlin/io/github/example/service/UserServiceIntegrationTest.kt"
+                     "README.md")))
+    (should (equal (mapcar (lambda (item) (substring-no-properties (car item))) items)
+                   '("UserServiceIntegrationTest.kt  src/test/kotlin/io/github/example/service"
+                     "README.md")))
+    (let ((row (car (car items))))
+      (should-not (get-text-property 0 'face row))
+      (should (eq (get-text-property 29 'face row) 'completions-annotations))
+      (should (eq (get-text-property (1- (length row)) 'face row) 'completions-annotations)))))
+
 (ert-deftest search/files-without-recentf ()
   (let ((root (+test-search--dir "search-files-norecent" "a.txt")))
     (cl-letf (((symbol-function 'projectile-project-files) (lambda (_) '("a.txt"))))
@@ -334,9 +358,12 @@ untracked ones too, ignored ones not."
     (should-not (member "no-such-function-zz" commands))
     (should (member "forward-char" commands))
     (should (member "+my/search-everywhere" commands))
-    ;; The rest in alphabetical order.
+    ;; The rest as M-x lists them: shortest first, then alphabetically.
     (let ((rest (nthcdr 2 commands)))
-      (should (equal rest (sort (copy-sequence rest) #'string<))))))
+      (should (equal rest (sort (copy-sequence rest)
+                                (lambda (a b)
+                                  (or (< (length a) (length b))
+                                      (and (= (length a) (length b)) (string< a b))))))))))
 
 (ert-deftest search/commands-as-m-x-offers-here ()
   "Only what M-x offers in this buffer (`read-extended-command-predicate'):
@@ -406,15 +433,24 @@ not a mode's commands elsewhere, recently used or not."
                 (dolist (source (list classes symbols))
                   (should (eq (plist-get source :category) 'consult-lsp-symbols))
                   (should (functionp (plist-get source :async)))
-                  (should (eq (plist-get source :annotate) #'+my/search-everywhere--annotate-symbol))
                   (should (eq (plist-get source :action) #'+my/search-everywhere--goto-symbol)))
+                ;; All in their rows: no annotation, from marginalia neither
+                ;; (it aligns the Actions' docs after the longest row it
+                ;; annotated: a file's long path pushed them off a narrow
+                ;; frame).
+                (dolist (source (list classes files symbols))
+                  (should-not (funcall (plist-get source :annotate) "row"))
+                  (should-not (assq (plist-get source :category) marginalia-annotators)))
+                (should (assq (plist-get actions :category) marginalia-annotators))
                 ;; Each its own token, classes or not.
                 (should (equal (reverse asyncs)
                                '(((ws) :+my/search-everywhere-classes t)
                                  ((ws) :+my/search-everywhere-symbols nil))))
-                (should (eq (plist-get files :category) 'file))
                 (should (eq (plist-get files :face) 'consult-file))
-                (should (equal (funcall (plist-get files :items)) '("src/A.kt" "b.txt")))
+                (should (equal (mapcar (lambda (item) (substring-no-properties (car item)))
+                                       (funcall (plist-get files :items)))
+                               '("A.kt  src" "b.txt")))
+                (should (equal (mapcar #'cdr (funcall (plist-get files :items))) '("src/A.kt" "b.txt")))
                 (should (eq (plist-get actions :category) 'command))
                 (should (eq (plist-get actions :items) #'+my/search-everywhere--commands))
                 (should (eq (plist-get actions :action) #'+my/search-everywhere--run-command))

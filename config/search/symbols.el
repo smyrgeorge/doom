@@ -37,19 +37,31 @@ Classes and Symbols requests would cancel each other."
                                   (and (memq (lsp:symbol-information-kind info)
                                              +my/search-everywhere--class-kinds)
                                        t))
-                         collect (consult-lsp--symbols--transformer workspace info)))
+                         collect (+my/search-everywhere--symbol-row workspace info)))
               results)))
    (consult--async-highlight)))
 
-(defun +my/search-everywhere--annotate-symbol (cand)
-  "Show the symbol's kind and container, e.g. \"Method  UserService\"."
-  (let ((info (get-text-property 0 'consult--candidate cand))
-        (container (get-text-property 0 'consult--container-name cand)))
-    (concat (propertize (format " %s" (alist-get (lsp:symbol-information-kind info)
-                                                 lsp-symbol-kinds))
-                        'face 'font-lock-type-face)
-            (and container (propertize (format "  %s" container)
-                                       'face 'completions-annotations)))))
+(defun +my/search-everywhere--symbol-row (workspace info)
+  "Symbol INFO of WORKSPACE as a row of the list: its name, kind and
+container first, which a narrow frame still shows, then its file and line,
+which keep rows unique: \"save  Method  UserService  src/Service.kt:12\".
+INFO is the row's `consult--candidate' property."
+  (let* ((location (lsp:symbol-information-location info))
+         (file (lsp--uri-to-path (lsp:location-uri location)))
+         (root (lsp--workspace-root workspace))
+         (line (1+ (lsp:position-line (lsp:range-start (lsp:location-range location)))))
+         (container (lsp:symbol-information-container-name? info)))
+    (propertize
+     (concat (lsp:symbol-information-name info)
+             (propertize (format "  %s" (alist-get (lsp:symbol-information-kind info)
+                                                   lsp-symbol-kinds "Symbol"))
+                         'face 'font-lock-type-face)
+             (propertize (concat (and container (format "  %s" container))
+                                 (format "  %s:%d"
+                                         (if root (file-relative-name file root) file)
+                                         line))
+                         'face 'completions-annotations))
+     'consult--candidate info)))
 
 (defun +my/search-everywhere--goto-symbol (cand)
   "Open the file of symbol CAND at its position."

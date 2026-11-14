@@ -11,3 +11,16 @@
                           when (and (string-prefix-p root abs) (file-exists-p abs))
                           collect (file-relative-name abs root))))
     (delete-dups (append recent (projectile-project-files root)))))
+
+(defun +my/search-everywhere--file-items (files)
+  "FILES (relative to the project's root) as the list shows them: each one's
+name first, then its folder, dimmed, so a narrow frame still shows the name.
+Picking one gives its relative path."
+  (mapcar (lambda (file)
+            (let ((folder (file-name-directory file)))
+              (cons (concat (file-name-nondirectory file)
+                            (and folder
+                                 (propertize (concat "  " (directory-file-name folder))
+                                             'face 'completions-annotations)))
+                    file)))
+          files))
