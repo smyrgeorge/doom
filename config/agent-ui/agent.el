@@ -311,7 +311,7 @@ EXCEPT's (a canvas being killed): ((CANVAS . ID)...), in their order."
   "CANVAS's pane shown (SELECT: selected), the cursor on question ID, its
 line in view."
   (unless (get-buffer-window canvas t)
-    (funcall agent-ui-display-function canvas))
+    (agent-ui--display canvas))
   (let ((window (get-buffer-window canvas t))
         (pos (with-current-buffer canvas
                (agent-ui--flush)
@@ -390,8 +390,8 @@ without it, if it had one (it stayed until the next turn's end)."
 ;; Options, both on (nil in config.el turns one off): a question shown (an
 ;; element that asks, `agent-ui-ask-waiting-p') takes the focus: its pane
 ;; selected, the cursor on it, once Emacs is idle a moment (typing in the
-;; session isn't taken over: the canvas's keys act); not a resumed session's
-;; coming back. Its answer sent (`agent-ui-ask-done-p'), it leaves its canvas;
+;; session isn't taken over: the canvas's keys act), the minibuffer closed;
+;; not a resumed session's coming back. Its answer sent (`agent-ui-ask-done-p'), it leaves its canvas;
 ;; a canvas left without elements is closed: its panes, its buffer killed, the
 ;; cursor back in the session.
 
@@ -409,10 +409,15 @@ killed (see above).")
 
 (defun agent-ui--focus-question (canvas id)
   "CANVAS's question ID, if it still waits: its pane selected, the cursor on
-it."
+it. While the minibuffer is open, once it's closed and Emacs is idle a
+moment again (the keys typed there aren't the canvas's)."
   (when (and (buffer-live-p canvas)
              (ignore-errors (agent-ui-ask-waiting-p (agent-ui-get id :canvas canvas))))
-    (agent-ui--show-question canvas id t)))
+    (if (active-minibuffer-window)
+        (agent-ui-after-minibuffer
+         (lambda ()
+           (run-with-idle-timer agent-ui-focus-questions-delay nil #'agent-ui--focus-question canvas id)))
+      (agent-ui--show-question canvas id t))))
 
 (defun agent-ui--focus-question-h (id element)
   "A question shown (`agent-ui-shown-functions'): it takes the focus, once

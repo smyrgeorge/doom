@@ -691,6 +691,49 @@ not with the option off (on: its own default)."
             (agent-ui-show '(:id "go2" :type "confirm" :question "Go?") :canvas ask))
           (should (= (length idle) 1)))))))
 
+(ert-deftest agent-ui-agent/a-question-waits-for-the-minibuffer ()
+  "A question shown while the minibuffer is open: its pane not opened, the
+focus not taken while it's open (the keys typed there went to the canvas:
+q killed it); once it's closed, its pane opens, and it takes the focus once
+Emacs is idle a moment again."
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ mini" "/tmp/mini/"))
+           (ask (concat (agent-ui--session-name session) " / ask"))
+           (agent-ui-focus-questions t)
+           (agent-ui-display-function #'agent-ui-display-canvas)
+           (open t)
+           (idle nil))
+      (cl-letf (((symbol-function 'run-with-idle-timer)
+                 (lambda (secs _repeat f &rest args) (push (cons secs (lambda () (apply f args))) idle)))
+                ((symbol-function 'active-minibuffer-window) (lambda () (and open (minibuffer-window)))))
+        (unwind-protect
+            (save-window-excursion
+              (delete-other-windows)
+              (switch-to-buffer session)
+              (let ((notes (split-window-right)))
+                (set-window-buffer notes (get-buffer-create "notes.txt"))
+                (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?" :options ("Test" "Revert"))
+                               :canvas ask)
+                (let ((canvas (get-buffer (agent-ui-canvas-buffer-name ask))))
+                  ;; Every pane as it was.
+                  (should (equal (mapcar #'window-buffer (window-list)) (list session (get-buffer "notes.txt"))))
+                  (should (= (length idle) 1))
+                  (funcall (cdr (pop idle)))
+                  (should (eq (window-buffer (selected-window)) session))
+                  (should-not (get-buffer-window canvas))
+                  ;; Closed: its pane opened; idle a moment again, the focus.
+                  (run-hooks 'minibuffer-exit-hook)
+                  (setq open nil)
+                  (+test-aua-settle)
+                  (should (get-buffer-window canvas))
+                  (should (eq (window-buffer (selected-window)) session))
+                  (should (equal (mapcar #'car idle) (list agent-ui-focus-questions-delay)))
+                  (funcall (cdr (pop idle)))
+                  (should (eq (window-buffer (selected-window)) canvas))
+                  (should (equal (get-text-property (window-point) 'agent-ui-id canvas) "fix")))))
+          (remove-hook 'minibuffer-exit-hook #'agent-ui--minibuffer-exit-h)
+          (setq agent-ui--after-minibuffer nil))))))
+
 (ert-deftest agent-ui-agent/answered-the-question-goes ()
   "An answer sent: the question leaves its canvas; a canvas left empty is
 closed and killed, the cursor back in the session. Beside other elements,

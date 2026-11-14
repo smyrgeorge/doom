@@ -201,6 +201,63 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
           (should (eq (selected-window) before))
           (should (get-buffer-window canvas)))))))
 
+(defun +test-auc-settle ()
+  "Timers due now run."
+  (let ((end (+ (float-time) 0.1)))
+    (while (< (float-time) end) (accept-process-output nil 0.02))))
+
+(ert-deftest agent-ui-canvas/shown-once-the-minibuffer-closes ()
+  "An element shown while the minibuffer is open: drawn, its canvas shown
+once it's closed (opened then, it took another pane's place: tiling steps
+aside while it's open); not if it's in a window by then, or gone. Another
+minibuffer still open (one opened from it): once that one's closed."
+  (+test-auc
+    (let ((open t))
+      (cl-letf (((symbol-function 'active-minibuffer-window)
+                 (lambda () (and open (minibuffer-window)))))
+        (unwind-protect
+            (progn
+              (agent-ui-show '(:id "a" :type "meter"))
+              (should (equal (+test-auc-text) "0/10\n\n"))
+              (should-not +test-auc-displayed)
+              (should (memq #'agent-ui--minibuffer-exit-h minibuffer-exit-hook))
+              ;; Its exit hook runs while it's still open: just after.
+              (run-hooks 'minibuffer-exit-hook)
+              (setq open nil)
+              (should-not +test-auc-displayed)
+              (+test-auc-settle)
+              (should (equal +test-auc-displayed (list canvas)))
+              (should-not (memq #'agent-ui--minibuffer-exit-h minibuffer-exit-hook))
+              ;; Still open after its exit (another one): waiting again.
+              (setq open t +test-auc-displayed nil)
+              (agent-ui-show '(:id "b" :type "meter"))
+              (run-hooks 'minibuffer-exit-hook)
+              (+test-auc-settle)
+              (should-not +test-auc-displayed)
+              (setq open nil)
+              (run-hooks 'minibuffer-exit-hook)
+              (+test-auc-settle)
+              (should (equal +test-auc-displayed (list canvas)))
+              ;; In a window by then: not shown again; gone: not either.
+              (setq open t +test-auc-displayed nil)
+              (agent-ui-show '(:id "c" :type "meter"))
+              (save-window-excursion
+                (switch-to-buffer canvas)
+                (setq open nil)
+                (run-hooks 'minibuffer-exit-hook)
+                (+test-auc-settle))
+              (should-not +test-auc-displayed)
+              (let ((other (agent-ui-canvas "test-gone")))
+                (setq open t)
+                (agent-ui-show '(:id "d" :type "meter") :canvas other)
+                (kill-buffer other)
+                (setq open nil)
+                (run-hooks 'minibuffer-exit-hook)
+                (+test-auc-settle)
+                (should-not +test-auc-displayed)))
+          (remove-hook 'minibuffer-exit-hook #'agent-ui--minibuffer-exit-h)
+          (setq agent-ui--after-minibuffer nil))))))
+
 (ert-deftest agent-ui-canvas/drawn-at-its-windows-width ()
   (+test-auc
     ;; In no window: `agent-ui-default-width'.

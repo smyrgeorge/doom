@@ -38,7 +38,8 @@ drawn together."
 
 (defcustom agent-ui-display-function #'agent-ui-display-canvas
   "Called with a canvas's buffer when a new element is shown in it while it's
-in no window: shows it, without selecting it."
+in no window (the minibuffer open: once it's closed): shows it, without
+selecting it."
   :type 'function :group 'agent-ui)
 
 (defvar agent-ui-canvas-hook nil
@@ -171,6 +172,47 @@ there."
 (defun agent-ui-display-canvas (buffer)
   "Show BUFFER, a canvas, in another window, without selecting it."
   (display-buffer buffer '(nil (inhibit-same-window . t))))
+
+;; ====== WHILE THE MINIBUFFER IS OPEN ======
+;; A canvas's pane opened while the minibuffer is open took another pane's
+;; place (tiling steps aside then, Emacs reusing a window), and a question
+;; taking the focus took the keys typed there. Both wait for it to close.
+
+(defvar agent-ui--after-minibuffer nil
+  "What waits for the minibuffer to close: functions of no argument, the
+latest first.")
+
+(defun agent-ui-after-minibuffer (function)
+  "Call FUNCTION (of no argument) now; while the minibuffer is open, once
+it's closed (see above)."
+  (if (not (active-minibuffer-window))
+      (funcall function)
+    (push function agent-ui--after-minibuffer)
+    (add-hook 'minibuffer-exit-hook #'agent-ui--minibuffer-exit-h)))
+
+(defun agent-ui--minibuffer-exit-h ()
+  "The minibuffer closing: what waits for it called just after (it's still
+open while this hook runs)."
+  (remove-hook 'minibuffer-exit-hook #'agent-ui--minibuffer-exit-h)
+  (run-with-timer 0 nil #'agent-ui--minibuffer-closed))
+
+(defun agent-ui--minibuffer-closed ()
+  "What waits for the minibuffer called, in order: waiting again while
+another is still open (one opened from it)."
+  (let ((waiting (reverse agent-ui--after-minibuffer)))
+    (setq agent-ui--after-minibuffer nil)
+    (dolist (function waiting)
+      (with-demoted-errors "Agent UI: %S"
+        (agent-ui-after-minibuffer function)))))
+
+(defun agent-ui--display (buffer)
+  "BUFFER, a canvas in no window, shown (`agent-ui-display-function'); while
+the minibuffer is open, once it's closed, if it's still in none."
+  (let ((display agent-ui-display-function))
+    (agent-ui-after-minibuffer
+     (lambda ()
+       (when (and (buffer-live-p buffer) (not (get-buffer-window buffer t)))
+         (funcall display buffer))))))
 
 ;; ====== DRAWING ======
 
@@ -639,7 +681,7 @@ Signals `agent-ui-error' if ELEMENT is wrong."
           (puthash id entry agent-ui--entries)
           (setq agent-ui--order (append agent-ui--order (list id)))
           (unless (agent-ui--window)
-            (funcall agent-ui-display-function (current-buffer)))
+            (agent-ui--display (current-buffer)))
           (agent-ui--draw entry (agent-ui--context))
           (agent-ui--animate))))
       (run-hook-with-args 'agent-ui-shown-functions id element)
