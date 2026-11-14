@@ -108,21 +108,43 @@ first of *Beads: NAME*, *Beads: PARENT/NAME* and *Beads: PATH* no buffer has."
 ;; already), not in place of the current buffer as beads.el has it; an issue
 ;; opened from it (RET) in a new pane too, the next ones in that pane (as its
 ;; tabs), not each in a new one.
+(defun +my/beads--show-list (root &optional filter)
+  "ROOT's issue list shown (see above), with FILTER (beads.el's) if given."
+  (let ((default-directory root)
+        ;; beads.el shows its list with `switch-to-buffer': as `display-buffer'
+        ;; would (tiling's application in a new pane).
+        (switch-to-buffer-obey-display-actions t))
+    ;; All of beads.el: its list uses beads.el's own (`beads-show-hint').
+    (require 'beads)
+    ;; Its list's bd run at its root (see EACH PROJECT ITS LIST).
+    (let ((list (get-buffer-create (+my/beads-list-name root))))
+      (with-current-buffer list
+        (unless (derived-mode-p 'beads-list-mode)
+          (beads-list-mode))
+        (setq default-directory root)
+        (when filter
+          (setq beads-list--filter filter))))
+    (beads-list)))
+
 (defun +my/beads-project ()
   "The current project's issues (see above)."
   (interactive)
   (when-let* ((root (+my/beads--root-or-terminal)))
-    (let ((default-directory root)
-          ;; beads.el shows its list with `switch-to-buffer': as `display-buffer'
-          ;; would (tiling's application in a new pane).
-          (switch-to-buffer-obey-display-actions t))
-      ;; All of beads.el: its list uses beads.el's own (`beads-show-hint').
-      (require 'beads)
-      ;; Its list's bd run at its root (see EACH PROJECT ITS LIST).
-      (when-let* ((list (get-buffer (+my/beads-list-name root))))
-        (with-current-buffer list
-          (setq default-directory root)))
-      (beads-list))))
+    (+my/beads--show-list root)))
+
+;; AN ISSUE'S CHILDREN (C in an issue): its project's list, filtered to them
+;; (said in a notice, with Clear filter). beads.el looked for a list named
+;; *Beads Issues* (none: lists are named by their project) and set a filter
+;; the list never read: C failed.
+(defun +my/beads-children-a (&rest _)
+  "`beads-detail-view-children': the issue's children in its project's list
+\(see above)."
+  (let ((id (alist-get 'id (beads-detail--require-issue))))
+    (require 'beads-filter)
+    (+my/beads--show-list (+my/beads--list-root) (beads-filter-by-parent id))
+    (message "Showing children of %s" id)))
+
+(advice-add 'beads-detail-view-children :override #'+my/beads-children-a)
 
 (defun +my/beads--issue-window ()
   "A window of this frame showing an issue (not the list's preview)."

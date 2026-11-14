@@ -8,7 +8,8 @@
 ;; trips: its arguments built with string keys but read with symbols (create,
 ;; update, close, labels, dependencies all failed), flags bd renamed, `bd
 ;; show' answering a list, `bd delete' only previewing without --force, `bd
-;; stats' nesting its counts under summary (the list's bar and S said 0).
+;; stats' nesting its counts under summary (the list's bar and S said 0), an
+;; issue's epic as parent (beads.el read parent_id: P found no parent).
 ;; Mended here; the activity feed (`bd mutations')
 ;; and the merge conflicts view (`bd resolve-conflicts') are gone from bd and
 ;; say so. Only bd's command line is used (config/beads.el).
@@ -59,6 +60,23 @@ closed ones itself (config/beads/hidden.el)."
       (car result)
     result))
 
+(defun +my/beads--parent-id (issue)
+  "ISSUE (bd's JSON) with its epic as parent_id too, where beads.el reads it
+\(bd 1.x says parent): P (its parent), its view's Parent: row, C's filter."
+  (if-let* (((consp issue))
+            (parent (alist-get 'parent issue))
+            ((not (alist-get 'parent_id issue))))
+      (cons (cons 'parent_id parent) issue)
+    issue))
+
+(defun +my/beads--parent-ids-a (result)
+  "`beads-client-show''s or `beads-client-list''s RESULT, an issue or a list of
+them: each with its parent_id (see `+my/beads--parent-id')."
+  (cond ((and (consp result) (consp (car result)) (symbolp (caar result)))
+         (+my/beads--parent-id result))
+        ((sequencep result) (mapcar #'+my/beads--parent-id result))
+        (t result)))
+
 (defun +my/beads--stats-summary-a (stats)
   "`bd stats''s STATS with its summary's counts at the top, where beads.el
 reads them (bd 0.49 had them there); the rest kept."
@@ -86,6 +104,10 @@ reads them (bd 0.49 had them there); the rest kept."
   (advice-add 'beads-backend-bd--cli-extra-flags :filter-return #'+my/beads--no-daemon-a))
 (after! beads-client
   (advice-add 'beads-client-show :filter-return #'+my/beads--one-issue-a)
-  (advice-add 'beads-client-stats :filter-return #'+my/beads--stats-summary-a))
+  (advice-add 'beads-client-stats :filter-return #'+my/beads--stats-summary-a)
+  ;; Outermost: around the answers fetched in the background too
+  ;; (config/beads/refresh.el).
+  (advice-add 'beads-client-show :filter-return #'+my/beads--parent-ids-a '((depth . -90)))
+  (advice-add 'beads-client-list :filter-return #'+my/beads--parent-ids-a '((depth . -90))))
 (advice-add 'beads-activity :override #'+my/beads-activity-a)
 (advice-add 'beads-conflicts :override #'+my/beads-conflicts-a)

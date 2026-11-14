@@ -934,6 +934,42 @@ folder's name only: one list, the first project's issues)."
         (should (equal (funcall ids second) (sort (list elsewhere new) #'string<)))
         (should (equal (funcall ids first) (list here)))))))
 
+;; doom-o5t.7
+(ert-deftest beads/bd-an-issue-s-parent-and-children ()
+  "P on an epic's issue opens the epic, its view says Parent: ID; C on the
+epic shows the project's list, its issues only, the filter said (bd 1.x says
+parent, beads.el read parent_id: no parent; C errored)."
+  (+test-beads-with-project
+    (let* ((epic (+test-beads--create "The parser rewrite" :issue-type "epic"))
+           (lexer (+test-beads--create "Lexer" :parent epic))
+           (parser (+test-beads--create "Parser" :parent epic))
+           (other (+test-beads--create "Unrelated")))
+      (ignore other)
+      (should (equal (alist-get 'parent_id (beads-client-show lexer)) epic))
+      (should (equal (alist-get 'parent_id (seq-find (lambda (i) (equal (alist-get 'id i) parser))
+                                                     (beads-client-list)))
+                     epic))
+      (+my/beads-project)
+      (let ((list (+test-beads--list)))
+        (beads-detail-open (beads-client-show lexer))
+        (with-current-buffer (format "*Beads Detail: %s*" lexer)
+          (should (string-match-p (concat "Parent: +\\[" (regexp-quote epic) "\\]") (+test-beads--text (current-buffer))))
+          (beads-detail-goto-parent))
+        (should (equal (buffer-name (window-buffer (selected-window))) (format "*Beads Detail: %s*" epic)))
+        (with-current-buffer (format "*Beads Detail: %s*" epic)
+          (beads-detail-view-children))
+        (should (eq (window-buffer (selected-window)) list))
+        (with-current-buffer list
+          (should (equal (sort (mapcar #'car tabulated-list-entries) #'string<)
+                         (sort (list lexer parser) #'string<)))
+          (should (equal (+test-beads--notices)
+                         `((,(format "Filtered: children of %s." epic) ("Clear filter")))))
+          ;; In the background too.
+          (+my/beads-refresh-async list)
+          (+test-beads--settle list)
+          (should (equal (sort (mapcar #'car tabulated-list-entries) #'string<)
+                         (sort (list lexer parser) #'string<))))))))
+
 ;; ====== THE PLACE KEPT ======
 
 (defun +test-beads--ids-at (window)
