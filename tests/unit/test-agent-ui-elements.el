@@ -2951,6 +2951,19 @@ never cut."
                            "▾ lib/\n"
                            "    A x.c  +3")))))
 
+(ert-deftest agent-ui-elements/files-long-note-cut-not-the-names ()
+  "One long note is cut, the paths whole when they fit (it squeezed every
+name to 8 columns: \"M …arser.c  +12345 −3 A rather long…\" at 100)."
+  (let ((files '(:type "files"
+                 :files ((:path "src/parser.c" :status "changed" :added 12345 :removed 3
+                          :note "A rather long note about why this file changed so much, and more")
+                         (:path "tests/parser_test.c" :status "failing" :errors 2)))))
+    (dolist (width '(60 80 100))
+      (let ((text (+test-aue-draw files :width width)))
+        (should (string-match-p "^M src/parser\\.c +\\+12345 −3 A rather" text))
+        (should (string-match-p "^✗ tests/parser_test\\.c  2 errors$" text))))
+    (should (string-match-p "A rather long note about w…$" (+test-aue-draw files :width 60)))))
+
 ;; doom-nwj.90
 (ert-deftest agent-ui-elements/files-paths-written-differently ()
   "./src/a.c, src//b.c and src/c.c are in one src/ folder (they made three),

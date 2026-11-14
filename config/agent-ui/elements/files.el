@@ -131,13 +131,19 @@ no count fits). PICK: its pick mark's maker, before it (select)."
 (defun agent-ui-files--lines (props files names indent width &optional pick)
   "FILES' lines, NAMES their names, after INDENT, WIDTH columns at most: the
 names beside counts in a column as wide as the longest, narrowed while the
-counts don't fit (8 columns at least; it was the width less 20, or 24:
-nothing under that, and the counts never cut)."
+counts (and a note's start) don't fit (8 columns at least; it was the width
+less 20, or 24: nothing under that, and the counts never cut)."
   (let* ((room (- width (string-width indent) 2))
          (counts (mapcar #'agent-ui-files--counts files))
          (longest (apply #'max 0 (cl-loop for n in names for c in counts
                                            when c collect (string-width n))))
-         (widest (apply #'max 0 (mapcar (lambda (c) (string-width (string-join c " "))) counts)))
+         ;; The counts' widest, a note's first 12 columns only (the rest
+         ;; cut, if the names need the room): one long note squeezed every
+         ;; name to 8 columns.
+         (widest (apply #'max 0 (cl-loop for f in files for c in counts
+                                         collect (let ((note (plist-get f :note)))
+                                                   (+ (string-width (string-join (if note (butlast c) c) " "))
+                                                      (if note (1+ (min 12 (string-width note))) 0))))))
          (w (min longest (max (min longest 8) (- room 2 widest)))))
     (cl-mapcar (lambda (file name count) (agent-ui-files--line props file name count indent w room pick))
                files names counts)))
