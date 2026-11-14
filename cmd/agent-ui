@@ -41,7 +41,7 @@
 #
 # --panel NAME (any operation): the project's open panel NAME's canvas.
 # --canvas NAME (any operation): the session's other canvas NAME ("tests"),
-# in a pane of its own, instead of its canvas; "canvas": NAME in the JSON
+# a tab beside its canvas, instead of it; "canvas": NAME in the JSON
 # (an element's, a change's, a batch's operation's) says the same.
 #
 # JSON is the last argument, or comes on stdin. The reply is JSON on stdout:

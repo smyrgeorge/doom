@@ -127,6 +127,21 @@ canvas's name (nil for the session's canvas); nil if none."
   (seq-filter (lambda (b) (eq (buffer-local-value 'agent-ui--session-buffer b) session))
               (agent-ui-canvases)))
 
+(defun agent-ui--session-window (canvas)
+  "A window of the selected frame showing another canvas of CANVAS's
+session, its own first (`agent-ui-share-window-functions'): CANVAS goes
+there, a tab beside it, not in a pane of its own (five canvases took five
+panes, each a few lines high)."
+  (when-let* ((session (buffer-local-value 'agent-ui--session-buffer canvas))
+              ((buffer-live-p session)))
+    (seq-some (lambda (other) (and (not (eq other canvas)) (get-buffer-window other)))
+              (sort (agent-ui-session-canvases session)
+                    (lambda (a b) (and (null (buffer-local-value 'agent-ui--canvas-part a))
+                                       (buffer-local-value 'agent-ui--canvas-part b)
+                                       t))))))
+
+(add-hook 'agent-ui-share-window-functions #'agent-ui--session-window)
+
 (defun agent-ui--kill-canvas ()
   "The session's buffer is killed: its canvases too."
   (mapc #'kill-buffer (agent-ui-session-canvases (current-buffer))))
@@ -190,7 +205,7 @@ From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear; --canvas NAME on any of them uses \
-another canvas of this session, in a pane of its own. It replies with JSON. Before using it \
+another canvas of this session, a tab beside its first. It replies with JSON. Before using it \
 the first time, read %s: the core (when to use it, which element for what, the \
 command, the everyday types), and which of its references to read only when \
 needed (asking the user, charts, layouts, following a command, a type of \
@@ -320,11 +335,39 @@ line in view."
       (with-current-buffer canvas (goto-char pos))
       (when window
         (set-window-point window pos)
-        (unless (pos-visible-in-window-p pos window)
-          (set-window-start window (with-current-buffer canvas
-                                     (save-excursion (goto-char pos) (line-beginning-position)))))))
+        (agent-ui--question-in-view canvas id pos window)))
     (when (and select window)
       (select-window window))))
+
+(defun agent-ui--element-end (id start)
+  "Where element ID, from START in the current canvas, ends: after its last
+character (a panel's child: its last line's, its panel's lines its too)."
+  (let* ((top (get-text-property start 'agent-ui-id))
+         (prop (if (equal top id) 'agent-ui-id 'agent-ui-child))
+         (pos start)
+         (end start))
+    (while (and (< pos (point-max)) (equal (get-text-property pos 'agent-ui-id) top))
+      (let ((next (or (next-single-property-change pos prop nil (point-max)) (point-max))))
+        (when (equal (get-text-property pos prop) id)
+          (setq end next))
+        (setq pos next)))
+    end))
+
+(defun agent-ui--question-in-view (canvas id start window)
+  "Question ID of CANVAS, from START, all in WINDOW's view, its Answer too:
+WINDOW scrolled to its first line if that's needed, made taller if it must
+and can (a short pane showed its first lines, the Answer below them)."
+  (with-current-buffer canvas
+    (let* ((first (save-excursion (goto-char start) (line-beginning-position)))
+           (end (agent-ui--element-end id start))
+           (lines (count-lines first end))
+           (shown (window-body-height window)))
+      (unless (and (pos-visible-in-window-p first window) (pos-visible-in-window-p (max first (1- end)) window))
+        (set-window-start window first))
+      (when (> lines shown)
+        (let ((delta (min (- lines shown) (window-max-delta window))))
+          (when (> delta 0)
+            (ignore-errors (window-resize window delta))))))))
 
 (defun agent-ui-questions-new (session event)
   "SESSION's questions waiting at its turn's end, EVENT (agent-shell's

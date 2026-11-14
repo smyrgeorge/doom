@@ -101,8 +101,8 @@ agent-shell makes), naming its session after its buffer; the agent's shell inher
 session's canvas, `Agent UI: SESSION`. Without it (a session started before Agent UI was loaded, an agent in a
 terminal), the session working in the script's directory or above it (the deepest; of those, the most recently used),
 else the canvas `default`. A session's canvas is killed with it. `--canvas NAME`, or `"canvas": "NAME"` in the JSON (an
-element's, a change's, a batch's operation's), picks the session's other canvas `Agent UI: SESSION / NAME`, made in a
-pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up to 40.
+element's, a change's, a batch's operation's), picks the session's other canvas `Agent UI: SESSION / NAME`, made a
+tab of its canvas's pane when first shown; a name is letters, digits, spaces, `_ . -`, up to 40.
 
 **In Lisp,** the same operations: `(agent-ui-show SPEC)`, `(agent-ui-update ID PATCH)`, `(agent-ui-append ID PATCH)`,
 `(agent-ui-remove ID)`, each taking an optional `:canvas`. SPEC and PATCH are plists (`(:type progress :value 3)`), as
@@ -118,8 +118,10 @@ pane of its own when first shown; a name is letters, digits, spaces, `_ . -`, up
   it closes with its session. `a` on an element puts it into the session's prompt; `b` on one files a bug in Agent UI ([below](#bugs-in-agent-ui)); `c` on a line of code or a diff (or a region's lines) writes a review comment under it (`c` on a comment edits it, `d` removes it), Send the review sending them all, with their places, to the agent at once; `s` on a table's
   column sorts it by it (again: the other way); `M-↑` / `M-↓` (`K` / `J`) move a rank's item; `x` drops a plan's step or rejects a diff's hunk (again: back), `e` rewords a step; `h` / `l` on a slider's track move its knob; `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
-  the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, each in a pane of its own, with its own elements
-  and ids. They close with the session, and are kept and come back with it.
+  the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, with its own elements and ids. Each opens as a tab
+  of the pane showing another of the session's canvases (in front, the one before behind it; back with its session:
+  behind), else in a pane of its own. They close with the session, and are kept and come back with it. A question
+  taking the focus is brought all into view, its pane made taller if it must.
 - **Finished, it closes:** a `steps`, `todo` or `progress` that finished well (every step done or skipped, every item
   ticked, the bar at its end) closes itself 10 seconds later, a line under it counting down with a **Keep** button; the
   pane closes with its last element. One that failed stays; a change meanwhile starts the countdown again or stops it.

@@ -175,9 +175,33 @@ there."
   (declare (indent 1))
   `(with-current-buffer (agent-ui--buffer ,canvas) ,@body))
 
+(defvar agent-ui-share-window-functions nil
+  "Called with a canvas's buffer about to be shown: a window to show it in,
+a tab there beside what it shows (config/agent-ui/agent.el: another canvas
+of its session's), or nil: a window of its own. The first one's.")
+
+(defvar agent-ui--restoring)            ; persist.el's: canvases coming back
+
 (defun agent-ui-display-canvas (buffer)
-  "Show BUFFER, a canvas, in another window, without selecting it."
-  (display-buffer buffer '(nil (inhibit-same-window . t))))
+  "Show BUFFER, a canvas, in another window, without selecting it: in the
+window `agent-ui-share-window-functions' gives, a tab there (coming back
+with its session: behind what it shows), else in one of its own."
+  (if-let* ((window (run-hook-with-args-until-success 'agent-ui-share-window-functions buffer)))
+      (agent-ui--display-in buffer window (bound-and-true-p agent-ui--restoring))
+    (display-buffer buffer '(nil (inhibit-same-window . t)))))
+
+(defun agent-ui--display-in (buffer window &optional behind)
+  "BUFFER shown in WINDOW, what it showed kept as a tab (its previous
+buffers); BEHIND: a tab behind it, what it showed still shown. Not where the
+window manager (tiling) would put it: there, as asked."
+  (let ((before (window-buffer window))
+        (display-buffer-overriding-action '(nil . nil)))
+    (display-buffer buffer `((display-buffer-use-some-window)
+                             (some-window . ,(lambda (_buffer _alist) window))
+                             (inhibit-same-window . nil)))
+    (when (and behind (buffer-live-p before) (eq (window-buffer window) buffer))
+      (set-window-buffer window before))
+    window))
 
 ;; ====== WHILE THE MINIBUFFER IS OPEN ======
 ;; A canvas's pane opened while the minibuffer is open took another pane's
@@ -769,16 +793,22 @@ started or stopped as they came or went, redrawn soon. Returns ID."
 (defun agent-ui--close-if-empty ()
   "The current canvas, without elements now: its panes close, as a pane does
 with its last tab (it stayed open, empty, after a clear). A window that
-showed something else before goes back to it; one it alone showed is
-deleted, but a frame's last. The canvas itself stays, with its session; the
-next element shown opens a pane again."
+showed something else before goes back to it (another canvas it's a tab
+beside, a session's: `agent-ui-share-window-functions'); one it alone showed
+is deleted, but a frame's last. The canvas itself stays, with its session;
+the next element shown opens a pane again."
   (unless agent-ui--order
     (let ((canvas (current-buffer)))
       (dolist (window (get-buffer-window-list canvas nil t))
-        (let ((made (eq (car-safe (window-parameter window 'quit-restore)) 'window))
-              (before (seq-some (lambda (entry) (and (buffer-live-p (car entry)) (not (eq (car entry) canvas))))
-                                (window-prev-buffers window))))
-          (cond ((and (or made (not before)) (eq (window-deletable-p window) t))
+        (let* ((other (lambda (test)
+                        (seq-some (lambda (entry) (and (buffer-live-p (car entry)) (not (eq (car entry) canvas))
+                                                       (funcall test (car entry))))
+                                  (window-prev-buffers window))))
+               (made (eq (car-safe (window-parameter window 'quit-restore)) 'window))
+               (before (funcall other #'always))
+               (canvas-before (funcall other (lambda (b) (eq (buffer-local-value 'major-mode b)
+                                                             'agent-ui-canvas-mode)))))
+          (cond ((and (not canvas-before) (or made (not before)) (eq (window-deletable-p window) t))
                  (delete-window window))
                 (before (switch-to-prev-buffer window 'bury))))))))
 

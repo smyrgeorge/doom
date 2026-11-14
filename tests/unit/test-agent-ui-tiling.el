@@ -68,3 +68,78 @@ as C-c C-q does."
           (funcall (car idle))
           (should (eq (window-buffer (selected-window)) (get-buffer canvas-name)))
           (should (equal (get-text-property (point) 'agent-ui-id) "fix")))))))
+
+;; ====== A SESSION'S CANVASES, ONE PANE ======
+
+(ert-deftest agent-ui-tiling/a-sessions-canvases-tabs-of-one-pane ()
+  "Tall: the session's canvas in a pane of its own; its other canvases (tests,
+logs, ask) tabs of that pane, each in front when it opens, the ones before
+kept as its tabs (each took a stack pane: five canvases, five panes of a
+few lines). A question answered, its canvas gone: the tab before it in
+front again. Coming back with the session: behind the one shown."
+  (+test-auti 'tall
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (let* ((main (get-buffer (agent-ui-canvas-buffer-name name)))
+           (pane (get-buffer-window main)))
+      (should pane)
+      (should (= (length (+my/tiling--panes)) 2))
+      (dolist (part '("tests" "logs"))
+        (agent-ui-show '(:id "t" :type "text" :text "x") :canvas (agent-ui-sub-canvas name part)))
+      (should (= (length (+my/tiling--panes)) 2))
+      (should (eq (window-buffer pane) (get-buffer (agent-ui-canvas-buffer-name (concat name " / logs")))))
+      (should (equal (mapcar (lambda (b) (buffer-name b)) (mapcar #'car (window-prev-buffers pane)))
+                     (list (agent-ui-canvas-buffer-name (concat name " / tests")) (buffer-name main))))
+      ;; Selected still: the session.
+      (should (eq (window-buffer (selected-window)) session))
+      ;; A question: a tab too; answered, gone: the one before in front.
+      (let ((agent-ui-action-function #'ignore)
+            (ask (agent-ui-sub-canvas name "ask")))
+        (agent-ui-show '(:id "go" :type "confirm" :question "Deploy?") :canvas ask)
+        (should (= (length (+my/tiling--panes)) 2))
+        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name ask))))
+          (should (eq (window-buffer pane) canvas))
+          (with-current-buffer canvas
+            (agent-ui--flush)
+            (goto-char (point-min))
+            (search-forward "⏵ Proceed")
+            (goto-char (match-beginning 0))
+            (agent-ui-button-press))
+          (let ((end (+ (float-time) 0.2)))
+            (while (< (float-time) end) (accept-process-output nil 0.02)))
+          (should-not (buffer-live-p canvas))
+          (should (eq (window-buffer pane) (get-buffer (agent-ui-canvas-buffer-name (concat name " / logs")))))
+          (should (= (length (+my/tiling--panes)) 2))))
+      ;; Coming back with its session: a tab behind the one shown.
+      (let ((agent-ui--restoring t))
+        (agent-ui-show '(:id "x" :type "text" :text "x") :canvas (agent-ui-sub-canvas name "later")))
+      (should (eq (window-buffer pane) (get-buffer (agent-ui-canvas-buffer-name (concat name " / logs")))))
+      (should (assq (get-buffer (agent-ui-canvas-buffer-name (concat name " / later"))) (window-prev-buffers pane))))))
+
+(ert-deftest agent-ui-tiling/a-questions-answer-in-view ()
+  "A question taking the focus in a short pane: its pane grown to show it
+all, its first line at the top, Answer in view (5 lines showed its first
+lines, the cursor on the first, Answer below)."
+  (+test-auti 'tall
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (let* ((main (get-buffer (agent-ui-canvas-buffer-name name)))
+           (pane (get-buffer-window main)))
+      ;; Short: the stack's other panes taking the room.
+      (dolist (other '("x1" "x2" "x3"))
+        (let ((this-command 'test))
+          (set-window-buffer (+my/tiling-split) (+test-buffer other))))
+      (select-window (get-buffer-window session))
+      (should (< (window-body-height pane) 6))
+      (agent-ui-show (list :id "fix" :type "choice" :question "Which fix?"
+                           :options '("One" "Two" "Three" "Four" "Five" "Six")
+                           :title "Pick")
+                     :canvas name)
+      (let ((agent-ui-focus-questions t))
+        (agent-ui--focus-question main "fix"))
+      (should (eq (selected-window) pane))
+      (with-current-buffer main
+        (let* ((start (agent-ui--element-start main "fix"))
+               (end (agent-ui--element-end "fix" start)))
+          (should (equal (get-text-property (window-point pane) 'agent-ui-id) "fix"))
+          (should (= (window-start pane) (save-excursion (goto-char start) (line-beginning-position))))
+          (should (>= (window-body-height pane) (count-lines (window-start pane) end)))
+          (should (save-excursion (goto-char start) (search-forward "⏵ Answer" end t))))))))

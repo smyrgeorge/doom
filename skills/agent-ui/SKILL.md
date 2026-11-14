@@ -67,8 +67,8 @@ lists the right ones). Exit status: 0 done, 1 not done, 2 a wrong use, 3 no Emac
 wrong element is refused whole; nothing half-shown. A reply's `hidden`: its pane couldn't open; tell the user.
 
 **Several canvases.** `--canvas NAME` on any operation (or `"canvas": "NAME"` in the JSON; the MCP tools' `canvas`)
-uses another canvas of your session, in a pane of its own: for a second subject worth its own pane, or a question
-(`ask`). Ids, `list` and `clear` are a canvas's own. It closes, is kept and comes back with your session.
+uses another canvas of your session, a tab beside the first: for a second subject, or a question (`ask`). Ids, `list`
+and `clear` are a canvas's own. It closes, is kept and comes back with your session.
 
 ## The types
 

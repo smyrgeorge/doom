@@ -25,7 +25,7 @@
 ;; ====== THE TOOLS ======
 
 (defconst agent-ui-mcp--canvas-schema
-  '(:type "string" :description "Optional: another canvas of your session, by name (\"tests\"), in a pane of its own; without it, your session's canvas")
+  '(:type "string" :description "Optional: another canvas of your session, by name (\"tests\"), a tab beside its first; without it, your session's canvas")
   "The canvas argument's schema.")
 
 (defconst agent-ui-mcp--panel-schema

@@ -14,9 +14,9 @@
 ;; reply (JSON: {"ok": true, ...} or {"ok": false, "error": "..."}) there,
 ;; which the script prints. No JSON is quoted into Lisp, whatever it holds.
 ;;
-;; A session has its canvas and, named, others ("SESSION / tests"), each in
-;; its own pane: --canvas NAME, or "canvas": NAME in the JSON (an element's,
-;; a change's, a batch's operation's), says which.
+;; A session has its canvas and, named, others ("SESSION / tests"), tabs of
+;; its pane: --canvas NAME, or "canvas": NAME in the JSON (an element's, a
+;; change's, a batch's operation's), says which.
 
 (require 'cl-lib)
 (require 'subr-x)
