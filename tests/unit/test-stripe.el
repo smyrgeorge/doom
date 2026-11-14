@@ -514,7 +514,7 @@ current line's background, else gray30."
     (let ((rows (+my/stripe--cell-rows (selected-window) (point-min) 4 nil)))
       (should (equal (mapcar #'car rows) '(1 3 5 7)))
       (should (equal (+test-stripe--cell-colors rows) '(nil nil nil nil)))
-      (should (equal (window-parameter nil '+my/stripe-geometry) '(cells 4 4))))))
+      (should (equal (seq-take (window-parameter nil '+my/stripe-geometry) 3) '(cells 4 4))))))
 
 (ert-deftest stripe/cells-fill-the-window ()
   (+test-stripe (+test-stripe--text 100)
@@ -523,7 +523,7 @@ current line's background, else gray30."
       (should (equal (mapcar #'car rows)
                      (mapcar #'+test-stripe--line-start
                              (number-sequence 1 (window-body-height)))))
-      (should (equal (window-parameter nil '+my/stripe-geometry)
+      (should (equal (seq-take (window-parameter nil '+my/stripe-geometry) 3)
                      (list 'cells (window-body-height) 101))))))
 
 (ert-deftest stripe/cells-clickable ()
@@ -629,7 +629,7 @@ the end on the last row."
     (let* ((start (+test-stripe--line-start 90))
            (rows (+my/stripe--cell-rows (selected-window) start 101 '((100 100 error)))))
       (should (= (length rows) 12))           ; lines 90..100 and the last, empty one
-      (should (equal (window-parameter nil '+my/stripe-geometry) '(cells 12 101)))
+      (should (equal (seq-take (window-parameter nil '+my/stripe-geometry) 3) '(cells 12 101)))
       (let ((colors (+test-stripe--cell-colors rows)))
         (should (equal (nth (+my/stripe--line-to-row 100 101 12) colors) "#ff0000"))
         (should (equal (nth (+my/stripe--line-to-row 90 101 12) colors)
@@ -1195,7 +1195,7 @@ scrolled sideways."
                                    'before-string))
                      "#ff0000")))
     (should (equal (window-parameter nil '+my/stripe-key) (+my/stripe--key (selected-window))))
-    (should (equal (window-parameter nil '+my/stripe-geometry) (list 'cells (window-body-height) 101)))))
+    (should (equal (seq-take (window-parameter nil '+my/stripe-geometry) 3) (list 'cells (window-body-height) 101)))))
 
 (ert-deftest stripe/render-reuses-its-overlays ()
   (+test-stripe (+test-stripe--text 100)
@@ -1573,6 +1573,100 @@ of the window, `C-o' going back."
                    (lambda (w line) (setq jumped (list w line)))))
           (+my/stripe-press (+test-stripe--strip-event 'down-mouse-1 window 40))))
       (should (equal jumped (list window 41))))))
+
+;; Pixels are rows here (batch): a 9 pixel strip for 3000 lines, as a 9 row
+;; window's in a graphical frame is many lines a pixel.
+(defmacro +test-stripe--short-pane (&rest body)
+  "BODY in a window 9 rows high on 3000 lines, as in a graphical frame, the
+band at least 3 pixels high."
+  (declare (indent 0))
+  `(+test-stripe (+test-stripe--text 3000)
+     (+test-stripe--gui
+       ;; No strip frames made (batch): the mode's sync is dropped too.
+       (cl-letf (((symbol-function '+my/stripe--sync-soon) #'ignore))
+         (when (timerp +my/stripe--sync-timer)
+           (cancel-timer +my/stripe--sync-timer)
+           (setq +my/stripe--sync-timer nil))
+         (let ((window (selected-window))
+               (window-min-height 1)
+               (+my/stripe-thumb-min-height 3))
+           (split-window window 10)
+           (should (= (window-body-height window) 9))
+           ,@body)))))
+
+(defun +test-stripe--press (window y)
+  "A press Y pixels down WINDOW's strip, as drawn now: the line it goes to,
+nil if it held the band (released at once)."
+  (let (jumped)
+    (pcase-let ((`(,lines . ,marks) (+my/stripe--marks)))
+      (pcase-let ((`(,_ ,scale ,thumb ,spans) (+my/stripe--pixels window (window-start window) lines marks)))
+        (set-window-parameter window '+my/stripe-geometry (list 'pixels scale lines thumb spans))))
+    (+test-stripe--on-strip window
+      (cl-letf (((symbol-function '+my/stripe--goto-line) (lambda (_ line) (setq jumped line)))
+                ((symbol-function '+my/stripe--pointer-y) (lambda (_) y))
+                ((symbol-function 'read-event) (lambda (&rest _) '(mouse-1 (strip-window 1 (0 . 0) 0)))))
+        (+my/stripe-press (+test-stripe--strip-event 'down-mouse-1 window y))))
+    jumped))
+
+(defun +test-stripe--short-pane-pixels (window)
+  "WINDOW's strip's pixels and scale."
+  (pcase-let ((`(,lines . ,marks) (+my/stripe--marks)))
+    (seq-take (+my/stripe--pixels window (window-start window) lines marks) 2)))
+
+(ert-deftest stripe/press-on-a-mark-goes-to-its-line ()
+  "Many lines a pixel: a press on any pixel of a mark goes to its line, not to
+the line under the pixel; off the marks, there."
+  (+test-stripe--short-pane
+    (+test-stripe--errors '(2000 error))
+    (pcase-let* ((`(,pixels ,scale) (+test-stripe--short-pane-pixels window))
+                 (top (string-match "7" pixels)))
+      (should (> (/ 1 scale) 100))
+      (dotimes (i +my/stripe-mark-height)
+        (should (eq (aref pixels (+ top i)) ?7))
+        (should (= (+test-stripe--press window (+ top i)) 2000)))
+      (should (eq (aref pixels 3) ?\s))
+      (should (= (+test-stripe--press window 3) (1+ (floor (/ 3 scale))))))))
+
+(ert-deftest stripe/press-on-a-mark-over-the-band-goes-to-it ()
+  "A mark drawn over the band: a press there goes to its line; on the band
+itself, it holds the band."
+  (+test-stripe--short-pane
+    (set-window-start window (+test-stripe--line-start 1500))
+    (+test-stripe--errors '(1500 error))
+    (pcase-let* ((`(,pixels) (+test-stripe--short-pane-pixels window))
+                 (top (string-match "7" pixels))
+                 (band (string-match "t" pixels)))
+      (should (string-match-p "7+t" pixels))      ; the mark is on the band
+      (should (= (+test-stripe--press window top) 1500))
+      (should-not (+test-stripe--press window band)))))
+
+(ert-deftest stripe/mark-at ()
+  "The most important mark drawn at the pixel wins, then the one nearest the
+pixel's line; a mark of several lines: the pixel's line within it."
+  (let ((spans '((10 12 7 100 100) (10 12 6 101 101) (20 30 3 400 450) (11 14 7 120 120))))
+    (should (= (+my/stripe--mark-at 10 105 spans) 100))
+    (should (= (+my/stripe--mark-at 11 115 spans) 120))
+    (should (= (+my/stripe--mark-at 25 430 spans) 430))
+    (should (= (+my/stripe--mark-at 25 300 spans) 400))
+    (should-not (+my/stripe--mark-at 15 200 spans))))
+
+(ert-deftest stripe/click-on-a-mark-s-cell-goes-to-its-line ()
+  "In a terminal, a cell for many lines showing a mark: a click goes to the
+mark's line, not to the middle of the cell's lines."
+  (+test-stripe (+test-stripe--text 2000)
+    (+test-stripe--errors '(1990 error))
+    (+my/stripe--render (selected-window))
+    (let* ((rows (window-body-height))
+           (row (+my/stripe--line-to-row 1990 2001 rows))
+           (ov (nth row (+test-stripe--row-overlays)))
+           (cell (+test-stripe--margin (overlay-get ov 'before-string))))
+      (should (> (abs (- (+my/stripe--row-to-line row 2001 rows) 1990)) rows))
+      (+my/stripe-jump (+test-stripe--click (selected-window) (cons cell 0)))
+      (should (= (line-number-at-pos) 1990))
+      ;; A cell without a mark: the middle of its lines.
+      (let ((cell (+test-stripe--margin (overlay-get (nth 2 (+test-stripe--row-overlays)) 'before-string))))
+        (+my/stripe-jump (+test-stripe--click (selected-window) (cons cell 0)))
+        (should (= (line-number-at-pos) (+my/stripe--row-to-line 2 2001 rows)))))))
 
 (ert-deftest stripe/press-past-the-end-goes-to-the-last-line ()
   (+test-stripe (+test-stripe--text 100)

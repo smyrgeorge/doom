@@ -40,9 +40,11 @@ for a window of rows: at each step of a scroll, that was most of its cost)."
           (cons (1+ lines) (max 0 (- rows moved 1))))))))
 
 (defun +my/stripe--pixels (window start lines marks)
-  "(PIXELS SCALE THUMB) of WINDOW's strip from START: PIXELS a palette
+  "(PIXELS SCALE THUMB SPANS) of WINDOW's strip from START: PIXELS a palette
 character per pixel row of its text area, top to bottom; SCALE pixels per
-line; THUMB the band, (TOP . BOTTOM) in pixels, nil when the file fits."
+line; THUMB the band, (TOP . BOTTOM) in pixels, nil when the file fits; SPANS
+the marks as drawn, (TOP BOTTOM PRIORITY FIRST-LINE LAST-LINE) each (for
+clicks: `+my/stripe--mark-at')."
   (let* ((height (max 1 (window-body-height window t)))
          (font-height (window-font-height window))
          (rows (max 1 (window-body-height window)))
@@ -54,7 +56,8 @@ line; THUMB the band, (TOP . BOTTOM) in pixels, nil when the file fits."
                        (- rows (+my/stripe--text-rows-wanted window))))
          (scale (min (float font-height) (/ (float height) (+ lines overscroll))))
          (pixels (make-string height ?\s))
-         (thumb nil))
+         (thumb nil)
+         (spans nil))
     ;; The band (when the window can scroll): its first line, the part of it
     ;; scrolled away included, down to the last line shown, and the empty rows
     ;; below the end.
@@ -78,10 +81,11 @@ line; THUMB the band, (TOP . BOTTOM) in pixels, nil when the file fits."
                        (+ y0 +my/stripe-mark-height)
                      (max (+ y0 +my/stripe-mark-height)
                           (round (* scale (min end lines)))))))
+          (push (list y0 (min height y1) priority beg (max beg (min end lines))) spans)
           (cl-loop for y from y0 below (min height y1)
                    when (> priority (+my/stripe--pixel-rank (aref pixels y)))
                    do (aset pixels y char)))))
-    (list pixels scale thumb)))
+    (list pixels scale thumb spans)))
 
 (defun +my/stripe--image (pixels width palette)
   "An image WIDTH pixels wide whose pixel rows have the colours of PIXELS (a
@@ -195,12 +199,12 @@ made first, after this redisplay, if it has none)."
     (if (not (and entry (frame-live-p (nth 1 entry))))
         (+my/stripe--sync-soon)
       (pcase-let* ((frame (nth 1 entry))
-                   (`(,pixels ,scale ,thumb) (+my/stripe--pixels window start lines marks))
+                   (`(,pixels ,scale ,thumb ,spans) (+my/stripe--pixels window start lines marks))
                    (width (max 1 (* (or (cdr (window-margins window)) 1)
                                     (frame-char-width (window-frame window)))))
                    (palette (+my/stripe--palette))
                    (content (list pixels width palette)))
-        (set-window-parameter window '+my/stripe-geometry (list 'pixels scale lines thumb))
+        (set-window-parameter window '+my/stripe-geometry (list 'pixels scale lines thumb spans))
         (unless (equal content (nth 2 entry))
           (let ((old (nth 3 entry))
                 (image (+my/stripe--image pixels width palette)))

@@ -20,6 +20,10 @@
                      (nreverse starts))))
          (rows (length starts))
          (cells (make-vector rows nil))
+         ;; The line a click on a mark's cell goes to: the mark's (its first
+         ;; in the row), not the middle of the row's lines, which in a long
+         ;; file could be far enough for it to stay off screen.
+         (targets (make-vector rows nil))
          (thumb-color (+my/stripe--thumb-color))
          (thumb nil))
     ;; Marks: in each row, the highest-priority kind wins.
@@ -30,7 +34,10 @@
                  for old = (aref cells row)
                  when (or (null old)
                           (> priority (car (alist-get old +my/stripe--kinds))))
-                 do (aset cells row kind))))
+                 do (aset cells row kind)
+                    (aset targets row (max beg (if (<= lines rows)
+                                                   (1+ row)
+                                                 (1+ (ceiling (* row lines) rows))))))))
     ;; Thumb: the rows covering the lines on screen (long files only), from
     ;; the first line to the one on the last row (wrapped lines take several
     ;; rows, so that's not always FIRST + ROWS - 1).
@@ -39,7 +46,7 @@
                         (+my/stripe--line-to-row
                          (min lines (line-number-at-pos (car (last starts)) t))
                          lines rows))))
-    (set-window-parameter window '+my/stripe-geometry (list 'cells rows lines)) ; for clicks
+    (set-window-parameter window '+my/stripe-geometry (list 'cells rows lines targets)) ; for clicks
     (cl-loop for pos in starts
              for row from 0
              for kind = (aref cells row)

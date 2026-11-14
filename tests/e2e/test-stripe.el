@@ -207,6 +207,32 @@ old one), only the strip's."
       (should (<= (abs (- (line-number-at-pos (point)) (1+ (floor (/ y scale))))) 1))
       (should (pos-visible-in-window-p (point) window)))))
 
+(ert-deftest e2e-stripe/a-press-on-a-mark-shows-its-line ()
+  "A pane 9 rows high on 3000 lines: a press on any pixel of an error's mark
+puts its line on screen."
+  (require 'flycheck)
+  (+test-stripe
+    (+test-stripe--file "m.el" 3000)
+    (let ((window (let ((window-min-height 1))
+                    (split-window (selected-window) 10)
+                    (selected-window))))
+      (should (= (window-body-height window) 9))
+      (setq-local flycheck-mode t)
+      (setq-local flycheck-current-errors
+                  (list (flycheck-error-new :buffer (current-buffer) :line 2000 :column 1
+                                            :level 'error :message "msg")))
+      (should (+test-wait-for (lambda () (string-match-p "7" (+test-stripe--pixels window))) 3))
+      (let* ((pixels (+test-stripe--pixels window))
+             (top (string-match "7+" pixels))
+             (bottom (match-end 0)))
+        (cl-loop for y from top below bottom
+                 do (set-window-start window (point-min))
+                    (+my/stripe-press (list 'down-mouse-1 (+test-stripe--strip-posn window y)))
+                    (redisplay t)
+                    (should (pos-visible-in-window-p
+                             (save-excursion (goto-char (point-min)) (forward-line 1999) (point))
+                             window)))))))
+
 (ert-deftest e2e-stripe/the-wheel-over-the-strip-scrolls-the-file ()
   (+test-stripe
     (+test-stripe--file "g.el" 1000)
