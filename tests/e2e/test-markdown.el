@@ -183,6 +183,42 @@ again, loaded. Killed (q): a new one."
         (+md-preview--post-command-h))
       (should (+test-wait-for (lambda () (= (+test-md--scroll-y preview-window) 0)) 3)))))
 
+(defun +test-md--from-a-third (window line)
+  "In WINDOW's view: how far LINE's element (as the scroll finds it) is from
+a third of the way down, where the preview puts the cursor's line; in pixels."
+  (string-to-number
+   (+test-md--js window (format "(function(line){
+  var best=null, bestLine=-1;
+  document.querySelectorAll('[data-pos]:not([data-wrapper])').forEach(function(el){
+    var m=/^(\\d+):/.exec(el.getAttribute('data-pos')); if(!m) return;
+    var l=+m[1]; if(l<=line && l>=bestLine){best=el; bestLine=l;}
+  });
+  return String(best ? Math.round(best.getBoundingClientRect().top - innerHeight/3) : 99999);
+})(%d)" line))))
+
+(ert-deftest e2e-markdown/resized-keeps-the-cursor-s-line ()
+  "The preview resized to 30, 60, 90 columns (its page laid out anew, the
+line moved by screens): the cursor's line a third of the way down again."
+  (+test-md
+    (+test-md--open)
+    (let ((preview-window (car (+test-md--windows))))
+      (with-current-buffer (+test-md--source)
+        (goto-char (point-min))
+        (forward-line 110)
+        (+md-preview--post-command-h))
+      (should (+test-wait-for (lambda () (< (abs (+test-md--from-a-third preview-window 111)) 30)) 3))
+      (dolist (width '(30 60 90))
+        (let ((before (+test-md--js preview-window "String(innerWidth)")))
+          (window-resize preview-window (- width (window-total-width preview-window)) t)
+          (should (= (window-total-width preview-window) width))
+          ;; Its view resized, the page laid out anew.
+          (should (+test-wait-for
+                   (lambda () (not (equal (+test-md--js preview-window "String(innerWidth)") before)))
+                   3))
+          (should (+test-wait-for
+                   (lambda () (< (abs (+test-md--from-a-third preview-window 111)) 30))
+                   3)))))))
+
 (ert-deftest e2e-markdown/github-alerts-look-as-on-github ()
   "> [!CAUTION] typed in: shown as GitHub shows it (github-markdown-css): a
 coloured bar on the left, the title in that colour with its icon."
