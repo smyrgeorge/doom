@@ -29,6 +29,7 @@
           (+my/stripe--render window)))
     (remove-overlays (point-min) (point-max) '+my/stripe t)
     (setq +my/stripe--cache nil)
+    (+my/stripe--todo-forget)
     (remove-hook 'window-scroll-functions #'+my/stripe--scrolled t)
     (remove-hook 'window-scroll-functions #'+my/stripe--after-scroll t)
     (remove-hook 'before-change-functions #'+my/stripe--note-line-edit t)

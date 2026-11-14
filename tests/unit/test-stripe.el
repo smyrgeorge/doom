@@ -1411,6 +1411,61 @@ is redrawn for them), as are other edits of lines with one; others aren't."
       (let ((+my/stripe-todo-keywords nil))
         (should-not (counted (lambda () (insert "O"))))))))
 
+(ert-deftest stripe/todo-edits-counted-near-them-in-a-long-line ()
+  "In a line of megabytes (minified, so-long-mode), a TODO keyword is looked
+for only near the edit (1000 characters either side): one far away doesn't
+count it; near, it does. A line of normal length: anywhere in it."
+  (+test-stripe (concat (make-string 10 ?x) " TODO " (make-string 5000 ?x) "\n"
+                        (make-string 150 ?y) " TODO\n")
+    (cl-flet ((counted (pos)
+                (let ((count +my/stripe--line-edits))
+                  (goto-char pos)
+                  (insert "z")
+                  (> +my/stripe--line-edits count))))
+      (should-not (counted 4000))
+      (should (counted 900))
+      (should (counted (+test-stripe--line-start 2))))))
+
+(ert-deftest stripe/todo-keywords-looked-for-alone ()
+  "The keywords alone in the regexp (Emacs looks for them fast); that they're
+words is checked after."
+  (should (equal (+my/stripe--todo-regexp) (regexp-opt '("TODO" "FIXME" "HACK") t))))
+
+(ert-deftest stripe/todo-lines-kept-in-a-big-file ()
+  "A big file's TODO lines are kept between edits, moving with the text, not
+searched for again at once; once Emacs is idle, they are, and the strip is
+drawn again if they changed."
+  (+test-stripe "one\nTODO two\nthree\n"
+    (let ((+my/stripe--todo-big 10)
+          (searched 0))
+      (advice-add '+my/stripe--todo-starts :before (lambda () (cl-incf searched)) '((name . count)))
+      (unwind-protect
+          (progn
+            (should (equal (+my/stripe--todo-lines) '(2)))
+            (should (= searched 1))
+            (goto-char (point-min))
+            (insert "\n")
+            (should (equal (+my/stripe--todo-lines) '(3)))
+            (should (= searched 1))
+            (should (timerp +my/stripe--todo-timer))
+            (goto-char (point-min))
+            (insert "FIXME\n")
+            (should (equal (+my/stripe--todo-lines) '(4)))
+            (+my/stripe--marks)
+            (let ((edits +my/stripe--line-edits))
+              (+my/stripe--todo-search-again)
+              (should (= searched 2))
+              (should-not +my/stripe--todo-timer)
+              (should (> +my/stripe--line-edits edits))
+              (should (equal (+my/stripe--todo-lines) '(1 4)))
+              (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks))) '((1 1 todo) (4 4 todo))))
+              ;; Found the same: not drawn again.
+              (setq edits +my/stripe--line-edits)
+              (+my/stripe--todo-search-again)
+              (should (= +my/stripe--line-edits edits))))
+        (advice-remove '+my/stripe--todo-starts 'count)
+        (when (timerp +my/stripe--todo-timer) (cancel-timer +my/stripe--todo-timer))))))
+
 (ert-deftest stripe/line-edits-counted ()
   "Edits that add or remove line breaks are counted (they move the strip's
 strings); others aren't."

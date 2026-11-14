@@ -37,17 +37,20 @@ already."
 (defun +my/stripe--note-line-edit (beg end &rest _)
   "Before/after a change: count it if BEG..END holds a line break, i.e. lines
 are being removed (before) or added (after), or its lines hold a TODO keyword,
-i.e. one may be removed (before) or added (after)."
+i.e. one may be removed (before) or added (after). Looked for in its lines
+only up to 1000 characters either side of it: a line of a few megabytes
+\(minified JSON, so-long-mode) was searched whole twice for each character
+typed, 150 ms."
   (when (save-excursion
-          (goto-char beg)
-          (or (and (< beg end) (search-forward "\n" end t))
+          (or (and (< beg end) (goto-char beg) (search-forward "\n" end t))
               (when-let* ((regexp (+my/stripe--todo-regexp)))
-                (let ((case-fold-search nil))
+                (let ((case-fold-search nil)
+                      (bound (save-excursion
+                               (goto-char end)
+                               (min (line-end-position) (+ end 1000)))))
                   (goto-char beg)
-                  (forward-line 0)
-                  (re-search-forward regexp (save-excursion (goto-char end)
-                                                            (line-end-position))
-                                     t)))))
+                  (goto-char (max (line-beginning-position) (- beg 1000)))
+                  (re-search-forward regexp bound t)))))
     (cl-incf +my/stripe--line-edits)))
 
 (defun +my/stripe--render-all ()

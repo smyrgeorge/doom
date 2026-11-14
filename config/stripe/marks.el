@@ -51,47 +51,127 @@ edits within a line don't: the strip isn't redrawn for those).")
 (defvar +my/stripe--todo-regexp nil "(KEYWORDS . REGEXP) for `+my/stripe--todo-regexp'.")
 
 (defun +my/stripe--todo-regexp ()
-  "A regexp matching `+my/stripe-todo-keywords' as words (group 1): not next to
-a letter, a digit or an underscore. nil for none."
+  "A regexp matching `+my/stripe-todo-keywords' (group 1), nil for none. The
+keywords alone: Emacs looks for them fast, where a character before them in
+the regexp (not a letter...) made it try at every position, 5 MB in 110 ms
+instead of 30. That they're words is checked after (`+my/stripe--todo-word-p')."
   (when +my/stripe-todo-keywords
     (unless (eq (car +my/stripe--todo-regexp) +my/stripe-todo-keywords)
       (setq +my/stripe--todo-regexp
-            (cons +my/stripe-todo-keywords
-                  (concat "\\(?:^\\|[^[:alnum:]_]\\)"
-                          (regexp-opt +my/stripe-todo-keywords t)
-                          "\\(?:[^[:alnum:]_]\\|$\\)"))))
+            (cons +my/stripe-todo-keywords (regexp-opt +my/stripe-todo-keywords t))))
     (cdr +my/stripe--todo-regexp)))
 
-(defun +my/stripe--todo-match-p ()
-  "Whether the TODO keyword just matched marks its line: in code (and conf
-files) only in a comment, in text anywhere."
-  (or (not (derived-mode-p 'prog-mode 'conf-mode))
-      ;; `syntax-ppss' moves point.
-      (save-excursion (save-match-data (nth 4 (syntax-ppss (match-beginning 1)))))))
+(defun +my/stripe--todo-word-p ()
+  "Whether the TODO keyword just matched is a word: not next to a letter, a
+digit or an underscore."
+  (cl-flet ((word-char-p (char)
+              (and char (string-match-p "[[:alnum:]_]" (char-to-string char)))))
+    (not (or (word-char-p (char-before (match-beginning 1)))
+             (word-char-p (char-after (match-end 1)))))))
 
-(defun +my/stripe--todo-lines ()
-  "The lines with a TODO keyword (see `+my/stripe-todo-keywords'), first to last."
+(defun +my/stripe--todo-match-p ()
+  "Whether the TODO keyword just matched marks its line: a word, and in code
+\(and conf files) only in a comment, in text anywhere."
+  (and (+my/stripe--todo-word-p)
+       (or (not (derived-mode-p 'prog-mode 'conf-mode))
+           ;; `syntax-ppss' moves point.
+           (save-excursion (save-match-data (nth 4 (syntax-ppss (match-beginning 1))))))))
+
+(defun +my/stripe--todo-starts ()
+  "Where the lines with a TODO keyword start (see `+my/stripe-todo-keywords'),
+first to last."
   (when-let* ((regexp (+my/stripe--todo-regexp)))
     (save-excursion
       (goto-char (point-min))
       (let ((case-fold-search nil)
-            (line 1)
-            (pos (point-min))
-            lines)
+            starts)
         (while (re-search-forward regexp nil t)
-          (if (not (+my/stripe--todo-match-p))
-              ;; Searched on from the keyword's end: the character after it,
-              ;; part of the match, may start the next one.
-              (goto-char (match-end 1))
-            ;; The keyword's line (the match may end on the next one, with the
-            ;; line break after the keyword).
+          (when (+my/stripe--todo-match-p)
             (goto-char (match-beginning 1))
-            (setq line (+ line (count-lines pos (line-beginning-position)))
-                  pos (line-beginning-position))
-            (push line lines)
+            (push (line-beginning-position) starts)
             ;; One mark a line.
             (forward-line 1)))
-        (nreverse lines)))))
+        (nreverse starts)))))
+
+(defun +my/stripe--lines-at (positions)
+  "The lines of POSITIONS (first to last), each once."
+  (save-excursion
+    (let ((line 1)
+          (pos (point-min))
+          lines)
+      (dolist (position positions)
+        (goto-char position)
+        (setq line (+ line (count-lines pos (line-beginning-position)))
+              pos (line-beginning-position))
+        (unless (eql line (car lines))
+          (push line lines)))
+      (nreverse lines))))
+
+;; BIG FILES
+;; Searching a big file again for TODO keywords, and whether each is in a
+;; comment, after each edit that adds or removes a line took long: in 5 MB of
+;; Emacs Lisp, a newline cost 170 ms. In a file of over
+;; `+my/stripe--todo-big' characters the lines found are kept, as markers that
+;; move with the text, and read from them after an edit; the file is searched
+;; again once Emacs is idle a moment, and the strip drawn again if that found
+;; others (a TODO typed or deleted, a comment opened or closed).
+(defconst +my/stripe--todo-big 1000000
+  "A file with more characters keeps its TODO lines between edits (see above).")
+
+(defvar-local +my/stripe--todo-kept nil
+  "(TICK . MARKERS): a big file's TODO lines' starts found at TICK (see above).")
+
+(defvar-local +my/stripe--todo-timer nil
+  "The idle timer that searches a big file for TODO keywords again.")
+
+(defun +my/stripe--todo-keep ()
+  "Find a big file's TODO lines and keep them (see above)."
+  (mapc (lambda (marker) (set-marker marker nil)) (cdr +my/stripe--todo-kept))
+  (setq +my/stripe--todo-kept
+        (cons (buffer-chars-modified-tick)
+              (mapcar (lambda (start)
+                        ;; Text typed at its start goes before it.
+                        (copy-marker start t))
+                      (+my/stripe--todo-starts)))))
+
+(defun +my/stripe--todo-forget ()
+  "A big file's kept TODO lines and its search to come dropped (see above)."
+  (when (timerp +my/stripe--todo-timer)
+    (cancel-timer +my/stripe--todo-timer))
+  (mapc (lambda (marker) (set-marker marker nil)) (cdr +my/stripe--todo-kept))
+  (setq +my/stripe--todo-timer nil
+        +my/stripe--todo-kept nil))
+
+(defun +my/stripe--todo-search-again ()
+  "Search a big file for TODO keywords again: if its lines changed, the strip
+is drawn again (see above)."
+  (setq +my/stripe--todo-timer nil)
+  (let ((old (+my/stripe--lines-at (cdr +my/stripe--todo-kept))))
+    (+my/stripe--todo-keep)
+    (unless (equal old (+my/stripe--lines-at (cdr +my/stripe--todo-kept)))
+      (setq +my/stripe--cache nil)
+      (cl-incf +my/stripe--line-edits)
+      (force-window-update (current-buffer)))))
+
+(defun +my/stripe--todo-lines ()
+  "The lines with a TODO keyword (see `+my/stripe-todo-keywords'), first to
+last; a big file's as kept since the last search (see BIG FILES)."
+  (cond
+   ((< (buffer-size) +my/stripe--todo-big)
+    (+my/stripe--lines-at (+my/stripe--todo-starts)))
+   (t
+    (unless +my/stripe--todo-kept
+      (+my/stripe--todo-keep))
+    (unless (or (eql (car +my/stripe--todo-kept) (buffer-chars-modified-tick))
+                (timerp +my/stripe--todo-timer))
+      (let ((buffer (current-buffer)))
+        (setq +my/stripe--todo-timer
+              (run-with-idle-timer 0.5 nil
+                                   (lambda ()
+                                     (when (buffer-live-p buffer)
+                                       (with-current-buffer buffer
+                                         (+my/stripe--todo-search-again))))))))
+    (+my/stripe--lines-at (mapcar #'marker-position (cdr +my/stripe--todo-kept))))))
 
 (defun +my/stripe--level (err)
   "The stripe kind of flycheck error ERR: `error', `warning' or `info'."
