@@ -833,6 +833,16 @@ own (`agent-ui-image')."
   (let ((family (face-attribute 'default :family nil t)))
     (if (and (stringp family) (not (member family '("default" "unspecified")))) family "monospace")))
 
+(defun agent-ui-svg-text-width (text size)
+  "About how wide TEXT is in an SVG at font SIZE (pixels): a character of a
+monospace font 0.6 of its size."
+  (* 0.6 size (string-width text)))
+
+(defun agent-ui-svg-fit-size (text size width)
+  "SIZE, or less if TEXT is wider at it than WIDTH pixels (see
+`agent-ui-svg-text-width'): its font size fitting it there."
+  (min size (/ width (* 0.6 (max 1 (string-width text))))))
+
 ;; ====== GLYPHS IN THEIR CELLS ======
 ;; In the GUI, a character the default font lacks comes from another font,
 ;; often wider or narrower than its columns (✎ 17 pixels where a column is

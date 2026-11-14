@@ -73,14 +73,20 @@ one, from the clock now; a timestamp in epoch seconds)."
                 "left"))))))
 
 (defun agent-ui-countdown--text (props ctx)
+  "Its label, then the time and its word: the time kept whole, the label cut
+first (4 columns at least, else left out), then the word left out (the
+whole line was cut: \"Rate limit resets in  4…\")."
   (pcase-let* ((`(,time ,face ,word) (agent-ui-countdown--state props))
+               (width (plist-get ctx :width))
                (label (plist-get props :label))
-               (shown (concat (propertize time 'face face)
-                              (if (and word (plist-get props :until)) (concat " " word) ""))))
-    (agent-ui-truncate (if label
-                           (concat (propertize label 'face 'agent-ui-muted) "  " shown)
-                         shown)
-                       (plist-get ctx :width))))
+               (word (and word (plist-get props :until)
+                          (<= (+ (string-width time) 1 (string-width word)) width)
+                          word))
+               (shown (concat (propertize time 'face face) (if word (concat " " word) "")))
+               (room (- width (string-width shown) 2)))
+    (if (and label (>= room (min 4 (string-width label))))
+        (concat (propertize (agent-ui-truncate label room) 'face 'agent-ui-muted) "  " shown)
+      (agent-ui-truncate shown width))))
 
 (defun agent-ui-countdown--gui (props ctx)
   (pcase-let* ((`(,time ,face ,word) (agent-ui-countdown--state props))
@@ -88,6 +94,15 @@ one, from the clock now; a timestamp in epoch seconds)."
                (lh (plist-get ctx :line-height))
                (w (min (* cw (plist-get ctx :width)) (* 28 cw)))
                (h (* 3 lh))
+               (room (- w (* 2 cw)))
+               ;; The time big, smaller if it doesn't fit; its word beside it
+               ;; where there's room, else left out (they overlapped).
+               (size (agent-ui-svg-fit-size time (* (if word 1.4 1.0) lh) room))
+               (word-size (* 0.8 lh))
+               (word (and word (<= (+ (agent-ui-svg-text-width time size) cw
+                                      (agent-ui-svg-text-width word word-size))
+                                   room)
+                          word))
                (font (agent-ui--svg-font))
                (svg (svg-create w h)))
     (if (< (plist-get ctx :width) 16)
@@ -95,13 +110,13 @@ one, from the clock now; a timestamp in epoch seconds)."
       (svg-rectangle svg 0 0 w h :rx 6
                      :fill (agent-ui-blend (agent-ui-background) (agent-ui-color 'default) 0.07))
       (when-let* ((label (plist-get props :label)))
-        (svg-text svg (agent-ui-truncate label (floor (- w (* 2 cw)) (* 0.5 lh)))
+        (svg-text svg (agent-ui-truncate label (floor room (* 0.5 lh)))
                   :x cw :y (* 0.95 lh) :font-size (round (* 0.8 lh)) :font-family font
                   :fill (agent-ui-color 'agent-ui-muted)))
-      (svg-text svg time :x cw :y (* 2.4 lh) :font-size (round (* (if word 1.4 1.0) lh)) :font-weight "bold"
+      (svg-text svg time :x cw :y (* 2.4 lh) :font-size (round size) :font-weight "bold"
                 :font-family font :fill (agent-ui-color (if (eq face 'bold) 'default face)))
       (when word
-        (svg-text svg word :x (- w cw) :y (* 2.4 lh) :text-anchor "end" :font-size (round (* 0.8 lh))
+        (svg-text svg word :x (- w cw) :y (* 2.4 lh) :text-anchor "end" :font-size (round word-size)
                   :font-family font :fill (agent-ui-color 'agent-ui-muted)))
       (propertize "countdown" 'display (agent-ui-svg-image svg)))))
 

@@ -2550,12 +2550,53 @@ WARN seconds; past it, ended so long ago (never negative). From the clock."
     ;; Seconds from now, drawn without being shown: from now.
     (should (equal (+test-aue-draw '(:type "countdown" :until 90)) "1m 30s left"))
     (should (equal (+test-aue-draw '(:type "countdown" :label "a long label for a narrow pane" :until 90) :width 20)
-                   "a long label for a …"))
+                   "a long…  1m 30s left"))
     ;; The GUI: a tile, the time big.
     (let ((text (agent-ui-render '(:type "countdown" :label "Resets in" :until 1800000252.0)
                                  (agent-ui-context :width 40 :graphic t :char-width 8 :line-height 16))))
       (should (string-match-p ">4m 12s</text>" (plist-get (cdr (get-text-property 0 'display text)) :data))))
     (should (agent-ui-animated-p '(:type "countdown" :until 90)))))
+
+(ert-deftest agent-ui-elements/countdown-time-kept-whole ()
+  "The time whole at 16 columns and up, in text and the GUI: the label cut
+first, then the word left out (the line was cut from its end: \"Rate limit
+resets in  4…\" at 24; in the GUI, \"12h 30m\" overlapped \"elapsed\")."
+  (let ((agent-ui-clock (lambda () 1800000000.0))
+        (resets '(:type "countdown" :label "Rate limit resets in" :until 1800000252.0))
+        (long '(:type "countdown" :label "The deploy window for the production cluster closes in"
+                :until 1800045000.0))
+        (since '(:type "countdown" :label "Build running" :since 1799955000.0)))
+    (should (equal (+test-aue-draw resets :width 24) "Rate limit…  4m 12s left"))
+    (should (equal (+test-aue-draw resets :width 16) "4m 12s left"))
+    (should (string-suffix-p "…  12h 30m left" (+test-aue-draw long :width 60)))
+    (dolist (width (number-sequence 16 60))
+      (should (string-search "4m 12s" (+test-aue-draw resets :width width)))
+      (should (string-search "12h 30m" (+test-aue-draw long :width width)))
+      (should (<= (string-width (+test-aue-draw long :width width)) width)))
+    ;; The GUI: the time and its word apart, or the word left out; the time
+    ;; within the tile.
+    (dolist (element (list resets since))
+      (dolist (width (number-sequence 16 30))
+        (let* ((svg (plist-get (cdr (get-text-property
+                                     0 'display
+                                     (agent-ui-render element (agent-ui-context :width width :graphic t
+                                                                                :char-width 11 :line-height 25))))
+                               :data))
+               (texts (let ((out nil) (start 0))
+                        (while (string-match "font-size=\"\\([0-9]+\\)\"[^>]*x=\"\\([0-9.]+\\)\">\\([^<]*\\)</text>"
+                                             svg start)
+                          (push (list (match-string 3 svg) (string-to-number (match-string 1 svg))
+                                      (string-to-number (match-string 2 svg)))
+                                out)
+                          (setq start (match-end 0)))
+                        (nreverse out)))
+               (time (cl-find-if (lambda (text) (string-match-p "\\`[0-9]" (car text))) texts))
+               (word (cl-find-if (lambda (text) (member (car text) '("left" "elapsed"))) texts))
+               (time-end (+ (nth 2 time) (* 0.6 (nth 1 time) (string-width (car time)))))
+               (tile (* 11 (min width 28))))
+          (should (<= time-end (- tile 11)))
+          (when word
+            (should (<= (+ time-end 11) (- (nth 2 word) (* 0.6 (nth 1 word) (string-width (car word))))))))))))
 
 (ert-deftest agent-ui-elements/countdown-a-time-when-shown ()
   "Shown, seconds from now become a time: it goes on from there (shown
