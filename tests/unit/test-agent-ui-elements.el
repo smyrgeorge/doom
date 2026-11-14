@@ -4214,6 +4214,29 @@ px in 480)."
     ;; Few columns: all of them, no note.
     (should-not (string-match-p "left out" (+test-aue-draw '(:type "heatmap" :rows ("a") :columns ("x" "y") :values (("passed" "failed"))))))))
 
+(ert-deftest agent-ui-elements/heatmap-column-labels-whole ()
+  "Column labels whole when the width allows, the cells widened for them
+\(cut to 6: \"macos…\" with 72 columns free); else cut, or numbered with
+a key under the grid when cut they'd read under 5 columns or alike (every
+one \"c…\" at 20), text and GUI."
+  (let ((element '(:type "heatmap" :rows ("lexer" "parser") :columns ("linux" "macos-long-name" "windows")
+                   :values (("passed" "failed" "passed") ("passed" "flaky" "passed")))))
+    (should (string-prefix-p "        linux           macos-long-name windows\n"
+                             (+test-aue-draw element :width 60)))
+    (let ((text (+test-aue-draw element :width 24)))
+      (should (string-prefix-p "        1    2    3\n" text))
+      (should (string-search "\n1 linux\n2 macos-long-name\n3 windows\n" text))
+      (dolist (line (split-string text "\n"))
+        (should (<= (string-width line) 24))))
+    ;; The GUI: whole with room, numbered and keyed in a narrow pane.
+    (let ((svg (+test-aue-svg element 100)))
+      (should (string-match-p ">macos-long-name</text>" svg)))
+    (let* ((text (agent-ui-render element (agent-ui-context :width 20 :graphic t :char-width 8 :line-height 16)))
+           (svg (plist-get (cdr (get-text-property 0 'display text)) :data)))
+      (should (string-match-p ">1</text>.*>2</text>.*>3</text>" svg))
+      (should-not (string-match-p "&#8230;</text>" (car (split-string svg ">lexer<"))))
+      (should (string-search "\n1 linux\n2 macos-long-name\n3 windows\n" (substring-no-properties text))))))
+
 (ert-deftest agent-ui-elements/heatmap-gui-row-labels-cut ()
   "In the GUI a long row label is cut to its column (it ran through the cells)."
   (let ((svg (+test-aue-svg '(:type "heatmap" :rows ("test_parser_handles_unicode_identifiers" "lexer")

@@ -89,14 +89,37 @@ as text, a swatch was left at a line's end, its word on the next)."
                                  " " (propertize (agent-ui-format-number (cdr range)) 'face 'agent-ui-muted))))
                  (mapcar (lambda (w) (concat (propertize "█" 'face (list :foreground (agent-ui-heatmap--color props w range)))
                                              " " (propertize w 'face 'agent-ui-muted)))
-                         words)))
-         (lines nil) (line nil))
+                         words))))
+    (agent-ui-heatmap--pack items width)))
+
+(defun agent-ui-heatmap--pack (items width)
+  "ITEMS on lines of WIDTH, two spaces between them, an item never split."
+  (let ((lines nil) (line nil))
     (dolist (item items)
       (if (and line (> (+ (string-width line) 2 (string-width item)) width))
           (progn (push line lines) (setq line item))
         (setq line (if line (concat line "  " item) item))))
     (when line (push line lines))
     (mapconcat (lambda (l) (agent-ui-truncate l width)) (nreverse lines) "\n")))
+
+(defun agent-ui-heatmap--heads (columns room)
+  "COLUMNS' labels over their cells, ROOM columns each: cut to it; or, cut
+under 5 columns or read alike, their numbers (all \"c…\"), their labels
+then in a key (`agent-ui-heatmap--key'). (HEADS . NUMBERED)."
+  (let ((cut (mapcar (lambda (c) (agent-ui-truncate c (max 1 room))) columns)))
+    (if (or (equal cut columns)
+            (and (>= room 5) (= (length (delete-dups (copy-sequence cut))) (length cut))))
+        (cons cut nil)
+      (cons (mapcar #'number-to-string (number-sequence 1 (length columns))) t))))
+
+(defun agent-ui-heatmap--key (columns width)
+  "The columns' numbers and their labels (\"1 linux  2 macos\"), packed into
+lines of WIDTH: under a grid whose labels don't fit their cells, which are
+numbered (cut, they all read \"c…\")."
+  (agent-ui-heatmap--pack (cl-loop for c in columns for i from 1
+                                   collect (concat (propertize (number-to-string i) 'face 'bold) " "
+                                                   (propertize c 'face 'agent-ui-muted)))
+                          width))
 
 (defun agent-ui-heatmap--latest (props room)
   "PROPS with its latest columns only, those fitting ROOM columns at 3 each
@@ -124,14 +147,17 @@ month of days ran 97 columns wide at 60."
          (latest (agent-ui-heatmap--latest props (- (plist-get ctx :width) label-width 1)))
          (props (car latest))
          (rows (plist-get props :rows)) (columns (plist-get props :columns))
-         ;; A cell: its block, then a space; its label within the block.
-         (cell (max 3 (min 7 (1+ (apply #'max (mapcar #'string-width columns)))
+         ;; A cell: its block, then a space; its label within the block,
+         ;; the cells as wide as the widest label, if there's room (they were
+         ;; 6 at most: "macos…" with 72 columns free).
+         (cell (max 3 (min (1+ (apply #'max (mapcar #'string-width columns)))
                            (/ (- (plist-get ctx :width) label-width 2) (max 1 (length columns))))))
+         (heads (agent-ui-heatmap--heads columns (1- cell)))
          (block (lambda (color) (if color (propertize (make-string (1- cell) ?█) 'face (list :foreground color))
                                   (propertize (make-string (1- cell) ?·) 'face 'agent-ui-muted)))))
     (concat
      (make-string (+ label-width 2) ?\s)
-     (string-trim-right (mapconcat (lambda (c) (agent-ui-pad (agent-ui-truncate c (1- cell)) cell)) columns ""))
+     (string-trim-right (mapconcat (lambda (c) (agent-ui-pad c cell)) (car heads) ""))
      "\n"
      (mapconcat (lambda (row)
                   (concat (agent-ui-pad (car row) label-width) "  "
@@ -140,6 +166,7 @@ month of days ran 97 columns wide at 60."
                 (cl-mapcar #'cons rows (plist-get props :values)) "\n")
      (when-let* ((note (agent-ui-heatmap--left-out (cdr latest) (plist-get ctx :width))))
        (concat "\n" note))
+     (if (cdr heads) (concat "\n" (agent-ui-heatmap--key columns (plist-get ctx :width))) "")
      ;; The legend: the scale's ends, or the words used, fitted to the width.
      "\n"
      (agent-ui-heatmap--legend props range (plist-get ctx :width)))))
@@ -153,14 +180,22 @@ month of days ran 97 columns wide at 60."
          (latest (agent-ui-heatmap--latest props (- (plist-get ctx :width) (/ label-w cw))))
          (props (car latest))
          (rows (plist-get props :rows)) (columns (plist-get props :columns))
-         (cell-w (max (* 3 cw) (min (* 8 cw) (/ (- (* cw (plist-get ctx :width)) label-w) (max 1 (length columns))))))
+         ;; Cells 8 columns wide, or as the widest label, if there's room.
+         (label (car (seq-sort-by #'string-width #'> (copy-sequence columns))))
+         (cell-w (max (* 3 cw) (min (max (* 8 cw) (+ (agent-ui-svg-text-width label (* 0.8 lh)) 6))
+                                    (/ (- (* cw (plist-get ctx :width)) label-w) (max 1 (length columns))))))
+         ;; Its labels a little smaller if that fits them (0.6 of a line
+         ;; at least), else cut or numbered (`agent-ui-heatmap--heads').
+         (size (max (* 0.6 lh) (agent-ui-svg-fit-size label (* 0.8 lh) (- cell-w 4))))
+         (heads (agent-ui-heatmap--heads columns (floor (+ (/ (- cell-w 4) (* 0.6 size)) 1e-6))))
          (cell-h (round (* 1.5 lh)))
          (top (round (* 1.4 lh)))
          (svg (svg-create (+ label-w (* cell-w (length columns))) (+ top (* cell-h (length rows)))))
          (muted (agent-ui-chart--color 'agent-ui-muted)) (fg (agent-ui-chart--color 'default)))
-    (cl-loop for c in columns for j from 0
-             do (agent-ui-chart--svg-text svg ctx (agent-ui-truncate c (max 1 (/ cell-w cw)))
-                                          (+ label-w (* j cell-w) (/ cell-w 2)) (* 0.9 lh) :fill muted :text-anchor "middle"))
+    (cl-loop for c in (car heads) for j from 0
+             do (svg-text svg c :x (+ label-w (* j cell-w) (/ cell-w 2)) :y (* 0.9 lh)
+                          :font-size (round size) :font-family (agent-ui--svg-font)
+                          :fill muted :text-anchor "middle"))
     (cl-loop for r in rows for row in (plist-get props :values) for i from 0
              do (let ((y (+ top (* i cell-h))))
                   ;; Cut to its column (whole, it ran through the cells).
@@ -182,6 +217,7 @@ month of days ran 97 columns wide at 60."
                                                             :text-anchor "middle"))))))
     (concat (agent-ui-chart--image svg) "\n"
             (if-let* ((note (agent-ui-heatmap--left-out (cdr latest) (plist-get ctx :width)))) (concat note "\n") "")
+            (if (cdr heads) (concat (agent-ui-heatmap--key columns (plist-get ctx :width)) "\n") "")
             ;; The legend, as text: all its lines (only its last was kept).
             (agent-ui-heatmap--legend props range (plist-get ctx :width)))))
 
