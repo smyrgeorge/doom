@@ -24,7 +24,7 @@ foreground is their colour.")
     (info    1 +my/stripe-suggestion)))
 
 (defun +my/stripe-faces-h ()
-  "The marks' own colours from the theme, as IntelliJ's: TODO comments blue,
+  "The marks' own colours from the theme: TODO comments blue,
 suggestions a dim warning colour (flycheck's info green is the git gutter's
 added lines')."
   (when (and (fboundp 'doom-blend) (fboundp 'doom-color))

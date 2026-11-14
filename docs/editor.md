@@ -83,7 +83,7 @@ Without `(load! "config/tiling")` in `config.el`, each opens where it would on i
 
 ## Error stripe
 
-A strip at the right edge of a file's window maps the whole file, as IntelliJ's does:
+A strip at the right edge of a file's window maps the whole file:
 - diagnostics: errors (red), warnings (yellow), suggestions (dim yellow: LSP hints and information);
 - TODO comments: `TODO`, `FIXME`, `HACK` (blue);
 - git changes: added, changed and deleted lines, in the gutter's colours;

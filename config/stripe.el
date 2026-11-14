@@ -39,7 +39,7 @@ LSP hints and information).")
 in comments, in text anywhere. nil: none.")
 
 (defvar +my/stripe-mark-height 2
-  "Height of a mark, in pixels (graphical frames): a line, as IntelliJ's, however
+  "Height of a mark, in pixels (graphical frames): a thin line, however
 tall its line is on the strip. Marks of several lines (git hunks) span them,
 this high at least.")
 
