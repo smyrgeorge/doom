@@ -181,20 +181,26 @@ a new one (see above)."
                                       (not (eq (window-buffer (overlay-get view 'window))
                                                buffer)))
                                     open))))
-          (if (not spare)
-              (+my/webkit--new-view window)
-            (+my/webkit--place spare window)
-            (xwidget-webkit-adjust-size-to-window (+my/webkit--view-xwidget spare) window)))
+          (if spare
+              (+my/webkit--fit spare window)
+            (+my/webkit--new-view window)))
         (when (and +my/webkit--views (not (timerp +my/webkit--watch-timer)))
           (setq +my/webkit--watch-timer (run-with-timer 0.1 0.1 #'+my/webkit--watch)))))))
 
+(defun +my/webkit--fit (view window)
+  "Make VIEW as big as WINDOW, its window now (a view keeps the size it was
+made with), kept where it is (see VIEWS); its cover too, while it loads (see
+NO WHITE FLASH)."
+  (let ((xwidget (+my/webkit--view-xwidget view)))
+    (+my/webkit--place view window)
+    (xwidget-webkit-adjust-size-to-window xwidget window)
+    (+my/webkit--fit-cover xwidget window)))
+
 (defun +my/webkit--fit-h (window)
-  "Make WINDOW's WebKit view as big as it (a view keeps the size it was made
-with), where it is now kept (see VIEWS)."
+  "WINDOW's size changed: its view fitted to it."
   (with-current-buffer (window-buffer window)
     (when-let* ((view (+my/webkit--view window)))
-      (+my/webkit--place view window)
-      (xwidget-webkit-adjust-size-to-window (+my/webkit--view-xwidget view) window))))
+      (+my/webkit--fit view window))))
 
 (defun +my/webkit--shown-h (window)
   "WINDOW shows the page: its view, fitted to it; or one for it after this
@@ -228,8 +234,8 @@ are: moved, the window scrolled them away."
 ;; WebKit's view is white until its page has loaded. A view only starts once
 ;; its window shows the page (nothing shown until then, in the theme's colour),
 ;; under a borderless frame (config/childframe.el) in the page's background
-;; colour (`+my/webkit-background'): it goes once WebKit says the page has
-;; loaded, or after 2 s (e.g. offline).
+;; colour (`+my/webkit-background'), fitted to the window as the view is: it
+;; goes once WebKit says the page has loaded, or after 2 s (e.g. offline).
 (defun +my/webkit--uncover (xwidget)
   "Take the cover off XWIDGET's view."
   (when-let* ((cover (xwidget-get xwidget 'cover)))
@@ -244,6 +250,17 @@ are: moved, the window scrolled them away."
           ((functionp background) (funcall background))
           (t (face-background 'default nil t)))))
 
+(defun +my/webkit--fit-cover (xwidget window)
+  "XWIDGET's cover, while it loads, over WINDOW's text area: as it is now (a
+pane split or resized meanwhile, its neighbour isn't covered)."
+  (when-let* ((frame (car (xwidget-get xwidget 'cover))))
+    (when (frame-live-p frame)
+      (let ((edges (window-inside-pixel-edges window))
+            (frame-resize-pixelwise t))
+        (set-frame-size frame (- (nth 2 edges) (nth 0 edges))
+                        (- (nth 3 edges) (nth 1 edges)) t)
+        (set-frame-position frame (nth 0 edges) (nth 1 edges))))))
+
 (defun +my/webkit--cover (window xwidget)
   "Cover WINDOW's text area in the page's background colour while XWIDGET
 loads there (see above). The current buffer kept: making the frame selects
@@ -251,13 +268,9 @@ the selected one again, which makes its window's buffer current."
   (when (and (fboundp '+my/childframe-make)
              (display-graphic-p (window-frame window)))
     (let ((frame (save-current-buffer
-                   (+my/childframe-make (window-frame window) "+my/webkit-cover")))
-          (edges (window-inside-pixel-edges window))
-          (frame-resize-pixelwise t))
+                   (+my/childframe-make (window-frame window) "+my/webkit-cover"))))
       (set-frame-parameter frame 'background-color (+my/webkit--background))
-      (set-frame-size frame (- (nth 2 edges) (nth 0 edges))
-                      (- (nth 3 edges) (nth 1 edges)) t)
-      (set-frame-position frame (nth 0 edges) (nth 1 edges))
-      (make-frame-visible frame)
       (xwidget-put xwidget 'cover
-                   (cons frame (run-at-time 2 nil #'+my/webkit--uncover xwidget))))))
+                   (cons frame (run-at-time 2 nil #'+my/webkit--uncover xwidget)))
+      (+my/webkit--fit-cover xwidget window)
+      (make-frame-visible frame))))

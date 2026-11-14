@@ -94,6 +94,7 @@
   "BODY as in the GUI: views get covers, frames faked."
   (declare (indent 0))
   `(let ((+test-webkit--frames nil)
+         (live-p (symbol-function 'frame-live-p))
          (set-parameter (symbol-function 'set-frame-parameter))
          (set-size (symbol-function 'set-frame-size))
          (set-position (symbol-function 'set-frame-position))
@@ -111,6 +112,11 @@
                     frame)))
                ((symbol-function '+my/childframe-delete)
                 (lambda (frame) (put frame 'deleted (1+ (or (get frame 'deleted) 0)))))
+               ((symbol-function 'frame-live-p)
+                (lambda (frame)
+                  (if (+test-webkit--fake-frame-p frame)
+                      (not (get frame 'deleted))
+                    (funcall live-p frame))))
                ((symbol-function 'set-frame-parameter)
                 (lambda (frame parameter value)
                   (if (+test-webkit--fake-frame-p frame)
@@ -1000,6 +1006,41 @@ mode has said what its page is."
           (should (eq (timer--function (cdr cover)) #'+my/webkit--uncover))
           (should (equal (timer--args (cdr cover)) (list xw)))
           (should (< 1.5 (+test-webkit--due (cdr cover)) 2.1)))))))
+
+(ert-deftest webkit/cover-fitted-as-its-window-changes ()
+  "The pane split or resized while its view loads: its cover over the
+window's text area as it is now, not the neighbour; moved with the view to
+another window; gone, left alone."
+  (+test-webkit
+    (+test-webkit--graphic
+      (let* ((page (+test-webkit--page))
+             (window (+test-webkit--show page))
+             (xw (+test-webkit--xw page window))
+             (frame (car (xwidget-get xw 'cover)))
+             (cover-edges (lambda ()
+                            (let ((size (get frame 'size)) (position (get frame 'position)))
+                              (list (car position) (cdr position)
+                                    (+ (car position) (nth 0 size)) (+ (cdr position) (nth 1 size)))))))
+        (should (equal (funcall cover-edges) (window-inside-pixel-edges window)))
+        ;; Split: what redisplay calls for the window resized.
+        (set-window-buffer (split-window window nil 'right) (+test-buffer "other"))
+        (+my/webkit--fit-h window)
+        (should (equal (funcall cover-edges) (window-inside-pixel-edges window)))
+        (window-resize window -5 t)
+        (+my/webkit--fit-h window)
+        (should (equal (funcall cover-edges) (window-inside-pixel-edges window)))
+        ;; Its window closed, the view given to another: the cover with it.
+        (let ((below (split-window window nil 'below)))
+          (delete-window window)
+          (+test-webkit--show page below)
+          (should (eq (+test-webkit--xw page below) xw))
+          (should (equal (funcall cover-edges) (window-inside-pixel-edges below)))
+          ;; Its frame gone (its parent deleted): not touched.
+          (put frame 'deleted 1)
+          (put frame 'size nil)
+          (window-resize below -2 t)
+          (+my/webkit--fit-h below)
+          (should-not (get frame 'size)))))))
 
 (ert-deftest webkit/cover-in-the-pages-colour-from-a-function ()
   (+test-webkit

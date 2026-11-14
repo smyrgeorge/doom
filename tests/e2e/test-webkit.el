@@ -123,6 +123,47 @@ closed)."
         (advice-remove '+my/webkit--cover '+test-cover))
       (should (equal colours '("#123456"))))))
 
+(defconst +test-webkit--slow-html
+  "<!doctype html><html><head><title>slow</title><style>body{background:#123456}</style></head>
+<body><p>slow</p><script>var t = Date.now(); while (Date.now() - t < 1500) {}</script></body></html>"
+  "A page taking 1.5 s to load.")
+
+(define-derived-mode +test-webkit-slow-mode +test-webkit-mode "SlowPage"
+  "A test page loading slowly."
+  (setq-local +my/webkit-url-function
+              (lambda (_window)
+                (+my/webkit-file-url (+test-file "page/slow.html" +test-webkit--slow-html)))))
+
+(defun +test-webkit--frame-edges (frame)
+  "FRAME's text area's edges, in its parent's."
+  (let ((position (frame-position frame)))
+    (list (car position) (cdr position)
+          (+ (car position) (frame-text-width frame)) (+ (cdr position) (frame-text-height frame)))))
+
+(ert-deftest e2e-webkit/the-cover-follows-its-pane-while-loading ()
+  "Split while the page loads: its cover over the pane's text area as it is
+now, the new neighbour not covered."
+  (+test-webkit
+    (let ((buffer (get-buffer-create "*slow page*"))
+          (window (selected-window)))
+      (switch-to-buffer buffer)
+      (+test-webkit-slow-mode)
+      (let ((cover (+test-wait-for
+                    (lambda () (with-current-buffer buffer
+                                 (when-let* ((xwidget (+my/webkit-xwidget window)))
+                                   (car (xwidget-get xwidget 'cover)))))
+                    3)))
+        (should cover)
+        (should (equal (+test-webkit--frame-edges cover) (window-inside-pixel-edges window)))
+        (let ((right (split-window window nil 'right)))
+          (set-window-buffer right "*scratch*")
+          (should (+test-wait-for (lambda () (equal (+test-webkit--frame-edges cover)
+                                                    (window-inside-pixel-edges window)))
+                                  1))
+          ;; Still loading, the neighbour uncovered.
+          (should (frame-live-p cover))
+          (should (<= (nth 2 (+test-webkit--frame-edges cover)) (car (window-inside-pixel-edges right)))))))))
+
 (ert-deftest e2e-webkit/split-gives-each-window-its-own-view ()
   (+test-webkit
     (+test-webkit--open)
