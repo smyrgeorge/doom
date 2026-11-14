@@ -24,10 +24,15 @@ strip: FRAME, a child frame, shows its IMAGE, made from CONTENT.")
 (defun +my/stripe--last-line-shown (window start rows lines)
   "(LINE . EMPTY): the line after the last one WINDOW shows from START, ROWS
 rows tall; at the end of the buffer, LINES + 1 and the empty rows below it.
-Lines cut off at the window's edge (Doom's default) take a row each: counted.
-Wrapped ones (Markdown, visual-line-mode) are laid out to see (a millisecond
-for a window of rows: at each step of a scroll, that was most of its cost)."
-  (if (or truncate-lines (truncated-partial-width-window-p window))
+Lines cut off at the window's edge (Doom's default) take a row each: counted,
+unless some of them are hidden (folded code: the window shows more lines; the
+band covered only as many as its rows). Wrapped ones (Markdown,
+visual-line-mode) are laid out to see (a millisecond for a window of rows: at
+each step of a scroll, that was most of its cost)."
+  (if (and (or truncate-lines (truncated-partial-width-window-p window))
+           (let ((end (save-excursion (goto-char start) (forward-line rows) (point))))
+             (and (not (invisible-p start))
+                  (>= (next-single-char-property-change start 'invisible nil end) end))))
       (let ((after (+ (line-number-at-pos start t) rows)))
         (if (<= after lines)
             (cons after 0)

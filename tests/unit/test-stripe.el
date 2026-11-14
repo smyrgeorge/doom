@@ -787,6 +787,26 @@ on the strip (lines 10 pixels here); one of several lines spans them."
         (should (equal (+my/stripe--last-line-shown (selected-window) (+test-stripe--line-start 95) rows 101)
                        (cons 102 (- (+ 95 rows) 101 1))))))))
 
+(ert-deftest stripe/last-line-shown-laid-out-past-folded-code ()
+  "Lines cut off at the edge, some folded (hidden) on screen: the window shows
+more lines than rows, laid out; the band spans them. Folded below the
+window: counted."
+  (+test-stripe (+test-stripe--text 1000)
+    (setq truncate-lines t)
+    (let* ((rows (window-body-height))
+           (fold (make-overlay (+test-stripe--line-start 60) (+test-stripe--line-start 601))))
+      (overlay-put fold 'invisible t)
+      (should (equal (+my/stripe--last-line-shown (selected-window) (+test-stripe--line-start 50) rows 1001)
+                     (cons (+ 601 (- rows 10)) 0)))
+      (+test-stripe--gui
+        (+test-stripe--small
+          (set-window-start nil (+test-stripe--line-start 50))
+          (pcase-let ((`(,_ ,scale ,thumb) (+test-stripe--strip-pixels)))
+            (should (>= (cdr thumb) (round (* scale 600)))))))
+      (cl-letf (((symbol-function 'vertical-motion) (lambda (&rest _) (error "Laid out"))))
+        (should (equal (+my/stripe--last-line-shown (selected-window) (+test-stripe--line-start 700) rows 1001)
+                       (cons (+ 700 rows) 0)))))))
+
 (ert-deftest stripe/last-line-shown-laid-out-when-lines-wrap ()
   "Wrapped lines: as many lines as fit, laid out."
   (+test-stripe (mapconcat (lambda (_) (make-string 200 ?x)) (number-sequence 1 30) "\n")
