@@ -188,7 +188,11 @@ old one), only the strip's."
         (advice-remove '+my/stripe--image 'count)
         (advice-remove 'image-flush 'count)
         (advice-remove 'redraw-frame 'count))
-      (should (< 20 made 150))
+      ;; At most an image each time the band's top (rounded down) or its
+      ;; bottom (rounded) crosses a pixel, the band moving 300/3000 of the
+      ;; strip's height (its text area's): far fewer than the scrolls. Not
+      ;; a fixed count: macOS's 672 px made 66, Linux's 864 px 165.
+      (should (< 20 made (+ 2 (* 2 (ceiling (/ (* 300.0 (window-body-height nil t)) 3000))))))
       (should (= flushed made))
       (should (= (length redrawn) made))
       (should (seq-every-p (lambda (frame) (eq frame strip)) redrawn)))))
