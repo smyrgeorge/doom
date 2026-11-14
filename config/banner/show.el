@@ -23,12 +23,18 @@
   (when (+my/banner--ours-p)
     (setq-local header-line-format +my/banner--saved-header)))
 
+(defun +my/banner--one-line (text)
+  "TEXT on one line: its line breaks and other control characters, with the
+spaces around them, a space each run. A notice is a row: a line break hid
+what came after it there (its actions, ✕, the notices under it)."
+  (string-trim (replace-regexp-in-string "[[:space:]]*[[:cntrl:]][[:space:][:cntrl:]]*" " " text)))
+
 (cl-defun +my/banner-show (id text &key (type 'info) actions)
-  "Show notice ID at the top of the current buffer's windows: TEXT, of TYPE
-(info, warning, error; see `+my/banner-types'), then ACTIONS to click, a list
-of (LABEL . FUNCTION), FUNCTION called in the buffer. Showing ID again replaces
-it in place."
-  (let ((notice (list id text actions type)))
+  "Show notice ID at the top of the current buffer's windows: TEXT (on one
+line), of TYPE (info, warning, error; see `+my/banner-types'), then ACTIONS to
+click, a list of (LABEL . FUNCTION), FUNCTION called in the buffer. Showing ID
+again replaces it in place."
+  (let ((notice (list id (+my/banner--one-line text) actions type)))
     (setq +my/banner--list
           (if (assq id +my/banner--list)
               (mapcar (lambda (n) (if (eq (car n) id) notice n)) +my/banner--list)

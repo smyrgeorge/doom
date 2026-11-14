@@ -279,6 +279,25 @@ line's room follow, both ways."
                               3))
       (ignore other))))
 
+;; ====== MESSAGES ======
+
+(ert-deftest e2e-banner/a-line-break-hides-nothing ()
+  "A message with a line break: one row, its action and ✕ on screen, the next
+notice under it."
+  (+test-banner
+    (+test-banner--file "break.txt")
+    (+my/banner-show 'first "Export failed: TypeError: broke\n    at foo (x.js:1)"
+                     :type 'error :actions '(("Retry" . +test-banner--action)))
+    (+my/banner-show 'second "Second notice")
+    (let ((frame (+test-banner--shown (selected-window))))
+      (should (+test-wait-for (lambda () (+test-banner--over-p frame (selected-window) 2)) 3))
+      (should (+test-banner--inside frame "mouse-1: Retry"))
+      (should (= (length (+test-banner--inside frame "mouse-1: close")) (* 3 2)))
+      (with-current-buffer (window-buffer (frame-root-window frame))
+        (goto-char (point-min))
+        (should (search-forward "Second notice" nil t))
+        (should (pos-visible-in-window-p (match-beginning 0) (frame-root-window frame)))))))
+
 ;; ====== CLICKS ======
 
 (ert-deftest e2e-banner/an-action-runs-in-the-window-it-s-about ()

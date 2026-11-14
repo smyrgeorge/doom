@@ -191,6 +191,42 @@
       (should (equal (mapcar #'car +my/banner--list) '(a b c)))
       (should (equal (assq 'b +my/banner--list) '(b "B again" nil error))))))
 
+(ert-deftest banner/show-on-one-line ()
+  "Line breaks and other control characters in a message: a space each run,
+with the spaces around them; none left at its ends."
+  (+test-banner
+    (with-current-buffer (+test-buffer "B")
+      (+my/banner-show 'a "Broke:\n    at foo\r\n\tat bar\n")
+      (should (equal (nth 1 (assq 'a +my/banner--list)) "Broke: at foo at bar"))
+      (+my/banner-show 'b "  bell\a here\e[0m  ")
+      (should (equal (nth 1 (assq 'b +my/banner--list)) "bell here [0m"))
+      ;; Spaces alone stay as they are.
+      (+my/banner-show 'c "Two  spaces")
+      (should (equal (nth 1 (assq 'c +my/banner--list)) "Two  spaces")))))
+
+(ert-deftest banner/a-line-break-hides-nothing ()
+  "A message with a line break: a row, its ✕ on it, the next notice's row
+under it; in a terminal's header line, no ^J."
+  (+test-banner
+    (+test-banner--gui
+      (let ((buffer (+test-buffer "B")))
+        (switch-to-buffer buffer)
+        (with-current-buffer buffer
+          (+my/banner-show 'first "Export failed: TypeError: broke\n    at foo (x.js:1)"
+                           :type 'error :actions '(("Retry" . ignore)))
+          (+my/banner-show 'second "Second notice"))
+        (let* ((frame (+test-banner--frame-of (selected-window)))
+               (lines (split-string (+test-banner--frame-text frame) "\n")))
+          (should (= (length lines) 2))
+          (should (string-match-p "broke at foo.*Retry.*✕" (car lines)))
+          (should (string-match-p "Second notice.*✕" (cadr lines)))
+          (should (= (nth 1 (+test-banner--frame-size frame)) (* 2 20))))
+        (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) nil)))
+          (with-current-buffer buffer
+            (let ((row (+my/banner--header-line)))
+              (should-not (string-match-p "[[:cntrl:]]" row))
+              (should (string-search "Retry" row)))))))))
+
 (ert-deftest banner/show-makes-room-in-the-header-line ()
   "The header line's own content stays, after the notices' room."
   (+test-banner
