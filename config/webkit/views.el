@@ -14,8 +14,8 @@
 ;; window showing another buffer, else a new one: a window that shows another
 ;; buffer keeps its view for when it shows the page again (a tab away and
 ;; back) only while no other window needs it. A second after windows come or
-;; go, views of closed windows are closed, but for the buffer's last one (for
-;; its next window).
+;; go (a frame deleted too), views of closed windows are closed, but for the
+;; buffer's last one (for its next window).
 
 (defvar-local +my/webkit--views nil
   "The buffer's views, overlays, the one latest looked at first (see VIEWS).")
@@ -119,6 +119,8 @@ js.el)."
     (setq +my/webkit--tidy-timer (run-at-time 1 nil #'+my/webkit--tidy))))
 
 (add-hook 'window-buffer-change-functions #'+my/webkit--tidy-h)
+;; A frame deleted changes no other window's buffer.
+(add-hook 'delete-frame-functions #'+my/webkit--tidy-h)
 
 (defun +my/webkit--new-view (window)
   "Open a WebKit view for WINDOW, covered while it loads (see above)."

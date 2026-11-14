@@ -665,6 +665,8 @@ next window; the others close."
 (ert-deftest webkit/tidy-a-second-after-windows-change ()
   (+test-webkit
     (should (memq #'+my/webkit--tidy-h (default-value 'window-buffer-change-functions)))
+    ;; A frame deleted too (no other window's buffer changes then).
+    (should (memq #'+my/webkit--tidy-h delete-frame-functions))
     ;; No page open (nothing watched): nothing to tidy.
     (+my/webkit--tidy-h (selected-frame))
     (should-not (+test-webkit--timers #'+my/webkit--tidy))

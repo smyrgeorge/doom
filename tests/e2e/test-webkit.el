@@ -181,6 +181,28 @@ closed)."
                                          (xwidget-window-inside-pixel-height left))))
                  3))))))
 
+(ert-deftest e2e-webkit/a-deleted-frame-s-view-goes-a-second-later ()
+  "A frame showing the page deleted: its view closed a second later, no
+other window changing meanwhile."
+  (+test-webkit
+    (+test-webkit--open)
+    (let ((frame (make-frame `((left . ,(frame-parameter nil 'left)) (top . ,(frame-parameter nil 'top))
+                               (width . 60) (height . 15) (z-group . above)))))
+      (unwind-protect
+          (progn
+            (set-window-buffer (frame-root-window frame) "*test page*")
+            (should (+test-webkit--loaded-in (frame-root-window frame)))
+            (should (= (+test-webkit--views) 2))
+            ;; The tidying its making asked for, done.
+            (should (+test-wait-for (lambda () (not +my/webkit--tidy-timer)) 3))
+            (should (= (+test-webkit--views) 2))
+            (delete-frame frame t)
+            (+test-sleep 1.5)
+            (should (= (+test-webkit--views) 1))
+            (should (+my/webkit-xwidget (frame-root-window (selected-frame)))))
+        (when (frame-live-p frame)
+          (delete-frame frame t))))))
+
 (ert-deftest e2e-webkit/a-tab-away-and-back-keeps-the-view ()
   (+test-webkit
     (+test-webkit--open)
