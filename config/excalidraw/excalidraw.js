@@ -239,6 +239,7 @@
           state.ready = true;
           publish();
           settle(() => { if (state.version !== state.exported) scheduleExport(); });
+          followSize();
         }, 0);
       },
       initialData: { elements: scene.elements, appState, files: scene.files, scrollToContent: true,
@@ -261,6 +262,17 @@
     }));
     document.addEventListener('pointermove', onPointerMove, { passive: true });
     publish();
+  }
+
+  // Resized (a pane narrowed or widened, at once): Excalidraw 0.17's own
+  // ResizeObserver notes whether it's now a phone's size without drawing
+  // anew, so the layout stayed the old one until the mouse moved over it.
+  // Drawn anew right after: this observer, made once Excalidraw is up, is
+  // called after its own. The drawing unchanged, no change counted.
+  function followSize() {
+    const container = document.querySelector('.excalidraw');
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    new ResizeObserver(() => api.updateScene({ appState: {} })).observe(container);
   }
 
   // Another view's drawing, or the file read again: shown, not a change of

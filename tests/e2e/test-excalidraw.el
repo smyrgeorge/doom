@@ -640,6 +640,34 @@ shown once and steady; closed once, as that pane's next change is saved."
         (should (= closed 1)))
       (with-current-buffer buffer (set-buffer-modified-p nil)))))
 
+(defun +test-exd--mobile-p ()
+  "Whether the selected window's page lays out for a phone."
+  (equal (+test-exd--js "String(document.querySelector('.excalidraw').classList.contains('excalidraw--mobile'))")
+         "true"))
+
+(ert-deftest e2e-exd/its-layout-follows-the-pane-s-size ()
+  "The pane narrowed under 730 px, widened again: the page lays out for it
+each time without any input (the mouse moving over it), and that's no change
+to the drawing."
+  (+test-exd
+    (let* ((file (+test-exd--make (+test-exd--file "resized.excalidraw.svg") +test-exd--two-shapes))
+           (buffer (+test-exd--open file))
+           (window (selected-window)))
+      (should-not (buffer-modified-p buffer))
+      (should (> (window-body-width window t) 730))
+      (should-not (+test-exd--mobile-p))
+      (let ((version (plist-get (+test-exd--state) :version))
+            (other (split-window window 70 'right)))
+        (should (< (window-body-width window t) 730))
+        (unless (+test-wait-for #'+test-exd--mobile-p 1)
+          (ert-fail (list "Not laid out for a phone" (+test-exd--js "String(window.innerWidth)"))))
+        (delete-window other)
+        (unless (+test-wait-for (lambda () (not (+test-exd--mobile-p))) 1)
+          (ert-fail (list "Still laid out for a phone" (+test-exd--js "String(window.innerWidth)"))))
+        (+test-sleep 0.5)
+        (should (= (plist-get (+test-exd--state) :version) version))
+        (should-not (buffer-modified-p buffer))))))
+
 ;; ====== LIBRARIES ======
 
 (defconst +test-exd--library
