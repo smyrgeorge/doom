@@ -2786,6 +2786,20 @@ in a terminal: neither."
       (should (equal (substring-no-properties (agent-ui-render '(:type "math" :tex "x^2") gui)) "  x²"))
       (should (equal (+test-aue-draw '(:type "math" :tex "x")) "  x")))))
 
+(ert-deftest agent-ui-elements/math-error-read-whole ()
+  "The tool's error is read whole before its result is kept, however late
+it comes after the tool exits (its sentinel could run first: the error
+read \"it failed\", under load)."
+  (let ((gui (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 20)))
+    (+test-aue-math (list "sh" "-c" "cat >/dev/null; (sleep 0.3; printf 'TeX error: late\\n' >&2) & exit 1")
+      (agent-ui-render '(:type "math" :tex "\\qux") gui)
+      (+test-aue-math-wait)
+      (should-not agent-ui-math--running)
+      (should (equal (substring-no-properties (agent-ui-render '(:type "math" :tex "\\qux") gui))
+                     "  \\qux\nNot typeset: TeX error: late"))
+      ;; Nothing left running.
+      (should-not (seq-some (lambda (p) (string-prefix-p "agent-ui-math" (process-name p))) (process-list))))))
+
 (ert-deftest agent-ui-elements/math-redrawn-when-typeset ()
   "Typeset: the elements showing it marked to be drawn again (a panel's
 child too)."

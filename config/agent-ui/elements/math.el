@@ -84,40 +84,58 @@ m.tex for LaTeX), its SVG on stdout."
     (let* ((dir (make-temp-file "agent-ui-math-" t))
            (out (generate-new-buffer " *agent-ui math*"))
            (err (generate-new-buffer " *agent-ui math errors*"))
-           (process
-            (progn
-              (when (eq tool 'latex)
-                (with-temp-file (expand-file-name "m.tex" dir)
-                  (insert (agent-ui-math--latex-source tex display color))))
-              (let ((process-environment
-                     ;; Node finds the global MathJax through NODE_PATH only.
-                     (if-let* ((modules (and (eq tool 'mathjax) (agent-ui-math--node-modules))))
-                         (cons (concat "NODE_PATH=" (directory-file-name modules)) process-environment)
-                       process-environment)))
-              (make-process
-               :name "agent-ui-math" :buffer out :stderr err :noquery t :connection-type 'pipe
-               :command (agent-ui-math--command tool display dir)
-               :sentinel
-               (lambda (process _event)
-                 (when (memq (process-status process) '(exit signal))
-                   (setq agent-ui-math--running (delete key agent-ui-math--running))
-                   (let ((svg (with-current-buffer out (buffer-string)))
-                         (message (string-trim (with-current-buffer err (buffer-string)))))
-                     (puthash key
-                              (if (and (zerop (process-exit-status process)) (string-match-p "<svg" svg))
-                                  (let ((file (expand-file-name (concat key ".svg") agent-ui-math-cache-directory)))
-                                    (make-directory agent-ui-math-cache-directory t)
-                                    (with-temp-file file
-                                      ;; MathJax's glyphs take the text's colour.
-                                      (insert (string-replace "currentColor" color svg)))
-                                    (list :file file))
-                                (list :error (car (split-string (if (string-empty-p message) "it failed" message)
-                                                                "\n"))))
-                              agent-ui-math--results))
-                   (kill-buffer out)
-                   (when (buffer-live-p err) (kill-buffer err))
-                   (delete-directory dir t)
-                   (agent-ui-math--redraw key))))))))
+           (process nil)
+           ;; Done once the tool has exited and its errors are all read: its
+           ;; sentinel could run before the last of them came (its error read
+           ;; "it failed").
+           (waiting 2)
+           (done
+            (lambda ()
+              (when (zerop (cl-decf waiting))
+                (setq agent-ui-math--running (delete key agent-ui-math--running))
+                (let ((svg (with-current-buffer out (buffer-string)))
+                      (message (string-trim (with-current-buffer err (buffer-string)))))
+                  (puthash key
+                           (if (and (zerop (process-exit-status process)) (string-match-p "<svg" svg))
+                               (let ((file (expand-file-name (concat key ".svg") agent-ui-math-cache-directory)))
+                                 (make-directory agent-ui-math-cache-directory t)
+                                 (with-temp-file file
+                                   ;; MathJax's glyphs take the text's colour.
+                                   (insert (string-replace "currentColor" color svg)))
+                                 (list :file file))
+                             (list :error (car (split-string (if (string-empty-p message) "it failed" message)
+                                                             "\n"))))
+                           agent-ui-math--results))
+                (kill-buffer out)
+                (kill-buffer err)
+                (delete-directory dir t)
+                (agent-ui-math--redraw key))))
+           (stderr (make-pipe-process
+                    :name "agent-ui-math errors" :buffer err :noquery t
+                    :sentinel (lambda (pipe _event)
+                                (unless (process-live-p pipe) (funcall done))))))
+      (when (eq tool 'latex)
+        (with-temp-file (expand-file-name "m.tex" dir)
+          (insert (agent-ui-math--latex-source tex display color))))
+      (let ((process-environment
+             ;; Node finds the global MathJax through NODE_PATH only.
+             (if-let* ((modules (and (eq tool 'mathjax) (agent-ui-math--node-modules))))
+                 (cons (concat "NODE_PATH=" (directory-file-name modules)) process-environment)
+               process-environment)))
+        (condition-case failed
+            (setq process
+                  (make-process
+                   :name "agent-ui-math" :buffer out :stderr stderr :noquery t :connection-type 'pipe
+                   :command (agent-ui-math--command tool display dir)
+                   :sentinel (lambda (process _event)
+                               (when (memq (process-status process) '(exit signal))
+                                 (funcall done)))))
+          (error (delete-process stderr)
+                 (kill-buffer out)
+                 (kill-buffer err)
+                 (delete-directory dir t)
+                 (setq agent-ui-math--running (delete key agent-ui-math--running))
+                 (signal (car failed) (cdr failed)))))
       (when (eq tool 'mathjax)
         (process-send-string process tex)
         (process-send-eof process)))))
