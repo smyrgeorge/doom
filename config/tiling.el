@@ -83,7 +83,7 @@
 ;;   SPC w RET makes the pane on the screen the first (the main one); nothing
 ;;   to resize. Closing it (SPC w d, its last tab, its buffer killed, q) shows
 ;;   the next one. Another strategy shows them all again (its SPC w a, SPC w
-;;   SPC...).
+;;   SPC...), as many as it has room for (the rest stay hidden, said).
 ;; - bsp (binary space partitioning): no main pane; a new pane halves the
 ;;   current one along its longer side (in pixels), on the right or below. SPC
 ;;   w a lays them out as a spiral, every split even; a pane closed, every split
@@ -150,27 +150,33 @@ FIRST above): what they show goes where they ask, not in a new pane.")
 
 (defvar +my/tiling-strategies
   '((tall :split +my/tiling-tall-split :arrange +my/tiling-tall-arrange
+          :fits +my/tiling-tall-fits-p
           :resize-main +my/tiling-tall-resize-main :resize-pane +my/tiling-tall-resize-pane
           :closed +my/tiling-tall-closed)
     (tall-right :split +my/tiling-tall-right-split :arrange +my/tiling-tall-right-arrange
+                :fits +my/tiling-tall-right-fits-p
                 :resize-main +my/tiling-tall-right-resize-main
                 :resize-pane +my/tiling-tall-right-resize-pane
                 :closed +my/tiling-tall-right-closed :order +my/tiling-tall-right-order)
     (wide :split +my/tiling-wide-split :arrange +my/tiling-wide-arrange
+          :fits +my/tiling-wide-fits-p
           :resize-main +my/tiling-wide-resize-main :resize-pane +my/tiling-wide-resize-pane
           :closed +my/tiling-wide-closed)
     (fullscreen :split +my/tiling-fullscreen-split :arrange +my/tiling-fullscreen-arrange
                 :hides t :swap-main +my/tiling-fullscreen-swap-main
                 :show +my/tiling-fullscreen-show)
-    (bsp :split +my/tiling-bsp-split :arrange +my/tiling-bsp-arrange
+    (bsp :split +my/tiling-bsp-split :arrange +my/tiling-bsp-arrange :fits +my/tiling-bsp-fits-p
          :resize-main +my/tiling-bsp-resize-main :resize-pane +my/tiling-bsp-resize-pane
          :closed +my/tiling-bsp-closed))
-  "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:resize-main
-FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION] [:order FUNCTION]). Each
-takes the panes in order, the main pane first (see above): :split opens a new
-pane and returns it, :arrange lays the panes out, :closed lays out the panes
-left once one closed; :order, given the panes in order on the screen, puts
-the main pane first if it isn't (tall-right's). A strategy that hides panes
+  "Tiling strategies: (NAME :split FUNCTION :arrange FUNCTION [:fits
+FUNCTION] [:resize-main FUNCTION] [:resize-pane FUNCTION] [:closed FUNCTION]
+[:order FUNCTION]). Each takes the panes in order, the main pane first (see
+above): :split opens a new pane and returns it, :arrange lays the panes out
+\(no room for them all: said, nothing changed), :closed lays out the panes
+left once one closed; :fits, given a count, says if that many panes fit laid
+out its way (hidden panes shown again: only so many, the rest stay hidden;
+without it, all); :order, given the panes in order on the screen, puts the
+main pane first if it isn't (tall-right's). A strategy that hides panes
 \(:hides t, fullscreen) also has :swap-main (SPC w RET, saying what it did)
 and :show (given a buffer, its hidden pane brought to the front: its window,
 or nil). Resizing, as

@@ -18,6 +18,10 @@
 equal widths (but a pane resized)."
   (+my/tiling--stack-arrange +my/tiling--wide panes))
 
+(defun +my/tiling-wide-fits-p (count)
+  "Non-nil if COUNT panes fit laid out wide (config/tiling/stack.el)."
+  (+my/tiling--stack-fits-p +my/tiling--wide (window-main-window) count))
+
 (defun +my/tiling-wide-split (panes)
   "Open a pane, wide: below the only one, else at the right end of the row
 below; PANES arranged wide first if need be. Return it."

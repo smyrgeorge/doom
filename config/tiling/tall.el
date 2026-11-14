@@ -17,6 +17,10 @@ right at equal heights (but a pane resized); each shows what it showed, the
 selected one stays so."
   (+my/tiling--stack-arrange +my/tiling--tall panes))
 
+(defun +my/tiling-tall-fits-p (count)
+  "Non-nil if COUNT panes fit laid out tall (config/tiling/stack.el)."
+  (+my/tiling--stack-fits-p +my/tiling--tall (window-main-window) count))
+
 (defun +my/tiling-tall-split (panes)
   "Open a pane, tall (see config/tiling.el): on the right of the only one, else
 at the bottom of the stack; PANES arranged tall first if need be. Return it."

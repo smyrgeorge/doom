@@ -283,6 +283,140 @@ the selected one stays selected."
       (should (<= (- (apply #'max heights) (apply #'min heights)) 1)))
     (should (eq (selected-window) (nth 2 (+my/tiling--panes))))))
 
+(defun +test-tiling--tab (pane name)
+  "PANE on a buffer NAME of its own (made anew), with D as a second tab."
+  (let ((buffer (+test-buffer name)))
+    (set-window-buffer pane buffer)
+    (set-window-parameter pane 'tab-line-buffers (list buffer (get-buffer "D")))))
+
+(defun +test-tiling--fill (strategy)
+  "As many panes as SPC w SPC opens in STRATEGY (its stack full), each new
+one on a buffer of its own (P2, P3...); their names, the main pane first."
+  (let ((+my/tiling-strategy strategy)
+        (count 1))
+    (condition-case nil
+        (while (< count 50)
+          (+my/tiling-split)
+          (cl-incf count)
+          (+test-tiling--tab (selected-window) (format "P%d" count)))
+      (user-error nil))
+    (+test-tiling--names (+my/tiling--ordered-panes))))
+
+(defun +test-tiling--grid (&rest rows)
+  "Panes of one's own: a column for each of ROWS, as wide as the others, of
+that many panes as tall as each other; each on a buffer of its own (P1,
+P2...), in order. Their names."
+  (let ((column (selected-window))
+        (width (window-total-width))
+        (height (window-total-height)))
+    (cl-loop for (count . more) on rows
+             do (let ((next (and more (split-window column (/ width (length rows)) 'right)))
+                      (pane column))
+                  (dotimes (_ (1- count))
+                    (setq pane (split-window pane (/ height count) 'below)))
+                  (setq column next)))
+    (cl-loop for pane in (+my/tiling--panes)
+             for index from 1
+             do (+test-tiling--tab pane (format "P%d" index)))
+    (+test-tiling--names (+my/tiling--panes))))
+
+(defun +test-tiling--laid-out-p (strategy names selected)
+  "Non-nil if the panes are laid out as STRATEGY (tall, tall-right, wide), in
+the order of NAMES (the main pane first), the stack even, each showing its
+buffer and its tabs, SELECTED's pane selected."
+  (let ((layout (symbol-value (intern (format "+my/tiling--%s" strategy)))))
+    (and (+my/tiling--stack-parts layout (window-main-window))
+         (equal (+test-tiling--names (+my/tiling--ordered-panes)) names)
+         (equal (buffer-name (window-buffer (selected-window))) selected)
+         (seq-every-p (lambda (name)
+                        (equal (window-parameter (get-buffer-window name) 'tab-line-buffers)
+                               (list (get-buffer name) (get-buffer "D"))))
+                      (cdr names))
+         (+test-tiling--even-p
+          (mapcar (lambda (pane) (+my/tiling--stack-length layout pane))
+                  (+my/tiling--stack-panes layout (window-main-window)))))))
+
+(ert-deftest tiling/arrange-every-pane-spc-w-spc-opens ()
+  "However many panes SPC w SPC opened (the stack full: 5 tall in 24 lines,
+6 wide in 80 columns, more than halving the last pane makes room for), SPC w
+a lays them all out, the stack even again, each showing what it showed, its
+tabs kept, the selected one still so: tall, tall-right, wide."
+  (dolist (strategy '(tall tall-right wide))
+    (+test-tiling
+      (let* ((+my/tiling-strategy strategy)
+             (names (+test-tiling--fill strategy)))
+        (should (>= (length names) 5))
+        (select-window (get-buffer-window "P3"))
+        (if (eq strategy 'wide) (enlarge-window-horizontally 2) (enlarge-window 1))
+        (+my/tiling-arrange)
+        (should (+test-tiling--laid-out-p strategy names "P3"))))))
+
+(defun +test-tiling--room (strategy)
+  "How many panes fit laid out as STRATEGY (tall, tall-right, wide): the
+main one and as many as the stack's length has room for, each at least
+`window-min-height' tall (`window-min-width' wide: wide)."
+  (1+ (if (eq strategy 'wide)
+          (/ (window-total-width (window-main-window)) window-min-width)
+        (/ (window-total-height (window-main-window)) window-min-height))))
+
+(ert-deftest tiling/arrange-as-many-as-fit ()
+  "Panes of one's own, as many as the stack has room for (tall's: 6 in 24
+lines, 4 the smallest; wide's: 8 in 80 columns, 10 the smallest), more than
+SPC w SPC opens: SPC w a lays them all out."
+  (dolist (strategy '(tall tall-right wide))
+    (+test-tiling
+      (let* ((+my/tiling-strategy strategy)
+             (count (+test-tiling--room strategy))
+             (names (apply #'+test-tiling--grid
+                           (append (make-list (/ count 2) 2) (and (cl-oddp count) '(1))))))
+        (should (> count 5))
+        (should (= (length names) count))
+        (select-window (get-buffer-window "P2"))
+        (+my/tiling-arrange)
+        (should (+test-tiling--laid-out-p strategy names "P2"))))))
+
+(ert-deftest tiling/arrange-no-room-said ()
+  "More panes than the stack has room for (10: tall's takes 6, wide's 8):
+SPC w a says so, the panes as they were, none deleted."
+  (+test-tiling
+    (+test-tiling--grid 2 2 2 2 2)
+    (select-window (get-buffer-window "P4"))
+    (let ((layout (+test-tiling--layout))
+          (panes (+my/tiling--panes)))
+      (dolist (strategy '(tall tall-right wide))
+        (let ((+my/tiling-strategy strategy))
+          (should (equal (cadr (should-error (+my/tiling-arrange) :type 'user-error))
+                         "No room for 10 panes"))
+          (should (equal (+test-tiling--layout) layout))
+          (should (equal (+my/tiling--panes) panes))
+          (should (equal (buffer-name (window-buffer (selected-window))) "P4")))))))
+
+(ert-deftest tiling/arrange-failing-halfway-puts-the-panes-back ()
+  "A split failing while SPC w a lays the panes out (the others deleted, not
+all made again): the panes as they were, what each showed, its tabs, the
+selected one; the error said."
+  (+test-tiling
+    (let ((names (+test-tiling--fill 'tall))
+          (split (symbol-function 'split-window))
+          (calls 0))
+      (select-window (get-buffer-window "P3"))
+      (let* ((layout (+test-tiling--layout))
+             (panes (+my/tiling--panes))
+             (tabs (mapcar (lambda (pane) (window-parameter pane 'tab-line-buffers)) panes)))
+        (cl-letf (((symbol-function 'split-window)
+                   (lambda (&rest args)
+                     (if (> (cl-incf calls) 2)
+                         (error "Window too small for splitting")
+                       (apply split args)))))
+          (should (equal (cadr (should-error (+my/tiling-arrange)))
+                         "Window too small for splitting")))
+        (should (= calls 3))
+        (should (equal (+test-tiling--layout) layout))
+        (should (equal (+my/tiling--panes) panes))
+        (should (equal (mapcar (lambda (pane) (window-parameter pane 'tab-line-buffers)) panes) tabs))
+        (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) names))
+        (should (equal (buffer-name (window-buffer (selected-window))) "P3"))))))
+
 ;; ====== A PANE CLOSED ======
 
 (defun +test-tiling--stack-heights ()
@@ -1109,6 +1243,55 @@ own."
     (let ((+my/tiling-strategy 'tall))
       (+my/tiling-arrange)
       (should (equal (+test-tiling--names (+my/tiling--panes)) '("C" "A" "B"))))))
+
+(defun +test-tiling--hidden-names ()
+  "The hidden panes' buffer names, in order."
+  (mapcar (lambda (slot) (buffer-name (plist-get slot :buffer))) (remq :shown (+my/tiling--slots))))
+
+(ert-deftest tiling/fullscreen-to-another-as-many-as-fit ()
+  "Fullscreen, 10 panes (A, then P1 to P9, in front): another strategy's SPC
+w a shows as many as it has room for (tall, tall-right: 7 in 24 lines; wide:
+9 in 80 columns; bsp: 6), in order, the one in front among them and
+selected, laid out its way; the rest stay hidden, said; none lost (back to
+fullscreen, all 10)."
+  (pcase-dolist (`(,strategy ,laid-out-p)
+                 `((tall +my/tiling--tall-p)
+                   (tall-right ,(apply-partially #'+my/tiling--stack-p +my/tiling--tall-right))
+                   (wide ,(apply-partially #'+my/tiling--stack-p +my/tiling--wide))
+                   (bsp +my/tiling--bsp-p)))
+    (+test-tiling-fullscreen
+      (let* ((names (cons "A" (cl-loop for i from 1 to 9 collect (buffer-name (+test-buffer (format "P%d" i))))))
+             (room (if (eq strategy 'bsp)
+                       (cl-loop for count downfrom 10
+                                when (+my/tiling--bsp-fits-p (window-main-window) count) return count)
+                     (+test-tiling--room strategy)))
+             (shown (append (seq-take names (1- room)) '("P9")))
+             said)
+        (should (< room 10))
+        (apply #'+test-tiling--fullscreen-open (cdr names))
+        (let ((+my/tiling-strategy strategy))
+          (cl-letf (((symbol-function 'message) (lambda (&rest args) (setq said (apply #'format args)))))
+            (+my/tiling-arrange))
+          (should (equal said (format "No room to show %d hidden pane%s" (- 10 room) (if (= room 9) "" "s"))))
+          (should (funcall laid-out-p (window-main-window)))
+          (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) shown))
+          (should (equal (buffer-name (window-buffer (selected-window))) "P9"))
+          (should (equal (+test-tiling--hidden-names) (seq-difference names shown))))
+        (+my/tiling-arrange)
+        (should (= (length (window-list)) 1))
+        (should (equal (sort (+test-tiling--slots) #'string<)
+                       (sort (cons "*P9" (remove "P9" names)) #'string<)))))))
+
+(ert-deftest tiling/fullscreen-to-tall-all-that-fit ()
+  "Fullscreen, 5 panes (more than halving the last pane makes room for):
+tall's SPC w a shows them all, laid out tall, none hidden."
+  (+test-tiling-fullscreen
+    (+test-tiling--fullscreen-open "B" "C" "D" "B")
+    (let ((+my/tiling-strategy 'tall))
+      (+my/tiling-arrange)
+      (should-not (+my/tiling--hidden-p))
+      (should (+my/tiling--tall-p (window-main-window)))
+      (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "C" "D" "B"))))))
 
 (ert-deftest tiling/fullscreen-nothing-to-resize ()
   (+test-tiling-fullscreen

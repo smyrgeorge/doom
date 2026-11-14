@@ -9,10 +9,11 @@
 ;; workspaces has windows of its own). Its SLOTS: the hidden panes' states,
 ;; and :shown where the pane on the screen is among them. Another strategy
 ;; shows them again (SPC w SPC, SPC w a...), in order, before laying the panes
-;; out. The pane on the screen closed (SPC w d, its last tab, its buffer
-;; killed, q on an application): the next one shown in its window (the frame's
-;; last can't be deleted). A buffer killed while hidden: its pane shows the one
-;; it showed before, or is gone.
+;; out: as many as it has room for (its :fits), the rest kept hidden. The
+;; pane on the screen closed (SPC w d, its last tab, its buffer killed, q on
+;; an application): the next one shown in its window (the frame's last can't
+;; be deleted). A buffer killed while hidden: its pane shows the one it
+;; showed before, or is gone.
 
 (defun +my/tiling--hidden-key ()
   "Whose hidden panes: the current workspace's (persp-mode's), else the
@@ -91,39 +92,46 @@ side (in pixels); nil if there's no room."
                                     'right
                                   'below)))))
 
-(defun +my/tiling--show-hidden ()
+(defun +my/tiling--show-hidden (&optional fits)
   "The hidden panes shown again (see above), each in a window of its own;
 return the panes in their order (those on the screen where :shown was), the
-first one marked the main one. No room for them all: those left stay hidden,
+first one marked the main one. No room for them all (FITS, given a count,
+nil: the strategy can't lay out that many panes): those left stay hidden,
 said."
-  (let ((slots (+my/tiling--live-slots (+my/tiling--slots)))
-        (visible (+my/tiling--ordered-panes))
-        panes left)
+  (let* ((slots (+my/tiling--live-slots (+my/tiling--slots)))
+         (visible (+my/tiling--ordered-panes))
+         (count (length visible))
+         panes left)
     (unless (memq :shown slots)
       (push :shown slots))
     (+my/tiling--set-slots nil)
     (dolist (slot slots)
       (if (eq slot :shown)
           (setq panes (append (reverse visible) panes))
-        (let ((window (and (not left) (+my/tiling--new-window))))
+        (let ((window (and (not left)
+                           (or (not fits) (funcall fits (1+ count)))
+                           (+my/tiling--new-window))))
           (if (not window)
               (push slot left)
+            (cl-incf count)
             (+my/tiling--restore window slot)
             (push window panes)))))
     (setq panes (nreverse panes))
     (when left
-      (+my/tiling--set-slots (cons :shown (nreverse left)))
+      (setq left (nreverse left))
+      (+my/tiling--set-slots (cons :shown left))
       (message "No room to show %d hidden pane%s" (length left) (if (cdr left) "s" "")))
     (+my/tiling--mark-main (car panes))
     panes))
 
 (defun +my/tiling--ready-panes ()
   "The panes to lay out, the main one first (`+my/tiling--ordered-panes'):
-hidden ones shown again first, when the strategy doesn't hide panes, and
-laid out its way (its :arrange), in their order."
+hidden ones shown again first, when the strategy doesn't hide panes, as many
+as it has room for (its :fits), and laid out its way (its :arrange), in their
+order."
   (let ((strategy (alist-get +my/tiling-strategy +my/tiling-strategies)))
     (when (and (+my/tiling--hidden-p) strategy (not (plist-get strategy :hides)))
-      (let ((panes (+my/tiling--show-hidden)))
+      (let ((panes (+my/tiling--show-hidden (plist-get strategy :fits))))
         (when (cdr panes)
           (funcall (plist-get strategy :arrange) panes))))
     (+my/tiling--ordered-panes)))

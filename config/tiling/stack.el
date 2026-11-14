@@ -116,34 +116,60 @@ Each at least its smallest (`+my/tiling--stack-least')."
                         (adjust-window-trailing-edge
                          pane (- size (+my/tiling--stack-length layout pane)) horizontal))))))))
 
+;; THE ROOM
+;; COUNT panes fit when the stack's panes (all but the main one) each get at
+;; least the smallest size along it: what SPC w SPC allows. SPC w a makes each
+;; at its size, the stack's length shared out (halving the last pane in turn
+;; runs out of room long before the stack does); no room for them all: said,
+;; nothing changed.
+
+(defun +my/tiling--stack-fits-p (layout window count)
+  "Non-nil if COUNT panes fit in WINDOW laid out as LAYOUT (see above)."
+  (<= (* (max 0 (1- count)) (+my/tiling--stack-least layout))
+      (window-size window (not (+my/tiling--across-p layout)))))
+
+(defun +my/tiling--stack-build (layout main count)
+  "Split MAIN, the only pane, into LAYOUT's main pane (itself, its share) and
+a stack of COUNT panes beside it, each its share of the stack's length; the
+stack's panes, in order."
+  (let* ((pane (split-window main (+my/tiling--stack-main-size layout main)
+                             (+my/tiling--stack-side layout)))
+         (length (+my/tiling--stack-length layout pane))
+         (stack (list pane)))
+    ;; Each in turn keeps its share, the rest going to the next one.
+    (dotimes (index (1- count))
+      (setq pane (split-window pane (+ (/ length count) (if (< index (% length count)) 1 0))
+                               (+my/tiling--stack-direction layout)))
+      (push pane stack))
+    (nreverse stack)))
+
 ;; THE STRATEGY'S FUNCTIONS (see `+my/tiling-strategies'), given the layout
 (defun +my/tiling--stack-arrange (layout panes)
   "Lay PANES out as LAYOUT: the first one the main pane, its share of the
 width (wide: height), the others in the stack beside it at equal sizes (but
 a pane resized, see above); each shows what it showed, the selected one
-stays so."
+stays so. No room for them all (see THE ROOM): said (a user error), the
+panes as they were."
+  (unless (+my/tiling--stack-fits-p layout (window-main-window) (length panes))
+    (user-error "No room for %d panes" (length panes)))
   (let* ((states (mapcar #'+my/tiling--state (cdr panes)))
          ;; The stack's shares (one resized), by place: kept.
          (shares (mapcar (lambda (pane) (window-parameter pane '+my/tiling-share)) (cdr panes)))
          (index (seq-position panes (selected-window)))
          (main (car panes))
-         (new (list main)))
-    (dolist (pane (cdr panes))
-      (delete-window pane))
-    (+my/tiling--mark-main main)
-    (when states
-      (let ((pane (split-window main (+my/tiling--stack-main-size layout main)
-                                (+my/tiling--stack-side layout))))
-        (push pane new)
-        (dotimes (_ (1- (length states)))
-          (setq pane (split-window pane nil (+my/tiling--stack-direction layout)))
-          (push pane new))
-        ;; The stack's panes at equal sizes. One alone: its parent is the
-        ;; main pane's too, whose share that would undo.
-        (when (cdr states)
-          (balance-windows (window-parent pane)))))
-    (setq new (nreverse new))
-    (cl-mapc #'+my/tiling--restore (cdr new) states)
+         (before (current-window-configuration))
+         new)
+    ;; Whatever fails halfway (the panes deleted, not all made again): the
+    ;; panes as they were.
+    (condition-case err
+        (progn
+          (dolist (pane (cdr panes))
+            (delete-window pane))
+          (setq new (cons main (and states (+my/tiling--stack-build layout main (length states)))))
+          (+my/tiling--mark-main main)
+          (cl-mapc #'+my/tiling--restore (cdr new) states))
+      (error (set-window-configuration before)
+             (signal (car err) (cdr err))))
     (cl-mapc (lambda (pane share) (set-window-parameter pane '+my/tiling-share share)) (cdr new) shares)
     (+my/tiling--stack-sizes layout (cdr new))
     (select-window (nth (or index 0) new))))

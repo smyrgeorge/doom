@@ -22,6 +22,10 @@
 on the left at equal heights (but a pane resized)."
   (+my/tiling--stack-arrange +my/tiling--tall-right panes))
 
+(defun +my/tiling-tall-right-fits-p (count)
+  "Non-nil if COUNT panes fit laid out tall-right (config/tiling/stack.el)."
+  (+my/tiling--stack-fits-p +my/tiling--tall-right (window-main-window) count))
+
 (defun +my/tiling-tall-right-split (panes)
   "Open a pane, tall-right: on the left of the only one, else at the bottom
 of the stack on the left; PANES arranged tall-right first if need be. Return

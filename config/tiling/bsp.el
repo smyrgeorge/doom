@@ -108,11 +108,15 @@ again. The panes made anew."
   "Lay PANES out as the spiral (see above), every split even; each shows what
 it showed, the selected one stays so. No room for them all: said, nothing
 changed."
-  (unless (+my/tiling--bsp-fits-p (window-main-window) (length panes))
+  (unless (+my/tiling-bsp-fits-p (length panes))
     (user-error "No room for %d panes" (length panes)))
   (let ((states (mapcar #'+my/tiling--state panes)))
     (+my/tiling--mark-main (car panes))
     (+my/tiling--bsp-lay-out panes (+my/tiling--bsp-spiral states))))
+
+(defun +my/tiling-bsp-fits-p (count)
+  "Non-nil if COUNT panes fit laid out as the spiral (see above)."
+  (+my/tiling--bsp-fits-p (window-main-window) count))
 
 (defun +my/tiling-bsp-split (panes)
   "Halve the current pane (the last one, from a side panel) along its longer

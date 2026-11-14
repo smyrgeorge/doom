@@ -64,7 +64,7 @@ it); it keeps its size when you arrange the panes, open one or close another.
 
 In `fullscreen`, a new pane opens alone, just after the current one, and closing it (`SPC w d`, its last tab, `q`)
 shows the next one. Each workspace keeps its own hidden panes. Choosing another strategy shows them all again at its
-next `SPC w a` or `SPC w SPC`, laid out its way.
+next `SPC w a` or `SPC w SPC`, laid out its way: as many as it has room for, the rest staying hidden.
 
 In `bsp`, `SPC w a` lays the panes out as a spiral, each halving the last, and when a pane closes, its space goes to
 its neighbour and every split runs along its longer side again. Splits are always even: a resize lasts until the
