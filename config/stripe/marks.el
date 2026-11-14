@@ -100,6 +100,12 @@ files) only in a comment, in text anywhere."
           ((>= severity 10) 'warning)
           (t 'info))))
 
+(defun +my/stripe--other-file-p (err)
+  "Non-nil if flycheck error ERR is another file's (flycheck shows it here on
+the first line)."
+  (when-let* ((file (flycheck-error-filename err)))
+    (not (and buffer-file-name (flycheck-same-files-p buffer-file-name file)))))
+
 (defun +my/stripe--marks ()
   "Return (LINES . MARKS): the buffer's line count and its marks.
 Each mark is (FIRST-LINE LAST-LINE KIND). Cached until the text, the flycheck
@@ -120,9 +126,10 @@ errors or the diff-hl highlights change."
               (let ((line (flycheck-error-line err))
                     (kind (+my/stripe--level err)))
                 (when (and line (memq kind +my/stripe-diagnostic-levels))
-                  ;; Line 0 (Emacs Lisp's "End of file during parsing"):
-                  ;; flycheck shows it on the first.
-                  (setq line (max 1 line))
+                  ;; Line 0 (Emacs Lisp's "End of file during parsing"), and
+                  ;; an error of another file (one this file loads) at its
+                  ;; line there: flycheck shows them on the first.
+                  (setq line (if (+my/stripe--other-file-p err) 1 (max 1 line)))
                   (push (list line line kind) marks)))))
           (dolist (line (+my/stripe--todo-lines))
             (push (list line line 'todo) marks))

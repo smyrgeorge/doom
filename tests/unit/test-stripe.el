@@ -243,6 +243,23 @@ the first line, and a short file's cells drawn (no \"Stripe:\" error)."
       (should (equal (+test-stripe--cell-color (overlay-get (car overlays) 'before-string))
                      (+test-stripe--color 'error))))))
 
+(ert-deftest stripe/marks-other-files-errors-on-the-first-line ()
+  "An error of another file (one this file loads) is marked on the first
+line, where flycheck shows it, not at its line in that file; this file's stay."
+  (+test-with-reset
+    (+test-stripe--clear (selected-window))
+    (find-file (+test-file "stripe/this.el" (+test-stripe--text 30)))
+    (+my/stripe-mode 1)
+    (setq-local flycheck-mode t)
+    (setq-local flycheck-current-errors
+                (list (flycheck-error-new :buffer (current-buffer) :filename buffer-file-name
+                                          :line 20 :column 1 :level 'warning :message "here")
+                      (flycheck-error-new :buffer (current-buffer)
+                                          :filename (expand-file-name "other.el" default-directory)
+                                          :line 300 :column 1 :level 'error :message "there")))
+    (should (equal (+test-stripe--sorted (cdr (+my/stripe--marks)))
+                   '((1 1 error) (20 20 warning))))))
+
 (ert-deftest stripe/marks-lsp-hints-are-suggestions ()
   "lsp-mode gives flycheck its hints (severity 4) as `info', tagged ones
 (unnecessary, deprecated) as levels of their own of the same severity."
