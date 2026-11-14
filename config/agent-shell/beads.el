@@ -72,14 +72,17 @@ project's Claude Code settings give it already (see above); else nil."
 
 ;; EMACS FOLLOWS CLAUDE'S CHANGES
 ;; Each of Claude's shell commands running bd, once done: the project's issue
-;; lists and issues open in Emacs refreshed (once for a burst of them), in the
-;; background (config/beads/refresh.el: those not shown, once shown again).
+;; lists and issues open in Emacs refreshed (once for a burst of them in that
+;; project, each project its own: one for all refreshed only the last one's),
+;; in the background (config/beads/refresh.el: those not shown, once shown
+;; again).
 
 (defconst +my/agent-shell-beads--command-regexp
   "\\(?:\\`\\|[;&|(`]\\|\\$(\\|[[:space:]]\\)bd\\(?:[[:space:]]\\|\\'\\)"
   "A shell command running bd.")
 
-(defvar +my/agent-shell-beads--refresh-timer nil)
+(defvar +my/agent-shell-beads--refresh-timers (make-hash-table :test #'equal)
+  "Each project's refresh to come: its root -> a timer.")
 
 (defun +my/agent-shell-beads--buffers (root)
   "Beads' issue lists and issues of ROOT's project."
@@ -92,7 +95,7 @@ project's Claude Code settings give it already (see above); else nil."
 
 (defun +my/agent-shell-beads-refresh (root)
   "Refresh the issue lists and issues of ROOT's project open in Emacs."
-  (setq +my/agent-shell-beads--refresh-timer nil)
+  (remhash root +my/agent-shell-beads--refresh-timers)
   (dolist (buffer (+my/agent-shell-beads--buffers root))
     (with-current-buffer buffer
       (with-demoted-errors "Beads refresh: %S"
@@ -109,10 +112,11 @@ refreshes ROOT's issues soon."
     (when (and (member (map-elt tool-call :status) '("completed" "failed"))
                (stringp command)
                (string-match-p +my/agent-shell-beads--command-regexp command))
-      (when (timerp +my/agent-shell-beads--refresh-timer)
-        (cancel-timer +my/agent-shell-beads--refresh-timer))
-      (setq +my/agent-shell-beads--refresh-timer
-            (run-at-time 0.3 nil #'+my/agent-shell-beads-refresh root)))))
+      (when-let* ((timer (gethash root +my/agent-shell-beads--refresh-timers))
+                  ((timerp timer)))
+        (cancel-timer timer))
+      (puthash root (run-at-time 0.3 nil #'+my/agent-shell-beads-refresh root)
+               +my/agent-shell-beads--refresh-timers))))
 
 (defun +my/agent-shell-beads--watch-h ()
   "In a new session in a project tracking its issues with Beads: follow

@@ -178,7 +178,7 @@ editor's text."
               (:tool-call . ((:status . ,status) (:command . ,command)))))))
 
 (ert-deftest agent-shell-beads/a-bd-command-done-refreshes-soon ()
-  (let (scheduled (+my/agent-shell-beads--refresh-timer nil))
+  (let (scheduled (+my/agent-shell-beads--refresh-timers (make-hash-table :test #'equal)))
     (cl-letf (((symbol-function 'run-at-time)
                (lambda (_time _repeat fn &rest args) (push (cons fn args) scheduled) 'timer))
               ((symbol-function 'timerp) (lambda (x) (eq x 'timer)))
@@ -192,6 +192,24 @@ editor's text."
       (+my/agent-shell-beads--tool-call "/p/" (+test-asb--event "completed" "bd close t-1"))
       (+my/agent-shell-beads--tool-call "/p/" (+test-asb--event "failed" "bd update t-2 --claim"))
       (should (equal scheduled '((+my/agent-shell-beads-refresh "/p/")))))))
+
+;; doom-o5t.12
+(ert-deftest agent-shell-beads/each-project-refreshed-once-for-its-burst ()
+  "bd commands in two projects' sessions within 0.3 s: both projects'
+issues refreshed (one timer for all refreshed the last one's only); a burst
+in one, once."
+  (let ((+my/agent-shell-beads--refresh-timers (make-hash-table :test #'equal))
+        refreshed)
+    (cl-letf (((symbol-function '+my/agent-shell-beads--buffers)
+               (lambda (root) (push root refreshed) nil)))
+      (+my/agent-shell-beads--tool-call "/a/proj-one/" (+test-asb--event "completed" "bd close x-1"))
+      (+my/agent-shell-beads--tool-call "/b/proj-two/" (+test-asb--event "completed" "bd list"))
+      (+my/agent-shell-beads--tool-call "/b/proj-two/" (+test-asb--event "completed" "bd ready"))
+      (let ((end (+ (float-time) 1)))
+        (while (< (float-time) end)
+          (accept-process-output nil 0.05))))
+    (should (equal (sort refreshed #'string<) '("/a/proj-one/" "/b/proj-two/")))
+    (should (zerop (hash-table-count +my/agent-shell-beads--refresh-timers)))))
 
 (ert-deftest agent-shell-beads/refresh-the-project-s-issues-only ()
   (let* ((here (+test-asb--dir t))
