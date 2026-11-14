@@ -475,8 +475,8 @@ window's edge past the margin and fringe, and how many more notices."
         (should (string-search (make-string 300 ?x) row))))))
 
 ;; A NARROW WINDOW
-;; Two of the config's notices: the Drawing for Claude's
-;; (config/agent-shell/excalidraw.el) and the long lines' (config/editor).
+;; Notices with long labels: the Drawing for Claude's as it once was
+;; (config/agent-shell/excalidraw.el), the long lines' (config/editor).
 (defconst +test-banner--narrow
   '((drawing "Drawing for Claude: C-c C-c inserts it into the prompt, C-c C-k discards it"
              (("Insert into the prompt" . ignore) ("Discard" . ignore)) info)

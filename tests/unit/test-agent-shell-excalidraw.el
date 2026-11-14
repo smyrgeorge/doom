@@ -242,12 +242,30 @@ without one, a new window split off to the left of the shell's."
         (+my/agent-shell-excalidraw-mode 1)
         (should (eq (nth 0 shown) 'agent-shell-excalidraw))
         (should (equal (nth 1 shown)
-                       "Drawing for Claude: C-c C-c inserts it into the prompt, C-c C-k discards it, M-p / M-n earlier drawings"))
+                       "For Claude: C-c C-c inserts, C-c C-k discards, M-p / M-n earlier drawings"))
         (should (equal (plist-get (nth 2 shown) :actions)
-                       '(("Insert into the prompt" . +my/agent-shell-excalidraw-insert)
+                       '(("Insert" . +my/agent-shell-excalidraw-insert)
                          ("Discard" . +my/agent-shell-excalidraw-discard))))
         (+my/agent-shell-excalidraw-mode -1)
         (should (equal closed '(agent-shell-excalidraw)))))))
+
+(ert-deftest agent-shell-excalidraw/its-notice-fits-its-pane ()
+  "At 70 columns (it opens in half a frame): both keys beside the buttons.
+At 40 (on two rows): the buttons and ✕ whole."
+  (let ((shown nil))
+    (cl-letf (((symbol-function '+my/banner-show)
+               (lambda (id text &rest args) (setq shown (list id text (plist-get args :actions) 'info))))
+              ((symbol-function '+my/banner-close) #'ignore)
+              ((symbol-function 'nerd-icons-codicon) (lambda (_) "I")))
+      (with-temp-buffer
+        (+my/agent-shell-excalidraw-mode 1)
+        (let ((row (substring-no-properties (+my/banner--row shown (current-buffer) nil nil 70))))
+          (should-not (string-search "\n" row))
+          (should (string-match-p "C-c C-c .*C-c C-k.*Insert    Discard  ✕" row)))
+        (let ((rows (split-string (substring-no-properties
+                                   (+my/banner--row shown (current-buffer) nil nil 40))
+                                  "\n")))
+          (should (string-match-p "\\`      Insert    Discard +✕ +\\'" (cadr rows))))))))
 
 ;; ====== INSERTING ======
 

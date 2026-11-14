@@ -22,17 +22,19 @@ CLAUDE in config/agent-shell.el).
       (+my/banner-close 'agent-shell-excalidraw))))
 
 (defun +my/agent-shell-excalidraw--notice ()
-  "Say at the drawing's top what its keys do, with buttons."
+  "Say at the drawing's top what its keys do, with buttons. Short: the keys
+fit beside the buttons in a pane of 70 columns (it opens in half a frame),
+the buttons whole at 40."
   (when (fboundp '+my/banner-show)
     (+my/banner-show
      'agent-shell-excalidraw
      (substitute-command-keys
-      "\\<+my/agent-shell-excalidraw-mode-map>Drawing for Claude: \
-\\[+my/agent-shell-excalidraw-insert] inserts it into the prompt, \
-\\[+my/agent-shell-excalidraw-discard] discards it, \
+      "\\<+my/agent-shell-excalidraw-mode-map>For Claude: \
+\\[+my/agent-shell-excalidraw-insert] inserts, \
+\\[+my/agent-shell-excalidraw-discard] discards, \
 \\[+my/agent-shell-excalidraw-previous] / \\[+my/agent-shell-excalidraw-next] \
 earlier drawings")
-     :actions '(("Insert into the prompt" . +my/agent-shell-excalidraw-insert)
+     :actions '(("Insert" . +my/agent-shell-excalidraw-insert)
                 ("Discard" . +my/agent-shell-excalidraw-discard)))))
 
 ;; FILES

@@ -854,6 +854,48 @@ PNG, inserts it into the shell's prompt and closes it."
         (should (> (car (+test-exd--png-size png)) 290))
         (should (equal inserted (list (list shell (format "%S" (list png))))))))))
 
+(defun +test-exd--notice-inside (window help)
+  "Positions on WINDOW's notices' frame whose help is HELP, each drawn whole
+inside the frame: nil if one is off it (or none has it)."
+  (when-let* ((frame (nth 1 (assq window +my/banner--frames)))
+              ((frame-live-p frame)))
+    (let ((root (frame-root-window frame))
+          (found nil))
+      (with-current-buffer (window-buffer root)
+        (cl-loop for pos from (point-min) below (point-max)
+                 when (equal (get-text-property pos 'help-echo) help)
+                 do (push pos found)
+                 and unless (let ((posn (posn-at-point pos root)))
+                              (and posn
+                                   (<= (+ (car (posn-x-y posn)) (car (posn-object-width-height posn)))
+                                       (window-body-width root t))))
+                 return nil
+                 finally return found)))))
+
+(ert-deftest e2e-exd/drawn-for-claude-its-notice-fits ()
+  "Its notice in the pane as it opens (half the frame), and at 74 and 40
+columns: both keys there but at 40, its buttons and ✕ whole, inside the
+notices' frame."
+  (+test-exd
+    (+test-exd--for-claude
+      (let ((drawing (+my/agent-shell-excalidraw)))
+        (should (+test-exd--ready))
+        (dolist (columns '(nil 74 40))
+          (when columns
+            (window-resize nil (- columns (window-total-width)) t))
+          (should (+test-wait-for
+                   (lambda ()
+                     (and (+test-exd--notice-inside (selected-window) "mouse-1: Insert")
+                          (+test-exd--notice-inside (selected-window) "mouse-1: Discard")
+                          (+test-exd--notice-inside (selected-window) "mouse-1: close")))
+                   3))
+          (unless (equal columns 40)
+            (let ((frame (nth 1 (assq (selected-window) +my/banner--frames))))
+              (should (string-match-p "C-c C-c .*C-c C-k"
+                                      (with-current-buffer (window-buffer (frame-root-window frame))
+                                        (buffer-string)))))))
+        (with-current-buffer drawing (set-buffer-modified-p nil))))))
+
 (ert-deftest e2e-exd/drawn-for-claude-in-the-left-window ()
   "With a file on the shell's left: the drawing in that window, the file
 there again once it's inserted."

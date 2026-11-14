@@ -243,7 +243,8 @@ window change makes the window a new one."
              (("Insert into the prompt" . +test-banner--action) ("Discard" . +test-banner--action)) info)
     (long-lines "Very long lines: opened plain and unwrapped, as scrolling them can be slow"
                 (("Wrap lines" . +test-banner--action) ("Open normally" . +test-banner--action)) warning))
-  "The Drawing for Claude's notice and the long lines', standing in.")
+  "Notices with long labels, standing in: the Drawing for Claude's as it once
+was, the long lines'.")
 
 (defun +test-banner--inside (frame help)
   "Positions on FRAME's rows whose help is HELP, each drawn whole inside the
