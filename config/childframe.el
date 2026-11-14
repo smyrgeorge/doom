@@ -37,6 +37,9 @@
     (desktop-dont-save . t))
   "A child frame's parameters (see A FRAME), besides its parent and minibuffer.")
 
+(defvar +my/childframe--buffers nil
+  "(FRAME . BUFFER) for each frame `+my/childframe-make' made (see ITS BUFFER).")
+
 (defun +my/childframe-make (parent name &optional parameters)
   "A child frame of PARENT (see A FRAME), its buffer \" *NAME*\". PARAMETERS,
 an alist, are added to its parameters or replace them. Other code isn't told
@@ -71,6 +74,7 @@ about it (`after-make-frame-functions'), and the selected frame stays so."
         (set-window-parameter window parameter 'none))
       (set-window-buffer window buffer)
       (set-window-dedicated-p window t))
+    (push (cons frame buffer) +my/childframe--buffers)
     frame))
 
 (defun +my/childframe-delete (frame)
@@ -79,6 +83,20 @@ about it (`after-make-frame-functions'), and the selected frame stays so."
     (let ((buffer (window-buffer (frame-root-window frame))))
       (delete-frame frame t)
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
+;; ITS BUFFER
+;; Goes with its frame, however the frame goes: deleted by
+;; `+my/childframe-delete', with its parent (Emacs deletes a frame's child
+;; frames with it: a frame closed), or by other code. Else each frame closed
+;; left a buffer per notice and stripe it had, shown nowhere.
+(defun +my/childframe--deleted-h (frame)
+  "Kill the buffer of FRAME, deleted, if `+my/childframe-make' made it."
+  (when-let* ((entry (assq frame +my/childframe--buffers)))
+    (setq +my/childframe--buffers (delq entry +my/childframe--buffers))
+    (when (buffer-live-p (cdr entry))
+      (kill-buffer (cdr entry)))))
+
+(add-hook 'after-delete-frame-functions #'+my/childframe--deleted-h)
 
 ;; ON THE SCREEN
 ;; Only a frame `frame-visible-p' calls t is on the screen. On X, one hidden
@@ -115,13 +133,16 @@ WANTS, called with the window, returns non-nil."
   "Sync FRAMES, a symbol whose value is a list of (WINDOW FRAME ...), with the
 windows: those for which WANTS returns non-nil get SHOW called with them (it
 lays out the window's frame, making it if the window has none); the frames of
-windows that no longer want one are hidden, those of closed windows deleted.
+windows that no longer want one are hidden, those of closed windows deleted,
+dead ones forgotten (their buffers killed).
 An error in SHOW is a message, after LABEL: the other windows still get theirs."
   (let ((wanted (+my/childframe-windows wants)))
     (set frames
          (cl-remove-if (lambda (entry)
                          (pcase-let ((`(,window ,frame) entry))
-                           (cond ((not (frame-live-p frame)) t)
+                           (cond ((not (frame-live-p frame))
+                                  (+my/childframe--deleted-h frame)
+                                  t)
                                  ((memq window wanted) nil)
                                  ((window-live-p window)
                                   (make-frame-invisible frame t)

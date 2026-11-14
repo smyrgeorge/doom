@@ -183,6 +183,59 @@ mouse-1 command run."
       (should-not +my/banner--list)
       (should (+test-wait-for (lambda () (not (+my/childframe-shown-p frame))) 3)))))
 
+(defun +test-banner--orphans ()
+  "The notices' buffers shown in no live frame."
+  (seq-filter (lambda (buffer)
+                (and (string-prefix-p " *+my/banner*" (buffer-name buffer))
+                     (not (get-buffer-window buffer t))))
+              (buffer-list)))
+
+(ert-deftest e2e-banner/a-frame-closed-takes-its-notices-buffers ()
+  "Another frame with notices in two windows, closed (Emacs deletes the
+notices' frames with it): their buffers go too."
+  (+test-banner
+    (let* ((buffer (+test-banner--file "frames.txt"))
+           (frame (make-frame `((left . ,(car (frame-position)))
+                                (top . ,(cdr (frame-position)))
+                                (width . 80) (height . 20)
+                                (z-group . above)))))
+      (unwind-protect
+          (progn
+            (+my/banner-show 'hello "In another frame")
+            (let* ((one (frame-first-window frame))
+                   (two (with-selected-frame frame (split-window one nil 'below))))
+              (set-window-buffer one buffer)
+              (set-window-buffer two buffer)
+              (should (+test-banner--shown one))
+              (should (+test-banner--shown two))
+              (let ((buffers (mapcar (lambda (w) (window-buffer (frame-root-window (+test-banner--frame w))))
+                                     (list one two))))
+                (delete-frame frame t)
+                (+test-sleep 0.3)
+                (should-not (seq-some #'buffer-live-p buffers))
+                (should-not (+test-banner--orphans)))))
+        (when (frame-live-p frame) (delete-frame frame t))))))
+
+(ert-deftest e2e-banner/a-notices-frame-deleted-directly ()
+  "A notices' frame deleted by other code: its buffer goes, and the next
+window change makes the window a new one."
+  (+test-banner
+    (+test-banner--file "deleted.txt")
+    (+my/banner-show 'hello "Deleted under it")
+    (let* ((window (selected-window))
+           (frame (+test-banner--shown window))
+           (buffer (window-buffer (frame-root-window frame))))
+      (delete-frame frame t)
+      (should-not (buffer-live-p buffer))
+      (split-window-right)
+      (let ((new (+test-wait-for (lambda ()
+                                   (let ((new (+test-banner--frame window)))
+                                     (and (frame-live-p new) (+my/childframe-shown-p new) new)))
+                                 3)))
+        (should new)
+        (should-not (eq new frame)))
+      (should-not (+test-banner--orphans)))))
+
 ;; ====== NARROW WINDOWS ======
 
 (defconst +test-banner--narrow

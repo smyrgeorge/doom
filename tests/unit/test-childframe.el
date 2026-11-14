@@ -1,9 +1,10 @@
 ;;; tests/unit/test-childframe.el -*- lexical-binding: t; -*-
 ;; config/childframe.el: child frames laid over a window (the notices, the
-;; error stripe, WebKit's cover): a frame's parameters and buffer, deleting it,
-;; a frame per window synced with the windows, syncing soon. Batch Emacs can't
-;; make frames: they're stood in for here (config/banner.el's and
-;; config/stripe.el's tests use them through their own).
+;; error stripe, WebKit's cover): a frame's parameters and buffer, deleting it
+;; (its buffer killed however it goes), a frame per window synced with the
+;; windows, syncing soon. Batch Emacs can't make frames: they're stood in for
+;; here (config/banner.el's and config/stripe.el's tests use them through their
+;; own).
 
 (+test-load "config/childframe")
 
@@ -115,6 +116,26 @@ added to them."
         (+my/childframe-delete 'child)
         (should (= deleted 1))))))
 
+(ert-deftest childframe/its-buffer-goes-with-it-however-it-goes ()
+  "A frame it made deleted by other code, or with its parent: its buffer
+killed. Other frames' buffers left alone."
+  (+test-with-reset
+    (should (memq '+my/childframe--deleted-h after-delete-frame-functions))
+    (pcase-let* ((+my/childframe--buffers nil)
+                 (`(,frame ,_ ,_ ,window) (+test-childframe--make nil))
+                 (buffer (window-buffer window)))
+      (should (eq (alist-get frame +my/childframe--buffers) buffer))
+      (set-window-dedicated-p window nil)
+      (run-hook-with-args 'after-delete-frame-functions frame)
+      (should-not (buffer-live-p buffer))
+      (should-not (assq frame +my/childframe--buffers))
+      ;; Again, or another frame: nothing.
+      (run-hook-with-args 'after-delete-frame-functions frame)
+      (let ((other (generate-new-buffer " *other*")))
+        (run-hook-with-args 'after-delete-frame-functions 'another-frame)
+        (should (buffer-live-p other))
+        (kill-buffer other)))))
+
 ;; ====== ON THE SCREEN ======
 
 (ert-deftest childframe/on-the-screen-only-if-visible-says-t ()
@@ -157,8 +178,8 @@ child frames."
 
 (ert-deftest childframe/sync ()
   "Windows wanting a frame get theirs laid out; the frames of the others are
-hidden, those of closed windows deleted, dead ones forgotten. An error in one
-window is a message: the others still get theirs."
+hidden, those of closed windows deleted, dead ones forgotten, their buffers
+killed. An error in one window is a message: the others still get theirs."
   (+test-with-reset
     (let* ((wanted (selected-window))
            (unwanted (split-window nil nil 'right))
@@ -173,6 +194,8 @@ window is a message: the others still get theirs."
                                            (list unwanted 'f-unwanted)
                                            (list closed 'f-closed)
                                            (list dead-frame 'f-dead)))
+           (dead-buffer (generate-new-buffer " *test-child*"))
+           (+my/childframe--buffers (list (cons 'f-dead dead-buffer)))
            (frame-live (symbol-function 'frame-live-p))
            (invisible (symbol-function 'make-frame-invisible)))
       (delete-window closed)
@@ -194,6 +217,9 @@ window is a message: the others still get theirs."
       (should (equal hidden '(f-unwanted)))
       (should (equal deleted '(f-closed)))
       (should (equal (sort shown :key #'window-left-column) (list wanted dead-frame)))
+      ;; The dead frame's buffer killed (it died without telling).
+      (should-not (buffer-live-p dead-buffer))
+      (should-not +my/childframe--buffers)
       (should (= (+test-messages "^Test: Boom$") 1)))))
 
 (ert-deftest childframe/soon-once ()
