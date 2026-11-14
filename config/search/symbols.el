@@ -77,3 +77,30 @@ INFO is the row's `consult--candidate' property."
     (find-file (lsp--uri-to-path (lsp:location-uri location)))
     (goto-char (lsp--position-to-point (lsp:range-start (lsp:location-range location))))
     (recenter)))
+
+(defun +my/search-everywhere--symbol-state ()
+  "Preview of Classes and Symbols: the symbol's file, at the symbol, in the
+pane the search started from; its buffer put back after. Files not open
+are opened for the preview only, as consult's previews do."
+  (let ((open (consult--temporary-files))
+        (show (consult--buffer-preview))
+        (jump (consult--jump-preview)))
+    (lambda (action cand)
+      (let ((marker (and cand (eq action 'preview)
+                         (+my/search-everywhere--symbol-marker cand open))))
+        (funcall show action (and marker (marker-buffer marker)))
+        (funcall jump action marker)
+        (unless cand
+          (funcall open))))))           ; the files opened, closed
+
+(defun +my/search-everywhere--symbol-marker (cand open)
+  "Where symbol CAND is: a marker in its file's buffer, which OPEN (from
+`consult--temporary-files') gives."
+  (let* ((info (get-text-property 0 'consult--candidate cand))
+         (location (lsp:symbol-information-location info)))
+    (when-let* ((buffer (funcall open (lsp--uri-to-path (lsp:location-uri location)))))
+      (with-current-buffer buffer
+        (save-restriction
+          (widen)
+          (copy-marker (lsp--position-to-point
+                        (lsp:range-start (lsp:location-range location)))))))))

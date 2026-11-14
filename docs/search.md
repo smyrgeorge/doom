@@ -3,7 +3,8 @@
 ## Search Everywhere
 
 `SPC s a` searches classes, files, symbols and actions (commands) in one list. Type `c`, `f`, `s` or `a` and a space to
-keep one kind; `DEL` on an empty input goes back to all.
+keep one kind; `DEL` on an empty input goes back to all. `C-SPC` previews the file or symbol in the pane you searched from
+(`C-g` puts it back).
 
 ## Find in files
 

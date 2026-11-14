@@ -16,11 +16,15 @@
          ;; annotations (Files not marginalia's either: their own category):
          ;; marginalia aligns the Actions' docs after the longest row it
          ;; annotated, off a narrow frame after a file's long path.
+         ;; C-SPC previews a file or a symbol in the pane the search started
+         ;; from (Doom's key for consult's previews); C-g puts it back.
          (symbols (lambda (name key classes token)
                     (when workspaces
                       (list :name name :narrow key :category 'consult-lsp-symbols
                             :async (+my/search-everywhere--lsp-async workspaces token classes)
                             :annotate #'ignore
+                            :state #'+my/search-everywhere--symbol-state
+                            :preview-key "C-SPC"
                             :run #'+my/search-everywhere--goto-symbol))))
          (selected
           (let ((completion-ignore-case t) ; "servic" finds UserService.kt
@@ -37,6 +41,10 @@
                            :items (lambda ()
                                     (+my/search-everywhere--file-items
                                      (+my/search-everywhere--files root)))
+                           :state (lambda ()
+                                    (let ((default-directory root)) ; its paths'
+                                      (consult--file-preview)))
+                           :preview-key "C-SPC"
                            :run (lambda (file) (find-file (expand-file-name file root)))))
                    (funcall symbols "Symbols" ?s nil :+my/search-everywhere-symbols)
                    (list :name "Actions" :narrow ?a :category 'command

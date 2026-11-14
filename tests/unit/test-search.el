@@ -9,7 +9,7 @@
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "consult"))))))
-  (dolist (package '("consult" "consult-lsp" "lsp-mode" "projectile" "marginalia"))
+  (dolist (package '("consult" "consult-lsp" "lsp-mode" "projectile" "marginalia" "vertico"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
 (defvar lsp-use-plists t)               ; as Doom builds lsp-mode (LSP_USE_PLISTS)
@@ -22,6 +22,7 @@
 (require 'projectile)
 (require 'recentf)
 (require 'marginalia)
+(require 'vertico)
 
 ;; Doom's Find in Files (SPC s p), from its source: what Cmd+Shift+F runs.
 (defconst +test-search--doom-modules
@@ -65,7 +66,8 @@ directory name)."
 (defun +test-search--workspace (&optional symbols)
   "A language server's workspace; SYMBOLS non-nil: its server searches the
 workspace's symbols (workspace/symbol)."
-  (make-lsp--workspace :server-capabilities (and symbols '(:workspaceSymbolProvider t))))
+  (make-lsp--workspace :client (make-lsp--client)
+                       :server-capabilities (and symbols '(:workspaceSymbolProvider t))))
 
 (defun +test-search--candidate (info &optional container)
   (propertize "candidate" 'consult--candidate info 'consult--container-name container))
@@ -632,6 +634,61 @@ all; with a language server too (its async sources), the input as typed."
           (setq-local lsp-mode nil)
           (should (equal (+test-search--type "f SPC DEL a SPC")
                          '(("f" nil) ("" ?f) ("" nil) ("a" nil) ("" ?a)))))))))
+
+;; ====== PREVIEW (C-SPC) ======
+;; In the real prompt, vertico on (as in Doom), keys typed into it.
+
+(defun +test-search--preview (keys)
+  "Open SPC s a from the selected window and type KEYS (`kbd' syntax: <f7>
+lets the language server's answers in, <f9> notes what the window shows),
+then C-g: the window's buffer and line at each <f9>, then after."
+  (let* ((window (selected-window))
+         (seen nil)
+         (note (lambda ()
+                 (interactive)
+                 (push (list (buffer-name (window-buffer window))
+                             (with-current-buffer (window-buffer window)
+                               (line-number-at-pos (window-point window))))
+                       seen)))
+         (keys-map (define-keymap
+                     ;; Longer than consult's refresh delay (0.2 s).
+                     "<f7>" (lambda () (interactive) (dotimes (_ 20) (accept-process-output nil 0.02)))
+                     "<f9>" note))
+         (vertico-map (make-composed-keymap keys-map vertico-map))
+         (map (define-keymap "<f5>" #'+my/search-everywhere)))
+    (use-local-map map)
+    (vertico-mode 1)
+    (unwind-protect
+        (condition-case nil
+            (execute-kbd-macro (vconcat (kbd "<f5>") (kbd keys) (kbd "C-g")))
+          (quit nil))
+      (vertico-mode -1)
+      (use-local-map nil))
+    (funcall note)
+    (nreverse seen)))
+
+(ert-deftest search/everywhere-previews-with-c-spc ()
+  "C-SPC previews the file or the symbol in the pane the search started
+from (the symbol's line); C-g puts it back. Only on C-SPC."
+  (+test-with-reset
+    (let* ((root (+test-search--dir "search-preview" "src/A.kt" "b.txt"))
+           (file (expand-file-name "src/Goto.kt" root))
+           (symbol (progn (with-temp-file file (insert "line one\nline two\n    fun target() {}\n"))
+                          (+test-search--symbol "target" 12 file 2 8))))
+      (+test-search-with-server (list (cons (+test-search--workspace t) (vector symbol)))
+        (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
+                  ((symbol-function 'projectile-project-files)
+                   (lambda (_) '("src/A.kt" "b.txt" "src/Goto.kt"))))
+          (with-current-buffer (find-file (expand-file-name "src/A.kt" root))
+            (setq-local lsp-mode t)
+            (setq-local lsp--buffer-workspaces (list (+test-search--workspace t)))
+            (should (equal (+test-search--preview "f SPC b . t x t <f9> C-SPC <f9>")
+                           '(("A.kt" 1) (" Preview:b.txt" 1) ("A.kt" 1))))
+            (should (equal (+test-search--preview "s SPC t a r g <f7> C-SPC <f9>")
+                           '((" Preview:Goto.kt" 3) ("A.kt" 1))))
+            ;; Files opened for it only: closed.
+            (should-not (get-buffer " Preview:b.txt"))
+            (should-not (get-buffer " Preview:Goto.kt"))))))))
 
 ;; ====== CMD+SHIFT+F ======
 
