@@ -159,9 +159,21 @@ word) anywhere."
     (unless (eql (window-body-width window t) +my/mermaid-preview--width)
       (+my/mermaid-preview--draw-image))))
 
+(defvar-local +my/mermaid-preview--asked nil
+  "In an image preview: the callback of the drawing it asked for last.")
+
+(defun +my/mermaid-preview--take-back ()
+  "The image preview's last drawing asked for taken back: not drawn if it
+hasn't started (see `+my/mermaid-render-cancel')."
+  (when +my/mermaid-preview--asked
+    (+my/mermaid-render-cancel +my/mermaid-preview--asked)
+    (setq +my/mermaid-preview--asked nil)))
+
 (defun +my/mermaid-preview--image-update (preview source)
   "Draw SOURCE in PREVIEW, an image preview, once mmdc has (now if it's in the
-cache); a drawing finishing after a newer one was asked is dropped."
+cache). The drawing asked before is taken back (one a pause in typing: not
+run if it's still waiting, each run a Chrome); one finishing after a newer
+one was asked is dropped."
   (let ((done (lambda (file message)
                 (when (buffer-live-p preview)
                   (with-current-buffer preview
@@ -170,6 +182,9 @@ cache); a drawing finishing after a newer one was asked is dropped."
                       (when file (setq +my/mermaid-preview--svg file))
                       (setq +my/mermaid-preview--error message)
                       (+my/mermaid-preview--draw-image)))))))
+    (with-current-buffer preview
+      (+my/mermaid-preview--take-back)
+      (setq +my/mermaid-preview--asked done))
     (when-let* ((file (+my/mermaid-render source done)))
       (funcall done file nil))))
 
@@ -180,6 +195,7 @@ cache); a drawing finishing after a newer one was asked is dropped."
   (setq-local cursor-type nil
               truncate-lines t)
   (add-hook 'window-size-change-functions #'+my/mermaid-preview--image-fit-h nil t)
+  (add-hook 'kill-buffer-hook #'+my/mermaid-preview--take-back nil t)
   (add-hook 'kill-buffer-hook #'+my/mermaid-preview--closed-h nil t))
 
 ;; ====== THE MODE ======

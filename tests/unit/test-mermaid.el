@@ -998,6 +998,65 @@ its page deleted."
                      (lambda () (string-search "Parse error" (with-current-buffer preview (buffer-string))))))
             (should (equal (+test-mermaid--image-file preview) last))))))))
 
+(ert-deftest mermaid/preview-image-asks-only-for-the-newest ()
+  "Each pause in typing asks for a drawing: the one asked before is taken
+back, not run while it waits; the newest drawn once the one running is
+done (each run a Chrome)."
+  (+test-mermaid--with-images
+    (let ((+my/mermaid-jobs 1)
+          (mmd (+test-mermaid--file "newest.mmd" "flowchart TD\n    SLOW\n")))
+      (+my/mermaid-preview-show)
+      (let ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd))
+            (start (float-time)))
+        (should (= +my/mermaid--running 1))
+        (dotimes (n 4)
+          (with-current-buffer mmd
+            (erase-buffer)
+            (insert (format "flowchart TD\n    A%d\n" n)))
+          (+my/mermaid-preview--update mmd))
+        ;; Only the newest waits.
+        (should (equal (mapcar #'cdr +my/mermaid--queue) '("flowchart TD\n    A3\n")))
+        (should (= (hash-table-count +my/mermaid--waiting) 2))
+        (should (+test-mermaid--wait
+                 (lambda () (when-let* ((file (+test-mermaid--image-file preview)))
+                              (string-search "A3" (+test-mermaid--text file))))
+                 8))
+        ;; The one running (3 s), then the newest.
+        (should (< (- (float-time) start) 5))
+        (should (= (length (+test-mermaid--runs mmdc)) 2))
+        ;; Closed: what it asked for taken back.
+        (with-current-buffer mmd (erase-buffer) (insert "flowchart TD\n    SLOW B\n"))
+        (+my/mermaid-preview--update mmd)
+        (with-current-buffer mmd (erase-buffer) (insert "flowchart TD\n    C\n"))
+        (+my/mermaid-preview--update mmd)
+        (should (= (length +my/mermaid--queue) 1))
+        (with-current-buffer mmd (+my/mermaid-preview-mode -1))
+        (should-not +my/mermaid--queue)))))
+
+(ert-deftest mermaid/render-cancel ()
+  "A request taken back: its callback not called; the drawing, queued with
+no one else waiting, dropped; asked by another too, still drawn for it."
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let* ((+my/mermaid-jobs 1)
+             (got nil)
+             (mine (lambda (file _) (push (cons 'mine file) got)))
+             (theirs (lambda (file _) (push (cons 'theirs file) got))))
+        (+my/mermaid-render "flowchart TD\n    SLOW\n" #'ignore)
+        (+my/mermaid-render "flowchart TD\n    A\n" mine)
+        (+my/mermaid-render "flowchart TD\n    B\n" mine)
+        (+my/mermaid-render "flowchart TD\n    B\n" theirs)
+        (should (= (length +my/mermaid--queue) 2))
+        (+my/mermaid-render-cancel mine)
+        (should (equal (mapcar #'cdr +my/mermaid--queue) '("flowchart TD\n    B\n")))
+        ;; The running one taken back too: it still runs, into the cache.
+        (+my/mermaid-render-cancel #'ignore)
+        (should (= +my/mermaid--running 1))
+        (should (+test-mermaid--wait (lambda () got) 8))
+        (should (equal (mapcar #'car got) '(theirs)))
+        (should (+my/mermaid-cached "flowchart TD\n    SLOW\n"))
+        (should (= (length (+test-mermaid--runs mmdc)) 2))))))
+
 (ert-deftest mermaid/preview-image-s-error-wrapped-to-its-pane ()
   "Mermaid's message (its lines up to 200 characters, a word longer than a
 pane): wrapped to the pane at 25, 40 and 60 columns, again as it's resized,

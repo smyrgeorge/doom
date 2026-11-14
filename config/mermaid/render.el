@@ -59,7 +59,8 @@ nil. Used: kept a month longer."
 ;; ====== RUNS ======
 
 (defvar +my/mermaid--waiting (make-hash-table :test #'equal)
-  "KEY: the callbacks waiting for its drawing (running or queued).")
+  "KEY: the callbacks waiting for its drawing (running or queued; none left,
+a running one's still there).")
 
 (defvar +my/mermaid--queue nil "(KEY . SOURCE) waiting for a run, oldest first.")
 
@@ -203,13 +204,13 @@ and MESSAGE."
 Drawn already (this theme): its file, CALLBACK not called. Else nil, and
 CALLBACK called later with the SVG's file and nil, or nil and a message:
 Mermaid's error, or what to install. Several asking for the same drawing
-share its run."
+share its run. `+my/mermaid-render-cancel' takes the request back."
   (or (+my/mermaid-cached source)
       (let ((key (+my/mermaid--key source (+my/mermaid-theme-json))))
         (cond
          ((not (executable-find +my/mermaid-mmdc))
           (run-at-time 0 nil callback nil +my/mermaid--install))
-         ((gethash key +my/mermaid--waiting)
+         ((not (eq (gethash key +my/mermaid--waiting 'none) 'none))
           (push callback (gethash key +my/mermaid--waiting)))
          (t
           (+my/mermaid--prune)
@@ -217,3 +218,19 @@ share its run."
           (setq +my/mermaid--queue (append +my/mermaid--queue (list (cons key source))))
           (+my/mermaid--next)))
         nil)))
+
+;; Taken back (a drawing asked anew, as you type): its callback isn't
+;; called; a drawing no one waits for any more, not started yet, isn't
+;; (one running finishes, into the cache).
+(defun +my/mermaid-render-cancel (callback)
+  "Take back the drawing CALLBACK was given to `+my/mermaid-render' for (see
+above)."
+  (maphash (lambda (key callbacks)
+             (when (memq callback callbacks)
+               (puthash key (remq callback callbacks) +my/mermaid--waiting)))
+           +my/mermaid--waiting)
+  (setq +my/mermaid--queue
+        (seq-filter (lambda (queued)
+                      (or (gethash (car queued) +my/mermaid--waiting)
+                          (ignore (remhash (car queued) +my/mermaid--waiting))))
+                    +my/mermaid--queue)))
