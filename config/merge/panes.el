@@ -11,7 +11,7 @@
          (unless (+my/merge--resolved-p chunk)
            (if (eq (+my/merge-chunk-kind chunk) 'conflict) '+my/merge-conflict '+my/merge-changed)))
         ((not (+my/merge--changed-p chunk side)) nil)
-        ((+my/merge--state chunk side) '+my/merge-done)
+        ((+my/merge--handled-p chunk side) '+my/merge-done)
         ((eq (+my/merge-chunk-kind chunk) 'conflict) '+my/merge-conflict)
         ((= (overlay-start (+my/merge--overlay chunk side)) (overlay-end (+my/merge--overlay chunk side)))
          '+my/merge-removed)
@@ -156,6 +156,18 @@ a space display spec in a margin's string is drawn a column wide."
                                                 ,(if (eq (+my/merge-chunk-kind chunk) 'conflict)
                                                      '+my/merge-mark-conflict
                                                    '+my/merge-mark)))))))
+
+(defun +my/merge--render-edited (session)
+  "SESSION's changes shown again whose lines in the Result an edit (by hand,
+an undo) made done or not done (see EDITED BY HAND, changes.el); the bar too
+then."
+  (let ((shown nil))
+    (seq-doseq (chunk (+my/merge-chunks session))
+      (unless (eq (overlay-get (+my/merge-chunk-result chunk) 'face) (+my/merge--face chunk 'result))
+        (+my/merge--render-chunk chunk)
+        (setq shown t)))
+    (when shown
+      (+my/merge--render-bar session))))
 
 (defun +my/merge--counts (session)
   "(CHANGES-LEFT . CONFLICTS-LEFT) of SESSION."

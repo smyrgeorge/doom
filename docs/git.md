@@ -18,9 +18,9 @@ together. Try it: `M-x +my/example-merge`.
 
 ![Yours, the Result and Theirs side by side](../examples/merge.png)
 
-Each change has buttons in its margin: `>>` / `<<` put it in the Result, `x` ignores it, and `✨` merges both sides word
-by word. The bar at the top accepts the rest from one side or every non-conflicting change, and ends with **Done**
-(save and stage) or **Abort**.
+Each change has buttons in its margin: `>>` / `<<` put it in the Result, `x` ignores it (the Result keeps what it has
+there), and `✨` merges both sides word by word. A change you edit by hand in the Result is done too. The bar at the top
+accepts the rest from one side or every non-conflicting change, and ends with **Done** (save and stage) or **Abort**.
 
 | Key | Action |
 |---|---|

@@ -16,8 +16,9 @@
 ;;   >> / <<   put the change in the Result. In a conflict whose other side is
 ;;             in already, add it after that one (keep both).
 ;;   x         ignore the change (the Result keeps what it has there).
-;; A change is done when each side that changed is in or ignored; it then
-;; turns grey. The words that changed are highlighted too (smerge's).
+;; A change is done when each side that changed is in or ignored, or its
+;; lines in the Result are edited by hand; it then turns grey. The words that
+;; changed are highlighted too (smerge's).
 ;; A conflict whose sides changed different words gets a ✨ wand in the
 ;; Result's margin: it merges them, word by word (see THE WAND, merge/changes.el).
 ;; The bar, across the top:

@@ -64,14 +64,18 @@
     (setq +my/merge--dirty t)))
 
 (defun +my/merge--post-command-h ()
-  "After a command: the panes lined up again if the Result changed (an edit,
-an undo)."
+  "After a command that changed the Result (an edit, an undo): its changes'
+regions where their markers are (see THE RESULT'S REGIONS, changes.el), the
+panes lined up again, the changes it made done or not done shown so."
   (when-let* ((session +my/merge--session)
               ((not (+my/merge-finished session)))
               ((buffer-live-p (+my/merge-result session)))
               ((buffer-local-value '+my/merge--dirty (+my/merge-result session))))
     (with-current-buffer (+my/merge-result session)
-      (+my/merge--align session))))
+      (seq-doseq (chunk (+my/merge-chunks session))
+        (+my/merge--sync chunk))
+      (+my/merge--align session)
+      (+my/merge--render-edited session))))
 
 (defun +my/merge--clean (start end)
   "The text from START to END of the current buffer, without fillers."

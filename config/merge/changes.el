@@ -67,12 +67,26 @@ from the base needs."
                (chunk (+my/merge-chunk--make
                        :index (cl-incf index) :kind kind
                        :yours yours :theirs theirs :result result
+                       :start (set-marker (make-marker) (aref diff 2) (+my/merge-result session))
+                       :end (set-marker (make-marker) (aref diff 3) (+my/merge-result session))
                        :base (+my/merge--text (+my/merge-base session) (aref diff 2) (aref diff 3)))))
           (dolist (ov (list yours theirs result))
             (overlay-put ov '+my/merge-chunk chunk)
             (overlay-put ov 'priority -10))
           chunk))
       (+my/merge--diff3 session)))))
+
+;; THE RESULT'S REGIONS
+;; A change's region in the Result is an overlay (its colour, the change at
+;; point) between two markers. An edit moves both alike, but undo puts back
+;; only markers: an edit undone left the overlay empty, the lines it had
+;; after it. So after a command that changed the Result, and before a button
+;; changes a region, its overlay goes back between its markers.
+(defun +my/merge--sync (chunk)
+  "CHUNK's overlay in the Result between its markers (see above)."
+  (let ((ov (+my/merge-chunk-result chunk)))
+    (when (overlay-buffer ov)
+      (move-overlay ov (+my/merge-chunk-start chunk) (+my/merge-chunk-end chunk)))))
 
 ;; A CHANGE'S STATE
 (defun +my/merge--overlay (chunk side)
@@ -83,7 +97,7 @@ from the base needs."
     ('result (+my/merge-chunk-result chunk))))
 
 (defun +my/merge--side-text (chunk side)
-  "CHUNK's text on SIDE (yours, theirs)."
+  "CHUNK's text on SIDE (yours, theirs; result: the Result's there now)."
   (let ((ov (+my/merge--overlay chunk side)))
     (+my/merge--text (overlay-buffer ov) (overlay-start ov) (overlay-end ov))))
 
@@ -100,9 +114,10 @@ from the base needs."
     (kind (eq kind side))))
 
 (defun +my/merge--handled-p (chunk side)
-  "Non-nil if SIDE's change in CHUNK is done (in the Result, ignored), or it
-made none."
-  (or (not (+my/merge--changed-p chunk side)) (+my/merge--state chunk side)))
+  "Non-nil if SIDE's change in CHUNK is done (in the Result, ignored, its
+lines there edited by hand), or it made none."
+  (or (not (+my/merge--changed-p chunk side)) (+my/merge--state chunk side)
+      (+my/merge--edited-p chunk)))
 
 (defun +my/merge--resolved-p (chunk)
   (and (+my/merge--handled-p chunk 'yours) (+my/merge--handled-p chunk 'theirs)))
@@ -130,6 +145,7 @@ made none."
   "Make CHUNK's states YOURS-STATE, THEIRS-STATE and ORDER, and its Result
 TEXT: one step of the Result's undo, which undoes (and redoes) them all."
   (let ((ov (+my/merge-chunk-result chunk)))
+    (+my/merge--sync chunk)
     (with-current-buffer (overlay-buffer ov)
       (let ((start (overlay-start ov))
             (old (buffer-substring-no-properties (overlay-start ov) (overlay-end ov))))
@@ -147,7 +163,9 @@ TEXT: one step of the Result's undo, which undoes (and redoes) them all."
               (goto-char start)
               (insert text)
               (delete-region (point) (+ (point) (length old))))))
-        (move-overlay ov start (+ start (length text)))))
+        (move-overlay ov start (+ start (length text)))
+        (set-marker (+my/merge-chunk-start chunk) start)
+        (set-marker (+my/merge-chunk-end chunk) (+ start (length text)))))
     (setf (+my/merge-chunk-yours-state chunk) yours-state
           (+my/merge-chunk-theirs-state chunk) theirs-state
           (+my/merge-chunk-order chunk) order)
@@ -172,9 +190,27 @@ both and DECISION merged: the wand (see THE WAND)."
            (order (append (remq side (+my/merge-chunk-order chunk))
                           (and (eq decision 'applied) (list side)))))
       (+my/merge--put chunk yours theirs order
-                      (+my/merge--result-of chunk yours theirs order))
+                      ;; Ignored: the Result keeps what it has there, edited
+                      ;; by hand (see EDITED BY HAND).
+                      (if (and (eq decision 'ignored) (+my/merge--edited-p chunk))
+                          (+my/merge--side-text chunk 'result)
+                        (+my/merge--result-of chunk yours theirs order)))
       (with-current-buffer (overlay-buffer (+my/merge-chunk-result chunk))
         (+my/merge--align +my/merge--session)))))
+
+;; EDITED BY HAND
+;; The Result is a buffer to edit: a change's lines there edited by hand (not
+;; what its buttons put there) are what's wanted, the change done. x keeps
+;; them (ignoring the sides not in), Done saves them, Accept Left / Right and
+;; Apply non-conflicting leave them; u undoes the edit, the change not done
+;; again.
+(defun +my/merge--edited-p (chunk)
+  "Non-nil if CHUNK's text in the Result was edited by hand (see above)."
+  (and (overlay-buffer (+my/merge-chunk-result chunk))
+       (not (equal (+my/merge--side-text chunk 'result)
+                   (+my/merge--result-of chunk (+my/merge-chunk-yours-state chunk)
+                                         (+my/merge-chunk-theirs-state chunk)
+                                         (+my/merge-chunk-order chunk))))))
 
 ;; THE WAND
 ;; A conflict's sides may have changed different words of the same lines

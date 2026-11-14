@@ -580,6 +580,107 @@ colours, the palette's tint with 256, diff-mode's faces with fewer."
     (should (string-prefix-p "zero\none\n" (+test-merge--result session)))
     (should (string-match-p "five\nsix theirs\nseven" (+test-merge--result session)))))
 
+(defun +test-merge--edit (session chunk text)
+  "CHUNK's lines in SESSION's Result replaced by TEXT by hand, as a command:
+a step of undo of its own, the panes lined up after."
+  (with-current-buffer (+my/merge-result session)
+    (let ((ov (+my/merge-chunk-result chunk)))
+      (undo-boundary)
+      (save-excursion
+        (goto-char (overlay-start ov))
+        (insert text)
+        (delete-region (point) (overlay-end ov)))
+      (+my/merge--post-command-h)
+      (undo-boundary))))
+
+(defun +test-merge--undo (session &optional again)
+  "u in SESSION's Result (AGAIN: right after another u), as a command."
+  (with-current-buffer (+my/merge-result session)
+    (undo-boundary)
+    (let ((last-command (and again 'undo)))
+      (undo))
+    (+my/merge--post-command-h)))
+
+(ert-deftest merge/edited-by-hand-is-done ()
+  "A change's lines in the Result edited by hand: done (not red any more, its
+sides grey, one less left, the bar says so); the edit undone, not done
+again."
+  (+test-merge
+    (let ((chunk (+test-merge--chunk session 2))
+          (bar (lambda () (with-current-buffer (+my/merge-bar session) (buffer-string)))))
+      (+test-merge--edit session chunk "six yours+theirs by hand\n")
+      (should (string-match-p "five\nsix yours\\+theirs by hand\nseven" (+test-merge--result session)))
+      (should (+my/merge--resolved-p chunk))
+      (should (equal (+my/merge--counts session) '(5 . 0)))
+      (should-not (overlay-get (+my/merge-chunk-result chunk) 'face))
+      (should (eq (overlay-get (+my/merge-chunk-yours chunk) 'face) '+my/merge-done))
+      (should (eq (overlay-get (+my/merge-chunk-theirs chunk) 'face) '+my/merge-done))
+      (should (string-match-p "5\\( changes\\)? left, 0 conflicts" (funcall bar)))
+      (+test-merge--undo session)
+      (should (string-match-p "five\nsix\nseven" (+test-merge--result session)))
+      (should-not (+my/merge--resolved-p chunk))
+      (should (equal (+my/merge--counts session) '(6 . 1)))
+      (should (eq (overlay-get (+my/merge-chunk-result chunk) 'face) '+my/merge-conflict))
+      (should (eq (overlay-get (+my/merge-chunk-yours chunk) 'face) '+my/merge-conflict))
+      (should (string-match-p "6\\( changes\\)? left, 1 conflict" (funcall bar)))
+      ;; Redone: done again.
+      (+test-merge--undo session)
+      (should (string-match-p "five\nsix yours\\+theirs by hand\nseven" (+test-merge--result session)))
+      (should (+my/merge--resolved-p chunk))
+      ;; Undone, then a button: its lines in place of the base's, none left over.
+      (+test-merge--undo session)
+      (should (string-match-p "five\nsix\nseven" (+test-merge--result session)))
+      (+my/merge--decide chunk 'yours 'applied)
+      (should (string-match-p "five\nsix yours\nseven" (+test-merge--result session)))
+      (should (+test-merge--lined-up-p session)))))
+
+(ert-deftest merge/x-keeps-what-was-edited-by-hand ()
+  "x on a change edited by hand: the Result keeps the edit (not the base
+again), the change done; u undoes x, the edit still there, then the edit."
+  (+test-merge
+    ;; A conflict: SPC m x, both sides ignored.
+    (let ((chunk (+test-merge--chunk session 2)))
+      (+test-merge--edit session chunk "HAND six\n")
+      (with-current-buffer (+my/merge-result session)
+        (goto-char (overlay-start (+my/merge-chunk-result chunk)))
+        (+my/merge-ignore))
+      (should (string-match-p "five\nHAND six\nseven" (+test-merge--result session)))
+      (should (eq (+my/merge-chunk-yours-state chunk) 'ignored))
+      (should (eq (+my/merge-chunk-theirs-state chunk) 'ignored))
+      (should (+my/merge--resolved-p chunk)))
+    ;; A change Yours made alone: its x button, then undone.
+    (let ((chunk (+test-merge--chunk session 0)))
+      (+test-merge--edit session chunk "two by hand\n")
+      (+my/merge--decide chunk 'yours 'ignored)
+      (should (string-prefix-p "one\ntwo by hand\nthree\n" (+test-merge--result session)))
+      (should (+my/merge--resolved-p chunk))
+      (+test-merge--undo session)
+      (should-not (+my/merge-chunk-yours-state chunk))
+      (should (string-prefix-p "one\ntwo by hand\nthree\n" (+test-merge--result session)))
+      (should (+my/merge--resolved-p chunk))
+      (+test-merge--undo session t)
+      (should (string-prefix-p "one\ntwo\nthree\n" (+test-merge--result session)))
+      (should-not (+my/merge--resolved-p chunk)))
+    ;; Yours in, edited, Theirs ignored: the edit stays.
+    (let ((chunk (+test-merge--chunk session 3)))
+      (+my/merge--decide chunk 'yours 'applied)
+      (+test-merge--edit session chunk "EIGHT, by hand\n")
+      (+my/merge--decide chunk 'theirs 'ignored)
+      (should (string-match-p "seven\nEIGHT, by hand\nnine" (+test-merge--result session))))))
+
+(ert-deftest merge/accepting-leaves-what-was-edited-by-hand ()
+  "Accept Left / Right and Apply non-conflicting leave a change edited by
+hand as it is (done)."
+  (+test-merge
+    (+test-merge--edit session (+test-merge--chunk session 2) "six by hand\n")
+    (+test-merge--edit session (+test-merge--chunk session 1) "four by hand\n")
+    (+my/merge-apply-non-conflicting)
+    (should (string-match-p "three\nfour by hand\nfive\nsix by hand\nseven" (+test-merge--result session)))
+    (+my/merge-accept-left)
+    (should (equal (+test-merge--result session)
+                   (+test-merge--lines "one" "TWO" "three" "four by hand" "five" "six by hand" "seven" "EIGHT"
+                                       "nine" "eleven" "twelve" "thirteen")))))
+
 ;; ====== THE BAR ======
 
 (ert-deftest merge/apply-non-conflicting ()
@@ -692,6 +793,28 @@ colours, the palette's tint with 256, diff-mode's faces with fewer."
                                        "seven" "EIGHT" "nine" "eleven" "twelve" "thirteen")))
     (should (string-match-p "a.txt" (+test-merge--git "ls-files" "-u")))
     (should (+my/merge-finished session))))
+
+(ert-deftest merge/done-saves-what-was-edited-by-hand ()
+  "Done with a change edited by hand: the edit saved there, no conflict
+markers; nothing else left: staged, nothing asked. Others left: markers for
+those only."
+  (+test-merge
+    (+my/merge-apply-non-conflicting)
+    (+test-merge--edit session (+test-merge--chunk session 2) "six yours+theirs by hand\n")
+    (+my/merge-done)
+    (should (equal (+test-merge--read "a.txt")
+                   (+test-merge--lines "one" "TWO" "three" "FOUR" "five" "six yours+theirs by hand" "seven"
+                                       "EIGHT" "nine" "eleven" "twelve" "thirteen")))
+    (should (string-empty-p (+test-merge--git "ls-files" "-u")))
+    (should (+my/merge-finished session)))
+  (+test-merge
+    (+test-merge--edit session (+test-merge--chunk session 2) "six by hand\n")
+    (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t)))
+      (+my/merge-done))
+    (let ((file (+test-merge--read "a.txt")))
+      (should (string-match-p "\nfive\nsix by hand\nseven\n" file))
+      (should-not (string-match-p "six yours\\|six theirs" file))
+      (should (string-match-p "\n<<<<<<< main\nTWO\n=======\ntwo\n>>>>>>> feature\n" file)))))
 
 (ert-deftest merge/abort-leaves-the-file ()
   (+test-merge

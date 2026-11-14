@@ -14,6 +14,7 @@
   index
   kind                                  ; conflict, yours, theirs, same
   yours theirs result                   ; overlays in those buffers
+  start end                             ; markers: the Result's region (see changes.el)
   base                                  ; the base's text there
   yours-state theirs-state              ; nil, applied, ignored, merged
   wand                                  ; the sides' words merged, if they can be
