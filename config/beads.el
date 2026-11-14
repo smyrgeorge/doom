@@ -63,6 +63,7 @@
 (load! "beads/refresh")                 ; in the background, each its own
 (load! "beads/hidden")                  ; closed issues, a filter: said
 (load! "beads/look")                    ; icons, badges, tags, epics
+(load! "beads/bar")                     ; its counts, short when narrow
 (load! "beads/place")                   ; kept through a refresh
 (load! "beads/issue")                   ; an issue's view: all of it
 (load! "beads/preview")                 ; P: beside the list, its own

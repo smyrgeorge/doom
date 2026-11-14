@@ -28,10 +28,11 @@ room taken from the pane next to it when the list's is narrow, and closes with t
 Each issue's status, priority and type are icons and badges in their colours: ○ ready (nothing open blocks it), ◔ in
 progress, ⊘3 blocked by 3 open issues (in the Blocked section), ✓ closed; P0 and P1 stand out, P3 and P4 are muted; the
 type is its icon (its word in a terminal). The columns are narrow so the title keeps most of the width (in a pane under
-60 columns the id goes too); each row is one line, a long title cut at the pane's edge. Labels follow it as tags, an epic shows its progress (`3/11`, its closed
-issues too), and its open issues are listed under it, without the lead they share with it (`Agent workspace: `).
-`(setq +my/beads-titles-wrapped t)` in `config.el` shows titles whole: one too long for the pane goes on to the next
-line, under itself.
+60 columns the id goes too); each row is one line, a long title cut at the pane's edge. Labels follow it as tags, an
+epic shows its progress (`3/11`, its closed issues too), and its open issues are listed under it, without the lead they
+share with it (`Agent workspace: `). `(setq +my/beads-titles-wrapped t)` in `config.el` shows titles whole: one too long
+for the pane goes on to the next line, under itself. The bar under the list counts the project's issues; in a narrow
+pane, first, by their icons (`○5 ◔1 ⊘1 ✓1`: ready, in progress, blocked, closed).
 
 It shows the work still open: a notice over it says how many closed issues it hides, with **Show closed** (then
 **Hide closed**), and `f s closed` lists only them. With a filter on, a notice says which, with **Clear filter**.

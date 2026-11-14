@@ -106,10 +106,9 @@ halved by tiling, are narrow (see `beads/bd-a-narrow-pane-the-title-s-room')."
     script))
 
 (defun +test-beads--bar ()
-  "The current issue list's bottom bar: its text (no window in batch to draw
-it in), its counts."
-  (mapconcat (lambda (part) (if (stringp part) (substring-no-properties part) ""))
-             (flatten-tree (ensure-list mode-line-format)) ""))
+  "The current issue list's bottom bar in full (as in a wide window), its
+counts."
+  (substring-no-properties (+my/beads--bar 1000)))
 
 (defun +test-beads--bulk (open closed)
   "OPEN + CLOSED new issues (t-1...), imported into bd at once: the first
@@ -419,6 +418,34 @@ closed), not 0s."
         (should (string-match-p "Total Issues: +4" text))
         (should (string-match-p "Closed: +1" text))
         (should (string-match-p "Blocked: +1" text))))))
+
+;; doom-o5t.15
+(ert-deftest beads/bd-the-bar-in-a-narrow-pane ()
+  "The list's bar: its counts in words after its name where that fits; else
+first, short, as the list's icons (○ ready, ◔ in progress, ⊘ blocked, ✓
+closed), then its name: seen at 40 columns (beads.el's, 84 columns, cut
+there)."
+  (+test-beads-with-project
+    (let ((blocked (+test-beads--create "Blocked"))
+          (blocker (+test-beads--create "Blocker"))
+          (working (+test-beads--create "Working on it"))
+          (done (+test-beads--create "Done")))
+      (beads-client-request "dep_add" `((from_id . ,blocked) (to_id . ,blocker)))
+      (beads-client-update working :status "in_progress")
+      (beads-client-close done "Done")
+      (+my/beads-project)
+      (with-current-buffer (+test-beads--list)
+        (should (equal mode-line-format '((:eval (+my/beads--bar)))))
+        (let ((full (+my/beads--bar 1000))
+              (short (+my/beads--bar 40)))
+          (should (equal (substring-no-properties full)
+                         (concat " " (buffer-name) "   4 total | 2 open | 1 in progress | 1 blocked | 1 ready")))
+          (should (equal (substring-no-properties short) (concat " ○1 ◔1 ⊘1 ✓1  " (buffer-name))))
+          (should (eq (get-text-property 1 'face short) 'success)))
+        ;; Drawn in its window (40 columns or so here): by its width.
+        (let ((window (get-buffer-window (current-buffer))))
+          (should (< (window-total-width window) (string-width (+my/beads--bar 1000))))
+          (should (string-prefix-p " ○1 ◔1 ⊘1 ✓1  " (with-selected-window window (+my/beads--bar)))))))))
 
 ;; ====== WHAT THE LIST HIDES ======
 
