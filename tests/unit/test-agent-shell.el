@@ -212,6 +212,27 @@ puts it in a new pane (config/tiling/apps.el)."
   (should (equal agent-shell-markdown-image-max-width 1.0))
   (should (floatp agent-shell-markdown-image-max-width)))
 
+(ert-deftest agent-shell/images-beside-the-reply-s-indent ()
+  "Images (diagrams too) as wide as the window at most, drawn after a reply's
+2-column indent: at most the width beside it, in windows of 60, 40 and 25
+columns; a smaller share of the window, or a size in pixels, as it is."
+  (require 'agent-shell)
+  (+test-with-reset
+    (dolist (columns '(60 40 25))
+      (+test-reset)
+      (split-window nil (- columns) 'right)
+      (other-window 1)
+      (switch-to-buffer (+test-buffer "*test images*"))
+      (should (= (window-total-width) columns))
+      (let ((width (window-body-width nil t))
+            (indent (string-pixel-width "  ")))
+        (should (= indent 2))             ; a column a pixel, in batch
+        (should (= (agent-shell-markdown--image-max-width) (- width indent)))
+        (let ((agent-shell-markdown-image-max-width 0.4))
+          (should (= (agent-shell-markdown--image-max-width) (round (* 0.4 width)))))
+        (let ((agent-shell-markdown-image-max-width 300))
+          (should (= (agent-shell-markdown--image-max-width) 300)))))))
+
 ;; ====== WHAT CLAUDE IS TOLD ======
 
 (ert-deftest agent-shell/context-says-where-it-runs ()

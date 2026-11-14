@@ -209,8 +209,9 @@ KEYS above.")
         ;; New shells (e.g. from the Option+Enter Claude actions) start Claude
         ;; Code without asking which agent to use.
         agent-shell-preferred-agent-config 'claude-code
-        ;; Images (screenshots, charts) as wide as the window: agent-shell
-        ;; shrinks them to 40% of it. Smaller ones keep their own size.
+        ;; Images (screenshots, charts) as wide as the window (beside a
+        ;; reply's indent: config/agent-shell/images.el): agent-shell shrinks
+        ;; them to 40% of it. Smaller ones keep their own size.
         ;; One image only: {width=100%} after its link; the ones on screen:
         ;; M-x agent-shell-markdown-image-scale-increase / -decrease.
         agent-shell-markdown-image-max-width 1.0))
@@ -218,6 +219,7 @@ KEYS above.")
 ;; In config/agent-shell/, in this order: each part can use what the ones
 ;; before it define.
 (load! "agent-shell/context")
+(load! "agent-shell/images")
 (load! "agent-shell/excalidraw")
 (load! "agent-shell/beads")
 (load! "agent-shell/mermaid")
