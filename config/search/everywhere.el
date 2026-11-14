@@ -18,10 +18,12 @@
          ;; annotated, off a narrow frame after a file's long path.
          ;; C-SPC previews a file or a symbol in the pane the search started
          ;; from (Doom's key for consult's previews); C-g puts it back.
-         (symbols (lambda (name key classes token)
+         ;; One request per query for both, its symbols split by kind.
+         (requester (and workspaces (+my/search-everywhere--symbols-requester workspaces)))
+         (symbols (lambda (name key classes)
                     (when workspaces
                       (list :name name :narrow key :category 'consult-lsp-symbols
-                            :async (+my/search-everywhere--lsp-async workspaces token classes)
+                            :async (+my/search-everywhere--lsp-async requester classes)
                             :annotate #'ignore
                             :state #'+my/search-everywhere--symbol-state
                             :preview-key "C-SPC"
@@ -34,7 +36,7 @@
                 ;; does), nor DEL widen.
                 (consult-async-split-style 'none))
             (consult--multi
-             (list (funcall symbols "Classes" ?c t :+my/search-everywhere-classes)
+             (list (funcall symbols "Classes" ?c t)
                    (when root
                      (list :name "Files" :narrow ?f :category '+my/search-everywhere-file
                            :face 'consult-file :annotate #'ignore
@@ -46,7 +48,7 @@
                                       (consult--file-preview)))
                            :preview-key "C-SPC"
                            :run (lambda (file) (find-file (expand-file-name file root)))))
-                   (funcall symbols "Symbols" ?s nil :+my/search-everywhere-symbols)
+                   (funcall symbols "Symbols" ?s nil)
                    (list :name "Actions" :narrow ?a :category 'command
                          :items #'+my/search-everywhere--commands
                          :run #'+my/search-everywhere--run-command))

@@ -187,12 +187,14 @@ records in `cancelled'. Input is throttled by timers: `+test-search--feed'."
   (funcall async input)
   (dotimes (_ 5) (accept-process-output nil 0.01)))
 
-(defun +test-search--async (classes token)
+(defun +test-search--async (classes &optional requester)
   "The source's async function, set up, with a sink recording into the
-returned list's car (newest first)."
+returned list's car (newest first); REQUESTER, shared with another source,
+or its own (asking the workspace ws)."
   (let* ((log (list nil))
          (sink (lambda (action) (push action (car log)) nil))
-         (async (funcall (+my/search-everywhere--lsp-async '(ws) token classes) sink)))
+         (requester (or requester (+my/search-everywhere--symbols-requester '(ws))))
+         (async (funcall (+my/search-everywhere--lsp-async requester classes) sink)))
     ;; Set up from the input's buffer (the minibuffer's, here a buffer).
     (with-current-buffer (get-buffer-create " *test-search-input*")
       (funcall async 'setup))
@@ -204,13 +206,13 @@ returned list's car (newest first)."
 
 (ert-deftest search/symbols-queried-as-you-type ()
   "From 2 characters, each input asks the server (workspace/symbol, the
-query, detached, unmerged, the source's own token)."
+query, detached, unmerged, cancelling the previous one)."
   (let* ((file (+test-search--dir "search-lsp" "src/A.kt"))
          (workspace (make-lsp--workspace :root file))
          (symbols (vector (+test-search--symbol "UserService" 5 (expand-file-name "src/A.kt" file) 0 0)
                           (+test-search--symbol "save" 6 (expand-file-name "src/A.kt" file) 3 4))))
     (+test-search-with-server (list (cons workspace symbols))
-      (pcase-let ((`(,log ,async) (+test-search--async nil :tok)))
+      (pcase-let ((`(,log ,async) (+test-search--async nil)))
         (+test-search--feed async "U")
         (should-not requests)
         (+test-search--feed async "Us")
@@ -221,7 +223,7 @@ query, detached, unmerged, the source's own token)."
           (should (equal workspaces '(ws)))
           (should (eq (plist-get plist :mode) 'detached))
           (should (eq (plist-get plist :no-merge) t))
-          (should (eq (plist-get plist :cancel-token) :tok)))
+          (should (plist-get plist :cancel-token)))
         ;; Running, flushed, the results, finished.
         (let ((actions (reverse (car log))))
           (should (member [indicator running] actions))
@@ -237,7 +239,40 @@ query, detached, unmerged, the source's own token)."
           (should (eq (get-text-property 0 'consult--candidate (car cands)) (aref symbols 1))))
         (+test-search--feed async "Use")
         (should (equal (cadr (car requests)) '(:query "Use")))
-        (should (= (length requests) 2))))))
+        (should (= (length requests) 2))
+        (should (eq (plist-get (nth 3 (car requests)) :cancel-token)
+                    (plist-get (nth 3 (cadr requests)) :cancel-token)))))))
+
+(ert-deftest search/classes-and-symbols-one-request ()
+  "Classes and Symbols ask the server once per input (they sent the same
+request each), its answer split between them; a query already answered
+isn't asked again."
+  (let* ((dir (+test-search--dir "search-one" "A.kt"))
+         (file (expand-file-name "A.kt" dir))
+         (results (list (cons (make-lsp--workspace :root dir)
+                              (vector (+test-search--symbol "UserService" 5 file 0 0)
+                                      (+test-search--symbol "user" 6 file 1 0))))))
+    (+test-search-with-server results
+      (let ((requester (+my/search-everywhere--symbols-requester '(ws))))
+        (pcase-let ((`(,classes-log ,classes) (+test-search--async t requester))
+                    (`(,symbols-log ,symbols) (+test-search--async nil requester)))
+          (dolist (input '("Us" "Use"))
+            (funcall classes input)
+            (funcall symbols input)
+            (dotimes (_ 5) (accept-process-output nil 0.01)))
+          (should (equal (mapcar (lambda (request) (cadr request)) (reverse requests))
+                         '((:query "Us") (:query "Use"))))
+          (should (equal (mapcar (lambda (c) (car (split-string c " ")))
+                                 (+test-search--candidates classes-log))
+                         '("UserService" "UserService")))
+          (should (equal (mapcar (lambda (c) (car (split-string c " ")))
+                                 (+test-search--candidates symbols-log))
+                         '("user" "user")))
+          ;; Asked again, answered at once from the last answer.
+          (let ((answer nil))
+            (funcall requester "Use" (lambda (result) (setq answer result)))
+            (should (equal answer results))
+            (should (= (length requests) 2))))))))
 
 (ert-deftest search/classes-only-class-kinds ()
   "Classes keeps classes, enums, interfaces, objects, structs; across
@@ -255,23 +290,25 @@ workspaces."
                                           (+test-search--symbol "aField" 8 file 6 0)
                                           (+test-search--symbol "aFunction" 12 file 7 0))))))
     (+test-search-with-server results
-      (pcase-let ((`(,log ,async) (+test-search--async t :classes)))
+      (pcase-let ((`(,log ,async) (+test-search--async t)))
         (+test-search--feed async "An")
         (should (equal (mapcar (lambda (c) (car (split-string c " ")))
                                (+test-search--candidates log))
                        '("AClass" "AnEnum" "AnInterface" "AnObject" "AStruct"))))
-      (pcase-let ((`(,log ,async) (+test-search--async nil :symbols)))
+      (pcase-let ((`(,log ,async) (+test-search--async nil)))
         (+test-search--feed async "An")
         (should (equal (mapcar (lambda (c) (car (split-string c " ")))
                                (+test-search--candidates log))
                        '("aMethod" "aField" "aFunction")))))))
 
 (ert-deftest search/symbols-cancelled-on-exit ()
-  "Leaving (destroy) cancels the source's request, by its token."
+  "Leaving (destroy) cancels the request, by its token."
   (+test-search-with-server nil
-    (pcase-let ((`(,_log ,async) (+test-search--async nil :symbols-token)))
+    (pcase-let ((`(,_log ,async) (+test-search--async nil)))
+      (+test-search--feed async "Us")
+      (setq cancelled nil)
       (funcall async 'destroy)
-      (should (equal cancelled '(:symbols-token))))))
+      (should (equal cancelled (list (plist-get (nth 3 (car requests)) :cancel-token)))))))
 
 (ert-deftest search/symbols-request-failing-ends-the-indicator ()
   "A request refused (an error) or failed (the server's error answer): the
@@ -279,7 +316,7 @@ indicator says failed, no error escapes."
   (+test-search-with-server nil
     (cl-letf (((symbol-function 'lsp-request-async)
                (lambda (&rest _) (error "The connected server(s) does not support method"))))
-      (pcase-let ((`(,log ,async) (+test-search--async nil :tok)))
+      (pcase-let ((`(,log ,async) (+test-search--async nil)))
         (+test-search--feed async "Us")
         (should (equal (seq-filter #'vectorp (reverse (car log)))
                        '([indicator running] [indicator failed])))))
@@ -287,14 +324,14 @@ indicator says failed, no error escapes."
                (lambda (_method _params _callback &rest plist)
                  (run-at-time 0 nil (plist-get plist :error-handler)
                               '(:code -32601 :message "Unhandled method")))))
-      (pcase-let ((`(,log ,async) (+test-search--async nil :tok)))
+      (pcase-let ((`(,log ,async) (+test-search--async nil)))
         (+test-search--feed async "Us")
         (should (equal (seq-filter #'vectorp (reverse (car log)))
                        '([indicator running] [indicator failed])))))))
 
 (ert-deftest search/symbols-empty-input-asks-nothing ()
   (+test-search-with-server nil
-    (pcase-let ((`(,_log ,async) (+test-search--async nil :tok)))
+    (pcase-let ((`(,_log ,async) (+test-search--async nil)))
       (+test-search--feed async "")
       (+test-search--feed async "x")
       (should-not requests))))
@@ -441,8 +478,8 @@ own folder."
         (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
                   ((symbol-function 'projectile-project-files) (lambda (_) '("src/A.kt" "b.txt")))
                   ((symbol-function '+my/search-everywhere--lsp-async)
-                   (lambda (workspaces token classes)
-                     (push (list workspaces token classes) asyncs)
+                   (lambda (requester classes)
+                     (push (list requester classes) asyncs)
                      (lambda (sink) sink))))
           (+test-search-capturing-multi got
             (+my/search-everywhere)
@@ -471,10 +508,10 @@ own folder."
                   (should-not (funcall (plist-get source :annotate) "row"))
                   (should-not (assq (plist-get source :category) marginalia-annotators)))
                 (should (assq (plist-get actions :category) marginalia-annotators))
-                ;; Each its own token, classes or not.
-                (should (equal (reverse asyncs)
-                               `(((,ws) :+my/search-everywhere-classes t)
-                                 ((,ws) :+my/search-everywhere-symbols nil))))
+                ;; Classes or not, from one request.
+                (should (equal (mapcar #'cadr (reverse asyncs)) '(t nil)))
+                (should (functionp (car (car asyncs))))
+                (should (eq (car (car asyncs)) (car (cadr asyncs))))
                 (should (eq (plist-get files :face) 'consult-file))
                 (should (equal (mapcar (lambda (item) (substring-no-properties (car item)))
                                        (funcall (plist-get files :items)))
@@ -521,10 +558,10 @@ beside one that does, only that one's."
       (with-current-buffer (find-file-noselect (expand-file-name "a.txt" root))
         (setq-local lsp-mode t)
         (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
-                  ((symbol-function '+my/search-everywhere--lsp-async)
-                   (lambda (workspaces &rest _)
+                  ((symbol-function '+my/search-everywhere--symbols-requester)
+                   (lambda (workspaces)
                      (push workspaces asyncs)
-                     (lambda (sink) sink))))
+                     #'ignore)))
           (+test-search-capturing-multi got
             (setq-local lsp--buffer-workspaces (list without))
             (+my/search-everywhere)
@@ -534,7 +571,7 @@ beside one that does, only that one's."
                            '("Files" "Actions")))
             (setq-local lsp--buffer-workspaces (list without with))
             (+my/search-everywhere)
-            (should (equal asyncs (list (list with) (list with))))
+            (should (equal asyncs (list (list with))))
             (should (equal (mapcar (lambda (s) (plist-get s :name))
                                    (append (consult--multi-enabled-sources (car got)) nil))
                            '("Classes" "Files" "Symbols" "Actions")))))))))

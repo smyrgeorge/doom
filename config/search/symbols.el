@@ -2,38 +2,69 @@
 ;; Classes and Symbols: the language server's, as you type.
 ;; Loaded from config/search.el.
 
-(defun +my/search-everywhere--lsp-async (workspaces token classes)
-  "Async source of WORKSPACES' symbols, queried as the input changes.
-CLASSES non-nil keeps only class-like kinds, nil keeps the other kinds.
-TOKEN cancels the previous request; each source needs its own token, or the
-Classes and Symbols requests would cancel each other."
+(defun +my/search-everywhere--symbols-requester (workspaces)
+  "A function asking WORKSPACES' servers for the symbols matching a query,
+once for Classes and Symbols both (each sent the same request). Called with
+QUERY and CALLBACK: CALLBACK gets the servers' answer, ((WORKSPACE .
+SYMBOLS)...), or `failed'; a new QUERY cancels the previous request, one
+already answered is answered again. Called with `cancel', cancels it."
+  (let ((token (make-symbol "search-everywhere"))
+        query
+        answer                          ; (ANSWER) once answered
+        waiting)
+    (lambda (input &optional callback)
+      (let ((answered
+             (lambda (result)
+               (setq answer (list result))
+               (when (eq result 'failed)
+                 (setq query nil))        ; asked again next time
+               (mapc (lambda (callback) (funcall callback result))
+                     (prog1 (nreverse waiting) (setq waiting nil))))))
+        (cond
+         ((eq input 'cancel)
+          (setq query nil waiting nil)
+          (lsp-cancel-request-by-token token))
+         ((not (equal input query))
+          (setq query input
+                answer nil
+                waiting (list callback))
+          (let ((lsp--buffer-workspaces workspaces)
+                (failed (lambda (&rest _)
+                          (when (equal query input) (funcall answered 'failed)))))
+            ;; A request refused or failed ends the indicator too.
+            (condition-case nil
+                (lsp-request-async
+                 "workspace/symbol" (list :query input)
+                 (lambda (result)
+                   (when (equal query input) (funcall answered result)))
+                 :mode 'detached :no-merge t :cancel-token token
+                 :error-handler failed)
+              (error (funcall failed)))))
+         (answer (funcall callback (car answer)))
+         (t (push callback waiting)))))))
+
+(defun +my/search-everywhere--lsp-async (requester classes)
+  "Async source of the symbols REQUESTER finds, queried as the input changes
+\(see `+my/search-everywhere--symbols-requester'). CLASSES non-nil keeps
+only class-like kinds, nil keeps the other kinds."
   (consult--async-pipeline
    (consult--async-min-input)
    (consult--async-throttle)
    (lambda (sink)
-     (let ((request
-            (lambda (query)
-              (let ((lsp--buffer-workspaces workspaces)
-                    (failed (lambda (&rest _) (funcall sink [indicator failed]))))
-                ;; A request refused or failed ends the indicator too.
-                (condition-case nil
-                    (lsp-request-async
-                     "workspace/symbol" (list :query query)
-                     (lambda (results)
-                       (funcall sink 'flush)
-                       (funcall sink results)
-                       (funcall sink [indicator finished]))
-                     :mode 'detached :no-merge t :cancel-token token
-                     :error-handler failed)
-                  (error (funcall failed)))))))
-       (lambda (action)
-         (pcase action
-           ((pred stringp)
-            (unless (string-empty-p action)
-              (funcall sink [indicator running])
-              (funcall request action)))
-           ('destroy (lsp-cancel-request-by-token token)))
-         (funcall sink action))))
+     (lambda (action)
+       (pcase action
+         ((pred stringp)
+          (unless (string-empty-p action)
+            (funcall sink [indicator running])
+            (funcall requester action
+                     (lambda (result)
+                       (if (eq result 'failed)
+                           (funcall sink [indicator failed])
+                         (funcall sink 'flush)
+                         (funcall sink result)
+                         (funcall sink [indicator finished]))))))
+         ('destroy (funcall requester 'cancel)))
+       (funcall sink action)))
    (consult--async-transform
     (lambda (results)
       (mapcan (pcase-lambda (`(,workspace . ,symbols))
