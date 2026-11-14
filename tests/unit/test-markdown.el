@@ -434,6 +434,72 @@ look (scheme, background, stylesheets), not reloaded; the pane too."
         (should (memq #'+md-preview--off-h kill-buffer-hook))
         (should (memq #'+md-preview--off-h change-major-mode-hook))))))
 
+(ert-deftest markdown/preview-from-a-narrow-pane-on-the-frame-s-right ()
+  "Without tiling, from a pane too narrow to halve (18 columns, a pane on its
+right or its left): the preview in a new pane on the frame's right, as wide
+as the file's; no other pane's buffer changed."
+  (dolist (side '(left right))
+    (+test-md
+      (let* ((wide (selected-window))
+             (narrow (split-window wide (if (eq side 'left) 18 -18) 'right))
+             (other (+test-buffer "other.txt" "other")))
+        (when (eq side 'left) (cl-rotatef wide narrow))
+        (set-window-buffer wide other)
+        (select-window narrow)
+        (should (= (window-total-width narrow) 18))
+        (let* ((md (+test-md--file "narrow.md" "# Narrow\n"))
+               (preview (with-current-buffer md (+md-preview-mode 1) +md-preview--buffer))
+               (pane (get-buffer-window preview)))
+          (should pane)
+          (should-not (memq pane (list wide narrow)))
+          (should (eq (window-buffer narrow) md))
+          (should (eq (window-buffer wide) other))
+          (should (window-at-side-p pane 'right))
+          (should (= (window-total-width pane) 18))
+          (should (eq (selected-window) narrow))
+          ;; Off: its pane closes, the others as they were.
+          (with-current-buffer md (+md-preview-mode -1))
+          (should (equal (window-list nil nil narrow) (list narrow wide)))
+          (should (eq (window-buffer wide) other)))))))
+
+(ert-deftest markdown/preview-without-room-not-shown ()
+  "From a pane too narrow to halve, in a frame that can't take another pane
+\(split, it fails): not shown (no pane taken over), said so; the preview
+stays on."
+  (+test-md
+    (let* ((wide (selected-window))
+           (narrow (split-window wide -18 'right))
+           (other (+test-buffer "other.txt" "other"))
+           (md (progn (select-window narrow) (+test-md--file "room.md" "# Room\n"))))
+      (set-window-buffer wide other)
+      (+test-clear-messages)
+      (cl-letf (((symbol-function 'split-window-no-error) #'ignore))
+        (with-current-buffer md (+md-preview-mode 1)))
+      (should (equal (mapcar #'window-buffer (window-list nil nil wide)) (list other md)))
+      (should (buffer-local-value '+md-preview-mode md))
+      (should (= (+test-messages "No room for the preview") 1)))))
+
+(ert-deftest markdown/preview-halves-a-pane-wide-enough ()
+  "From 80 and 40 columns (the frame's, half of it): the file's pane halved,
+the preview on its right; another pane as it was."
+  (+test-md
+    (let ((md (+test-md--file "eighty.md" "# Eighty\n")))
+      (should (= (window-total-width) 80))
+      (with-current-buffer md (+md-preview-mode 1))
+      (should (equal (mapcar #'window-total-width (window-list nil nil (get-buffer-window md))) '(40 40)))
+      (with-current-buffer md (+md-preview-mode -1))))
+  (+test-md
+    (let* ((left (selected-window))
+           (right (split-window left 40 'right))
+           (other (+test-buffer "other.txt" "other")))
+      (set-window-buffer right other)
+      (let ((md (+test-md--file "forty.md" "# Forty\n")))
+        (with-current-buffer md (+md-preview-mode 1))
+        (let ((pane (get-buffer-window (buffer-local-value '+md-preview--buffer md))))
+          (should (equal (window-list nil nil left) (list left pane right)))
+          (should (equal (mapcar #'window-total-width (list left pane right)) '(20 20 40)))
+          (should (eq (window-buffer right) other)))))))
+
 (ert-deftest markdown/new-windows-would-take-focus ()
   "Control for the test above: here, a command's new window is selected."
   (+test-md
@@ -649,25 +715,53 @@ Markdown as it is now, at the cursor's line, in that view."
       (should (= (length (window-list)) 1)))))
 
 (ert-deftest markdown/closing-the-preview-turns-it-off ()
-  "q (or its tab's ✕) in the preview: the Markdown buffer's preview is off,
-its temp file gone; SPC m p opens it again."
-  (+test-md
-    (let* ((md (+test-md--file "q.md" "# Q\n"))
-           (preview (+test-md--open-preview md))
-           (file (buffer-local-value '+md-preview--file md)))
-      (with-selected-window (get-buffer-window preview)
-        (should (eq (key-binding "q") #'kill-current-buffer))
-        (kill-current-buffer))
-      (should-not (buffer-live-p preview))
-      (with-current-buffer md
-        (should-not +md-preview-mode)
-        (should-not +md-preview--buffer)
-        (should-not (memq #'+md-preview--after-change-h after-change-functions)))
-      (should-not (file-exists-p file))
-      (should (buffer-live-p md))
-      (with-current-buffer md
-        (+md-preview-mode 1)
-        (should (buffer-live-p +md-preview--buffer))))))
+  "q (or its tab's ✕, killing it) in the preview: the Markdown buffer's
+preview is off, its temp file gone; SPC m p opens it again. q closes its
+pane, as SPC m p does."
+  (dolist (close '(quit kill))
+    (+test-md
+      (let* ((md (+test-md--file "q.md" "# Q\n"))
+             (preview (+test-md--open-preview md))
+             (file (buffer-local-value '+md-preview--file md)))
+        (with-selected-window (get-buffer-window preview)
+          (if (eq close 'kill)
+              (kill-current-buffer)
+            (should (eq (key-binding "q") #'+my/markdown-preview-quit))
+            (call-interactively #'+my/markdown-preview-quit)))
+        (should-not (buffer-live-p preview))
+        (when (eq close 'quit)
+          (should (equal (mapcar #'window-buffer (window-list)) (list md))))
+        (with-current-buffer md
+          (should-not +md-preview-mode)
+          (should-not +md-preview--buffer)
+          (should-not (memq #'+md-preview--after-change-h after-change-functions)))
+        (should-not (file-exists-p file))
+        (should (buffer-live-p md))
+        (with-current-buffer md
+          (+md-preview-mode 1)
+          (should (buffer-live-p +md-preview--buffer)))))))
+
+(ert-deftest markdown/closing-the-preview-gives-back-a-pane-it-took ()
+  "The preview shown in another pane (its buffer switched to it): closed (SPC
+m p, q), that pane shows what it showed before, not deleted."
+  (dolist (close '(toggle quit))
+    (+test-md
+      (let* ((md (+test-md--file "took.md" "# Took\n"))
+             (preview (+test-md--open-preview md))
+             (other (+test-buffer "other.txt" "other"))
+             (left (get-buffer-window md))
+             (right (split-window left nil 'below)))
+        (set-window-buffer right other)
+        (delete-window (get-buffer-window preview))
+        (set-window-buffer right preview)
+        (+test-md--redisplay)
+        (if (eq close 'toggle)
+            (with-current-buffer md (+my/markdown-preview-toggle))
+          (with-selected-window right (+my/markdown-preview-quit)))
+        (should-not (buffer-live-p preview))
+        (should (window-live-p right))
+        (should (eq (window-buffer right) other))
+        (should (eq (window-buffer left) md))))))
 
 (ert-deftest markdown/preview-alone-in-its-frame-off ()
   "The preview's pane the frame's only window: it shows another buffer once
@@ -990,11 +1084,11 @@ toggled off by a second click."
                    ("<next>" . +my/webkit-screen-down) ("<prior>" . +my/webkit-screen-up)
                    ("gg" . +my/webkit-top) ("G" . +my/webkit-bottom)
                    ("<home>" . +my/webkit-top) ("<end>" . +my/webkit-bottom)
-                   ("y" . +my/webkit-copy) ("q" . kill-current-buffer)))
+                   ("y" . +my/webkit-copy) ("q" . +my/markdown-preview-quit)))
     (dolist (state '(normal motion))
       (should (eq (+test-md--key +md-preview-page-mode-map state key) command))))
   (should (eq (lookup-key +md-preview-page-mode-map (kbd "s-c")) #'+my/webkit-copy))
-  (should (eq (lookup-key +md-preview-page-mode-map "q") #'kill-current-buffer))
+  (should (eq (lookup-key +md-preview-page-mode-map "q") #'+my/markdown-preview-quit))
   (should (eq (lookup-key +md-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
   (should (eq (+test-md--key +md-preview-page-mode-map 'visual "<drag-mouse-1>") #'ignore)))
 

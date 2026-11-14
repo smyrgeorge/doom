@@ -96,12 +96,34 @@ preview off."
 (defun +md-preview--display (preview)
   "Show PREVIEW beside the Markdown file, half its window's width (a float
 would be half the frame's: in a narrow window the file was left a few
-columns). The cursor stays in the Markdown buffer: the preview follows it."
-  (let ((+my/focus-new-windows nil))
-    (display-buffer preview
-                    `(display-buffer-in-direction
-                      (direction . right)
-                      (window-width . ,(/ (window-total-width) 2))))))
+columns). A window too narrow to halve: on the frame's right, as wide as it
+\(not in the pane beside it, taken over); a frame too narrow for that, not
+shown. The cursor stays in the Markdown buffer: the preview follows it."
+  (let ((+my/focus-new-windows nil)
+        (width (window-total-width)))
+    (or (display-buffer preview
+                        (if (>= width (* 2 (window-min-size nil t)))
+                            `(display-buffer-in-direction
+                              (direction . right)
+                              (window-width . ,(/ width 2)))
+                          `((display-buffer-in-direction display-buffer-no-window)
+                            (direction . rightmost)
+                            (window-width . ,width)
+                            (allow-no-window . t))))
+        (message "No room for the preview: widen the frame"))))
+
+(defun +md-preview--kill (preview)
+  "PREVIEW killed, its panes quit as `quit-window' does: a pane made for it
+closes, unless other tabs are under it (they show instead); one it took
+over shows what it showed before. SPC m p and q close it so, the same."
+  (let ((kill-buffer-quit-windows t)
+        (kill-buffer-query-functions nil))
+    (kill-buffer preview)))
+
+(defun +my/markdown-preview-quit ()
+  "q in the preview: closed, as SPC m p in its file closes it."
+  (interactive)
+  (+md-preview--kill (current-buffer)))
 
 (defun +md-preview--off-h ()
   "The Markdown buffer killed, or its mode set again (its variables, this mode's
@@ -132,12 +154,7 @@ too, gone): its preview goes too."
     (when (+md-preview--live-p)
       (let ((preview +md-preview--buffer))
         (setq +md-preview--buffer nil)
-        (dolist (window (get-buffer-window-list preview nil t))
-          ;; The frame's only window: it shows another buffer once the
-          ;; preview is gone.
-          (ignore-errors (delete-window window)))
-        (let ((kill-buffer-query-functions nil))
-          (kill-buffer preview))))
+        (+md-preview--kill preview)))
     (when (and +md-preview--file (file-exists-p +md-preview--file))
       (delete-file +md-preview--file))
     (setq +md-preview--file nil +md-preview--line nil)))

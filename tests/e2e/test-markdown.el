@@ -367,6 +367,8 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); 'ok'")
       (+test-sleep 0.2)
       (execute-kbd-macro "q")
       (should-not (buffer-live-p preview))
+      ;; Its pane closed, as SPC m p closes it.
+      (should (equal (mapcar #'window-buffer (window-list)) (list (+test-md--source))))
       (with-current-buffer (+test-md--source)
         (should-not +md-preview-mode)
         (should-not +md-preview--file))

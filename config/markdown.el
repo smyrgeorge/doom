@@ -85,7 +85,7 @@
       :nm "<home>"  #'+my/webkit-top
       :nm "<end>"   #'+my/webkit-bottom
       :nm "y"       #'+my/webkit-copy
-      :gnm "q"      #'kill-current-buffer)
+      :gnm "q"      #'+my/markdown-preview-quit)
 
 ;; On Linux Ctrl+Shift+C copies (config/emacs.el, KEYS).
 (map! :unless (+my/macos-p)
