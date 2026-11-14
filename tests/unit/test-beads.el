@@ -1163,6 +1163,49 @@ for one window, cut in the other."
               (should (< +my/beads--wrapped-at (+my/beads--title-width window)))
               (should (> (+test-beads--row-lines "Lexer") 2)))))))))
 
+;; AN ISSUE'S SECTIONS
+(defun +test-beads--section (width &rest props)
+  "An issue's section (`beads-vui-content-section', PROPS) drawn in a pane
+WIDTH columns wide: its lines."
+  (require 'beads-vui)
+  (let ((buffer (get-buffer-create "*test-beads-section*")))
+    (delete-other-windows)
+    (let ((window (split-window nil nil 'right)))
+      (window-resize window (- width (window-width window)) t)
+      (should (= (window-width window) width))
+      (set-window-buffer window buffer)
+      (vui-mount (apply #'vui-component 'beads-vui-content-section props) (buffer-name buffer) t)
+      (split-string (with-current-buffer buffer (buffer-substring-no-properties (point-min) (point-max)))
+                    "\n"))))
+
+(ert-deftest beads/an-issue-s-section-every-line-indented ()
+  "A section's text (a description...): every line of it indented, not only
+its first (vui's); empty lines left empty."
+  (+test-with-reset
+    (let ((beads-detail-section-style 'heading))
+      (should (equal (seq-take (+test-beads--section 60 :title "Description"
+                                                     :content "The first line.\nThe second.\n\n- an item\n  its next line")
+                               6)
+                     '("Description:" "  The first line." "  The second." "" "  - an item" "    its next line")))
+      (should (equal (seq-take (+test-beads--section 60 :title "Notes" :content "") 2)
+                     '("Notes:" "  (empty)"))))))
+
+(ert-deftest beads/an-issue-s-section-separator-fits-the-pane ()
+  "`beads-detail-section-style' separator: its rule across the pane at 25,
+40 and 60 columns (but the last), its [edit] at its end (it drew 60
+characters, two or three screen lines in a narrow pane)."
+  (+test-with-reset
+    (let ((beads-detail-section-style 'separator))
+      (dolist (width '(25 40 60))
+        (let ((lines (+test-beads--section width :title "Description" :content "One.\nTwo."
+                                           :on-edit #'ignore)))
+          (should (string-match-p "\\`─+ \\[edit\\]\\'" (car lines)))
+          (should (= (string-width (car lines)) (1- width)))
+          (should (equal (seq-take (cdr lines) 4) '("Description:" "" "One." "Two."))))
+        (let ((lines (+test-beads--section width :title "Design Notes" :content "")))
+          (should (string-match-p "\\`─+\\'" (car lines)))
+          (should (= (string-width (car lines)) (1- width))))))))
+
 ;; ====== THE PLACE KEPT ======
 
 (defun +test-beads--ids-at (window)

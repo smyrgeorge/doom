@@ -34,14 +34,25 @@ its edit button if EDITABLE (ON-REFRESH called after an edit)."
 ;; its own components, these laid out anew) its rules span its pane, its
 ;; fields go on to the next line whole, each with its [edit], a long line goes
 ;; on under itself (indented as it is: under a list item's text), a
-;; dependency's title is whole. vui draws it again when its pane's width
+;; dependency's title is whole; a section's text is indented each line, not
+;; only its first (vui's), and with `beads-detail-section-style' separator
+;; its rules span the pane too. vui draws it again when its pane's width
 ;; changes, and here when another pane shows it (an issue opens in the
 ;; pane of the one before).
-(defun +my/beads--rule (char)
+(defun +my/beads--rule (char &rest after)
   "A rule of CHAR across the window showing the issue (but its last column:
-in a terminal a line filling it goes on to the next)."
+in a terminal a line filling it goes on to the next), AFTER (vnodes: an
+[edit] button) at its end."
   (vui-flex :width 'window
-            (vui-flex-item (lambda (width) (vui-text (make-string (max 1 (1- width)) char))))))
+            (vui-flex-item (lambda (width) (vui-text (make-string (max 1 (1- width)) char))))
+            after))
+
+(defun +my/beads--indented (text columns)
+  "TEXT with each of its lines (but empty ones) COLUMNS further in: vui
+indents only a text's first line."
+  (mapconcat (lambda (line) (if (string-empty-p line) line (concat (make-string columns ?\s) line)))
+             (split-string text "\n")
+             "\n"))
 
 (defun +my/beads--wrap-h ()
   "An issue's buffer: a long line goes on under itself at a word (see
@@ -130,6 +141,26 @@ after an edit), as many to a line as the window has room for (see above)."
        (when (and labels (> (length labels) 0))
          (vui-component 'beads-vui-labeled-value
            :label "Labels" :value (mapconcat #'identity (append labels nil) ", "))))))
+
+  (vui-defcomponent beads-vui-content-section (title content &key on-edit)
+    "A section: TITLE, its CONTENT (Markdown) under it, its edit button if
+ON-EDIT, as `beads-detail-section-style' lays it out: the content indented,
+every line of it (see above); `separator', under a rule across the window,
+the button at its end."
+    :render
+    (let ((text (if (and content (not (string-empty-p content)))
+                    (beads-vui-fontify-markdown content)
+                  (propertize "(empty)" 'face 'shadow)))
+          (edit (when on-edit (vui-button "edit" :on-click on-edit :face 'link)))
+          (heading (vui-text (concat title ":") :face '(:weight bold :underline t))))
+      (pcase beads-detail-section-style
+        ('separator
+         (vui-vstack (+my/beads--rule ?─ edit) heading (vui-newline) (vui-text text) (vui-newline)))
+        (_
+         (vui-vstack
+          (vui-hstack heading (when edit (vui-fragment (vui-text " ") edit)))
+          (vui-text (+my/beads--indented text 2))
+          (vui-newline))))))
 
   (vui-defcomponent beads-vui-section-header (title)
     "A section's header: TITLE under a rule across the window (see above)."
