@@ -14,7 +14,9 @@ Linux's notifications. Only while Emacs isn't in front; in Emacs, you see it the
 
 Claude sends its message itself (its system prompt says how and when):
 `emacsclient --eval '(+my/notify-claude "The tests pass" "/its/working/directory")'`. Any code can call
-`(+my/notify-claude TEXT DIRECTORY)` too: the notification names the project, a click shows its session.
+`(+my/notify-claude TEXT DIRECTORY)` too: the notification names the project, a click shows its session. Two sessions
+in one folder are told apart by their buffers' names (`doom`, `doom<2>`); a message is from the one whose turn is
+running, or the one a third argument names (a buffer, or its name).
 
 | Key | Action |
 |---|---|

@@ -22,7 +22,8 @@ showing the canvas (`agent-ui-question-waiting-functions')."
   (let ((question (and (buffer-live-p canvas)
                        (agent-ui-ask-question (agent-ui-get id :canvas canvas)))))
     (+my/notify 'agent-ui-question
-                (format "%s asks: %s" (if (buffer-live-p session) (buffer-name session) "Claude Code")
+                (format "%s asks: %s"
+                        (if (buffer-live-p session) (+my/notify-claude--name session) "Claude Code")
                         (or question "a question"))
                 :buffer canvas)))
 

@@ -18,12 +18,35 @@
 ;; overloaded, the login expired, a rate limit) ends in agent-shell's error,
 ;; not turn-complete: claude-turn-done says it too.
 
+(declare-function shell-maker-busy "shell-maker")
+
+(defun +my/notify-claude--folder (directory)
+  "DIRECTORY's folder's name; nil for none (the root)."
+  (let ((name (file-name-nondirectory (directory-file-name directory))))
+    (unless (string-empty-p name)
+      name)))
+
+(defun +my/notify-claude--sessions (directory)
+  "The Claude Code sessions working in DIRECTORY, the most recently used
+first."
+  (and directory
+       (seq-filter (lambda (buffer)
+                     (with-current-buffer buffer
+                       (and (derived-mode-p 'agent-shell-mode)
+                            (ignore-errors (file-equal-p (agent-shell-cwd) directory)))))
+                   (buffer-list))))
+
 (defun +my/notify-claude--name (buffer)
-  "BUFFER's session, as a notification names it: its project's folder."
+  "BUFFER's session, as a notification names it: its project's folder;
+with another session working there, its buffer's name, what follows its
+\" @ \" (\"doom<2>\"): else the two read alike."
   (with-current-buffer buffer
-    (or (ignore-errors
-          (file-name-nondirectory (directory-file-name (agent-shell-cwd))))
-        (buffer-name))))
+    (let* ((cwd (ignore-errors (agent-shell-cwd)))
+           (folder (and cwd (+my/notify-claude--folder cwd)))
+           (own (replace-regexp-in-string "\\`.* @ " "" (buffer-name))))
+      (cond ((and folder (not (cdr (+my/notify-claude--sessions cwd)))) folder)
+            ((not (string-empty-p own)) own)
+            (t (buffer-name))))))
 
 (defvar +my/notify-claude-turn-said-functions nil
   "Called with a session's buffer and agent-shell's turn-complete event when
@@ -102,27 +125,34 @@ for permission, or asks you a question."
 ;; A MESSAGE FROM CLAUDE CODE
 ;; The caller words it: Claude itself, through emacsclient (it's told how,
 ;; below), or any code. Given the session's working directory, the
-;; notification names its project and a click shows the session.
-(defun +my/notify-claude--session (directory)
-  "The Claude Code session working in DIRECTORY, if one is."
-  (and directory
-       (seq-find (lambda (buffer)
-                   (with-current-buffer buffer
-                     (and (derived-mode-p 'agent-shell-mode)
-                          (ignore-errors (file-equal-p (agent-shell-cwd) directory)))))
-                 (buffer-list))))
+;; notification names its project and a click shows the session. Of two
+;; sessions in one folder, the caller's: the one named, else one whose turn
+;; is running (Claude runs emacsclient in its turn).
+(defun +my/notify-claude--session (directory &optional session)
+  "The Claude Code session a message is from: SESSION (a buffer or its
+name), else of those working in DIRECTORY one whose turn is running, else
+the most recently used; nil if none is."
+  (or (when-let* ((buffer (and session (get-buffer session))))
+        (and (buffer-live-p buffer) buffer))
+      (let ((sessions (+my/notify-claude--sessions directory)))
+        (or (seq-find (lambda (buffer)
+                        (with-current-buffer buffer
+                          (ignore-errors (shell-maker-busy))))
+                      sessions)
+            (car sessions)))))
 
-(defun +my/notify-claude (text &optional directory)
+(defun +my/notify-claude (text &optional directory session)
   "Notify of a message from Claude Code: TEXT, as the caller words it.
 DIRECTORY: the session's working directory, the notification naming its
-project, a click showing the session. Shown as every notification is (see
-config/notify.el): only while Emacs isn't in front, `claude' on.
+project, a click showing the session; SESSION: that session (its buffer
+or its name), of several working there. Shown as every notification is
+\(see config/notify.el): only while Emacs isn't in front, `claude' on.
 Non-nil if it was shown."
   (unless (and (stringp text) (not (string-empty-p (string-trim text))))
     (user-error "No message to notify of"))
-  (let* ((session (+my/notify-claude--session directory))
+  (let* ((session (+my/notify-claude--session directory session))
          (name (cond (session (+my/notify-claude--name session))
-                     (directory (file-name-nondirectory (directory-file-name directory))))))
+                     (directory (+my/notify-claude--folder directory)))))
     (+my/notify 'claude (if name (format "%s: %s" name text) text)
                 :buffer session)))
 
