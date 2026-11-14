@@ -822,6 +822,28 @@ rows that continue a wrapped one, at the end on the last row."
       (should (= (+my/stripe--anchor (selected-window) third) (point-max)))
       (should (= (+my/stripe--anchor (selected-window) second) (1- third))))))
 
+(ert-deftest stripe/anchor-scrolled-sideways ()
+  "The window scrolled sideways: cells hang at the first column shown (Emacs
+draws no margin string hung on the part scrolled out of view), at the end of
+lines shorter than that; back at the start unscrolled. Each row its cell."
+  (+test-stripe (mapconcat (lambda (n) (if (cl-oddp n) (make-string 60 ?x) "short"))
+                           (number-sequence 1 30) "\n")
+    (setq truncate-lines t)
+    (let ((window (selected-window))
+          (long (+test-stripe--line-start 1))
+          (short (+test-stripe--line-start 2)))
+      (set-window-hscroll window 12)
+      (should (= (+my/stripe--anchor window long) (+ long 13)))
+      (should (= (+my/stripe--anchor window short) (+ short 5)))
+      (+my/stripe--render window)
+      (let ((overlays (+test-stripe--row-overlays window)))
+        (should (= (length overlays) (window-body-height window)))
+        (should (= (overlay-start (car overlays)) (+ long 13))))
+      (set-window-hscroll window 0)
+      (should (= (+my/stripe--anchor window long) long))
+      (+my/stripe--render window)
+      (should (= (overlay-start (car (+test-stripe--row-overlays window))) long)))))
+
 ;; ====== GRAPHICAL FRAMES: THE STRIP'S FRAME ======
 
 ;; Batch Emacs makes no child frames: they're stand-ins, the frame functions
@@ -1121,7 +1143,8 @@ moved): a new one, the old one flushed from Emacs's image cache."
 (ert-deftest stripe/key ()
   "What a window's strip depends on: buffer, start, vscroll, size, font,
 margin, errors, git highlights, line edits, where the window is (its edges,
-its header and tab lines: a notice above moves the strip)."
+its header and tab lines: a notice above moves the strip), how far it's
+scrolled sideways."
   (+test-stripe (+test-stripe--text 50)
     (+test-stripe--errors '(3 error))
     (let ((window (selected-window)))
@@ -1131,7 +1154,8 @@ its header and tab lines: a notice above moves the strip)."
                                    1 flycheck-current-errors +my/stripe--diff-hl-tick
                                    +my/stripe--line-edits
                                    (window-header-line-height window)
-                                   (window-tab-line-height window))
+                                   (window-tab-line-height window)
+                                   (window-hscroll window))
                              (window-pixel-edges window))))
       (should (= (nth 1 (+my/stripe--key window 42)) 42))
       ;; Each part compares with `eq' (no list: edges are its last parts).

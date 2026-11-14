@@ -58,20 +58,29 @@
 
 (defun +my/stripe--anchor (window pos)
   "Where to hang the cell of WINDOW's row starting at POS. A row that starts a
-line: there. A row that continues a wrapped line (visual-line-mode, e.g.
-Markdown): on its last character (the space it wraps at, or the newline).
-Laying out the row before, Emacs looks ahead into this row's first word to
-see whether it fits, and draws a margin string it meets there on that row
-too: hung at the start of the row (or just after) the cell showed on the row
-before, or on both."
-  (if (or (= pos (point-min)) (eq (char-before pos) ?\n))
-      pos
+line: there, or with the window scrolled sideways, at its first column shown:
+Emacs doesn't draw a margin string hung on the part scrolled out of view, so
+the whole strip went (a line shorter than that shows no cell). A row that
+continues a wrapped line (visual-line-mode, e.g. Markdown): on its last
+character (the space it wraps at, or the newline). Laying out the row before,
+Emacs looks ahead into this row's first word to see whether it fits, and
+draws a margin string it meets there on that row too: hung at the start of
+the row (or just after) the cell showed on the row before, or on both."
+  (cond
+   ((not (or (= pos (point-min)) (eq (char-before pos) ?\n)))
     (let ((next (save-excursion
                   (goto-char pos)
                   (and (= (vertical-motion 1 window) 1) (point)))))
       (cond ((null next) (point-max))   ; the last row
             ((> next (1+ pos)) (1- next))
-            (t pos)))))
+            (t pos))))
+   ((> (window-hscroll window) 0)
+    ;; Its first column is the truncation's `$'.
+    (save-excursion
+      (goto-char pos)
+      (move-to-column (1+ (window-hscroll window)))
+      (point)))
+   (t pos)))
 
 (defun +my/stripe--draw-cells (window start lines marks)
   "Draw WINDOW's strip as margin cells (a terminal), on overlays of its own."

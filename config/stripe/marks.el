@@ -182,7 +182,9 @@ examples/stripe.el reads them there."
                ;; Where the strip goes: the window moved, its header line grew
                ;; (a notice)...
                (window-header-line-height window)
-               (window-tab-line-height window))
+               (window-tab-line-height window)
+               ;; Scrolled sideways: a terminal's cells hang elsewhere.
+               (window-hscroll window))
          (window-pixel-edges window)))
 
 ;; diff-hl redraws its highlights asynchronously; bumping the tick makes the
