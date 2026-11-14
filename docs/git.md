@@ -4,7 +4,8 @@
 
 - Diffs are rendered by `git-delta`.
 - The status buffer lists the repository's TODO comments.
-- The log draws the branch graph with lines, a colour per lane, and the author and date in the margin.
+- The log draws the branch graph with lines, a colour per lane, and the author and date in the margin (hidden in a pane
+  too narrow for it).
 
 ## File diff
 

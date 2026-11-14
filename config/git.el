@@ -16,6 +16,13 @@
   '((?* . "●") (?| . "│") (?/ . "╱") (?\\ . "╲") (?- . "─"))
   "How the characters of git's graph are drawn.")
 
+;; THE MARGIN IN A NARROW PANE
+;; The margin (the log's date and author: 36 columns) is hidden where it would
+;; leave fewer columns of text than this, and shown again once the pane is
+;; wide enough (config/git/magit.el). L L still hides or shows it.
+(defvar +my/magit-margin-min-text 40
+  "The fewest columns of text a magit buffer's margin may leave its window.")
+
 (after! magit-log
   (put 'magit-log-mode 'magit-log-default-arguments
        '("--graph" "--color" "-n256" "--decorate"))

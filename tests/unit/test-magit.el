@@ -321,6 +321,41 @@ to the window's edge; the log keeps its margin."
     (with-current-buffer (magit-get-mode-buffer 'magit-log-mode)
       (should (magit--right-margin-active)))))
 
+(ert-deftest magit/log-margin-hidden-in-a-narrow-pane ()
+  "The log's margin (36 columns) whole at 100 columns; at 60 and 45, where it
+would leave fewer than 40 columns of log, hidden; wide again, back. L L still
+hides or shows it."
+  (should (= +my/magit-margin-min-text 40))
+  (+test-magit-with-repo nil
+    (+test-magit--git "commit" "-q" "--allow-empty" "-m" "x")
+    (let ((size (window-total-width (frame-root-window))))
+      (unwind-protect
+          (progn
+            (set-frame-size nil 100 (frame-height))
+            (magit-log-setup-buffer (list "--all") (get 'magit-log-mode 'magit-log-default-arguments) nil)
+            (let* ((log (magit-get-mode-buffer 'magit-log-mode))
+                   (window (get-buffer-window log))
+                   (margin (lambda ()
+                             (run-window-configuration-change-hook) ; as redisplay does
+                             (cdr (window-margins window)))))
+              (delete-other-windows window)
+              (should (= (window-total-width window) 100))
+              (should (equal (funcall margin) 36))
+              (dolist (width '(60 45))
+                (let ((other (split-window window width 'right)))
+                  (should (= (window-total-width window) width))
+                  (should-not (funcall margin))
+                  (should (>= (window-body-width window) 40))
+                  (delete-window other)
+                  (should (equal (funcall margin) 36))))
+              ;; L L: hidden, shown.
+              (with-current-buffer log
+                (magit-toggle-margin)
+                (should-not (funcall margin))
+                (magit-toggle-margin)
+                (should (equal (funcall margin) 36)))))
+        (set-frame-size nil size (frame-height))))))
+
 (ert-deftest magit/status-unpushed-commits-open ()
   (+test-magit-with-repo nil
     (let ((bare (make-temp-file (+test-tmp-file "magit-remote-") t)))

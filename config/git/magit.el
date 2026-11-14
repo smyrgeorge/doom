@@ -56,3 +56,18 @@
                                  (alist-get (char-after pos) +my/magit-graph-glyphs)))))))))
 
 (add-hook 'magit-refresh-buffer-hook #'+my/magit-pretty-graph-h)
+
+;; The margin in a narrow pane (see config/git.el): magit sets a window's
+;; margins when it shows the buffer and again whenever the window's size
+;; changes (`window-configuration-change-hook'); after it, the right margin is
+;; taken off if it leaves too few columns of text.
+(defun +my/magit-margin-fit-a (&optional window)
+  "After `magit-set-window-margins': WINDOW's right margin hidden if it leaves
+fewer than `+my/magit-margin-min-text' columns of text."
+  (when-let* ((window (or window (get-buffer-window)))
+              ((window-live-p window))
+              ((cdr (window-margins window)))
+              ((< (window-body-width window) +my/magit-margin-min-text)))
+    (set-window-margins window (car (window-margins window)) nil)))
+
+(advice-add 'magit-set-window-margins :after #'+my/magit-margin-fit-a)
