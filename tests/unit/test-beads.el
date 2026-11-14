@@ -841,6 +841,47 @@ issue under it)."
           (beads-list-unmark-all)
           (should (equal (+test-beads--view) before)))))))
 
+;; doom-o5t.5
+(ert-deftest beads/bd-two-lists-each-its-own-issues ()
+  "Two projects' lists open: each keeps its own issues (beads.el kept one
+list of them for all, the last refreshed): its separators, t (toggle marks)
+and the issue at point are its own, the other refreshed after it."
+  (+test-beads-with-project
+    (let* ((bug (+test-beads--create "Crash" :issue-type "bug" :priority 0))
+           (release (+test-beads--create "Release"))
+           (other (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "beads-other-") t))))
+           (ids (lambda () (sort (mapcar (lambda (issue) (alist-get 'id issue)) beads-list--issues) #'string<)))
+           (first nil) (second nil) (elsewhere nil))
+      (beads-client-request "dep_add" `((from_id . ,release) (to_id . ,bug)))
+      (+my/beads-project)
+      (setq first (+test-beads--list))
+      ;; Another project, its list opened (refreshed) after the first.
+      (let ((default-directory other))
+        (+test-beads--run "git" "init" "-q")
+        (+test-beads--run "bd" "init" "--quiet" "--prefix" "u")
+        (setq elsewhere (+test-beads--create "Elsewhere"))
+        (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) other)))
+          (+my/beads-project)))
+      (setq second (seq-find (lambda (b) (and (not (eq b first))
+                                              (with-current-buffer b (derived-mode-p 'beads-list-mode))))
+                             (buffer-list)))
+      (should second)
+      (should (local-variable-p 'beads-list--issues first))
+      (with-current-buffer second
+        (should (equal (funcall ids) (list elsewhere))))
+      (with-current-buffer first
+        (should (equal (funcall ids) (sort (list bug release) #'string<)))
+        ;; t: its own issues marked.
+        (beads-list-toggle-marks)
+        (should (equal (sort (copy-sequence beads-list--marked) #'string<) (sort (list bug release) #'string<)))
+        ;; Its separators drawn again (as a refresh does): Blocked over its own.
+        (beads-list--add-section-separators)
+        (should (string-match-p "── Blocked ──\n\\* [^\n]*Release" (+test-beads--view)))
+        ;; The issue at point.
+        (goto-char (point-min))
+        (search-forward "Crash")
+        (should (equal (alist-get 'id (beads-list--get-issue-at-point)) bug))))))
+
 ;; ====== THE PLACE KEPT ======
 
 (defun +test-beads--ids-at (window)

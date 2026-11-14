@@ -60,7 +60,7 @@
 
 (load! "beads/project")                 ; SPC o i, SPC o I
 (load! "beads/bd")                      ; mended for bd 1.x
-(load! "beads/refresh")                 ; in the background
+(load! "beads/refresh")                 ; in the background, each its own
 (load! "beads/hidden")                  ; closed issues, a filter: said
 (load! "beads/look")                    ; icons, badges, tags, epics
 (load! "beads/place")                   ; kept through a refresh

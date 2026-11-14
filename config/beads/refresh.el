@@ -1,5 +1,16 @@
 ;;; $DOOMDIR/config/beads/refresh.el -*- lexical-binding: t; -*-
-;; Issue lists refreshed in the background. Loaded from config/beads.el.
+;; Issue lists refreshed in the background, each keeping its own issues.
+;; Loaded from config/beads.el.
+
+;; EACH LIST ITS OWN ISSUES
+;; beads.el kept a list's issues in one variable for every list
+;; (`beads-list--issues', "for current buffer" its doc says, but global):
+;; with two projects' lists open, the one refreshed last won, and the other
+;; read that project's issues: its sections' separators, its P0 rows' tint,
+;; t (toggle marks), * m, the filter by type, the preview, the issue at point
+;; sent to Claude. Each list keeps its own now (doom-o5t.5).
+(after! beads-list
+  (make-variable-buffer-local 'beads-list--issues))
 
 ;; IN THE BACKGROUND
 ;; bd takes ~0.5 s to answer (bd list 0.35 s, bd stats 0.16 s: its database
