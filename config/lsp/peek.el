@@ -409,6 +409,25 @@ laid out for the pane (see Width)."
                          (overlay-get lsp-ui-peek--overlay 'after-string)
                          (+my/peek--separator)))))
 
+;;; Closing
+
+;; Leaving the peek for another pane (a key, a click there), lsp-ui's keys go
+;; and it closes the peek once Emacs is idle, but in the buffer current then:
+;; the other pane's. The peek stayed drawn, its keys gone, until another peek
+;; there was closed. Now it's closed in its own buffer.
+(defun +my/peek--close-in (buffer)
+  "Close BUFFER's peek, if it's still there."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (lsp-ui-peek--disable))))
+
+(defadvice! +my/peek-close-in-its-buffer-a ()
+  "Close the peek once Emacs is idle, in its own buffer (see above)."
+  :override #'lsp-ui-peek--abort
+  (interactive)
+  ;; Idle, as lsp-ui does (emacs-lsp/lsp-ui#33).
+  (run-with-idle-timer 0 nil #'+my/peek--close-in (current-buffer)))
+
 ;;; Fix
 
 ;; Closing the peek hides it twice, the second time with its overlay already

@@ -128,7 +128,7 @@ restored after."
 (defun +test-peek--close ()
   "Close the peek (as Esc does), no timer left behind."
   (lsp-ui-peek--disable)
-  (cancel-function-timers #'lsp-ui-peek--disable))
+  (cancel-function-timers #'+my/peek--close-in))
 
 (defmacro +test-peek--with-usages (locations &rest body)
   "BODY after gD on foo's declaration in main.py, the language server
@@ -196,6 +196,7 @@ other.py, in one project). The peek is closed after."
                    (+my/peek-insert-xrefs-a . lsp-ui-peek--insert-xrefs)
                    (+my/peek-frame-a . lsp-ui-peek--peek-new)
                    (+my/peek-fit-width-a . lsp-ui-peek--peek)
+                   (+my/peek-close-in-its-buffer-a . lsp-ui-peek--abort)
                    (+my/peek-footer-a . lsp-ui-peek--make-footer)
                    (+my/peek-separators-a . lsp-ui-peek--peek-new)
                    (+my/indent-guides-peek-guard-a . +indent-guides--restore-after-lsp-ui-peek-a)))

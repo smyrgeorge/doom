@@ -73,8 +73,9 @@ closed."
              (progn (lsp-ui-peek-find-references)
                     (redisplay t)
                     ,@body)
-           (lsp-ui-peek--disable)
-           (cancel-function-timers #'lsp-ui-peek--disable))))))
+           (when (buffer-live-p (get-file-buffer file))
+             (with-current-buffer (get-file-buffer file) (lsp-ui-peek--disable)))
+           (cancel-function-timers #'+my/peek--close-in))))))
 
 (defun +test-peek--row (pos)
   "The window row POS is shown on (0-based), or nil when it isn't shown."
@@ -215,5 +216,60 @@ buffer killed while open, no error."
       (window-resize window (- 60 (window-body-width window)) t)
       (redisplay t)
       (should (= (+test-messages "^Error") errors)))))
+
+;; ====== CLOSING ======
+
+(defmacro +test-peek-with-two-panes (&rest body)
+  "BODY with the peek open in the left pane, another buffer in the right
+one; SOURCE the peek's buffer, OTHER the right pane."
+  (declare (indent 0))
+  `(let ((other nil) (source nil))
+     (+test-peek-with-long (progn (+test-peek--pane-wide 70)
+                                  (setq other (next-window))
+                                  (set-window-buffer other (+test-buffer "*other pane*" "other\n")))
+         3 3
+       (setq source (current-buffer))
+       ,@body)))
+
+(defun +test-peek--closed-p (buffer)
+  "Whether BUFFER's peek is closed: its mode off, its overlay gone."
+  (with-current-buffer buffer
+    (not (or lsp-ui-peek-mode (overlayp lsp-ui-peek--overlay)))))
+
+(ert-deftest e2e-peek/closed-when-leaving-for-another-pane ()
+  "A key that selects another pane (lsp-ui's keys go): once Emacs is idle,
+the peek is closed in its own buffer (it stayed drawn, lsp-ui closing it in
+the other pane's)."
+  (global-set-key (kbd "<f12>") #'other-window)
+  (unwind-protect
+      (+test-peek-with-two-panes
+        (should-not (+test-peek--closed-p source))
+        (execute-kbd-macro (kbd "<f12>"))
+        (should (eq (selected-window) other))
+        (should (+test-wait-for (lambda () (+test-peek--closed-p source)) 3)))
+    (global-unset-key (kbd "<f12>"))))
+
+(ert-deftest e2e-peek/its-keys-still-close-and-jump ()
+  "q and C-g close it; RET jumps to the usage selected."
+  (dolist (key '("q" "C-g"))
+    (+test-peek-with-two-panes
+      (execute-kbd-macro (kbd key))
+      (should (+test-wait-for (lambda () (+test-peek--closed-p source)) 3))))
+  (+test-peek-with-two-panes
+    ;; Its server's (else lsp-ui starts one in the file jumped to).
+    (setq-local lsp--buffer-workspaces (list (make-lsp--workspace)))
+    (lsp-ui-peek--select-next)
+    (execute-kbd-macro (kbd "RET"))
+    (should (+test-wait-for (lambda () (+test-peek--closed-p source)) 3))
+    (should (= (line-number-at-pos) 69))))   ; the second usage
+
+(ert-deftest e2e-peek/its-buffer-killed-before-it-closes ()
+  "Its buffer killed before the peek is closed: no error."
+  (+test-peek-with-two-panes
+    (let ((errors (+test-messages "rror")))
+      (lsp-ui-peek--abort)
+      (kill-buffer source)
+      (+test-sleep 0.3)
+      (should (= (+test-messages "rror") errors)))))
 
 ;;; test-peek.el ends here
