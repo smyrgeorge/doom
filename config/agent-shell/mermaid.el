@@ -11,32 +11,47 @@
 ;; drawn (in the background, mermaid/render.el). An error, or no mmdc: the
 ;; source, the message under it. Still streaming, the block stays as it is.
 ;; Each diagram is a region carrying its source (`+my/agent-shell-mermaid'),
-;; found again in any buffer (the shell's, its viewport's) once drawn.
+;; found again in any buffer (the shell's, its viewport's) once drawn. Drawn,
+;; it's no taller than the window, and opens at full size as agent-shell's
+;; images do: RET or a click on it (the SVG in the image viewer, to zoom).
 
 (defun +my/agent-shell-mermaid-p ()
   "Non-nil if diagrams are drawn: config/mermaid.el there, the GUI."
   (and (fboundp '+my/mermaid-render) (display-graphic-p)))
 
 (defun +my/agent-shell-mermaid--image (file)
-  "FILE's image, as agent-shell sizes its images (resized with them)."
-  (let ((image (create-image file nil nil :max-width (agent-shell-markdown--image-max-width))))
+  "FILE's image, as agent-shell sizes its images (resized with them), no
+taller than the window."
+  (let* ((window (or (get-buffer-window (current-buffer) t) (frame-first-window)))
+         (image (create-image file nil nil
+                              :max-width (agent-shell-markdown--image-max-width)
+                              :max-height (window-body-height window t))))
     (image-flush image t)
     image))
 
 (defun +my/agent-shell-mermaid--show (start end file message)
-  "The diagram START..END (a region of the current buffer) as FILE's image;
-or its source with MESSAGE under it."
+  "The diagram START..END (a region of the current buffer) as FILE's image,
+opening FILE as agent-shell's images open theirs; or its source with MESSAGE
+under it."
   (let ((inhibit-read-only t)
         (buffer-undo-list t)
         (modified (buffer-modified-p)))
     (if file
-        (add-text-properties
-         start end
-         (list 'display (+my/agent-shell-mermaid--image file)
-               'agent-shell-markdown-image-width-ratio 'default
-               'agent-shell-markdown-image-window-width (agent-shell-markdown--displayed-window-width)))
+        (let* ((open (lambda () (interactive) (agent-shell-markdown-visit-file :file file)))
+               (keymap (agent-shell-markdown--make-ret-binding-map open)))
+          (add-text-properties
+           start end
+           (list 'display (+my/agent-shell-mermaid--image file)
+                 'agent-shell-markdown-image-width-ratio 'default
+                 'agent-shell-markdown-image-window-width (agent-shell-markdown--displayed-window-width)
+                 'keymap keymap
+                 'help-echo "Open image"
+                 'pointer 'hand))
+          (agent-shell-markdown--put-hint-sensor
+           start end (lambda () (agent-shell-markdown--image-hint :action open :keymap keymap))))
       (remove-list-of-text-properties start end '(agent-shell-markdown-image-width-ratio
-                                                  agent-shell-markdown-image-window-width))
+                                                  agent-shell-markdown-image-window-width
+                                                  keymap help-echo pointer cursor-sensor-functions))
       (let ((source (buffer-substring start end)))
         (remove-list-of-text-properties 0 (length source) '(display) source)
         (put-text-property start end 'display

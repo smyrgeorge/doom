@@ -155,7 +155,33 @@ fragment's block found as before, the whole reply."
     (let ((display (+test-as-mermaid--display)))
       (should (stringp display))
       (should (string-prefix-p "flowchart TD\n    A --> ERROR\nParse error on line 2:" display))
-      (should (eq (get-text-property (string-search "Parse" display) 'face display) 'error)))))
+      (should (eq (get-text-property (string-search "Parse" display) 'face display) 'error)))
+    ;; Nothing to open.
+    (pcase-let ((`(,start . ,_) (+test-as-mermaid--region)))
+      (should-not (get-text-property start 'keymap))
+      (should-not (get-text-property start 'pointer)))))
+
+(ert-deftest agent-shell-mermaid/a-diagram-opens-at-full-size ()
+  "A drawn diagram opens as agent-shell's images do: RET or a click on it
+visits its SVG, a hand pointer and a help-echo say so. It's no taller than
+the window. Copied, still the Markdown."
+  (+test-as-mermaid
+    (+test-as-mermaid--render +test-as-mermaid--reply)
+    (should (+test-mermaid--wait #'+test-as-mermaid--drawn-p))
+    (pcase-let ((`(,start . ,_) (+test-as-mermaid--region)))
+      (let ((file (image-property (+test-as-mermaid--display) :file))
+            visited)
+        (should (equal (get-text-property start 'help-echo) "Open image"))
+        (should (eq (get-text-property start 'pointer) 'hand))
+        (should (get-text-property start 'cursor-sensor-functions))
+        (cl-letf (((symbol-function 'agent-shell-markdown-visit-file)
+                   (lambda (&rest args) (push (plist-get args :file) visited))))
+          (goto-char start)
+          (call-interactively (key-binding (kbd "RET")))
+          (call-interactively (lookup-key (get-text-property start 'keymap) [mouse-1])))
+        (should (equal visited (list file file)))
+        (should (= (image-property (+test-as-mermaid--display) :max-height) (window-body-height nil t)))
+        (should (equal (agent-shell-markdown-reconstruct (point-min) (point-max)) +test-as-mermaid--reply))))))
 
 (ert-deftest agent-shell-mermaid/without-mmdc-what-to-install ()
   (+test-as-mermaid
@@ -202,6 +228,7 @@ fragment's block found as before, the whole reply."
 (ert-deftest agent-shell-mermaid/claude-is-told ()
   (should (string-search "```mermaid" (+my/agent-shell-mermaid-context)))
   (should (string-search "instead of rendering diagram code to an image" (+my/agent-shell-mermaid-context)))
+  (should (string-search "prefer top-down layouts" (+my/agent-shell-mermaid-context)))
   (cl-letf (((symbol-function 'fboundp)
              (let ((original (symbol-function 'fboundp)))
                (lambda (symbol) (and (not (eq symbol '+my/mermaid-render)) (funcall original symbol))))))

@@ -114,13 +114,16 @@ Claude Code settings run it as a session starts.")
 ;; closed; meanwhile, or for an error (its message under it) or without mmdc,
 ;; its source. Copying as Markdown, and the transcript, keep the block's
 ;; source. A theme switch draws them again; they resize with the window, as
-;; images do. Claude is told so (below), where config/mermaid.el is loaded.
+;; images do, no taller than it; RET or a click opens one at full size, as an
+;; image. Claude is told so (below), where config/mermaid.el is loaded.
 (defvar +my/agent-shell-mermaid-context
   "Diagrams: fenced mermaid blocks (```mermaid) are drawn as diagrams in \
 your replies, in the user's theme's colours: use them for flowcharts, \
 sequence, state, class and ER diagrams, Gantt charts, mind maps and the \
 like, in reports too, instead of rendering diagram code to an image. Mermaid \
-11's syntax; keep labels short."
+11's syntax; keep labels short. A diagram is shrunk to the width of the \
+user's pane, often narrow: prefer top-down layouts (flowchart TD) to wide \
+left-to-right ones."
   "Appended to Claude Code's system prompt where diagrams are drawn (see
 DIAGRAMS IN REPLIES above).")
 

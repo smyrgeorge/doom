@@ -30,7 +30,8 @@ when a session finished its turn or asks for your permission.
 
 Claude's ```` ```mermaid ```` blocks are drawn as diagrams in its replies, in the theme's colours
 ([Mermaid](mermaid.md)), once a block is complete: its source shows until then, and with an error, Mermaid's message
-under it. Copying a reply as Markdown, and its transcript, keep the source. Claude is told to use them for diagrams.
+under it. A diagram is no taller than the window; `RET` or a click on it opens it at full size. Copying a reply as
+Markdown, and its transcript, keep the source. Claude is told to use them for diagrams.
 
 ## Claude's diffs
 
