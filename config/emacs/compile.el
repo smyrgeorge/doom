@@ -28,6 +28,11 @@
 which it binds with `let', weren't special variables, and CALLS, which it
 calls, weren't defined (see above).")
 
+(defvar +my/compile--watchers (make-hash-table :test #'eq)
+  "NAME -> the functions in `+my/compile--watch' that bind or call it: a
+file loaded rechecks only those of the names it defines (thousands are
+watched: every lexical local looks like a variable not yet special).")
+
 (defun +my/compile--interpreted-p (symbol)
   (and (fboundp symbol)
        (let ((fn (symbol-function symbol)))
@@ -78,6 +83,16 @@ be expanded."
                  (cons (delete-dups variables) (delete-dups calls)))
         (error 'error)))))
 
+(defun +my/compile--unwatch (fn)
+  "FN no longer watched (see `+my/compile--watch')."
+  (pcase-let ((`(,_source ,_compiled ,variables ,calls) (gethash fn +my/compile--watch)))
+    (dolist (name (append variables calls))
+      (let ((fns (delq fn (gethash name +my/compile--watchers))))
+        (if fns
+            (puthash name fns +my/compile--watchers)
+          (remhash name +my/compile--watchers))))
+    (remhash fn +my/compile--watch)))
+
 (defun +my/compile--function (fn)
   "Byte-compile FN in place, noting what it uses that isn't known yet."
   (let* ((source (symbol-function fn))
@@ -85,10 +100,12 @@ be expanded."
     (unless (eq unknowns 'error)          ; left interpreted
       (byte-compile fn)
       (let ((compiled (symbol-function fn)))
-        (if (and (or (car unknowns) (cdr unknowns)) (not (eq compiled source)))
-            (puthash fn (list source compiled (car unknowns) (cdr unknowns))
-                     +my/compile--watch)
-          (remhash fn +my/compile--watch))))))
+        (+my/compile--unwatch fn)
+        (when (and (or (car unknowns) (cdr unknowns)) (not (eq compiled source)))
+          (puthash fn (list source compiled (car unknowns) (cdr unknowns))
+                   +my/compile--watch)
+          (dolist (name (seq-uniq (append (car unknowns) (cdr unknowns))))
+            (push fn (gethash name +my/compile--watchers))))))))
 
 (defun +my/compile-config-functions-h ()
   (when +my/compile--pending
@@ -99,18 +116,40 @@ be expanded."
         (ignore-errors (+my/compile--function (pop fns))))
       (setq +my/compile--pending (and fns t)))))
 
-(defun +my/compile--recheck ()
+(defun +my/compile--check (fn)
+  "FN compiled before a variable it binds or a macro it calls became known:
+back to its source, to be compiled again."
+  (when-let* ((entry (gethash fn +my/compile--watch)))
+    (pcase-let ((`(,source ,compiled ,variables ,calls) entry))
+      (cond ((not (eq (symbol-function fn) compiled)) ; redefined since
+             (+my/compile--unwatch fn))
+            ((or (seq-some #'special-variable-p variables)
+                 (seq-some #'macrop calls))
+             (fset fn source)
+             (+my/compile--unwatch fn))))))
+
+(defun +my/compile--defined (file)
+  "The names FILE, just loaded, defined (variables, functions, macros), from
+its `load-history' entry; t if it has none."
+  (if-let* ((entry (if (equal (car-safe (car load-history)) file)
+                       (car load-history)
+                     (assoc file load-history))))
+      (delq nil (mapcar (lambda (item)
+                          (cond ((symbolp item) item)
+                                ((memq (car-safe item) '(defun autoload t)) (cdr item))))
+                        (cdr entry)))
+    t))
+
+(defun +my/compile--recheck (&optional file)
   "Functions compiled before a variable they bind or a macro they call became
-known: back to their source, to be compiled again."
-  (maphash (lambda (fn entry)
-             (pcase-let ((`(,source ,compiled ,variables ,calls) entry))
-               (cond ((not (eq (symbol-function fn) compiled)) ; redefined since
-                      (remhash fn +my/compile--watch))
-                     ((or (seq-some #'special-variable-p variables)
-                          (seq-some #'macrop calls))
-                      (fset fn source)
-                      (remhash fn +my/compile--watch)))))
-           +my/compile--watch))
+known: back to their source, to be compiled again. FILE, just loaded: only
+those using a name it defined."
+  (let ((names (if file (+my/compile--defined file) t)))
+    (dolist (fn (if (eq names t)
+                    (hash-table-keys +my/compile--watch)
+                  (delete-dups (mapcan (lambda (name) (copy-sequence (gethash name +my/compile--watchers)))
+                                       names))))
+      (+my/compile--check fn))))
 
 (when (timerp +my/compile--timer)       ; reloading this file
   (cancel-timer +my/compile--timer))
@@ -119,6 +158,6 @@ known: back to their source, to be compiled again."
       (run-with-idle-timer +my/compile-idle-delay t #'+my/compile-config-functions-h))
 
 (add-hook 'after-load-functions
-          (defun +my/compile-pending-h (&rest _)
+          (defun +my/compile-pending-h (&optional file)
             (setq +my/compile--pending t)
-            (+my/compile--recheck)))
+            (+my/compile--recheck file)))

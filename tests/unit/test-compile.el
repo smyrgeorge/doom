@@ -13,6 +13,7 @@
   "BODY with its own watch list and pending flag."
   (declare (indent 0))
   `(let ((+my/compile--watch (make-hash-table :test #'eq))
+         (+my/compile--watchers (make-hash-table :test #'eq))
          (+my/compile--pending nil)
          (byte-compile-warnings nil))
      ,@body))
@@ -64,13 +65,15 @@ package loads (`after-load-functions' run)."
     (should (search-forward "(defvar +my/compile--pending t" nil t))))
 
 (ert-deftest compile/after-load-marks-pending-and-rechecks ()
+  "A file loaded: a pass due, and a recheck of what it defined."
   (should (memq #'+my/compile-pending-h after-load-functions))
   (+test-compile--isolated
-    (let ((rechecks 0))
-      (cl-letf (((symbol-function '+my/compile--recheck) (lambda () (cl-incf rechecks))))
-        (+test-compile--load "compile/any.el" "(defvar +test-compile-any 1)\n"))
-      (should +my/compile--pending)
-      (should (= rechecks 1)))))
+    (let ((rechecks nil))
+      (cl-letf (((symbol-function '+my/compile--recheck) (lambda (&optional file) (push file rechecks))))
+        (let ((file (+test-compile--load "compile/any.el" "(defvar +test-compile-any 1)\n")))
+          (should (equal (mapcar #'file-name-sans-extension rechecks)
+                         (list (file-name-sans-extension file))))))
+      (should +my/compile--pending))))
 
 ;; ====== WHAT GETS COMPILED ======
 
@@ -408,6 +411,53 @@ the next pass."
     (should-not (+test-compile--compiled-p '+test-compile-r4a))
     (should (+test-compile--compiled-p '+test-compile-r4b))
     (should (gethash '+test-compile-r4b +my/compile--watch))))
+
+(ert-deftest compile/recheck-only-what-a-file-defined ()
+  "A file loaded rechecks only the functions using a name it defined (a
+variable, a macro): not all those watched (thousands, each lexical local
+looking like a variable not yet special); the others stay compiled and
+watched."
+  (+test-compile--isolated
+    (+test-compile--define '+test-compile-r5a '(let ((+test-compile-r5-var 1)) +test-compile-r5-var))
+    (+test-compile--define '+test-compile-r5b '(+test-compile-r5-macro 1))
+    (+my/compile--function '+test-compile-r5a)
+    (+my/compile--function '+test-compile-r5b)
+    (dotimes (i 2000)
+      (let ((fn (intern (format "+test-compile-r5-many-%d" i))))
+        (+test-compile--define fn `(let ((,(intern (format "+test-compile-r5-local-%d" i)) 1)) nil))
+        (+my/compile--function fn)))
+    (should (= (hash-table-count +my/compile--watch) 2002))
+    (let ((checked nil)
+          (check (symbol-function '+my/compile--check)))
+      (cl-letf (((symbol-function '+my/compile--check) (lambda (fn) (push fn checked) (funcall check fn))))
+        (+test-compile--load "compile/r5.el" "(defvar +test-compile-r5-var nil)\n(defun +test-compile-r5-other () 1)\n")
+        (should (equal checked '(+test-compile-r5a)))
+        (setq checked nil)
+        (+test-compile--load "compile/r5-macro.el" "(defmacro +test-compile-r5-macro (x) `(list 'm ,x))\n")
+        (should (equal checked '(+test-compile-r5b)))))
+    (should (+my/compile--interpreted-p '+test-compile-r5a))
+    (should (equal (+test-compile-r5b) '(m 1)))
+    (should (+test-compile--compiled-p '+test-compile-r5-many-0))
+    (should (= (hash-table-count +my/compile--watch) 2000))
+    ;; No longer watched: out of the index too.
+    (should-not (gethash '+test-compile-r5-var +my/compile--watchers))
+    (should-not (gethash '+test-compile-r5-macro +my/compile--watchers))
+    (should (equal (gethash '+test-compile-r5-local-7 +my/compile--watchers) '(+test-compile-r5-many-7)))))
+
+(ert-deftest compile/recheck-compiled-again-watched-once ()
+  "Defined again (its file reloaded) and compiled again: watched once, under
+its names once."
+  (+test-compile--isolated
+    (dotimes (_ 2)
+      (+test-compile--define '+test-compile-r6 '(let ((+test-compile-r6-var 1)) (+test-compile-r6-call)))
+      (+my/compile--function '+test-compile-r6))
+    (should (equal (gethash '+test-compile-r6-var +my/compile--watchers) '(+test-compile-r6)))
+    (should (equal (gethash '+test-compile-r6-call +my/compile--watchers) '(+test-compile-r6)))
+    ;; Its names as found, none lost indexing them (a name both bound and
+    ;; called: a binding pair's head is taken for a call).
+    (pcase-let ((`(,source ,_ ,variables ,calls) (gethash '+test-compile-r6 +my/compile--watch)))
+      (should (equal (cons variables calls) (+my/compile--unknowns source)))
+      (should (memq '+test-compile-r6-var calls)))))
 
 ;; ====== THE CATCHES (config/emacs/compile.el's comments) ======
 
