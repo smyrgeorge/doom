@@ -39,6 +39,20 @@ stand-in theme, in a buffer shown in the selected window."
   (insert text)
   (agent-shell-markdown-replace-markup))
 
+(defun +test-as-mermaid--stream (chunk &optional create-new)
+  "CHUNK streamed into the buffer as agent-shell streams a reply: appended to
+its fragment (a new one with CREATE-NEW), the fragment's body rendered."
+  (let ((inhibit-read-only t))
+    (when-let* ((range (agent-shell-ui-update-fragment
+                        (agent-shell-ui-make-fragment-model
+                         :namespace-id "1" :block-id "1-agent_message_chunk" :body chunk)
+                        :append t :create-new create-new :navigation 'never :no-undo t))
+                (start (map-nested-elt range '(:body :start)))
+                (end (map-nested-elt range '(:body :end))))
+      (save-restriction
+        (narrow-to-region start end)
+        (agent-shell--render-markdown)))))
+
 (defun +test-as-mermaid--region ()
   "The buffer's diagram: (START END . SOURCE), or nil."
   (car (+my/agent-shell-mermaid--regions)))
@@ -79,6 +93,40 @@ stand-in theme, in a buffer shown in the selected window."
       (should (eq (char-after end) ?\n))
       (should-not (get-text-property end 'display)))
     (should (string-search "Done." (buffer-string)))))
+
+(ert-deftest agent-shell-mermaid/streamed-text-after-the-diagram-after-it ()
+  "A reply streamed as agent-shell streams it (its fragment appended to, then
+rendered): text, a diagram, more text stay in that order, copied too; the
+diagram is the reply's (its block, read-only, indented as it); the
+fragment's block found as before, the whole reply."
+  (+test-as-mermaid
+    (setq-local major-mode 'agent-shell-mode)
+    (+test-as-mermaid--stream "Here is a diagram:\n\n```mermaid\nflowchart TD\n    A --> B\n```\n" t)
+    (should (+test-as-mermaid--region))
+    (should (agent-shell-ui--cached-block "1-1-agent_message_chunk"))
+    (+test-as-mermaid--stream "\nAnd text after it.\n")
+    (pcase-let* ((`(,start ,end . ,_) (+test-as-mermaid--region))
+                 (before (save-excursion (goto-char (point-min)) (search-forward "Here is") (match-beginning 0)))
+                 (after (save-excursion (goto-char (point-min)) (search-forward "And text") (match-beginning 0))))
+      (should (< before start end after))
+      ;; The reply's own properties on it.
+      (dolist (pos (list start (1- end) end))
+        (should (equal (map-elt (get-text-property pos 'agent-shell-ui-state) :qualified-id)
+                       "1-1-agent_message_chunk"))
+        (should (eq (get-text-property pos 'agent-shell-ui-section) 'body))
+        (should (get-text-property pos 'read-only))
+        (should (equal (get-text-property pos 'line-prefix) "  ")))
+      (should-error (save-excursion (goto-char start) (delete-char 1)) :type 'text-read-only)
+      ;; The block: the whole reply.
+      (let ((range (agent-shell-ui--block-range :position before)))
+        (should (<= (map-elt range :start) before))
+        (should (> (map-elt range :end) after)))
+      ;; Copied: in its order.
+      (let ((markdown (agent-shell-markdown-reconstruct (point-min) (point-max))))
+        (should (< (string-search "Here is" markdown) (string-search "```mermaid" markdown)
+                   (string-search "And text" markdown)))))
+    (should (+test-mermaid--wait #'+test-as-mermaid--drawn-p))
+    (let ((inhibit-read-only t)) (erase-buffer))))
 
 (ert-deftest agent-shell-mermaid/streaming-left-until-closed ()
   (+test-as-mermaid

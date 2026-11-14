@@ -84,9 +84,15 @@ nothing drawn."
 
 (defun +my/agent-shell-mermaid--claim (start end body)
   "The block START..END (closed, its source BODY): its source in its place,
-highlighted, frozen, the block's Markdown on it; drawn (see above)."
+highlighted, frozen, the block's Markdown on it, the reply's own properties
+kept; drawn (see above)."
   (let* ((markdown (buffer-substring-no-properties start end))
-         (text (agent-shell-markdown--highlight-code body "mermaid")))
+         (text (agent-shell-markdown--highlight-code body "mermaid"))
+         ;; The reply's (its fragment's id and section, read-only, its
+         ;; indent), as agent-shell's passes keep them on what they replace:
+         ;; without, the fragment's end was looked for before the diagram, and
+         ;; text streamed after it went above it; the diagram could be edited.
+         (reply (agent-shell-markdown--carry-properties start)))
     (add-face-text-property 0 (length text) 'agent-shell-markdown-source-block t text)
     (goto-char start)
     (delete-region start end)
@@ -101,6 +107,7 @@ highlighted, frozen, the block's Markdown on it; drawn (see above)."
                         'agent-shell-markdown-source ""
                         'agent-shell-markdown-frozen t
                         'rear-nonsticky '(agent-shell-markdown-frozen agent-shell-markdown-source)))
+    (add-text-properties start (point) reply)
     ;; Once agent-shell's passes are done with the rest.
     (run-at-time 0 nil #'+my/agent-shell-mermaid--draw body)))
 
