@@ -279,6 +279,28 @@ screenshot), the drawing closed."
               (should (equal (cdr inserted) (list :text "<the image>" :shell-buffer shell))))))
       (kill-buffer shell))))
 
+(ert-deftest agent-shell-excalidraw/inserted-with-a-change-made-just-before ()
+  "A change made just before C-c C-c, not marked modified yet: the page's
+last change brought into the buffer first, then saved."
+  (let* ((dir (+test-ase--dir))
+         (file (+test-ase--write (expand-file-name "drawing-1.excalidraw.svg" dir)))
+         (shell (+test-ase--shell))
+         (calls nil))
+    (unwind-protect
+        (+test-ase--drawing shell file
+          (set-buffer-modified-p nil)
+          (cl-letf (((symbol-function '+my/excalidraw-flush)
+                     (lambda () (push 'flushed calls) (set-buffer-modified-p t) t))
+                    ((symbol-function 'save-buffer)
+                     (lambda (&rest _) (push 'saved calls) (set-buffer-modified-p nil)))
+                    ((symbol-function '+my/excalidraw-png) (lambda (png) (push 'png calls) png))
+                    ((symbol-function '+my/agent-shell-excalidraw--close) #'ignore)
+                    ((symbol-function 'agent-shell--get-files-context) (lambda (&rest _) "<the image>"))
+                    ((symbol-function 'agent-shell-insert) #'ignore))
+            (+my/agent-shell-excalidraw-insert)
+            (should (equal (reverse calls) '(flushed saved png)))))
+      (kill-buffer shell))))
+
 (ert-deftest agent-shell-excalidraw/not-inserted-when-it-can-t-be ()
   (let* ((dir (+test-ase--dir))
          (file (+test-ase--write (expand-file-name "drawing-1.excalidraw.svg" dir)))
@@ -364,6 +386,37 @@ again."
         (should (equal shown "<svg>own</svg>\n"))
         (should-not +my/agent-shell-excalidraw--earlier)
         (should (= (+test-messages "^This drawing again$") 1))))))
+
+(ert-deftest agent-shell-excalidraw/earlier-drawings-keep-a-change-made-just-before ()
+  "M-p right after a change: the page's last change brought into the buffer
+first (its export on its way would be dropped), so M-n shows it again. Only
+when its own drawing is taken: not from one earlier drawing to the next."
+  (let* ((dir (+test-ase--dir))
+         (own (+test-ase--write (expand-file-name "drawing-3.excalidraw.svg" dir)))
+         (shown nil)
+         (flushes 0))
+    (+test-ase--write (expand-file-name "drawing-1.excalidraw.svg" dir) "<svg>one</svg>\n")
+    (+test-ase--write (expand-file-name "drawing-2.excalidraw.svg" dir) "<svg>two</svg>\n")
+    (+test-ase--drawing nil own
+      (cl-letf (((symbol-function '+my/excalidraw-replace)
+                 (lambda (text)
+                   (setq shown text)
+                   (let ((inhibit-read-only t)) (erase-buffer) (insert text))))
+                ((symbol-function '+my/excalidraw-flush)
+                 (lambda ()
+                   (cl-incf flushes)
+                   ;; The page's last change, come in.
+                   (let ((inhibit-read-only t)) (erase-buffer) (insert "<svg>changed</svg>\n"))
+                   t)))
+        (+my/agent-shell-excalidraw-previous)
+        (should (= flushes 1))
+        (should (equal shown "<svg>two</svg>\n"))
+        (+my/agent-shell-excalidraw-previous)
+        (should (= flushes 1))
+        (+my/agent-shell-excalidraw-next)
+        (+my/agent-shell-excalidraw-next)
+        (should (equal shown "<svg>changed</svg>\n"))
+        (should (= flushes 1))))))
 
 (ert-deftest agent-shell-excalidraw/no-earlier-drawings ()
   (let* ((dir (+test-ase--dir))

@@ -848,3 +848,63 @@ under this drawing's name."
                                         (buffer-substring-no-properties
                                          (max (point-min) (- (point-max) 1500)) (point-max))))))
           (set-buffer-modified-p nil))))))
+
+(defun +test-exd--shows (elements)
+  "Wait until the drawing's elements are ELEMENTS (see `+test-exd--elements'),
+10 s at most; else fail, saying what it shows."
+  (unless (+test-wait-for (lambda () (equal (+test-exd--elements) elements)) 10)
+    (ert-fail (list "Not shown" :elements elements :shown (+test-exd--elements)))))
+
+(ert-deftest e2e-exd/drawn-for-claude-m-p-right-after-a-change ()
+  "M-p right after a change (its export still on its way): M-n brings the
+change back, also after M-p M-p M-n M-n. Nothing changed: no wait."
+  (+test-exd
+    (+test-exd--for-claude
+      (make-directory (expand-file-name "drawings" dir) t)
+      (+test-exd--make (expand-file-name "drawings/drawing-2000-01-01-00-00-00.excalidraw.svg" dir)
+                       "[{type: 'ellipse', x: 0, y: 0, width: 50, height: 50}]")
+      (+test-exd--make (expand-file-name "drawings/drawing-2000-01-02-00-00-00.excalidraw.svg" dir)
+                       "[{type: 'diamond', x: 0, y: 0, width: 50, height: 50}]")
+      (switch-to-buffer shell)
+      (let ((drawing (+my/agent-shell-excalidraw)))
+        (should (+test-exd--ready))
+        (should (+test-wait-for (lambda () (not (buffer-modified-p drawing))) 5))
+        ;; Nothing changed: M-p at once.
+        (let ((start (float-time)))
+          (execute-kbd-macro (kbd "M-p"))
+          (should (< (- (float-time) start) 0.5)))
+        (+test-exd--shows '("diamond"))
+        (execute-kbd-macro (kbd "M-n"))
+        (+test-exd--shows nil)
+        ;; A change, M-p at once, M-n.
+        (+test-exd--add "[{type: 'rectangle', x: 0, y: 0, width: 80, height: 40}]")
+        (execute-kbd-macro (kbd "M-p"))
+        (+test-exd--shows '("diamond"))
+        (execute-kbd-macro (kbd "M-n"))
+        (+test-exd--shows '("rectangle"))
+        ;; Another, M-p M-p M-n M-n.
+        (+test-exd--add "[{type: 'ellipse', x: 200, y: 0, width: 80, height: 40}]")
+        (execute-kbd-macro (kbd "M-p"))
+        (execute-kbd-macro (kbd "M-p"))
+        (+test-exd--shows '("ellipse"))
+        (execute-kbd-macro (kbd "M-n"))
+        (execute-kbd-macro (kbd "M-n"))
+        (+test-exd--shows '("rectangle" "ellipse"))
+        (with-current-buffer drawing (set-buffer-modified-p nil))))))
+
+(ert-deftest e2e-exd/drawn-for-claude-inserted-right-after-a-change ()
+  "C-c C-c right after a change: the file saved has it, as the PNG."
+  (+test-exd
+    (+test-exd--for-claude
+      (let* ((drawing (+my/agent-shell-excalidraw))
+             (file (buffer-file-name drawing)))
+        (should (+test-exd--ready))
+        (should (+test-wait-for (lambda () (and (file-exists-p file) (not (buffer-modified-p drawing)))) 5))
+        (+test-exd--add "[{type: 'rectangle', x: 0, y: 0, width: 80, height: 40}]")
+        (execute-kbd-macro (kbd "C-c C-c"))
+        (should-not (buffer-live-p drawing))
+        (should (= (length inserted) 1))
+        (find-file file)
+        (should (+test-exd--ready))
+        (should (equal (+test-exd--elements) '("rectangle")))
+        (set-buffer-modified-p nil)))))

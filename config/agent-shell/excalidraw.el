@@ -126,6 +126,9 @@ DRAWINGS FOR CLAUDE in config/agent-shell.el), and close it."
         (drawing (current-buffer)))
     (unless (buffer-live-p shell)
       (user-error "Its agent-shell is gone"))
+    ;; A change made just before: not marked modified yet (see SAVING in
+    ;; config/excalidraw/sync.el).
+    (+my/excalidraw-flush)
     (when (buffer-modified-p)
       (save-buffer))
     (let ((png (+my/excalidraw-png (+my/agent-shell-excalidraw--png-file buffer-file-name))))
@@ -168,6 +171,10 @@ the drawing's own again."
           (t
            (let ((own (if position
                           (cdr +my/agent-shell-excalidraw--earlier)
+                        ;; With a change made just before: its export, on
+                        ;; its way, would be dropped once another drawing
+                        ;; is shown.
+                        (+my/excalidraw-flush)
                         (buffer-substring-no-properties (point-min) (point-max))))
                  (file (nth next files)))
              (+my/excalidraw-replace (with-temp-buffer

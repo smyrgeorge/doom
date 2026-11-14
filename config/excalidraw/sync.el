@@ -13,7 +13,8 @@
 ;; buffer modified; a new export is asked for (an answer awaited, see
 ;; JAVASCRIPT there) and becomes the buffer's text, then the other views'
 ;; drawing. Saving first asks each page for its version, exported now, and
-;; waits for those to be in the buffer.
+;; waits for those to be in the buffer (`+my/excalidraw-flush': so does what
+;; takes the buffer's text as the drawing, a change made just before in it).
 (defun +my/excalidraw--state (&optional xwidget)
   "XWIDGET's page's state (default: this buffer's view), a plist (:ready
 :version :exported :cursor :dark :error), or nil before it has said it."
@@ -103,15 +104,21 @@ buffer (see above)."
   (when-let* ((flushed (xwidget-get xwidget 'flushed)))
     (<= flushed (or (xwidget-get xwidget 'fetched) 0))))
 
-(defun +my/excalidraw--before-save ()
-  "Saving: the drawings' last changes in the buffer first (see above)."
-  (when-let* ((xwidgets (+my/webkit-xwidgets)))
+(defun +my/excalidraw-flush ()
+  "The drawing's last changes in the buffer: each view's page asked for its
+version, exported now, waited for (5 s at most; a moment if nothing changed).
+Nil if one didn't come (see above)."
+  (let ((xwidgets (+my/webkit-xwidgets)))
     (dolist (xwidget xwidgets)
       (xwidget-put xwidget 'flushed nil)
       (+my/webkit-ask "window.exd ? exd.flush() : '0'" #'+my/excalidraw--flushed xwidget))
-    (unless (+my/webkit-wait (lambda () (seq-every-p #'+my/excalidraw--in-buffer-p xwidgets))
-                             5)
-      (message "The drawing's last change didn't come from its page: saved without it"))))
+    (or (null xwidgets)
+        (+my/webkit-wait (lambda () (seq-every-p #'+my/excalidraw--in-buffer-p xwidgets)) 5))))
+
+(defun +my/excalidraw--before-save ()
+  "Saving: the drawings' last changes in the buffer first (see above)."
+  (unless (+my/excalidraw-flush)
+    (message "The drawing's last change didn't come from its page: saved without it")))
 
 (defun +my/excalidraw--save (buffer)
   "Save BUFFER's drawing, if changed."

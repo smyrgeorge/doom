@@ -650,6 +650,38 @@ answers Emacs's questions (through timers: while a save waits)."
       (should (eql (xwidget-get xw 'flushed) 5))
       (should (eql (xwidget-get xw 'fetched) 5)))))
 
+(ert-deftest exd/flush-brings-the-last-change ()
+  "`+my/excalidraw-flush': the page changed a moment ago, not exported yet
+(not even marked modified): its version, exported now, is the buffer's text
+once it returns. Nothing changed: it returns as soon as the page answers.
+Without a view: at once."
+  (+test-exd
+    (let* ((file (+test-exd--file "flush.excalidraw.svg" +test-exd--svg))
+           (buffer (+test-exd--open file))
+           (xw (+test-exd--xw buffer))
+           (timer (run-at-time 0.02 0.02 #'+test-exd--page-answers)))
+      (unwind-protect
+          (with-current-buffer buffer
+            (+test-exd--page-at xw 1 1 +test-exd--svg)
+            (+my/excalidraw--sync xw)
+            (xwidget-put xw 'fetched 1)
+            (set-buffer-modified-p nil)
+            ;; Changed just now: not seen by Emacs yet.
+            (+test-exd--page-at xw 2 1 "<svg>two</svg>")
+            (should (+my/excalidraw-flush))
+            (should (equal (buffer-substring-no-properties (point-min) (point-max)) "<svg>two</svg>"))
+            (should (buffer-modified-p))
+            (should (eql (xwidget-get xw 'fetched) 2))
+            ;; Nothing changed since.
+            (let ((start (float-time)))
+              (should (+my/excalidraw-flush))
+              (should (< (- (float-time) start) 0.5))))
+        (cancel-timer timer))
+      ;; No view: nothing to wait for.
+      (with-temp-buffer
+        (cl-letf (((symbol-function '+my/webkit-wait) (lambda (&rest _) (error "Waited"))))
+          (should (+my/excalidraw-flush)))))))
+
 (ert-deftest exd/saving-asks-every-view ()
   (+test-exd
     (let* ((buffer (+test-exd--open (+test-exd--file "views.excalidraw.svg" +test-exd--svg)))
