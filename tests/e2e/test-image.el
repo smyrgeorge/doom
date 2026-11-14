@@ -78,7 +78,8 @@ first.")
         (dolist (label (list "Fit" "1:1" "Crop" "Sharp" "Copy" "Diff"
                              (if (+my/macos-p) "Preview" "Open")))
           (should (string-match-p (regexp-quote label) toolbar)))
-        (should-not (string-match-p "Save" toolbar))))))
+        (should-not (string-match-p "Save" toolbar))
+        (should-not (string-match-p "…" toolbar))))))
 
 (ert-deftest e2e-image/a-narrow-window-s-toolbar ()
   (+test-with-reset
@@ -351,6 +352,55 @@ fits, else as big as it fits."
       (should (one-window-p))
       (+test-image--open (expand-file-name "b.png" dir)) ; not committed
       (should-error (+my/image-diff) :type 'user-error))))
+
+;; ====== THE TOOLBAR IN NARROW PANES ======
+
+(defun +test-image--toolbar-width (window)
+  "The width in pixels of WINDOW's toolbar: its text, without the space
+pushing its right side to the window's edge."
+  (let ((text (format-mode-line header-line-format nil window))
+        (parts nil)
+        (i 0))
+    (while (< i (length text))
+      (let ((next (next-single-property-change i 'display text (length text))))
+        (unless (eq (car-safe (get-text-property i 'display text)) 'space)
+          (push (substring text i next) parts))
+        (setq i next)))
+    (string-pixel-width (apply #'concat (nreverse parts)))))
+
+(defun +test-image--fits (window)
+  (redisplay t)
+  (should (<= (+test-image--toolbar-width window) (window-body-width window t))))
+
+(ert-deftest e2e-image/the-toolbar-fits-narrow-panes-copy-diff-and-save-last ()
+  (let ((dir (+test-image--repo)))
+    (dolist (cols '(60 40 25))
+      (+test-with-reset
+        (+test-image--pane cols)
+        (let ((window (selected-window)))
+          (+test-image--open (expand-file-name "a.png" dir))
+          (ert-info ((format "%d columns" cols))
+            (+test-image--fits window)
+            (should (string-match-p "Copy" (+test-image--toolbar)))
+            ;; What's left out in the … button's menu, with its keys.
+            (should (string-match-p "…" (+test-image--toolbar)))
+            (let ((menu (+my/image--menu (nth 2 (+my/image--toolbar-fit)))))
+              (should (eq (lookup-key menu [+my/image-rotate]) #'+my/image-rotate))
+              (should (eq (lookup-key menu [+my/image-open-in-preview]) #'+my/image-open-in-preview))
+              (should (equal (assq '+my/image-diff (cdr menu))
+                             '(+my/image-diff menu-item "The image as in git's HEAD, beside it (SPC m g)"
+                                              +my/image-diff))))
+            ;; HEAD shown: Diff kept, its toolbar fitting too.
+            (+my/image-diff)
+            (+test-image--fits window)
+            (+test-image--fits (get-buffer-window +my/image--head-buffer))
+            (should (string-match-p "Diff" (+test-image--toolbar)))
+            ;; Edited: Save kept as well.
+            (+my/image-flip)
+            (+test-image--fits window)
+            (let ((toolbar (+test-image--toolbar)))
+              (dolist (label '("Copy" "Diff" "Save"))
+                (should (string-match-p label toolbar))))))))))
 
 ;; ====== CHANGED ON DISK ======
 

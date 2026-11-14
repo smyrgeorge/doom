@@ -1,8 +1,9 @@
 # Images
 
 Images open in Emacs's own viewer, in their tab, with a toolbar in the header line: the folder's images, zoom, rotate,
-flip, crop, sharp pixels, the image's size, copy, git's HEAD beside it, Preview (Linux: Open). A file changed on disk (a
-regenerated screenshot) is shown anew, its zoom kept. Try it: `M-x +my/example-image`.
+flip, crop, sharp pixels, the image's size, copy, git's HEAD beside it, Preview (Linux: Open). In a narrow pane it keeps
+what fits, the rest in the menu of its `…` button. A file changed on disk (a regenerated screenshot) is shown anew, its
+zoom kept. Try it: `M-x +my/example-image`.
 
 ![A picture beside its version in git's HEAD](../examples/image.png)
 

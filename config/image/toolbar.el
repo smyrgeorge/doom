@@ -35,13 +35,14 @@
     (diff        "nf-cod-diff"              "Diff")
     (save        "nf-md-content_save"       "Save")
     (preview     "nf-cod-link_external"     "Preview")
-    (finder      "nf-md-apple_finder"))
+    (finder      "nf-md-apple_finder")
+    (more        "nf-cod-ellipsis"))
   "(NAME NERD-ICON LABEL): a button's icon and label (either can be nil).")
 
 (defconst +my/image--fallbacks
   '((previous . "‹") (next . "›") (zoom-out . "−") (zoom-in . "+")
     (rotate-left . "⟲") (rotate . "⟳") (flip . "⇋") (flip-v . "⇵")
-    (play . "▶") (pause . "⏸") (finder . "Finder"))
+    (play . "▶") (pause . "⏸") (finder . "Finder") (more . "…"))
   "Icons without a label, as text where Nerd icons aren't loaded.")
 
 (defun +my/image--icon-spec (name)
@@ -52,8 +53,9 @@ Preview is Open (the default app) and Finder a folder (the file manager)."
     ('finder '(finder "nf-md-folder_open"))
     (_ (assq name +my/image--icons))))
 
-(defun +my/image--icon (name)
-  "Button NAME's icon and label (see `+my/image--icons')."
+(defun +my/image--icon (name &optional short)
+  "Button NAME's icon and label (see `+my/image--icons'); SHORT, its icon
+alone if it has one."
   (pcase-let* ((`(,_ ,icon ,label) (+my/image--icon-spec name))
                (glyph (and icon (fboundp 'nerd-icons-codicon)
                            (ignore-errors
@@ -61,7 +63,7 @@ Preview is Open (the default app) and Finder a folder (the file manager)."
                                           #'nerd-icons-mdicon
                                         #'nerd-icons-codicon)
                                       icon)))))
-    (cond ((and glyph label) (concat glyph " " label))
+    (cond ((and glyph label) (if short glyph (concat glyph " " label)))
           ((or glyph label))
           ((and (eq name 'finder) (not (+my/macos-p))) "Folder")
           (t (alist-get name +my/image--fallbacks)))))
@@ -89,10 +91,13 @@ Preview is Open (the default app) and Finder a folder (the file manager)."
                  map)
                +my/image--click-maps)))
 
-(defun +my/image--button (name help command &optional state)
+(defun +my/image--button (name help command &optional state short)
   "Button NAME calling COMMAND when clicked, HELP its tooltip. STATE: on (its
-setting on), off (can't be used here) or nil."
-  (let ((text (concat " " (+my/image--icon name) " ")))
+setting on), off (can't be used here) or nil. SHORT: its icon alone, one
+space before it instead of one on each side."
+  (let ((text (if short
+                  (concat " " (+my/image--icon name t))
+                (concat " " (+my/image--icon name) " "))))
     (add-face-text-property 0 (length text)
                             (pcase state
                               ('on '+my/image-toolbar-on)
@@ -117,66 +122,129 @@ setting on), off (can't be used here) or nil."
   (+my/image--text " │ "))
 
 ;; THE TOOLBAR
-(defun +my/image--toolbar-left ()
-  "The toolbar's buttons on the left: the folder, zoom, edits, animation."
-  (let* ((file (and buffer-file-name (not +my/image--head-of)))
-         (scale (or +my/image--zoom-target (+my/image-scale)))
-         (editable (+my/image--editable-p)))
-    (concat
-     (if +my/image--head-of
-         (concat (propertize (format " HEAD %s " +my/image--head-commit)
-                             'face '+my/image-toolbar-on)
-                 (+my/image--separator))
-       (when file
-         (pcase-let ((`(,index . ,count) (+my/image--position)))
-           (concat (+my/image--button 'previous "Previous image in the folder (K)"
-                                      #'+my/image-previous (and (< count 2) 'off))
-                   (+my/image--text (format "%d/%d" (1+ index) count))
-                   (+my/image--button 'next "Next image in the folder (J)"
-                                      #'+my/image-next (and (< count 2) 'off))
-                   (+my/image--separator)))))
-     (+my/image--button 'zoom-out "Zoom out (-, Cmd+-)" #'+my/image-zoom-out)
-     ;; %% for the header line: % starts its constructs (%b...).
-     (+my/image--text (if scale (format "%d%%%%" (round (* 100 scale))) "–"))
-     (+my/image--button 'zoom-in "Zoom in (+, Cmd+=)" #'+my/image-zoom-in)
-     (+my/image--button 'fit "Fit the window (W)" #'+my/image-fit
-                        (and (eq image-transform-resize 'fit-window) 'on))
-     (+my/image--button 'actual "Actual size (0, Cmd+0)" #'+my/image-actual-size
-                        (and scale (< (abs (- scale 1.0)) 0.005) 'on))
-     (when editable
-       (concat (+my/image--separator)
-               (+my/image--button 'rotate-left "Rotate anticlockwise (R)" #'+my/image-rotate-left)
-               (+my/image--button 'rotate "Rotate clockwise (r)" #'+my/image-rotate)
-               (+my/image--button 'flip "Flip horizontally (f)" #'+my/image-flip)
-               (+my/image--button 'flip-v "Flip vertically (F)" #'+my/image-flip-vertically)
-               (+my/image--button 'crop "Crop: drag, RET crops, q cancels (c)" #'+my/image-crop)))
-     (+my/image--separator)
-     (when image-multi-frame
-       (if (+my/image-playing-p)
-           (+my/image--button 'pause "Pause the animation (RET)" #'+my/image-toggle-animation)
-         (+my/image--button 'play "Play the animation (RET)" #'+my/image-toggle-animation)))
-     (+my/image--button 'sharp "Sharp pixels: no smoothing (SPC m s)" #'+my/image-toggle-sharp
-                        (and (+my/image--sharp-p) 'on)))))
+;; As wide as its window, no wider: in a narrow one it leaves out, first to
+;; last, the groups of `+my/image--narrowing', the buttons left out in the
+;; menu of a … button at its right end, with their keys.
+(defconst +my/image--narrowing
+  '(size apps edits view folder zoom tight save diff copy)
+  "What a narrow window's toolbar leaves out, first to last: the image's size;
+Diff (HEAD not shown), Preview and Finder; rotate, flip and crop; Fit, 1:1
+and Sharp; the folder's ‹ n/m › (HEAD's commit); zoom and play / pause; the
+room around Copy, Diff and Save, and their labels (icons kept); then Save,
+Diff and Copy.")
 
-(defun +my/image--toolbar-right (level)
-  "The toolbar's right side: the image's size, Copy, Diff, Save, Preview,
-Finder. LEVEL 0 all of it, 1 without the size, 2 Copy only (a narrow window)."
-  (let ((file (and buffer-file-name (not +my/image--head-of))))
-    (concat
-     (when (< level 1)
-       (concat (+my/image--text (+my/image-info)) " "))
-     (+my/image--button 'copy (format "Copy the image (y, %s)" (+my/os-key-name "Cmd+C" "Ctrl+Shift+C"))
-                        #'+my/image-copy)
-     (when (and file (< level 2))
-       (concat
-        (+my/image--button 'diff "The image as in git's HEAD, on the left (SPC m g)"
-                           #'+my/image-diff (and (+my/image--head-shown-p) 'on))
-        (when (buffer-modified-p)
-          (+my/image--button 'save "Save the edited image (SPC f s)" #'+my/image-save 'on))
-        (+my/image--button 'preview (format "Open in %s (SPC m p)" (+my/os-app-name 'viewer))
-                           #'+my/image-open-in-preview)
-        (+my/image--button 'finder (format "Show in %s (SPC m f)" (+my/os-app-name 'files))
-                           #'+my/image-show-in-finder))))))
+(defun +my/image--toolbar-parts (level)
+  "The toolbar without the first LEVEL groups of `+my/image--narrowing':
+\(LEFT RIGHT MENU), its two sides and the buttons left out, (HELP COMMAND
+STATE) each."
+  (let* ((out (seq-take +my/image--narrowing level))
+         (file (and buffer-file-name (not +my/image--head-of)))
+         (scale (or +my/image--zoom-target (+my/image-scale)))
+         (head (+my/image--head-shown-p))
+         (menu nil))
+    (cl-flet ((button (group name help command &optional state)
+                (if (not (memq group out))
+                    (+my/image--button name help command state (memq 'tight out))
+                  (unless (eq state 'off)
+                    (push (list help command state) menu))
+                  nil)))
+      (let* ((place
+              (cond
+               (+my/image--head-of
+                (propertize (if (memq 'folder out) " HEAD " (format " HEAD %s " +my/image--head-commit))
+                            'face '+my/image-toolbar-on
+                            'help-echo (format "The image as in git's HEAD (%s)" +my/image--head-commit)))
+               (file
+                (pcase-let* ((`(,index . ,count) (+my/image--position))
+                             (state (and (< count 2) 'off)))
+                  (concat (button 'folder 'previous "Previous image in the folder (K)"
+                                  #'+my/image-previous state)
+                          (unless (memq 'folder out)
+                            (+my/image--text (format "%d/%d" (1+ index) count)))
+                          (button 'folder 'next "Next image in the folder (J)"
+                                  #'+my/image-next state))))))
+             (zoom
+              (concat (button 'zoom 'zoom-out "Zoom out (-, Cmd+-)" #'+my/image-zoom-out)
+                      (unless (memq 'zoom out)
+                        ;; %% for the header line: % starts its constructs (%b...).
+                        (+my/image--text (if scale (format "%d%%%%" (round (* 100 scale))) "–")))
+                      (button 'zoom 'zoom-in "Zoom in (+, Cmd+=)" #'+my/image-zoom-in)
+                      (button 'view 'fit "Fit the window (W)" #'+my/image-fit
+                              (and (eq image-transform-resize 'fit-window) 'on))
+                      (button 'view 'actual "Actual size (0, Cmd+0)" #'+my/image-actual-size
+                              (and scale (< (abs (- scale 1.0)) 0.005) 'on))))
+             (edits
+              (when (+my/image--editable-p)
+                (concat (button 'edits 'rotate-left "Rotate anticlockwise (R)" #'+my/image-rotate-left)
+                        (button 'edits 'rotate "Rotate clockwise (r)" #'+my/image-rotate)
+                        (button 'edits 'flip "Flip horizontally (f)" #'+my/image-flip)
+                        (button 'edits 'flip-v "Flip vertically (F)" #'+my/image-flip-vertically)
+                        (button 'edits 'crop "Crop: drag, RET crops, q cancels (c)" #'+my/image-crop))))
+             (looks
+              (concat (when image-multi-frame
+                        (if (+my/image-playing-p)
+                            (button 'zoom 'pause "Pause the animation (RET)" #'+my/image-toggle-animation)
+                          (button 'zoom 'play "Play the animation (RET)" #'+my/image-toggle-animation)))
+                      (button 'view 'sharp "Sharp pixels: no smoothing (SPC m s)" #'+my/image-toggle-sharp
+                              (and (+my/image--sharp-p) 'on))))
+             (left (mapconcat #'identity
+                              (seq-remove #'string-empty-p (delq nil (list place zoom edits looks)))
+                              (+my/image--separator)))
+             (right
+              (concat
+               (unless (memq 'size out)
+                 (concat (+my/image--text (+my/image-info)) " "))
+               (button 'copy 'copy (format "Copy the image (y, %s)" (+my/os-key-name "Cmd+C" "Ctrl+Shift+C"))
+                       #'+my/image-copy)
+               (when file
+                 (concat
+                  (button (if head 'diff 'apps) 'diff
+                          (if head "Close git's HEAD (SPC m g)" "The image as in git's HEAD, beside it (SPC m g)")
+                          #'+my/image-diff (and head 'on))
+                  (when (buffer-modified-p)
+                    (button 'save 'save "Save the edited image (SPC f s)" #'+my/image-save 'on))
+                  (button 'apps 'preview (format "Open in %s (SPC m p)" (+my/os-app-name 'viewer))
+                          #'+my/image-open-in-preview)
+                  (button 'apps 'finder (format "Show in %s (SPC m f)" (+my/os-app-name 'files))
+                          #'+my/image-show-in-finder))))))
+        (setq menu (nreverse menu))
+        (list (if (string-empty-p left) "" (concat " " left))
+              (if menu
+                  (concat right (+my/image--button 'more "What the toolbar leaves out here"
+                                                   #'+my/image-toolbar-menu))
+                right)
+              menu)))))
+
+(defun +my/image--toolbar-fit ()
+  "The toolbar's widest form the selected window fits (see THE TOOLBAR):
+\(LEFT RIGHT MENU), as `+my/image--toolbar-parts'."
+  (let ((width (window-body-width nil t))
+        (last (length +my/image--narrowing)))
+    (cl-loop for level from 0 to last
+             for parts = (+my/image--toolbar-parts level)
+             when (or (= level last)
+                      (<= (+ (string-pixel-width (nth 0 parts)) (string-pixel-width (nth 1 parts)))
+                          width))
+             return parts)))
+
+(defun +my/image--menu (items)
+  "A menu of ITEMS, (HELP COMMAND STATE) each: HELP its label, ticked if
+STATE is on (as `+my/image--button's)."
+  (let ((map (make-sparse-keymap "Image")))
+    (dolist (item (reverse items) map)
+      (pcase-let ((`(,help ,command ,state) item))
+        (define-key map (vector command)
+                    `(menu-item ,help ,command
+                                ,@(when (eq state 'on) '(:button (:toggle . t)))))))))
+
+(defun +my/image-toolbar-menu ()
+  "The toolbar's … button: a menu of the buttons a narrow window leaves out,
+with their keys."
+  (interactive)
+  (let ((items (nth 2 (+my/image--toolbar-fit))))
+    (unless items
+      (user-error "The toolbar shows all its buttons"))
+    (popup-menu (+my/image--menu items))))
 
 (defvar-local +my/image--toolbar-cache nil
   "(KEY . TEXT): the toolbar last made, and what it was made from.")
@@ -191,8 +259,8 @@ Finder. LEVEL 0 all of it, 1 without the size, 2 Copy only (a narrow window)."
 
 (defun +my/image--toolbar ()
   "The toolbar (see config/image.el): buttons on the left, the image's size
-and the rest on the right, as much of it as the window fits. In the header
-line, made again only when what it shows changes."
+and the rest on the right, as much of it as the window fits (see THE
+TOOLBAR). In the header line, made again only when what it shows changes."
   (when (+my/image--spec)
     (let ((key (+my/image--toolbar-key)))
       (unless (equal (car +my/image--toolbar-cache) key)
@@ -200,12 +268,7 @@ line, made again only when what it shows changes."
       (cdr +my/image--toolbar-cache))))
 
 (defun +my/image--make-toolbar ()
-  (let* ((width (window-body-width nil t))
-         (left (concat " " (+my/image--toolbar-left)))
-         (left-width (string-pixel-width left))
-         (right (seq-find (lambda (right) (<= (+ left-width (string-pixel-width right)) width))
-                          (mapcar #'+my/image--toolbar-right '(0 1))
-                          (+my/image--toolbar-right 2))))
+  (pcase-let ((`(,left ,right) (+my/image--toolbar-fit)))
     (concat left
             (propertize " " 'display
                         `(space :align-to (- right (,(string-pixel-width right)))))

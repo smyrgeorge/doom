@@ -42,8 +42,10 @@
 ;;                           file manager)
 ;; SPC m t turns the toolbar off (all images'); q closes the image. The
 ;; toolbar and Sharp are as the last image had them, the variables below for
-;; the first. A narrow window's toolbar leaves out the file's size first, then
-;; the buttons on the right but Copy.
+;; the first. A narrow window's toolbar is never wider than it: it leaves out
+;; the file's size, then puts in the menu of a … button (their keys said
+;; there) Preview and Finder, the edits, Fit, 1:1 and Sharp, the folder's
+;; ‹ n/m ›, zoom; Copy, Diff (HEAD shown) and Save (edited) last.
 ;; A file changed on disk (e.g. a regenerated screenshot) is shown anew, its
 ;; zoom kept: auto-revert-mode (not while edited and unsaved).
 ;; Where images don't show (a terminal), the file's text: none of this.
