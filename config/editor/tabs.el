@@ -55,6 +55,20 @@ window has it as a tab (see above)."
 
 (advice-add 'quit-window :around #'+my/tabs-quit-window-a)
 
+;; MAGIT'S Q (Doom's: `magit-mode-quit-window') deletes a window magit made
+;; once no other magit buffer is in its history, whatever else is: a file
+;; opened there (one of its tabs) was left open in no tab. A window with
+;; other tabs is quit as `quit-window' does: kept, showing the tab before.
+(defun +my/tabs-magit-quit-a (fn kill-buffer)
+  "`magit-mode-quit-window': a window with other tabs kept (see above)."
+  (if (and (bound-and-true-p tab-line-mode)
+           (seq-some (lambda (buffer) (not (eq buffer (current-buffer))))
+                     (+my/tabs-window-buffers)))
+      (quit-window kill-buffer)
+    (funcall fn kill-buffer)))
+
+(advice-add 'magit-mode-quit-window :around #'+my/tabs-magit-quit-a)
+
 (defun +my/tabs-in-workspace-p (buffer)
   "Non-nil if BUFFER is the current workspace's (Doom's workspaces), or
 without workspaces."

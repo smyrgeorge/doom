@@ -1372,6 +1372,21 @@ shown; the buffer kept (killed with C-u q)."
       (quit-window t)
       (should-not (buffer-live-p app)))))
 
+(ert-deftest tiling/fullscreen-quit-keeps-a-pane-with-other-tabs ()
+  "q on an application in a pane where a file was opened too (a tab): the
+pane kept on the screen, showing the file; the application kept."
+  (+test-tiling-fullscreen
+    (let ((app (+test-tiling--app "an app"))
+          (file (+test-tiling--file "b.txt")))
+      (pop-to-buffer app '(+my/tiling-display-buffer))
+      (switch-to-buffer file)
+      (switch-to-buffer app)
+      (should (equal (+test-tiling--slots) '("A" "*an app")))
+      (quit-window)
+      (should (equal (+test-tiling--slots) '("A" "*b.txt")))
+      (should (buffer-live-p app))
+      (should (buffer-live-p file)))))
+
 (ert-deftest tiling/fullscreen-an-application-hidden-brought-to-the-front ()
   "An application shown while its pane is hidden: that pane in front, no new
 one."

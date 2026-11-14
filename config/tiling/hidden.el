@@ -210,14 +210,17 @@ closed, the next one shown, the workspace kept. Non-nil if so."
 
 (defun +my/tiling-quit-shown-a (fn &optional window bury-or-kill)
   "`quit-restore-window' (q) on an application opened in the frame's only pane
-while others are hidden: the pane closed, the next one shown (another
-strategy deletes its window); the buffer killed if asked."
+while others are hidden, its last tab: the pane closed, the next one shown
+\(another strategy deletes its window); the buffer killed if asked. With
+other tabs (a file opened there), as Emacs quits it: the tab before shown."
   (let* ((window (window-normalize-window window t))
          (buffer (window-buffer window))
          (quit (window-parameter window 'quit-restore)))
     (if (and (+my/tiling--shown-alone-p window)
              (eq (car quit) 'window)
-             (eq (nth 3 quit) buffer))
+             (eq (nth 3 quit) buffer)
+             ;; config/tiling/apps.el's.
+             (+my/tiling--last-tab-p window buffer))
         (progn
           (set-window-parameter window 'quit-restore nil)
           (delete-window window)

@@ -835,6 +835,57 @@ a hidden pane still has as a tab stays open."
       (should-not (buffer-live-p b))
       (should (equal (+test-tiling--shown) "a.txt")))))
 
+;; ====== MAGIT'S Q ======
+
+(ert-deftest e2e-tiling/magit-s-q-keeps-a-pane-with-a-file-tab ()
+  "q in magit's status (Doom's: `magit-mode-quit-window'), a file opened in
+its pane too (a tab): the pane kept, showing the file, in tall and
+fullscreen; no file left in no tab. Magit's pane with no other tab: q
+closes it."
+  (dolist (strategy '(tall fullscreen))
+    (+test-tiling
+      (set-frame-parameter nil '+my/tiling-hidden nil)
+      (unwind-protect
+          (let* ((+my/tiling-strategy strategy)
+                 (magit-bury-buffer-function #'magit-mode-quit-window)
+                 (dir (+test-tiling--dir))
+                 (default-directory dir)
+                 (main (selected-window)))
+            (+test-tiling--repo dir "f.txt")
+            (magit-status-setup-buffer dir)
+            (let ((pane (selected-window))
+                  (status (current-buffer))
+                  (b (+test-tiling--file "b.txt")))
+              (should (derived-mode-p 'magit-status-mode))
+              (should (equal (mapcar #'buffer-name (mapcar #'window-buffer (+my/tiling--panes)))
+                             (if (eq strategy 'tall) (list "a.txt" (buffer-name status))
+                               (list (buffer-name status)))))
+              (find-file (buffer-file-name b))
+              (should (eq (selected-window) pane))
+              (magit-status-setup-buffer dir)
+              (should (eq (selected-window) pane))
+              (should (eq (window-buffer pane) status))
+              (should (member "b.txt" (+test-tiling--tabs pane)))
+              (magit-mode-bury-buffer)
+              (should (window-live-p pane))
+              (should (eq (window-buffer pane) b))
+              (should (member "b.txt" (+test-tiling--tabs pane)))
+              (should (equal (mapcar #'buffer-name (mapcar #'window-buffer (+my/tiling--panes)))
+                             (if (eq strategy 'tall) '("a.txt" "b.txt") '("b.txt"))))
+              ;; Its only tab: q closes the pane (fullscreen: the next shown).
+              (magit-status-setup-buffer dir)
+              (let ((only (selected-window)))
+                ;; Fullscreen: in the window on the screen, b.txt's pane hidden.
+                (should (eq (eq only pane) (eq strategy 'fullscreen)))
+                (should (equal (+test-tiling--tabs only) (list (buffer-name status))))
+                (magit-mode-bury-buffer)
+                (should (equal (mapcar #'buffer-name (mapcar #'window-buffer (+my/tiling--panes)))
+                               (if (eq strategy 'tall) '("a.txt" "b.txt") '("b.txt"))))
+                (when (eq strategy 'tall)
+                  (should-not (window-live-p only))
+                  (should (window-live-p main))))))
+        (set-frame-parameter nil '+my/tiling-hidden nil)))))
+
 ;; ====== BSP ======
 
 (ert-deftest e2e-tiling/bsp-halves-by-real-pixels ()

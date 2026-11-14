@@ -261,6 +261,43 @@ while another window still has it. Other buffers aren't."
       (+my/tabs-close help)
       (should (buffer-live-p help)))))
 
+(ert-deftest tabs/magit-s-q-keeps-a-window-with-other-tabs ()
+  "Magit's q (Doom's: `magit-mode-quit-window') in a window magit made: a file
+opened there (a tab), the window kept, showing it, no file left in no tab;
+no other tab, the window closed as magit has it."
+  (should (advice-member-p #'+my/tabs-magit-quit-a 'magit-mode-quit-window))
+  (+test-tabs
+    (require 'magit)
+    (let* ((doom-real-buffer-functions (list #'+test-tabs--magit-p))
+           (a (+test-tabs--file "a.txt"))
+           (b (+test-tabs--file "b.txt"))
+           (status (with-current-buffer (get-buffer-create "magit: test")
+                     (magit-status-mode)
+                     (+test-tabs--on (current-buffer)))))
+      (+test-tabs--show a)
+      (dolist (other (list b nil))
+        (let ((main (selected-window))
+              (window (display-buffer status '(display-buffer-pop-up-window))))
+          ;; As magit's display does: the window made for it, its only tab.
+          (+test-tabs--only window status)
+          (set-window-parameter window 'magit-dedicated t)
+          (select-window window)
+          (when other
+            (switch-to-buffer other)
+            (switch-to-buffer status)
+            (should (seq-set-equal-p (+test-tabs--tabs) (list status other))))
+          (magit-mode-quit-window nil)
+          (if other
+              (progn (should (window-live-p window))
+                     (should (eq (window-buffer window) b))
+                     ;; Magit quit there (buried: off its tabs).
+                     (should (equal (+test-tabs--tabs window) (list b)))
+                     (select-window main)
+                     (delete-other-windows))
+            (should-not (window-live-p window))
+            (should (eq (selected-window) main)))
+          (should (buffer-live-p status)))))))
+
 (ert-deftest tabs/tabs-in-the-order-first-shown ()
   (+test-tabs
     (let ((a (+test-tabs--file "a.txt"))
