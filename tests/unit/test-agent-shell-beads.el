@@ -54,7 +54,10 @@ also `root'), with a temp HOME; skipped without bd."
          (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
                  "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
        (+test-asb--run "git" "init" "-q")
-       (+test-asb--run "bd" "init" "--quiet" "--prefix" "t")
+       ;; As SPC o i inits (`+my/beads-init-command'): no files for agents
+       ;; (a plain bd init adds Claude Code's SessionStart hook running bd
+       ;; prime: Beads' guide then comes from there, see guide-once).
+       (+test-asb--run "bd" "init" "--quiet" "--skip-agents" "--prefix" "t")
        (cl-letf (((symbol-function 'agent-shell-cwd) (lambda () root)))
          ,@body))))
 
@@ -102,6 +105,49 @@ also `root'), with a temp HOME; skipped without bd."
       (should (> (length text) (+ (length +my/agent-shell-beads-context) 500))))
     (let ((+my/agent-shell-beads-prime nil))
       (should (equal (+my/agent-shell-beads-context) +my/agent-shell-beads-context)))))
+
+(ert-deftest agent-shell-beads/guide-once ()
+  "A project whose Claude Code settings run bd prime as a session starts (a
+SessionStart hook, as this config's own) gets the paragraph alone: the
+guide comes from there; read from the project's settings, its local ones,
+the user's (doom-zoa)."
+  ;; This config's own.
+  (should (+my/agent-shell-beads--primed-p +test-root))
+  (+test-asb-with-bd
+    (let* ((process-environment (cons (concat "CLAUDE_CONFIG_DIR=" (+test-asb--dir))
+                                      process-environment))
+           (hook (concat "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"\",\"hooks\":"
+                         "[{\"type\":\"command\",\"command\":\"bd prime --hook-json\"}]}]}}"))
+           (project (expand-file-name ".claude/settings.json" root))
+           (others (concat "{\"hooks\":{\"SessionStart\":[{\"hooks\":[{\"type\":\"command\","
+                           "\"command\":\"echo hi\"}]}],\"Stop\":[{\"hooks\":"
+                           "[{\"type\":\"command\",\"command\":\"bd prime\"}]}]},"
+                           "\"permissions\":{\"allow\":[],\"deny\":null}}")))
+      ;; No settings: the guide.
+      (should-not (+my/agent-shell-beads--primed-p root))
+      (should (> (length (+my/agent-shell-beads-context))
+                 (+ (length +my/agent-shell-beads-context) 500)))
+      ;; Other hooks, bd prime at another moment: the guide still.
+      (make-directory (file-name-directory project))
+      (with-temp-file project (insert others))
+      (should-not (+my/agent-shell-beads--primed-p root))
+      ;; Run as a session starts, from any of the three: the paragraph alone.
+      (dolist (file (list project
+                          (expand-file-name ".claude/settings.local.json" root)
+                          (expand-file-name "settings.json" (getenv "CLAUDE_CONFIG_DIR"))))
+        (let ((before (and (file-exists-p file)
+                           (with-temp-buffer (insert-file-contents file) (buffer-string)))))
+          (with-temp-file file (insert hook))
+          (should (+my/agent-shell-beads--primed-p root))
+          (should (equal (+my/agent-shell-beads-context) +my/agent-shell-beads-context))
+          (if before
+              (with-temp-file file (insert before))
+            (delete-file file))))
+      (should-not (+my/agent-shell-beads--primed-p root))
+      ;; Settings that aren't JSON: as none.
+      (with-temp-file (expand-file-name ".claude/settings.local.json" root)
+        (insert "{not json"))
+      (should-not (+my/agent-shell-beads--primed-p root)))))
 
 (ert-deftest agent-shell-beads/context-in-the-system-prompt ()
   "A session started in the project: its system prompt has it, after the

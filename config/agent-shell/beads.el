@@ -24,13 +24,47 @@ issues with Beads (a .beads/ folder there)."
 
 ;; WHAT CLAUDE IS TOLD (a session's system prompt, config/agent-shell/context.el)
 
+;; Beads' guide once: a project whose Claude Code settings run bd prime as a
+;; session starts (a SessionStart hook: `bd setup claude' adds one; this
+;; config's own .claude/settings.json has it) gives Claude the guide already,
+;; 7 KB: claude-agent-acp loads the user's, the project's and its local
+;; settings, as Claude Code in a terminal does.
+(defun +my/agent-shell-beads--claude-settings (root)
+  "Claude Code's settings files for a session in ROOT: the project's, its
+local ones, the user's."
+  (list (expand-file-name ".claude/settings.json" root)
+        (expand-file-name ".claude/settings.local.json" root)
+        (expand-file-name "settings.json" (or (getenv "CLAUDE_CONFIG_DIR") "~/.claude"))))
+
+(defun +my/agent-shell-beads--primed-p (root)
+  "Non-nil if Claude Code's settings for ROOT run bd prime when a session
+starts (see above)."
+  (seq-some
+   (lambda (file)
+     (when-let* (((file-readable-p file))
+                 (settings (ignore-errors
+                             (with-temp-buffer
+                               (insert-file-contents file)
+                               (json-parse-buffer :object-type 'alist :array-type 'list
+                                                  :null-object nil :false-object nil)))))
+       (seq-some (lambda (matcher)
+                   (seq-some (lambda (hook)
+                               (let ((command (alist-get 'command hook)))
+                                 (and (stringp command)
+                                      (string-match-p "\\bbd prime\\b" command))))
+                             (alist-get 'hooks matcher)))
+                 (alist-get 'SessionStart (alist-get 'hooks settings)))))
+   (+my/agent-shell-beads--claude-settings root)))
+
 (defun +my/agent-shell-beads-context ()
   "For a session in a project tracking its issues with Beads: what Claude is
-told of them, Beads' guide after (see ISSUES FOR CLAUDE); else nil."
+told of them, Beads' guide after (see ISSUES FOR CLAUDE), unless the
+project's Claude Code settings give it already (see above); else nil."
   (when-let* ((root (+my/agent-shell-beads--root))
               ((executable-find "bd")))
     (string-join (delq nil (list +my/agent-shell-beads-context
                                  (and +my/agent-shell-beads-prime
+                                      (not (+my/agent-shell-beads--primed-p root))
                                       (+my/agent-shell-beads--bd root "prime"))))
                  "\n\n")))
 

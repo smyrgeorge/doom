@@ -500,16 +500,30 @@ to have its tests and its section in the skill, which the filed issue is for.
 ## What the agent is told
 
 A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
-`+my/agent-shell-claude-context-functions`), while Emacs runs a server: the canvas, when to use it rather than Markdown
-in a reply (for what changes over time or deserves watching), that issues and plans go there without being asked (a
-project's or an epic's issues as the `issues` board, a search's as a table, a plan or the current ticket's acceptance
-criteria as `steps`), that a list to pick from goes there as a `choice` (the turn ended, the answer its next prompt;
-a small question, with agent-shell's forms on, as AskUserQuestion in the conversation), the command's full path with
-an example, to read the skill before using it the first time, and,
-when Agent UI itself misbehaves, to ask you and file it with `agent-ui bug`
-([Bugs in Agent UI](#bugs-in-agent-ui)). The MCP server's instructions, also in its system prompt, say the same of its
-`bug` tool. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), is read in parts, as the agent needs
-them: SKILL.md, read first, says when to use the canvas, the command, every type in a line and the everyday ones
+`+my/agent-shell-claude-context-functions`), while Emacs runs a server, in three parts:
+
+- **What to show:** the canvas is where information goes. Whatever has a shape (figures, records, a comparison, a
+  trend, a structure, steps, changes, output) goes there as the element that fits it, and the reply keeps the words
+  (what was found, what it means, what's next, a line saying what's on the canvas). What a sentence or two holds stays
+  in the reply alone. Kinds of information are matched to elements: figures `stats` (one against a target `gauge`),
+  records `table`, a trend or distribution `chart`, two dimensions `heatmap`, a structure or flow `graph` or `mermaid`,
+  durations `timeline`, code `code`, changes `diff`, files `files`, output `log`, categories `tags`, formulas `math`, a
+  write-up `markdown`, a picture `image`, a page `html`, several together `panel`. Issues and plans go there without
+  being asked (a project's or an epic's issues as the `issues` board, a plan or the current ticket's acceptance criteria
+  as `steps`). This comes before what agent-shell's text says of tables, images and diagrams in replies: they're for
+  when the canvas can't be used.
+- **Asking:** a question goes on a canvas of its own (`--canvas ask`), as the interactive element that fits it: a list
+  to pick from a `choice` (or `select` on a table, files, issues), alternatives to see a `compare`, something risky a
+  `confirm`, a plan to agree on `steps` with `approve`, proposed changes a `diff` with `accept`, several values a `form`,
+  an order a `rank`, a number a `slider`; the turn ended, the answer its next prompt. Only a quick question (2 to 4
+  short options, nothing to show or compare) goes in the conversation, as AskUserQuestion, with agent-shell's forms on.
+- **The command:** its full path with an example, to read the skill before using it the first time, and, when Agent
+  UI itself misbehaves, to ask you and file it with `agent-ui bug` ([Bugs in Agent UI](#bugs-in-agent-ui)).
+
+The MCP server's instructions, also in its system prompt, say the same: information there, questions there beyond a
+quick one, and its `bug` tool. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), is read in parts, as
+the agent needs them: SKILL.md, read first, says when to use the canvas (information, issues and plans, questions),
+the command, every type in a line by what it shows and the everyday ones
 (`progress`, `steps`, `table`, `issues`) with examples; its `references/` the rest, each read only when a task needs
 it: asking you (`asking.md`), figures (`data.md`), content and layout (`content.md`), following a command
 (`sources.md`), a type of its own (`custom-types.md`), a bug in Agent UI (`bugs.md`). A type's every property comes

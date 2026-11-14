@@ -1,10 +1,10 @@
 ---
 name: agent-ui
 description: >-
-  Show things to the user in Emacs beside your agent-shell session, on its Agent UI canvas: progress bars, checklists
-  of steps, tables, charts, text, Markdown, each updated in place as work goes on. Use when running inside Emacs (agent-shell)
-  with this Doom config, for anything that changes over time or that the user should keep in view while the
-  conversation scrolls: a long build or test run, a multi-step task's progress, results arriving one by one.
+  Show the user information in Emacs beside your agent-shell session, on its Agent UI canvas, and ask them things
+  there: figures, tables, charts, diagrams, plans, changes, each as the element that fits it, updated in place. Use
+  when running inside Emacs (agent-shell) with this Doom config, for whatever you have to tell that has a shape, and
+  for questions beyond a quick one.
 ---
 
 # Agent UI
@@ -23,19 +23,17 @@ This file is the core. The rest is in `references/`, each read only when your ta
 
 ## When to use it
 
-- **Yes:** what changes while you work or that the user will want to glance at: a build or test run you're watching,
-  the steps of a longer task and where you are in them, results that come in one by one, a summary that should stay in
-  view while the conversation goes on.
+- **Information goes here:** whatever you have to tell that has a shape (figures, records, a comparison, a trend, a
+  structure, steps, changes, output): show it as the element that fits it ([The types](#the-types)), and keep your
+  reply to the words: what you found, what it means, what's next, a line saying what's on the canvas. Tables, charts
+  and diagrams go here rather than into your reply. What a sentence or two holds stays in the reply alone.
 - **Issues and plans, always, without being asked:** a project's or an epic's issues (`bd ready`, an epic's
   children, a label's): the `issues` board, which follows your bd commands by itself. A search's results or a few
   chosen tickets: a `table` (`key` the id). A plan, or the ticket you're working on: `steps`, its acceptance criteria
-  as the steps, ticked as you go. Say so in a line of your reply rather than repeating the list there.
-- **Questions:** a list to pick from (which bugs to fix, which files, which approach): a `choice`; before something
-  risky (a force-push, a deploy, deleting data): a `confirm`; on a canvas of its own (`--canvas ask`), then end your
-  turn: the answer comes as your next prompt. See [asking.md](references/asking.md). A small question (2 to 4
-  options, nothing to show): AskUserQuestion, in the conversation, if you have it.
-- **No:** what you'd say once. Answers, explanations, code and reports go in your reply (Markdown), as usual. Don't
-  duplicate your reply on the canvas.
+  as the steps, ticked as you go.
+- **Questions:** asked here, as the interactive element that fits ([asking.md](references/asking.md)), on a canvas
+  of its own (`--canvas ask`), then end your turn: the answer comes as your next prompt. Only a quick question (2 to 4
+  short options, nothing to show or compare): AskUserQuestion, in the conversation, if you have it.
 - Keep it tidy: a handful of elements, each worth looking at. Update rather than add; remove what stopped helping.
 
 ## The command
@@ -74,18 +72,21 @@ uses another canvas of your session, in a pane of its own: for a second subject 
 
 ## The types
 
-- **Here, below:** `progress` a bar; `steps` a checklist; `table` rows, filled in by key; `issues` the project's
-  Beads issues as a board.
-- **Asking the user** ([asking.md](references/asking.md)): `choice` pick from a list; `compare` options shown side
-  by side; `confirm` yes or no before something risky; `form` several answers at once; `rank` put in order; `slider`
-  a number in a range; `todo` a checklist you both tick. Also there: picking rows, files, issues or chips
-  (`select`), a plan to approve (`steps`), changes to accept (`diff`).
-- **Figures and state** ([data.md](references/data.md)): `chart` line, bar, histogram, sparkline; `stats` figures
-  and their changes; `gauge` a value against its limits; `heatmap` a grid of cells; `timeline` tasks on a time axis;
-  `countdown` time elapsed or left; `graph` nodes and edges; `tags` chips; `log` lines by level.
-- **Content and layout** ([content.md](references/content.md)): `text`; `markdown`; `code` a snippet, marked,
-  reviewed; `diff` changes; `math` formulas; `mermaid` a diagram; `image`; `html` a page as a card; `files` files and their state;
-  `panel` elements side by side or stacked: a dashboard.
+Pick the one that fits what you have to tell.
+
+- **Here, below:** `progress` a run, a bar; `steps` a plan, a task's progress; `table` records, results, filled in
+  by key; `issues` the project's Beads issues as a board.
+- **Asking the user** ([asking.md](references/asking.md)): `choice` pick from a list; `compare` alternatives to see
+  side by side; `confirm` yes or no before something risky; `form` several values at once; `rank` an order; `slider`
+  a number in a range; `todo` a checklist you both tick. Also: picking rows, files, issues or chips (`select`), a plan
+  to approve (`steps`), changes to accept (`diff`).
+- **Figures** ([data.md](references/data.md)): `stats` a few figures and their changes; `gauge` one against its
+  target or limits; `chart` a trend, a series, a distribution; `heatmap` values across two dimensions; `timeline`
+  durations on a time axis; `countdown` time elapsed or left; `graph` a structure, dependencies, a flow; `tags`
+  categories with counts; `log` output, lines by level.
+- **Content and layout** ([content.md](references/content.md)): `text` a line; `markdown` a write-up; `code` a
+  snippet, marked, reviewed; `diff` changes; `math` formulas; `mermaid` a diagram; `image` a picture, a screenshot;
+  `html` a page as a card; `files` files and their state; `panel` several together: a dashboard.
 
 ### `progress`
 

@@ -182,15 +182,42 @@ killed after."
       (should (string-search (concat "read " (abbreviate-file-name agent-ui-skill)) text))
       ;; Its references read only when needed (doom-9sf).
       (should (string-search "which of its references to read only when needed" text))
+      ;; Information goes on the canvas, each kind as the element that fits
+      ;; it; the reply keeps the words (doom-ht6.28).
+      (should (string-search "It is where information goes" text))
+      (should (string-search "keep your reply to the words" text))
+      (should (string-search "What a sentence or two holds stays in the reply alone" text))
+      (should (string-search "The element by the information: figures, stats" text))
+      (dolist (pair '(("figures, stats" stats) ("against a target or limits, gauge" gauge)
+                      ("a search's matches, table" table) ("a distribution, chart" chart)
+                      ("two dimensions, heatmap" heatmap) ("a flow, graph or mermaid" graph mermaid)
+                      ("durations over time, timeline" timeline) ("code, code" code)
+                      ("changes, diff" diff) ("files and their state, files" files)
+                      ("output, log" log) ("categories with counts, tags" tags)
+                      ("formulas, math" math) ("a write-up, markdown" markdown)
+                      ("a picture, image" image) ("a web page, html" html)
+                      ("several of these together, a panel" panel)))
+        (should (string-search (car pair) text))
+        (dolist (type (cdr pair))
+          (should (memq type (agent-ui-types)))))
+      ;; Before what the editor's text says of tables, images and diagrams.
+      (should (string-search "This comes before what's said above of tables, images and diagrams in your replies"
+                             text))
       ;; Issues and plans: on the canvas without being asked, each in its form.
       (should (string-search "Issues and plans go there too, always, without being asked" text))
       (should (string-search "as the issues board" text))
       (should (string-search "as steps (its acceptance criteria)" text))
-      ;; Questions: a list to pick from on the canvas, the turn ended.
-      (should (string-search "To have the user pick from a list" text))
+      ;; Questions: on a canvas of its own, as the interactive element that
+      ;; fits, the turn ended.
+      (should (string-search "show it on a canvas of its own (--canvas ask:" text))
+      (should (string-search "as the interactive element that fits the question" text))
       (should (string-search "end your turn: the answer comes as your next prompt" text))
+      (should (string-search "To pick from a list (which to fix, which files, which approach), a choice" text))
       (should (string-search "before something risky (a force-push, a deploy, deleting data), a confirm" text))
-      (should (string-search "Ask on a canvas of its own (--canvas ask)" text))
+      (dolist (asks '("side by side, compare" "steps with approve" "diff with accept" "form" "rank" "slider"))
+        (should (string-search asks text)))
+      ;; Paragraphs: what to show, asking, the command.
+      (should (= (length (split-string text "\n\n")) 3))
       ;; A bug in Agent UI itself: asked, filed in its own issues.
       (should (string-search (concat "When Agent UI itself misbehaves") text))
       (should (string-search (concat (abbreviate-file-name agent-ui-command) " bug '{\"title\"") text))
@@ -201,10 +228,11 @@ killed after."
 
 (ert-deftest agent-ui-agent/small-questions-in-the-conversation ()
   "AskUserQuestion named only while agent-shell shows its forms (else the
-agent hasn't the tool)."
+agent hasn't the tool), for a quick question only: the rest on the canvas."
   (cl-letf (((symbol-function 'server-running-p) (lambda (&rest _) t)))
     (let ((agent-shell-elicitation--experimental-feature-enabled t))
-      (should (string-search "ask it with AskUserQuestion, in the conversation" (agent-ui-agent-context))))
+      (should (string-search "Only a quick question (2 to 4 short options, nothing to show or compare) goes in the conversation instead, with AskUserQuestion"
+                             (agent-ui-agent-context))))
     (let ((agent-shell-elicitation--experimental-feature-enabled nil))
       (should-not (string-search "AskUserQuestion" (agent-ui-agent-context))))))
 
@@ -230,6 +258,12 @@ the canvas, what's needed only at times goes into its references.")
                    (agent-ui-types)))
     ;; Issues and plans: shown without being asked (doom-nwj.20).
     (should (string-search "**Issues and plans, always, without being asked:**" core))
+    ;; Information goes on the canvas; questions too, beyond a quick one
+    ;; (doom-ht6.28).
+    (should (string-search "**Information goes here:**" core))
+    (should (string-search "Only a quick question (2 to 4\n  short options, nothing to show or compare): AskUserQuestion"
+                           core))
+    (should-not (string-search "**No:** what you'd say once" core))
     ;; Each operation it names, the command's, in the core.
     (dolist (op agent-ui-operations)
       (should (string-match-p (concat "^agent-ui " op "\\b") core)))))

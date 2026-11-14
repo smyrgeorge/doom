@@ -44,6 +44,10 @@ recorded, its reply REPLY (a plist)."
         (should (plist-get (plist-get result :capabilities) :tools))
         (should (equal (plist-get (plist-get result :serverInfo) :name) "agent-ui"))
         (should (string-match-p "canvas beside your session" (plist-get result :instructions)))
+        ;; Information there, each as the element that fits it; questions too
+        ;; (doom-ht6.28).
+        (should (string-match-p "goes there as the element that fits it" (plist-get result :instructions)))
+        (should (string-match-p "Ask there too, beyond a quick question" (plist-get result :instructions)))
         ;; A bug in Agent UI itself: how to file it, and where.
         (should (string-match-p "file it with the bug tool: it goes into Agent UI's own issues, never the project's"
                                 (plist-get result :instructions)))))

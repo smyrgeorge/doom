@@ -26,26 +26,21 @@ to a few columns) and fenced code blocks, highlighted by the Emacs mode of \
 their language, so always name it. HTML and LaTeX math show as plain \
 text: don't use them.
 
-File references: cite code as path:line (also path:line-line or \
-path:line:col), bare or in backticks, with paths relative to your working \
-directory or absolute. agent-shell turns references to existing files into \
-links that open the file at that line.
+File references: path:line (also path:line-line or path:line:col), relative \
+or absolute, bare or in backticks, become links that open the file at that line.
 
-Images: a Markdown image link to a local file, such as \
-![chart](/abs/path/chart.png), or an image's absolute path alone on a line, \
-is shown inline, up to the window's width ({width=50%} right after the link \
-caps it at half). PNG, JPEG, WebP and SVG work; remote URLs aren't fetched, \
-so download an image first. Save the images you make under \
-.agent-shell/images/ in your working directory, next to agent-shell's \
-transcripts (kept out of git), so they still show when a transcript is read \
-later. Show charts, diagrams and screenshots this way. SVG written directly \
-needs no tools; check that others (e.g. Graphviz, matplotlib) are installed \
-before relying on them.
+Images: a Markdown image link to a local file (![chart](/abs/path/chart.png)), \
+or an image's absolute path alone on a line, shows inline, up to the window's \
+width ({width=50%} right after the link caps it at half). PNG, JPEG, WebP and \
+SVG; remote URLs aren't fetched: download an image first. Save the images you \
+make under .agent-shell/images/ in your working directory (kept out of git), so \
+they still show when a transcript is read later. SVG written directly needs no \
+tools; check that others (Graphviz, matplotlib) are installed before relying \
+on them.
 
-Reports: when asked for a report with diagrams, charts or graphs, write the \
-report itself as Markdown in your reply, not as an HTML page or one big \
-image. Render each diagram or graph as its own image and link it where it \
-belongs; render diagram code to an image too, unless it's drawn in replies.
+Reports: write the report itself as Markdown in your reply, not as an HTML \
+page or one big image; each diagram, chart or graph its own image, linked where \
+it belongs (diagram code too, unless it's drawn in replies).
 
 The editor: the user's Emacs (Doom Emacs, configured in ~/.config/doom) \
 runs a server, so emacsclient reaches it from your shell. emacsclient --eval \
@@ -89,6 +84,8 @@ that its buffer isn't modified."
 ;; - a session started there is told so (`+my/agent-shell-beads-context'),
 ;;   with Beads' own guide for agents (`bd prime': finding work, claiming,
 ;;   creating, closing issues, dependencies), appended to its system prompt;
+;;   the guide left out where the project's Claude Code settings give it
+;;   already (a SessionStart hook running bd prime, as this config's has);
 ;; - each bd command Claude runs refreshes the issue lists and issues open in
 ;;   Emacs for that project, so its changes show as it makes them;
 ;; - C-c C-i (SPC m i) in agent-shell picks one of the project's open issues
@@ -108,7 +105,8 @@ with Beads (see ISSUES FOR CLAUDE above), before `bd prime''s guide.")
 
 (defvar +my/agent-shell-beads-prime t
   "Non-nil: Beads' guide for agents (`bd prime') follows
-`+my/agent-shell-beads-context' in the system prompt.")
+`+my/agent-shell-beads-context' in the system prompt, unless the project's
+Claude Code settings run it as a session starts.")
 
 ;; DIAGRAMS IN REPLIES
 ;; ```mermaid blocks in Claude's replies are drawn as diagrams, in the theme's

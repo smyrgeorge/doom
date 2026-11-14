@@ -256,8 +256,8 @@ puts it in a new pane (config/tiling/apps.el)."
   (let ((text +my/agent-shell-claude-context))
     (should (string-match-p "report itself as Markdown in your reply, not as an HTML page or one big image"
                             text))
-    (should (string-match-p "Render each diagram or graph as its own image" text))
-    (should (string-match-p "render diagram code to an image too, unless it's drawn in replies" text))))
+    (should (string-match-p "each diagram, chart or graph its own image, linked where it belongs" text))
+    (should (string-match-p "diagram code too, unless it's drawn in replies" text))))
 
 (ert-deftest agent-shell/context-the-editor ()
   (let ((text +my/agent-shell-claude-context))

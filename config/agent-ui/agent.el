@@ -155,25 +155,44 @@ prompt); nil while Emacs runs no server (the command couldn't reach it)."
           (skill (agent-ui--home-relative agent-ui-skill)))
       (format "Agent UI: beside this session, Emacs has a canvas (a pane of its \
 own, opened without taking the user's focus when you first show something) \
-that keeps things in view while the conversation scrolls: progress bars, \
-checklists of steps, tables, charts, text, Markdown, each updated in place. Use it for \
-what changes over time or deserves watching (a long build or test run, a \
-multi-step task's progress, results arriving one by one), not for what a reply \
-says once. Issues and plans go there too, always, without being asked: a project's \
-or an epic's issues (bd ready, an epic's children) as the issues board, which \
-follows your bd commands; a search's results as a table; a plan, or the ticket \
-you're working on, as steps (its acceptance criteria), ticked as you go. To have \
-the user pick from a list (which to fix, which files, which approach), show it \
-there as a choice (multiple: several), say so in a line and end your turn: the \
-answer comes as your next prompt; before something risky (a force-push, a deploy, \
-deleting data), a confirm, the same way. Ask on a canvas of its own (--canvas \
-ask): it takes the user's focus and closes once answered.%s From your shell: %s show \
+where you show the user things as elements, each updated in place. It is where \
+information goes: whatever you have to tell that has a shape (figures, records, \
+a comparison, a trend, a structure, steps, changes, output), show it there as \
+the element that fits it, and keep your reply to the words: what you found, \
+what it means, what's next, and a line saying what's on the canvas, not the \
+same again. What a sentence or two holds stays in the reply alone. The element \
+by the information: figures, stats (one against a target or limits, gauge); \
+records, results, a search's matches, table; a trend, a series or a \
+distribution, chart; values across two dimensions, heatmap; a structure, \
+dependencies or a flow, graph or mermaid; durations over time, timeline; code, \
+code; changes, diff; files and their state, files; output, log; categories \
+with counts, tags; formulas, math; a write-up, markdown; a picture, image; a \
+web page, html; several of these together, a panel. Issues and plans go there \
+too, always, without being asked: a project's or an epic's issues (bd ready, an \
+epic's children) as the issues board, which follows your bd commands; a plan, \
+or the ticket you're working on, as steps (its acceptance criteria), ticked as \
+you go; a long build or test run as progress, steps, a table filling in. This \
+comes before what's said above of tables, images and diagrams in your replies: \
+they're for when the canvas can't be used (the command exits with 3).
+
+Asking: to ask the user something, show it on a canvas of its own (--canvas \
+ask: it takes the user's focus and closes once answered) as the interactive \
+element that fits the question, say so in a line and end your turn: the answer \
+comes as your next prompt. To pick from a list (which to fix, which files, \
+which approach), a choice (multiple: several), or select on a table, files or \
+issues you show; alternatives the user has to see, side by side, compare; \
+before something risky (a force-push, a deploy, deleting data), a confirm, with \
+what will happen; a plan to agree on before you start, steps with approve; \
+changes you propose, diff with accept; several values at once, form; an order, \
+rank; a number in a range, slider.%s
+
+From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear; --canvas NAME on any of them uses \
 another canvas of this session, in a pane of its own. It replies with JSON. Before using it \
-the first time, read %s: the core (when to use it, the command, every type \
-named, the everyday ones), and which of its references to read only when \
+the first time, read %s: the core (when to use it, which element for what, the \
+command, the everyday types), and which of its references to read only when \
 needed (asking the user, charts, layouts, following a command, a type of \
 your own). Remove what stops helping, and never leave something \
 shown running once it stopped. When Agent UI itself misbehaves (a wrong drawing, \
@@ -181,10 +200,12 @@ an error, a property it lacks), ask the user, then file it: %s bug \
 '{\"title\":...,\"description\":...,\"element\":\"ID\",\"repro\":{an element \
 showing it}}' goes into Agent UI's own issues, never this project's (not filed: \
 its reply's report, to show the user); then carry on with a workaround.%s"
-              ;; Questions in the conversation, while agent-shell shows them.
+              ;; Quick questions in the conversation, while agent-shell shows
+              ;; them (its form); else the agent hasn't the tool.
               (if (bound-and-true-p agent-shell-elicitation--experimental-feature-enabled)
-                  " A small question (2 to 4 options, no list to show): ask it with \
-AskUserQuestion, in the conversation, and wait for the answer."
+                  " Only a quick question (2 to 4 short options, nothing to \
+show or compare) goes in the conversation instead, with AskUserQuestion \
+(agent-shell shows it as a form): wait for its answer."
                 "")
               command command skill command
               (if agent-ui-agent-mcp
