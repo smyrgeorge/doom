@@ -393,6 +393,36 @@ page is as wide."
                3))
       (should (> (+test-pdf--number "document.getElementById('viewerContainer').clientWidth" right) 150)))))
 
+(ert-deftest e2e-pdf/a-fit-kept-through-a-page-area-of-no-room ()
+  "Fit width or page, the page area 0 pixels wide or high, then as before:
+fitted again, as chosen (not PDF.js's \"auto\"), and kept so with its place."
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (pcase-dolist (`(,mode ,side) '(("page-width" "width") ("page-fit" "height")))
+      (ert-info (mode)
+        (+my/pdf--js (format "fit('%s')" mode))
+        (should (+test-wait-for (lambda () (equal (+test-pdf--js "pdfx.viewer.currentScaleValue") mode)) 3))
+        (+test-pdf--js (format "document.getElementById('viewerContainer').style.%s = '0px'; 'ok'" side))
+        (+test-sleep 0.4)
+        (+test-pdf--js (format "document.getElementById('viewerContainer').style.%s = ''; 'ok'" side))
+        (should (+test-wait-for (lambda () (equal (+test-pdf--js "pdfx.viewer.currentScaleValue") mode)) 3))
+        ;; Fitted: as wide as the page area, or (page-fit) as big as fits.
+        (should (+test-wait-for
+                 (lambda ()
+                   (let ((page (json-parse-string
+                                (+test-pdf--js "(function () {
+  var c = document.getElementById('viewerContainer'), p = document.querySelector('.pdfViewer .page').getBoundingClientRect();
+  return JSON.stringify([c.clientWidth - p.width, c.clientHeight - p.height]);
+})()")
+                                :array-type 'list)))
+                     (pcase-let ((`(,width ,height) page))
+                       (if (equal mode "page-width")
+                           (< (abs width) 3)
+                         ;; As big as it fits: its margins left out.
+                         (and (> width -1) (> height -1) (or (< width 3) (< height 25)))))))
+                 3))
+        (should (+test-wait-for (lambda () (equal (plist-get (plist-get (+test-pdf--state) :place) :s) mode)) 3))))))
+
 ;; What the toolbar shows: :clipped, the buttons shown past its edge; :missing,
 ;; those hidden that its ⋯ menu doesn't have; :hidden, how many are hidden;
 ;; :more, the ⋯ button shown.

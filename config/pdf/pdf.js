@@ -21,7 +21,7 @@
   const labels = Object.assign({ mod: 'Cmd', viewer: 'Preview' }, options.labels);
   const minScale = 0.25;
   const maxScale = 10;
-  const autoScales = ['page-width', 'page-fit', 'page-actual', 'auto'];
+  const fits = ['page-width', 'page-fit', 'page-actual'];
   const container = document.getElementById('viewerContainer');
   const findBadge = document.getElementById('find');
   const pageBadge = document.getElementById('page');
@@ -198,10 +198,21 @@
     view: options.view === 'pages' ? 'pages' : 'outline',
   };
 
-  const zoom = (factor) => {
-    viewer.currentScale = clamp(viewer.currentScale * factor, minScale, maxScale);
-  };
-  const fit = (value) => { viewer.currentScaleValue = value; };
+  // The fit chosen (W, P, Cmd+0, the toolbar, as it opened), one of fits,
+  // or null at a zoom of its own: kept here, not read back from PDF.js, which
+  // fitting a page area of no room (0 px) turns into its default, "auto", for
+  // good. Applied once there's room.
+  let fitMode = null;
+  const roomy = () => container.clientWidth > 0 && container.clientHeight > 0;
+  function fit(value) {
+    fitMode = fits.includes(value) ? value : 'page-width';
+    if (roomy()) viewer.currentScaleValue = fitMode;
+  }
+  function setScale(scale) {
+    fitMode = null;
+    viewer.currentScale = clamp(scale, minScale, maxScale);
+  }
+  const zoom = (factor) => setScale(viewer.currentScale * factor);
   const turnPage = (delta) => {
     if (doc) viewer.currentPageNumber = clamp(viewer.currentPageNumber + delta, 1, doc.numPages);
   };
@@ -234,12 +245,11 @@
     const div = view.div;
     const [x, y] = view.getPagePoint(left - div.offsetLeft - div.clientLeft,
                                      top - div.offsetTop - div.clientTop);
-    const value = viewer.currentScaleValue;
     return {
       p: view.id,
       t: Math.round(y),
       l: Math.round(x),
-      s: autoScales.includes(value) ? value : Math.round(viewer.currentScale * 10000) / 100,
+      s: fitMode || Math.round(viewer.currentScale * 10000) / 100,
     };
   }
 
@@ -452,10 +462,10 @@
   }
 
   // Fitting the width (or page) again when there's more or less room: the
-  // window resized, the toolbar or the sidebar shown or hidden.
+  // window resized, the toolbar or the sidebar shown or hidden; not while
+  // there's none (see fitMode).
   new ResizeObserver(() => {
-    const value = viewer.currentScaleValue;
-    if (doc && autoScales.includes(value)) viewer.currentScaleValue = value;
+    if (doc && fitMode && roomy()) viewer.currentScaleValue = fitMode;
   }).observe(container);
 
   // THE OUTLINE
@@ -691,15 +701,17 @@
     restore = null;
     place = null;
     if (reloaded) {
-      viewer.currentScaleValue = reloaded.scale;
+      if (typeof reloaded.scale === 'number') setScale(reloaded.scale);
+      else fit(reloaded.scale);
       container.scrollTop = reloaded.top;
       container.scrollLeft = reloaded.left;
     } else if (last) {
-      if (typeof last.s === 'number') viewer.currentScale = clamp(last.s / 100, minScale, maxScale);
-      else viewer.currentScaleValue = last.s || 'page-width';
+      // "auto" (kept by an earlier version once it had no room): the width.
+      if (typeof last.s === 'number') setScale(last.s / 100);
+      else fit(last.s);
       goTo(last);
     } else {
-      viewer.currentScaleValue = 'page-width';
+      fit('page-width');
     }
     pageInfo.textContent = viewer.currentPageNumber + ' / ' + doc.numPages;
     fitToolbar();
@@ -733,7 +745,7 @@
     try {
       const next = await lib.getDocument({ data: bytes(await load(src)) }).promise;
       if (keepPlace && doc) {
-        restore = { scale: viewer.currentScaleValue, top: container.scrollTop, left: container.scrollLeft };
+        restore = { scale: fitMode || viewer.currentScale, top: container.scrollTop, left: container.scrollLeft };
       }
       const old = doc;
       doc = next;
@@ -792,7 +804,7 @@
   });
   window.addEventListener('gesturechange', (e) => {
     e.preventDefault();
-    viewer.currentScale = clamp(pinchFrom * e.scale, minScale, maxScale);
+    setScale(pinchFrom * e.scale);
   });
 
   // THE MOUSE POINTER: Emacs draws its own over the whole page (CSS cursors
