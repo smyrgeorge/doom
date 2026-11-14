@@ -603,9 +603,10 @@ words in a terminal."
 
 ;; doom-o5t.1
 (ert-deftest beads/look-a-title-whole ()
-  "A title too long for the window goes on to the next lines, under itself
-\(at its column, its indent's width on); its progress and tags after it,
-each kept whole; an epic's issue without the lead it shares with it."
+  "A title on one line (the default); wrapped, one too long for the window
+goes on to the next lines, under itself (at its column, its indent's width
+on); its progress and tags after it, each kept whole; an epic's issue
+without the lead it shares with it."
   (should (equal (+my/beads--wrap '("aa" "bb" "cc" "dd") 5) '("aa bb" "cc dd")))
   (should (equal (+my/beads--wrap '("aa" " tag one ") 9) '("aa" " tag one ")))
   (should (equal (+my/beads--wrap '("abcdefghij") 4) '("abc…")))
@@ -621,32 +622,33 @@ each kept whole; an epic's issue without the lead it shares with it."
     (puthash "e" '(1 . 3) +my/beads--children)
     (cl-letf (((symbol-function '+my/beads--title-width) (lambda (&rest _) 24))
               ((symbol-function '+my/beads--title-column) (lambda () 30)))
-      ;; An epic: its title on two lines, its progress after it.
-      (let ((title (+my/beads-format-title '((id . "e") (title . "Parser: the rewrite of the lexer")))))
-        (should (equal (substring-no-properties title) "Parser: the rewrite of\n the lexer 1/3"))
-        (should (equal (get-text-property (string-search "\n" title) 'display title) nil))
-        (should (equal (get-text-property (1+ (string-search "\n" title)) 'display title) '(space :align-to 30))))
-      ;; Its issue, indented, its lead left out, its next line under its text.
-      (let ((title (+my/beads-format-title '((id . "e.1") (parent . "e") (labels . ["ui"])
-                                             (title . "Parser: errors recovered from, line by line")))))
-        (should (equal (substring-no-properties title) "└ errors recovered from,\n   line by line  ui ")))
-      (should (equal +my/beads--wrapped-at 24))
-      ;; Wrapping off: on one line, nothing to draw again on a resize.
-      (let ((+my/beads-titles-wrapped nil))
-        (should (equal (substring-no-properties
-                        (+my/beads-format-title '((id . "e") (title . "Parser: the rewrite of the lexer"))))
-                       "Parser: the rewrite of the lexer 1/3"))
-        (should (equal +my/beads--wrapped-at nil))))
-    ;; Wrapped, the feature's own default (config.el turns it off).
-    (should (eq +my/beads-titles-wrapped t))
-    ;; Under 20 columns for it: on one line.
-    (cl-letf (((symbol-function '+my/beads--title-width) (lambda (&rest _) 19)))
-      (should (equal (substring-no-properties (+my/beads-format-title '((id . "x") (title . "One line, however long"))))
-                     "One line, however long")))
-    ;; No window: on one line.
-    (cl-letf (((symbol-function '+my/beads--title-width) #'ignore))
-      (should (equal (substring-no-properties (+my/beads-format-title '((id . "x") (title . "One line, however long"))))
-                     "One line, however long")))))
+      ;; Not wrapped, the default: on one line, nothing to draw again on a
+      ;; resize.
+      (should-not +my/beads-titles-wrapped)
+      (should (equal (substring-no-properties
+                      (+my/beads-format-title '((id . "e") (title . "Parser: the rewrite of the lexer"))))
+                     "Parser: the rewrite of the lexer 1/3"))
+      (should (equal +my/beads--wrapped-at nil))
+      (let ((+my/beads-titles-wrapped t))
+        ;; An epic: its title on two lines, its progress after it.
+        (let ((title (+my/beads-format-title '((id . "e") (title . "Parser: the rewrite of the lexer")))))
+          (should (equal (substring-no-properties title) "Parser: the rewrite of\n the lexer 1/3"))
+          (should (equal (get-text-property (string-search "\n" title) 'display title) nil))
+          (should (equal (get-text-property (1+ (string-search "\n" title)) 'display title) '(space :align-to 30))))
+        ;; Its issue, indented, its lead left out, its next line under its text.
+        (let ((title (+my/beads-format-title '((id . "e.1") (parent . "e") (labels . ["ui"])
+                                               (title . "Parser: errors recovered from, line by line")))))
+          (should (equal (substring-no-properties title) "└ errors recovered from,\n   line by line  ui ")))
+        (should (equal +my/beads--wrapped-at 24))))
+    (let ((+my/beads-titles-wrapped t))
+      ;; Under 20 columns for it: on one line.
+      (cl-letf (((symbol-function '+my/beads--title-width) (lambda (&rest _) 19)))
+        (should (equal (substring-no-properties (+my/beads-format-title '((id . "x") (title . "One line, however long"))))
+                       "One line, however long")))
+      ;; No window: on one line.
+      (cl-letf (((symbol-function '+my/beads--title-width) #'ignore))
+        (should (equal (substring-no-properties (+my/beads-format-title '((id . "x") (title . "One line, however long"))))
+                       "One line, however long"))))))
 
 (ert-deftest beads/look-a-row-on-several-lines ()
   "A row on several lines: j and k go from row to row, hl-line highlights it

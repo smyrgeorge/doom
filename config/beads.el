@@ -50,10 +50,10 @@
 (defvar +my/beads-closed-shown nil
   "Whether a new issue list shows its closed issues.")
 
-;; The list's titles shown whole: one too long for the pane goes on to the
-;; next lines, under itself (config/beads/look.el). nil: each row one line, a
-;; title cut at the pane's edge.
-(defvar +my/beads-titles-wrapped t
+;; The list's rows on one line, a long title cut at the pane's edge
+;; (config/beads/look.el). t: titles shown whole, one too long for the pane
+;; going on to the next lines, under itself.
+(defvar +my/beads-titles-wrapped nil
   "Whether a title too long for the issue list's pane goes on to the next lines.")
 
 ;; ====== CODE ======
