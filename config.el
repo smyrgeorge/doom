@@ -134,6 +134,10 @@
 ;; first PDF opened; SPC m d turns them light (config/pdf.el).
 (setq +my/pdf-dark-pages t)
 
+;; Issues: each row of the list on one line, a long title cut at the pane's
+;; edge, not going on to the next lines (config/beads.el).
+(setq +my/beads-titles-wrapped nil)
+
 ;; ====== CODE ======
 
 ;; OS (what differs between macOS and Linux: keys, other apps; the files below use it)

@@ -630,7 +630,15 @@ each kept whole; an epic's issue without the lead it shares with it."
       (let ((title (+my/beads-format-title '((id . "e.1") (parent . "e") (labels . ["ui"])
                                              (title . "Parser: errors recovered from, line by line")))))
         (should (equal (substring-no-properties title) "└ errors recovered from,\n   line by line  ui ")))
-      (should (equal +my/beads--wrapped-at 24)))
+      (should (equal +my/beads--wrapped-at 24))
+      ;; Wrapping off: on one line, nothing to draw again on a resize.
+      (let ((+my/beads-titles-wrapped nil))
+        (should (equal (substring-no-properties
+                        (+my/beads-format-title '((id . "e") (title . "Parser: the rewrite of the lexer"))))
+                       "Parser: the rewrite of the lexer 1/3"))
+        (should (equal +my/beads--wrapped-at nil))))
+    ;; Wrapped, the feature's own default (config.el turns it off).
+    (should (eq +my/beads-titles-wrapped t))
     ;; Under 20 columns for it: on one line.
     (cl-letf (((symbol-function '+my/beads--title-width) (lambda (&rest _) 19)))
       (should (equal (substring-no-properties (+my/beads-format-title '((id . "x") (title . "One line, however long"))))

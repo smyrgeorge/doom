@@ -29,7 +29,8 @@ progress, ⊘3 blocked by 3 open issues (in the Blocked section), ✓ closed; P0
 type is its icon (its word in a terminal). The columns are narrow so the title keeps most of the width, and it's shown
 whole: a title too long for the pane goes on to the next line, under itself. Labels follow it as tags, an epic shows
 its progress (`3/11`, its closed issues too), and its open issues are listed under it, without the lead they share
-with it (`Agent workspace: `).
+with it (`Agent workspace: `). `(setq +my/beads-titles-wrapped nil)` in `config.el` keeps each row on one line, a long
+title cut at the pane's edge.
 
 It shows the work still open: a notice over it says how many closed issues it hides, with **Show closed** (then
 **Hide closed**), and `f s closed` lists only them. With a filter on, a notice says which, with **Clear filter**.

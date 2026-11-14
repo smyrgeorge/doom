@@ -16,7 +16,8 @@
 ;;   in a terminal;
 ;; - no date (its column there, empty, no gap after it: beads.el sorts by it);
 ;; - nothing before a row's mark (beads.el padded it by 2 columns, never used);
-;; - a title: whole, a long one going on to the next lines under itself;
+;; - a title: whole, a long one going on to the next lines under itself (or
+;;   on one line, cut: `+my/beads-titles-wrapped');
 ;;   after it an epic's progress (its issues done of all, closed ones too)
 ;;   and its labels as tags (a colour each, the same each time); an epic's
 ;;   issues under it, indented, without the lead they share with it
@@ -244,7 +245,8 @@ PARENT's title."
   "ISSUE's title, under its epic's indented and without the lead it shares
 with it; after it its progress if it's an epic, its labels as tags. Whole: a
 title too long for the window goes on to the next lines, under itself (no
-window, or under 20 columns for it: on one line)."
+window, under 20 columns for it, or `+my/beads-titles-wrapped' nil: on one
+line)."
   (let* ((id (alist-get 'id issue))
          (depth (or (and +my/beads--depth (gethash id +my/beads--depth)) 0))
          (indent (if (> depth 0)
@@ -259,11 +261,12 @@ window, or under 20 columns for it: on one line)."
          (words (append (split-string title " " t)
                         (and counts (list (+my/beads--progress (car counts) (cdr counts))))
                         (mapcar #'+my/beads--label-tag (append (alist-get 'labels issue) nil))))
-         (room (+my/beads--title-width))
+         (room (and +my/beads-titles-wrapped (+my/beads--title-width)))
          (column (+my/beads--title-column)))
+    ;; Not wrapped: nothing to draw again when the window's resized.
     (setq +my/beads--wrapped-at room)
-    ;; No window, or one so narrow the title would be a word a line: on one
-    ;; line, cut at the window's edge.
+    ;; Not wrapped, no window, or one so narrow the title would be a word a
+    ;; line: on one line, cut at the window's edge.
     (if (or (not room) (< (- room (string-width indent)) 20))
         (concat indent (string-join words " "))
       (let ((lines (+my/beads--wrap words (- room (string-width indent)))))

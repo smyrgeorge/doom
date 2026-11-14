@@ -311,6 +311,11 @@ default: every new prompt started with the line)."
   "PDFs open with dark pages (config/pdf.el's own default: light)."
   (should (eq +my/pdf-dark-pages t)))
 
+(ert-deftest config/beads-titles-on-one-line ()
+  "The issue list's rows on one line (config/beads.el's own default: a long
+title wrapped)."
+  (should (eq +my/beads-titles-wrapped nil)))
+
 ;; ====== LOAD ORDER ======
 
 (defun +test-config--position (form)
@@ -326,6 +331,8 @@ dark PDF pages, Agent UI's questions (their files' defvars keep them)."
              (+test-config--position '(load! "config/tiling"))))
   (should (< (+test-config--position '(setq +my/pdf-dark-pages t))
              (+test-config--position '(load! "config/pdf"))))
+  (should (< (+test-config--position '(setq +my/beads-titles-wrapped nil))
+             (+test-config--position '(load! "config/beads"))))
   (should (< (+test-config--position '(setq agent-ui-focus-questions t agent-ui-close-answered t))
              (+test-config--position '(load! "config/agent-ui"))))
   (should (< (+test-config--position '(setq-default fill-column 120))
