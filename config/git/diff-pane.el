@@ -8,7 +8,10 @@
 ;; the pane to that file; in the pane, SPC g d, q or Esc closes it. The pane
 ;; refreshes when the file is saved. In the pane: s / u / x stage, unstage or
 ;; discard a hunk, RET jumps to the line.
-;; Opening it saves the buffer first (magit diffs the file on disk).
+;; Opening it saves the buffer first (magit diffs the file on disk). The pane
+;; takes half of the window it's opened from (the split does; a window-width
+;; would be a share of the whole frame, taken from the windows beside it).
+;; With tiling (config/tiling), the strategy places it.
 (defun +my/git-diff-pane--window ()
   "Return the window in this frame showing a single-file magit diff."
   (seq-find (lambda (win)
@@ -39,8 +42,7 @@ In the pane itself, close it."
               (if (window-live-p win)
                   (progn (set-window-buffer win buffer) win)
                 (display-buffer buffer '((display-buffer-in-direction)
-                                         (direction . right)
-                                         (window-width . 0.5)))))))
+                                         (direction . right)))))))
       (magit-diff-buffer-file)          ; selects the pane
       ;; Put the cursor on the hunk of the line we came from. magit tries this
       ;; itself but gives up when the diff starts with a --stat summary.

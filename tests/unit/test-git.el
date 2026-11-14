@@ -180,6 +180,29 @@ window on *scratch*, and again after (the repo's buffers killed)."
           (should (equal magit-buffer-diff-range "main"))
           (should (string-match-p "^\\+CHANGED 5$" (buffer-substring-no-properties (point-min) (point-max)))))))))
 
+(ert-deftest git/pane-halves-its-window-not-the-frame ()
+  "Beside another window, on either side: the diff takes half of the window
+it's opened from, not half of the frame; the other window keeps its width."
+  (+test-git-with-repo
+    (+test-git--write "a.txt" (+test-git--lines 30 '(5)))
+    (dolist (side '(right left))
+      (+test-reset)
+      (let* ((first (selected-window))
+             (second (split-window-right))
+             (code (if (eq side 'right) second first))
+             (other (if (eq side 'right) first second))
+             (width (window-total-width code))
+             (other-width (window-total-width other)))
+        (select-window code)
+        (+test-git--visit "a.txt" 5)
+        (+my/git-diff-pane)
+        (let ((pane (selected-window)))
+          (should (= (length (window-list)) 3))
+          (should (= (window-total-width other) other-width))
+          (should (<= (abs (- (window-total-width pane) (/ width 2))) 1))
+          (should (<= (abs (- (window-total-width code) (/ width 2))) 1))
+          (should (> (car (window-edges pane)) (car (window-edges code)))))))))
+
 (ert-deftest git/pane-cursor-on-the-hunk-of-the-line ()
   "The cursor goes to the hunk of the line you were on (also below the --stat
 summary magit starts the diff with)."
