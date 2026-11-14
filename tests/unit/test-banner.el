@@ -1271,6 +1271,27 @@ laid out; its window shows a read-only buffer without any lines of its own."
         (dolist (face '(+my/banner-info +my/banner-warning +my/banner-error))
           (set-face-attribute face nil :background 'unspecified :foreground 'unspecified))))))
 
+(ert-deftest banner/every-notice-listed ()
+  "Each file in config/ showing a notice is in config/banner.el's list."
+  (let ((listed (with-temp-buffer
+                  (insert-file-contents (expand-file-name "config/banner.el" +test-root))
+                  (buffer-string)))
+        (showing nil))
+    (dolist (file (directory-files-recursively (expand-file-name "config" +test-root) "\\.el\\'"))
+      (let ((name (file-relative-name file +test-root)))
+        (unless (string-prefix-p "config/banner" name)
+          (with-temp-buffer
+            (insert-file-contents file)
+            (when (search-forward "(+my/banner-show" nil t)
+              (push name showing))))))
+    (should (member "config/agent-shell/excalidraw.el" showing))
+    ;; "(TYPE, FILE)".
+    (dolist (name showing)
+      (should (equal (list name (and (string-match-p (rx "(" (or "info" "warning" "error") ", " (literal name) ")")
+                                                     listed)
+                                     t))
+                     (list name t))))))
+
 ;; ====== LOADED ======
 
 (ert-deftest banner/config-el-loads-it ()

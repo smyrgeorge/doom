@@ -28,8 +28,19 @@
 ;;   them on;
 ;; - the Markdown preview (info, config/markdown/notice.el): a Markdown file
 ;;   offers it ("Open preview");
+;; - the Mermaid preview (info, config/mermaid/notice.el): a Mermaid file
+;;   offers it ("Open preview");
 ;; - the browser (info, config/html.el): an HTML file offers it ("Open in
-;;   browser").
+;;   browser");
+;; - a drawing's error (error, config/excalidraw/sync.el): what its page
+;;   couldn't do (save it, show the file, add a library), no actions;
+;; - Excalidraw's libraries (info, config/excalidraw/libraries.el): over their
+;;   site, opened from a drawing, "Back to the drawing";
+;; - a drawing for Claude (info, config/agent-shell/excalidraw.el): its keys,
+;;   "Insert" (into the prompt) and "Discard";
+;; - an issue list's filter and closed issues (info, config/beads/hidden.el):
+;;   "Filtered: ..." with "Clear filter"; "N closed issues hidden" (or
+;;   shown) with "Show closed" (or "Hide closed").
 (defvar +my/banner-types
   '((info    "nf-cod-info"    blue)
     (warning "nf-cod-warning" yellow)
