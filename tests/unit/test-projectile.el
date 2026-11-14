@@ -55,6 +55,7 @@
   (defvar +workspaces-on-switch-project-behavior 'non-empty)
   (defvar +workspace--last nil)
   (defvar +workspaces-data-file "_workspaces")
+  (require 'persp-mode)                 ; its structs' setters, as it's read
   (load +test-projectile--doom-workspaces nil t))
 
 (+test-load "config/projectile")
@@ -227,11 +228,14 @@ away (with a cache they weren't)."
       (should-not (+my/project-readme dir)))))
 
 (ert-deftest projectile/switch-project-opens-the-readme ()
-  "SPC p p: the README, without asking for a file."
+  "SPC p p into a workspace showing nothing yet (Doom's fallback buffer): the
+README, without asking for a file."
   (should (eq +workspaces-switch-project-function #'+my/project-open-readme))
   (+test-with-reset
     (let ((dir (+test-projectile--project "switch" "README.org" "README.txt" "src/a.kt"))
+          (doom-fallback-buffer-name "*doom*")
           (asked nil))
+      (switch-to-buffer (+test-projectile--dashboard))
       (cl-letf (((symbol-function 'doom-project-find-file)
                  (lambda (&rest args) (setq asked args))))
         (funcall +workspaces-switch-project-function dir))
@@ -617,6 +621,31 @@ them): their buffers stay the other's. Each keeps what's shown in it."
 
 ;; ====== WORKSPACES: SPC P P ======
 ;; Doom's SPC p p (`+workspaces-switch-to-project-h'), real persp-mode.
+
+(ert-deftest projectile/spc-p-p-back-to-an-open-project-keeps-its-panes ()
+  "SPC p p to a project open in its workspace (Doom runs the README opener
+then too): its panes and the buffer you were on stay, Doom's file prompt
+instead of its README over them. A new workspace still opens it."
+  (+test-projectile-need-doom-workspaces)
+  (+test-projectile-real-workspaces
+    (let* ((doom-fallback-buffer-name "*doom*")
+           (p (+test-projectile--project "open-b" "b.txt" "README.md"))
+           (readme (expand-file-name "README.md" p))
+           (asked nil))
+      (find-file (+test-file "elsewhere.txt" "x\n"))
+      (cl-letf (((symbol-function 'doom-project-find-file) (lambda (dir) (push dir asked))))
+        (+workspaces-switch-to-project-h p)
+        (should (equal (buffer-file-name (window-buffer)) readme))
+        (should-not asked)
+        (find-file (expand-file-name "b.txt" p))
+        (split-window-right)
+        (+workspace-switch "A")
+        (+workspaces-switch-to-project-h p))
+      (should (equal (safe-persp-name (get-current-persp))
+                     (file-name-nondirectory (directory-file-name p))))
+      (should (= (length (window-list nil 'nomini)) 2))
+      (should (equal (buffer-file-name (window-buffer)) (expand-file-name "b.txt" p)))
+      (should (equal asked (list p))))))
 
 (ert-deftest projectile/spc-p-p-into-an-empty-workspace-keeps-the-project ()
   "SPC p p from an empty workspace (Doom takes it over, renamed, without
