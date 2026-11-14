@@ -98,11 +98,25 @@ Click a mark to jump to it, drag the band to scroll. Try it: `M-x +my/example-st
 ## Notices
 
 Notices at the top of a window, with action buttons. Markdown files offer the [live preview](markdown.md); HTML files
-offer to open them in your browser (`M-x +my/html-open-in-emacs` shows one in WebKit, in a pane); files with lines over 5,000 characters open plain, and offer to wrap them or open
+offer to open them in your browser (or [in Emacs](#html-pages)); files with lines over 5,000 characters open plain, and offer to wrap them or open
 them normally. Large files (over 20,000 lines or 1 MB) open at once without the language server, spelling, syntax
 checking, the sticky header and the error stripe, and offer to open them normally. Try it: `M-x +my/example-banner`.
 
 ![Notices of each kind at the top of a window](../examples/banner.png)
+
+## HTML pages
+
+`M-x +my/html-open-in-emacs` shows an HTML file or a URL as a page in WebKit, in a pane; links out of it open in your
+browser.
+
+| Key | Action |
+|---|---|
+| `j` / `k`, `C-d` / `C-u`, `gg` / `G` | Scroll |
+| `h` / `l` | Scroll sideways |
+| `+` / `-` / `0` | Zoom in / out / its own size, in all the page's panes |
+| `W` | As wide as the pane |
+| `y`, `Cmd+C` | Copy the selection |
+| `q` | Close |
 
 ## Sticky header
 

@@ -13,7 +13,7 @@
 
 (defconst +test-keys--files
   '("config/window" "config/childframe" "config/banner" "config/editor" "config/search"
-    "config/webkit" "config/markdown" "config/pdf" "config/image" "config/merge")
+    "config/webkit" "config/markdown" "config/html" "config/pdf" "config/image" "config/merge")
   "The files binding the keys below, in config.el's order.")
 
 ;; ====== THE KEYS ======
@@ -37,6 +37,9 @@
     (+my/pdf-mode-map nil "s-[" +my/pdf-back)
     (+my/pdf-mode-map nil "s-p" +my/pdf-print)
     (+md-preview-page-mode-map nil "s-c" +my/webkit-copy)
+    (+my/html-page-mode-map nil "s-c" +my/webkit-copy)
+    (+my/html-page-mode-map nil "s-=" +my/html-page-zoom-in)
+    (+my/html-page-mode-map nil "s-0" +my/html-page-actual-size)
     (+my/merge-mode-map nil "s-s" +my/merge-done)
     (+my/merge-mode-map nil "C-c C-c" +my/merge-done))
   "(KEYMAP STATE KEY COMMAND): bound on macOS and on Linux. STATE: the Evil
@@ -71,6 +74,10 @@ state of KEYMAP's auxiliary map, or nil for KEYMAP itself.")
      (+my/pdf-mode-map normal "M-<left>" +my/pdf-back)
      (+my/pdf-mode-map normal "M-<right>" +my/pdf-forward)
      (+md-preview-page-mode-map normal "C-S-c" +my/webkit-copy)
+     (+my/html-page-mode-map normal "C-S-c" +my/webkit-copy)
+     (+my/html-page-mode-map normal "C-=" +my/html-page-zoom-in)
+     (+my/html-page-mode-map normal "C--" +my/html-page-zoom-out)
+     (+my/html-page-mode-map normal "C-0" +my/html-page-actual-size)
      (+my/merge-mode-map nil "C-s" +my/merge-done)))
   "(KEYMAP STATE KEY COMMAND): bound on Linux only (see above).")
 
