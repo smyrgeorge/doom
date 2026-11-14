@@ -11,7 +11,8 @@ The config runs in a terminal too: `emacs -nw`, or `emacsclient -t`. `Cmd` keys 
 | `M-[` / `M-]` | `Alt+[` / `Alt+]` | `[b` / `]b` |
 
 The error stripe is a column of coloured cells, notices take the header line, and `SPC m p` falls back to
-markdown-mode's preview. The terminal's background follows the theme while Emacs runs.
+markdown-mode's preview. The terminal's background follows the theme while Emacs runs, its own while Emacs is
+suspended (`C-x C-z`) or gone.
 
 ## 24-bit colour
 

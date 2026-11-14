@@ -4,7 +4,8 @@
 ;; TERMINAL
 ;; Paint the terminal's own background (the strip below the echo area) with the
 ;; theme's background via OSC 11, and give the terminal its own back when Emacs
-;; exits or an emacsclient -t frame closes. Its own: asked before the first
+;; exits or an emacsclient -t frame closes, and while it's suspended (C-x C-z:
+;; painted again once it's back). Its own: asked before the first
 ;; paint (OSC 11 ?), set back with OSC 11. OSC 111 (reset) only where it didn't
 ;; answer: iTerm2 ignores 111, and the theme's colour stayed after Emacs (after
 ;; cmd/diff, emacs -nw). Only once the terminal is set up (its
@@ -49,15 +50,19 @@ BEL), and keep the colour to give back."
      "\e]111\a")
    terminal))
 
+(defun +my/tty--paint-bg (frame)
+  "Paint FRAME's terminal with the theme's background, if it's a terminal
+frame and its terminal is set up; its own asked first (see above)."
+  (when (eq (framep frame) t)           ; tty frame
+    (when-let* (((terminal-parameter (frame-terminal frame) 'terminal-initted))
+                (bg (face-background 'default frame))
+                ((string-prefix-p "#" bg)))
+      (+my/tty--ask-bg frame)
+      (send-string-to-terminal (format "\e]11;%s\a" bg)
+                               (frame-terminal frame)))))
+
 (defun +my/tty-sync-bg-h (&rest _)
-  (dolist (frame (frame-list))
-    (when (eq (framep frame) t)         ; tty frame
-      (when-let* (((terminal-parameter (frame-terminal frame) 'terminal-initted))
-                  (bg (face-background 'default frame))
-                  ((string-prefix-p "#" bg)))
-        (+my/tty--ask-bg frame)
-        (send-string-to-terminal (format "\e]11;%s\a" bg)
-                                 (frame-terminal frame))))))
+  (mapc #'+my/tty--paint-bg (frame-list)))
 (defun +my/tty-reset-bg-h (&rest _)
   (dolist (frame (frame-list))
     (when (eq (framep frame) t)
@@ -82,6 +87,28 @@ BEL), and keep the colour to give back."
     (ignore-errors
       (+my/tty--give-back-bg (frame-terminal frame)))))
 (add-hook 'delete-frame-functions #'+my/tty-reset-frame-bg-h -90)
+;; Suspended, C-x C-z: emacs -nw (`suspend-emacs', its own terminal) or an
+;; emacsclient -t frame (`suspend-tty', that terminal). The shell shows the
+;; terminal's own background meanwhile, the theme's once Emacs is back.
+(defun +my/tty--frame-of (terminal)
+  "A terminal frame of TERMINAL; nil TERMINAL: of the terminal Emacs runs in
+\(emacs -nw)."
+  (seq-find (lambda (frame)
+              (and (eq (framep frame) t)
+                   (if terminal
+                       (eq (frame-terminal frame) terminal)
+                     (controlling-tty-p (frame-terminal frame)))))
+            (frame-list)))
+(defun +my/tty-suspend-h (&optional terminal)
+  (when-let* ((frame (+my/tty--frame-of terminal)))
+    (+my/tty--give-back-bg (frame-terminal frame))))
+(defun +my/tty-resume-h (&optional terminal)
+  (when-let* ((frame (+my/tty--frame-of terminal)))
+    (+my/tty--paint-bg frame)))
+(add-hook 'suspend-hook #'+my/tty-suspend-h)
+(add-hook 'suspend-tty-functions #'+my/tty-suspend-h)
+(add-hook 'suspend-resume-hook #'+my/tty-resume-h)
+(add-hook 'resume-tty-functions #'+my/tty-resume-h)
 
 ;; MENU BAR
 ;; Doom hides the menu bar except in macOS GUI frames, where it lives in the

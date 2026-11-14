@@ -1,9 +1,9 @@
 ;;; tests/unit/test-terminal.el -*- lexical-binding: t; -*-
 ;; config/terminal.el: terminal (tty) frames: the terminal's background painted
 ;; with the theme's (OSC 11), once it's set up, its own asked first (OSC 11 ?)
-;; and given back (OSC 11 with it; else OSC 111) on exit or when an
-;; emacsclient -t frame closes, as a terminal Emacs on a pty shows; no menu
-;; bar; no tty-tip-mode.
+;; and given back (OSC 11 with it; else OSC 111) on exit, when an emacsclient
+;; -t frame closes and while suspended (C-x C-z), as a terminal Emacs on a pty
+;; shows; no menu bar; no tty-tip-mode.
 
 ;; As Doom has it, before this config.
 (add-hook 'tty-setup-hook #'tty-tip-mode)
@@ -81,6 +81,10 @@ its parameters in `params' ((TERMINAL . PARAMETER) . VALUE)."
   (should (memq '+my/tty-sync-bg-h after-make-frame-functions))
   (should (memq '+my/tty-reset-bg-h kill-emacs-hook))
   (should (memq '+my/tty-reset-frame-bg-h delete-frame-functions))
+  (should (memq '+my/tty-suspend-h suspend-hook))
+  (should (memq '+my/tty-suspend-h suspend-tty-functions))
+  (should (memq '+my/tty-resume-h suspend-resume-hook))
+  (should (memq '+my/tty-resume-h resume-tty-functions))
   ;; Before the server's (it closes the client's terminal), whenever it starts.
   (require 'server)
   (let ((delete-frame-functions (default-value 'delete-frame-functions)))
@@ -205,10 +209,12 @@ iTerm2 ignores)."
       (should (equal (reverse +test-terminal--sent)
                      '(("\e]11;rgb:1111/2222/3333\a" tty1-terminal) ("\e]111\a" tty2-terminal)))))))
 
-(defun +test-terminal--nw (reply)
+(defun +test-terminal--nw (reply &optional suspend)
   "Run a terminal Emacs (this config's terminal.el, Doom's theme) on a pty,
 being its terminal: answer its background query with REPLY (nil: no answer,
-as tmux), quit it (C-x C-c) once it painted the theme's. What it wrote."
+as tmux), quit it (C-x C-c) once it painted the theme's; SUSPEND: suspend it
+first (C-x C-z; on this pty it's back at once, nothing to stop it), quit once
+it painted it again. What it wrote."
   (let* ((home (make-temp-file (+test-tmp-file "nw-home-") t))
          (setup (format "(progn (run-at-time 30 nil #'kill-emacs 3) (require 'doom-themes) (+test-load \"config/terminal\") (load-theme 'doom-one t) (run-hooks 'doom-load-theme-hook))"))
          (process-environment (append (list "TERM=xterm-256color" "COLORTERM=truecolor"
@@ -233,8 +239,13 @@ as tmux), quit it (C-x C-c) once it painted the theme's. What it wrote."
           (setq answered t)
           (process-send-string process reply))
         (when (and (not quitting) (string-search "\e]11;#" output))
-          (setq quitting t)
-          (process-send-string process "\C-x\C-c"))))
+          (if (and suspend (not (eq suspend 'sent)))
+              (progn (setq suspend 'sent)
+                     (process-send-string process "\C-x\C-z"))
+            (when (or (not suspend)
+                      (string-search "\e]11;#" output (1+ (string-search "\e]11;#" output))))
+              (setq quitting t)
+              (process-send-string process "\C-x\C-c"))))))
     output))
 
 (ert-deftest terminal/given-back-as-it-was ()
@@ -308,6 +319,46 @@ given its own colour back."
         (when (string-prefix-p "emacsclient" (process-name process))
           (delete-process process)))
       (call-process "emacsclient" nil nil nil "-s" socket "-e" "(kill-emacs)"))))
+
+(ert-deftest terminal/given-back-while-suspended ()
+  "C-x C-z in a terminal Emacs on a pty: its own colour given back as it's
+suspended (the shell shows it), the theme's painted again once it's back."
+  (let* ((output (+test-terminal--nw "\e]11;rgb:1111/2222/3333\e\\" t))
+         (painted (string-search "\e]11;#282c34\a" output))
+         (given-back (string-search "\e]11;rgb:1111/2222/3333\a" output))
+         (again (and given-back (string-search "\e]11;#282c34\a" output given-back))))
+    (should painted)
+    (should given-back)
+    (should (< painted given-back))
+    (should again)
+    (should-not (string-search "\e]111" output))))
+
+(ert-deftest terminal/suspended-and-resumed ()
+  "Suspended (emacs -nw: its own terminal; emacsclient -t: that one): its
+colour given back; resumed: the theme's painted again. Only to that
+terminal; none for a GUI frame's."
+  (+test-terminal
+    (+test-terminal--frames '((tty1 t "#282c34") (tty2 t "#1e1e1e") (gui ns "#282c34"))
+      (set-terminal-parameter 'tty1-terminal '+my/tty-bg "rgb:1111/2222/3333")
+      (set-terminal-parameter 'tty1-terminal '+my/tty-bg-asked t)
+      (set-terminal-parameter 'tty2-terminal '+my/tty-bg-asked t)
+      (cl-letf (((symbol-function 'controlling-tty-p) (lambda (terminal) (eq terminal 'tty1-terminal))))
+        ;; emacs -nw: C-x C-z (suspend-hook, suspend-resume-hook).
+        (run-hooks 'suspend-hook)
+        (should (equal +test-terminal--sent '(("\e]11;rgb:1111/2222/3333\a" tty1-terminal))))
+        (setq +test-terminal--sent nil)
+        (run-hooks 'suspend-resume-hook)
+        (should (equal +test-terminal--sent '(("\e]11;#282c34\a" tty1-terminal))))
+        ;; emacsclient -t: its terminal.
+        (setq +test-terminal--sent nil)
+        (run-hook-with-args 'suspend-tty-functions 'tty2-terminal)
+        (run-hook-with-args 'resume-tty-functions 'tty2-terminal)
+        (should (equal (reverse +test-terminal--sent)
+                       '(("\e]111\a" tty2-terminal) ("\e]11;#1e1e1e\a" tty2-terminal))))
+        ;; No terminal frame of it (a GUI Emacs): nothing.
+        (setq +test-terminal--sent nil)
+        (run-hook-with-args 'suspend-tty-functions 'gui-terminal)
+        (should-not +test-terminal--sent)))))
 
 (ert-deftest terminal/given-back-with-a-reset-if-it-never-said ()
   "No answer (tmux detached, a terminal without the query): OSC 111."
