@@ -62,6 +62,11 @@ directory name)."
                       :range (lsp-make-range :start position :end position))
            (and container (list :containerName container)))))
 
+(defun +test-search--workspace (&optional symbols)
+  "A language server's workspace; SYMBOLS non-nil: its server searches the
+workspace's symbols (workspace/symbol)."
+  (make-lsp--workspace :server-capabilities (and symbols '(:workspaceSymbolProvider t))))
+
 (defun +test-search--candidate (info &optional container)
   (propertize "candidate" 'consult--candidate info 'consult--container-name container))
 
@@ -266,6 +271,25 @@ workspaces."
       (funcall async 'destroy)
       (should (equal cancelled '(:symbols-token))))))
 
+(ert-deftest search/symbols-request-failing-ends-the-indicator ()
+  "A request refused (an error) or failed (the server's error answer): the
+indicator says failed, no error escapes."
+  (+test-search-with-server nil
+    (cl-letf (((symbol-function 'lsp-request-async)
+               (lambda (&rest _) (error "The connected server(s) does not support method"))))
+      (pcase-let ((`(,log ,async) (+test-search--async nil :tok)))
+        (+test-search--feed async "Us")
+        (should (equal (seq-filter #'vectorp (reverse (car log)))
+                       '([indicator running] [indicator failed])))))
+    (cl-letf (((symbol-function 'lsp-request-async)
+               (lambda (_method _params _callback &rest plist)
+                 (run-at-time 0 nil (plist-get plist :error-handler)
+                              '(:code -32601 :message "Unhandled method")))))
+      (pcase-let ((`(,log ,async) (+test-search--async nil :tok)))
+        (+test-search--feed async "Us")
+        (should (equal (seq-filter #'vectorp (reverse (car log)))
+                       '([indicator running] [indicator failed])))))))
+
 (ert-deftest search/symbols-empty-input-asks-nothing ()
   (+test-search-with-server nil
     (pcase-let ((`(,_log ,async) (+test-search--async nil :tok)))
@@ -406,11 +430,12 @@ not a mode's commands elsewhere, recently used or not."
   "Classes, Files, Symbols, Actions; case-insensitive, from the project's root."
   (+test-with-reset
     (let* ((root (+test-search--dir "search-all" "src/A.kt" "b.txt"))
+           (ws (+test-search--workspace t))
            (asyncs nil))
       (with-current-buffer (find-file-noselect (expand-file-name "src/A.kt" root))
         (setq-local lsp-mode t)
+        (setq-local lsp--buffer-workspaces (list ws))
         (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
-                  ((symbol-function 'lsp-workspaces) (lambda () '(ws)))
                   ((symbol-function 'projectile-project-files) (lambda (_) '("src/A.kt" "b.txt")))
                   ((symbol-function '+my/search-everywhere--lsp-async)
                    (lambda (workspaces token classes)
@@ -444,8 +469,8 @@ not a mode's commands elsewhere, recently used or not."
                 (should (assq (plist-get actions :category) marginalia-annotators))
                 ;; Each its own token, classes or not.
                 (should (equal (reverse asyncs)
-                               '(((ws) :+my/search-everywhere-classes t)
-                                 ((ws) :+my/search-everywhere-symbols nil))))
+                               `(((,ws) :+my/search-everywhere-classes t)
+                                 ((,ws) :+my/search-everywhere-symbols nil))))
                 (should (eq (plist-get files :face) 'consult-file))
                 (should (equal (mapcar (lambda (item) (substring-no-properties (car item)))
                                        (funcall (plist-get files :items)))
@@ -469,7 +494,7 @@ not a mode's commands elsewhere, recently used or not."
       (with-current-buffer (find-file-noselect (expand-file-name "a.txt" root))
         (setq-local lsp-mode nil)
         (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
-                  ((symbol-function 'lsp-workspaces) (lambda () (setq required t) '(ws))))
+                  ((symbol-function 'lsp-feature?) (lambda (&rest _) (setq required t) '(ws))))
           (+test-search-capturing-multi got
             (+my/search-everywhere)
             (let ((sources (car got)))
@@ -479,6 +504,36 @@ not a mode's commands elsewhere, recently used or not."
               (should (equal (mapcar (lambda (s) (plist-get s :name))
                                      (append (consult--multi-enabled-sources sources) nil))
                              '("Files" "Actions"))))))))))
+
+(ert-deftest search/everywhere-symbols-only-from-servers-that-search-them ()
+  "A server that doesn't search workspace symbols (no workspaceSymbolProvider):
+no Classes, no Symbols, nothing asked of it (it raised an error at each key);
+beside one that does, only that one's."
+  (+test-with-reset
+    (let ((root (+test-search--dir "search-nosym" "a.txt"))
+          (with (+test-search--workspace t))
+          (without (+test-search--workspace))
+          (asyncs nil))
+      (with-current-buffer (find-file-noselect (expand-file-name "a.txt" root))
+        (setq-local lsp-mode t)
+        (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
+                  ((symbol-function '+my/search-everywhere--lsp-async)
+                   (lambda (workspaces &rest _)
+                     (push workspaces asyncs)
+                     (lambda (sink) sink))))
+          (+test-search-capturing-multi got
+            (setq-local lsp--buffer-workspaces (list without))
+            (+my/search-everywhere)
+            (should-not asyncs)
+            (should (equal (mapcar (lambda (s) (plist-get s :name))
+                                   (append (consult--multi-enabled-sources (car got)) nil))
+                           '("Files" "Actions")))
+            (setq-local lsp--buffer-workspaces (list without with))
+            (+my/search-everywhere)
+            (should (equal asyncs (list (list with) (list with))))
+            (should (equal (mapcar (lambda (s) (plist-get s :name))
+                                   (append (consult--multi-enabled-sources (car got)) nil))
+                           '("Classes" "Files" "Symbols" "Actions")))))))))
 
 (ert-deftest search/everywhere-outside-a-project ()
   "No project: no Files; the current folder stays."
@@ -525,11 +580,11 @@ all; with a language server too (its async sources), the input as typed."
     (let ((root (+test-search--dir "search-narrow" "a.txt")))
       (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
                 ((symbol-function 'projectile-project-files) (lambda (_) '("a.txt")))
-                ((symbol-function 'lsp-workspaces) (lambda () '(ws)))
                 ((symbol-function 'lsp-request-async) #'ignore)
                 ((symbol-function 'lsp-cancel-request-by-token) #'ignore))
         (with-current-buffer (switch-to-buffer (+test-buffer "narrow.kt" "x\n"))
           (setq-local lsp-mode t)
+          (setq-local lsp--buffer-workspaces (list (+test-search--workspace t)))
           (should (equal (+test-search--type "c SPC DEL s SPC DEL f SPC DEL a SPC x")
                          '(("c" nil) ("" ?c) ("" nil) ("s" nil) ("" ?s) ("" nil)
                            ("f" nil) ("" ?f) ("" nil) ("a" nil) ("" ?a) ("x" ?a))))

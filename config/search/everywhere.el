@@ -13,9 +13,11 @@
          ;; otherwise starts it with "#" (its async split), and then c SPC
          ;; didn't narrow (only a lone character does), nor DEL widen.
          (consult-async-split-style 'none)
+         ;; The servers that search their workspace's symbols: a server
+         ;; without it raised an error at each key typed.
          (workspaces (and (bound-and-true-p lsp-mode)
                           (require 'consult-lsp nil t)
-                          (lsp-workspaces)))
+                          (lsp-feature? "workspace/symbol")))
          ;; Classes, Files and Symbols show all in their rows, not in
          ;; annotations (Files not marginalia's either: their own category):
          ;; marginalia aligns the Actions' docs after the longest row it

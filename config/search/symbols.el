@@ -13,14 +13,19 @@ Classes and Symbols requests would cancel each other."
    (lambda (sink)
      (let ((request
             (lambda (query)
-              (let ((lsp--buffer-workspaces workspaces))
-                (lsp-request-async
-                 "workspace/symbol" (list :query query)
-                 (lambda (results)
-                   (funcall sink 'flush)
-                   (funcall sink results)
-                   (funcall sink [indicator finished]))
-                 :mode 'detached :no-merge t :cancel-token token)))))
+              (let ((lsp--buffer-workspaces workspaces)
+                    (failed (lambda (&rest _) (funcall sink [indicator failed]))))
+                ;; A request refused or failed ends the indicator too.
+                (condition-case nil
+                    (lsp-request-async
+                     "workspace/symbol" (list :query query)
+                     (lambda (results)
+                       (funcall sink 'flush)
+                       (funcall sink results)
+                       (funcall sink [indicator finished]))
+                     :mode 'detached :no-merge t :cancel-token token
+                     :error-handler failed)
+                  (error (funcall failed)))))))
        (lambda (action)
          (pcase action
            ((pred stringp)
