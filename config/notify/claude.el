@@ -1,11 +1,12 @@
 ;;; $DOOMDIR/config/notify/claude.el -*- lexical-binding: t; -*-
-;; Claude Code's notifications: a session finished its turn, asks for your
-;; permission, asks you a question, or sends a message of its own.
+;; Claude Code's notifications: a session finished its turn (or stopped on
+;; an error), asks for your permission, asks you a question, or sends a
+;; message of its own.
 ;; Loaded from config/notify.el.
 
 ;; THE KINDS (see config/notify.el)
 (+my/notify-define 'claude "Claude Code" "A session's message, in its own words")
-(+my/notify-define 'claude-turn-done "Claude Code" "A session finished its turn")
+(+my/notify-define 'claude-turn-done "Claude Code" "A session finished its turn, or stopped on an error")
 (+my/notify-define 'claude-permission "Claude Code" "A session asks for your permission")
 (+my/notify-define 'claude-question "Claude Code" "A session asks you a question")
 
@@ -13,7 +14,9 @@
 ;; A question in the conversation (AskUserQuestion, agent-shell's form) is
 ;; agent-shell's elicitation-request: its turn waits for the answer, no
 ;; turn-complete comes. With its forms off, the adapter asks it as a
-;; permission (claude-permission says it).
+;; permission (claude-permission says it). A turn that fails (the API
+;; overloaded, the login expired, a rate limit) ends in agent-shell's error,
+;; not turn-complete: claude-turn-done says it too.
 
 (defun +my/notify-claude--name (buffer)
   "BUFFER's session, as a notification names it: its project's folder."
@@ -42,6 +45,18 @@ its turn ends: one returning non-nil says it in a notification of its own
                             (_ (format "stopped (%s)" reason))))
                   :buffer buffer))))
 
+(defun +my/notify-claude--failed (buffer event)
+  "BUFFER's session stopped on an error (agent-shell's error EVENT): its
+message, the first line."
+  (let* ((message (map-nested-elt event '(:data :message)))
+         (line (and (stringp message)
+                    (string-trim (car (split-string (string-trim message) "\n"))))))
+    (+my/notify 'claude-turn-done
+                (if (and line (not (string-empty-p line)))
+                    (format "%s: stopped: %s" (+my/notify-claude--name buffer) line)
+                  (format "%s: stopped on an error" (+my/notify-claude--name buffer)))
+                :buffer buffer)))
+
 (defun +my/notify-claude--permission (buffer event)
   "BUFFER's session asks for permission (agent-shell's permission-request
 EVENT): what for, the tool call's title."
@@ -66,12 +81,15 @@ elicitation-request EVENT, a form): the question, its first line."
                 :buffer buffer)))
 
 (defun +my/notify-claude--watch-h ()
-  "A new session: notify when it finishes its turn, asks for permission, or
-asks you a question."
+  "A new session: notify when it finishes its turn or stops on an error, asks
+for permission, or asks you a question."
   (let ((buffer (current-buffer)))
     (agent-shell-subscribe-to
      :shell-buffer buffer :event 'turn-complete
      :on-event (lambda (event) (+my/notify-claude--turn-done buffer event)))
+    (agent-shell-subscribe-to
+     :shell-buffer buffer :event 'error
+     :on-event (lambda (event) (+my/notify-claude--failed buffer event)))
     (agent-shell-subscribe-to
      :shell-buffer buffer :event 'permission-request
      :on-event (lambda (event) (+my/notify-claude--permission buffer event)))

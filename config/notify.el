@@ -25,7 +25,8 @@
 ;; isn't in front; a click (Linux) brings Emacs forward on BUFFER.
 ;;
 ;; Notifications so far (config/notify/claude.el):
-;; - claude-turn-done: a Claude Code session finished its turn;
+;; - claude-turn-done: a Claude Code session finished its turn, or stopped
+;;   on an error (the API overloaded, the login expired...);
 ;; - claude-permission: a Claude Code session asks for your permission (to
 ;;   run a command, edit a file...);
 ;; - claude-question: a Claude Code session asks you a question in its

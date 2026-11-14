@@ -24,7 +24,7 @@ kind as the element that fits it (figures, tables, charts, diagrams, plans, chan
 side, a yes or no, a form...), your answer its next prompt; only a quick one (2 to 4 short options) comes as a form in
 the conversation, Claude waiting for your answer (agent-shell's experimental forms:
 `(setq agent-shell-elicitation--experimental-feature-enabled nil)` in `config.el` turns them off). While you're in another app, a [notification](notifications.md) says
-when a session finished its turn or asks for your permission.
+when a session finished its turn (or stopped on an error) or asks for your permission.
 
 ## Diagrams in replies
 

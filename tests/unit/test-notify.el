@@ -192,7 +192,7 @@ subscriptions recorded in `subscribed' ((EVENT . FUNCTION)...)."
 
 (ert-deftest notify/claude-kinds-and-hook ()
   (should (equal (alist-get 'claude-turn-done +my/notify-kinds)
-                 '("Claude Code" "A session finished its turn")))
+                 '("Claude Code" "A session finished its turn, or stopped on an error")))
   (should (equal (alist-get 'claude-permission +my/notify-kinds)
                  '("Claude Code" "A session asks for your permission")))
   (should (memq #'+my/notify-claude--watch-h (default-value 'agent-shell-mode-hook))))
@@ -232,6 +232,35 @@ shows the session."
         (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
           (funcall (nth 2 (car +test-notify--shown)))
           (should (eq (window-buffer (selected-window)) session)))))))
+
+(ert-deftest notify/claude-stopped-on-an-error ()
+  "A session's turn failing (agent-shell's error, no turn-complete: the API
+overloaded, the login expired, a rate limit): said with its message, the
+first line; a click shows the session. Emacs in front, or the kind off:
+nothing."
+  (+test-notify nil
+    (+test-notify--session "doom"
+      (let ((failed (alist-get 'error subscribed)))
+        (should failed)
+        (funcall failed '((:event . error) (:data (:code . 529) (:message . "Overloaded"))))
+        (funcall failed '((:event . error) (:data (:code . -32603) (:message . " Rate limit reached\nTry later "))))
+        (funcall failed '((:event . error) (:data (:code . -32603) (:message))))
+        (should (equal (mapcar #'butlast +test-notify--shown)
+                       '(("Claude Code" "doom: stopped on an error")
+                         ("Claude Code" "doom: stopped: Rate limit reached")
+                         ("Claude Code" "doom: stopped: Overloaded"))))
+        (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
+          (funcall (nth 2 (car +test-notify--shown)))
+          (should (eq (window-buffer (selected-window)) session))))))
+  (+test-notify t
+    (+test-notify--session "doom"
+      (funcall (alist-get 'error subscribed) '((:data (:message . "Overloaded"))))
+      (should-not +test-notify--shown)))
+  (+test-notify nil
+    (let ((+my/notify-off '(claude-turn-done)))
+      (+test-notify--session "doom"
+        (funcall (alist-get 'error subscribed) '((:data (:message . "Overloaded"))))
+        (should-not +test-notify--shown)))))
 
 (ert-deftest notify/claude-asks-for-permission ()
   "A session asking for permission: what for, the tool call's title."
