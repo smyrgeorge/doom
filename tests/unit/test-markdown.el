@@ -1031,3 +1031,69 @@ long line); wrapping again: joined."
     (+md-reflow-mode -1)
     (should-not (text-property-any (point-min) (point-max) '+md-reflow t))
     (should-not (get-text-property 4 'display))))
+
+(defun +test-md--reflow-left (&optional object)
+  "Where this part's properties are left in OBJECT (a string; default: the
+buffer): positions with `+md-reflow' or a display of \" \"."
+  (let ((end (if object (length object) (point-max)))
+        (pos (if object 0 (point-min)))
+        left)
+    (while (< pos end)
+      (when (or (get-text-property pos '+md-reflow object)
+                (equal (get-text-property pos 'display object) " "))
+        (push pos left))
+      (setq pos (1+ pos)))
+    (nreverse left)))
+
+(ert-deftest markdown/reflow-copied-text-keeps-its-line-breaks ()
+  "Copied (M-w, evil's y, by words or lines) and yanked (C-y, evil's p) into
+a text-mode buffer: its line breaks, not spaces. Yanked back into the
+Markdown: joined again."
+  (+test-md--reflow "One\ntwo\n"
+    (should (equal (+test-md--joined) '(("One" . "\n"))))
+    (let ((kill-ring nil)
+          (source (current-buffer)))
+      (kill-ring-save (point-min) (point-max))
+      (should-not (+test-md--reflow-left (car kill-ring)))
+      ;; The buffer still reflowed.
+      (should (equal (+test-md--reflow-left) '(4)))
+      (with-temp-buffer
+        (text-mode)
+        (yank)
+        (should (equal (buffer-string) "One\ntwo\n"))
+        (should-not (+test-md--reflow-left))
+        ;; evil: by lines (yy p, inserted as is), by words.
+        (erase-buffer)
+        (with-current-buffer source (evil-yank (point-min) (point-max) 'line))
+        (should-not (+test-md--reflow-left (car kill-ring)))
+        (evil-paste-after 1)
+        (should (string-search "One\ntwo" (buffer-string)))
+        (should-not (+test-md--reflow-left))
+        (erase-buffer)
+        (with-current-buffer source (evil-yank 1 8 'exclusive))
+        (evil-paste-after 1)
+        (should (equal (buffer-string) "One\ntwo"))
+        (should-not (+test-md--reflow-left)))
+      ;; Back into the Markdown: a paragraph of its own, joined as any.
+      (goto-char (point-max))
+      (insert "\n")
+      (yank)
+      (should (equal (+test-md--joined) '(("One" . "\n") ("o\n\nOne" . "\n")))))))
+
+(ert-deftest markdown/reflow-cleared-by-another-major-mode ()
+  "text-mode, fundamental-mode: no line break left joined (jit-lock, which
+would clear them, gone with markdown-ts-mode). markdown-ts-mode again:
+joined again."
+  (+test-md--reflow "One\ntwo\n"
+    (dolist (mode '(text-mode fundamental-mode))
+      (markdown-ts-mode)
+      (setq-local word-wrap t truncate-lines nil)
+      (should (equal (+test-md--joined) '(("One" . "\n"))))
+      (funcall mode)
+      (should-not +md-reflow-mode)
+      (should-not (+test-md--reflow-left))
+      (should-not (buffer-modified-p)))
+    (markdown-ts-mode)
+    (setq-local word-wrap t truncate-lines nil)
+    (should +md-reflow-mode)
+    (should (equal (+test-md--joined) '(("One" . "\n"))))))

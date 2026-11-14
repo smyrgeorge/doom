@@ -9,10 +9,12 @@
 ;; its "> ") is shown as one space: a `display' property, put by jit-lock as
 ;; the text is shown, kept apart by `+md-reflow'. visual-line-mode then wraps
 ;; the whole paragraph, adaptive-wrap lining its rows up under the item's
-;; text. The file's text doesn't change. Left as they are: hard line breaks
-;; (two trailing spaces, a backslash), code blocks, tables, headings, HTML,
-;; front matter (none of them paragraphs). Only while lines wrap (a pane
-;; truncating its lines would show a paragraph as one long line).
+;; text. The file's text doesn't change, nor does text copied from it (its
+;; line breaks, yanked elsewhere); another major mode clears it all. Left as
+;; they are: hard line breaks (two trailing spaces, a backslash), code blocks,
+;; tables, headings, HTML, front matter (none of them paragraphs). Only while
+;; lines wrap (a pane truncating its lines would show a paragraph as one long
+;; line).
 
 (defun +md-reflow--wrapping-p ()
   "Whether this buffer's lines wrap at the pane's edge, by words."
@@ -24,12 +26,13 @@
                 (equal (treesit-node-type (treesit-node-parent node)) "setext_heading"))
               (mapcar #'cdr (treesit-query-capture 'markdown '((paragraph) @p) beg end))))
 
-(defun +md-reflow--clear (beg end)
-  "This part's display properties in BEG..END removed."
+(defun +md-reflow--clear (beg end &optional object)
+  "This part's display properties in BEG..END (of OBJECT, a string, else the
+buffer) removed."
   (let ((pos beg))
-    (while (setq pos (text-property-any pos end '+md-reflow t))
-      (let ((stop (or (text-property-not-all pos end '+md-reflow t) end)))
-        (remove-text-properties pos stop '(display nil +md-reflow nil))
+    (while (setq pos (text-property-any pos end '+md-reflow t object))
+      (let ((stop (or (text-property-not-all pos end '+md-reflow t object) end)))
+        (remove-text-properties pos stop '(display nil +md-reflow nil) object)
         (setq pos stop)))))
 
 (defun +md-reflow--join (node)
@@ -65,13 +68,31 @@ wrapping)."
           (mapc #'+md-reflow--join nodes)))
       `(jit-lock-bounds ,from . ,to))))
 
+(defun +md-reflow--copied (text)
+  "TEXT copied or cut from the buffer (y, M-w, a register...): its line
+breaks as they are. Yanked into another buffer, the display properties would
+show them as spaces for good; yanked back here, jit-lock joins them again."
+  (+md-reflow--clear 0 (length text) text)
+  text)
+
+(defun +md-reflow--off-h ()
+  "Another major mode (text-mode, so-long...): jit-lock, which clears this
+part's properties, goes with markdown-ts-mode's variables: cleared now."
+  (+md-reflow-mode -1))
+
 (define-minor-mode +md-reflow-mode
   "Show a Markdown paragraph's lines as one line, wrapped at the pane's edge
 \(see config/markdown/reflow.el); the file's text unchanged."
   :lighter nil
   (if +md-reflow-mode
-      (jit-lock-register #'+md-reflow--fontify)
+      (progn
+        (jit-lock-register #'+md-reflow--fontify)
+        (add-function :filter-return (local 'filter-buffer-substring-function)
+                      #'+md-reflow--copied)
+        (add-hook 'change-major-mode-hook #'+md-reflow--off-h nil t))
     (jit-lock-unregister #'+md-reflow--fontify)
+    (remove-function (local 'filter-buffer-substring-function) #'+md-reflow--copied)
+    (remove-hook 'change-major-mode-hook #'+md-reflow--off-h t)
     (with-silent-modifications
       (+md-reflow--clear (point-min) (point-max)))))
 
