@@ -51,15 +51,17 @@
                 (should (string-match-p "1 closed issue hidden"
                                         (with-current-buffer (window-buffer (frame-root-window frame))
                                           (buffer-string))))
-                ;; Over the window's top row; the header line two rows tall,
-                ;; the column titles in its bottom one, visible.
+                ;; Over the window's top row; the header line two rows tall
+                ;; once drawn (the list is shown before it's drawn: its
+                ;; window's height known until then is the empty list's), the
+                ;; column titles in its bottom one, visible.
                 (should (+test-wait-for
                          (lambda ()
                            (and (= (cdr (frame-position frame))
                                    (+ (nth 1 (window-pixel-edges window)) (window-tab-line-height window)))
                                 (= (frame-pixel-height frame) row)))
                          3))
-                (should (>= (window-header-line-height window) (* 2 row)))
+                (should (+test-wait-for (lambda () (>= (window-header-line-height window) (* 2 row))) 3))
                 (should (string-match-p "Title" (format-mode-line header-line-format nil window)))))
           (dolist (buffer (buffer-list))
             (when (string-prefix-p "*Beads" (buffer-name buffer))

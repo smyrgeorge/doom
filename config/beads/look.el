@@ -15,6 +15,9 @@
 ;; - a type: its icon (nerd-icons) in its colour in a graphic frame, its word
 ;;   in a terminal;
 ;; - no date (its column there, empty, no gap after it: beads.el sorts by it);
+;; - in a pane under 60 columns, no id either (the title's room: at 40
+;;   columns, 25 of its characters, not 14), drawn again when its pane's
+;;   width crosses that; no column title cut (the type's, an icon wide);
 ;; - nothing before a row's mark (beads.el padded it by 2 columns, never used);
 ;; - a title: on one line, cut at the window's edge; or whole, a long one
 ;;   going on to the next lines under itself (`+my/beads-titles-wrapped');
@@ -278,16 +281,33 @@ it: on one line)."
                                      (make-string (string-width indent) ?\s) line))
                            (cdr lines) ""))))))
 
+(defconst +my/beads--narrow-width 60
+  "Columns under which the list has no id (see THE LOOK).")
+
+(defvar-local +my/beads--narrow nil
+  "Whether the list was drawn for a pane under `+my/beads--narrow-width'.")
+
+(defun +my/beads--narrow-p (&optional window)
+  "Whether WINDOW (default: one showing the list) is narrow (see THE LOOK);
+nil without one."
+  (when-let* ((window (or window (get-buffer-window (current-buffer) 'visible))))
+    (< (window-body-width window) +my/beads--narrow-width)))
+
 (defconst +my/beads--columns
-  '((date 0 +my/beads--no-date)
+  '((id 10 +my/beads-format-id)
+    (date 0 +my/beads--no-date)
     (status 3 +my/beads-format-status "St")
     (priority 4 +my/beads-format-priority)
     (type 8 +my/beads-format-type)
     (title 50 +my/beads-format-title))
   "beads.el's list columns drawn here: (COLUMN WIDTH FORMATTER [HEADER]).
 The date's empty, its column kept (no gap after it): beads.el's column sort
-names it. The type's 2 columns wide in a graphic frame (its icon), 8 in a
-terminal (its word).")
+names it; the id's too in a narrow pane. The type's 2 columns wide in a
+graphic frame (its icon), 8 in a terminal (its word).")
+
+(defun +my/beads-format-id (issue)
+  "ISSUE's id; nothing in a narrow pane (see THE LOOK)."
+  (if +my/beads--narrow "" (alist-get 'id issue)))
 
 (defun +my/beads--no-date (_issue)
   "The date's column: empty (see `+my/beads--columns'). Its text would show
@@ -307,14 +327,18 @@ date sort doesn't read it (it compares the rows' second column)."
 
 (defun +my/beads-format-a (format)
   "`beads-list--build-format''s FORMAT: no gap after the date's empty column;
-the type's column as wide as its icon in a graphic frame (see
+none for the id in a narrow pane (its column 0 wide, noted for its
+formatter); the type's column as wide as its icon in a graphic frame (see
 `+my/beads--columns')."
   (let ((format (copy-sequence format))
         (graphic (+my/beads--graphic-p)))
+    (setq +my/beads--narrow (+my/beads--narrow-p))
     (dotimes (n (length format))
       (pcase (aref format n)
         (`("Date" ,width ,sort . ,props)
          (aset format n `("Date" ,width ,sort :pad-right 0 ,@props)))
+        ((and `("ID" ,_ ,sort . ,props) (guard +my/beads--narrow))
+         (aset format n `("ID" 0 ,sort :pad-right 0 ,@props)))
         ((and `("Type" ,_ . ,rest) (guard graphic))
          (aset format n (cons "Type" (cons 2 rest))))))
     format))
@@ -334,20 +358,26 @@ maybe within another's: config/banner's), or nil."
         ((consp format)
          (or (+my/beads--header-string (car format)) (+my/beads--header-string (cdr format))))))
 
+(defun +my/beads--hidden-headers ()
+  "The column titles shown as nothing: the date's, its column empty
+\(tabulated-list put \"Date…\" over the status's: its 0 columns can't cut
+it); the id's in a narrow pane, its column gone (\"ID\" spilt over the
+status's); the type's in a graphic frame, its column an icon wide (\"T…\")."
+  `("Date" ,@(and +my/beads--narrow '("ID")) ,@(and (+my/beads--graphic-p) '("Type"))))
+
 (defun +my/beads-header-a (&rest _)
-  "`tabulated-list-init-header', in a list: the date's header shown as
-nothing, its column being empty (tabulated-list put \"Date…\" over the
-status's header: its 0 columns can't cut it)."
+  "`tabulated-list-init-header', in a list: the titles of
+`+my/beads--hidden-headers' shown as nothing."
   (when-let* (((derived-mode-p 'beads-list-mode))
-              (header (+my/beads--header-string (or tabulated-list--header-string header-line-format)))
-              (start (let ((pos 0))
-                       ;; By `equal' (`text-property-any' compares with `eq').
-                       (while (and pos (not (equal (get-text-property pos 'tabulated-list-column-name header) "Date")))
-                         (setq pos (next-single-property-change pos 'tabulated-list-column-name header)))
-                       pos))
-              (end (next-single-property-change start 'tabulated-list-column-name header (length header))))
-    ;; In place: the header line holds this string.
-    (put-text-property start end 'display "" header)))
+              (header (+my/beads--header-string (or tabulated-list--header-string header-line-format))))
+    (let ((hidden (+my/beads--hidden-headers))
+          (pos 0))
+      (while pos
+        (let ((next (next-single-property-change pos 'tabulated-list-column-name header)))
+          ;; In place: the header line holds this string.
+          (when (member (get-text-property pos 'tabulated-list-column-name header) hidden)
+            (put-text-property pos (or next (length header)) 'display "" header))
+          (setq pos next))))))
 
 ;; A ROW ON SEVERAL LINES: moved over and highlighted whole
 (defun +my/beads--row-bounds ()
@@ -392,12 +422,14 @@ title on several), or nil off a row."
 (defvar-local +my/beads--rewrap-timer nil)
 
 (defun +my/beads--resized-h (window)
-  "WINDOW showing the list, resized: its titles wrapped again for its width
-\(in the background, a moment after its last change: a border dragged)."
+  "WINDOW showing the list, resized: drawn again (in the background, a moment
+after its last change: a border dragged) if its titles were wrapped for
+another width, or it crossed the narrow width (see THE LOOK)."
   (let ((buffer (window-buffer window)))
     (with-current-buffer buffer
-      (when (and +my/beads--wrapped-at
-                 (not (equal (+my/beads--title-width window) +my/beads--wrapped-at)))
+      (when (or (and +my/beads--wrapped-at
+                     (not (equal (+my/beads--title-width window) +my/beads--wrapped-at)))
+                (not (eq (+my/beads--narrow-p window) +my/beads--narrow)))
         (when (timerp +my/beads--rewrap-timer) (cancel-timer +my/beads--rewrap-timer))
         (setq +my/beads--rewrap-timer
               (run-with-timer 0.3 nil (lambda ()
@@ -407,7 +439,8 @@ title on several), or nil off a row."
                                             (+my/beads-refresh-async buffer t))))))))))
 
 (defun +my/beads--rows-h ()
-  "A list: its rows highlighted whole, redrawn when its window's width changes."
+  "A list: its rows highlighted whole, drawn again when its window's width
+changes (see `+my/beads--resized-h')."
   (setq-local hl-line-range-function #'+my/beads--hl-range)
   (add-hook 'window-size-change-functions #'+my/beads--resized-h nil t))
 

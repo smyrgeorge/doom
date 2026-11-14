@@ -123,7 +123,10 @@ first of *Beads: NAME*, *Beads: PARENT/NAME* and *Beads: PATH* no buffer has."
           (beads-list-mode))
         (setq default-directory root)
         (when filter
-          (setq beads-list--filter filter))))
+          (setq beads-list--filter filter)))
+      ;; Shown, then drawn (beads.el drew it first): for its pane's width
+      ;; (config/beads/look.el).
+      (switch-to-buffer list))
     (beads-list)))
 
 (defun +my/beads-project ()

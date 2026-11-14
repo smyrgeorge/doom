@@ -36,13 +36,16 @@
 (defmacro +test-beads-with-repo (&rest body)
   "BODY in a new git repo (`default-directory', also `repo'), with a temp HOME
 and global gitconfig, Doom's project root it; skipped without bd. One window
-on *scratch*, and again after (Beads' buffers killed)."
+on *scratch*, and again after (Beads' buffers killed). Lists drawn wide
+\(with their ids), however narrow their pane: the batch frame's 80 columns,
+halved by tiling, are narrow (see `beads/bd-a-narrow-pane-the-title-s-room')."
   (declare (indent 0))
   `(progn
      (unless (executable-find "bd")
        (ert-skip "No bd (scripts/tools.sh installs it)"))
      (+test-with-reset
-       (let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "beads-home-") t)))
+       (let* ((+my/beads--narrow-width 0)
+              (home (file-name-as-directory (make-temp-file (+test-tmp-file "beads-home-") t)))
               (repo (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "beads-repo-") t))))
               (process-environment
                (append (list (concat "HOME=" home)
@@ -1004,6 +1007,76 @@ unless asked)."
       (with-current-buffer (format "*Beads Detail: %s*" epic)
         (should (string-match-p (format "Dependents:\n +\\[%s\\] +Its issue" (regexp-quote child))
                                 (+test-beads--text (current-buffer))))))))
+
+;; doom-o5t.9
+(defun +test-beads--width (window columns)
+  "WINDOW resized to COLUMNS of body, and told so (batch Emacs runs no
+window change functions: called as redisplay calls them)."
+  (unless (= (window-body-width window) columns)
+    (window-resize window (- columns (window-body-width window)) t))
+  (should (= (window-body-width window) columns))
+  (with-current-buffer (window-buffer window)
+    (run-hook-with-args 'window-size-change-functions window)))
+
+(defun +test-beads--header-shown ()
+  "The current list's column titles as shown: without those shown as nothing."
+  (let ((header (+my/beads--header-string header-line-format))
+        (shown ""))
+    (dotimes (n (length header))
+      (unless (equal (get-text-property n 'display header) "")
+        (setq shown (concat shown (substring-no-properties header n (1+ n))))))
+    shown))
+
+(ert-deftest beads/bd-a-narrow-pane-the-title-s-room ()
+  "A list in a pane under 60 columns (a graphic frame's): no id, the title
+from column 14 (25 of its characters at 40 columns, some at 25), from the
+start (SPC o i: drawn once shown) and when a pane narrows; 60 columns or
+more, the id back where it was. No column title cut (\"T…\")."
+  (+test-beads-with-project
+    (let* ((+my/beads--narrow-width 60)
+           (id (+test-beads--create "Lexer: tokens, read in a pane narrower than the title is long"))
+           (row (lambda () (+test-beads--line "Lexer: tokens"))))
+      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+        (+my/beads-project)
+        (let* ((list (+test-beads--list))
+               (window (get-buffer-window list)))
+          (should (< (window-body-width window) 60))
+          (with-current-buffer list
+            (should +my/beads--narrow)
+            (should (= (+my/beads--title-column) 14))
+            (should-not (string-search id (funcall row)))
+            (should (string-prefix-p "  ○ " (funcall row)))
+            (should-not (string-search "…" (+test-beads--header-shown)))
+            (should-not (string-search "ID" (+test-beads--header-shown)))
+            (should (string-search "Title" (+test-beads--header-shown))))
+          ;; 40 and 25 columns: the title's room.
+          (+test-beads--width window 40)
+          (with-current-buffer list
+            (should (>= (+my/beads--title-width window) 25)))
+          (+test-beads--width window 25)
+          (with-current-buffer list
+            (should (> (+my/beads--title-width window) 0)))
+          ;; Wider: drawn again (in the background), the id back.
+          (delete-other-windows window)
+          (+test-beads--width window (window-body-width window))
+          (should (>= (window-body-width window) 60))
+          (with-current-buffer list
+            (should +my/beads--rewrap-timer)
+            (should (+test-wait-for (lambda () (not +my/beads--rewrap-timer)) 5))
+            (+test-beads--settle list)
+            (should-not +my/beads--narrow)
+            (should (string-prefix-p (concat "  " id " ○") (funcall row)))
+            (should (= (+my/beads--title-column) (+ 2 (1+ (length id)) 4 5 3)))
+            (should-not (string-search "…" (+test-beads--header-shown)))
+            (should (string-search "ID" (+test-beads--header-shown))))
+          ;; Narrower again: drawn again, narrow.
+          (split-window window nil 'right)
+          (+test-beads--width window 40)
+          (with-current-buffer list
+            (should (+test-wait-for (lambda () (not +my/beads--rewrap-timer)) 5))
+            (+test-beads--settle list)
+            (should +my/beads--narrow)
+            (should-not (string-search id (funcall row)))))))))
 
 ;; ====== THE PLACE KEPT ======
 
