@@ -20,7 +20,9 @@
 ;;   width crosses that; no column title cut (the type's, an icon wide);
 ;; - nothing before a row's mark (beads.el padded it by 2 columns, never used);
 ;; - a title: on one line, cut at the window's edge; or whole, a long one
-;;   going on to the next lines under itself (`+my/beads-titles-wrapped');
+;;   going on to the next lines under itself (`+my/beads-titles-wrapped'),
+;;   for the narrowest window showing the list, drawn again once one shows
+;;   it if it was drawn in none (M-x beads-list: beads.el draws, then shows);
 ;;   after it an epic's progress (its issues done of all, closed ones too)
 ;;   and its labels as tags (a colour each, the same each time); an epic's
 ;;   issues under it, indented, without the lead they share with it
@@ -195,8 +197,14 @@ letters)."
   (propertize (format "%d/%d" done all) 'face (if (= done all) 'success 'shadow)))
 
 (defvar-local +my/beads--wrapped-at nil
-  "The title's width the list's rows were drawn for: drawn again (in the
-background) when its window's width makes it another.")
+  "The title's width the list's rows were drawn for (`unshown': drawn in no
+window): drawn again (in the background) when its windows' widths make it
+another.")
+
+(defun +my/beads--width ()
+  "The body width of the narrowest window showing the list, or nil."
+  (when-let* ((windows (get-buffer-window-list (current-buffer) 'nomini 'visible)))
+    (apply #'min (mapcar #'window-body-width windows))))
 
 (defun +my/beads--title-column ()
   "Where the title starts in a row, in columns (the title the last column),
@@ -209,12 +217,12 @@ or nil if it isn't the last."
                    0))))
 
 (defun +my/beads--title-width (&optional window)
-  "Columns the title has in WINDOW (default: one showing the list), the
-window's width less those before it, or nil (no window, the title not the
-last column)."
-  (when-let* ((window (or window (get-buffer-window (current-buffer) 'visible)))
+  "Columns the title has in WINDOW (default: the narrowest showing the list),
+the window's width less those before it, or nil (no window, the title not
+the last column)."
+  (when-let* ((width (if window (window-body-width window) (+my/beads--width)))
               (column (+my/beads--title-column)))
-    (- (window-body-width window) column 1)))
+    (- width column 1)))
 
 (defun +my/beads--wrap (words width)
   "WORDS (strings, each kept whole: a tag, an epic's progress) in lines of
@@ -266,8 +274,9 @@ it: on one line)."
                         (mapcar #'+my/beads--label-tag (append (alist-get 'labels issue) nil))))
          (room (and +my/beads-titles-wrapped (+my/beads--title-width)))
          (column (+my/beads--title-column)))
-    ;; Not wrapped: nothing to draw again when the window's resized.
-    (setq +my/beads--wrapped-at room)
+    ;; Not wrapped: nothing to draw again when the window's resized; no
+    ;; window: drawn again once one shows it.
+    (setq +my/beads--wrapped-at (if (and +my/beads-titles-wrapped (not room) column) 'unshown room))
     ;; Not wrapped (the default), no window, or one so narrow the title would
     ;; be a word a line: on one line, cut at the window's edge.
     (if (or (not room) (< (- room (string-width indent)) 20))
@@ -288,10 +297,10 @@ it: on one line)."
   "Whether the list was drawn for a pane under `+my/beads--narrow-width'.")
 
 (defun +my/beads--narrow-p (&optional window)
-  "Whether WINDOW (default: one showing the list) is narrow (see THE LOOK);
-nil without one."
-  (when-let* ((window (or window (get-buffer-window (current-buffer) 'visible))))
-    (< (window-body-width window) +my/beads--narrow-width)))
+  "Whether WINDOW (default: the narrowest showing the list) is narrow (see
+THE LOOK); nil without one."
+  (when-let* ((width (if window (window-body-width window) (+my/beads--width))))
+    (< width +my/beads--narrow-width)))
 
 (defconst +my/beads--columns
   '((id 10 +my/beads-format-id)
@@ -386,11 +395,13 @@ title on several), or nil off a row."
   (when-let* ((id (tabulated-list-get-id)))
     (save-excursion
       (let ((start (line-beginning-position)) (end (line-end-position)))
-        (while (and (not (bobp)) (equal (get-text-property (1- start) 'tabulated-list-id) id))
+        ;; By the lines' bounds (on the first row, point off its start:
+        ;; nothing before it).
+        (while (and (> start (point-min)) (equal (get-text-property (1- start) 'tabulated-list-id) id))
           (goto-char (1- start))
           (setq start (line-beginning-position)))
         (goto-char end)
-        (while (and (not (eobp)) (equal (get-text-property (1+ end) 'tabulated-list-id) id))
+        (while (and (< end (point-max)) (equal (get-text-property (1+ end) 'tabulated-list-id) id))
           (forward-line 1)
           (setq end (line-end-position)))
         (cons start (min (point-max) (1+ end)))))))
@@ -422,14 +433,15 @@ title on several), or nil off a row."
 (defvar-local +my/beads--rewrap-timer nil)
 
 (defun +my/beads--resized-h (window)
-  "WINDOW showing the list, resized: drawn again (in the background, a moment
-after its last change: a border dragged) if its titles were wrapped for
-another width, or it crossed the narrow width (see THE LOOK)."
+  "WINDOW showing the list, resized or new to it: drawn again (in the
+background, a moment after its last change: a border dragged) if its titles
+were wrapped for another width than its narrowest window's (or none), or
+that crossed the narrow width (see THE LOOK)."
   (let ((buffer (window-buffer window)))
     (with-current-buffer buffer
       (when (or (and +my/beads--wrapped-at
-                     (not (equal (+my/beads--title-width window) +my/beads--wrapped-at)))
-                (not (eq (+my/beads--narrow-p window) +my/beads--narrow)))
+                     (not (equal (+my/beads--title-width) +my/beads--wrapped-at)))
+                (not (eq (+my/beads--narrow-p) +my/beads--narrow)))
         (when (timerp +my/beads--rewrap-timer) (cancel-timer +my/beads--rewrap-timer))
         (setq +my/beads--rewrap-timer
               (run-with-timer 0.3 nil (lambda ()
@@ -439,10 +451,11 @@ another width, or it crossed the narrow width (see THE LOOK)."
                                             (+my/beads-refresh-async buffer t))))))))))
 
 (defun +my/beads--rows-h ()
-  "A list: its rows highlighted whole, drawn again when its window's width
-changes (see `+my/beads--resized-h')."
+  "A list: its rows highlighted whole, drawn again when its windows' widths
+change, or another window shows it (see `+my/beads--resized-h')."
   (setq-local hl-line-range-function #'+my/beads--hl-range)
-  (add-hook 'window-size-change-functions #'+my/beads--resized-h nil t))
+  (add-hook 'window-size-change-functions #'+my/beads--resized-h nil t)
+  (add-hook 'window-buffer-change-functions #'+my/beads--resized-h nil t))
 
 ;; AN EPIC'S ISSUES UNDER IT
 (defun +my/beads--child< (a b)

@@ -1078,6 +1078,64 @@ more, the id back where it was. No column title cut (\"T…\")."
             (should +my/beads--narrow)
             (should-not (string-search id (funcall row)))))))))
 
+;; doom-o5t.11
+(defun +test-beads--row-lines (text)
+  "How many lines the current list's row showing TEXT takes."
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward text)
+    (let ((bounds (+my/beads--row-bounds)))
+      (count-lines (car bounds) (cdr bounds)))))
+
+(defun +test-beads--redrawn (list)
+  "LIST's redraw on its way (a window's width changed) done."
+  (with-current-buffer list
+    (should (+test-wait-for (lambda () (not +my/beads--rewrap-timer)) 5)))
+  (+test-beads--settle list))
+
+(ert-deftest beads/bd-titles-wrapped-in-every-window ()
+  "Titles wrapped: a list drawn in no window (M-x beads-list: beads.el draws
+it, then shows it) wrapped once a window shows it; in two windows, for the
+narrower (no word cut in it). beads.el's: not wrapped until resized; wrapped
+for one window, cut in the other."
+  (+test-beads-with-project
+    (let ((+my/beads-titles-wrapped t)
+          (title "Lexer: tokens read from a file far longer than the pane is wide, on two lines"))
+      (+test-beads--create title)
+      (delete-other-windows)
+      (beads-list)
+      (let* ((list (+test-beads--list))
+             (window (get-buffer-window list)))
+        (should (eq (window-buffer (selected-window)) list))
+        (with-current-buffer list
+          (should (eq +my/beads--wrapped-at 'unshown))
+          (should (= (+test-beads--row-lines "Lexer") 1))
+          ;; The first row's bounds, point off its start.
+          (goto-char (point-min))
+          (forward-char 3)
+          (should (equal (+my/beads--hl-range) (cons (point-min) (line-beginning-position 2)))))
+        ;; Shown (as redisplay calls the window change functions).
+        (with-current-buffer list
+          (run-hook-with-args 'window-buffer-change-functions window))
+        (+test-beads--redrawn list)
+        (with-current-buffer list
+          (should (equal +my/beads--wrapped-at (+my/beads--title-width window)))
+          (should (= (+test-beads--row-lines "Lexer") 2)))
+        ;; Another window on it, narrower (the first one selected); both
+        ;; narrow, in a graphic frame: room for titles in both.
+        (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+          (let* ((+my/beads--narrow-width 60)
+                 (narrower (split-window window 41 'right)))
+            (set-window-buffer narrower list)
+            (should (< (window-body-width narrower) (window-body-width window)))
+            (with-current-buffer list
+              (run-hook-with-args 'window-buffer-change-functions narrower))
+            (+test-beads--redrawn list)
+            (with-current-buffer list
+              (should (equal +my/beads--wrapped-at (+my/beads--title-width narrower)))
+              (should (< +my/beads--wrapped-at (+my/beads--title-width window)))
+              (should (> (+test-beads--row-lines "Lexer") 2)))))))))
+
 ;; ====== THE PLACE KEPT ======
 
 (defun +test-beads--ids-at (window)
