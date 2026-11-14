@@ -2091,6 +2091,36 @@ form answered on the canvas, its buffer gone."
     ;; Answered: not opened again.
     (should-error (agent-ui-form-open canvas "ticket") :type 'user-error)))
 
+(ert-deftest agent-ui-elements/form-laid-out-for-its-window ()
+  "The form's buffer laid out for its window: in 49 columns, its lines
+within it (a 40-column field after the labels and an 86-column help line
+wrapped mid-field), a text field narrowed beside its label; in 30, each
+field under its label, no wider than the window."
+  (+test-aue-canvas
+    (agent-ui-show (append '(:id "ticket") +test-aue-ticket))
+    (dolist (case '((49 . t) (30 . nil)))
+      (save-window-excursion
+        (delete-other-windows)
+        (let ((window (split-window-right)))
+          (select-window window)
+          (window-resize window (- (car case) (window-width window)) t)
+          (should (= (window-width window) (car case)))
+          (let ((display-buffer-overriding-action '(display-buffer-same-window)))
+            (agent-ui-form-open canvas "ticket"))
+          (unwind-protect
+              (with-current-buffer "*Agent UI form: ticket*"
+                (+test-aue-settle)
+                (should (eq (get-buffer-window) window))
+                (dolist (line (split-string (buffer-string) "\n"))
+                  (should (< (string-width line) (car case))))
+                ;; Beside its label, or under it.
+                (should (eq (cdr case) (and (string-match-p "^Priority  2" (buffer-string)) t)))
+                (should (string-search "C-c C-c sends it" (buffer-string)))
+                ;; Each field still typed into.
+                (+test-aue-type "title" "Fix the parser")
+                (should (equal (plist-get (agent-ui-get "ticket" :canvas canvas) :values) '(:title "Fix the parser"))))
+            (kill-buffer "*Agent UI form: ticket*")))))))
+
 (ert-deftest agent-ui-elements/form-cancelled-kept ()
   "Cancel: nothing sent, what was typed kept, there when it's opened again."
   (+test-aue-form

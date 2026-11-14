@@ -226,19 +226,36 @@ on CANVAS (the canvas follows, it's saved)."
                            (let ((old (cl-remove name old :key #'car :test #'equal)))
                              (if message (cons (cons name message) old) old)))))
 
-(defun agent-ui-form--input (canvas id field value)
-  "FIELD's input, vui's, VALUE in it."
+(defun agent-ui-form--size (field)
+  "How wide FIELD's input is drawn, at most: 40 a text, a file, 10 a
+number, 3 a yes / no, a select as its longest option."
+  (pcase (agent-ui-form--type field)
+    ((or "text" "file" "directory") 40)
+    ("boolean" 3)
+    ("select" (+ 4 (apply #'max 1 (mapcar (lambda (o) (string-width (format "%s" o)))
+                                          (plist-get field :options)))))
+    (_ 10)))
+
+(defun agent-ui-form--width (id)
+  "The columns form ID's buffer is laid out in: its window's, less one (a
+line as wide wraps in a terminal); 79 while it's in none."
+  (let ((window (get-buffer-window (agent-ui-form--buffer-name id) t)))
+    (max 20 (1- (if window (window-width window) 80)))))
+
+(defun agent-ui-form--input (canvas id field value &optional width)
+  "FIELD's input, vui's, VALUE in it; WIDTH columns at most."
   (let* ((name (plist-get field :name))
          (type (agent-ui-form--type field))
+         (size (min (agent-ui-form--size field) (or width most-positive-fixnum)))
          (set (lambda (v) (agent-ui-form--set-value canvas id name v)))
          (on-error (lambda (message _raw) (agent-ui-form--set-error name message))))
     (pcase type
-      ("text" (vui-field :value (if (stringp value) value "") :size 40 :key name
+      ("text" (vui-field :value (if (stringp value) value "") :size size :key name
                          :placeholder (plist-get field :placeholder) :on-change set))
       ("boolean" (vui-checkbox :checked (eq value t) :key name :on-change (lambda (v) (funcall set (and v t)))))
       ("select" (vui-select :value value :options (plist-get field :options) :key name
                             :prompt (concat (agent-ui-form--label field) ": ") :on-change set))
-      (_ (vui-typed-field :type (intern type) :value value :key name :size (if (member type '("file" "directory")) 40 10)
+      (_ (vui-typed-field :type (intern type) :value value :key name :size size
                           :min (plist-get field :min) :max (plist-get field :max)
                           :placeholder (plist-get field :placeholder)
                           :show-error 'inline :on-change set :on-error on-error)))))
@@ -260,35 +277,63 @@ on CANVAS (the canvas follows, it's saved)."
 (declare-function vui-get-instance "vui")
 (declare-function vui-get-state "vui")
 (declare-function vui-set-state "vui")
+(declare-function vui-rerender "vui")
 
 (with-eval-after-load 'vui-components
   (vui-defcomponent agent-ui-form--view (canvas id title question fields initial)
     :state ((values initial) (errors nil) (problem nil))
     :render
-    (let ((label-width (apply #'max 0 (mapcar (lambda (f) (string-width (agent-ui-form--label f))) fields))))
+    ;; Laid out for its window (it was 40-column fields after the labels,
+    ;; an 86-column help line: split mid-field in a narrow one): each
+    ;; field after its label while they all fit there (a text field
+    ;; narrowed), else under it; no input wider than the window; its
+    ;; texts wrapped.
+    (let* ((width (agent-ui-form--width id))
+           (label-width (apply #'max 0 (mapcar (lambda (f) (string-width (agent-ui-form--label f))) fields)))
+           (hint-width (lambda (f) (let ((hint (agent-ui-form--hint f)))
+                                     (if (string-empty-p hint) 0 (+ 2 (string-width hint))))))
+           ;; The room for a field's input after its label (and before its
+           ;; hint): a text field narrowed to 20 at most.
+           (room (lambda (f) (- width label-width 2 (funcall hint-width f))))
+           (beside (cl-every (lambda (f) (>= (funcall room f) (min (agent-ui-form--size f) 20))) fields))
+           (lines (lambda (text face)
+                    (mapcar (lambda (line) (vui-text line :face face))
+                            (split-string (agent-ui-wrap text width) "\n")))))
       ;; Its question, its fields, its buttons: a blank line between.
       (vui-vstack
        :spacing 1
        (and (or title question)
-            (vui-vstack (and title (vui-text title :face 'agent-ui-title))
-                        (and question (vui-text question :face 'bold))))
+            (vui-vstack (and title (funcall lines title 'agent-ui-title))
+                        (and question (funcall lines question 'bold))))
        (vui-vstack
+        :spacing (if beside 0 1)
         (mapcar (lambda (field)
-                  (let ((hint (agent-ui-form--hint field)))
-                    (vui-hstack
-                     :spacing 2
-                     (vui-text (string-pad (agent-ui-form--label field) label-width) :face 'agent-ui-muted)
-                     (agent-ui-form--input canvas id field (plist-get values (agent-ui-form--key (plist-get field :name))))
-                     (and (not (string-empty-p hint)) (vui-text hint :face 'agent-ui-muted)))))
+                  (let* ((hint (agent-ui-form--hint field))
+                         (hint (and (not (string-empty-p hint)) (vui-text hint :face 'agent-ui-muted)))
+                         (value (plist-get values (agent-ui-form--key (plist-get field :name)))))
+                    (if beside
+                        (vui-hstack
+                         :spacing 2
+                         (vui-text (string-pad (agent-ui-form--label field) label-width) :face 'agent-ui-muted)
+                         (agent-ui-form--input canvas id field value (funcall room field))
+                         hint)
+                      ;; Its label over it; its hint after it, or under it.
+                      (let ((input (agent-ui-form--input canvas id field value width)))
+                        (vui-vstack
+                         (funcall lines (agent-ui-form--label field) 'agent-ui-muted)
+                         (if (and hint (<= (+ (min width (agent-ui-form--size field)) (funcall hint-width field))
+                                           width))
+                             (vui-hstack :spacing 2 input hint)
+                           (delq nil (list input hint))))))))
                 fields))
        (vui-vstack
-        (and problem (vui-text problem :face 'agent-ui-error))
+        (and problem (funcall lines problem 'agent-ui-error))
         (vui-hstack
          :spacing 3
          (vui-button "Send" :on-click #'agent-ui-form-send :face 'agent-ui-action)
          (vui-button "Cancel" :on-click #'agent-ui-form-cancel))
-        (vui-text "C-c C-c sends it, C-c C-k cancels (what you typed is kept), TAB goes to the next field"
-                  :face 'agent-ui-muted))))))
+        (funcall lines "C-c C-c sends it, C-c C-k cancels (what you typed is kept), TAB goes to the next field"
+                 'agent-ui-muted))))))
 
 (defun agent-ui-form-open (canvas id)
   "Open form ID of CANVAS in a buffer of its own, selected; again: that one."
@@ -307,14 +352,17 @@ on CANVAS (the canvas follows, it's saved)."
           (agent-ui-form-mode)
           (setq agent-ui-form--canvas canvas
                 agent-ui-form--id id))
-        (vui-mount (vui-component 'agent-ui-form--view
-                                  :canvas canvas :id id
-                                  :title (plist-get element :title)
-                                  :question (plist-get props :question)
-                                  :fields (plist-get props :fields)
-                                  :initial (agent-ui-form--values props))
-                   name t)
-        (pop-to-buffer buffer)
+        (let ((instance (vui-mount (vui-component 'agent-ui-form--view
+                                                  :canvas canvas :id id
+                                                  :title (plist-get element :title)
+                                                  :question (plist-get props :question)
+                                                  :fields (plist-get props :fields)
+                                                  :initial (agent-ui-form--values props))
+                                   name t)))
+          (pop-to-buffer buffer)
+          ;; Laid out again for the window it's in (then as that changes:
+          ;; vui's resize hook).
+          (with-current-buffer buffer (vui-rerender instance)))
         ;; On its first field.
         (goto-char (point-min))
         (ignore-errors (widget-forward 1))))))
