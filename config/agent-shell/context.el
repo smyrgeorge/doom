@@ -48,12 +48,13 @@ prompt."
 ;; a region, an error, files: dired's marked ones, asked of dired in any buffer.
 ;; Outside dired, dired takes a line starting with a date (an issue in Beads'
 ;; list: 2026-11-08 ...) for a file's, then fails (no subdir-alist): the
-;; session never opened. Dired's files only in dired; elsewhere, as agent-shell
-;; has it (an image file buffer: its file). In dired, those of the region, else
-;; the marked ones: with none marked, dired gives the file at point (even . or
-;; .., the folder itself or its parent), which went into every session started
-;; there. Sending a file to Claude (agent-shell-send-file) is as agent-shell
-;; has it: the file at point too.
+;; session never opened. Dired's files only in dired; elsewhere, the image
+;; you're on (image-mode: its file), not any buffer of an image file's: an
+;; SVG's source, its selection replaced by the whole file. In dired, those of
+;; the region, else the marked ones: with none marked, dired gives the file at
+;; point (even . or .., the folder itself or its parent), which went into
+;; every session started there. Sending a file to Claude
+;; (agent-shell-send-file) is as agent-shell has it: the file at point too.
 (defun +my/agent-shell--dired-files ()
   "Dired's files for a session: the region's, else the marked ones; nil with
 none marked; never . or .. (see above)."
@@ -66,11 +67,12 @@ none marked; never . or .. (see above)."
 
 (defun +my/agent-shell-buffer-files-a (fn &rest args)
   "`agent-shell--buffer-files': dired's files in dired only, for a session
-only those chosen (see above)."
+only those chosen; elsewhere the image shown (see above)."
   (cond ((not (derived-mode-p 'dired-mode))
          (let ((file (buffer-file-name)))
            (and (plist-get args :obvious)
                 file
+                (derived-mode-p 'image-mode)
                 (image-supported-file-p file)
                 (list file))))
         ((plist-get args :obvious)

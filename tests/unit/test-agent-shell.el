@@ -472,11 +472,33 @@ file (agent-shell-send-file): the file at point, as agent-shell has it."
         (kill-buffer buffer)))))
 
 (ert-deftest agent-shell/context-an-image-buffer-s-file ()
+  "The image you're on (image-mode): its file."
   (let ((file (expand-file-name "pic.png" (make-temp-file (+test-tmp-file "ctx-") t))))
     (with-temp-buffer
       (setq buffer-file-name file)
+      (setq-local major-mode 'image-mode)
       (should (equal (agent-shell--buffer-files :obvious t) (list file)))
       (should-not (agent-shell--buffer-files))
+      (set-buffer-modified-p nil))))
+
+(ert-deftest agent-shell/context-an-svg-s-source-its-selection ()
+  "An SVG's source (not image-mode): its selection, not the file; with none,
+nothing."
+  (let ((file (expand-file-name "chart.svg" (make-temp-file (+test-tmp-file "ctx-") t)))
+        (agent-shell-context-sources '(files region)) ; config.el's
+        (transient-mark-mode t))
+    (with-temp-buffer
+      (setq buffer-file-name file)
+      (insert "<svg xmlns=\"http://www.w3.org/2000/svg\">\n<rect width=\"5\" height=\"5\"/>\n</svg>\n")
+      (should-not (agent-shell--buffer-files :obvious t))
+      (should-not (agent-shell--context))
+      (goto-char (point-min))
+      (search-forward "<rect")
+      (push-mark (match-beginning 0) t t)
+      (end-of-line)
+      (let ((context (agent-shell--context)))
+        (should (string-search "<rect width=\"5\" height=\"5\"/>" context))
+        (should-not (string-search "@" context)))
       (set-buffer-modified-p nil))))
 
 (ert-deftest agent-shell/advice-installed ()
