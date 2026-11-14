@@ -462,6 +462,45 @@ not a mode's commands elsewhere, recently used or not."
 (ert-deftest search/everywhere-is-a-command ()
   (should (commandp #'+my/search-everywhere)))
 
+(defun +test-search--type (keys)
+  "Open SPC s a from the current buffer and type KEYS (`kbd' syntax), then
+C-g: the minibuffer's (INPUT NARROW) after each key."
+  (let ((log nil)
+        (map (make-sparse-keymap)))
+    (define-key map (kbd "<f5>") #'+my/search-everywhere)
+    (use-local-map map)
+    (minibuffer-with-setup-hook
+        (lambda ()
+          (add-hook 'post-command-hook
+                    (lambda ()
+                      ;; Not consult's run of the hook as it opens.
+                      (unless (eq this-command #'+my/search-everywhere)
+                        (push (list (minibuffer-contents-no-properties) consult--narrow) log)))
+                    nil t))
+      (condition-case nil
+          (execute-kbd-macro (vconcat (kbd "<f5>") (kbd keys) (kbd "C-g")))
+        (quit nil)))
+    (nreverse log)))
+
+(ert-deftest search/everywhere-narrows-with-a-key-and-space ()
+  "c, f, s or a then SPC keeps one tab, DEL on an empty input goes back to
+all; with a language server too (its async sources), the input as typed."
+  (+test-with-reset
+    (let ((root (+test-search--dir "search-narrow" "a.txt")))
+      (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
+                ((symbol-function 'projectile-project-files) (lambda (_) '("a.txt")))
+                ((symbol-function 'lsp-workspaces) (lambda () '(ws)))
+                ((symbol-function 'lsp-request-async) #'ignore)
+                ((symbol-function 'lsp-cancel-request-by-token) #'ignore))
+        (with-current-buffer (switch-to-buffer (+test-buffer "narrow.kt" "x\n"))
+          (setq-local lsp-mode t)
+          (should (equal (+test-search--type "c SPC DEL s SPC DEL f SPC DEL a SPC x")
+                         '(("c" nil) ("" ?c) ("" nil) ("s" nil) ("" ?s) ("" nil)
+                           ("f" nil) ("" ?f) ("" nil) ("a" nil) ("" ?a) ("x" ?a))))
+          (setq-local lsp-mode nil)
+          (should (equal (+test-search--type "f SPC DEL a SPC")
+                         '(("f" nil) ("" ?f) ("" nil) ("a" nil) ("" ?a)))))))))
+
 ;; ====== CMD+SHIFT+F ======
 
 (ert-deftest search/find-in-files-selected-text-is-the-query ()

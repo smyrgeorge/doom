@@ -9,6 +9,10 @@
   (let* ((root (doom-project-root))
          (default-directory (or root default-directory)) ; file annotations
          (completion-ignore-case t)     ; "servic" finds UserService.kt
+         ;; The input as typed: with a language server's sources, consult
+         ;; otherwise starts it with "#" (its async split), and then c SPC
+         ;; didn't narrow (only a lone character does), nor DEL widen.
+         (consult-async-split-style 'none)
          (workspaces (and (bound-and-true-p lsp-mode)
                           (require 'consult-lsp nil t)
                           (lsp-workspaces)))
