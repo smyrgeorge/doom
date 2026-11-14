@@ -554,6 +554,44 @@ RESULTS a list the callback pushes (FILE MESSAGE) on."
         (should (string-match-p "longer than 0.3 s" (cadr (caar results))))
         (should (= +my/mermaid--running 0))))))
 
+(ert-deftest mermaid/render-stopped-closes-its-chrome ()
+  "Stopped, mmdc is asked to stop, and closes its Chrome (in a process group
+of its own, which killing mmdc doesn't reach); the callback is told, the
+next run queued starts."
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let* ((+my/mermaid-timeout 0.5)
+             (+my/mermaid-jobs 1)
+             (stopped (cdr (+test-mermaid--render "flowchart TD\n    CHROME\n")))
+             (next (cdr (+test-mermaid--render "flowchart TD\n    A\n")))
+             (pid-file (expand-file-name "chrome.pid" (file-name-directory mmdc))))
+        (should (+test-mermaid--wait (lambda () (file-exists-p pid-file)) 5))
+        (let ((chrome (string-to-number (+test-mermaid--text pid-file))))
+          (unwind-protect
+              (progn
+                (should (> chrome 0))
+                (should (+test-mermaid--wait (lambda () (car stopped)) 5))
+                (should (string-match-p "longer than 0.5 s" (cadr (caar stopped))))
+                ;; Its Chrome gone (`signal-process' 0: still there).
+                (should (+test-mermaid--wait (lambda () (/= 0 (signal-process chrome 0))) 2))
+                (should (+test-mermaid--wait (lambda () (car next)) 5))
+                (should (car (caar next)))
+                (should (= +my/mermaid--running 0)))
+            (ignore-errors (signal-process chrome 'SIGKILL))))))))
+
+(ert-deftest mermaid/render-stopped-killed-if-it-won-t-stop ()
+  "An mmdc that doesn't stop when asked: killed a moment later, the callback
+told."
+  (+test-mermaid--theme +test-mermaid--dark
+    (+test-mermaid--with-mmdc
+      (let* ((+my/mermaid-timeout 0.3)
+             (+my/mermaid--grace 0.3)
+             (results (cdr (+test-mermaid--render "flowchart TD\n    STUBBORN\n"))))
+        (should-not (+test-mermaid--wait (lambda () (car results)) 0.45))
+        (should (+test-mermaid--wait (lambda () (car results)) 3))
+        (should (string-match-p "longer than 0.3 s" (cadr (caar results))))
+        (should (= +my/mermaid--running 0))))))
+
 (defun +test-mermaid--puppeteer (args)
   "The puppeteer config mmdc's ARGS name (-p), read; nil without one."
   (when-let* ((file (+test-mermaid--arg args "-p")))

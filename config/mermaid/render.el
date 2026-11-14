@@ -150,10 +150,23 @@ and MESSAGE."
       (process-send-string process source)
       (process-send-eof process))))
 
+;; A run stopped: asked to stop (SIGTERM), as mmdc then closes its Chrome,
+;; which is in a process group of its own (`delete-process' only reaches
+;; mmdc's, leaving Chrome running); killed if it's still there a few seconds
+;; later.
+(defvar +my/mermaid--grace 3
+  "Seconds a stopped mmdc has to close its Chrome before it's killed.")
+
 (defun +my/mermaid--stop (process)
-  "PROCESS ran for longer than `+my/mermaid-timeout': stopped."
+  "PROCESS ran for longer than `+my/mermaid-timeout': stopped (see above)."
   (when (process-live-p process)
     (process-put process '+my/mermaid-timed-out t)
+    (signal-process process 'SIGTERM)
+    (run-at-time +my/mermaid--grace nil #'+my/mermaid--kill process)))
+
+(defun +my/mermaid--kill (process)
+  "PROCESS, a stopped mmdc, killed if it's still running."
+  (when (process-live-p process)
     (delete-process process)))
 
 (defun +my/mermaid--sentinel (process _event)

@@ -39,10 +39,15 @@
 ;; ====== A STAND-IN MMDC ======
 ;; A script taking mmdc's arguments: the source on its input, its SVG (the
 ;; source and the config it was given in it) written to -o; a source saying
-;; ERROR fails as Mermaid does, SLOW takes 3 s. Each run's arguments logged.
+;; ERROR fails as Mermaid does, SLOW takes 3 s. CHROME starts a stand-in
+;; Chrome as puppeteer does, in a process group of its own (its pid in
+;; chrome.pid), and runs 30 s, but closes it and exits on SIGTERM, as mmdc
+;; does; STUBBORN ignores SIGTERM. Each run's arguments logged.
 
 (defconst +test-mermaid--mmdc-script
   "#!/bin/sh
+# A SIGTERM before the source is read: kept for after (STUBBORN's ignored).
+trap 'stop=1' TERM
 dir=$(dirname \"$0\")
 echo \"$*\" >> \"$dir/runs.log\"
 out= config=
@@ -51,7 +56,19 @@ while [ $# -gt 0 ]; do
   shift
 done
 source=$(cat)
+case \"$source\" in *STUBBORN*) trap '' TERM; sleep 30; exit 0 ;; esac
+trap - TERM
+[ -n \"$stop\" ] && exit 143
 case \"$source\" in *SLOW*) sleep 3 ;; esac
+case \"$source\" in
+  *CHROME*)
+    trap 'kill $chrome $run 2>/dev/null; exit 143' TERM
+    perl -e 'setpgrp(0, 0); exec @ARGV' sleep 30 &
+    chrome=$!
+    echo $chrome > \"$dir/chrome.pid\"
+    sleep 30 & run=$!
+    wait $run ;;
+esac
 case \"$source\" in
   *ERROR*)
     echo 'Error: Parse error on line 2:' >&2
