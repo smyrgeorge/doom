@@ -257,6 +257,53 @@ coloured bar on the left, the title in that colour with its icon."
       (should (equal (+test-md--js preview-window "location.href")
                      (+my/webkit-file-url (buffer-local-value '+md-preview--file (+test-md--source))))))))
 
+;; ====== A NARROW PANE ======
+
+(ert-deftest e2e-markdown/a-narrow-pane-fits-the-page ()
+  "At 25 columns: a formula wider than the pane scrolls in its own box (the
+page doesn't), inline math as it was; the text has most of the width, a list
+item five levels deep still 40 px. At the usual width, the padding as ever."
+  (+test-md
+    (let ((md (find-file (+test-file "md/narrow.md"
+                                     (concat "# Narrow\n\nInline $x^2$ math.\n\n"
+                                             "$$\n\\sum_{i=1}^{n} \\frac{a_i + b_i + c_i + d_i + e_i + f_i}"
+                                             "{x_i^2 + y_i^2 + z_i^2 + w_i^2} = \\int_0^\\infty e^{-t^2} dt\n$$\n\n"
+                                             "- one\n  - two\n    - three\n      - four\n"
+                                             "        - five words in the fifth level\n")))))
+      (markdown-mode)
+      (let ((this-command '+my/markdown-preview-toggle))
+        (+my/markdown-preview-toggle))
+      (let* ((window (get-buffer-window (buffer-local-value '+md-preview--buffer md)))
+             (js (lambda (script) (+test-md--js window script))))
+        (should (+test-md--ready window))
+        (should (+test-wait-for (lambda () (equal (funcall js "getComputedStyle(document.body).paddingLeft") "28px")) 5))
+        ;; 25 columns of text (a scroll bar besides, in emacs -Q).
+        (window-resize window (- 25 (window-body-width window)) t)
+        (should (= (window-body-width window) 25))
+        (should (+test-wait-for
+                 (lambda () (<= (string-to-number (funcall js "String(innerWidth)")) (+ (window-body-width window t) 2)))
+                 3))
+        (should (+test-wait-for (lambda () (equal (funcall js "getComputedStyle(document.body).paddingLeft") "10px")) 3))
+        ;; The formula: wider than the pane, scrolled in its box.
+        (should (<= (string-to-number (funcall js "String(document.documentElement.scrollWidth)"))
+                    (string-to-number (funcall js "String(innerWidth)"))))
+        (should (equal (funcall js "(function(b){ return String(b.scrollWidth > b.clientWidth); })(document.querySelector('math[display=block]').parentElement)")
+                       "true"))
+        ;; Its start shown (not cut on the left), its end scrolled to.
+        (should (equal (funcall js "(function(m){ return String(m.querySelector('semantics > *').getBoundingClientRect().left >= m.parentElement.getBoundingClientRect().left - 1); })(document.querySelector('math[display=block]'))")
+                       "true"))
+        (should (equal (funcall js "(function(b){ b.scrollLeft = 50; return String(b.scrollLeft > 0); })(document.querySelector('math[display=block]').parentElement)")
+                       "true"))
+        (should-not (equal (funcall js "getComputedStyle(document.querySelector('math[display=inline]')).display") "block"))
+        ;; The text's width; the list's deepest item.
+        (should (>= (string-to-number
+                     (funcall js "(function(s){ return String(document.body.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight)); })(getComputedStyle(document.body))"))
+                    150))
+        (should (>= (string-to-number
+                     (funcall js "String(Math.min.apply(null, [...document.querySelectorAll('li')].map(l => l.getBoundingClientRect().width)))"))
+                    40))
+        (should (equal (funcall js "String(document.querySelectorAll('ul ul ul ul ul li').length)") "1"))))))
+
 ;; ====== SPLITS ======
 
 (ert-deftest e2e-markdown/split-both-panes-show-it ()

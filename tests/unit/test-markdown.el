@@ -301,6 +301,10 @@ takes."
                           "<link id='md-css-1' rel='stylesheet' href='https://cdn.example/github-markdown-dark.css'>"
                           "<link id='md-css-2' rel='stylesheet' href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/styles/github-dark.min.css'>"
                           "body.markdown-body{box-sizing:border-box;max-width:none;width:100%;margin:0;"
+                          ;; A formula scrolled in its box; a narrow pane's
+                          ;; padding and lists.
+                          "span:has(> math[display=block]),p:has(> math[display=block]){display:block;overflow-x:auto;}"
+                          "@media (max-width:480px){body.markdown-body{padding:12px 10px;}"
                           "<script src='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/highlight.min.js'></script>"
                           +md-preview--anchors-js
                           (concat "document.addEventListener('DOMContentLoaded',function(){"

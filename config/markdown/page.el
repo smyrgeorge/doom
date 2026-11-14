@@ -105,8 +105,16 @@ GitHub's alerts get GitHub's markup (`+md-preview--alerts-filter')."
                 ""))
    ;; As wide as the pane. (GitHub's stylesheet sets `.markdown-body''s margin,
    ;; which beat a plain `body' rule: the text stayed in a 740 px column on the
-   ;; left, empty space on the right.)
-   "<style>body.markdown-body{box-sizing:border-box;max-width:none;width:100%;margin:0;padding:24px 28px;}</style>"
+   ;; left, empty space on the right.) A formula too wide for it scrolls
+   ;; sideways in its own box, as tables and code do, not the page: the
+   ;; element around it (WebKit doesn't scroll a <math>). In a narrow pane
+   ;; (480 px, about 68 columns, or less), less padding, lists nested less
+   ;; deep: at 25 columns the text had 106 of 179 px, a list's fourth level
+   ;; none.
+   (concat "<style>body.markdown-body{box-sizing:border-box;max-width:none;width:100%;margin:0;padding:24px 28px;}"
+           "span:has(> math[display=block]),p:has(> math[display=block]){display:block;overflow-x:auto;}"
+           "@media (max-width:480px){body.markdown-body{padding:12px 10px;}"
+           ".markdown-body ul,.markdown-body ol{padding-left:1.2em;}}</style>")
    "<script src='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/highlight.min.js'></script>"
    "<script>" +md-preview--anchors-js
    "document.addEventListener('DOMContentLoaded',function(){"
