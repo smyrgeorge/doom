@@ -430,16 +430,45 @@ selection still is. With config.el's sources (test-config.el checks them)."
             (should (string-match-p "(foo)" text))))))))
 
 (ert-deftest agent-shell/context-dired-s-files-in-dired ()
-  "In dired: its file at point, as agent-shell has it."
+  "In dired, a session's files (SPC o c): the marked ones, those of the
+region; none marked, none (not the file at point, nor . or ..). Sending a
+file (agent-shell-send-file): the file at point, as agent-shell has it."
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "ctx-") t)))
-         (file (expand-file-name "x.txt" dir)))
-    (with-temp-file file (insert "x\n"))
-    (let ((buffer (dired-noselect dir)))
+         (x (expand-file-name "x.txt" dir))
+         (y (expand-file-name "y.txt" dir)))
+    (with-temp-file x (insert "x\n"))
+    (with-temp-file y (insert "y\n"))
+    (let ((buffer (dired-noselect dir))
+          (agent-shell-context-sources '(files region))) ; config.el's
       (unwind-protect
           (with-current-buffer buffer
-            (goto-char (point-min))
-            (should (search-forward "x.txt" nil t))
-            (should (equal (agent-shell--buffer-files) (list file))))
+            (let ((line (lambda (name)
+                          (goto-char (point-min))
+                          (should (re-search-forward (concat " " (regexp-quote name) "$") nil t))
+                          (beginning-of-line))))
+              ;; None marked.
+              (dolist (name '("x.txt" "." ".."))
+                (funcall line name)
+                (should-not (agent-shell--buffer-files :obvious t))
+                (should-not (agent-shell--context)))
+              (funcall line "x.txt")
+              (should (equal (agent-shell--buffer-files) (list x)))
+              ;; Marked.
+              (funcall line "y.txt")
+              (dired-mark 1)
+              (funcall line "..")
+              (should (equal (agent-shell--buffer-files :obvious t) (list y)))
+              (should (string-search "y.txt" (agent-shell--context)))
+              (dired-unmark-all-marks)
+              ;; A region over . .. and x.txt: x.txt.
+              (let ((transient-mark-mode t))
+                (funcall line ".")
+                (push-mark (point) t t)
+                (funcall line "x.txt")
+                (end-of-line)
+                (should (use-region-p))
+                (should (equal (agent-shell--buffer-files :obvious t) (list x)))
+                (deactivate-mark))))
         (kill-buffer buffer)))))
 
 (ert-deftest agent-shell/context-an-image-buffer-s-file ()

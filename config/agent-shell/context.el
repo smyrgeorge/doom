@@ -49,15 +49,33 @@ prompt."
 ;; Outside dired, dired takes a line starting with a date (an issue in Beads'
 ;; list: 2026-11-08 ...) for a file's, then fails (no subdir-alist): the
 ;; session never opened. Dired's files only in dired; elsewhere, as agent-shell
-;; has it (an image file buffer: its file).
+;; has it (an image file buffer: its file). In dired, those of the region, else
+;; the marked ones: with none marked, dired gives the file at point (even . or
+;; .., the folder itself or its parent), which went into every session started
+;; there. Sending a file to Claude (agent-shell-send-file) is as agent-shell
+;; has it: the file at point too.
+(defun +my/agent-shell--dired-files ()
+  "Dired's files for a session: the region's, else the marked ones; nil with
+none marked; never . or .. (see above)."
+  (seq-remove (lambda (file) (member (file-name-nondirectory file) '("." "..")))
+              (or (agent-shell--dired-paths-in-region)
+                  (and (save-excursion
+                         (goto-char (point-min))
+                         (re-search-forward (dired-marker-regexp) nil t))
+                       (dired-get-marked-files)))))
+
 (defun +my/agent-shell-buffer-files-a (fn &rest args)
-  "`agent-shell--buffer-files': dired's files in dired only (see above)."
-  (if (derived-mode-p 'dired-mode)
-      (apply fn args)
-    (let ((file (buffer-file-name)))
-      (and (plist-get args :obvious)
-           file
-           (image-supported-file-p file)
-           (list file)))))
+  "`agent-shell--buffer-files': dired's files in dired only, for a session
+only those chosen (see above)."
+  (cond ((not (derived-mode-p 'dired-mode))
+         (let ((file (buffer-file-name)))
+           (and (plist-get args :obvious)
+                file
+                (image-supported-file-p file)
+                (list file))))
+        ((plist-get args :obvious)
+         (+my/agent-shell--dired-files))
+        (t
+         (apply fn args))))
 
 (advice-add 'agent-shell--buffer-files :around #'+my/agent-shell-buffer-files-a)

@@ -5,7 +5,7 @@ CLI's login.
 
 | Key | Action |
 |---|---|
-| `SPC o c` | A new session, in a new [tiled](editor.md#tiling) pane |
+| `SPC o c` | A session, a new one or one to resume (it asks), in a new [tiled](editor.md#tiling) pane |
 | `SPC o C` | The same, in the window you're in (the file there kept as a tab) |
 | `Option+Enter` (Linux: `Alt+Enter`) | Send the error at point or the selection to Claude |
 | `RET` (normal state too) | Send the prompt (`S-RET`: a newline) |
@@ -13,9 +13,9 @@ CLI's login.
 `(setq +my/agent-shell-insert-ret-newline t)` in `config.el` makes `RET` in insert state a newline instead, the prompt
 sent with `RET` from normal state.
 
-A new session starts in insert state, its prompt empty but for what you chose: the selection, dired's marked files, the
-image you're on. `(setq agent-shell-context-sources '(files region error line))` in `config.el` brings the error at
-point too, or else the line you're on.
+A session starts in insert state, its prompt empty but for what you chose: the selection, dired's marked files (or
+those of the selection there), the image you're on. `(setq agent-shell-context-sources '(files region error line))` in
+`config.el` brings the error at point too, or else the line you're on.
 
 Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
 and Claude can ask Emacs what you're looking at. Claude shows you information on a canvas beside its session, each
