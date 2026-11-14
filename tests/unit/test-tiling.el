@@ -790,6 +790,36 @@ error, and opens nothing."
       (should (equal (cadr error) "No room for another pane"))
       (should (= (length (+my/tiling--panes)) (1+ count))))))
 
+(ert-deftest tiling/a-narrow-main-area-no-room-said ()
+  "A main area too narrow for two panes (the sidebar beside it), or too short
+in wide: SPC w SPC says there's no room, nothing changed; with room, no pane
+under the smallest size (`window-min-width', wide's `window-min-height')."
+  (dolist (strategy '(tall tall-right wide))
+    (let ((across (not (eq strategy 'wide))))
+      (dolist (room (list (1- (* 2 (if across window-min-width window-min-height)))
+                          (+ 5 (* 2 (if across window-min-width window-min-height)))))
+        (+test-tiling
+          (let* ((+my/tiling-strategy strategy)
+                 (side (display-buffer-in-side-window
+                        (+test-buffer "SIDE")
+                        (if across
+                            `((side . left) (window-width . ,(- (frame-width) room)))
+                          `((side . top) (window-height . ,(- (window-total-height (window-main-window)) room)))))))
+            (should (window-live-p side))
+            (should (= (window-size (window-main-window) across) room))
+            (if (< room (* 2 (if across window-min-width window-min-height)))
+                (progn
+                  (should (equal (cadr (should-error (+my/tiling-split) :type 'user-error))
+                                 "No room for another pane"))
+                  (should (= (length (+my/tiling--panes)) 1))
+                  ;; SPC w a, panes of one's own: no room for them either.
+                  (should-not (+my/tiling--stack-fits-p (symbol-value (intern (format "+my/tiling--%s" strategy)))
+                                                        (window-main-window) 2)))
+              (+my/tiling-split)
+              (should (= (length (+my/tiling--panes)) 2))
+              (dolist (pane (+my/tiling--panes))
+                (should (>= (window-size pane across) (if across window-min-width window-min-height)))))))))))
+
 ;; ====== TALL-RIGHT ======
 
 (defmacro +test-tiling-tall-right (&rest body)

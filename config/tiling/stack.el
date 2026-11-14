@@ -121,12 +121,22 @@ Each at least its smallest (`+my/tiling--stack-least')."
 ;; least the smallest size along it: what SPC w SPC allows. SPC w a makes each
 ;; at its size, the stack's length shared out (halving the last pane in turn
 ;; runs out of room long before the stack does); no room for them all: said,
-;; nothing changed.
+;; nothing changed. With a stack, the main pane and the stack each get at
+;; least the smallest size across it too (the main pane's share, the rest):
+;; the first split, at the main pane's size, was only kept from going under
+;; Emacs's 2 columns, so a narrow main area (beside the sidebar) was split
+;; into panes of no columns at all.
 
 (defun +my/tiling--stack-fits-p (layout window count)
   "Non-nil if COUNT panes fit in WINDOW laid out as LAYOUT (see above)."
-  (<= (* (max 0 (1- count)) (+my/tiling--stack-least layout))
-      (window-size window (not (+my/tiling--across-p layout)))))
+  (let* ((across (+my/tiling--across-p layout))
+         (main (+my/tiling--stack-main-size layout window))
+         (least (if across window-min-width window-min-height)))
+    (and (<= (* (max 0 (1- count)) (+my/tiling--stack-least layout))
+             (window-size window (not across)))
+         (or (< count 2)
+             (and (<= least main)
+                  (<= least (- (window-size window across) main)))))))
 
 (defun +my/tiling--stack-build (layout main count)
   "Split MAIN, the only pane, into LAYOUT's main pane (itself, its share) and
@@ -189,9 +199,12 @@ error), the panes as they were."
     (+my/tiling--stack-arrange layout panes))
   (let ((root (window-main-window)))
     (if (window-live-p root)
-        (prog1 (+my/tiling--split-window root (+my/tiling--stack-main-size layout root)
-                                         (+my/tiling--stack-side layout))
-          (+my/tiling--mark-main root))
+        (progn
+          (unless (+my/tiling--stack-fits-p layout root 2)
+            (user-error "No room for another pane"))
+          (prog1 (+my/tiling--split-window root (+my/tiling--stack-main-size layout root)
+                                           (+my/tiling--stack-side layout))
+            (+my/tiling--mark-main root)))
       (let* ((stack (+my/tiling--stack-panes layout root))
              (last (car (last stack))))
         (when (< (apply #'+ (mapcar (lambda (pane) (+my/tiling--stack-length layout pane)) stack))
