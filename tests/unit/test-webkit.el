@@ -531,6 +531,53 @@ goes to the next window showing the page, none made."
         (should (equal (+test-webkit--calls 'adjust) (list (list x2 w3))))
         (should (= (length (+test-webkit--views page)) 2))))))
 
+(ert-deftest webkit/a-layout-rebuilt-each-pane-keeps-its-view ()
+  "The same layout made anew (new windows, as tiling's arrange makes them):
+each window gets the view of the closed window that was where it is, not
+the one latest looked at."
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (left (+test-webkit--show page))
+           (right (+test-webkit--show page (split-window left nil 'right)))
+           (below (+test-webkit--show page (split-window right nil 'below)))
+           (views (mapcar (lambda (window) (+test-webkit--xw page window)) (list left right below)))
+           (state (window-state-get (frame-root-window) t)))
+      ;; Latest looked at: below, then right.
+      (with-current-buffer page
+        (+my/webkit--looked-at right)
+        (+my/webkit--looked-at below))
+      (window-state-put state (frame-root-window))
+      (let ((windows (window-list nil 'nomini (frame-first-window))))
+        (should (= (length windows) 3))
+        (should-not (seq-intersection windows (list left right below)))
+        ;; Shown in another order than the views were looked at.
+        (dolist (window windows)
+          (+test-webkit--show page window))
+        (should (equal (mapcar (lambda (window) (+test-webkit--xw page window)) windows) views))
+        (should (= (length +test-webkit--made) 3))))))
+
+(ert-deftest webkit/a-resized-window-s-view-kept-where-it-is ()
+  "A window resized (a neighbour closed): its view kept at its new place,
+for the window that's there next."
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (left (+test-webkit--show page))
+           (right (+test-webkit--show page (split-window left nil 'right)))
+           (x-left (+test-webkit--xw page left))
+           (x-right (+test-webkit--xw page right)))
+      (window-resize left 10 t)
+      (dolist (window (list left right))
+        (with-current-buffer page (+my/webkit--fit-h window))
+        (should (equal (overlay-get (with-current-buffer page (+my/webkit--view window)) '+my/webkit-place)
+                       (cons (selected-frame) (window-pixel-edges window)))))
+      (let ((state (window-state-get (frame-root-window) t)))
+        (window-state-put state (frame-root-window))
+        (let ((windows (window-list nil 'nomini (frame-first-window))))
+          (dolist (window (reverse windows))
+            (+test-webkit--show page window))
+          (should (equal (mapcar (lambda (window) (+test-webkit--xw page window)) windows)
+                         (list x-left x-right))))))))
+
 (ert-deftest webkit/a-window-on-another-buffer-lends-its-view ()
   "A window showing another buffer keeps its view only while no other window
 needs one."

@@ -203,6 +203,39 @@ other window changing meanwhile."
         (when (frame-live-p frame)
           (delete-frame frame t))))))
 
+(ert-deftest e2e-webkit/a-layout-rebuilt-each-pane-keeps-its-place ()
+  "The same layout made anew (new windows, as tiling's arrange makes them):
+each pane keeps its own view and scroll place, the right one looked at
+last."
+  (+test-webkit
+    (+test-webkit--open)
+    (let* ((left (selected-window))
+           (right (split-window-right))
+           (a (+test-webkit--loaded-in left))
+           (b (+test-webkit--loaded-in right)))
+      (with-current-buffer "*test page*"
+        (+my/webkit-execute "window.scrollTo(0, 500)" a)
+        (+my/webkit-execute "window.scrollTo(0, 1500)" b))
+      (should (+test-wait-for (lambda () (and (eql (plist-get (+test-webkit--state a) :y) 500)
+                                              (eql (plist-get (+test-webkit--state b) :y) 1500)))
+                              3))
+      (select-window right)
+      (+test-sleep 0.3)
+      (window-state-put (window-state-get (frame-root-window) t) (frame-root-window))
+      (let ((windows (window-list nil 'nomini (frame-first-window))))
+        (should (= (length windows) 2))
+        (should-not (memq left windows))
+        (should (+test-wait-for
+                 (lambda () (with-current-buffer "*test page*"
+                              (seq-every-p #'+my/webkit-xwidget windows)))
+                 3))
+        (with-current-buffer "*test page*"
+          (should (eq (+my/webkit-xwidget (car windows)) a))
+          (should (eq (+my/webkit-xwidget (cadr windows)) b)))
+        (should (eql (plist-get (+test-webkit--state a) :y) 500))
+        (should (eql (plist-get (+test-webkit--state b) :y) 1500))
+        (should (= (+test-webkit--views) 2))))))
+
 (ert-deftest e2e-webkit/a-tab-away-and-back-keeps-the-view ()
   (+test-webkit
     (+test-webkit--open)

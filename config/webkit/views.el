@@ -10,10 +10,12 @@
 ;; split, both panes show the page, scrolled apart. A view starts once its
 ;; window shows the buffer (WebKit only draws on screen), loading the URL
 ;; `+my/webkit-url-function' gives. A window gets the view of a closed window
-;; first (panes tiling lays out anew, a workspace switched back to), else of a
-;; window showing another buffer, else a new one: a window that shows another
-;; buffer keeps its view for when it shows the page again (a tab away and
-;; back) only while no other window needs it. A second after windows come or
+;; first (panes tiling lays out anew, a workspace switched back to), the one
+;; whose window was where it is (its edges the closest: each pane its own page
+;; and scroll place, not swapped), else of a window showing another buffer,
+;; else a new one: a window that shows another buffer keeps its view for when
+;; it shows the page again (a tab away and back) only while no other window
+;; needs it. A second after windows come or
 ;; go (a frame deleted too), views of closed windows are closed, but for the
 ;; buffer's last one (for its next window).
 
@@ -92,6 +94,21 @@ meanwhile (killing a buffer kills its views)."
     (+my/webkit--kill xwidget))
   (delete-overlay view))
 
+(defun +my/webkit--place (view window)
+  "VIEW is WINDOW's: where it is kept, for when the window closes (see
+above)."
+  (overlay-put view 'window window)
+  (overlay-put view '+my/webkit-place (cons (window-frame window) (window-pixel-edges window))))
+
+(defun +my/webkit--distance (view window)
+  "How far WINDOW is from where VIEW's window was (see above): its edges'
+distances, its frame another's farther than any."
+  (let ((place (overlay-get view '+my/webkit-place)))
+    (if (not (and place (eq (car place) (window-frame window))))
+        most-positive-fixnum
+      (apply #'+ (cl-mapcar (lambda (a b) (abs (- a b)))
+                            (cdr place) (window-pixel-edges window))))))
+
 (defvar +my/webkit--tidy-timer nil)
 
 (defun +my/webkit--tidy ()
@@ -139,7 +156,7 @@ js.el)."
       ;; Anywhere else is a link out of the page (see LINKS OUT in links.el).
       (xwidget-put xwidget 'home url)
       (overlay-put view '+my/webkit xwidget)
-      (overlay-put view 'window window)
+      (+my/webkit--place view window)
       (overlay-put view 'display (list 'xwidget :xwidget xwidget))
       ;; Last: the one latest looked at stays first until this one is.
       (setq +my/webkit--views (append +my/webkit--views (list view)))
@@ -157,26 +174,27 @@ a new one (see above)."
         ;; Edge to edge: no fringes (also buffer-local, for other windows).
         (set-window-fringes window 0 0)
         (let* ((open (seq-filter #'+my/webkit--view-xwidget +my/webkit--views))
-               (spare (or (seq-find (lambda (view)
-                                      (not (window-live-p (overlay-get view 'window))))
-                                    open)
+               (closed (seq-remove (lambda (view) (window-live-p (overlay-get view 'window)))
+                                   open))
+               (spare (or (car (sort closed :key (lambda (view) (+my/webkit--distance view window))))
                           (seq-find (lambda (view)
                                       (not (eq (window-buffer (overlay-get view 'window))
                                                buffer)))
                                     open))))
           (if (not spare)
               (+my/webkit--new-view window)
-            (overlay-put spare 'window window)
+            (+my/webkit--place spare window)
             (xwidget-webkit-adjust-size-to-window (+my/webkit--view-xwidget spare) window)))
         (when (and +my/webkit--views (not (timerp +my/webkit--watch-timer)))
           (setq +my/webkit--watch-timer (run-with-timer 0.1 0.1 #'+my/webkit--watch)))))))
 
 (defun +my/webkit--fit-h (window)
   "Make WINDOW's WebKit view as big as it (a view keeps the size it was made
-with)."
+with), where it is now kept (see VIEWS)."
   (with-current-buffer (window-buffer window)
-    (when-let* ((xwidget (+my/webkit-xwidget window)))
-      (xwidget-webkit-adjust-size-to-window xwidget window))))
+    (when-let* ((view (+my/webkit--view window)))
+      (+my/webkit--place view window)
+      (xwidget-webkit-adjust-size-to-window (+my/webkit--view-xwidget view) window))))
 
 (defun +my/webkit--shown-h (window)
   "WINDOW shows the page: its view, fitted to it; or one for it after this
