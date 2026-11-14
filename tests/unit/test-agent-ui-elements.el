@@ -576,10 +576,35 @@ fit, the others said under it (it stayed wider than its width)."
       (let ((text (+test-aue-draw six :width width)))
         (dolist (line (split-string text "\n"))
           (should (<= (string-width line) width)))
-        (should (string-match-p "… [0-9]+ more col" text))))
+        (should (string-match-p "… [0-9]+ more[ \n]+col" text))))
     ;; Wide enough: all of them, no note.
     (should-not (string-match-p "more columns" (+test-aue-draw six :width 60)))
-    (should (string-match-p "… 1 more column: Commit" (+test-aue-draw six :width 30)))))
+    (should (string-match-p "… 2 more columns: Branch,\n   Commit" (+test-aue-draw six :width 30)))))
+
+(ert-deftest agent-ui-elements/table-columns-left-out-not-squeezed ()
+  "In a narrow canvas, columns are left out rather than every one squeezed
+to 3 (\"do… │ Ta… │ 202…\"): the key column (else the first) whole, the
+others 6 wide at least at 24, those left out named, the note wrapped."
+  (let ((issues '(:type "table" :columns ("ID" "Title" "Status" "Created at")
+                  :rows (("doom-ht6.13" "Tabs squeeze columns" "open" "2026-11-14")
+                         ("doom-ht6.14" "Sort dates" "closed" "2026-11-13")))))
+    (let ((text (+test-aue-draw issues :width 30)))
+      (should (string-match-p "^ doom-ht6.13 │ Tabs squeeze c…$" text))
+      (should (string-match-p "… 2 more columns: Status,\n   Created at\\'" text)))
+    (dolist (width '(24 30 40))
+      (let ((lines (split-string (+test-aue-draw issues :width width) "\n")))
+        (dolist (line lines)
+          (should (<= (string-width line) width)))
+        ;; Each cell shown: whole, or 6 wide at least.
+        (dolist (line (seq-take lines 4))
+          (dolist (cell (split-string line "│" t " +"))
+            (when (string-suffix-p "…" cell)
+              (should (>= (string-width cell) 6)))))))
+    ;; A key column not the first: whole, the first one cut.
+    (should (string-match-p "^ Tabs squ… │ doom-ht6.13$"
+                            (+test-aue-draw '(:type "table" :columns ("Title" "ID") :key "ID"
+                                              :rows (("Tabs squeeze columns" "doom-ht6.13")))
+                                            :width 24)))))
 
 (ert-deftest agent-ui-elements/table-sorted-by-durations ()
   "Durations sorted by their length, units and all (the leading numbers
@@ -3151,7 +3176,8 @@ column widens, it's sorted, or its rows are more than drawn."
         (agent-ui--flush)
         (should-not whole)
         (should (+test-aue--same-drawing-p (+test-aue--region "w") (+test-aue--drawn-whole "w")))
-        (should (string-match-p "\n … [0-9]+ more columns: .*\\'" (substring-no-properties (+test-aue--region "w")))))
+        (should (string-match-p "\n … [0-9]+ more columns: \\(.\\|\n   \\)*\\'"
+                                (substring-no-properties (+test-aue--region "w")))))
       ;; Sorted: drawn whole.
       (agent-ui-show '(:id "s" :type "table" :columns ("N") :sort "N" :rows (("b") ("c"))))
       (agent-ui--flush)

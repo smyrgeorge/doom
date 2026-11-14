@@ -101,28 +101,50 @@ measured once): a list per column, its header's first."
   (apply #'max (mapcar (lambda (s) (length (car s))) agent-ui-table--states))
   "The longest cell coloured by its state: longer ones aren't looked up.")
 
-(defun agent-ui-table--widths (columns max-width)
+(defun agent-ui-table--narrowest (width)
+  "The narrowest a column is cut to in a table WIDTH columns wide: 8, less
+when narrow (6 at 24), 3 at least. Narrower, every cell read \"do…\":
+columns are left out instead (said under it)."
+  (max 3 (min 8 (/ width 4))))
+
+(defun agent-ui-table--narrowests (columns key max-width)
+  "Each of COLUMNS' narrowest (their cells' widths, `--cell-widths') in
+MAX-WIDTH: its widest cell's, at most `agent-ui-table--narrowest'; KEY's (the
+column naming a row) whole, up to MAX-WIDTH."
+  (let ((narrowest (agent-ui-table--narrowest max-width)))
+    (cl-loop for cells in columns
+             for i from 0
+             collect (min (apply #'max cells) (if (eql i key) max-width narrowest)))))
+
+(defun agent-ui-table--widths (columns max-width &optional narrowests)
   "Each column's width (COLUMNS: their cells' widths, `--cell-widths'): its
-widest cell's, the widest cut down until the table fits MAX-WIDTH (no column
-under 3)."
-  (let* ((widths (vconcat (mapcar (lambda (cells) (apply #'max cells)) columns))))
+widest cell's, the widest cut down until the table fits MAX-WIDTH, none
+under its NARROWESTS' (`--narrowests'), else under 3."
+  (let* ((widths (vconcat (mapcar (lambda (cells) (apply #'max cells)) columns)))
+         (floors (vconcat (or narrowests (make-list (length widths) 3)))))
     ;; A table's width: each column and a space either side, a │ between,
     ;; less the last one's trailing space.
-    (cl-flet ((total () (+ (cl-reduce #'+ widths) (* 3 (length widths)) -2)))
-      (while (and (> (total) max-width)
-                  (> (cl-reduce #'max widths) 3))
-        (let ((widest (cl-position (cl-reduce #'max widths) widths)))
-          (cl-decf (aref widths widest)))))
+    (cl-flet ((total () (+ (cl-reduce #'+ widths) (* 3 (length widths)) -2))
+              ;; The widest column wider than FLOOR (its own, or 3).
+              (widest (own)
+                (let ((best nil))
+                  (dotimes (i (length widths))
+                    (when (and (> (aref widths i) (max 3 (if own (aref floors i) 3)))
+                               (or (null best) (> (aref widths i) (aref widths best))))
+                      (setq best i)))
+                  best)))
+      (let (cut)
+        (while (and (> (total) max-width)
+                    (setq cut (or (widest t) (widest nil))))
+          (cl-decf (aref widths cut)))))
     (append widths nil)))
 
-(defun agent-ui-table--fitting (columns max-width)
-  "How many of the COLUMNS (their cells' widths, `--cell-widths') fit
-MAX-WIDTH, each at its narrowest (3 columns, or less if its cells are):
+(defun agent-ui-table--fitting (narrowests max-width)
+  "How many columns fit MAX-WIDTH, each at its NARROWESTS' (`--narrowests'):
 those on the left, one at least."
-  (let* ((narrowest (mapcar (lambda (cells) (min 3 (apply #'max cells))) columns))
-         (k (length narrowest)))
+  (let ((k (length narrowests)))
     (while (and (> k 1)
-                (> (+ (apply #'+ (seq-take narrowest k)) (* 3 k) -2) max-width))
+                (> (+ (apply #'+ (seq-take narrowests k)) (* 3 k) -2) max-width))
       (cl-decf k))
     k))
 
@@ -240,9 +262,12 @@ widths, alignments, buttons beside or under)."
                         (<= (+ (apply #'+ full) (* 3 (length full)) -2 actions-width)
                             (plist-get ctx :width)))))
          (room (max 4 (- (plist-get ctx :width) (if beside actions-width 0))))
-         ;; The columns that fit (the others left out, said under it).
-         (shown (agent-ui-table--fitting cell-widths room))
-         (widths (agent-ui-table--widths (seq-take cell-widths shown) room))
+         ;; The columns that fit, each at its narrowest (the key column
+         ;; whole, the others 8 wide, less when narrow): the others left
+         ;; out, said under it (cut to 3, every cell read "do…").
+         (narrowests (agent-ui-table--narrowests cell-widths (agent-ui-table--answer-index props) room))
+         (shown (agent-ui-table--fitting narrowests room))
+         (widths (agent-ui-table--widths (seq-take cell-widths shown) room (seq-take narrowests shown)))
          (align (cl-loop for i below n
                          collect (or (nth i (plist-get props :align))
                                      ;; Numbers to the right.
@@ -272,6 +297,20 @@ alignments, the buttons."
   (list (plist-get ctx :width) (plist-get layout :header) (plist-get layout :shown)
         (plist-get layout :widths) (plist-get layout :align)
         (and (plist-get layout :actions) t) (plist-get layout :beside)))
+
+(defun agent-ui-table--left-out (layout ctx)
+  "The line saying which columns LAYOUT leaves out (nil: none), wrapped to
+CTX's width under its start: each named (cut, the last ones weren't)."
+  (let ((n (plist-get layout :n))
+        (shown (plist-get layout :shown)))
+    (when (< shown n)
+      (propertize
+       (concat " " (replace-regexp-in-string
+                    "\n" "\n   " (agent-ui-wrap (format "… %d more %s: %s" (- n shown)
+                                                       (if (= (- n shown) 1) "column" "columns")
+                                                       (string-join (nthcdr shown (plist-get layout :columns)) ", "))
+                                               (- (plist-get ctx :width) 3))))
+       'face 'agent-ui-muted))))
 
 (defun agent-ui-table--build (layout ctx rows measured &optional full)
   "ROWS' lines (MEASURED their cells' widths) laid out as LAYOUT says; FULL:
@@ -385,12 +424,8 @@ the whole table, its header, \"no rows yet\" and what's left out too."
             (when (and full (> (length all) (length rows)))
               (insert "\n " (propertize (format "… %d rows more" (- (length all) (length rows)))
                                         'face 'agent-ui-muted)))
-            (when (and full (< shown n))
-              (insert "\n " (propertize (agent-ui-truncate (format "… %d more %s: %s" (- n shown)
-                                                                   (if (= (- n shown) 1) "column" "columns")
-                                                                   (string-join (nthcdr shown columns) ", "))
-                                                           (1- (plist-get ctx :width)))
-                                        'face 'agent-ui-muted)))
+            (when-let* ((left-out (and full (agent-ui-table--left-out layout ctx))))
+              (insert "\n" left-out))
             (setq text (buffer-string))
             (erase-buffer))))
       ;; Its cells' and bars' properties, on the string itself.
@@ -434,7 +469,8 @@ buttons where they were), nothing sorts them, and all are drawn."
         (when (equal before key)
           (puthash new-rows key agent-ui-table--layouts)
           (let ((added (- (length new-rows) (length old-rows))))
-            (list (list 'insert (if (< (plist-get layout :shown) (plist-get layout :n)) 1 0)
+            (list (list 'insert (let ((left-out (agent-ui-table--left-out layout ctx)))
+                                  (if left-out (1+ (cl-count ?\n left-out)) 0))
                         (agent-ui-table--build layout ctx (last (plist-get layout :rows) added)
                                                (last (plist-get layout :measured) added))))))))))
 
