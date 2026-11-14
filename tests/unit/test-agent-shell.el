@@ -587,18 +587,59 @@ project's sessions to resume or a new one), though the project has one."
 (ert-deftest agent-shell/spc-o-C-shows-it-here ()
   "While SPC o C shows the session (agent-shell keeping the override for
 when a session is picked), the here action comes first, the override there
-was after it; then the override is as it was."
+was after it, the window SPC o C was pressed in in its alist; then the
+override is as it was."
   (+test-agent-shell--mocked
     (let ((display-buffer-overriding-action '((+test-agent-shell--other) (some . thing)))
+          (here (selected-window))
           seen)
       (cl-letf (((symbol-function 'agent-shell--display-and-insert-context)
-                 (lambda (&rest _) (setq seen (copy-tree display-buffer-overriding-action)))))
+                 (lambda (&rest _) (setq seen (copy-sequence display-buffer-overriding-action)))))
         (+test-agent-shell--press "o C"))
-      (should (equal seen '((+my/agent-shell-here-display +test-agent-shell--other) (some . thing))))
+      (should (equal seen `((+my/agent-shell-here-display +test-agent-shell--other)
+                            (+my/agent-shell-here-window . ,here) (some . thing))))
       (should (equal display-buffer-overriding-action '((+test-agent-shell--other) (some . thing))))
       ;; Without an override, or one function alone.
-      (should (equal (+my/agent-shell--here-action nil) '((+my/agent-shell-here-display))))
-      (should (equal (+my/agent-shell--here-action '(ignore)) '((+my/agent-shell-here-display ignore)))))))
+      (should (equal (+my/agent-shell--here-action nil here)
+                     `((+my/agent-shell-here-display) (+my/agent-shell-here-window . ,here))))
+      (should (equal (+my/agent-shell--here-action '(ignore) here)
+                     `((+my/agent-shell-here-display ignore) (+my/agent-shell-here-window . ,here)))))))
+
+(ert-deftest agent-shell/spc-o-C-in-the-window-it-was-pressed-in ()
+  "The session picked once you moved to another window: shown in the one SPC
+o C was pressed in. That window gone: in the selected one; dedicated to its
+buffer: the next action."
+  (+test-with-reset
+    (dolist (case '(moved deleted dedicated))
+      (+test-reset)
+      (let ((left-file (+test-buffer "left.txt" "left\n"))
+            (right-file (+test-buffer "right.txt" "right\n"))
+            (session (+test-buffer "Claude Agent @ here")))
+        (with-current-buffer session (setq-local major-mode 'agent-shell-mode))
+        (switch-to-buffer left-file)
+        (let* ((left (selected-window))
+               (right (split-window-right))
+               (action (+my/agent-shell--here-action nil left)))
+          (set-window-buffer right right-file)
+          (select-window right)           ; moved before the pick
+          (pcase case
+            ('deleted (delete-window left))
+            ('dedicated (set-window-dedicated-p left t)))
+          (let ((shown (+my/agent-shell-here-display session (cdr action))))
+            (pcase case
+              ('moved
+               (should (eq shown left))
+               (should (eq (window-buffer left) session))
+               (should (eq (car (car (window-prev-buffers left))) left-file))
+               (should (eq (window-buffer right) right-file)))
+              ('deleted
+               (should (eq shown right))
+               (should (eq (window-buffer right) session)))
+              ('dedicated
+               (should-not shown)
+               (should (eq (window-buffer left) left-file))
+               (should (eq (window-buffer right) right-file))
+               (set-window-dedicated-p left nil)))))))))
 
 (ert-deftest agent-shell/here-display-a-session-in-the-selected-window ()
   "The here action: a session in the selected window, what it showed kept
