@@ -1,9 +1,9 @@
 ;;; tests/e2e/test-markdown-mermaid.el -*- lexical-binding: t; -*-
 ;; config/markdown/mermaid.el in a GUI Emacs: ```mermaid blocks in Markdown's
 ;; live preview, drawn by mermaid.js (Doom's, copied; skipped without it,
-;; xwidgets or pandoc): a wide diagram in a narrow pane, readable, scrolled
-;; in its box; an edited one's versions not kept. Drawing, redrawing and
-;; re-theming: tests/e2e/test-mermaid.el.
+;; xwidgets or pandoc): a block fenced by four backticks; a wide diagram in
+;; a narrow pane, readable, scrolled in its box; an edited one's versions not
+;; kept. Drawing, redrawing and re-theming: tests/e2e/test-mermaid.el.
 
 (require 'markdown-mode)
 ;; The preview's stylesheets (Doom's markdown module sets GitHub's).
@@ -62,6 +62,16 @@ previews and files closed after."
            (when (buffer-file-name buffer)
              (with-current-buffer buffer (set-buffer-modified-p nil))
              (kill-buffer buffer)))))))
+
+;; ====== FENCES ======
+
+(ert-deftest e2e-markdown-mermaid/a-block-fenced-by-four-backticks-drawn ()
+  "A Markdown whose only diagram is fenced by four backticks (a block that
+may hold ``` lines): drawn, mermaid.js loaded for it."
+  (+test-mdm
+    (let ((md (+test-mdm--open "fence.md" "# Fence\n\n````mermaid\nflowchart LR\n    A[Four backticks] --> B\n````\n")))
+      (should (+test-mdm--drawn md 1))
+      (should (string-search "Four backticks" (+test-mdm--js md "document.querySelector('div.mermaid-diagram svg').textContent"))))))
 
 ;; ====== WIDE DIAGRAMS ======
 

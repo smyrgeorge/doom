@@ -117,11 +117,12 @@ when a block shows up), their look; empty without config/mermaid.el."
 
 (defun +md-preview--mermaid-draw-script ()
   "JavaScript drawing the page's diagrams (after its content changed). A
-Markdown with a block: mermaid.js downloaded first if it isn't there."
+Markdown with a block (fenced by three backticks or tildes, or more):
+mermaid.js downloaded first if it isn't there."
   (if (and (+md-preview--mermaid-p)
            (save-excursion
              (goto-char (point-min))
-             (re-search-forward "^[ \t]*\\(```\\|~~~\\)[ \t]*mermaid\\b" nil t))
+             (re-search-forward "^[ \t]*\\(`\\{3,\\}\\|~\\{3,\\}\\)[ \t]*mermaid\\b" nil t))
            (+my/mermaid-js-ensure))
       "if (window.mdMermaid) mdMermaid.draw();"
     ""))

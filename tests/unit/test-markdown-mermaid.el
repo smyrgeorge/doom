@@ -74,10 +74,19 @@
       (insert "# Plain\n\n```python\nprint(1)\n```\n\nThe word mermaid.\n")
       (should (equal (+md-preview--mermaid-draw-script) ""))
       (should (= ensured 0)))
-    ;; ~~~ fences and indented ones count.
-    (with-temp-buffer
-      (insert "- item\n\n  ~~~ mermaid\n  flowchart TD\n  ~~~\n")
-      (should (string-search "mdMermaid.draw()" (+md-preview--mermaid-draw-script))))))
+    ;; ~~~ fences and indented ones count, longer ones too (a block
+    ;; holding ``` lines).
+    (dolist (markdown '("- item\n\n  ~~~ mermaid\n  flowchart TD\n  ~~~\n"
+                        "````mermaid\nflowchart TD\n````\n"
+                        "~~~~~ mermaid\nflowchart TD\n~~~~~\n"))
+      (with-temp-buffer
+        (insert markdown)
+        (should (string-search "mdMermaid.draw()" (+md-preview--mermaid-draw-script)))))
+    ;; Not two backticks (inline code), nor another language.
+    (dolist (markdown '("``mermaid`` inline\n" "````mermaidx\n````\n"))
+      (with-temp-buffer
+        (insert markdown)
+        (should (equal (+md-preview--mermaid-draw-script) ""))))))
 
 (ert-deftest markdown-mermaid/without-mermaid-js-blocks-stay-code ()
   (+test-md-mermaid
