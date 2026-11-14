@@ -14,7 +14,8 @@
 ;; - a priority: P0 and P1 as red and orange badges, P2 plain, P3/P4 muted;
 ;; - a type: its icon (nerd-icons) in its colour in a graphic frame, its word
 ;;   in a terminal;
-;; - no date (its column there, empty: beads.el sorts by it);
+;; - no date (its column there, empty, no gap after it: beads.el sorts by it);
+;; - nothing before a row's mark (beads.el padded it by 2 columns, never used);
 ;; - a title: whole, a long one going on to the next lines under itself;
 ;;   after it an epic's progress (its issues done of all, closed ones too)
 ;;   and its labels as tags (a colour each, the same each time); an epic's
@@ -281,8 +282,9 @@ window, or under 20 columns for it: on one line)."
     (type 8 +my/beads-format-type)
     (title 50 +my/beads-format-title))
   "beads.el's list columns drawn here: (COLUMN WIDTH FORMATTER [HEADER]).
-The date's empty, its column kept: beads.el's column sort names it. The type's 2
-columns wide in a graphic frame (its icon), 8 in a terminal (its word).")
+The date's empty, its column kept (no gap after it): beads.el's column sort
+names it. The type's 2 columns wide in a graphic frame (its icon), 8 in a
+terminal (its word).")
 
 (defun +my/beads--no-date (_issue)
   "The date's column: empty (see `+my/beads--columns'). Its text would show
@@ -301,15 +303,25 @@ date sort doesn't read it (it compares the rows' second column)."
                 beads-list--column-defs)))
 
 (defun +my/beads-format-a (format)
-  "`beads-list--build-format''s FORMAT: the type's column as wide as its
-icon in a graphic frame (see `+my/beads--columns')."
-  (if (not (+my/beads--graphic-p))
-      format
-    (let ((format (copy-sequence format)))
-      (dotimes (n (length format))
-        (pcase (aref format n)
-          (`("Type" ,_ . ,rest) (aset format n (cons "Type" (cons 2 rest))))))
-      format)))
+  "`beads-list--build-format''s FORMAT: no gap after the date's empty column;
+the type's column as wide as its icon in a graphic frame (see
+`+my/beads--columns')."
+  (let ((format (copy-sequence format))
+        (graphic (+my/beads--graphic-p)))
+    (dotimes (n (length format))
+      (pcase (aref format n)
+        (`("Date" ,width ,sort . ,props)
+         (aset format n `("Date" ,width ,sort :pad-right 0 ,@props)))
+        ((and `("Type" ,_ . ,rest) (guard graphic))
+         (aset format n (cons "Type" (cons 2 rest))))))
+    format))
+
+(defun +my/beads--no-padding-h ()
+  "A list: nothing before its rows' marks (beads.el's padding of 2 columns
+was for tabulated-list's tags, which it never puts: its marks have their own
+column), its header drawn again for it (beads.el's mode drew it already)."
+  (setq-local tabulated-list-padding 0)
+  (tabulated-list-init-header))
 
 (defun +my/beads--header-string (format)
   "The column headers' string in a header line's FORMAT (tabulated-list's,
@@ -466,6 +478,7 @@ closed issue's in the theme's muted colour."
   (+my/beads-columns)
   (advice-add 'beads-list--build-format :filter-return #'+my/beads-format-a)
   (advice-add 'tabulated-list-init-header :after #'+my/beads-header-a)
+  (add-hook 'beads-list-mode-hook #'+my/beads--no-padding-h)
   (add-hook 'beads-list-mode-hook #'+my/beads--rows-h)
   (advice-add 'beads-list--issue-section :around #'+my/beads-section-a)
   (advice-add 'beads-list--sectioned-sort :filter-return #'+my/beads-nest-a)

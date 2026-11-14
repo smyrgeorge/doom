@@ -720,6 +720,46 @@ Blocked section; a closed row dimmed."
         (should (memq 'shadow (+test-beads--faces-at "Old parser removed")))
         (should-not (memq 'shadow (+test-beads--faces-at "Crash on")))))))
 
+;; doom-o5t.2
+(ert-deftest beads/look-no-gap-after-the-date ()
+  "The date's empty column has no gap after it, in a terminal and a graphic
+frame; only a graphic frame narrows the type's to its icon."
+  (let ((format (vector '(" " 1 nil) '("ID" 9 t) '("Date" 0 beads-list--sort-by-date)
+                        '("St" 3 t) '("Type" 8 t) '("Title" 50 t))))
+    (should (equal (aref (+my/beads-format-a format) 2) '("Date" 0 beads-list--sort-by-date :pad-right 0)))
+    (should (equal (aref (+my/beads-format-a format) 4) '("Type" 8 t)))
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+      (should (equal (aref (+my/beads-format-a format) 2) '("Date" 0 beads-list--sort-by-date :pad-right 0)))
+      (should (equal (aref (+my/beads-format-a format) 4) '("Type" 2 t))))
+    ;; beads.el's own, untouched.
+    (should (equal (aref format 2) '("Date" 0 beads-list--sort-by-date)))))
+
+(ert-deftest beads/bd-the-columns-from-the-left-edge ()
+  "A row starts with its mark's column (nothing before it), the id after its
+gap, the status right after the id's (no gap for the empty date); the title
+where it's said to start; the header over them; a marked row's *."
+  (+test-beads-with-project
+    (let ((id (+test-beads--create "Lexer: tokens" :issue-type "task")))
+      (+my/beads-project)
+      (with-current-buffer (+test-beads--list)
+        (should (= tabulated-list-padding 0))
+        (let ((line (+test-beads--line "Lexer: tokens")))
+          ;; One issue: its id fills its column.
+          (should (string-prefix-p (concat "  " id " ○") line))
+          ;; Mark, id, status, priority, type (its word: a terminal), each
+          ;; with its gap.
+          (should (= (+my/beads--title-column) (+ 2 (1+ (length id)) 4 5 9)))
+          (should (= (string-search "Lexer: tokens" line) (+my/beads--title-column))))
+        ;; The header's ID over the ids.
+        (let* ((header (+my/beads--header-string header-line-format))
+               (at (string-search "ID" header)))
+          (should (equal (get-text-property (1- at) 'display header)
+                         '(space :align-to (+ header-line-indent-width 2)))))
+        (goto-char (point-min))
+        (search-forward id)
+        (beads-list-mark)
+        (should (string-prefix-p (concat "* " id " ○") (+test-beads--line "Lexer: tokens")))))))
+
 ;; ====== THE PLACE KEPT ======
 
 (defun +test-beads--ids-at (window)
