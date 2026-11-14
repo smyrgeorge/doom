@@ -393,6 +393,31 @@ page is as wide."
                3))
       (should (> (+test-pdf--number "document.getElementById('viewerContainer').clientWidth" right) 150)))))
 
+(ert-deftest e2e-pdf/zooming-out-a-narrow-pane-s-fit-never-zooms-in ()
+  "Fit width in a 25-column pane is under PDF.js's 25% minimum: zooming
+out (keys, a pinch) leaves it; zooming in still stops at the maximum."
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (+test-pdf--narrow 25)
+    (+my/pdf-fit-width)
+    (let ((scale (lambda () (+test-pdf--number "pdfx.viewer.currentScale")))
+          (page "document.querySelector('.pdfViewer .page').getBoundingClientRect().width"))
+      (should (+test-wait-for (lambda () (< (funcall scale) 0.25)) 3))
+      (let ((fitted (funcall scale))
+            (width (+test-pdf--number page)))
+        (+my/pdf-zoom-out)
+        (+test-sleep 0.3)
+        (should (<= (funcall scale) fitted))
+        (should (<= (+test-pdf--number page) width))
+        (+test-pdf--js "(function () {
+  var pinch = (type, scale) => { var e = new Event(type); e.scale = scale; window.dispatchEvent(e); };
+  pinch('gesturestart', 1); pinch('gesturechange', 0.5); return 'ok';
+})()")
+        (+test-sleep 0.3)
+        (should (<= (funcall scale) fitted)))
+      (+test-pdf--js "pdfx.zoom(1000); 'ok'")
+      (should (+test-wait-for (lambda () (= (funcall scale) 10)) 3)))))
+
 (ert-deftest e2e-pdf/a-fit-kept-through-a-page-area-of-no-room ()
   "Fit width or page, the page area 0 pixels wide or high, then as before:
 fitted again, as chosen (not PDF.js's \"auto\"), and kept so with its place."

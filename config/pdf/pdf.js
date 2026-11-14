@@ -212,7 +212,16 @@
     fitMode = null;
     viewer.currentScale = clamp(scale, minScale, maxScale);
   }
-  const zoom = (factor) => setScale(viewer.currentScale * factor);
+  // Zooming from the scale FROM to SCALE: within minScale..maxScale, or no
+  // further than FROM if it's past them (fitting a narrow pane goes under
+  // minScale), so zooming out never zooms in. Nothing changed, the fit kept.
+  function zoomFrom(from, scale) {
+    const next = clamp(scale, Math.min(minScale, from), Math.max(maxScale, from));
+    if (next === viewer.currentScale) return;
+    fitMode = null;
+    viewer.currentScale = next;
+  }
+  const zoom = (factor) => zoomFrom(viewer.currentScale, viewer.currentScale * factor);
   const turnPage = (delta) => {
     if (doc) viewer.currentPageNumber = clamp(viewer.currentPageNumber + delta, 1, doc.numPages);
   };
@@ -804,7 +813,7 @@
   });
   window.addEventListener('gesturechange', (e) => {
     e.preventDefault();
-    setScale(pinchFrom * e.scale);
+    zoomFrom(pinchFrom, pinchFrom * e.scale);
   });
 
   // THE MOUSE POINTER: Emacs draws its own over the whole page (CSS cursors
