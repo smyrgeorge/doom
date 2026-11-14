@@ -51,9 +51,37 @@
   (call-interactively (intern (format "+my/example-%s" name))))
 
 ;; FOR THE EXAMPLES
+(defvar +my/example--made t
+  "While an example runs: the folders it made so far (`+my/example-folder');
+else t.")
+
 (defun +my/example-folder (name)
   "A new folder for example NAME in the temp folder (by its true name)."
-  (file-name-as-directory (file-truename (make-temp-file (format "%s-example-" name) t))))
+  (let ((dir (file-name-as-directory (file-truename (make-temp-file (format "%s-example-" name) t)))))
+    (when (listp +my/example--made)
+      (push dir +my/example--made))
+    dir))
+
+(defun +my/example--main-window ()
+  "The selected frame's last used window not a side window (a file tree, a
+popup)."
+  (car (sort (seq-remove (lambda (window) (window-parameter window 'window-side))
+                         (window-list nil 'nomini))
+             (lambda (a b) (> (window-use-time a) (window-use-time b))))))
+
+(defun +my/example-alone ()
+  "The selected window alone in its frame, as `delete-other-windows' but
+its side windows (a file tree, a popup) kept; from a side window, the
+frame's last used other window (`delete-other-windows' can't make a side
+window the only one)."
+  (when (window-parameter nil 'window-side)
+    (select-window (+my/example--main-window)))
+  (if (window-with-parameter 'window-side)
+      (dolist (window (window-list nil 'nomini))
+        (unless (or (eq window (selected-window))
+                    (window-parameter window 'window-side))
+          (delete-window window)))
+    (delete-other-windows)))
 
 (defun +my/example-write (dir file text)
   "Write TEXT (UTF-8) to FILE in DIR; its full name."
@@ -135,9 +163,30 @@ image example), once that's open."
 
 (add-hook 'find-file-hook #'+my/example--visited-h)
 
-;; M-x +my/example-NAME: each loads its file when first run.
+(defun +my/example--run-a (run &rest args)
+  "Around each example's command, RUN (given ARGS). From a side window (a
+file tree, a popup): run in the frame's last used other window, where it can
+have the frame (see `+my/example-alone'). Failing partway (git, bd, a
+split): the folders it made deleted once the buffers on their files are
+closed, at once if none is (see `+my/example-delete-when-closed')."
+  (when (window-parameter nil 'window-side)
+    (select-window (+my/example--main-window)))
+  (let ((+my/example--made nil)
+        (done nil))
+    (unwind-protect
+        (prog1 (apply run args)
+          (setq done t))
+      (unless done
+        (dolist (dir +my/example--made)
+          (unless (assoc dir +my/example--folders)
+            (+my/example-delete-when-closed dir nil)))))))
+
+;; M-x +my/example-NAME: each loads its file when first run, run through
+;; `+my/example--run-a'.
 (dolist (name (+my/examples))
-  (autoload (intern (format "+my/example-%s" name))
-            (expand-file-name name +my/examples-dir)
-            (format "Example: %s (see examples/%s.el)." name name)
-            t))
+  (let ((command (intern (format "+my/example-%s" name))))
+    (autoload command
+              (expand-file-name name +my/examples-dir)
+              (format "Example: %s (see examples/%s.el)." name name)
+              t)
+    (advice-add command :around #'+my/example--run-a)))

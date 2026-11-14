@@ -150,7 +150,7 @@ in a temp repository (deleted once closed). See examples/stripe.el."
     ;; written here, while it's open.
     (when (and (boundp 'trusted-content) (listp trusted-content))
       (push repo trusted-content))
-    (delete-other-windows)
+    (+my/example-alone)
     (find-file (expand-file-name "inventory.el" repo))
     ;; What the strip shows: flycheck's findings and git's changes (on where
     ;; Doom turns them on; here for sure).

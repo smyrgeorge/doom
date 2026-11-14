@@ -213,7 +213,7 @@ examples/pdf.el."
     (setq +my/pdf-dark-pages t)
     (let ((buffer-file-name file))
       (+my/pdf--keep-place '(:p 1 :s "page-fit")))
-    (delete-other-windows)
+    (+my/example-alone)
     (find-file file)
     (let ((buffer (current-buffer)))
       (+my/example-pdf--dark buffer)

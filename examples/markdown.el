@@ -59,7 +59,7 @@ examples/markdown.el."
   (interactive)
   (let* ((dir (+my/example-folder "markdown"))
          (file (+my/example-write dir "README.md" +my/example-markdown--text)))
-    (delete-other-windows)
+    (+my/example-alone)
     (find-file file)
     (let ((buffer (current-buffer)))
       (if (+my/markdown-preview-live-p)

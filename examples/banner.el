@@ -36,7 +36,7 @@ once closed). See examples/banner.el."
   (interactive)
   (let* ((dir (+my/example-folder "banner"))
          (file (+my/example-write dir "catalog.min.json" (+my/example-banner--json))))
-    (delete-other-windows)
+    (+my/example-alone)
     (find-file file)
     ;; Very long lines: so-long-mode, and its notice (where Doom's global
     ;; so-long-mode isn't on, by hand).

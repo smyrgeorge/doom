@@ -106,7 +106,7 @@ works (the file deleted once both are closed). See examples/agent-ui.el."
     (kill-buffer old))
   (let* ((dir (+my/example-folder "agent-ui"))
          (file (+my/example-write dir "release.md" +my/example-agent-ui--conversation)))
-    (delete-other-windows)
+    (+my/example-alone)
     (find-file file)
     (let ((conversation (current-buffer))
           (canvas (agent-ui-canvas +my/example-agent-ui--canvas)))

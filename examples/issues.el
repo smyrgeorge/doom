@@ -65,11 +65,11 @@ list is closed). See examples/issues.el."
           (+my/example-issues--bd "init" "--quiet" "--skip-agents" "--prefix" "demo")
           (+my/example-issues--bd "import" issues "--quiet"))
       (delete-file issues))
-    (delete-other-windows)
+    (+my/example-alone)
     ;; As SPC o i: the list in its pane, alone in the frame.
     (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) dir)))
       (+my/beads-project))
-    (delete-other-windows)
+    (+my/example-alone)
     (+my/example-delete-when-closed dir (list (current-buffer)))
     (message "Issues example: RET opens one, Show closed shows the closed ones")
     (current-buffer)))

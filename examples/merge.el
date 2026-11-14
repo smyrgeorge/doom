@@ -168,8 +168,7 @@ your name, hooks or signing): its exit status."
 (defun +my/example-merge--repo ()
   "A new repository in the temp folder, merging feature into main and in
 conflict in orders.py; its folder."
-  (let ((default-directory (file-name-as-directory
-                            (file-truename (make-temp-file "merge-example-" t)))))
+  (let ((default-directory (+my/example-folder "merge")))
     (dolist (step `((init "-q")
                     (write ,+my/example-merge--base)
                     (git "add" "orders.py")

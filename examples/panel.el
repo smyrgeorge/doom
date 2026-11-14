@@ -24,7 +24,7 @@ deleted once it's closed). See examples/panel.el."
          (panels (expand-file-name ".agent-ui/panels/" root)))
     (make-directory panels t)
     (copy-file (expand-file-name ".agent-ui/panels/cpu.el" doom-user-dir) panels)
-    (delete-other-windows)
+    (+my/example-alone)
     (let ((canvas (let ((agent-ui-panel-allow-function (lambda (_panel) t)))
                     (agent-ui-open-panel-here "cpu" root))))
       (+my/example-delete-when-closed dir (list canvas))

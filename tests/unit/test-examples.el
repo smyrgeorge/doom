@@ -244,6 +244,56 @@ too; deleted with the last of them, THEN called once."
     (should-not (file-exists-p dir))
     (should-not (assoc dir +my/example--folders))))
 
+;; ====== RUN FROM ANYWHERE, NOTHING LEFT ======
+
+(ert-deftest examples/run-from-a-side-window ()
+  "From a side window (a file tree, a popup): each example opens in the
+frame's other window, the side window kept (the merge's panes take the
+frame as Magit's e does)."
+  (+test-examples
+    (dolist (run (append (list #'+my/example-banner #'+my/example-mermaid #'+my/example-tiling
+                               #'+my/example-agent-ui #'+my/example-panel #'+my/example-merge)
+                         (and (executable-find "bd") (list #'+my/example-issues))))
+      (+test-reset)
+      (let* ((side (display-buffer-in-side-window (get-buffer-create "*side*") '((side . left))))
+             (made (progn (select-window side)
+                          (funcall run))))
+        (should-not (window-parameter (selected-window) 'window-side))
+        (if (+my/merge-p made)
+            (+my/merge--finish made)
+          (should (window-live-p side))
+          (should (eq (window-buffer side) (get-buffer "*side*")))
+          (should (= (length (window-list nil 'nomini))
+                     (1+ (length (seq-filter #'get-buffer-window (ensure-list made))))))
+          (mapc #'kill-buffer (ensure-list made)))))))
+
+(ert-deftest examples/failing-partway-leaves-no-folder ()
+  "An example failing partway (bd, git, a notice): no NAME-example-* folder
+left; one with a file left open, once that's closed."
+  (+test-examples
+    (let ((temporary-file-directory (file-name-as-directory (make-temp-file (+test-tmp-file "examples-tmp-") t)))
+          (executable-find (symbol-function 'executable-find)))
+      (cl-flet ((left () (directory-files temporary-file-directory nil "-example-")))
+        (require 'example-issues (expand-file-name "issues" +my/examples-dir))
+        (require 'example-image (expand-file-name "image" +my/examples-dir))
+        (require 'example-banner (expand-file-name "banner" +my/examples-dir))
+        ;; bd failing.
+        (cl-letf (((symbol-function 'executable-find)
+                   (lambda (name &rest args) (if (equal name "bd") "/usr/bin/bd" (apply executable-find name args))))
+                  ((symbol-function '+my/example-issues--bd) (lambda (&rest _) (error "bd init: failed"))))
+          (should-error (+my/example-issues))
+          (should-not (left)))
+        ;; git failing.
+        (cl-letf (((symbol-function '+my/example-image--git) (lambda (&rest _) 1)))
+          (should-error (+my/example-image))
+          (should-not (left)))
+        ;; Its file open, then a notice failing: the folder goes with the file.
+        (cl-letf (((symbol-function '+my/banner-show) (lambda (&rest _) (error "No notices"))))
+          (should-error (+my/example-banner))
+          (should (equal (length (left)) 1))
+          (kill-buffer "catalog.min.json")
+          (should-not (left)))))))
+
 ;; ====== TILING ======
 
 (ert-deftest examples/tiling-a-project-tall ()

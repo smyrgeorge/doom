@@ -93,7 +93,7 @@ SPC w SPC opens them (deleted once closed). See examples/tiling.el."
          (files (mapcar (lambda (file) (+my/example-write dir (car file) (cdr file)))
                         +my/example-tiling--files))
          (buffers nil))
-    (delete-other-windows)
+    (+my/example-alone)
     (find-file (car files))
     (push (current-buffer) buffers)
     (let ((main (selected-window)))

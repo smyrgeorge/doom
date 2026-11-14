@@ -99,7 +99,7 @@ examples/excalidraw.el."
     ;; `find-file', which tiling opens in a new pane (an application,
     ;; config/tiling.el) the example then had to widen, its WebKit view
     ;; resized as it loaded (at times left blank).
-    (delete-other-windows)
+    (+my/example-alone)
     (set-window-buffer (selected-window) (find-file-noselect file))
     (set-buffer (window-buffer (selected-window)))
     (+my/example-delete-when-closed dir (list (current-buffer)))

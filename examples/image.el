@@ -238,7 +238,7 @@ new temp folder, always that name (the screenshot shows the picture's path)."
 version there (deleted once closed). See examples/image.el."
   (interactive)
   (let ((repo (+my/example-image--repo)))
-    (delete-other-windows)
+    (+my/example-alone)
     (find-file (expand-file-name "landscape.png" repo))
     (let ((buffer (current-buffer)))
       (when (bound-and-true-p +my/image-mode)

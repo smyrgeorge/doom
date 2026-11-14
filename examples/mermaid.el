@@ -31,7 +31,7 @@ examples/mermaid.el."
   (interactive)
   (let* ((dir (+my/example-folder "mermaid"))
          (file (+my/example-write dir "week.mmd" +my/example-mermaid--text)))
-    (delete-other-windows)
+    (+my/example-alone)
     (find-file file)
     (let ((buffer (current-buffer)))
       (if (+my/mermaid-preview-live-p)
