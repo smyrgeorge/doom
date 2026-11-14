@@ -140,6 +140,55 @@ above)."
 
 (advice-add 'tab-line-format-template :around #'+my/tabs-no-separator-a)
 
+;; A TAB TOO WIDE
+;; A tab wider than its window was never brought into view: tab-line scrolls
+;; to the current tab by finding where a tab starts past the window's width,
+;; and the current tab alone ran past it (a long file name in a 30-column
+;; pane: a sliver of it shown, or the tabs before it). Nor did it count the
+;; scroll arrows it puts before the tabs: the current tab's end, its ✕, was
+;; cut. A label too long for its window is shortened, its end kept after "…"
+;; (the end of a file's name tells it apart), room left for the icon, the ✕
+;; and the arrows; tab-line scrolls with room for the arrows.
+(defun +my/tabs--width (string)
+  "STRING's width in the tab line: pixels, columns on a text terminal."
+  (if (display-graphic-p) (string-pixel-width string) (string-width string)))
+
+(defun +my/tabs--around ()
+  "What the tab line shows besides its tabs when they don't all fit: its
+separators and scroll arrows."
+  (let ((separator (or tab-line-separator (if (window-system) " " "|"))))
+    (concat separator tab-line-left-button tab-line-right-button separator)))
+
+(defun +my/tabs--line ()
+  "How wide the selected window's tab line is as tab-line's scroll measures
+it: the window's body (a text terminal's last column its continuation
+mark)."
+  (- (window-body-width nil t) (if (display-graphic-p) 0 1)))
+
+(defun +my/tabs--room (tabs)
+  "How wide one of TABS may be in the selected window's tab line (see above):
+the line less the arrows (with other tabs) and its separator."
+  (- (+my/tabs--line)
+     (if (cdr tabs) (+my/tabs--width (+my/tabs--around)) 0)
+     (+my/tabs--width (or tab-line-separator (if (window-system) " " "|")))))
+
+(defun +my/tabs--fit (label make tabs)
+  "(funcall MAKE LABEL): a tab of TABS, its LABEL shortened to fit the window
+\(see above), its end kept after \"…\"."
+  (let ((tab (funcall make label))
+        (room (+my/tabs--room tabs)))
+    (if (<= (+my/tabs--width tab) room)
+        tab
+      ;; The most of its end that fits.
+      (let ((low 0) (high (1- (length label))) (best 0))
+        (while (<= low high)
+          (let ((middle (/ (+ low high) 2)))
+            (if (<= (+my/tabs--width (funcall make (concat "…" (substring label (- (length label) middle)))))
+                    room)
+                (setq best middle low (1+ middle))
+              (setq high (1- middle)))))
+        (funcall make (concat "…" (substring label (- (length label) best))))))))
+
 (defun +my/tabs-format (tab tabs)
   "TAB's text in the tab line (see above), for `tab-line-tab-name-format-function'."
   (let* ((selected (eq tab (window-buffer)))
@@ -149,13 +198,6 @@ above)."
          (icon (and (display-graphic-p) (fboundp 'nerd-icons-icon-for-buffer)
                     (with-current-buffer tab
                       (ignore-errors (nerd-icons-icon-for-buffer)))))
-         (text (concat " "
-                       (if (stringp icon) (concat icon " ") "")
-                       (+my/tabs-label tab tabs)
-                       (if (and (buffer-file-name tab) (buffer-modified-p tab))
-                           " •" "")
-                       " "))
-         (close (copy-sequence tab-line-close-button))
          (bar (and (display-graphic-p)
                    (+my/tabs-bar (if selected
                                      (face-background 'highlight nil t)
@@ -163,21 +205,57 @@ above)."
          ;; Between tabs, not before the first (see NO GAP above).
          (gap (and (display-graphic-p) (not (eq tab (car tabs)))
                    (propertize " " 'face 'tab-line))))
-    ;; Appended, so the icon keeps its own colour.
-    (add-face-text-property 0 (length text) face t text)
-    (add-face-text-property 0 (length close) face t close)
-    (concat (or gap "")
-            (propertize (concat (or bar "")
-                                (propertize text
-                                            'keymap tab-line-tab-map
-                                            'help-echo (if selected "Current tab"
-                                                         "Click to select tab")
-                                            'follow-link 'ignore)
-                                close
-                                (propertize " " 'face face))
-                        'tab tab
-                        'selected selected
-                        'mouse-face 'tab-line-highlight))))
+    (+my/tabs--fit
+     (+my/tabs-label tab tabs)
+     (lambda (label)
+       (let ((text (concat " "
+                           (if (stringp icon) (concat icon " ") "")
+                           label
+                           (if (and (buffer-file-name tab) (buffer-modified-p tab))
+                               " •" "")
+                           " "))
+             (close (copy-sequence tab-line-close-button)))
+         ;; Appended, so the icon keeps its own colour.
+         (add-face-text-property 0 (length text) face t text)
+         (add-face-text-property 0 (length close) face t close)
+         (concat (or gap "")
+                 (propertize (concat (or bar "")
+                                     (propertize text
+                                                 'keymap tab-line-tab-map
+                                                 'help-echo (if selected "Current tab"
+                                                              "Click to select tab")
+                                                 'follow-link 'ignore)
+                                     close
+                                     (propertize " " 'face face))
+                             'tab tab
+                             'selected selected
+                             'mouse-face 'tab-line-highlight))))
+     tabs)))
+
+(defun +my/tabs-scroll-room-a (fn strings hscroll)
+  "`tab-line-auto-hscroll': tabs that don't all fit scrolled to with room for
+the arrows before them (see A TAB TOO WIDE above); the current tab first if
+it's wider than the window even shortened (a pane a few columns wide), where
+tab-line finds nowhere to scroll to."
+  (let ((shown (funcall fn strings hscroll)))
+    (if (not (car shown))
+        shown
+      (set-window-parameter nil 'tab-line-hscroll hscroll)
+      (setq shown (with-current-buffer tab-line-auto-hscroll-buffer
+                    (setq-local line-prefix
+                                (propertize " " 'display `(space :width (,(+my/tabs--width (+my/tabs--around))))))
+                    (unwind-protect (funcall fn strings hscroll)
+                      (kill-local-variable 'line-prefix))))
+      (let ((selected (seq-position strings 'selected
+                                    (lambda (string property) (tab-line--get-tab-property property string)))))
+        (if (and selected (not (integerp hscroll))
+                 (> (+my/tabs--width (nth selected strings))
+                    (- (+my/tabs--line) (+my/tabs--width (+my/tabs--around)))))
+            (progn (set-window-parameter nil 'tab-line-hscroll (float selected))
+                   (list t (float selected)))
+          shown)))))
+
+(advice-add 'tab-line-auto-hscroll :around #'+my/tabs-scroll-room-a)
 
 ;; THE CACHE
 ;; Tab-line draws a window's tabs again only when its cache key changes, and

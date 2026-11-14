@@ -659,6 +659,94 @@ tab-line's `|' separators, as ever."
         (cl-letf (((symbol-function 'nerd-icons-icon-for-buffer) nil))
           (should (string-prefix-p " a.txt " (+my/tabs-format a (+test-tabs--tabs)))))))))
 
+;; A TAB TOO WIDE
+(defconst +test-tabs--long "AgreementControllerIntegrationTest.kt")
+
+(ert-deftest tabs/a-label-too-long-for-its-window-is-shortened ()
+  "Its end kept after …, the tab as wide as the window allows (room left for
+the arrows and the separator), drawn whole by the tab line."
+  (+test-tabs
+    (let ((a (+test-tabs--file "a.txt"))
+          (long (+test-tabs--file +test-tabs--long)))
+      (+test-tabs--show a long)
+      (split-window-right 30)
+      (let* ((tabs (+test-tabs--tabs))
+             (tab (substring-no-properties (+my/tabs-format long tabs)))
+             (room (+my/tabs--room tabs)))
+        ;; The window's body, less its continuation column, the arrows and
+        ;; separators (tab-line's) and its own separator.
+        (should (= room (- (window-body-width) 1 (string-width "|") (string-width (+my/tabs--around)))))
+        (should (string-match "\\` …\\([A-Za-z]+\\)Test\\.kt " tab))
+        (should (<= (string-width tab) room))
+        ;; As much of it as fits.
+        (should (> (string-width tab) (- room 1)))
+        ;; Still the tab, clicked or closed.
+        (should (eq (tab-line--get-tab-property 'tab (+my/tabs-format long tabs)) long))
+        ;; Drawn whole, scrolled to.
+        (pcase-let ((`(,shown ,width) (+test-tabs--shown)))
+          (should (equal (car (last shown)) +test-tabs--long))
+          (should (<= width (1- (window-body-width)))))
+        ;; Alone: no arrows to leave room for.
+        (should (= (+my/tabs--room (list long)) (+ room (string-width (+my/tabs--around)))))))))
+
+(ert-deftest tabs/labels-that-fit-are-as-they-are ()
+  "Short labels, a long one in a window wide enough, same-named files' paths."
+  (+test-tabs
+    (let ((a (+test-tabs--file "crate-a/src/lib.rs"))
+          (b (+test-tabs--file "crate-b/src/lib.rs"))
+          (long (+test-tabs--file +test-tabs--long)))
+      (+test-tabs--show a b long)
+      (let ((tabs (+test-tabs--tabs)))
+        (should (string-prefix-p " crate-a/src/lib.rs " (+my/tabs-format a tabs)))
+        (should (string-prefix-p " crate-b/src/lib.rs " (+my/tabs-format b tabs)))
+        (should (string-prefix-p (concat " " +test-tabs--long " ") (+my/tabs-format long tabs)))))))
+
+(ert-deftest tabs/a-tab-wider-than-its-window-even-shortened-is-scrolled-to ()
+  "A pane a few columns wide: the current tab first, cut, not out of view."
+  (+test-tabs
+    (let ((files (mapcar (lambda (i) (+test-tabs--file (format "file%02d.txt" i))) (number-sequence 1 6))))
+      (apply #'+test-tabs--show files)
+      (switch-to-buffer (nth 2 files))
+      (split-window-right 12)
+      (should (equal (car (car (+test-tabs--shown))) "file03.txt")))))
+
+(ert-deftest tabs/scrolled-with-room-for-the-arrows ()
+  "tab-line's scroll measures the tabs with the arrows' room before them,
+once they don't all fit (arrows to show); as it was when they do."
+  (should (advice-member-p #'+my/tabs-scroll-room-a 'tab-line-auto-hscroll))
+  (+test-tabs
+    (let ((tab (propertize "tab" 'tab (current-buffer) 'selected t))
+          calls)
+      (set-window-parameter nil 'tab-line-hscroll 3.0)
+      ;; They fit: once, no room taken.
+      (should (equal (+my/tabs-scroll-room-a
+                      (lambda (strings hscroll)
+                        (push (list strings hscroll (buffer-local-value 'line-prefix tab-line-auto-hscroll-buffer))
+                              calls)
+                        (list nil hscroll))
+                      (list tab) 3.0)
+                     '(nil 3.0)))
+      (should (equal calls `(((,tab) 3.0 nil))))
+      ;; They don't: again, from the scroll it had, the arrows' room first.
+      (setq calls nil)
+      (should (equal (+my/tabs-scroll-room-a
+                      (lambda (strings hscroll)
+                        (push (list hscroll (window-parameter nil 'tab-line-hscroll)
+                                    (buffer-local-value 'line-prefix tab-line-auto-hscroll-buffer))
+                              calls)
+                        (set-window-parameter nil 'tab-line-hscroll 1.0)
+                        (list t 1.0))
+                      (list tab) 3.0)
+                     '(t 1.0)))
+      (pcase-let ((`((,hscroll ,parameter ,prefix) (,_ ,_ ,first)) calls))
+        (should-not first)
+        (should (equal hscroll 3.0))
+        (should (equal parameter 3.0))
+        (should (equal (get-text-property 0 'display prefix)
+                       `(space :width (,(string-width (+my/tabs--around)))))))
+      ;; Left as it was.
+      (should-not (buffer-local-value 'line-prefix tab-line-auto-hscroll-buffer)))))
+
 (ert-deftest tabs/format-tab-found-by-tab-line ()
   "Clicks find the tab from the string (`tab-line--get-tab-property')."
   (+test-tabs
