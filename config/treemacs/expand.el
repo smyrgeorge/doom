@@ -1,14 +1,24 @@
 ;;; $DOOMDIR/config/treemacs/expand.el -*- lexical-binding: t; -*-
 ;; Expanding and collapsing all folders. Loaded from config/treemacs.el.
 
+;; zR opens the folders the count counts, no more: not .git (git's, hundreds of
+;; folders), not links to folders (one to a big folder elsewhere was opened
+;; whole without asking, and a link up the tree opened it again and again,
+;; until Emacs gave up half way: "Apparent cycle of symbolic links"), not
+;; folders it can't read (both the count and zR failed on one: "Opening
+;; directory: Permission denied", nothing opened).
+(defun +my/treemacs--expandable-dir-p (file)
+  "Non-nil if zR opens folder FILE (see above)."
+  (and (not (file-symlink-p file))
+       (not (equal (file-name-nondirectory (directory-file-name file)) ".git"))
+       (file-accessible-directory-p file)))
+
 (defun +my/treemacs--count-dirs (dir limit)
-  "Count the folders under DIR (not .git), stopping once past LIMIT."
+  "Count the folders under DIR that zR opens, stopping once past LIMIT."
   (let ((count 0) (stack (list dir)))
     (while (and stack (<= count limit))
       (dolist (file (directory-files (pop stack) t directory-files-no-dot-files-regexp t))
-        (when (and (file-directory-p file)
-                   (not (file-symlink-p file))
-                   (not (equal (file-name-nondirectory file) ".git")))
+        (when (and (file-directory-p file) (+my/treemacs--expandable-dir-p file))
           (cl-incf count)
           (push file stack))))
     count))
@@ -36,15 +46,14 @@
                  (y-or-n-p (format "%s has more than %d folders. Expand them all? "
                                    (treemacs-project->name project)
                                    +my/treemacs-expand-all-warn)))
-         ;; Close it (forgetting what was open below), then reopen recursively;
-         ;; .git (shown) left closed: it's git's, hundreds of folders.
+         ;; Close it (forgetting what was open below), then reopen recursively,
+         ;; the folders the count skips left closed (see above).
          (when (eq (treemacs-button-get pos :state) 'root-node-open)
            (treemacs--collapse-root-node pos t))
          (let ((expand-dir (symbol-function 'treemacs--expand-dir-node)))
            (cl-letf (((symbol-function 'treemacs--expand-dir-node)
                       (lambda (btn &rest args)
-                        (unless (equal (file-name-nondirectory (treemacs-button-get btn :path))
-                                       ".git")
+                        (when (+my/treemacs--expandable-dir-p (treemacs-button-get btn :path))
                           (apply expand-dir btn args)))))
              (treemacs--expand-root-node pos t))))))))
 

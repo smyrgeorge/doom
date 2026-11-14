@@ -1903,6 +1903,37 @@ its width there."
     (should (= (+my/treemacs--count-dirs wide 5) 10))
     (should (<= 6 (+my/treemacs--count-dirs wide 15) 30))))
 
+(defmacro +test-treemacs-with-locked (dir &rest body)
+  "BODY with folder DIR unreadable (mode 000), readable again after."
+  (declare (indent 1))
+  `(progn
+     (set-file-modes ,dir #o000)
+     (unwind-protect (progn ,@body)
+       (set-file-modes ,dir #o755))))
+
+(ert-deftest treemacs/count-dirs-skips-unreadable-folders ()
+  (let ((root (+test-treemacs--dir "count-locked" "locked/x/" "ok/y/")))
+    (+test-treemacs-with-locked (expand-file-name "locked" root)
+      ;; ok, ok/y.
+      (should (= (+my/treemacs--count-dirs root 100) 2)))))
+
+(ert-deftest treemacs/expand-all-leaves-links-and-unreadable-folders-closed ()
+  "zR opens what the count counts: a link up the tree (a cycle) and a folder
+it can't read stay closed, the rest open, no error."
+  (+test-treemacs
+    (let ((root (+test-treemacs--project "expand-links" "README.md" "sub/x.txt" "locked/y.txt"
+                                         "ok/deep/z.txt")))
+      (make-symbolic-link ".." (expand-file-name "sub/up" root))
+      (+test-treemacs-with-locked (expand-file-name "locked" root)
+        (+test-treemacs--show-project root)
+        (with-current-buffer (treemacs-get-local-buffer)
+          ;; sub, ok, ok/deep: no question asked below the limit.
+          (should (= (+my/treemacs--count-dirs root 100) 3))
+          (treemacs-expand-all)
+          (should (equal (sort (+test-treemacs--closed-dirs) #'string<) '("+ .git" "+ locked" "+ up")))
+          (should (member "x.txt" (+test-treemacs--lines)))
+          (should (member "z.txt" (+test-treemacs--lines))))))))
+
 (ert-deftest treemacs/expand-collapse-need-treemacs ()
   (+test-treemacs
     (should-error (treemacs-expand-all) :type 'user-error)
