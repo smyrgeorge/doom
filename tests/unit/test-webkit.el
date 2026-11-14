@@ -1572,6 +1572,8 @@ the URLs asked for in `downloads', oldest first."
         (should (equal (+test-webkit--script-of #'+my/webkit-scroll-down 3) "window.scrollBy(0, 180)\n;void 0"))
         (should (equal (+test-webkit--script-of #'+my/webkit-scroll-up) "window.scrollBy(0, -60)\n;void 0"))
         (should (equal (+test-webkit--script-of #'+my/webkit-scroll-up 2) "window.scrollBy(0, -120)\n;void 0"))
+        (should (equal (+test-webkit--script-of #'+my/webkit-scroll-right) "window.scrollBy(60, 0)\n;void 0"))
+        (should (equal (+test-webkit--script-of #'+my/webkit-scroll-left 2) "window.scrollBy(-120, 0)\n;void 0"))
         (let ((+my/webkit-scroll-step 10))
           (should (equal (+test-webkit--script-of #'+my/webkit-scroll-down 2) "window.scrollBy(0, 20)\n;void 0")))
         (let ((current-prefix-arg 4))
@@ -1584,7 +1586,8 @@ the URLs asked for in `downloads', oldest first."
         (should (equal (+test-webkit--script-of #'+my/webkit-top) "window.scrollTo(0, 0)\n;void 0"))
         (should (equal (+test-webkit--script-of #'+my/webkit-bottom)
                        "window.scrollTo(0, document.documentElement.scrollHeight)\n;void 0")))
-      (dolist (command '(+my/webkit-scroll-down +my/webkit-scroll-up +my/webkit-half-screen-down
+      (dolist (command '(+my/webkit-scroll-down +my/webkit-scroll-up +my/webkit-scroll-left
+                         +my/webkit-scroll-right +my/webkit-half-screen-down
                          +my/webkit-half-screen-up +my/webkit-screen-down +my/webkit-screen-up
                          +my/webkit-top +my/webkit-bottom +my/webkit-copy))
         (should (commandp command))))))

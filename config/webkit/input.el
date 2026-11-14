@@ -48,8 +48,9 @@ the page's keys don't apply)."
 
 ;; COMMANDS
 ;; For pages with no keys of their own (a mode binds them): j / k, C-d / C-u,
-;; C-f / C-b, gg / G scroll the selected window's view; y / Cmd+C copy its
-;; selected text (`+my/webkit-selection-script').
+;; C-f / C-b, gg / G scroll the selected window's view, h / l sideways (a page
+;; wider than its pane); y / Cmd+C copy its selected text
+;; (`+my/webkit-selection-script').
 (defun +my/webkit-scroll-down (&optional count)
   "j: scroll the page down."
   (interactive "p")
@@ -59,6 +60,16 @@ the page's keys don't apply)."
   "k: scroll the page up."
   (interactive "p")
   (+my/webkit-execute (format "window.scrollBy(0, %d)" (- (* (or count 1) +my/webkit-scroll-step)))))
+
+(defun +my/webkit-scroll-left (&optional count)
+  "h: scroll the page left."
+  (interactive "p")
+  (+my/webkit-execute (format "window.scrollBy(%d, 0)" (- (* (or count 1) +my/webkit-scroll-step)))))
+
+(defun +my/webkit-scroll-right (&optional count)
+  "l: scroll the page right."
+  (interactive "p")
+  (+my/webkit-execute (format "window.scrollBy(%d, 0)" (* (or count 1) +my/webkit-scroll-step))))
 
 (defun +my/webkit-half-screen-down ()
   "C-d: half a screen down."

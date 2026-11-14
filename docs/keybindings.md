@@ -42,6 +42,7 @@ Vim's and Doom's keys stay as they are there. `config/emacs.el` has the rules.
 | `SPC m p` (Mermaid) | the same | The diagram beside the file, redrawn as you type |
 | `SPC m c` / `SPC m b` / `SPC m r` (Mermaid) | the same | Draw the file / buffer / region as an SVG |
 | `SPC m o` (Mermaid) | the same | Open in Mermaid's Live Editor |
+| `h` / `l` (Mermaid preview) | the same | Scroll sideways |
 | `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | Claude Code in a new pane / in the window you're in |
 | `RET` (Claude Code, normal state) | the same | Send the prompt |
 | `n` / `p`, `y`, `RET` (Claude's diffs) | the same | The next / previous hunk, accept, open the file |

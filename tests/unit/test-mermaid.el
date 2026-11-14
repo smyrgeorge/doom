@@ -767,7 +767,13 @@ window on *scratch*, and again after."
       ;; A </script> in the diagram doesn't end the page's script.
       (should (= 3 (with-temp-buffer (insert page) (count-matches "</script>" (point-min) (point-max)))))
       (should (string-search "<\\/script>" page))
-      (should (string-search "window.mmd" page)))))
+      (should (string-search "window.mmd" page))
+      ;; Zoomed past the pane: not shrunk back, its left edge not centred off
+      ;; the page; the zoom of the fitted width, again once the pane resized.
+      (should (string-search "#diagram svg{flex:none;margin:0 auto;" page))
+      (should-not (string-search "justify-content:center" page))
+      (should (string-search "svg.getBoundingClientRect().width" page))
+      (should (string-search "addEventListener('resize'" page)))))
 
 (ert-deftest mermaid/preview-follows-typing ()
   "Redrawn ≈0.3 s after typing stops, in each of its views, without reloading."
@@ -897,6 +903,8 @@ its page deleted."
 (ert-deftest mermaid/preview-keys ()
   (pcase-dolist (`(,key . ,command)
                  '(("j" . +my/webkit-scroll-down) ("k" . +my/webkit-scroll-up)
+                   ("h" . +my/webkit-scroll-left) ("l" . +my/webkit-scroll-right)
+                   ("<left>" . +my/webkit-scroll-left) ("<right>" . +my/webkit-scroll-right)
                    ("C-d" . +my/webkit-half-screen-down) ("C-u" . +my/webkit-half-screen-up)
                    ("gg" . +my/webkit-top) ("G" . +my/webkit-bottom)
                    ("+" . +my/mermaid-preview-zoom-in) ("=" . +my/mermaid-preview-zoom-in)

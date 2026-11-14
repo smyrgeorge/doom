@@ -32,6 +32,7 @@ in WebKit (downloaded once); in an Emacs without xwidgets, by `mmdc`, a second o
 | `+` / `-` | Zoom in / out |
 | `0` | As wide as it is, at most the pane |
 | `j` / `k`, `C-d` / `C-u`, `gg` / `G` | Scroll |
+| `h` / `l` | Scroll sideways |
 | `q` | Close |
 
 ## The theme's colours

@@ -74,9 +74,10 @@ the system's chromium.")
 ;; re-themes it); SPC m p again closes it, as q in it does. In the GUI with
 ;; WebKit (xwidgets): a page drawing it with mermaid.js, at once; +, - and 0
 ;; zoom it (0: as wide as it is, at most the pane), j / k, C-d / C-u, gg / G
-;; scroll. Without WebKit: mmdc's SVG (the renderer), a second or so after
-;; you pause. An error shows Mermaid's message under the last drawing. In a
-;; terminal, SPC m p opens Mermaid's Live Editor in the browser instead.
+;; scroll, h / l sideways. Without WebKit: mmdc's SVG (the renderer), a
+;; second or so after you pause. An error shows Mermaid's message under the
+;; last drawing. In a terminal, SPC m p opens Mermaid's Live Editor in the
+;; browser instead.
 ;; mermaid.js (the version mmdc draws with) is downloaded once, from
 ;; jsdelivr, its SHA-256 checked below (M-x +my/mermaid-js-install does it
 ;; again); without it (offline), the preview is mmdc's SVG.
@@ -119,6 +120,10 @@ the system's chromium.")
       :nm "k"       #'+my/webkit-scroll-up
       :nm "<down>"  #'+my/webkit-scroll-down
       :nm "<up>"    #'+my/webkit-scroll-up
+      :nm "h"       #'+my/webkit-scroll-left
+      :nm "l"       #'+my/webkit-scroll-right
+      :nm "<left>"  #'+my/webkit-scroll-left
+      :nm "<right>" #'+my/webkit-scroll-right
       :nm "C-d"     #'+my/webkit-half-screen-down
       :nm "C-u"     #'+my/webkit-half-screen-up
       :nm "gg"      #'+my/webkit-top

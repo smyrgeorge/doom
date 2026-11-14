@@ -55,7 +55,7 @@ webkit/links.el).")
   "JavaScript whose value is the page's selected text (see `+my/webkit-copy').")
 
 (defvar +my/webkit-scroll-step 60
-  "Pixels j / k scroll a page (see COMMANDS in webkit/input.el).")
+  "Pixels j / k (h / l) scroll a page (see COMMANDS in webkit/input.el).")
 
 ;; ====== KEY BINDINGS ======
 

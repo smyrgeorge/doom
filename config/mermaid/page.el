@@ -70,21 +70,26 @@
           (or (+my/mermaid--face-colour 'error :foreground frame) ""))))
 
 ;; THE PREVIEW'S PAGE
-;; The diagram as wide as its natural size, at most the pane's; zoomed (+, -,
-;; 0) its natural size times the zoom, scrolled. An error under it, the last
+;; The diagram as wide as its natural size, at most the pane's (fitted);
+;; zoomed (+, -, 0) the fitted width times the zoom, the pane resized too,
+;; scrolled both ways: wider than the pane, it's never shrunk back (a flex
+;; item would be) nor centred past its left edge (auto margins centre only
+;; what fits). A narrow pane's margins narrower. An error under it, the last
 ;; drawing kept. The page's colours the theme's: re-themed in place.
 (defconst +my/mermaid--preview-js
   "var shown = null, zoom = 1;
 function fit() {
   var svg = document.querySelector('#diagram svg');
   if (!svg) return;
-  if (zoom === 1) { svg.style.width = ''; svg.style.maxWidth = svg.dataset.maxWidth || svg.style.maxWidth; }
-  else {
-    if (!svg.dataset.maxWidth) svg.dataset.maxWidth = svg.style.maxWidth;
-    svg.style.maxWidth = 'none';
-    svg.style.width = (svg.viewBox.baseVal.width * zoom) + 'px';
-  }
+  if (!('maxWidth' in svg.dataset)) svg.dataset.maxWidth = svg.style.maxWidth;
+  svg.style.width = '';
+  svg.style.maxWidth = svg.dataset.maxWidth;
+  if (zoom === 1) return;
+  var fitted = svg.getBoundingClientRect().width || svg.viewBox.baseVal.width;
+  svg.style.maxWidth = 'none';
+  svg.style.width = (fitted * zoom) + 'px';
 }
+addEventListener('resize', function () { if (zoom !== 1) fit(); });
 async function show(source) {
   shown = source;
   var error = await mmd.draw(document.getElementById('diagram'), source);
@@ -111,9 +116,9 @@ function theme(config, background, foreground, error) {
 <title>mmd</title>
 <style>
 html{background:%b;color:%f}
-body{margin:0;padding:24px;font-family:%F}
-#diagram{display:flex;justify-content:center}
-#diagram svg{max-width:100%%;height:auto}
+body{margin:0;padding:min(24px,4vw);font-family:%F}
+#diagram{display:flex}
+#diagram svg{flex:none;margin:0 auto;max-width:100%%;height:auto}
 #error{color:%e;font:12px monospace;white-space:pre-wrap;margin:16px 0 0}
 </style>
 <script src=\"%m\"></script>

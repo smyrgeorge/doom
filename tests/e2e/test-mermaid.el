@@ -6,7 +6,8 @@
 ;; the SVG in the image viewer. A run takes a second or more (node and a
 ;; headless Chrome): each waits up to a minute. A Mermaid file's preview in
 ;; WebKit (mermaid.js: Doom's, copied; skipped without it or xwidgets): drawn,
-;; redrawn as you type, an error under the last drawing, re-themed, zoomed.
+;; redrawn as you type, an error under the last drawing, re-themed, zoomed
+;; (past a narrow pane, scrolled sideways).
 ;; ```mermaid blocks in Markdown's live preview (pandoc too): drawn, only an
 ;; edited one drawn again, an error in place, re-themed with the page. In a
 ;; reply of Claude Code's, as agent-shell renders it: drawn, copied back.
@@ -222,22 +223,95 @@ preview and files closed after."
                  (lambda () (string-search (downcase (face-foreground 'font-lock-keyword-face))
                                            (downcase (+test-mermaid--page xwidget "document.querySelector('#diagram svg').outerHTML"))))
                  10))
-        ;; Zoomed: twice as wide as it is, then back.
-        (let ((natural (string-to-number (+test-mermaid--page xwidget "document.querySelector('#diagram svg').viewBox.baseVal.width"))))
+        ;; Zoomed: drawn 1.5625 times as wide as it is (twice +), then back.
+        (let ((natural (string-to-number (+test-mermaid--page xwidget "document.querySelector('#diagram svg').viewBox.baseVal.width")))
+              (fitted (+test-mermaid--drawn-width xwidget)))
+          (should (> natural 10))
+          (should (< (abs (- fitted natural)) 1))
           (with-current-buffer preview
             (+my/mermaid-preview-zoom-in)
             (+my/mermaid-preview-zoom-in))
-          (should (> natural 10))
-          (should (+test-wait-for
-                   (lambda () (< (abs (- (string-to-number
-                                          (+test-mermaid--page xwidget "parseFloat(document.querySelector('#diagram svg').style.width)"))
-                                         (* natural 1.5625)))
-                                 0.5))
-                   5))
+          (should (+test-mermaid--drawn-p xwidget (* fitted 1.5625)))
           (with-current-buffer preview (+my/mermaid-preview-zoom-reset))
-          (should (+test-wait-for
-                   (lambda () (equal (+test-mermaid--page xwidget "document.querySelector('#diagram svg').style.width") ""))
-                   5)))))))
+          (should (+test-mermaid--drawn-p xwidget fitted)))))))
+
+(defun +test-mermaid--drawn-width (xwidget)
+  "The width XWIDGET's diagram is drawn at, in pixels (not its style's)."
+  (string-to-number (+test-mermaid--page xwidget "document.querySelector('#diagram svg').getBoundingClientRect().width")))
+
+(defun +test-mermaid--drawn-p (xwidget width)
+  "Non-nil once XWIDGET's diagram is drawn WIDTH pixels wide (a pixel either
+way), 5 s at most."
+  (+test-wait-for (lambda () (< (abs (- (+test-mermaid--drawn-width xwidget) width)) 1)) 5))
+
+(defun +test-mermaid--page-number (xwidget expression)
+  (string-to-number (+test-mermaid--page xwidget expression)))
+
+(ert-deftest e2e-mermaid/preview-zoomed-past-a-narrow-pane ()
+  "A wide diagram in a 40-column pane: fitted to it; +, - drawn bigger or
+smaller than fitted, the pane resized too; wider than the pane, either edge
+scrolled to, h / l sideways."
+  (+test-mermaid--preview
+    (let ((mmd (find-file (+test-file "mermaid/wide.mmd"
+                                      (concat "flowchart LR\n    "
+                                              (mapconcat (lambda (n) (format "N%d[Step number %d]" n n))
+                                                         (number-sequence 1 12) " --> ")
+                                              "\n")))))
+      (+my/mermaid-preview-show)
+      (let* ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd))
+             (pane (get-buffer-window preview))
+             (xwidget (+test-mermaid--preview-xwidget mmd)))
+        (should xwidget)
+        (window-resize pane (- 40 (window-total-width pane)) t)
+        (should (= (window-total-width pane) 40))
+        ;; The view as wide as the pane, the diagram fitted to it.
+        (should (+test-wait-for
+                 (lambda () (= (+test-mermaid--page-number xwidget "innerWidth") (window-body-width pane t)))
+                 5))
+        (let ((natural (+test-mermaid--page-number xwidget "document.querySelector('#diagram svg').viewBox.baseVal.width"))
+              (inner (+test-mermaid--page-number xwidget "innerWidth"))
+              (fitted (+test-mermaid--drawn-width xwidget)))
+          (should (> natural (* 3 inner)))
+          (should (< 100 fitted inner))
+          ;; Narrow margins in a narrow pane.
+          (should (<= (+test-mermaid--page-number xwidget "document.querySelector('#diagram svg').getBoundingClientRect().left")
+                      (* 0.04 inner)))
+          (with-current-buffer preview
+            (+my/mermaid-preview-zoom-in)
+            (should (+test-mermaid--drawn-p xwidget (* fitted 1.25)))
+            (+my/mermaid-preview-zoom-reset)
+            (should (+test-mermaid--drawn-p xwidget fitted))
+            (+my/mermaid-preview-zoom-out)
+            (should (+test-mermaid--drawn-p xwidget (* fitted 0.8)))
+            ;; Zoomed past the pane: its left edge, then its right one.
+            (+my/mermaid-preview-zoom-reset)
+            (dotimes (_ 4) (+my/mermaid-preview-zoom-in))
+            (should (+test-mermaid--drawn-p xwidget (* fitted (expt 1.25 4))))
+            (should (> (+test-mermaid--page-number xwidget "document.documentElement.scrollWidth") (* 2 inner)))
+            (should (>= (+test-mermaid--page-number xwidget "document.querySelector('#diagram svg').getBoundingClientRect().left") 0))
+            (with-selected-window pane
+              (+my/webkit-scroll-right 100))
+            (should (+test-wait-for (lambda () (> (+test-mermaid--page-number xwidget "scrollX") 0)) 5))
+            ;; In view (a scroll is whole pixels: a fraction of one may not).
+            (should (< (+test-mermaid--page-number xwidget "document.querySelector('#diagram svg').getBoundingClientRect().right")
+                       (1+ inner)))
+            ;; h / l: a step sideways.
+            (with-selected-window pane
+              (+my/webkit-scroll-left 100)
+              (+my/webkit-scroll-right))
+            (should (+test-wait-for (lambda () (= (+test-mermaid--page-number xwidget "scrollX") 60)) 5))
+            ;; The pane wider: the zoom kept, of the new fitted width.
+            (+my/mermaid-preview-zoom-reset)
+            (window-resize pane 20 t)
+            (should (+test-wait-for
+                     (lambda () (= (+test-mermaid--page-number xwidget "innerWidth") (window-body-width pane t)))
+                     5))
+            (let ((wider (+test-mermaid--drawn-width xwidget)))
+              (should (> wider fitted))
+              (+my/mermaid-preview-zoom-in)
+              (should (+test-mermaid--drawn-p xwidget (* wider 1.25)))
+              (window-resize pane -20 t)
+              (should (+test-mermaid--drawn-p xwidget (* fitted 1.25))))))))))
 
 (ert-deftest e2e-mermaid/notice-opens-the-preview ()
   (+test-mermaid--preview
