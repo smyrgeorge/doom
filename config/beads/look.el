@@ -474,6 +474,43 @@ closed issue's in the theme's muted colour."
     (when (equal (and +my/beads--statuses (gethash id +my/beads--statuses)) "closed")
       (add-face-text-property start (point) 'shadow))))
 
+;; MARKS (m, u, U, t, * m): ONLY THE MARKS CHANGE
+;; beads.el printed the whole list again for a mark, from its issues in bd's
+;; order: not in sections (a blocked one out of Blocked), an epic's issues
+;; away from it, and the sections' separators left where the emptied list
+;; put them, at its top (every issue under Blocked). Here each row's mark is
+;; set in place, the rest as it was drawn (doom-o5t.4).
+(defun +my/beads--mark-at ()
+  "Where the mark's column starts on the line at point, or nil."
+  (let ((pos (line-beginning-position)) (eol (line-end-position)))
+    ;; By `equal' (`text-property-any' compares with `eq').
+    (while (and pos (< pos eol)
+                (not (equal (get-text-property pos 'tabulated-list-column-name) " ")))
+      (setq pos (next-single-property-change pos 'tabulated-list-column-name nil eol)))
+    (and pos (< pos eol) pos)))
+
+(defun +my/beads-update-marks ()
+  "`beads-list--update-mark-display': each row's mark (*, else a space) set
+from `beads-list--marked', in place: its character only (its faces kept: a
+P0's tint, a closed row's dimming), and its entry's."
+  (save-excursion
+    (let ((inhibit-read-only t))
+      (goto-char (point-min))
+      (while (not (eobp))
+        (when-let* ((id (tabulated-list-get-id))
+                    ;; A row's first line (a title on several lines is one row).
+                    ((or (bobp) (not (equal (get-text-property (1- (point)) 'tabulated-list-id) id))))
+                    (entry (tabulated-list-get-entry))
+                    (at (+my/beads--mark-at))
+                    (mark (if (member id beads-list--marked) "*" " "))
+                    ((not (equal (buffer-substring-no-properties at (1+ at)) mark))))
+          (let ((props (text-properties-at at)))
+            (goto-char at)
+            (delete-char 1)
+            (insert (apply #'propertize mark props)))
+          (aset entry 0 mark))
+        (forward-line 1)))))
+
 (after! beads-client
   ;; Inside the closed ones' hiding (config/beads/hidden.el): it sees them all.
   (advice-add 'beads-client-list :filter-return #'+my/beads--note-issues-a '((depth . -40))))
@@ -485,4 +522,5 @@ closed issue's in the theme's muted colour."
   (add-hook 'beads-list-mode-hook #'+my/beads--rows-h)
   (advice-add 'beads-list--issue-section :around #'+my/beads-section-a)
   (advice-add 'beads-list--sectioned-sort :filter-return #'+my/beads-nest-a)
-  (advice-add 'beads-list--print-entry :override #'+my/beads-print-entry-a))
+  (advice-add 'beads-list--print-entry :override #'+my/beads-print-entry-a)
+  (advice-add 'beads-list--update-mark-display :override #'+my/beads-update-marks))

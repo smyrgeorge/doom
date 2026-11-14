@@ -770,6 +770,77 @@ where it's said to start; the header over them; a marked row's *."
         (beads-list-mark)
         (should (string-prefix-p (concat "* " id " ○") (+test-beads--line "Lexer: tokens")))))))
 
+;; doom-o5t.4
+(defun +test-beads--view ()
+  "The current list as it's seen: its text, the sections' separators (their
+overlays' strings) where they are."
+  (let ((overlays (sort (seq-filter (lambda (o) (overlay-get o 'before-string))
+                                    (overlays-in (point-min) (point-max)))
+                        (lambda (a b) (< (overlay-start a) (overlay-start b)))))
+        (view "") (pos (point-min)))
+    (dolist (o overlays)
+      (setq view (concat view (buffer-substring-no-properties pos (overlay-start o))
+                         (substring-no-properties (overlay-get o 'before-string)))
+            pos (overlay-start o)))
+    (concat view (buffer-substring-no-properties pos (point-max)))))
+
+(ert-deftest beads/a-mark-on-a-row-of-several-lines ()
+  "A row on several lines (its title wrapped): its mark on its first line
+only, its next lines untouched."
+  (with-temp-buffer
+    (let ((entry (vector " " "b")) (beads-list--marked '("b")))
+      (insert (propertize " " 'tabulated-list-column-name " ") " "
+              (propertize "b one" 'tabulated-list-column-name "Title")
+              (propertize "\n" 'tabulated-list-column-name "Title")
+              (propertize " " 'tabulated-list-column-name "Title") "b two\n")
+      (put-text-property (point-min) (point-max) 'tabulated-list-id "b")
+      (put-text-property (point-min) (point-max) 'tabulated-list-entry entry)
+      (+my/beads-update-marks)
+      (should (equal (buffer-string) "* b one\n b two\n"))
+      (should (equal (aref entry 0) "*"))
+      (should (equal (get-text-property 0 'tabulated-list-id (buffer-string)) "b")))))
+
+(ert-deftest beads/bd-a-mark-changes-only-the-marks ()
+  "m, u, t and U change a row's mark, in place: the rows' order (an epic's
+issues under it, the blocked one in Blocked), the separators, a P0's tint and
+the place stay (beads.el printed the list again: Blocked at its top, every
+issue under it)."
+  (+test-beads-with-project
+    (let* ((epic (+test-beads--create "The parser rewrite" :issue-type "epic" :priority 1))
+           (lexer (+test-beads--create "Lexer: tokens" :issue-type "task" :parent epic))
+           (bug (+test-beads--create "Crash on an empty file" :issue-type "bug" :priority 0))
+           (release (+test-beads--create "Release 2.0")))
+      (ignore lexer)
+      (beads-client-request "dep_add" `((from_id . ,release) (to_id . ,bug)))
+      (+my/beads-project)
+      (with-current-buffer (+test-beads--list)
+        (let ((before (+test-beads--view))
+              (marked (lambda (view id) (replace-regexp-in-string (concat "^  " (regexp-quote id) " ")
+                                                                  (concat "* " id " ") view t t))))
+          (should (string-match-p "── Blocked ──\n  [^\n]*Release 2.0" before))
+          (goto-char (point-min))
+          (search-forward "The parser rewrite")
+          (beads-list-mark)
+          (should (equal (+test-beads--view) (funcall marked before epic)))
+          ;; The place: the next row, as beads.el's m goes.
+          (should (equal (tabulated-list-get-id) lexer))
+          (should (equal (aref (tabulated-list-get-entry (save-excursion (search-backward epic))) 0) "*"))
+          ;; A P0's row: its mark in its tint.
+          (goto-char (point-min))
+          (search-forward bug)
+          (beads-list-mark)
+          (should (equal (+test-beads--view) (funcall marked (funcall marked before epic) bug)))
+          (should (memq 'beads-list-row-p0 (ensure-list (get-text-property (line-beginning-position 0) 'face))))
+          ;; u, t, U.
+          (forward-line -1)
+          (beads-list-unmark)
+          (should (equal (+test-beads--view) (funcall marked before epic)))
+          (beads-list-toggle-marks)
+          (should-not (member epic beads-list--marked))
+          (should (string-match-p (concat "^\\* " (regexp-quote release)) (+test-beads--view)))
+          (beads-list-unmark-all)
+          (should (equal (+test-beads--view) before)))))))
+
 ;; ====== THE PLACE KEPT ======
 
 (defun +test-beads--ids-at (window)
