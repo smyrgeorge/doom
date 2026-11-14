@@ -197,7 +197,8 @@ Linux's Ctrl keys: test-keys.el."
                    ("y" . +my/webkit-copy)
                    ("+" . +my/html-page-zoom-in) ("=" . +my/html-page-zoom-in)
                    ("-" . +my/html-page-zoom-out) ("0" . +my/html-page-actual-size)
-                   ("W" . +my/html-page-fit-width) ("q" . +my/html-page-quit)))
+                   ("W" . +my/html-page-fit-width) ("gr" . revert-buffer)
+                   ("q" . +my/html-page-quit)))
     (should (eq (lookup-key (evil-get-auxiliary-keymap +my/html-page-mode-map 'normal) (kbd key))
                 command)))
   (should (eq (lookup-key +my/html-page-mode-map (kbd "s-c")) #'+my/webkit-copy))
@@ -323,6 +324,36 @@ answer to a symbol), then the page's, in each view."
       (setq +test-html--scripts nil)
       (+my/html--fitted nil)
       (should-not +test-html--scripts))))
+
+(ert-deftest html/page-reloaded ()
+  "g r (revert-buffer): each of its views reloaded, as WebKit does."
+  (+test-html--page
+    (let ((reloaded nil))
+      (cl-letf (((symbol-function 'xwidget-webkit-goto-history)
+                 (lambda (view rel) (push (list view rel) reloaded))))
+        (revert-buffer))
+      (should (equal (reverse reloaded) (mapcar (lambda (view) (list view 0)) +test-html--views))))))
+
+(ert-deftest html/page-opened-again-reloaded ()
+  "The same page opened again (its file changed, say): its buffer, reloaded;
+another so named: replaced, not reloaded."
+  (+test-html
+    (let ((reloaded nil))
+      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                ((symbol-function 'featurep) (let ((featurep (symbol-function 'featurep)))
+                                               (lambda (f &rest r) (or (eq f 'xwidget-internal)
+                                                                       (apply featurep f r)))))
+                ((symbol-function '+my/webkit-file-url) (lambda (f) (concat "file://" f)))
+                ((symbol-function '+my/webkit--shown-h) #'ignore)
+                ((symbol-function '+my/html--revert) (lambda (&rest _) (push (current-buffer) reloaded))))
+        (let ((buffer (+my/html-open-in-emacs "/tmp/a/report.html")))
+          (should-not reloaded)
+          (should (eq (+my/html-open-in-emacs "/tmp/a/report.html") buffer))
+          (should (equal reloaded (list buffer)))
+          (let ((other (+my/html-open-in-emacs "/tmp/b/report.html")))
+            (should-not (buffer-live-p buffer))
+            (should (equal reloaded (list buffer)))
+            (kill-buffer other)))))))
 
 (ert-deftest html/page-quit ()
   "q: the page closed with the pane made for it."

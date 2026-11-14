@@ -5,7 +5,7 @@
 ;; browser. Its keys' commands: scrolled, copied, zoomed, fitted to a narrow
 ;; pane, the zoom kept in a split, closed. A URL (a server of the test's
 ;; own): shown, redirected in Emacs, a link to another page in the browser;
-;; typed at M-x.
+;; typed at M-x. A changed file: opened again or reverted, its new page.
 
 (+test-load "config/childframe" "config/window" "config/webkit" "config/html")
 
@@ -111,6 +111,26 @@ page goes to the browser, the view staying; M-x takes a URL."
                  10)))
       (kill-buffer buffer)
       (should-not (buffer-live-p buffer)))))
+
+(ert-deftest e2e-html/a-changed-page-reloaded ()
+  "The file changed: opened again, its new page; changed again, g r
+(revert-buffer) shows it."
+  (+test-needs-webkit)
+  (+test-with-reset
+    (let* ((version (lambda (title) (format "<!doctype html><title>%s</title><p>%s</p>" title title)))
+           (file (+test-file "pages/changing.html" (funcall version "version one")))
+           (buffer (+my/html-open-in-emacs file))
+           (title (lambda ()
+                    (with-current-buffer buffer
+                      (when-let* ((xwidget (+my/webkit-xwidget (get-buffer-window buffer))))
+                        (xwidget-webkit-title xwidget))))))
+      (should (+test-wait-for (lambda () (equal (funcall title) "version one")) 10))
+      (+test-file "pages/changing.html" (funcall version "version two"))
+      (should (eq (+my/html-open-in-emacs file) buffer))
+      (should (+test-wait-for (lambda () (equal (funcall title) "version two")) 10))
+      (+test-file "pages/changing.html" (funcall version "version three"))
+      (with-current-buffer buffer (revert-buffer))
+      (should (+test-wait-for (lambda () (equal (funcall title) "version three")) 10)))))
 
 ;; ====== ITS KEYS ======
 

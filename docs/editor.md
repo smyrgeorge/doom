@@ -115,6 +115,7 @@ browser.
 | `h` / `l` | Scroll sideways |
 | `+` / `-` / `0` | Zoom in / out / its own size, in all the page's panes |
 | `W` | As wide as the pane |
+| `g r` | Reload (as opening it again does) |
 | `y`, `Cmd+C` | Copy the selection |
 | `q` | Close |
 

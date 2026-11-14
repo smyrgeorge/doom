@@ -43,7 +43,7 @@ Vim's and Doom's keys stay as they are there. `config/emacs.el` has the rules.
 | `SPC m c` / `SPC m b` / `SPC m r` (Mermaid) | the same | Draw the file / buffer / region as an SVG |
 | `SPC m o` (Mermaid) | the same | Open in Mermaid's Live Editor |
 | `h` / `l` (Mermaid preview) | the same | Scroll sideways |
-| `+` / `-` / `0`, `W` (HTML page) | the same | Zoom in / out / its own size, as wide as the pane |
+| `+` / `-` / `0`, `W`, `g r` (HTML page) | the same | Zoom in / out / its own size, as wide as the pane, reload |
 | `Cmd+C` (HTML page) | `Ctrl+Shift+C` | Copy the selection |
 | `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | Claude Code in a new pane / in the window you're in |
 | `RET` (Claude Code, normal state) | the same | Send the prompt |

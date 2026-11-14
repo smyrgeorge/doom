@@ -25,7 +25,8 @@
 ;; UI's page cards open so (config/agent-ui.el). Its keys: j / k, C-d / C-u,
 ;; gg / G scroll, h / l sideways; y / Cmd+C copy; + / - zoom, 0 back to its
 ;; size, W fits the pane's width (a page wider than it), the zoom the page's in
-;; all its panes (a split too); q closes it.
+;; all its panes (a split too); g r reloads it, as opening it again does; q
+;; closes it.
 (defvar-local +my/html-page-url nil
   "In a page's buffer (see A PAGE IN EMACS above): the URL it shows.")
 
@@ -64,6 +65,7 @@
       :nm "-"       #'+my/html-page-zoom-out
       :nm "0"       #'+my/html-page-actual-size
       :nm "W"       #'+my/html-page-fit-width
+      :nm "gr"      #'revert-buffer
       :gnm "q"      #'+my/html-page-quit)
 
 ;; On Linux, Ctrl for Cmd (config/emacs.el, KEYS): zoom, copy.
@@ -110,8 +112,16 @@
 config/html.el).
 
 \\{+my/html-page-mode-map}"
-  (setq-local +my/webkit-url-function (lambda (_window) +my/html-page-url))
+  (setq-local +my/webkit-url-function (lambda (_window) +my/html-page-url)
+              revert-buffer-function #'+my/html--revert)
   (add-hook '+my/webkit-load-functions #'+my/html--loaded nil t))
+
+;; Reloaded (g r, or the page opened again: its file changed, say): each of
+;; its views, as WebKit reloads a page, its zoom kept (see below).
+(defun +my/html--revert (&rest _)
+  "g r: each of the page's views reloaded (see above)."
+  (dolist (xwidget (+my/webkit-xwidgets))
+    (xwidget-webkit-goto-history xwidget 0)))
 
 ;; Zoom: the page's, the same in each of its views (a new one, once loaded,
 ;; too). Down to half its size, WebKit's page zoom (CSS's on the page's root:
@@ -252,7 +262,9 @@ it's Emacs's."
           (kill-buffer old))
         (let ((buffer (get-buffer-create name)))
           (with-current-buffer buffer
-            (unless (derived-mode-p '+my/html-page-mode)
+            (if (derived-mode-p '+my/html-page-mode)
+                ;; Open already: as it is now.
+                (+my/html--revert)
               (+my/html-page-mode))
             ;; After the mode (which clears the buffer's variables), before
             ;; a window shows it (which starts its view).
