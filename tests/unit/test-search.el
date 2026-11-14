@@ -427,7 +427,8 @@ not a mode's commands elsewhere, recently used or not."
 ;; ====== SPC s a ======
 
 (ert-deftest search/everywhere-in-a-project-with-lsp ()
-  "Classes, Files, Symbols, Actions; case-insensitive, from the project's root."
+  "Classes, Files, Symbols, Actions; read case-insensitively, in the buffer's
+own folder."
   (+test-with-reset
     (let* ((root (+test-search--dir "search-all" "src/A.kt" "b.txt"))
            (ws (+test-search--workspace t))
@@ -448,7 +449,8 @@ not a mode's commands elsewhere, recently used or not."
                              '("Classes" "Files" "Symbols" "Actions")))
               (should (equal (mapcar (lambda (s) (plist-get s :narrow)) sources) '(?c ?f ?s ?a)))
               (should (equal options '(:prompt "Search everywhere: " :require-match t :sort nil)))
-              (should (equal state (list :ignore-case t :directory root)))
+              (should (equal state (list :ignore-case t
+                                         :directory (expand-file-name "src/" root))))
               ;; Consult takes them.
               (should (= (length (consult--multi-enabled-sources sources)) 4))
               (let ((classes (+test-search--source sources "Classes"))
@@ -458,7 +460,7 @@ not a mode's commands elsewhere, recently used or not."
                 (dolist (source (list classes symbols))
                   (should (eq (plist-get source :category) 'consult-lsp-symbols))
                   (should (functionp (plist-get source :async)))
-                  (should (eq (plist-get source :action) #'+my/search-everywhere--goto-symbol)))
+                  (should (eq (plist-get source :run) #'+my/search-everywhere--goto-symbol)))
                 ;; All in their rows: no annotation, from marginalia neither
                 ;; (it aligns the Actions' docs after the longest row it
                 ;; annotated: a file's long path pushed them off a narrow
@@ -478,11 +480,11 @@ not a mode's commands elsewhere, recently used or not."
                 (should (equal (mapcar #'cdr (funcall (plist-get files :items))) '("src/A.kt" "b.txt")))
                 (should (eq (plist-get actions :category) 'command))
                 (should (eq (plist-get actions :items) #'+my/search-everywhere--commands))
-                (should (eq (plist-get actions :action) #'+my/search-everywhere--run-command))
+                (should (eq (plist-get actions :run) #'+my/search-everywhere--run-command))
                 ;; Picking a file opens it, from the root.
                 (with-temp-buffer
                   (setq default-directory "/")
-                  (funcall (plist-get files :action) "b.txt"))
+                  (funcall (plist-get files :run) "b.txt"))
                 (should (equal (buffer-file-name (window-buffer))
                                (expand-file-name "b.txt" root)))))))))))
 
@@ -549,6 +551,45 @@ beside one that does, only that one's."
                            '("Actions")))
             (should (equal (plist-get (nth 2 got) :directory) dir))
             (should (eq (plist-get (nth 2 got) :ignore-case) t))))))))
+
+(defvar +test-search--ran-in nil)
+(defun +test-search-cmd-where ()
+  (interactive)
+  (setq +test-search--ran-in (list default-directory completion-ignore-case)))
+(defun +test-search-cmd-cd ()
+  (interactive)
+  (cd (+test-tmp-file "search-cd/")))
+
+(ert-deftest search/everywhere-runs-what-is-picked-as-m-x-would ()
+  "What's picked runs once read: an action in the buffer's own folder (not
+the project's root), a cd through it sticks, with the user's own
+`completion-ignore-case'; a file still opens from the root."
+  (+test-with-reset
+    (let* ((root (+test-search--dir "search-run" "src/deep/A.kt" "b.txt"))
+           (deep (expand-file-name "src/deep/" root))
+           (pick nil)
+           (completion-ignore-case nil))
+      (make-directory (+test-tmp-file "search-cd/") t)
+      (with-current-buffer (find-file-noselect (expand-file-name "A.kt" deep))
+        (switch-to-buffer (current-buffer))
+        (cl-letf (((symbol-function 'doom-project-root) (lambda (&rest _) root))
+                  ;; As consult's: an :action runs before it returns.
+                  ((symbol-function 'consult--multi)
+                   (lambda (sources &rest _)
+                     (let ((source (+test-search--source sources (car pick))))
+                       (when-let* ((action (plist-get source :action)))
+                         (funcall action (cdr pick)))
+                       `(,(cdr pick) :match t ,@source)))))
+          (setq pick '("Actions" . "+test-search-cmd-where"))
+          (+my/search-everywhere)
+          (should (equal +test-search--ran-in (list deep nil)))
+          (setq pick '("Actions" . "+test-search-cmd-cd"))
+          (+my/search-everywhere)
+          (should (equal default-directory (file-name-as-directory
+                                            (file-truename (+test-tmp-file "search-cd/")))))
+          (setq pick '("Files" . "b.txt"))
+          (+my/search-everywhere)
+          (should (equal (buffer-file-name (window-buffer)) (expand-file-name "b.txt" root))))))))
 
 (ert-deftest search/everywhere-is-a-command ()
   (should (commandp #'+my/search-everywhere)))
