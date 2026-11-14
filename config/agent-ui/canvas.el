@@ -57,6 +57,9 @@ selecting it."
   "Run in a canvas when its elements change: shown, updated, appended to,
 removed, cleared; not when the canvas closes.")
 
+(defvar agent-ui-cleared-hook nil
+  "Run in a canvas once it's cleared (every element removed at once).")
+
 (defvar agent-ui-removed-functions nil
   "Called in a canvas with an element's id once it's gone (removed, or its
 canvas killed).")
@@ -820,6 +823,7 @@ next element shown opens a pane again."
       (agent-ui-remove id :canvas (current-buffer)))
     (let ((inhibit-read-only t))
       (erase-buffer))
+    (run-hooks 'agent-ui-cleared-hook)
     (agent-ui--close-if-empty)))
   nil)
 

@@ -88,6 +88,56 @@ window shown, saves at once; what it makes, killed after."
       (+test-aup-settle)
       (should-not (file-exists-p (expand-file-name ".agent-shell/agent-ui/" dir))))))
 
+(ert-deftest agent-ui-persist/closed-then-made-again-keeps-what-was-saved ()
+  "Closed (q), then the agent's next element: the canvas shows only it, its
+saves keep what was saved before, before it (they replaced it: a and b lost
+for good); resumed, all of them back. Its removals and clearing count."
+  (+test-aup
+    (let ((canvas-name (agent-ui-canvas-buffer-name name)))
+      (agent-ui-show '(:id "a" :type "text" :text "a") :canvas name)
+      (agent-ui-show '(:id "b" :type "text" :text "b") :canvas name)
+      (+test-aup-settle)
+      (kill-buffer canvas-name)
+      (agent-ui-show '(:id "c" :type "text" :text "c") :canvas name)
+      (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas name)) '("c")))
+      (+test-aup-settle)
+      (should (equal (mapcar (lambda (e) (plist-get e :id)) (+test-aup-saved)) '("a" "b" "c")))
+      ;; Shown again on it: its own, once.
+      (agent-ui-show '(:id "a" :type "text" :text "a again") :canvas name)
+      (+test-aup-settle)
+      (should (equal (+test-aup-saved) '((:id "b" :type "text" :text "b") (:id "c" :type "text" :text "c")
+                                         (:id "a" :type "text" :text "a again"))))
+      (agent-ui-remove "a" :canvas name)
+      (+test-aup-settle)
+      (should (equal (mapcar (lambda (e) (plist-get e :id)) (+test-aup-saved)) '("b" "c")))
+      ;; Resumed: all back.
+      (kill-buffer canvas-name)
+      (should (= (agent-ui-persist-restore session) 2))
+      (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas name)) '("b" "c")))
+      ;; Back with its session: nothing kept twice.
+      (+test-aup-settle)
+      (should (equal (mapcar (lambda (e) (plist-get e :id)) (+test-aup-saved)) '("b" "c")))
+      ;; Closed, made again, cleared: nothing kept.
+      (kill-buffer canvas-name)
+      (agent-ui-show '(:id "d" :type "text" :text "d") :canvas name)
+      (agent-ui-clear :canvas name)
+      (+test-aup-settle)
+      (should (equal (+test-aup-saved) nil)))))
+
+(ert-deftest agent-ui-persist/saved-when-emacs-exits ()
+  "A save waiting when Emacs exits: done (the last second's changes were
+lost)."
+  (should (memq #'agent-ui--persist-all-now kill-emacs-hook))
+  (+test-aup
+    (agent-ui-show '(:id "t" :type "text" :text "first") :canvas name)
+    (+test-aup-settle)
+    (let ((agent-ui-persist-delay 60))
+      (agent-ui-update "t" '(:text "last") :canvas name)
+      (+test-aup-settle)
+      (should (equal (+test-aup-saved) '((:id "t" :type "text" :text "first"))))
+      (agent-ui--persist-all-now)
+      (should (equal (+test-aup-saved) '((:id "t" :type "text" :text "last")))))))
+
 ;; ====== RESTORING ======
 
 (ert-deftest agent-ui-persist/back-when-resumed ()

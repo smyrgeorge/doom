@@ -9,8 +9,12 @@
 ;; restart), its canvas comes back, as it was. Its elements' sources aren't
 ;; started again (a command run twice): they come back as they last were.
 ;; Closing a canvas, or its session, doesn't change what's saved; clearing it
-;; does (an empty canvas, saved). A session's other canvases ("SESSION /
-;; tests") are kept beside it, ID@tests.json, and come back with it.
+;; does (an empty canvas, saved). A canvas closed (q) and made again by the
+;; agent's next element keeps what was saved before in its saves, before its
+;; own elements (it saved only these, the others lost for good); its
+;; clearing drops them. A save waiting when Emacs exits is done then. A
+;; session's other canvases ("SESSION / tests") are kept beside it,
+;; ID@tests.json, and come back with it.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -28,6 +32,10 @@ saved together)."
   :type 'number :group 'agent-ui)
 
 (defvar-local agent-ui--persist-timer nil "In a canvas: its save, waiting.")
+
+(defvar-local agent-ui--persist-kept nil
+  "In a canvas made again (closed, its session going on): the elements its
+session saved before, kept in its saves before its own (see above).")
 
 (declare-function agent-shell-session-id "agent-shell")
 (declare-function agent-shell-subscribe-to "agent-shell")
@@ -72,8 +80,9 @@ id: its elements, as JSON. Returns the file, or nil."
       (cancel-timer agent-ui--persist-timer))
     (setq agent-ui--persist-timer nil)
     (when-let* ((file (agent-ui-persist-file agent-ui--session-buffer agent-ui--canvas-part)))
-      (let ((elements (mapcar (lambda (id) (agent-ui--entry-element (gethash id agent-ui--entries)))
-                              agent-ui--order)))
+      (let ((elements (append agent-ui--persist-kept
+                              (mapcar (lambda (id) (agent-ui--entry-element (gethash id agent-ui--entries)))
+                                      agent-ui--order))))
         (make-directory (file-name-directory file) t)
         (let ((coding-system-for-write 'utf-8))
           (write-region (decode-coding-string
@@ -100,6 +109,44 @@ id: its elements, as JSON. Returns the file, or nil."
 (add-hook 'agent-ui-canvas-hook
           (lambda () (add-hook 'kill-buffer-hook #'agent-ui--persist-closing -50 t)))
 
+(defun agent-ui--persist-kept-h ()
+  "A canvas made, tied to its session (after `agent-ui--link-session'): what
+was saved for it before kept in its saves (see above); not one coming back
+with its session (those are its elements)."
+  (unless (bound-and-true-p agent-ui--restoring)
+    (when-let* ((file (agent-ui-persist-file agent-ui--session-buffer agent-ui--canvas-part))
+                ((file-readable-p file)))
+      (setq agent-ui--persist-kept (seq-filter #'agent-ui--plist-p (agent-ui-persist--read file))))))
+
+(add-hook 'agent-ui-canvas-hook #'agent-ui--persist-kept-h t)
+
+(defun agent-ui--persist-shown-h (id _element)
+  "Element ID shown on the canvas: the one kept from before with its id,
+replaced (removed, it's gone)."
+  (when agent-ui--persist-kept
+    (setq agent-ui--persist-kept
+          (seq-remove (lambda (e) (equal (plist-get e :id) id)) agent-ui--persist-kept))))
+
+(add-hook 'agent-ui-shown-functions #'agent-ui--persist-shown-h)
+
+(defun agent-ui--persist-cleared-h ()
+  "The canvas cleared: what was kept from before dropped too, saved empty."
+  (when agent-ui--persist-kept
+    (setq agent-ui--persist-kept nil)
+    (agent-ui--persist-later)))
+
+(add-hook 'agent-ui-cleared-hook #'agent-ui--persist-cleared-h)
+
+(defun agent-ui--persist-all-now ()
+  "Emacs exits: the canvases' saves waiting done now (their last second of
+changes was lost)."
+  (dolist (canvas (agent-ui-canvases))
+    (when (timerp (buffer-local-value 'agent-ui--persist-timer canvas))
+      (with-demoted-errors "Agent UI: a canvas not saved: %S"
+        (agent-ui-persist-save canvas)))))
+
+(add-hook 'kill-emacs-hook #'agent-ui--persist-all-now)
+
 ;; ====== RESTORING ======
 
 (defun agent-ui-persist--without-sources (element)
@@ -109,6 +156,15 @@ id: its elements, as JSON. Returns the file, or nil."
         (plist-put element :children (mapcar (lambda (c) (if (agent-ui--plist-p c) (agent-ui-persist--without-sources c) c))
                                              children))
       element)))
+
+(defun agent-ui-persist--read (file)
+  "The elements saved in FILE; nil if it can't be read."
+  (condition-case nil
+      (agent-ui-parse-json (with-temp-buffer
+                             (let ((coding-system-for-read 'utf-8))
+                               (insert-file-contents file))
+                             (buffer-string)))
+    ((agent-ui-error file-error) nil)))
 
 (defun agent-ui-persist-restore (session)
   "SESSION's canvases back (an agent-shell buffer whose session id is
@@ -134,12 +190,7 @@ empty: how many of its elements; nil if not."
               ((file-readable-p file))
               (name (agent-ui-sub-canvas (agent-ui--session-name session) part))
               ((not (agent-ui-elements :canvas name))))
-    (let ((elements (condition-case nil
-                        (agent-ui-parse-json (with-temp-buffer
-                                               (let ((coding-system-for-read 'utf-8))
-                                                 (insert-file-contents file))
-                                               (buffer-string)))
-                      (agent-ui-error nil)))
+    (let ((elements (agent-ui-persist--read file))
           (count 0)
           ;; Coming back: its questions don't take the focus.
           (agent-ui--restoring t))
