@@ -152,11 +152,16 @@ what sips can't read: SVG). Non-nil if TO was made."
                     (replace-regexp-in-string "[\n\r]+" " " text))))
 
 (defun +my/os--notify-macos (title body)
-  "TITLE and BODY in macOS's Notification Center (config/emacs.el)."
+  "TITLE and BODY in macOS's Notification Center (config/emacs.el): through
+Emacs's own AppleScript while it has a GUI display (posted as Emacs's);
+else (a terminal's Emacs, a daemon with only terminal frames: its
+AppleScript errors there) through osascript, posted as Script Editor's."
   (let ((script (format "display notification %s with title %s"
                         (+my/os--applescript-string body)
                         (+my/os--applescript-string title))))
-    (if (fboundp 'do-applescript)
+    (if (and (fboundp 'do-applescript)
+             (fboundp 'x-display-list)
+             (x-display-list))
         (do-applescript script)
       (+my/os--run "osascript" "-e" script))
     t))

@@ -38,9 +38,10 @@
 
 ;; DESKTOP NOTIFICATIONS (`+my/os-notify', config/notify.el's)
 ;; macOS: Notification Center, posted by Emacs itself (AppleScript's display
-;; notification, `do-applescript'; osascript's without it); macOS asks once
-;; whether Emacs may notify (System Settings > Notifications > Emacs). A click
-;; brings Emacs forward.
+;; notification, `do-applescript'; osascript's without it, or without a GUI
+;; display: Emacs in a terminal, posted as Script Editor's then); macOS asks
+;; once whether Emacs may notify (System Settings > Notifications > Emacs). A
+;; click brings Emacs forward.
 ;; Linux: the desktop's notifications, through D-Bus (`notifications-notify':
 ;; a click runs the caller's function), else notify-send.
 

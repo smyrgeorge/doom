@@ -22,7 +22,8 @@ Claude sends its message itself (its system prompt says how and when):
 | `SPC t N` | One kind on / off |
 
 `M-x +my/notify-test` shows one now, to check that your desktop shows Emacs's: macOS asks once whether Emacs may notify
-(System Settings → Notifications → Emacs). On Linux, a click brings Emacs forward on what it's about.
+(System Settings → Notifications → Emacs; Emacs in a terminal posts them as Script Editor's). On Linux, a click brings
+Emacs forward on what it's about.
 
 In `config.el`, `(setq +my/notify-enabled nil)` turns them all off, and
 `(setq +my/notify-off '(claude claude-turn-done))` the kinds named.

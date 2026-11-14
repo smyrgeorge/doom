@@ -256,17 +256,34 @@ neither made it."
 ;; ====== DESKTOP NOTIFICATIONS ======
 
 (ert-deftest os/notify-on-macos ()
-  "Notification Center, through AppleScript in Emacs (posted as Emacs's);
-quotes and backslashes escaped, line breaks spaces."
-  (let ((+test-notifications nil))
+  "Notification Center, through AppleScript in Emacs (posted as Emacs's)
+while it has a GUI display; quotes and backslashes escaped, line breaks
+spaces."
+  (let ((+test-notifications nil)
+        (+test-os-runs nil))
     ;; macOS's Emacs has it, recorded (tests/helper.el); this test's Emacs may
-    ;; be Linux's, without it.
+    ;; be Linux's, without it, and has no display (batch).
     (cl-letf (((symbol-function 'do-applescript)
-               (lambda (script) (push (list 'applescript script) +test-notifications) "")))
+               (lambda (script) (push (list 'applescript script) +test-notifications) ""))
+              ((symbol-function 'x-display-list) (lambda () '("Mac"))))
       (+test-on-macos
         (should (+my/os-notify "Claude Code" "doom: \"done\" in a\\b\nnext"))))
     (should (equal +test-notifications
-                   '((applescript "display notification \"doom: \\\"done\\\" in a\\\\b next\" with title \"Claude Code\""))))))
+                   '((applescript "display notification \"doom: \\\"done\\\" in a\\\\b next\" with title \"Claude Code\""))))
+    (should-not +test-os-runs)))
+
+(ert-deftest os/notify-on-macos-in-a-terminal ()
+  "Emacs in a terminal (emacs -nw, a daemon with only terminal frames): its
+AppleScript is there but errors without a GUI display; osascript's."
+  (let ((+test-os-runs nil)
+        (+test-notifications nil))
+    (cl-letf (((symbol-function 'do-applescript)
+               (lambda (_script) (error "Window system is not in use or not initialized")))
+              ((symbol-function 'x-display-list) #'ignore))
+      (+test-on-macos (should (+my/os-notify "Title" "Body"))))
+    (should-not +test-notifications)
+    (should (equal +test-os-runs
+                   '(("osascript" "-e" "display notification \"Body\" with title \"Title\""))))))
 
 (ert-deftest os/notify-on-macos-without-applescript-in-emacs ()
   "No `do-applescript' (an Emacs built without it): osascript's."
