@@ -619,6 +619,27 @@ alone put 850ms between 41s and 2m 05s)."
   ;; Plain numbers: as numbers still.
   (should (string-match-p " 2\n.* 10" (+test-aue-draw '(:type "table" :columns ("N") :sort "N" :rows (("10") ("2")))))))
 
+(ert-deftest agent-ui-elements/table-sorted-dates-times-versions ()
+  "Dates, times and versions sorted by each of their numbers, both ways (by
+their leading number alone, ties left in their order: 2026-11-14 before
+2026-01-20, 1.2.10 before 1.2.9); numbers with a unit or % as numbers."
+  (cl-flet ((sorted (cells &optional descending)
+              (mapcar (lambda (line) (string-trim line))
+                      (nthcdr 2 (split-string
+                                 (+test-aue-draw `(:type "table" :columns ("V") :sort "V" :descending ,descending
+                                                   :rows ,(mapcar #'list cells)))
+                                 "\n")))))
+    (dolist (case '(("2025-12-31" "2026-01-20" "2026-03-01" "2026-11-14")
+                    ("9:59:59" "12:00:59" "12:01:03")
+                    ("1.2.9" "1.2.10" "1.10.0" "2.0.0")
+                    ("2 %" "45%" "300 MB" "1,204 MB")))
+      (should (equal (sorted (reverse case)) case))
+      (should (equal (sorted (append (cdr case) (list (car case))) t) (reverse case)))))
+  (should (= (agent-ui-table--number "1,204") 1204))
+  (should (= (agent-ui-table--number "0.4s") 0.4))
+  (should-not (agent-ui-table--number "2026-11-14"))
+  (should-not (agent-ui-table--number "1.2.10")))
+
 (ert-deftest agent-ui-elements/table-sort-arrow-kept ()
   "A sorted column's name cut to fit: its arrow kept (it was cut first)."
   (let ((text (+test-aue-draw '(:type "table" :columns ("Name" "Status" "Duration" "Owner" "Branch" "Commit")

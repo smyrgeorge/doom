@@ -149,9 +149,12 @@ those on the left, one at least."
     k))
 
 (defun agent-ui-table--number (cell)
-  "CELL's leading number (\"0.4s\": 0.4, \"1,204\": 1204), or nil."
-  (when (string-match "\\`[-+]?[0-9][0-9,]*\\(?:\\.[0-9]+\\)?" cell)
-    (string-to-number (string-replace "," "" (match-string 0 cell)))))
+  "CELL as a number, if it's one, with a unit or % maybe (\"0.4s\": 0.4,
+\"1,204\": 1204, \"12 MB\": 12), or nil (\"2026-11-14\", \"12:01:03\",
+\"1.2.10\": their leading numbers alone sorted them wrong)."
+  (when (string-match "\\`[-+]?[0-9][0-9,]*\\(?:\\.[0-9]+\\)?\\(?: ?\\(?:%\\|[[:alpha:]][[:alpha:]/]*\\)\\)?\\'"
+                      (string-trim cell))
+    (string-to-number (string-replace "," "" (string-trim cell)))))
 
 (defconst agent-ui-table--units '(("ms" . 0.001) ("s" . 1) ("min" . 60) ("m" . 60) ("h" . 3600) ("d" . 86400))
   "A duration's units, in seconds.")
@@ -170,15 +173,16 @@ nil if it isn't one: numbers each with a unit, nothing else."
 
 (defun agent-ui-table--sorted (rows column descending)
   "ROWS (their cells as text) by COLUMN's cells: as durations if they all are
-\(\"2m 05s\", \"850ms\"), else as numbers if they all start with one, else as
-text; DESCENDING the other way; empty cells last."
+\(\"2m 05s\", \"850ms\"), else as numbers if they all are (a unit or % after
+them maybe), else as text, the numbers in it by their value (dates, times,
+versions: 1.2.9 before 1.2.10); DESCENDING the other way; empty cells last."
   (let* ((cells (seq-remove #'string-empty-p (mapcar (lambda (r) (nth column r)) rows)))
          (durations (and cells (cl-every #'agent-ui-table--duration cells)))
          (numbers (and cells (cl-every #'agent-ui-table--number cells)))
          (before (lambda (a b)
                    (cond (durations (< (agent-ui-table--duration a) (agent-ui-table--duration b)))
                          (numbers (< (agent-ui-table--number a) (agent-ui-table--number b)))
-                         (t (string< (downcase a) (downcase b)))))))
+                         (t (string-version-lessp (downcase a) (downcase b)))))))
     (cl-stable-sort (copy-sequence rows)
                     (lambda (ra rb)
                       (let ((a (nth column ra)) (b (nth column rb)))
