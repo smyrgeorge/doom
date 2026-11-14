@@ -55,6 +55,47 @@
                 (should (string-match-p "question waiting" (format-mode-line mode-line-format)))))))
       (kill-buffer session))))
 
+;; A question while the minibuffer is open (a file being found): opened then,
+;; its pane took another's place (tiling steps aside while it's open), and
+;; taking the focus, it got the keys typed there (q killed it).
+(ert-deftest e2e-agent-ui/a-question-waits-for-the-minibuffer ()
+  "A question shown while the minibuffer reads: every pane as it was, the
+minibuffer's window selected; once it's closed, its pane opens beside them,
+then takes the focus once Emacs is idle a moment."
+  (let* ((session (generate-new-buffer "Claude Agent @ e2e-mini"))
+         (notes (generate-new-buffer "notes.txt"))
+         (agent-ui-display-function #'agent-ui-display-canvas)
+         (agent-ui-focus-questions t)
+         (agent-ui-focus-questions-delay 0.2)
+         ;; A new window for it, as tiling's new pane (not the other one's).
+         (split-width-threshold 20)
+         (seen nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-ui--sessions) (lambda () (list session))))
+          (delete-other-windows)
+          (switch-to-buffer session)
+          (set-window-buffer (split-window-right) notes)
+          (let ((name (concat (agent-ui--session-name session) " / ask")))
+            (run-with-timer 0.2 nil (lambda ()
+                                      (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?"
+                                                       :options ("Change the test" "Revert the message"))
+                                                     :canvas name)))
+            (run-with-timer 1.2 nil (lambda ()
+                                      (setq seen (list (mapcar #'window-buffer (window-list nil 'nomini))
+                                                       (minibufferp (window-buffer (selected-window)))))
+                                      (exit-minibuffer)))
+            (read-from-minibuffer "Find file: ")
+            (should (equal seen (list (list session notes) t)))
+            (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name))))
+              (should (+test-wait-for (lambda () (get-buffer-window canvas)) 2))
+              (should (get-buffer-window notes))
+              (should (get-buffer-window session))
+              (should (+test-wait-for (lambda () (eq (window-buffer (selected-window)) canvas)) 3))
+              (should (equal (get-text-property (window-point) 'agent-ui-id canvas) "fix"))
+              (kill-buffer canvas))))
+      (kill-buffer session)
+      (kill-buffer notes))))
+
 (ert-deftest e2e-agent-ui/redrawn-when-its-text-is-scaled ()
   "Its text scaled (C-x C-+, C-x C-0): drawn again, within a moment, at its
 window's new width, a column short of it (37 columns of zoomed text were
