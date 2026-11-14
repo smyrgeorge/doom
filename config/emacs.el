@@ -29,6 +29,8 @@
 ;; macOS: Preview and Finder (open), Preview's print dialog (osascript).
 ;; Linux: the file's default app and the file manager (xdg-open, D-Bus), the
 ;; default printer (lp, after asking).
+;; A file on another machine (TRAMP) none of them can open: said. One that
+;; fails says why once it ends.
 
 ;; THE CLIPBOARD'S IMAGES (`+my/os-copy-image')
 ;; macOS: osascript. Linux: wl-copy (Wayland) or xclip (X11).

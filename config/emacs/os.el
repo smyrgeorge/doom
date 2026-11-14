@@ -23,13 +23,33 @@ manager) is called here, for menus and buttons."
 
 (defun +my/os--run (program &rest args)
   "Start PROGRAM with ARGS, not waiting for it; on Linux a user error if it
-isn't installed (macOS's open always is)."
+isn't installed (macOS's open always is). Its failing (an exit status not
+0) said once it ends, with what it wrote."
   (unless (or (+my/macos-p) (executable-find program))
     (user-error "%s isn't installed" program))
-  (apply #'call-process program nil 0 nil args))
+  (let ((output (generate-new-buffer " *os-run*" t)))
+    (make-process
+     :name program :buffer output :noquery t :connection-type 'pipe
+     :command (cons program args)
+     :sentinel (lambda (process _event)
+                 (unless (process-live-p process)
+                   (let ((said (with-current-buffer output (string-trim (buffer-string)))))
+                     (kill-buffer output)
+                     (unless (eql (process-exit-status process) 0)
+                       (message "%s failed: %s" program
+                                (if (string-empty-p said)
+                                    (format "exit status %s" (process-exit-status process))
+                                  said)))))))))
+
+(defun +my/os--local (file verb what)
+  "A user error if FILE is on another machine (remote, TRAMP): WHAT, an app
+here (`+my/os-app-name'), can't VERB (\"open\") it."
+  (when (file-remote-p file)
+    (user-error "Can't %s a file on another machine in %s: %s" verb (+my/os-app-name what) file)))
 
 (defun +my/os-open (file)
   "Open FILE in another app: Preview on macOS, its default app on Linux."
+  (+my/os--local file "open" 'viewer)
   (if (+my/macos-p)
       (+my/os--run "open" "-a" "Preview" file)
     (+my/os--run "xdg-open" file)))
@@ -38,6 +58,7 @@ isn't installed (macOS's open always is)."
   "Show FILE (or a folder) in the file manager, selected: Finder on macOS; on
 Linux the file manager D-Bus has (Nautilus, Dolphin...), else its folder,
 opened."
+  (+my/os--local file "show" 'files)
   (cond ((+my/macos-p) (+my/os--run "open" "-R" file))
         ((+my/os--reveal-dbus file))
         (t (+my/os--run "xdg-open" (file-name-directory (directory-file-name file))))))

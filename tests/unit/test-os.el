@@ -91,23 +91,70 @@ selected; without one, its folder opened."
           (should-not (+my/os--reveal-dbus "/a/b.pdf"))
         (advice-add '+my/os--reveal-dbus :override #'ignore '((name . +test-no-apps)))))))
 
+(defmacro +test-os--really-running (&rest body)
+  "BODY with `+my/os--run' running its programs (tests/helper.el only
+records them)."
+  (declare (indent 0))
+  `(progn
+     (advice-remove '+my/os--run '+test-no-apps)
+     (unwind-protect (progn ,@body)
+       (advice-add '+my/os--run :override
+                   (lambda (program &rest args) (push (cons program args) +test-os-runs) 0)
+                   '((name . +test-no-apps))))))
+
 (ert-deftest os/run-needs-the-program-on-linux ()
   "Linux: a program not installed is said (xdg-open, from xdg-utils); macOS's
 open always is."
-  (advice-remove '+my/os--run '+test-no-apps)
-  (unwind-protect
-      (+test-os--recording-calls
+  (+test-os--really-running
+    (let ((made nil))
+      (cl-letf (((symbol-function 'make-process)
+                 (lambda (&rest args) (push (plist-get args :command) made) nil)))
         (+test-os--with-programs '()
           (+test-on-linux
             (should-error (+my/os--run "xdg-open" "/a") :type 'user-error))
           (+test-on-macos (+my/os--run "open" "-R" "/a")))
         (+test-os--with-programs '("xdg-open")
-          (+test-on-linux (+my/os--run "xdg-open" "/a")))
-        ;; Not waited for (BUFFER 0).
-        (should (equal calls '(("xdg-open" nil "/a") ("open" nil "-R" "/a")))))
-    (advice-add '+my/os--run :override
-                (lambda (program &rest args) (push (cons program args) +test-os-runs) 0)
-                '((name . +test-no-apps)))))
+          (+test-on-linux (+my/os--run "xdg-open" "/a"))))
+      (should (equal made '(("xdg-open" "/a") ("open" "-R" "/a")))))))
+
+(ert-deftest os/run-says-a-failure ()
+  "Not waited for; failing (an exit status not 0), said once it ends, with
+what it wrote (open: \"The file ... does not exist.\"), else its status.
+Ending well: nothing said."
+  (skip-unless (executable-find "sh"))
+  (+test-os--really-running
+    (+test-clear-messages)
+    (let ((processes (+test-on-linux
+                       (list (+my/os--run "sh" "-c" "echo 'The file /a does not exist.' >&2; exit 1")
+                             (+my/os--run "sh" "-c" "exit 3")
+                             (+my/os--run "sh" "-c" "echo fine")))))
+      (should (seq-every-p #'processp processes))
+      ;; Done: their output's buffers gone.
+      (should (+test-wait-for (lambda ()
+                                (not (seq-some (lambda (process) (buffer-live-p (process-buffer process)))
+                                               processes)))
+                              10)))
+    (should (= (+test-messages "^sh failed: ") 2))
+    (should (= (+test-messages "^sh failed: The file /a does not exist\\.$") 1))
+    (should (= (+test-messages "^sh failed: exit status 3$") 1))
+    (should (= (+test-messages "fine") 0))))
+
+(ert-deftest os/a-file-on-another-machine ()
+  "A remote file (TRAMP): no app here can open or show it, said; nothing
+run."
+  (let ((+test-os-runs nil))
+    (dolist (system (list (lambda (f) (+test-on-macos (funcall f)))
+                          (lambda (f) (+test-on-linux (funcall f)))))
+      (funcall system
+               (lambda ()
+                 (should-error (+my/os-open "/ssh:host:/a/b.png") :type 'user-error)
+                 (should-error (+my/os-reveal "/ssh:host:/a/b.png") :type 'user-error))))
+    (+test-on-macos
+      (should (equal (cadr (should-error (+my/os-open "/ssh:host:/a/b.png") :type 'user-error))
+                     (format-message "Can't open a file on another machine in Preview: /ssh:host:/a/b.png")))
+      (should (equal (cadr (should-error (+my/os-reveal "/ssh:host:/a/b.png") :type 'user-error))
+                     (format-message "Can't show a file on another machine in Finder: /ssh:host:/a/b.png"))))
+    (should-not +test-os-runs)))
 
 ;; ====== PRINTING ======
 
