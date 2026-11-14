@@ -424,6 +424,40 @@ beside the diff's; the diff's tab again, SPC g d closes its pane."
           (should-not (window-live-p diff))
           (should (= (length (+my/tiling--panes)) 1)))))))
 
+(ert-deftest e2e-tiling/file-diff-one-tab-whichever-files ()
+  "SPC g d on f.txt, g.txt, then h.txt: the diff's pane has one tab, h.txt's
+diff (the others killed); q closes the pane."
+  (+test-tiling
+    (let* ((dir (+test-tiling--dir))
+           (default-directory dir)
+           (left (selected-window))
+           (files (mapcar (lambda (name) (expand-file-name name dir)) '("f.txt" "g.txt" "h.txt")))
+           pane)
+      (+test-tiling--git "init" "-q")
+      (dolist (file files)
+        (with-temp-file file (insert "one\ntwo\n")))
+      (+test-tiling--git "add" ".")
+      (+test-tiling--git "commit" "-qm" "files")
+      (dolist (file files)
+        (select-window left)
+        (find-file file)
+        (goto-char (point-max))
+        (insert "three\n")
+        (+my/git-diff-pane)
+        (should (or (not pane) (eq (selected-window) pane)))
+        (setq pane (selected-window)))
+      (let ((diff (window-buffer pane)))
+        (should (= (length (+my/tiling--panes)) 2))
+        (should (equal (buffer-local-value 'magit-buffer-diff-files diff) '("h.txt")))
+        (should (equal (+test-tiling--tabs pane) (list (buffer-name diff))))
+        (should (equal (seq-filter (lambda (buffer) (with-current-buffer buffer (derived-mode-p 'magit-diff-mode)))
+                                   (buffer-list))
+                       (list diff)))
+        (set-buffer diff)
+        (call-interactively #'magit-mode-bury-buffer)
+        (should-not (window-live-p pane))
+        (should (= (length (+my/tiling--panes)) 1))))))
+
 (ert-deftest e2e-tiling/magit-status-and-its-buffers ()
   "SPC g g from a file: magit's status in a new pane; its log in that pane; a
 commit from the log in a new pane, q closes it; RET on a file in the status:

@@ -262,6 +262,52 @@ summary magit starts the diff with)."
           (should (string-match-p "^\\+CHANGED 20$" (buffer-substring-no-properties (point-min) (point-max))))
           (should (equal (+test-git--hunk-at-point) '(17 7))))))))
 
+(defun +test-git--diff-buffers ()
+  "The magit diff buffers alive."
+  (seq-filter (lambda (buffer) (with-current-buffer buffer (derived-mode-p 'magit-diff-mode)))
+              (buffer-list)))
+
+(ert-deftest git/pane-keeps-one-diff ()
+  "SPC g d on a.txt, sub/c.txt, then b.txt: the pane shows b.txt's diff, the
+others gone from its buffers and killed; q closes the pane, not showing the
+one before."
+  (+test-git-with-repo
+    (+test-git--write "a.txt" (+test-git--lines 30 '(2)))
+    (+test-git--write "sub/c.txt" (+test-git--lines 30 '(20)))
+    (+test-git--write "b.txt" (+test-git--lines 30 '(8)))
+    (let ((code (selected-window))
+          (files (mapcar #'expand-file-name '("a.txt" "sub/c.txt" "b.txt")))
+          pane)
+      (dolist (file files)
+        (select-window code)
+        (+test-git--visit file 8)
+        (+my/git-diff-pane)
+        (should (or (not pane) (eq (selected-window) pane)))
+        (setq pane (selected-window)))
+      (should (equal (+test-git--pane-files) '("b.txt")))
+      (should (equal (+test-git--diff-buffers) (list (window-buffer pane))))
+      (should-not (seq-some (lambda (entry) (not (eq (car entry) (window-buffer pane))))
+                            (seq-filter (lambda (entry) (buffer-live-p (car entry)))
+                                        (window-prev-buffers pane))))
+      (call-interactively #'magit-mode-bury-buffer)
+      (should (= (length (window-list)) 1))
+      (should (eq (selected-window) code))
+      (should-not (+my/git-diff-pane--window)))))
+
+(ert-deftest git/pane-same-file-again ()
+  "SPC g d again from the same file: the same diff, kept."
+  (+test-git-with-repo
+    (+test-git--write "a.txt" (+test-git--lines 30 '(2)))
+    (let ((code (selected-window)))
+      (+test-git--visit "a.txt" 2)
+      (+my/git-diff-pane)
+      (let ((diff (window-buffer)))
+        (select-window code)
+        (+my/git-diff-pane)
+        (should (buffer-live-p diff))
+        (should (eq (window-buffer) diff))
+        (should (equal (+test-git--diff-buffers) (list diff)))))))
+
 (ert-deftest git/pane-closes-from-itself ()
   "SPC g d in the pane closes it; the code's window stays."
   (+test-git-with-repo

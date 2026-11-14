@@ -12,6 +12,8 @@
 ;; takes half of the window it's opened from (the split does; a window-width
 ;; would be a share of the whole frame, taken from the windows beside it).
 ;; With tiling (config/tiling), the strategy places it.
+;; Another file's diff takes the place of the one shown: the pane keeps one
+;; diff, its only tab (magit makes a buffer per file), so q closes it.
 (defun +my/git-diff-pane--window ()
   "Return the window in this frame showing a single-file magit diff."
   (seq-find (lambda (win)
@@ -25,6 +27,26 @@
        (require 'magit nil t)
        (magit-toplevel)
        (magit-file-relative-name)))
+
+(defun +my/git-diff-pane--switch (window buffer)
+  "Show BUFFER, another file's diff, in WINDOW, the pane, in place of the one
+it shows (see above): that one taken off its buffers (its tabs) and killed
+unless shown elsewhere; quitting WINDOW closes it as before. Return WINDOW."
+  (let ((old (window-buffer window)))
+    (set-window-buffer window buffer)
+    (unless (eq old buffer)
+      (let ((quit (window-parameter window 'quit-restore)))
+        (when (eq (nth 3 quit) old)
+          (set-window-parameter window 'quit-restore
+                                (append (seq-take quit 3) (list buffer) (nthcdr 4 quit)))))
+      (set-window-prev-buffers window (seq-remove (lambda (entry) (eq (car entry) old))
+                                                  (window-prev-buffers window)))
+      (set-window-next-buffers window (remq old (window-next-buffers window)))
+      (set-window-parameter window 'tab-line-buffers
+                            (remq old (window-parameter window 'tab-line-buffers)))
+      (unless (get-buffer-window old t)
+        (kill-buffer old)))
+    window))
 
 (defun +my/git-diff-pane ()
   "Show the current file's git diff in a pane on the right and focus it.
@@ -40,7 +62,7 @@ In the pane itself, close it."
            (magit-display-buffer-function
             (lambda (buffer)
               (if (window-live-p win)
-                  (progn (set-window-buffer win buffer) win)
+                  (+my/git-diff-pane--switch win buffer)
                 (display-buffer buffer '((display-buffer-in-direction)
                                          (direction . right)))))))
       (magit-diff-buffer-file)          ; selects the pane

@@ -8,8 +8,14 @@
 
 ## File diff
 
-`SPC g d` shows the current file's changes in a new pane: `s` / `u` / `x` stage, unstage or discard a hunk,
-`RET` goes to the line, `q` closes it.
+`SPC g d` shows the current file's changes in a new pane, on the hunk of the line you're on; from another file, the
+pane shows that one's. It refreshes when the file is saved.
+
+| Key | Action |
+|---|---|
+| `s` / `u` / `x` | Stage, unstage or discard the hunk |
+| `RET` | Go to the line |
+| `SPC g d` / `q` / `Esc` | Close the pane |
 
 ## Resolving conflicts
 
