@@ -288,9 +288,24 @@ PREVIEW in config/mermaid.el)."
       (let ((preview +my/mermaid-preview--buffer))
         (setq +my/mermaid-preview--buffer nil)
         (+my/mermaid-preview--kill preview)))
-    (when (and +my/mermaid-preview--file (file-exists-p +my/mermaid-preview--file))
-      (delete-file +my/mermaid-preview--file))
-    (setq +my/mermaid-preview--file nil)))
+    (+my/mermaid-preview--delete-page)))
+
+;; The WebKit preview's page is a temporary file, deleted when the preview
+;; goes, or Emacs does (no buffer is killed then).
+(defun +my/mermaid-preview--delete-page ()
+  "This Mermaid buffer's preview page deleted (see above)."
+  (when (and +my/mermaid-preview--file (file-exists-p +my/mermaid-preview--file))
+    (delete-file +my/mermaid-preview--file))
+  (setq +my/mermaid-preview--file nil))
+
+(defun +my/mermaid-preview--delete-pages-h ()
+  "Emacs is exiting: each preview's page deleted (see above)."
+  (dolist (buffer (buffer-list))
+    (when (buffer-local-value '+my/mermaid-preview--file buffer)
+      (with-current-buffer buffer
+        (ignore-errors (+my/mermaid-preview--delete-page))))))
+
+(add-hook 'kill-emacs-hook #'+my/mermaid-preview--delete-pages-h)
 
 (defun +my/mermaid-preview--shown-p ()
   "Non-nil while this Mermaid buffer's preview is open and on screen."

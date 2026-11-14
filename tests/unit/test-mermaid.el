@@ -848,6 +848,27 @@ window on *scratch*, and again after."
           (should (= (length (window-list)) 1))
           (should (seq-every-p #'+test-mermaid--xw-killed +test-mermaid--made)))))))
 
+(ert-deftest mermaid/preview-page-deleted-when-emacs-exits ()
+  "Emacs exiting with previews open (no buffer killed then): their pages
+deleted; another file left alone."
+  (should (memq #'+my/mermaid-preview--delete-pages-h kill-emacs-hook))
+  (+test-mermaid--with-webkit
+    (let ((first (+test-mermaid--file "exit-1.mmd" "flowchart TD\n"))
+          (other (make-temp-file "mermaid-preview-" nil ".html")))
+      (+my/mermaid-preview-show)
+      (let ((second (+test-mermaid--file "exit-2.mmd" "flowchart LR\n")))
+        (+my/mermaid-preview-show)
+        (+test-mermaid--redisplay)
+        (let ((pages (mapcar (lambda (mmd) (buffer-local-value '+my/mermaid-preview--file mmd))
+                             (list first second))))
+          (should (seq-every-p #'file-exists-p pages))
+          (+my/mermaid-preview--delete-pages-h)
+          (should-not (seq-some #'file-exists-p pages))
+          (should (file-exists-p other))
+          ;; Turned off after: nothing to delete, no error.
+          (with-current-buffer first (+my/mermaid-preview-mode -1))
+          (should-not (buffer-local-value '+my/mermaid-preview--file first)))))))
+
 (ert-deftest mermaid/preview-closed-turns-it-off ()
   "Its pane closed (q kills it): the file's preview off; the file killed: the
 preview goes."
