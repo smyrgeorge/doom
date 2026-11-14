@@ -184,13 +184,32 @@ above)."
 ;; that key watches the current tab alone for unsaved changes: saving the
 ;; others (save all, magit saving the repository's files) left their • on, and
 ;; changes made elsewhere (another window, a rename by the language server)
-;; didn't show one. The key watches every file tab.
+;; didn't show one. The key watches every file tab, and the window's width: a
+;; pane resized (tiling resizes every pane when one opens or closes) kept the
+;; tabs laid out for its old width, the current one off screen until the next
+;; tab switch. Laid out for a new width, the tab line scrolls to the current
+;; tab afresh (a pane widened showed only the tabs from where it had scrolled
+;; to); a scroll of your own (its arrows) stays.
 (defun +my/tabs-cache-key (tabs)
-  "TABS' cache key (`tab-line-cache-key-function'): tab-line's own, and which
-of them have unsaved changes."
-  (cons (mapcar (lambda (tab) (and (bufferp tab) (buffer-file-name tab) (buffer-modified-p tab)))
-                tabs)
-        (tab-line-cache-key-default tabs)))
+  "TABS' cache key (`tab-line-cache-key-function'): tab-line's own first (it
+reads them by place), which of them have unsaved changes, and the width the
+window's tabs are laid out for."
+  (append (tab-line-cache-key-default tabs)
+          (list (mapcar (lambda (tab) (and (bufferp tab) (buffer-file-name tab) (buffer-modified-p tab)))
+                        tabs)
+                (window-body-width nil t))))
+
+(defun +my/tabs-resized-a (&rest _)
+  "Before `tab-line-format-template': in a window laid out for another width
+\(see above), the tab line's own scroll (a float; one of yours is an integer)
+afresh."
+  (let ((width (window-body-width nil t)))
+    (unless (eql width (window-parameter nil '+my/tabs-width))
+      (when (floatp (window-parameter nil 'tab-line-hscroll))
+        (set-window-parameter nil 'tab-line-hscroll nil))
+      (set-window-parameter nil '+my/tabs-width width))))
+
+(advice-add 'tab-line-format-template :before #'+my/tabs-resized-a)
 
 ;; A theme loaded: every window's tabs drawn again. Their bars are images in
 ;; the old theme's colours, which the cache kept (their text, in faces,

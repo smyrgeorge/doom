@@ -501,16 +501,60 @@ workspaces' buffers its history has."
           (notes (+test-tabs--plain "notes")))
       (+test-tabs--show notes a)
       (with-current-buffer notes (insert "change"))
-      (let ((key (+my/tabs-cache-key (list notes a))))
-        ;; tab-line's own key kept.
-        (should (equal (cdr key) (tab-line-cache-key-default (list notes a))))
+      (let* ((own (tab-line-cache-key-default (list notes a)))
+             (key (+my/tabs-cache-key (list notes a))))
+        ;; tab-line's own key kept, first: it reads its scroll (3rd) and the
+        ;; buffer's name (2nd) by place.
+        (should (equal (seq-take key (length own)) own))
+        (should (eq (nth 2 key) (window-parameter nil 'tab-line-hscroll)))
         ;; Unsaved files only.
-        (should (equal (car key) '(nil nil))))
+        (should (equal (nth (length own) key) '(nil nil)))
+        ;; The width the tabs are laid out for.
+        (should (equal (car (last key)) (window-body-width nil t))))
       (with-current-buffer a (insert "change"))
-      (should (equal (car (+my/tabs-cache-key (list notes a))) '(nil t)))
+      (should (equal (car (last (+my/tabs-cache-key (list notes a)) 2)) '(nil t)))
       ;; Tabs of tab-line's other form (alists): no error.
-      (should (equal (car (+my/tabs-cache-key (list `((name . "a") (buffer . ,a)))))
+      (should (equal (car (last (+my/tabs-cache-key (list `((name . "a") (buffer . ,a)))) 2))
                      '(nil))))))
+
+(defun +test-tabs--shown ()
+  "The selected window's tab line as tab-line lays it out (its cache used):
+the tabs it shows, as buffer names, and its width in columns."
+  (let ((parts (seq-filter #'stringp (flatten-tree (tab-line-format)))))
+    (list (delete-dups (delq nil (mapcar (lambda (part)
+                                           (when-let* ((tab (tab-line--get-tab-property 'tab part)))
+                                             (buffer-name tab)))
+                                         parts)))
+          (string-width (apply #'concat parts)))))
+
+(ert-deftest tabs/a-resized-window-lays-out-its-tabs-again ()
+  "Shrunk, the current tab still shown whole, no tab switch needed; widened
+again, all the tabs that fit shown (not only those from where it scrolled
+to); a scroll of your own (an integer) kept."
+  (+test-tabs
+    (let ((files (mapcar (lambda (i) (+test-tabs--file (format "file%02d.txt" i))) (number-sequence 1 12)))
+          (window (selected-window)))
+      (apply #'+test-tabs--show files)
+      (pcase-let ((`(,wide ,_) (+test-tabs--shown)))
+        (should (equal (car (last wide)) "file12.txt"))
+        (should (< (length wide) 12))
+        ;; Shrunk: the current tab whole, within the window.
+        (split-window-right 30)
+        (should (= (window-total-width window) 30))
+        (pcase-let ((`(,narrow ,width) (+test-tabs--shown)))
+          (should (equal (car (last narrow)) "file12.txt"))
+          (should (< (length narrow) (length wide)))
+          (should (<= width (window-body-width window))))
+        ;; Widened: as many as before.
+        (delete-other-windows)
+        (should (equal (car (+test-tabs--shown)) wide))
+        ;; A scroll of your own (the tab line's arrows) stays.
+        (set-window-parameter nil 'tab-line-hscroll 2)
+        (let ((mine (car (+test-tabs--shown))))
+          (should (equal (car mine) "file03.txt"))
+          (split-window-right 30)
+          (should (eql (window-parameter window 'tab-line-hscroll) 2))
+          (should (equal (car (car (+test-tabs--shown))) "file03.txt")))))))
 
 (ert-deftest tabs/a-new-theme-draws-every-window-s-tabs-again ()
   "The bars are images in the theme's colours, kept in tab-line's cache: a
