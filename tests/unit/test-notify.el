@@ -171,6 +171,17 @@ counted."
     (let ((+my/notify-kinds nil))
       (should-error (call-interactively #'+my/notify-toggle-kind) :type 'user-error))))
 
+(ert-deftest notify/toggle-a-kind-none-picked ()
+  "SPC t N, nothing picked (empty input, M-RET in vertico): said, none
+turned off; nor a kind not defined."
+  (+test-notify nil
+    (+my/notify-define 'first "Title" "The first")
+    (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "")))
+      (should-error (call-interactively #'+my/notify-toggle-kind) :type 'user-error))
+    (should-error (+my/notify-toggle-kind 'no-such-kind) :type 'user-error)
+    (should-error (+my/notify-toggle-kind nil) :type 'user-error)
+    (should-not +my/notify-off)))
+
 ;; ====== CLAUDE CODE ======
 
 (defmacro +test-notify--session (name &rest body)

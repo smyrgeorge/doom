@@ -69,7 +69,10 @@ off, its name."
                          (reverse +my/notify-kinds))))
      (unless labels
        (user-error "No notifications defined"))
-     (list (cdr (assoc (completing-read "Turn on / off: " labels nil t) labels)))))
+     (list (or (cdr (assoc (completing-read "Turn on / off: " labels nil t) labels))
+               (user-error "No notification picked")))))
+  (unless (assq kind +my/notify-kinds)
+    (user-error "No notification %s" kind))
   (setq +my/notify-off (if (memq kind +my/notify-off)
                            (remq kind +my/notify-off)
                          (cons kind +my/notify-off)))
