@@ -140,6 +140,28 @@ length, and the ways back."
         (should-not +my/banner--list)
         (should-not (+my/banner--ours-p))))))
 
+(ert-deftest long-lines/open-normally-is-remembered ()
+  "Open normally, then the file's mode set again (revert-buffer, normal-mode),
+with Doom's global-so-long-mode on: its own mode still, not so-long-mode."
+  (+test-long-lines
+    (let ((was global-so-long-mode)
+          (buffer (+test-long-lines--file)))
+      (unwind-protect
+          (progn
+            (global-so-long-mode 1)
+            (switch-to-buffer buffer)
+            (should (eq major-mode 'so-long-mode))
+            (+test-long-lines--click buffer "Open normally")
+            (should (eq major-mode 'emacs-lisp-mode))
+            (revert-buffer t t)
+            (run-window-configuration-change-hook) ; as redisplay would
+            (should (eq major-mode 'emacs-lisp-mode))
+            (normal-mode)
+            (run-window-configuration-change-hook)
+            (should (eq major-mode 'emacs-lisp-mode))
+            (should-not +my/banner--list))
+        (global-so-long-mode (if was 1 -1))))))
+
 ;; ====== LOADED ======
 
 (ert-deftest long-lines/config-el-loads-it-after-banner ()

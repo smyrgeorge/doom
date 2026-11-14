@@ -28,10 +28,14 @@
   ;; Same notice, without the part about wrapping.
   (+my/long-lines-notice-h))
 
+(defvar +my/large-files--normally)      ; editor/large-files.el
+
 (defun +my/long-lines--open-normally ()
   ;; Back to the file's own mode. Not `so-long-revert': Doom's action keeps
   ;; what to undo in a buffer-local variable that entering `so-long-mode'
-  ;; wipes, so it did nothing.
+  ;; wipes, so it did nothing. Remembered, as large-files.el's is: the mode
+  ;; set again (revert-buffer, normal-mode) went back to `so-long-mode'.
+  (setq-local +my/large-files--normally t)
   (so-long-mode-revert))
 
 (add-hook 'so-long-hook #'+my/long-lines-notice-h)

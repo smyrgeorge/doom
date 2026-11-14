@@ -30,7 +30,8 @@
 (put '+my/large-file 'permanent-local t)
 
 (defvar-local +my/large-files--normally nil
-  "Non-nil once the file was opened normally: not light again.")
+  "Non-nil once the file was opened normally (here, or long-lines.el's Open
+normally): not light again, nor so-long's.")
 (put '+my/large-files--normally 'permanent-local t)
 
 (defvar +my/large-files--light nil
@@ -142,7 +143,13 @@ Open normally (`so-long-mode-revert') runs."
                 (+my/large-files--long (major-mode-remap mode)))
                (mode (set-auto-mode-0 mode (car args)))))))
     ('large (+my/large-files--large fn args))
-    (_ (apply fn args))))
+    ;; Opened normally: its mode set again (revert-buffer, normal-mode) as
+    ;; chosen, not so-long's after it.
+    (_ (if (not +my/large-files--normally)
+           (apply fn args)
+         (require 'so-long)
+         (let ((so-long-enabled nil))
+           (apply fn args))))))
 
 (defun +my/large-files-no-scan-a (fn &rest args)
   "`syntax-propertize': not while a large file's mode sets up (see above)."
