@@ -86,6 +86,8 @@ data left out: what a panel saved from it keeps)."
   "The size of a character cell its elements were drawn for, in pixels:
 \(WIDTH HEIGHT) (their images, their glyphs evened out are sized from it).")
 (defvar-local agent-ui--counter 0 "For ids made for elements shown without one.")
+(defvar-local agent-ui--hidden nil
+  "Why the canvas's pane couldn't open (an error's message), until it does.")
 
 ;; ====== THE BUFFER ======
 
@@ -207,12 +209,28 @@ another is still open (one opened from it)."
 
 (defun agent-ui--display (buffer)
   "BUFFER, a canvas in no window, shown (`agent-ui-display-function'); while
-the minibuffer is open, once it's closed, if it's still in none."
+the minibuffer is open, once it's closed, if it's still in none. Its pane
+not opening (tiling's \"No room for another pane\") isn't an error: its
+elements are drawn and go on, it's said (`agent-ui--hidden'), and tried
+again at its next change."
   (let ((display agent-ui-display-function))
     (agent-ui-after-minibuffer
      (lambda ()
        (when (and (buffer-live-p buffer) (not (get-buffer-window buffer t)))
-         (funcall display buffer))))))
+         (let ((hidden (condition-case err
+                           (progn (funcall display buffer) nil)
+                         (error (error-message-string err)))))
+           (with-current-buffer buffer
+             (when (and hidden (not agent-ui--hidden))
+               (message "%s" (format "%s can't be shown (%s): it opens at its next change, once there's room"
+                                     (buffer-name) hidden)))
+             (setq agent-ui--hidden hidden))))))))
+
+(defun agent-ui--show-if-hidden ()
+  "The current canvas shown, if its pane couldn't open before and it's still
+in no window (room made since)."
+  (when (and agent-ui--hidden (not (agent-ui--window)))
+    (agent-ui--display (current-buffer))))
 
 ;; ====== DRAWING ======
 
@@ -419,6 +437,7 @@ any others by then)."
   "Redraw every element of CANVAS (default: the current buffer's) now."
   (interactive)
   (agent-ui--in (or canvas (current-buffer))
+    (agent-ui--show-if-hidden)
     (setq agent-ui--dirty (copy-sequence agent-ui--order))
     (agent-ui--flush)))
 
@@ -674,6 +693,7 @@ Signals `agent-ui-error' if ELEMENT is wrong."
                                          id given))
           (run-hook-with-args 'agent-ui-removed-functions id)
           (agent-ui--children-stopped old)
+          (agent-ui--show-if-hidden)
           (agent-ui--dirty (list (agent-ui--entry-id owner)))))
        (entry
           (progn
@@ -681,6 +701,7 @@ Signals `agent-ui-error' if ELEMENT is wrong."
             (agent-ui--children-stopped (agent-ui--entry-element entry))
             (setf (agent-ui--entry-element entry) element
                   (agent-ui--entry-shown entry) given)
+            (agent-ui--show-if-hidden)
             (agent-ui--dirty (list id))))
        (t
         (agent-ui--ids-free element)
@@ -728,6 +749,7 @@ started or stopped as they came or went, redrawn soon. Returns ID."
       (agent-ui--ids-free new id)
       (setf (agent-ui--entry-element entry) new))
     (agent-ui--children-changed old new)
+    (agent-ui--show-if-hidden)
     (agent-ui--dirty (list (agent-ui--entry-id entry)))
     (run-hooks 'agent-ui-changed-hook)
     id))

@@ -63,8 +63,8 @@ heredoc for anything long). An element is an object with a `type`, an `id` (lett
 optional `title` (a line above it) and its type's properties.
 
 Replies: `{"ok":true,"id":"build"}`, or `{"ok":false,"error":"..."}` saying exactly what's wrong (an unknown property
-lists the right ones). Exit status: 0 done, 1 not done, 2 a wrong use, 3 no Emacs (the canvas can't be used: carry on
-without it). A wrong element is refused whole; nothing half-shown.
+lists the right ones). Exit status: 0 done, 1 not done, 2 a wrong use, 3 no Emacs (carry on without the canvas). A
+wrong element is refused whole; nothing half-shown. A reply's `hidden`: its pane couldn't open; tell the user.
 
 **Several canvases.** `--canvas NAME` on any operation (or `"canvas": "NAME"` in the JSON; the MCP tools' `canvas`)
 uses another canvas of your session, in a pane of its own: for a second subject worth its own pane, or a question

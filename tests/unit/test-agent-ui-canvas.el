@@ -258,6 +258,47 @@ minibuffer still open (one opened from it): once that one's closed."
           (remove-hook 'minibuffer-exit-hook #'agent-ui--minibuffer-exit-h)
           (setq agent-ui--after-minibuffer nil))))))
 
+(ert-deftest agent-ui-canvas/shown-though-its-pane-cant-open ()
+  "Its pane can't open (tiling's \"No room for another pane\"): the element
+shown all the same, drawn, its sources started (`agent-ui-shown-functions'),
+said; its pane tried again at the next change, opened once there's room
+(it was half added: in the canvas's order, not drawn, its source never
+started, every later element failing the same way)."
+  (+test-auc
+    (let* ((room nil)
+           (shown nil)
+           (agent-ui-display-function
+            (lambda (b) (if room (push b +test-auc-displayed) (user-error "No room for another pane"))))
+           (agent-ui-shown-functions (list (lambda (id _element) (push id shown)))))
+      (should (equal (agent-ui-show '(:id "a" :type "meter" :value 1)) "a"))
+      (should (equal (+test-auc-text) "1/10\n\n"))
+      (should (equal shown '("a")))
+      (should (equal (buffer-local-value 'agent-ui--hidden canvas) "No room for another pane"))
+      (should (= (+test-messages "can't be shown (No room for another pane)") 1))
+      ;; Another: the same, said once.
+      (+test-clear-messages)
+      (agent-ui-show '(:id "b" :type "meter" :value 2))
+      (should (equal (+test-auc-text) "1/10\n\n2/10\n\n"))
+      (should (equal shown '("b" "a")))
+      (should (= (+test-messages "can't be shown") 0))
+      ;; Room made: shown at its next change.
+      (setq room t)
+      (agent-ui-update "a" '(:value 3))
+      (should (equal +test-auc-displayed (list canvas)))
+      (should-not (buffer-local-value 'agent-ui--hidden canvas))
+      (+test-auc-flush)
+      (should (equal (+test-auc-text) "3/10\n\n2/10\n\n"))
+      ;; Shown once: its next changes don't show it again.
+      (agent-ui-update "a" '(:value 4))
+      (should (= (length +test-auc-displayed) 1))
+      ;; g r tries again too.
+      (setq room nil)
+      (agent-ui-show '(:id "c" :type "meter"))
+      (should (buffer-local-value 'agent-ui--hidden canvas))
+      (setq room t)
+      (agent-ui-canvas-redraw canvas)
+      (should (= (length +test-auc-displayed) 2)))))
+
 (ert-deftest agent-ui-canvas/drawn-at-its-windows-width ()
   (+test-auc
     ;; In no window: `agent-ui-default-width'.

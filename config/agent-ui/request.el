@@ -92,14 +92,19 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
        ;; (`agent-ui-file-directory'), unless they say.
        (let* ((id (agent-ui-show element :canvas canvas))
               (log (and (fboundp 'agent-ui-source-status)
-                        (plist-get (agent-ui-source-status id :canvas canvas) :log))))
+                        (plist-get (agent-ui-source-status id :canvas canvas) :log)))
+              (hidden (buffer-local-value 'agent-ui--hidden (agent-ui--buffer canvas))))
          (append (list :ok t :id id)
                  ;; A link to it, for the agent's reply (config/agent-ui/snapshot.el).
                  (when (fboundp 'agent-ui-link)
                    (list :link (agent-ui-link (with-current-buffer (agent-ui--buffer canvas)
                                                 agent-ui--canvas-name)
                                               id)))
-                 (when log (list :log log))))))
+                 (when log (list :log log))
+                 ;; Shown, but its pane couldn't open: for the agent to say.
+                 (when hidden
+                   (list :hidden (format "the canvas's pane couldn't open (%s): it opens at its next change, once there's room"
+                                         hidden)))))))
     ("update"
      (list :ok t :id (agent-ui-update (agent-ui--need-id op (or id (plist-get payload :id)))
                                       (agent-ui--payload-object payload "update")

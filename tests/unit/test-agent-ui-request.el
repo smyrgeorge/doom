@@ -42,6 +42,19 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
 
 ;; ====== OPERATIONS ======
 
+(ert-deftest agent-ui-request/shown-though-its-pane-cant-open ()
+  "Its canvas's pane can't open: shown all the same, the reply ok, saying
+so (it was ok false, the element half added)."
+  (+test-aur
+    (let ((agent-ui-display-function (lambda (_b) (user-error "No room for another pane"))))
+      (let ((reply (+test-aur-request "show" nil "{\"id\":\"b\",\"type\":\"progress\",\"max\":4}")))
+        (should (eq (plist-get reply :ok) t))
+        (should (string-match-p "pane couldn't open (No room for another pane)" (plist-get reply :hidden))))
+      (should (string-match-p "0/4" (+test-aur-text))))
+    ;; Shown: not said.
+    (should-not (plist-get (+test-aur-request "show" nil "{\"id\":\"c\",\"type\":\"progress\",\"max\":4}")
+                           :hidden))))
+
 (ert-deftest agent-ui-request/show-update-append-remove ()
   (+test-aur
     ;; Its link too, for the agent's reply.
