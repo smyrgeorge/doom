@@ -68,10 +68,11 @@ that its buffer isn't modified."
 ;;              agent-shell shows a screenshot; the drawing closes
 ;;   C-c C-k    discard it: closed, its files deleted
 ;;   M-p / M-n  an earlier drawing of the folder instead of this one (newest
-;;              first; M-n back past the newest: this one again), to change
-;;              and insert again
-;; A notice at its top says so, with buttons. It needs what drawings need: a
-;; GUI Emacs with xwidgets, and Excalidraw.
+;;              first, blank ones left out; M-n back past the newest: this
+;;              one again), to change and insert again
+;; A notice at its top says so, with buttons. Closed otherwise (its tab,
+;; SPC b k) with nothing drawn, it leaves no file. It needs what drawings
+;; need: a GUI Emacs with xwidgets, and Excalidraw.
 (defvar +my/agent-shell-drawings-subdir "drawings"
   "Where drawings for Claude go, in the project's .agent-shell/ folder.")
 

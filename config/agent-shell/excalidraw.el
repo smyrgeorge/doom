@@ -10,6 +10,9 @@
   "In a drawing for Claude: the earlier drawing shown instead of its own (M-p,
 M-n), as (POSITION . OWN-TEXT); nil: its own.")
 
+(defvar-local +my/agent-shell-excalidraw--inserted nil
+  "In a drawing for Claude: non-nil once inserted (its file kept, blank or not).")
+
 (define-minor-mode +my/agent-shell-excalidraw-mode
   "A drawing for Claude, inserted into an agent-shell prompt (see DRAWINGS FOR
 CLAUDE in config/agent-shell.el).
@@ -17,7 +20,10 @@ CLAUDE in config/agent-shell.el).
 \\{+my/agent-shell-excalidraw-mode-map}"
   :lighter " Claude"
   (if +my/agent-shell-excalidraw-mode
-      (+my/agent-shell-excalidraw--notice)
+      (progn
+        (+my/agent-shell-excalidraw--notice)
+        (add-hook 'kill-buffer-hook #'+my/agent-shell-excalidraw--killed-h nil t))
+    (remove-hook 'kill-buffer-hook #'+my/agent-shell-excalidraw--killed-h t)
     (when (fboundp '+my/banner-close)
       (+my/banner-close 'agent-shell-excalidraw))))
 
@@ -56,15 +62,41 @@ earlier drawings")
   "Drawing FILE's PNG: beside it, its name with .png for .excalidraw.svg."
   (concat (string-remove-suffix ".excalidraw.svg" file) ".png"))
 
+(defun +my/agent-shell-excalidraw--blank-p (file)
+  "Non-nil if nothing is drawn in drawing FILE, an .excalidraw.svg: the scene
+Excalidraw keeps in it (between payload-start and payload-end, base64 JSON
+whose \"encoded\", zlib's if \"compressed\", holds the scene's JSON as
+bytes) has no elements but deleted ones. Nil if it can't tell."
+  (ignore-errors
+    (with-temp-buffer
+      (insert-file-contents-literally file)
+      (goto-char (point-min))
+      (when (re-search-forward "<!-- payload-start -->\\([^<]*\\)<!-- payload-end -->" nil t)
+        (let* ((payload (json-parse-string
+                         (decode-coding-string (base64-decode-string (match-string 1)) 'latin-1)
+                         :object-type 'alist :false-object nil))
+               (scene (with-temp-buffer
+                        (set-buffer-multibyte nil)
+                        (insert (encode-coding-string (alist-get 'encoded payload) 'latin-1))
+                        (when (alist-get 'compressed payload)
+                          (unless (zlib-decompress-region (point-min) (point-max))
+                            (error "Not zlib's")))
+                        (json-parse-string (decode-coding-string (buffer-string) 'utf-8)
+                                           :object-type 'alist :array-type 'list
+                                           :false-object nil :null-object nil))))
+          (seq-every-p (lambda (element) (alist-get 'isDeleted element))
+                       (alist-get 'elements scene)))))))
+
 (defun +my/agent-shell-excalidraw--earlier-files ()
-  "The drawing's folder's other drawings, newest first (named by the time).
-Itself left out by its true name: `file-equal-p' compares every attribute,
-its access time too, so a read of it meanwhile (Spotlight indexing it) had
-it listed among its own earlier drawings."
+  "The drawing's folder's other drawings, newest first (named by the time),
+but blank ones. Itself left out by its true name: `file-equal-p' compares
+every attribute, its access time too, so a read of it meanwhile (Spotlight
+indexing it) had it listed among its own earlier drawings."
   (when buffer-file-name
     (let ((dir (file-name-directory buffer-file-name))
           (own (file-truename buffer-file-name)))
-      (sort (seq-remove (lambda (file) (equal (file-truename file) own))
+      (sort (seq-remove (lambda (file) (or (equal (file-truename file) own)
+                                           (+my/agent-shell-excalidraw--blank-p file)))
                         (directory-files dir t "\\.excalidraw\\.svg\\'"))
             (lambda (a b) (string> (file-name-nondirectory a) (file-name-nondirectory b)))))))
 
@@ -134,11 +166,22 @@ DRAWINGS FOR CLAUDE in config/agent-shell.el), and close it."
     (when (buffer-modified-p)
       (save-buffer))
     (let ((png (+my/excalidraw-png (+my/agent-shell-excalidraw--png-file buffer-file-name))))
+      (setq +my/agent-shell-excalidraw--inserted t)
       (+my/agent-shell-excalidraw--close drawing)
       (with-current-buffer shell
         (agent-shell-insert :text (agent-shell--get-files-context :files (list png))
                             :shell-buffer shell))
       png)))
+
+(defun +my/agent-shell-excalidraw--killed-h ()
+  "A drawing for Claude closed without being inserted (its tab, SPC b k): its
+file deleted if nothing is drawn in it (it's saved blank as it opens), else
+each one closed so was left for M-p to list."
+  (when (and buffer-file-name
+             (not +my/agent-shell-excalidraw--inserted)
+             (file-exists-p buffer-file-name)
+             (+my/agent-shell-excalidraw--blank-p buffer-file-name))
+    (delete-file buffer-file-name)))
 
 (defun +my/agent-shell-excalidraw-discard ()
   "Close the drawing without inserting it; its files are deleted."

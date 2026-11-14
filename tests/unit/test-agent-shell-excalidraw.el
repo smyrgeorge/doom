@@ -49,6 +49,29 @@ minor mode on, no page); the buffer killed after."
          (with-current-buffer buffer (set-buffer-modified-p nil))
          (kill-buffer buffer)))))
 
+;; DRAWINGS' FILES
+;; Excalidraw's scene in an .excalidraw.svg: base64 JSON whose "encoded" is
+;; the scene's JSON, zlib's (made by Python's zlib, as Excalidraw's pako).
+(defconst +test-ase--blank
+  "eyJ2ZXJzaW9uIjoiMSIsImVuY29kaW5nIjoiYnN0cmluZyIsImNvbXByZXNzZWQiOnRydWUsImVuY29kZWQiOiJ4nKtWKqksSFWyUlBKrUhOzMlMKUosV9JRUCpLLSrOzM9cdTAwMDNKXHUwMDE4XHUwMDAxecX5pUXJYFUlqcUlIPnUnNTc1LySYqBYdCyQn1hQXHUwMDEwXFySWFx1MDAwMlJTXVx1MDAwYuSnZeakXHUwMDE2gzm1XHUwMDAwKrlcdTAwMWZ6In0="
+  "A scene without elements.")
+
+(defconst +test-ase--rectangle
+  "eyJ2ZXJzaW9uIjoiMSIsImVuY29kaW5nIjoiYnN0cmluZyIsImNvbXByZXNzZWQiOnRydWUsImVuY29kZWQiOiJ4nDWMsVx1MDAwZcIwXGZEf6XKzFx1MDAwMIzM/Fx1MDAwMSNiiNJrYymkUWxoqyr/jl3R6fzeWbc5WVx1MDAwYtytc1iCT9RXP7tT576oTFPW4qrE06eG/UvAYj1cdTAwMTLeyMLqnpuj3rpqxTFXXHUwMDExxOcxweSi5qy5/nOmXqLeXHUwMDE3g1xiXHUwMDFho1x1MDAxY0R8122BLVx1MDAwZT4x2kutL+UhXmx5a8pcdTAwMDMl8Fx1MDAwZe1cdTAwMDcxdDpcdTAwMTQifQ=="
+  "A scene with a rectangle.")
+
+(defconst +test-ase--deleted
+  "eyJ2ZXJzaW9uIjoiMSIsImVuY29kaW5nIjoiYnN0cmluZyIsImNvbXByZXNzZWQiOnRydWUsImVuY29kZWQiOiJ4nDWMsVx1MDAwZcIwXGZEf6XKzFx1MDAwMIzM/Fx1MDAwMSNiiJKjsVx1MDAxNNIocWmrKP+OXdHp/N5Z11xmb1x1MDAxOeY2XHUwMDE4rM5G8sUu5jSYL0qlKUlxXHUwMDE1qtNcXNz+xaisPVwiPkhcXMU9myGvXdHimCtwbNNcdTAwMTihclx1MDAxNXOW3P65kOcg90UhgMbAXHUwMDA3Ub3LNkNcdTAwMTe5zOgvkTbnXHUwMDA3W9bh1oXfXHUwMDE0UXfoP/jQOckifQ=="
+  "A scene with a rectangle deleted.")
+
+(defun +test-ase--svg (payload)
+  "An .excalidraw.svg's text with PAYLOAD as its scene."
+  (format "<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\">
+  <!-- svg-source:excalidraw -->
+  <!-- payload-type:application/vnd.excalidraw+json --><!-- payload-version:2 --><!-- payload-start -->%s<!-- payload-end -->
+</svg>
+" payload))
+
 ;; ====== KEYS ======
 
 (ert-deftest agent-shell-excalidraw/keys-in-agent-shell ()
@@ -117,6 +140,56 @@ minor mode on, no page); the buffer killed after."
       (should (equal (mapcar #'file-name-nondirectory (+my/agent-shell-excalidraw--earlier-files))
                      '("drawing-2026-11-07-12-00-00.excalidraw.svg" "drawing-2026-11-07-09-00-00.excalidraw.svg"
                        "drawing-2026-11-06-09-00-00.excalidraw.svg"))))))
+
+(ert-deftest agent-shell-excalidraw/blank-drawings ()
+  "Nothing drawn: no elements in its scene, or only deleted ones. A file it
+can't tell of (no scene in it, a broken one): not blank."
+  (let ((dir (+test-ase--dir)))
+    (cl-flet ((blank-p (name text)
+                (+my/agent-shell-excalidraw--blank-p (+test-ase--write (expand-file-name name dir) text))))
+      (should (blank-p "blank.excalidraw.svg" (+test-ase--svg +test-ase--blank)))
+      (should (blank-p "deleted.excalidraw.svg" (+test-ase--svg +test-ase--deleted)))
+      (should-not (blank-p "drawn.excalidraw.svg" (+test-ase--svg +test-ase--rectangle)))
+      ;; Not compressed.
+      (should (blank-p "plain.excalidraw.svg"
+                       (+test-ase--svg (base64-encode-string
+                                        "{\"version\":\"1\",\"encoding\":\"bstring\",\"compressed\":false,\"encoded\":\"{\\\"elements\\\":[]}\"}"
+                                        t))))
+      (should-not (blank-p "none.excalidraw.svg" "<svg/>\n"))
+      (should-not (blank-p "broken.excalidraw.svg" (+test-ase--svg "bm90IGpzb24=")))
+      (should-not (+my/agent-shell-excalidraw--blank-p (expand-file-name "missing.excalidraw.svg" dir))))))
+
+(ert-deftest agent-shell-excalidraw/earlier-drawings-not-blank-ones ()
+  (let* ((dir (+test-ase--dir))
+         (own (+test-ase--write (expand-file-name "drawing-3.excalidraw.svg" dir))))
+    (+test-ase--write (expand-file-name "drawing-1.excalidraw.svg" dir) (+test-ase--svg +test-ase--rectangle))
+    (+test-ase--write (expand-file-name "drawing-2.excalidraw.svg" dir) (+test-ase--svg +test-ase--blank))
+    (+test-ase--drawing nil own
+      (should (equal (mapcar #'file-name-nondirectory (+my/agent-shell-excalidraw--earlier-files))
+                     '("drawing-1.excalidraw.svg"))))))
+
+(ert-deftest agent-shell-excalidraw/closed-blank-leaves-no-file ()
+  "Closed without being inserted (its tab, SPC b k): its file deleted if
+nothing is drawn in it; kept if something is, or once inserted."
+  (let ((dir (+test-ase--dir)))
+    (pcase-dolist (`(,name ,text ,inserted ,kept)
+                   `(("blank" ,(+test-ase--svg +test-ase--blank) nil nil)
+                     ("drawn" ,(+test-ase--svg +test-ase--rectangle) nil t)
+                     ("inserted" ,(+test-ase--svg +test-ase--blank) t t)))
+      (let ((file (+test-ase--write (expand-file-name (concat name ".excalidraw.svg") dir) text)))
+        (+test-ase--drawing nil file
+          (setq +my/agent-shell-excalidraw--inserted inserted)
+          (set-buffer-modified-p nil)
+          (kill-buffer))
+        (should (equal (list name (file-exists-p file)) (list name kept)))))
+    ;; Not a drawing for Claude (the mode off): nothing deleted.
+    (let ((file (+test-ase--write (expand-file-name "other.excalidraw.svg" dir) (+test-ase--svg +test-ase--blank))))
+      (+test-ase--drawing nil file
+        (cl-letf (((symbol-function '+my/banner-close) #'ignore))
+          (+my/agent-shell-excalidraw-mode -1))
+        (set-buffer-modified-p nil)
+        (kill-buffer))
+      (should (file-exists-p file)))))
 
 (ert-deftest agent-shell-excalidraw/earlier-drawings-never-itself ()
   "The drawing itself is never among its earlier ones, though its file is

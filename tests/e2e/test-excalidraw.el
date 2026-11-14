@@ -983,6 +983,37 @@ there again once it's inserted."
         (should-not (file-exists-p file))
         (should-not inserted)))))
 
+(ert-deftest e2e-exd/drawn-for-claude-closed-blank-leaves-no-file ()
+  "Closed by its tab (or SPC b k) with nothing drawn: its file, saved blank
+as it opened, goes; M-p in the next lists no blank one. Drawn and saved,
+closed so: kept."
+  (+test-exd
+    (+test-exd--for-claude
+      (let* ((drawing (+my/agent-shell-excalidraw))
+             (file (buffer-file-name drawing)))
+        (should (+test-exd--ready))
+        (should (+test-wait-for (lambda () (file-exists-p file)) 5))
+        (kill-buffer drawing)
+        (should-not (file-exists-p file)))
+      (switch-to-buffer shell)
+      (let* ((drawing (+my/agent-shell-excalidraw))
+             (file (buffer-file-name drawing)))
+        (should (+test-exd--ready))
+        (should (+test-wait-for (lambda () (file-exists-p file)) 5))
+        (+test-exd--in-buffer (+test-exd--add +test-exd--two-shapes))
+        (save-buffer)
+        (kill-buffer drawing)
+        (should (file-exists-p file))
+        ;; The next drawing's earlier ones: that one only, not its own
+        ;; blank one.
+        (switch-to-buffer shell)
+        (let ((next (+my/agent-shell-excalidraw)))
+          (should (+test-exd--ready))
+          (should (+test-wait-for (lambda () (file-exists-p (buffer-file-name next))) 5))
+          (with-current-buffer next
+            (should (equal (+my/agent-shell-excalidraw--earlier-files) (list file))))
+          (kill-buffer next))))))
+
 (ert-deftest e2e-exd/drawn-for-claude-from-an-earlier-one ()
   "M-p: an earlier drawing on the canvas; inserted, it's that one's PNG,
 under this drawing's name."
