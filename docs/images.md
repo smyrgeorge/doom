@@ -17,7 +17,7 @@ regenerated screenshot) is shown anew, its zoom kept. Try it: `M-x +my/example-i
 | `RET` | `RET` | Play / pause an animation |
 | `y`, `Cmd+C` | `y`, `Ctrl+Shift+C` | Copy the image (to paste in other apps) |
 | `SPC m y` | `SPC m y` | Copy its path |
-| `SPC m g` | `SPC m g` | The image as in git's HEAD, on its left; again, closed |
+| `SPC m g` | `SPC m g` | The image as in git's HEAD, in half of its pane: on its left (above, in a narrow pane); again, closed |
 | `SPC m s` | `SPC m s` | Sharp pixels (no smoothing) |
 | `SPC m t` | `SPC m t` | The toolbar |
 | `SPC m p` / `SPC m f` | `SPC m p` / `SPC m f` | Open in Preview / show in Finder (Linux: the default app / the file manager) |

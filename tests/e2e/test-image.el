@@ -233,19 +233,50 @@ input."
 
 ;; ====== GIT'S HEAD ======
 
-(defun +test-image--repo ()
+(defun +test-image--resize (file width height)
+  "FILE made WIDTH×HEIGHT pixels, in place (sips on macOS, else ImageMagick)."
+  (should (zerop (if (executable-find "sips")
+                     (call-process "sips" nil nil nil "-z" (number-to-string height)
+                                   (number-to-string width) file)
+                   (call-process (+my/os-imagemagick) nil nil nil file
+                                 "-resize" (format "%dx%d!" width height) file))))
+  file)
+
+(defun +test-image--repo (&optional size)
   "A git repository whose HEAD has a.png red, then a.png turned green; its
-path."
+path. SIZE, (WIDTH . HEIGHT): both that big."
   (let* ((dir (+test-image--folder))
+         (file (expand-file-name "a.png" dir))
          (default-directory dir)
          (process-environment (append '("GIT_CONFIG_GLOBAL=/dev/null" "GIT_CONFIG_NOSYSTEM=1"
                                         "GIT_AUTHOR_NAME=t" "GIT_AUTHOR_EMAIL=t@t"
                                         "GIT_COMMITTER_NAME=t" "GIT_COMMITTER_EMAIL=t@t")
                                       process-environment)))
+    (when size (+test-image--resize file (car size) (cdr size)))
     (dolist (args '(("init" "-q") ("add" "a.png") ("commit" "-q" "-m" "a")))
       (should (zerop (apply #'call-process "git" nil nil nil args))))
-    (+test-image--write (expand-file-name "a.png" dir) +test-image--green)
+    (+test-image--write file +test-image--green)
+    (when size (+test-image--resize file (car size) (cdr size)))
     dir))
+
+(defun +test-image--pane (cols)
+  "The selected window made COLS columns wide, another pane on its right;
+that pane."
+  (let ((other (split-window nil nil 'right)))
+    (set-window-buffer other (get-buffer-create "*other*"))
+    (window-resize (selected-window) (- cols (window-total-width)) t)
+    (redisplay t)
+    other))
+
+(defun +test-image--fitted-p (window)
+  "Non-nil if WINDOW's image is fitted to it, as it opens: at its size if it
+fits, else as big as it fits."
+  (with-selected-window window
+    (pcase-let* ((`(,width . ,height) (image-size (+my/image--spec) t))
+                 (`(,left ,top ,right ,bottom) (window-inside-pixel-edges window)))
+      (and (<= width (- right left)) (<= height (- bottom top))
+           (or (equal (cons width height) (+my/image-size))
+               (>= width (- right left 2)) (>= height (- bottom top 2)))))))
 
 (ert-deftest e2e-image/head-beside-the-image ()
   (+test-with-reset
@@ -274,6 +305,41 @@ path."
         (setq head +my/image--head-buffer)
         (kill-buffer image)
         (should-not (buffer-live-p head))))))
+
+(ert-deftest e2e-image/head-halves-the-image-s-pane-of-any-width ()
+  (let ((dir (+test-image--repo '(800 . 400))))
+    (dolist (cols '(120 60 40 30))
+      (+test-with-reset
+        (let* ((other (+test-image--pane cols))
+               (other-width (window-total-width other))
+               (window (selected-window))
+               (height (window-total-height window))
+               (side (>= cols (* 2 +my/image-diff-min-width))))
+          (+test-image--open (expand-file-name "a.png" dir))
+          (should (= (window-total-width window) cols))
+          (+my/image-diff)
+          (let ((head-window (get-buffer-window +my/image--head-buffer)))
+            (ert-info ((format "%d columns" cols))
+              ;; Its pane halved, on the left or (narrow) above; the other
+              ;; pane as it was.
+              (should (eq (window-in-direction (if side 'left 'above) window) head-window))
+              (if side
+                  (progn (should (= (+ (window-total-width head-window) (window-total-width window)) cols))
+                         (should (<= (abs (- (window-total-width head-window) (window-total-width window))) 1)))
+                (should (= (window-total-width head-window) (window-total-width window) cols))
+                (should (= (+ (window-total-height head-window) (window-total-height window)) height))
+                (should (<= (abs (- (window-total-height head-window) (window-total-height window))) 1)))
+              (should (= (window-total-width other) other-width))
+              ;; Both fitted to their panes at once.
+              (should (+test-image--fitted-p head-window))
+              (should (+test-image--fitted-p window))
+              ;; Again: the image's pane as it was, fitted to it.
+              (+my/image-diff)
+              (should-not (window-live-p head-window))
+              (should (= (window-total-width window) cols))
+              (should (= (window-total-height window) height))
+              (should (= (window-total-width other) other-width))
+              (should (+test-image--fitted-p window)))))))))
 
 (ert-deftest e2e-image/head-unchanged-or-not-in-git ()
   (+test-with-reset

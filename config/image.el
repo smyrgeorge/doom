@@ -31,8 +31,10 @@
 ;;   Copy          y         the image itself to the clipboard (Cmd+C too;
 ;;                           Linux: Ctrl+Shift+C, with wl-copy or xclip), to
 ;;                           paste in Slack, GitHub...; SPC m y copies its path
-;;   Diff          SPC m g   the image as it is in git's HEAD, in a pane on its
-;;                           left, to compare (e.g. regenerated screenshots);
+;;   Diff          SPC m g   the image as it is in git's HEAD, to compare (e.g.
+;;                           regenerated screenshots): the image's pane halved,
+;;                           HEAD on the left (in a pane too narrow for two,
+;;                           `+my/image-diff-min-width', above it), both fitted;
 ;;                           again, closed
 ;;   Save                    shown while edited (see above)
 ;;   Preview       SPC m p   open it in macOS's Preview; SPC m f shows it in
@@ -56,6 +58,10 @@
 
 (defvar +my/image-zoom-limits '(0.05 . 20.0)
   "The smallest and largest zoom (1.0: the image's actual size).")
+
+(defvar +my/image-diff-min-width 30
+  "The narrowest the image and its HEAD version get side by side (SPC m g),
+in columns each: a narrower pane has HEAD above the image.")
 
 (defvar +my/image-mode-map (make-sparse-keymap)
   "Keys of images (see `+my/image-mode').")
