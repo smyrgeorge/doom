@@ -22,12 +22,18 @@
 ;; of asking bd again). A buffer not shown in a window isn't refreshed: it is
 ;; when it's shown again. A refresh on its way isn't started again; one the
 ;; user asks for (gr, an edit in the list) is done as before, waited for, and
-;; cancels the one on its way (its answer would be older).
+;; cancels the one on its way (its answer would be older). One that can't
+;; start (no bd) leaves nothing behind, and is said once (the timer's every
+;; 30 s said it again, and left a process and two buffers each time), until
+;; a refresh works again.
 (defvar-local +my/beads--fetching nil
   "This buffer's refresh on its way: (TOKEN . PROCESSES).")
 
 (defvar-local +my/beads--stale nil
   "Non-nil when this buffer wasn't refreshed while not shown.")
+
+(defvar +my/beads--failure nil
+  "What a refresh in the background said last of its failure (said once).")
 
 (defvar +my/beads--fetched nil
   "While a buffer is redrawn from bd's answers fetched in the background: an
@@ -56,7 +62,8 @@ an array), or (:error MESSAGE) with ERRORS, its standard error."
 (defun +my/beads--bd-async (operation args callback)
   "bd run for OPERATION with ARGS (an alist), as beads.el's command line runs
 it, not waited for: CALLBACK called with its answer (see `+my/beads--answer')
-when it ends, unless it was deleted. The process."
+when it ends, unless it was deleted. The process. bd not started (not found):
+an error, nothing left behind."
   (let* ((backend (beads-backend-for-project))
          (program (beads-backend-cli-program-path backend))
          (flags (append (when-let* ((fn (beads-backend-cli-extra-flags backend)))
@@ -64,22 +71,37 @@ when it ends, unless it was deleted. The process."
                         (funcall (beads-backend-op-to-cli-args backend) operation args)
                         '("--json")))
          (default-directory (+my/beads--cli-root))
+         (_ (unless (executable-find program)
+              (error "%s not found (scripts/tools.sh installs bd)" program)))
          (out (generate-new-buffer " *beads-fetch*" t))
          (err (generate-new-buffer " *beads-fetch-errors*" t))
          (stderr (make-pipe-process :name "beads-fetch-errors" :buffer err :noquery t)))
-    (make-process
-     :name "beads-fetch" :buffer out :stderr stderr :noquery t
-     :connection-type 'pipe
-     :command (cons program flags)
-     :sentinel (lambda (process _event)
-                 (unless (process-live-p process)
-                   (unwind-protect
-                       (unless (process-get process 'cancelled)
-                         (funcall callback (+my/beads--answer
-                                            process (with-current-buffer err (buffer-string)))))
-                     (delete-process stderr)
-                     (kill-buffer out)
-                     (kill-buffer err)))))))
+    (condition-case error
+        (make-process
+         :name "beads-fetch" :buffer out :stderr stderr :noquery t
+         :connection-type 'pipe
+         :command (cons program flags)
+         :sentinel (lambda (process _event)
+                     (unless (process-live-p process)
+                       (unwind-protect
+                           (unless (process-get process 'cancelled)
+                             (funcall callback (+my/beads--answer
+                                                process (with-current-buffer err (buffer-string)))))
+                         (delete-process stderr)
+                         (kill-buffer out)
+                         (kill-buffer err)))))
+      (error
+       (delete-process stderr)
+       (kill-buffer out)
+       (kill-buffer err)
+       (signal (car error) (cdr error))))))
+
+(defun +my/beads--failed (text)
+  "A refresh in the background failed, as TEXT says: said, unless it was the
+last time (see above)."
+  (unless (equal text +my/beads--failure)
+    (setq +my/beads--failure text)
+    (message "%s" text)))
 
 (defun +my/beads--cancel (&optional buffer)
   "BUFFER's (else this one's) refresh on its way, cancelled."
@@ -94,29 +116,33 @@ when it ends, unless it was deleted. The process."
 (defun +my/beads--fetch (buffer operations done)
   "bd asked for each of OPERATIONS ((OPERATION . ARGS) ...) in the background,
 from BUFFER: DONE called in BUFFER with their answers ((OPERATION . ANSWER)
-...) once all came. One failed: said as beads.el says it, the rest dropped."
+...) once all came. One failed, or bd couldn't start: said as beads.el says
+it (once, see above), the rest dropped."
   (with-current-buffer buffer
     (let ((token (list 'fetch))
           (answers nil))
-      (setq +my/beads--fetching
-            (cons token
-                  (mapcar
-                   (lambda (operation)
-                     (+my/beads--bd-async
-                      (car operation) (cdr operation)
-                      (lambda (answer)
-                        (when (buffer-live-p buffer)
-                          (with-current-buffer buffer
-                            ;; Still this buffer's refresh (not cancelled).
-                            (when (eq (car +my/beads--fetching) token)
-                              (if (eq (car-safe answer) :error)
-                                  (progn (+my/beads--cancel)
-                                         (message "Failed to fetch issues: %s" (cadr answer)))
-                                (push (cons (car operation) answer) answers)
-                                (when (= (length answers) (length operations))
-                                  (setq +my/beads--fetching nil)
-                                  (funcall done answers)))))))))
-                   operations))))))
+      (setq +my/beads--fetching (list token))
+      (condition-case error
+          (dolist (operation operations)
+            (push (+my/beads--bd-async
+                   (car operation) (cdr operation)
+                   (lambda (answer)
+                     (when (buffer-live-p buffer)
+                       (with-current-buffer buffer
+                         ;; Still this buffer's refresh (not cancelled).
+                         (when (eq (car +my/beads--fetching) token)
+                           (if (eq (car-safe answer) :error)
+                               (progn (+my/beads--cancel)
+                                      (+my/beads--failed (format "Failed to fetch issues: %s" (cadr answer))))
+                             (push (cons (car operation) answer) answers)
+                             (when (= (length answers) (length operations))
+                               (setq +my/beads--fetching nil
+                                     +my/beads--failure nil)
+                               (funcall done answers))))))))
+                  (cdr +my/beads--fetching)))
+        (error
+         (+my/beads--cancel)
+         (+my/beads--failed (format "Failed to fetch issues: %s" (error-message-string error))))))))
 
 (defun +my/beads--redraw (buffer answers fn &rest args)
   "FN called with ARGS in BUFFER, beads.el's client answering with ANSWERS

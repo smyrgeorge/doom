@@ -1307,6 +1307,34 @@ for, the issue redrawn with bd's answer."
       (should (seq-find (lambda (m) (string-match-p "Failed to fetch issues: .*bd broke" m)) messages))
       (should (string-match-p "First" (+test-beads--text list))))))
 
+;; doom-o5t.13
+(ert-deftest beads/no-bd-in-the-background ()
+  "bd not found: a refresh in the background leaves nothing behind (its
+processes, its buffers), signals nothing (beads-autoupdate's timer runs it),
+keeps the list as it was, and says so once; bd back, it refreshes again."
+  (+test-beads-with-project
+    (+test-beads--create "First")
+    (+my/beads-project)
+    (let ((list (+test-beads--list))
+          (processes (length (process-list)))
+          (buffers (length (buffer-list)))
+          messages)
+      (cl-letf (((symbol-function 'beads-backend-cli-program-path) (lambda (&rest _) "/nonexistent/bd"))
+                ((symbol-function 'message)
+                 (lambda (format &rest args) (when format (push (apply #'format-message format args) messages)))))
+        (dotimes (_ 3)
+          (with-current-buffer list
+            (beads-autoupdate--refresh))))
+      (should (= (length (process-list)) processes))
+      (should (= (length (buffer-list)) buffers))
+      (should-not (buffer-local-value '+my/beads--fetching list))
+      (should (= (seq-count (lambda (m) (string-match-p "Failed to fetch issues: /nonexistent/bd not found" m)) messages) 1))
+      (should (string-match-p "First" (+test-beads--text list)))
+      (+test-beads--run "bd" "create" "Second" "--quiet")
+      (+my/beads-refresh-async list)
+      (+test-beads--settle list)
+      (should (string-match-p "Second" (+test-beads--text list))))))
+
 (ert-deftest beads/background-refresh-wired ()
   (should (advice-member-p #'+my/beads-autoupdate-a 'beads-autoupdate--refresh))
   (should (advice-member-p #'+my/beads-refresh-lists-a 'beads-detail--refresh-list-buffers))
