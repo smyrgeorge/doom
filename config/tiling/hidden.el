@@ -80,6 +80,19 @@ it as a tab."
 ;; window holds it: a hidden pane does too.
 (add-hook '+my/tabs-held-functions #'+my/tiling--hidden-holds-p)
 
+;; A WORKSPACE KILLED (Doom's, persp-mode's): its hidden panes go with it.
+;; They stayed in the frame, their buffers held (closing a file's last tab
+;; left it open), for a workspace that was no more.
+(defun +my/tiling-workspace-killed-h (persp)
+  "PERSP, a workspace, about to be killed: its hidden panes forgotten, in
+every frame (see above)."
+  (dolist (frame (frame-list))
+    (let ((all (frame-parameter frame '+my/tiling-hidden)))
+      (when (assq persp all)
+        (set-frame-parameter frame '+my/tiling-hidden (assq-delete-all persp (copy-sequence all)))))))
+
+(add-hook 'persp-before-kill-functions #'+my/tiling-workspace-killed-h)
+
 ;; SHOWN AGAIN
 (defun +my/tiling--new-window ()
   "A window for a pane shown again: the biggest pane split along its longer

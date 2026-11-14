@@ -1512,6 +1512,34 @@ elsewhere doesn't close it: config/editor/tabs.el asks)."
         (setq workspace 'one)
         (should (equal (+test-tiling--slots) '("A" "*B")))))))
 
+(ert-deftest tiling/fullscreen-a-workspace-killed-its-panes-forgotten ()
+  "A workspace killed (persp-mode's `persp-before-kill-functions'): its
+hidden panes forgotten, their buffers no longer held; another workspace's
+kept."
+  (should (memq #'+my/tiling-workspace-killed-h (default-value 'persp-before-kill-functions)))
+  (+test-tiling-fullscreen
+    (let ((persp-mode t) (workspace 'one)
+          (b (+test-tiling--file "b.txt"))
+          (c (+test-tiling--file "c.txt")))
+      (cl-letf (((symbol-function 'get-current-persp) (lambda (&rest _) workspace)))
+        (+my/tiling-split)
+        (switch-to-buffer b)
+        (+my/tiling-split)                  ; b.txt's pane hidden
+        ;; Another workspace's window (here the same one): c.txt alone.
+        (setq workspace 'two)
+        (switch-to-buffer c)
+        (set-window-prev-buffers nil nil)
+        (set-window-parameter nil 'tab-line-buffers nil)
+        (+my/tiling-split)                  ; c.txt's pane hidden
+        (should (+my/tiling--hidden-holds-p b))
+        (should (+my/tiling--hidden-holds-p c))
+        (run-hook-with-args 'persp-before-kill-functions 'one)
+        (should-not (assq 'one (frame-parameter nil '+my/tiling-hidden)))
+        (should-not (+my/tiling--hidden-holds-p b))
+        ;; The other's kept.
+        (should (+my/tiling--hidden-holds-p c))
+        (should (+my/tiling--hidden-p))))))
+
 (ert-deftest tiling/next-pane-else-evil-s-next-window ()
   "SPC w w / W, another strategy (or no pane hidden): Evil's next / previous
 window."
