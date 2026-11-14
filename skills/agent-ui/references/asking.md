@@ -110,7 +110,8 @@ agent-ui show '{"id":"plan","type":"steps","title":"The fix","approve":true,"ste
 A `table`'s rows, `files`, an `issues` board's cards or `tags`' chips: give the element `select`, `{"question",
 "multiple", "note"}` (`multiple` for several, `note` for a note). Marks come before them, the user picks (RET, a
 click, All, None) and presses Answer: "Answer to ID (QUESTION): ..." comes as your next
-prompt, naming a table's `key` cells (else its first column's), the files' paths, the issues' ids, the chips' labels.
+prompt, naming a table's `key` cells (else its first column's; a row whose cell there another row's is too, by all its
+cells: "parser · failed · macos"), the files' paths, the issues' ids, the chips' labels.
 Say so in a line and end your turn:
 
 ```sh

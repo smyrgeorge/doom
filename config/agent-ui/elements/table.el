@@ -76,7 +76,7 @@ if there's no such column."
         (agent-ui-error (agent-ui--fail "table: row-%s" (agent-ui-error-message err)))))
     (plist-put props :key (agent-ui-table--key-index (plist-get props :key) columns))
     ;; Asking the user to pick rows (doom-ord): its settings; what's picked,
-    ;; each a row's key cell (or its first).
+    ;; each a row's key cell (or its first; `agent-ui-table--row-answers').
     (when-let* ((select (plist-get props :select)))
       (agent-ui-ask-select-check "table" select)
       (agent-ui-ask-check "table" (plist-get props :selected) (agent-ui-table--answers props)
@@ -87,10 +87,31 @@ if there's no such column."
   "The column a picked row answers with: its key, else its first."
   (or (plist-get props :key) 0))
 
+(defun agent-ui-table--row-answers (rows index)
+  "What each of ROWS (their cells as text) answers if picked: its INDEX
+cell (its key's, else its first); a row whose cell there another's is too,
+its cells (\"parser · failed · 1.2s\"), numbered if they're alike too. One
+row picked marks it alone (all those with its key cell were)."
+  (let ((counts (make-hash-table :test #'equal))
+        (seen (make-hash-table :test #'equal)))
+    (cl-flet ((count (items) (clrhash counts) (dolist (i items) (puthash i (1+ (gethash i counts 0)) counts))))
+      (let ((keys (mapcar (lambda (row) (or (nth index row) "")) rows)))
+        (count keys)
+        (let ((answers (cl-loop for row in rows for key in keys
+                                collect (if (= (gethash key counts) 1)
+                                            key
+                                          (string-join (seq-remove #'string-empty-p row) " · ")))))
+          (count answers)
+          (mapcar (lambda (answer)
+                    (if (= (gethash answer counts) 1)
+                        answer
+                      (format "%s (%d)" answer (puthash answer (1+ (gethash answer seen 0)) seen))))
+                  answers))))))
+
 (defun agent-ui-table--answers (props)
-  "Each row's answer, if picked (its key cell, else its first), in order."
-  (let ((i (agent-ui-table--answer-index props)))
-    (mapcar (lambda (row) (agent-ui-table--cell (nth i row))) (plist-get props :rows))))
+  "Each row's answer, if picked (`agent-ui-table--row-answers'), in order."
+  (agent-ui-table--row-answers (mapcar (lambda (row) (mapcar #'agent-ui-table--cell row)) (plist-get props :rows))
+                               (agent-ui-table--answer-index props)))
 
 (defun agent-ui-table--cell-widths (header rows)
   "Each column's cells' widths, from HEADER's and ROWS' (their cells' widths,
@@ -290,7 +311,14 @@ widths, alignments, buttons beside or under)."
                                     c))))
     (list :columns columns :n n :all all :rows rows :measured measured :header header
           :actions actions :beside beside :shown shown :widths widths :align align
-          ;; Asking: the rows pickable (not once answered, nor in a still picture).
+          ;; Asking: each row's answer, by the row (sorted, it's the same
+          ;; list); the rows pickable (not once answered, nor in a still
+          ;; picture).
+          :answer-of (when (plist-get props :select)
+                       (let ((answers (make-hash-table :test #'eq)))
+                         (cl-mapc (lambda (row answer) (puthash row answer answers))
+                                  all (agent-ui-table--row-answers all (agent-ui-table--answer-index props)))
+                         answers))
           :props props :select (plist-get props :select)
           :pick (and (plist-get props :select) (not (plist-get props :answered)) (not (plist-get ctx :still))))))
 
@@ -396,7 +424,7 @@ the whole table, its header, \"no rows yet\" and what's left out too."
                          for first = t then nil
                          do (unless first (insert "\n"))
                          (let* ((row-start (point))
-                                (answer (and select (nth (agent-ui-table--answer-index props) row)))
+                                (answer (and select (gethash row (plist-get layout :answer-of))))
                                 (multiple (and select (eq (plist-get select :multiple) t)))
                                 ;; The row (its mark and cells, not its buttons) a
                                 ;; button picking it, while it can be.
@@ -541,7 +569,7 @@ ID (QUESTION): their keys\" into your prompt."
           (sort any "The column (index from 0, or name) its rows are sorted by (s on a column in the canvas)")
           (descending boolean "Sorted the other way: largest first")
           (row-actions list "Buttons on each row: [{\"label\", \"prompt\", \"submit\"}], the prompt's {Column} its cell, {row} all")
-          (select any "Ask the user to pick rows: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their KEY cells (else the first)")
+          (select any "Ask the user to pick rows: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their KEY cells (else the first; a row whose cell another's is too, by its cells)")
           (selected list "The rows picked so far (their key cells): a default, or the user's")
           (note-text string "The user's note")
           (answered string "The answer given (then it can't be changed)"))

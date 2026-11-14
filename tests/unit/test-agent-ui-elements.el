@@ -3029,6 +3029,34 @@ with their first cell; in a still picture: marks, no buttons."
     (should-not (string-search "⏵" still))
     (should-not (string-search "Add a note" still))))
 
+(ert-deftest agent-ui-elements/table-select-rows-sharing-a-key ()
+  "Two rows with the same key cell: picking one marks only it, the answer
+naming that row by its cells (both were marked, the answer their key);
+sorted too; a unique key cell still answers alone."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
+      (agent-ui-show '(:id "pick" :type "table" :columns ("Test" "Result" "OS")
+                       :rows (("parser" "failed" "linux") ("parser" "failed" "macos") ("lexer" "passed" "linux"))
+                       :select (:question "Which to rerun?" :multiple t)))
+      (with-current-buffer canvas
+        (+test-aue-press "macos")
+        (should (equal (plist-get (agent-ui-get "pick") :selected) '("parser · failed · macos")))
+        (agent-ui--flush)
+        (should (string-search "[ ]  parser │ failed │ linux" (buffer-string)))
+        (should (string-search "[x]  parser │ failed │ macos" (buffer-string)))
+        (+test-aue-press "lexer")
+        (+test-aue-press "⏵ Answer")
+        (should (equal sent '(("Answer to pick (Which to rerun?): parser · failed · macos, lexer" t)))))))
+  ;; Sorted: each row its own answer still.
+  (let ((text (+test-aue-draw '(:type "table" :columns ("Test" "OS") :sort "OS" :descending t
+                                :rows (("parser" "linux") ("parser" "macos"))
+                                :select (:question "Which?") :selected ("parser · linux")))))
+    (should (string-search "( )  parser │ macos" text))
+    (should (string-search "(•)  parser │ linux" text)))
+  ;; Rows alike in every cell: numbered.
+  (should (equal (agent-ui-table--row-answers '(("a" "x") ("a" "x") ("b" "y")) 0) '("a · x (1)" "a · x (2)" "b"))))
+
 (ert-deftest agent-ui-elements/table-select-wrong ()
   (should (string-match-p "select is {\"question\""
                           (+test-aue-error '(:type "table" :columns ("A") :rows (("a")) :select "yes"))))
