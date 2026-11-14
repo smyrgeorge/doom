@@ -31,7 +31,8 @@
 ;;   SPC m d        dark pages: inverted to dark greys, hues kept (as
 ;;                  pdf-tools' midnight mode); again, light pages
 ;;   SPC m t        the toolbar: sidebar, back / forward, page, zoom, fit, dark
-;;                  pages, Preview, print
+;;                  pages, Preview, print; in a narrow pane what doesn't fit
+;;                  goes into the menu of its ⋯ button
 ;;   Option+Enter   the actions menu (config/editor/actions.el): for the selected
 ;;                  text, copy, search the PDF or the web, explain it with
 ;;                  Claude or add it to Claude's prompt (with the file and

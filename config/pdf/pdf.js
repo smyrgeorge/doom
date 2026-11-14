@@ -48,8 +48,10 @@
     body.no-toolbar { --tb: 0px; }
     #viewerContainer { top: var(--tb); }
     body.sidebar #viewerContainer { left: var(--sb); }
-    #find { top: calc(var(--tb) + 10px); }
-    #toolbar, #sidebar {
+    #find { top: calc(var(--tb) + 10px); display: flex; box-sizing: border-box; max-width: calc(100vw - 28px); }
+    #find .query { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    #find .count { flex: none; }
+    #toolbar, #sidebar, #menu {
       position: fixed; z-index: 20; box-sizing: border-box;
       background: var(--bar); color: var(--fg);
       font: 12px -apple-system, sans-serif;
@@ -60,7 +62,7 @@
       display: flex; align-items: center; gap: 2px;
       border-bottom: 1px solid var(--border);
     }
-    body.no-toolbar #toolbar { display: none; }
+    body.no-toolbar #toolbar, body.no-toolbar #menu, #toolbar [hidden], #menu[hidden] { display: none !important; }
     #toolbar button {
       flex: none; display: flex; align-items: center; justify-content: center;
       width: 26px; height: 24px; padding: 0; border: 0; border-radius: 5px;
@@ -72,6 +74,21 @@
     #toolbar .info { flex: none; min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
     #toolbar .sep { flex: none; width: 1px; height: 16px; margin: 0 6px; background: var(--border); }
     #toolbar .grow { flex: 1; }
+    #menu {
+      z-index: 30; top: var(--tb); right: 4px; max-width: calc(100vw - 8px);
+      max-height: calc(100vh - var(--tb) - 4px); overflow: auto; padding: 4px;
+      border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .4);
+    }
+    #menu button {
+      display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px;
+      border: 0; border-radius: 4px; background: none; color: var(--fg); font: inherit;
+      text-align: left; white-space: nowrap;
+    }
+    #menu button:hover { background: var(--hover); }
+    #menu button.on { color: var(--accent); }
+    #menu button:disabled { opacity: .35; background: none; }
+    #menu button svg { flex: none; }
+    #menu button span { overflow: hidden; text-overflow: ellipsis; }
     #sidebar {
       top: var(--tb); bottom: 0; left: 0; width: var(--sb);
       overflow: auto; display: none; border-right: 1px solid var(--border);
@@ -111,7 +128,7 @@
     #sidebar .thumb canvas { display: block; width: 100%; height: 100%; }
     #sidebar .thumb .num { margin-top: 4px; color: var(--dim); font-variant-numeric: tabular-nums; }
     #sidebar .thumb.current .num { color: var(--accent); }
-    #toolbar button:not(:disabled), #sidebar .tabs button:not(:disabled),
+    #toolbar button:not(:disabled), #menu button:not(:disabled), #sidebar .tabs button:not(:disabled),
     #sidebar .item, #sidebar .caret, #sidebar .thumb { cursor: pointer; }
     body.dark .pdfViewer .page, body.dark #sidebar .thumb .box { background-color: #242424; }
     body.dark .pdfViewer .page canvas, body.dark #sidebar .thumb canvas {
@@ -141,6 +158,8 @@
     fitPage: svg('<rect x="3.5" y="1.5" width="9" height="13" rx="1"/><path d="M6 5h4M6 8h4M6 11h2.5"/>'),
     dark: svg('<path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/>'),
     preview: svg('<path d="M9.5 2.5h4v4M13.5 2.5l-6 6M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5"/>'),
+    more: svg('<circle cx="3.5" cy="8" r=".9" fill="currentColor"/><circle cx="8" cy="8" r=".9" fill="currentColor"/>' +
+              '<circle cx="12.5" cy="8" r=".9" fill="currentColor"/>'),
     print: svg('<path d="M4.5 6V2.5h7V6M4.5 11.5h-2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1h-2"/>' +
                '<rect x="4.5" y="9" width="7" height="5" rx=".5"/>'),
   };
@@ -288,23 +307,82 @@
   const sep = () => toolbar.appendChild(el('span', 'sep'));
 
   const sidebarButton = button('sidebar', 'Sidebar: outline, pages (O)', () => set({ sidebar: !state.sidebar }));
-  sep();
+  const seps = [sep()];
   const backButton = button('back', 'Back (C-o)', goBack);
   const forwardButton = button('forward', 'Forward (C-i)', goForward);
-  sep();
-  button('prev', 'Previous page (K)', () => turnPage(-1));
+  seps.push(sep());
+  const prevButton = button('prev', 'Previous page (K)', () => turnPage(-1));
   const pageInfo = toolbar.appendChild(el('span', 'info'));
-  button('next', 'Next page (J)', () => turnPage(1));
-  sep();
-  button('zoomOut', `Zoom out (${labels.mod}+-)`, () => zoom(1 / zoomStep));
+  const nextButton = button('next', 'Next page (J)', () => turnPage(1));
+  seps.push(sep());
+  const zoomOutButton = button('zoomOut', `Zoom out (${labels.mod}+-)`, () => zoom(1 / zoomStep));
   const zoomInfo = toolbar.appendChild(el('span', 'info'));
-  button('zoomIn', `Zoom in (${labels.mod}+=)`, () => zoom(zoomStep));
-  button('fitWidth', 'Fit width (W)', () => fit('page-width'));
-  button('fitPage', 'Fit page (P)', () => fit('page-fit'));
+  const zoomInButton = button('zoomIn', `Zoom in (${labels.mod}+=)`, () => zoom(zoomStep));
+  const fitWidthButton = button('fitWidth', 'Fit width (W)', () => fit('page-width'));
+  const fitPageButton = button('fitPage', 'Fit page (P)', () => fit('page-fit'));
   toolbar.appendChild(el('span', 'grow'));
   const darkButton = button('dark', 'Dark pages (SPC m d)', () => set({ dark: !state.dark }));
-  button('preview', `Open in ${labels.viewer} (SPC m p)`, () => request('preview'));
-  button('print', `Print (${labels.mod}+P)`, () => request('print'));
+  const previewButton = button('preview', `Open in ${labels.viewer} (SPC m p)`, () => request('preview'));
+  const printButton = button('print', `Print (${labels.mod}+P)`, () => request('print'));
+  const moreButton = button('more', 'More', () => (menu.hidden ? openMenu() : closeMenu()));
+
+  // NARROW PANES: what the toolbar can't fit goes, a group at a time in this
+  // order, the separators and the zoom's % hidden, the buttons into the menu
+  // of the ⋯ button at its end.
+  const narrowing = [
+    seps.concat(zoomInfo),
+    [darkButton, previewButton, printButton],
+    [fitWidthButton, fitPageButton],
+    [backButton, forwardButton],
+    [pageInfo],
+    [prevButton, nextButton],
+    [zoomOutButton, zoomInButton],
+    [sidebarButton],
+  ];
+  const menu = el('div');
+  menu.id = 'menu';
+  menu.hidden = true;
+
+  function fitToolbar() {
+    closeMenu();
+    for (const group of narrowing) for (const node of group) node.hidden = false;
+    moreButton.hidden = true;
+    for (const group of narrowing) {
+      if (toolbar.scrollWidth <= toolbar.clientWidth) break;
+      for (const node of group) node.hidden = true;
+      if (group.some((node) => node.tagName === 'BUTTON')) moreButton.hidden = false;
+    }
+  }
+
+  // The menu: the buttons left out, with their keys, as they are (on, can't
+  // be used); one clicked, or a click elsewhere, closes it.
+  function openMenu() {
+    menu.textContent = '';
+    for (const node of toolbar.querySelectorAll('button')) {
+      if (!node.hidden) continue;
+      const item = menu.appendChild(el('button'));
+      item.innerHTML = node.innerHTML;
+      item.appendChild(el('span', '', node.title));
+      item.disabled = node.disabled;
+      item.classList.toggle('on', node.classList.contains('on'));
+      item.addEventListener('click', () => {
+        closeMenu();
+        node.click();
+      });
+    }
+    menu.hidden = false;
+    moreButton.classList.add('on');
+  }
+
+  function closeMenu() {
+    menu.hidden = true;
+    moreButton.classList.remove('on');
+  }
+
+  document.addEventListener('mousedown', (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && !moreButton.contains(e.target)) closeMenu();
+  });
+  new ResizeObserver(fitToolbar).observe(toolbar);
 
   function historyButtons() {
     backButton.disabled = !back.length;
@@ -321,7 +399,7 @@
   pagesTab.addEventListener('click', () => set({ view: 'pages' }));
   const outlineView = sidebar.appendChild(el('div', 'view'));
   const pagesView = sidebar.appendChild(el('div', 'view'));
-  document.body.append(toolbar, sidebar);
+  document.body.append(toolbar, menu, sidebar);
 
   // SETTINGS: the toolbar's buttons, Emacs's SPC m d / t, O.
   function publish() {
@@ -354,6 +432,7 @@
     const view = sidebarView();
     body.classList.toggle('dark', state.dark);
     body.classList.toggle('no-toolbar', !state.toolbar);
+    if (!state.toolbar) closeMenu();
     body.classList.toggle('sidebar', state.sidebar);
     darkButton.classList.toggle('on', state.dark);
     sidebarButton.classList.toggle('on', state.sidebar);
@@ -557,9 +636,20 @@
     node.classList.toggle('on', !!text);
   }
 
+  // The search's: its query, cut short in a narrow pane, then its matches,
+  // always shown.
+  function findBadgeShow(text, count) {
+    findBadge.textContent = '';
+    if (text) findBadge.append(el('span', 'query', text), el('span', 'count', count));
+    findBadge.classList.toggle('on', !!text);
+  }
+
   bus.on('pagechanging', (e) => {
     if (!doc) return;
-    pageInfo.textContent = e.pageNumber + ' / ' + doc.numPages;
+    const info = e.pageNumber + ' / ' + doc.numPages;
+    const resized = info.length !== pageInfo.textContent.length;
+    pageInfo.textContent = info;
+    if (resized) fitToolbar();
     if (!state.toolbar) {
       badge(pageBadge, e.pageNumber + ' / ' + doc.numPages);
       clearTimeout(pageTimer);
@@ -580,17 +670,17 @@
   // The place, while scrolling (not PDF.js's updateviewarea: see here()).
   container.addEventListener('scroll', publishSoon, { passive: true });
 
-  const matches = (m) => (m && m.total ? query + '   ' + m.current + ' / ' + m.total : query);
+  const matches = (m) => (m && m.total ? '   ' + m.current + ' / ' + m.total : '');
 
   bus.on('updatefindmatchescount', (e) => {
-    if (query) badge(findBadge, matches(e.matchesCount));
+    if (query) findBadgeShow(query, matches(e.matchesCount));
   });
 
   bus.on('updatefindcontrolstate', (e) => {
     if (!query) return;
     // FindState: 0 found, 1 not found, 2 wrapped, 3 pending.
-    if (e.state === 1) badge(findBadge, query + '   not found');
-    else badge(findBadge, matches(e.matchesCount) + (e.state === 2 ? '   (wrapped)' : ''));
+    if (e.state === 1) findBadgeShow(query, '   not found');
+    else findBadgeShow(query, matches(e.matchesCount) + (e.state === 2 ? '   (wrapped)' : ''));
   });
 
   // Opening: where it was before a reload, else where it was when last
@@ -612,6 +702,7 @@
       viewer.currentScaleValue = 'page-width';
     }
     pageInfo.textContent = viewer.currentPageNumber + ' / ' + doc.numPages;
+    fitToolbar();
     publish();
   });
 
@@ -656,7 +747,7 @@
       loadOutline(doc);
       loadThumbs(doc);
     } catch (e) {
-      badge(findBadge, 'PDF.js: ' + (e && e.message ? e.message : e));
+      findBadgeShow('PDF.js: ' + (e && e.message ? e.message : e));
     }
   }
 
@@ -678,7 +769,7 @@
     const was = !!query;
     query = '';
     bus.dispatch('findbarclose', { source: window });
-    badge(findBadge, '');
+    findBadgeShow('');
     return was;
   }
 

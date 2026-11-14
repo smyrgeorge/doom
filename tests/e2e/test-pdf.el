@@ -349,7 +349,8 @@ text."
   "The selected window made COLS columns wide, *scratch* beside it; once its
 page is as wide."
   (let ((window (selected-window)))
-    (set-window-buffer (split-window-right) (get-buffer-create "*scratch*"))
+    (when (one-window-p)
+      (set-window-buffer (split-window-right) (get-buffer-create "*scratch*")))
     (window-resize window (- cols (window-total-width window)) t)
     (should (+test-wait-for
              (lambda () (<= (abs (- (+test-pdf--number "innerWidth" window) (window-body-width window t))) 16))
@@ -391,6 +392,77 @@ page is as wide."
                              100))
                3))
       (should (> (+test-pdf--number "document.getElementById('viewerContainer').clientWidth" right) 150)))))
+
+;; What the toolbar shows: :clipped, the buttons shown past its edge; :missing,
+;; those hidden that its ⋯ menu doesn't have; :hidden, how many are hidden;
+;; :more, the ⋯ button shown.
+(defconst +test-pdf--toolbar-script
+  "(function () {
+  var tb = document.getElementById('toolbar');
+  var buttons = [...tb.querySelectorAll('button')];
+  var more = buttons.find(b => b.title === 'More');
+  var hidden = buttons.filter(b => b.hidden && b !== more).map(b => b.title);
+  var clipped = buttons.filter(b => !b.hidden && b.getBoundingClientRect().right > tb.clientWidth).map(b => b.title);
+  var menu = [];
+  if (!more.hidden) {
+    more.click();
+    menu = [...document.querySelectorAll('#menu button')].map(b => b.textContent);
+    more.click();
+  }
+  return JSON.stringify({clipped: clipped, missing: hidden.filter(t => !menu.includes(t)),
+                         hidden: hidden.length, more: !more.hidden});
+})()")
+
+(defun +test-pdf--toolbar ()
+  (json-parse-string (+test-pdf--js +test-pdf--toolbar-script) :object-type 'plist :array-type 'list))
+
+(ert-deftest e2e-pdf/the-toolbar-in-a-narrow-pane-the-rest-in-its-menu ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    ;; Wide: all of it, no ⋯.
+    (should (equal (+test-pdf--toolbar) '(:clipped nil :missing nil :hidden 0 :more :false)))
+    (dolist (cols '(60 40 25))
+      (+test-pdf--narrow cols)
+      (+test-sleep 0.3)
+      (ert-info ((format "%d columns" cols))
+        (let ((toolbar (+test-pdf--toolbar)))
+          ;; No button cut off; each one hidden in the ⋯ menu.
+          (should-not (plist-get toolbar :clipped))
+          (should-not (plist-get toolbar :missing))
+          (should (eq (plist-get toolbar :more) (if (> (plist-get toolbar :hidden) 0) t :false)))
+          (when (= cols 25)
+            (should (> (plist-get toolbar :hidden) 0))))))
+    ;; From the menu, as from the toolbar.
+    (+test-pdf--js "document.querySelector('#toolbar button[title=More]').click();
+[...document.querySelectorAll('#menu button')].find(b => b.textContent.startsWith('Dark pages')).click(); 'ok'")
+    (should (+test-wait-for (lambda () (plist-get (+test-pdf--state) :dark)) 3))
+    (should (equal (+test-pdf--js "String(document.getElementById('menu').hidden)") "true"))))
+
+(ert-deftest e2e-pdf/the-search-s-badge-fits-a-narrow-pane-its-count-shown ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (dolist (cols '(40 25))
+      (+test-pdf--narrow cols)
+      (+my/pdf--find "a long query, longer than a narrow pane is wide, matching nothing")
+      (should (+test-wait-for
+               (lambda () (string-match-p "not found" (+test-pdf--js "document.getElementById('find').textContent")))
+               5))
+      (+test-sleep 0.3)
+      (ert-info ((format "%d columns" cols))
+        (let ((badge (json-parse-string
+                      (+test-pdf--js "(function () {
+  var b = document.querySelector('#find').getBoundingClientRect();
+  var c = document.querySelector('#find .count').getBoundingClientRect();
+  return JSON.stringify({left: b.left, right: b.right, countLeft: c.left, countRight: c.right, width: innerWidth});
+})()")
+                      :object-type 'plist)))
+          (should (>= (plist-get badge :left) 0))
+          (should (<= (plist-get badge :right) (plist-get badge :width)))
+          ;; Its count whole, inside it.
+          (should (>= (plist-get badge :countLeft) (plist-get badge :left)))
+          (should (<= (plist-get badge :countRight) (plist-get badge :right)))
+          (should (> (- (plist-get badge :countRight) (plist-get badge :countLeft)) 20))))
+      (+my/pdf--escape-h))))
 
 ;; ====== COPY, OPTION+ENTER ======
 
