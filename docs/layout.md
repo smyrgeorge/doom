@@ -9,7 +9,6 @@
 | `config/notify.el`, `notify/` | [Notifications](notifications.md) on the desktop while Emacs isn't in front |
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
 | `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |
-| `config/cheatsheet.el`, `cheatsheet.org` | A tips panel under the sidebar (off) |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe |
 | `config/compile.el` | Byte-compiles this config when Emacs is idle |
 | `config/editor.el`, `editor/` | [The editor](editor.md): tabs, `Option+Enter`, `Cmd+B`, the sticky header, spelling |

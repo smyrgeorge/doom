@@ -158,10 +158,6 @@
 ;; TREEMACS (project view)
 (load! "config/treemacs")
 
-;; CHEATSHEET (tips panel under treemacs: Vim, Doom and this config's keys)
-;; Disabled for now; uncomment to try it again.
-;;(load! "config/cheatsheet")
-
 ;; GIT (Magit: the commit graph, git-delta diffs, TODOs in the status buffer;
 ;; SPC g d: the current file's diff in a pane)
 (load! "config/git")

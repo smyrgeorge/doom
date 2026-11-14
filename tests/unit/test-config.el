@@ -1,8 +1,7 @@
 ;;; tests/unit/test-config.el -*- lexical-binding: t; -*-
 ;; config.el: the whole config loads, in order, without errors; the files it
-;; loads exist, the disabled ones (cheatsheet, pdf) stay out; its own settings
-;; (CUSTOM CONFIG); the load order the files' comments ask for; nothing from
-;; tests/ is loaded.
+;; loads exist, Doom's pdf module stays out; its own settings (CUSTOM CONFIG);
+;; the load order the files' comments ask for; nothing from tests/ is loaded.
 
 (defvar doom-disabled-packages nil)     ; Doom's `use-package!' reads it
 (setq native-comp-enable-subr-trampolines nil) ; mocking primitives compiles none
@@ -122,20 +121,6 @@ file is recorded once it has loaded: its parts (config/merge/...) before it."
     ;; Each once.
     (should (equal loads (delete-dups (copy-sequence loads))))))
 
-(ert-deftest config/disabled-files-not-loaded ()
-  "config/cheatsheet exists but is commented out: not loaded."
-  (let ((text (with-temp-buffer
-                (insert-file-contents (expand-file-name "config.el" +test-root))
-                (buffer-string)))
-        (loaded (+test-config--loaded)))
-    (dolist (name '("config/cheatsheet"))
-      (should (file-exists-p (+test-config--file name)))
-      (should-not (member name (+test-config--loads)))
-      (should-not (member (+test-config--file name) loaded))
-      (should (string-match-p (format "^;;(load! \"%s\")$" (regexp-quote name)) text))))
-  ;; Nothing it defines is there.
-  (should-not (boundp '+my/cheatsheet-file)))
-
 (ert-deftest config/pdf-module-off-our-pdf-on ()
   "Doom's pdf module (pdf-tools) is off: PDFs are this config's own viewer
 (config/pdf, WebKit), loaded; pdf-tools' old setup is gone."
@@ -159,14 +144,13 @@ before a test read it."
               (directory-files-recursively (expand-file-name "config/" +test-root) "\\.el\\'")))
 
 (ert-deftest config/every-config-file-accounted-for ()
-  "Each config/*.el is loaded or one of the disabled ones, and each
-config/NAME/*.el a part config/NAME.el loads: none forgotten."
+  "Each config/*.el is loaded, and each config/NAME/*.el a part
+config/NAME.el loads: none forgotten."
   (let ((loads (+test-config--loads))
         (dir (expand-file-name "config/" +test-root)))
     (dolist (file (+test-config--el-files dir))
       (let ((name (concat "config/" (file-name-sans-extension file))))
-        (should (or (member name loads)
-                    (member name '("config/cheatsheet"))))))
+        (should (member name loads))))
     (dolist (folder (directory-files dir nil "\\`[^.]"))
       (when (file-directory-p (expand-file-name folder dir))
         (let ((entry (concat "config/" folder)))
@@ -178,7 +162,7 @@ config/NAME/*.el a part config/NAME.el loads: none forgotten."
 (ert-deftest config/files-are-lexical-and-say-so ()
   "Every config file uses lexical binding (compile.el relies on it) and its
 header says what loads it: config.el, or for a part its file (config/merge.el)."
-  (dolist (name (append (+test-config--loads) '("config/cheatsheet")))
+  (dolist (name (+test-config--loads))
     (dolist (file (cons name (+test-config--parts name)))
       (with-temp-buffer
         (insert-file-contents (+test-config--file file))
