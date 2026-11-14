@@ -4,8 +4,8 @@
 ;; remembers its project (the dashboard is in the current workspace's one) and
 ;; keeps the buffers shown in it. Projects are temp folders (with a .git);
 ;; workspaces are persp-mode structs, `get-current-persp' mocked, but real
-;; persp-mode for the buffers kept; Doom's dashboard functions come from its
-;; source.
+;; persp-mode for the buffers kept and SPC p p; Doom's dashboard functions and
+;; its SPC p p come from its source.
 
 ;; ====== LOADING ======
 
@@ -42,6 +42,21 @@
      +dashboard-update-pwd-h +dashboard--pwd)))
 (defvar +workspaces-switch-project-function #'doom-project-find-file) ; Doom's workspaces module
 
+(defconst +test-projectile--doom-workspaces
+  (seq-find #'file-exists-p
+            (list (expand-file-name "sources/doom+/modules/ui/workspaces/autoload/workspaces.el"
+                                    doom-emacs-dir)
+                  (expand-file-name "ui/workspaces/autoload/workspaces.el" doom-modules-dir)))
+  "Doom's workspaces module's functions (SPC p p: `+workspaces-switch-to-project-h').")
+
+(when +test-projectile--doom-workspaces
+  ;; Its settings (the module's config.el), as Doom has them.
+  (defvar +workspaces-main "main")
+  (defvar +workspaces-on-switch-project-behavior 'non-empty)
+  (defvar +workspace--last nil)
+  (defvar +workspaces-data-file "_workspaces")
+  (load +test-projectile--doom-workspaces nil t))
+
 (+test-load "config/projectile")
 
 (require 'projectile)
@@ -66,6 +81,10 @@ projectile resolves them)."
 (defun +test-projectile--project (name &rest files)
   "A project NAME (a .git folder) with FILES; its root."
   (apply #'+test-projectile--dir name ".git/" files))
+
+(defmacro +test-projectile-need-doom-workspaces ()
+  '(unless (fboundp '+workspaces-switch-to-project-h)
+     (ert-skip "Doom's workspaces module isn't there")))
 
 (defmacro +test-projectile-need-dashboard ()
   '(unless (fboundp '+dashboard--persp-record-project-h)
@@ -330,6 +349,21 @@ previous workspace's project) keeps its project."
       (+dashboard--persp-record-project-h "two" (selected-frame))
       (should (equal (persp-parameter 'last-project-root) p1)))))
 
+(ert-deftest projectile/leaving-from-a-file-in-no-project-records-nothing ()
+  "Leaving while showing a file outside any project: the workspace keeps its
+project (Doom's recorder stored none, and the workspace forgot it)."
+  (+test-projectile-need-dashboard)
+  (+test-projectile-with-workspaces
+    (let ((p1 (+test-projectile--project "loose-a" "a.txt")))
+      (+test-projectile--show (expand-file-name "a.txt" p1))
+      (+dashboard--persp-record-project-h "two" (selected-frame))
+      (should (equal (persp-parameter 'last-project-root) p1))
+      (+test-projectile--show (+test-file "no-project-x/loose.txt" "x\n"))
+      (should-not (doom-project-root))
+      (+dashboard--persp-record-project-h "two" (selected-frame))
+      (should (equal (persp-parameter 'last-project-root) p1))
+      (should (equal (+my/workspace-project) p1)))))
+
 (ert-deftest projectile/new-workspace-records-nothing ()
   "A workspace being made (`persp-created-functions': PERSP given): what's
 shown is the previous workspace's; nothing recorded, in either."
@@ -580,3 +614,32 @@ them): their buffers stay the other's. Each keeps what's shown in it."
       (+my/workspace-add-shown-buffers-h (selected-frame))
       (should (buffer-live-p buffer))
       (kill-buffer buffer))))
+
+;; ====== WORKSPACES: SPC P P ======
+;; Doom's SPC p p (`+workspaces-switch-to-project-h'), real persp-mode.
+
+(ert-deftest projectile/spc-p-p-into-an-empty-workspace-keeps-the-project ()
+  "SPC p p from an empty workspace (Doom takes it over, renamed, without
+saying whose it is) into a project without a README, its file prompt left
+(C-g): the workspace is the project's, its dashboard there after switching
+away and back (it went to ~)."
+  (+test-projectile-need-doom-workspaces)
+  (+test-projectile-need-dashboard)
+  (+test-projectile-real-workspaces
+    (let* ((doom-fallback-buffer-name "*doom*")
+           (p (+test-projectile--project "taken-over" "src.kt"))
+           (name (file-name-nondirectory (directory-file-name p)))
+           (persp-before-switch-functions (list #'+dashboard--persp-record-project-h))
+           (persp-activated-functions (list #'+dashboard--persp-detect-project-h)))
+      (switch-to-buffer (+test-projectile--dashboard))
+      (should-not (+workspace-buffer-list))
+      (cl-letf (((symbol-function 'doom-project-find-file) (lambda (_) (signal 'quit nil))))
+        (condition-case nil
+            (+workspaces-switch-to-project-h p)
+          (quit nil)))
+      (should (equal (safe-persp-name (get-current-persp)) name))
+      (should (equal (+my/workspace-project) p))
+      (persp-frame-switch "B")
+      (persp-frame-switch name)
+      (should (equal (+my/workspace-project) p))
+      (should (equal (+test-projectile--dashboard-dir) p)))))

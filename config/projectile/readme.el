@@ -24,7 +24,12 @@
        dir))))
 
 (defun +my/project-open-readme (dir)
-  "After switching to project DIR: its README, else Doom's file prompt."
+  "After switching to project DIR: its README, else Doom's file prompt.
+The workspace is DIR's first (config/projectile/workspaces.el): Doom says so
+only of a workspace it makes, not of an empty one it took over, which the
+prompt left (C-g) then put in ~."
+  (when (and (bound-and-true-p persp-mode) (get-current-persp))
+    (set-persp-parameter '+workspace-project dir))
   (if-let* ((readme (+my/project-readme dir)))
       (find-file readme)
     (doom-project-find-file dir)))

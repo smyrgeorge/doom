@@ -9,9 +9,10 @@
 ;; whatever it showed, the dashboard too, still in the previous workspace's
 ;; project: a workspace whose files were all closed took on another's, and
 ;; there SPC SPC listed the other project's files and the sidebar followed it.
-;; Only files count now, recorded as they're shown; a workspace made for a
-;; project (SPC p p) stays in it, one without a file yet starts in ~, never in
-;; another's.
+;; Only files in a project count now, recorded as they're shown (one outside
+;; any project recorded none: the workspace's project forgotten); a workspace
+;; made for a project (SPC p p) stays in it, one without a file yet starts in
+;; ~, never in another's.
 (defun +my/workspace-shown-file ()
   "The file buffer the selected window shows, if any. Not the current buffer:
 Doom's hook on buffer switches runs in whatever buffer is current, and right
@@ -34,14 +35,15 @@ project then got recorded as the new workspace's."
 (add-hook 'doom-switch-buffer-hook #'+my/workspace-record-project-h)
 
 (defadvice! +my/workspace-record-files-only-a (fn &optional persp &rest args)
-  "Leaving a workspace, record its project only from the file it shows (see
-above). Not when one is made (PERSP): what's shown is still the previous
-workspace's."
+  "Leaving a workspace, record its project only from the file it shows, when
+that one is in a project (see above). Not when one is made (PERSP): what's
+shown is still the previous workspace's."
   :around #'+dashboard--persp-record-project-h
   (unless (and persp (persp-p persp))
     (when-let* ((buffer (+my/workspace-shown-file)))
       (with-current-buffer buffer
-        (apply fn persp args)))))
+        (when (doom-project-root)
+          (apply fn persp args))))))
 
 (defun +my/workspace-project ()
   "The current workspace's project (see above), or nil without workspaces."
