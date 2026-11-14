@@ -7,7 +7,7 @@
 ;; the outline, reverts, quitting Emacs, keys.
 ;; Batch Emacs has no GUI: WebKit is faked (`+test-pdf--with-fakes'); PDFs
 ;; show in it (`+my/webkit-p' t) unless a test says otherwise. Nothing is
-;; downloaded (`url-copy-file' fails, or copies from a fake CDN), nothing opens
+;; downloaded (`+my/webkit--fetch' fails, or copies from a fake CDN), nothing opens
 ;; outside Emacs (Preview, osascript recorded), temp folders and the places
 ;; file are the test's own.
 
@@ -35,10 +35,11 @@
   (mapcar #'cdr (seq-filter (lambda (call) (eq (car call) function)) +test-pdf--log)))
 
 (defmacro +test-pdf--with-fakes (&rest body)
-  "BODY with WebKit's functions faked, downloads failing, Preview and
-osascript recorded (not run)."
+  "BODY with WebKit's functions faked, downloads failing (none lately: each
+test's own), Preview and osascript recorded (not run)."
   (declare (indent 0))
-  `(let ((+test-pdf--made nil)
+  `(let ((+my/webkit--failed nil)
+         (+test-pdf--made nil)
          (+test-pdf--scripts nil)
          (+test-pdf--log nil)
          (+test-os-runs nil)
@@ -77,7 +78,7 @@ osascript recorded (not run)."
                ((symbol-function 'xwidget-webkit-goto-history) #'ignore)
                ((symbol-function 'xwidget-webkit-callback) #'ignore)
                ;; No download, no Preview, no osascript.
-               ((symbol-function 'url-copy-file)
+               ((symbol-function '+my/webkit--fetch)
                 (lambda (url &rest _) (signal 'file-error (list "A test can't download" url))))
                ((symbol-function 'make-process)
                 (lambda (&rest args)
@@ -378,14 +379,16 @@ doc-view and this config, in the GUI or a terminal."
 (defvar +test-pdf--downloads nil "The URLs downloaded from the fake CDN, in order.")
 
 (defmacro +test-pdf--with-cdn (files &rest body)
-  "BODY with `url-copy-file' copying from a fake CDN of FILES ((PATH . BYTES)...),
-by their path in the npm package; others missing (an error)."
+  "BODY with `+my/webkit--fetch' copying from a fake CDN of FILES ((PATH . BYTES)...),
+by their path in the npm package; others missing (an error). No download
+failed lately."
   (declare (indent 1))
   `(let ((cdn (+test-pdf--new-dir "cdn"))
-         (+test-pdf--downloads nil))
+         (+test-pdf--downloads nil)
+         (+my/webkit--failed nil))
      (pcase-dolist (`(,path . ,bytes) ,files)
        (+test-pdf--write-bytes (expand-file-name path cdn) bytes))
-     (cl-letf (((symbol-function 'url-copy-file)
+     (cl-letf (((symbol-function '+my/webkit--fetch)
                 (lambda (url newname &optional ok-if-already-exists &rest _)
                   (setq +test-pdf--downloads (append +test-pdf--downloads (list url)))
                   (let ((path (and (string-match "\\`https://cdn\\.jsdelivr\\.net/npm/pdfjs-dist@[^/]+/\\(.+\\)\\'" url)
@@ -458,7 +461,7 @@ by their path in the npm package; others missing (an error)."
 
 (ert-deftest pdf/pdf-js-ensure ()
   (+test-pdf
-    ;; There: nothing downloaded (the macro's `url-copy-file' fails).
+    ;; There: nothing downloaded (the macro's `+my/webkit--fetch' fails).
     (should (+my/pdf-js-installed-p))
     (should (eq (+my/pdf-js-ensure) t))
     (let ((+my/pdf-js-dir (+test-pdf--new-dir "ensure"))

@@ -2,7 +2,7 @@
 ;; config/webkit.el: web pages inside Emacs, in WebKit (xwidgets): a view per
 ;; window, spare views, views of closed windows tidied, the cover against the
 ;; white flash, links out, JavaScript, the title read, the pointer, clicks,
-;; commands, the base mode.
+;; commands, the base mode; downloads (from a server of the test's own).
 ;; Batch Emacs has no GUI: WebKit is faked (`+test-webkit--with-fakes'), the
 ;; windows, overlays, buffers and timers are real. Redisplay doesn't run here:
 ;; the window hooks it would run are called by the tests (`+test-webkit--show').
@@ -226,6 +226,8 @@ hook, then the view started after it. Return WINDOW."
 
 (ert-deftest webkit/settings ()
   (should (= (default-value '+my/webkit-scroll-step) 60))
+  (should (= (default-value '+my/webkit-download-timeout) 15))
+  (should (= (default-value '+my/webkit-download-retry) 600))
   (should (eq (default-value '+my/webkit-link-function) #'browse-url))
   (should (equal (default-value '+my/webkit-selection-script) "String(window.getSelection())"))
   (should-not (default-value '+my/webkit-url-function))
@@ -1490,16 +1492,17 @@ collector took would crash Emacs), then not."
 ;; ====== DOWNLOADS ======
 
 (defmacro +test-webkit--with-cdn (files &rest body)
-  "BODY with `url-copy-file' copying from a fake CDN of FILES ((URL . BYTES)...);
-the URLs asked for in `downloads', oldest first."
+  "BODY with `+my/webkit--fetch' copying from a fake CDN of FILES ((URL . BYTES)...);
+the URLs asked for in `downloads', oldest first. No download failed lately."
   (declare (indent 1))
-  `(let ((downloads nil))
-     (cl-letf (((symbol-function 'url-copy-file)
-                (lambda (url newname &optional ok-if-already-exists &rest _)
+  `(let ((downloads nil)
+         (+my/webkit--failed nil))
+     (cl-letf (((symbol-function '+my/webkit--fetch)
+                (lambda (url newname)
                   (setq downloads (append downloads (list url)))
                   (let ((bytes (cdr (assoc url ,files))))
                     (unless bytes (signal 'file-error (list "Not found" url)))
-                    (when (and (file-exists-p newname) (not ok-if-already-exists))
+                    (when (file-exists-p newname)
                       (signal 'file-already-exists (list newname)))
                     (let ((coding-system-for-write 'no-conversion))
                       (with-temp-file newname
@@ -1555,6 +1558,130 @@ the URLs asked for in `downloads', oldest first."
     ;; Offline: the download's error.
     (+test-webkit--with-cdn nil
       (should-error (+my/webkit-install "Lib" "1" files dir) :type 'file-error))))
+
+(ert-deftest webkit/install-not-again-soon-after-a-failure ()
+  "Failed: not tried again for a page for a while (said so, the failure's
+reason kept), but by its install command; done, forgotten."
+  (let* ((dir (file-name-as-directory (+test-tmp-file "install/again")))
+         (files `(("a.js" "https://cdn.example/a.js" ,(+test-webkit--sha256 "var a;")))))
+    (+test-webkit--with-cdn nil
+      (should-error (+my/webkit-install "Lib" "1" files dir) :type 'file-error)
+      (should (= (length downloads) 1))
+      ;; Soon after: not tried, said why.
+      (let ((err (should-error (+my/webkit-install "Lib" "1" files dir))))
+        (should (string-match-p "\\`Lib: Not found.*(0 min ago; tried again in 10 min, or now by its install command)\\'"
+                                (error-message-string err))))
+      (should (= (length downloads) 1))
+      ;; Another library: tried.
+      (should-error (+my/webkit-install "Other" "1" files dir) :type 'file-error)
+      (should (= (length downloads) 2))
+      ;; Its command: tried.
+      (let ((this-command '+test-webkit--install-lib))
+        (should-error (+test-webkit--install-lib files dir) :type 'file-error))
+      (should (= (length downloads) 3))
+      ;; Its time come: tried.
+      (setf (nth 1 (assoc "Lib" +my/webkit--failed)) (- (float-time) (1+ +my/webkit-download-retry)))
+      (should-error (+my/webkit-install "Lib" "1" files dir) :type 'file-error)
+      (should (= (length downloads) 4)))
+    ;; Installed: forgotten.
+    (+test-webkit--with-cdn '(("https://cdn.example/a.js" . "var a;"))
+      (push (list "Lib" (- (float-time) (1+ +my/webkit-download-retry)) "Lib: failed") +my/webkit--failed)
+      (+my/webkit-install "Lib" "1" files dir)
+      (should-not (assoc "Lib" +my/webkit--failed)))))
+
+(defun +test-webkit--install-lib (files dir)
+  "Lib's install command (M-x)."
+  (interactive)
+  (+my/webkit-install "Lib" "1" files dir))
+
+;; A web server of the test's own, on this machine.
+
+(defvar +test-webkit--served nil "The paths asked of the test's server, the latest first.")
+
+(defun +test-webkit--serve (answer)
+  "A server on this machine answering each request with what ANSWER, a
+function of its path, returns: (STATUS . BODY), or nil (no answer ever).
+Its URL's start (http://127.0.0.1:PORT)."
+  (let ((server
+         (make-network-process
+          :name "test-http" :server t :host "127.0.0.1" :service t :family 'ipv4
+          :coding 'binary :noquery t
+          :filter
+          (lambda (process text)
+            (let ((request (concat (or (process-get process 'request) "") text)))
+              (process-put process 'request request)
+              (when (and (string-search "\r\n\r\n" request)
+                         (string-match "\\`GET \\([^ ]+\\)" request))
+                (let ((path (match-string 1 request)))
+                  (push path +test-webkit--served)
+                  (pcase (funcall answer path)
+                    (`(,status . ,body)
+                     (process-send-string
+                      process (format "HTTP/1.1 %s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s"
+                                      status (length body) body))
+                     (process-send-eof process))))))))))
+    (format "http://127.0.0.1:%d" (process-contact server :service))))
+
+(defmacro +test-webkit--with-server (answer &rest body)
+  "BODY with the test's server answering with ANSWER (see above) at `base',
+no proxy; its connections closed after."
+  (declare (indent 1))
+  `(let ((+test-webkit--served nil)
+         (url-proxy-services nil)
+         (processes (process-list)))
+     (let ((base (+test-webkit--serve ,answer)))
+       (unwind-protect (progn ,@body)
+         (dolist (process (process-list))
+           (unless (memq process processes)
+             (delete-process process)))))))
+
+(ert-deftest webkit/fetch-downloads-a-file ()
+  (let ((binary (apply #'unibyte-string (number-sequence 0 255)))
+        (file (+test-tmp-file "fetch/lib.bin")))
+    (+test-webkit--with-server (lambda (_path) (cons "200 OK" binary))
+      (+my/webkit--fetch (concat base "/lib.bin") file)
+      (should (equal +test-webkit--served '("/lib.bin")))
+      (should (equal (with-temp-buffer
+                       (set-buffer-multibyte nil)
+                       (insert-file-contents-literally file)
+                       (buffer-string))
+                     binary))
+      ;; Nothing left: no buffer, no connection.
+      (should-not (seq-find (lambda (b) (string-match-p "127\\.0\\.0\\.1" (buffer-name b))) (buffer-list))))))
+
+(ert-deftest webkit/fetch-says-http-s-error ()
+  "A 404: HTTP's error, not the SHA-256's."
+  (let ((dir (file-name-as-directory (+test-tmp-file "fetch/missing")))
+        (+my/webkit--failed nil))
+    (+test-webkit--with-server (lambda (_path) (cons "404 Not Found" "Not found"))
+      (let ((err (should-error (+my/webkit-install "Lib" "1" `(("a.js" ,(concat base "/a.js") "0")) dir))))
+        (should (equal (error-message-string err) (format "Lib: %s/a.js: HTTP 404" base))))
+      (should-not (file-exists-p (expand-file-name "a.js.part" dir))))))
+
+(ert-deftest webkit/fetch-gives-up-when-nothing-comes ()
+  "A server that never answers (a host out of reach): given up after the
+timeout, not waited for."
+  (let ((+my/webkit-download-timeout 0.5)
+        (start (float-time)))
+    (+test-webkit--with-server #'ignore
+      (let ((err (should-error (+my/webkit--fetch (concat base "/a.js") (+test-tmp-file "fetch/never.js")))))
+        (should (equal (error-message-string err) "no answer from 127.0.0.1 in 0.5 s")))
+      (should (equal +test-webkit--served '("/a.js")))
+      (should (< (- (float-time) start) 3)))))
+
+(ert-deftest webkit/fetch-stopped-by-c-g ()
+  "C-g stops it, from a timer too (where quitting is inhibited)."
+  (let ((+my/webkit-download-timeout 10)
+        (start (float-time)))
+    (+test-webkit--with-server #'ignore
+      (let ((timer (run-at-time 0.3 nil (lambda () (setq quit-flag t)))))
+        (unwind-protect
+            (let* ((inhibit-quit t)
+                   (err (should-error (+my/webkit--fetch (concat base "/a.js") (+test-tmp-file "fetch/stopped.js")))))
+              (should (equal (error-message-string err) "download stopped (C-g)")))
+          (cancel-timer timer)))
+      (should-not quit-flag)
+      (should (< (- (float-time) start) 3)))))
 
 (ert-deftest webkit/title-json ()
   (let ((xw (+test-webkit--xw-new)))

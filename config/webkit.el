@@ -27,8 +27,8 @@
 ;;   in webkit/input.el);
 ;; - a file's new text, from a page that edits it, under the views, to be
 ;;   saved as any (see THE BUFFER'S TEXT in webkit/files.el);
-;; - the libraries a page needs, downloaded and checked (see DOWNLOADS in
-;;   webkit/files.el).
+;; - the libraries a page needs, downloaded and checked, given up on when
+;;   nothing comes (see DOWNLOADS in webkit/files.el).
 ;; A mode derived from it sets, in its body, the variables below (buffer-local).
 (defvar-local +my/webkit-url-function nil
   "Function of the window a new view is for (see VIEWS in webkit/views.el),
@@ -53,6 +53,14 @@ webkit/links.el).")
 
 (defvar-local +my/webkit-selection-script "String(window.getSelection())"
   "JavaScript whose value is the page's selected text (see `+my/webkit-copy').")
+
+(defvar +my/webkit-download-timeout 15
+  "Seconds a library's download may get nothing before it's given up (see
+DOWNLOADS in webkit/files.el).")
+
+(defvar +my/webkit-download-retry 600
+  "Seconds before a library whose download failed is tried again for a page
+(see DOWNLOADS in webkit/files.el).")
 
 (defvar +my/webkit-scroll-step 60
   "Pixels j / k (h / l) scroll a page (see COMMANDS in webkit/input.el).")

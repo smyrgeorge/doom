@@ -27,11 +27,13 @@
 (defvar +test-exd--notices nil "(show ID TEXT TYPE BUFFER) or (close ID BUFFER), latest first.")
 
 (defmacro +test-exd--with-fakes (&rest body)
-  "BODY with WebKit's functions faked, downloads failing, notices recorded."
+  "BODY with WebKit's functions faked, downloads failing (none lately: each
+test's own), notices recorded."
   (declare (indent 0))
   `(let ((+test-exd--made nil)
          (+test-exd--scripts nil)
-         (+test-exd--notices nil))
+         (+test-exd--notices nil)
+         (+my/webkit--failed nil))
      (cl-letf (((symbol-function 'make-xwidget)
                 (lambda (_type _title _width _height &optional _arguments buffer _related)
                   (let ((xw (+test-exd--xw-new :buffer buffer)))
@@ -67,7 +69,7 @@
                   (push (list 'show id text (plist-get args :type) (current-buffer)) +test-exd--notices)))
                ((symbol-function '+my/banner-close)
                 (lambda (&optional id) (push (list 'close id (current-buffer)) +test-exd--notices)))
-               ((symbol-function 'url-copy-file)
+               ((symbol-function '+my/webkit--fetch)
                 (lambda (url &rest _) (signal 'file-error (list "A test can't download" url)))))
        ,@body)))
 
@@ -329,7 +331,7 @@ mode, and why."
                     +my/excalidraw-files))
            (downloads nil))
       (should-not (+my/excalidraw-installed-p))
-      (cl-letf (((symbol-function 'url-copy-file)
+      (cl-letf (((symbol-function '+my/webkit--fetch)
                  (lambda (url newname &rest _)
                    (push url downloads)
                    (with-temp-file newname (insert (gethash url bytes)))
@@ -348,7 +350,7 @@ mode, and why."
 (ert-deftest exd/install-refuses-a-wrong-file ()
   (+test-exd
     (let ((+my/excalidraw-dir (file-name-as-directory (expand-file-name "bad" (+test-exd--new-dir "install")))))
-      (cl-letf (((symbol-function 'url-copy-file)
+      (cl-letf (((symbol-function '+my/webkit--fetch)
                  (lambda (_url newname &rest _) (with-temp-file newname (insert "evil")) t)))
         (+test-clear-messages)
         (should-not (+my/excalidraw-ensure))
