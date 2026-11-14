@@ -998,6 +998,40 @@ its page deleted."
                      (lambda () (string-search "Parse error" (with-current-buffer preview (buffer-string))))))
             (should (equal (+test-mermaid--image-file preview) last))))))))
 
+(ert-deftest mermaid/preview-image-s-error-wrapped-to-its-pane ()
+  "Mermaid's message (its lines up to 200 characters, a word longer than a
+pane): wrapped to the pane at 25, 40 and 60 columns, again as it's resized,
+nothing of it lost."
+  (+test-mermaid--with-images
+    (let ((mmd (+test-mermaid--file "wrap.mmd" "flowchart TD\n"))
+          (message (concat "Parse error on line 2:\n...A --> B -->\n-----------------^\n"
+                           "Expecting 'SQE', 'DOUBLECIRCLEEND', 'PE', '-)', 'STADIUMEND', 'SUBROUTINEEND', "
+                           "'PIPE', 'CYLINDEREND', 'DIAMOND_STOP', 'TAGEND', 'TRAPEND', 'INVTRAPEND', "
+                           "'UNICODE_TEXT', 'TEXT', 'TAGSTART', got 'PS'\n"
+                           "at https://mermaid.invalid/a-word-longer-than-any-pane-it-could-be-shown-in.mjs")))
+      (should (> (length message) 200))
+      (with-current-buffer mmd (+my/mermaid-preview-show))
+      (let* ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd))
+             (pane (split-window (get-buffer-window mmd) nil 'right)))
+        (set-window-buffer pane preview)
+        (with-current-buffer preview
+          (setq +my/mermaid-preview--svg nil
+                +my/mermaid-preview--error message)
+          (+my/mermaid-preview--draw-image))
+        (dolist (columns '(25 40 60))
+          (window-resize pane (- columns (window-body-width pane)) t)
+          (should (= (window-body-width pane) columns))
+          ;; Resized: what redisplay calls.
+          (+my/mermaid-preview--image-fit-h pane)
+          (with-current-buffer preview
+            (let ((lines (split-string (buffer-string) "\n")))
+              (should (<= (apply #'max (mapcar #'string-width lines)) (1- columns)))
+              (should (> (length lines) (/ (length message) columns))))
+            (should (equal (replace-regexp-in-string "[ \n]" "" (buffer-string))
+                           (replace-regexp-in-string "[ \n]" "" message)))
+            (should (eq (get-text-property (point-max) 'face) nil))
+            (should (eq (get-text-property 3 'face) 'error))))))))
+
 (ert-deftest mermaid/preview-in-a-terminal-the-live-editor ()
   (+test-mermaid--with-mmdc
     (cl-letf (((symbol-function '+my/webkit-p) #'ignore))

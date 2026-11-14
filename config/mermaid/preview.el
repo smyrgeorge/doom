@@ -102,7 +102,9 @@ is now."
 
 ;; ====== AS AN IMAGE ======
 ;; Without WebKit: mmdc's SVG (mermaid/render.el), as wide as it is, at most
-;; the pane's; an error under the last drawing.
+;; the pane's; an error under the last drawing, wrapped to the pane's width
+;; (Mermaid's lines run to 200 characters), drawn again as the pane's width
+;; changes.
 
 (defvar-local +my/mermaid-preview--svg nil "The SVG the image preview shows.")
 
@@ -110,10 +112,29 @@ is now."
 
 (defvar-local +my/mermaid-preview--width nil "The width it was drawn for.")
 
+(defun +my/mermaid-preview--wrap (text columns)
+  "TEXT, each of its lines wrapped to COLUMNS: at a space, else (a longer
+word) anywhere."
+  (mapconcat
+   (lambda (line)
+     (let ((rows nil))
+       (while (> (length line) columns)
+         (let ((space (string-match-p " [^ ]*\\'" (substring line 0 (1+ columns)))))
+           (if (and space (> space 0))
+               (progn (push (substring line 0 space) rows)
+                      (setq line (substring line (1+ space))))
+             (push (substring line 0 columns) rows)
+             (setq line (substring line columns)))))
+       (string-join (nreverse (cons line rows)) "\n")))
+   (split-string text "\n")
+   "\n"))
+
 (defun +my/mermaid-preview--draw-image ()
   "The image preview drawn anew: its SVG, its error."
   (let* ((window (get-buffer-window (current-buffer) t))
          (width (and window (window-body-width window t)))
+         ;; The last column is the truncation's (lines are truncated).
+         (columns (if window (max 10 (1- (window-body-width window))) 80))
          (inhibit-read-only t))
     (setq +my/mermaid-preview--width width)
     (erase-buffer)
@@ -125,7 +146,9 @@ is now."
                     "diagram")
       (insert "\n"))
     (when +my/mermaid-preview--error
-      (insert "\n" (propertize +my/mermaid-preview--error 'face 'error) "\n"))
+      (insert "\n" (propertize (+my/mermaid-preview--wrap +my/mermaid-preview--error columns)
+                               'face 'error)
+              "\n"))
     (unless (or +my/mermaid-preview--svg +my/mermaid-preview--error)
       (insert (propertize "Drawing…" 'face 'shadow)))
     (goto-char (point-min))))
