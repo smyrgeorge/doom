@@ -1818,6 +1818,72 @@ doesn't collapse the project."
       (should (eq (car (+test-treemacs--states)) 'root-node-open))
       (should (equal (+test-treemacs--at-point) '(".git" nil))))))
 
+;; ====== WIDTH ======
+
+(defmacro +test-treemacs-width (&rest body)
+  "BODY with the sidebar's width as treemacs has it, never set by hand."
+  (declare (indent 0))
+  `(let ((treemacs-width 35)
+         (+my/treemacs--width-set-at nil))
+     ,@body))
+
+(ert-deftest treemacs/width-settings ()
+  "At most a quarter of the frame; not locked."
+  (should (eql (default-value '+my/treemacs-max-width) 0.25))
+  (should-not treemacs-width-is-initially-locked)
+  (should (memq #'+my/treemacs-width-h (default-value 'window-size-change-functions)))
+  (should (advice-member-p #'+my/treemacs-open-width-a #'treemacs--popup-window)))
+
+(ert-deftest treemacs/width-in-a-frame ()
+  "`treemacs-width', at most a quarter of the frame (not under
+`window-min-width'); set by hand: as is in frames as wide as where it was."
+  (+test-treemacs-width
+    (cl-flet ((width-at (columns)
+                (cl-letf (((symbol-function 'frame-width) (lambda (&optional _) columns)))
+                  (+my/treemacs--width-in (selected-frame)))))
+      (should (equal (mapcar #'width-at '(200 140 100 80 60 40 30)) '(35 35 25 20 15 10 10)))
+      (setq treemacs-width 50 +my/treemacs--width-set-at 140)
+      (should (equal (mapcar #'width-at '(200 140 100 60)) '(50 50 25 15))))))
+
+(ert-deftest treemacs/width-of-the-sidebar ()
+  "Opened at its width in the frame (80 columns: 20), preserved, not fixed;
+resized by hand: that width kept, preserved again; the frame's width changed:
+its width there."
+  (+test-treemacs
+    (+test-treemacs-width
+      (let* ((root (+test-treemacs--project "width" "README.md"))
+             (frame (selected-frame))
+             (sidebar (progn (+test-treemacs--show-project root) (treemacs-get-local-window))))
+        (should (= (frame-width) 80))
+        (should (= (window-total-width sidebar) 20))
+        (should (window-preserved-size sidebar t))
+        (should-not (buffer-local-value 'window-size-fixed (window-buffer sidebar)))
+        ;; Its edge dragged (as the mouse does), then noticed.
+        (adjust-window-trailing-edge sidebar 6 t)
+        (should (= (window-total-width sidebar) 26))
+        (+my/treemacs-width-h frame)
+        (should (= treemacs-width 26))
+        (should (= +my/treemacs--width-set-at 80))
+        (should (window-preserved-size sidebar t))
+        ;; Other windows changing: it stays.
+        (split-window (window-main-window) nil 'right)
+        (balance-windows)
+        (+my/treemacs-width-h frame)
+        (should (= (window-total-width sidebar) 26))
+        ;; The frame's width changed (as if narrower: a quarter of 60).
+        (setq +my/treemacs--width-set-at 100)
+        (set-frame-parameter frame '+my/treemacs-frame-width 120)
+        (cl-letf (((symbol-function '+my/treemacs--width-in) (lambda (_) 15)))
+          (+my/treemacs-width-h frame))
+        (should (= (window-total-width sidebar) 15))
+        (should (= treemacs-width 26))
+        (should (window-preserved-size sidebar t))
+        ;; Closed and opened again: its width.
+        (setq +my/treemacs--width-set-at 80)
+        (delete-window sidebar)
+        (+test-treemacs--show-project root)
+        (should (= (window-total-width (treemacs-get-local-window)) 26))))))
+
 ;; ====== zR / zM ======
 
 (ert-deftest treemacs/count-dirs ()

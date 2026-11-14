@@ -39,6 +39,18 @@
 (defvar +my/treemacs-sticky-title t
   "Non-nil: the project's title stays at the sidebar's top (its header line).")
 
+;; WIDTH
+;; The sidebar is `treemacs-width' columns wide (treemacs: 35), but at most a
+;; part of the frame: at a narrow frame's 60 columns it left the files 25. It
+;; follows the frame's resizes (back to its width as the frame grows), not
+;; the panes' (config/treemacs/width.el). Not locked: dragging its edge,
+;; SPC w < / > and w (treemacs's) resize it, and that width is kept, also once
+;; it's closed and opened again.
+(defvar +my/treemacs-max-width 0.25
+  "The sidebar's widest, a fraction of the frame's width.")
+
+(setq treemacs-width-is-initially-locked nil)
+
 ;; EXPAND / COLLAPSE ALL
 ;; `treemacs-expand-all' (zR in treemacs) opens every folder of the project(s)
 ;; in the sidebar; `treemacs-collapse-all' (zM) closes them all again but keeps
@@ -97,5 +109,6 @@
 (load! "treemacs/git")
 (load! "treemacs/branch")
 (load! "treemacs/sticky")
+(load! "treemacs/width")
 (load! "treemacs/expand")
 (load! "treemacs/menu")

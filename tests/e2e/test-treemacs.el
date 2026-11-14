@@ -266,6 +266,50 @@ file: its project's tree drawn again, the file shown and highlighted."
           (when (with-current-buffer buffer (derived-mode-p 'treemacs-mode))
             (kill-buffer buffer)))))))
 
+;; ====== WIDTH ======
+
+(defun +test-treemacs--frame-columns (columns)
+  "The frame COLUMNS wide, once it is (and redisplayed)."
+  (set-frame-width nil columns)
+  (should (+test-wait-for (lambda () (= (frame-width) columns)) 3))
+  (+test-sleep 0.3))
+
+(ert-deftest e2e-treemacs/width-follows-the-frame-and-the-hand ()
+  "At most a quarter of the frame, back to 35 columns as it grows; resized by
+hand (SPC w <, its edge dragged): that width, kept once closed and opened
+again; panes split beside it leave it."
+  (let ((treemacs-width 35)
+        (+my/treemacs--width-set-at nil))
+    (unwind-protect
+        (+test-treemacs
+          (+test-treemacs--frame-columns 140)
+          (let ((sidebar (+test-treemacs--window)))
+            (should (= (window-total-width sidebar) 35))
+            (+test-treemacs--frame-columns 60)
+            (should (<= (window-total-width sidebar) 15))
+            (+test-treemacs--frame-columns 140)
+            (should (= (window-total-width sidebar) 35))
+            (with-selected-window sidebar
+              (let ((this-command 'evil-window-decrease-width))
+                (evil-window-decrease-width 5)))
+            (+test-sleep 0.3)
+            (should (= (window-total-width sidebar) 30))
+            (adjust-window-trailing-edge sidebar 10 t)
+            (+test-sleep 0.3)
+            (should (= (window-total-width sidebar) 40))
+            (split-window (window-main-window) nil 'right)
+            (balance-windows)
+            (+test-sleep 0.3)
+            (should (= (window-total-width sidebar) 40))
+            (delete-window sidebar)
+            (+test-sleep 0.3)
+            (save-selected-window
+              (let ((inhibit-message t))
+                (treemacs-add-and-display-current-project-exclusively)))
+            (+test-sleep 0.3)
+            (should (= (window-total-width (+test-treemacs--window)) 40))))
+      (set-frame-size nil 1000 700 t))))
+
 ;; ====== STICKY TITLE ======
 
 (defun +test-treemacs--header (window)

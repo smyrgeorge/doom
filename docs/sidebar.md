@@ -7,6 +7,9 @@ a magit operation, or a switch made in a terminal. That line (the project in vie
 branch) is the sidebar's top bar, and stays there while a long tree scrolls; a click on it goes back to it
 (`+my/treemacs-sticky-title`: nil turns it off).
 
+It is 35 columns wide, at most a quarter of the frame (`+my/treemacs-max-width`), and follows the frame as it is
+resized. A width set by hand is kept, also when the sidebar is closed and opened again.
+
 | macOS | Linux | Action |
 |---|---|---|
 | `←` / `→` | `←` / `→` | Collapse or go to the parent / expand; on a file, up / down (`RET` opens it) |
@@ -16,6 +19,7 @@ branch) is the sidebar's top bar, and stays there while a long tree scrolls; a c
 | `Cmd+C` | `Ctrl+Shift+C` | Copy the file's (or folder's) absolute path (`ya` on both) |
 | Right click → Reveal in Finder | Right click → Show in File Manager | The file or folder, selected in the file manager |
 | `SPC w w`, window numbers | the same | Go to the sidebar |
+| Drag its edge, `SPC w <` / `SPC w >`, `w` | the same | Resize it |
 
 The arrows work in the language server's lists too (`SPC c S`, `SPC c X`, `SPC c y`), which open with the cursor in
 them.
