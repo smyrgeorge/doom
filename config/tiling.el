@@ -43,7 +43,8 @@
 ;;   puts it, whatever their own setting or Doom's popup rules say; one shown
 ;;   already, or a tab of a pane (a file over it): that pane. But from a
 ;;   command opening one in the window you're in (`+my/tiling-here-commands':
-;;   Doom's SPC o T, a new terminal there): where it asks, as without tiling.
+;;   Doom's SPC o T, a new terminal there): where it asks, as without tiling;
+;;   from a popup or a side panel, in the pane used last, as files are.
 ;;   Magit's status (SPC g g), and any magit buffer opened
 ;;   from outside magit (SPC g d's diff, a log from a file), open so; inside
 ;;   magit, a log or a diff from the status stays in its pane as magit has it,

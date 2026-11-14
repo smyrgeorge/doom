@@ -162,11 +162,15 @@ for anything else (popups, *Completions*, transient menus, git's own
 files...), for a buffer shown in no window (ALIST's `allow-no-window'),
 while the minibuffer is open (previews put back what they showed), and from
 a command of `+my/tiling-here-commands' (Doom's SPC o T: the window you're
-in): as it asks."
+in): as it asks; such a command from a popup or a side panel (no pane to be
+in, a split made instead): in the pane used last, as a file."
   (cond
    ((active-minibuffer-window) nil)
    ((alist-get 'allow-no-window alist) nil)
-   ((memq this-command +my/tiling-here-commands) nil)
+   ((memq this-command +my/tiling-here-commands)
+    (unless (memq (selected-window) (+my/tiling--panes))
+      (when-let* ((pane (+my/tiling--last-pane)))
+        (+my/tiling--show-file buffer pane alist))))
    ((+my/tiling-app-p buffer)
     (cond ((get-buffer-window buffer)
            (window--display-buffer buffer (get-buffer-window buffer) 'reuse

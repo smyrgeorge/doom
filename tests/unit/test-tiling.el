@@ -1879,6 +1879,29 @@ it, no new pane; from any other, in a new pane."
         (should-not (eq (display-buffer (+test-tiling--app "app2") '(display-buffer-same-window)) here)))
       (should (equal (mapcar #'car (+test-tiling--layout)) '("app" "app2"))))))
 
+(ert-deftest tiling/here-commands-from-a-side-panel-in-the-last-pane ()
+  "A command of `+my/tiling-here-commands' (Doom's SPC o T) from a side panel
+\(the sidebar) or a popup (*Help*): no window to be in, so in the pane used
+last (as a file), what was there kept under it; no split."
+  (dolist (action (list '(display-buffer-in-side-window (side . left) (window-width . 20)
+                                                        (dedicated . t))
+                        +test-tiling--popup-action))
+    (+test-tiling-first
+      (let* ((main (selected-window))
+             (other (+my/tiling-split))
+             (side (display-buffer (+test-buffer "SIDE") action)))
+        (switch-to-buffer "B")              ; in the new pane, used last
+        (select-window main)
+        (select-window other)
+        (select-window side)
+        (let* ((this-command '+ghostel/here)
+               (shown (display-buffer (+test-tiling--app "app") '(display-buffer-same-window))))
+          (should (eq shown other))
+          (should (eq (window-buffer other) (get-buffer "app")))
+          (should (assq (get-buffer "B") (window-prev-buffers other)))
+          (should (equal (mapcar #'car (+test-tiling--layout)) '("A" "app")))
+          (should (window-live-p side)))))))
+
 (ert-deftest tiling/anything-else-as-it-asks ()
   (+test-tiling-first
     (let ((window (display-buffer "B" +test-tiling--popup-action)))

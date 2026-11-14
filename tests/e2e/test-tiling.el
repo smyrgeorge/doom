@@ -151,6 +151,26 @@ the file there a tab under it, shown again once the terminal's killed."
           (should (window-live-p here))
           (should (eq (window-buffer here) file)))))))
 
+(ert-deftest e2e-tiling/spc-o-T-from-a-popup-in-the-last-pane ()
+  "SPC o T from a popup (*Help*, a side window): the terminal in the pane used
+last, the file there a tab under it; no split, the popup kept."
+  (+test-tiling--needs-ghostel)
+  (+test-tiling
+    (+test-tiling--doom-projects
+      (let* ((pane (selected-window))
+             (help (display-buffer (get-buffer-create "*test help*")
+                                   '((display-buffer-in-side-window) (side . bottom)))))
+        (select-window help)
+        (let ((this-command '+ghostel/here))
+          (call-interactively #'+ghostel/here))
+        (let ((terminal (window-buffer pane)))
+          (should (with-current-buffer terminal (derived-mode-p 'ghostel-mode)))
+          (should (eq (selected-window) pane))
+          (should (equal (+test-tiling--layout) (list (buffer-name terminal))))
+          (should (equal (+test-tiling--tabs pane) (list "a.txt" (buffer-name terminal))))
+          (should (window-live-p help))
+          (kill-buffer terminal))))))
+
 ;; ====== A PANE CLOSED ======
 
 (ert-deftest e2e-tiling/a-closed-pane-s-rows-shared-by-the-stack ()
