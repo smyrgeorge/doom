@@ -72,6 +72,9 @@ rest of the track in each zone's, dimmed; its target a ┃."
                                   (propertize "░" 'face (if zones (agent-ui-gauge--face zones at) 'agent-ui-muted)))))))))
 
 (defun agent-ui-gauge--text (props ctx)
+  "Its label, its bar (8 cells at least, 40 at most), its value and target:
+on a line while they fit, the target left out first; else the label on a
+line of its own above (it was left out: \"lines covered\" gone at 24)."
   (let* ((width (plist-get ctx :width))
          (value (plist-get props :value))
          (face (agent-ui-gauge--face (agent-ui-gauge--zones props) value))
@@ -80,17 +83,21 @@ rest of the track in each zone's, dimmed; its target a ┃."
                       (propertize (concat "target " (agent-ui-gauge--shown props (plist-get props :target)))
                                   'face 'agent-ui-muted)))
          (label (plist-get props :label))
-         ;; What's beside the bar, the target left out first, then the
-         ;; label, while the bar would be under 8 cells.
-         (after (concat "  " shown (if target (concat "  " target) "")))
-         (after (if (< (- width (string-width after) (if label (+ 2 (string-width label)) 0)) 8)
-                    (concat "  " shown)
-                  after))
-         (label (and label (>= (- width (string-width after) (string-width label) 2) 8) label))
-         (bar-width (max 3 (min 40 (- width (string-width after) (if label (+ 2 (string-width label)) 0))))))
-    (concat (if label (concat label "  ") "")
+         (full (concat "  " shown (if target (concat "  " target) "")))
+         (short (concat "  " shown))
+         ;; The room for the bar beside AFTER and maybe the label.
+         (room (lambda (after beside) (- width (string-width after) (if beside (+ 2 (string-width label)) 0))))
+         (after (cond ((and label (>= (funcall room full t) 8)) full)
+                      ((and label (>= (funcall room short t) 8)) short)
+                      ((>= (funcall room full nil) 8) full)
+                      (t short)))
+         (beside (and label (>= (funcall room after t) 8)))
+         (bar-width (max 3 (min 40 (funcall room after beside)))))
+    (concat (cond (beside (concat label "  "))
+                  (label (concat (agent-ui-truncate label width) "\n"))
+                  (t ""))
             (agent-ui-gauge--bar props bar-width)
-            (agent-ui-truncate after (max 0 (- width bar-width (if label (+ 2 (string-width label)) 0)))))))
+            (agent-ui-truncate after (max 0 (- width bar-width (if beside (+ 2 (string-width label)) 0)))))))
 
 ;; ====== AS SVG ======
 
@@ -142,8 +149,12 @@ rest of the track in each zone's, dimmed; its target a ┃."
         (let ((in (agent-ui-gauge--point cx cy (- r stroke) (agent-ui-gauge--fraction props target)))
               (out (agent-ui-gauge--point cx cy (+ r stroke) (agent-ui-gauge--fraction props target))))
           (svg-line svg (car in) (cdr in) (car out) (cdr out) :stroke (agent-ui-color 'default) :stroke-width 2)))
-      (svg-text svg (agent-ui-gauge--shown props value) :x cx :y (- cy (* 0.15 lh)) :text-anchor "middle"
-                :font-size (round (* 1.3 lh)) :font-weight "bold" :font-family font :fill (agent-ui-color face))
+      ;; Its value inside the arc: smaller if it's wider than the arc's
+      ;; inside (it was clipped both sides, or ran over the arc).
+      (let ((shown (agent-ui-gauge--shown props value)))
+        (svg-text svg shown :x cx :y (- cy (* 0.15 lh)) :text-anchor "middle"
+                  :font-size (round (agent-ui-svg-fit-size shown (* 1.3 lh) (* 1.8 (- r stroke))))
+                  :font-weight "bold" :font-family font :fill (agent-ui-color face)))
       (let ((under (string-join (delq nil (list (plist-get props :label)
                                                 (and (plist-get props :target)
                                                      (concat "target " (agent-ui-gauge--shown props (plist-get props :target))))))
@@ -154,11 +165,14 @@ rest of the track in each zone's, dimmed; its target a ┃."
           (svg-text svg (agent-ui-truncate under (floor w (* 0.47 lh)))
                     :x cx :y (+ cy (* 2.0 lh)) :text-anchor "middle"
                     :font-size (round (* 0.75 lh)) :font-family font :fill (agent-ui-color 'agent-ui-muted))))
-      (dolist (end (list (cons min "start") (cons max "end")))
-        (svg-text svg (agent-ui-format-number (car end))
-                  :x (if (equal (cdr end) "start") (- cx r (/ stroke 2.0)) (+ cx r (/ stroke 2.0)))
-                  :y (+ cy (* 0.9 lh)) :text-anchor (cdr end)
-                  :font-size (round (* 0.7 lh)) :font-family font :fill (agent-ui-color 'agent-ui-muted)))
+      ;; Its range's ends under the arc's: smaller if they'd meet.
+      (let* ((ends (concat (agent-ui-format-number min) "  " (agent-ui-format-number max)))
+             (size (agent-ui-svg-fit-size ends (* 0.7 lh) (+ (* 2 r) stroke))))
+        (dolist (end (list (cons min "start") (cons max "end")))
+          (svg-text svg (agent-ui-format-number (car end))
+                    :x (if (equal (cdr end) "start") (- cx r (/ stroke 2.0)) (+ cx r (/ stroke 2.0)))
+                    :y (+ cy (* 0.9 lh)) :text-anchor (cdr end)
+                    :font-size (round size) :font-family font :fill (agent-ui-color 'agent-ui-muted))))
       (propertize "gauge" 'display (agent-ui-svg-image svg)))))
 
 (agent-ui-define gauge

@@ -2535,13 +2535,18 @@ labels picked; then locked."
 
 (ert-deftest agent-ui-elements/gauge ()
   "A bar: filled in its value's zone's face, the rest of the track in each
-zone's, the target a ┃; the value with its unit; the target, then the label
-left out when narrow."
+zone's, the target a ┃; the value with its unit; the target left out when
+narrow, then the label on a line of its own (it was left out)."
   (should (equal (+test-aue-draw +test-aue-coverage :width 60)
                  ;; 34 cells: 27 filled, the target's, 6 not.
                  (concat "covered  " (make-string 27 ?█) "┃" (make-string 6 ?░) "  78%  target 80%")))
   (should (equal (+test-aue-draw +test-aue-coverage :width 30) "covered  ████████████┃░░░  78%"))
-  (should (equal (+test-aue-draw +test-aue-coverage :width 14) "███████┃░  78%"))
+  (should (equal (+test-aue-draw +test-aue-coverage :width 14) "covered\n███████┃░  78%"))
+  (should (equal (+test-aue-draw (plist-put (copy-sequence +test-aue-coverage) :label "lines covered") :width 24)
+                 "lines covered\n███████████████┃░░░  78%"))
+  (should (equal (+test-aue-draw (plist-put (copy-sequence +test-aue-coverage) :label (make-string 120 ?x))
+                                 :width 100)
+                 (concat (make-string 99 ?x) "…\n" (make-string 31 ?█) "░┃" (make-string 7 ?░) "  78%  target 80%")))
   ;; Each zone's face: the fill's by the value; the track's by its place.
   (let ((text (agent-ui-render +test-aue-coverage (agent-ui-context :width 60))))
     (should (eq (get-text-property 9 'face text) 'agent-ui-warning))
@@ -2573,7 +2578,38 @@ target's tick, the value, the label and target under; too narrow: text."
     (should (string-match-p ">covered &#183; target 80%</text>" svg)))
   (should (equal (substring-no-properties
                   (agent-ui-render +test-aue-coverage (agent-ui-context :width 4 :graphic t :char-width 8 :line-height 16)))
-                 "██┃…")))
+                 "cov…\n██┃…")))
+
+(ert-deftest agent-ui-elements/gauge-gui-value-fits ()
+  "In the GUI the value fits inside the arc, its font smaller if need be,
+and the range's ends don't meet (\"123456789.12 requests/s\" needed 441 px
+in a 330 px arc, clipped both sides; at 16 columns \"1234 ms\" ran over the
+arc)."
+  (dolist (element '((:type "gauge" :value 123456789.123 :min -1e9 :max 1e9 :unit "requests/s" :label "throughput")
+                     (:type "gauge" :value 1234 :min -1e9 :max 2000 :unit "ms" :label "p95")))
+    (dolist (width (number-sequence 16 60 2))
+      (let* ((svg (plist-get (cdr (get-text-property
+                                   0 'display (agent-ui-render element (agent-ui-context :width width :graphic t
+                                                                                        :char-width 11 :line-height 25))))
+                             :data))
+             (w (progn (string-match "<svg width=\"\\([0-9]+\\)\"" svg) (string-to-number (match-string 1 svg))))
+             (texts (let ((out nil) (start 0))
+                      (while (string-match "font-size=\"\\([0-9]+\\)\" text-anchor=\"\\([a-z]+\\)\" y=\"[0-9.]+\" x=\"\\([0-9.]+\\)\">\\([^<]*\\)</text>" svg start)
+                        (let* ((size (string-to-number (match-string 1 svg))) (x (string-to-number (match-string 3 svg)))
+                               (text (match-string 4 svg)) (tw (* 0.6 size (string-width text)))
+                               (from (pcase (match-string 2 svg) ("middle" (- x (/ tw 2))) ("start" x) (_ (- x tw)))))
+                          (push (list text from (+ from tw)) out))
+                        (setq start (match-end 0)))
+                      (nreverse out)))
+             (value (cl-find-if (lambda (text) (string-match-p " \\(ms\\|requests/s\\)\\'" (car text))) texts))
+             (low (cl-find-if (lambda (text) (string-prefix-p "-1000000000" (car text))) texts))
+             (high (car (last texts)))
+             ;; The arc's inside: its stroke's (0.55 of a line) inner edge.
+             (stroke (round (* 0.55 25))) (r (- (/ w 2.0) stroke)))
+        (should value)
+        (should (>= (nth 1 value) (- (/ w 2.0) (- r (/ stroke 2.0)))))
+        (should (<= (nth 2 value) (+ (/ w 2.0) (- r (/ stroke 2.0)))))
+        (should (< (nth 2 low) (nth 1 high)))))))
 
 (ert-deftest agent-ui-elements/gauge-wrong ()
   (should (string-match-p "value is required" (+test-aue-error '(:type "gauge"))))
