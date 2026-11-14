@@ -124,6 +124,30 @@ CSS, JSON, YAML...), else its outline (Markdown, Dockerfile). A mode declaring n
 
 Spelling knows ~40k programming words and checks camelCase words part by part.
 
+## Language servers
+
+Inlay hints (in the comment colour), semantic highlighting and colour swatches are on. A code lens sits at the end of
+its line, or above the line when they don't fit the pane together.
+
+| Language | Inlay hints | Code lenses |
+|---|---|---|
+| Kotlin (kotlin-lsp) | Types, parameter names, chained calls | |
+| Python (basedpyright) | Variable and return types, argument names | |
+| Rust (rust-analyzer) | Types, parameter names, method chains, closure return types, lifetimes | `▶ Run`, implementations, references |
+| TypeScript / JavaScript (TypeScript 7) | Parameter names of literals, return types, enum values | References, implementations |
+
+Other languages get their server's own.
+
+`Cmd+B` (Linux: `Ctrl+Shift+B`) on a declaration lists its usages in a peek under it: each usage's line, the function
+it's in and its code, beside a preview of the selected one (in a pane under 70 columns, the list alone).
+
+| Key | Action |
+|---|---|
+| `j` / `k` | Next / previous usage |
+| `C-j` / `C-k` | Next / previous file |
+| `RET` / `M-RET` | Open the usage / in the other window |
+| `Esc` | Close |
+
 ## Behaviour
 
 - New windows take focus; `SPC w S` / `SPC w V` split and leave it.

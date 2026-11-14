@@ -16,7 +16,7 @@
 | `config/examples.el`, `examples/` | [Examples](examples.md) and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | [Drawings](drawings.md) |
 | `config/git.el`, `git/` | [Magit](git.md#magit), [a file's diff](git.md#file-diff) |
-| `config/lsp.el`, `lsp/` | Language servers (each language's settings: `lsp/LANGUAGE.el`), the usages list |
+| `config/lsp.el`, `lsp/` | [Language servers](editor.md#language-servers) (each language's settings: `lsp/LANGUAGE.el`), the usages peek |
 | `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
 | `config/mermaid.el`, `mermaid/` | [Mermaid](mermaid.md): mermaid-mode, diagrams in the theme's colours |
 | `config/html.el` | HTML files: a [notice](editor.md#notices) to open them in the browser; a page in WebKit (`+my/html-open-in-emacs`) |
