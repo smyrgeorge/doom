@@ -2227,6 +2227,29 @@ still picture: the track only."
   (should (string-search " 0 ●───" (+test-aue-draw '(:type "slider" :min 0 :max 1 :step 0.25) :width 30)))
   (should (string-search "   0.5" (+test-aue-draw '(:type "slider" :min 0 :max 1 :step 0.25 :value 0.4)))))
 
+(ert-deftest agent-ui-elements/slider-fits-the-width ()
+  "A slider's lines within the width: its value on a line of its own when it
+leaves the track under 5 columns, its ends left out too when narrower (the
+line ran past the width, cut there: \"… 1000000   300\" read as 300)."
+  (let ((ms '(:type "slider" :label "Request timeout" :min 0 :max 1000000 :step 5 :unit "milliseconds"
+              :value 300000)))
+    (dolist (width (number-sequence 8 60))
+      (let ((text (+test-aue-draw ms :width width)))
+        (dolist (line (split-string text "\n"))
+          (should (<= (string-width line) width)))
+        (should (string-search "●" text))
+        (when (>= width 22)
+          (should (string-search "300000 milliseconds" text)))))
+    (should (equal (+test-aue-draw ms :width 24 :still t)
+                   (concat "Request timeout\n"
+                           " 300000 milliseconds\n"
+                           " 0 ━━━━●──────── 1000000")))
+    ;; Its ends left out where there's no room for them.
+    (should (string-match-p "\n ━+●─+\\'" (+test-aue-draw ms :width 14 :still t))))
+  ;; Room enough: on one line, as before.
+  (should (string-search " 0 ━━●────── 120   30 s"
+                         (+test-aue-draw '(:type "slider" :min 0 :max 120 :step 5 :unit "s" :value 30) :width 24))))
+
 (ert-deftest agent-ui-elements/slider-moved-and-set ()
   "On its track: h / l a step, H / L ten (its own keys there), never past
 its ends; a click there; Set sends the value; then locked."

@@ -166,7 +166,16 @@ as its step and min have (0.1 six times: 0.6, not 0.6000000000000001)."
          ;; The value's column as wide as its widest (it doesn't jump).
          (shown-width (apply #'max (mapcar (lambda (v) (string-width (agent-ui-slider--shown props v)))
                                            (list min max value))))
-         (track-width (max 5 (- width 1 (string-width low) 1 1 (string-width high) 3 shown-width)))
+         ;; The value after the track while the track keeps 5 columns; else
+         ;; on a line of its own above it; the ends left out too where the
+         ;; track still hasn't 5 (its line ran past the width, cut there:
+         ;; "… 1000000   300" read as 300).
+         (ends-width (+ 1 (string-width low) 1 1 (string-width high)))
+         (beside (>= (- width ends-width 3 shown-width) 5))
+         (ends (or beside (>= (- width ends-width) 5)))
+         (track-width (max 1 (cond (beside (- width ends-width 3 shown-width))
+                                   (ends (- width ends-width))
+                                   (t (- width 1)))))
          (knob (round (* (1- track-width) (/ (float (- value min)) (- max min)))))
          (track (apply #'concat
                        (cl-loop for i below track-width
@@ -179,9 +188,12 @@ as its step and min have (0.1 six times: 0.6, not 0.6000000000000001)."
                                                             (lambda () (agent-ui-slider--set props ctx to))
                                                             'mouse-face 'highlight))
                                             char)))))
-         (line (concat " " (propertize low 'face 'agent-ui-muted) " " track " "
-                       (propertize high 'face 'agent-ui-muted) "   "
-                       (propertize (agent-ui-slider--shown props value) 'face 'bold))))
+         (shown (propertize (agent-ui-slider--shown props value) 'face 'bold))
+         (line (concat (if beside "" (concat " " (agent-ui-truncate shown (1- width)) "\n"))
+                       " " (if ends (concat (propertize low 'face 'agent-ui-muted) " ") "")
+                       track
+                       (if ends (concat " " (propertize high 'face 'agent-ui-muted)) "")
+                       (if beside (concat "   " shown) ""))))
     (string-join
      (append
       (and (plist-get props :label) (list (propertize (agent-ui-truncate (plist-get props :label) width) 'face 'bold)))
@@ -205,15 +217,17 @@ as its step and min have (0.1 six times: 0.6, not 0.6000000000000001)."
                                                      "\n "))
                            'face 'agent-ui-muted))
          (unless (plist-get props :live)
-           (list (concat " " (agent-ui-button
-                              (propertize "⏵ Set" 'face 'agent-ui-action)
-                              (lambda ()
-                                (funcall agent-ui-action-function
-                                         (format "Answer to slider %s (%s): %s" (plist-get ctx :id)
-                                                 (or (plist-get props :label) "value") (agent-ui-slider--shown props value))
-                                         t)
-                                (agent-ui-ask-change ctx (list :answered (agent-ui-slider--shown props value))))
-                              "RET: send the value"))))))))
+           (list (agent-ui-button-row
+                  (list (agent-ui-button
+                         (propertize "⏵ Set" 'face 'agent-ui-action)
+                         (lambda ()
+                           (funcall agent-ui-action-function
+                                    (format "Answer to slider %s (%s): %s" (plist-get ctx :id)
+                                            (or (plist-get props :label) "value") (agent-ui-slider--shown props value))
+                                    t)
+                           (agent-ui-ask-change ctx (list :answered (agent-ui-slider--shown props value))))
+                         "RET: send the value"))
+                  width " ")))))))
      "\n")))
 
 (agent-ui-define slider
