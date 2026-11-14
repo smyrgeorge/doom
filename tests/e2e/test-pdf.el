@@ -339,6 +339,59 @@ text."
     (+test-pdf--js "document.querySelectorAll('#sidebar .item')[1].click(); 'ok'")
     (should (+test-pdf--wait-page 3))))
 
+;; ====== NARROW PANES ======
+
+(defun +test-pdf--number (script &optional window)
+  "SCRIPT's value in WINDOW's page, a number."
+  (string-to-number (+test-pdf--js (format "String(%s)" script) window)))
+
+(defun +test-pdf--narrow (cols)
+  "The selected window made COLS columns wide, *scratch* beside it; once its
+page is as wide."
+  (let ((window (selected-window)))
+    (set-window-buffer (split-window-right) (get-buffer-create "*scratch*"))
+    (window-resize window (- cols (window-total-width window)) t)
+    (should (+test-wait-for
+             (lambda () (<= (abs (- (+test-pdf--number "innerWidth" window) (window-body-width window t))) 16))
+             3))))
+
+(ert-deftest e2e-pdf/the-sidebar-over-the-page-in-a-narrow-pane ()
+  (+test-pdf
+    (+test-pdf--open (+test-pdf--file "chapters.pdf" :pages 10 :outline '(("One" . 1) ("Five" . 5))))
+    (+my/pdf--js "set({sidebar: true, view: 'outline'})")
+    ;; Wide: 260 px, beside the page.
+    (should (+test-wait-for
+             (lambda () (= (+test-pdf--number "document.getElementById('viewerContainer').getBoundingClientRect().left") 260))
+             3))
+    (should (= (+test-pdf--number "document.getElementById('sidebar').offsetWidth") 260))
+    (should (+test-wait-for (lambda () (= (+test-pdf--number "document.querySelectorAll('#sidebar .item').length") 2)) 5))
+    ;; 25 columns: over the page, which keeps the pane's width; a heading
+    ;; picked closes it.
+    (+test-pdf--narrow 25)
+    (let ((width (+test-pdf--number "innerWidth")))
+      (should (+test-wait-for
+               (lambda () (> (+test-pdf--number "document.getElementById('viewerContainer').clientWidth") (* 0.8 width)))
+               3))
+      (should (equal (+test-pdf--js "getComputedStyle(document.getElementById('sidebar')).display") "block"))
+      (should (<= (+test-pdf--number "document.getElementById('sidebar').offsetWidth") width)))
+    (+test-pdf--js "document.querySelectorAll('#sidebar .item')[1].click(); 'ok'")
+    (should (+test-pdf--wait-page 5))
+    (should (+test-wait-for (lambda () (not (plist-get (+test-pdf--state) :sidebar))) 3))))
+
+(ert-deftest e2e-pdf/a-narrow-split-with-the-sidebar-shows-its-page ()
+  (+test-pdf
+    (+test-pdf--open +test-pdf--book)
+    (let* ((left (selected-window))
+           (right (split-window left (- (window-total-width left) 30) 'right)))
+      (should (+test-pdf--ready right))
+      (+my/pdf-toggle-sidebar)
+      (should (+test-wait-for (lambda () (plist-get (+test-pdf--state right) :sidebar)) 3))
+      (should (+test-wait-for
+               (lambda () (> (+test-pdf--number "document.querySelector('.pdfViewer .page').getBoundingClientRect().width" right)
+                             100))
+               3))
+      (should (> (+test-pdf--number "document.getElementById('viewerContainer').clientWidth" right) 150)))))
+
 ;; ====== COPY, OPTION+ENTER ======
 
 (defun +test-pdf--select-page-text (&optional window)

@@ -27,6 +27,9 @@
   const pageBadge = document.getElementById('page');
 
   const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
+  // A pane too narrow for the sidebar beside the page (260 px each): it goes
+  // over the page instead, and a pick closes it.
+  const narrow = '(max-width: 519px)';
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -37,7 +40,8 @@
 
   // LOOK
   // Dark pages: inverted, with hues turned back, so white comes out as a dark
-  // grey and black text as a light one, like pdf-tools' midnight mode.
+  // grey and black text as a light one, like pdf-tools' midnight mode. The
+  // sidebar beside the page, or over it in a narrow pane.
   const style = el('style');
   style.textContent = `
     :root { --tb: 32px; --sb: 260px; }
@@ -97,7 +101,7 @@
     #sidebar .pg { flex: none; color: var(--dim); font-variant-numeric: tabular-nums; }
     #sidebar .children.collapsed { display: none; }
     #sidebar .empty { padding: 8px 12px; color: var(--dim); }
-    #sidebar .thumb { width: 150px; margin: 6px auto 12px; text-align: center; }
+    #sidebar .thumb { width: 150px; max-width: calc(100% - 24px); margin: 6px auto 12px; text-align: center; }
     #sidebar .thumb .box {
       background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); overflow: hidden;
       outline: 2px solid transparent; outline-offset: 2px;
@@ -112,6 +116,11 @@
     body.dark .pdfViewer .page, body.dark #sidebar .thumb .box { background-color: #242424; }
     body.dark .pdfViewer .page canvas, body.dark #sidebar .thumb canvas {
       filter: invert(.86) hue-rotate(180deg);
+    }
+    @media ${narrow} {
+      :root { --sb: min(260px, 85vw); }
+      body.sidebar #viewerContainer { left: 0; }
+      #sidebar { box-shadow: 2px 0 10px rgba(0, 0, 0, .4); }
     }
   `;
   document.head.appendChild(style);
@@ -383,9 +392,16 @@
     }
   }
 
+  // A heading or a page picked: the sidebar over the page closed (see LOOK).
+  const overPage = window.matchMedia(narrow);
+  function picked() {
+    if (overPage.matches && state.sidebar) set({ sidebar: false });
+  }
+
   function go(heading) {
     if (heading.dest) links.goToDestination(heading.dest);
     else if (heading.url) window.location.href = heading.url;  // Emacs opens it in the browser
+    picked();
   }
 
   const countHeadings = (nodes) =>
@@ -482,7 +498,10 @@
       item.appendChild(el('div', 'num', String(n)));
       const thumb = { n, item, box, pdf, done: false, queued: false };
       item.thumb = thumb;
-      item.addEventListener('click', () => jump(() => { viewer.currentPageNumber = n; }));
+      item.addEventListener('click', () => {
+        jump(() => { viewer.currentPageNumber = n; });
+        picked();
+      });
       thumbs.push(thumb);
       thumbObserver.observe(item);
     }

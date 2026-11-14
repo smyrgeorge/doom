@@ -26,7 +26,8 @@
 ;;   o (SPC m o)    go to a heading of the outline, picked in the minibuffer
 ;;   O (SPC m O)    the sidebar: the outline (headings, their pages, the
 ;;                  current one marked; ▸ / ▾ open / close) or the pages'
-;;                  thumbnails; click one to go there
+;;                  thumbnails; click one to go there (a pane under 520 px
+;;                  has it over the page, closed once one is clicked)
 ;;   SPC m d        dark pages: inverted to dark greys, hues kept (as
 ;;                  pdf-tools' midnight mode); again, light pages
 ;;   SPC m t        the toolbar: sidebar, back / forward, page, zoom, fit, dark
