@@ -55,7 +55,9 @@ project."
   "Keys on the sticky title: a click goes to the project's line.")
 
 (defvar-local +my/treemacs--sticky-last nil
-  "The title last shown: kept while the tree has none to show (drawn anew).")
+  "(TITLE . WHOLE): the title last shown and, if it was cut, the whole of it;
+kept while the tree has none to show (drawn anew), not once it has no
+projects.")
 
 (defun +my/treemacs--sticky-indent (window)
   "A space as wide as WINDOW's left fringe and margin (see above)."
@@ -64,21 +66,71 @@ project."
                                   (* (or (car (window-margins window)) 0)
                                      (frame-char-width (window-frame window))))))))
 
+;; A title wider than the sidebar's text is cut, but in its name: an
+;; ellipsis ends what fits of it, and the branch and ↑↓ after it stay. The
+;; header line cut it at the window's edge, silently (the tree's line shows
+;; that it's cut, the header line not), so a long name hid the branch;
+;; hovering shows it whole.
+(defvar-local +my/treemacs--sticky-fit nil
+  "((TEXT ROOM) . FIT): the last root line TEXT fitted in ROOM pixels.")
+
+(defun +my/treemacs--sticky-width (string)
+  "STRING's width in pixels in the header line."
+  (let ((string (copy-sequence string)))
+    (add-face-text-property 0 (length string) 'header-line t string)
+    (string-pixel-width string)))
+
+(defun +my/treemacs--sticky-cut (line room)
+  "LINE (a root line) at most ROOM pixels wide: the name cut short with an
+ellipsis, what follows it (the branch, ↑↓) kept; LINE itself if it fits."
+  (if (<= (+my/treemacs--sticky-width line) room)
+      line
+    (let* ((beg (if (get-text-property 0 'button line)
+                    0
+                  (or (next-single-property-change 0 'button line) 0)))
+           (end (or (next-single-property-change beg 'button line) (length line)))
+           (cut (lambda (n)
+                  (concat (substring line 0 (+ beg n))
+                          (propertize (truncate-string-ellipsis)
+                                      'face (get-text-property beg 'face line))
+                          (substring line end))))
+           (low 0)
+           (high (- end beg)))
+      ;; The most of the name that fits.
+      (while (< low high)
+        (let ((mid (/ (+ low high 1) 2)))
+          (if (<= (+my/treemacs--sticky-width (funcall cut mid)) room)
+              (setq low mid)
+            (setq high (1- mid)))))
+      (funcall cut low))))
+
+(defun +my/treemacs--sticky-fitted (line window)
+  "LINE (a root line) fitted in WINDOW's text width (see above)."
+  (let ((key (list line (window-body-width window t))))
+    (unless (equal (car +my/treemacs--sticky-fit) key)
+      (setq +my/treemacs--sticky-fit (cons key (+my/treemacs--sticky-cut line (cadr key)))))
+    (cdr +my/treemacs--sticky-fit)))
+
 (defun +my/treemacs--sticky-title ()
   "The sticky header line: the root line of the project at the window's top,
 as the tree shows it (see above)."
   (let* ((window (selected-window))
          (bol (ignore-errors (+my/treemacs--project-at (window-start window)))))
-    (when bol
-      (setq +my/treemacs--sticky-last
-            (propertize
-             (string-replace "%" "%%" (buffer-substring bol (save-excursion
-                                                              (goto-char bol)
-                                                              (line-end-position))))
-             'mouse-face 'highlight)))
-    (propertize (concat (+my/treemacs--sticky-indent window) (or +my/treemacs--sticky-last ""))
+    (cond
+     (bol
+      (let* ((line (buffer-substring bol (save-excursion (goto-char bol) (line-end-position))))
+             (title (+my/treemacs--sticky-fitted line window)))
+        (setq +my/treemacs--sticky-last
+              (cons (propertize (string-replace "%" "%%" title) 'mouse-face 'highlight)
+                    (unless (string= title line) (string-trim (substring-no-properties line)))))))
+     ;; No projects (the last one removed): no title.
+     ((null (ignore-errors (treemacs-workspace->projects (treemacs-current-workspace))))
+      (setq +my/treemacs--sticky-last nil)))
+    (propertize (concat (+my/treemacs--sticky-indent window) (or (car +my/treemacs--sticky-last) ""))
                 'local-map +my/treemacs-sticky-map
-                'help-echo "mouse-1: go to the project")))
+                'help-echo (concat (when (cdr +my/treemacs--sticky-last)
+                                     (concat (cdr +my/treemacs--sticky-last) "\n"))
+                                   "mouse-1: go to the project"))))
 
 (defun +my/treemacs-sticky-goto (event)
   "Go to the line of the project whose title was clicked (EVENT)."
@@ -168,6 +220,7 @@ else the default face's."
   (when (+my/treemacs--sidebar-p)
     (setq-local header-line-format
                 (and +my/treemacs-sticky-title '(:eval (+my/treemacs--sticky-title))))
+    (setq +my/treemacs--sticky-fit nil)   ; measured anew (a new theme's fonts)
     (+my/treemacs--sticky-faces)
     (remove-hook 'pre-redisplay-functions #'+my/treemacs--hide-top-root t)
     (add-hook 'after-change-functions #'+my/treemacs--hide-after-change-h nil t)

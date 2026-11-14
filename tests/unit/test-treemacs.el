@@ -1702,7 +1702,8 @@ the default's."
   "The root line as the tree shows it (% escaped), after a space as wide as
 the left fringe; kept while the tree has none; a click goes to the project."
   (+test-treemacs
-    (let* ((root (+test-treemacs--dir "sticky-title" "README.md" "a.txt" "b.txt"))
+    (let* ((+my/treemacs-max-width 0.5)   ; the title fits: not cut
+           (root (+test-treemacs--dir "sticky-title" "README.md" "a.txt" "b.txt"))
            (name (file-name-nondirectory (directory-file-name root)))
            (window (progn (+test-treemacs--show-project root) (treemacs-get-local-window))))
       (+my/treemacs--branch-set (directory-file-name root) "  100%")
@@ -1817,6 +1818,55 @@ doesn't collapse the project."
       (+test-treemacs--keys [right])
       (should (eq (car (+test-treemacs--states)) 'root-node-open))
       (should (equal (+test-treemacs--at-point) '(".git" nil))))))
+
+;; ====== STICKY TITLE: CUT TO FIT, NO PROJECTS ======
+
+(defun +test-treemacs--title-text (window)
+  "The sticky title shown in WINDOW, without the space before it."
+  (with-selected-window window
+    (string-trim (substring-no-properties (+my/treemacs--sticky-title)))))
+
+(ert-deftest treemacs/sticky-title-cut-in-its-name ()
+  "Wider than the sidebar's text: the name cut short with an ellipsis, the
+branch and ↑↓ after it kept; hovering shows it whole. Short: as it is."
+  (+test-treemacs
+    (let* ((root (+test-treemacs--dir "a-rather-long-project-name-here" "README.md"))
+           (name (file-name-nondirectory (directory-file-name root)))
+           (window (progn (+test-treemacs--show-project root) (treemacs-get-local-window))))
+      (+my/treemacs--branch-set (directory-file-name root) (+my/treemacs--branch-suffix "# branch.oid abc\n# branch.head topic\n# branch.ab +3 -0\n"))
+      (should (> (+ (length name) 10) (window-body-width window)))
+      (let ((title (+test-treemacs--title-text window)))
+        (should (string-suffix-p "…  topic ↑3" title))
+        (should (string-prefix-p "a-rather" title))
+        (should (<= (string-width title) (window-body-width window)))
+        ;; The most of the name that fits.
+        (should (= (string-width title) (window-body-width window))))
+      (with-selected-window window
+        (should (equal (get-text-property 1 'help-echo (+my/treemacs--sticky-title))
+                       (concat name "  topic ↑3\nmouse-1: go to the project"))))
+      ;; Wide enough: as the tree shows it.
+      (let ((+my/treemacs-max-width 0.75)
+            (treemacs-width 70))
+        (delete-window window)
+        (setq window (progn (+test-treemacs--show-project root) (treemacs-get-local-window)))
+        (should (equal (+test-treemacs--title-text window) (concat name "  topic ↑3")))
+        (with-selected-window window
+          (should (equal (get-text-property 1 'help-echo (+my/treemacs--sticky-title))
+                         "mouse-1: go to the project")))))))
+
+(ert-deftest treemacs/sticky-title-none-without-projects ()
+  "The last project removed: no title (the tree drawn anew, with projects:
+the last one kept, see `treemacs/sticky-title')."
+  (+test-treemacs
+    (let* ((root (+test-treemacs--dir "gone" "README.md"))
+           (buffer (+test-treemacs--show-project root))
+           (window (treemacs-get-local-window)))
+      (should (string-prefix-p "gone" (+test-treemacs--title-text window)))
+      (with-current-buffer buffer
+        (let ((inhibit-message t))
+          (treemacs-do-remove-project-from-workspace
+           (car (treemacs-workspace->projects (treemacs-current-workspace))) t)))
+      (should (equal (+test-treemacs--title-text window) "")))))
 
 ;; ====== WIDTH ======
 
