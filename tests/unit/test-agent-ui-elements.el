@@ -1827,6 +1827,25 @@ said; answered, the answer instead of its buttons; none in a still picture."
                          (+test-aue-draw '(:type "confirm" :question "Migrate?"
                                            :diff "--- a/db.sql\n+++ b/db.sql\n@@ -1 +1 @@\n-a\n+b\n")))))
 
+(ert-deftest agent-ui-elements/confirm-and-plan-buttons-fit ()
+  "A confirm's Proceed / Cancel and a plan's Approve / Reject are broken
+onto lines of their own where they don't fit the width (on one line, the
+last one was off screen), each still a button."
+  (dolist (case '(((:type "confirm" :question "Deploy?" :proceed "Deploy to production" :cancel "Not now")
+                   24 "⏵ Deploy to production\n⏵ Not now")
+                  ((:type "confirm" :question "Push?" :danger "high" :word "main") 30
+                   "⏵ Proceed   ⏵ Cancel\ntype \"main\" to proceed")
+                  ((:type "steps" :steps ("Fix the parser") :approve (:question "Go?")) 18
+                   "⏵ Approve\n⏵ Reject")))
+    (pcase-let ((`(,element ,width ,end) case))
+      (let ((text (agent-ui-render element (agent-ui-context :width width))))
+        (should (string-suffix-p end (substring-no-properties text)))
+        (dolist (line (split-string text "\n"))
+          (should (<= (string-width line) width)))
+        (dolist (label '("⏵ Deploy" "⏵ Not now" "⏵ Approve" "⏵ Reject" "⏵ Cancel"))
+          (when-let* ((at (string-search label text)))
+            (should (get-text-property at 'agent-ui-action text))))))))
+
 (ert-deftest agent-ui-elements/confirm-proceed-or-cancel ()
   "Proceed or Cancel sends its answer at once; then locked."
   (+test-aue-canvas

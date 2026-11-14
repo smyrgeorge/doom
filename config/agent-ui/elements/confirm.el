@@ -76,20 +76,23 @@ one refused."
        ((plist-get ctx :still) nil)
        (t
         (let ((buttons
-               (concat (agent-ui-button (propertize (concat "⏵ " (plist-get props :proceed))
-                                                    'face (if high 'agent-ui-error 'agent-ui-action))
-                                        (lambda () (agent-ui-confirm--answer props ctx "proceed"))
-                                        (if word (format "RET: type %s, then proceed" word) "RET: proceed"))
-                       "   "
-                       (agent-ui-button (propertize (concat "⏵ " (plist-get props :cancel)) 'face 'agent-ui-action)
-                                        (lambda () (agent-ui-confirm--answer props ctx "cancel"))
-                                        "RET: cancel")))
+               ;; Broken between them to the width (`agent-ui-button-row').
+               (agent-ui-button-row
+                (list (agent-ui-button (propertize (concat "⏵ " (plist-get props :proceed))
+                                                   'face (if high 'agent-ui-error 'agent-ui-action))
+                                       (lambda () (agent-ui-confirm--answer props ctx "proceed"))
+                                       (if word (format "RET: type %s, then proceed" word) "RET: proceed"))
+                      (agent-ui-button (propertize (concat "⏵ " (plist-get props :cancel)) 'face 'agent-ui-action)
+                                       (lambda () (agent-ui-confirm--answer props ctx "cancel"))
+                                       "RET: cancel"))
+                width))
               (hint (and word (format "type %S to proceed" word))))
           (cond
            ((null hint) (list buttons))
            ;; The word to type after the buttons, or under them if it
            ;; doesn't fit there.
-           ((<= (+ (string-width buttons) 3 (string-width hint)) width)
+           ((and (not (string-search "\n" buttons))
+                 (<= (+ (string-width buttons) 3 (string-width hint)) width))
             (list (concat buttons "   " (propertize hint 'face 'agent-ui-muted))))
            (t (list buttons (propertize (agent-ui-wrap hint width) 'face 'agent-ui-muted))))))))
      "\n")))

@@ -486,13 +486,14 @@ text's colour until it's answered."
         (list (propertize (agent-ui-wrap "x drops the step at the cursor (again: back), e rewords it" width)
                           'face 'agent-ui-muted)
               (agent-ui-ask-note-button props ctx)
-              (concat (agent-ui-button (propertize "⏵ Approve" 'face 'agent-ui-action)
-                                       (lambda () (agent-ui-steps--approved props ctx))
-                                       "RET: approve the plan as it is now")
-                      "   "
-                      (agent-ui-button (propertize "⏵ Reject" 'face 'agent-ui-action)
-                                       (lambda () (agent-ui-steps--rejected props ctx))
-                                       "RET: reject it, saying why"))))))
+              (agent-ui-button-row
+               (list (agent-ui-button (propertize "⏵ Approve" 'face 'agent-ui-action)
+                                      (lambda () (agent-ui-steps--approved props ctx))
+                                      "RET: approve the plan as it is now")
+                     (agent-ui-button (propertize "⏵ Reject" 'face 'agent-ui-action)
+                                      (lambda () (agent-ui-steps--rejected props ctx))
+                                      "RET: reject it, saying why"))
+               width)))))
      "\n")))
 
 (defun agent-ui-steps--draw (props ctx)
