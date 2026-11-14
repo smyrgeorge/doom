@@ -26,7 +26,7 @@
 (defvar so-long-enabled)
 
 (defvar-local +my/large-file nil
-  "In a file opened light for its size: (SIZE . LINES).")
+  "In a file opened light for its size: (BYTES . LINES), its size on disk.")
 (put '+my/large-file 'permanent-local t)
 
 (defvar-local +my/large-files--normally nil
@@ -49,6 +49,15 @@ normally): not light again, nor so-long's.")
            (assoc-default buffer-file-name doom-file-lines-threshold-alist #'string-match-p))
       20000))
 
+;; ITS SIZE: in bytes, on disk, as `+my/large-file-size' says: the buffer's
+;; size is in characters, and a 1.2 MB file of CJK text (3 bytes a character)
+;; was 404,000 of them, not large. A file not on disk yet: its text's.
+(defun +my/large-files--bytes ()
+  "This buffer's file's size in bytes (see above)."
+  (or (and buffer-file-name
+           (file-attribute-size (file-attributes (file-chase-links buffer-file-name))))
+      (1- (position-bytes (point-max)))))
+
 (defun +my/large-files--kind ()
   "This buffer's, a file's just read: `long' (a line over `so-long-threshold'),
 `large' (see above), or nil."
@@ -59,7 +68,7 @@ normally): not light again, nor so-long's.")
     (let ((stats (buffer-line-statistics)))
       (cond ((> (cadr stats) so-long-threshold) 'long)
             ((or (> (car stats) (+my/large-files--max-lines))
-                 (> (buffer-size) +my/large-file-size))
+                 (> (+my/large-files--bytes) +my/large-file-size))
              'large)))))
 
 ;; THE MODE LOOKED UP may not be a major mode itself: an alias (.js's
@@ -116,7 +125,7 @@ Open normally (`so-long-mode-revert') runs."
 
 (defun +my/large-files--large (fn args)
   "FN, `set-auto-mode', with ARGS: the file's mode light (see above)."
-  (setq +my/large-file (cons (buffer-size) (car (buffer-line-statistics))))
+  (setq +my/large-file (cons (+my/large-files--bytes) (car (buffer-line-statistics))))
   (let ((doom-inhibit-local-var-hooks t)
         (so-long-enabled nil)
         (+my/large-files--light t))
@@ -183,9 +192,9 @@ Open normally (`so-long-mode-revert') runs."
   "The large file in its own mode with everything (asked first over
 `+my/large-file-ask-size')."
   (interactive)
-  (when (or (<= (buffer-size) +my/large-file-ask-size)
+  (when (or (<= (+my/large-files--bytes) +my/large-file-ask-size)
             (y-or-n-p (format "Open this %s file with everything on (Emacs may be slow while it's open)? "
-                              (+my/large-files--size (buffer-size)))))
+                              (+my/large-files--size (+my/large-files--bytes)))))
     (setq +my/large-files--normally t
           +my/large-file nil)
     (+my/banner-close 'large-file)

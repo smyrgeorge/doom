@@ -211,6 +211,23 @@ notice saying so, Open normally giving it all."
         ;; Opened again (reverted): normally still.
         (should-not (+my/large-files--kind))))))
 
+(ert-deftest large-files/its-size-on-disk ()
+  "A file over the size in bytes but not in characters (CJK text, 3 bytes a
+character): light, its notice giving its size on disk."
+  (+test-lf
+    (let ((file (+test-tmp-file "large/cjk.md")))
+      (let ((coding-system-for-write 'utf-8))
+        (with-temp-file file
+          (dotimes (_ 404) (insert (make-string 1000 ?中) "\n"))))
+      (let ((bytes (file-attribute-size (file-attributes file))))
+        (should (> bytes +my/large-file-size))
+        (with-current-buffer (car (+test-lf--open file))
+          (should (< (buffer-size) +my/large-file-size))
+          (should so-long-minor-mode)
+          (should (equal +my/large-file (cons bytes 404)))
+          (should (string-match-p "\\`This file is large (1\\.2 MB, 404 lines)"
+                                  (nth 1 (+test-lf--notice 'large-file)))))))))
+
 (ert-deftest large-files/very-large-asks-first ()
   (+test-lf
     (let ((buffer (car (+test-lf--open (+test-lf--many-lines))))
