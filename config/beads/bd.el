@@ -9,7 +9,8 @@
 ;; update, close, labels, dependencies all failed), flags bd renamed, `bd
 ;; show' answering a list, `bd delete' only previewing without --force, `bd
 ;; stats' nesting its counts under summary (the list's bar and S said 0), an
-;; issue's epic as parent (beads.el read parent_id: P found no parent).
+;; issue's epic as parent (beads.el read parent_id: P found no parent), `bd
+;; show' without an issue's comments and dependents unless asked.
 ;; Mended here; the activity feed (`bd mutations')
 ;; and the merge conflicts view (`bd resolve-conflicts') are gone from bd and
 ;; say so. Only bd's command line is used (config/beads.el).
@@ -37,11 +38,16 @@ forced: without --force bd 1.x only previews it (and exits 0: beads.el said
 \"Deleted\", nothing was), and beads.el has asked first. A list or ready of
 every issue: bd 1.x lists 50 at most (ready 100), and no closed ones (the
 list's status filter couldn't show them), unless asked; the list hides the
-closed ones itself (config/beads/hidden.el)."
+closed ones itself (config/beads/hidden.el). An issue shown with its
+comments and the issues depending on it (an epic's, a blocker's): bd 1.x
+only counts them, unless asked."
   (let ((args (mapcar (lambda (arg) (or (cdr (assoc arg +my/beads--flags)) arg)) args)))
     (pcase (car args)
       ((and "delete" (guard (not (member "--force" args))))
        (append args '("--force")))
+      ("show"
+       (append args (seq-remove (lambda (flag) (member flag args))
+                                '("--include-comments" "--include-dependents"))))
       ("list"
        (append args
                (unless (member "--limit" args) '("--limit" "0"))

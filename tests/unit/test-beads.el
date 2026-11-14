@@ -21,6 +21,7 @@
 (require 'beads-activity)               ; its faces
 (require 'doom-themes)                  ; doom-blend
 (require 'nerd-icons)                   ; the types' icons
+(require 'markdown-mode)                ; an issue's text as Markdown
 
 ;; ====== HELPERS ======
 
@@ -969,6 +970,40 @@ parent, beads.el read parent_id: no parent; C errored)."
           (+test-beads--settle list)
           (should (equal (sort (mapcar #'car tabulated-list-entries) #'string<)
                          (sort (list lexer parser) #'string<))))))))
+
+;; doom-o5t.8
+(ert-deftest beads/bd-an-issue-s-notes-comments-dependents ()
+  "An issue's view: its notes, as Markdown; a comment added with c, after
+the refresh; a blocker's lists what it blocks, an epic's its issues
+\(beads.el drew no notes, and bd 1.x leaves comments and dependents out
+unless asked)."
+  (+test-beads-with-project
+    (let* ((epic (+test-beads--create "The epic" :issue-type "epic"))
+           (child (+test-beads--create "Its issue" :parent epic))
+           (blocker (+test-beads--create "The blocker"))
+           (blocked (+test-beads--create "The blocked one")))
+      (beads-client-request "dep_add" `((from_id . ,blocked) (to_id . ,blocker)))
+      (beads-client-update child :notes "Reported again, **twice**")
+      (should (equal (beads-backend-bd--operation-to-cli-args "show" `((id . ,child)))
+                     (list "show" child "--include-comments" "--include-dependents")))
+      (beads-detail-open (beads-client-show child))
+      (with-current-buffer (format "*Beads Detail: %s*" child)
+        (should (string-match-p "^Notes: +\\[edit\\]\n +Reported again, \\*\\*twice\\*\\*"
+                                (+test-beads--text (current-buffer))))
+        (should (memq 'markdown-bold-face (+test-beads--faces-at "twice")))
+        ;; c: a comment, shown once added.
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "A comment from Emacs")))
+          (beads-detail-add-comment))
+        (should (string-match-p "Comments (1):\n\n\\[Tester\\] .*\nA comment from Emacs"
+                                (+test-beads--text (current-buffer)))))
+      (beads-detail-open (beads-client-show blocker))
+      (with-current-buffer (format "*Beads Detail: %s*" blocker)
+        (should (string-match-p (format "Dependents:\n +\\[%s\\] +The blocked one" (regexp-quote blocked))
+                                (+test-beads--text (current-buffer)))))
+      (beads-detail-open (beads-client-show epic))
+      (with-current-buffer (format "*Beads Detail: %s*" epic)
+        (should (string-match-p (format "Dependents:\n +\\[%s\\] +Its issue" (regexp-quote child))
+                                (+test-beads--text (current-buffer))))))))
 
 ;; ====== THE PLACE KEPT ======
 

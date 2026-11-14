@@ -57,7 +57,8 @@ It shows the work still open: a notice over it says how many closed issues it hi
 
 ## An issue
 
-Its description, design, acceptance criteria and notes, rendered as Markdown, with its fields and dependencies.
+Its description, design, acceptance criteria and notes, rendered as Markdown, with its fields, its dependencies, the
+issues depending on it (an epic's issues, what a blocker holds up) and its comments.
 
 | Key | Action |
 |---|---|
