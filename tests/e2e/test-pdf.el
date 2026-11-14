@@ -15,7 +15,7 @@
 (defvar +test-pdf--pdfjs (+test-pdfjs-dir))
 
 ;; Nothing opens outside Emacs: printing (osascript's Preview dialog on macOS,
-;; lp on Linux) is recorded instead; the apps config/os.el starts, by
+;; lp on Linux) is recorded instead; the apps config/emacs/os.el starts, by
 ;; tests/helper.el (`+test-os-runs').
 (defvar +test-pdf--outside nil
   "The commands that would have run outside Emacs, the latest first.")

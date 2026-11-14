@@ -97,7 +97,7 @@ in columns each: a narrower pane has HEAD above the image.")
       :n "RET" #'+my/image-toggle-animation
       :n "q"   #'kill-current-buffer)    ; as PDFs
 
-;; On Linux, Ctrl for Cmd (config/os.el, KEYS): zoom, copy.
+;; On Linux, Ctrl for Cmd (config/emacs.el, KEYS): zoom, copy.
 (map! :unless (+my/macos-p)
       :map +my/image-mode-map
       :n "C-="   #'+my/image-zoom-in

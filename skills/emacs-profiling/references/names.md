@@ -11,6 +11,6 @@ Names in the call trees that aren't functions of the code being profiled.
 - `...` (top-down tree only): stacks deeper than 32 calls, whose start isn't known.
 - `let`, `let*`, `if`, `progn`, `while`, `cond`, `save-excursion`...: special forms show up as calls only in
   interpreted code. This config's functions (`+my/...`) are byte-compiled once Emacs has been idle a moment
-  (`config/compile.el`); a profile taken right after startup can catch them interpreted, slower than they really are.
+  (`config/emacs/compile.el`); a profile taken right after startup can catch them interpreted, slower than they really are.
 - `#<lambda ...>`, `#<subr ...>`, closures: anonymous functions; their callers say whose they are.
 - `profiler-start`, `profiler-stop`, `+my/profiling-...` at the start or end: the profiler itself; ignore them.

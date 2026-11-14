@@ -35,8 +35,9 @@ from the base needs."
                       1)
             (error "diff3 failed: %s" (with-current-buffer output (buffer-string))))
           ;; `dlet': Ediff's own variables (its buffers) whatever the compiler
-          ;; knew; compiled before Ediff loaded (config/compile.el), a `let'
-          ;; bound locals Ediff never saw, the first time (Ediff loads above).
+          ;; knew; compiled before Ediff loaded (config/emacs/compile.el), a
+          ;; `let' bound locals Ediff never saw, the first time (Ediff loads
+          ;; above).
           (with-temp-buffer
             (dlet ((ediff-buffer-A (+my/merge-yours session))
                    (ediff-buffer-B (+my/merge-base session))

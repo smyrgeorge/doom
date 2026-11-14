@@ -43,7 +43,7 @@ git's HEAD."
   (+my/image--redisplay))
 
 (defun +my/image--transform (transform)
-  "Change the image by TRANSFORM (config/os.el's `+my/os-image-transform':
+  "Change the image by TRANSFORM (config/emacs/os.el's `+my/os-image-transform':
 sips on macOS, ImageMagick on Linux), as done to a file (see
 config/image.el)."
   (+my/image--check-editable)

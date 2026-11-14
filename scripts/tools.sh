@@ -73,10 +73,10 @@ TOOLS=(
   "config            | node:mathjax-full | npm:mathjax-full     | npm:mathjax-full      | npm:mathjax-full       | formulas typeset: Agent UI's math (config/agent-ui/elements/math.el)"
   "config            | mmdc             | npm:@mermaid-js/mermaid-cli | apt:unzip npm:@mermaid-js/mermaid-cli | dnf:unzip npm:@mermaid-js/mermaid-cli | Mermaid diagrams drawn (config/mermaid.el)"
   "config            | python3          | builtin               | apt:python3           | dnf:python3            | treemacs's git status (config/treemacs.el)"
-  "config            | xdg-open         | -                     | apt:xdg-utils         | dnf:xdg-utils          | other apps, the file manager (config/os.el)"
-  "config            | lp               | -                     | apt:cups-client       | dnf:cups-client        | printing PDFs (config/os.el)"
-  "config            | wl-copy          | -                     | apt:wl-clipboard      | dnf:wl-clipboard       | copying images, Wayland (config/os.el)"
-  "config            | xclip            | -                     | apt:xclip             | dnf:xclip              | copying images, X11 (config/os.el)"
+  "config            | xdg-open         | -                     | apt:xdg-utils         | dnf:xdg-utils          | other apps, the file manager (config/emacs/os.el)"
+  "config            | lp               | -                     | apt:cups-client       | dnf:cups-client        | printing PDFs (config/emacs/os.el)"
+  "config            | wl-copy          | -                     | apt:wl-clipboard      | dnf:wl-clipboard       | copying images, Wayland (config/emacs/os.el)"
+  "config            | xclip            | -                     | apt:xclip             | dnf:xclip              | copying images, X11 (config/emacs/os.el)"
   "config            | mutool           | -                     | apt:mupdf-tools       | dnf:mupdf              | PDFs without xwidgets: DocView"
 
   # :emacs, :checkers, :tools

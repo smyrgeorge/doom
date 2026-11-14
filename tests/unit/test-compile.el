@@ -1,11 +1,11 @@
 ;;; tests/unit/test-compile.el -*- lexical-binding: t; -*-
-;; config/compile.el: this config's functions byte-compiled in place when Emacs
-;; is idle (stopping at a key press), again after anything loads; functions
-;; compiled before a variable they bind became special, or a function they
-;; call became a macro (its package loaded), go back to their source.
+;; config/emacs/compile.el: this config's functions byte-compiled in place when
+;; Emacs is idle (stopping at a key press), again after anything loads;
+;; functions compiled before a variable they bind became special, or a function
+;; they call became a macro (its package loaded), go back to their source.
 
 (setq native-comp-enable-subr-trampolines nil) ; mocking `input-pending-p' compiles none
-(+test-load "config/compile")
+(+test-load "config/emacs")
 
 ;; ====== HELPERS ======
 
@@ -49,7 +49,7 @@ package loads (`after-load-functions' run)."
 (ert-deftest compile/reload-keeps-one-timer ()
   "Loading the file again replaces its timer (and hook) instead of adding one."
   (let ((old +my/compile--timer))
-    (+test-load "config/compile")
+    (+test-load "config/emacs/compile")
     (should-not (memq old timer-idle-list))
     (should (memq +my/compile--timer timer-idle-list))
     (should (= (cl-count #'+my/compile-config-functions-h timer-idle-list
@@ -60,7 +60,7 @@ package loads (`after-load-functions' run)."
 (ert-deftest compile/pending-at-start ()
   "The first pass compiles what the config defined."
   (with-temp-buffer
-    (insert-file-contents (expand-file-name "config/compile.el" +test-root))
+    (insert-file-contents (expand-file-name "config/emacs/compile.el" +test-root))
     (should (search-forward "(defvar +my/compile--pending t" nil t))))
 
 (ert-deftest compile/after-load-marks-pending-and-rechecks ()
@@ -409,7 +409,7 @@ the next pass."
     (should (+test-compile--compiled-p '+test-compile-r4b))
     (should (gethash '+test-compile-r4b +my/compile--watch))))
 
-;; ====== THE CATCHES (config/compile.el's comments) ======
+;; ====== THE CATCHES (config/emacs/compile.el's comments) ======
 
 (ert-deftest compile/let-binding-a-package-variable ()
   "SPC g d's catch: a function binding a package's variable, compiled before

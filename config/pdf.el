@@ -167,7 +167,7 @@
       :nm "O"       #'+my/pdf-toggle-sidebar
       :gnm "q"      #'kill-current-buffer)  ; as Doom's pdf-tools did
 
-;; On Linux, Ctrl for Cmd (config/os.el, KEYS): zoom, copy, print; Alt+← /
+;; On Linux, Ctrl for Cmd (config/emacs.el, KEYS): zoom, copy, print; Alt+← /
 ;; Alt+→ back and forward, as browsers.
 (map! :unless (+my/macos-p)
       :map +my/pdf-mode-map

@@ -1,50 +1,13 @@
-;;; $DOOMDIR/config/os.el -*- lexical-binding: t; -*-
+;;; $DOOMDIR/config/emacs/os.el -*- lexical-binding: t; -*-
 ;; What differs between macOS and Linux: the keys, and the other apps and
-;; programs files go to (another app, the file manager, the printer, the
-;; clipboard's images, image editing). Loaded from config.el, first: the other
-;; files use it.
-
-;; ====== VARIABLES ======
-
-;; KEYS
-;; On macOS this config's keys use Cmd (Super, `s-'), as macOS's apps do.
-;; Linux's desktops keep most Super keys for themselves (and a terminal can't
-;; send Super at all), so on Linux each Cmd key also has a Ctrl key, as Linux's
-;; apps have them (docs/keybindings.md lists both):
-;; - Ctrl where Vim and Emacs leave it free: Ctrl+1..9 (tabs), Ctrl+= / Ctrl+-
-;;   / Ctrl+0 (zoom), Ctrl+P (print), Ctrl+S (a drawing, a merge);
-;; - Ctrl+Shift where Ctrl is Vim's (Ctrl+B, Ctrl+W, Ctrl+C, Ctrl+V...), as
-;;   Linux's terminals copy with Ctrl+Shift+C;
-;; - Alt+← / Alt+→ back / forward, as browsers.
-;; The Cmd keys stay bound too (Super, where the desktop lets it through).
-;; macOS gets none of the Linux keys: its keys are as they were.
-
-;; OTHER APPS (see `+my/os-open', `+my/os-reveal', `+my/os-print')
-;; macOS: Preview and Finder (open), Preview's print dialog (osascript).
-;; Linux: the file's default app and the file manager (xdg-open, D-Bus), the
-;; default printer (lp, after asking).
-
-;; THE CLIPBOARD'S IMAGES (`+my/os-copy-image')
-;; macOS: osascript. Linux: wl-copy (Wayland) or xclip (X11).
-
-;; IMAGE EDITING (`+my/os-image-transform', `+my/os-image-to-png')
-;; macOS: sips. Linux: ImageMagick (magick, or convert: ImageMagick 6).
-
-;; DESKTOP NOTIFICATIONS (`+my/os-notify', config/notify.el's)
-;; macOS: Notification Center, posted by Emacs itself (AppleScript's display
-;; notification, `do-applescript'; osascript's without it); macOS asks once
-;; whether Emacs may notify (System Settings > Notifications > Emacs). A click
-;; brings Emacs forward.
-;; Linux: the desktop's notifications, through D-Bus (`notifications-notify':
-;; a click runs the caller's function), else notify-send.
-
-;; ====== CODE ======
+;; programs files go to (config/emacs.el, MACOS AND LINUX, says which).
+;; Loaded from config/emacs.el, first: the other files use it.
 
 (defun +my/macos-p ()
   "Non-nil on macOS (else Linux, or another Unix)."
   (eq system-type 'darwin))
 
-;; KEYS (see above)
+;; KEYS (config/emacs.el)
 (defun +my/os-key-name (mac linux)
   "A key's name, for messages and buttons: MAC (\"Cmd+C\") on macOS, else
 LINUX (\"Ctrl+Shift+C\")."
@@ -181,7 +144,7 @@ what sips can't read: SVG). Non-nil if TO was made."
         (and (zerop (call-process magick nil nil nil from (concat "png:" to)))
              (file-exists-p to)))))
 
-;; DESKTOP NOTIFICATIONS (see above)
+;; DESKTOP NOTIFICATIONS (config/emacs.el)
 (defun +my/os--applescript-string (text)
   "TEXT as an AppleScript string, on one line."
   (format "\"%s\"" (replace-regexp-in-string
@@ -189,7 +152,7 @@ what sips can't read: SVG). Non-nil if TO was made."
                     (replace-regexp-in-string "[\n\r]+" " " text))))
 
 (defun +my/os--notify-macos (title body)
-  "TITLE and BODY in macOS's Notification Center (see above)."
+  "TITLE and BODY in macOS's Notification Center (config/emacs.el)."
   (let ((script (format "display notification %s with title %s"
                         (+my/os--applescript-string body)
                         (+my/os--applescript-string title))))
@@ -205,7 +168,7 @@ what sips can't read: SVG). Non-nil if TO was made."
        (ignore-errors (dbus-ping :session notifications-service 500))))
 
 (defun +my/os--notify-linux (title body on-click)
-  "TITLE and BODY in the desktop's notifications (see above); ON-CLICK, a
+  "TITLE and BODY in the desktop's notifications (config/emacs.el); ON-CLICK, a
 function, run on a click (D-Bus only). Nil if neither D-Bus nor notify-send
 can show it."
   (cond ((+my/os--dbus-notifications-p)
@@ -220,9 +183,9 @@ can show it."
          t)))
 
 (defun +my/os-notify (title body &optional on-click)
-  "Show a desktop notification, TITLE and BODY (see DESKTOP NOTIFICATIONS
-above). ON-CLICK, a function, runs when it's clicked (Linux; on macOS a click
-brings Emacs forward). Non-nil if it was shown."
+  "Show a desktop notification, TITLE and BODY (config/emacs.el, DESKTOP
+NOTIFICATIONS). ON-CLICK, a function, runs when it's clicked (Linux; on
+macOS a click brings Emacs forward). Non-nil if it was shown."
   (if (+my/macos-p)
       (+my/os--notify-macos title body)
     (+my/os--notify-linux title body on-click)))

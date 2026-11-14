@@ -10,9 +10,8 @@
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
 | `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe |
-| `config/compile.el` | Byte-compiles this config when Emacs is idle |
 | `config/editor.el`, `editor/` | [The editor](editor.md): tabs, `Option+Enter`, `Cmd+B`, the sticky header, spelling |
-| `config/emacs.el` | Garbage collection |
+| `config/emacs.el`, `emacs/` | Emacs itself: what differs between macOS and Linux ([the keys](keybindings.md), other apps, the clipboard's images, notifications), garbage collection, [profiling](claude-code.md#profiling-emacs), this config byte-compiled when Emacs is idle |
 | `config/examples.el`, `examples/` | [Examples](examples.md) and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | [Drawings](drawings.md) |
 | `config/git.el`, `git/` | [Magit](git.md#magit), [a file's diff](git.md#file-diff) |
@@ -21,9 +20,7 @@
 | `config/mermaid.el`, `mermaid/` | [Mermaid](mermaid.md): mermaid-mode, diagrams in the theme's colours |
 | `config/html.el` | HTML files: a [notice](editor.md#notices) to open them in the browser; a page in WebKit (`+my/html-open-in-emacs`) |
 | `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |
-| `config/os.el` | What differs between macOS and Linux: [the keys](keybindings.md), other apps, the clipboard's images, notifications |
 | `config/pdf.el`, `pdf/` | [PDFs](pdf.md) |
-| `config/profiling.el`, `profiling/` | [Profiling](claude-code.md#profiling-emacs) |
 | `config/projectile.el`, `projectile/` | [Projects](search.md#projects) |
 | `config/search.el`, `search/` | [Search](search.md) |
 | `config/stripe.el`, `stripe/` | [Error stripe](editor.md#error-stripe) |

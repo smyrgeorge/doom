@@ -105,7 +105,7 @@ a pane closed).")
       :nm "]c" #'+my/merge-next
       :nm "[c" #'+my/merge-previous)
 
-;; On Linux Ctrl+S (config/os.el, KEYS).
+;; On Linux Ctrl+S (config/emacs.el, KEYS).
 (map! :unless (+my/macos-p)
       :map +my/merge-mode-map
       "C-s" #'+my/merge-done)

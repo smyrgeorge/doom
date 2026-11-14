@@ -87,7 +87,7 @@
       :nm "y"       #'+my/webkit-copy
       :gnm "q"      #'kill-current-buffer)
 
-;; On Linux Ctrl+Shift+C copies (config/os.el, KEYS).
+;; On Linux Ctrl+Shift+C copies (config/emacs.el, KEYS).
 (map! :unless (+my/macos-p)
       :map +md-preview-page-mode-map
       :nm "C-S-c" #'+my/webkit-copy)

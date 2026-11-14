@@ -162,7 +162,7 @@ if it can't."
 ;; PREVIEW AND PRINT
 (defun +my/pdf-open-in-preview ()
   "SPC m p: the PDF in another app: macOS's Preview (to sign, annotate...),
-Linux's default app for PDFs (config/os.el)."
+Linux's default app for PDFs (config/emacs/os.el)."
   (interactive)
   (unless buffer-file-name
     (user-error "Not a file"))
@@ -171,7 +171,7 @@ Linux's default app for PDFs (config/os.el)."
 (defun +my/pdf-print ()
   "Cmd+P (Linux: Ctrl+P): print the PDF: in Preview's print dialog on macOS
 (it asks once to let Emacs control Preview), on the default printer on
-Linux, after asking (config/os.el)."
+Linux, after asking (config/emacs/os.el)."
   (interactive)
   (unless buffer-file-name
     (user-error "Not a file"))

@@ -43,9 +43,9 @@ order, theirs included: the `load!'s among its top-level forms."
                append (append (+test-config--parts part) (list part))))))
 
 (defvar +test-config--history-before
-  (remove (expand-file-name "config/os.el" +test-root) (mapcar #'car load-history))
-  "The files loaded before config.el; but config/os.el, which tests/helper.el
-loads too (config.el loads it again, first).")
+  (remove (expand-file-name "config/emacs/os.el" +test-root) (mapcar #'car load-history))
+  "The files loaded before config.el; but config/emacs/os.el, which
+tests/helper.el loads too (config.el loads it again, first).")
 
 (defvar +test-config--error nil "What loading config.el signalled, if anything.")
 
@@ -265,8 +265,8 @@ without that `load!' each feature opens its windows as it does alone."
 
 (ert-deftest config/notifications-can-be-taken-out ()
   "Notifications live in config/notify.el and config/notify/ (the desktop's
-side, `+my/os-notify', in config/os.el): config.el loads them, no other file
-fires one, so without that `load!' nothing notifies and nothing breaks."
+side, `+my/os-notify', in config/emacs/os.el): config.el loads them, no other
+file fires one, so without that `load!' nothing notifies and nothing breaks."
   (let ((users nil))
     (dolist (file (+test-config--all-el-files))
       (unless (string-match-p "/config/notify\\(?:\\.el\\|/\\)" file)
@@ -347,13 +347,19 @@ puts its last."
   (should (< (+test-config--load-position "config/window")
              (+test-config--load-position "config/tiling"))))
 
-(ert-deftest config/order-compile-last ()
-  "config/compile.el is the last thing config.el does."
-  (should (equal (car (last (+test-config--forms))) '(load! "config/compile")))
-  (should (equal (car (last (+test-config--loaded) 2))
-                 (+test-config--file "config/compile")))
-  ;; So its first pass sees every config function, from the first file to
-  ;; the last.
+(ert-deftest config/order-emacs-first ()
+  "config/emacs.el is the first file config.el loads, and its part for what
+differs between macOS and Linux (config/emacs/os.el) its first: the other
+files use it."
+  (should (equal (car (+test-config--loads)) "config/emacs"))
+  (should (equal (car (+test-config--parts "config/emacs")) "config/emacs/os"))
+  (should (equal (car (+test-config--loaded)) (+test-config--file "config/emacs/os"))))
+
+(ert-deftest config/compile-sees-every-file ()
+  "config/emacs/compile.el loads first, with config/emacs.el, but compiles
+nothing then: its first pass waits for Emacs to be idle, so it sees every
+config function, from the first file to the last."
+  (should (memq +my/compile--timer timer-idle-list))
   (let ((candidates (+my/compile--candidates)))
     (should (memq '+my/tiling-split candidates))
     (should (memq '+my/context-actions candidates))

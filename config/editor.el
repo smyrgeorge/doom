@@ -252,8 +252,8 @@ An entry overrides a mode's own (set in config.el).")
       :gn "s-8" #'+my/tabs-select-8
       :gn "s-9" #'+my/tabs-select-9)
 
-;; On Linux also Ctrl+1..9 (config/os.el, KEYS), as Linux's browsers (Alt+1..9
-;; stay Doom's workspaces).
+;; On Linux also Ctrl+1..9 (config/emacs.el, KEYS), as Linux's browsers
+;; (Alt+1..9 stay Doom's workspaces).
 (map! :unless (+my/macos-p)
       :gn "C-1" #'+my/tabs-select-1
       :gn "C-2" #'+my/tabs-select-2

@@ -12,7 +12,7 @@ can't send `Super`), so on Linux each `Cmd` key is a `Ctrl` key, as Linux's apps
 - `Alt+←` / `Alt+→` for back and forward, as browsers.
 
 The `Cmd` keys also work on Linux as `Super` keys, where the desktop lets them through. macOS gets none of the Linux keys:
-Vim's and Doom's keys stay as they are there. `config/os.el` has the rules.
+Vim's and Doom's keys stay as they are there. `config/emacs.el` has the rules.
 
 | macOS | Linux | Action |
 |---|---|---|

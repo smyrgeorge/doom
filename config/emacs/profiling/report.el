@@ -1,6 +1,6 @@
-;;; $DOOMDIR/config/profiling/report.el -*- lexical-binding: t; -*-
+;;; $DOOMDIR/config/emacs/profiling/report.el -*- lexical-binding: t; -*-
 ;; A profile written as text an agent can read: a summary, the call trees, the
-;; raw profiles. Loaded from config/profiling.el.
+;; raw profiles. Loaded from config/emacs/profiling.el.
 
 (defun +my/profiling--name (entry)
   "A backtrace ENTRY as text: a function's name, `Automatic GC'..."

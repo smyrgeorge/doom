@@ -26,7 +26,7 @@ run those under Xvfb, one at a time: `E2E_JOBS=1 xvfb-run -a tests/run.sh e2e`.
 - `tests/unit/test-NAME.el` tests `config/NAME.el` or a part of it (`test-tabs.el`: `config/editor/tabs.el`); the
   language servers' settings, a file per language (`test-lsp-rust.el`: `config/lsp/rust.el`), sharing
   `tests/helper-lsp.el`. `test-keys.el` checks the keys of both systems (`+test-on-macos`, `+test-on-linux` in
-  `tests/helper.el` run code as on either); no test opens another app (`config/os.el`'s are recorded).
+  `tests/helper.el` run code as on either); no test opens another app (`config/emacs/os.el`'s are recorded).
 - `tests/e2e/test-NAME.el` tests what needs a GUI: WebKit pages, child frames, the merge on screen.
 - `tests/linux/` runs them on Linux: a Debian image set up by `scripts/emacs.sh` and `scripts/tools.sh` (with or
   without xwidgets), the config and Doom's folder mounted read-only, the end-to-end tests under Xvfb. Built the first

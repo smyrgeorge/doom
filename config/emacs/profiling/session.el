@@ -1,6 +1,6 @@
-;;; $DOOMDIR/config/profiling/session.el -*- lexical-binding: t; -*-
+;;; $DOOMDIR/config/emacs/profiling/session.el -*- lexical-binding: t; -*-
 ;; Starting and stopping the profiler, and saying where the profile went.
-;; Loaded from config/profiling.el.
+;; Loaded from config/emacs/profiling.el.
 
 (defvar +my/profiling--run nil
   "The profile being recorded, from `+my/profiling-start': a plist of :start

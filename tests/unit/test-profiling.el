@@ -1,10 +1,11 @@
 ;;; tests/unit/test-profiling.el -*- lexical-binding: t; -*-
-;; config/profiling.el: SPC h T starts the profiler; again, it stops it and
-;; writes the profile as text into a new folder (a summary, the call trees, the
-;; raw profiles), says where and that an agent should read the skill first, and
-;; copies that. The real profiler, profiling a busy function.
+;; config/emacs.el's profiling (config/emacs/profiling/): SPC h T starts the
+;; profiler; again, it stops it and writes the profile as text into a new
+;; folder (a summary, the call trees, the raw profiles), says where and that an
+;; agent should read the skill first, and copies that. The real profiler,
+;; profiling a busy function.
 
-(+test-load "config/profiling")
+(+test-load "config/emacs")
 
 (require 'profiler)
 

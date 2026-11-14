@@ -4,8 +4,8 @@
 ;; focus: in front, away, not known), a click bringing Emacs forward on the
 ;; buffer, the toggles (SPC t n, SPC t N), the test notification; and Claude
 ;; Code's (config/notify/claude.el): agent-shell's events, stood in for. What
-;; the desktop would show is recorded (`+my/os-notify' here, config/os.el's
-;; own posting in tests/helper.el).
+;; the desktop would show is recorded (`+my/os-notify' here,
+;; config/emacs/os.el's own posting in tests/helper.el).
 
 (+test-load "config/notify")
 ;; Agent UI's questions: the notification reads them from their canvas.

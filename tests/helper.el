@@ -172,8 +172,8 @@ as diff-hl loads: the rest of its setup was skipped, an error.)"
       (error "No Doom module %s %s" group module))
     (load file nil t)))
 
-;; Loaded in a running Emacs (Doom, config/compile.el compile): otherwise code
-;; let-binding `byte-compile-warnings' before it's special (doom-modeline's
+;; Loaded in a running Emacs (Doom, config/emacs/compile.el compile): otherwise
+;; code let-binding `byte-compile-warnings' before it's special (doom-modeline's
 ;; segments) fails as bytecomp loads in it.
 (require 'bytecomp)
 
@@ -207,10 +207,10 @@ as diff-hl loads: the rest of its setup was skipped, an error.)"
             (lambda (url &rest _) (push url +test-browsed))
             '((name . +test-no-browser)))
 
-;; No test opens another app or the file manager: what config/os.el would
+;; No test opens another app or the file manager: what config/emacs/os.el would
 ;; start is only recorded (see LOADING THE CONFIG).
 (defvar +test-os-runs nil
-  "(PROGRAM ARGS...) config/os.el was asked to start, the latest first.")
+  "(PROGRAM ARGS...) config/emacs/os.el was asked to start, the latest first.")
 
 ;; ====== NO SOUND ======
 
@@ -248,20 +248,20 @@ binds keys (Doom's does nothing in batch mode)."
           (inhibit-message t))
       (load (expand-file-name file +test-root) nil t))))
 
-;; What config.el loads first, which the other files use (config/os.el); the
-;; apps it starts only recorded (see NOTHING OPENS OUTSIDE). Advice stays
-;; when a test loads it again.
-(+test-load "config/os")
+;; What config.el loads first, which the other files use (config/emacs/os.el,
+;; config/emacs.el's first part); the apps it starts only recorded (see NOTHING
+;; OPENS OUTSIDE). Advice stays when a test loads it again.
+(+test-load "config/emacs/os")
 (advice-add '+my/os--run :override
             (lambda (program &rest args) (push (cons program args) +test-os-runs) 0)
             '((name . +test-no-apps)))
 (advice-add '+my/os--reveal-dbus :override #'ignore '((name . +test-no-apps)))
 
-;; No test shows a desktop notification: what config/os.el would post is only
-;; recorded, macOS's (AppleScript) and Linux's (D-Bus; notify-send goes
+;; No test shows a desktop notification: what config/emacs/os.el would post is
+;; only recorded, macOS's (AppleScript) and Linux's (D-Bus; notify-send goes
 ;; through `+my/os--run', recorded above).
 (defvar +test-notifications nil
-  "The notifications config/os.el posted, the latest first: (applescript
+  "The notifications config/emacs/os.el posted, the latest first: (applescript
 SCRIPT) or (dbus ARGS...).")
 
 (advice-add 'do-applescript :override
@@ -273,7 +273,7 @@ SCRIPT) or (dbus ARGS...).")
             '((name . +test-no-notifications)))
 
 (defmacro +test-on-linux (&rest body)
-  "BODY as on Linux: `system-type' gnu/linux (config/os.el's `+my/macos-p'
+  "BODY as on Linux: `system-type' gnu/linux (config/emacs/os.el's `+my/macos-p'
 nil); files BODY loads bind Linux's keys."
   (declare (indent 0))
   `(let ((system-type 'gnu/linux)) ,@body))

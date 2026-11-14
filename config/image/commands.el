@@ -126,8 +126,8 @@ the next images as this one."
 
 ;; COPYING
 (defun +my/image--png (from to)
-  "Make PNG TO from image FROM (config/os.el: sips on macOS, ImageMagick for
-what sips can't read, SVG, and on Linux)."
+  "Make PNG TO from image FROM (config/emacs/os.el: sips on macOS,
+ImageMagick for what sips can't read, SVG, and on Linux)."
   (unless (+my/os-image-to-png from to)
     (user-error "Couldn't make a PNG of the image to copy%s"
                 (if (+my/os-imagemagick) "" " (it needs ImageMagick)"))))

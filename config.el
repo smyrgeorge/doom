@@ -130,10 +130,10 @@
 
 ;; ====== CODE ======
 
-;; OS (what differs between macOS and Linux: keys, other apps; the files below use it)
-(load! "config/os")
-
-;; EMACS (garbage collection)
+;; EMACS (what differs between macOS and Linux: keys, other apps, which the
+;; files below use; garbage collection; profiling: SPC h T starts the profiler,
+;; again writes a profile for an agent, who reads skills/emacs-profiling first;
+;; this config's functions byte-compiled when Emacs is idle)
 (load! "config/emacs")
 
 ;; WINDOW (maximized frame; new windows get focus)
@@ -219,10 +219,3 @@
 
 ;; SEARCH EVERYWHERE (classes, files, symbols, actions in one list)
 (load! "config/search")
-
-;; PROFILING (SPC h T starts the profiler; again, it writes a profile for an
-;; agent, who reads skills/emacs-profiling first)
-(load! "config/profiling")
-
-;; COMPILE (byte-compile this config's functions when Emacs is idle; load last)
-(load! "config/compile")

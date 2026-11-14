@@ -1,5 +1,5 @@
 ;;; tests/unit/test-keys.el -*- lexical-binding: t; -*-
-;; This config's keys on macOS and on Linux (config/os.el, KEYS): the Cmd
+;; This config's keys on macOS and on Linux (config/emacs.el, KEYS): the Cmd
 ;; keys everywhere; Linux's Ctrl keys on Linux only, macOS's keys as they
 ;; were. The files binding them are loaded as on macOS (what they bound
 ;; then kept), then again as on Linux. Drawings' keys: test-excalidraw.el;

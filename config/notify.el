@@ -7,9 +7,9 @@
 ;; NOTIFICATIONS
 ;; Something you'd want to know while you're in another app (Claude Code
 ;; finished, Claude Code needs you) shows as a desktop notification: macOS's
-;; Notification Center, Linux's notifications (`+my/os-notify', config/os.el).
-;; Only while no Emacs frame has the focus: in Emacs, you see it there. Each
-;; kind can be turned off on its own:
+;; Notification Center, Linux's notifications (`+my/os-notify',
+;; config/emacs/os.el). Only while no Emacs frame has the focus: in Emacs, you
+;; see it there. Each kind can be turned off on its own:
 ;;   SPC t n    all notifications on / off
 ;;   SPC t N    one kind on / off (picked from them)
 ;;   M-x +my/notify-test   one now, Emacs in front or not: does the desktop

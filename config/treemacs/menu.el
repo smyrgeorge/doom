@@ -3,7 +3,7 @@
 
 ;; REVEAL IN FINDER
 ;; After "Open With", on a file or a folder: it shown selected in the file
-;; manager (Finder; on Linux the file manager, config/os.el).
+;; manager (Finder; on Linux the file manager, config/emacs/os.el).
 (defun +my/treemacs-reveal-in-finder ()
   "The file or folder at point shown selected in the file manager (Finder on
 macOS)."

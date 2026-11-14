@@ -1,7 +1,7 @@
 ;;; tests/unit/test-os.el -*- lexical-binding: t; -*-
-;; config/os.el: what differs between macOS and Linux. Each function on each
-;; system (`system-type' let-bound), the programs it would run recorded, not
-;; run (tests/helper.el records the apps it starts, `+test-os-runs'); and
+;; config/emacs/os.el: what differs between macOS and Linux. Each function on
+;; each system (`system-type' let-bound), the programs it would run recorded,
+;; not run (tests/helper.el records the apps it starts, `+test-os-runs'); and
 ;; ImageMagick's rotating for real where it's installed.
 
 ;; ====== HELPERS ======

@@ -128,8 +128,8 @@ config/merge.el); Magit's Ediff for what they can't show."
   (interactive (progn (require 'magit) (list (magit-read-unmerged-file))))
   (require 'magit)
   ;; Magit's functions, not its macros (`magit-with-toplevel'): compiled
-  ;; before Magit loaded (config/compile.el), a macro is a call to nothing the
-  ;; first time.
+  ;; before Magit loaded (config/emacs/compile.el), a macro is a call to
+  ;; nothing the first time.
   (let* ((default-directory (or (magit-toplevel) (user-error "Not in a Git repository")))
          (path (file-relative-name (expand-file-name file) default-directory))
          (why (+my/merge--why-not path)))

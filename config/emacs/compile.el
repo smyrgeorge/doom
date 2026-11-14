@@ -1,18 +1,7 @@
-;;; $DOOMDIR/config/compile.el -*- lexical-binding: t; -*-
-;; Byte-compile this config's functions in the background. Loaded last from
-;; config.el.
+;;; $DOOMDIR/config/emacs/compile.el -*- lexical-binding: t; -*-
+;; Byte-compile this config's functions in the background, once Emacs has been
+;; idle a moment (config/emacs.el, COMPILE). Loaded from config/emacs.el.
 
-;; ====== VARIABLES ======
-
-;; COMPILE
-;; Doom loads config.el and config/*.el as source, so their functions ran
-;; interpreted, several times slower than compiled: e.g. the stripe's redraw on
-;; each frame of a scroll took 1.5 ms instead of 0.2. Once Emacs has been idle
-;; for a moment they're byte-compiled in place, a few milliseconds each,
-;; stopping at the first key press (no files written, so nothing gets stale).
-;; Again after anything loads: functions in `after!' blocks are defined when
-;; their package loads.
-;;
 ;; A catch: compiled before a package loaded, code using it can go wrong,
 ;; where the interpreter (which looks at things as it runs) didn't:
 ;; - a `let' binding the package's variable, e.g. SPC g d's
@@ -29,10 +18,6 @@
 ;; runs compiled to its end the first time. Such a function binds the package's
 ;; variables with `dlet' and calls its functions, not its macros (see
 ;; config/merge/changes.el).
-(defvar +my/compile-idle-delay 2
-  "Seconds of idleness before this config's functions get compiled.")
-
-;; ====== CODE ======
 
 (defvar +my/compile--pending t "Something loaded since the last pass.")
 

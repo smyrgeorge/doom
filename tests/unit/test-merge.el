@@ -15,7 +15,7 @@
 
 (+test-load "config/merge")
 
-;; As config/compile.el does once Emacs is idle a moment after it started:
+;; As config/emacs/compile.el does once Emacs is idle a moment after it started:
 ;; the functions byte-compiled before Magit, Ediff or smerge loaded. A
 ;; function loading its package then using the package's macro or binding its
 ;; variable, compiled so, failed the first time it ran (compile.el puts a
@@ -184,7 +184,7 @@ feature merged into main: in conflict."
 
 (ert-deftest merge/compiled-before-its-packages ()
   "The functions were compiled before Magit, Ediff and smerge loaded, as
-config/compile.el may (the other tests run them so)."
+config/emacs/compile.el may (the other tests run them so)."
   (should (equal +test-merge--packages-before '(nil nil nil)))
   (should (byte-code-function-p (symbol-function '+my/merge--diff3)))
   (should (byte-code-function-p (symbol-function '+my/merge))))

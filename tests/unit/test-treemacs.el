@@ -305,8 +305,8 @@ With\"."
     (should (eq (+my/treemacs--menu-with-reveal items) items))))
 
 (ert-deftest treemacs/reveal-in-finder ()
-  "The node shown in the file manager (config/os.el's `+my/os-reveal'); not
-on a line without a path."
+  "The node shown in the file manager (config/emacs/os.el's `+my/os-reveal');
+not on a line without a path."
   (+test-treemacs
     (let ((root (+test-treemacs--project "reveal" "README.md"))
           revealed)
@@ -324,7 +324,7 @@ on a line without a path."
   (+test-on-linux (should (equal (+my/treemacs--reveal-label) "Show in File Manager"))))
 
 (ert-deftest treemacs/copy-key-per-system ()
-  "Cmd+C everywhere; Ctrl+Shift+C on Linux only (config/os.el, KEYS)."
+  "Cmd+C everywhere; Ctrl+Shift+C on Linux only (config/emacs.el, KEYS)."
   (unwind-protect
       (progn
         (define-key treemacs-mode-map (kbd "C-S-c") nil)
