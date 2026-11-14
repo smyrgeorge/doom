@@ -55,6 +55,38 @@
                 (should (string-match-p "question waiting" (format-mode-line mode-line-format)))))))
       (kill-buffer session))))
 
+(ert-deftest e2e-agent-ui/redrawn-when-its-text-is-scaled ()
+  "Its text scaled (C-x C-+, C-x C-0): drawn again, within a moment, at its
+window's new width, a column short of it (37 columns of zoomed text were
+drawn at 67 until g r)."
+  (let ((agent-ui-display-function #'switch-to-buffer)
+        (agent-ui-default-canvas "e2e-scale"))
+    (delete-other-windows)
+    (agent-ui-show (list :id "t" :type "text"
+                         :text (mapconcat (lambda (i) (format "word%d" i)) (number-sequence 1 60) " ")))
+    (let* ((canvas (agent-ui-canvas))
+           (window (get-buffer-window canvas))
+           (drawn-for-it
+            (lambda ()
+              (redisplay t)
+              (with-current-buffer canvas
+                (and (not agent-ui--dirty)
+                     (equal agent-ui--width (1- (window-max-chars-per-line window)))
+                     (cl-every (lambda (line) (<= (string-width line) agent-ui--width))
+                               (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n")))))))
+      (unwind-protect
+          (with-current-buffer canvas
+            (agent-ui--flush)
+            (should (+test-wait-for drawn-for-it 2))
+            (let ((before agent-ui--width))
+              (text-scale-increase 3)
+              (should (+test-wait-for drawn-for-it 0.5))
+              (should (< agent-ui--width before))
+              (text-scale-set 0)
+              (should (+test-wait-for drawn-for-it 0.5))
+              (should (= agent-ui--width before))))
+        (kill-buffer canvas)))))
+
 (defun +test-e2e-aui--borders-in-line (canvas)
   "CANVAS's borders at their columns' pixels, its lines a line high, as its
 window shows them; how many borders."

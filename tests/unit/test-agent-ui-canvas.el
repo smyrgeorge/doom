@@ -381,6 +381,30 @@ size change with the same width in columns but other cells too."
         (with-current-buffer canvas
           (should (equal agent-ui--cell (list (frame-char-width) (frame-char-height)))))))))
 
+(ert-deftest agent-ui-canvas/redrawn-when-its-text-is-scaled ()
+  "Its text scaled (C-x C-+): drawn again at its window's new width, for its
+cells as scaled (no window size changed: drawn for the old ones until g r)."
+  (+test-auc
+    (with-current-buffer canvas (should (memq #'agent-ui--text-scaled text-scale-mode-hook)))
+    (save-window-excursion
+      (delete-other-windows)
+      (switch-to-buffer canvas)
+      (agent-ui-show '(:id "a" :type "meter" :wide t))
+      (agent-ui-canvas-redraw)
+      (let ((columns (window-max-chars-per-line)))
+        (should (equal (+test-auc-text) (format "0/10 w%d\n\n" (1- columns))))
+        ;; As a scaled text's window says.
+        (cl-letf (((symbol-function 'window-max-chars-per-line) (lambda (&rest _) 38))
+                  ((symbol-function 'window-font-width) (lambda (&rest _) 14)))
+          (with-current-buffer canvas (text-scale-increase 3))
+          (with-current-buffer canvas (should agent-ui--dirty))
+          (+test-auc-flush)
+          (should (equal (+test-auc-text) "0/10 w37\n\n"))
+          (with-current-buffer canvas (should (equal (car agent-ui--cell) 14))))
+        (with-current-buffer canvas (text-scale-set 0))
+        (+test-auc-flush)
+        (should (equal (+test-auc-text) (format "0/10 w%d\n\n" (1- columns))))))))
+
 (ert-deftest agent-ui-canvas/redrawn-by-its-timer ()
   (+test-auc
     (let ((agent-ui-redraw-delay 0.01))

@@ -108,6 +108,7 @@ data left out: what a panel saved from it keeps)."
               cursor-in-non-selected-windows nil)
   (setq agent-ui--entries (make-hash-table :test #'equal))
   (add-hook 'window-size-change-functions #'agent-ui--size-changed nil t)
+  (add-hook 'text-scale-mode-hook #'agent-ui--text-scaled nil t)
   (add-hook 'kill-buffer-hook #'agent-ui--stop-timers nil t))
 
 (defun agent-ui-canvas-buffer-name (name)
@@ -280,8 +281,9 @@ in no window (room made since)."
               agent-ui-default-width)
      :graphic (display-graphic-p frame)
      :tick agent-ui--tick
-     :char-width (frame-char-width frame)
-     :line-height (frame-char-height frame)
+     ;; Its cells as its window shows them: scaled with its text (C-x C-+).
+     :char-width (if window (window-font-width window) (frame-char-width frame))
+     :line-height (if window (window-font-height window) (frame-char-height frame))
      ;; Its text's font, as the window shows it: its size and ascent.
      :font-size (car font)
      :font-ascent (cdr font))))
@@ -484,6 +486,13 @@ new width, for the new cells."
                  (not (and (equal agent-ui--width (plist-get ctx :width))
                            (equal agent-ui--cell (agent-ui--cell-size ctx)))))
         (agent-ui--dirty agent-ui--order)))))
+
+(defun agent-ui--text-scaled ()
+  "The canvas's text scaled (C-x C-+, C-x C--): its elements drawn again for
+its new width and cells (no window's size changed: they stayed drawn for the
+old ones until g r)."
+  (dolist (window (get-buffer-window-list (current-buffer) nil t))
+    (agent-ui--size-changed window)))
 
 (defun agent-ui--font-changed ()
   "A frame's font changed (its size: Doom's font size commands,
