@@ -300,6 +300,28 @@ the temporary folder)."
         (kill-buffer canvas)
         (should-not (cl-some #'file-exists-p logs))))))
 
+(ert-deftest agent-ui-source/late-output-of-a-stopped-source-ignored ()
+  "A command's output and end read after its source stopped (deleting
+another process reads what an exited one left: its log was written again,
+on Linux, once its canvas was killed): its log not made again, the
+element's next source neither fed nor told it ended."
+  (+test-ausrc
+    (agent-ui-show '(:id "b" :type "text" :text "" :source (:command "echo first" :tail 1)))
+    (let* ((first (with-current-buffer canvas (gethash "b" agent-ui-source--states)))
+           (process (agent-ui-source--state-process first))
+           (log (agent-ui-source--state-log first)))
+      (+test-ausrc-ended "b")
+      ;; Shown again: its first source stopped, its log deleted.
+      (agent-ui-show '(:id "b" :type "text" :text "" :source (:command "sleep 30" :tail 1)))
+      (should-not (file-exists-p log))
+      ;; The first command's output and end, read late.
+      (funcall (process-filter process) process "late\n")
+      (funcall (process-sentinel process) process "finished\n")
+      (should-not (file-exists-p log))
+      (should-not (string-match-p "late" (+test-ausrc-text)))
+      (should (eq (plist-get (agent-ui-source-status "b") :running) t))
+      (should-not (plist-get (agent-ui-source-status "b") :exit)))))
+
 ;; ====== THROUGH THE COMMAND LINE ======
 
 (ert-deftest agent-ui-source/in-a-request ()

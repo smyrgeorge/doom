@@ -530,6 +530,19 @@ hasn't (the config falls back there: DocView, the file, eww)."
 (defun +test--stderr (text)
   (princ text #'external-debugging-output))
 
+(defconst +test-e2e-frame-size '(142 . 50)
+  "The end-to-end tests' frame, (COLUMNS . LINES): the same on every system.
+In pixels (1000×700) it was 142×50 with macOS's font (Menlo, 7×14) but
+111×38 with Linux's (DejaVu Sans Mono, 9×18): what fits a pane differed.")
+
+(defun +test-e2e-frame-reset ()
+  "The frame at `+test-e2e-frame-size', once it is (on X, at the next
+redisplay)."
+  (set-frame-size nil (car +test-e2e-frame-size) (cdr +test-e2e-frame-size))
+  (+test-wait-for (lambda () (and (= (frame-width) (car +test-e2e-frame-size))
+                                  (= (frame-height) (cdr +test-e2e-frame-size))))
+                  5))
+
 (defun +test-e2e-run ()
   "Run this GUI Emacs's tests once it's up, report them on stderr (ERT's batch
 report), and exit with their status."
@@ -544,7 +557,7 @@ report), and exit with their status."
      ;; it on screen, focused (to watch the tests).
      (set-frame-parameter nil 'z-group 'above)
      (set-frame-parameter nil 'fullscreen nil) ; config/window.el maximizes
-     (set-frame-size nil 1000 700 t)
+     (+test-e2e-frame-reset)
      (if (equal (getenv "E2E_WINDOW") "front")
          (progn (set-frame-position nil 60 60)
                 (select-frame-set-input-focus (selected-frame)))

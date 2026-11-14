@@ -394,11 +394,13 @@ page is as wide."
       (should (> (+test-pdf--number "document.getElementById('viewerContainer').clientWidth" right) 150)))))
 
 (ert-deftest e2e-pdf/zooming-out-a-narrow-pane-s-fit-never-zooms-in ()
-  "Fit width in a 25-column pane is under PDF.js's 25% minimum: zooming
+  "Fit width in a pane 175 px wide is under PDF.js's 25% minimum: zooming
 out (keys, a pinch) leaves it; zooming in still stops at the maximum."
   (+test-pdf
     (+test-pdf--open +test-pdf--book)
-    (+test-pdf--narrow 25)
+    ;; 25 columns of macOS's 7 px font (19.5%), 19 of Linux's 9 px: 25
+    ;; columns there fit the page at 25.6%, over the minimum.
+    (+test-pdf--narrow (/ 175 (frame-char-width)))
     (+my/pdf-fit-width)
     (let ((scale (lambda () (+test-pdf--number "pdfx.viewer.currentScale")))
           (page "document.querySelector('.pdfViewer .page').getBoundingClientRect().width"))

@@ -292,9 +292,18 @@ failed patch (a progress bar's own if none)."
                              :canvas canvas)
           (error (setf (agent-ui-source--state-error state) (agent-ui-error-message err))))))))
 
+(defun agent-ui-source--current-p (canvas id state)
+  "Non-nil while STATE is element ID's source in CANVAS: not stopped, not
+started again since."
+  (eq (agent-ui-source--state canvas id) state))
+
 (defun agent-ui-source--run (canvas id state command &optional on-exit)
   "Run COMMAND for element ID's STATE (in its dir), its output fed (and
-logged), ON-EXIT called with its exit code."
+logged), ON-EXIT called with its exit code; neither once STATE stopped.
+Output can come late: an exited command's last output is read when any
+process is deleted (stopping another source), after its own source
+stopped; it would have written its log again, once deleted, or fed the
+element's next source."
   (let* ((default-directory (or (agent-ui-source--state-dir state) default-directory))
          (process
           (make-process
@@ -303,11 +312,14 @@ logged), ON-EXIT called with its exit code."
            :connection-type 'pipe :noquery t
            :coding 'utf-8
            :filter (lambda (_process output)
-                     (agent-ui-source--log output (agent-ui-source--state-log state))
-                     (agent-ui-source--feed canvas id output))
+                     (when (agent-ui-source--current-p canvas id state)
+                       (agent-ui-source--log output (agent-ui-source--state-log state))
+                       (agent-ui-source--feed canvas id output)))
            :sentinel (lambda (process _event)
-                       (when (memq (process-status process) '(exit signal))
-                         (when on-exit (funcall on-exit (process-exit-status process))))))))
+                       (when (and on-exit
+                                  (memq (process-status process) '(exit signal))
+                                  (agent-ui-source--current-p canvas id state))
+                         (funcall on-exit (process-exit-status process)))))))
     (setf (agent-ui-source--state-process state) process)
     process))
 

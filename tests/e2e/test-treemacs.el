@@ -308,7 +308,7 @@ again; panes split beside it leave it."
                 (treemacs-add-and-display-current-project-exclusively)))
             (+test-sleep 0.3)
             (should (= (window-total-width (+test-treemacs--window)) 40))))
-      (set-frame-size nil 1000 700 t))))
+      (+test-e2e-frame-reset))))
 
 ;; ====== STICKY TITLE ======
 
