@@ -9,9 +9,10 @@
 ;;   avatar and name: a turn's answer (its first lines; RET opens its pane),
 ;;   an issue filed, claimed or closed by an agent (from its bd commands), an
 ;;   agent joining, going home, started again, renamed, leaving, stuck, a hand
-;;   raised, your messages and where they went. At its end it follows new
-;;   lines; scrolled up, it stays. F filters it: all, hands only, the selected
-;;   agent's.
+;;   raised, your messages and where they went. Its cursor on its last line,
+;;   it follows new lines; elsewhere (scrolled up, a line clicked), it stays
+;;   where it is, its cursor on the same line. F filters it: all, hands only,
+;;   the selected agent's.
 ;; - the compose line below it, a window of its own (it never scrolls away):
 ;;   "#ada fix the test" to ada, "#builders ..." to the first free builder (else
 ;;   queued for the first), "#all ..." to everyone, no # to the selected agent
@@ -66,6 +67,7 @@ more; at the bottom in narrower ones), or `bottom'."
 (defvar-local agent-workspace--room-entries nil "In the feed: its entries, the oldest first.")
 (defvar-local agent-workspace--room-filter nil "In the feed: nil (all), `hands', or an agent's name.")
 (defvar-local agent-workspace--room-folded nil "In the feed: the threads folded (their ids).")
+(defvar-local agent-workspace--room-drawn nil "In the feed: its entries when it was last drawn.")
 (defvar-local agent-workspace--compose-history nil "In the compose line: what you sent, the latest first.")
 (defvar-local agent-workspace--compose-index -1 "In the compose line: where M-p / M-n are in it.")
 (defvar-local agent-workspace--compose-prompt nil "In the compose line: its prompt, an overlay.")
@@ -247,15 +249,21 @@ its thread folded, how many lines of it it stands for."
   (concat text (make-string (max 0 (- width (string-width text))) ?\s)))
 
 (defun agent-workspace--room-redraw (project)
-  "PROJECT's room's feed drawn again: following its end where it was at its
-end, kept where it was scrolled up."
+  "PROJECT's room's feed drawn again. Each window showing it: its cursor on
+the last line, it follows the end; else it stays where it was, its start
+and its cursor on the same lines, kept by their entries (positions shift:
+the oldest entries dropped, a thread folded, a hand's buttons gone)."
   (when-let* ((buffer (seq-find (lambda (buffer) (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-room-mode))
                                 (agent-workspace--app-buffers project))))
     (with-current-buffer buffer
       (let* ((windows (get-buffer-window-list buffer nil t))
-             (following (or (null windows)
-                            (seq-some (lambda (window) (>= (window-point window) (1- (point-max)))) windows)))
-             (starts (mapcar (lambda (window) (cons window (window-start window))) windows))
+             (places (mapcar (lambda (window)
+                               (list window
+                                     (agent-workspace--room-last-line-p (window-point window))
+                                     (agent-workspace--room-mark (window-start window))
+                                     (agent-workspace--room-mark (window-point window))))
+                             windows))
+             (drawn (make-hash-table :test #'eq))
              (inhibit-read-only t)
              (width (if windows (window-body-width (car windows)) agent-workspace-room-width)))
         (erase-buffer)
@@ -263,7 +271,8 @@ end, kept where it was scrolled up."
           (dolist (entry agent-workspace--room-entries)
             (when (agent-workspace--room-shown-p entry agent-workspace--room-filter)
               (let* ((thread (plist-get entry :thread))
-                     (folded (and thread (member thread agent-workspace--room-folded))))
+                     (folded (and thread (member thread agent-workspace--room-folded)))
+                     (start (point)))
                 ;; A folded thread: its first line only, saying how many more.
                 (unless (and folded (member thread seen))
                   (when thread (push thread seen))
@@ -272,15 +281,53 @@ end, kept where it was scrolled up."
                                  (and folded
                                       (1- (seq-count (lambda (other) (equal (plist-get other :thread) thread))
                                                      agent-workspace--room-entries)))))
-                    (insert line "\n")))))))
-        (if following
-            (dolist (window windows)
-              (set-window-point window (point-max))
-              (with-selected-window window
-                (goto-char (point-max))
-                (recenter -1)))
-          (pcase-dolist (`(,window . ,start) starts)
-            (set-window-start window (min start (point-max)) t)))))))
+                    (insert line "\n"))
+                  ;; Each of its lines carries it: where a window is, kept by it.
+                  (put-text-property start (point) 'agent-workspace-entry entry)
+                  (puthash entry (cons start (point)) drawn))))))
+        (setq agent-workspace--room-drawn agent-workspace--room-entries)
+        (pcase-dolist (`(,window ,following ,start ,point) places)
+          (if following
+              (progn
+                (set-window-point window (point-max))
+                (with-selected-window window
+                  (goto-char (point-max))
+                  (recenter -1)))
+            ;; Both put back, its start forced: redisplay has no reason to
+            ;; move it (its cursor is on the screen).
+            (set-window-point window (agent-workspace--room-find point drawn))
+            (set-window-start window (agent-workspace--room-find start drawn))))))))
+
+(defun agent-workspace--room-last-line-p (position)
+  "Non-nil if POSITION is on the feed's last line (or after it): there, a
+window follows new lines."
+  (>= position (save-excursion (goto-char (max (point-min) (1- (point-max))))
+                               (line-beginning-position))))
+
+(defun agent-workspace--room-mark (position)
+  "POSITION in the feed, by its entry: (ENTRY OFFSET . LATER), OFFSET in
+ENTRY's lines, LATER the entries after it when it was drawn; nil, none there
+\(the end)."
+  (when-let* ((entry (get-text-property position 'agent-workspace-entry)))
+    (let ((start (if (and (> position (point-min))
+                          (eq (get-text-property (1- position) 'agent-workspace-entry) entry))
+                     (previous-single-property-change position 'agent-workspace-entry nil (point-min))
+                   position)))
+      (cl-list* entry (- position start) (cdr (memq entry agent-workspace--room-drawn))))))
+
+(defun agent-workspace--room-find (mark drawn)
+  "Where MARK (`agent-workspace--room-mark') is in the feed drawn again,
+DRAWN its entries' places (ENTRY to (START . END)): the same offset in its
+entry (its lines shorter now, the start of its last one); its entry gone,
+the nearest one after it; none, the end."
+  (pcase-let ((`(,entry ,offset . ,later) mark))
+    (if-let* ((place (and entry (gethash entry drawn))))
+        (let ((at (+ (car place) offset)))
+          (if (< at (cdr place))
+              at
+            (save-excursion (goto-char (1- (cdr place))) (line-beginning-position))))
+      (or (seq-some (lambda (other) (car (gethash other drawn))) later)
+          (point-max)))))
 
 (defun agent-workspace--room-header ()
   "The feed's header line: ROOM, its filter."

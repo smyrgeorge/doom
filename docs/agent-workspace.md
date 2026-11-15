@@ -103,9 +103,10 @@ new crews.
 One chat for the whole crew: a feed of what matters, and below it a compose line that stays in view.
 
 - **The feed** shows each agent's turns (their answers' first lines), the issues it files, claims and closes, the
-  crew's changes (an agent joining, going home, started again, stuck), raised hands, and your messages. At its end it
-  follows new lines; scrolled up, it stays. `RET` on a line opens its agent's pane. `F` shows raised hands only, then
-  the selected agent's only, then all.
+  crew's changes (an agent joining, going home, started again, stuck), raised hands, and your messages. With the cursor
+  on its last line it follows new lines; anywhere else (scrolled up, a line clicked) it stays put, the cursor on the
+  same line. `RET` on a line opens its agent's pane. `F` shows raised hands only, then the selected agent's only, then
+  all.
 - **The compose line**: `#ada fix the test` goes to ada, `#builders ...` to the first free builder, `#all ...` to
   everyone, and a message without `#` to the selected agent (`→ ada` before it). An agent that's working gets it
   after its turn, and the feed says so. Typing `#ada ` selects ada.

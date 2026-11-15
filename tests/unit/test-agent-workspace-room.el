@@ -157,6 +157,177 @@ first lines, on one."
         (agent-workspace-room-filter)
         (should (string-search "ada" (+test-awr2--feed project)))))))
 
+;; ====== WHERE IT STAYS ======
+
+(defun +test-awr2--notes (project from to)
+  "Notes FROM to TO posted in PROJECT's room: \"note 01\"..."
+  (cl-loop for i from from to to
+           do (agent-workspace-room-post project :kind 'note :text (format "note %02d" i))))
+
+(defun +test-awr2--window (project)
+  "PROJECT's feed's window."
+  (get-buffer-window (agent-workspace--room-buffer project)))
+
+(defun +test-awr2--put (window what text &optional offset)
+  "WINDOW's WHAT (`start' or `point') at TEXT's line in it (OFFSET in it),
+or at TEXT itself (OFFSET `at')."
+  (with-current-buffer (window-buffer window)
+    (save-excursion
+      (goto-char (point-min))
+      (should (search-forward text nil t))
+      (let ((at (if (eq offset 'at) (match-beginning 0) (+ (line-beginning-position) (or offset 0)))))
+        (if (eq what 'start) (set-window-start window at) (set-window-point window at))))))
+
+(defun +test-awr2--line (window what)
+  "The line at WINDOW's WHAT (`start' or `point'), and how far in it is:
+\(TEXT . COLUMN)."
+  (with-current-buffer (window-buffer window)
+    (save-excursion
+      (goto-char (if (eq what 'start) (window-start window) (window-point window)))
+      (cons (buffer-substring-no-properties (line-beginning-position) (line-end-position))
+            (- (point) (line-beginning-position))))))
+
+(defun +test-awr2--at-end-p (window)
+  "Non-nil if WINDOW's point is at its buffer's end."
+  (= (window-point window) (with-current-buffer (window-buffer window) (point-max))))
+
+(ert-deftest agent-workspace-room/follows-from-its-last-line ()
+  "Its cursor on the last line (at its end or not): a new line keeps it at
+the end; moved off it, it stays; back on the last line, it follows again."
+  (+test-awr2 "follow"
+    (agent-workspace-create :role "builder" :name "ada")
+    (+test-awr2--notes project 1 60)
+    (let ((window (+test-awr2--window project)))
+      (should (+test-awr2--at-end-p window))
+      (should (> (window-start window) 1))
+      ;; On the last line, at its start: it follows.
+      (+test-awr2--put window 'point "note 60")
+      (+test-awr2--notes project 61 61)
+      (should (+test-awr2--at-end-p window))
+      ;; Off it: it stays.
+      (+test-awr2--put window 'point "note 30" 4)
+      (+test-awr2--notes project 62 62)
+      (should (= (cdr (+test-awr2--line window 'point)) 4))
+      (should (string-search "note 30" (car (+test-awr2--line window 'point))))
+      ;; Back on the last line: it follows again.
+      (+test-awr2--put window 'point "note 62" 3)
+      (+test-awr2--notes project 63 63)
+      (should (+test-awr2--at-end-p window))
+      (should (string-suffix-p "note 63\n" (+test-awr2--feed project))))))
+
+(ert-deftest agent-workspace-room/stays-where-it-is ()
+  "Its cursor on an earlier line (a line clicked, scrolled up): a new line
+leaves its window where it was, its start and its cursor on the same lines,
+never at the top; the same with the oldest entries dropped (their positions
+shifted), its window selected or not; its start's entry dropped, the
+nearest one after it."
+  (+test-awr2 "stay"
+    (agent-workspace-create :role "builder" :name "ada")
+    (+test-awr2--notes project 1 60)
+    (let* ((window (+test-awr2--window project))
+           (buffer (window-buffer window))
+           (kept (lambda () (length (buffer-local-value 'agent-workspace--room-entries buffer)))))
+      (+test-awr2--put window 'start "note 20")
+      (+test-awr2--put window 'point "note 25" 15)
+      (+test-awr2--notes project 61 61)
+      (should (string-search "note 20" (car (+test-awr2--line window 'start))))
+      (should (= (cdr (+test-awr2--line window 'start)) 0))
+      (should (string-search "note 25" (car (+test-awr2--line window 'point))))
+      (should (= (cdr (+test-awr2--line window 'point)) 15))
+      ;; The oldest dropped: positions shift, it stays on its lines.
+      (let ((agent-workspace-room-kept (funcall kept))
+            (start (window-start window)))
+        (+test-awr2--notes project 62 63)
+        (should (< (window-start window) start))
+        (should (string-search "note 20" (car (+test-awr2--line window 'start))))
+        (should (string-search "note 25" (car (+test-awr2--line window 'point))))
+        (should (= (cdr (+test-awr2--line window 'point)) 15)))
+      ;; Its window selected (the cursor in the feed): the same.
+      (with-selected-window window
+        (+test-awr2--notes project 64 64)
+        (should (string-search "note 25" (car (+test-awr2--line window 'point))))
+        (should (string-search "note 25" (buffer-substring (line-beginning-position) (line-end-position)))))
+      (should (string-search "note 20" (car (+test-awr2--line window 'start))))
+      (should (string-search "note 25" (car (+test-awr2--line window 'point))))
+      ;; Its start's entry dropped (the oldest): the nearest one after it.
+      (set-window-start window 1)
+      (let ((first (car (+test-awr2--line window 'start)))
+            (agent-workspace-room-kept (funcall kept)))
+        (+test-awr2--notes project 65 65)
+        (should (= (window-start window) 1))
+        (should-not (equal (car (+test-awr2--line window 'start)) first))
+        (should (string-search "note 25" (car (+test-awr2--line window 'point))))))))
+
+(ert-deftest agent-workspace-room/each-window-on-its-own ()
+  "Two windows on the feed: the one at the end follows, the other stays."
+  (+test-awr2 "windows"
+    (agent-workspace-create :role "builder" :name "ada")
+    (+test-awr2--notes project 1 60)
+    (let* ((window (+test-awr2--window project))
+           (other (split-window window nil 'below)))
+      (unwind-protect
+          (progn
+            (set-window-point window (with-current-buffer (window-buffer window) (point-max)))
+            (+test-awr2--put other 'start "note 10")
+            (+test-awr2--put other 'point "note 12")
+            (+test-awr2--notes project 61 61)
+            (should (+test-awr2--at-end-p window))
+            (should (string-search "note 10" (car (+test-awr2--line other 'start))))
+            (should (string-search "note 12" (car (+test-awr2--line other 'point)))))
+        (delete-window other)))))
+
+(ert-deftest agent-workspace-room/stays-on-a-hand-s-buttons ()
+  "Its cursor on a hand's button: a new line leaves it there; the hand
+answered, its buttons gone, the cursor on the hand's line, not at the top."
+  (+test-awr2 "buttons"
+    (let ((ada (agent-workspace-create :role "builder" :name "ada")))
+      (cl-letf (((symbol-function 'agent-workspace-hand-options)
+                 (lambda (agent) (and (eq (agent-workspace-agent-state agent) 'hand)
+                                      '(("Yes" . ignore) ("No" . ignore))))))
+        (+test-awr2--notes project 1 20)
+        (agent-workspace--raise-hand ada '(:kind question :title "restore or rebuild?"))
+        (+test-awr2--notes project 21 60)
+        (let ((window (+test-awr2--window project)))
+          (+test-awr2--put window 'start "note 10")
+          (+test-awr2--put window 'point "[No]" 'at)
+          (+test-awr2--notes project 61 61)
+          (should (string-search "note 10" (car (+test-awr2--line window 'start))))
+          (with-current-buffer (window-buffer window)
+            (should (equal (buffer-substring-no-properties (window-point window) (+ (window-point window) 4))
+                           "[No]")))
+          ;; Answered elsewhere: its buttons go.
+          (agent-workspace--set-state ada 'desk)
+          (should-not (string-search "[No]" (+test-awr2--feed project)))
+          (should (string-search "note 10" (car (+test-awr2--line window 'start))))
+          (should (string-search "restore or rebuild?" (car (+test-awr2--line window 'point)))))))))
+
+(ert-deftest agent-workspace-room/stays-when-a-thread-folds ()
+  "A thread folded, then unfolded: the window stays on its lines; its
+start on a line folded away, on the nearest one after it."
+  (+test-awr2 "fold"
+    (agent-workspace-create :role "builder" :name "ada")
+    (+test-awr2--notes project 1 10)
+    (dotimes (i 10)
+      (agent-workspace-room-post project :kind 'note :thread "t1" :text (format "thread %02d" i)))
+    (+test-awr2--notes project 11 60)
+    (let* ((window (+test-awr2--window project))
+           (buffer (window-buffer window)))
+      (+test-awr2--put window 'start "thread 05")
+      (+test-awr2--put window 'point "note 30" 12)
+      (with-current-buffer buffer
+        (setq agent-workspace--room-folded '("t1"))
+        (agent-workspace--room-redraw project))
+      (should (string-search "9 more" (+test-awr2--feed project)))
+      (should (string-search "note 11" (car (+test-awr2--line window 'start))))
+      (should (= (cdr (+test-awr2--line window 'point)) 12))
+      (should (string-search "note 30" (car (+test-awr2--line window 'point))))
+      (+test-awr2--put window 'start "note 05")
+      (with-current-buffer buffer
+        (setq agent-workspace--room-folded nil)
+        (agent-workspace--room-redraw project))
+      (should (string-search "note 05" (car (+test-awr2--line window 'start))))
+      (should (string-search "note 30" (car (+test-awr2--line window 'point)))))))
+
 ;; ====== THE COMPOSE LINE ======
 
 (ert-deftest agent-workspace-room/who-a-message-goes-to ()
