@@ -413,10 +413,43 @@ loads again, its title as it was once it's done (doom-hgl)."
       (should (+test-wait-for (lambda () (not (equal (+test-aup-title canvas "slow") first))) 2)))
     (should (+test-wait-for (lambda () (memq 'slow +test-aup-calls)) 3))
     (should (equal (plist-get (agent-ui-get "slow" :canvas canvas) :text) "slow done"))
-    ;; Loading again: its data kept meanwhile.
-    (should (+test-wait-for (lambda () (string-match-p "⟳" (or (+test-aup-title canvas "slow") ""))) 1))
+    ;; Loading again (said once it's taken a moment): its data kept meanwhile.
+    (should (+test-wait-for (lambda () (string-match-p "⟳" (or (+test-aup-title canvas "slow") ""))) 2))
     (should (equal (plist-get (agent-ui-get "slow" :canvas canvas) :text) "slow done"))
     (should-not (+test-aup-status canvas))))
+
+(ert-deftest agent-ui-panels/a-quick-refresh-says-no-loading ()
+  "A query's first run, its element empty: its title says it's loading at
+once. Refreshing it (its data shown): only once it's taken
+`agent-ui-panel-loading-delay', its data kept meanwhile; a quick refresh,
+never: its title didn't flicker \"⟳ loading, 0s\" at each one (doom-ht6.32)."
+  (should (= (default-value 'agent-ui-panel-loading-delay) 0.5))
+  (+test-aup-open "refreshed"
+    (should (string-match-p "\\`Orders  ⟳ loading, 0s\\'" (+test-aup-title canvas "t")))
+    (should (+test-wait-for (lambda () (memq 'done +test-aup-calls)) 3))
+    (should (+test-wait-for (lambda () (equal (+test-aup-title canvas "t") "Orders")) 1))
+    ;; Quicker than the delay (a long one here: a busy machine runs even a
+    ;; quick query slowly): its title as it was, all along.
+    (let ((agent-ui-panel-loading-delay 4)
+          (titles nil))
+      (agent-ui-panels--fetch panel)
+      (should (gethash "t" (agent-ui-panels--running panel)))
+      (should (+test-wait-for (lambda ()
+                                (push (+test-aup-title canvas "t") titles)
+                                (= (cl-count 'done +test-aup-calls) 2))
+                              3))
+      (push (+test-aup-title canvas "t") titles)
+      (should (equal (delete-dups titles) '("Orders"))))
+    ;; Slow (2 s): said once it's taken a moment, its data kept.
+    (with-temp-file (expand-file-name "slow" root))
+    (let ((start (float-time)))
+      (agent-ui-panels--fetch panel)
+      (should (equal (+test-aup-title canvas "t") "Orders"))
+      (should (+test-wait-for (lambda () (string-match-p "⟳ loading" (+test-aup-title canvas "t"))) 3))
+      (should (>= (- (float-time) start) agent-ui-panel-loading-delay))
+      (should (equal (plist-get (agent-ui-get "t" :canvas canvas) :text) "orders")))
+    (should (+test-wait-for (lambda () (equal (+test-aup-title canvas "t") "Orders")) 5))
+    (should (= (cl-count 'done +test-aup-calls) 3))))
 
 (ert-deftest agent-ui-panels/a-query-timed-out ()
   "TIMEOUT: killed after it, said on its element."

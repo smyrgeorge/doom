@@ -49,10 +49,11 @@ Its code fills it with:
   Killed when the panel closes; with `:timeout`, after so many seconds.
 
 **Each query on its own.** Give each `agent-ui-panel-run` the `:element` it fills: while it runs, that element's
-title says it's loading and for how long (`⟳ loading, 1m 12s`), its last data still shown; its failure (its exit,
-what it said; a timeout) is said on its title, until it goes well. A query still running isn't started again by the
-next fetch; the others are, each at its own pace: a slow one never holds the others. Several queries in one panel:
-one `agent-ui-panel-run` each, in the same `:fetch`. Without `:element`, its failure is said under the panel.
+title says it's loading and for how long (`⟳ loading, 1m 12s`; a refresh, once it's taken half a second), its last
+data still shown; its failure (its exit, what it said; a timeout) is said on its title, until it goes well. A query
+still running isn't started again by the next fetch; the others are, each at its own pace: a slow one never holds the
+others. Several queries in one panel: one `agent-ui-panel-run` each, in the same `:fetch`. Without `:element`, its
+failure is said under the panel.
 
 It's fetched only while it's shown (hidden, it waits; shown again, it's fetched at once). After you edit its file,
 the user presses `gR` on it to read it again.

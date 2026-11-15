@@ -237,8 +237,10 @@ its fetches' timer, its commands running, its last error."
   ;; . ELEMENT) ...: said on ELEMENT's title, else on its line); the queries
   ;; running, by key (:process :start :element); the titles of its elements
   ;; marked (loading, failed), as they were ((ID . TITLE) ...); the timer
-  ;; saying how long they've been loading.
-  stale errors (running (make-hash-table :test #'equal)) titles ticker)
+  ;; saying how long they've been loading; the queries that ended once, by
+  ;; key (their element shows something: a refresh is said loading late).
+  stale errors (running (make-hash-table :test #'equal)) titles ticker
+  (loaded (make-hash-table :test #'equal)))
 
 (defvar-local agent-ui-panels--state nil
   "In a project panel's canvas: the panel (an `agent-ui-panels--state').")
@@ -505,17 +507,26 @@ element, one line each), its elements' titles (loading, how long; failed)."
       (agent-ui-panels--status panel (and lines (string-join lines "\n"))))
     (agent-ui-panels--mark panel)))
 
+(defcustom agent-ui-panel-loading-delay 0.5
+  "Seconds a query refreshing its element (which shows its last data, or
+its error) runs before the element's title says it's loading: a quick
+refresh doesn't flicker it. Its first one, nothing shown yet: at once."
+  :type 'number :group 'agent-ui)
+
 (defun agent-ui-panels--mark (panel)
-  "PANEL's elements' titles: one loading, \"⟳ loading, 1m 12s\" after it;
-one failed, its error; the others as they were."
+  "PANEL's elements' titles: one loading, \"⟳ loading, 1m 12s\" after it
+\(a refresh: once it's taken `agent-ui-panel-loading-delay'); one failed,
+its error; the others as they were."
   (let ((canvas (agent-ui-panels--canvas panel))
         (now (float-time))
         (marks nil))
-    (maphash (lambda (_key run)
+    (maphash (lambda (key run)
                (when-let* ((id (plist-get run :element)))
                  (let ((took (- now (plist-get run :start))))
-                   (unless (and (assoc id marks) (< took (cdr (assoc id marks))))
-                     (setf (alist-get id marks nil nil #'equal) took)))))
+                   (when (or (>= took agent-ui-panel-loading-delay)
+                             (not (gethash key (agent-ui-panels--loaded panel))))
+                     (unless (and (assoc id marks) (< took (cdr (assoc id marks))))
+                       (setf (alist-get id marks nil nil #'equal) took))))))
              (agent-ui-panels--running panel))
     (setq marks (mapcar (lambda (m) (cons (car m) (concat "⟳ loading, " (agent-ui-format-duration (cdr m)))))
                         marks))
@@ -650,6 +661,8 @@ a fetch missed while it was hidden, done."
     (when (process-live-p process) (delete-process process)))
   (setf (agent-ui-panels--processes panel) nil)
   (clrhash (agent-ui-panels--running panel))
+  ;; Its elements drawn anew next (read again, opened again): empty.
+  (clrhash (agent-ui-panels--loaded panel))
   (when (agent-ui-panels--script panel)
     (agent-ui-panels--call panel :stop)
     (setf (agent-ui-panels--script panel) nil)))
@@ -727,11 +740,12 @@ lists, null and false nil) when it reads so; else TEXT."
 in PANEL's root, without waiting, however long it takes: CALLBACK then
 called with its output (see `agent-ui-panels--output'), if it ends well
 \(exit 0); else its error is said. ELEMENT: the id of the element it fills,
-its title saying it's loading (and how long) meanwhile, its data kept, its
-error said on it. A query (its ELEMENT, else its COMMAND) still running
-isn't started again: nil then; the others are, each on its own. TIMEOUT:
-seconds, it killed after them (an error). Killed when PANEL closes.
-Returns its process."
+its title saying it's loading (and how long) meanwhile (refreshing it: once
+it's taken `agent-ui-panel-loading-delay'), its data kept, its error said
+on it. A query (its ELEMENT, else its COMMAND) still running isn't started
+again: nil then; the others are, each on its own. TIMEOUT: seconds, it
+killed after them (an error). Killed when PANEL closes. Returns its
+process."
   (let ((key (or element (if (stringp command) command (string-join command " "))))
         (running (agent-ui-panels--running panel)))
     (unless (gethash key running)
@@ -750,7 +764,8 @@ Returns its process."
                  (unless (process-live-p process)
                    (setf (agent-ui-panels--processes panel) (delq process (agent-ui-panels--processes panel)))
                    (when (eq (plist-get (gethash key running) :process) process)
-                     (remhash key running))
+                     (remhash key running)
+                     (puthash key t (agent-ui-panels--loaded panel)))
                    (let ((text (with-current-buffer out (buffer-string)))
                          (errors (string-trim (with-current-buffer err (buffer-string))))
                          (code (process-exit-status process)))
@@ -788,7 +803,13 @@ Returns its process."
                                           (setq timed-out t)
                                           (delete-process process)))))
         (when element
-          (agent-ui-panels--mark panel)
+          (if (gethash key (agent-ui-panels--loaded panel))
+              ;; A refresh: said once it's taken a moment.
+              (run-with-timer agent-ui-panel-loading-delay nil
+                              (lambda ()
+                                (when (eq (plist-get (gethash key running) :process) process)
+                                  (agent-ui-panels--tick panel))))
+            (agent-ui-panels--mark panel))
           (unless (timerp (agent-ui-panels--ticker panel))
             (setf (agent-ui-panels--ticker panel)
                   (run-with-timer 1 1 #'agent-ui-panels--tick panel))))

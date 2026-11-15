@@ -448,7 +448,8 @@ given to a function once it ends well (parsed JSON when it reads so), killed whe
 
 While it's hidden (another tab in its pane, another workspace), it isn't fetched; shown again, it's fetched at once.
 Its queries each load on their own: one given the `:element` it fills has that element's title say it's loading
-and for how long (`⟳ loading, 1m 12s`) while its last data stays, and its failure said there; a query still running
+and for how long (`⟳ loading, 1m 12s`) while its last data stays (a refresh: once it's taken half a second,
+`agent-ui-panel-loading-delay`, so a quick one doesn't flicker it), and its failure said there; a query still running
 isn't started again, the others go on at their pace (a slow one never holds the others). What goes wrong otherwise is
 said on it, a line in the error face under it, each until it goes well; a fetch that takes long itself (over `agent-ui-panel-slow`, 0.1 s), Emacs frozen
 meanwhile, too. `gR` reads its file again (edited) and runs it anew; its file wrong, it's said there and the panel
