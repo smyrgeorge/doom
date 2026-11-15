@@ -478,7 +478,8 @@ changed or not, to queue. Never agent-shell's \"Busy, try later\"."
                        :actions ((:label "Retry" :prompt "Run them again" :submit t)
                                  (:label "Fix" :prompt "Fix the 2 failing tests")))
                      :canvas name)
-      (cl-letf (((symbol-function 'agent-shell--can-insert-into-prompt-p) (lambda (&rest _) (not busy)))
+      (cl-letf (((symbol-function 'shell-maker-busy) (lambda () busy))
+                ((symbol-function 'agent-shell--prompt-input-start) #'ignore)
                 ((symbol-function 'agent-shell-insert)
                  (lambda (&rest _) (if busy (user-error "Busy, try later") (push 'inserted inserted))))
                 ((symbol-function 'agent-shell-prompt-queue)
@@ -499,6 +500,52 @@ changed or not, to queue. Never agent-shell's \"Busy, try later\"."
           (+test-aua-press canvas "⏵ Fix")
           (should (equal inserted '(inserted)))
           (should (= (length queued) 2)))))))
+
+(ert-deftest agent-ui-agent/an-answer-while-the-agent-works-its-prompt-live ()
+  "An Answer pressed while the session's agent works (its turn kept running
+by its sub-agents), its prompt kept live meanwhile (taking text): queued,
+sent once the agent's done, said so. It was sent, agent-shell said \"Busy,
+try later\", the answer neither sent nor queued (doom-nw7). A button putting
+its text into the prompt: there, as the prompt takes it."
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ working" "/tmp/working/"))
+           (name (agent-ui--session-name session))
+           (ask (agent-ui-sub-canvas name "ask"))
+           (agent-ui-focus-questions nil)
+           (agent-ui-close-answered nil)
+           inserted queued said)
+      (agent-ui-show '(:id "ways" :type "compare" :question "Which reads better?"
+                       :options ((:label "A: a loop" :element (:type "text" :text "for x in xs: total += x"))
+                                 (:label "B: sum" :element (:type "text" :text "total = sum(xs)"))))
+                     :canvas ask)
+      (agent-ui-show '(:id "t" :type "text" :text "2 failed"
+                       :actions ((:label "Fix" :prompt "Fix the 2 failing tests")))
+                     :canvas name)
+      (cl-letf (((symbol-function 'shell-maker-busy) #'always)
+                ;; Its prompt kept live: what's typed there goes at its end.
+                ((symbol-function 'agent-shell--prompt-input-start) (lambda () (point-max)))
+                ;; As agent-shell's: nothing sent while its agent works.
+                ((symbol-function 'agent-shell-insert)
+                 (lambda (&rest args)
+                   (when (and (shell-maker-busy)
+                              (or (plist-get args :submit) (not (agent-shell--prompt-input-start))))
+                     (user-error "Busy, try later"))
+                   (push args inserted)))
+                ((symbol-function 'agent-shell-prompt-queue)
+                 (lambda (prompt) (push (list prompt (current-buffer)) queued)))
+                ((symbol-function 'message)
+                 (lambda (format &rest args) (when format (push (apply #'format format args) said)))))
+        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name ask))))
+          (+test-aua-press canvas "( ) B: sum")
+          (+test-aua-press canvas "⏵ Answer"))
+        (should (equal queued (list (list "Answer to compare ways (Which reads better?): B: sum" session))))
+        (should-not inserted)
+        (should (member "Queued: sent once the agent's done" said))
+        (should (equal (plist-get (agent-ui-get "ways" :canvas ask) :answered) "B: sum"))
+        ;; Into the prompt: there, as it takes text.
+        (+test-aua-press (get-buffer (agent-ui-canvas-buffer-name name)) "⏵ Fix")
+        (should (equal inserted (list (list :text "Fix the 2 failing tests" :submit nil :shell-buffer session))))
+        (should (= (length queued) 1))))))
 
 ;; ====== A QUESTION WAITING ======
 

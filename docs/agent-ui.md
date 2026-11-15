@@ -349,9 +349,10 @@ The agent asks on a canvas of its own (`--canvas ask`: `Agent UI: SESSION / ask`
   (`agent-ui-focus-questions-delay`, 1s: what you type in the session isn't taken over by the canvas's keys). Not a
   resumed session's questions coming back.
 - **Answered, it goes:** your answer goes straight to the agent, sent at once (no Enter to press: no question
-  waits in the prompt). Once it's sent, the question leaves its canvas; a canvas left empty is closed, its
-  buffer killed, and the cursor goes back to the session. Beside other elements, they stay. A plan you approved goes
-  too: the agent shows its steps again as an ordinary checklist, ticked as it works.
+  waits in the prompt); while the agent still works (its sub-agents too), queued, sent once it's done. Once it's
+  given, the question leaves its canvas; a canvas left empty is closed, its buffer killed, and the cursor goes back
+  to the session. Beside other elements, they stay. A plan you approved goes too: the agent shows its steps again as
+  an ordinary checklist, ticked as it works.
 
 Both are on; in `config.el`, `(setq agent-ui-focus-questions nil)` keeps the focus where it is, and
 `(setq agent-ui-close-answered nil)` keeps answered questions on their canvas.

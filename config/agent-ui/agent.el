@@ -234,17 +234,20 @@ their schemas: use whichever you like."
 
 ;; ====== ACTIONS ======
 
-;; While the agent works, its prompt may take no text (agent-shell said "Busy,
-;; try later"): a button sending its prompt queues it, sent when the agent's
-;; done (agent-shell's queue); one putting it into the prompt offers it to
+;; While the agent works (its turn kept running by its sub-agents too),
+;; agent-shell sends nothing ("Busy, try later"), though its prompt may still
+;; take text (a prompt kept live meanwhile): a button sending its prompt
+;; queues it, sent when the agent's done (agent-shell's queue); one putting it
+;; into the prompt puts it there if the prompt takes text, else offers it to
 ;; queue, to read and change first, as agent-shell's own commands do then.
-(defun agent-ui--session-busy-p (session)
-  "Whether SESSION's prompt takes no text now (its agent working, no prompt
-kept live meanwhile). Not known (not a shell yet): not busy, agent-shell
-then has its say."
+(defun agent-ui--session-busy-p (session submit)
+  "Whether SESSION can't take a prompt now: one sent (SUBMIT) while its agent
+works; one put into its prompt while that takes no text (its agent working,
+no prompt kept live meanwhile). Not known (not a shell yet): not busy,
+agent-shell then has its say."
   (ignore-errors
     (with-current-buffer session
-      (if (fboundp 'agent-shell--can-insert-into-prompt-p)
+      (if (and (not submit) (fboundp 'agent-shell--can-insert-into-prompt-p))
           (not (agent-shell--can-insert-into-prompt-p :shell-buffer session))
         (and (fboundp 'shell-maker-busy) (shell-maker-busy))))))
 
@@ -266,7 +269,7 @@ of no session: the session working in its project, the latest."
     (unless (fboundp 'agent-shell-insert)
       (user-error "agent-shell isn't loaded"))
     (cond
-     ((not (and (fboundp 'agent-shell-prompt-queue) (agent-ui--session-busy-p session)))
+     ((not (and (fboundp 'agent-shell-prompt-queue) (agent-ui--session-busy-p session submit)))
       (save-current-buffer
         (agent-shell-insert :text prompt :submit submit :shell-buffer session)))
      (submit
