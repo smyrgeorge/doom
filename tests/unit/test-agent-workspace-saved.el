@@ -38,6 +38,7 @@ at once (no wait)."
             (agent-workspace--crews (make-hash-table :test #'equal))
             (agent-workspace--apps (make-hash-table :test #'equal))
             (agent-workspace--crew-timers (make-hash-table :test #'equal))
+            (agent-workspace--crew-closed (make-hash-table :test #'equal))
             (started nil))
        (ignore started)
        (set-frame-size (selected-frame) 160 40)
@@ -145,6 +146,24 @@ that wasn't); a write still to come is done first."
       (should-not (+test-aws2--file project))
       (agent-workspace-close project)
       (should (string-search "ada" (+test-aws2--file project))))))
+
+(ert-deftest agent-workspace-saved/nothing-written-once-closed ()
+  "Closed with its app still open: whatever changes after (an agent
+selected, the minimap hidden) writes nothing, crew.el keeping every agent;
+a new agent made there, a new crew, written again (doom-51z.15)."
+  (+test-aws2 "closed-app-open"
+    (agent-workspace-open t)
+    (agent-workspace-create :role "builder" :name "ada")
+    (agent-workspace-create :role "builder" :name "ken")
+    (let ((text (+test-aws2--file project)))
+      (should (string-search "ken" text))
+      (agent-workspace-close project)
+      (should (agent-workspace--app project))
+      (run-hook-with-args 'agent-workspace-layout-functions project)
+      (agent-workspace-crew-save project)
+      (should (equal (+test-aws2--file project) text)))
+    (agent-workspace-create :role "builder" :name "sam")
+    (should (string-search "sam" (+test-aws2--file project)))))
 
 ;; ====== READ ======
 

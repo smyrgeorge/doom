@@ -36,6 +36,10 @@
 (defvar agent-workspace--crew-timers (make-hash-table :test #'equal)
   "A project's crew.el to write: its timer.")
 
+(defvar agent-workspace--crew-closed (make-hash-table :test #'equal)
+  "The projects whose crew was closed (none made since): crew.el kept as it
+was then, whatever changes in their app after.")
+
 (defvar agent-workspace--crew-loading nil
   "Non-nil while a crew starts from its crew.el: nothing written meanwhile.")
 
@@ -177,14 +181,15 @@ read already), or nil."
 
 (defun agent-workspace-crew-save (&optional project)
   "Write PROJECT's crew.el now (default: the current project's), if what it
-holds changed. Not for a crew closed (neither running nor its app open):
-crew.el keeps it."
+holds changed. Not for a crew closed (its app open or not, until an agent is
+made there again): crew.el keeps it as it was."
   (interactive)
   (let* ((project (or project (agent-workspace-project) (user-error "Not in a project")))
          (file (agent-workspace--crew-path project))
          (text (agent-workspace-crew-text project)))
     (remhash (agent-workspace--root project) agent-workspace--crew-timers)
-    (unless (or (and (not (agent-workspace-agents project))
+    (unless (or (gethash (agent-workspace--root project) agent-workspace--crew-closed)
+                (and (not (agent-workspace-agents project))
                      (not (and (fboundp 'agent-workspace--app) (agent-workspace--app project))))
                 (and (file-readable-p file)
                      (equal text (with-temp-buffer (insert-file-contents file) (buffer-string)))))
@@ -203,6 +208,9 @@ crew.el keeps it."
 (defun agent-workspace--crew-changed-h (agent what)
   "AGENT's WHAT changed: what crew.el holds, written. In
 `agent-workspace-change-functions'."
+  ;; An agent made: the crew running again, written again.
+  (when (eq what 'created)
+    (remhash (agent-workspace--root (agent-workspace-agent-project agent)) agent-workspace--crew-closed))
   (when (or (memq what '(created renamed colour role settings forgotten))
             ;; A panel opened or closed; not one closing as its crew closes
             ;; (the agent out of it already): crew.el keeps what was open.
@@ -224,11 +232,15 @@ crew.el keeps it."
 
 (defun agent-workspace--crew-closing-h (project)
   "PROJECT's crew closing: a write still to come, done now, before any agent
-stops (its panels still open, in it). In
+stops (its panels still open, in it); then nothing written for it (its app
+changing after, still open) until an agent is made there again. In
 `agent-workspace-closing-functions'."
-  (when-let* ((timer (gethash (agent-workspace--root project) agent-workspace--crew-timers)))
-    (cancel-timer timer)
-    (agent-workspace-crew-save project)))
+  (let ((key (agent-workspace--root project)))
+    (when-let* ((timer (gethash key agent-workspace--crew-timers)))
+      (cancel-timer timer)
+      (agent-workspace-crew-save project))
+    (remhash key agent-workspace--crew-timers)
+    (puthash key t agent-workspace--crew-closed)))
 
 (add-hook 'agent-workspace-closing-functions #'agent-workspace--crew-closing-h)
 (add-hook 'agent-workspace-change-functions #'agent-workspace--crew-changed-h)
