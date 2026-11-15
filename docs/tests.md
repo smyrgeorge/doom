@@ -18,7 +18,8 @@ each before). Test files run several at once, their results shown in file order:
 ones (default: 4, at most `JOBS`; one at a time in `tests/linux/run.sh`, where they share one X server); `JOBS=1` or
 `E2E_JOBS=1` runs them one at a time. A test file with a line `;; run.sh: alone` runs with no other beside it, before
 the others: the end-to-end frames share a corner of the screen, PDF.js draws no page in a covered frame
-(`test-pdf.el`), and a test timing itself by the clock is slowed by the others (`test-large-files.el`). `Ctrl+C` stops
+(`test-pdf.el`), and a test timing itself by the clock is slowed by the others (`test-large-files.el`). One with a line
+`;; run.sh: slow` starts before the rest, so its minute or two runs beside them rather than after. `Ctrl+C` stops
 them all. The PDF and drawing tests copy PDF.js and Excalidraw from Doom's data folder, and skip without them: opening
 a PDF or a drawing once downloads them, or `emacs --batch -l tests/helper.el -l tests/assets.el` does. The Mermaid
 end-to-end tests draw with the real `mmdc` and skip without it (the unit tests use a stand-in). `E2E_WINDOW=front`

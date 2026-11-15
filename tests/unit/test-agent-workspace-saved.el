@@ -8,6 +8,7 @@
 ;; by hand; a crew round-trips. An agent's open panels in it by name, kept as
 ;; the crew closes, opened again with it. In throwaway git repositories;
 ;; sessions are plain buffers (no agent runs).
+;; run.sh: slow (~45 s: stand-in sessions).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")

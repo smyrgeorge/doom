@@ -5,6 +5,7 @@
 ;; starting, bd 1.x, the list against the real bd, what it hides. The look, the
 ;; place kept and refreshes, panes and colours: test-beads-*.el (shared:
 ;; tests/helper-beads.el).
+;; run.sh: slow (~115 s: the real bd).
 
 (load (expand-file-name "../helper-beads" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 

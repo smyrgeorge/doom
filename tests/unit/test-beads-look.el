@@ -2,6 +2,7 @@
 ;; config/beads.el: the issue list's and an issue's look: columns, tags, titles
 ;; wrapped, marks, two lists, narrow panes, an issue's sections (shared:
 ;; tests/helper-beads.el).
+;; run.sh: slow (~125 s: the real bd).
 
 (load (expand-file-name "../helper-beads" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 

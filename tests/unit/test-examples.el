@@ -4,6 +4,7 @@
 ;; conflict every way the panes handle, opened; deleted once the merge is
 ;; closed, whatever it saved. Real git, with a temp HOME and global gitconfig
 ;; (the user's never read).
+;; run.sh: slow (~65 s: every example, run).
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "magit"))))))

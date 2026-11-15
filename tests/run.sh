@@ -16,7 +16,9 @@
 # end-to-end ones, their results shown in their order. A file with a line
 # ";; run.sh: alone" runs with none beside it, before the others (PDF.js
 # draws no page in a covered frame, and the end-to-end frames share a
-# corner). Exits 1 if a test failed.
+# corner); one with ";; run.sh: slow" starts before the rest (its minute or
+# two runs beside them, not after: the run ends sooner). Exits 1 if a test
+# failed.
 
 
 TESTS=$(cd "$(dirname "$0")" && pwd)
@@ -138,13 +140,18 @@ alone() {  # alone FILE: FILE runs with no other beside it (see above)
   grep -q '^;; run\.sh: alone' "$1"
 }
 
+slow() {  # slow FILE: FILE starts before the others (see above)
+  grep -q '^;; run\.sh: slow' "$1"
+}
+
 run_files() {  # run_files KIND N FILE...: N of them running at once, shown in their order
   local kind=$1 n=$2 next=0 shown=0 waiting="" base running solo="" file
   shift 2
   local files=("$@") starts=()
-  # Those running alone first, then the others.
+  # Those running alone first, then the slow ones, then the others.
   for file in "${files[@]}"; do alone "$file" && starts+=("$file"); done
-  for file in "${files[@]}"; do alone "$file" || starts+=("$file"); done
+  for file in "${files[@]}"; do alone "$file" || ! slow "$file" || starts+=("$file"); done
+  for file in "${files[@]}"; do alone "$file" || slow "$file" || starts+=("$file"); done
   while [ "$shown" -lt ${#files[@]} ]; do
     # bash 3.2 (macOS) has no `wait -n': the jobs still running are counted.
     while [ "$next" -lt ${#starts[@]} ]; do

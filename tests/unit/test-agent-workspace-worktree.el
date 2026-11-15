@@ -9,6 +9,7 @@
 ;; branch (deleted after, the agent at rest); a crew's project found from
 ;; them; its name on it in Emacs (the project's name, the mode line, its
 ;; tabs).
+;; run.sh: slow (~50 s: git worktrees).
 
 ;; Git as git is, not as your ~/.gitconfig has it (hooks, signing...).
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")

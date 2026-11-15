@@ -4,6 +4,7 @@
 ;; stand-in agent (examples/agent-workspace/stand-in.el, agent-shell's mock agent kind):
 ;; their states following the events, what you do to one, closing a crew
 ;; leaving no process.
+;; run.sh: slow (~55 s: stand-in sessions).
 
 (require 'agent-shell)
 (require 'agent-shell-mock-agent)

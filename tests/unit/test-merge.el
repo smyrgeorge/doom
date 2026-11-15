@@ -7,6 +7,7 @@
 ;; panes and their buttons, applying, ignoring, keeping both, undo, Accept
 ;; Left / Right, Apply non-conflicting, Done (written, staged; with changes
 ;; left: conflict markers), Abort, the fallback to Ediff, Magit's e.
+;; run.sh: slow (~70 s: git merges).
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "magit"))))))

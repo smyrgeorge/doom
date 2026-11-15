@@ -2,6 +2,7 @@
 ;; config/beads.el: the place kept across a refresh, refreshes in the background
 ;; (never waiting for bd, never twice at once, failing quietly) (shared:
 ;; tests/helper-beads.el).
+;; run.sh: slow (~75 s: the real bd, slowed down).
 
 (load (expand-file-name "../helper-beads" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 
