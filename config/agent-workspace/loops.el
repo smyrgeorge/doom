@@ -290,20 +290,21 @@ committed (no branch for an issue there): a failure, nothing claimed."
                       ;; it given back.
                       (when issue (agent-workspace--loop-give-back agent (alist-get 'id issue))))
                      ((eq (car answer) 'error) (agent-workspace--loop-failed agent (cdr answer)))
-                     (issue (agent-workspace--loop-take agent (alist-get 'id issue) (alist-get 'title issue)))
+                     (issue (agent-workspace--loop-take agent (alist-get 'id issue) (alist-get 'title issue)
+                                                        (alist-get 'issue_type issue)))
                      (t (agent-workspace--loop-nap agent))))))
              (agent-workspace--loop-answered agent)))))
     ;; Its role lost its labels since.
     (agent-workspace-loop-set agent nil (format "its role, %s, has no labels" (agent-workspace-agent-role agent)))))
 
-(defun agent-workspace--loop-take (agent id title)
-  "AGENT takes issue ID (its TITLE), claimed for it: its branch for it, its
+(defun agent-workspace--loop-take (agent id title &optional type)
+  "AGENT takes issue ID (its TITLE, TYPE), claimed for it: its branch for it, its
 session fresh (if it had a turn), then given it as t gives one. Its branch
 not opened (changes there since): the issue given back, a failure."
   (let ((woke (eq (agent-workspace-agent-state agent) 'nap)))
     (agent-workspace--loop-put agent :napped nil)
     (condition-case err
-        (agent-workspace-give agent id title)
+        (agent-workspace-give agent id title type)
       (user-error
        (agent-workspace--loop-give-back agent id)
        (signal (car err) (cdr err))))

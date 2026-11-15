@@ -446,12 +446,22 @@ committed."
            (how (progn
                   ;; Asleep, nothing given; its branch can't be, nothing sent.
                   (agent-workspace--live-or-error agent)
-                  (agent-workspace-give agent (plist-get issue :id) (plist-get issue :title))
+                  (agent-workspace-give agent (plist-get issue :id) (plist-get issue :title) (plist-get issue :type))
                   (agent-workspace-send agent (agent-workspace-issue-prompt (plist-get issue :id) (plist-get issue :title))
                                         :submit t))))
       (message (if (eq how 'queued) "%s gets %s after its turn (busy)" "%s works on %s")
                name (plist-get issue :id))
       (agent-workspace-select agent))))
+
+(defun agent-workspace-issue-type (project id)
+  "PROJECT's issue ID's type (bd's issue_type: \"bug\"...), as last fetched,
+or nil."
+  (when-let* ((buffer (and (agent-workspace--app project) (agent-workspace--issues-buffer project)))
+              (data (buffer-local-value 'agent-workspace--issues-data buffer)))
+    (plist-get (seq-find (lambda (issue) (equal (plist-get issue :id) id))
+                         (append (plist-get data :doing) (plist-get data :ready)
+                                 (plist-get data :blocked) (plist-get data :done)))
+               :type)))
 
 (defun agent-workspace-issues-refresh ()
   "The issues fetched again, the app laid out again."

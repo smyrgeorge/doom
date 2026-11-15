@@ -173,19 +173,19 @@ with C-u its model, mode and colour asked too (its role's by default)."
 
 (ert-deftest agent-workspace-new/made-from-an-issue ()
   "Made for an issue: its role offered first, its worktree on the issue's
-branch (ID-slug, the id alone without a title), the issue its first
+branch (TYPE/ID: task/ when its type isn't known), the issue its first
 message, noted as its."
   (+test-awn "issue"
     (+test-awn--answering '("builder" "")
-      (let ((agent (agent-workspace-new nil "builder" "doom-a1b" "Fix the thing")))
+      (let ((agent (agent-workspace-new nil "builder" "doom-a1b" "Fix the thing" "bug")))
         (should (equal (agent-workspace-agent-issue agent) "doom-a1b"))
         (should (equal (agent-workspace-agent-issue-title agent) "Fix the thing"))
-        (should (equal (agent-workspace-agent-branch agent) "doom-a1b-fix-the-thing"))
+        (should (equal (agent-workspace-agent-branch agent) "fix/doom-a1b"))
         (should (equal sent '(("ada" "Work on doom-a1b: Fix the thing" (:submit t)))))))
     ;; A prompt of its own wins.
     (let ((ken (agent-workspace-create :role "builder" :name "ken" :issue "doom-b2c" :prompt "Look at it")))
       (should (equal (car sent) '("ken" "Look at it" (:submit t))))
-      (should (equal (agent-workspace-agent-branch ken) "doom-b2c")))))
+      (should (equal (agent-workspace-agent-branch ken) "task/doom-b2c")))))
 
 (ert-deftest agent-workspace-new/no-crew-here ()
   "Outside git, or with no commit: no crew, saying why; nothing asked."

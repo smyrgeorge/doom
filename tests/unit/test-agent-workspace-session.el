@@ -342,9 +342,10 @@ queue), then goes."
 (ert-deftest agent-workspace-session/a-branch-for-each-piece-of-work ()
   "Its work on branches of its own, made as its turn starts, before its
 agent gets the prompt: a prompt at rest, one named from its words; an issue
-given while it works, the issue's (ID-slug, from the main branch) as its
+given while it works, the issue's (TYPE/ID, from the main branch) as its
 prompt, queued, starts its turn, the prompt's branch left holding nothing
-deleted; given one at the desk, at once. Its bar's branch follows."
+deleted; given one at the desk, at once. Its bar's branch follows, renamed
+by the agent too (at its turn's end)."
   (+test-aws--with-crew "branches"
     (let* ((agent (+test-aws--create "ada"))
            (dir (agent-workspace-agent-worktree agent))
@@ -360,19 +361,23 @@ deleted; given one at the desk, at once. Its bar's branch follows."
                   'queued))
       (should (equal (funcall head) "slow-please"))
       (should (+test-aws--wait (lambda () (member "Work on demo-1: Lexer: strings" (+test-aws--prompts "ada")))))
-      (should (equal (funcall head) "demo-1-strings"))
-      (should (equal (agent-workspace-agent-branch agent) "demo-1-strings"))
-      (should (equal (+test-aws--logged :branch "ada") '("slow-please" "demo-1-strings")))
+      (should (equal (funcall head) "task/demo-1"))
+      (should (equal (agent-workspace-agent-branch agent) "task/demo-1"))
+      (should (equal (+test-aws--logged :branch "ada") '("slow-please" "task/demo-1")))
       (let ((default-directory project))
         (should (equal (+test-aws--git "branch" "--list" "slow-please") "")))
-      ;; At the desk: at once.
+      ;; It names its branch, as it's told; its turn ends: its bar says it.
+      (let ((default-directory dir))
+        (+test-aws--git "branch" "-m" "task/demo-1-lexer-strings"))
       (agent-workspace-interrupt agent)
       (should (+test-aws--state agent 'desk))
-      (agent-workspace-give agent "demo-2" "Parser")
-      (should (equal (funcall head) "demo-2-parser"))
+      (should (equal (agent-workspace-agent-branch agent) "task/demo-1-lexer-strings"))
+      ;; At the desk: at once.
+      (agent-workspace-give agent "demo-2" "Parser" "feature")
+      (should (equal (funcall head) "feat/demo-2"))
       (agent-workspace-send agent (agent-workspace-issue-prompt "demo-2" "Parser") :submit t)
       (should (+test-aws--wait (lambda () (= (length (+test-aws--logged :branch "ada")) 3))))
-      (should (equal (car (last (+test-aws--logged :branch "ada"))) "demo-2-parser")))))
+      (should (equal (car (last (+test-aws--logged :branch "ada"))) "feat/demo-2")))))
 
 ;; ====== WHAT YOU DO TO ONE ======
 

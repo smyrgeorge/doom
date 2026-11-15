@@ -122,11 +122,11 @@ made for it; one taken or not valid is refused, and asked again."
           :mode mode
           :colour colour)))
 
-(defun agent-workspace-new (&optional more role issue title)
+(defun agent-workspace-new (&optional more role issue title type)
   "Make a new agent in this project's crew: you're asked its role, then its
 name (left empty, one is made for it); MORE (C-u): its model, permission
-mode and colour too. ROLE is offered first. ISSUE (with its TITLE): the
-issue it's for, its first message. It gets its worktree, its session
+mode and colour too. ROLE is offered first. ISSUE (with its TITLE, TYPE):
+the issue it's for, its first message. It gets its worktree, its session
 starts, then it waits for you. Return it."
   (interactive "P")
   (let ((project (agent-workspace-project)))
@@ -136,5 +136,5 @@ starts, then it waits for you. Return it."
            (name (agent-workspace-read-name project role))
            (more (and more (agent-workspace--read-more project role))))
       (apply #'agent-workspace-create
-             :project project :role role :name name :issue issue :issue-title title
+             :project project :role role :name name :issue issue :issue-title title :issue-type type
              more))))

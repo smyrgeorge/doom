@@ -31,8 +31,8 @@ of git: see `agent-workspace--keep-out-of-git')."
   "At most this many characters of a title (or a prompt) in a branch's name.")
 
 (defvar agent-workspace--branch-next (make-hash-table :test #'eq :weakness 'key)
-  "An agent given an issue while it worked: (ISSUE . BRANCH), its worktree
-put on the issue's branch as its next turn starts (if it's still its issue).")
+  "An agent given an issue while it worked: (ISSUE . TYPE), its worktree put
+on the issue's branch as its next turn starts (if it's still its issue).")
 
 (defvar agent-workspace--branch-quiet (make-hash-table :test #'eq :weakness 'key)
   "An agent to texts sent to it that are no work of its own (it's told of a
@@ -258,10 +258,13 @@ branch it's on is kept. Its session must not run."
 ;; ====== A BRANCH FOR EACH PIECE OF WORK ======
 ;; In the agent's own worktree, opened as the work starts: an issue given to
 ;; it (t, the room's offer, its loop, :issue as it's made: `agent-workspace-give'
-;; in core.el), ID-slug, from the main checkout's branch as it is then; one
-;; of that name already there (the issue given back) checked out again,
-;; taken from the agent at rest that has it. Given while it works, as its
-;; next turn starts (the issue's prompt, queued). A prompt of yours while it
+;; in core.el), TYPE/ID (fix/doom-pbk.18), from the main checkout's branch as
+;; it is then; the agent, having read the issue, renames it once to
+;; TYPE/ID-WORDS, 2 to 4 words of its own (fix/doom-pbk.18-minimap-lanes-line-up:
+;; it's told so, session.el). One of the issue's already there (TYPE/ID, or
+;; TYPE/ID-...: the issue given back) checked out again, taken from the agent
+;; at rest that has it. Given while it works, as its next turn starts (the
+;; issue's prompt, queued). A prompt of yours while it
 ;; rests (on agent/NAME, holding nothing the main branch hasn't), a branch
 ;; named from its first words, where it is: the same commit, no file
 ;; changed. Its worktree with changes not committed can't take an issue's.
@@ -294,11 +297,13 @@ at a -. \"\" when nothing's left."
                      (substring text 0 agent-workspace--slug-length)))))
     (string-trim text "-+" "-+")))
 
-(defun agent-workspace-issue-branch (issue &optional title)
-  "The branch for ISSUE (its id) titled TITLE: ID-slug
-\(\"doom-pbk.9-other-canvases-on-the-stage\"), its id alone without one."
-  (let ((slug (if title (agent-workspace-slug title) "")))
-    (if (string-empty-p slug) issue (concat issue "-" slug))))
+(defun agent-workspace-issue-branch (issue &optional type)
+  "The branch made for ISSUE (its id) of TYPE (bd's issue_type): TYPE/ID,
+fix/ for a bug, feat/ for a feature, task/ when its type isn't known
+\(\"fix/doom-pbk.18\"). Its agent adds words of its own once
+\(fix/doom-pbk.18-minimap-lanes-line-up)."
+  (let ((type (agent-workspace-slug (or type ""))))
+    (concat (pcase type ("bug" "fix") ("feature" "feat") ("" "task") (_ type)) "/" issue)))
 
 (defun agent-workspace--branches (project)
   "PROJECT's branches, their names."
@@ -456,31 +461,37 @@ committed, or BRANCH is held."
           (agent-workspace-rest other)))
       (agent-workspace--branch-switch agent branch start))))
 
-(defun agent-workspace--issue-branch-there (project issue title)
-  "The branch of PROJECT for ISSUE titled TITLE: ID-slug; else one there
-already named after it under another title (ID, or ID-...: renamed since)."
-  (let ((branch (agent-workspace-issue-branch issue title))
-        (there (agent-workspace--branches project)))
-    (if (member branch there)
-        branch
-      (or (seq-find (lambda (other) (or (equal other issue) (string-prefix-p (concat issue "-") other)))
-                    there)
-          branch))))
+(defun agent-workspace--issue-branch-there (project issue type)
+  "The branch of PROJECT for ISSUE of TYPE: the one there already, TYPE/ID
+or TYPE/ID-WORDS (renamed by its agent), else under another type since
+\(any other TYPE/ID...); none, TYPE/ID (`agent-workspace-issue-branch')."
+  (let* ((branch (agent-workspace-issue-branch issue type))
+         (there (agent-workspace--branches project))
+         (named (lambda (pattern)
+                  (seq-find (lambda (other) (and (not (string-prefix-p "agent/" other))
+                                                 (string-match-p pattern other)))
+                            there))))
+    (or (car (member branch there))
+        (funcall named (concat "\\`" (regexp-quote branch) "-"))
+        (funcall named (concat "\\`[^/]+/" (regexp-quote issue) "\\(?:-\\|\\'\\)"))
+        branch)))
 
-(defun agent-workspace-issue-branch-open (agent issue &optional title)
-  "AGENT given ISSUE (its TITLE): its worktree on the issue's branch
-\(`agent-workspace-issue-branch'), made from the main checkout's branch as
-it is then, or checked out again (the issue given back). Now, or if AGENT
-is working, as its next turn starts (the issue's prompt, queued). A user
-error if it can't be now (`agent-workspace-branch-open'). Nothing without
-its worktree."
+(defun agent-workspace-issue-branch-open (agent issue &optional type)
+  "AGENT given ISSUE (of TYPE, bd's issue_type; not given: as its issues
+were last fetched, issues.el): its worktree on the issue's branch
+\(`agent-workspace-issue-branch': TYPE/ID), made from the main checkout's
+branch as it is then, or checked out again (the issue given back, as its
+agent renamed it maybe). Now, or if AGENT is working, as its next turn
+starts (the issue's prompt, queued). A user error if it can't be now
+\(`agent-workspace-branch-open'). Nothing without its worktree."
   (when (agent-workspace--worktree-live agent)
     (let* ((project (agent-workspace-agent-project agent))
-           (branch (agent-workspace--issue-branch-there project issue title)))
+           (type (or type (and (fboundp 'agent-workspace-issue-type) (agent-workspace-issue-type project issue)))))
       (if (memq (agent-workspace-agent-state agent) '(working hand))
-          (puthash agent (cons issue branch) agent-workspace--branch-next)
+          (puthash agent (cons issue type) agent-workspace--branch-next)
         (remhash agent agent-workspace--branch-next)
-        (agent-workspace-branch-open agent branch (agent-workspace-main-branch project))))))
+        (agent-workspace-branch-open agent (agent-workspace--issue-branch-there project issue type)
+                                     (agent-workspace-main-branch project))))))
 
 (defun agent-workspace-branch-quiet (agent text)
   "TEXT, sent to AGENT, is no work of its own (it's told of a merge, given
@@ -533,7 +544,8 @@ words, where it is. What can't be done is said, never signalled."
            ((and next (progn (remhash agent agent-workspace--branch-next)
                              (equal (car next) (agent-workspace-agent-issue agent))))
             (condition-case err
-                (agent-workspace-branch-open agent (cdr next) (agent-workspace-main-branch project))
+                (agent-workspace-branch-open agent (agent-workspace--issue-branch-there project (car next) (cdr next))
+                                             (agent-workspace-main-branch project))
               (user-error
                (agent-workspace--branch-say
                 agent (format "stays on %s for %s: %s" (or head "no branch") (car next)
@@ -643,6 +655,8 @@ hasn't, else what you choose, shown what it holds."
   "One of AGENT's branches, read with PROMPT (a format: AGENT's name): the
 one it's on, unless others of its hold commits the main checkout's branch
 hasn't: then you're asked, the one it's on first."
+  ;; Its slot as its worktree is (the agent renamed its branch since).
+  (agent-workspace--branch-sync agent)
   (let* ((work (mapcar #'car (plist-get (agent-workspace-worktree-work agent) :commits)))
          (choices (delete-dups (delq nil (cons (agent-workspace-agent-branch agent) work)))))
     (cond ((cdr choices)
@@ -656,6 +670,7 @@ hasn't: then you're asked, the one it's on first."
 the main checkout's branch (MAIN...BRANCH): in magit, else as a diff."
   (interactive (let ((agent (agent-workspace-read-agent "Review the branch of: ")))
                  (list agent (agent-workspace-read-branch agent "Review %s's branch: "))))
+  (agent-workspace--branch-sync agent)
   (let* ((project (agent-workspace-agent-project agent))
          (branch (or branch (agent-workspace-agent-branch agent)
                      (user-error "%s is on no branch" (agent-workspace-agent-name agent))))
@@ -685,6 +700,7 @@ is told (if its session runs). A merge stopped on conflicts is left to you,
 in the main checkout. Return non-nil if it merged."
   (interactive (let ((agent (agent-workspace-read-agent "Merge the branch of: ")))
                  (list agent (agent-workspace-read-branch agent "Merge %s's branch: "))))
+  (agent-workspace--branch-sync agent)
   (let* ((project (agent-workspace-agent-project agent))
          (name (agent-workspace-agent-name agent))
          (branch (or branch (agent-workspace-agent-branch agent) (user-error "%s is on no branch" name)))

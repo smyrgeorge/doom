@@ -968,7 +968,7 @@ On a ready issue: its role offered first, the issue its first message."
     (agent-workspace-new more
                          (or (plist-get issue :role)
                              (get-text-property (point) 'agent-workspace-role))
-                         (plist-get issue :id) (plist-get issue :title))))
+                         (plist-get issue :id) (plist-get issue :title) (plist-get issue :type))))
 
 (defun agent-workspace-edit ()
   "Change the agent: its name, colour, role, permission mode or model."

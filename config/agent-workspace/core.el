@@ -21,6 +21,7 @@
 (declare-function agent-workspace-worktree-remove "agent-workspace/worktree")
 (declare-function agent-workspace-issue-branch-open "agent-workspace/worktree")
 (declare-function agent-workspace--turn-branch "agent-workspace/worktree")
+(declare-function agent-workspace--branch-sync "agent-workspace/worktree")
 (declare-function agent-workspace--start "agent-workspace/session")
 (declare-function agent-workspace--stop "agent-workspace/session")
 (declare-function agent-workspace--process-table "agent-workspace/session")
@@ -312,6 +313,8 @@ nil if it isn't a word ending in -ing."
        (agent-workspace--raise-hand
         agent (list :kind 'question :title (alist-get :message data))))
       ('turn-complete
+       ;; Its branch as its worktree is: renamed by it, once (worktree.el).
+       (agent-workspace--branch-sync agent)
        (agent-workspace--set-state
         agent (if (or (equal (alist-get :stop-reason data) "cancelled")
                       (agent-workspace--looked-at-p agent))
@@ -378,15 +381,15 @@ fewest have."
                           #'< agent-workspace-colours)))))
 
 (cl-defun agent-workspace-create (&key role name colour model mode prompt issue issue-title
-                                       project (kind 'claude-code))
+                                       issue-type project (kind 'claude-code))
   "Make an agent in PROJECT's crew (default: the current project's) and start
 it: ROLE (its name, required), NAME (required), COLOUR (default: its role's
 while free, else a free one), MODEL and MODE (default: its role's), KIND (an
 agent of `agent-workspace-kinds'). It gets its own worktree, always, and its
 session starts there. PROMPT, if given, is its first message, sent once it's
-ready; ISSUE (an id, and ISSUE-TITLE), the issue it's for (its branch for
-it opened in its worktree: `agent-workspace-give'): its first message
-unless PROMPT, \"Work on ID: TITLE\". Return the agent.
+ready; ISSUE (an id, and ISSUE-TITLE, ISSUE-TYPE), the issue it's for (its
+branch for it opened in its worktree: `agent-workspace-give'): its first
+message unless PROMPT, \"Work on ID: TITLE\". Return the agent.
 
 A step failing says which: its worktree (or its issue's branch) not made,
 nothing is; its session not started, it's stuck saying why, in the crew."
@@ -410,13 +413,13 @@ nothing is; its session not started, it's stuck saying why, in the crew."
           (progn
             (agent-workspace-worktree-ensure agent)
             (when issue
-              (agent-workspace-issue-branch-open agent issue issue-title)))
+              (agent-workspace-issue-branch-open agent issue issue-type)))
         (error (user-error "%s's worktree: %s" name (error-message-string err))))
       (let ((key (agent-workspace--root project)))
         (puthash key (append (gethash key agent-workspace--crews) (list agent))
                  agent-workspace--crews))
       (when issue
-        (agent-workspace-give agent issue issue-title))
+        (agent-workspace-give agent issue issue-title issue-type))
       (agent-workspace--changed agent 'created)
       (when (and (agent-workspace--start agent)
                  (or prompt issue))
@@ -516,15 +519,16 @@ works; a running session starts again, fresh, as ROLE says."
           (agent-workspace--start agent)
         (agent-workspace--set-state agent state)))))
 
-(defun agent-workspace-give (agent issue &optional title)
-  "Give AGENT ISSUE (its TITLE) to work on, before its prompt is sent (t, the
-room's offer, its loop, :issue as it's made all come here): its branch for
-it opened in its worktree first (worktree.el: ID-slug, from the main
-checkout's branch; as its next turn starts if it's working), a user error
-if it can't be (changes not committed there): nothing given. Then noted:
-what its state says. nil: none, its branch as it is."
+(defun agent-workspace-give (agent issue &optional title type)
+  "Give AGENT ISSUE (its TITLE, its TYPE: bd's issue_type) to work on, before
+its prompt is sent (t, the room's offer, its loop, :issue as it's made all
+come here): its branch for it opened in its worktree first (worktree.el:
+TYPE/ID, from the main checkout's branch; as its next turn starts if it's
+working), a user error if it can't be (changes not committed there):
+nothing given. Then noted: what its state says. nil: none, its branch as
+it is."
   (when issue
-    (agent-workspace-issue-branch-open agent issue title))
+    (agent-workspace-issue-branch-open agent issue type))
   (agent-workspace--note-issue agent issue title))
 
 (defun agent-workspace--note-issue (agent issue &optional title)

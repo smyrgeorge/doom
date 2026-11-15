@@ -1,7 +1,7 @@
 ---
 name: builder
 description: builds what you give it
-tools: Read, Grep, Glob, Edit, Write, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git add:*), Bash(git commit:*), Bash(bd:*), Bash(ls:*)
+tools: Read, Grep, Glob, Edit, Write, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git add:*), Bash(git commit:*), Bash(git branch -m:*), Bash(bd:*), Bash(ls:*)
 deny: Bash(git push:*)
 labels: build
 hands-to: reviewer

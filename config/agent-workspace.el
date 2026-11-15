@@ -122,16 +122,21 @@ needs your OK. nil: Claude Code's own default."
 ;; A branch of its own for each piece of work, in its worktree, made as the
 ;; work starts (worktree.el); its bar shows the one it's on. An issue given to
 ;; it (t, the room's offer, its loop, :issue: `agent-workspace-give', core.el)
-;; gets ID-slug (doom-pbk.9-other-canvases-on-the-stage: its title
-;; lowercased, its "Area: " dropped, at most 48 characters), from the main
-;; checkout's branch as it is then; one of that name there already (given
-;; back) checked out again, taken from another agent at rest. Given while it
-;; works, as the issue's prompt starts its next turn. Its worktree with
-;; changes not committed takes none: refused, saying which branch has them
-;; (as its turn starts: it stays, said). A prompt of yours at rest (the room,
-;; #, its session: agent-shell's input-submitted) gets a branch named from
-;; its first words, where it is (no file changes); not a / command, nor what
-;; it's only told (a merge, an event). Between pieces of work it rests on
+;; gets TYPE/ID (fix/doom-pbk.18: fix/ a bug, feat/ a feature, else its
+;; type, task/...), from the main checkout's branch as it is then; the agent,
+;; having read the issue, renames it once, before its first commit, to
+;; TYPE/ID-WORDS, 2 to 4 words of its own
+;; (fix/doom-pbk.18-minimap-lanes-line-up: it's told so, session.el; its bar
+;; follows at its turn's end, d and M at once; git carries its note). One of
+;; the issue's there already (TYPE/ID, TYPE/ID-...: given back) checked out
+;; again, taken from another agent at rest. Given while it works, as the
+;; issue's prompt starts its next turn. Its worktree with changes not
+;; committed takes none: refused, saying which branch has them (as its turn
+;; starts: it stays, said). A prompt of yours at rest (the room, #, its
+;; session: agent-shell's input-submitted) gets a branch named from its first
+;; words (lowercase, an "Area: " dropped, at most 48 characters), where it is
+;; (no file changes); not a / command, nor what it's only told (a merge, an
+;; event). Between pieces of work it rests on
 ;; agent/NAME at the main branch's tip: nothing is merged from it (one with
 ;; work from before keeps it, merged as before). A branch it leaves holding
 ;; nothing (a question, an investigation) is deleted. Each is noted as its

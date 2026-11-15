@@ -2,7 +2,8 @@
 ;; config/agent-workspace/worktree.el and names.el: every agent's own git
 ;; worktree, named after it (.agent-shell/worktrees/ROLE-NAME, agent/NAME, its lock's
 ;; reason), in throwaway git repositories; a branch there for each piece of
-;; its work (an issue's, ID-slug, from the main branch; a prompt's at rest;
+;; its work (an issue's, TYPE/ID from the main branch, renamed by its agent
+;; once; a prompt's at rest;
 ;; taken from another agent; refused over changes not committed); forgetting
 ;; it without losing work, on any of its branches; reviewing and merging a
 ;; branch (deleted after, the agent at rest); a crew's project found from
@@ -272,18 +273,25 @@ cut at a -."
                    . "pneumonoultramicroscopicsilicovolcanoconiosisxxx")
                   ("???" . "")))
     (should (equal (agent-workspace-slug (car case)) (cdr case))))
-  (should (<= (length (agent-workspace-slug (make-string 80 ?a))) 48))
-  (should (equal (agent-workspace-issue-branch "doom-pbk.9" "Agent workspace: other canvases on the stage")
-                 "doom-pbk.9-other-canvases-on-the-stage"))
-  (should (equal (agent-workspace-issue-branch "demo-1") "demo-1"))
-  (should (equal (agent-workspace-issue-branch "demo-1" "!!!") "demo-1")))
+  (should (<= (length (agent-workspace-slug (make-string 80 ?a))) 48)))
+
+(ert-deftest agent-workspace-worktree/an-issue-s-branch-name ()
+  "An issue's branch, as it's made: its type, then its id: fix/ for a bug,
+feat/ for a feature, its own type else, task/ when it isn't known."
+  (should (equal (agent-workspace-issue-branch "doom-pbk.18" "bug") "fix/doom-pbk.18"))
+  (should (equal (agent-workspace-issue-branch "doom-pbk.21" "feature") "feat/doom-pbk.21"))
+  (should (equal (agent-workspace-issue-branch "demo-1" "chore") "chore/demo-1"))
+  (should (equal (agent-workspace-issue-branch "demo-1" "task") "task/demo-1"))
+  (should (equal (agent-workspace-issue-branch "demo-1") "task/demo-1")))
 
 (ert-deftest agent-workspace-worktree/a-branch-per-issue ()
-  "Given an issue, its worktree goes on a branch of its own, ID-slug, from
+  "Given an issue, its worktree goes on a branch of its own, TYPE/ID, from
 the main checkout's branch as it is then (not where its worktree was),
-noted as its; its slot follows, said. Another: the next one, the first kept
-with its work. Given back (its title changed since too): checked out again,
-its work there; a branch left holding nothing, deleted."
+noted as its; its slot follows, said. Renamed by its agent (TYPE/ID-WORDS),
+the note goes with it. Another issue: the next one, the first kept with its
+work. Given back (its type changed since too): its branch as its agent
+renamed it, checked out again, its work there; a branch left holding
+nothing, deleted."
   (let* ((project (+test-aww--project "per-issue"))
          (agent (+test-aww--agent project "ada"))
          (dir (agent-workspace-worktree-ensure agent))
@@ -291,29 +299,34 @@ its work there; a branch left holding nothing, deleted."
          (agent-workspace-change-functions (list (lambda (_agent what) (push what changes)))))
     ;; Your branch moved on since its worktree was made.
     (+test-aww--change project "yours" "mine\n" "my work")
-    (agent-workspace-give agent "demo-1" "Lexer: strings with escapes")
-    (should (equal (+test-aww--head dir) "demo-1-strings-with-escapes"))
-    (should (equal (agent-workspace-agent-branch agent) "demo-1-strings-with-escapes"))
+    (agent-workspace-give agent "demo-1" "Lexer: strings with escapes" "bug")
+    (should (equal (+test-aww--head dir) "fix/demo-1"))
+    (should (equal (agent-workspace-agent-branch agent) "fix/demo-1"))
     (should (equal (agent-workspace-agent-issue agent) "demo-1"))
     (should (equal (reverse changes) '(branch issue)))
-    (should (equal (+test-aww--rev project "demo-1-strings-with-escapes") (+test-aww--rev project "main")))
+    (should (equal (+test-aww--rev project "fix/demo-1") (+test-aww--rev project "main")))
     (should (file-exists-p (expand-file-name "yours" dir)))
-    (let ((default-directory project))
-      (should (equal (+test-aww--git "config" "branch.demo-1-strings-with-escapes.agent-workspace-agent") "ada")))
+    ;; Its agent names it, once, then commits.
+    (let ((default-directory dir))
+      (+test-aww--git "branch" "-m" "fix/demo-1-lexer-escapes"))
     (+test-aww--change dir "lexer" "strings\n" "ada's lexer")
+    (let ((default-directory project))
+      (should (equal (+test-aww--git "config" "branch.fix/demo-1-lexer-escapes.agent-workspace-agent") "ada")))
     ;; Another: from the main branch; the first kept, its work on it.
-    (agent-workspace-give agent "demo-2" "Parser")
-    (should (equal (+test-aww--head dir) "demo-2-parser"))
+    (agent-workspace-give agent "demo-2" "Parser" "feature")
+    (should (equal (+test-aww--head dir) "feat/demo-2"))
     (should-not (file-exists-p (expand-file-name "lexer" dir)))
-    ;; Given back, under another title now: checked out again, its work
-    ;; there; the one it left held nothing: gone.
-    (agent-workspace-give agent "demo-1" "Lexer: escapes in strings")
-    (should (equal (+test-aww--head dir) "demo-1-strings-with-escapes"))
+    ;; Given back, a task now: its branch as ada named it, its work there;
+    ;; the one it left held nothing: gone.
+    (agent-workspace-give agent "demo-1" "Lexer: strings with escapes" "task")
+    (should (equal (+test-aww--head dir) "fix/demo-1-lexer-escapes"))
+    (should (equal (agent-workspace-agent-branch agent) "fix/demo-1-lexer-escapes"))
     (should (file-exists-p (expand-file-name "lexer" dir)))
-    (should (equal (+test-aww--branches project) '("agent/ada" "demo-1-strings-with-escapes" "main")))
+    (should (equal (+test-aww--branches project) '("agent/ada" "fix/demo-1-lexer-escapes" "main")))
+    (should (equal (agent-workspace-agent-branches agent) '("fix/demo-1-lexer-escapes" "agent/ada")))
     ;; No issue: its branch as it is.
     (agent-workspace-give agent nil)
-    (should (equal (+test-aww--head dir) "demo-1-strings-with-escapes"))))
+    (should (equal (+test-aww--head dir) "fix/demo-1-lexer-escapes"))))
 
 (ert-deftest agent-workspace-worktree/an-issue-refused-over-changes ()
   "Its worktree with changes not committed: an issue refused, saying which
@@ -325,16 +338,16 @@ one it's on given again: fine. Committed, the next is given."
     (agent-workspace-give agent "demo-1" "One")
     (+test-aww--change dir "wip" "half\n")
     (should (equal (cadr (should-error (agent-workspace-give agent "demo-2" "Two") :type 'user-error))
-                   "ada has changes not committed, on demo-1-one"))
+                   "ada has changes not committed, on task/demo-1"))
     (should (equal (agent-workspace-agent-issue agent) "demo-1"))
-    (should (equal (+test-aww--head dir) "demo-1-one"))
+    (should (equal (+test-aww--head dir) "task/demo-1"))
     (should (file-exists-p (expand-file-name "wip" dir)))
     (agent-workspace-give agent "demo-1" "One")
     (let ((default-directory dir))
       (+test-aww--git "add" "wip")
       (+test-aww--commit "wip"))
     (agent-workspace-give agent "demo-2" "Two")
-    (should (equal (+test-aww--head dir) "demo-2-two"))))
+    (should (equal (+test-aww--head dir) "task/demo-2"))))
 
 (ert-deftest agent-workspace-worktree/an-issue-given-while-it-works ()
   "Given an issue while it works, its worktree stays as it is until its next
@@ -349,26 +362,26 @@ Changes not committed by then: it stays, said."
     (+test-aww--change dir "wip" "half\n")
     (agent-workspace-give agent "demo-2" "Two")
     (should (equal (agent-workspace-agent-issue agent) "demo-2"))
-    (should (equal (+test-aww--head dir) "demo-1-one"))
+    (should (equal (+test-aww--head dir) "task/demo-1"))
     ;; It commits; its turn ends; the issue's prompt starts the next.
     (let ((default-directory dir))
       (+test-aww--git "add" "wip")
       (+test-aww--commit "wip"))
     (setf (agent-workspace-agent-state agent) 'done)
     (+test-aww--turn agent "Work on demo-2: Two")
-    (should (equal (+test-aww--head dir) "demo-2-two"))
-    (should (equal (agent-workspace-agent-branch agent) "demo-2-two"))
+    (should (equal (+test-aww--head dir) "task/demo-2"))
+    (should (equal (agent-workspace-agent-branch agent) "task/demo-2"))
     (should (eq (agent-workspace-agent-state agent) 'working))
     ;; Again, its changes not committed this time: it stays, said.
     (agent-workspace-give agent "demo-3" "Three")
     (+test-aww--change dir "more" "half\n")
     (+test-aww--saying said
       (+test-aww--turn agent "Work on demo-3: Three"))
-    (should (equal (+test-aww--head dir) "demo-2-two"))
-    (should (member "ada stays on demo-2-two for demo-3: ada has changes not committed, on demo-2-two" said))
+    (should (equal (+test-aww--head dir) "task/demo-2"))
+    (should (member "ada stays on task/demo-2 for demo-3: ada has changes not committed, on task/demo-2" said))
     ;; Its next turn: nothing more.
     (+test-aww--turn agent "go on")
-    (should (equal (+test-aww--head dir) "demo-2-two"))
+    (should (equal (+test-aww--head dir) "task/demo-2"))
     ;; Given one while it works, then given back (killed) before its next
     ;; turn: no longer its, no branch for it.
     (let ((default-directory dir))
@@ -377,7 +390,7 @@ Changes not committed by then: it stays, said."
     (agent-workspace-give agent "demo-4" "Four")
     (agent-workspace--note-issue agent nil)
     (+test-aww--turn agent "something else")
-    (should (equal (+test-aww--head dir) "demo-2-two"))))
+    (should (equal (+test-aww--head dir) "task/demo-2"))))
 
 (ert-deftest agent-workspace-worktree/a-prompt-at-rest ()
   "A turn starting at rest (on agent/NAME, holding nothing the main branch
@@ -432,14 +445,14 @@ checked out somewhere else, refused saying where."
       (setf (agent-workspace-agent-state ken) 'working)
       ;; (A user error's quotes as Emacs shows them: format-message's.)
       (should (equal (cadr (should-error (agent-workspace-give sam "demo-1" "One") :type 'user-error))
-                     (format-message "demo-1-one is ken's: it's working on it")))
+                     (format-message "task/demo-1 is ken's: it's working on it")))
       (setf (agent-workspace-agent-state ken) 'done)
       (+test-aww--change his "wip" "half\n")
       (should (equal (cadr (should-error (agent-workspace-give sam "demo-1" "One") :type 'user-error))
-                     (format-message "demo-1-one is ken's: ken has changes not committed, on demo-1-one")))
+                     (format-message "task/demo-1 is ken's: ken has changes not committed, on task/demo-1")))
       (delete-file (expand-file-name "wip" his))
       (agent-workspace-give sam "demo-1" "One")
-      (should (equal (+test-aww--head hers) "demo-1-one"))
+      (should (equal (+test-aww--head hers) "task/demo-1"))
       (should (file-exists-p (expand-file-name "lexer" hers)))
       (should (equal (+test-aww--head his) "agent/ken"))
       (should (equal (agent-workspace-agent-branch ken) "agent/ken"))
@@ -448,8 +461,8 @@ checked out somewhere else, refused saying where."
       (let ((yours (expand-file-name "aww/taken-yours/" +test-tmp)))
         (when (file-exists-p yours) (delete-directory yours t))
         (let ((default-directory project))
-          (+test-aww--git "worktree" "add" "-q" "-b" "demo-2-two" (directory-file-name yours) "HEAD"))
-        (should (string-prefix-p "demo-2-two is checked out in "
+          (+test-aww--git "worktree" "add" "-q" "-b" "task/demo-2" (directory-file-name yours) "HEAD"))
+        (should (string-prefix-p "task/demo-2 is checked out in "
                                  (cadr (should-error (agent-workspace-give ken "demo-2" "Two")
                                                      :type 'user-error))))
         (should (equal (+test-aww--head his) "agent/ken"))))))
@@ -464,12 +477,12 @@ changed in crew.json), found by its lock's reason, on its branch still."
     (agent-workspace-give agent "demo-1" "One")
     (let ((again (+test-aww--agent project "ada")))
       (should (equal (agent-workspace-worktree-ensure again) dir))
-      (should (equal (agent-workspace-agent-branch again) "demo-1-one"))
+      (should (equal (agent-workspace-agent-branch again) "task/demo-1"))
       (setf (agent-workspace-agent-role again) "reviewer")
       (let ((moved (agent-workspace-worktree-ensure again)))
         (should (equal moved (expand-file-name ".agent-shell/worktrees/reviewer-ada/" project)))
-        (should (equal (+test-aww--head moved) "demo-1-one"))
-        (should (equal (agent-workspace-agent-branch again) "demo-1-one"))
+        (should (equal (+test-aww--head moved) "task/demo-1"))
+        (should (equal (agent-workspace-agent-branch again) "task/demo-1"))
         (should-not (file-exists-p dir))))))
 
 (ert-deftest agent-workspace-worktree/renamed-on-an-issue-s-branch ()
@@ -481,12 +494,12 @@ the new name's; agent/NAME, where it rests, renamed."
     (agent-workspace-give agent "demo-1" "One")
     (agent-workspace-worktree-move agent "grace" "builder")
     (should (equal (+test-aww--head (expand-file-name ".agent-shell/worktrees/builder-grace/" project))
-                   "demo-1-one"))
-    (should (equal (agent-workspace-agent-branch agent) "demo-1-one"))
-    (should (equal (+test-aww--branches project) '("agent/grace" "demo-1-one" "main")))
+                   "task/demo-1"))
+    (should (equal (agent-workspace-agent-branch agent) "task/demo-1"))
+    (should (equal (+test-aww--branches project) '("agent/grace" "main" "task/demo-1")))
     (let ((default-directory project))
-      (should (equal (+test-aww--git "config" "branch.demo-1-one.agent-workspace-agent") "grace")))
-    (should (equal (agent-workspace-agent-branches agent) '("demo-1-one" "agent/grace")))))
+      (should (equal (+test-aww--git "config" "branch.task/demo-1.agent-workspace-agent") "grace")))
+    (should (equal (agent-workspace-agent-branches agent) '("task/demo-1" "agent/grace")))))
 
 ;; ====== A CREW'S PROJECT ======
 
@@ -624,7 +637,7 @@ left."
     (+test-aww--change dir "one" "done\n" "ada's one")
     (agent-workspace-give agent "demo-2" "Two")
     (let ((default-directory project)) (+test-aww--git "branch" "yours"))
-    (should (equal (mapcar #'car (plist-get (agent-workspace-worktree-work agent) :commits)) '("demo-1-one")))
+    (should (equal (mapcar #'car (plist-get (agent-workspace-worktree-work agent) :commits)) '("task/demo-1")))
     (should (= (agent-workspace-branch-ahead agent) 0))
     (cl-letf (((symbol-function 'read-multiple-choice)
                (lambda (&rest _)
@@ -632,8 +645,8 @@ left."
                  '(?r "remove it anyway"))))
       (+test-aww--with-crew project (list agent)
         (agent-workspace-forget agent)))
-    (should (string-search ", on demo-2-two, holds work" shown))
-    (should (string-search "Not on main:\n  demo-1-one\n    " shown))
+    (should (string-search ", on task/demo-2, holds work" shown))
+    (should (string-search "Not on main:\n  task/demo-1\n    " shown))
     (should (string-search "ada's one" shown))
     (should-not (file-exists-p dir))
     (should (equal (+test-aww--branches project) '("main" "yours")))))
@@ -654,7 +667,7 @@ it's on, or another of its."
       (agent-workspace-give agent "demo-1" "One")
       (agent-workspace-review agent)
       (agent-workspace-review agent "agent/ada"))
-    (should (equal (reverse called) (list (list "main...agent/ada" project) (list "main...demo-1-one" project)
+    (should (equal (reverse called) (list (list "main...agent/ada" project) (list "main...task/demo-1" project)
                                           (list "main...agent/ada" project))))))
 
 (ert-deftest agent-workspace-worktree/which-branch ()
@@ -671,8 +684,8 @@ you're asked, the one it's on first."
       (agent-workspace-give agent "demo-1" "One")
       (+test-aww--change dir "one" "done\n" "one")
       (agent-workspace-give agent "demo-2" "Two")
-      (should (equal (agent-workspace-read-branch agent "Merge %s's branch: ") "demo-2-two"))
-      (should (equal asked '("Merge ada's branch: " ("demo-2-two" "demo-1-one") "demo-2-two"))))))
+      (should (equal (agent-workspace-read-branch agent "Merge %s's branch: ") "task/demo-2"))
+      (should (equal asked '("Merge ada's branch: " ("task/demo-2" "task/demo-1") "task/demo-2"))))))
 
 (ert-deftest agent-workspace-worktree/merge ()
   "Merged into the main checkout: a merge commit naming its branch, the
@@ -682,7 +695,10 @@ merged tip, ready for the next; nothing ahead after."
          (agent (+test-aww--agent project "ada"))
          (dir (agent-workspace-worktree-ensure agent))
          (told nil))
-    (agent-workspace-give agent "demo-1" "Lexer: strings with escapes")
+    (agent-workspace-give agent "demo-1" "Lexer: strings with escapes" "bug")
+    ;; Named by its agent (the bar follows as M merges it).
+    (let ((default-directory dir))
+      (+test-aww--git "branch" "-m" "fix/demo-1-lexer-escapes"))
     (+test-aww--change dir "feature" "done\n" "ada's feature")
     (+test-aww--change project "other" "mine\n" "my own work")
     (cl-letf (((symbol-function 'agent-workspace-live-p) (lambda (_) t))
@@ -692,8 +708,8 @@ merged tip, ready for the next; nothing ahead after."
         (should (agent-workspace-merge agent))))
     (should (equal (+test-aww--read (expand-file-name "feature" project)) "done\n"))
     (let ((default-directory project))
-      (should (equal (+test-aww--git "log" "-1" "--format=%s" "main") "Merge branch 'demo-1-strings-with-escapes'")))
-    (should (equal told '(("The user merged your branch demo-1-strings-with-escapes into main and deleted it: \
+      (should (equal (+test-aww--git "log" "-1" "--format=%s" "main") "Merge branch 'fix/demo-1-lexer-escapes'")))
+    (should (equal told '(("The user merged your branch fix/demo-1-lexer-escapes into main and deleted it: \
 your worktree is back on agent/ada, at main's tip. Your next work gets a branch of its own."
                            :submit t :no-branch t))))
     (should (equal (+test-aww--branches project) '("agent/ada" "main")))
@@ -717,12 +733,12 @@ worktree as it is."
     (setf (agent-workspace-agent-state agent) 'working)
     (+test-aww--saying said
       (+test-aww--merging (should (agent-workspace-merge agent))))
-    (should (equal (car said) "Merged demo-1-one into main; demo-1-one kept for now (M again later): ada is working"))
-    (should (equal (+test-aww--head dir) "demo-1-one"))
+    (should (equal (car said) "Merged task/demo-1 into main; task/demo-1 kept for now (M again later): ada is working"))
+    (should (equal (+test-aww--head dir) "task/demo-1"))
     (setf (agent-workspace-agent-state agent) 'done)
     (+test-aww--change dir "wip" "half\n")
     (+test-aww--merging (should (agent-workspace-merge agent)))
-    (should (equal (+test-aww--head dir) "demo-1-one"))
+    (should (equal (+test-aww--head dir) "task/demo-1"))
     (delete-file (expand-file-name "wip" dir))
     (+test-aww--merging (should (agent-workspace-merge agent)))
     (should (equal (+test-aww--head dir) "agent/ada"))
@@ -732,10 +748,10 @@ worktree as it is."
     (+test-aww--change dir "two" "done\n" "two")
     (agent-workspace-give agent "demo-3" "Three")
     (+test-aww--saying said
-      (+test-aww--merging (should (agent-workspace-merge agent "demo-2-two"))))
-    (should (equal (car said) "Merged demo-2-two into main: demo-2-two deleted"))
-    (should (equal (+test-aww--head dir) "demo-3-three"))
-    (should (equal (+test-aww--branches project) '("agent/ada" "demo-3-three" "main")))
+      (+test-aww--merging (should (agent-workspace-merge agent "task/demo-2"))))
+    (should (equal (car said) "Merged task/demo-2 into main: task/demo-2 deleted"))
+    (should (equal (+test-aww--head dir) "task/demo-3"))
+    (should (equal (+test-aww--branches project) '("agent/ada" "main" "task/demo-3")))
     (should (file-exists-p (expand-file-name "two" project)))))
 
 (ert-deftest agent-workspace-worktree/merge-never-fast-forwards ()

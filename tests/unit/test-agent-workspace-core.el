@@ -270,8 +270,9 @@ colour, its issue."
 ;; ====== ITS SESSION'S CONFIG ======
 
 (ert-deftest agent-workspace/what-the-agent-is-told ()
-  "Who it is and how it works (a branch made for each piece of its work,
-never one of its own), then its role's instructions, after what every
+  "Who it is and how it works (a branch made for each piece of its work, an
+issue's renamed once by it, never one of its own), then its role's
+instructions, after what every
 session is told; nothing for a session not an agent's."
   (let ((agent (+test-awc--agent))
         (agent-workspace-role-function
@@ -284,6 +285,8 @@ session is told; nothing for a session not an agent's."
                       "your own git worktree, /tmp/project/.agent-shell/worktrees/ada:"
                       "never in the project's main checkout (/tmp/project)"
                       "Each piece of work gets a branch of its own there, made for you as it starts"
+                      "named after its type and id (fix/doom-a1b for a bug"
+                      "rename it once, adding 2 to 4 words of your own, lowercase and hyphenated"
                       "never switch branches or make one yourself"
                       "bd commands run as ada" "Your notifications carry your name already"))
         (should (string-search part text)))

@@ -327,7 +327,8 @@ From the shell: `cmd/agent-workspace new --role builder [--name ada] [--prompt T
 ## An agent
 
 - **Its session** is a Claude Code session in agent-shell, in the buffer `ada · builder`. It's told who it is, that
-  it works with you only, to commit in its worktree, on the branch made for its work, and never to switch branches,
+  it works with you only, to commit in its worktree, on the branch made for its work (an issue's renamed once, with
+  words of its own), and never to switch branches,
   then its role's instructions. Its role's model and tools apply.
 - **Its permission mode** is Claude Code's auto mode: Claude decides what needs your OK. A role's `mode` changes it
   for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all (`nil`: Claude Code's own default).
@@ -410,12 +411,13 @@ Each piece of an agent's work gets a branch of its own, in its worktree, made as
 it's on.
 
 - **An issue** you give it (`t`, the room's `[Give it to ken]`, its [loop](#loops), `:issue` as it's made) gets a
-  branch named after it, its id then its title's words: `doom-pbk.9-other-canvases-on-the-stage` (lowercase, the
-  title's `Area: ` dropped, at most 48 characters). It's made from your checkout's branch as it is then. An issue given
-  back to it is checked out again, its work there; one another agent has, at rest, is taken from it. Given while it
-  works, the branch comes as the issue starts its next turn.
+  branch named after its type and id: `fix/doom-pbk.18` (`fix/` for a bug, `feat/` for a feature, else its type:
+  `task/`, `chore/`). It's made from your checkout's branch as it is then. The agent, once it has read the issue and
+  before its first commit, renames it once with 2 to 4 words of its own: `fix/doom-pbk.18-minimap-lanes-line-up`. An
+  issue given back to it finds its branch again, its work there; one another agent has, at rest, is taken from it.
+  Given while it works, the branch comes as the issue starts its next turn.
 - **A prompt of yours** while it rests (from the room, `#`, or typed in its session) gets a branch named from its first
-  words, `fix-the-parser`, where it is: no file changes.
+  words (lowercase, at most 48 characters), `fix-the-parser`, where it is: no file changes.
 - **Between pieces of work** it rests on `agent/ada`, at your branch's tip. Nothing is merged from it, but an agent
   with work there from before (an older crew's) keeps it, and `M` merges it as before.
 
@@ -424,12 +426,12 @@ leaves holding nothing (a question answered, an investigation) is deleted.
 
 | Key | Command | Does |
 |---|---|---|
-| `d` | `M-x agent-workspace-review` | A branch's changes in magit: what it did since it left yours (`main...doom-pbk.9-…`) |
+| `d` | `M-x agent-workspace-review` | A branch's changes in magit: what it did since it left yours (`main...fix/doom-pbk.18-…`) |
 | `M` | `M-x agent-workspace-merge` | Merges a branch into your checkout, tells the agent, deletes the branch, and the agent rests on `agent/ada` at the result |
 
 Both take the branch it's on, or ask which when others of its hold work (a looping agent's earlier issues). A merge
 always makes a merge commit naming the branch, even when it could fast-forward: `Merge branch
-'doom-pbk.9-other-canvases-on-the-stage'`. While the agent works, or has changes not committed, the branch stays for
+'fix/doom-pbk.18-minimap-lanes-line-up'`. While the agent works, or has changes not committed, the branch stays for
 now, and you're told: `M` again later. A merge that conflicts stops in your checkout, for you to resolve.
 
 ## What you do to one

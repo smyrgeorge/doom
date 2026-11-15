@@ -128,7 +128,7 @@ refused if its worktree has changes not committed."
   (let ((issue (or (agent-workspace--still-ready project id) (user-error "%s is not ready any more" id)))
         (agent (or (agent-workspace-agent name project) (user-error "%s is not in the crew now" name))))
     (agent-workspace--live-or-error agent)
-    (agent-workspace-give agent id (plist-get issue :title))
+    (agent-workspace-give agent id (plist-get issue :title) (plist-get issue :type))
     (agent-workspace-send agent (agent-workspace-issue-prompt id (plist-get issue :title)) :submit t)
     ;; Its until it's fetched again: its offer's button gone.
     (plist-put issue :assignee name)
