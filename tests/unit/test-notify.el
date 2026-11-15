@@ -41,9 +41,10 @@ none off, what's shown recorded in `+test-notify--shown'."
 (ert-deftest notify/settings ()
   (should (eq (default-value '+my/notify-enabled) t))
   (should-not (default-value '+my/notify-off))
-  ;; Claude Code's, Agent UI's, so far.
+  ;; Claude Code's, Agent UI's, an agent crew's, so far.
   (should (equal (mapcar #'car +my/notify-kinds)
-                 '(agent-ui-question agent-ui-bug claude-question claude-permission claude-turn-done claude))))
+                 '(agent-message agent-stuck agent-done agent-hand
+                   agent-ui-question agent-ui-bug claude-question claude-permission claude-turn-done claude))))
 
 (ert-deftest notify/keys ()
   (should (eq (lookup-key doom-leader-map (kbd "t n")) #'+my/notify-toggle))
@@ -475,3 +476,92 @@ again: not twice)."
     ;; Not those it gets already: a turn's end, a permission, a question.
     (should (string-search "when you finish a turn, when you ask for permission and when you ask a question in the conversation: don't send those again"
                            +my/agent-shell-claude-context))))
+
+;; ====== AN AGENT CREW'S (config/notify/crew.el) ======
+
+(+test-load "config/agent-workspace")
+
+(defmacro +test-notify-crew (&rest body)
+  "BODY as `+test-notify' away from Emacs, with an agent `ada' (a builder of
+a crew in /tmp/project/, its session `session', a buffer), the quiet times
+forgotten; a click's selection recorded in `selected'."
+  (declare (indent 0))
+  `(+test-notify nil
+     (let* ((+my/notify-crew--last (make-hash-table :test #'equal))
+            (session (generate-new-buffer "ada · builder"))
+            (ada (agent-workspace--make-agent :name "ada" :role "builder" :colour "blue" :state 'working
+                                              :project "/tmp/project/" :buffer session))
+            (selected nil))
+       (with-current-buffer session (setq agent-workspace--agent ada))
+       (unwind-protect
+           (cl-letf (((symbol-function 'agent-workspace-open) #'ignore)
+                     ((symbol-function 'agent-workspace-select) (lambda (agent go) (push (list agent go) selected))))
+             ,@body)
+         (kill-buffer session)))))
+
+(ert-deftest notify/crew-kinds ()
+  (dolist (kind '(agent-hand agent-done agent-stuck agent-message))
+    (should (assq kind +my/notify-kinds)))
+  (should (memq #'+my/notify-crew--state-h agent-workspace-state-change-functions))
+  (should (memq #'+my/notify-crew--watch agent-workspace-session-functions))
+  (should (memq #'+my/notify-crew--own-p +my/notify-claude-own-functions)))
+
+(ert-deftest notify/crew-a-hand-raised ()
+  "A hand raised: named by the agent, saying what it wants; a click opens its
+crew's app on it, the cursor in its pane."
+  (+test-notify-crew
+    (agent-workspace--raise-hand ada '(:kind permission :title "npm install" :tool-kind "execute"))
+    (should (equal (mapcar #'butlast +test-notify--shown)
+                   '(("Agent crew" "ada (builder) wants to run npm install"))))
+    (funcall (nth 2 (car +test-notify--shown)))
+    (should (equal selected (list (list ada t))))))
+
+(ert-deftest notify/crew-once-per-change-of-state ()
+  "Once per change of state, and not again for the same agent and kind
+within `+my/notify-crew-quiet' seconds."
+  (+test-notify-crew
+    (agent-workspace--raise-hand ada '(:kind question :title "restore or rebuild?"))
+    (agent-workspace--raise-hand ada '(:kind question :title "and then?"))
+    (should (= (length +test-notify--shown) 1))
+    (agent-workspace--set-state ada 'working)
+    (agent-workspace--raise-hand ada '(:kind question :title "again?"))
+    (should (= (length +test-notify--shown) 1))
+    (let ((+my/notify-crew-quiet 0))
+      (agent-workspace--set-state ada 'working)
+      (agent-workspace--raise-hand ada '(:kind question :title "now?"))
+      (should (equal (cadr (car +test-notify--shown)) "ada (builder) asks: now?")))))
+
+(ert-deftest notify/crew-stuck-and-done ()
+  "Stuck, why; a turn finished, its issue; one you interrupted, nothing."
+  (+test-notify-crew
+    (setf (agent-workspace-agent-error ada) "its session: the API is overloaded\nmore")
+    (agent-workspace--set-state ada 'stuck)
+    (should (equal (cadr (car +test-notify--shown)) "ada (builder) is stuck: its session: the API is overloaded"))
+    (setf (agent-workspace-agent-issue ada) "doom-a1b")
+    (+my/notify-crew--turn-done ada '((:event . turn-complete) (:data (:stop-reason . "end_turn"))))
+    (should (equal (cadr (car +test-notify--shown)) "ada (builder) finished doom-a1b"))
+    (clrhash +my/notify-crew--last)
+    (setq +test-notify--shown nil)
+    (+my/notify-crew--turn-done ada '((:event . turn-complete) (:data (:stop-reason . "cancelled"))))
+    (should-not +test-notify--shown)))
+
+(ert-deftest notify/crew-claude-s-kinds-leave-them ()
+  "A crew's agent's session: Claude Code's kinds leave it (no notification
+twice); its own message named by the agent."
+  (+test-notify-crew
+    (should (+my/notify-claude--own-p session))
+    (with-temp-buffer
+      (should-not (+my/notify-claude--own-p (current-buffer))))
+    (should (+my/notify-claude "The tests pass" "/tmp/project/.agent-shell/worktrees/ada/" session))
+    (should (equal (mapcar #'butlast +test-notify--shown) '(("Agent crew" "ada (builder): The tests pass"))))))
+
+(ert-deftest notify/crew-off-or-in-front ()
+  "A kind off, or Emacs in front: nothing."
+  (+test-notify-crew
+    (let ((+my/notify-off '(agent-hand)))
+      (agent-workspace--raise-hand ada '(:kind question :title "?")))
+    (should-not +test-notify--shown))
+  (+test-notify t
+    (let ((ada (agent-workspace--make-agent :name "ada" :role "builder" :state 'working :project "/tmp/p/")))
+      (agent-workspace--raise-hand ada '(:kind question :title "?"))
+      (should-not +test-notify--shown))))

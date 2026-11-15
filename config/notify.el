@@ -39,6 +39,13 @@
 ;;   on a canvas element);
 ;; - agent-ui-question: a session's turn ended with a question waiting on its
 ;;   canvas (a choice, rows to pick): said instead of claude-turn-done.
+;; And the agent workspace's (config/notify/crew.el), each naming the agent
+;; ("ada (builder)"), a click opening its crew on it; Claude Code's kinds
+;; leave a crew's sessions to them:
+;; - agent-hand: an agent raises its hand (a permission, a question);
+;; - agent-done: an agent finished its turn (the issue it works on);
+;; - agent-stuck: an error stopped an agent;
+;; - agent-message: an agent's message, in its own words.
 (defvar +my/notify-enabled t
   "Desktop notifications on (see above); SPC t n toggles it.")
 
@@ -62,3 +69,4 @@ part that fires it (`+my/notify-define').")
 (load! "notify/core")
 (load! "notify/claude")
 (load! "notify/agent-ui")
+(load! "notify/crew")

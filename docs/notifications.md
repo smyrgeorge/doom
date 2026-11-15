@@ -11,6 +11,13 @@ Linux's notifications. Only while Emacs isn't in front; in Emacs, you see it the
 | Claude Code asks | A session asks you a question in its conversation (the question named) |
 | Agent UI: a question | A session's turn ended with a [question waiting on its canvas](agent-ui.md#a-question-waiting), said instead of "finished" |
 | Agent UI: a bug | A bug filed in [Agent UI's own issues](agent-ui.md#bugs-in-agent-ui) |
+| Agent crew: a hand | An agent of a [crew](agent-workspace.md) wants your permission or asks you something, named: "ada (builder) wants to run npm install" |
+| Agent crew: done | An agent finished its turn: "ada (builder) finished doom-a1b" |
+| Agent crew: stuck | An error stopped an agent, saying why |
+| Agent crew: a message | An agent's own message: "ada (builder): the tests pass" |
+
+A crew's notifications come once per change, and a click opens its crew with that agent selected. Claude Code's own
+aren't sent for a crew's sessions.
 
 Claude sends its message itself (its system prompt says how and when):
 `emacsclient --eval '(+my/notify-claude "The tests pass" "/its/working/directory")'`. Any code can call

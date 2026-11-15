@@ -179,8 +179,8 @@ agents or wait for them.
 You work in your own git worktree, %s, on the branch %s: make your changes and \
 commits there, never in the project's main checkout (%s), which is the user's. They \
 review your branch and merge it. Your bd commands run as %s (BEADS_ACTOR), on the \
-project's issues: an issue the user gives you, claim it as yourself. When you notify \
-the user, start with your name."
+project's issues: an issue the user gives you, claim it as yourself. Your notifications \
+carry your name already."
                name (agent-workspace-agent-role agent)
                (file-name-nondirectory (directory-file-name project))
                (directory-file-name (agent-workspace-agent-worktree agent))
@@ -220,12 +220,19 @@ desk). Buffer-local in `window-buffer-change-functions'."
   (when-let* ((agent (agent-workspace-buffer-agent (window-buffer window))))
     (agent-workspace-seen agent)))
 
-(defun agent-workspace--question-waiting (session _canvas _id)
-  "SESSION's turn ended with a question waiting on its Agent UI canvas: its
-agent raises its hand. In `agent-ui-question-waiting-functions'."
+(declare-function agent-ui-ask-question "agent-ui/ask")
+(declare-function agent-ui-get "agent-ui/canvas")
+
+(defun agent-workspace--question-waiting (session canvas id)
+  "SESSION's turn ended with question ID waiting on its Agent UI CANVAS: its
+agent raises its hand, asking it. In `agent-ui-question-waiting-functions'."
   (when-let* ((agent (agent-workspace-buffer-agent session)))
     (when (eq (agent-workspace-agent-buffer agent) session)
-      (agent-workspace--raise-hand agent (list :kind 'question :title "a question on its canvas")))))
+      (agent-workspace--raise-hand
+       agent (list :kind 'question
+                   :title (or (and (buffer-live-p canvas) (fboundp 'agent-ui-ask-question)
+                                   (ignore-errors (agent-ui-ask-question (agent-ui-get id :canvas canvas))))
+                              "a question on its canvas"))))))
 
 (cl-defun agent-workspace-send (agent text &key submit)
   "Put TEXT in AGENT's prompt; SUBMIT: send it. Working, it gets it after

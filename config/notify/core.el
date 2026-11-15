@@ -32,14 +32,18 @@ frame (it's no window: its focus is never known)."
     (cond (window (select-window window))
           ((buffer-live-p buffer) (pop-to-buffer buffer)))))
 
-(cl-defun +my/notify (kind text &key buffer)
+(cl-defun +my/notify (kind text &key buffer action)
   "Notify of KIND, TEXT, if notifications and KIND are on and Emacs isn't in
-front (see config/notify.el). BUFFER: what it's about, shown on a click.
+front (see config/notify.el). BUFFER: what it's about, shown on a click;
+ACTION: a function called on a click instead (Emacs brought forward first).
 Non-nil if it was shown."
   (when (and (+my/notify-on-p kind)
              (not (+my/notify-emacs-in-front-p)))
     (+my/os-notify (car (alist-get kind +my/notify-kinds)) text
-                   (and buffer (lambda () (+my/notify--show buffer))))))
+                   (cond (action (lambda ()
+                                   (select-frame-set-input-focus (selected-frame))
+                                   (funcall action)))
+                         (buffer (lambda () (+my/notify--show buffer)))))))
 
 (defun +my/notify-test ()
   "Show a notification now, Emacs in front or not: does the desktop show

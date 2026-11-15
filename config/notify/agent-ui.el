@@ -21,11 +21,13 @@ a similar open one."
 showing the canvas (`agent-ui-question-waiting-functions')."
   (let ((question (and (buffer-live-p canvas)
                        (agent-ui-ask-question (agent-ui-get id :canvas canvas)))))
-    (+my/notify 'agent-ui-question
-                (format "%s asks: %s"
-                        (if (buffer-live-p session) (+my/notify-claude--name session) "Claude Code")
-                        (or question "a question"))
-                :buffer canvas)))
+    ;; A crew's agent's: its raised hand says it (config/notify/crew.el).
+    (unless (and (buffer-live-p session) (+my/notify-claude--own-p session))
+      (+my/notify 'agent-ui-question
+                  (format "%s asks: %s"
+                          (if (buffer-live-p session) (+my/notify-claude--name session) "Claude Code")
+                          (or question "a question"))
+                  :buffer canvas))))
 
 (add-hook 'agent-ui-question-waiting-functions #'+my/notify-agent-ui--question)
 

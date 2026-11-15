@@ -48,6 +48,16 @@ with another session working there, its buffer's name, what follows its
             ((not (string-empty-p own)) own)
             (t (buffer-name))))))
 
+(defvar +my/notify-claude-own-functions nil
+  "Called with a session's buffer: one returning non-nil notifies of that
+session itself (an agent of a crew: config/notify/crew.el), its turns, its
+permissions, questions, errors and messages; Claude Code's kinds then don't.")
+
+(defun +my/notify-claude--own-p (buffer)
+  "Non-nil if BUFFER's session is notified of by another (see
+`+my/notify-claude-own-functions')."
+  (run-hook-with-args-until-success '+my/notify-claude-own-functions buffer))
+
 (defvar +my/notify-claude-turn-said-functions nil
   "Called with a session's buffer and agent-shell's turn-complete event when
 its turn ends: one returning non-nil says it in a notification of its own
@@ -105,20 +115,26 @@ elicitation-request EVENT, a form): the question, its first line."
 
 (defun +my/notify-claude--watch-h ()
   "A new session: notify when it finishes its turn or stops on an error, asks
-for permission, or asks you a question."
+for permission, or asks you a question; not one another notifies of
+\(`+my/notify-claude-own-functions'), asked as each event comes (a crew's
+agent is known once its session started)."
   (let ((buffer (current-buffer)))
     (agent-shell-subscribe-to
      :shell-buffer buffer :event 'turn-complete
-     :on-event (lambda (event) (+my/notify-claude--turn-done buffer event)))
+     :on-event (lambda (event) (unless (+my/notify-claude--own-p buffer)
+                                 (+my/notify-claude--turn-done buffer event))))
     (agent-shell-subscribe-to
      :shell-buffer buffer :event 'error
-     :on-event (lambda (event) (+my/notify-claude--failed buffer event)))
+     :on-event (lambda (event) (unless (+my/notify-claude--own-p buffer)
+                                 (+my/notify-claude--failed buffer event))))
     (agent-shell-subscribe-to
      :shell-buffer buffer :event 'permission-request
-     :on-event (lambda (event) (+my/notify-claude--permission buffer event)))
+     :on-event (lambda (event) (unless (+my/notify-claude--own-p buffer)
+                                 (+my/notify-claude--permission buffer event))))
     (agent-shell-subscribe-to
      :shell-buffer buffer :event 'elicitation-request
-     :on-event (lambda (event) (+my/notify-claude--question buffer event)))))
+     :on-event (lambda (event) (unless (+my/notify-claude--own-p buffer)
+                                 (+my/notify-claude--question buffer event))))))
 
 (add-hook 'agent-shell-mode-hook #'+my/notify-claude--watch-h)
 
@@ -153,8 +169,15 @@ Non-nil if it was shown."
   (let* ((session (+my/notify-claude--session directory session))
          (name (cond (session (+my/notify-claude--name session))
                      (directory (+my/notify-claude--folder directory)))))
-    (+my/notify 'claude (if name (format "%s: %s" name text) text)
-                :buffer session)))
+    (if (and session (+my/notify-claude--own-p session))
+        (run-hook-with-args-until-success '+my/notify-claude-message-functions session text)
+      (+my/notify 'claude (if name (format "%s: %s" name text) text)
+                  :buffer session))))
+
+(defvar +my/notify-claude-message-functions nil
+  "Called with a session's buffer and a message of its own, for a session
+another notifies of (`+my/notify-claude-own-functions'): one notifies of it
+\(non-nil if shown).")
 
 ;; What Claude Code is told about it: appended to what it's told about Emacs
 ;; (config/agent-shell.el's `+my/agent-shell-claude-context', loaded before),

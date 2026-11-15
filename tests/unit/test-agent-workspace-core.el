@@ -282,7 +282,7 @@ every session is told; nothing for a session not an agent's."
                       "work with the user only" "Don't hand work to other agents"
                       "/tmp/project/.agent-shell/worktrees/ada, on the branch agent/ada"
                       "never in the project's main checkout (/tmp/project)"
-                      "bd commands run as ada" "start with your name"))
+                      "bd commands run as ada" "Your notifications carry your name already"))
         (should (string-search part text)))
       (should (string-suffix-p "\n\nBuild what you're given." text)))))
 

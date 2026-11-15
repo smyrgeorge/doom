@@ -1,7 +1,8 @@
 # Agent workspace
 
 > **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, the
-> app (its workspace, the issues, the stage, the room) and the saved crew. Notifications come next.
+> app (its workspace, the issues, the stage, the room), the saved crew and notifications. Answering raised hands
+> from one place comes next.
 
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
@@ -71,6 +72,12 @@ One chat for the whole crew: a feed of what matters, and below it a compose line
 | `#` | Talk to the agent you're on (in the issues, a bar, a session) |
 
 The feed is kept per project on this machine, in `.agent-shell/agent-workspace/room.jsonl`.
+
+## Notifications
+
+While you're in another app, a notification names the agent: a hand raised ("ada (builder) wants to run npm
+install"), a turn finished, stuck, or a message of its own. A click opens its crew with it selected. `SPC t N` turns
+each kind off ([Notifications](notifications.md)).
 
 ## The saved crew
 
