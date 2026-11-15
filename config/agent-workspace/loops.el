@@ -530,3 +530,7 @@ nothing). For other parts (the inbox). Non-nil if it was napping."
              (agent-workspace--loop-active-p agent))
     (agent-workspace--loop-look agent)
     t))
+
+;; Looping, it takes its issues itself: never offered one in the room
+;; (handover.el).
+(add-hook 'agent-workspace-offer-skip-functions #'agent-workspace-agent-loop)

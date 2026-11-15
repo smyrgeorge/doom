@@ -165,6 +165,12 @@ claim): one gets it, the other is refused; the issue is the one's."
               (funcall fetched (list (list :id "demo-4" :title "More" :role "builder" :status 'ready)))
               (should-not (string-search "demo-4 is ready" (funcall feed)))
               (agent-workspace--set-state ken 'done)
-              (should (string-search "demo-4 is ready for the builders: ken is free" (funcall feed))))
+              (should (string-search "demo-4 is ready for the builders: ken is free" (funcall feed)))
+              ;; Looping, he takes them himself: none offered.
+              (setf (agent-workspace-agent-loop ken) t)
+              (agent-workspace-give ken nil)
+              (funcall fetched (list (list :id "demo-5" :title "Loop it" :role "builder" :status 'ready)))
+              (should-not (string-search "demo-5 is ready" (funcall feed)))
+              (setf (agent-workspace-agent-loop ken) nil))
           (when (agent-workspace--app project) (agent-workspace--close-app project))
           (agent-workspace-close-all))))))

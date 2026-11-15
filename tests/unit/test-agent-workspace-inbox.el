@@ -324,3 +324,11 @@ other events for her dropped), q gives the room back."
       (should (string-search "off: ci for ada" (agent-workspace--inbox-view-header))))
     (agent-workspace-inbox-view-quit)
     (should (get-buffer-window (agent-workspace--room-buffer project)))))
+
+(ert-deftest agent-workspace-inbox/napping-is-free ()
+  "An agent napping (its loop found nothing) takes an event as one at the
+desk does."
+  (+test-awi "nap" (("ada" "builder"))
+    (agent-workspace--set-state ada 'nap)
+    (agent-workspace-inbox-add project "ada" "wake up" :from "ci")
+    (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "wake up") (+test-awi--said "ada"))) 20))))

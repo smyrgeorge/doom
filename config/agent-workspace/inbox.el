@@ -239,7 +239,7 @@ source off for one: its copy dropped. Return the events, each as it is now
 done (not working, its hand raised, asleep), no event's turn of its own
 going."
   (and (agent-workspace-live-p agent)
-       (memq (agent-workspace-agent-state agent) '(desk done napping))
+       (memq (agent-workspace-agent-state agent) '(desk done nap))
        (not (gethash agent agent-workspace--event-turns))))
 
 (defun agent-workspace--inbox-for (agent events)
@@ -315,7 +315,7 @@ next event. In `agent-workspace-state-change-functions'."
     (when (and (agent-workspace-live-p agent)
                (not (equal (cdr turn) agent-workspace-event-mode)))
       (agent-workspace--set-session-mode agent (cdr turn) #'ignore)))
-  (when (memq new '(desk done napping))
+  (when (memq new '(desk done nap))
     (let ((project (agent-workspace-agent-project agent)))
       (run-at-time 0 nil (lambda ()
                            (when (memq agent (agent-workspace-agents project))
