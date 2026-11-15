@@ -8,6 +8,7 @@
 ;; bd, "Work on ID: fail..." fails, else holds) on throwaway git repositories
 ;; whose issues bd tracks (skipped without bd). Batch Emacs gets no file-notify
 ;; events: a change to .beads is the watch's callback, called.
+;; run.sh: slow (~105 s alone, ~190 s in a full run: a stand-in session and bd for each issue taken).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -388,6 +389,25 @@ part wakes it (`agent-workspace-loop-wake'), for an issue that came."
              (two (+test-awl--issue project "close: two" "build" 2)))
         (should (agent-workspace-loop-wake ada))
         (should (+test-awl--wait (lambda () (equal (+test-awl--status project two) "closed"))))))))
+
+(ert-deftest agent-workspace-loops/a-slow-bd-still-gets-somewhere ()
+  "bd slower than its looks come (one every 1.2 s here, bd's list taking
+1.5 s): each look's answer is used, then the next look, not thrown away for
+it: it naps, then takes an issue that came (doom-pbk.23)."
+  (+test-awl--with-crew "slow"
+    (let* ((bin (file-name-as-directory (make-temp-file (+test-tmp-file "slow-bd-") t)))
+           (real (executable-find "bd"))
+           (exec-path (cons bin exec-path))
+           (process-environment (cons (concat "PATH=" bin path-separator (getenv "PATH")) process-environment))
+           (agent-workspace-loop-check 0.02))
+      (with-temp-file (expand-file-name "bd" bin)
+        (insert "#!/bin/sh\n[ \"$1\" = list ] && sleep 1.5\nexec " (shell-quote-argument real) " \"$@\"\n"))
+      (set-file-modes (expand-file-name "bd" bin) #o755)
+      (let ((ada (+test-awl--create "ada")))
+        (agent-workspace-loop-set ada t)
+        (+test-awl--all-in (list ada) 'nap 60)
+        (let ((one (+test-awl--issue project "close: one" "build" 2)))
+          (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed")) 60)))))))
 
 (ert-deftest agent-workspace-loops/a-branch-for-each-issue ()
   "Each issue it takes gets its branch in its worktree (TYPE/ID, from the

@@ -217,8 +217,8 @@ with its turn: a message queued for it goes first)."
   (run-at-time 0 nil #'agent-workspace--loop-look agent))
 
 (defun agent-workspace--loop-answered (agent)
-  "AGENT's bd command answered: nothing running for it now. Non-nil if a
-look was asked for meanwhile: done now, instead."
+  "AGENT's bd command answered (and its answer used): nothing running for it
+now. Non-nil if a look was asked for meanwhile: done now."
   (agent-workspace--loop-put agent :busy nil)
   (when (agent-workspace--loop-get agent :again)
     (agent-workspace--loop-put agent :again nil)
@@ -247,25 +247,33 @@ one or naps; its issue still in progress, it waits (for you to look)."
      agent (list "list" "--status" "in_progress" "--assignee" (agent-workspace-agent-name agent)
                  "--json" "--limit" "0")
      (lambda (answer)
-       (when (and (not (agent-workspace--loop-answered agent))
-                  (agent-workspace--loop-active-p agent)
-                  (agent-workspace--loop-at-rest-p agent))
-         (agent-workspace--loop-safely
-          agent
-          (lambda ()
-            (pcase answer
-              (`(error . ,why) (agent-workspace--loop-failed agent why))
-              (`(ok . ,(and doing (pred consp)))
-               ;; Its issue still in progress: it waits. One it claimed
-               ;; itself noted as its issue.
-               (unless (seq-find (lambda (issue) (equal (alist-get 'id issue) (agent-workspace-agent-issue agent)))
-                                 doing)
-                 (agent-workspace--note-issue agent (alist-get 'id (car doing)) (alist-get 'title (car doing)))))
-              (_
-               ;; Free: the issue it had is done (closed, or handed over).
-               (when (agent-workspace-agent-issue agent)
-                 (agent-workspace--note-issue agent nil))
-               (agent-workspace--loop-claim agent)))))))))))
+       ;; Its answer used even when another look was asked for meanwhile
+       ;; (.beads changing, its look every few minutes), then that one:
+       ;; thrown away instead, a bd slower than those never got anywhere.
+       (unwind-protect
+           (progn
+             (agent-workspace--loop-put agent :busy nil)
+             (when (and (agent-workspace--loop-active-p agent)
+                        (agent-workspace--loop-at-rest-p agent))
+               (agent-workspace--loop-safely
+                agent
+                (lambda ()
+                  (pcase answer
+                    (`(error . ,why) (agent-workspace--loop-failed agent why))
+                    (`(ok . ,(and doing (pred consp)))
+                     ;; Its issue still in progress: it waits. One it claimed
+                     ;; itself noted as its issue.
+                     (unless (seq-find (lambda (issue) (equal (alist-get 'id issue) (agent-workspace-agent-issue agent)))
+                                       doing)
+                       (agent-workspace--note-issue agent (alist-get 'id (car doing)) (alist-get 'title (car doing)))))
+                    (_
+                     ;; Free: the issue it had is done (closed, or handed over).
+                     (when (agent-workspace-agent-issue agent)
+                       (agent-workspace--note-issue agent nil))
+                     (agent-workspace--loop-claim agent)))))))
+         ;; A claim it started is busy now: its own answer looks again.
+         (unless (agent-workspace--loop-get agent :busy)
+           (agent-workspace--loop-answered agent))))))))
 
 (defun agent-workspace--loop-claim (agent)
   "AGENT, free, claims the next ready issue of its role's labels (bd, as
