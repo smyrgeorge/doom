@@ -21,9 +21,11 @@ stash; not its process log."
 
 (defun +my/tiling-beads-issue-new-pane-p ()
   "In a Beads issue's buffer being shown (config/beads.el): non-nil if it opens
-in a new pane: not the list's preview (P), beads.el's side window. (A second
-issue goes to the first one's pane: config/beads/project.el.)"
-  (not (equal (buffer-name) "*Beads Preview*")))
+in a new pane: not a list's preview (P), where it asks: a list's own
+\(*Beads Preview: NAME*, config/beads/preview.el, beside it), or beads.el's
+\(*Beads Preview*, a side window, without config/beads.el). (A second issue
+goes to the first one's pane: config/beads/project.el.)"
+  (not (string-prefix-p "*Beads Preview" (buffer-name))))
 
 (defun +my/tiling--apps ()
   "The applications chosen (`+my/tiling-apps'): their modes, as

@@ -1524,12 +1524,39 @@ it, the list squeezed to 21; bd waited for on each row; left behind."
 (ert-deftest beads/issues-are-tiling-s-applications ()
   (dolist (mode '(beads-list-mode beads-detail-mode beads-detail-vui-mode))
     (should (seq-find (lambda (app) (eq (if (consp app) (car app) app) mode)) (+my/tiling--apps))))
-  (with-temp-buffer
-    (rename-buffer "*Beads Preview*" t)
-    (when (equal (buffer-name) "*Beads Preview*")
-      (should-not (+my/tiling-beads-issue-new-pane-p))))
-  (with-temp-buffer
-    (should (+my/tiling-beads-issue-new-pane-p))))
+  ;; A list's preview (config/beads/preview.el's), beads.el's own: where they
+  ;; ask; an issue: a new pane.
+  (dolist (case '(("*Beads Preview: doom*" . nil) ("*Beads Preview*" . nil)
+                  ("*Beads Detail: doom-1*" . t)))
+    (with-temp-buffer
+      (rename-buffer (car case) t)
+      (should (equal (buffer-name) (car case)))
+      (should (eq (and (+my/tiling-beads-issue-new-pane-p) t) (cdr case))))))
+
+(ert-deftest beads/a-preview-shown-where-it-asks ()
+  "A list's preview shown through `display-buffer' (beads.el's own: a side
+window on the right): there, not in a new pane as an issue is."
+  (+test-with-reset
+    (let ((this-command 'test)
+          (+my/tiling-apps 'all))
+      (dolist (name '("*Beads Preview: doom*" "*Beads Preview*"))
+        (let ((preview (get-buffer-create name)))
+          (unwind-protect
+              (progn
+                (with-current-buffer preview (beads-detail-mode))
+                (let ((window (display-buffer preview '((display-buffer-in-side-window)
+                                                        (side . right) (window-width . 0.4)))))
+                  (should (eq (window-parameter window 'window-side) 'right))
+                  (should (= (length (+my/tiling--panes)) 1))))
+            (kill-buffer preview))))
+      (let ((issue (get-buffer-create "*Beads Detail: doom-1*")))
+        (unwind-protect
+            (progn
+              (with-current-buffer issue (beads-detail-mode))
+              (let ((window (display-buffer issue '((display-buffer-in-side-window) (side . right)))))
+                (should-not (window-parameter window 'window-side))
+                (should (= (length (+my/tiling--panes)) 2))))
+          (kill-buffer issue))))))
 
 ;; ====== EVIL ======
 
