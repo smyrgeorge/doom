@@ -103,7 +103,8 @@ folder deleted once it's closed. See examples/agent-workspace.el."
          (default-directory dir))
     (+my/example-agent-workspace--project dir)
     (+my/example-agent-workspace--kind)
-    (+my/example-alone)
+    ;; Your windows left as they are: the crew has its own workspace (or gives
+    ;; back the windows it found).
     (setq +my/example-agent-workspace--crew
           (list (agent-workspace-create :role "builder" :name "ada" :kind 'stand-in
                                         :issue "demo-1" :issue-title "Lexer: strings with escapes")

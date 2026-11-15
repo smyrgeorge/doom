@@ -505,9 +505,12 @@ it's closed."
 (ert-deftest examples/agent-workspace-a-crew-offline ()
   "Three stand-in agents in their crew's app, each in its worktree: ada
 working on demo-1, sam's hand raised, ken done; Q closes it, every agent
-exiting, and the folder goes."
+exiting, and the folder goes; your windows as they were (doom-51z.16)."
   (+test-examples
     (set-frame-size (selected-frame) 220 40)
+    (delete-other-windows)
+    (switch-to-buffer (get-buffer-create "*yours*"))
+    (set-window-buffer (split-window-right) (get-buffer-create "*yours, right*"))
     (let* ((app (+my/example-agent-workspace))
            (project (agent-workspace--app-project app)))
       (should (equal (mapcar #'agent-workspace-agent-name (agent-workspace-agents project)) '("ada" "sam" "ken")))
@@ -520,4 +523,6 @@ exiting, and the folder goes."
       (with-current-buffer (agent-workspace--issues-buffer project)
         (agent-workspace-quit))
       (should-not (agent-workspace-agents project))
+      (should (equal (mapcar (lambda (window) (buffer-name (window-buffer window))) (window-list nil 'nomini))
+                     '("*yours*" "*yours, right*")))
       (should (+test-wait-for (lambda () (not (file-exists-p project))) 10)))))
