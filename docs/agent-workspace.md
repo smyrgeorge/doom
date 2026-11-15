@@ -7,7 +7,7 @@
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
 
-![The crew's app: the issues, the stage, the room](../examples/agent-workspace.png)
+![The crew's app: the issues and the minimap, the stage, the room](../examples/agent-workspace.png)
 
 Try it: `M-x +my/example-agent-workspace`, a crew of three stand-in agents, offline.
 
