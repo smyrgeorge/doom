@@ -10,7 +10,9 @@ tests/linux/run.sh all             # the same on Linux, in Docker (from macOS to
 XWIDGETS=no tests/linux/run.sh all # on an Emacs without xwidgets, as most distributions'
 ```
 
-Each test file runs in a throwaway Emacs, so your Emacs and its files are never touched. Test files run several at
+Each test file runs in a throwaway Emacs, so your Emacs and its files are never touched. Nor do the tests see your
+shell's Beads settings (every `BEADS_` and `BD_` variable, and `AGENT_WORKSPACE_AGENT`): run by an agent of a crew,
+their `bd` never reaches the project's issues. Test files run several at
 once, their results shown in file order: `JOBS` unit test files (default: the number of CPUs), `E2E_JOBS` end-to-end
 ones (default: 4, at most `JOBS`; one at a time in `tests/linux/run.sh`, where they share one X server); `JOBS=1` or
 `E2E_JOBS=1` runs them one at a time. A test file with a line `;; run.sh: alone` runs with no other beside it, before

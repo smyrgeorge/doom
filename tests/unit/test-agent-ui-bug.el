@@ -243,7 +243,8 @@ directory), a temp HOME; skipped without bd."
        ,@body)))
 
 (defun +test-aub-issues (dir &rest args)
-  "DIR's issues (bd list --json ARGS, run there without BEADS_DIR)."
+  "DIR's issues (bd list --json ARGS, run there without the BEADS_DIR a test
+set for another project's session)."
   (let ((default-directory dir)
         (process-environment (seq-remove (lambda (v) (string-prefix-p "BEADS_DIR=" v)) process-environment)))
     (json-parse-string (with-temp-buffer

@@ -2,7 +2,7 @@
 ;; What every test file shares. Loaded by tests/run.sh only, in a throwaway
 ;; Emacs (`emacs -Q --init-directory=<temp>`): Doom never loads tests/
 ;; (config.el only loads config/), and the tests never touch Doom's profile,
-;; its state (places, history...) or a running Emacs.
+;; its state (places, history...), a running Emacs or the project's issues.
 ;;
 ;; - Doom's packages come from its build folder (read-only), its macros
 ;;   (`after!', `defadvice!', `map!', `use-package!'...) from its own source,
@@ -94,6 +94,25 @@ name (macOS's /var is a link to /private/var): buffers visit files by theirs
 ;; their own: a test's reset killed their log buffer, their sentinels failed
 ;; on it, and the bell rang (macOS's alert sound) in each GUI test Emacs.
 (setq native-comp-jit-compilation nil)
+
+;; ====== NOT THE PROJECT'S ISSUES ======
+
+;; No test sees the shell's Beads (bd) settings, nor does what it runs: an
+;; agent of a crew runs the tests with BEADS_DIR set to the project's issues,
+;; BEADS_ACTOR and AGENT_WORKSPACE_AGENT to its name
+;; (config/agent-workspace/session.el). Inherited, bd in a test's throwaway
+;; project used the project's issues (bd init failed there, already
+;; initialized; a test's writes landed in them) and wrote as the agent.
+;; Every BEADS_ and BD_ variable (bd's settings) and AGENT_WORKSPACE_AGENT
+;; are dropped from this Emacs's environment.
+(defconst +test-dropped-variables
+  "\\`\\(?:BEADS_\\|BD_\\|AGENT_WORKSPACE_AGENT\\(?:=\\|\\'\\)\\)"
+  "The environment variables no test sees (see above): a regexp on
+\"NAME=VALUE\".")
+
+(dolist (var '(process-environment initial-environment))
+  (set var (seq-remove (lambda (v) (string-match-p +test-dropped-variables v))
+                       (symbol-value var))))
 
 ;; ====== DOOM ======
 
