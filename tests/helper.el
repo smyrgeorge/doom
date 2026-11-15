@@ -114,6 +114,52 @@ name (macOS's /var is a link to /private/var): buffers visit files by theirs
   (set var (seq-remove (lambda (v) (string-match-p +test-dropped-variables v))
                        (symbol-value var))))
 
+;; Nor does a test's bd send anonymous usage metrics (on by default, from each
+;; test's fresh HOME, its first command printing a notice about it where its
+;; output is read): DO_NOT_TRACK, which bd honours.
+(setenv "DO_NOT_TRACK" "1")
+
+;; ====== A BEADS PROJECT, FAST ======
+
+;; `bd init' takes ~5 s (it makes an embedded Dolt database), and every test
+;; making a throwaway project paid it. `+test-bd-init' runs it once per test
+;; process for the same arguments, in a template folder, and copies what it
+;; made: the repository as bd init leaves it (its commit, .beads, the files it
+;; adds, its git config), the one absolute path it writes (core.hooksPath)
+;; pointed at the copy. A copy takes ~0.1 s; bd works on it as on the
+;; original, from any HOME, and never touches the template.
+
+(defvar +test-bd--templates nil
+  "Projects `bd init' made, to copy: (ARGS . FOLDER) each.")
+
+(defun +test-bd--call (program &rest args)
+  "Run PROGRAM with ARGS in `default-directory': an error with its output if
+it fails."
+  (with-temp-buffer
+    (let ((status (apply #'call-process program nil t nil args)))
+      (unless (eql status 0)
+        (error "%s %s: %s" program (string-join args " ") (string-trim (buffer-string)))))))
+
+(defun +test-bd-init (&rest args)
+  "Make `default-directory' (a folder: empty, or a new git repository) a bd
+project, as `bd init ARGS' there would: copied from the one bd init made
+in a template folder, the first time this process asked for ARGS."
+  (let* ((dir (file-name-as-directory (expand-file-name default-directory)))
+         (template (or (cdr (assoc args +test-bd--templates))
+                       (let ((folder (file-name-as-directory (make-temp-file (+test-tmp-file "bd-template-") t))))
+                         (let ((default-directory folder))
+                           (+test-bd--call "git" "init" "-q")
+                           (apply #'+test-bd--call "bd" "init" args))
+                         (push (cons args folder) +test-bd--templates)
+                         folder))))
+    ;; Its own repository (a git init there) replaced by the template's.
+    (when (file-exists-p (expand-file-name ".git" dir))
+      (delete-directory (expand-file-name ".git" dir) t))
+    (+test-bd--call "cp" "-R" (concat template ".") dir)
+    (let ((default-directory dir))
+      (+test-bd--call "git" "config" "core.hooksPath"
+                      (expand-file-name ".beads/hooks" (file-truename dir))))))
+
 ;; ====== DOOM ======
 
 ;; `modulep!': the modules (and flags) init.el's `doom!' block enables.

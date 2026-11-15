@@ -29,8 +29,7 @@
         (with-temp-file (expand-file-name ".gitconfig" home)
           (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
                   "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
-        (+test-beads-e2e--run "git" "init" "-q")
-        (+test-beads-e2e--run "bd" "init" "--quiet" "--prefix" "t")
+        (+test-bd-init "--quiet" "--prefix" "t")
         (+test-beads-e2e--run "bd" "create" "Still open" "--quiet")
         (+test-beads-e2e--run "bd" "close" (string-trim (with-temp-buffer
                                                          (call-process "bd" nil t nil "create" "Done" "--silent")
@@ -88,8 +87,7 @@ also `repo'), a temp HOME; skipped without bd. Beads' buffers killed after."
            (with-temp-file (expand-file-name ".gitconfig" home)
              (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
                      "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
-           (+test-beads-e2e--run "git" "init" "-q")
-           (+test-beads-e2e--run "bd" "init" "--quiet" "--prefix" "t")
+           (+test-bd-init "--quiet" "--prefix" "t")
            (unwind-protect (progn ,@body)
              (dolist (buffer (buffer-list))
                (when (string-prefix-p "*Beads" (buffer-name buffer))

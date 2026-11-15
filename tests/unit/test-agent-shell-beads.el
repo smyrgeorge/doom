@@ -57,7 +57,7 @@ also `root'), with a temp HOME; skipped without bd."
        ;; As SPC o i inits (`+my/beads-init-command'): no files for agents
        ;; (a plain bd init adds Claude Code's SessionStart hook running bd
        ;; prime: Beads' guide then comes from there, see guide-once).
-       (+test-asb--run "bd" "init" "--quiet" "--skip-agents" "--prefix" "t")
+       (+test-bd-init "--quiet" "--skip-agents" "--prefix" "t")
        (cl-letf (((symbol-function 'agent-shell-cwd) (lambda () root)))
          ,@body))))
 

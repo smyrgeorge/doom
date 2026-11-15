@@ -60,11 +60,13 @@ run not aborted (exit status 1, not 2)."
   "A batch run (as tests/run.sh runs a file) from a crew's agent's shell,
 BEADS_DIR, BEADS_ACTOR, AGENT_WORKSPACE_AGENT... set: neither its tests nor
 what they run see them (bd would use the project's issues); the other
-variables are kept. Nor does this Emacs."
+variables are kept. Nor does this Emacs. bd's usage metrics are off for
+them (DO_NOT_TRACK)."
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "harness-") t)))
          (file (expand-file-name "test-run.el" dir))
          (crew '("BEADS_DIR" "BEADS_DB" "BEADS_ACTOR" "BD_ACTOR" "AGENT_WORKSPACE_AGENT")))
     (should-not (seq-some #'getenv crew))
+    (should (equal (getenv "DO_NOT_TRACK") "1"))
     (with-temp-file file
       (insert ";;; -*- lexical-binding: t; -*-\n"
               (prin1-to-string
@@ -86,5 +88,6 @@ variables are kept. Nor does this Emacs."
         (should (equal status 0))
         (should (string-match-p "passed +1/1 +run/env" output))
         (should (string-match-p (concat "^TEST_TMP=" (regexp-quote dir) "$") env))
+        (should (string-match-p "^DO_NOT_TRACK=1$" env))
         (dolist (name crew)
           (should-not (string-match-p (concat "^" name "=") env)))))))

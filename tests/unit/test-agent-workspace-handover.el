@@ -90,8 +90,7 @@ claim): one gets it, the other is refused; the issue is the one's."
   (let* ((project (+test-awo--dir "claims"))
          (default-directory project)
          (process-environment (append '("BEADS_NO_DAEMON=1") process-environment)))
-    (call-process "git" nil nil nil "init" "-q" "-b" "main")
-    (should (eql 0 (call-process "bd" nil nil nil "init" "--quiet" "--skip-agents" "--prefix" "clm")))
+    (+test-bd-init "--quiet" "--skip-agents" "--prefix" "clm")
     (let* ((id (with-temp-buffer
                  (should (eql 0 (call-process "bd" nil t nil "create" "--title" "Build it" "--type" "task"
                                               "--labels" "build" "--json")))

@@ -236,8 +236,7 @@ directory), a temp HOME; skipped without bd."
        (dolist (prefix '("lib" "oth"))
          (let ((default-directory (file-name-as-directory
                                    (file-truename (make-temp-file (+test-tmp-file (concat prefix "-")) t)))))
-           (call-process "git" nil nil nil "init" "-q")
-           (should (zerop (call-process "bd" nil nil nil "init" "--quiet" "--prefix" prefix)))
+           (+test-bd-init "--quiet" "--prefix" prefix)
            (if (equal prefix "lib") (setq library default-directory) (setq other default-directory))))
        (make-directory (expand-file-name "config/agent-ui/" library) t)
        ,@body)))
