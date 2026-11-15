@@ -236,7 +236,7 @@ refused; an unknown role is refused, naming the roles."
          (text (let ((agent-workspace--starting agent)) (agent-workspace-agent-context))))
     (should (string-match-p "\\`You are sam, the investigator" text))
     (should (string-search "\n\nYou're an investigator" text))
-    (should (string-search "label it investigated" text))))
+    (should (string-search "hand it to the builders, as you're told" text))))
 
 (ert-deftest agent-workspace-roles/copied-into-a-project ()
   "A starter copied into the project's roles, to change there; not over one

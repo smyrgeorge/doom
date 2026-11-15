@@ -213,6 +213,7 @@ its thread folded, how many lines of it it stands for."
                  ('event (concat (propertize "✉ → " 'face 'shadow)
                                  (propertize (or (plist-get entry :to) "") 'face 'bold) " "))
                  ('event-done (propertize "✉ " 'face 'shadow))
+                 ('offer (propertize "◆ " 'face 'shadow))
                  (_ "")))
          (text (plist-get entry :text))
          (text (pcase kind
@@ -234,6 +235,9 @@ its thread folded, how many lines of it it stands for."
                 ;; A hand's buttons, while it's raised (hands.el).
                 (and (eq kind 'hand) (fboundp 'agent-workspace--room-hand-line)
                      (agent-workspace--room-hand-line project entry))
+                ;; A ready issue offered to a free agent (handover.el).
+                (and (eq kind 'offer) (fboundp 'agent-workspace--room-offer-line)
+                     (agent-workspace--room-offer-line project entry))
                 ;; A queued event's buttons, while it waits (inbox.el).
                 (and (eq kind 'event) (fboundp 'agent-workspace--room-event-line)
                      (agent-workspace--room-event-line project entry))))))
@@ -369,7 +373,7 @@ in its room. In `agent-workspace-session-functions'."
           (let* ((tool-call (map-nested-elt event '(:data :tool-call)))
                  (command (map-elt tool-call :command)))
             (when (and (equal (map-elt tool-call :status) "completed") (stringp command))
-              (when-let* ((said (agent-workspace--bd-said command)))
+              (when-let* ((said (agent-workspace--bd-said command project)))
                 (agent-workspace-room-post project :kind 'issue :agent name :text said))))))))))
 
 (defun agent-workspace--first-lines (text)
@@ -378,10 +382,21 @@ in its room. In `agent-workspace-session-functions'."
          (line (string-join lines " ")))
     (if (> (length line) 160) (concat (substring line 0 159) "…") line)))
 
-(defun agent-workspace--bd-said (command)
+(defun agent-workspace--bd-said (command &optional project)
   "What COMMAND, an agent's shell command, did to an issue, in words, or
-nil: \"closed doom-a1b\", \"claimed doom-a1b\", \"filed: TITLE\"."
+nil: \"closed doom-a1b\", \"claimed doom-a1b\", \"filed: TITLE\", a
+hand-over: \"handed doom-a1b to the builders\" (PROJECT's role whose label it
+added), \"handed doom-a1b back to ken\"."
   (cond
+   ((string-match "\\(?:\\`\\|[;&|(]\\s-*\\)bd update\\s-+\\([^ ;&|]+\\)[^;&|]*--add-label[= ]\\([^ ;&|]+\\)" command)
+    (let* ((issue (match-string 1 command))
+           (label (match-string 2 command))
+           (role (and project (fboundp 'agent-workspace-label-role) (agent-workspace-label-role project label)))
+           (back (and (string-match "--assignee[= ]\\(?:\"\\([^\"]+\\)\"\\|'\\([^']+\\)'\\|\\([^ ;&|\"']+\\)\\)" command)
+                      (or (match-string 1 command) (match-string 2 command) (match-string 3 command)))))
+      (cond (back (format "handed %s back to %s" issue back))
+            (role (format "handed %s to the %ss" issue role))
+            (t (format "labelled %s %s" issue label)))))
    ((string-match "\\(?:\\`\\|[;&|(]\\s-*\\)bd close\\s-+\\([^ ;&|]+\\)" command)
     (format "closed %s" (match-string 1 command)))
    ((string-match "\\(?:\\`\\|[;&|(]\\s-*\\)bd update\\s-+\\([^ ;&|]+\\).*--claim" command)

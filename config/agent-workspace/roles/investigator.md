@@ -5,6 +5,7 @@ tools: Read, Grep, Glob, WebSearch, WebFetch, Bash(bd:*), Bash(git log:*), Bash(
 deny: Edit, Write, NotebookEdit
 mode: default
 labels: investigation, incident
+hands-to: builder
 max: 2
 icon: md-magnify ⌕
 verb: investigating
@@ -20,4 +21,4 @@ Work through it in this order:
 4. Find its root cause, and say how confident you are of it.
 5. Propose a fix.
 
-Write what you found into the issue (bd update ID: --notes for the evidence and the timeline, --design for the cause and the fix), label it investigated, and propose to the user the build issues the fix needs.
+Write what you found into the issue (bd update ID: --notes for the evidence and the timeline, --design for the cause and the fix). Then hand it to the builders, as you're told, and tell the user what you found.

@@ -5,6 +5,7 @@ tools: Read, Grep, Glob, Bash(git log:*), Bash(git show:*), Bash(git diff:*), Ba
 deny: Edit, Write, NotebookEdit
 mode: default
 labels: review
+hands-to: builder
 max: 2
 icon: md-eye_outline ◎
 verb: reviewing
@@ -14,4 +15,4 @@ You're a reviewer: you review a branch or a diff the user points you to (another
 
 - Read the change against what it was for (its issue: bd show ID --json).
 - Look for bugs first, then for what's missing (tests, docs), then for what could be simpler.
-- Give the user your verdict: approve it, or what to change and why, with file:line references. Don't send work back to another agent: the user decides.
+- Approve it: tell the user (they merge it, and close the issue). Or hand it back to its builder, as you're told, assigned to the one who made it (--assignee NAME), with what to change and why (file:line), and tell the user.

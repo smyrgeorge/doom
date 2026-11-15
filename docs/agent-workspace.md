@@ -138,6 +138,19 @@ An event from a source that's off is dropped as it comes, and the room says so; 
 off. During `agent-workspace-inbox-quiet-hours` (say `("22:00" . "08:00")`) no event is delivered: they wait for the
 end.
 
+## Work handed on through issues
+
+The work moves between roles through the project's issues: an investigator's findings go to the builders, a builder's
+branch to the reviewers, and a reviewer's changes back to the builder who made it. A role's `hands-to:` says where its
+finished issues go. Each agent is told how: it changes the issue's label from its role's to the next one's, leaves
+it open and unassigned (or assigned to the builder it goes back to), and writes what they need in its notes. It does
+this with `bd`, as itself, so Beads' history says who did what. The room says each hand-over: `◆ handed demo-3 to the
+builders`.
+
+When an issue is ready for a role and one of its agents is free, the room offers it once: `demo-3 is ready for the
+builders: ken is free`, with `[Give it to ken]`. Two agents claiming one issue at once never both get it: bd's claim
+is atomic.
+
 ## Agents asking each other
 
 Issues carry the work between agents; a message is for a question. An agent sends one from its shell:
@@ -255,9 +268,9 @@ A role is what a kind of agent does and may do. These four ship with this config
 | Role | Does | May |
 |---|---|---|
 | scribe | writes issues with you | read, `bd`; no edits |
-| investigator | investigates what you give it, writes its findings into the issue | read, search the web, `bd`; no edits |
-| builder | builds what you give it, runs the tests, commits on its branch | edit, commit; never push |
-| reviewer | reviews a branch you point it to, gives you its verdict | read, `bd`; no edits |
+| investigator | investigates what you give it, writes its findings into the issue, hands it to the builders | read, search the web, `bd`; no edits |
+| builder | builds what you give it, runs the tests, commits on its branch, hands it to the reviewers | edit, commit; never push |
+| reviewer | reviews a branch, approves it to you or hands it back to its builder | read, `bd`; no edits |
 
 Each role is a Markdown file, as Claude Code's own agents are: a front matter, then its instructions.
 
@@ -280,7 +293,8 @@ Write the tests first, then run them.
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode. Claude Code
   enforces all three.
 - `max` is how many of the role may run at once. `labels` are the issues it's for. `talks-to` names the roles it may
-  [message](#agents-asking-each-other) without your OK.
+  [message](#agents-asking-each-other) without your OK. `hands-to` names the role its finished issues
+  [go to](#work-handed-on-through-issues).
 - `icon` is a nerd icon for the GUI, then a glyph for the terminal. `verb` is what its agents show while they work:
   "testing doom-a1b". `colour` is its agents' colour while it's free.
 

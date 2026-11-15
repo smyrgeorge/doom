@@ -23,6 +23,10 @@
 (defvar agent-workspace-issues-mode-map (make-sparse-keymap)
   "Keys in the issue list (set in config/agent-workspace.el).")
 
+(defvar agent-workspace-issues-fetched-functions nil
+  "Called with a project and its issues as just fetched (a plist: :doing
+:ready :blocked :done, issue plists; :error).")
+
 (defvar-local agent-workspace--issues-project nil "In the issue list: its project.")
 (defvar-local agent-workspace--issues-data nil
   "In the issue list: its issues as last fetched, a plist: :doing :ready
@@ -114,7 +118,9 @@ cancelled, its bd commands running stopped (its app closing)."
                                 (setq agent-workspace--issues-pending nil
                                       agent-workspace--issues-data
                                       (agent-workspace--issues-parse project answers))
-                                (agent-workspace--issues-redraw project)))))))
+                                (agent-workspace--issues-redraw project)
+                                (run-hook-with-args 'agent-workspace-issues-fetched-functions
+                                                    project agent-workspace--issues-data)))))))
               (agent-workspace--bd project '("list" "--json" "--limit" "0") (got :all))
               (agent-workspace--bd project '("ready" "--json" "--limit" "0") (got :ready))
               (agent-workspace--bd project (list "list" "--json" "--status" "closed"
