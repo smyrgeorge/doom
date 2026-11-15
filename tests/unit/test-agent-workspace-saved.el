@@ -3,8 +3,9 @@
 ;; .agent-workspace/crew.el. Written when the crew changes (stable, only what
 ;; differs), read as data (never evaluated, its problems by line), the crew
 ;; started again from it (fresh, asleep ones asleep, one that can't start
-;; saying why, the layout as it was), read again by hand. In throwaway git
-;; repositories; sessions are plain buffers (no agent runs).
+;; saying why, the layout as it was), read again by hand. An agent's open
+;; panels in it by name, kept as the crew closes, opened again with it. In
+;; throwaway git repositories; sessions are plain buffers (no agent runs).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -270,3 +271,205 @@ asked first; a colour changed applied."
     (should (equal (mapcar #'agent-workspace-agent-name (agent-workspace--ordered project)) '("ada" "sam")))
     (should (equal (agent-workspace-agent-colour (agent-workspace-agent "ada" project)) "red"))
     (should (eq (agent-workspace-agent-state (agent-workspace-agent "sam" project)) 'desk))))
+
+;; ====== AN AGENT'S PANELS ======
+
+(defconst +test-aws2--panel
+  ";;; panel.el --- Agent UI panel -*- lexical-binding: t; -*-
+(agent-ui-panel
+ :version 1
+ :ui (:type \"text\" :id \"t\" :text \"\")
+ :every 60
+ :fetch (lambda (panel) (agent-ui-panel-update panel \"t\" :text default-directory)))
+"
+  "A panel showing where it runs.")
+
+(defmacro +test-aws2-panels (name &rest body)
+  "BODY as `+test-aws2' runs it, its project with two panels committed, logs
+and tests, and trusted (the trust file the test's own); the panels open
+closed after."
+  (declare (indent 1))
+  `(let ((agent-ui-panel-trust-file (+test-tmp-file (format "aws2-trust-%s.eld" ,name))))
+     (unwind-protect
+         (+test-aws2 ,name
+           (let ((default-directory project))
+             (make-directory ".agent-ui/panels" t)
+             (dolist (panel '("logs" "tests"))
+               (write-region +test-aws2--panel nil (format ".agent-ui/panels/%s.el" panel)))
+             (call-process "git" nil nil nil "add" ".agent-ui")
+             (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "panels"))
+           (agent-ui-panel-trust-project project)
+           ,@body)
+       (dolist (buffer (buffer-list))
+         (when (buffer-local-value 'agent-ui-panels--state buffer)
+           (let ((kill-buffer-query-functions nil))
+             (kill-buffer buffer)))))))
+
+(defun +test-aws2--open-panel (agent name)
+  "Panel NAME opened as AGENT's session opens one (agent-ui open NAME)."
+  (agent-ui-open-panel name (agent-workspace-agent-worktree agent) t))
+
+(defun +test-aws2--open-panels ()
+  "The panels open: their canvases' names."
+  (sort (mapcar #'buffer-name
+                (seq-filter (lambda (buffer) (buffer-local-value 'agent-ui-panels--state buffer))
+                            (buffer-list)))
+        #'string<))
+
+(defun +test-aws2--draft (agent)
+  "A panel's file elsewhere in AGENT's worktree: drafts/try.el."
+  (let ((draft (expand-file-name "drafts/try.el" (agent-workspace-agent-worktree agent))))
+    (make-directory (file-name-directory draft) t)
+    (write-region +test-aws2--panel nil draft)))
+
+(ert-deftest agent-workspace-saved/an-agents-panels-written ()
+  "An agent's open panels in its entry, by name, sorted: written as one opens
+or closes; none, no :panels (put to sleep, they close: gone from it). One
+opened from a file of its worktree: that file. Yours, from the main
+checkout: in no agent's."
+  (+test-aws2-panels "panels-written"
+    (let ((ada (agent-workspace-create :role "builder" :name "ada"))
+          (ken (agent-workspace-create :role "builder" :name "ken")))
+      (+test-aws2--open-panel ada "tests")
+      (should (string-search "(:name \"ada\" :role \"builder\" :colour \"blue\" :panels (\"tests\"))"
+                             (+test-aws2--file project)))
+      (let ((logs (+test-aws2--open-panel ada "logs")))
+        (+test-aws2--open-panel ken "tests")
+        (agent-ui-open-panel "tests" project)
+        (should (string-search ":colour \"blue\" :panels (\"logs\" \"tests\"))" (+test-aws2--file project)))
+        (should (string-search "(:name \"ken\" :role \"builder\" :colour \"magenta\" :panels (\"tests\"))"
+                               (+test-aws2--file project)))
+        (kill-buffer logs)
+        (+test-sleep 0.1)
+        (should (string-search ":colour \"blue\" :panels (\"tests\"))" (+test-aws2--file project))))
+      (+test-aws2--draft ada)
+      (+test-aws2--open-panel ada "drafts/try.el")
+      (should (equal (agent-workspace-agent-panel-names ada) '("drafts/try.el" "tests")))
+      (should (string-search ":panels (\"drafts/try.el\" \"tests\"))" (+test-aws2--file project)))
+      (agent-workspace-sleep ken)
+      (+test-sleep 0.1)
+      (should (string-search "(:name \"ken\" :role \"builder\" :colour \"magenta\" :asleep t)"
+                             (+test-aws2--file project))))))
+
+(ert-deftest agent-workspace-saved/closing-keeps-the-panels ()
+  "The crew closed: its agents' panels close with them, crew.el keeps them
+\(Q; agent-workspace-close with its app open); a write still to come, with
+them, done first."
+  (+test-aws2-panels "panels-closing"
+    (agent-workspace-open t)
+    (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
+           (tests (+test-aws2--open-panel ada "tests"))
+           (text (+test-aws2--file project)))
+      (should (string-search ":panels (\"tests\")" text))
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (agent-workspace-quit))
+      (should-not (buffer-live-p tests))
+      (+test-sleep 0.2)
+      (should (equal (+test-aws2--file project) text))))
+  (+test-aws2-panels "panels-closing-app-open"
+    (agent-workspace-open t)
+    (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
+           (tests (+test-aws2--open-panel ada "tests"))
+           (text (+test-aws2--file project)))
+      (agent-workspace-close project)
+      (should-not (buffer-live-p tests))
+      (+test-sleep 0.2)
+      (should (equal (+test-aws2--file project) text))))
+  ;; One closed as the crew closes (its change said after): nothing written
+  ;; after, its crew gone.
+  (+test-aws2-panels "panels-closing-at-once"
+    (agent-workspace-open t)
+    (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
+           (logs (+test-aws2--open-panel ada "logs"))
+           (text (progn (+test-aws2--open-panel ada "tests") (+test-aws2--file project))))
+      (kill-buffer logs)
+      (agent-workspace-close project)
+      (+test-sleep 0.2)
+      (should (equal (+test-aws2--file project) text))))
+  ;; Debounced for real: the write closing does has them.
+  (+test-aws2-panels "panels-flushed"
+    (cl-letf* ((run-at-time (symbol-function 'run-at-time))
+               ((symbol-function 'run-at-time)
+                (lambda (time repeat fn &rest args)
+                  (if (eq fn #'agent-workspace-crew-save)
+                      (funcall run-at-time 3600 nil #'ignore)
+                    (apply run-at-time time repeat fn args)))))
+      (let ((ada (agent-workspace-create :role "builder" :name "ada")))
+        (+test-aws2--open-panel ada "tests")
+        (should-not (+test-aws2--file project))
+        (agent-workspace-close project)
+        (+test-sleep 0.2)
+        (should (string-search "(:name \"ada\" :role \"builder\" :colour \"blue\" :panels (\"tests\"))"
+                               (+test-aws2--file project)))))))
+
+(ert-deftest agent-workspace-saved/wrong-panels-left-out ()
+  "An entry whose :panels isn't a list of names is left out, its line said."
+  (+test-aws2 "wrong-panels"
+    (+test-aws2--write project "(agent-workspace-crew
+ :version 1
+ :agents ((:name \"ada\" :role \"builder\" :panels (\"tests\"))
+          (:name \"ken\" :role \"builder\" :panels \"tests\")
+          (:name \"sam\" :role \"builder\" :panels (\"tests\" logs))
+          (:name \"tim\" :role \"builder\" :panels (\"tests\" . \"logs\"))
+          (:name \"una\" :role \"builder\" :panels (\"\")))
+ :layout nil)
+")
+    (pcase-let ((`(,crew . ,problems) (agent-workspace-crew-read project)))
+      (should (equal (plist-get crew :agents) '((:name "ada" :role "builder" :panels ("tests")))))
+      (should (equal problems
+                     '(".agent-workspace/crew.el:4: ken's panels \"tests\" aren't a list of names: left out"
+                       ".agent-workspace/crew.el:5: sam's panels (\"tests\" logs) aren't a list of names: left out"
+                       ".agent-workspace/crew.el:6: tim's panels (\"tests\" . \"logs\") aren't a list of names: left out"
+                       ".agent-workspace/crew.el:7: una's panels (\"\") aren't a list of names: left out"))))))
+
+(ert-deftest agent-workspace-saved/panels-opened-again ()
+  "Started again from crew.el: each agent that starts opens its panels again,
+in its worktree (its own, shown in no pane); an asleep one, none; one whose
+file is gone skipped, said, the others open. Nothing written meanwhile."
+  (+test-aws2-panels "panels-again"
+    (agent-workspace-create :role "builder" :name "ada")
+    (agent-workspace-create :role "builder" :name "ken")
+    (agent-workspace-close project)
+    (+test-aws2--write project "(agent-workspace-crew
+ :version 1
+ :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :panels (\"gone\" \"logs\" \"tests\"))
+          (:name \"ken\" :role \"builder\" :colour \"green\" :asleep t :panels (\"tests\")))
+ :layout (:view stage :room right :selected \"ada\" :open t))
+")
+    (let ((warned nil))
+      (cl-letf (((symbol-function 'display-warning) (lambda (_type message &rest _) (push message warned))))
+        (agent-workspace-open t))
+      (let ((ada (agent-workspace-agent "ada" project)))
+        (should (equal (+test-aws2--open-panels) '("Agent UI: logs · ada" "Agent UI: tests · ada")))
+        (dolist (canvas (agent-workspace-agent-panels ada))
+          (should (equal (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state canvas)))
+                         (file-truename (agent-workspace-agent-worktree ada))))
+          (should-not (get-buffer-window canvas t))))
+      (should (equal warned '("ada's panel gone: not one of this project's: logs, tests: skipped"))))
+    (should (string-search ":panels (\"gone\" \"logs\" \"tests\")" (+test-aws2--file project)))))
+
+(ert-deftest agent-workspace-saved/panels-closed-and-opened-again ()
+  "Q, then SPC o w: each agent's panels open again with it, in its worktree
+\(one from a file there too); the one put to sleep closed its own: none."
+  (+test-aws2-panels "panels-cycle"
+    (agent-workspace-open t)
+    (let ((ada (agent-workspace-create :role "builder" :name "ada"))
+          (ken (agent-workspace-create :role "builder" :name "ken"))
+          (sam (agent-workspace-create :role "builder" :name "sam")))
+      (+test-aws2--draft ada)
+      (+test-aws2--open-panel ada "tests")
+      (+test-aws2--open-panel ada "logs")
+      (+test-aws2--open-panel ada "drafts/try.el")
+      (+test-aws2--open-panel ken "tests")
+      (+test-aws2--open-panel sam "logs")
+      (agent-workspace-sleep sam)
+      (+test-sleep 0.1))
+    (with-current-buffer (agent-workspace--issues-buffer project)
+      (agent-workspace-quit))
+    (should-not (+test-aws2--open-panels))
+    (agent-workspace-open t)
+    (should (equal (+test-aws2--open-panels)
+                   '("Agent UI: logs · ada" "Agent UI: tests · ada" "Agent UI: tests · ken" "Agent UI: try · ada")))
+    (should (equal (agent-workspace-agent-panel-names (agent-workspace-agent "ada" project))
+                   '("drafts/try.el" "logs" "tests")))
+    (should (eq (agent-workspace-agent-state (agent-workspace-agent "sam" project)) 'asleep))))

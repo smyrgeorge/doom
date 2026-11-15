@@ -106,11 +106,14 @@
 ;; What the crew is, not its state, saved in the project and committed:
 ;; .agent-workspace/crew.el (config/agent-workspace/saved.el), read as data,
 ;; never evaluated. Each agent's name, role, colour (its model and mode when
-;; not its role's), whether it's asleep; the layout. Written when the crew
-;; changes. SPC o w with no crew running starts it again from there: every
-;; agent fresh, in its worktree, its role as it is now, asleep ones asleep,
-;; each waiting for you; one that can't start stuck, saying why. gR reads it
-;; again (after an edit, a pull), asking before it starts or forgets one.
+;; not its role's), whether it's asleep, its open panels by name (never their
+;; data); the layout. Written when the crew changes (a panel opened or closed
+;; too); closing the crew leaves it as it was. SPC o w with no crew running
+;; starts it again from there: every agent fresh, in its worktree, its role as
+;; it is now, its panels opened again there, asleep ones asleep, each waiting
+;; for you; one that can't start stuck, saying why; a panel whose file is
+;; gone skipped, said. gR reads it again (after an edit, a pull), asking
+;; before it starts or forgets one.
 
 ;; THE APP
 ;; SPC o w, from inside a project (outside one, asked which): its crew's own
@@ -247,7 +250,8 @@
 
 ;; AN AGENT'S PANELS (config/agent-workspace/panels.el): a project panel an
 ;; agent opens runs in its worktree, "tests · ada", never popped up (its pane
-;; on the stage shows it), trusted as its project, closed with the agent.
+;; on the stage shows it), trusted as its project, closed with the agent;
+;; saved with the crew by name, opened again with it (see THE SAVED CREW).
 (setq agent-ui-panel-name-function #'agent-workspace--panel-name
       agent-ui-panel-trust-root-function #'agent-workspace--panel-trust-root
       agent-ui-panel-display-function #'agent-workspace--panel-display)

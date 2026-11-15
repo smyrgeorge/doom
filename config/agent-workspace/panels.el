@@ -12,15 +12,21 @@
 ;; agents' worktrees; a file changed on an agent's branch is asked about
 ;; again (Agent UI remembers a file's trust by its content). Closed when its
 ;; agent is killed, put to sleep or forgotten, and when its crew closes; kept
-;; across a restart.
+;; across a restart. Saved with the crew, by name (crew.el's :panels, never
+;; their data: saved.el), opened again when it starts again.
 
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
 
 (declare-function agent-ui-panel-default-canvas-name "agent-ui/panels")
+(declare-function agent-ui-open-panel "agent-ui/panels")
+(declare-function agent-ui-error-message "agent-ui/core")
 (defvar agent-ui-panels--state)
+(defvar agent-ui-panel-directory)
 (declare-function agent-ui-panels--root "agent-ui/panels")
+(declare-function agent-ui-panels--file "agent-ui/panels")
+(declare-function agent-ui-panels--name "agent-ui/panels")
 
 ;; ====== WHOSE ======
 
@@ -92,3 +98,35 @@ panels closed. A restart keeps them. In
     (agent-workspace--close-panels agent)))
 
 (add-hook 'agent-workspace-state-change-functions #'agent-workspace--panels-state-h)
+
+;; ====== SAVED WITH THE CREW ======
+
+(defun agent-workspace-agent-panel-names (agent)
+  "AGENT's open panels as crew.el keeps them, sorted: each as agent-ui open
+takes it, its name (one opened from a file elsewhere in its worktree: that
+file, relative to it)."
+  (sort (mapcar (lambda (canvas)
+                  (let* ((panel (buffer-local-value 'agent-ui-panels--state canvas))
+                         (name (agent-ui-panels--name panel))
+                         (file (agent-ui-panels--file panel))
+                         (root (agent-ui-panels--root panel)))
+                    (if (file-equal-p file (expand-file-name (concat name ".el")
+                                                             (expand-file-name agent-ui-panel-directory root)))
+                        name
+                      (file-relative-name file root))))
+                (agent-workspace-agent-panels agent))
+        #'string<))
+
+(defun agent-workspace-open-panels (agent names)
+  "AGENT's panels NAMES (crew.el's) opened again, in its worktree, as its
+session opens one. One that can't open (its file gone): skipped, said; the
+others open. None without Agent UI."
+  (when (fboundp 'agent-ui-open-panel)
+    (dolist (name names)
+      (condition-case err
+          (agent-ui-open-panel name (agent-workspace-agent-worktree agent) t)
+        (error
+         (display-warning 'agent-workspace
+                          (format "%s's panel %s: %s: skipped" (agent-workspace-agent-name agent) name
+                                  (string-remove-prefix (format "panel %s: " name)
+                                                        (agent-ui-error-message err)))))))))

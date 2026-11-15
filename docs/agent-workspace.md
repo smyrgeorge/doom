@@ -97,6 +97,7 @@ opening `tests` get one each, and yours from the main checkout stays yours. It r
 (`agent-ui get --panel tests`), and a panel nobody is looking at fetches only when its agent reads it. They share the
 project's trust: trust the project and its agents' worktrees are trusted too, but a panel file changed on an agent's
 branch is asked about again. They close when the agent is killed, put to sleep or forgotten, and when the crew closes.
+They're saved with the crew, by name, and open again when it starts again ([The saved crew](#the-saved-crew)).
 
 ## Notifications
 
@@ -107,22 +108,24 @@ each kind off ([Notifications](notifications.md)).
 ## The saved crew
 
 The crew is saved in the project, in `.agent-workspace/crew.el`, to commit: each agent's name, role and colour, its
-model and permission mode when they aren't its role's, whether it's asleep, and which agent is selected. Not its
-session, state or issue.
+model and permission mode when they aren't its role's, whether it's asleep, the [panels](#an-agents-panels) it has
+open (by name, never their data), and which agent is selected. Not its session, state or issue.
 
 ```elisp
 (agent-workspace-crew
  :version 1
- :agents ((:name "ada" :role "builder" :colour "blue")
+ :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
           (:name "ken" :role "builder" :colour "green" :asleep t)
           (:name "sam" :role "investigator" :colour "magenta" :model "opus"))
  :layout (:view stage :room right :selected "ada" :open t))
 ```
 
-It's written when the crew changes, and read as data, never run. `SPC o w` in a project whose crew isn't running
-starts every agent in it again: fresh, each in its worktree, with its role as it is now, waiting for you. Asleep
-agents stay asleep. An agent that can't start (its role is gone, its worktree can't be made) is stuck, saying why,
-and the others start. A wrong entry is left out, and a warning names its line.
+It's written when the crew changes (a panel opened or closed too), and read as data, never run. Closing the crew
+leaves it as it was, its agents' panels in it. `SPC o w` in a project whose crew isn't running starts every agent in
+it again: fresh, each in its worktree, with its role as it is now, its panels open again there (fetched afresh),
+waiting for you. Asleep agents stay asleep. An agent that can't start (its role is gone, its worktree can't be made)
+is stuck, saying why, and the others start. A panel whose file is gone is skipped, saying so, and the others open. A
+wrong entry is left out, and a warning names its line.
 
 After you edit it or pull it, `gR` reads it again. It asks before it starts an agent or forgets one.
 

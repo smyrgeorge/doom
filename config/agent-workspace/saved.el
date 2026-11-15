@@ -6,18 +6,21 @@
 ;;
 ;;   (agent-workspace-crew
 ;;    :version 1
-;;    :agents ((:name "ada" :role "builder" :colour "blue")
+;;    :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
 ;;             (:name "ken" :role "builder" :colour "green" :asleep t))
 ;;    :layout (:view stage :room right :selected "ada" :open t))
 ;;
 ;; What each agent is (its name, role, colour; its model and mode when not its
-;; role's; whether it's asleep; its kind when not Claude Code) and the layout; never its session, its state
-;; or its issue. Written when the crew changes (debounced), in a stable order
-;; (role order, then name), one agent a line, only if it differs. When the
-;; app opens with no crew running, every agent in it starts again, fresh, in
-;; its worktree, with its role as it is now; asleep ones stay asleep; each
-;; waits for you. One that can't start is stuck, saying why; the others
-;; start. Read again by hand (gR): it asks before starting or stopping one.
+;; role's; whether it's asleep; its kind when not Claude Code; its open
+;; panels, by name, never their data) and the layout; never its session, its
+;; state or its issue. Written when the crew changes (debounced), in a stable
+;; order (role order, then name), one agent a line, only if it differs; its
+;; crew closing leaves it as it was (written first, before any agent stops
+;; and its panels close). When the app opens with no crew running, every
+;; agent in it starts again, fresh, in its worktree, with its role as it is
+;; now, its panels opened again there; asleep ones stay asleep; each waits
+;; for you. One that can't start is stuck, saying why; the others start. Read
+;; again by hand (gR): it asks before starting or stopping one.
 
 (require 'cl-lib)
 (require 'seq)
@@ -117,6 +120,10 @@ read already), or nil."
                  (mapconcat (lambda (kind) (symbol-name (car kind))) agent-workspace-kinds ", ")))
         ((and (plist-get entry :model) (not (stringp (plist-get entry :model))))
          (format "%s's model isn't a string" (plist-get entry :name)))
+        ((let ((panels (plist-get entry :panels)))
+           (not (and (proper-list-p panels)
+                     (seq-every-p (lambda (name) (and (stringp name) (not (string-empty-p name)))) panels))))
+         (format "%s's panels %S aren't a list of names" (plist-get entry :name) (plist-get entry :panels)))
         (t (ignore project) nil)))
 
 ;; ====== WRITING ======
@@ -134,7 +141,9 @@ read already), or nil."
             (and (eq (agent-workspace-agent-state agent) 'asleep) (list :asleep t))
             ;; Not Claude Code (the example's stand-in): said, so it starts again as it was.
             (unless (eq (agent-workspace-agent-kind agent) 'claude-code)
-              (list :kind (agent-workspace-agent-kind agent))))))
+              (list :kind (agent-workspace-agent-kind agent)))
+            (let ((panels (agent-workspace-agent-panel-names agent)))
+              (and panels (list :panels panels))))))
 
 (defun agent-workspace-crew-text (project)
   "PROJECT's crew as crew.el's text."
@@ -191,7 +200,11 @@ crew.el keeps it."
 (defun agent-workspace--crew-changed-h (agent what)
   "AGENT's WHAT changed: what crew.el holds, written. In
 `agent-workspace-change-functions'."
-  (when (memq what '(created renamed colour role settings forgotten))
+  (when (or (memq what '(created renamed colour role settings forgotten))
+            ;; A panel opened or closed; not one closing as its crew closes
+            ;; (the agent out of it already): crew.el keeps what was open.
+            (and (eq what 'panels)
+                 (memq agent (agent-workspace-agents (agent-workspace-agent-project agent)))))
     (agent-workspace--crew-save-soon (agent-workspace-agent-project agent))))
 
 (defun agent-workspace--crew-state-h (agent old new)
@@ -207,7 +220,8 @@ crew.el keeps it."
   (agent-workspace--crew-save-soon project))
 
 (defun agent-workspace--crew-closing-h (project)
-  "PROJECT's crew closing: a write still to come, done now. In
+  "PROJECT's crew closing: a write still to come, done now, before any agent
+stops (its panels still open, in it). In
 `agent-workspace-closing-functions'."
   (when-let* ((timer (gethash (agent-workspace--root project) agent-workspace--crew-timers)))
     (cancel-timer timer)
@@ -222,7 +236,8 @@ crew.el keeps it."
 
 (defun agent-workspace--restore (project entry)
   "The agent ENTRY of PROJECT's crew.el, in its crew again: fresh, in its
-worktree, asleep if it was; stuck, saying why, if it can't start."
+worktree, its panels opened again there; asleep if it was (none opened);
+stuck, saying why, if it can't start."
   (let* ((name (plist-get entry :name))
          (role (plist-get entry :role))
          (agent (agent-workspace--make-agent
@@ -245,8 +260,9 @@ worktree, asleep if it was; stuck, saying why, if it can't start."
                      (agent-workspace-agent-error agent) (concat "its worktree: " (error-message-string err)))
                t))))
     (agent-workspace--changed agent 'created)
-    (when (eq (agent-workspace-agent-state agent) 'waking)
-      (agent-workspace--start agent))
+    (when (and (eq (agent-workspace-agent-state agent) 'waking)
+               (agent-workspace--start agent))
+      (agent-workspace-open-panels agent (plist-get entry :panels)))
     agent))
 
 (defun agent-workspace--crew-start (project)
