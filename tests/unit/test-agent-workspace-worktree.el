@@ -180,7 +180,7 @@ role changed: moved, its branch as it was."
 
 (ert-deftest agent-workspace-worktree/named-otherwise-moved ()
   "A worktree on its branch named as before (worktrees/NAME), or for its
-role before (crew.el edited): moved to ROLE-NAME as its agent starts, its
+role before (crew.json edited): moved to ROLE-NAME as its agent starts, its
 work kept, locked as it. Its branch checked out outside the agents' folder
 \(yours): never moved, git's refusal said."
   (let* ((project (+test-aww--project "before"))
@@ -196,7 +196,7 @@ work kept, locked as it. Its branch checked out outside the agents' folder
       (should-not (file-exists-p old))
       (should (file-exists-p (expand-file-name "wip" dir)))
       (should (string-search "locked agent ada (builder)" (+test-aww--porcelain project)))
-      ;; Its role changed in crew.el meanwhile.
+      ;; Its role changed in crew.json meanwhile.
       (setf (agent-workspace-agent-role agent) "reviewer")
       (let ((moved (agent-workspace-worktree-ensure agent)))
         (should (equal moved (expand-file-name ".agent-shell/worktrees/reviewer-ada/" project)))

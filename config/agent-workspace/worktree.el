@@ -7,7 +7,7 @@
 ;; kept when it's killed, put to sleep or its crew closed (the next start
 ;; reuses it), moved when it's renamed or its role changes. One found
 ;; elsewhere in .agent-shell/worktrees on its branch (worktrees/NAME, as
-;; they were named before; its role's before crew.el changed it) is moved
+;; they were named before; its role's before crew.json changed it) is moved
 ;; to its folder as it starts.
 
 (require 'cl-lib)

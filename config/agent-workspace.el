@@ -88,7 +88,7 @@ needs your OK. nil: Claude Code's own default."
 
 ;; LOOPS
 ;; (config/agent-workspace/loops.el) Off for every agent; L turns one's on
-;; (↻ on its bar; kept in crew.el). Once free (its turn ended, the issue it
+;; (↻ on its bar; kept in crew.json). Once free (its turn ended, the issue it
 ;; had closed or handed over: still in progress, it waits for you to look), it
 ;; takes the next issue by itself: one you gave it first, else the next ready
 ;; one its role's labels say, claimed as itself (bd ready --claim: two never
@@ -169,7 +169,7 @@ needs your OK. nil: Claude Code's own default."
 ;; pauses them all. Limits: 6 an hour from a source, 40 a day for an agent.
 ;; E lists them in the room's place: RET sends one now, d drops it, M-up /
 ;; M-down move it, o turns its source off for its agent or everyone (kept in
-;; crew.el), q back. None delivered in `agent-workspace-inbox-quiet-hours'.
+;; crew.json), q back. None delivered in `agent-workspace-inbox-quiet-hours'.
 ;; Only with `agent-workspace-outside-events' (E and P: while messages use
 ;; it too).
 
@@ -177,7 +177,7 @@ needs your OK. nil: Claude Code's own default."
 ;; A direct message for a question (config/agent-workspace/messages.el), from
 ;; an agent's shell: cmd/agent-workspace send --to ken TEXT. T in the app: may
 ;; they, off / ask me (each waits in the room for [Send] [Edit] [Drop]) / on,
-;; kept in crew.el; a role's talks-to: names the roles it may message without
+;; kept in crew.json; a role's talks-to: names the roles it may message without
 ;; your OK. Through the inbox: delivered when free, framed as from the sender
 ;; (data, not your instructions); the reply goes back to the sender, as an
 ;; answer. In the room, each exchange a thread: TAB folds it, x stops it (or
@@ -199,18 +199,20 @@ needs your OK. nil: Claude Code's own default."
 ;; is still offered to its first free agent, for you to give.
 
 ;; THE SAVED CREW
-;; What the crew is, not its state, saved in the project and committed:
-;; .agent-workspace/crew.el (config/agent-workspace/saved.el), read as data,
-;; never evaluated. Each agent's name, role, colour (its model and mode when
-;; not its role's), whether it's asleep, whether it loops, its open panels by
-;; name (never their data); the layout. Written when the crew changes (a panel
-;; opened or closed too); closing the crew leaves it as it was. SPC o w with
-;; no crew running starts it again from there: every agent fresh, in its
-;; worktree, its role as it is now, its panels opened again there, asleep ones
-;; and looping ones asleep, each waiting for you; one that can't start stuck,
-;; saying why; a panel whose file is gone skipped, said. gR reads it again
-;; (after an edit, a pull), asking before it starts or forgets one, or turns
-;; a loop on.
+;; What the crew is, not its state, saved per project on this machine, not
+;; committed: .agent-shell/agent-workspace/crew.json, beside the room and the
+;; inbox (config/agent-workspace/saved.el), JSON, read as data, never
+;; evaluated. Each agent's name, role, colour (its model and mode when not its
+;; role's), whether it's asleep, whether it loops, its open panels by name
+;; (never their data); the layout. Written when the crew changes (a panel
+;; opened or closed too), one agent a line; closing the crew leaves it as it
+;; was. SPC o w with no crew running starts it again from there: every agent
+;; fresh, in its worktree, its role as it is now, its panels opened again
+;; there, asleep ones and looping ones asleep, each waiting for you; one that
+;; can't start stuck, saying why; a panel whose file is gone skipped, said; a
+;; wrong agent left out, said by its place and name; a file that isn't JSON or
+;; isn't a crew said, nothing started. gR reads it again (after an edit),
+;; asking before it starts or forgets one, or turns a loop on.
 
 ;; THE APP
 ;; SPC o w, from inside a project (outside one, asked which): its crew's own
@@ -242,7 +244,7 @@ needs your OK. nil: Claude Code's own default."
 ;;                canvas and panels (the cursor there; again: the next one), V
 ;;                the one there full size (again: back), I its issue, L its
 ;;                loop on or off, a the next raised hand, A answer it, f + an
-;;                initial that agent, gr lay out again, gR read crew.el again,
+;;                initial that agent, gr lay out again, gR read crew.json again,
 ;;                q leave, Q close, ? the keys
 ;;   its session  the same after SPC m w (C-c w in insert state), and ] / [
 ;;                the next / previous agent; a click on its header line or a

@@ -66,7 +66,7 @@ terminal with `git init` typed.
 | `P` | anywhere | Pause the crew's events, or let them go again (with the inbox on) |
 | `T` | anywhere | May its agents message each other: off, ask me, on (while they may talk) |
 | `E` | anywhere | The events waiting: reorder, drop, send now, a source off (with the inbox on) |
-| `gr` / `gR` | anywhere | Lay it out again / read `crew.el` again |
+| `gr` / `gR` | anywhere | Lay it out again / read `crew.json` again |
 | `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
 In an agent's own session, the same keys follow `SPC m w` (`C-c w` in insert state), plus `]` / `[` for the next or
@@ -140,7 +140,7 @@ day (`agent-workspace-inbox-source-limit`, `agent-workspace-inbox-agent-limit`);
 
 `E` lists the events waiting, in the room's place (`q` gives the room back): `RET` sends one now, `d` drops it,
 `M-↑` / `M-↓` move it (the order they're delivered in), and `o` turns its source off for its agent or for everyone.
-An event from a source that's off is dropped as it comes, and the room says so; `crew.el` keeps the sources you turned
+An event from a source that's off is dropped as it comes, and the room says so; `crew.json` keeps the sources you turned
 off. During `agent-workspace-inbox-quiet-hours` (say `("22:00" . "08:00")`) no event is delivered: they wait for the
 end.
 
@@ -167,7 +167,7 @@ the issue as it is and tell you. The room still offers a ready issue, for you to
 
 Issues carry the work between agents; a message is for a question. An agent sends one from its shell:
 `cmd/agent-workspace send --to ken "What does the lexer return?"` (to an agent, or `#reviewer`, a role's first free
-agent). `T` in the app says whether they may, kept in `crew.el`:
+agent). `T` in the app says whether they may, kept in `crew.json`:
 
 - **Ask me**, at first: each message waits in the room, `ada → ken`, for `[Send]`, `[Edit]` or `[Drop]`.
 - **On**: sent at once. **Off**: refused, and the agent is told so.
@@ -184,7 +184,7 @@ it was for. Guards: a thread waits for your OK after 5 messages without you (`ag
 agent sends at most 10 messages an hour (`agent-workspace-message-limit`). Each agent is told its crew, how to message,
 which roles it may message without your OK, and never to wait for an answer.
 
-With `agent-workspace-agents-talk` set to `nil`, a message is refused, whatever `T` says (`crew.el` keeps it), and
+With `agent-workspace-agents-talk` set to `nil`, a message is refused, whatever `T` says (`crew.json` keeps it), and
 `T` says so. Agents aren't told of messages, and those queued before wait, not delivered.
 
 ## Raised hands
@@ -245,31 +245,35 @@ opens its crew with it selected. `SPC t N` turns each kind off ([Notifications](
 
 ## The saved crew
 
-The crew is saved in the project, in `.agent-workspace/crew.el`, to commit: each agent's name, role and colour, its
-model and permission mode when they aren't its role's, whether it's asleep, whether it [loops](#loops), the
-[panels](#an-agents-panels) it has open (by name, never their data), which agent is selected, whether the minimap is
-shown, whether its agents may message each other, and the event sources you turned off. Not its session, state or
-issue.
+The crew is kept per project on this machine, in `.agent-shell/agent-workspace/crew.json`, beside the room and the
+inbox, not committed: each agent's name, role and colour, its model and permission mode when they aren't its role's,
+whether it's asleep, whether it [loops](#loops), the [panels](#an-agents-panels) it has open (by name, never their
+data), which agent is selected, whether the minimap is shown, whether its agents may message each other, and the event
+sources you turned off. Not its session, state or issue.
 
-```elisp
-(agent-workspace-crew
- :version 1
- :agents ((:name "ada" :role "builder" :colour "blue" :loop t :panels ("logs" "tests"))
-          (:name "ken" :role "builder" :colour "green" :asleep t)
-          (:name "sam" :role "investigator" :colour "magenta" :model "opus"))
- :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask :sources-off nil))
+```json
+{"version": 2,
+ "agents": [
+  {"name": "ada", "role": "builder", "colour": "blue", "loop": true, "panels": ["logs", "tests"]},
+  {"name": "ken", "role": "builder", "colour": "green", "asleep": true},
+  {"name": "sam", "role": "investigator", "colour": "magenta", "model": "opus"}
+ ],
+ "layout": {"view": "stage", "room": "right", "selected": "ada", "open": true, "minimap": true,
+            "talk": "ask", "sources_off": []}}
 ```
 
-It's written when the crew changes (a panel opened or closed too), and read as data, never run. Closing the crew
-leaves it as it was, its agents' panels in it. `SPC o w` in a project whose crew isn't running starts every agent in
-it again: fresh, each in its worktree, with its role as it is now, its panels open again there (fetched afresh),
-waiting for you. Asleep agents stay asleep, and their panels open when they wake. Looping agents come back asleep:
-reopening never starts work by itself. An agent that can't start (its role is gone, its worktree can't be made)
-is stuck, saying why, and the others start. A panel whose file is gone is skipped, saying so, and the others open. A
-wrong entry is left out, and a warning names its line.
+It's written when the crew changes (a panel opened or closed too), one agent a line, and read as JSON, never run, so
+scripts can read it too (`jq`). Closing the crew leaves it as it was, its agents' panels in it. `SPC o w` in a project
+whose crew isn't running starts every agent in it again: fresh, each in its worktree, with its role as it is now, its
+panels open again there (fetched afresh), waiting for you. Asleep agents stay asleep, and their panels open when they
+wake. Looping agents come back asleep: reopening never starts work by itself. An agent that can't start (its role is
+gone, its worktree can't be made) is stuck, saying why, and the others start. A panel whose file is gone is skipped,
+saying so, and the others open. A wrong agent is left out, and a warning names it (`crew.json: agent 2 (ken): its
+colour "pink" isn't one of ...`). A file that isn't JSON, or isn't a crew, is said, nothing starts, and it's kept as it
+is until you make an agent.
 
-After you edit it or pull it, `gR` reads it again. It asks before it starts an agent, forgets one or turns a loop on;
-a colour, the panels or a loop turned off it applies.
+After you edit it, `gR` reads it again. It asks before it starts an agent, forgets one or turns a loop on; a colour, the
+panels or a loop turned off it applies.
 
 ## Making an agent
 

@@ -255,7 +255,7 @@ her worktree too; wrong ones said."
 
 (ert-deftest agent-workspace-inbox/a-source-off ()
   "A source off for ada: its events for her dropped, said; for ken still
-queued; off for everyone, his too; on again, queued. crew.el keeps it. #all's
+queued; off for everyone, his too; on again, queued. crew.json keeps it. #all's
 copies, each its own id."
   (+test-awi "off" (("ada" "builder") ("ken" "builder"))
     (agent-workspace-sleep ada)
@@ -269,7 +269,7 @@ copies, each its own id."
     (agent-workspace-inbox-source-toggle project "ci" "#all")
     (should-not (agent-workspace-inbox-add project "#builder" "red" :from "ci"))
     (agent-workspace-crew-save project)
-    (should (string-search ":sources-off ((\"ci\" . \"#all\") (\"ci\" . \"ada\"))"
+    (should (string-search "\"sources_off\": [[\"ci\", \"#all\"], [\"ci\", \"ada\"]]"
                            (with-temp-buffer (insert-file-contents (agent-workspace--crew-path project)) (buffer-string))))
     (agent-workspace-inbox-source-toggle project "ci" "#all")
     (agent-workspace-inbox-source-toggle project "ci" "ada")

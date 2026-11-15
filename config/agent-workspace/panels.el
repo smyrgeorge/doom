@@ -12,8 +12,9 @@
 ;; agents' worktrees; a file changed on an agent's branch is asked about
 ;; again (Agent UI remembers a file's trust by its content). Closed when its
 ;; agent is killed, put to sleep or forgotten, and when its crew closes; kept
-;; across a restart, and a rename (opened again in its moved worktree). Saved with the crew, by name (crew.el's :panels, never
-;; their data: saved.el), opened again when it starts again.
+;; across a restart, and a rename (opened again in its moved worktree). Saved
+;; with the crew, by name (crew.json's panels, never their data: saved.el),
+;; opened again when it starts again.
 
 (require 'cl-lib)
 (require 'seq)
@@ -102,7 +103,7 @@ panels closed. A restart keeps them. In
 ;; ====== ITS WORKTREE MOVED ======
 
 (defvar agent-workspace--panels-moving (make-hash-table :test #'eq :weakness 'key)
-  "An agent whose worktree is moving: its panels, as crew.el keeps them, to
+  "An agent whose worktree is moving: its panels, as crew.json keeps them, to
 open again once it has.")
 
 (defun agent-workspace--panels-moving-h (agent)
@@ -126,7 +127,7 @@ there, named after it. In `agent-workspace-change-functions'."
 ;; ====== SAVED WITH THE CREW ======
 
 (defun agent-workspace--panel-saved-name (canvas)
-  "Panel CANVAS as crew.el keeps it, as agent-ui open takes it: its name
+  "Panel CANVAS as crew.json keeps it, as agent-ui open takes it: its name
 \(one opened from a file elsewhere in its worktree: that file, relative to
 it)."
   (let* ((panel (buffer-local-value 'agent-ui-panels--state canvas))
@@ -139,13 +140,13 @@ it)."
       (file-relative-name file root))))
 
 (defun agent-workspace-agent-panel-names (agent)
-  "AGENT's open panels as crew.el keeps them, sorted (see
+  "AGENT's open panels as crew.json keeps them, sorted (see
 `agent-workspace--panel-saved-name')."
   (sort (mapcar #'agent-workspace--panel-saved-name (agent-workspace-agent-panels agent))
         #'string<))
 
 (defun agent-workspace-set-panels (agent names)
-  "AGENT's panels made NAMES (crew.el's, edited): the ones missing opened,
+  "AGENT's panels made NAMES (crew.json's, edited): the ones missing opened,
 the others closed."
   (dolist (canvas (agent-workspace-agent-panels agent))
     (unless (member (agent-workspace--panel-saved-name canvas) names)
@@ -155,7 +156,7 @@ the others closed."
    agent (seq-difference names (agent-workspace-agent-panel-names agent))))
 
 (defun agent-workspace-open-panels (agent names)
-  "AGENT's panels NAMES (crew.el's) opened again, in its worktree, as its
+  "AGENT's panels NAMES (crew.json's) opened again, in its worktree, as its
 session opens one. One that can't open (its file gone): skipped, said; the
 others open. None without Agent UI."
   (when (fboundp 'agent-ui-open-panel)

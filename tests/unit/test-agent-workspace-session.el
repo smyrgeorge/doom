@@ -541,7 +541,7 @@ with it). A stopped session's processes are looked at once, later."
     (let ((before (append timer-list timer-idle-list)))
       (+test-aws--create "ada")
       (+test-aws--create "grace")
-      ;; Nothing that ticks (a write of crew.el to come is once).
+      ;; Nothing that ticks (a write of crew.json to come is once).
       (should-not (seq-filter (lambda (timer)
                                 (and (not (memq timer before))
                                      (timer--repeat-delay timer)

@@ -17,7 +17,7 @@
 ;; then delivered or dropped; [Send now] gives it at once, in the agent's own
 ;; mode (you let it). Its agent's bar shows ✉N. P pauses them all. A source
 ;; can be off for an agent, a role or everyone (its events dropped as they
-;; come, said; crew.el keeps it). In `agent-workspace-inbox-quiet-hours' none
+;; come, said; crew.json keeps it). In `agent-workspace-inbox-quiet-hours' none
 ;; is delivered. E lists the queued ones: reorder, drop, send now, a source
 ;; off.
 ;; At most `agent-workspace-inbox-source-limit' events an hour from a source,
@@ -68,7 +68,7 @@ plan, it reads and investigates on its own; editing asks you."
 
 (defvar agent-workspace--sources-off (make-hash-table :test #'equal)
   "A project's sources off: ((SOURCE . FOR)...), FOR an agent's name,
-\"#ROLE\" or \"#all\". Kept in crew.el.")
+\"#ROLE\" or \"#all\". Kept in crew.json.")
 
 (defvar agent-workspace--inbox-quiet-timers (make-hash-table :test #'equal)
   "A project's delivery waiting for its quiet hours' end.")
@@ -480,7 +480,7 @@ PROJECT: for it, its role, or everyone."
 
 (defun agent-workspace-inbox-source-toggle (project source for)
   "Source SOURCE off for FOR (an agent's name, \"#ROLE\", \"#all\") in
-PROJECT, or on again; said in the room, kept in crew.el."
+PROJECT, or on again; said in the room, kept in crew.json."
   (let* ((key (agent-workspace--root project))
          (pair (cons source for))
          (off (gethash key agent-workspace--sources-off))

@@ -126,7 +126,7 @@ another agent's stay."
 
 (ert-deftest agent-workspace-panels/said-as-they-open-and-close ()
   "One opened or closed: said to `agent-workspace-change-functions' (its
-pane, its bar, crew.el follow it)."
+pane, its bar, crew.json follow it)."
   (+test-awp
     (agent-ui-panel-trust-project project)
     (let* ((whats nil)

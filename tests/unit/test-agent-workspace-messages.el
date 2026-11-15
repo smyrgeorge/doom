@@ -3,7 +3,7 @@
 ;; its shell (cmd/agent-workspace send, its request), waiting for your OK
 ;; ([Send] [Edit] [Drop]) as the crew asks; a role's talks-to, the switch on,
 ;; skipping it; off refusing; the answer back to the sender, no answer to it;
-;; T, kept in crew.el. Stand-in agents (examples/agent-workspace/stand-in.el),
+;; T, kept in crew.json. Stand-in agents (examples/agent-workspace/stand-in.el),
 ;; their messages logged.
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
@@ -147,7 +147,7 @@ nowhere."
 
 (ert-deftest agent-workspace-messages/talks-to-on-and-off ()
   "A role's talks-to: no OK to those roles; on: none at all; off: refused.
-T cycles it, kept in crew.el."
+T cycles it, kept in crew.json."
   (+test-awg "switch"
       '(("investigator.md" . "---\nname: investigator\ndescription: looks into things\ntalks-to: builder\n---\nLook into it.\n"))
       (("sam" "investigator") ("ken" "builder") ("ada" "builder"))
@@ -166,7 +166,7 @@ T cycles it, kept in crew.el."
     (should (eq (agent-workspace-talk-mode project) 'off))
     (should (string-search "Agents may not message each other" (+test-awg--send "ken" "ada" "hi")))
     (agent-workspace-crew-save project)
-    (should (string-search ":talk off " (with-temp-buffer
+    (should (string-search "\"talk\": \"off\"" (with-temp-buffer
                                           (insert-file-contents (agent-workspace--crew-path project))
                                           (buffer-string))))
     ;; Wrong ones.
@@ -251,7 +251,7 @@ nothing of it while they may not talk."
 (ert-deftest agent-workspace-messages/never-while-agents-may-not-talk ()
   "Agents may not talk (`agent-workspace-agents-talk' nil; its own default:
 t): a message from an agent's shell refused, its reply saying why, whatever
-the crew's switch says (crew.el keeps it); T refuses; nobody told of
+the crew's switch says (crew.json keeps it); T refuses; nobody told of
 messages; a message left queued held, not delivered, no buttons; on again,
 delivered."
   (should (eq (default-value 'agent-workspace-agents-talk) t))
@@ -268,9 +268,9 @@ delivered."
       (should-not (agent-workspace--message-context ada))
       (let ((agent-workspace--starting ada))
         (should-not (string-search "cmd/agent-workspace send" (agent-workspace-agent-context))))
-      ;; crew.el keeps the crew's switch as it says.
+      ;; crew.json keeps the crew's switch as it says.
       (agent-workspace-crew-save project)
-      (should (string-search ":talk on " (with-temp-buffer
+      (should (string-search "\"talk\": \"on\"" (with-temp-buffer
                                            (insert-file-contents (agent-workspace--crew-path project))
                                            (buffer-string))))
       ;; The message left queued: held, ken free.

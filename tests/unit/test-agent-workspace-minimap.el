@@ -2,7 +2,7 @@
 ;; config/agent-workspace/minimap.el: the crew's minimap under the issue list.
 ;; Its lanes from what the agents did (activity.el's, stood in for), drawn
 ;; again as they do things (a burst: once), not while it's hidden; m hides it,
-;; crew.el keeps that; RET, o, d on a lane and on a conflict. Agents' sessions
+;; crew.json keeps that; RET, o, d on a lane and on a conflict. Agents' sessions
 ;; plain buffers (no agent runs); bd not run. A terminal's glyphs (batch).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
@@ -102,7 +102,7 @@ minimap; its buffer current."
 
 (ert-deftest agent-workspace-minimap/under-the-issues ()
   "Under the issue list, 12 lines; m hides it (the issues the whole column)
-and shows it again; crew.el keeps it hidden, and a crew started again from it
+and shows it again; crew.json keeps it hidden, and a crew started again from it
 opens without it."
   (+test-awm "under"
     (agent-workspace-create :role "builder" :name "ada")
@@ -115,7 +115,7 @@ opens without it."
     (should (equal (nth 0 (+test-awm--windows)) '("*issues · under*" 50 39)))
     (should-not (get-buffer-window (agent-workspace--minimap-buffer project)))
     (agent-workspace-crew-save project)
-    (should (string-search ":minimap nil " (with-temp-buffer
+    (should (string-search "\"minimap\": false" (with-temp-buffer
                                               (insert-file-contents (agent-workspace--crew-path project))
                                               (buffer-string))))
     (with-current-buffer (agent-workspace--issues-buffer project)
@@ -123,7 +123,7 @@ opens without it."
     (should (equal (nth 1 (+test-awm--windows)) '("*minimap · under*" 50 12)))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
-    ;; Closed, then started again from crew.el: hidden as it was.
+    ;; Closed, then started again from crew.json: hidden as it was.
     (agent-workspace-crew-save project)
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-quit))

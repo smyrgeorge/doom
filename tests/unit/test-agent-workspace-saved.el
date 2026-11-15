@@ -1,11 +1,13 @@
 ;;; tests/unit/test-agent-workspace-saved.el -*- lexical-binding: t; -*-
 ;; config/agent-workspace/saved.el: the crew's configuration in
-;; .agent-workspace/crew.el. Written when the crew changes (stable, only what
-;; differs), read as data (never evaluated, its problems by line), the crew
-;; started again from it (fresh, asleep ones asleep, one that can't start
-;; saying why, the layout as it was), read again by hand. An agent's open
-;; panels in it by name, kept as the crew closes, opened again with it. In
-;; throwaway git repositories; sessions are plain buffers (no agent runs).
+;; .agent-shell/agent-workspace/crew.json, per machine. Written when the crew
+;; changes (stable, one agent a line, only what differs), read as JSON (never
+;; evaluated, a wrong agent said by its place and name, a wrong file said and
+;; nothing started), the crew started again from it (fresh, asleep ones
+;; asleep, one that can't start saying why, the layout as it was), read again
+;; by hand; a crew round-trips. An agent's open panels in it by name, kept as
+;; the crew closes, opened again with it. In throwaway git repositories;
+;; sessions are plain buffers (no agent runs).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -29,8 +31,8 @@
 
 (defmacro +test-aws2 (name &rest body)
   "BODY in a new project NAME (`project'), no crew or app before or after;
-sessions plain buffers (`started' lists the agents started); crew.el written
-at once (no wait)."
+sessions plain buffers (`started' lists the agents started); crew.json
+written at once (no wait)."
   (declare (indent 1))
   `(+test-with-reset
      (let* ((project (+test-aws2--project ,name))
@@ -71,23 +73,27 @@ at once (no wait)."
              (agent-workspace--close-app project))
            (agent-workspace-close-all))))))
 
+(defun +test-aws2--path (project)
+  "PROJECT's crew.json."
+  (expand-file-name ".agent-shell/agent-workspace/crew.json" project))
+
 (defun +test-aws2--file (project)
-  "PROJECT's crew.el's text, or nil."
-  (let ((file (expand-file-name ".agent-workspace/crew.el" project)))
+  "PROJECT's crew.json's text, or nil."
+  (let ((file (+test-aws2--path project)))
     (and (file-exists-p file) (with-temp-buffer (insert-file-contents file) (buffer-string)))))
 
 (defun +test-aws2--write (project text)
-  "PROJECT's crew.el now TEXT."
-  (let ((file (expand-file-name ".agent-workspace/crew.el" project)))
+  "PROJECT's crew.json now TEXT."
+  (let ((file (+test-aws2--path project)))
     (make-directory (file-name-directory file) t)
     (with-temp-file file (insert text))))
 
 ;; ====== WRITTEN ======
 
 (ert-deftest agent-workspace-saved/its-text ()
-  "One agent a line, in role order then by name; its model only when not its
-role's, its mode only when not what it would have anyway (its role's, else
-auto); asleep said; the layout."
+  "JSON, one agent a line, in role order then by name; its model only when
+not its role's, its mode only when not what it would have anyway (its
+role's, else auto); asleep said; the layout."
   (+test-aws2 "text"
     (let ((sam (agent-workspace-create :role "investigator" :name "sam" :model "opus"))
           (ken (agent-workspace-create :role "builder" :name "ken" :colour "green" :mode "acceptEdits"))
@@ -95,38 +101,46 @@ auto); asleep said; the layout."
       (agent-workspace-sleep ken)
       (ignore sam ada)
       (should (equal (agent-workspace-crew-text project)
-                     ";;; crew.el --- Agent workspace: the crew -*- lexical-binding: t; -*-
-;; Read as data, never evaluated (config/agent-workspace/saved.el). SPC o w starts it again.
-(agent-workspace-crew
- :version 1
- :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :mode \"plan\")
-          (:name \"ken\" :role \"builder\" :colour \"green\" :mode \"acceptEdits\" :asleep t)
-          (:name \"sam\" :role \"investigator\" :colour \"magenta\" :model \"opus\"))
- :layout (:view stage :room right :selected nil :open nil :minimap t :talk ask :sources-off nil))
+                     "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"mode\": \"plan\"},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"mode\": \"acceptEdits\", \"asleep\": true},
+  {\"name\": \"sam\", \"role\": \"investigator\", \"colour\": \"magenta\", \"model\": \"opus\"}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": null, \"open\": false, \"minimap\": true, \"talk\": \"ask\", \"sources_off\": []}}
 "))
+      ;; JSON indeed, as jq and scripts read it.
+      (should (equal (plist-get (json-parse-string (agent-workspace-crew-text project) :object-type 'plist) :version)
+                     2))
       ;; Her own mode auto, the one she'd have anyway: not written.
       (setf (agent-workspace-agent-mode ada) "auto")
-      (should (string-search "(:name \"ada\" :role \"builder\" :colour \"blue\")"
-                             (agent-workspace-crew-text project))))))
+      (should (string-search "{\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"}"
+                             (agent-workspace-crew-text project)))))
+  ;; No agents (all forgotten, its app open): an empty list.
+  (+test-aws2 "text-empty"
+    (agent-workspace-open t)
+    (should (string-prefix-p "{\"version\": 2,\n \"agents\": [],\n \"layout\": {"
+                             (agent-workspace-crew-text project)))))
 
 (ert-deftest agent-workspace-saved/written-when-the-crew-changes ()
-  "Made, recoloured, put to sleep, woken, forgotten: written; a state alone
-\(working, done): not."
+  "Made, recoloured, put to sleep, woken, forgotten: written, in
+.agent-shell/agent-workspace/crew.json, nothing in .agent-workspace/; a
+state alone (working, done): not."
   (+test-aws2 "written"
     (let ((ada (agent-workspace-create :role "builder" :name "ada")))
-      (should (string-search "(:name \"ada\" :role \"builder\" :colour \"blue\")" (+test-aws2--file project)))
+      (should (string-search "{\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"}"
+                             (+test-aws2--file project)))
+      (should-not (file-exists-p (expand-file-name ".agent-workspace" project)))
       (agent-workspace-recolour ada "cyan")
-      (should (string-search ":colour \"cyan\"" (+test-aws2--file project)))
+      (should (string-search "\"colour\": \"cyan\"" (+test-aws2--file project)))
       (agent-workspace-sleep ada)
-      (should (string-search ":asleep t" (+test-aws2--file project)))
+      (should (string-search "\"asleep\": true" (+test-aws2--file project)))
       (agent-workspace-wake ada)
-      (should-not (string-search ":asleep" (+test-aws2--file project)))
-      (let ((before (file-attribute-modification-time
-                     (file-attributes (expand-file-name ".agent-workspace/crew.el" project)))))
+      (should-not (string-search "\"asleep\"" (+test-aws2--file project)))
+      (let ((before (file-attribute-modification-time (file-attributes (+test-aws2--path project)))))
         (agent-workspace--set-state ada 'working)
         (agent-workspace--set-state ada 'done)
-        (should (equal (file-attribute-modification-time
-                        (file-attributes (expand-file-name ".agent-workspace/crew.el" project)))
+        (should (equal (file-attribute-modification-time (file-attributes (+test-aws2--path project)))
                        before)))
       (agent-workspace-create :role "builder" :name "ken")
       (agent-workspace-forget ada 'keep)
@@ -134,7 +148,7 @@ auto); asleep said; the layout."
       (should (string-search "ken" (+test-aws2--file project))))))
 
 (ert-deftest agent-workspace-saved/closing-keeps-it ()
-  "Closing the crew leaves crew.el as it was (every agent in it, none asleep
+  "Closing the crew leaves crew.json as it was (every agent in it, none asleep
 that wasn't); a write still to come is done first."
   (+test-aws2 "closing"
     (agent-workspace-create :role "builder" :name "ada")
@@ -154,7 +168,7 @@ that wasn't); a write still to come is done first."
 
 (ert-deftest agent-workspace-saved/nothing-written-once-closed ()
   "Closed with its app still open: whatever changes after (an agent
-selected, the minimap hidden) writes nothing, crew.el keeping every agent;
+selected, the minimap hidden) writes nothing, crew.json keeping every agent;
 a new agent made there, a new crew, written again (doom-51z.15)."
   (+test-aws2 "closed-app-open"
     (agent-workspace-open t)
@@ -172,58 +186,112 @@ a new agent made there, a new crew, written again (doom-51z.15)."
 
 ;; ====== READ ======
 
-(ert-deftest agent-workspace-saved/read-as-data ()
-  "Read, never evaluated: what isn't a crew is said, nothing run."
+(ert-deftest agent-workspace-saved/read-as-json ()
+  "Read as JSON, never evaluated: what isn't JSON, or isn't a crew (an
+object with a list of agents), is said, nothing run; no file, nothing."
   (+test-aws2 "read"
-    (+test-aws2--write project "(progn (setq +test-aws2-evaluated t))\n")
-    (pcase-let ((`(,crew . ,problems) (agent-workspace-crew-read project)))
-      (should-not crew)
-      (should (string-match-p "\\`\\.agent-workspace/crew\\.el:1: not a crew" (car problems))))
+    (dolist (case '(("(progn (setq +test-aws2-evaluated t))\n" . "crew.json: not a crew: not JSON (line 1)")
+                    ("{\"agents\": [\n  {\"name\": \"ada\",}\n]}\n" . "crew.json: not a crew: not JSON (line 2)")
+                    ("{\"agents\": []} trailing\n" . "crew.json: not a crew: not JSON (line 1)")
+                    ("[{\"name\": \"ada\", \"role\": \"builder\"}]\n" . "crew.json: not a crew: not a JSON object")
+                    ("{}\n" . "crew.json: not a crew: not a JSON object")
+                    ("{\"version\": 2}\n" . "crew.json: not a crew: its \"agents\" aren't a list")
+                    ("{\"agents\": {\"name\": \"ada\"}}\n" . "crew.json: not a crew: its \"agents\" aren't a list")))
+      (+test-aws2--write project (car case))
+      (should (equal (agent-workspace-crew-read project) (list nil (cdr case)))))
     (should-not (boundp '+test-aws2-evaluated))
     (should-not (agent-workspace-crew-read (+test-aws2--project "none")))))
 
+(ert-deftest agent-workspace-saved/a-wrong-file-starts-nothing ()
+  "SPC o w with a crew.json that isn't JSON or isn't a crew: said, no agent
+started, the file kept as it is for you to mend (the minimap hidden, the
+talk switched meanwhile: nothing written); an agent made: written again."
+  (dolist (text '("(agent-workspace-crew :agents ((:name \"ada\" :role \"builder\")))\n"
+                  "{\"agents\": {\"name\": \"ada\", \"role\": \"builder\"}}\n"))
+    (+test-aws2 "wrong-file"
+      (+test-aws2--write project text)
+      (let ((warned nil))
+        (cl-letf (((symbol-function 'display-warning) (lambda (_type message &rest _) (push message warned))))
+          (agent-workspace-open t))
+        (should (= (length warned) 1))
+        (should (string-prefix-p "crew.json: not a crew: " (car warned))))
+      (should-not (agent-workspace-agents project))
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (agent-workspace-minimap-toggle))
+      (agent-workspace-crew-save project)
+      (should (equal (+test-aws2--file project) text))
+      (agent-workspace-create :role "builder" :name "ken")
+      (should (string-search "\"name\": \"ken\"" (+test-aws2--file project))))))
+
 (ert-deftest agent-workspace-saved/a-wrong-agent-left-out ()
-  "A wrong agent entry is left out, its line said; the others read."
+  "A wrong agent entry is left out, said by its place and name; the others
+read; an unknown key said, ignored."
   (+test-aws2 "wrong"
-    (+test-aws2--write project "(agent-workspace-crew
- :version 1
- :agents ((:name \"ada\" :role \"builder\" :colour \"blue\")
-          (:name \"Bad Name\" :role \"builder\")
-          (:name \"ken\" :role \"builder\" :colour \"pink\")
-          (:name \"sam\" :role \"investigator\" :mode \"yolo\")
-          (:name \"ada\" :role \"scribe\")
-          (:name \"tim\"))
- :colours 3
- :layout (:selected \"ada\" :open t))
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"},
+  {\"name\": \"Bad Name\", \"role\": \"builder\"},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"pink\"},
+  {\"name\": \"sam\", \"role\": \"investigator\", \"mode\": \"yolo\"},
+  {\"name\": \"ada\", \"role\": \"scribe\"},
+  {\"name\": \"tim\"},
+  \"una\",
+  {\"name\": \"vic\", \"role\": \"builder\", \"asleep\": \"yes\"},
+  {\"name\": \"wes\", \"role\": \"builder\", \"kind\": \"robot\"},
+  {\"name\": \"xan\", \"role\": \"builder\", \"model\": 4},
+  {\"name\": \"yan\", \"role\": \"builder\", \"loop\": false, \"model\": null, \"panels\": []}
+ ],
+ \"colours\": 3,
+ \"layout\": {\"selected\": \"ada\", \"open\": true}}
 ")
     (pcase-let ((`(,crew . ,problems) (agent-workspace-crew-read project)))
-      (should (equal (mapcar (lambda (entry) (plist-get entry :name)) (plist-get crew :agents)) '("ada")))
+      (should (equal (plist-get crew :agents)
+                     '((:name "ada" :role "builder" :colour "blue") (:name "yan" :role "builder"))))
       (should (equal (plist-get crew :layout) '(:selected "ada" :open t)))
       (should (equal problems
-                     '(".agent-workspace/crew.el:4: not a name: \"Bad Name\": left out"
-                       ".agent-workspace/crew.el:5: ken's colour \"pink\" isn't one of blue, magenta, green, yellow, cyan, red, white, black: left out"
-                       ".agent-workspace/crew.el:6: sam's mode \"yolo\" isn't one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions: left out"
-                       ".agent-workspace/crew.el:7: ada twice: left out"
-                       ".agent-workspace/crew.el:8: tim has no role: left out"
-                       ".agent-workspace/crew.el:9: unknown key :colours: ignored"))))))
+                     '("crew.json: unknown key \"colours\": ignored"
+                       "crew.json: agent 2: not a name: \"Bad Name\": left out"
+                       "crew.json: agent 3 (ken): its colour \"pink\" isn't one of blue, magenta, green, yellow, cyan, red, white, black: left out"
+                       "crew.json: agent 4 (sam): its mode \"yolo\" isn't one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions: left out"
+                       "crew.json: agent 5 (ada): its name twice: left out"
+                       "crew.json: agent 6 (tim): no role: left out"
+                       "crew.json: agent 7: an agent is an object: {\"name\": ..., \"role\": ...}: left out"
+                       "crew.json: agent 8 (vic): its asleep \"yes\" isn't true or false: left out"
+                       "crew.json: agent 9 (wes): its kind \"robot\" isn't one of claude-code: left out"
+                       "crew.json: agent 10 (xan): its model 4 isn't a string: left out"))))))
+
+(ert-deftest agent-workspace-saved/a-wrong-layout-said ()
+  "A layout that isn't an object, or a value of it that's wrong: said,
+ignored; the agents read."
+  (+test-aws2 "wrong-layout"
+    (+test-aws2--write project "{\"agents\": [{\"name\": \"ada\", \"role\": \"builder\"}], \"layout\": \"stage\"}\n")
+    (should (equal (agent-workspace-crew-read project)
+                   '((:agents ((:name "ada" :role "builder")) :layout nil)
+                     "crew.json: its layout isn't an object: ignored")))
+    (+test-aws2--write project "{\"agents\": [], \"layout\": {\"talk\": 3, \"selected\": \"ada\", \"sources_off\": [[\"ci\"]], \"minimap\": false}}\n")
+    (should (equal (agent-workspace-crew-read project)
+                   '((:agents nil :layout (:selected "ada" :minimap nil))
+                     "crew.json: its layout's talk 3 isn't a name: ignored"
+                     "crew.json: its layout's sources_off [[\"ci\"]] isn't a list of [source, target]: ignored")))))
 
 ;; ====== STARTED AGAIN ======
 
 (ert-deftest agent-workspace-saved/started-again ()
-  "SPC o w with no crew running: every agent in crew.el again, fresh, in its
+  "SPC o w with no crew running: every agent in crew.json again, fresh, in its
 worktree (reused), its colour, model, mode; asleep ones asleep (no session);
 one whose role is gone stuck, saying why; the selected one's pane open."
   (+test-aws2 "again"
     (let ((ada (agent-workspace-create :role "builder" :name "ada")))
       (write-region "work\n" nil (expand-file-name "wip" (agent-workspace-agent-worktree ada))))
     (agent-workspace-close project)
-    (+test-aws2--write project "(agent-workspace-crew
- :version 1
- :agents ((:name \"ada\" :role \"builder\" :colour \"blue\")
-          (:name \"ken\" :role \"builder\" :colour \"green\" :asleep t)
-          (:name \"sam\" :role \"investigator\" :colour \"magenta\" :model \"opus\" :mode \"plan\")
-          (:name \"tim\" :role \"wizard\" :colour \"cyan\"))
- :layout (:view stage :room right :selected \"sam\" :open t))
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"asleep\": true},
+  {\"name\": \"sam\", \"role\": \"investigator\", \"colour\": \"magenta\", \"model\": \"opus\", \"mode\": \"plan\"},
+  {\"name\": \"tim\", \"role\": \"wizard\", \"colour\": \"cyan\"}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"sam\", \"open\": true}}
 ")
     (setq started nil)
     (let ((app (agent-workspace-open t)))
@@ -245,8 +313,8 @@ one whose role is gone stuck, saying why; the selected one's pane open."
         (should (eq (agent-workspace--app-selected app) sam))
         (should (eq (agent-workspace--app-open app) sam))
         (should (get-buffer-window (agent-workspace-agent-buffer sam)))))
-    ;; Started again: crew.el as it was (nothing written meanwhile).
-    (should (string-search "\"tim\" :role \"wizard\"" (+test-aws2--file project)))))
+    ;; Started again: crew.json as it was (nothing written meanwhile).
+    (should (string-search "{\"name\": \"tim\", \"role\": \"wizard\"" (+test-aws2--file project)))))
 
 (ert-deftest agent-workspace-saved/closed-and-opened-again ()
   "Q, then SPC o w: the same agents (names, roles, colours, models, modes),
@@ -274,30 +342,31 @@ fresh, waiting; the asleep one asleep; the same agent selected."
       (should (equal (agent-workspace-agent-name (agent-workspace--app-selected app)) "sam")))))
 
 (ert-deftest agent-workspace-saved/read-again ()
-  "gR: an agent added to crew.el started, one taken out forgotten, each
+  "gR: an agent added to crew.json started, one taken out forgotten, each
 asked first; a colour changed applied."
   (+test-aws2 "reload"
     (agent-workspace-open t)
     (agent-workspace-create :role "builder" :name "ada")
     (agent-workspace-create :role "builder" :name "ken")
-    (+test-aws2--write project "(agent-workspace-crew
- :version 1
- :agents ((:name \"ada\" :role \"builder\" :colour \"red\")
-          (:name \"sam\" :role \"scribe\" :colour \"cyan\"))
- :layout (:view stage :room right :selected \"ada\" :open t))
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"red\"},
+  {\"name\": \"sam\", \"role\": \"scribe\", \"colour\": \"cyan\"}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ada\", \"open\": true}}
 ")
     (let ((asked nil))
       (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (push prompt asked) t)))
         (with-current-buffer (agent-workspace--issues-buffer project)
           (agent-workspace-crew-reload)))
-      (should (equal (reverse asked) '("Start sam (scribe), new in crew.el? "
-                                       "Forget ken, gone from crew.el (its worktree kept)? "))))
+      (should (equal (reverse asked) '("Start sam (scribe), new in crew.json? "
+                                       "Forget ken, gone from crew.json (its worktree kept)? "))))
     (should (equal (mapcar #'agent-workspace-agent-name (agent-workspace--ordered project)) '("ada" "sam")))
     (should (equal (agent-workspace-agent-colour (agent-workspace-agent "ada" project)) "red"))
     (should (eq (agent-workspace-agent-state (agent-workspace-agent "sam" project)) 'desk))))
 
 (ert-deftest agent-workspace-saved/its-loops-read-again ()
-  "gR: a loop crew.el turns on asked first (it starts work); one it turns
+  "gR: a loop crew.json turns on asked first (it starts work); one it turns
 off, applied."
   (skip-unless (executable-find "bd"))
   (+test-aws2 "reload-loops"
@@ -311,17 +380,18 @@ off, applied."
       (let ((ada (agent-workspace-create :role "builder" :name "ada"))
             (ken (agent-workspace-create :role "builder" :name "ken")))
         (agent-workspace-loop-set ken t)
-        (+test-aws2--write project "(agent-workspace-crew
- :version 1
- :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :loop t)
-          (:name \"ken\" :role \"builder\" :colour \"green\"))
- :layout (:view stage :room right :selected \"ada\" :open t))
+        (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"loop\": true},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\"}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ada\", \"open\": true}}
 ")
         (let ((asked nil))
           (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (push prompt asked) t)))
             (with-current-buffer (agent-workspace--issues-buffer project)
               (agent-workspace-crew-reload)))
-          (should (equal asked '("Turn ada's loop on, as crew.el says? "))))
+          (should (equal asked '("Turn ada's loop on, as crew.json says? "))))
         (should (agent-workspace-agent-loop ada))
         (should-not (agent-workspace-agent-loop ken))))))
 
@@ -377,7 +447,7 @@ closed after."
 
 (ert-deftest agent-workspace-saved/panels-kept-across-a-rename ()
   "An agent renamed (its worktree moved): its panels open again in its new
-worktree, named after it, one from a file there too; crew.el keeps them
+worktree, named after it, one from a file there too; crew.json keeps them
 (doom-ukm.6)."
   (+test-aws2-panels "panels-renamed"
     (let ((ada (agent-workspace-create :role "builder" :name "ada")))
@@ -391,40 +461,40 @@ worktree, named after it, one from a file there too; crew.el keeps them
         (should (equal (file-name-as-directory
                         (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state canvas))))
                        (file-name-as-directory (file-truename (agent-workspace-agent-worktree ada))))))
-      (should (string-search "(:name \"grace\" :role \"builder\" :colour \"blue\" :panels (\"drafts/try.el\" \"tests\"))"
+      (should (string-search "{\"name\": \"grace\", \"role\": \"builder\", \"colour\": \"blue\", \"panels\": [\"drafts/try.el\", \"tests\"]}"
                              (+test-aws2--file project))))))
 
 (ert-deftest agent-workspace-saved/an-agents-panels-written ()
   "An agent's open panels in its entry, by name, sorted: written as one opens
-or closes; none, no :panels (put to sleep, they close: gone from it). One
+or closes; none, no panels (put to sleep, they close: gone from it). One
 opened from a file of its worktree: that file. Yours, from the main
 checkout: in no agent's."
   (+test-aws2-panels "panels-written"
     (let ((ada (agent-workspace-create :role "builder" :name "ada"))
           (ken (agent-workspace-create :role "builder" :name "ken")))
       (+test-aws2--open-panel ada "tests")
-      (should (string-search "(:name \"ada\" :role \"builder\" :colour \"blue\" :panels (\"tests\"))"
+      (should (string-search "{\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"panels\": [\"tests\"]}"
                              (+test-aws2--file project)))
       (let ((logs (+test-aws2--open-panel ada "logs")))
         (+test-aws2--open-panel ken "tests")
         (agent-ui-open-panel "tests" project)
-        (should (string-search ":colour \"blue\" :panels (\"logs\" \"tests\"))" (+test-aws2--file project)))
-        (should (string-search "(:name \"ken\" :role \"builder\" :colour \"magenta\" :panels (\"tests\"))"
+        (should (string-search "\"colour\": \"blue\", \"panels\": [\"logs\", \"tests\"]}" (+test-aws2--file project)))
+        (should (string-search "{\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"magenta\", \"panels\": [\"tests\"]}"
                                (+test-aws2--file project)))
         (kill-buffer logs)
         (+test-sleep 0.1)
-        (should (string-search ":colour \"blue\" :panels (\"tests\"))" (+test-aws2--file project))))
+        (should (string-search "\"colour\": \"blue\", \"panels\": [\"tests\"]}" (+test-aws2--file project))))
       (+test-aws2--draft ada)
       (+test-aws2--open-panel ada "drafts/try.el")
       (should (equal (agent-workspace-agent-panel-names ada) '("drafts/try.el" "tests")))
-      (should (string-search ":panels (\"drafts/try.el\" \"tests\"))" (+test-aws2--file project)))
+      (should (string-search "\"panels\": [\"drafts/try.el\", \"tests\"]}" (+test-aws2--file project)))
       (agent-workspace-sleep ken)
       (+test-sleep 0.1)
-      (should (string-search "(:name \"ken\" :role \"builder\" :colour \"magenta\" :asleep t)"
+      (should (string-search "{\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"magenta\", \"asleep\": true}"
                              (+test-aws2--file project))))))
 
 (ert-deftest agent-workspace-saved/closing-keeps-the-panels ()
-  "The crew closed: its agents' panels close with them, crew.el keeps them
+  "The crew closed: its agents' panels close with them, crew.json keeps them
 \(Q; agent-workspace-close with its app open); a write still to come, with
 them, done first."
   (+test-aws2-panels "panels-closing"
@@ -432,7 +502,7 @@ them, done first."
     (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
            (tests (+test-aws2--open-panel ada "tests"))
            (text (+test-aws2--file project)))
-      (should (string-search ":panels (\"tests\")" text))
+      (should (string-search "\"panels\": [\"tests\"]" text))
       (with-current-buffer (agent-workspace--issues-buffer project)
         (agent-workspace-quit))
       (should-not (buffer-live-p tests))
@@ -471,31 +541,33 @@ them, done first."
         (should-not (+test-aws2--file project))
         (agent-workspace-close project)
         (+test-sleep 0.2)
-        (should (string-search "(:name \"ada\" :role \"builder\" :colour \"blue\" :panels (\"tests\"))"
+        (should (string-search "{\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"panels\": [\"tests\"]}"
                                (+test-aws2--file project)))))))
 
 (ert-deftest agent-workspace-saved/wrong-panels-left-out ()
-  "An entry whose :panels isn't a list of names is left out, its line said."
+  "An entry whose panels aren't a list of names is left out, said by its
+place and name."
   (+test-aws2 "wrong-panels"
-    (+test-aws2--write project "(agent-workspace-crew
- :version 1
- :agents ((:name \"ada\" :role \"builder\" :panels (\"tests\"))
-          (:name \"ken\" :role \"builder\" :panels \"tests\")
-          (:name \"sam\" :role \"builder\" :panels (\"tests\" logs))
-          (:name \"tim\" :role \"builder\" :panels (\"tests\" . \"logs\"))
-          (:name \"una\" :role \"builder\" :panels (\"\")))
- :layout nil)
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"panels\": [\"tests\"]},
+  {\"name\": \"ken\", \"role\": \"builder\", \"panels\": \"tests\"},
+  {\"name\": \"sam\", \"role\": \"builder\", \"panels\": [\"tests\", 3]},
+  {\"name\": \"tim\", \"role\": \"builder\", \"panels\": {\"tests\": \"logs\"}},
+  {\"name\": \"una\", \"role\": \"builder\", \"panels\": [\"\"]}
+ ],
+ \"layout\": null}
 ")
     (pcase-let ((`(,crew . ,problems) (agent-workspace-crew-read project)))
       (should (equal (plist-get crew :agents) '((:name "ada" :role "builder" :panels ("tests")))))
       (should (equal problems
-                     '(".agent-workspace/crew.el:4: ken's panels \"tests\" aren't a list of names: left out"
-                       ".agent-workspace/crew.el:5: sam's panels (\"tests\" logs) aren't a list of names: left out"
-                       ".agent-workspace/crew.el:6: tim's panels (\"tests\" . \"logs\") aren't a list of names: left out"
-                       ".agent-workspace/crew.el:7: una's panels (\"\") aren't a list of names: left out"))))))
+                     '("crew.json: agent 2 (ken): its panels \"tests\" aren't a list of names: left out"
+                       "crew.json: agent 3 (sam): its panels [\"tests\", 3] aren't a list of names: left out"
+                       "crew.json: agent 4 (tim): its panels {\"tests\": \"logs\"} aren't a list of names: left out"
+                       "crew.json: agent 5 (una): its panels [\"\"] aren't a list of names: left out"))))))
 
 (ert-deftest agent-workspace-saved/panels-opened-again ()
-  "Started again from crew.el: each agent that starts opens its panels again,
+  "Started again from crew.json: each agent that starts opens its panels again,
 in its worktree (its own, shown only as its pane's tabs: one at a time); an
 asleep one, none; one whose file is gone skipped, said, the others open.
 Nothing written meanwhile."
@@ -503,11 +575,12 @@ Nothing written meanwhile."
     (agent-workspace-create :role "builder" :name "ada")
     (agent-workspace-create :role "builder" :name "ken")
     (agent-workspace-close project)
-    (+test-aws2--write project "(agent-workspace-crew
- :version 1
- :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :panels (\"gone\" \"logs\" \"tests\"))
-          (:name \"ken\" :role \"builder\" :colour \"green\" :asleep t :panels (\"tests\")))
- :layout (:view stage :room right :selected \"ada\" :open t))
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"panels\": [\"gone\", \"logs\", \"tests\"]},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"asleep\": true, \"panels\": [\"tests\"]}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ada\", \"open\": true}}
 ")
     (let ((warned nil))
       (cl-letf (((symbol-function 'display-warning) (lambda (_type message &rest _) (push message warned))))
@@ -522,34 +595,35 @@ Nothing written meanwhile."
         (should (<= (seq-count (lambda (canvas) (get-buffer-window canvas t)) (agent-workspace-agent-panels ada))
                     1)))
       (should (equal warned '("ada's panel gone: not one of this project's: logs, tests: skipped"))))
-    (should (string-search ":panels (\"gone\" \"logs\" \"tests\")" (+test-aws2--file project)))))
+    (should (string-search "\"panels\": [\"gone\", \"logs\", \"tests\"]" (+test-aws2--file project)))))
 
 (ert-deftest agent-workspace-saved/an-asleep-agents-panels-when-it-wakes ()
-  "Started again asleep: its panels kept in crew.el (written meanwhile), none
+  "Started again asleep: its panels kept in crew.json (written meanwhile), none
 open; woken, they open (doom-ukm.7)."
   (+test-aws2-panels "asleep-panels"
     (agent-workspace-create :role "builder" :name "ken")
     (agent-workspace-close project)
-    (+test-aws2--write project "(agent-workspace-crew
- :version 1
- :agents ((:name \"ken\" :role \"builder\" :colour \"green\" :asleep t :panels (\"logs\" \"tests\")))
- :layout (:view stage :room right :selected \"ken\" :open t))
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"asleep\": true, \"panels\": [\"logs\", \"tests\"]}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ken\", \"open\": true}}
 ")
     (agent-workspace-open t)
     (let ((ken (agent-workspace-agent "ken" project)))
       (should (eq (agent-workspace-agent-state ken) 'asleep))
       (should-not (+test-aws2--open-panels))
       (agent-workspace-recolour ken "blue")
-      (should (string-search "(:name \"ken\" :role \"builder\" :colour \"blue\" :asleep t :panels (\"logs\" \"tests\"))"
+      (should (string-search "{\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"blue\", \"asleep\": true, \"panels\": [\"logs\", \"tests\"]}"
                              (+test-aws2--file project)))
       (agent-workspace-wake ken)
       (should (equal (+test-aws2--open-panels) '("Agent UI: logs · ken" "Agent UI: tests · ken")))
       (+test-sleep 0.1)
-      (should (string-search "(:name \"ken\" :role \"builder\" :colour \"blue\" :panels (\"logs\" \"tests\"))"
+      (should (string-search "{\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"blue\", \"panels\": [\"logs\", \"tests\"]}"
                              (+test-aws2--file project))))))
 
 (ert-deftest agent-workspace-saved/read-again-applies-panels ()
-  "gR after crew.el's :panels edited: a running agent's opened and closed as
+  "gR after crew.json's panels edited: a running agent's opened and closed as
 listed; an asleep one's kept for when it wakes (doom-ukm.7)."
   (+test-aws2-panels "reload-panels"
     (agent-workspace-open t)
@@ -558,11 +632,12 @@ listed; an asleep one's kept for when it wakes (doom-ukm.7)."
       (+test-aws2--open-panel ada "tests")
       (agent-workspace-sleep ken)
       (+test-sleep 0.1)
-      (+test-aws2--write project "(agent-workspace-crew
- :version 1
- :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :panels (\"logs\"))
-          (:name \"ken\" :role \"builder\" :colour \"magenta\" :asleep t :panels (\"tests\")))
- :layout (:view stage :room right :selected \"ada\" :open t))
+      (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"panels\": [\"logs\"]},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"magenta\", \"asleep\": true, \"panels\": [\"tests\"]}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ada\", \"open\": true}}
 ")
       (with-current-buffer (agent-workspace--issues-buffer project)
         (agent-workspace-crew-reload))
@@ -596,3 +671,84 @@ listed; an asleep one's kept for when it wakes (doom-ukm.7)."
     (should (equal (agent-workspace-agent-panel-names (agent-workspace-agent "ada" project))
                    '("drafts/try.el" "logs" "tests")))
     (should (eq (agent-workspace-agent-state (agent-workspace-agent "sam" project)) 'asleep))))
+
+;; ====== A ROUND TRIP ======
+
+(ert-deftest agent-workspace-saved/a-crew-round-trips ()
+  "Written, read back, started again: the same crew (a model, a mode, a
+kind, asleep, a loop, panels) and layout (talk, sources_off, selected, open,
+minimap); written again after, the same text."
+  (+test-aws2-panels "round-trip"
+    (let ((agent-workspace-kinds (append agent-workspace-kinds '((robot :config ignore))))
+          (agent-workspace--talk (make-hash-table :test #'equal))
+          (agent-workspace--sources-off (make-hash-table :test #'equal))
+          (agent-workspace--minimap-shown (make-hash-table :test #'equal)))
+      ;; Its looks and its watch on .beads not here (see its-loops-read-again).
+      (cl-letf (((symbol-function 'agent-workspace--loop-soon) #'ignore)
+                ((symbol-function 'agent-workspace--loop-watch-update) #'ignore))
+        (agent-workspace-open t)
+        (let ((ada (agent-workspace-create :role "builder" :name "ada" :model "opus" :mode "plan"))
+              (ken (agent-workspace-create :role "builder" :name "ken" :colour "green"))
+              (sam (agent-workspace-create :role "investigator" :name "sam" :kind 'robot)))
+          (+test-aws2--open-panel ada "logs")
+          (+test-aws2--open-panel ada "tests")
+          (setf (agent-workspace-agent-loop ken) t)
+          (agent-workspace-sleep ken)
+          (agent-workspace-select sam))
+        (agent-workspace--talk-set project 'off)
+        (agent-workspace--inbox-set-sources-off project '(("ci" . "#all") ("cal" . "ada")))
+        (agent-workspace--minimap-set project nil)
+        (agent-workspace-crew-save project)
+        (let ((text (+test-aws2--file project)))
+          (should (equal (agent-workspace-crew-read project)
+                         '((:agents ((:name "ada" :role "builder" :colour "blue" :model "opus" :mode "plan"
+                                      :panels ("logs" "tests"))
+                                     (:name "ken" :role "builder" :colour "green" :asleep t :loop t)
+                                     (:name "sam" :role "investigator" :colour "magenta" :kind robot))
+                            :layout (:view stage :room right :selected "sam" :open t :minimap nil :talk off
+                                     :sources-off (("ci" . "#all") ("cal" . "ada")))))))
+          (with-current-buffer (agent-workspace--issues-buffer project)
+            (agent-workspace-quit))
+          (should-not (agent-workspace-agents project))
+          (clrhash agent-workspace--talk)
+          (clrhash agent-workspace--sources-off)
+          (clrhash agent-workspace--minimap-shown)
+          (let ((app (agent-workspace-open t))
+                (ada (agent-workspace-agent "ada" project))
+                (ken (agent-workspace-agent "ken" project))
+                (sam (agent-workspace-agent "sam" project)))
+            (should (equal (list (agent-workspace-agent-model ada) (agent-workspace-agent-mode ada)
+                                 (agent-workspace-agent-panel-names ada))
+                           '("opus" "plan" ("logs" "tests"))))
+            (should (equal (list (agent-workspace-agent-colour ken) (agent-workspace-agent-state ken)
+                                 (agent-workspace-agent-loop ken))
+                           '("green" asleep t)))
+            (should (eq (agent-workspace-agent-kind sam) 'robot))
+            (should (eq (agent-workspace--talk-switch project) 'off))
+            (should (equal (agent-workspace-inbox-sources-off project) '(("ci" . "#all") ("cal" . "ada"))))
+            (should-not (agent-workspace-minimap-shown-p project))
+            (should (eq (agent-workspace--app-selected app) sam))
+            (should (eq (agent-workspace--app-open app) sam)))
+          (agent-workspace-crew-save project)
+          (should (equal (+test-aws2--file project) text)))))))
+
+(ert-deftest agent-workspace-saved/an-old-crew-file-left-alone ()
+  "The crew's file before crew.json, .agent-workspace/crew.el, neither read
+nor touched: no crew started from it, nothing written beside it."
+  (+test-aws2 "old"
+    (let ((old (expand-file-name ".agent-workspace/crew.el" project))
+          (text "(agent-workspace-crew
+ :version 1
+ :agents ((:name \"ada\" :role \"builder\" :colour \"blue\"))
+ :layout (:selected \"ada\" :open t))
+"))
+      (make-directory (file-name-directory old) t)
+      (write-region text nil old nil 'silent)
+      (agent-workspace-open t)
+      (should-not (agent-workspace-agents project))
+      (agent-workspace-create :role "builder" :name "ken")
+      (should (string-search "{\"name\": \"ken\"" (+test-aws2--file project)))
+      (should-not (string-search "ada" (+test-aws2--file project)))
+      (should (equal (directory-files (file-name-directory old) nil directory-files-no-dot-files-regexp)
+                     '("crew.el")))
+      (should (equal (with-temp-buffer (insert-file-contents old) (buffer-string)) text)))))

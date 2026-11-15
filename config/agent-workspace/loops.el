@@ -1,10 +1,10 @@
 ;;; $DOOMDIR/config/agent-workspace/loops.el -*- lexical-binding: t; -*-
 ;; Loops: an agent that, once free, takes the next ready issue of its role by
 ;; itself, or naps and says so. Loaded from config/agent-workspace.el, after
-;; minimap.el (saved.el, after it, keeps them in crew.el). No Doom here.
+;; minimap.el (saved.el, after it, keeps them in crew.json). No Doom here.
 ;;
 ;; Off for every agent; L turns an agent's on or off (its bar shows ↻). A crew
-;; started again from crew.el brings a looping agent back asleep, still
+;; started again from crew.json brings a looping agent back asleep, still
 ;; looping: reopening never starts work by itself, waking it does.
 ;;
 ;; Free: at rest (at the desk, done or napping), nothing queued for it, and no

@@ -445,7 +445,7 @@ try again cancelled."
 ;; ====== THE SAVED CREW ======
 
 (ert-deftest agent-workspace-loops/reopening-never-starts-one ()
-  "Its loop in crew.el; the crew started again from it brings it back
+  "Its loop in crew.json; the crew started again from it brings it back
 asleep, still looping, its session not started, no issue taken; woken, it
 takes one."
   (+test-awl--with-crew "reopen"
@@ -453,9 +453,9 @@ takes one."
       (agent-workspace-loop-set ada t)
       (+test-awl--all-in (list ada) 'nap)
       (agent-workspace-crew-save project)
-      (should (string-search "(:name \"ada\" :role \"builder\" :colour \"blue\" :loop t :kind mock)"
+      (should (string-search "{\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"loop\": true, \"kind\": \"mock\"}"
                              (with-temp-buffer
-                               (insert-file-contents (expand-file-name ".agent-workspace/crew.el" project))
+                               (insert-file-contents (agent-workspace--crew-path project))
                                (buffer-string))))
       (agent-workspace-close project))
     (let ((one (+test-awl--issue project "close: one" "build" 2)))
@@ -468,8 +468,8 @@ takes one."
         (should-not (agent-workspace-agent-buffer ada))
         (should (eq (agent-workspace-agent-state ada) 'asleep))
         (should (equal (+test-awl--status project one) "open"))
-        ;; Asleep, looping: both in crew.el.
-        (should (string-search ":asleep t :loop t" (agent-workspace-crew-text project)))
+        ;; Asleep, looping: both in crew.json.
+        (should (string-search "\"asleep\": true, \"loop\": true" (agent-workspace-crew-text project)))
         ;; Woken: it loops.
         (agent-workspace-wake ada)
         (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))))))

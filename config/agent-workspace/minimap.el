@@ -13,7 +13,7 @@
 ;;
 ;; Drawn again as the agents do things, a few times a second at most, and once
 ;; a minute (its cells move on) while a lane has something; only while it's
-;; shown: no timer otherwise. Shown or hidden with m, kept in crew.el's layout.
+;; shown: no timer otherwise. Shown or hidden with m, kept in crew.json's layout.
 
 (require 'cl-lib)
 (require 'seq)
@@ -29,7 +29,7 @@
 
 (defcustom agent-workspace-minimap t
   "Non-nil: a crew's app shows its minimap (under the issue list) until m
-hides it; crew.el keeps what you chose."
+hides it; crew.json keeps what you chose."
   :type 'boolean
   :group 'agent-workspace)
 
