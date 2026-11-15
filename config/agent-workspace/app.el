@@ -53,6 +53,10 @@ sentence): offer what would make one (git init). nil: just say why.")
   "Called with a project as its app opens with no crew running, until one
 returns non-nil: start the project's saved crew again (doom-51z.5).")
 
+(defvar agent-workspace-layout-functions nil
+  "Called with a project when its app's layout changes: an agent selected, a
+pane opened or folded.")
+
 (defvar agent-workspace-open-issue-function nil
   "Called with an issue's id and its project's folder to show the issue.")
 
@@ -599,6 +603,7 @@ cursor on its issue; done, it's seen. GO: the cursor in its pane."
   (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent))))
     (setf (agent-workspace--app-selected app) agent
           (agent-workspace--app-open app) agent)
+    (run-hook-with-args 'agent-workspace-layout-functions (agent-workspace--app-project app))
     (agent-workspace-seen agent)
     (agent-workspace--issues-goto-agent agent)
     (when (agent-workspace--shown-p app)
@@ -660,6 +665,7 @@ point, else the selected one."
          (app (agent-workspace--app (agent-workspace-agent-project agent))))
     (if (eq (agent-workspace--app-open app) agent)
         (progn (setf (agent-workspace--app-open app) nil)
+               (run-hook-with-args 'agent-workspace-layout-functions (agent-workspace--app-project app))
                (agent-workspace--retile app)
                (when-let* ((window (get-buffer-window (agent-workspace--bar-buffer agent))))
                  (select-window window)))

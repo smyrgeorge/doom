@@ -1,7 +1,7 @@
 # Agent workspace
 
-> **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, and the
-> app: its workspace, the issues and the stage. The room, the saved crew and notifications come next.
+> **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, the
+> app (its workspace, the issues and the stage) and the saved crew. The room and notifications come next.
 
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
@@ -40,10 +40,33 @@ terminal with `git init` typed.
 | `v` / `I` | anywhere | Its canvas / its issue |
 | `a` | anywhere | The next raised hand |
 | `f` + initial | anywhere | That agent |
-| `gr` / `q` / `Q` / `?` | anywhere | Lay it out again / leave / close / the keys |
+| `gr` / `gR` | anywhere | Lay it out again / read `crew.el` again |
+| `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
 In an agent's own session, the same keys follow `SPC m w` (`C-c w` in insert state), plus `]` / `[` for the next or
 previous agent. A click on a bar or a pane's header line selects its agent, and `mouse-3` there lists its actions.
+
+## The saved crew
+
+The crew is saved in the project, in `.agent-workspace/crew.el`, to commit: each agent's name, role and colour, its
+model and permission mode when they aren't its role's, whether it's asleep, and which agent is selected. Not its
+session, state or issue.
+
+```elisp
+(agent-workspace-crew
+ :version 1
+ :agents ((:name "ada" :role "builder" :colour "blue")
+          (:name "ken" :role "builder" :colour "green" :asleep t)
+          (:name "sam" :role "investigator" :colour "magenta" :model "opus"))
+ :layout (:view stage :room right :selected "ada" :open t))
+```
+
+It's written when the crew changes, and read as data, never run. `SPC o w` in a project whose crew isn't running
+starts every agent in it again: fresh, each in its worktree, with its role as it is now, waiting for you. Asleep
+agents stay asleep. An agent that can't start (its role is gone, its worktree can't be made) is stuck, saying why,
+and the others start. A wrong entry is left out, and a warning names its line.
+
+After you edit it or pull it, `gR` reads it again. It asks before it starts an agent or forgets one.
 
 ## Making an agent
 

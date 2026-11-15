@@ -82,6 +82,16 @@
 ;; asking nothing, and leaves no process of theirs: what hasn't exited
 ;; `agent-workspace-exit-timeout' seconds later is killed. Their worktrees stay.
 
+;; THE SAVED CREW
+;; What the crew is, not its state, saved in the project and committed:
+;; .agent-workspace/crew.el (config/agent-workspace/saved.el), read as data,
+;; never evaluated. Each agent's name, role, colour (its model and mode when
+;; not its role's), whether it's asleep; the layout. Written when the crew
+;; changes. SPC o w with no crew running starts it again from there: every
+;; agent fresh, in its worktree, its role as it is now, asleep ones asleep,
+;; each waiting for you; one that can't start stuck, saying why. gR reads it
+;; again (after an edit, a pull), asking before it starts or forgets one.
+
 ;; THE APP
 ;; SPC o w, from inside a project (outside one, asked which): its crew's own
 ;; workspace, "crew · PROJECT" (config/agent-workspace/app.el); SPC o W: in
@@ -109,7 +119,8 @@
 ;;                fresh, s sleep or wake, e edit (name, colour, role, mode,
 ;;                model), d its branch's changes, M merge its branch, v its
 ;;                canvas, I its issue, a the next raised hand, f + an initial
-;;                that agent, gr lay out again, q leave, Q close, ? the keys
+;;                that agent, gr lay out again, gR read crew.el again, q leave,
+;;                Q close, ? the keys
 ;;   its session  the same after SPC m w (C-c w in insert state), and ] / [
 ;;                the next / previous agent; a click on its header line or a
 ;;                bar selects it, mouse-3 its actions
@@ -135,6 +146,7 @@
 (load! "agent-workspace/stage")
 (load! "agent-workspace/app")
 (load! "agent-workspace/issues")
+(load! "agent-workspace/saved")
 (load! "agent-workspace/doom")
 
 ;; The app's keys, in its buffers (see THE APP above). Set here, at top level:
@@ -146,7 +158,7 @@
     ("d" . agent-workspace-review-here) ("M" . agent-workspace-merge-here)
     ("v" . agent-workspace-canvas-here) ("I" . agent-workspace-issue-here)
     ("a" . agent-workspace-next-hand) ("f" . agent-workspace-jump)
-    ("gr" . agent-workspace-layout) ("q" . agent-workspace-leave)
+    ("gr" . agent-workspace-layout) ("gR" . agent-workspace-crew-reload) ("q" . agent-workspace-leave)
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help))
   "The keys every buffer of the app has (see THE APP above).")
 

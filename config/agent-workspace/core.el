@@ -46,6 +46,9 @@ reads as an error."
 `renamed', `colour', `role', `settings' (its model or mode), `issue',
 `session' (a new one started), `forgotten', `closed' (its crew closed).")
 
+(defvar agent-workspace-closing-functions nil
+  "Called with a project as its crew closes, before any agent stops.")
+
 (defvar agent-workspace-state-change-functions nil
   "Called with an agent, its old state and its new one, when its state
 changes (before `agent-workspace-change-functions').")
@@ -360,7 +363,7 @@ not started, it's stuck saying why, in the crew."
       (user-error "Not a colour for an agent: %s (one of %s)"
                   colour (string-join agent-workspace-colours ", ")))
     (let ((agent (agent-workspace--make-agent
-                  :name name :role role :kind kind
+                  :name name :role role :kind kind :state 'waking
                   :colour (or colour (agent-workspace-free-colour
                                       project (plist-get (funcall agent-workspace-role-function project role)
                                                          :colour)))
@@ -485,6 +488,7 @@ their processes, (PID . START) each."
   (when-let* ((project (or project (agent-workspace-project)))
               (key (agent-workspace--root project))
               (agents (gethash key agent-workspace--crews)))
+    (run-hook-with-args 'agent-workspace-closing-functions key)
     (remhash key agent-workspace--crews)
     (let ((table (and (seq-some #'agent-workspace-live-p agents)
                       (agent-workspace--process-table))))
