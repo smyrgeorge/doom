@@ -58,6 +58,7 @@ terminal with `git init` typed.
 | `1` / `2` | anywhere | The stage / the room alone |
 | `m` | anywhere | Show or hide the minimap |
 | `P` | anywhere | Pause the crew's events, or let them go again |
+| `T` | anywhere | May its agents message each other: off, ask me, on |
 | `gr` / `gR` | anywhere | Lay it out again / read `crew.el` again |
 | `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
@@ -127,6 +128,20 @@ gives it at once (after the agent's turn), in its own mode: you let it. The agen
 every event (they're queued, not delivered) until `P` again. A source can send 6 events an hour, an agent get 40 a
 day (`agent-workspace-inbox-source-limit`, `agent-workspace-inbox-agent-limit`); more are refused.
 
+## Agents asking each other
+
+Issues carry the work between agents; a message is for a question. An agent sends one from its shell:
+`cmd/agent-workspace send --to ken "What does the lexer return?"` (to an agent, or `#reviewer`, a role's first free
+agent). `T` in the app says whether they may, kept in `crew.el`:
+
+- **Ask me**, at first: each message waits in the room, `ada → ken`, for `[Send]`, `[Edit]` or `[Drop]`.
+- **On**: sent at once. **Off**: refused, and the agent is told so.
+
+A role's `talks-to: reviewer` lets its agents message reviewers without your OK. Once sent, a message goes through the
+[inbox](#the-inbox): it waits until its agent is free, and never wakes one asleep. It's told as from the sender, data
+and not your instructions, in plan mode. Its reply goes back to the sender the same way, as an answer, and an answer
+gets none.
+
 ## Raised hands
 
 When several agents wait for you, you can answer them from one place. A raised hand's options are buttons under it in
@@ -160,7 +175,8 @@ each kind off ([Notifications](notifications.md)).
 
 The crew is saved in the project, in `.agent-workspace/crew.el`, to commit: each agent's name, role and colour, its
 model and permission mode when they aren't its role's, whether it's asleep, the [panels](#an-agents-panels) it has
-open (by name, never their data), which agent is selected, and whether the minimap is shown. Not its session, state or issue.
+open (by name, never their data), which agent is selected, whether the minimap is shown, and whether its agents may
+message each other. Not its session, state or issue.
 
 ```elisp
 (agent-workspace-crew
@@ -168,7 +184,7 @@ open (by name, never their data), which agent is selected, and whether the minim
  :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
           (:name "ken" :role "builder" :colour "green" :asleep t)
           (:name "sam" :role "investigator" :colour "magenta" :model "opus"))
- :layout (:view stage :room right :selected "ada" :open t :minimap t))
+ :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask))
 ```
 
 It's written when the crew changes (a panel opened or closed too), and read as data, never run. Closing the crew
@@ -246,7 +262,8 @@ Write the tests first, then run them.
 
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode. Claude Code
   enforces all three.
-- `max` is how many of the role may run at once. `labels` are the issues it's for.
+- `max` is how many of the role may run at once. `labels` are the issues it's for. `talks-to` names the roles it may
+  [message](#agents-asking-each-other) without your OK.
 - `icon` is a nerd icon for the GUI, then a glyph for the terminal. `verb` is what its agents show while they work:
   "testing doom-a1b". `colour` is its agents' colour while it's free.
 

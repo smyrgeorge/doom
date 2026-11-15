@@ -12,13 +12,16 @@
 ;;        "state"}
 ;;   send {"to": "ada" | "#builder" | "#all", "from": "ci", "text": "..."}
 ;;        (from: optional, "shell") -> {"ok": true, "events": [{"id", "to",
-;;        "state": "queued" | "delivered"}]} (inbox.el)
+;;        "state": "queued" | "delivered"}]} (inbox.el); with "agent": "ada"
+;;        (from her shell, AGENT_WORKSPACE_AGENT, no from): her message
+;;        (messages.el), its state "waiting" too, for your OK
 
 (require 'cl-lib)
 (require 'subr-x)
 (require 'json)
 
 (declare-function agent-workspace-inbox-add "agent-workspace/inbox")
+(declare-function agent-workspace-message-send "agent-workspace/messages")
 
 (defun agent-workspace--request-new (directory payload)
   "Make an agent in DIRECTORY's project, as PAYLOAD (a plist) says: the
@@ -51,7 +54,9 @@ reply, a plist."
          (project (or (agent-workspace-project)
                       (user-error "No crew here: %s" (agent-workspace-no-crew-reason))))
          (to (plist-get payload :to))
-         (from (plist-get payload :from)))
+         (from (plist-get payload :from))
+         (sender (and (stringp (plist-get payload :agent))
+                      (agent-workspace-agent (plist-get payload :agent) project))))
     (unless (and (stringp to) (not (string-empty-p to)))
       (user-error "send: to whom? --to NAME, --to #ROLE or --to #all"))
     (list :ok t
@@ -59,10 +64,13 @@ reply, a plist."
                    (mapcar (lambda (event)
                              (list :id (plist-get event :id) :to (plist-get event :to)
                                    :state (plist-get event :state)))
-                           (agent-workspace-inbox-add project to (plist-get payload :text)
-                                                      :from (if (and (stringp from) (not (string-empty-p from)))
-                                                                from
-                                                              "shell")))))))
+                           (if sender
+                               ;; From an agent's shell: its message.
+                               (agent-workspace-message-send sender to (plist-get payload :text))
+                             (agent-workspace-inbox-add project to (plist-get payload :text)
+                                                        :from (if (and (stringp from) (not (string-empty-p from)))
+                                                                  from
+                                                                "shell"))))))))
 
 (defun agent-workspace-request (dir)
   "Answer cmd/agent-workspace's request in DIR (see the top of this file):

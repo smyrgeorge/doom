@@ -19,6 +19,7 @@
 ;;                                   acceptEdits, plan, dontAsk,
 ;;                                   bypassPermissions (or accept-edits...)
 ;;   labels: build                   the issues it's for
+;;   talks-to: reviewer              the roles it may message without your OK
 ;;   max: 4                          how many of it may run at once
 ;;   icon: md-hammer ⚙               a nerd icon (GUI), a glyph (terminal)
 ;;   verb: building                  what it does, working: "building doom-a1b"
@@ -49,7 +50,7 @@
   "Claude Code's permission modes.")
 
 (defconst agent-workspace--role-keys
-  '("name" "description" "tools" "deny" "model" "mode" "labels" "max" "icon" "verb" "colour" "color")
+  '("name" "description" "tools" "deny" "model" "mode" "labels" "talks-to" "max" "icon" "verb" "colour" "color")
   "A role file's keys (color as Claude Code's agents spell it).")
 
 (defvar agent-workspace--roles-cache (make-hash-table :test #'equal)
@@ -101,7 +102,7 @@ this file), nil if FILE has errors; PROBLEMS, each (error|warning
           (let ((key nil) (list nil) (closed nil))
             (cl-flet ((store (key value n)
                         (pcase key
-                          ((or "tools" "deny" "labels")
+                          ((or "tools" "deny" "labels" "talks-to")
                            (setq role (plist-put role (intern (concat ":" key))
                                                  (if (listp value) value (agent-workspace--role-list value)))))
                           ("name"
@@ -153,7 +154,7 @@ this file), nil if FILE has errors; PROBLEMS, each (error|warning
                         (problem 'warning line "worktree: ignored (every agent has its own worktree)"))
                        ((not (member k agent-workspace--role-keys))
                         (problem 'warning line "unknown key %s: ignored" k))
-                       ((and (string-empty-p value) (member k '("tools" "deny" "labels")))
+                       ((and (string-empty-p value) (member k '("tools" "deny" "labels" "talks-to")))
                         ;; Its items on the lines below.
                         (setq key k))
                        (t (store k value line)))))

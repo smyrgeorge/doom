@@ -14,7 +14,10 @@
 #                                from SOURCE (default: shell): delivered when
 #                                it's free, as data, never instructions
 #                                -> {"ok": true, "events": [{"id", "to",
-#                                "state": "queued"|"delivered"}]}
+#                                "state": "queued"|"delivered"}]}; from an
+#                                agent's shell (AGENT_WORKSPACE_AGENT), no
+#                                --from: its message to another agent,
+#                                "waiting" for your OK if the crew asks
 #
 # The reply is JSON on stdout: {"ok": false, "error": "what's wrong"} when it
 # isn't done. Exit status: 0 done, 1 not done (the reply says why), 2 a wrong
@@ -84,8 +87,11 @@ case "$op" in
     done
     [ -z "$to" ] && fail 2 "send: to whom? agent-workspace send --to NAME|#ROLE|#all TEXT"
     [ -z "$have_text" ] && fail 2 "send: what? agent-workspace send --to $to TEXT (or - to read it)"
-    payload=$(printf '{"to":%s,"from":%s,"text":%s}' \
-                     "$(json_string "$to")" "$(json_string "$from")" "$(json_string "$text")") ;;
+    agent=""
+    [ -z "$from" ] && agent=${AGENT_WORKSPACE_AGENT:-}
+    payload=$(printf '{"to":%s,"from":%s,"text":%s,"agent":%s}' \
+                     "$(json_string "$to")" "$(json_string "$from")" "$(json_string "$text")" \
+                     "$(json_string "$agent")") ;;
   *)
     fail 2 "unknown operation \"$op\"; operations: new, send" ;;
 esac

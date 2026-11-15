@@ -8,7 +8,7 @@
 ;;    :version 1
 ;;    :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
 ;;             (:name "ken" :role "builder" :colour "green" :asleep t))
-;;    :layout (:view stage :room right :selected "ada" :open t :minimap t))
+;;    :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask))
 ;;
 ;; What each agent is (its name, role, colour; its model and mode when not its
 ;; role's; whether it's asleep; its kind when not Claude Code; its open
@@ -181,7 +181,10 @@ read already), or nil."
                                :open (and app (agent-workspace--app-open app) t)
                                :minimap (and (fboundp 'agent-workspace-minimap-shown-p)
                                              (agent-workspace-minimap-shown-p project)
-                                             t)))
+                                             t)
+                               :talk (if (fboundp 'agent-workspace-talk-mode)
+                                         (agent-workspace-talk-mode project)
+                                       'ask)))
             ")\n")))
 
 (defun agent-workspace-crew-save (&optional project)
@@ -313,6 +316,10 @@ In `agent-workspace-open-functions'."
                     ((plist-member layout :minimap))
                     ((fboundp 'agent-workspace--minimap-set)))
           (agent-workspace--minimap-set project (plist-get layout :minimap)))
+        (when-let* ((layout (plist-get crew :layout))
+                    ((memq (plist-get layout :talk) '(off ask on)))
+                    ((fboundp 'agent-workspace--talk-set)))
+          (agent-workspace--talk-set project (plist-get layout :talk)))
         (when-let* ((app (agent-workspace--app project))
                     (layout (plist-get crew :layout))
                     (selected (agent-workspace-agent (plist-get layout :selected) project)))

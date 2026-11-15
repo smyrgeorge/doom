@@ -115,7 +115,7 @@ opens without it."
     (should (equal (nth 0 (+test-awm--windows)) '("*issues · under*" 50 39)))
     (should-not (get-buffer-window (agent-workspace--minimap-buffer project)))
     (agent-workspace-crew-save project)
-    (should (string-search ":minimap nil)" (with-temp-buffer
+    (should (string-search ":minimap nil " (with-temp-buffer
                                               (insert-file-contents (agent-workspace--crew-path project))
                                               (buffer-string))))
     (with-current-buffer (agent-workspace--issues-buffer project)

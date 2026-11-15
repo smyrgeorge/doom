@@ -113,6 +113,15 @@
 ;; queued ([Send now] [Drop]), delivered, dropped; ✉N on its agent's bar; P
 ;; pauses them all. Limits: 6 an hour from a source, 40 a day for an agent.
 
+;; AGENTS ASKING EACH OTHER
+;; A direct message for a question (config/agent-workspace/messages.el), from
+;; an agent's shell: cmd/agent-workspace send --to ken TEXT. T in the app: may
+;; they, off / ask me (each waits in the room for [Send] [Edit] [Drop]) / on,
+;; kept in crew.el; a role's talks-to: names the roles it may message without
+;; your OK. Through the inbox: delivered when free, framed as from the sender
+;; (data, not your instructions); the reply goes back to the sender, as an
+;; answer.
+
 ;; THE SAVED CREW
 ;; What the crew is, not its state, saved in the project and committed:
 ;; .agent-workspace/crew.el (config/agent-workspace/saved.el), read as data,
@@ -188,6 +197,7 @@
 (load! "agent-workspace/room")
 (load! "agent-workspace/hands")
 (load! "agent-workspace/inbox")
+(load! "agent-workspace/messages")
 (load! "agent-workspace/panels")
 (load! "agent-workspace/activity")
 (load! "agent-workspace/minimap")
@@ -206,7 +216,8 @@
     ("gr" . agent-workspace-layout) ("gR" . agent-workspace-crew-reload) ("q" . agent-workspace-leave)
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)
     ("#" . agent-workspace-talk) ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room)
-    ("m" . agent-workspace-minimap-toggle) ("P" . agent-workspace-inbox-pause))
+    ("m" . agent-workspace-minimap-toggle) ("P" . agent-workspace-inbox-pause)
+    ("T" . agent-workspace-talk-cycle))
   "The keys every buffer of the app has (see THE APP above).")
 
 (+my/agent-workspace-bind agent-workspace-issues-mode-map
