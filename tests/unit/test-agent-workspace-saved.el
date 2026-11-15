@@ -424,8 +424,9 @@ them, done first."
 
 (ert-deftest agent-workspace-saved/panels-opened-again ()
   "Started again from crew.el: each agent that starts opens its panels again,
-in its worktree (its own, shown in no pane); an asleep one, none; one whose
-file is gone skipped, said, the others open. Nothing written meanwhile."
+in its worktree (its own, shown only as its pane's tabs: one at a time); an
+asleep one, none; one whose file is gone skipped, said, the others open.
+Nothing written meanwhile."
   (+test-aws2-panels "panels-again"
     (agent-workspace-create :role "builder" :name "ada")
     (agent-workspace-create :role "builder" :name "ken")
@@ -444,7 +445,10 @@ file is gone skipped, said, the others open. Nothing written meanwhile."
         (dolist (canvas (agent-workspace-agent-panels ada))
           (should (equal (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state canvas)))
                          (file-truename (agent-workspace-agent-worktree ada))))
-          (should-not (get-buffer-window canvas t))))
+          (dolist (window (get-buffer-window-list canvas nil t))
+            (should (eq (window-parameter window 'agent-workspace-side) ada))))
+        (should (<= (seq-count (lambda (canvas) (get-buffer-window canvas t)) (agent-workspace-agent-panels ada))
+                    1)))
       (should (equal warned '("ada's panel gone: not one of this project's: logs, tests: skipped"))))
     (should (string-search ":panels (\"gone\" \"logs\" \"tests\")" (+test-aws2--file project)))))
 
