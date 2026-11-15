@@ -169,6 +169,7 @@
 (load! "agent-workspace/room")
 (load! "agent-workspace/hands")
 (load! "agent-workspace/panels")
+(load! "agent-workspace/activity")
 (load! "agent-workspace/saved")
 (load! "agent-workspace/doom")
 

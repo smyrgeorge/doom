@@ -15,6 +15,9 @@
 ;;                 cancelled (session/cancel)
 ;;   "hold"        says so, then works until it's cancelled
 ;;   "slow"        says so, works a second and a half, ends its turn
+;;   "read FILE"   reads FILE (a tool call of kind read, at its line 3), ends
+;;   "edit FILE"   edits FILE (a tool call of kind edit; agent-shell writes it,
+;;                 fs/write_text_file), ends its turn
 ;;   "child"       starts a child process (sleep 300, in a process group of its
 ;;                 own) and holds, saying its pid
 ;;   "fail"        fails the prompt (an error)
@@ -32,6 +35,7 @@
 (defvar mock-acp--holding nil "The id of the prompt being held (until cancelled).")
 (defvar mock-acp--asking nil "Our permission request's id and the prompt's: (OURS . PROMPT).")
 (defvar mock-acp--next-id 1000 "The next id of a request of ours.")
+(defvar mock-acp--writing nil "Our file write request's id and the prompt's: (OURS . PROMPT).")
 
 (defun mock-acp--send (object)
   "Write OBJECT as a JSON line."
@@ -67,6 +71,22 @@
   (let ((session (gethash "sessionId" params))
         (text (mock-acp--prompt-text params)))
     (cond
+     ((string-match "\\`read \\(.+\\)" text)
+      (let ((file (expand-file-name (string-trim (match-string 1 text)))))
+        (mock-acp--update session `(:sessionUpdate "tool_call" :toolCallId "r1" :title ,(concat "Read " file)
+                                    :kind "read" :status "completed"
+                                    :locations [(:path ,file :line 3)]))
+        (mock-acp--say session (format "read %s" file))
+        (mock-acp--result id '(:stopReason "end_turn"))))
+     ((string-match "\\`edit \\(.+\\)" text)
+      (let ((file (expand-file-name (string-trim (match-string 1 text))))
+            (ours (cl-incf mock-acp--next-id)))
+        (mock-acp--update session `(:sessionUpdate "tool_call" :toolCallId "e1" :title ,(concat "Edit " file)
+                                    :kind "edit" :status "in_progress"
+                                    :locations [(:path ,file :line 1)]))
+        (setq mock-acp--writing (cons ours id))
+        (mock-acp--send `(:jsonrpc "2.0" :id ,ours :method "fs/write_text_file"
+                          :params (:sessionId ,session :path ,file :content "edited by the stand-in\n")))))
      ((string-match-p "\\`Work on" text)
       (mock-acp--say session "On it: reading the code first, then the tests.")
       (setq mock-acp--holding id))
@@ -141,6 +161,13 @@
          (mock-acp--result mock-acp--holding '(:stopReason "cancelled"))
          (setq mock-acp--holding nil)))
       ('nil
+       ;; A response to our file write: the edit done, the turn ends.
+       (when (and mock-acp--writing (equal id (car mock-acp--writing)))
+         (let ((prompt (cdr mock-acp--writing)))
+           (setq mock-acp--writing nil)
+           (mock-acp--update "mock-session" '(:sessionUpdate "tool_call_update" :toolCallId "e1"
+                                              :status "completed"))
+           (mock-acp--result prompt '(:stopReason "end_turn"))))
        ;; A response to our permission request: the tool runs, the turn ends.
        (when (and mock-acp--asking (equal id (car mock-acp--asking)))
          (let ((prompt (cdr mock-acp--asking)))
