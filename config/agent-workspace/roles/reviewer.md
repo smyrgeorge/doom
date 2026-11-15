@@ -3,7 +3,6 @@ name: reviewer
 description: reviews a branch you point it to
 tools: Read, Grep, Glob, Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(bd:*), Bash(ls:*)
 deny: Edit, Write, NotebookEdit
-mode: default
 labels: review
 hands-to: builder
 max: 2

@@ -147,8 +147,9 @@ read already), or nil."
                   :colour (agent-workspace-agent-colour agent))
             (let ((model (agent-workspace-agent-model agent)))
               (and model (not (equal model (plist-get role :model))) (list :model model)))
+            ;; Its own mode, unless it's the one it would have anyway.
             (let ((mode (agent-workspace-agent-mode agent)))
-              (and mode (not (equal mode (plist-get role :mode))) (list :mode mode)))
+              (and mode (not (equal mode (or (plist-get role :mode) agent-workspace-mode))) (list :mode mode)))
             (and (eq (agent-workspace-agent-state agent) 'asleep) (list :asleep t))
             (and (agent-workspace-agent-loop agent) (list :loop t))
             ;; Not Claude Code (the example's stand-in): said, so it starts again as it was.

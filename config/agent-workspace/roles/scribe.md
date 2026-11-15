@@ -3,7 +3,6 @@ name: scribe
 description: writes issues with you
 tools: Read, Grep, Glob, Bash(bd:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(ls:*)
 deny: Edit, Write, NotebookEdit
-mode: default
 max: 1
 icon: md-feather ✎
 verb: writing

@@ -85,8 +85,9 @@ at once (no wait)."
 ;; ====== WRITTEN ======
 
 (ert-deftest agent-workspace-saved/its-text ()
-  "One agent a line, in role order then by name; its model and mode only
-when not its role's; asleep said; the layout."
+  "One agent a line, in role order then by name; its model only when not its
+role's, its mode only when not what it would have anyway (its role's, else
+auto); asleep said; the layout."
   (+test-aws2 "text"
     (let ((sam (agent-workspace-create :role "investigator" :name "sam" :model "opus"))
           (ken (agent-workspace-create :role "builder" :name "ken" :colour "green" :mode "acceptEdits"))
@@ -99,10 +100,14 @@ when not its role's; asleep said; the layout."
 (agent-workspace-crew
  :version 1
  :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :mode \"plan\")
-          (:name \"ken\" :role \"builder\" :colour \"green\" :asleep t)
+          (:name \"ken\" :role \"builder\" :colour \"green\" :mode \"acceptEdits\" :asleep t)
           (:name \"sam\" :role \"investigator\" :colour \"magenta\" :model \"opus\"))
  :layout (:view stage :room right :selected nil :open nil :minimap t :talk ask :sources-off nil))
-")))))
+"))
+      ;; Her own mode auto, the one she'd have anyway: not written.
+      (setf (agent-workspace-agent-mode ada) "auto")
+      (should (string-search "(:name \"ada\" :role \"builder\" :colour \"blue\")"
+                             (agent-workspace-crew-text project))))))
 
 (ert-deftest agent-workspace-saved/written-when-the-crew-changes ()
   "Made, recoloured, put to sleep, woken, forgotten: written; a state alone
@@ -197,7 +202,7 @@ a new agent made there, a new crew, written again (doom-51z.15)."
       (should (equal problems
                      '(".agent-workspace/crew.el:4: not a name: \"Bad Name\": left out"
                        ".agent-workspace/crew.el:5: ken's colour \"pink\" isn't one of blue, magenta, green, yellow, cyan, red, white, black: left out"
-                       ".agent-workspace/crew.el:6: sam's mode \"yolo\" isn't one of default, acceptEdits, plan, dontAsk, bypassPermissions: left out"
+                       ".agent-workspace/crew.el:6: sam's mode \"yolo\" isn't one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions: left out"
                        ".agent-workspace/crew.el:7: ada twice: left out"
                        ".agent-workspace/crew.el:8: tim has no role: left out"
                        ".agent-workspace/crew.el:9: unknown key :colours: ignored"))))))

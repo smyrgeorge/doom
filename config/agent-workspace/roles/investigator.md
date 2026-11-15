@@ -3,7 +3,6 @@ name: investigator
 description: investigates what you give it
 tools: Read, Grep, Glob, WebSearch, WebFetch, Bash(bd:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git blame:*), Bash(git status:*), Bash(ls:*)
 deny: Edit, Write, NotebookEdit
-mode: default
 labels: investigation, incident
 hands-to: builder
 max: 2

@@ -101,7 +101,7 @@ inherit, Claude Code's color spelling."
   (dolist (case '(("No front matter.\n" (error "tester.md:1: no front matter: it starts with a line ---, its keys, then a line ---"))
                   ("---\nmax: 3\n" (error "tester.md:3: its front matter isn't closed: a line --- after its keys"))
                   ("---\ndescription: x\nmode: yolo\n---\n"
-                   (error "tester.md:3: mode yolo: not one of default, acceptEdits, plan, dontAsk, bypassPermissions"))
+                   (error "tester.md:3: mode yolo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions"))
                   ("---\nmax: many\n---\n" (error "tester.md:2: max many: not a number above 0"))
                   ("---\nmax: 0\n---\n" (error "tester.md:2: max 0: not a number above 0"))
                   ("---\ncolour: #ff0000\n---\n"
@@ -135,17 +135,17 @@ reading); the builder edits without asking, and never pushes."
     (dolist (file (directory-files dir t "\\.md\\'"))
       (pcase-let ((`(,role . ,problems) (agent-workspace-role-read file)))
         (should-not problems)
-        (dolist (key '(:description :verb :icon :glyph :colour :max :mode :instructions :tools))
+        (dolist (key '(:description :verb :icon :glyph :colour :max :instructions :tools))
           (should (plist-get role key)))
+        ;; None has a mode: each agent starts in agent-workspace-mode's (auto).
+        (should-not (plist-get role :mode))
         (should (member "Bash(bd:*)" (plist-get role :tools)))
         (should (string-width (plist-get role :glyph)))
         (if (equal (plist-get role :name) "builder")
             (progn
-              (should (equal (plist-get role :mode) "acceptEdits"))
               (should (member "Edit" (plist-get role :tools)))
               (should (equal (plist-get role :deny) '("Bash(git push:*)")))
               (should (equal (plist-get role :labels) '("build"))))
-          (should (equal (plist-get role :mode) "default"))
           (should (equal (plist-get role :deny) '("Edit" "Write" "NotebookEdit")))
           (should-not (seq-intersection '("Edit" "Write") (plist-get role :tools))))))))
 

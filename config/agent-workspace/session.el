@@ -101,13 +101,20 @@ buffer, not shown. If it can't start, AGENT is stuck, saying why."
      (message "%s's session didn't start: %s" (agent-workspace-agent-name agent) (error-message-string err))
      nil)))
 
+(defun agent-workspace-mode-of (agent)
+  "The permission mode AGENT's session starts in (Claude Code's id): its own
+\(e, C-u c), else its role's, else `agent-workspace-mode' (auto); nil,
+Claude Code's own default."
+  (or (agent-workspace-agent-mode agent) (plist-get (agent-workspace-role agent) :mode)
+      agent-workspace-mode))
+
 (defun agent-workspace--config (agent)
   "agent-shell's config for AGENT's session (see the top of this file)."
   (let* ((kind (or (alist-get (agent-workspace-agent-kind agent) agent-workspace-kinds)
                    (error "No such kind of agent: %s" (agent-workspace-agent-kind agent))))
          (role (agent-workspace-role agent))
          (model (or (agent-workspace-agent-model agent) (plist-get role :model)))
-         (mode (or (agent-workspace-agent-mode agent) (plist-get role :mode)))
+         (mode (agent-workspace-mode-of agent))
          ;; A copy: the maker's own values (a quoted session meta) stay.
          (config (copy-tree (funcall (plist-get kind :config))))
          (maker (alist-get :client-maker config))

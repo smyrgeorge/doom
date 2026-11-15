@@ -240,7 +240,7 @@ and branch."
                            (concat sep mail)
                          "")))
          (role (agent-workspace-role agent))
-         (mode (or (agent-workspace-agent-mode agent) (plist-get role :mode)))
+         (mode (agent-workspace-mode-of agent))
          (model (or (agent-workspace-agent-model agent) (plist-get role :model)))
          (buttons (and hand (fboundp 'agent-workspace--hand-buttons)
                        (agent-workspace--hand-buttons

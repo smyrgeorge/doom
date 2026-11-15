@@ -100,14 +100,14 @@ made for it; one taken or not valid is refused, and asked again."
                           (sit-for 1.5)))))))))
 
 (defun agent-workspace--read-more (project role)
-  "Its model, permission mode and colour, read (its role's and a free one
-by default): (:model :mode :colour)."
+  "Its model, permission mode and colour, read (its role's, else
+`agent-workspace-mode', and a free one by default): (:model :mode :colour)."
   (let* ((spec (agent-workspace--project-role project role))
          (model (completing-read (format "Model (%s's: %s): " role (or (plist-get spec :model) "inherit"))
                                  (cons "inherit" agent-workspace-models) nil nil nil nil
                                  (or (plist-get spec :model) "inherit")))
          (mode (completing-read "Permission mode: " agent-workspace-modes nil t nil nil
-                                (or (plist-get spec :mode) "default")))
+                                (or (plist-get spec :mode) agent-workspace-mode "default")))
          (colour (completing-read "Colour: " agent-workspace-colours nil t nil nil
                                   (agent-workspace-free-colour project (plist-get spec :colour)))))
     (list :model (unless (member model '("" "inherit")) model)

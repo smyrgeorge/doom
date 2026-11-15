@@ -28,6 +28,18 @@ INBOX below)."
   :type 'boolean
   :group 'agent-workspace)
 
+;; ITS PERMISSION MODE
+;; Claude Code's (`agent-workspace-modes'): an agent's own (e, C-u c), else
+;; its role's (its file's mode:; the starters have none), else
+;; `agent-workspace-mode': auto, Claude deciding what needs your OK. The bar
+;; shows it.
+(defcustom agent-workspace-mode "auto"
+  "The permission mode an agent starts in (Claude Code's id) when neither
+you (e, C-u c) nor its role (mode:) chose one. auto: Claude decides what
+needs your OK. nil: Claude Code's own default."
+  :type '(choice (const :tag "Claude Code's" nil) string)
+  :group 'agent-workspace)
+
 ;; AGENTS
 ;; An agent of a project's crew (config/agent-workspace/core.el): a name
 ;; ("ada": a lowercase letter, then lowercase letters, digits or -), a role
@@ -111,8 +123,8 @@ INBOX below)."
 
 ;; ITS SESSION
 ;; agent-shell's (config/agent-workspace/session.el), in its worktree, its
-;; buffer "ada · builder". Its role's model, permission mode, tools and MCP
-;; servers; in its system prompt, after what every session is told, who it is
+;; buffer "ada · builder". Its role's model, tools and MCP servers, its
+;; permission mode (see ITS PERMISSION MODE above); in its system prompt, after what every session is told, who it is
 ;; and how it works, then its role's instructions; in its environment its name
 ;; (BEADS_ACTOR, AGENT_WORKSPACE_AGENT) and the project's issues (BEADS_DIR).
 

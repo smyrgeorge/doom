@@ -3,7 +3,6 @@ name: builder
 description: builds what you give it
 tools: Read, Grep, Glob, Edit, Write, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git add:*), Bash(git commit:*), Bash(bd:*), Bash(ls:*)
 deny: Bash(git push:*)
-mode: acceptEdits
 labels: build
 hands-to: reviewer
 max: 4

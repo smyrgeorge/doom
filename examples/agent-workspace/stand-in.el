@@ -166,6 +166,7 @@ batch (the stand-in would exit)."
                                       :availableModes [(:id "default" :name "Default")
                                                        (:id "acceptEdits" :name "Accept Edits")
                                                        (:id "plan" :name "Plan Mode")
+                                                       (:id "auto" :name "Auto")
                                                        (:id "dontAsk" :name "Don't Ask")
                                                        (:id "bypassPermissions" :name "Bypass Permissions")])
                               :models (:currentModelId "default"

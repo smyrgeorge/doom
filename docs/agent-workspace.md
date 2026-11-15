@@ -280,7 +280,8 @@ a colour, the panels or a loop turned off it applies.
 2. **Its name.** Leave it empty and one is made for it, `ada`, `grace`, `linus`..., each with an initial no other
    agent has. A name is lowercase letters, digits and `-`.
 
-With `C-u`, it also asks for its model, permission mode and colour. Its role's are the defaults.
+With `C-u`, it also asks for its model, permission mode and colour. Its role's are the defaults (its mode: auto,
+unless its role says).
 
 The agent gets its worktree and its session starts. Then it waits for you. If its worktree can't be made, nothing is
 made, and you're told why. If its session doesn't start, it's stuck, saying why.
@@ -296,8 +297,11 @@ From the shell: `cmd/agent-workspace new --role builder [--name ada] [--prompt T
 ## An agent
 
 - **Its session** is a Claude Code session in agent-shell, in the buffer `ada · builder`. It's told who it is, that
-  it works with you only, and to commit in its worktree, then its role's instructions. Its role's model, permission
-  mode and tools apply.
+  it works with you only, and to commit in its worktree, then its role's instructions. Its role's model and tools
+  apply.
+- **Its permission mode** is Claude Code's auto mode: Claude decides what needs your OK. A role's `mode` changes it
+  for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all (`nil`: Claude Code's own default).
+  The agent's bar shows it.
 - **Its worktree** is `.agent-shell/worktrees/ada`, on the branch `agent/ada`, branched from your checkout's HEAD.
   It's made with the agent and kept when the agent stops, so the next start finds its work. It's locked with the
   agent's name as the reason (`git worktree list -v`). `.agent-shell/` stays out of git. A project that isn't a git
@@ -334,8 +338,8 @@ colour: yellow
 Write the tests first, then run them.
 ```
 
-- `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode. Claude Code
-  enforces all three.
+- `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the four
+  have none: their agents run in auto mode). Claude Code enforces all three.
 - `max` is how many of the role may run at once. `labels` are the issues it's for. `talks-to` names the roles it may
   [message](#agents-asking-each-other) without your OK. `hands-to` names the role its finished issues
   [go to](#work-handed-on-through-issues).

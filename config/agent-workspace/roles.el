@@ -47,8 +47,8 @@
   (expand-file-name "roles/" (file-name-directory (or load-file-name buffer-file-name)))
   "The starter roles, shipped with this module.")
 
-(defconst agent-workspace-modes '("default" "acceptEdits" "plan" "dontAsk" "bypassPermissions")
-  "Claude Code's permission modes.")
+(defconst agent-workspace-modes '("default" "acceptEdits" "plan" "auto" "dontAsk" "bypassPermissions")
+  "Claude Code's permission modes (auto: Claude decides what needs your OK).")
 
 (defconst agent-workspace--role-keys
   '("name" "description" "tools" "deny" "model" "mode" "labels" "talks-to" "hands-to" "max" "icon" "verb"

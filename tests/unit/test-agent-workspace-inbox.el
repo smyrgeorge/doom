@@ -108,7 +108,7 @@ MODE\" for each mode set."
 (ert-deftest agent-workspace-inbox/delivered-when-free-as-data-in-plan-mode ()
   "An event for ada while she works: queued (✉1, the room says so), then
 delivered once she's free, framed as data, her turn in plan mode, her own
-mode (her role's, acceptEdits) back after; the queue empty, its file gone."
+mode (auto: her role has none) back after; the queue empty, its file gone."
   (+test-awi "delivered" (("ada" "builder"))
     (agent-workspace-send ada "hold on" :submit t)
     (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'working)) 10))
@@ -123,7 +123,7 @@ mode (her role's, acceptEdits) back after; the queue empty, its file gone."
     (+test-awi--free ada)
     (should (+test-wait-for (lambda () (equal (last (+test-awi--said "ada") 3)
                                               (list "mode plan" (+test-awi--event-text "ci" "the build broke on main")
-                                                    "mode acceptEdits")))
+                                                    "mode auto")))
                             10))
     (should-not (agent-workspace-inbox project))
     (should-not (agent-workspace-inbox-badge ada))
