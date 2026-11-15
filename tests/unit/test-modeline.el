@@ -1,6 +1,8 @@
 ;;; tests/unit/test-modeline.el -*- lexical-binding: t; -*-
 ;; config/editor/modeline.el: a space after the mode line's last item on the right,
-;; in every doom-modeline layout.
+;; in every doom-modeline layout; each window's mode line its own layout (narrow
+;; or not) and the path it has room for. As drawn, in pixels:
+;; tests/e2e/test-modeline.el.
 
 (+test-load "config/editor")
 
@@ -77,6 +79,181 @@ already, stays as it is."
     (should (equal (nth 1 (assq '+test-a doom-modeline--modelines)) '(bar buffer-info)))
     ;; Its format redefined with it.
     (should (equal (car (last (car (last (doom-modeline-format--+test-a))))) " "))))
+
+;; ====== EACH WINDOW ITS OWN LAYOUT ======
+
+(defconst +test-modeline--path "src/main/kotlin/com/example/agreements/AgreementController.kt"
+  "A deep path in a project.")
+
+(defmacro +test-modeline--deep (&rest body)
+  "BODY in a buffer visiting `+test-modeline--path' in a project (\"app\"),
+shown in the only window; doom-modeline's names as Doom has them
+\(relative-from-project); the narrow layout in 20 columns or less (batch
+Emacs's frame is 80)."
+  (declare (indent 0))
+  `(+test-with-reset
+     (let* ((root (file-truename (+test-tmp-file "modeline/app/")))
+            (file (expand-file-name +test-modeline--path root))
+            (doom-modeline-buffer-file-name-style 'relative-from-project)
+            (doom-modeline-window-width-limit 20))
+       (make-directory (file-name-directory file) t)
+       (with-temp-file file (insert "class A\n"))
+       (let ((buffer (find-file-noselect file)))
+         (unwind-protect
+             (progn
+               (switch-to-buffer buffer)
+               (setq-local doom-modeline--project-root root)
+               (setq-local doom-modeline--buffer-file-name nil)
+               (setq-local +my/modeline--names nil)
+               ,@body)
+           (kill-buffer buffer))))))
+
+(defun +test-modeline--draw (window)
+  "WINDOW's mode line drawn (its format worked out, WINDOW selected then, as
+redisplay does)."
+  (with-selected-window window
+    (doom-modeline-format--main)))
+
+(ert-deftest modeline/every-layout-fitted ()
+  "Every layout's format works its window out (`+my/modeline-fit-a'), those
+defined later too."
+  (pcase-dolist (`(,name . ,_) doom-modeline--modelines)
+    (should (advice-member-p #'+my/modeline-fit-a (intern (format "doom-modeline-format--%s" name)))))
+  (+test-modeline--with-layouts '((+test-later (bar buffer-info) (major-mode)))
+    (should (advice-member-p #'+my/modeline-fit-a 'doom-modeline-format--+test-later))))
+
+(ert-deftest modeline/narrow-layout-per-window ()
+  "The narrow layout worked out for the window whose mode line is drawn: a
+narrow pane not selected gets it (doom-modeline worked it out from the
+selected window's width); two windows on one buffer, each its own."
+  (+test-modeline--deep
+    (let* ((doom-modeline-window-width-limit 40)
+           (wide (selected-window))
+           (narrow (split-window wide -30 'left)))
+      (should (eq (window-buffer narrow) (current-buffer)))
+      (should (<= (window-total-width narrow) 40))
+      (should (> (window-total-width wide) 40))
+      ;; As doom-modeline has it: from the selected window's width.
+      (doom-modeline-window-size-change)
+      (should-not doom-modeline--limited-width-p)
+      (+test-modeline--draw narrow)
+      (should doom-modeline--limited-width-p)
+      (+test-modeline--draw wide)
+      (should-not doom-modeline--limited-width-p))))
+
+(ert-deftest modeline/names-from-the-longest ()
+  "The names the mode line can show: doom-modeline's (Doom's
+relative-from-project), its folders cut to their first letter, the file's
+name; worked out with doom-modeline's."
+  (+test-modeline--deep
+    (doom-modeline-update-buffer-file-name)
+    (should (equal (mapcar #'substring-no-properties +my/modeline--names)
+                   (list (concat "app/" +test-modeline--path)
+                         "app/s/m/k/c/e/a/AgreementController.kt"
+                         "AgreementController.kt")))
+    (should (eq (car +my/modeline--names) doom-modeline--buffer-file-name)))
+  ;; Shallow: no shorter one but the file's name.
+  (with-temp-buffer
+    (setq doom-modeline--buffer-file-name (propertize "app/a.kt" 'face 'bold))
+    (setq buffer-file-name "/tmp/app/a.kt")
+    (cl-letf (((symbol-function 'doom-modeline-buffer-file-name)
+               (lambda () (if (eq doom-modeline-buffer-file-name-style 'file-name) "a.kt" "app/a.kt"))))
+      (+my/modeline-names-a))
+    (should (equal +my/modeline--names '("app/a.kt" "a.kt")))
+    (setq buffer-file-name nil))
+  ;; Not a file's: its name only.
+  (with-temp-buffer
+    (doom-modeline-update-buffer-file-name)
+    (should (equal (mapcar #'substring-no-properties +my/modeline--names) (list (buffer-name))))))
+
+(defmacro +test-modeline--widths (room rhs &rest body)
+  "BODY with the mode line ROOM wide, its right side RHS wide, its left side
+10 and the name shown (widths in columns: batch Emacs draws no mode line);
+no choice kept from before."
+  (declare (indent 2))
+  `(cl-letf (((symbol-function '+my/modeline--room) (lambda () ,room))
+             ((symbol-function '+my/modeline--string-width) #'string-width)
+             ;; doom-modeline's, its right side's width.
+             ((symbol-function 'doom-modeline-string-pixel-width) (lambda (_) ,rhs))
+             ((symbol-function '+my/modeline--left)
+              (lambda (_) (concat (make-string 10 ?<) doom-modeline--buffer-file-name)))
+             ((symbol-function '+my/modeline--right) (lambda (_) (make-string ,rhs ?>))))
+     (dolist (window (window-list))
+       (set-window-parameter window '+my/modeline-fit nil))
+     ,@body))
+
+(ert-deftest modeline/the-path-the-window-has-room-for ()
+  "In the wide layout, the longest name the window has room for with the
+rest of the line (the position on the left, the right side): the path,
+else its folders shortened, else the file's name."
+  (+test-modeline--deep
+    (let ((full (concat "app/" +test-modeline--path)))
+      (dolist (case `((200 30 . ,full)
+                      (,(+ 10 (length full) 30) 30 . ,full)
+                      (,(+ 10 (length full) 29) 30 . "app/s/m/k/c/e/a/AgreementController.kt")
+                      (100 30 . "app/s/m/k/c/e/a/AgreementController.kt")
+                      (100 55 . "AgreementController.kt")
+                      ;; Not even that: the file's name all the same.
+                      (40 55 . "AgreementController.kt")))
+        (pcase-let ((`(,room ,rhs . ,name) case))
+          (+test-modeline--widths room rhs
+            (+test-modeline--draw (selected-window))
+            (should (equal (list room rhs (substring-no-properties doom-modeline--buffer-file-name))
+                           (list room rhs name)))))))))
+
+(ert-deftest modeline/the-path-per-window ()
+  "Two windows on one buffer, each drawn with the name it has room for; the
+buffer-info segment shows it."
+  (+test-modeline--deep
+    (let* ((left (selected-window))
+           (right (split-window left nil 'right))
+           (full (concat "app/" +test-modeline--path)))
+      ;; The right one 200 wide, the left one 100.
+      (+test-modeline--widths (if (eq (selected-window) right) 200 100) 30
+        (+test-modeline--draw right)
+        (should (equal (substring-no-properties doom-modeline--buffer-file-name) full))
+        (should (string-search full (substring-no-properties
+                                     (with-selected-window right (doom-modeline-segment--buffer-info)))))
+        (+test-modeline--draw left)
+        (should (equal (substring-no-properties doom-modeline--buffer-file-name)
+                       "app/s/m/k/c/e/a/AgreementController.kt"))
+        (should (string-search "app/s/m/k/c/e/a/AgreementController.kt"
+                               (substring-no-properties
+                                (with-selected-window left (doom-modeline-segment--buffer-info)))))))))
+
+(ert-deftest modeline/the-choice-kept-while-the-line-is-the-same ()
+  "Measured once for the window while its width and the line's text are the
+same (the position's width too); again when one changes."
+  (+test-modeline--deep
+    (let ((rhs 30) (measured 0))
+      (+test-modeline--widths 100 rhs
+        (cl-letf* ((choose (symbol-function '+my/modeline--choose))
+                   ((symbol-function '+my/modeline--choose)
+                    (lambda (&rest args) (cl-incf measured) (apply choose args))))
+          (+test-modeline--draw (selected-window))
+          (+test-modeline--draw (selected-window))
+          (should (= measured 1))
+          (should (equal (substring-no-properties doom-modeline--buffer-file-name)
+                         "app/s/m/k/c/e/a/AgreementController.kt"))
+          ;; The right side changed (a check's count, a branch).
+          (setq rhs 31)
+          (+test-modeline--draw (selected-window))
+          (should (= measured 2))
+          ;; Another window, wider or narrower.
+          (split-window nil nil 'right)
+          (+test-modeline--draw (selected-window))
+          (should (= measured 3)))))))
+
+(ert-deftest modeline/the-narrow-layout-measures-nothing ()
+  "The narrow layout (the buffer's name only): nothing measured, the names
+left as they were."
+  (+test-modeline--deep
+    (let ((doom-modeline-window-width-limit 1000)
+          (measured nil))
+      (cl-letf (((symbol-function '+my/modeline--left) (lambda (_) (setq measured t) "")))
+        (+test-modeline--draw (selected-window))
+        (should doom-modeline--limited-width-p)
+        (should-not measured)))))
 
 ;; ====== LOADED ======
 
