@@ -20,8 +20,11 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
   a role nobody in the crew has is flagged. Blocked, by what. Done today. Moving onto an issue in progress selects its
   agent.
 - **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
-  and its Agent UI canvas below it when it shows something. The others are folded to a bar: its avatar, name, role,
-  state and how long it's been working. The stage arranges itself: drag a border and it's tiled again.
+  and below it (beside it from 140 columns) its Agent UI canvas and its [panels](#an-agents-panels) as tabs,
+  `canvas │ logs │ tests`, one shown at a time. `v` shows the next one, `V` the one there full size, in the whole
+  pane (`V` again: back), and a click on a tab shows it. Something new on its canvas brings the canvas back. The
+  others are folded to a bar: its avatar, name, role, state and how long it's been working, and `◫2` when it has
+  two panels open. The stage arranges itself: drag a border and it's tiled again.
 
 - **The room** is on the right, 78 columns, or at the bottom in a frame under 200 columns (or with
   `agent-workspace-room-side` set to `bottom`). `2` shows the room alone, `1` the stage again.
@@ -45,7 +48,9 @@ terminal with `git init` typed.
 | `s` | anywhere | Put it to sleep, or wake it |
 | `e` | anywhere | Change its name, colour, role, permission mode or model |
 | `d` / `M` | anywhere | Its branch's changes / merge its branch |
-| `v` / `I` | anywhere | Its canvas / its issue |
+| `v` | anywhere | Its canvas and panels, the cursor in the one shown; there, the next one |
+| `V` | anywhere | The one shown, full size; again: back beside its session |
+| `I` | anywhere | Its issue |
 | `a` / `A` | anywhere | The next raised hand / answer it |
 | `f` + initial | anywhere | That agent |
 | `#` | anywhere | Talk to it in the room |
@@ -54,7 +59,8 @@ terminal with `git init` typed.
 | `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
 In an agent's own session, the same keys follow `SPC m w` (`C-c w` in insert state), plus `]` / `[` for the next or
-previous agent. A click on a bar or a pane's header line selects its agent, and `mouse-3` there lists its actions.
+previous agent. In its canvas and panels, `v` and `V` work too. A click on a bar or a pane's header line
+selects its agent, and `mouse-3` there lists its actions.
 
 ## The room
 
@@ -93,8 +99,9 @@ picked ("→ Allow (you)"). A hand answered in its session leaves the room.
 
 An agent can open [project panels](agent-ui.md#project-panels) and keep them open while it works (a test watcher, a
 service's logs). A panel it opens runs in its worktree, on its branch's code, and is its own: `tests · ada`. Two agents
-opening `tests` get one each, and yours from the main checkout stays yours. It reads them as data
-(`agent-ui get --panel tests`), and a panel nobody is looking at fetches only when its agent reads it. They share the
+opening `tests` get one each, and yours from the main checkout stays yours. They're tabs in its pane, beside its
+canvas (`v` shows them), and its bar and header line count them: `◫2`. It reads them as data
+(`agent-ui get --panel tests`), and a panel whose tab isn't shown fetches only when its agent reads it. They share the
 project's trust: trust the project and its agents' worktrees are trusted too, but a panel file changed on an agent's
 branch is asked about again. They close when the agent is killed, put to sleep or forgotten, and when the crew closes.
 They're saved with the crew, by name, and open again when it starts again ([The saved crew](#the-saved-crew)).

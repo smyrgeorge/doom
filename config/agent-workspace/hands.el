@@ -99,8 +99,12 @@ no argument answering it so; nil if its hand isn't raised."
        (list (cons "Go to it" (lambda () (agent-workspace--go-to-hand agent))))))))
 
 (defun agent-workspace--go-to-hand (agent)
-  "AGENT selected, the cursor on what it asks: its permission's buttons, or
-its canvas."
+  "AGENT selected, the cursor on what it asks: its permission's buttons (its
+session shown), or its canvas (its tab shown)."
+  (let ((canvas (plist-get (agent-workspace-agent-ask agent) :canvas)))
+    (if (and (buffer-live-p canvas) (memq canvas (agent-workspace-agent-tabs agent)))
+        (agent-workspace--tab-pick agent canvas)
+      (agent-workspace--session-shown agent)))
   (agent-workspace-select agent t)
   (if-let* ((canvas (plist-get (agent-workspace-agent-ask agent) :canvas))
             ((buffer-live-p canvas))

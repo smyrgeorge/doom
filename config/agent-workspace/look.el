@@ -12,10 +12,11 @@
 ;;
 ;; An agent's line (its pane's header line, or its bar when its pane is
 ;; folded): ▾/▸, avatar, name, role, state glyph and words, time; on the right
-;; its permission mode, model and branch, at the edge to the pixel. Tinted in
-;; its colour (30% its open pane's, 14% a bar), the warning colour for a raised
-;; hand, its options then buttons before them (hands.el). Under 90 columns:
-;; name, state and buttons only.
+;; its panels counted (◫2), its permission mode, model and branch, at the edge
+;; to the pixel; its canvas or a panel full size in its pane (V): their tabs
+;; there instead. Tinted in its colour (30% its open pane's, 14% a bar), the
+;; warning colour for a raised hand, its options then buttons before them
+;; (hands.el). Under 90 columns: name, state, buttons and panels only.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -29,6 +30,8 @@
 (declare-function agent-ui-blend "agent-ui/core")
 (declare-function agent-ui-color "agent-ui/core")
 (declare-function agent-ui-background "agent-ui/core")
+(declare-function agent-workspace-agent-panels "agent-workspace/panels")
+(declare-function agent-workspace--tab-name "agent-workspace/stage")
 
 ;; ====== VARIABLES ======
 
@@ -197,9 +200,20 @@ glyphs evened), LEFT cut to WIDTH's columns left; the line to the edge."
             right
             (if gui (propertize " " 'display '(space :align-to right)) ""))))
 
-(defun agent-workspace-line (agent width &optional open folded)
+(defun agent-workspace-badge (agent)
+  "AGENT's panels counted, \"◫2\" (their names its help), or nil if it has
+none."
+  (when-let* (((fboundp 'agent-workspace-agent-panels))
+              (panels (agent-workspace-agent-panels agent)))
+    (propertize (concat (string-trim-right (agent-workspace-glyph 'canvas)) (number-to-string (length panels)))
+                'help-echo (format "Its panels: %s (v shows them)"
+                                   (mapconcat #'agent-workspace--tab-name panels ", ")))))
+
+(defun agent-workspace-line (agent width &optional open folded tabs)
   "AGENT's line, WIDTH columns: its pane's header line (OPEN: its pane is the
-open one, tinted brighter) or its bar (FOLDED: ▸)."
+open one, tinted brighter) or its bar (FOLDED: ▸). TABS (its canvas and
+panels', one shown full size in its pane) at its right, for its mode, model
+and branch."
   (let* ((hand (eq (agent-workspace-agent-state agent) 'hand))
          (sep (propertize " · " 'face 'shadow))
          (narrow (< width 90))
@@ -218,19 +232,22 @@ open one, tinted brighter) or its bar (FOLDED: ▸)."
          (buttons (and hand (fboundp 'agent-workspace--hand-buttons)
                        (agent-workspace--hand-buttons
                         agent (agent-workspace--ask-key (agent-workspace-agent-ask agent)))))
-         (right (if narrow
-                    (concat (or buttons "") " ")
-                  (concat (if buttons (concat buttons "  ") "")
-                          (propertize (string-join (delq nil (list (and mode (agent-workspace-mode-label mode))
-                                                                    model))
-                                                   " ")
-                                      'face 'shadow)
-                          (when-let* ((branch (agent-workspace-agent-branch agent)))
-                            (concat " " (propertize (concat (agent-workspace-glyph 'branch 'shadow) branch)
-                                                    'help-echo (format "Its worktree: %s"
-                                                                       (abbreviate-file-name
-                                                                        (or (agent-workspace-agent-worktree agent) ""))))))
-                          " ")))
+         (badge (and (not tabs) (agent-workspace-badge agent)))
+         (right (cond
+                 (tabs (concat (if buttons (concat buttons "  ") "") tabs " "))
+                 (narrow (concat (string-join (delq nil (list buttons badge)) " ") " "))
+                 (t (concat (if buttons (concat buttons "  ") "")
+                            (if badge (concat badge "  ") "")
+                            (propertize (string-join (delq nil (list (and mode (agent-workspace-mode-label mode))
+                                                                      model))
+                                                     " ")
+                                        'face 'shadow)
+                            (when-let* ((branch (agent-workspace-agent-branch agent)))
+                              (concat " " (propertize (concat (agent-workspace-glyph 'branch 'shadow) branch)
+                                                      'help-echo (format "Its worktree: %s"
+                                                                         (abbreviate-file-name
+                                                                          (or (agent-workspace-agent-worktree agent) ""))))))
+                            " "))))
          (line (agent-workspace--at-right left right width)))
     (agent-ui-even-glyphs
      (agent-workspace--tint line (if hand 'warning (agent-workspace-agent-face agent)) (if open 0.3 0.14)))))

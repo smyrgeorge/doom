@@ -2,7 +2,8 @@
 ;; config/agent-workspace's app in a GUI Emacs: what needs real windows and
 ;; redisplay. Its agents' lines (a bar, the open pane's header line) drawn to
 ;; the window's right edge, their avatars images; the stage tiled again after
-;; a border dragged; closing it. No agent runs: sessions are buffers.
+;; a border dragged; closing it; an agent's canvas and panels as tabs, a panel
+;; fetching once its tab is shown. No agent runs: sessions are buffers.
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -128,5 +129,70 @@ to what it was."
           (should (string-search "→ sam look at this" (buffer-string))))
         ;; The feed shows its end.
         (should (= (window-end feed t) (with-current-buffer (window-buffer feed) (point-max))))))))
+
+(defconst +test-e2e-aw--panel
+  ";;; -*- lexical-binding: t; -*-
+(agent-ui-panel
+ :version 1
+ :ui (:type \"text\" :id \"t\" :text \"\")
+ :every 60
+ :fetch (lambda (panel) (agent-ui-panel-update panel \"t\" :text default-directory)))
+"
+  "A panel showing where it runs.")
+
+(defun +test-e2e-aw--header (window)
+  "WINDOW's header line, as it's drawn."
+  (with-selected-window window
+    (substring-no-properties (format-mode-line (window-parameter window 'header-line-format) nil window))))
+
+(ert-deftest e2e-agent-workspace/panels-as-tabs ()
+  "ada with a canvas and two panels (logs, tests): its side area's tabs drawn
+as its header line, the canvas shown; its badge on its pane's header line;
+a hidden panel fetches nothing until v shows it (then it does, as shown);
+V: the one shown full size, the tabs at its line's right edge; V again:
+back."
+  (+test-e2e-aw
+    (let ((agent-ui-panel-trust-file (+test-tmp-file "aw-e2e-trust.eld"))
+          (worktree (agent-workspace-agent-worktree ada)))
+      (make-directory (expand-file-name ".agent-ui/panels" worktree) t)
+      (dolist (name '("logs" "tests"))
+        (write-region +test-e2e-aw--panel nil (expand-file-name (format ".agent-ui/panels/%s.el" name) worktree)))
+      (agent-ui-panel-trust-project project)
+      (let* ((session (agent-workspace-agent-buffer ada))
+             (canvas (agent-ui-canvas (agent-ui--session-name session))))
+        (with-current-buffer canvas (setq agent-ui--session-buffer session))
+        (agent-ui-show '(:type "text" :id "hello" :text "Hello") :canvas canvas)
+        (let* ((logs (agent-ui-open-panel "logs" worktree t))
+               (tests (agent-ui-open-panel "tests" worktree t))
+               (state (lambda (panel) (buffer-local-value 'agent-ui-panels--state panel))))
+          (+test--pump 0.3)
+          (let ((side (agent-workspace--side-window ada))
+                (pane (get-buffer-window session)))
+            (should (eq (window-buffer side) canvas))
+            (should (string-prefix-p " canvas │ logs │ tests" (+test-e2e-aw--header side)))
+            (should (string-search (substring-no-properties (agent-workspace-badge ada))
+                                   (+test-e2e-aw--header pane)))
+            ;; Hidden, not fetched.
+            (should-not (agent-ui-panel-fetched (funcall state logs)))
+            (should-not (agent-ui-panel-fetched (funcall state tests)))
+            ;; v (from its session): in the canvas; again: logs, shown, fetched.
+            (with-current-buffer session (agent-workspace-panels-here))
+            (with-current-buffer (window-buffer) (agent-workspace-panels-here))
+            (should (eq (window-buffer) logs))
+            (should (+test-wait-for (lambda () (agent-ui-panel-fetched (funcall state logs))) 3))
+            (should-not (agent-ui-panel-fetched (funcall state tests)))
+            ;; V: logs full size, its pane's whole room, the tabs at the
+            ;; right of its line.
+            (with-current-buffer (window-buffer) (agent-workspace-full-here))
+            (+test--pump 0.3)
+            (should (eq (window-buffer) logs))
+            (should-not (get-buffer-window session))
+            (should (string-match-p "▾ .*ada · builder.*canvas │ logs │ tests *\\'"
+                                    (+test-e2e-aw--header (selected-window))))
+            ;; V again: back beside its session.
+            (with-current-buffer (window-buffer) (agent-workspace-full-here))
+            (+test--pump 0.3)
+            (should (get-buffer-window session))
+            (should (eq (window-buffer (agent-workspace--side-window ada)) logs))))))))
 
 (+test-e2e-run)

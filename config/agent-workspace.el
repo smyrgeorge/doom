@@ -126,9 +126,10 @@
 ;;   (each with its agent), ready by the role they're for, blocked, done today;
 ;;   moving onto one in progress selects its agent;
 ;; - the stage (config/agent-workspace/stage.el): every agent a pane, in role
-;;   order; the selected one's open (its session, its canvas below it), the
-;;   others folded to a bar. It arranges itself: tiling leaves its frame
-;;   alone (config/tiling.el).
+;;   order; the selected one's open (its session; below it, beside it from
+;;   140 columns, its canvas and panels as tabs, one shown: v the next, V it
+;;   full size), the others folded to a bar (◫2: its panels). It arranges
+;;   itself: tiling leaves its frame alone (config/tiling.el).
 ;; q leaves it (the crew goes on, its tally in the other workspaces' mode
 ;; line: a click comes back); Q, SPC TAB d, or quitting Emacs close it at
 ;; once: every agent exits, no question asked.
@@ -141,12 +142,16 @@
 ;;   both         c a new agent, i interrupt, K kill (gone home), r restart
 ;;                fresh, s sleep or wake, e edit (name, colour, role, mode,
 ;;                model), d its branch's changes, M merge its branch, v its
-;;                canvas, I its issue, a the next raised hand, A answer it, f + an initial
-;;                that agent, gr lay out again, gR read crew.el again, q leave,
-;;                Q close, ? the keys
+;;                canvas and panels (the cursor there; again: the next one), V
+;;                the one there full size (again: back), I its issue, a the
+;;                next raised hand, A answer it, f + an initial that agent, gr
+;;                lay out again, gR read crew.el again, q leave, Q close, ?
+;;                the keys
 ;;   its session  the same after SPC m w (C-c w in insert state), and ] / [
 ;;                the next / previous agent; a click on its header line or a
 ;;                bar selects it, mouse-3 its actions
+;;   its canvas,  v / V as above; a click on a tab shows it
+;;   its panels
 
 ;; ====== KEY BINDINGS ======
 
@@ -183,7 +188,7 @@
     ("K" . agent-workspace-kill-here) ("r" . agent-workspace-restart-here)
     ("s" . agent-workspace-sleep-here) ("e" . agent-workspace-edit)
     ("d" . agent-workspace-review-here) ("M" . agent-workspace-merge-here)
-    ("v" . agent-workspace-canvas-here) ("I" . agent-workspace-issue-here)
+    ("v" . agent-workspace-panels-here) ("V" . agent-workspace-full-here) ("I" . agent-workspace-issue-here)
     ("a" . agent-workspace-next-hand) ("A" . agent-workspace-answer) ("f" . agent-workspace-jump)
     ("gr" . agent-workspace-layout) ("gR" . agent-workspace-crew-reload) ("q" . agent-workspace-leave)
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)
@@ -204,6 +209,11 @@
                                     ("RET" . agent-workspace-go) ("<return>" . agent-workspace-go)
                                     ("TAB" . agent-workspace-toggle) ("<tab>" . agent-workspace-toggle))
                                   +my/agent-workspace-keys))
+
+;; An agent's canvas or panel, in its pane on the stage: v and V there too, in
+;; place of evil's visual state.
+(+my/agent-workspace-bind agent-workspace-side-mode-map
+                          '(("v" . agent-workspace-panels-here) ("V" . agent-workspace-full-here)))
 
 ;; The room: its feed, its compose line (RET sends there, in insert state too).
 (+my/agent-workspace-bind agent-workspace-room-mode-map

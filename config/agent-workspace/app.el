@@ -75,7 +75,9 @@ pane opened or folded.")
   frame              ; the frame it's laid out in
   plan               ; what decided its layout
   sizes              ; its frame's windows' sizes, as laid out
-  resizes)           ; when it was last laid out after a resize
+  resizes            ; when it was last laid out after a resize
+  tabs               ; ((AGENT . TAB)...): the tab each agent's side area shows
+  full)              ; the agent whose open pane shows its tab full size, or nil
 
 (defvar agent-workspace--apps (make-hash-table :test #'equal)
   "The apps open: a project to its app.")
@@ -367,11 +369,15 @@ frame of the app. In `persp-activated-functions'."
 
 (defun agent-workspace--plan (app)
   "What decides APP's layout: laid out anew when it changes."
-  (list (frame-width) (frame-height) (agent-workspace--app-view app)
-        (agent-workspace--ordered (agent-workspace--app-project app))
-        (agent-workspace--app-open app)
-        (mapcar (lambda (agent) (buffer-live-p (agent-workspace-agent-buffer agent)))
-                (agent-workspace-agents (agent-workspace--app-project app)))))
+  (let ((open (agent-workspace--app-open app)))
+    (list (frame-width) (frame-height) (agent-workspace--app-view app)
+          (agent-workspace--ordered (agent-workspace--app-project app))
+          open
+          (mapcar (lambda (agent) (buffer-live-p (agent-workspace-agent-buffer agent)))
+                  (agent-workspace-agents (agent-workspace--app-project app)))
+          ;; Its open pane's side: its tabs, the one shown, full size.
+          (and open (list (agent-workspace-agent-tabs open) (agent-workspace--side-tab open)
+                          (agent-workspace--full-tab open))))))
 
 (defun agent-workspace--sizes-now (frame)
   "FRAME's windows' sizes: (FRAME-SIZE ROOT-HEIGHT WINDOWS...), ROOT-HEIGHT
@@ -384,12 +390,19 @@ its windows' height above the echo area."
 
 (defun agent-workspace--settle (app agents)
   "APP's selection among AGENTS: the selected agent gone (or none yet), the
-first selected, its pane open; an open pane whose agent went, none."
+first selected, its pane open; an open pane whose agent went, none. Full
+size only while its pane is the open one, with a tab to show."
   (unless (memq (agent-workspace--app-selected app) agents)
     (setf (agent-workspace--app-selected app) (car agents)
           (agent-workspace--app-open app) (car agents)))
   (unless (memq (agent-workspace--app-open app) agents)
-    (setf (agent-workspace--app-open app) nil)))
+    (setf (agent-workspace--app-open app) nil))
+  (let ((full (agent-workspace--app-full app)))
+    (unless (and full (eq full (agent-workspace--app-open app)) (agent-workspace--side-tab full))
+      (setf (agent-workspace--app-full app) nil)))
+  (setf (agent-workspace--app-tabs app)
+        (seq-filter (lambda (entry) (and (memq (car entry) agents) (buffer-live-p (cdr entry))))
+                    (agent-workspace--app-tabs app))))
 
 (defun agent-workspace-layout (&optional app)
   "APP (the one here) laid out anew in the selected frame: its issues on the
@@ -407,7 +420,7 @@ left, its stage beside them, the selected agent's pane open."
     (setf (agent-workspace--app-frame app) (selected-frame))
     (let ((ignore-window-parameters t))
       (delete-other-windows base))
-    (dolist (parameter '(window-side agent-workspace-room agent-workspace-pane agent-workspace-canvas))
+    (dolist (parameter '(window-side agent-workspace-room agent-workspace-pane agent-workspace-side))
       (set-window-parameter base parameter nil))
     (set-window-dedicated-p base nil)
     (let ((issues (display-buffer-in-side-window
@@ -480,14 +493,21 @@ when the stage isn't as it was."
     (agent-workspace--issues-redraw (agent-workspace--app-project app))
     (force-mode-line-update t)))
 
-(defun agent-workspace--canvas-changed (agent)
-  "AGENT's canvas shows something new: in its pane if it's open and its
-canvas isn't there yet."
+(defun agent-workspace--tab-pick (agent tab)
+  "TAB the one AGENT's side area shows, from its next layout."
   (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent))))
+    (setf (alist-get agent (agent-workspace--app-tabs app)) tab)))
+
+(defun agent-workspace--canvas-changed (agent &optional canvas)
+  "AGENT's CANVAS (its own, by default) shows something new: its tab the
+one its side area shows, in its pane if it's open and it isn't there yet."
+  (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent)))
+              (canvas (or canvas (agent-workspace--canvas agent)))
+              ((memq canvas (agent-workspace-agent-tabs agent))))
+    (agent-workspace--tab-pick agent canvas)
     (when (and (eq (agent-workspace--app-open app) agent)
                (agent-workspace--shown-p app)
-               (not (get-buffer-window (agent-workspace--canvas agent)
-                                       (agent-workspace--app-frame app))))
+               (not (get-buffer-window canvas (agent-workspace--app-frame app))))
       (with-selected-frame (agent-workspace--app-frame app)
         (agent-workspace--retile app)))))
 
@@ -637,12 +657,25 @@ opened, its pane open, the cursor in it."
 
 (setq agent-workspace-select-function #'agent-workspace--select-from-anywhere)
 
+(defun agent-workspace--side-agent (buffer)
+  "The agent whose canvas or panel BUFFER is, or nil."
+  (or (agent-workspace--canvas-agent buffer)
+      (and (fboundp 'agent-workspace--panel-agent) (agent-workspace--panel-agent buffer))))
+
+(defun agent-workspace--window-agent (window)
+  "The agent whose line, pane or side area WINDOW shows, or nil."
+  (when (window-live-p window)
+    (or (with-current-buffer (window-buffer window)
+          (or agent-workspace--bar-of (agent-workspace-buffer-agent)))
+        (window-parameter window 'agent-workspace-side))))
+
 (defun agent-workspace--current ()
   "The agent the command is about: the bar's, the pane's, the issue's at
-point, else the selected one."
+point, the canvas's or panel's, else the selected one."
   (or (buffer-local-value 'agent-workspace--bar-of (current-buffer))
       (agent-workspace-buffer-agent)
       (and (fboundp 'agent-workspace--issues-agent-at) (agent-workspace--issues-agent-at))
+      (agent-workspace--side-agent (current-buffer))
       (when-let* ((app (agent-workspace--here)))
         (agent-workspace--app-selected app))
       (user-error "No agent here")))
@@ -688,19 +721,14 @@ point, else the selected one."
   "A click on an agent's line (a bar, a header line): it's selected, the
 cursor in its pane."
   (interactive "e")
-  (let* ((window (posn-window (event-start event)))
-         (agent (and (window-live-p window)
-                     (with-current-buffer (window-buffer window)
-                       (or agent-workspace--bar-of (agent-workspace-buffer-agent))))))
-    (when agent (agent-workspace-select agent t))))
+  (when-let* ((agent (agent-workspace--window-agent (posn-window (event-start event)))))
+    (agent-workspace-select agent t)))
 
 (defun agent-workspace-line-menu (event)
   "mouse-3 on an agent's line: its actions, as a menu."
   (interactive "e")
   (let* ((window (posn-window (event-start event)))
-         (agent (and (window-live-p window)
-                     (with-current-buffer (window-buffer window)
-                       (or agent-workspace--bar-of (agent-workspace-buffer-agent)))))
+         (agent (agent-workspace--window-agent window))
          (choice (and agent
                       (x-popup-menu
                        event
@@ -775,15 +803,74 @@ left, the crew going on)."
           (message "%s: %s" issue (or (agent-workspace-agent-issue-title agent) "")))
       (message "%s has no issue" (agent-workspace-agent-name agent)))))
 
-(defun agent-workspace-canvas-here ()
-  "The agent's canvas: the cursor in it (its pane opened)."
+(defun agent-workspace--tabs-or-error (agent)
+  "AGENT's tabs (its canvas, its panels), or a user error: it has none."
+  (or (agent-workspace-agent-tabs agent)
+      (user-error "%s shows nothing: its canvas is empty, it has no panel" (agent-workspace-agent-name agent))))
+
+(defun agent-workspace--app-shown (agent)
+  "AGENT's crew's app, shown (opened if it isn't)."
+  (let ((app (agent-workspace--app (agent-workspace-agent-project agent))))
+    (if (and app (agent-workspace--shown-p app))
+        app
+      (let ((default-directory (agent-workspace-agent-project agent)))
+        (agent-workspace-open)))))
+
+(defun agent-workspace--side-show (agent &optional tab)
+  "AGENT's side area showing TAB (else the one it shows), its pane open (its
+crew's app opened if it isn't shown), the cursor in it."
+  (agent-workspace--app-shown agent)
+  (when tab
+    (agent-workspace--tab-pick agent tab))
+  (agent-workspace-select agent)
+  (when-let* ((window (agent-workspace--side-window agent)))
+    (select-window window)))
+
+(defun agent-workspace-panels-here ()
+  "The agent's canvas and panels, in its pane (opened): the cursor in the
+one shown; in it already, the next one shown."
   (interactive)
-  (let ((agent (agent-workspace--current)))
-    (unless (agent-workspace--canvas agent)
-      (user-error "%s's canvas shows nothing" (agent-workspace-agent-name agent)))
-    (agent-workspace-select agent)
-    (when-let* ((window (get-buffer-window (agent-workspace--canvas agent))))
-      (select-window window))))
+  (let* ((agent (agent-workspace--current))
+         (tabs (agent-workspace--tabs-or-error agent))
+         (window (agent-workspace--side-window agent)))
+    (agent-workspace--side-show
+     agent (and window (eq window (selected-window))
+                (or (cadr (memq (window-buffer window) tabs)) (car tabs))))))
+
+(defun agent-workspace-full-here ()
+  "The agent's canvas or panel shown full size, in its pane's whole room,
+the cursor in it; full size already: back beside its session."
+  (interactive)
+  (let* ((agent (agent-workspace--current))
+         (app (progn (agent-workspace--tabs-or-error agent)
+                     (agent-workspace--app-shown agent))))
+    (setf (agent-workspace--app-full app)
+          (unless (and (eq (agent-workspace--app-full app) agent)
+                       (eq (agent-workspace--app-open app) agent))
+            agent))
+    (agent-workspace--side-show agent)))
+
+(defun agent-workspace--session-shown (agent)
+  "AGENT's pane back to its session (beside its side area) if it showed a
+tab full size: what it asks is there."
+  (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent))))
+    (when (eq (agent-workspace--app-full app) agent)
+      (setf (agent-workspace--app-full app) nil))))
+
+(defun agent-workspace-tab-click (event)
+  "A click on a tab of an agent's side area (EVENT): it's shown, the cursor
+in it."
+  (interactive "e")
+  (let* ((posn (event-start event))
+         (text (posn-string posn))
+         (tab (and text (get-text-property (cdr text) 'agent-workspace-tab (car text))))
+         (agent (agent-workspace--window-agent (posn-window posn))))
+    (when (and agent (buffer-live-p tab))
+      (agent-workspace--side-show agent tab))))
+
+;; Here, not in the defvar (stage.el's): loading the file again sets them again.
+(define-key agent-workspace-tab-map [header-line mouse-1] #'agent-workspace-tab-click)
+(define-key agent-workspace-tab-map [mouse-1] #'agent-workspace-tab-click)
 
 (defun agent-workspace-new-here (&optional more)
   "Make a new agent in this crew (MORE, C-u: its model, mode and colour too).
@@ -849,6 +936,7 @@ what it asks."
                           (append (nthcdr from agents) (seq-take agents from)))))
     (if (not agent)
         (message "No hand raised")
+      (agent-workspace--session-shown agent)
       (agent-workspace-select agent t)
       (with-current-buffer (agent-workspace-agent-buffer agent)
         (ignore-errors (agent-shell-jump-to-latest-permission-button-row)))
@@ -858,4 +946,4 @@ what it asks."
   "The app's keys."
   (interactive)
   (message "%s" (substitute-command-keys
-                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas · I issue · a next hand · f+initial · gr lay out · q leave · Q close")))
+                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · a next hand · f+initial · gr lay out · q leave · Q close")))

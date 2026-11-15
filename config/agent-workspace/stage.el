@@ -3,24 +3,32 @@
 ;; config/agent-workspace.el, after look.el. No Doom here.
 ;;
 ;; Every agent has a pane, in role order (they never move). One is open, the
-;; selected agent's: its session, its line as its header line, its Agent UI
-;; canvas below it (beside it from 140 columns) when the canvas shows
-;; something. The others are folded: a one-row window each showing the
-;; agent's bar (a window can't be its header line alone). Every pane folded:
-;; a hint below the bars. The stage arranges itself: no border to drag; a
-;; border dragged or the frame resized, it's tiled again (sizes taken as they
-;; are after 3 layouts in 3 seconds: never a loop).
+;; selected agent's: its session, its line as its header line, and its side
+;; area below it (beside it from 140 columns): its Agent UI canvas, when it
+;; shows something, and its panels, as tabs ("canvas │ logs │ tests"), one
+;; shown at a time, the tabs its header line. Full size (V), the one shown
+;; takes the pane's whole room, the tabs at its line's right. The others are
+;; folded: a one-row window each showing the agent's bar (a window can't be
+;; its header line alone). Every pane folded: a hint below the bars. The
+;; stage arranges itself: no border to drag; a border dragged or the frame
+;; resized, it's tiled again (sizes taken as they are after 3 layouts in 3
+;; seconds: never a loop).
 ;;
 ;; The stage never changes an agent's session buffer: its windows' own
 ;; parameters hide their mode line and tab line and give the open pane its
-;; header line.
+;; header line. A canvas or panel it shows gets `agent-workspace-side-mode'
+;; (the app's v and V in it).
 
 (require 'cl-lib)
 (require 'subr-x)
 
 (declare-function agent-ui-canvas-buffer-name "agent-ui/canvas")
 (declare-function agent-ui--session-name "agent-ui/agent")
+(declare-function agent-ui-panels--name "agent-ui/panels")
+(declare-function evil-normalize-keymaps "evil-core")
+(declare-function agent-workspace-agent-panels "agent-workspace/panels")
 (defvar agent-ui-display-function)
+(defvar agent-ui-panels--state)
 
 ;; ====== VARIABLES ======
 
@@ -36,6 +44,13 @@ agent's of a crew.")
 
 (defvar-local agent-workspace--bar-of nil
   "In a bar's buffer: its agent.")
+
+(defvar agent-workspace-side-mode-map (make-sparse-keymap)
+  "Keys in an agent's canvas or panel on the stage (set in
+config/agent-workspace.el).")
+
+(defvar agent-workspace-tab-map (make-sparse-keymap)
+  "Keys on a tab of an agent's side area: a click shows it.")
 
 ;; ====== A BAR ======
 
@@ -115,10 +130,13 @@ one)."
     face))
 
 (defun agent-workspace--pane-header ()
-  "The open pane's header line: its agent's line (in its window's width)."
-  (when-let* ((agent (agent-workspace-buffer-agent)))
+  "The open pane's header line: its agent's line (in its window's width);
+its canvas or a panel shown there full size, their tabs at its right."
+  (when-let* ((agent (or (agent-workspace-buffer-agent) (window-parameter nil 'agent-workspace-pane))))
     (string-replace "%" "%%" (agent-workspace--clickable
-                              (agent-workspace-line agent (window-total-width) t)
+                              (agent-workspace-line agent (window-total-width) t nil
+                                                    (and (window-parameter nil 'agent-workspace-side)
+                                                         (agent-workspace--tabs-text agent (window-buffer))))
                               agent-workspace-line-map))))
 
 ;; ====== THE STACK ======
@@ -159,6 +177,7 @@ how to open one, or make one."
 (defun agent-workspace--show-pane (window agent)
   "AGENT's session (or its bar, if it has none) in WINDOW, at its end."
   (set-window-dedicated-p window nil)
+  (set-window-parameter window 'agent-workspace-side nil)
   (let ((buffer (agent-workspace-agent-buffer agent)))
     (if (not (buffer-live-p buffer))
         (progn (set-window-buffer window (agent-workspace--bar-buffer agent))
@@ -181,6 +200,7 @@ how to open one, or make one."
 (defun agent-workspace--show-bar (window agent)
   "AGENT's bar in WINDOW."
   (set-window-dedicated-p window nil)
+  (set-window-parameter window 'agent-workspace-side nil)
   (set-window-buffer window (agent-workspace--bar-buffer agent))
   (dolist (parameter '(header-line-format mode-line-format tab-line-format))
     (set-window-parameter window parameter 'none))
@@ -188,35 +208,9 @@ how to open one, or make one."
   (set-window-margins window 0 0)
   (agent-workspace--bar-draw window))
 
-(defun agent-workspace--canvas (agent)
-  "AGENT's Agent UI canvas, if it shows something."
-  (when-let* (((fboundp 'agent-ui-canvas-buffer-name))
-              (session (agent-workspace-agent-buffer agent))
-              ((buffer-live-p session))
-              (canvas (get-buffer (agent-ui-canvas-buffer-name (agent-ui--session-name session)))))
-    (and (with-current-buffer canvas (> (buffer-size) 0)) canvas)))
-
-(defun agent-workspace--canvas-split (window agent)
-  "AGENT's canvas in its open pane WINDOW: below its session, or beside it
-in a pane 140 columns wide or more. The canvas's window, or nil."
-  (when-let* ((canvas (agent-workspace--canvas agent)))
-    (let* ((wide (>= (window-total-width window) 140))
-           (new (condition-case nil
-                    (let ((window-min-height 4) (window-min-width 30))
-                      (if wide
-                          (split-window window (- (round (* 0.45 (window-total-width window)))) 'right)
-                        (split-window window (- (max 8 (round (* 0.45 (window-total-height window))))) 'below)))
-                  (error nil))))
-      (when new
-        (set-window-buffer new canvas)
-        (dolist (parameter '(mode-line-format tab-line-format))
-          (set-window-parameter new parameter 'none))
-        (set-window-parameter new 'agent-workspace-canvas agent)
-        new))))
-
 (defun agent-workspace--stack (area agents open)
-  "AGENTS' panes stacked in window AREA, all folded but OPEN's (its canvas in
-it): their windows."
+  "AGENTS' panes stacked in window AREA, all folded but OPEN's (its side
+area in it, or full size): their windows."
   (let* ((window-min-height 1)
          (window-resize-pixelwise t)       ; else a split's pixels round to lines
          (sizes (agent-workspace--sizes agents open (window-total-height area)))
@@ -240,26 +234,147 @@ it): their windows."
                                  (condition-case nil
                                      (let ((window-combination-limit (= i 0)))
                                        (split-window w (nth i pixels) 'below t))
-                                   (error nil)))))
+                                   (error nil))))
+                      (full (and (not (eq agent :hint)) (> rows agent-workspace--folded-rows)
+                                 (agent-workspace--full-tab agent))))
                   (cond ((eq agent :hint)
                          (set-window-buffer w (agent-workspace--hint-buffer (agent-workspace-agent-project (car agents))))
                          (dolist (parameter '(header-line-format mode-line-format tab-line-format))
-                           (set-window-parameter w parameter 'none)))
+                           (set-window-parameter w parameter 'none))
+                         (set-window-parameter w 'agent-workspace-side nil))
                         ((<= rows agent-workspace--folded-rows)
                          (agent-workspace--show-bar w agent))
+                        (full
+                         (agent-workspace--show-tab w agent full '(:eval (agent-workspace--pane-header))))
                         (t
                          (agent-workspace--show-pane w agent)
-                         (when-let* ((canvas (agent-workspace--canvas-split w agent)))
-                           (push canvas windows))))
+                         (when-let* ((side (agent-workspace--side-split w agent)))
+                           (push side windows))))
                   (set-window-parameter w 'agent-workspace-pane (and (not (eq agent :hint)) agent))
                   (push w windows)
                   (if next (setq w next) (cl-return))))
     (nreverse windows)))
 
+;; ====== ITS SIDE: ITS CANVAS AND PANELS, AS TABS ======
+;; The open pane's side area holds the agent's canvas (when it shows
+;; something) and its panels (panels.el), as tabs: one shown at a time, the
+;; one last shown (by v, a click, the canvas showing something new), else
+;; the first. A panel hidden fetches nothing (Agent UI's: it fetches while
+;; it's in a window). Full size (V): the one shown in the pane's whole room.
+
+(defun agent-workspace--canvas (agent)
+  "AGENT's Agent UI canvas, if it shows something."
+  (when-let* (((fboundp 'agent-ui-canvas-buffer-name))
+              (session (agent-workspace-agent-buffer agent))
+              ((buffer-live-p session))
+              (canvas (get-buffer (agent-ui-canvas-buffer-name (agent-ui--session-name session)))))
+    (and (with-current-buffer canvas (> (buffer-size) 0)) canvas)))
+
+(defun agent-workspace-agent-tabs (agent)
+  "AGENT's side area's tabs: its canvas if it shows something, then its
+panels; their buffers."
+  (let ((canvas (agent-workspace--canvas agent)))
+    (append (and canvas (list canvas))
+            (and (fboundp 'agent-workspace-agent-panels) (agent-workspace-agent-panels agent)))))
+
+(defun agent-workspace--side-tab (agent &optional tabs)
+  "The tab AGENT's side area shows, of TABS (its tabs): the one last shown
+if it's still there, else the first; nil if it has none."
+  (let ((tabs (or tabs (agent-workspace-agent-tabs agent)))
+        (app (agent-workspace--app (agent-workspace-agent-project agent))))
+    (or (car (memq (and app (alist-get agent (agent-workspace--app-tabs app))) tabs))
+        (car tabs))))
+
+(defun agent-workspace--full-tab (agent)
+  "The tab AGENT's open pane shows full size, or nil."
+  (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent)))
+              ((eq (agent-workspace--app-full app) agent)))
+    (agent-workspace--side-tab agent)))
+
+(defun agent-workspace--tab-name (tab)
+  "TAB's name: its panel's (\"tests\"), or \"canvas\"."
+  (if-let* (((boundp 'agent-ui-panels--state))
+            (panel (buffer-local-value 'agent-ui-panels--state tab)))
+      (agent-ui-panels--name panel)
+    "canvas"))
+
+(defun agent-workspace--tabs-text (agent shown)
+  "AGENT's tabs between │, SHOWN's bold in its colour, the others dimmed:
+each a button (a click shows it)."
+  (mapconcat (lambda (tab)
+               (propertize (agent-workspace--tab-name tab)
+                           'face (if (eq tab shown) (list (agent-workspace--fg agent) 'bold) 'shadow)
+                           'agent-workspace-tab tab
+                           'agent-workspace-button t
+                           'mouse-face 'agent-workspace-hover
+                           'help-echo "Show it (v: the next one, V: full size)"
+                           'keymap agent-workspace-tab-map
+                           'local-map agent-workspace-tab-map))
+             (agent-workspace-agent-tabs agent)
+             (propertize " │ " 'face 'shadow)))
+
+(defun agent-workspace--side-header ()
+  "The side area's header line: its agent's tabs, the one shown marked; v
+and V at its right. Tinted in its colour, as a bar."
+  (when-let* ((agent (window-parameter nil 'agent-workspace-side)))
+    (string-replace "%" "%%" (agent-workspace--clickable
+                              (agent-workspace--tint
+                               (agent-workspace--at-right
+                                (concat " " (agent-workspace--tabs-text agent (window-buffer)))
+                                (propertize "v: next · V: full size " 'face 'shadow)
+                                (window-total-width))
+                               (agent-workspace-agent-face agent) 0.14)
+                              agent-workspace-line-map))))
+
+(define-minor-mode agent-workspace-side-mode
+  "An agent's canvas or panel shown in its pane on the stage: v shows the
+next one, V the one there full size."
+  :lighter nil
+  ;; Evil's keys of its map, in this buffer from now.
+  (when (fboundp 'evil-normalize-keymaps)
+    (evil-normalize-keymaps)))
+
+(defun agent-workspace--show-tab (window agent tab header)
+  "TAB, of AGENT's side area, in WINDOW, its header line HEADER."
+  (set-window-dedicated-p window nil)
+  (set-window-buffer window tab)
+  (dolist (parameter '(mode-line-format tab-line-format))
+    (set-window-parameter window parameter 'none))
+  (set-window-display-table window nil)
+  (set-window-parameter window 'header-line-format header)
+  (set-window-parameter window 'agent-workspace-side agent)
+  (with-current-buffer tab
+    (unless agent-workspace-side-mode
+      (agent-workspace-side-mode 1))))
+
+(defun agent-workspace--side-split (window agent)
+  "AGENT's side area in its open pane WINDOW: below its session, or beside
+it in a pane 140 columns wide or more; its tab shown (see above). Its
+window, or nil (no tab)."
+  (when-let* ((tab (agent-workspace--side-tab agent)))
+    (let* ((wide (>= (window-total-width window) 140))
+           (new (condition-case nil
+                    (let ((window-min-height 4) (window-min-width 30))
+                      (if wide
+                          (split-window window (- (round (* 0.45 (window-total-width window)))) 'right)
+                        (split-window window (- (max 8 (round (* 0.45 (window-total-height window))))) 'below)))
+                  (error nil))))
+      (when new
+        (agent-workspace--show-tab new agent tab '(:eval (agent-workspace--side-header)))
+        new))))
+
+(defun agent-workspace--side-window (agent)
+  "The window AGENT's side area shows its tab in (its pane's, full size),
+or nil."
+  (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent)))
+              ((agent-workspace--shown-p app)))
+    (seq-find (lambda (window) (eq (window-parameter window 'agent-workspace-side) agent))
+              (window-list (agent-workspace--app-frame app) 'nomini))))
+
 ;; ====== ITS CANVAS: NEVER POPPED UP ======
 ;; A canvas of a crew's agent isn't shown by Agent UI where it would (a pane of
 ;; its own, tiled): the stage puts it in its agent's open pane, when it shows
-;; something.
+;; something new: its tab shown.
 
 (defun agent-workspace--canvas-agent (canvas)
   "The crew's agent whose session CANVAS is, or nil."
@@ -269,9 +384,10 @@ it): their windows."
 
 (defun agent-workspace--display-canvas (canvas)
   "Agent UI's display function: a crew's agent's CANVAS goes in its open
-pane (the stage laid out again); any other as Agent UI shows it."
+pane, its tab shown (the stage laid out again); any other as Agent UI shows
+it."
   (if-let* ((agent (agent-workspace--canvas-agent canvas)))
-      (agent-workspace--canvas-changed agent)
+      (agent-workspace--canvas-changed agent canvas)
     (funcall (or agent-workspace--canvas-fallback #'ignore) canvas)))
 
 (defun agent-workspace--take-canvases ()
