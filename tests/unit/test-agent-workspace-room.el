@@ -148,9 +148,9 @@ first lines, on one."
       (agent-workspace-select (agent-workspace-agent "ken" project))
       (with-current-buffer (agent-workspace--room-buffer project)
         (agent-workspace-room-filter)
-        (should (equal (string-trim (+test-awr2--feed project))
-                       (string-trim (car (split-string (+test-awr2--feed project) "\n" t)))))
+        ;; Only the hand (and its buttons).
         (should (string-search "asks: restore or rebuild?" (+test-awr2--feed project)))
+        (should-not (string-search "joined" (+test-awr2--feed project)))
         (agent-workspace-room-filter)
         (should (string-search "ken" (+test-awr2--feed project)))
         (should-not (string-search "ada" (+test-awr2--feed project)))

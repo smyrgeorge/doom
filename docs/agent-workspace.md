@@ -1,8 +1,8 @@
 # Agent workspace
 
 > **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, the
-> app (its workspace, the issues, the stage, the room), the saved crew and notifications. Answering raised hands
-> from one place comes next.
+> app (its workspace, the issues, the stage, the room), the saved crew, notifications, and raised hands answered from
+> one place.
 
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
@@ -42,7 +42,7 @@ terminal with `git init` typed.
 | `e` | anywhere | Change its name, colour, role, permission mode or model |
 | `d` / `M` | anywhere | Its branch's changes / merge its branch |
 | `v` / `I` | anywhere | Its canvas / its issue |
-| `a` | anywhere | The next raised hand |
+| `a` / `A` | anywhere | The next raised hand / answer it |
 | `f` + initial | anywhere | That agent |
 | `#` | anywhere | Talk to it in the room |
 | `1` / `2` | anywhere | The stage / the room alone |
@@ -72,6 +72,18 @@ One chat for the whole crew: a feed of what matters, and below it a compose line
 | `#` | Talk to the agent you're on (in the issues, a bar, a session) |
 
 The feed is kept per project on this machine, in `.agent-shell/agent-workspace/room.jsonl`.
+
+## Raised hands
+
+When several agents wait for you, you can answer them from one place. A raised hand's options are buttons under it in
+the room, on its agent's bar and on its pane's header line:
+
+- a permission's are agent-shell's own: Allow, Always allow, Reject;
+- a question on the agent's canvas (a choice) has its options;
+- anything else has "Go to it", which opens the agent's pane at the question.
+
+`a` goes to the next raised hand, across the crew, and `A` answers it. Once you answer from the room, it says what you
+picked ("→ Allow (you)"). A hand answered in its session leaves the room.
 
 ## Notifications
 

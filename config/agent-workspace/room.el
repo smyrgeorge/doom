@@ -214,8 +214,12 @@ home, restarted, renamed, left, stuck, hand, note), :agent (its name), :text,
                  ('hand (propertize text 'face 'warning))
                  (_ text)))
          (first (concat " " (propertize (or (plist-get entry :time) "") 'face 'shadow) " " who " " lead text)))
-    (list (propertize first 'agent-workspace-entry entry
-                      'wrap-prefix (make-string agent-workspace--room-indent ?\s)))))
+    (delq nil
+          (list (propertize first 'agent-workspace-entry entry
+                            'wrap-prefix (make-string agent-workspace--room-indent ?\s))
+                ;; A hand's buttons, while it's raised (hands.el).
+                (and (eq kind 'hand) (fboundp 'agent-workspace--room-hand-line)
+                     (agent-workspace--room-hand-line project entry))))))
 
 (defun agent-workspace--pad (text width)
   "TEXT padded to WIDTH columns."
@@ -298,9 +302,15 @@ end, kept where it was scrolled up."
         (name (agent-workspace-agent-name agent)))
     (pcase new
       ('hand (agent-workspace-room-post project :kind 'hand :agent name
-                                        :text (agent-workspace-state-text agent)))
+                                        :text (agent-workspace-state-text agent)
+                                        :ask (and (fboundp 'agent-workspace--ask-key)
+                                                  (agent-workspace--ask-key (agent-workspace-agent-ask agent)))))
       ('home (unless (eq old 'home)
                (agent-workspace-room-post project :kind 'home :agent name :text "went home")))
+      (_ (when (and (eq old 'hand) (agent-workspace--app project))
+           ;; A hand answered (here or elsewhere): its buttons go.
+           (agent-workspace--room-redraw project))))
+    (pcase new
       ('stuck (agent-workspace-room-post project :kind 'stuck :agent name
                                          :text (concat "stuck"
                                                        (if-let* ((error (agent-workspace-agent-error agent)))

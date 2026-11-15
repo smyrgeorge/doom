@@ -95,6 +95,13 @@
 ;; app talks to the agent there. Kept per project, per machine, in
 ;; .agent-shell/agent-workspace/room.jsonl.
 
+;; RAISED HANDS, ANSWERED FROM ONE PLACE
+;; (config/agent-workspace/hands.el) A permission's options are agent-shell's
+;; own buttons, pressed as they are; a question on an agent's canvas (a
+;; choice) its options, answered as its Answer button does; anything else,
+;; "go to it". They're buttons under the hand in the room, on its agent's bar
+;; and header line; A picks one, a goes to the next hand.
+
 ;; THE SAVED CREW
 ;; What the crew is, not its state, saved in the project and committed:
 ;; .agent-workspace/crew.el (config/agent-workspace/saved.el), read as data,
@@ -131,7 +138,7 @@
 ;;   both         c a new agent, i interrupt, K kill (gone home), r restart
 ;;                fresh, s sleep or wake, e edit (name, colour, role, mode,
 ;;                model), d its branch's changes, M merge its branch, v its
-;;                canvas, I its issue, a the next raised hand, f + an initial
+;;                canvas, I its issue, a the next raised hand, A answer it, f + an initial
 ;;                that agent, gr lay out again, gR read crew.el again, q leave,
 ;;                Q close, ? the keys
 ;;   its session  the same after SPC m w (C-c w in insert state), and ] / [
@@ -160,6 +167,7 @@
 (load! "agent-workspace/app")
 (load! "agent-workspace/issues")
 (load! "agent-workspace/room")
+(load! "agent-workspace/hands")
 (load! "agent-workspace/saved")
 (load! "agent-workspace/doom")
 
@@ -171,7 +179,7 @@
     ("s" . agent-workspace-sleep-here) ("e" . agent-workspace-edit)
     ("d" . agent-workspace-review-here) ("M" . agent-workspace-merge-here)
     ("v" . agent-workspace-canvas-here) ("I" . agent-workspace-issue-here)
-    ("a" . agent-workspace-next-hand) ("f" . agent-workspace-jump)
+    ("a" . agent-workspace-next-hand) ("A" . agent-workspace-answer) ("f" . agent-workspace-jump)
     ("gr" . agent-workspace-layout) ("gR" . agent-workspace-crew-reload) ("q" . agent-workspace-leave)
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)
     ("#" . agent-workspace-talk) ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room))

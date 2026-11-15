@@ -69,12 +69,18 @@ agent's of a crew.")
           (current-buffer)))))
 
 (defun agent-workspace--clickable (line map)
-  "LINE with MAP on it (a click selects its agent), hovered as `hl-line'."
-  (let ((line (copy-sequence line)))
-    (add-text-properties 0 (length line)
-                         (list 'keymap map 'local-map map 'mouse-face 'agent-workspace-hover
-                               'help-echo "Select this agent: its pane opens (mouse-3: its actions)")
-                         line)
+  "LINE with MAP on it (a click selects its agent), hovered as `hl-line';
+its buttons (a raised hand's) keep their own."
+  (let ((line (copy-sequence line))
+        (pos 0))
+    (while (< pos (length line))
+      (let ((next (or (next-single-property-change pos 'agent-workspace-button line) (length line))))
+        (unless (get-text-property pos 'agent-workspace-button line)
+          (add-text-properties pos next
+                               (list 'keymap map 'local-map map 'mouse-face 'agent-workspace-hover
+                                     'help-echo "Select this agent: its pane opens (mouse-3: its actions)")
+                               line))
+        (setq pos next)))
     line))
 
 (defun agent-workspace--bar-draw (window)

@@ -229,7 +229,7 @@ agent raises its hand, asking it. In `agent-ui-question-waiting-functions'."
   (when-let* ((agent (agent-workspace-buffer-agent session)))
     (when (eq (agent-workspace-agent-buffer agent) session)
       (agent-workspace--raise-hand
-       agent (list :kind 'question
+       agent (list :kind 'question :canvas canvas :id id
                    :title (or (and (buffer-live-p canvas) (fboundp 'agent-ui-ask-question)
                                    (ignore-errors (agent-ui-ask-question (agent-ui-get id :canvas canvas))))
                               "a question on its canvas"))))))

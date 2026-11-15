@@ -14,7 +14,8 @@
 ;; folded): ▾/▸, avatar, name, role, state glyph and words, time; on the right
 ;; its permission mode, model and branch, at the edge to the pixel. Tinted in
 ;; its colour (30% its open pane's, 14% a bar), the warning colour for a raised
-;; hand. Under 90 columns: name and state only.
+;; hand, its options then buttons before them (hands.el). Under 90 columns:
+;; name, state and buttons only.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -214,9 +215,13 @@ open one, tinted brighter) or its bar (FOLDED: ▸)."
          (role (agent-workspace-role agent))
          (mode (or (agent-workspace-agent-mode agent) (plist-get role :mode)))
          (model (or (agent-workspace-agent-model agent) (plist-get role :model)))
+         (buttons (and hand (fboundp 'agent-workspace--hand-buttons)
+                       (agent-workspace--hand-buttons
+                        agent (agent-workspace--ask-key (agent-workspace-agent-ask agent)))))
          (right (if narrow
-                    " "
-                  (concat (propertize (string-join (delq nil (list (and mode (agent-workspace-mode-label mode))
+                    (concat (or buttons "") " ")
+                  (concat (if buttons (concat buttons "  ") "")
+                          (propertize (string-join (delq nil (list (and mode (agent-workspace-mode-label mode))
                                                                     model))
                                                    " ")
                                       'face 'shadow)
