@@ -4,9 +4,9 @@
 ;; the window's right edge, their avatars images; the stage tiled again after
 ;; a border dragged; closing it; an agent's canvas and panels as tabs, a panel
 ;; fetching once its tab is shown; the minimap's lanes, even, their │ lined
-;; up and no line past its edge in a font without ✎; a napping
-;; loop's watch on its project's issues (file-notify's events, which batch
-;; Emacs doesn't get). No agent runs: sessions are buffers.
+;; up (each its role's icon) and no line past its edge in a font without ✎; a
+;; napping loop's watch on its project's issues (file-notify's events, which
+;; batch Emacs doesn't get). No agent runs: sessions are buffers.
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -237,7 +237,8 @@ same pixels (its glyphs evened)."
           (should (= (car bars) (cadr bars))))))))
 
 (ert-deftest e2e-agent-workspace/the-minimap-s-bars-line-up ()
-  "Lanes of different minutes (an edit every minute, none, mixed): every
+  "Lanes of different minutes (an edit every minute, none, mixed), each
+its role's icon after its avatar (a project's role without one: ▶): every
 lane's │ at the same x, its cells a column each, an edit's glyph one too
 (the legend's); no line past the window's edge (no $), a file named with
 glyphs drawn wider cut. In JetBrains Mono if it's here: it has no ✎, drawn
@@ -248,7 +249,11 @@ from another font, 12 px for a column of 8."
     (unwind-protect
         (+test-e2e-aw
           (let* ((window (get-buffer-window (agent-workspace--minimap-buffer project)))
-                 (ken (agent-workspace-create :role "builder" :name "ken"))
+                 (ken (progn
+                        (make-directory (expand-file-name ".agent-workspace/roles" project) t)
+                        (write-region "---\ndescription: triages\n---\nTriage.\n" nil
+                                      (expand-file-name ".agent-workspace/roles/triager.md" project))
+                        (agent-workspace-create :role "triager" :name "ken")))
                  (start (float-time))
                  (now start))
             (cl-letf (((symbol-function 'float-time) (lambda (&rest _) now)))
@@ -267,6 +272,12 @@ from another font, 12 px for a column of 8."
                   (push (car (posn-x-y (posn-at-point (1- (point)) window))) bars))
                 (should (= (length bars) 3))
                 (should (= (length (delete-dups bars)) 1))
+                ;; Each lane its role's icon after its avatar.
+                (dolist (agent (list ada sam ken))
+                  (goto-char (point-min))
+                  (should (search-forward (concat " ▌" (upcase (substring (agent-workspace-agent-name agent) 0 1)) " "
+                                                  (substring-no-properties (agent-workspace-role-glyph agent)))
+                                          nil t)))
                 (goto-char (point-min))
                 (while (not (eobp))
                   (should (< (car (window-text-pixel-size window (line-beginning-position) (line-end-position)))

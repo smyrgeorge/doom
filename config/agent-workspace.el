@@ -313,10 +313,12 @@ needs your OK. nil: Claude Code's own default."
                                   +my/agent-workspace-keys))
 
 ;; The minimap, under the issues (config/agent-workspace/minimap.el): a lane
-;; each agent, what it did minute by minute, a cell a column on the screen (a
-;; glyph the font draws wider: its fallback, ± for ✎), every lane's │ at the
-;; same column, a line too long cut with …; RET its agent, o the file it's
-;; in, d its changes (on a ⚠: both agents'). m shows or hides it, anywhere.
+;; each agent (its avatar and role's icon, its name and role on hover; the
+;; quiet ones' too), what it did minute by minute, a cell a column on the
+;; screen (a glyph the font draws wider: its fallback, ± for ✎), every lane's
+;; │ at the same column, a line too long cut with …; RET its agent, o the
+;; file it's in, d its changes (on a ⚠: both agents'). m shows or hides it,
+;; anywhere.
 (+my/agent-workspace-bind agent-workspace-minimap-mode-map
                           (append '(("j" . agent-workspace-minimap-next) ("k" . agent-workspace-minimap-previous)
                                     ("<down>" . agent-workspace-minimap-next) ("<up>" . agent-workspace-minimap-previous)

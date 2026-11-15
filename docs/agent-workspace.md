@@ -81,14 +81,17 @@ selects its agent, and `mouse-3` there lists its actions.
 Under the issues, what each agent did over the last 15 minutes, a lane each:
 
 ```text
- CREW  15 minutes                       where now
- ▌A ⌕⌕⌕✎✎▶✎✎✎✎▶✎✎✎▶ │ ⚙  src/lexer.el:214
- ▌S ··⌕⌕⌕✎✎✎▶!!!!!! │ !  wants to use npm insta…
- quiet ▌K ken ○
+ CREW  15 minutes                         where now
+ ▌A ⚙ ⌕⌕⌕✎✎▶✎✎✎✎▶✎✎✎▶ │ ⚙  src/lexer.el:214
+ ▌S ⌕ ··⌕⌕⌕✎✎✎▶!!!!!! │ !  wants to use npm ins…
+ quiet ▌K ⚙ ken ○
  ⚠ ada + sam: src/lexer.el
-    -15m    -5m now
-    ⌕ read  ✎ edit  ▶ run  ! asks you
+      -15m    -5m now
+      ⌕ read  ✎ edit  ▶ run  ! asks you
 ```
+
+Each agent shows as its avatar and its role's icon (`▶` for a role without one), the icon dimmed with the avatar
+(waking, asleep, gone home); hover either for its name and role, `ada · builder`.
 
 A cell is a minute: what the agent did most then (asked you, edited, ran a command, read or searched), `·` for
 nothing. After the bar: its state, and the file and line it's in, or what it asks you. Agents that did nothing in those

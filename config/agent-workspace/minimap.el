@@ -3,11 +3,12 @@
 ;; list. Loaded from config/agent-workspace.el, after activity.el. No Doom
 ;; here.
 ;;
-;; A lane an agent (activity.el's data): its avatar, its last
-;; `agent-workspace-activity-minutes' minutes a cell each (read, edit, run, a
-;; hand raised: what it did most then), then its state's glyph and where it
-;; is now (its file and line, what it asks you). The agents with nothing done
-;; in those minutes (at the desk, asleep) on one line under the lanes; a file
+;; A lane an agent (activity.el's data): its avatar and its role's icon (its
+;; name and role on hover), its last `agent-workspace-activity-minutes'
+;; minutes a cell each (read, edit, run, a hand raised: what it did most
+;; then), then its state's glyph and where it is now (its file and line, what
+;; it asks you). The agents with nothing done in those minutes (at the desk,
+;; asleep) on one line under the lanes, each its avatar and icon too; a file
 ;; two agents change on a line of its own (⚠ ada + ken: FILE). One column a
 ;; cell on the screen: a glyph drawn wider (a font lacking it draws it from
 ;; another) replaced by its fallback, measured once a frame; the │ at its
@@ -50,6 +51,10 @@ font has it). JetBrains Mono has no ✎: drawn from another font, wider, ±.")
 (defvar agent-workspace--minimap-measured (make-hash-table :test #'eq :weakness 'key)
   "A frame's cells' glyphs, measured there: (FONT (KIND . GLYPH)...), FONT
 what they were measured with.")
+
+(defconst agent-workspace--minimap-indent "      "
+  "Before a lane's cells: a space, its avatar, a space, its role's icon
+\(two columns each); the axis and the legend start there too.")
 
 (defconst agent-workspace--minimap-order '(asked edit run read)
   "What a minute's cell shows when the agent did several things: the first.")
@@ -182,6 +187,18 @@ a column."
               (setq high (1- mid)))))
         (concat (substring line 0 low) "…")))))
 
+(defun agent-workspace--minimap-who (agent)
+  "AGENT's avatar, then its role's icon (`agent-workspace-role-glyph', as on
+its line), two columns each: the icon in its colour, dimmed while it is, as
+its avatar (not shadow: hard to read on the minimap's background); its name
+and role on hover, \"ada · scribe\"."
+  (let ((face (if (and (agent-workspace-dim-p agent) (fboundp 'agent-ui-blend))
+                  (list :foreground (agent-ui-blend (agent-ui-background)
+                                                    (agent-ui-color (agent-workspace-agent-face agent)) 0.4))
+                (agent-workspace--fg agent))))
+    (propertize (concat (agent-workspace-agent-avatar agent) " " (agent-workspace-role-glyph agent face))
+                'help-echo (format "%s · %s" (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))))
+
 (defun agent-workspace--minimap-where (agent width)
   "Where AGENT is now, WIDTH columns at most: its file and line (the file cut
 on the left), what it asks you, else its state in words."
@@ -201,10 +218,11 @@ on the left), what it asks you, else its state in words."
      (t (agent-workspace--fit (propertize (agent-workspace-state-text agent) 'face 'shadow) width)))))
 
 (defun agent-workspace--minimap-lane (agent width &optional now)
-  "AGENT's lane, WIDTH columns: avatar, its minutes up to NOW, │ at its
-column (a space aligned to it: a cell a pixel off can't move it), its
-state's glyph, where it is; fitted to WIDTH columns on the screen."
-  (let* ((minutes (concat " " (agent-workspace-agent-avatar agent) " "
+  "AGENT's lane, WIDTH columns: avatar and role's icon, its minutes up to
+NOW, │ at its column (a space aligned to it: a cell a pixel off can't move
+it), its state's glyph, where it is; fitted to WIDTH columns on the
+screen."
+  (let* ((minutes (concat " " (agent-workspace--minimap-who agent)
                           (mapconcat (lambda (kinds) (agent-workspace--minimap-cell agent kinds))
                                      (agent-workspace-activity-lane agent now) "")))
          (head (concat minutes
@@ -224,11 +242,11 @@ it's working, its hand raised, stuck."
 
 (defun agent-workspace--minimap-quiet (agents width)
   "AGENTS with nothing done in the last minutes, on one line: each its
-avatar, name and state's glyph."
+avatar and role's icon, name and state's glyph."
   (agent-workspace--minimap-fit
    (concat " " (propertize "quiet " 'face 'shadow)
            (mapconcat (lambda (agent)
-                        (propertize (concat (agent-workspace-agent-avatar agent) " "
+                        (propertize (concat (agent-workspace--minimap-who agent)
                                             (agent-workspace-agent-name-text agent) " "
                                             (string-trim-right (agent-workspace-state-glyph agent)))
                                     'agent-workspace-minimap-agent agent))
@@ -256,12 +274,12 @@ a mark left out where it would touch the one before."
       (when (and (>= at free) (<= (+ at (length text)) n))
         (setq cells (concat (substring cells 0 at) text (substring cells (+ at (length text))))
               free (+ at (length text) 1))))
-    (propertize (concat "    " cells) 'face 'shadow)))
+    (propertize (concat agent-workspace--minimap-indent cells) 'face 'shadow)))
 
 (defun agent-workspace--minimap-legend (width)
   "What its glyphs say (the ones its cells use), WIDTH columns at most."
   (agent-workspace--minimap-fit
-   (concat "    "
+   (concat agent-workspace--minimap-indent
            (mapconcat (lambda (entry)
                         (propertize (format "%s %s" (agent-workspace--minimap-glyph (car entry)) (cdr entry))
                                     'face 'shadow))
