@@ -101,7 +101,7 @@ when not its role's; asleep said; the layout."
  :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :mode \"plan\")
           (:name \"ken\" :role \"builder\" :colour \"green\" :asleep t)
           (:name \"sam\" :role \"investigator\" :colour \"magenta\" :model \"opus\"))
- :layout (:view stage :room right :selected nil :open nil :minimap t :talk ask))
+ :layout (:view stage :room right :selected nil :open nil :minimap t :talk ask :sources-off nil))
 ")))))
 
 (ert-deftest agent-workspace-saved/written-when-the-crew-changes ()

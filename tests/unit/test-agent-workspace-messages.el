@@ -166,7 +166,7 @@ T cycles it, kept in crew.el."
     (should (eq (agent-workspace-talk-mode project) 'off))
     (should (string-search "Agents may not message each other" (+test-awg--send "ken" "ada" "hi")))
     (agent-workspace-crew-save project)
-    (should (string-search ":talk off)" (with-temp-buffer
+    (should (string-search ":talk off " (with-temp-buffer
                                           (insert-file-contents (agent-workspace--crew-path project))
                                           (buffer-string))))
     ;; Wrong ones.

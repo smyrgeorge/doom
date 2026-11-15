@@ -951,4 +951,4 @@ what it asks."
   "The app's keys."
   (interactive)
   (message "%s" (substitute-command-keys
-                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · a next hand · f+initial · m minimap · P pause events · T talk · gr lay out · q leave · Q close")))
+                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · a next hand · f+initial · m minimap · P pause events · T talk · E inbox · gr lay out · q leave · Q close")))

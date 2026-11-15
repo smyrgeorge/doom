@@ -59,6 +59,7 @@ terminal with `git init` typed.
 | `m` | anywhere | Show or hide the minimap |
 | `P` | anywhere | Pause the crew's events, or let them go again |
 | `T` | anywhere | May its agents message each other: off, ask me, on |
+| `E` | anywhere | The events waiting: reorder, drop, send now, a source off |
 | `gr` / `gR` | anywhere | Lay it out again / read `crew.el` again |
 | `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
@@ -131,6 +132,12 @@ gives it at once (after the agent's turn), in its own mode: you let it. The agen
 every event (they're queued, not delivered) until `P` again. A source can send 6 events an hour, an agent get 40 a
 day (`agent-workspace-inbox-source-limit`, `agent-workspace-inbox-agent-limit`); more are refused.
 
+`E` lists the events waiting, in the room's place (`q` gives the room back): `RET` sends one now, `d` drops it,
+`M-↑` / `M-↓` move it (the order they're delivered in), and `o` turns its source off for its agent or for everyone.
+An event from a source that's off is dropped as it comes, and the room says so; `crew.el` keeps the sources you turned
+off. During `agent-workspace-inbox-quiet-hours` (say `("22:00" . "08:00")`) no event is delivered: they wait for the
+end.
+
 ## Agents asking each other
 
 Issues carry the work between agents; a message is for a question. An agent sends one from its shell:
@@ -185,8 +192,8 @@ each kind off ([Notifications](notifications.md)).
 
 The crew is saved in the project, in `.agent-workspace/crew.el`, to commit: each agent's name, role and colour, its
 model and permission mode when they aren't its role's, whether it's asleep, the [panels](#an-agents-panels) it has
-open (by name, never their data), which agent is selected, whether the minimap is shown, and whether its agents may
-message each other. Not its session, state or issue.
+open (by name, never their data), which agent is selected, whether the minimap is shown, whether its agents may
+message each other, and the event sources you turned off. Not its session, state or issue.
 
 ```elisp
 (agent-workspace-crew
@@ -194,7 +201,7 @@ message each other. Not its session, state or issue.
  :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
           (:name "ken" :role "builder" :colour "green" :asleep t)
           (:name "sam" :role "investigator" :colour "magenta" :model "opus"))
- :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask))
+ :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask :sources-off nil))
 ```
 
 It's written when the crew changes (a panel opened or closed too), and read as data, never run. Closing the crew

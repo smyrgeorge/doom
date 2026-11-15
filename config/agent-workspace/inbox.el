@@ -15,7 +15,11 @@
 ;;
 ;; Every event in the room: queued (with [Send now] [Drop] while it waits),
 ;; then delivered or dropped; [Send now] gives it at once, in the agent's own
-;; mode (you let it). Its agent's bar shows ✉N. P pauses them all.
+;; mode (you let it). Its agent's bar shows ✉N. P pauses them all. A source
+;; can be off for an agent, a role or everyone (its events dropped as they
+;; come, said; crew.el keeps it). In `agent-workspace-inbox-quiet-hours' none
+;; is delivered. E lists the queued ones: reorder, drop, send now, a source
+;; off.
 ;; At most `agent-workspace-inbox-source-limit' events an hour from a source,
 ;; `agent-workspace-inbox-agent-limit' a day for an agent: more is refused.
 
@@ -48,6 +52,19 @@ plan, it reads and investigates on its own; editing asks you."
   "At most this many events a day for one agent (or role)."
   :type 'natnum
   :group 'agent-workspace)
+
+(defcustom agent-workspace-inbox-quiet-hours nil
+  "Hours no event is delivered (they wait): (START . END), \"HH:MM\" each,
+\(\"22:00\" . \"08:00\") across midnight; nil, none."
+  :type '(choice (const nil) (cons string string))
+  :group 'agent-workspace)
+
+(defvar agent-workspace--sources-off (make-hash-table :test #'equal)
+  "A project's sources off: ((SOURCE . FOR)...), FOR an agent's name,
+\"#ROLE\" or \"#all\". Kept in crew.el.")
+
+(defvar agent-workspace--inbox-quiet-timers (make-hash-table :test #'equal)
+  "A project's delivery waiting for its quiet hours' end.")
 
 (defvar agent-workspace--inboxes (make-hash-table :test #'equal)
   "A project's queued events, the oldest first: plists (:id :to :from :text
@@ -114,9 +131,11 @@ left out."
   (agent-workspace--inbox-redraw project))
 
 (defun agent-workspace--inbox-redraw (project)
-  "PROJECT's room (its events' buttons) and app (its bars' ✉N) drawn again."
+  "PROJECT's room (its events' buttons), app (its bars' ✉N) and inbox view
+drawn again."
   (when (fboundp 'agent-workspace--room-redraw)
     (agent-workspace--room-redraw project))
+  (agent-workspace--inbox-view-draw project)
   (when-let* ((app (agent-workspace--app project)))
     (agent-workspace--redraw app)))
 
@@ -165,20 +184,29 @@ TARGETS has had its day's."
 agent's name, \"#ROLE\" (its first free agent) or \"#all\" (a copy each).
 KIND, a string kept with it (\"message\", \"answer\": messages.el); LIMITS
 nil: not counted (a message: messages.el's own); EXTRA, a plist kept with it
-too (its :thread, :issue: in the room). Delivered when the agent is free. Return the
-events, each as it is now (:state queued or delivered)."
+too (its :thread, :issue: in the room). Delivered when the agent is free; a
+source off for one: its copy dropped. Return the events, each as it is now
+\(:state queued or delivered)."
   (when (or (not (stringp text)) (string-empty-p (string-trim text)))
     (user-error "send: what? An event needs its text"))
   (unless (and (stringp from) (string-match-p "\\`[[:alnum:]][[:alnum:]._-]*\\'" from))
     (user-error "send: --from %S: a source is named with letters, digits, . _ -" from))
   (let* ((targets (agent-workspace--inbox-targets project to))
          (key (agent-workspace--root project))
-         (events (mapcar (lambda (target)
-                           (append (list :id (agent-workspace--inbox-next-id project) :to target :from from
-                                         :text text :time (format-time-string "%FT%T%z"))
-                                   (and kind (list :kind kind))
-                                   extra))
-                         targets)))
+         (events (cl-loop for target in targets
+                          for id from (agent-workspace--inbox-next-id project)
+                          collect (append (list :id id :to target :from from
+                                                :text text :time (format-time-string "%FT%T%z"))
+                                          (and kind (list :kind kind))
+                                          extra))))
+    ;; A source off for one of them: its copy dropped, said.
+    (let ((off (seq-filter (lambda (target) (agent-workspace-inbox-source-off-p project from target)) targets)))
+      (when off
+        (dolist (target off)
+          (agent-workspace-room-post project :kind 'event-done :agent from :to target
+                                     :text (format "dropped: %s is off for %s" from target)))
+        (setq targets (seq-difference targets off)
+              events (seq-remove (lambda (event) (member (plist-get event :to) off)) events))))
     (when limits
       (agent-workspace--inbox-check-limits project from targets)
       (dolist (target targets)
@@ -224,7 +252,8 @@ going."
 (defun agent-workspace--inbox-deliver (project)
   "PROJECT's queued events given to their agents that are free, one each,
 in order (unless its events are paused)."
-  (unless (gethash (agent-workspace--root project) agent-workspace--inbox-paused)
+  (unless (or (gethash (agent-workspace--root project) agent-workspace--inbox-paused)
+              (agent-workspace--inbox-quiet project))
     (dolist (agent (agent-workspace--ordered project))
       (when (agent-workspace--inbox-free-p agent)
         (when-let* ((event (agent-workspace--inbox-for agent (agent-workspace-inbox project))))
@@ -392,3 +421,209 @@ its buttons' line (a message waiting for your OK: messages.el).")
                           (define-key map (kbd "RET") command)
                           (define-key map [return] command)
                           map))))
+
+;; ====== SOURCES OFF, QUIET HOURS ======
+
+(defun agent-workspace-inbox-source-off-p (project from to)
+  "Non-nil if source FROM is off for TO (an agent's name, \"#ROLE\") in
+PROJECT: for it, its role, or everyone."
+  (let ((off (gethash (agent-workspace--root project) agent-workspace--sources-off))
+        (role (if (string-prefix-p "#" to)
+                  to
+                (when-let* ((agent (agent-workspace-agent to project)))
+                  (concat "#" (agent-workspace-agent-role agent))))))
+    (seq-some (lambda (for) (member (cons from for) off)) (delq nil (list to role "#all")))))
+
+(defun agent-workspace-inbox-sources-off (project)
+  "PROJECT's sources off: ((SOURCE . FOR)...)."
+  (gethash (agent-workspace--root project) agent-workspace--sources-off))
+
+(defun agent-workspace--inbox-set-sources-off (project off)
+  "PROJECT's sources off made OFF ((SOURCE . FOR)...)."
+  (puthash (agent-workspace--root project) off agent-workspace--sources-off))
+
+(defun agent-workspace-inbox-source-toggle (project source for)
+  "Source SOURCE off for FOR (an agent's name, \"#ROLE\", \"#all\") in
+PROJECT, or on again; said in the room, kept in crew.el."
+  (let* ((key (agent-workspace--root project))
+         (pair (cons source for))
+         (off (gethash key agent-workspace--sources-off))
+         (now-off (not (member pair off))))
+    (puthash key (if now-off (cons pair off) (delete pair (copy-sequence off))) agent-workspace--sources-off)
+    (run-hook-with-args 'agent-workspace-layout-functions project)
+    (agent-workspace-room-post project :kind 'note
+                               :text (format (if now-off "%s off for %s (you)" "%s on again for %s (you)")
+                                             source (if (equal for "#all") "everyone" for)))
+    now-off))
+
+(defun agent-workspace--clock-minutes (text)
+  "\"HH:MM\" as minutes since midnight."
+  (pcase-let ((`(,h ,m) (mapcar #'string-to-number (split-string text ":"))))
+    (+ (* 60 h) (or m 0))))
+
+(defun agent-workspace--inbox-quiet (project &optional time)
+  "Non-nil if TIME (now) is in the quiet hours: then PROJECT's delivery
+waits for their end (a timer, while events wait)."
+  (when-let* ((hours agent-workspace-inbox-quiet-hours))
+    (let* ((decoded (decode-time time))
+           (now (+ (* 60 (decoded-time-hour decoded)) (decoded-time-minute decoded)))
+           (start (agent-workspace--clock-minutes (car hours)))
+           (end (agent-workspace--clock-minutes (cdr hours)))
+           (quiet (if (<= start end) (and (>= now start) (< now end)) (or (>= now start) (< now end)))))
+      (when (and quiet (agent-workspace-inbox project)
+                 (not (gethash (agent-workspace--root project) agent-workspace--inbox-quiet-timers)))
+        (let ((key (agent-workspace--root project))
+              (wait (* 60 (mod (- end now) 1440))))
+          (puthash key (run-at-time (max 60 (- wait (decoded-time-second decoded))) nil
+                                    (lambda ()
+                                      (remhash key agent-workspace--inbox-quiet-timers)
+                                      (agent-workspace--inbox-deliver key)))
+                   agent-workspace--inbox-quiet-timers)))
+      quiet)))
+
+;; ====== THE INBOX'S VIEW ======
+
+(defvar agent-workspace-inbox-mode-map (make-sparse-keymap)
+  "Keys in the inbox's view (set in config/agent-workspace.el).")
+
+(defvar-local agent-workspace--inbox-view-project nil "In the inbox's view: its project.")
+
+(define-derived-mode agent-workspace-inbox-mode tabulated-list-mode "Inbox"
+  "A crew's queued events: reorder, drop, send now, a source off."
+  (setq tabulated-list-format [("To" 10 nil) ("From" 10 nil) ("Since" 6 nil) ("Event" 0 nil)]
+        tabulated-list-padding 1)
+  (setq-local mode-line-format nil
+              tab-line-exclude t
+              header-line-format '(:eval (agent-workspace--inbox-view-header)))
+  (tabulated-list-init-header))
+
+(defun agent-workspace--inbox-view-header ()
+  "The inbox view's header line."
+  (when agent-workspace--inbox-view-project
+    (let ((project agent-workspace--inbox-view-project))
+      (string-replace
+       "%" "%%"
+       (concat " " (propertize "INBOX" 'face 'bold) "  "
+               (propertize (concat (format "%d waiting" (length (agent-workspace-inbox project)))
+                                   (if (agent-workspace-inbox-paused-p project) ", paused" "")
+                                   (if (agent-workspace-inbox-sources-off project)
+                                       (format ", off: %s"
+                                               (mapconcat (lambda (pair) (format "%s for %s" (car pair) (cdr pair)))
+                                                          (agent-workspace-inbox-sources-off project) ", "))
+                                     "")
+                                   "   RET send now · d drop · M-↑/M-↓ move · o source off · q back")
+                           'face 'shadow))))))
+
+(defun agent-workspace--inbox-view-buffer (project)
+  "PROJECT's inbox view (made the first time)."
+  (let ((root (agent-workspace--root project)))
+    (or (seq-find (lambda (buffer) (equal (buffer-local-value 'agent-workspace--inbox-view-project buffer) root))
+                  (agent-workspace--app-buffers project))
+        (with-current-buffer (generate-new-buffer
+                              (format "*inbox · %s*" (file-name-nondirectory (directory-file-name root))))
+          (agent-workspace-inbox-mode)
+          (setq agent-workspace--inbox-view-project root
+                default-directory root)
+          (agent-workspace--app-buffer-add project (current-buffer))
+          (current-buffer)))))
+
+(defun agent-workspace--inbox-view-draw (project)
+  "PROJECT's inbox view drawn again, if it's there."
+  (when-let* ((buffer (seq-find (lambda (buffer) (equal (buffer-local-value 'agent-workspace--inbox-view-project buffer)
+                                                        (agent-workspace--root project)))
+                                (buffer-list))))
+    (with-current-buffer buffer
+      (setq tabulated-list-entries
+            (mapcar (lambda (event)
+                      (list (plist-get event :id)
+                            (vector (plist-get event :to) (plist-get event :from)
+                                    (agent-workspace--since (plist-get event :time))
+                                    (car (split-string (plist-get event :text) "\n")))))
+                    (agent-workspace-inbox project)))
+      (tabulated-list-print t))))
+
+(defun agent-workspace--since (time)
+  "How long ago TIME (\"%FT%T%z\") was: \"4m\", \"2h\", \"3d\"."
+  (let ((seconds (- (float-time) (float-time (ignore-errors (date-to-time time))))))
+    (cond ((< seconds 3600) (format "%dm" (/ (max 0 seconds) 60)))
+          ((< seconds 86400) (format "%dh" (/ seconds 3600)))
+          (t (format "%dd" (/ seconds 86400))))))
+
+(defun agent-workspace-inbox-view ()
+  "The crew's queued events, in the room's place (q gives it back): RET sends
+one now, d drops it, M-up / M-down move it, o turns its source off for its
+agent (E)."
+  (interactive)
+  (let* ((app (agent-workspace--here-or-error))
+         (project (agent-workspace--app-project app))
+         (buffer (agent-workspace--inbox-view-buffer project))
+         (room (and (fboundp 'agent-workspace--room-buffer)
+                    (get-buffer-window (agent-workspace--room-buffer project)))))
+    (agent-workspace--inbox-view-draw project)
+    (if (window-live-p room)
+        (progn (set-window-dedicated-p room nil)
+               (set-window-buffer room buffer)
+               (select-window room))
+      (pop-to-buffer buffer))))
+
+(defun agent-workspace-inbox-view-quit ()
+  "Back to the room."
+  (interactive)
+  (let ((project agent-workspace--inbox-view-project))
+    (if-let* ((window (get-buffer-window (current-buffer)))
+              ((fboundp 'agent-workspace--room-buffer)))
+        (set-window-buffer window (agent-workspace--room-buffer project))
+      (quit-window))))
+
+(defun agent-workspace--inbox-view-id ()
+  "The event at point's id, or a user error."
+  (or (tabulated-list-get-id) (user-error "No event here")))
+
+(defun agent-workspace-inbox-view-send-now ()
+  "The event here given now (see `agent-workspace-inbox-send-now')."
+  (interactive)
+  (agent-workspace-inbox-send-now agent-workspace--inbox-view-project (agent-workspace--inbox-view-id)))
+
+(defun agent-workspace-inbox-view-drop ()
+  "The event here dropped."
+  (interactive)
+  (agent-workspace-inbox-drop agent-workspace--inbox-view-project (agent-workspace--inbox-view-id)))
+
+(defun agent-workspace-inbox-move (project id n)
+  "PROJECT's queued event ID moved N places (down; up if negative)."
+  (let* ((events (copy-sequence (agent-workspace-inbox project)))
+         (event (agent-workspace--inbox-event project id))
+         (i (cl-position event events))
+         (j (max 0 (min (1- (length events)) (+ i n)))))
+    (setq events (delq event events))
+    (agent-workspace--inbox-write project (append (seq-take events j) (list event) (seq-drop events j)))))
+
+(defun agent-workspace-inbox-view-down (&optional n)
+  "The event here moved down (N places)."
+  (interactive "p")
+  (let ((id (agent-workspace--inbox-view-id)))
+    (agent-workspace-inbox-move agent-workspace--inbox-view-project id (or n 1))
+    (goto-char (point-min))
+    (while (and (not (eobp)) (not (eql (tabulated-list-get-id) id))) (forward-line 1))))
+
+(defun agent-workspace-inbox-view-up (&optional n)
+  "The event here moved up (N places)."
+  (interactive "p")
+  (agent-workspace-inbox-view-down (- (or n 1))))
+
+(defun agent-workspace-inbox-view-source-off ()
+  "The event here's source turned off (or on) for its agent or role, or for
+everyone (asked)."
+  (interactive)
+  (let* ((project agent-workspace--inbox-view-project)
+         (event (agent-workspace--inbox-event project (agent-workspace--inbox-view-id)))
+         (source (plist-get event :from))
+         (for (completing-read (format "%s off for: " source) (list (plist-get event :to) "#all") nil t
+                               nil nil (plist-get event :to))))
+    (when (agent-workspace-inbox-source-toggle project source for)
+      ;; Its events waiting for them: dropped.
+      (dolist (other (agent-workspace-inbox project))
+        (when (and (equal (plist-get other :from) source)
+                   (agent-workspace-inbox-source-off-p project source (plist-get other :to)))
+          (agent-workspace-inbox-drop project (plist-get other :id)))))
+    (agent-workspace--inbox-view-draw project)))

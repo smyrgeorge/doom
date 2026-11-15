@@ -8,7 +8,8 @@
 ;;    :version 1
 ;;    :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
 ;;             (:name "ken" :role "builder" :colour "green" :asleep t))
-;;    :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask))
+;;    :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask
+;;             :sources-off (("ci" . "#reviewer"))))
 ;;
 ;; What each agent is (its name, role, colour; its model and mode when not its
 ;; role's; whether it's asleep; its kind when not Claude Code; its open
@@ -184,7 +185,9 @@ read already), or nil."
                                              t)
                                :talk (if (fboundp 'agent-workspace-talk-mode)
                                          (agent-workspace-talk-mode project)
-                                       'ask)))
+                                       'ask)
+                               :sources-off (and (fboundp 'agent-workspace-inbox-sources-off)
+                                                 (agent-workspace-inbox-sources-off project))))
             ")\n")))
 
 (defun agent-workspace-crew-save (&optional project)
@@ -320,6 +323,13 @@ In `agent-workspace-open-functions'."
                     ((memq (plist-get layout :talk) '(off ask on)))
                     ((fboundp 'agent-workspace--talk-set)))
           (agent-workspace--talk-set project (plist-get layout :talk)))
+        (when-let* ((layout (plist-get crew :layout))
+                    (off (plist-get layout :sources-off))
+                    ((and (proper-list-p off)
+                          (seq-every-p (lambda (pair) (and (consp pair) (stringp (car pair)) (stringp (cdr pair))))
+                                       off)))
+                    ((fboundp 'agent-workspace--inbox-set-sources-off)))
+          (agent-workspace--inbox-set-sources-off project off))
         (when-let* ((app (agent-workspace--app project))
                     (layout (plist-get crew :layout))
                     (selected (agent-workspace-agent (plist-get layout :selected) project)))

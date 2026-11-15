@@ -112,6 +112,9 @@
 ;; investigates; editing asks you), its own mode back after. In the room:
 ;; queued ([Send now] [Drop]), delivered, dropped; ✉N on its agent's bar; P
 ;; pauses them all. Limits: 6 an hour from a source, 40 a day for an agent.
+;; E lists them in the room's place: RET sends one now, d drops it, M-up /
+;; M-down move it, o turns its source off for its agent or everyone (kept in
+;; crew.el), q back. None delivered in `agent-workspace-inbox-quiet-hours'.
 
 ;; AGENTS ASKING EACH OTHER
 ;; A direct message for a question (config/agent-workspace/messages.el), from
@@ -221,7 +224,7 @@
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)
     ("#" . agent-workspace-talk) ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room)
     ("m" . agent-workspace-minimap-toggle) ("P" . agent-workspace-inbox-pause)
-    ("T" . agent-workspace-talk-cycle))
+    ("T" . agent-workspace-talk-cycle) ("E" . agent-workspace-inbox-view))
   "The keys every buffer of the app has (see THE APP above).")
 
 (+my/agent-workspace-bind agent-workspace-issues-mode-map
@@ -253,6 +256,15 @@
 ;; place of evil's visual state.
 (+my/agent-workspace-bind agent-workspace-side-mode-map
                           '(("v" . agent-workspace-panels-here) ("V" . agent-workspace-full-here)))
+
+;; The inbox's view (E).
+(+my/agent-workspace-bind agent-workspace-inbox-mode-map
+                          '(("RET" . agent-workspace-inbox-view-send-now) ("<return>" . agent-workspace-inbox-view-send-now)
+                            ("d" . agent-workspace-inbox-view-drop) ("o" . agent-workspace-inbox-view-source-off)
+                            ("M-<up>" . agent-workspace-inbox-view-up) ("M-<down>" . agent-workspace-inbox-view-down)
+                            ("M-k" . agent-workspace-inbox-view-up) ("M-j" . agent-workspace-inbox-view-down)
+                            ("q" . agent-workspace-inbox-view-quit) ("Q" . agent-workspace-quit)
+                            ("?" . agent-workspace-help)))
 
 ;; The room: its feed, its compose line (RET sends there, in insert state too).
 (+my/agent-workspace-bind agent-workspace-room-mode-map
