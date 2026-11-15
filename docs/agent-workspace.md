@@ -25,12 +25,14 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
   a role nobody in the crew has is flagged. Blocked, by what. Done today. Moving onto an issue in progress selects its
   agent. The [minimap](#the-minimap) is under them.
 - **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
-  and below it (beside it from 140 columns) its Agent UI canvas and its [panels](#an-agents-panels) as tabs,
-  `canvas │ logs │ tests`, one shown at a time. `v` shows the next one, `V` the one there full size, in the whole
-  pane (`V` again: back), and a click on a tab shows it. Something new on its canvas brings the canvas back. `q` in
-  the canvas closes it, as it does when the agent clears it: the next tab is shown, or the session takes the whole
-  pane again. The others are folded to a bar: its avatar, name, role, state and how long it's been working, and `◫2` when it has
-  two panels open. The stage arranges itself: drag a border and it's tiled again.
+  and below it (beside it from 140 columns) its Agent UI canvas, its other canvases (`ask`, where it asks you
+  things) and its [panels](#an-agents-panels) as tabs, `canvas │ ask │ logs`, one shown at a time. `v` shows the
+  next one, `V` the one there full size, in the whole pane (`V` again: back), and a click on a tab shows it.
+  Something new on a canvas brings its tab back; a question there doesn't take your cursor. `q` in a canvas closes
+  it, as it does when the agent clears it, or once you've answered the question on `ask`: the tab shown before is
+  shown, or the session takes the whole pane again. The others are folded to a bar: its avatar, name, role, state
+  and how long it's been working, and `◫2` when it has two panels open. The stage arranges itself: drag a border
+  and it's tiled again.
 
 - **The room** is on the right, 78 columns, or at the bottom in a frame under 200 columns (or with
   `agent-workspace-room-side` set to `bottom`). `2` shows the room alone, `1` the stage again.
@@ -196,7 +198,8 @@ the room, on its agent's bar and on its pane's header line:
 
 - a permission's are agent-shell's own: Allow, Always allow, Reject;
 - a question on the agent's canvas (a choice) has its options;
-- anything else has "Go to it", which opens the agent's pane at the question.
+- anything else has "Go to it", which opens the agent's pane at the question: its canvas's tab, the cursor on
+  it.
 
 `a` goes to the next raised hand, across the crew, and `A` answers it. Once you answer from the room, it says what you
 picked ("→ Allow (you)"). A hand answered in its session leaves the room.
