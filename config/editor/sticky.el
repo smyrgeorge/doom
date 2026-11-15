@@ -117,11 +117,74 @@ scroll step took ~6% of the time spent scrolling).")
                             'face 'shadow))))
   (cdr +my/sticky--path-cache))
 
-(defun +my/sticky--compute (start)
-  (if-let* ((starts (+my/sticky--scope-starts start)))
-      (mapconcat #'+my/sticky--line starts
-                 (propertize +my/sticky-separator 'face 'shadow))
-    (+my/sticky--path)))
+;; FITTING THE WINDOW
+;; The header is never wider than its window (a narrow pane): the scopes'
+;; lines shortened to their names first (class AgreementController, fun
+;; renewAgreement), the innermost kept whole while it fits; then the outer
+;; ones dropped ("… › fun renewAgreement"), the innermost cut at its end last.
+;; The path is cut from the left, a folder at a time
+;; ("…/agreements/AgreementController.kt"): its file's name kept.
+
+(defun +my/sticky--short (line)
+  "LINE, a scope's, shortened to its name and what comes before it: up to its
+parameters' \"(\" (not one starting it or after a blank or another \"(\":
+Lisp's forms, Go's receiver), a \" :\" (Kotlin's supertypes), a \" {\", a
+\" =\", or a \":\" or \"{\" ending it, whichever comes first."
+  (let* ((case-fold-search nil)
+         (cuts (delq nil (list (and (string-match "[^ \t(](" line) (1+ (match-beginning 0)))
+                               (and (string-match " :\\| {\\| =" line) (match-beginning 0))
+                               (and (string-match "[:{]\\'" line) (match-beginning 0)))))
+         (short (if cuts (string-trim-right (substring line 0 (apply #'min cuts))) line)))
+    (if (string-empty-p short) line short)))
+
+(defun +my/sticky--fit-scopes (lines width)
+  "LINES, the scopes' (outermost first), joined by the separator in at most
+WIDTH columns (see above)."
+  (let* ((separator (propertize +my/sticky-separator 'face 'shadow))
+         (more (concat (propertize "…" 'face 'shadow) separator))
+         (short (mapcar #'+my/sticky--short lines))
+         (whole (mapconcat #'identity lines separator)))
+    (if (<= (string-width whole) width)
+        whole
+      (or (cl-loop for drop from 0 below (length lines)
+                   for prefix = (if (> drop 0) more "")
+                   for scopes = (nthcdr drop short)
+                   thereis (cl-loop for these in (list (append (butlast scopes) (last lines)) scopes)
+                                    for text = (concat prefix (mapconcat #'identity these separator))
+                                    thereis (and (<= (string-width text) width) text)))
+          (if (< width 1)
+              ""
+            (truncate-string-to-width (car (last short)) width nil nil
+                                      (propertize "…" 'face 'shadow)))))))
+
+(defun +my/sticky--fit-path (path width)
+  "PATH, the file's as shown, in at most WIDTH columns (see above)."
+  (if (<= (string-width path) width)
+      path
+    (let ((more (propertize "…" 'face 'shadow))
+          (start 0)
+          found)
+      (while (and (not found) (string-match "/" path start))
+        (setq start (match-end 0))
+        (let ((text (concat more (substring path (1- start)))))
+          (when (<= (string-width text) width)
+            (setq found text))))
+      (or found
+          (let ((name (substring path start)))
+            (if (<= (string-width name) width)
+                name
+              (while (and (> (length name) 0) (> (string-width (concat more name)) width))
+                (setq name (substring name 1)))
+              (if (> width 0) (concat more name) "")))))))
+
+(defun +my/sticky--compute (start &optional width)
+  "The header's text for the window starting at START: the scopes its top
+line is inside, else the file's path; in WIDTH columns if given (see
+above)."
+  (let ((width (or width most-positive-fixnum)))
+    (if-let* ((starts (+my/sticky--scope-starts start)))
+        (+my/sticky--fit-scopes (mapcar #'+my/sticky--line starts) width)
+      (+my/sticky--fit-path (+my/sticky--path) width))))
 
 (defun +my/sticky--indent (window)
   "Spaces as wide as the line numbers in WINDOW, to line the header up with the
@@ -142,15 +205,18 @@ file). Relative numbers aren't sized like that: those ask Emacs."
    ?\s))
 
 (defun +my/sticky-header ()
-  "The header line text of the window being displayed (cached per scroll position)."
+  "The header line text of the window being displayed (cached per scroll
+position and size), as wide as the window at most."
   (let* ((window (selected-window))      ; the window whose header is drawn
          (key (list (current-buffer) (window-start window) (buffer-chars-modified-tick)
-                    (window-body-height window) display-line-numbers))
+                    (window-body-height window) (window-body-width window) display-line-numbers))
          (cache (window-parameter window '+my/sticky)))
     (if (equal (car cache) key)
         (cdr cache)
-      (let ((text (concat (+my/sticky--indent window)
-                          (or (ignore-errors (+my/sticky--compute (window-start window))) ""))))
+      (let* ((indent (+my/sticky--indent window))
+             (width (- (window-body-width window) (length indent)))
+             (text (concat indent
+                           (or (ignore-errors (+my/sticky--compute (window-start window) width)) ""))))
         (set-window-parameter window '+my/sticky (cons key text))
         text))))
 

@@ -127,7 +127,8 @@ browser.
 
 The header line shows the classes and functions the top line is inside (`class Api { › fun call(x: Int) {`); in
 Markdown, the headings (`# Guide › ## Setup`); in a Dockerfile, the stage (its `FROM` line). Before any, the file's
-path in its project.
+path in its project. In a narrow pane it fits: the scopes cut to their names (`class Api › fun call`), then the outer
+ones dropped (`… › fun call`); the path cut from the left, keeping the file's name.
 
 A tree-sitter language gets it from its major mode: the functions it declares (Python, Java, TypeScript, Rust, C, Lua,
 CSS, JSON, YAML...), else its outline (Markdown, Dockerfile). A mode declaring neither needs its scopes' node types in

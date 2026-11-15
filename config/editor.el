@@ -139,6 +139,9 @@ The menu shows groups in this order.")
 ;; shows the file's path in the project. Nested scopes come from tree-sitter
 ;; where the major mode uses it; other modes get the enclosing defun only.
 ;; In Markdown (markdown-ts-mode) the scopes are the headings: "# Guide › ## Setup".
+;; Never wider than its window: in a narrow pane the scopes are cut to their
+;; names ("class Foo › def bar"), then the outer ones dropped ("… › def bar");
+;; the path is cut from the left, its file's name kept.
 ;; The header row is always there, so the text doesn't shift when it changes.
 ;; Only where scopes can be told (e.g. not in HTML: web-mode has no notion of
 ;; them): elsewhere there's no header row.

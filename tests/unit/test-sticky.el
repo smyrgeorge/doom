@@ -454,7 +454,7 @@ itself (or below) left out."
     (let ((computed 0))
       (cl-letf* ((compute (symbol-function '+my/sticky--compute))
                  ((symbol-function '+my/sticky--compute)
-                  (lambda (start) (cl-incf computed) (format "at %d" (line-number-at-pos start)))))
+                  (lambda (start &rest _) (cl-incf computed) (format "at %d" (line-number-at-pos start)))))
         (let ((text (+my/sticky-header)))
           (should (eq (+my/sticky-header) text))
           (should (= computed 1))
@@ -478,6 +478,10 @@ itself (or below) left out."
           (should (= computed 5))
           (+my/sticky-header)
           (should (= computed 5))
+          ;; Narrower.
+          (split-window nil nil 'right)
+          (+my/sticky-header)
+          (should (= computed 6))
           (ignore compute))))))
 
 (ert-deftest sticky/header-per-window ()
@@ -486,7 +490,7 @@ itself (or below) left out."
                                          (number-sequence 1 100) "")
       #'python-mode
     (cl-letf (((symbol-function '+my/sticky--compute)
-               (lambda (start) (format "at %d" (line-number-at-pos start)))))
+               (lambda (start &rest _) (format "at %d" (line-number-at-pos start)))))
       (setq-local display-line-numbers nil)
       (let* ((top (selected-window))
              (bottom (split-window)))
@@ -499,11 +503,133 @@ itself (or below) left out."
 (ert-deftest sticky/header-never-signals ()
   "An error working out the scopes leaves the header empty (but lined up)."
   (+test-sticky "sticky/e.py" "x = 1\n" #'python-mode
-    (cl-letf (((symbol-function '+my/sticky--compute) (lambda (_) (error "Boom"))))
+    (cl-letf (((symbol-function '+my/sticky--compute) (lambda (&rest _) (error "Boom"))))
       (setq-local display-line-numbers nil)
       (should (equal (+my/sticky-header) ""))
       (setq-local display-line-numbers t)
       (should (equal (+my/sticky-header) (+my/sticky--indent (selected-window)))))))
+
+;; ====== FITTING THE WINDOW ======
+
+(defconst +test-sticky--agreements
+  "class AgreementController(private val service: AgreementService, private val clock: Clock) {
+    fun renewAgreement(agreementId: String, until: LocalDate, reason: String?): Agreement {
+        val agreement = service.find(agreementId)
+        return agreement.renewed(until, reason, clock)
+    }
+}
+"
+  "Line 3: inside a function whose line and its class's are long.")
+
+(ert-deftest sticky/short ()
+  "A scope's line shortened to its name and what comes before it; its faces
+kept."
+  (dolist (case '(("class AgreementController(private val service: AgreementService) {"
+                   . "class AgreementController")
+                  ("fun renewAgreement(agreementId: String): Agreement {" . "fun renewAgreement")
+                  ("override suspend fun <T> List<T>.renew(x: T): T {" . "override suspend fun <T> List<T>.renew")
+                  ("def bar(self):" . "def bar")
+                  ("class Foo:" . "class Foo")
+                  ("class Foo{" . "class Foo")
+                  ("## Setup {#setup}" . "## Setup")
+                  ("class Foo(Base):" . "class Foo")
+                  ("object Single : Base() {" . "object Single")
+                  ("companion object {" . "companion object")
+                  ("func (r *Recv) Name(x int) error {" . "func (r *Recv) Name")
+                  ("fn renew<T>(x: T) -> T {" . "fn renew<T>")
+                  ("const renew = (a) => {" . "const renew")
+                  ("(defun foo (x)" . "(defun foo (x)")
+                  ("(cl-defmethod foo ((x bar))" . "(cl-defmethod foo ((x bar))")
+                  ("# Guide" . "# Guide")
+                  ("FROM golang:${GO} AS build" . "FROM golang:${GO} AS build")
+                  ("{" . "{")))
+    (should (equal (cons (car case) (+my/sticky--short (car case))) case)))
+  (let ((short (+my/sticky--short (concat (propertize "def" 'face 'font-lock-keyword-face) " bar(self):"))))
+    (should (equal short "def bar"))
+    (should (eq (get-text-property 0 'face short) 'font-lock-keyword-face))))
+
+(ert-deftest sticky/fit-scopes ()
+  "Too wide: the outer scopes shortened (the innermost whole while it fits),
+then all; then the outer ones dropped (\"… › fun renewAgreement\"); the
+innermost cut at its end last. Never wider than asked."
+  (let ((lines '("class AgreementController(private val service: AgreementService) {"
+                 "fun renewAgreement(agreementId: String): Agreement {")))
+    (dolist (case '((200 . "class AgreementController(private val service: AgreementService) { › fun renewAgreement(agreementId: String): Agreement {")
+                    (90 . "class AgreementController › fun renewAgreement(agreementId: String): Agreement {")
+                    (60 . "class AgreementController › fun renewAgreement")
+                    (46 . "class AgreementController › fun renewAgreement")
+                    (45 . "… › fun renewAgreement")
+                    (40 . "… › fun renewAgreement")
+                    (22 . "… › fun renewAgreement")
+                    (21 . "fun renewAgreement")
+                    (18 . "fun renewAgreement")
+                    (10 . "fun renew…")
+                    (2 . "f…")
+                    (1 . "…")
+                    (0 . "")
+                    (-3 . "")))
+      (let ((text (+my/sticky--fit-scopes lines (car case))))
+        (should (equal (cons (car case) (substring-no-properties text)) case))
+        (should (<= (string-width text) (max 0 (car case)))))))
+  ;; Three deep: the outermost dropped first.
+  (should (equal (substring-no-properties
+                  (+my/sticky--fit-scopes '("class A(x: Int) {" "class B(y: Int) {" "fun c(z: Int) {")
+                                          21))
+                 "… › class B › fun c"))
+  (let ((text (+my/sticky--fit-scopes '("class A(x: Int) {" "fun c(z: Int) {") 10)))
+    (should (eq (get-text-property 0 'face text) 'shadow))
+    (should (equal (substring-no-properties text) "… › fun c"))))
+
+(ert-deftest sticky/fit-path ()
+  "Too wide: the path cut from the left a folder at a time, its file's name
+kept; that name alone; cut from the left too, last. Dimmed, never wider than
+asked."
+  (let ((path (propertize "src/main/kotlin/com/example/agreements/AgreementController.kt" 'face 'shadow)))
+    (dolist (case '((80 . "src/main/kotlin/com/example/agreements/AgreementController.kt")
+                    (60 . "…/main/kotlin/com/example/agreements/AgreementController.kt")
+                    (55 . "…/kotlin/com/example/agreements/AgreementController.kt")
+                    (40 . "…/agreements/AgreementController.kt")
+                    (25 . "…/AgreementController.kt")
+                    (23 . "AgreementController.kt")
+                    (10 . "…roller.kt")
+                    (0 . "")))
+      (let ((text (+my/sticky--fit-path path (car case))))
+        (should (equal (cons (car case) (substring-no-properties text)) case))
+        (should (<= (string-width text) (car case)))
+        (should (seq-every-p (lambda (index) (eq (get-text-property index 'face text) 'shadow))
+                             (number-sequence 0 (1- (length text)))))))))
+
+(ert-deftest sticky/narrow-panes-kotlin ()
+  "In a narrow pane, inside the function: the header ends with \"fun
+renewAgreement\", never wider than the window (line numbers too); at the
+file's top, the path keeps its name; worked out again when resized."
+  (+test-sticky--needs kotlin)
+  (skip-unless (fboundp 'kotlin-ts-mode))
+  (+test-sticky "sticky-narrow/src/main/kotlin/com/example/agreements/AgreementController.kt"
+      +test-sticky--agreements #'kotlin-ts-mode
+    (cl-letf (((symbol-function 'doom-project-root)
+               (lambda (&rest _) (file-truename (+test-tmp-file "sticky-narrow/")))))
+      (let ((window (selected-window)))
+        (delete-other-windows)
+        (split-window window 40 'right)
+        (dolist (numbers '(nil t))
+          (setq-local display-line-numbers numbers)
+          (set-window-start window (+test-sticky--goto-line 3))
+          (let ((header (substring-no-properties (+my/sticky-header))))
+            (should (string-suffix-p "fun renewAgreement" header))
+            (should (<= (string-width header) (window-body-width window))))
+          (set-window-start window (point-min))
+          (let ((header (substring-no-properties (+my/sticky-header))))
+            (should (string-suffix-p "/AgreementController.kt" header))
+            (should (<= (string-width header) (window-body-width window)))))
+        ;; Wider: the whole path, both scopes.
+        (setq-local display-line-numbers nil)
+        (delete-other-windows)
+        (should (equal (substring-no-properties (+my/sticky-header))
+                       "src/main/kotlin/com/example/agreements/AgreementController.kt"))
+        (set-window-start window (+test-sticky--goto-line 3))
+        (should (equal (substring-no-properties (+my/sticky-header))
+                       "class AgreementController › fun renewAgreement"))))))
 
 ;; ====== THE MODE ======
 
