@@ -85,32 +85,23 @@ is now."
   (+my/mermaid-preview--paint)
   (add-hook 'kill-buffer-hook #'+my/mermaid-preview--closed-h nil t))
 
-(defun +my/mermaid-preview-zoom-in ()
-  "The preview's diagram bigger."
-  (interactive)
-  (+my/webkit-execute "zoomBy(1.25);" t))
-
-(defun +my/mermaid-preview-zoom-out ()
-  "The preview's diagram smaller."
-  (interactive)
-  (+my/webkit-execute "zoomBy(0.8);" t))
-
-(defun +my/mermaid-preview-zoom-reset ()
-  "The preview's diagram as wide as it is, at most the pane's width."
-  (interactive)
-  (+my/webkit-execute "zoomBy(0);" t))
-
 ;; ====== AS AN IMAGE ======
 ;; Without WebKit: mmdc's SVG (mermaid/render.el), as wide as it is, at most
-;; the pane's; an error under the last drawing, wrapped to the pane's width
-;; (Mermaid's lines run to 200 characters), drawn again as the pane's width
-;; changes.
+;; the pane's (fitted), times the zoom (+, -, 0: as the page's); an error
+;; under the last drawing, wrapped to the pane's width (Mermaid's lines run to
+;; 200 characters), drawn again as the pane's width changes. Scrolled in
+;; pixels both ways (a tall diagram is one line: Emacs's own scrolling jumps
+;; past it, to a blank pane), never past its end; drawn again (typed, zoomed,
+;; resized), where it was.
 
 (defvar-local +my/mermaid-preview--svg nil "The SVG the image preview shows.")
 
 (defvar-local +my/mermaid-preview--error nil "The image preview's error, or nil.")
 
 (defvar-local +my/mermaid-preview--width nil "The width it was drawn for.")
+
+(defvar-local +my/mermaid-preview--zoom 1
+  "The image preview's zoom: its fitted width times it (1: fitted).")
 
 (defun +my/mermaid-preview--wrap (text columns)
   "TEXT, each of its lines wrapped to COLUMNS: at a space, else (a longer
@@ -129,10 +120,42 @@ word) anywhere."
    (split-string text "\n")
    "\n"))
 
+(defun +my/mermaid-preview--max-zoom (image frame)
+  "The most IMAGE, fitted, is zoomed in FRAME: ten times, and no larger than
+Emacs draws an image there (`max-image-size': a tall diagram's height). Ten
+where its size isn't known (no FRAME, or not a GUI's)."
+  (let ((size (and frame (ignore-errors (image-size image t frame))))
+        (most (lambda (pixels)
+                (if (floatp max-image-size) (* max-image-size pixels) max-image-size))))
+    (if (or (not (consp size)) (not (numberp max-image-size)))
+        10
+      (max 0.1 (min 10 (* 0.99 (/ (funcall most (frame-pixel-width frame)) (float (max 1 (car size)))))
+                    (* 0.99 (/ (funcall most (frame-pixel-height frame)) (float (max 1 (cdr size))))))))))
+
+(defun +my/mermaid-preview--image (width frame)
+  "The image preview's SVG for a pane WIDTH pixels wide (nil: none) in FRAME:
+as wide as it is, at most the pane's (fitted), times the zoom (at most
+`+my/mermaid-preview--max-zoom'). Zoomed, scaled by the zoom (Emacs's own
+image scaling too) and at most the fitted width times it: the fitted width
+times the zoom, the SVG drawn at that size (sharp)."
+  (let* ((max-width (and width (max 50 (- width 20))))
+         (fitted (create-image +my/mermaid-preview--svg 'svg nil :max-width max-width :ascent 'center)))
+    (unless (= +my/mermaid-preview--zoom 1)
+      (setq +my/mermaid-preview--zoom
+            (min +my/mermaid-preview--zoom (+my/mermaid-preview--max-zoom fitted frame))))
+    (if (= +my/mermaid-preview--zoom 1)
+        fitted
+      (create-image +my/mermaid-preview--svg 'svg nil
+                    :scale (* +my/mermaid-preview--zoom (image-compute-scaling-factor image-scaling-factor))
+                    :max-width (and max-width (round (* +my/mermaid-preview--zoom max-width)))
+                    :ascent 'center))))
+
 (defun +my/mermaid-preview--draw-image ()
-  "The image preview drawn anew: its SVG, its error."
+  "The image preview drawn anew: its SVG, its error; scrolled where it was
+\(as far as it still goes)."
   (let* ((window (get-buffer-window (current-buffer) t))
          (width (and window (window-body-width window t)))
+         (y (and window (+my/mermaid-preview--y window)))
          ;; The last column is the truncation's (lines are truncated).
          (columns (if window (max 10 (1- (window-body-width window))) 80))
          (inhibit-read-only t))
@@ -140,10 +163,7 @@ word) anywhere."
     (erase-buffer)
     (insert "\n")
     (when +my/mermaid-preview--svg
-      (insert-image (create-image +my/mermaid-preview--svg 'svg nil
-                                  :max-width (and width (max 50 (- width 20)))
-                                  :ascent 'center)
-                    "diagram")
+      (insert-image (+my/mermaid-preview--image width (and window (window-frame window))) "diagram")
       (insert "\n"))
     (when +my/mermaid-preview--error
       (insert "\n" (propertize (+my/mermaid-preview--wrap +my/mermaid-preview--error columns)
@@ -151,13 +171,159 @@ word) anywhere."
               "\n"))
     (unless (or +my/mermaid-preview--svg +my/mermaid-preview--error)
       (insert (propertize "Drawing…" 'face 'shadow)))
-    (goto-char (point-min))))
+    (goto-char (point-min))
+    (when window
+      (+my/mermaid-preview--scroll-to window y))))
 
 (defun +my/mermaid-preview--image-fit-h (window)
-  "WINDOW's width changed: the image preview drawn for it."
+  "WINDOW's size changed: the image preview drawn for its width, its scroll
+kept within it."
   (with-current-buffer (window-buffer window)
-    (unless (eql (window-body-width window t) +my/mermaid-preview--width)
+    (if (eql (window-body-width window t) +my/mermaid-preview--width)
+        (+my/mermaid-preview--scroll-to window (+my/mermaid-preview--y window))
       (+my/mermaid-preview--draw-image))))
+
+;; Scrolled: how far down, in pixels, from the lines' heights (the image's
+;; is one line, as tall as it); the line there the window's start, the rest
+;; its vscroll (as pixel-scroll-precision-mode does: point kept there, else
+;; redisplay would scroll back to it); sideways in columns (hscroll), never
+;; past the widest line's right edge.
+
+(defun +my/mermaid-preview--measure (window)
+  "The image preview as WINDOW shows it, unscrolled (`window-text-pixel-size'
+takes its vscroll off each height): (WIDTH . ROWS), WIDTH its widest line's,
+ROWS its lines ((START . HEIGHT)...), in pixels."
+  (let ((vscroll (window-vscroll window t))
+        (hscroll (window-hscroll window))
+        (rows nil))
+    (set-window-vscroll window 0 t t)
+    (set-window-hscroll window 0)
+    (unwind-protect
+        (save-excursion
+          (goto-char (point-min))
+          (while (< (point) (point-max))
+            (let ((start (point)))
+              (forward-line 1)
+              (push (cons start (cdr (window-text-pixel-size window start (point)))) rows)))
+          (cons (car (window-text-pixel-size window (point-min) (point-max) most-positive-fixnum))
+                (nreverse rows)))
+      (set-window-vscroll window vscroll t t)
+      (set-window-hscroll window hscroll))))
+
+(defun +my/mermaid-preview--y (window)
+  "How far down WINDOW shows the image preview, in pixels."
+  (let ((start (window-start window))
+        (y (window-vscroll window t)))
+    (dolist (row (cdr (+my/mermaid-preview--measure window)) y)
+      (when (< (car row) start)
+        (setq y (+ y (cdr row)))))))
+
+(defun +my/mermaid-preview--scroll-to (window y &optional x)
+  "WINDOW shows the image preview from Y pixels down and X columns across
+\(nil: as it is), within it: its bottom never above the pane's, its widest
+line's right edge never left of the pane's."
+  (pcase-let* ((`(,width . ,rows) (+my/mermaid-preview--measure window))
+               (y (max 0 (min (or y 0)
+                              (- (apply #'+ (mapcar #'cdr rows)) (window-body-height window t)))))
+               (top 0))
+    (while (and (cdr rows) (>= y (+ top (cdar rows))))
+      (setq top (+ top (cdar rows))
+            rows (cdr rows)))
+    (let ((start (if rows (caar rows) (point-min)))
+          (vscroll (- y top)))
+      (set-window-start window start (not (zerop vscroll)))
+      (set-window-vscroll window vscroll t t)
+      (set-window-point window start))
+    (set-window-hscroll window (max 0 (min (or x (window-hscroll window))
+                                           (ceiling (- width (window-body-width window t))
+                                                    (frame-char-width (window-frame window))))))))
+
+(defun +my/mermaid-preview--scroll (dy &optional dx)
+  "The image preview in the selected window scrolled DY pixels down, DX
+columns right."
+  (let ((window (selected-window)))
+    (+my/mermaid-preview--scroll-to window (+ (+my/mermaid-preview--y window) dy)
+                                    (+ (window-hscroll window) (or dx 0)))))
+
+(defun +my/mermaid-preview-image-down (&optional count)
+  "j: the diagram scrolled down, as a page is."
+  (interactive "p")
+  (+my/mermaid-preview--scroll (* (or count 1) +my/webkit-scroll-step)))
+
+(defun +my/mermaid-preview-image-up (&optional count)
+  "k: the diagram scrolled up."
+  (interactive "p")
+  (+my/mermaid-preview--scroll (- (* (or count 1) +my/webkit-scroll-step))))
+
+(defun +my/mermaid-preview--columns (pixels)
+  "PIXELS as columns of the selected window's frame, at least one."
+  (max 1 (round pixels (frame-char-width))))
+
+(defun +my/mermaid-preview-image-left (&optional count)
+  "h: the diagram scrolled left (wider than its pane)."
+  (interactive "p")
+  (+my/mermaid-preview--scroll 0 (- (* (or count 1) (+my/mermaid-preview--columns +my/webkit-scroll-step)))))
+
+(defun +my/mermaid-preview-image-right (&optional count)
+  "l: the diagram scrolled right (wider than its pane)."
+  (interactive "p")
+  (+my/mermaid-preview--scroll 0 (* (or count 1) (+my/mermaid-preview--columns +my/webkit-scroll-step))))
+
+(defun +my/mermaid-preview-image-half-screen-down ()
+  "C-d: half a screen down."
+  (interactive)
+  (+my/mermaid-preview--scroll (/ (window-body-height nil t) 2)))
+
+(defun +my/mermaid-preview-image-half-screen-up ()
+  "C-u: half a screen up."
+  (interactive)
+  (+my/mermaid-preview--scroll (- (/ (window-body-height nil t) 2))))
+
+(defun +my/mermaid-preview-image-screen-down ()
+  "A screen down (C-v, Space...)."
+  (interactive)
+  (+my/mermaid-preview--scroll (round (* 0.9 (window-body-height nil t)))))
+
+(defun +my/mermaid-preview-image-screen-up ()
+  "A screen up (M-v...)."
+  (interactive)
+  (+my/mermaid-preview--scroll (- (round (* 0.9 (window-body-height nil t))))))
+
+(defun +my/mermaid-preview-image-top ()
+  "gg: the diagram's top, as a page's (its left too)."
+  (interactive)
+  (+my/mermaid-preview--scroll-to (selected-window) 0 0))
+
+(defun +my/mermaid-preview-image-bottom ()
+  "G: the diagram's bottom, as a page's (its left too)."
+  (interactive)
+  (+my/mermaid-preview--scroll-to (selected-window) most-positive-fixnum 0))
+
+;; Zoomed, the page or the image: the fitted width times the zoom,
+;; from a tenth to ten times; 0 fitted again.
+(defun +my/mermaid-preview--zoom-by (factor)
+  "The preview's diagram zoomed by FACTOR; 0: fitted again."
+  (if (derived-mode-p '+my/mermaid-preview-image-mode)
+      (progn
+        (setq +my/mermaid-preview--zoom
+              (if (zerop factor) 1 (max 0.1 (min 10 (* +my/mermaid-preview--zoom factor)))))
+        (+my/mermaid-preview--draw-image))
+    (+my/webkit-execute (format "zoomBy(%s);" factor) t)))
+
+(defun +my/mermaid-preview-zoom-in ()
+  "The preview's diagram bigger."
+  (interactive)
+  (+my/mermaid-preview--zoom-by 1.25))
+
+(defun +my/mermaid-preview-zoom-out ()
+  "The preview's diagram smaller."
+  (interactive)
+  (+my/mermaid-preview--zoom-by 0.8))
+
+(defun +my/mermaid-preview-zoom-reset ()
+  "The preview's diagram as wide as it is, at most the pane's width."
+  (interactive)
+  (+my/mermaid-preview--zoom-by 0))
 
 (defvar-local +my/mermaid-preview--asked nil
   "In an image preview: the callback of the drawing it asked for last.")
@@ -193,7 +359,11 @@ one was asked is dropped."
 
 \\{+my/mermaid-preview-image-mode-map}"
   (setq-local cursor-type nil
-              truncate-lines t)
+              truncate-lines t
+              ;; Scrolled past point (at a line's start, see above), as
+              ;; image-mode is.
+              auto-hscroll-mode nil
+              scroll-margin 0)
   (add-hook 'window-size-change-functions #'+my/mermaid-preview--image-fit-h nil t)
   (add-hook 'kill-buffer-hook #'+my/mermaid-preview--take-back nil t)
   (add-hook 'kill-buffer-hook #'+my/mermaid-preview--closed-h nil t))

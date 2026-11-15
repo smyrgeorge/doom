@@ -24,8 +24,8 @@ In Org, a `#+begin_src mermaid :file flow.svg` block draws with `C-c C-c`, in th
 
 The notice at the top of a Mermaid file has an **Open preview** button: the diagram in a pane beside the file, redrawn
 as you type, in the theme's colours. An error shows Mermaid's message under the last drawing. It's drawn by mermaid.js
-in WebKit (downloaded once); in an Emacs without xwidgets, by `mmdc`, a second or so after you pause. In a terminal,
-`SPC m p` opens the Live Editor instead.
+in WebKit (downloaded once); in an Emacs without xwidgets, by `mmdc`, a second or so after you pause: the same keys
+either way. In a terminal, `SPC m p` opens the Live Editor instead.
 
 | Key | Action |
 |---|---|

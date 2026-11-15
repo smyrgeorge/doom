@@ -72,12 +72,12 @@ the system's chromium.")
 ;; SPC m p shows the diagram beside its file, in a pane of its own, redrawn
 ;; as you type (once you pause), in the theme's colours (a theme switch
 ;; re-themes it); SPC m p again closes it, as q in it does. In the GUI with
-;; WebKit (xwidgets): a page drawing it with mermaid.js, at once; +, - and 0
-;; zoom it (0: as wide as it is, at most the pane), j / k, C-d / C-u, gg / G
-;; scroll, h / l sideways. Without WebKit: mmdc's SVG (the renderer), a
-;; second or so after you pause. An error shows Mermaid's message under the
-;; last drawing. In a terminal, SPC m p opens Mermaid's Live Editor in the
-;; browser instead.
+;; WebKit (xwidgets): a page drawing it with mermaid.js, at once; without
+;; WebKit: mmdc's SVG (the renderer), a second or so after you pause. Either
+;; way +, - and 0 zoom it (0: as wide as it is, at most the pane), j / k,
+;; C-d / C-u, gg / G scroll, h / l sideways. An error shows Mermaid's message
+;; under the last drawing. In a terminal, SPC m p opens Mermaid's Live Editor
+;; in the browser instead.
 ;; mermaid.js (the version mmdc draws with) is downloaded once, from
 ;; jsdelivr, its SHA-256 checked below (M-x +my/mermaid-js-install does it
 ;; again); without it (offline), the preview is mmdc's SVG.
@@ -140,8 +140,27 @@ the system's chromium.")
 (defvar +my/mermaid-preview-image-mode-map (make-sparse-keymap)
   "Keys of a Mermaid preview's image (see `+my/mermaid-preview-image-mode').")
 
+;; The same keys on mmdc's image (without WebKit): zoomed, scrolled in pixels.
 (map! :map +my/mermaid-preview-image-mode-map
-      :gnm "q" #'+my/mermaid-preview-quit)
+      :nm "j"       #'+my/mermaid-preview-image-down
+      :nm "k"       #'+my/mermaid-preview-image-up
+      :nm "<down>"  #'+my/mermaid-preview-image-down
+      :nm "<up>"    #'+my/mermaid-preview-image-up
+      :nm "h"       #'+my/mermaid-preview-image-left
+      :nm "l"       #'+my/mermaid-preview-image-right
+      :nm "<left>"  #'+my/mermaid-preview-image-left
+      :nm "<right>" #'+my/mermaid-preview-image-right
+      :nm "C-d"     #'+my/mermaid-preview-image-half-screen-down
+      :nm "C-u"     #'+my/mermaid-preview-image-half-screen-up
+      :nm "gg"      #'+my/mermaid-preview-image-top
+      :nm "G"       #'+my/mermaid-preview-image-bottom
+      :nm "+"       #'+my/mermaid-preview-zoom-in
+      :nm "="       #'+my/mermaid-preview-zoom-in
+      :nm "-"       #'+my/mermaid-preview-zoom-out
+      :nm "0"       #'+my/mermaid-preview-zoom-reset
+      [remap scroll-up-command]   #'+my/mermaid-preview-image-screen-down
+      [remap scroll-down-command] #'+my/mermaid-preview-image-screen-up
+      :gnm "q"      #'+my/mermaid-preview-quit)
 
 (after! evil
   (evil-set-initial-state '+my/mermaid-preview-page-mode 'normal)

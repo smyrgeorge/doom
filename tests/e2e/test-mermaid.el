@@ -7,7 +7,8 @@
 ;; headless Chrome): each waits up to a minute. A Mermaid file's preview in
 ;; WebKit (mermaid.js: Doom's, copied; skipped without it or xwidgets): drawn,
 ;; redrawn as you type, an error under the last drawing, re-themed, zoomed
-;; (past a narrow pane, scrolled sideways).
+;; (past a narrow pane, scrolled sideways). Without WebKit, mmdc's image:
+;; zoomed, scrolled sideways, a tall one scrolled through.
 ;; ```mermaid blocks in Markdown's live preview (pandoc too): drawn, only an
 ;; edited one drawn again, an error in place, re-themed with the page. In a
 ;; reply of Claude Code's, as agent-shell renders it: drawn, copied back.
@@ -350,6 +351,145 @@ scrolled to, h / l sideways."
             (+my/mermaid-preview-mode -1)
             (set-buffer-modified-p nil))
           (kill-buffer mmd))))))
+
+(defmacro +test-mermaid--image-preview (name source &rest body)
+  "BODY with SOURCE's preview without WebKit (the real mmdc's image), from a
+Mermaid file NAME: `mmd' the file's buffer, `preview' the preview's, `pane'
+its window, once drawn."
+  (declare (indent 2))
+  `(progn
+     (+test-mermaid--needs-mmdc)
+     (+test-mermaid--fresh
+       (cl-letf (((symbol-function '+my/webkit-p) #'ignore))
+         (let ((mmd (find-file (+test-file (concat "mermaid/" ,name) ,source))))
+           (unwind-protect
+               (progn
+                 (+my/mermaid-preview-show)
+                 (let* ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd))
+                        (pane (get-buffer-window preview)))
+                   (should pane)
+                   (should (+test-wait-for (lambda () (+test-mermaid--image-size preview)) 60))
+                   ,@body))
+             (with-current-buffer mmd
+               (+my/mermaid-preview-mode -1)
+               (set-buffer-modified-p nil))
+             (kill-buffer mmd)))))))
+
+(defun +test-mermaid--image-size (preview)
+  "The size in pixels of the image PREVIEW shows, or nil."
+  (with-current-buffer preview
+    (let ((pos (text-property-not-all (point-min) (point-max) 'display nil)))
+      (and pos (image-size (get-text-property pos 'display) t)))))
+
+(defun +test-mermaid--at (pane x y)
+  "What PANE shows at X, Y (pixels in its body): (POSITION OBJECT-X . OBJECT-Y),
+OBJECT-X/Y in its image if it's the image's; nil past the text."
+  (let ((posn (posn-at-x-y x y pane)))
+    (and posn (posn-point posn)
+         (cons (posn-point posn) (and (posn-image posn) (posn-object-x-y posn))))))
+
+(ert-deftest e2e-mermaid/preview-without-webkit-zoomed-and-panned ()
+  "Without WebKit, a wide diagram in a 40-column pane: fitted to it; +, -
+drawn bigger or smaller than fitted, 0 fitted again; wider than the pane, h
+/ l sideways, its right edge at the pane's at most; the pane wider, the zoom
+kept."
+  (+test-mermaid--image-preview "wide-image.mmd"
+      (concat "flowchart LR\n    "
+              (mapconcat (lambda (n) (format "N%d[Step number %d]" n n)) (number-sequence 1 12) " --> ")
+              "\n")
+    (window-resize pane (- 40 (window-total-width pane)) t)
+    (+test-sleep 0.2)
+    (let ((fitted (car (+test-mermaid--image-size preview)))
+          (inner (window-body-width pane t)))
+      (should (< 100 fitted inner))
+      (with-selected-window pane
+        (+my/mermaid-preview-zoom-in)
+        (should (= (car (+test-mermaid--image-size preview)) (round (* 1.25 fitted))))
+        (+my/mermaid-preview-zoom-reset)
+        (should (= (car (+test-mermaid--image-size preview)) fitted))
+        (+my/mermaid-preview-zoom-out)
+        (should (= (car (+test-mermaid--image-size preview)) (round (* 0.8 fitted))))
+        (+my/mermaid-preview-zoom-reset)
+        ;; Zoomed past the pane: scrolled sideways, a step, then its right
+        ;; edge at the pane's, no further; back.
+        (dotimes (_ 4) (+my/mermaid-preview-zoom-in))
+        (let ((width (car (+test-mermaid--image-size preview))))
+          (should (> width (* 2 inner)))
+          (should (= (window-hscroll pane) 0))
+          (+my/mermaid-preview-image-right)
+          (+test-sleep 0.1)
+          (should (= (window-hscroll pane) (round +my/webkit-scroll-step (frame-char-width))))
+          (+my/mermaid-preview-image-right 100)
+          (+test-sleep 0.1)
+          ;; Its right edge in the pane's last column (its middle row: under
+          ;; the empty line above it).
+          (let* ((column (frame-char-width))
+                 (middle (+ (frame-char-height) (/ (cdr (+test-mermaid--image-size preview)) 2)))
+                 (right (+test-mermaid--at pane (- inner column 1) middle))
+                 (most (window-hscroll pane)))
+            (should (cdr right))
+            (should (<= (- width column 1) (cadr right) (1- width)))
+            (+my/mermaid-preview-image-right)
+            (should (= (window-hscroll pane) most)))
+          (+my/mermaid-preview-image-left 100)
+          (+test-sleep 0.1)
+          (should (= (window-hscroll pane) 0))))
+      ;; The pane wider: the zoom kept, of the new fitted width.
+      (with-selected-window pane (+my/mermaid-preview-zoom-reset))
+      (window-resize pane 20 t)
+      (+test-sleep 0.2)
+      (let ((wider (car (+test-mermaid--image-size preview))))
+        (should (> wider fitted))
+        (with-selected-window pane (+my/mermaid-preview-zoom-in))
+        (should (= (car (+test-mermaid--image-size preview)) (round (* 1.25 wider))))
+        (window-resize pane -20 t)
+        (+test-sleep 0.2)
+        (should (= (car (+test-mermaid--image-size preview)) (round (* 1.25 fitted))))))))
+
+(ert-deftest e2e-mermaid/preview-without-webkit-a-tall-diagram-scrolled ()
+  "Without WebKit, a diagram taller than its pane: j / k, C-d, G, gg scroll
+through it in pixels, the pane never blank: at G its bottom at the pane's
+bottom, no further."
+  (+test-mermaid--image-preview "tall-image.mmd"
+      (concat "flowchart TD\n    "
+              (mapconcat (lambda (n) (format "N%d[Step %d]" n n)) (number-sequence 1 24) " --> ")
+              "\n")
+    (let* ((height (cdr (+test-mermaid--image-size preview)))
+           (body (window-body-height pane t))
+           (y (lambda () (with-current-buffer preview (+my/mermaid-preview--y pane))))
+           (full (lambda ()
+                   ;; The image at the pane's top and bottom: no blank.
+                   (+test-sleep 0.1)
+                   (let ((top (+test-mermaid--at pane 10 1))
+                         (bottom (+test-mermaid--at pane 10 (- body 2))))
+                     (and (cdr top) (cdr bottom) (list (cddr top) (cddr bottom)))))))
+      (should (> height (* 2 body)))
+      (with-selected-window pane
+        (+my/mermaid-preview-image-down 2)
+        (should (= (funcall y) (* 2 +my/webkit-scroll-step)))
+        (should (funcall full))
+        (+my/mermaid-preview-image-up)
+        (should (= (funcall y) +my/webkit-scroll-step))
+        (+my/mermaid-preview-image-half-screen-down)
+        (should (= (funcall y) (+ +my/webkit-scroll-step (/ body 2))))
+        (should (funcall full))
+        ;; G: the image's bottom at the pane's (the line above it, empty, at
+        ;; the top of the text: scrolled by its height more).
+        (+my/mermaid-preview-image-bottom)
+        (let ((most (funcall y)))
+          (should (> most (- height body)))
+          (let ((rows (funcall full)))
+            (should rows)
+            (should (<= (- height 4) (cadr rows) (1- height))))
+          (+my/mermaid-preview-image-down 10)
+          (should (= (funcall y) most))
+          (should (funcall full))
+          (+my/mermaid-preview-image-up)
+          (should (= (funcall y) (- most +my/webkit-scroll-step))))
+        (+my/mermaid-preview-image-top)
+        (should (= (funcall y) 0))
+        (+test-sleep 0.1)
+        (should (= (window-start pane) (with-current-buffer preview (point-min))))))))
 
 ;; ====== IN MARKDOWN'S PREVIEW ======
 

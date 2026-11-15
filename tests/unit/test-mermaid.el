@@ -972,8 +972,25 @@ its page deleted."
     (should (eq (lookup-key (evil-get-auxiliary-keymap +my/mermaid-preview-page-mode-map 'normal) (kbd key))
                 command)))
   (should (eq (lookup-key +my/mermaid-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select))
-  (should (eq (lookup-key (evil-get-auxiliary-keymap +my/mermaid-preview-image-mode-map 'normal) "q")
-              #'+my/mermaid-preview-quit)))
+  ;; The same keys on mmdc's image.
+  (pcase-dolist (`(,key . ,command)
+                 '(("j" . +my/mermaid-preview-image-down) ("k" . +my/mermaid-preview-image-up)
+                   ("<down>" . +my/mermaid-preview-image-down) ("<up>" . +my/mermaid-preview-image-up)
+                   ("h" . +my/mermaid-preview-image-left) ("l" . +my/mermaid-preview-image-right)
+                   ("<left>" . +my/mermaid-preview-image-left) ("<right>" . +my/mermaid-preview-image-right)
+                   ("C-d" . +my/mermaid-preview-image-half-screen-down)
+                   ("C-u" . +my/mermaid-preview-image-half-screen-up)
+                   ("gg" . +my/mermaid-preview-image-top) ("G" . +my/mermaid-preview-image-bottom)
+                   ("+" . +my/mermaid-preview-zoom-in) ("=" . +my/mermaid-preview-zoom-in)
+                   ("-" . +my/mermaid-preview-zoom-out) ("0" . +my/mermaid-preview-zoom-reset)
+                   ("q" . +my/mermaid-preview-quit)))
+    (should (eq (lookup-key (evil-get-auxiliary-keymap +my/mermaid-preview-image-mode-map 'normal) (kbd key))
+                command)))
+  ;; Emacs's own page keys (C-v, M-v): a screen, within the image.
+  (should (eq (lookup-key +my/mermaid-preview-image-mode-map [remap scroll-up-command])
+              #'+my/mermaid-preview-image-screen-down))
+  (should (eq (lookup-key +my/mermaid-preview-image-mode-map [remap scroll-down-command])
+              #'+my/mermaid-preview-image-screen-up)))
 
 ;; Without WebKit: mmdc's SVG.
 
@@ -1111,6 +1128,119 @@ nothing of it lost."
                            (replace-regexp-in-string "[ \n]" "" message)))
             (should (eq (get-text-property (point-max) 'face) nil))
             (should (eq (get-text-property 3 'face) 'error))))))))
+
+(defun +test-mermaid--image (preview)
+  "The image PREVIEW shows (its display property), or nil."
+  (with-current-buffer preview
+    (let ((pos (text-property-not-all (point-min) (point-max) 'display nil)))
+      (and pos (get-text-property pos 'display)))))
+
+(ert-deftest mermaid/preview-image-zoomed ()
+  "Without WebKit, as the page: +, - the fitted width times the zoom (the SVG
+scaled by it, at most the fitted width times it), from a tenth to ten times;
+0 fitted again; the pane resized, the zoom kept."
+  (+test-mermaid--with-images
+    (let ((mmd (+test-mermaid--file "zoomed.mmd" "flowchart TD\n    A --> B\n")))
+      (with-current-buffer mmd (+my/mermaid-preview-show))
+      (let* ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd))
+             (pane (split-window (get-buffer-window mmd) nil 'right)))
+        (set-window-buffer pane preview)
+        (should (+test-mermaid--wait (lambda () (+test-mermaid--image-file preview))))
+        (cl-flet ((spec (property) (plist-get (cdr (+test-mermaid--image preview)) property)))
+          ;; (In batch a pixel is a column: the narrowest fit, 50, here.)
+          (let ((fitted (spec :max-width)))
+            (should (= fitted (max 50 (- (window-body-width pane t) 20))))
+            (should (eq (spec :scale) 'default))
+            (with-current-buffer preview
+              (+my/mermaid-preview-zoom-in)
+              (should (= (spec :scale) 1.25))
+              (should (= (spec :max-width) (round (* 1.25 fitted))))
+              (+my/mermaid-preview-zoom-in)
+              (should (= (spec :scale) 1.5625))
+              (+my/mermaid-preview-zoom-reset)
+              (should (eq (spec :scale) 'default))
+              (should (= (spec :max-width) fitted))
+              (+my/mermaid-preview-zoom-out)
+              (should (= (spec :scale) 0.8))
+              (should (= (spec :max-width) (round (* 0.8 fitted))))
+              (dotimes (_ 30) (+my/mermaid-preview-zoom-out))
+              (should (= (spec :scale) 0.1))
+              (dotimes (_ 30) (+my/mermaid-preview-zoom-in))
+              (should (= (spec :scale) 10))
+              ;; The pane resized: fitted to it, times the zoom.
+              (+my/mermaid-preview-zoom-reset)
+              (+my/mermaid-preview-zoom-in)
+              (delete-other-windows pane)
+              (+my/mermaid-preview--image-fit-h pane)
+              (let ((wider (- (window-body-width pane t) 20)))
+                (should (> wider fitted))
+                (should (= (spec :scale) 1.25))
+                (should (= (spec :max-width) (round (* 1.25 wider))))))))))))
+
+(ert-deftest mermaid/preview-image-scrolled-within-it ()
+  "Without WebKit, scrolled by its lines' heights (in batch a line each, a
+step one line here): j / k, C-d / C-u, gg / G, never past its end; drawn
+again (typed), where it was; the pane taller, its end still at the pane's
+bottom; sideways never past its widest line."
+  (+test-mermaid--with-images
+    (let ((mmd (+test-mermaid--file "scrolled.mmd" "flowchart TD\n    A --> B\n"))
+          (+my/webkit-scroll-step 1))
+      (with-current-buffer mmd (+my/mermaid-preview-show))
+      (let* ((preview (buffer-local-value '+my/mermaid-preview--buffer mmd))
+             (pane (split-window (get-buffer-window mmd) nil 'right)))
+        (set-window-buffer pane preview)
+        (should (+test-mermaid--wait (lambda () (+test-mermaid--image-file preview))))
+        ;; Under the image, an error 40 lines long: taller than the pane.
+        (with-current-buffer preview
+          (setq +my/mermaid-preview--error (mapconcat #'number-to-string (number-sequence 1 40) "\n"))
+          (+my/mermaid-preview--draw-image))
+        (let* ((lines (with-current-buffer preview (count-lines (point-min) (point-max))))
+               (most (- lines (window-body-height pane))))
+          (cl-flet ((y () (with-current-buffer preview (+my/mermaid-preview--y pane)))
+                    (top () (with-current-buffer preview
+                              (line-number-at-pos (window-start pane)))))
+            (should (> most 10))
+            (should (= (y) 0))
+            (with-selected-window pane
+              (+my/mermaid-preview-image-down)
+              (should (= (y) 1))
+              (should (= (top) 2))
+              (+my/mermaid-preview-image-down 3)
+              (should (= (y) 4))
+              (+my/mermaid-preview-image-up 2)
+              (should (= (y) 2))
+              (+my/mermaid-preview-image-half-screen-down)
+              (should (= (y) (+ 2 (/ (window-body-height pane) 2))))
+              (+my/mermaid-preview-image-half-screen-up)
+              (should (= (y) 2))
+              ;; G: its last line at the pane's bottom; no further.
+              (+my/mermaid-preview-image-bottom)
+              (should (= (y) most))
+              (should (= (top) (1+ most)))
+              (+my/mermaid-preview-image-down 5)
+              (should (= (y) most))
+              (+my/mermaid-preview-image-screen-down)
+              (should (= (y) most))
+              (+my/mermaid-preview-image-up)
+              (should (= (y) (1- most)))
+              ;; Drawn again (typed): where it was.
+              (+my/mermaid-preview--draw-image)
+              (should (= (y) (1- most)))
+              (+my/mermaid-preview-image-top)
+              (should (= (y) 0))
+              (+my/mermaid-preview-image-up)
+              (should (= (y) 0))
+              ;; Sideways: nothing wider than the pane.
+              (+my/mermaid-preview-image-right 5)
+              (should (= (window-hscroll pane) 0)))
+            ;; A shorter pane, scrolled to its end; taller again: its end at
+            ;; the bottom, not past it.
+            (let ((below (split-window pane nil 'below)))
+              (with-selected-window pane (+my/mermaid-preview-image-bottom))
+              (should (= (y) (- lines (window-body-height pane))))
+              (delete-window below)
+              (+my/mermaid-preview--image-fit-h pane)
+              (should (= (y) most)))))))))
 
 (ert-deftest mermaid/preview-in-a-terminal-the-live-editor ()
   (+test-mermaid--with-mmdc
