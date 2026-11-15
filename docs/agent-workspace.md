@@ -95,6 +95,10 @@ nothing. After the bar: its state, and the file and line it's in, or what it ask
 minutes share the `quiet` line. A file two agents changed (on their branches or uncommitted) is marked `⚠`: they'll
 conflict when you merge.
 
+Every cell is one column, so the bars line up from lane to lane: a glyph your font lacks, drawn wider from another
+font, gives way to one it has (JetBrains Mono has no `✎`: an edit is `±`, and the legend says so). A line too long for
+the window ends in `…`.
+
 On a lane, `RET` selects its agent, `o` opens the file it's in, in its worktree at its line, and `d` shows its branch's
 changes. On a `⚠`, `RET` or `d` shows both agents' changes to that file. `m` shows or hides it, and the crew keeps
 that. `agent-workspace-minimap-height` sets its height (12 lines); `agent-workspace-minimap` set to `nil` hides it in

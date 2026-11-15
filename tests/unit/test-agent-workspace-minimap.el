@@ -2,8 +2,10 @@
 ;; config/agent-workspace/minimap.el: the crew's minimap under the issue list.
 ;; Its lanes from what the agents did (activity.el's, stood in for), drawn
 ;; again as they do things (a burst: once), not while it's hidden; m hides it,
-;; crew.json keeps that; RET, o, d on a lane and on a conflict. Agents' sessions
-;; plain buffers (no agent runs); bd not run. A terminal's glyphs (batch).
+;; crew.json keeps that; RET, o, d on a lane and on a conflict; a cell a
+;; column, every │ at the same one, no line past the window's edge. Agents'
+;; sessions plain buffers (no agent runs); bd not run. A terminal's glyphs
+;; (batch); a glyph drawn wider stood in for, its width stubbed.
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -45,6 +47,7 @@ the minimap shown (as by default)."
             (agent-workspace--apps (make-hash-table :test #'equal))
             (agent-workspace--activity (make-hash-table :test #'eq :weakness 'key))
             (agent-workspace--minimap-shown (make-hash-table :test #'equal))
+            (agent-workspace--minimap-measured (make-hash-table :test #'eq :weakness 'key))
             (agent-workspace-minimap t))
        (set-frame-size (selected-frame) 220 40)
        (cl-letf (((symbol-function 'agent-workspace--start)
@@ -87,6 +90,23 @@ the minimap shown (as by default)."
                                     (:locations . ,(and file (vector `((path . ,(expand-file-name
                                                                                  file (agent-workspace-agent-worktree agent)))
                                                                        (line . ,line))))))))))))
+
+(defmacro +test-awm--wide (&rest body)
+  "BODY with ✎ drawn a column wider than it is (a font without it: another
+font's, wider), its cells' glyphs measured afresh."
+  (declare (indent 0))
+  `(let ((agent-workspace--minimap-measured (make-hash-table :test #'eq :weakness 'key)))
+     (cl-letf* ((width (symbol-function 'string-pixel-width))
+                ((symbol-function 'string-pixel-width)
+                 (lambda (text &rest args)
+                   (+ (apply width text args) (* (frame-char-width) (cl-count ?✎ text))))))
+       ,@body)))
+
+(defun +test-awm--bar (lane)
+  "LANE's │: how far in it's drawn (the space before it aligned), and that
+space's display."
+  (let ((at (string-search "│" lane)))
+    (list (string-pixel-width (substring lane 0 at)) (get-text-property (1- at) 'display lane))))
 
 (defun +test-awm--goto (project text)
   "Point (and the minimap's window's) at the line with TEXT in PROJECT's
@@ -169,7 +189,60 @@ legend."
         (should (equal (string-trim (nth 4 lines)) "-15m    -5m now"))
         (should (string-search "⌕ read  ✎ edit  ▶ run  ! asks you" (nth 5 lines)))
         (should (= (length lines) 6)))
+      ;; Both lanes' │ at the same column, a space aligned to it.
+      (let ((lanes (with-current-buffer (agent-workspace--minimap-buffer project)
+                     (split-string (buffer-string) "\n"))))
+        (should (equal (+test-awm--bar (nth 0 lanes))
+                       (list (+ 5 agent-workspace-activity-minutes)
+                             `(space :align-to ,(+ 5 agent-workspace-activity-minutes)))))
+        (should (equal (+test-awm--bar (nth 1 lanes)) (+test-awm--bar (nth 0 lanes)))))
       (ignore ken))))
+
+(ert-deftest agent-workspace-minimap/a-cell-a-column ()
+  "A cell's glyph drawn wider than a column (✎ from another font) is its
+kind's next one, a column wide (±): in its cells and the legend; one drawn
+a column wide kept. Measured once a frame, again when its font changes."
+  (let ((agent (agent-workspace--make-agent :name "ada" :role "builder" :colour "blue" :project "/p/"))
+        (measured 0))
+    (let ((agent-workspace--minimap-measured (make-hash-table :test #'eq :weakness 'key)))
+      (should (equal (agent-workspace--minimap-glyph 'edit) "✎"))
+      (should (equal (agent-workspace--minimap-cell agent '(edit read)) "✎")))
+    (+test-awm--wide
+      (cl-letf* ((width (symbol-function 'string-pixel-width))
+                 ((symbol-function 'string-pixel-width)
+                  (lambda (&rest args) (cl-incf measured) (apply width args))))
+        (should (equal (agent-workspace--minimap-cell agent '(edit read)) "±"))
+        (should (memq 'bold (get-text-property 0 'face (agent-workspace--minimap-cell agent '(edit)))))
+        (should (string-search "⌕ read  ± edit  ▶ run  ! asks you" (agent-workspace--minimap-legend 60)))
+        (should (equal (mapcar #'agent-workspace--minimap-glyph '(read run asked none)) '("⌕" "▶" "!" "·")))
+        ;; Once a frame: not measured again.
+        (setq measured 0)
+        (agent-workspace--minimap-cell agent '(edit))
+        (should (= measured 0))
+        ;; Another font: measured again.
+        (cl-letf (((symbol-function 'face-font) (lambda (&rest _) "another font")))
+          (should (equal (agent-workspace--minimap-glyph 'edit) "±")))
+        (should (> measured 0))))))
+
+(ert-deftest agent-workspace-minimap/a-lane-never-past-its-edge ()
+  "A lane fitting its columns but drawn wider (glyphs from wider fonts) is
+cut to its pixels, … at its end; its │ where every lane's is."
+  (+test-awm "edge"
+    (let ((ada (agent-workspace-create :role "builder" :name "ada")))
+      (+test-awm--tool ada "edit" "src/✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎.el" 3)
+      (+test-awm--wide
+        (let ((lane (agent-workspace--minimap-lane ada 50)))
+          (should (<= (string-pixel-width lane) 50))
+          (should (string-suffix-p "…" lane))
+          (should (string-search "±" lane))
+          (should (eq (get-text-property (1- (length lane)) 'agent-workspace-minimap-agent lane) ada))
+          (should (equal (nth 1 (+test-awm--bar lane)) `(space :align-to ,(+ 5 agent-workspace-activity-minutes)))))
+        ;; Drawn: no line past the window's edge.
+        (agent-workspace-open t)
+        (let ((window (get-buffer-window (agent-workspace--minimap-buffer project))))
+          (with-current-buffer (window-buffer window)
+            (dolist (line (split-string (buffer-string) "\n"))
+              (should (< (string-pixel-width line) (window-body-width window t))))))))))
 
 (ert-deftest agent-workspace-minimap/drawn-as-they-do-things ()
   "Drawn again as an agent does things, a burst once, a quarter of a second

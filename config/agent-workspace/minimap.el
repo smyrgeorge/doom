@@ -9,7 +9,10 @@
 ;; is now (its file and line, what it asks you). The agents with nothing done
 ;; in those minutes (at the desk, asleep) on one line under the lanes; a file
 ;; two agents change on a line of its own (⚠ ada + ken: FILE). One column a
-;; cell, the same glyphs in the GUI and a terminal; faces only.
+;; cell on the screen: a glyph drawn wider (a font lacking it draws it from
+;; another) replaced by its fallback, measured once a frame; the │ at its
+;; column whatever comes before it; every line evened and cut to its window's
+;; pixels, never past its edge. Faces only.
 ;;
 ;; Drawn again as the agents do things, a few times a second at most, and once
 ;; a minute (its cells move on) while a lane has something; only while it's
@@ -39,8 +42,14 @@ hides it; crew.json keeps what you chose."
   :group 'agent-workspace)
 
 (defvar agent-workspace-minimap-glyphs
-  '((read . "⌕") (edit . "✎") (run . "▶") (asked . "!") (none . "·"))
-  "A cell's glyph by what the agent did in its minute, one column each.")
+  '((read "⌕" "≡" "=") (edit "✎" "±" "+") (run "▶" ">") (asked "!") (none "·" "."))
+  "A cell's glyphs by what the agent did in its minute: the first drawn one
+column wide in the frame, else the next (its last at worst: the frame's
+font has it). JetBrains Mono has no ✎: drawn from another font, wider, ±.")
+
+(defvar agent-workspace--minimap-measured (make-hash-table :test #'eq :weakness 'key)
+  "A frame's cells' glyphs, measured there: (FONT (KIND . GLYPH)...), FONT
+what they were measured with.")
 
 (defconst agent-workspace--minimap-order '(asked edit run read)
   "What a minute's cell shows when the agent did several things: the first.")
@@ -118,11 +127,31 @@ hides it; crew.json keeps what you chose."
 
 ;; ====== ITS LINES ======
 
+(defun agent-workspace--minimap-glyph (kind)
+  "KIND's glyph for a cell in the selected frame: the first of its
+`agent-workspace-minimap-glyphs' drawn as wide as a column there (bold, as
+its cell, for an edit or a hand raised), else its last. Measured once a
+frame, again when its font changes; in a terminal, where a glyph is its
+cell (a pixel a column), its first."
+  (let* ((glyphs (alist-get kind agent-workspace-minimap-glyphs))
+         (font (list (frame-char-width) (face-font 'default) agent-workspace-minimap-glyphs))
+         (measured (gethash (selected-frame) agent-workspace--minimap-measured)))
+    (unless (equal (car measured) font)
+      (setq measured (puthash (selected-frame) (list font) agent-workspace--minimap-measured)))
+    (or (alist-get kind (cdr measured))
+        (let* ((face (if (memq kind '(edit asked)) 'bold 'default))
+               (glyph (or (seq-find (lambda (glyph)
+                                      (= (string-pixel-width (propertize glyph 'face face)) (frame-char-width)))
+                                    glyphs)
+                          (car (last glyphs)))))
+          (setcdr measured (cons (cons kind glyph) (cdr measured)))
+          glyph))))
+
 (defun agent-workspace--minimap-cell (agent kinds)
   "AGENT's cell for a minute it did KINDS in: a glyph, in its colour (read
 dimmer, edit bold), a hand raised in the warning face."
   (let* ((kind (seq-find (lambda (kind) (memq kind kinds)) agent-workspace--minimap-order))
-         (glyph (alist-get (or kind 'none) agent-workspace-minimap-glyphs))
+         (glyph (agent-workspace--minimap-glyph (or kind 'none)))
          (fg (agent-workspace--fg agent)))
     (propertize glyph 'face
                 (pcase kind
@@ -134,6 +163,24 @@ dimmer, edit bold), a hand raised in the warning face."
                              (list :foreground (agent-ui-blend (agent-ui-background)
                                                                (plist-get fg :foreground) 0.6))
                            fg))))))
+
+(defun agent-workspace--minimap-fit (line width)
+  "LINE, a line of the minimap, its glyphs evened (`agent-ui-even-glyphs')
+and cut to WIDTH columns' pixels, … where cut: never past its window's
+edge (no $ there), however wide a glyph is drawn. In a terminal a pixel is
+a column."
+  (let ((line (if (fboundp 'agent-ui-even-glyphs) (agent-ui-even-glyphs line) line))
+        (pixels (* width (frame-char-width))))
+    (if (<= (string-pixel-width line) pixels)
+        line
+      ;; The most of it that fits with … after it.
+      (let ((low 0) (high (1- (length line))))
+        (while (< low high)
+          (let ((mid (/ (+ low high 1) 2)))
+            (if (<= (string-pixel-width (concat (substring line 0 mid) "…")) pixels)
+                (setq low mid)
+              (setq high (1- mid)))))
+        (concat (substring line 0 low) "…")))))
 
 (defun agent-workspace--minimap-where (agent width)
   "Where AGENT is now, WIDTH columns at most: its file and line (the file cut
@@ -154,14 +201,19 @@ on the left), what it asks you, else its state in words."
      (t (agent-workspace--fit (propertize (agent-workspace-state-text agent) 'face 'shadow) width)))))
 
 (defun agent-workspace--minimap-lane (agent width &optional now)
-  "AGENT's lane, WIDTH columns: avatar, its minutes up to NOW, │, its
-state's glyph, where it is."
-  (let* ((cells (mapconcat (lambda (kinds) (agent-workspace--minimap-cell agent kinds))
-                           (agent-workspace-activity-lane agent now) ""))
-         (head (concat " " (agent-workspace-agent-avatar agent) " " cells " "
+  "AGENT's lane, WIDTH columns: avatar, its minutes up to NOW, │ at its
+column (a space aligned to it: a cell a pixel off can't move it), its
+state's glyph, where it is; fitted to WIDTH columns on the screen."
+  (let* ((minutes (concat " " (agent-workspace-agent-avatar agent) " "
+                          (mapconcat (lambda (kinds) (agent-workspace--minimap-cell agent kinds))
+                                     (agent-workspace-activity-lane agent now) "")))
+         (head (concat minutes
+                       (propertize " " 'display `(space :align-to ,(1+ (string-width minutes))))
                        (propertize "│" 'face 'shadow) " "
                        (agent-workspace-state-glyph agent) " ")))
-    (propertize (concat head (agent-workspace--minimap-where agent (max 6 (- width (string-width head)))))
+    (propertize (agent-workspace--minimap-fit
+                 (concat head (agent-workspace--minimap-where agent (max 6 (- width (string-width head)))))
+                 width)
                 'agent-workspace-minimap-agent agent)))
 
 (defun agent-workspace--minimap-busy-p (agent &optional now)
@@ -173,7 +225,7 @@ it's working, its hand raised, stuck."
 (defun agent-workspace--minimap-quiet (agents width)
   "AGENTS with nothing done in the last minutes, on one line: each its
 avatar, name and state's glyph."
-  (agent-workspace--fit
+  (agent-workspace--minimap-fit
    (concat " " (propertize "quiet " 'face 'shadow)
            (mapconcat (lambda (agent)
                         (propertize (concat (agent-workspace-agent-avatar agent) " "
@@ -186,7 +238,7 @@ avatar, name and state's glyph."
 (defun agent-workspace--minimap-conflict (conflict width)
   "CONFLICT (FILE AGENT...), a file several agents change: its line."
   (propertize
-   (agent-workspace--fit
+   (agent-workspace--minimap-fit
     (concat " " (propertize "⚠" 'face 'warning) " "
             (mapconcat #'agent-workspace-agent-name-text (cdr conflict) (propertize " + " 'face 'shadow))
             (propertize ": " 'face 'shadow)
@@ -206,14 +258,16 @@ a mark left out where it would touch the one before."
               free (+ at (length text) 1))))
     (propertize (concat "    " cells) 'face 'shadow)))
 
-(defun agent-workspace--minimap-legend ()
-  "What its glyphs say."
-  (concat "    "
-          (mapconcat (lambda (entry)
-                       (propertize (format "%s %s" (alist-get (car entry) agent-workspace-minimap-glyphs) (cdr entry))
-                                   'face 'shadow))
-                     '((read . "read") (edit . "edit") (run . "run") (asked . "asks you"))
-                     "  ")))
+(defun agent-workspace--minimap-legend (width)
+  "What its glyphs say (the ones its cells use), WIDTH columns at most."
+  (agent-workspace--minimap-fit
+   (concat "    "
+           (mapconcat (lambda (entry)
+                        (propertize (format "%s %s" (agent-workspace--minimap-glyph (car entry)) (cdr entry))
+                                    'face 'shadow))
+                      '((read . "read") (edit . "edit") (run . "run") (asked . "asks you"))
+                      "  "))
+   width))
 
 (defun agent-workspace--minimap-header ()
   "The minimap's header line."
@@ -235,7 +289,7 @@ a mark left out where it would touch the one before."
     (append (mapcar (lambda (agent) (agent-workspace--minimap-lane agent width now)) busy)
             (and quiet (list (agent-workspace--minimap-quiet quiet width)))
             (mapcar (lambda (conflict) (agent-workspace--minimap-conflict conflict width)) conflicts)
-            (and busy (list (agent-workspace--minimap-axis) (agent-workspace--minimap-legend)))
+            (and busy (list (agent-workspace--minimap-axis) (agent-workspace--minimap-legend width)))
             (and (not agents) (list (propertize "  No agents yet." 'face 'shadow))))))
 
 ;; ====== DRAWING IT ======
@@ -249,14 +303,12 @@ was on; drawn again at the next minute while a lane has something."
       (let* ((pos (window-point window))
              (agent (get-text-property pos 'agent-workspace-minimap-agent))
              (line (line-number-at-pos pos))
-             (lines (agent-workspace-minimap-text project (max 20 (1- (window-body-width window)))))
+             ;; Its glyphs measured in its own frame.
+             (lines (with-selected-frame (window-frame window)
+                      (agent-workspace-minimap-text project (max 20 (1- (window-body-width window))))))
              (inhibit-read-only t))
         (erase-buffer)
         (insert (string-join lines "\n"))
-        (when (fboundp 'agent-ui-even-glyphs)
-          (let ((text (buffer-string)))
-            (erase-buffer)
-            (insert (agent-ui-even-glyphs text))))
         (goto-char (point-min))
         (if-let* ((match (and agent (text-property-search-forward 'agent-workspace-minimap-agent agent #'eq))))
             (goto-char (prop-match-beginning match))

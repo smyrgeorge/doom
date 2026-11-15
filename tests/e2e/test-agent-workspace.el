@@ -3,7 +3,8 @@
 ;; redisplay. Its agents' lines (a bar, the open pane's header line) drawn to
 ;; the window's right edge, their avatars images; the stage tiled again after
 ;; a border dragged; closing it; an agent's canvas and panels as tabs, a panel
-;; fetching once its tab is shown; the minimap's lanes, even; a napping
+;; fetching once its tab is shown; the minimap's lanes, even, their │ lined
+;; up and no line past its edge in a font without ✎; a napping
 ;; loop's watch on its project's issues (file-notify's events, which batch
 ;; Emacs doesn't get). No agent runs: sessions are buffers.
 
@@ -234,6 +235,50 @@ same pixels (its glyphs evened)."
             (push (car (window-text-pixel-size window (line-beginning-position) (1- (point)))) bars))
           (should (= (length bars) 2))
           (should (= (car bars) (cadr bars))))))))
+
+(ert-deftest e2e-agent-workspace/the-minimap-s-bars-line-up ()
+  "Lanes of different minutes (an edit every minute, none, mixed): every
+lane's │ at the same x, its cells a column each, an edit's glyph one too
+(the legend's); no line past the window's edge (no $), a file named with
+glyphs drawn wider cut. In JetBrains Mono if it's here: it has no ✎, drawn
+from another font, 12 px for a column of 8."
+  (let ((font (frame-parameter nil 'font)))
+    (when (find-font (font-spec :family "JetBrains Mono"))
+      (set-frame-font (font-spec :family "JetBrains Mono" :size 13) nil t))
+    (unwind-protect
+        (+test-e2e-aw
+          (let* ((window (get-buffer-window (agent-workspace--minimap-buffer project)))
+                 (ken (agent-workspace-create :role "builder" :name "ken"))
+                 (start (float-time))
+                 (now start))
+            (cl-letf (((symbol-function 'float-time) (lambda (&rest _) now)))
+              (dotimes (i 14)
+                (setq now (- start (* 60 (- 14 i))))
+                (+test-e2e-aw--did ada "edit" "notes/✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎.md" 1)
+                (+test-e2e-aw--did sam (if (cl-oddp i) "edit" "read") "README" 1)))
+            (agent-workspace--set-state ken 'working)
+            (agent-workspace--minimap-draw project)
+            (redisplay t)
+            (with-current-buffer (window-buffer window)
+              (let ((bars nil)
+                    (edit (agent-workspace--minimap-glyph 'edit)))
+                (goto-char (point-min))
+                (while (search-forward "│" nil t)
+                  (push (car (posn-x-y (posn-at-point (1- (point)) window))) bars))
+                (should (= (length bars) 3))
+                (should (= (length (delete-dups bars)) 1))
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (should (< (car (window-text-pixel-size window (line-beginning-position) (line-end-position)))
+                             (window-body-width window t)))
+                  (forward-line 1))
+                ;; ada's lane, its file's name drawn wider than its columns: cut.
+                (goto-char (point-min))
+                (should (search-forward "▌A" nil t))
+                (should (string-suffix-p "…" (buffer-substring (point) (line-end-position))))
+                (should (= (string-pixel-width edit) (frame-char-width)))
+                (should (string-search (concat edit " edit") (buffer-string)))))))
+      (set-frame-font font nil t))))
 
 (ert-deftest e2e-agent-workspace/a-napping-loop-wakes-on-its-issues-changing ()
   "A napping agent's loop watches its project's .beads (a GUI Emacs gets
