@@ -130,7 +130,7 @@ canvas (`v` shows them), and its bar and header line count them: `◫2`. It read
 (`agent-ui get --panel tests`), and a panel whose tab isn't shown fetches only when its agent reads it. They share the
 project's trust: trust the project and its agents' worktrees are trusted too, but a panel file changed on an agent's
 branch is asked about again. They close when the agent is killed, put to sleep or forgotten, and when the crew closes.
-They're saved with the crew, by name, and open again when it starts again ([The saved crew](#the-saved-crew)).
+Renamed, it keeps them: they open again in its moved worktree, under its new name. They're saved with the crew, by name, and open again when it starts again ([The saved crew](#the-saved-crew)).
 
 ## Notifications
 

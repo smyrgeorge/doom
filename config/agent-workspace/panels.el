@@ -12,7 +12,7 @@
 ;; agents' worktrees; a file changed on an agent's branch is asked about
 ;; again (Agent UI remembers a file's trust by its content). Closed when its
 ;; agent is killed, put to sleep or forgotten, and when its crew closes; kept
-;; across a restart. Saved with the crew, by name (crew.el's :panels, never
+;; across a restart, and a rename (opened again in its moved worktree). Saved with the crew, by name (crew.el's :panels, never
 ;; their data: saved.el), opened again when it starts again.
 
 (require 'cl-lib)
@@ -98,6 +98,30 @@ panels closed. A restart keeps them. In
     (agent-workspace--close-panels agent)))
 
 (add-hook 'agent-workspace-state-change-functions #'agent-workspace--panels-state-h)
+
+;; ====== ITS WORKTREE MOVED ======
+
+(defvar agent-workspace--panels-moving (make-hash-table :test #'eq :weakness 'key)
+  "An agent whose worktree is moving: its panels, as crew.el keeps them, to
+open again once it has.")
+
+(defun agent-workspace--panels-moving-h (agent)
+  "AGENT's worktree about to move (a rename): its panels closed, kept to
+open again. In `agent-workspace-moving-functions'."
+  (when-let* ((names (agent-workspace-agent-panel-names agent)))
+    (puthash agent names agent-workspace--panels-moving)
+    (agent-workspace--close-panels agent)))
+
+(defun agent-workspace--panels-moved-h (agent what)
+  "AGENT renamed, its worktree moved: its panels opened again there, named
+after it. In `agent-workspace-change-functions'."
+  (when-let* (((eq what 'renamed))
+              (names (gethash agent agent-workspace--panels-moving)))
+    (remhash agent agent-workspace--panels-moving)
+    (agent-workspace-open-panels agent names)))
+
+(add-hook 'agent-workspace-moving-functions #'agent-workspace--panels-moving-h)
+(add-hook 'agent-workspace-change-functions #'agent-workspace--panels-moved-h)
 
 ;; ====== SAVED WITH THE CREW ======
 

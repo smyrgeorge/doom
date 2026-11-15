@@ -341,6 +341,25 @@ closed after."
     (make-directory (file-name-directory draft) t)
     (write-region +test-aws2--panel nil draft)))
 
+(ert-deftest agent-workspace-saved/panels-kept-across-a-rename ()
+  "An agent renamed (its worktree moved): its panels open again in its new
+worktree, named after it, one from a file there too; crew.el keeps them
+(doom-ukm.6)."
+  (+test-aws2-panels "panels-renamed"
+    (let ((ada (agent-workspace-create :role "builder" :name "ada")))
+      (+test-aws2--draft ada)
+      (+test-aws2--open-panel ada "tests")
+      (+test-aws2--open-panel ada "drafts/try.el")
+      (agent-workspace-rename ada "grace")
+      (+test-sleep 0.1)
+      (should (equal (+test-aws2--open-panels) '("Agent UI: tests · grace" "Agent UI: try · grace")))
+      (dolist (canvas (agent-workspace-agent-panels ada))
+        (should (equal (file-name-as-directory
+                        (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state canvas))))
+                       (file-name-as-directory (file-truename (agent-workspace-agent-worktree ada))))))
+      (should (string-search "(:name \"grace\" :role \"builder\" :colour \"blue\" :panels (\"drafts/try.el\" \"tests\"))"
+                             (+test-aws2--file project))))))
+
 (ert-deftest agent-workspace-saved/an-agents-panels-written ()
   "An agent's open panels in its entry, by name, sorted: written as one opens
 or closes; none, no :panels (put to sleep, they close: gone from it). One

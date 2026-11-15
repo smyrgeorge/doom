@@ -50,6 +50,11 @@ reads as an error."
 (defvar agent-workspace-closing-functions nil
   "Called with a project as its crew closes, before any agent stops.")
 
+(defvar agent-workspace-moving-functions nil
+  "Called with an agent whose worktree is about to move (it's renamed),
+its session stopped: what's open there closed, to open again in the new one
+once it's `renamed'.")
+
 (defvar agent-workspace-state-change-functions nil
   "Called with an agent, its old state and its new one, when its state
 changes (before `agent-workspace-change-functions').")
@@ -453,6 +458,7 @@ while it works; a running session starts again, fresh (its worktree moved)."
   (let ((live (agent-workspace-live-p agent))
         (state (agent-workspace-agent-state agent)))
     (when live (agent-workspace--stop agent 'waking))
+    (run-hook-with-args 'agent-workspace-moving-functions agent)
     (agent-workspace-worktree-rename agent name)
     (setf (agent-workspace-agent-name agent) name)
     (agent-workspace--changed agent 'renamed)
