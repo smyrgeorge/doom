@@ -24,6 +24,7 @@
 (declare-function agent-ui-ask-answer-text "agent-ui/ask")
 (declare-function agent-ui-ask-answered-text "agent-ui/ask")
 (declare-function agent-ui-canvas-buffer-name "agent-ui/canvas")
+(declare-function agent-ui--show-question "agent-ui/agent")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
 (defvar agent-ui--canvas-name)
 
@@ -100,19 +101,23 @@ no argument answering it so; nil if its hand isn't raised."
 
 (defun agent-workspace--go-to-hand (agent)
   "AGENT selected, the cursor on what it asks: its permission's buttons (its
-session shown), or its canvas (its tab shown)."
-  (let ((canvas (plist-get (agent-workspace-agent-ask agent) :canvas)))
-    (if (and (buffer-live-p canvas) (memq canvas (agent-workspace-agent-tabs agent)))
+session shown), or its question (its canvas's tab shown: its own, ask...)."
+  (let* ((ask (agent-workspace-agent-ask agent))
+         (canvas (plist-get ask :canvas))
+         (canvas (and (buffer-live-p canvas) (memq canvas (agent-workspace-agent-tabs agent)) canvas)))
+    (if canvas
         (agent-workspace--tab-pick agent canvas)
-      (agent-workspace--session-shown agent)))
-  (agent-workspace-select agent t)
-  (if-let* ((canvas (plist-get (agent-workspace-agent-ask agent) :canvas))
-            ((buffer-live-p canvas))
-            (window (get-buffer-window canvas)))
-      (select-window window)
-    (when (buffer-live-p (agent-workspace-agent-buffer agent))
-      (with-current-buffer (agent-workspace-agent-buffer agent)
-        (ignore-errors (agent-shell-jump-to-latest-permission-button-row))))))
+      (agent-workspace--session-shown agent))
+    (agent-workspace-select agent t)
+    (if-let* ((window (and canvas (get-buffer-window canvas))))
+        (progn
+          (select-window window)
+          ;; Agent UI's own: the cursor on it, all of it in view.
+          (when-let* ((id (plist-get ask :id)))
+            (ignore-errors (agent-ui--show-question canvas id t))))
+      (when (buffer-live-p (agent-workspace-agent-buffer agent))
+        (with-current-buffer (agent-workspace-agent-buffer agent)
+          (ignore-errors (agent-shell-jump-to-latest-permission-button-row)))))))
 
 (defun agent-workspace-hand-answer (agent label)
   "Answer AGENT's raised hand with its option LABEL (see

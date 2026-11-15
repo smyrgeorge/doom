@@ -44,8 +44,8 @@ reads as an error."
 (defvar agent-workspace-change-functions nil
   "Called with an agent and what changed, a symbol: `created', `state',
 `renamed', `colour', `role', `settings' (its model or mode), `issue',
-`panels' (one opened or closed), `canvas' (closed or emptied), `loop'
-\(turned on or off),
+`panels' (one opened or closed), `canvas' (one of its Agent UI canvases
+closed or emptied), `loop' (turned on or off),
 `session' (a new one started), `forgotten', `closed' (its crew closed).")
 
 (defvar agent-workspace-closing-functions nil

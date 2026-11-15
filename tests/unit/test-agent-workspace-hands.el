@@ -164,6 +164,55 @@ said answered from here)."
     (should-not (string-search "[Allow" (+test-awh--feed project)))
     (should-not (string-search "(you)" (+test-awh--feed project)))))
 
+(ert-deftest agent-workspace-hands/a-question-on-its-ask-canvas ()
+  "sam asks on a canvas of its own (--canvas ask), as agents are told to:
+it's a tab of its pane, \"ask\", the cursor left where it was; its raised
+hand's Go to it, and a, show it, the cursor on the question; answered there,
+sam gets the answer, the ask tab goes, its side area closes."
+  (+test-awh "ask"
+    (agent-workspace-select ada)
+    (let* ((session (agent-workspace-agent-buffer sam))
+           (name (agent-ui-sub-canvas (agent-ui--session-name session) "ask"))
+           (was (selected-window)))
+      (agent-ui-show '(:id "push" :type "confirm" :question "Push?") :canvas name)
+      (let ((ask (get-buffer (agent-ui-canvas-buffer-name name))))
+        ;; Agent UI tied it to sam's session: the stage's, a tab of its pane.
+        (should (eq (agent-workspace--canvas-agent ask) sam))
+        (should (equal (agent-workspace-agent-tabs sam) (list ask)))
+        (should (equal (agent-workspace--tab-name ask) "ask"))
+        (should-not (buffer-local-value 'agent-ui-focus-questions ask))
+        (should (eq (selected-window) was))
+        ;; Its turn ended with it waiting: its hand raised, Go to it.
+        (run-hook-with-args 'agent-ui-question-waiting-functions session ask "push")
+        (should (eq (agent-workspace-agent-state sam) 'hand))
+        (should (equal (mapcar #'car (agent-workspace-hand-options sam)) '("Go to it")))
+        ;; Go to it: sam's pane open, its ask tab shown, the cursor on it.
+        (agent-workspace-hand-answer sam "Go to it")
+        (should (eq (agent-workspace--app-selected (agent-workspace--app project)) sam))
+        (should (eq (window-buffer) ask))
+        (should (equal (get-text-property (window-point) 'agent-ui-id ask) "push"))
+        ;; a, from elsewhere: the same.
+        (agent-workspace-select ada t)
+        (with-current-buffer (agent-workspace--issues-buffer project)
+          (agent-workspace-next-hand))
+        (should (eq (agent-workspace--app-selected (agent-workspace--app project)) sam))
+        (should (eq (window-buffer) ask))
+        (should (equal (get-text-property (window-point) 'agent-ui-id ask) "push"))
+        ;; Proceed: sam gets it; the ask canvas emptied, killed, its tab gone,
+        ;; sam's session alone in its pane.
+        (with-current-buffer ask
+          (agent-ui--flush)
+          (goto-char (point-min))
+          (search-forward "⏵ Proceed")
+          (goto-char (match-beginning 0))
+          (agent-ui-button-press))
+        (should (+test-awh--wait (lambda () (member "Answer to confirm push (Push?): proceed"
+                                                    (+test-awh--prompts "sam")))))
+        (should (+test-awh--wait (lambda () (not (buffer-live-p ask)))))
+        (should (+test-awh--wait (lambda () (not (agent-workspace--side-window sam)))))
+        (should (get-buffer-window session))
+        (should (eq (window-buffer (get-buffer-window session)) session))))))
+
 (ert-deftest agent-workspace-hands/no-hand-no-options ()
   (+test-awh "none"
     (should-not (agent-workspace-hand-options ada))

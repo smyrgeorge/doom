@@ -4,15 +4,15 @@
 ;;
 ;; Every agent has a pane, in role order (they never move). One is open, the
 ;; selected agent's: its session, its line as its header line, and its side
-;; area below it (beside it from 140 columns): its Agent UI canvas, when it
-;; shows something, and its panels, as tabs ("canvas │ logs │ tests"), one
-;; shown at a time, the tabs its header line. Full size (V), the one shown
-;; takes the pane's whole room, the tabs at its line's right. The others are
-;; folded: a one-row window each showing the agent's bar (a window can't be
-;; its header line alone). Every pane folded: a hint below the bars. The
-;; stage arranges itself: no border to drag; a border dragged or the frame
-;; resized, it's tiled again (sizes taken as they are after 3 layouts in 3
-;; seconds: never a loop).
+;; area below it (beside it from 140 columns): its Agent UI canvases, when
+;; they show something (its own, then its others: ask...), and its panels, as
+;; tabs ("canvas │ ask │ logs"), one shown at a time, the tabs its header
+;; line. Full size (V), the one shown takes the pane's whole room, the tabs at
+;; its line's right. The others are folded: a one-row window each showing the
+;; agent's bar (a window can't be its header line alone). Every pane folded:
+;; a hint below the bars. The stage arranges itself: no border to drag; a
+;; border dragged or the frame resized, it's tiled again (sizes taken as they
+;; are after 3 layouts in 3 seconds: never a loop).
 ;;
 ;; The stage never changes an agent's session buffer: its windows' own
 ;; parameters hide their mode line and tab line and give the open pane its
@@ -25,10 +25,13 @@
 (declare-function agent-ui-canvas-buffer-name "agent-ui/canvas")
 (declare-function agent-ui--session-name "agent-ui/agent")
 (declare-function agent-ui-panels--name "agent-ui/panels")
+(declare-function agent-ui-session-canvases "agent-ui/agent")
 (declare-function evil-normalize-keymaps "evil-core")
 (declare-function agent-workspace-agent-panels "agent-workspace/panels")
 (defvar agent-ui-display-function)
 (defvar agent-ui-panels--state)
+(defvar agent-ui--canvas-part)
+(defvar agent-ui-focus-questions)
 
 ;; ====== VARIABLES ======
 
@@ -255,12 +258,13 @@ area in it, or full size): their windows."
                   (if next (setq w next) (cl-return))))
     (nreverse windows)))
 
-;; ====== ITS SIDE: ITS CANVAS AND PANELS, AS TABS ======
-;; The open pane's side area holds the agent's canvas (when it shows
-;; something) and its panels (panels.el), as tabs: one shown at a time, the
-;; one last shown (by v, a click, the canvas showing something new), else
-;; the first. A panel hidden fetches nothing (Agent UI's: it fetches while
-;; it's in a window). Full size (V): the one shown in the pane's whole room.
+;; ====== ITS SIDE: ITS CANVASES AND PANELS, AS TABS ======
+;; The open pane's side area holds the agent's canvas, its other canvases
+;; (--canvas NAME: a question's, ask) when they show something, and its
+;; panels (panels.el), as tabs: one shown at a time, the one last shown (by
+;; v, a click, a canvas showing something new) still there, else the first.
+;; A panel hidden fetches nothing (Agent UI's: it fetches while it's in a
+;; window). Full size (V): the one shown in the pane's whole room.
 
 (defun agent-workspace--canvas-buffer (agent)
   "AGENT's Agent UI canvas, if it has one (empty or not)."
@@ -272,21 +276,36 @@ area in it, or full size): their windows."
 (defun agent-workspace--canvas (agent)
   "AGENT's Agent UI canvas, if it shows something."
   (when-let* ((canvas (agent-workspace--canvas-buffer agent)))
-    (and (with-current-buffer canvas (> (buffer-size) 0)) canvas)))
+    (and (> (buffer-size canvas) 0) canvas)))
+
+(defun agent-workspace--other-canvases (agent)
+  "AGENT's other Agent UI canvases (its session's, --canvas NAME) that show
+something, by name."
+  (when-let* (((fboundp 'agent-ui-session-canvases))
+              (session (agent-workspace-agent-buffer agent))
+              ((buffer-live-p session)))
+    (seq-sort-by (lambda (canvas) (buffer-local-value 'agent-ui--canvas-part canvas)) #'string<
+                 (seq-filter (lambda (canvas)
+                               (and (buffer-local-value 'agent-ui--canvas-part canvas)
+                                    (> (buffer-size canvas) 0)))
+                             (agent-ui-session-canvases session)))))
 
 (defun agent-workspace-agent-tabs (agent)
-  "AGENT's side area's tabs: its canvas if it shows something, then its
-panels; their buffers."
+  "AGENT's side area's tabs: its canvas, then its other canvases, if they
+show something, then its panels; their buffers."
   (let ((canvas (agent-workspace--canvas agent)))
     (append (and canvas (list canvas))
+            (agent-workspace--other-canvases agent)
             (and (fboundp 'agent-workspace-agent-panels) (agent-workspace-agent-panels agent)))))
 
 (defun agent-workspace--side-tab (agent &optional tabs)
   "The tab AGENT's side area shows, of TABS (its tabs): the one last shown
-if it's still there, else the first; nil if it has none."
+that's still there (one gone: the one shown before it), else the first; nil
+if it has none."
   (let ((tabs (or tabs (agent-workspace-agent-tabs agent)))
         (app (agent-workspace--app (agent-workspace-agent-project agent))))
-    (or (car (memq (and app (alist-get agent (agent-workspace--app-tabs app))) tabs))
+    (or (seq-find (lambda (tab) (memq tab tabs))
+                  (and app (alist-get agent (agent-workspace--app-tabs app))))
         (car tabs))))
 
 (defun agent-workspace--full-tab (agent)
@@ -296,11 +315,13 @@ if it's still there, else the first; nil if it has none."
     (agent-workspace--side-tab agent)))
 
 (defun agent-workspace--tab-name (tab)
-  "TAB's name: its panel's (\"tests\"), or \"canvas\"."
+  "TAB's name: its panel's (\"tests\"), its other canvas's (\"ask\"), or
+\"canvas\"."
   (if-let* (((boundp 'agent-ui-panels--state))
             (panel (buffer-local-value 'agent-ui-panels--state tab)))
       (agent-ui-panels--name panel)
-    "canvas"))
+    (or (and (boundp 'agent-ui--canvas-part) (buffer-local-value 'agent-ui--canvas-part tab))
+        "canvas")))
 
 (defun agent-workspace--tabs-text (agent shown)
   "AGENT's tabs between │, SHOWN's bold in its colour, the others dimmed:
@@ -375,10 +396,14 @@ or nil."
     (seq-find (lambda (window) (eq (window-parameter window 'agent-workspace-side) agent))
               (window-list (agent-workspace--app-frame app) 'nomini))))
 
-;; ====== ITS CANVAS: NEVER POPPED UP ======
-;; A canvas of a crew's agent isn't shown by Agent UI where it would (a pane of
-;; its own, tiled): the stage puts it in its agent's open pane, when it shows
-;; something new: its tab shown.
+;; ====== ITS CANVASES: NEVER POPPED UP ======
+;; A canvas of a crew's agent (its own, or another of its session's: ask,
+;; tests) isn't shown by Agent UI where it would (a pane of its own, tiled):
+;; the stage puts it in its agent's open pane, when it shows something new:
+;; its tab shown. A question there takes no focus: the agent's raised hand
+;; says it, as for a permission (a goes there). Closed or emptied (q, a
+;; question answered), its tab goes (app.el): the side area shows the one
+;; shown before, or closes.
 
 (defun agent-workspace--canvas-agent (canvas)
   "The crew's agent whose session CANVAS is, or nil."
@@ -386,12 +411,25 @@ or nil."
                             (buffer-local-value 'agent-ui--session-buffer canvas))))
     (and (buffer-live-p session) (agent-workspace-buffer-agent session))))
 
+(defun agent-workspace--no-focus (canvas)
+  "CANVAS, a crew's agent's: a question there takes no focus (see above)."
+  (with-current-buffer canvas
+    (setq-local agent-ui-focus-questions nil)))
+
+(defun agent-workspace--canvas-no-focus-h ()
+  "A new canvas, a crew's agent's: a question there takes no focus. In
+`agent-ui-canvas-hook', after Agent UI ties it to its session."
+  (when (agent-workspace--canvas-agent (current-buffer))
+    (agent-workspace--no-focus (current-buffer))))
+
 (defun agent-workspace--display-canvas (canvas)
   "Agent UI's display function: a crew's agent's CANVAS goes in its open
 pane, its tab shown (the stage laid out again); any other as Agent UI shows
 it."
   (if-let* ((agent (agent-workspace--canvas-agent canvas)))
-      (agent-workspace--canvas-changed agent canvas)
+      (progn
+        (agent-workspace--no-focus canvas)
+        (agent-workspace--canvas-changed agent canvas))
     (funcall (or agent-workspace--canvas-fallback #'ignore) canvas)))
 
 (defun agent-workspace--take-canvases ()
@@ -402,3 +440,4 @@ it."
           agent-ui-display-function #'agent-workspace--display-canvas)))
 
 (agent-workspace--take-canvases)
+(add-hook 'agent-ui-canvas-hook #'agent-workspace--canvas-no-focus-h 90)

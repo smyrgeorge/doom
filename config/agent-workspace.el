@@ -226,8 +226,9 @@ needs your OK. nil: Claude Code's own default."
 ;;   moving onto one in progress selects its agent;
 ;; - the stage (config/agent-workspace/stage.el): every agent a pane, in role
 ;;   order; the selected one's open (its session; below it, beside it from
-;;   140 columns, its canvas and panels as tabs, one shown: v the next, V it
-;;   full size), the others folded to a bar (◫2: its panels). It arranges
+;;   140 columns, its canvases (its own, ask...) and panels as tabs, one
+;;   shown: v the next, V it full size; a question there takes no focus, its
+;;   hand says it), the others folded to a bar (◫2: its panels). It arranges
 ;;   itself: tiling leaves its frame alone (config/tiling.el).
 ;; q leaves it (the crew goes on, its tally in the other workspaces' mode
 ;; line: a click comes back); Q, SPC TAB d, or quitting Emacs close it at

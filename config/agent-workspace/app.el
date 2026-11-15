@@ -28,7 +28,7 @@
 (declare-function persp-get-by-name "persp-mode")
 (declare-function get-current-persp "persp-mode")
 (declare-function safe-persp-name "persp-mode")
-(declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
+(declare-function agent-workspace--go-to-hand "agent-workspace/hands")
 (declare-function agent-workspace--issues-buffer "agent-workspace/issues")
 (declare-function agent-workspace--issues-redraw "agent-workspace/issues")
 (declare-function agent-workspace--issues-refresh "agent-workspace/issues")
@@ -76,7 +76,7 @@ pane opened or folded.")
   plan               ; what decided its layout
   sizes              ; its frame's windows' sizes, as laid out
   resizes            ; when it was last laid out after a resize
-  tabs               ; ((AGENT . TAB)...): the tab each agent's side area shows
+  tabs               ; ((AGENT TAB...)...): the tabs each agent's side area showed, the last first
   full)              ; the agent whose open pane shows its tab full size, or nil
 
 (defvar agent-workspace--apps (make-hash-table :test #'equal)
@@ -401,8 +401,11 @@ size only while its pane is the open one, with a tab to show."
     (unless (and full (eq full (agent-workspace--app-open app)) (agent-workspace--side-tab full))
       (setf (agent-workspace--app-full app) nil)))
   (setf (agent-workspace--app-tabs app)
-        (seq-filter (lambda (entry) (and (memq (car entry) agents) (buffer-live-p (cdr entry))))
-                    (agent-workspace--app-tabs app))))
+        (delq nil (mapcar (lambda (entry)
+                            (when-let* (((memq (car entry) agents))
+                                        (tabs (seq-filter #'buffer-live-p (cdr entry))))
+                              (cons (car entry) tabs)))
+                          (agent-workspace--app-tabs app)))))
 
 (defun agent-workspace-layout (&optional app)
   "APP (the one here) laid out anew in the selected frame: its issues on the
@@ -497,9 +500,11 @@ when the stage isn't as it was."
     (force-mode-line-update t)))
 
 (defun agent-workspace--tab-pick (agent tab)
-  "TAB the one AGENT's side area shows, from its next layout."
+  "TAB the one AGENT's side area shows, from its next layout; it gone, the
+one shown before it."
   (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent))))
-    (setf (alist-get agent (agent-workspace--app-tabs app)) tab)))
+    (setf (alist-get agent (agent-workspace--app-tabs app))
+          (seq-take (cons tab (delq tab (alist-get agent (agent-workspace--app-tabs app)))) 8))))
 
 (defun agent-workspace--canvas-changed (agent &optional canvas)
   "AGENT's CANVAS (its own, by default) shows something new: its tab the
@@ -515,26 +520,26 @@ one its side area shows, in its pane if it's open and it isn't there yet."
         (agent-workspace--retile app)))))
 
 ;; ====== ITS CANVAS CLOSED ======
-;; An agent's canvas closed (q kills it) or emptied (cleared, its last
-;; element removed or closed by itself): its stage laid out again at once,
-;; as for a panel closed (panels.el). Its side area shows its next tab (a
-;; panel), else it's gone, its session taking the whole pane; shown full
+;; An agent's canvas (its own, or another: ask) closed (q kills it) or
+;; emptied (cleared, its last element removed or closed by itself, a
+;; question answered): its stage laid out again at once, as for a panel
+;; closed (panels.el). Its side area shows the tab shown before, or its
+;; next, else it's gone, its session taking the whole pane; shown full
 ;; size, its pane is back to its session. Never what Emacs put in its window
 ;; instead of a killed buffer (Doom's dashboard), or Agent UI in an emptied
 ;; canvas's pane (its session again). The cursor, there, goes to what's
 ;; there now: its next tab, else its session.
 
 (defun agent-workspace--canvas-gone (canvas)
-  "CANVAS, killed or emptied: if it's a crew's agent's own, its stage laid
-out again (see above)."
+  "CANVAS, killed or emptied: if it's a crew's agent's (its own, or another
+of its session's: ask), its stage laid out again (see above)."
   (when-let* ((agent (agent-workspace--canvas-agent canvas))
-              ((eq canvas (agent-workspace--canvas-buffer agent)))
               (app (agent-workspace--app (agent-workspace-agent-project agent))))
-    ;; Shown full size: the tab shown as if it were still one (the first).
+    ;; Shown full size: the tab shown as if it were still one.
     (when (and (eq (agent-workspace--app-full app) agent)
                (eq (agent-workspace--side-tab
-                    agent (cons canvas (and (fboundp 'agent-workspace-agent-panels)
-                                            (agent-workspace-agent-panels agent))))
+                    agent (let ((tabs (agent-workspace-agent-tabs agent)))
+                            (if (memq canvas tabs) tabs (cons canvas tabs))))
                    canvas))
       (setf (agent-workspace--app-full app) nil))
     (run-at-time 0 nil #'agent-workspace--canvas-gone-later agent
@@ -996,10 +1001,7 @@ what it asks."
                           (append (nthcdr from agents) (seq-take agents from)))))
     (if (not agent)
         (message "No hand raised")
-      (agent-workspace--session-shown agent)
-      (agent-workspace-select agent t)
-      (with-current-buffer (agent-workspace-agent-buffer agent)
-        (ignore-errors (agent-shell-jump-to-latest-permission-button-row)))
+      (agent-workspace--go-to-hand agent)
       (message "%s %s" (agent-workspace-agent-name agent) (agent-workspace-state-text agent)))))
 
 (defun agent-workspace-help ()
