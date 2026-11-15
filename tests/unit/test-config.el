@@ -289,6 +289,13 @@ default: every new prompt started with the line)."
   "PDFs open with dark pages (config/pdf.el's own default: light)."
   (should (eq +my/pdf-dark-pages t)))
 
+(ert-deftest config/agent-workspace-only-you ()
+  "The agent workspace's agents work only with you, for now: they don't talk
+to each other, no event from outside reaches them (config/agent-workspace.el's
+own defaults: both on)."
+  (should-not agent-workspace-agents-talk)
+  (should-not agent-workspace-outside-events))
+
 ;; ====== LOAD ORDER ======
 
 (defun +test-config--position (form)
@@ -299,11 +306,15 @@ default: every new prompt started with the line)."
 
 (ert-deftest config/order-settings-before-files ()
   "The settings the files read when they load come first: the tiling strategy,
-dark PDF pages (their files' defvars keep them)."
+dark PDF pages, the agent workspace's switches (their files' defvars keep
+them)."
   (should (< (+test-config--position '(setq +my/tiling-strategy 'tall))
              (+test-config--position '(load! "config/tiling"))))
   (should (< (+test-config--position '(setq +my/pdf-dark-pages t))
              (+test-config--position '(load! "config/pdf"))))
+  (should (< (+test-config--position '(setq agent-workspace-agents-talk nil
+                                            agent-workspace-outside-events nil))
+             (+test-config--position '(load! "config/agent-workspace"))))
   (should (< (+test-config--position '(setq-default fill-column 120))
              (+test-config--position '(load! "config/editor")))))
 

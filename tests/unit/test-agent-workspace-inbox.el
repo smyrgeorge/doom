@@ -332,3 +332,41 @@ desk does."
     (agent-workspace--set-state ada 'nap)
     (agent-workspace-inbox-add project "ada" "wake up" :from "ci")
     (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "wake up") (+test-awi--said "ada"))) 20))))
+
+(ert-deftest agent-workspace-inbox/outside-events-off ()
+  "Events from outside off (`agent-workspace-outside-events' nil; its own
+default: t): one from the shell refused, its reply saying why; one left
+queued from before held: kept in its file, neither delivered (ada free) nor
+shown (no ✉N, no buttons); on again, delivered. Messages off too: E and P
+say so."
+  (should (eq (default-value 'agent-workspace-outside-events) t))
+  (+test-awi "outside-off" (("ada" "builder"))
+    (agent-workspace-open t)
+    ;; Queued while she sleeps, before they're off.
+    (agent-workspace-sleep ada)
+    (agent-workspace-inbox-add project "ada" "left from before" :from "ci")
+    (let ((agent-workspace-outside-events nil))
+      (let ((reply (+test-awi--request "{\"to\":\"ada\",\"from\":\"ci\",\"text\":\"red\"}")))
+        (should-not (plist-get reply :ok))
+        (should (string-search "Events from outside are off" (plist-get reply :error))))
+      (should-error (agent-workspace-inbox-add project "ada" "red" :from "ci") :type 'user-error)
+      (agent-workspace-wake ada)
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'desk)) 20))
+      (+test-sleep 0.5)
+      (should-not (seq-find (lambda (text) (string-prefix-p "Event" text)) (+test-awi--said "ada")))
+      (should (equal (mapcar (lambda (event) (plist-get event :text)) (agent-workspace-inbox project))
+                     '("left from before")))
+      (should (file-exists-p (agent-workspace--inbox-path project)))
+      (should-not (agent-workspace-inbox-badge ada))
+      (agent-workspace--room-redraw project)
+      (should-not (string-search "[Send now]" (with-current-buffer (agent-workspace--room-buffer project)
+                                                 (buffer-string))))
+      (let ((agent-workspace-agents-talk nil))
+        (with-current-buffer (agent-workspace--issues-buffer project)
+          (should-error (agent-workspace-inbox-view) :type 'user-error)
+          (should-error (agent-workspace-inbox-pause) :type 'user-error))))
+    ;; On again: delivered.
+    (agent-workspace--inbox-deliver project)
+    (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "left from before") (+test-awi--said "ada")))
+                            20))
+    (should-not (agent-workspace-inbox project))))

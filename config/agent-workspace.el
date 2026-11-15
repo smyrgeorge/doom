@@ -6,6 +6,28 @@
 
 ;; ====== VARIABLES ======
 
+;; WHO AN AGENT WORKS WITH
+;; You, always. Its crew's other agents, and events from outside, only while
+;; these say so (both on here; config.el turns them off for now): each one off,
+;; refused, its keys saying so, what was left queued kept and not delivered.
+(defcustom agent-workspace-agents-talk t
+  "Non-nil: the crew's agents talk to each other: their messages (as the
+crew's switch says: `agent-workspace-talk', T) and their issues handed on
+from role to role (a role's hands-to). nil: they never do, each works only
+with you: a message refused, T off, a role's hands-to ignored (it's told to
+hand nothing on), messages left queued not delivered (see AGENTS ASKING EACH
+OTHER and WORK HANDED ON THROUGH ISSUES below)."
+  :type 'boolean
+  :group 'agent-workspace)
+
+(defcustom agent-workspace-outside-events t
+  "Non-nil: events from outside (cmd/agent-workspace send from the shell or
+a script, --from SOURCE) reach the crew, through its inbox. nil: refused,
+nothing but you prompts an agent; events left queued not delivered (see THE
+INBOX below)."
+  :type 'boolean
+  :group 'agent-workspace)
+
 ;; AGENTS
 ;; An agent of a project's crew (config/agent-workspace/core.el): a name
 ;; ("ada": a lowercase letter, then lowercase letters, digits or -), a role
@@ -132,6 +154,8 @@
 ;; E lists them in the room's place: RET sends one now, d drops it, M-up /
 ;; M-down move it, o turns its source off for its agent or everyone (kept in
 ;; crew.el), q back. None delivered in `agent-workspace-inbox-quiet-hours'.
+;; Only with `agent-workspace-outside-events' (E and P: while messages use
+;; it too).
 
 ;; AGENTS ASKING EACH OTHER
 ;; A direct message for a question (config/agent-workspace/messages.el), from
@@ -144,7 +168,8 @@
 ;; lets it go again), [Answer] answers for the agent it's for. A thread waits
 ;; for your OK after 5 messages without you; an agent sends at most 10 an
 ;; hour. Each agent is told its crew and how to message (what it may without
-;; your OK, never waiting on another agent).
+;; your OK, never waiting on another agent). Only with
+;; `agent-workspace-agents-talk'.
 
 ;; WORK HANDED ON THROUGH ISSUES
 ;; (config/agent-workspace/handover.el) A role's hands-to: names where its
@@ -152,7 +177,10 @@
 ;; changes back to the builder). Each agent is told how: the label changed to
 ;; the next role's, the issue open and unassigned, notes for them; given back
 ;; for changes, assigned to the builder who made it. The first free agent of
-;; that role takes it (t, or its loop). The room says each hand-over.
+;; that role takes it (t, or its loop). The room says each hand-over. Only
+;; with `agent-workspace-agents-talk': without it, an agent whose role hands
+;; on is told to hand nothing on, only to tell you. A ready issue of a role
+;; is still offered to its first free agent, for you to give.
 
 ;; THE SAVED CREW
 ;; What the crew is, not its state, saved in the project and committed:

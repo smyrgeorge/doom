@@ -186,8 +186,9 @@ read already), or nil."
                                :minimap (and (fboundp 'agent-workspace-minimap-shown-p)
                                              (agent-workspace-minimap-shown-p project)
                                              t)
-                               :talk (if (fboundp 'agent-workspace-talk-mode)
-                                         (agent-workspace-talk-mode project)
+                               ;; As it says, even while agents may not talk.
+                               :talk (if (fboundp 'agent-workspace--talk-switch)
+                                         (agent-workspace--talk-switch project)
                                        'ask)
                                :sources-off (and (fboundp 'agent-workspace-inbox-sources-off)
                                                  (agent-workspace-inbox-sources-off project))))

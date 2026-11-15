@@ -12,6 +12,10 @@
 ;; asleep, framed as from the sender (data, not your instructions), its turn
 ;; in plan mode. Its answer, that turn's reply, goes back to the sender the
 ;; same way, as an answer: no answer to an answer.
+;;
+;; All of it only with `agent-workspace-agents-talk' (config/agent-workspace.el):
+;; without it the crew's switch is off whatever it says (crew.el keeps what it
+;; says), T refuses, and messages left queued wait, not delivered (inbox.el).
 
 (require 'cl-lib)
 (require 'seq)
@@ -50,8 +54,19 @@ sent yet: after the turn it's in) or asked; its turn's reply then goes back.")
 ;; ====== THE SWITCH ======
 
 (defun agent-workspace-talk-mode (project)
-  "PROJECT's crew's switch: off, ask or on."
+  "PROJECT's crew's switch as it works now: off, ask or on (off whatever it
+says without `agent-workspace-agents-talk')."
+  (if agent-workspace-agents-talk (agent-workspace--talk-switch project) 'off))
+
+(defun agent-workspace--talk-switch (project)
+  "PROJECT's crew's switch as it says: off, ask or on (crew.el keeps it)."
   (gethash (agent-workspace--root project) agent-workspace--talk agent-workspace-talk))
+
+(defun agent-workspace--talk-refuse ()
+  "A user error if agents may never talk to each other
+\(`agent-workspace-agents-talk')."
+  (unless agent-workspace-agents-talk
+    (user-error "Agents never talk to each other here: each works only with the user (agent-workspace-agents-talk)")))
 
 (defun agent-workspace--talk-set (project mode)
   "PROJECT's crew's switch made MODE (off, ask, on)."
@@ -60,6 +75,7 @@ sent yet: after the turn it's in) or asked; its turn's reply then goes back.")
 (defun agent-workspace-talk-cycle ()
   "May the crew's agents message each other: off, ask me, on (T)."
   (interactive)
+  (agent-workspace--talk-refuse)
   (let* ((app (agent-workspace--here-or-error))
          (project (agent-workspace--app-project app))
          (mode (pcase (agent-workspace-talk-mode project) ('off 'ask) ('ask 'on) (_ 'off))))
@@ -189,6 +205,7 @@ OK if the crew asks (unless SENDER's role may talk to TO's) or its thread
 has gone `agent-workspace-thread-pause' messages without you; else in the
 inbox. Return the events as `agent-workspace-inbox-add' does, or the
 message waiting (:state \"waiting\")."
+  (agent-workspace--talk-refuse)
   (let* ((project (agent-workspace-agent-project sender))
          (from (agent-workspace-agent-name sender)))
     (when (eq (agent-workspace-talk-mode project) 'off)
@@ -253,6 +270,7 @@ own)."
 (defun agent-workspace-message-ok (project id &optional text)
   "PROJECT's message ID, waiting for your OK, sent (TEXT: as you edited
 it)."
+  (agent-workspace--talk-refuse)
   (when-let* ((message (agent-workspace--message-waiting project id)))
     (agent-workspace--message-take project message)
     (agent-workspace--thread-you project message 1)
@@ -349,7 +367,8 @@ counted in the limits; no answer to it), unless its thread was stopped."
   (let* ((project (agent-workspace-agent-project agent))
          (sender (plist-get message :from))
          (thread (agent-workspace--thread-by-id project (plist-get message :thread))))
-    (when (and (agent-workspace-agent sender project) (not (string-empty-p text))
+    (when (and agent-workspace-agents-talk
+               (agent-workspace-agent sender project) (not (string-empty-p text))
                (not (and thread (agent-workspace--thread-stopped thread))))
       (when thread (cl-incf (agent-workspace--thread-count thread)))
       (agent-workspace-inbox-add project sender text :from (agent-workspace-agent-name agent)
@@ -364,10 +383,12 @@ counted in the limits; no answer to it), unless its thread was stopped."
 
 (defun agent-workspace--room-message-line (project entry)
   "A message's buttons: waiting for your OK, [Send] [Edit] [Answer] [Drop];
-queued, [Send now] [Answer] [Drop]. In
+queued, [Send now] [Answer] [Drop]. None while agents may not talk
+\(`agent-workspace-agents-talk'). In
 `agent-workspace-room-event-line-functions'."
   (let ((indent (make-string agent-workspace--room-indent ?\s)))
     (cond
+     ((not agent-workspace-agents-talk) nil)
      ((when-let* ((id (plist-get entry :message))
                   (message (agent-workspace--message-waiting project id)))
         (concat indent

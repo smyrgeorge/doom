@@ -949,7 +949,13 @@ what it asks."
       (message "%s %s" (agent-workspace-agent-name agent) (agent-workspace-state-text agent)))))
 
 (defun agent-workspace-help ()
-  "The app's keys."
+  "The app's keys (not those of what's off: the inbox, agents talking)."
   (interactive)
   (message "%s" (substitute-command-keys
-                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · L loop · a next hand · f+initial · m minimap · P pause events · T talk · E inbox · gr lay out · q leave · Q close")))
+                 (concat "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · L loop · a next hand · f+initial · m minimap · "
+                         (if (or (bound-and-true-p agent-workspace-outside-events)
+                                 (bound-and-true-p agent-workspace-agents-talk))
+                             "P pause events · E inbox · "
+                           "")
+                         (if (bound-and-true-p agent-workspace-agents-talk) "T talk · " "")
+                         "gr lay out · q leave · Q close"))))

@@ -128,6 +128,13 @@
 ;; first PDF opened; SPC m d turns them light (config/pdf.el).
 (setq +my/pdf-dark-pages t)
 
+;; The agent workspace's agents work only with you, for now
+;; (config/agent-workspace.el): they don't talk to each other (no messages, no
+;; issues handed on from role to role), and no event from outside reaches them
+;; (cmd/agent-workspace send from the shell or a script). t turns either on.
+(setq agent-workspace-agents-talk nil
+      agent-workspace-outside-events nil)
+
 ;; ====== CODE ======
 
 ;; EMACS (what differs between macOS and Linux: keys, other apps, which the

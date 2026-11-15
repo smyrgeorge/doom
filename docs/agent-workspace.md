@@ -7,6 +7,11 @@
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
 
+For now, only with you: agents don't talk to each other, and no event from outside reaches them. `config.el` sets
+`agent-workspace-agents-talk` and `agent-workspace-outside-events` to `nil`. [The inbox](#the-inbox),
+[work handed on](#work-handed-on-through-issues) and [agents asking each other](#agents-asking-each-other) work
+again once they're `t`.
+
 ![The crew's app: the issues and the minimap, the stage, the room](../examples/agent-workspace.png)
 
 Try it: `M-x +my/example-agent-workspace`, a crew of three stand-in agents, offline.
@@ -58,9 +63,9 @@ terminal with `git init` typed.
 | `#` | anywhere | Talk to it in the room |
 | `1` / `2` | anywhere | The stage / the room alone |
 | `m` | anywhere | Show or hide the minimap |
-| `P` | anywhere | Pause the crew's events, or let them go again |
-| `T` | anywhere | May its agents message each other: off, ask me, on |
-| `E` | anywhere | The events waiting: reorder, drop, send now, a source off |
+| `P` | anywhere | Pause the crew's events, or let them go again (with the inbox on) |
+| `T` | anywhere | May its agents message each other: off, ask me, on (while they may talk) |
+| `E` | anywhere | The events waiting: reorder, drop, send now, a source off (with the inbox on) |
 | `gr` / `gR` | anywhere | Lay it out again / read `crew.el` again |
 | `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
@@ -139,6 +144,9 @@ An event from a source that's off is dropped as it comes, and the room says so; 
 off. During `agent-workspace-inbox-quiet-hours` (say `("22:00" . "08:00")`) no event is delivered: they wait for the
 end.
 
+With `agent-workspace-outside-events` set to `nil`, `send` is refused, saying why. Events queued before then wait,
+unshown and not delivered, until it's `t` again.
+
 ## Work handed on through issues
 
 The work moves between roles through the project's issues: an investigator's findings go to the builders, a builder's
@@ -151,6 +159,9 @@ builders`.
 When an issue is ready for a role and one of its agents is free, the room offers it once: `demo-3 is ready for the
 builders: ken is free`, with `[Give it to ken]`. Two agents claiming one issue at once never both get it: bd's claim
 is atomic.
+
+With `agent-workspace-agents-talk` set to `nil`, nothing is handed on: an agent whose role hands on is told to leave
+the issue as it is and tell you. The room still offers a ready issue, for you to give.
 
 ## Agents asking each other
 
@@ -172,6 +183,9 @@ more (the sender is told), until `x` again. `[Answer]` on a message answers its 
 it was for. Guards: a thread waits for your OK after 5 messages without you (`agent-workspace-thread-pause`), and an
 agent sends at most 10 messages an hour (`agent-workspace-message-limit`). Each agent is told its crew, how to message,
 which roles it may message without your OK, and never to wait for an answer.
+
+With `agent-workspace-agents-talk` set to `nil`, a message is refused, whatever `T` says (`crew.el` keeps it), and
+`T` says so. Agents aren't told of messages, and those queued before wait, not delivered.
 
 ## Raised hands
 

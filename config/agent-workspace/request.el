@@ -14,7 +14,10 @@
 ;;        (from: optional, "shell") -> {"ok": true, "events": [{"id", "to",
 ;;        "state": "queued" | "delivered"}]} (inbox.el); with "agent": "ada"
 ;;        (from her shell, AGENT_WORKSPACE_AGENT, no from): her message
-;;        (messages.el), its state "waiting" too, for your OK
+;;        (messages.el), its state "waiting" too, for your OK. Refused
+;;        ({"ok": false, "error"}) while events from outside are off
+;;        (`agent-workspace-outside-events'), or for an agent's message,
+;;        while agents may not talk (`agent-workspace-agents-talk')
 
 (require 'cl-lib)
 (require 'subr-x)

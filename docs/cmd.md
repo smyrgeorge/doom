@@ -54,6 +54,6 @@ cmd/agent-workspace send --to '#builder' --from cron - < triage.txt   # a role's
 ```
 
 An event is queued and delivered when its agent is free, as data from its source
-([The inbox](agent-workspace.md#the-inbox)). The reply is JSON on stdout
+([The inbox](agent-workspace.md#the-inbox)). For now `send` is refused: this config turns events from outside off. The reply is JSON on stdout
 (`{"ok":true,"name":"ada","role":"builder","worktree":...,"branch":"agent/ada",...}` for new,
 `{"ok":true,"events":[{"id":1,"to":"ada","state":"queued"}]}` for send); it exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without an Emacs server.

@@ -22,6 +22,13 @@
 ;; off.
 ;; At most `agent-workspace-inbox-source-limit' events an hour from a source,
 ;; `agent-workspace-inbox-agent-limit' a day for an agent: more is refused.
+;;
+;; Events from outside only with `agent-workspace-outside-events', messages
+;; between agents only with `agent-workspace-agents-talk'
+;; (config/agent-workspace.el): one off, its kind refused as it comes, its
+;; events left queued held: kept in the file, neither delivered nor shown
+;; (no ✉N, no buttons, not in E), until it's on again. Both off, E and P say
+;; so.
 
 (require 'cl-lib)
 (require 'seq)
@@ -139,9 +146,34 @@ drawn again."
   (when-let* ((app (agent-workspace--app project)))
     (agent-workspace--redraw app)))
 
+(defun agent-workspace--inbox-held-p (event)
+  "Non-nil if EVENT is held: kept queued, neither delivered nor shown, while
+its kind is off (a message or an answer between agents:
+`agent-workspace-agents-talk'; any other, from outside:
+`agent-workspace-outside-events')."
+  (not (if (member (plist-get event :kind) '("message" "answer"))
+           agent-workspace-agents-talk
+         agent-workspace-outside-events)))
+
+(defun agent-workspace--inbox-waiting (project)
+  "PROJECT's queued events not held, the oldest first: those delivered and
+shown."
+  (seq-remove #'agent-workspace--inbox-held-p (agent-workspace-inbox project)))
+
+(defun agent-workspace--inbox-on-p ()
+  "Non-nil if anything may come into a crew's inbox: events from outside, or
+messages between agents."
+  (or agent-workspace-outside-events agent-workspace-agents-talk))
+
+(defun agent-workspace--inbox-refuse ()
+  "A user error if nothing may come into a crew's inbox."
+  (unless (agent-workspace--inbox-on-p)
+    (user-error "No events: none from outside, no messages between agents \
+\(agent-workspace-outside-events, agent-workspace-agents-talk)")))
+
 (defun agent-workspace--inbox-event (project id)
-  "PROJECT's queued event ID, or nil."
-  (seq-find (lambda (event) (eql (plist-get event :id) id)) (agent-workspace-inbox project)))
+  "PROJECT's queued event ID, or nil (held: nil too)."
+  (seq-find (lambda (event) (eql (plist-get event :id) id)) (agent-workspace--inbox-waiting project)))
 
 (defun agent-workspace--inbox-targets (project to)
   "Whom TO names in PROJECT's crew: a list of names and \"#ROLE\"s (\"#all\":
@@ -187,6 +219,9 @@ nil: not counted (a message: messages.el's own); EXTRA, a plist kept with it
 too (its :thread, :issue: in the room). Delivered when the agent is free; a
 source off for one: its copy dropped. Return the events, each as it is now
 \(:state queued or delivered)."
+  (unless (or kind agent-workspace-outside-events)
+    (user-error "Events from outside are off: nothing but the user prompts the agents \
+\(agent-workspace-outside-events)"))
   (when (or (not (stringp text)) (string-empty-p (string-trim text)))
     (user-error "send: what? An event needs its text"))
   (unless (and (stringp from) (string-match-p "\\`[[:alnum:]][[:alnum:]._-]*\\'" from))
@@ -256,7 +291,7 @@ in order (unless its events are paused)."
               (agent-workspace--inbox-quiet project))
     (dolist (agent (agent-workspace--ordered project))
       (when (agent-workspace--inbox-free-p agent)
-        (when-let* ((event (agent-workspace--inbox-for agent (agent-workspace-inbox project))))
+        (when-let* ((event (agent-workspace--inbox-for agent (agent-workspace--inbox-waiting project))))
           (agent-workspace--inbox-give project agent event))))))
 
 (defun agent-workspace-event-text (event)
@@ -360,6 +395,7 @@ own mode."
   "Pause the crew's events (they're queued, not delivered), or let them go
 again (P)."
   (interactive)
+  (agent-workspace--inbox-refuse)
   (let* ((app (agent-workspace--here-or-error))
          (project (agent-workspace--app-project app))
          (key (agent-workspace--root project))
@@ -379,7 +415,7 @@ again (P)."
 (defun agent-workspace-inbox-count (agent)
   "How many events wait for AGENT by name."
   (seq-count (lambda (event) (equal (plist-get event :to) (agent-workspace-agent-name agent)))
-             (agent-workspace-inbox (agent-workspace-agent-project agent))))
+             (agent-workspace--inbox-waiting (agent-workspace-agent-project agent))))
 
 (defun agent-workspace-inbox-badge (agent)
   "\"✉2\" for AGENT's events waiting (their sources its help), or nil."
@@ -470,7 +506,7 @@ waits for their end (a timer, while events wait)."
            (start (agent-workspace--clock-minutes (car hours)))
            (end (agent-workspace--clock-minutes (cdr hours)))
            (quiet (if (<= start end) (and (>= now start) (< now end)) (or (>= now start) (< now end)))))
-      (when (and quiet (agent-workspace-inbox project)
+      (when (and quiet (agent-workspace--inbox-waiting project)
                  (not (gethash (agent-workspace--root project) agent-workspace--inbox-quiet-timers)))
         (let ((key (agent-workspace--root project))
               (wait (* 60 (mod (- end now) 1440))))
@@ -504,8 +540,9 @@ waits for their end (a timer, while events wait)."
       (string-replace
        "%" "%%"
        (concat " " (propertize "INBOX" 'face 'bold) "  "
-               (propertize (concat (format "%d waiting" (length (agent-workspace-inbox project)))
+               (propertize (concat (format "%d waiting" (length (agent-workspace--inbox-waiting project)))
                                    (if (agent-workspace-inbox-paused-p project) ", paused" "")
+                                   (if agent-workspace-outside-events "" ", none from outside")
                                    (if (agent-workspace-inbox-sources-off project)
                                        (format ", off: %s"
                                                (mapconcat (lambda (pair) (format "%s for %s" (car pair) (cdr pair)))
@@ -539,7 +576,7 @@ waits for their end (a timer, while events wait)."
                             (vector (plist-get event :to) (plist-get event :from)
                                     (agent-workspace--since (plist-get event :time))
                                     (car (split-string (plist-get event :text) "\n")))))
-                    (agent-workspace-inbox project)))
+                    (agent-workspace--inbox-waiting project)))
       (tabulated-list-print t))))
 
 (defun agent-workspace--since (time)
@@ -554,6 +591,7 @@ waits for their end (a timer, while events wait)."
 one now, d drops it, M-up / M-down move it, o turns its source off for its
 agent (E)."
   (interactive)
+  (agent-workspace--inbox-refuse)
   (let* ((app (agent-workspace--here-or-error))
          (project (agent-workspace--app-project app))
          (buffer (agent-workspace--inbox-view-buffer project))
@@ -590,13 +628,15 @@ agent (E)."
   (agent-workspace-inbox-drop agent-workspace--inbox-view-project (agent-workspace--inbox-view-id)))
 
 (defun agent-workspace-inbox-move (project id n)
-  "PROJECT's queued event ID moved N places (down; up if negative)."
-  (let* ((events (copy-sequence (agent-workspace-inbox project)))
+  "PROJECT's queued event ID moved N places (down; up if negative), among
+those shown (the held ones after them)."
+  (let* ((events (copy-sequence (agent-workspace--inbox-waiting project)))
+         (held (seq-filter #'agent-workspace--inbox-held-p (agent-workspace-inbox project)))
          (event (agent-workspace--inbox-event project id))
          (i (cl-position event events))
          (j (max 0 (min (1- (length events)) (+ i n)))))
     (setq events (delq event events))
-    (agent-workspace--inbox-write project (append (seq-take events j) (list event) (seq-drop events j)))))
+    (agent-workspace--inbox-write project (append (seq-take events j) (list event) (seq-drop events j) held))))
 
 (defun agent-workspace-inbox-view-down (&optional n)
   "The event here moved down (N places)."
@@ -622,7 +662,7 @@ everyone (asked)."
                                nil nil (plist-get event :to))))
     (when (agent-workspace-inbox-source-toggle project source for)
       ;; Its events waiting for them: dropped.
-      (dolist (other (agent-workspace-inbox project))
+      (dolist (other (agent-workspace--inbox-waiting project))
         (when (and (equal (plist-get other :from) source)
                    (agent-workspace-inbox-source-off-p project source (plist-get other :to)))
           (agent-workspace-inbox-drop project (plist-get other :id)))))

@@ -174,3 +174,20 @@ claim): one gets it, the other is refused; the issue is the one's."
               (setf (agent-workspace-agent-loop ken) nil))
           (when (agent-workspace--app project) (agent-workspace--close-app project))
           (agent-workspace-close-all))))))
+
+(ert-deftest agent-workspace-handover/nothing-handed-on-while-agents-may-not-talk ()
+  "Agents may not talk (`agent-workspace-agents-talk' nil): a role handing
+on is told to hand nothing on, only to tell the user, not how to hand on;
+one handing to nobody, nothing."
+  (let* ((project (+test-awo--dir "never"))
+         (investigator (+test-awo--agent project "sam" "investigator"))
+         (scribe (+test-awo--agent project "liz" "scribe"))
+         (agent-workspace-agents-talk nil))
+    (let ((told (agent-workspace--handover-context investigator)))
+      (should (string-search "hand nothing on" told))
+      (should (string-search "tell the user what you did" told))
+      (should-not (string-search "--add-label" told)))
+    (should-not (agent-workspace--handover-context scribe))
+    (let ((text (let ((agent-workspace--starting investigator)) (agent-workspace-agent-context))))
+      (should (string-search "hand nothing on" text))
+      (should-not (string-search "Work moves between roles" text)))))

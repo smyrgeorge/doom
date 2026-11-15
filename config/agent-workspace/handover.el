@@ -14,6 +14,11 @@
 ;; is free), or it takes it itself with its loop on. Claiming is bd's,
 ;; atomic: two agents never get the same issue. The room says each hand-over
 ;; (room.el reads the agents' bd commands).
+;;
+;; Only with `agent-workspace-agents-talk' (config/agent-workspace.el):
+;; without it, an agent whose role hands on is told to hand nothing on, only to
+;; tell you (its role's instructions say it hands on "as you're told"). The
+;; offers stay: a ready issue of a role, for you to give.
 
 (require 'cl-lib)
 (require 'seq)
@@ -30,19 +35,26 @@
 
 (defun agent-workspace--handover-context (agent)
   "How AGENT hands an issue on, if its role hands to another: in what it's
-told. In `agent-workspace-context-functions'."
+told. While agents may not talk (`agent-workspace-agents-talk'), that it
+hands nothing on. In `agent-workspace-context-functions'."
   (let* ((project (agent-workspace-agent-project agent))
          (next (plist-get (agent-workspace-role agent) :hands-to))
          (next (if (listp next) (car next) next))
          (mine (agent-workspace--role-label project (agent-workspace-agent-role agent)))
          (theirs (and next (agent-workspace--role-label project next))))
-    (when theirs
+    (cond
+     ((and next (not agent-workspace-agents-talk))
+      "You work only with the user, never with the other agents of your crew: hand nothing on to \
+them, whatever your role's instructions say. When your part of an issue is done, leave its labels, \
+status and assignee as they are, tell the user what you did, and end your turn: the user decides what \
+comes next, and who takes it.")
+     (theirs
       (format "Work moves between roles through the project's issues. When your part of an issue is \
 done, hand it to the %ss: its label changed from yours to theirs, the issue open again and unassigned \
 (or assigned to the one it goes back to), what they need in its notes: bd update ID %s--add-label %s \
 --status open --assignee \"\" --append-notes \"...\". Then tell the user, and end your turn: the first \
 free %s takes it."
-              next (if mine (format "--remove-label %s " mine) "") theirs next))))
+              next (if mine (format "--remove-label %s " mine) "") theirs next)))))
 
 (add-hook 'agent-workspace-context-functions #'agent-workspace--handover-context)
 

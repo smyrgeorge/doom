@@ -247,3 +247,42 @@ nothing of it while they may not talk."
       (should (string-search "Your crew: sam (investigator)." (agent-workspace-agent-context))))
     (agent-workspace--talk-set project 'off)
     (should-not (agent-workspace--message-context ada))))
+
+(ert-deftest agent-workspace-messages/never-while-agents-may-not-talk ()
+  "Agents may not talk (`agent-workspace-agents-talk' nil; its own default:
+t): a message from an agent's shell refused, its reply saying why, whatever
+the crew's switch says (crew.el keeps it); T refuses; nobody told of
+messages; a message left queued held, not delivered, no buttons; on again,
+delivered."
+  (should (eq (default-value 'agent-workspace-agents-talk) t))
+  (+test-awg "never" nil (("ada" "builder") ("ken" "builder"))
+    (agent-workspace--talk-set project 'on)
+    ;; Queued while ken sleeps, before they may not talk.
+    (agent-workspace-sleep ken)
+    (should (equal (plist-get (car (+test-awg--send "ada" "ken" "what does the lexer return?")) :state) "queued"))
+    (let ((agent-workspace-agents-talk nil))
+      (should (string-search "Agents never talk to each other here" (+test-awg--send "ada" "ken" "again?")))
+      (should (eq (agent-workspace-talk-mode project) 'off))
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (should-error (agent-workspace-talk-cycle) :type 'user-error))
+      (should-not (agent-workspace--message-context ada))
+      (let ((agent-workspace--starting ada))
+        (should-not (string-search "cmd/agent-workspace send" (agent-workspace-agent-context))))
+      ;; crew.el keeps the crew's switch as it says.
+      (agent-workspace-crew-save project)
+      (should (string-search ":talk on " (with-temp-buffer
+                                           (insert-file-contents (agent-workspace--crew-path project))
+                                           (buffer-string))))
+      ;; The message left queued: held, ken free.
+      (agent-workspace-wake ken)
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ken) 'desk)) 20))
+      (+test-sleep 0.5)
+      (should-not (seq-find (lambda (text) (string-prefix-p "Message from" text)) (+test-awg--prompts "ken")))
+      (should (= (length (agent-workspace-inbox project)) 1))
+      (agent-workspace--room-redraw project)
+      (should-not (string-search "[Send now]" (+test-awg--feed project))))
+    ;; On again: delivered.
+    (agent-workspace--inbox-deliver project)
+    (should (+test-wait-for (lambda () (member (+test-awg--asked "ada" "builder" "what does the lexer return?")
+                                               (+test-awg--prompts "ken")))
+                            20))))
