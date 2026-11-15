@@ -124,7 +124,8 @@ tab of its canvas's pane when first shown; a name is letters, digits, spaces, `_
   (cleared, its last element removed), one closes, its tab gone, until an element is shown there again. A question
   taking the focus is brought all into view, its pane made taller if it must.
 - **Finished, it closes:** a `steps`, `todo` or `progress` that finished well (every step done or skipped, every item
-  ticked, the bar at its end) closes itself 10 seconds later, a line under it counting down with a **Keep** button; the
+  ticked, the bar at its end) closes itself 10 seconds later, a line under it counting down with a **Keep** button
+  ("closing" when it's the canvas's last element and the canvas goes with it, "removed" when the canvas stays); the
   pane closes with its last element. One that failed stays; a change meanwhile starts the countdown again or stops it.
   The agent's `"close"` on it decides for it: seconds, or `false` to keep it. `(setq agent-ui-close-finished nil)` in
   `config.el`: only those whose `close` asks. A project panel never closes.

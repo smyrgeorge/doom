@@ -202,6 +202,20 @@ and finished again, it counts down again."
     (+test-auf-tick 3)
     (should (= (+test-auf-left "plan") 7))))
 
+(ert-deftest agent-ui-finished/removed-its-canvas-staying ()
+  "Done beside another element: its line says removed, not closing; at 0
+it's removed, its canvas staying with the other (doom-ht6.33)."
+  (+test-auf
+    (agent-ui-show '(:id "note" :type "text" :text "Still here."))
+    (agent-ui-show '(:id "plan" :type "steps" :steps ("Test" "Build")))
+    (agent-ui-append "plan" '(:steps ((:name "Test" :status "done") (:name "Build" :status "done"))))
+    (should (string-match-p "✓ All done, removed in 10s +⏵ Keep" (+test-auf-text)))
+    (should-not (string-search "closing in" (+test-auf-text)))
+    (+test-auf-tick 10)
+    (should-not (+test-auf-there-p "plan"))
+    (should (+test-auf-there-p "note"))
+    (should (get-buffer-window canvas))))
+
 (ert-deftest agent-ui-finished/not-in-a-project-panel ()
   "A project panel's elements never count down: it stays."
   (+test-auf
@@ -220,6 +234,11 @@ own if need be, never wider than the width (35 columns at 24: Keep cut off)."
                    "✓ All done, closing in 10s   ⏵ Keep"))
     (should (equal (substring-no-properties (agent-ui--closing-footer "p" 24))
                    "✓ Closing in 10s\n⏵ Keep"))
+    (let ((agent-ui--order '("p" "q")))
+      (should (equal (substring-no-properties (agent-ui--closing-footer "p" 60))
+                     "✓ All done, removed in 10s   ⏵ Keep"))
+      (should (equal (substring-no-properties (agent-ui--closing-footer "p" 24))
+                     "✓ Removed in 10s\n⏵ Keep")))
     (dolist (width '(24 39 60))
       (let ((line (agent-ui--closing-footer "p" width)))
         (should (cl-every (lambda (l) (<= (string-width l) width)) (split-string line "\n")))

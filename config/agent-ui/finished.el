@@ -5,7 +5,9 @@
 ;; An element of a type that finishes (its :finished: steps, todo, progress),
 ;; once all of it went well (`done'), closes itself `agent-ui-close-finished'
 ;; seconds later, or its own :close's (false: never); a line under it counts
-;; them down, with a Keep button. Closed, it's removed: its canvas's pane
+;; them down, with a Keep button: \"closing\" if it's its canvas's last
+;; element (the canvas goes with it), else \"removed\" (the canvas stays, with
+;; the others). Closed, it's removed: its canvas's pane
 ;; closes if it was the last (as an emptied canvas's does), the cursor back in
 ;; the session if it was there. Some of it failed: it stays. It changing
 ;; meanwhile starts its countdown again, or stops it (not finished well any
@@ -133,12 +135,14 @@ session if it was in CANVAS's pane, closed now (or CANVAS killed, emptied:
 
 (defun agent-ui--closing-footer (id &optional width)
   "Element ID's countdown, a line under it (two if WIDTH is too narrow for
-one, its words shortened if need be), while it counts down
+one, its words shortened if need be), while it counts down: closing, its
+canvas with it (its last element), or removed, the canvas staying
 \(`agent-ui-footer-functions')."
   (when-let* ((counting (and agent-ui--closing (gethash id agent-ui--closing))))
-    (let ((said (format "All done, closing in %ds" (cdr counting))))
+    (let* ((verb (if (cl-some (lambda (other) (not (equal other id))) agent-ui--order) "removed" "closing"))
+           (said (format "All done, %s in %ds" verb (cdr counting))))
       (when (and width (> (+ 2 (string-width said)) width))
-        (setq said (format "Closing in %ds" (cdr counting))))
+        (setq said (format "%s in %ds" (capitalize verb) (cdr counting))))
       (agent-ui-button-row
        (list (concat (propertize "✓ " 'face 'agent-ui-success) (propertize said 'face 'agent-ui-muted))
              (agent-ui-button (propertize "⏵ Keep" 'face 'agent-ui-action)
