@@ -35,6 +35,19 @@
 (defconst agent-ui-panels--keys '(:version :ui :every :fetch :start :stop)
   "What a panel's form has.")
 
+(defvar agent-ui-panel-name-function #'agent-ui-panel-default-canvas-name
+  "Called with a panel's name and its root: its canvas's name. Another module
+names its own (the agent workspace: an agent's, \"tests · ada\").")
+
+(defvar agent-ui-panel-trust-root-function #'identity
+  "Called with a panel's root: the root whose trust its panels share (the
+agent workspace: an agent's worktree shares its project's).")
+
+(defvar agent-ui-panel-display-function #'display-buffer
+  "Called with a panel's canvas opened for an agent (not selected) to show
+it; one that shows nothing leaves it hidden (the agent workspace's stage
+shows an agent's).")
+
 (defconst agent-ui-panel-blocking
   '(shell-command-to-string shell-command call-process call-process-region
     call-process-shell-command process-file process-lines
@@ -248,8 +261,12 @@ its fetches' timer, its commands running, its last error."
   "In a project panel's canvas: the panel (an `agent-ui-panels--state').")
 
 (defun agent-ui-panel-canvas-name (name root)
-  "The name of panel NAME's canvas, of the project at ROOT: \"NAME (PROJECT)\"
-\(no session's: tied to none)."
+  "The name of panel NAME's canvas, of the project at ROOT
+\(`agent-ui-panel-name-function')."
+  (funcall agent-ui-panel-name-function name root))
+
+(defun agent-ui-panel-default-canvas-name (name root)
+  "\"NAME (PROJECT)\", PROJECT ROOT's folder (no session's: tied to none)."
   (format "%s (%s)" name (file-name-nondirectory (directory-file-name root))))
 
 (defun agent-ui-panels--read-name ()
@@ -276,7 +293,7 @@ from. Returns its canvas."
          (canvas-name (agent-ui-panel-canvas-name (file-name-base file) root))
          (open (get-buffer (agent-ui-canvas-buffer-name canvas-name))))
     (if (and open (buffer-local-value 'agent-ui-panels--state open))
-        (progn (cond (noselect (display-buffer open))
+        (progn (cond (noselect (funcall agent-ui-panel-display-function open))
                      (here (switch-to-buffer open))
                      (t (pop-to-buffer open)))
                open)
@@ -298,7 +315,7 @@ from. Returns its canvas."
           (error (kill-buffer canvas)
                  (signal (car err) (cdr err))))
         (if noselect
-            (progn (display-buffer canvas)
+            (progn (funcall agent-ui-panel-display-function canvas)
                    (run-with-timer 0 nil #'agent-ui-panels--start panel (plist-get read :form)))
           (if here (switch-to-buffer canvas) (pop-to-buffer canvas))
           (agent-ui-panels--start panel (plist-get read :form)))
@@ -383,8 +400,11 @@ TIME)."
       (insert "\n"))))
 
 (defun agent-ui-panels--project (root)
-  "ROOT, a project's, as it's remembered: its true name, a folder."
-  (file-name-as-directory (file-truename (expand-file-name root))))
+  "ROOT, a project's, as its trust is remembered: the root whose trust it
+shares (`agent-ui-panel-trust-root-function'), its true name, a folder."
+  (file-name-as-directory
+   (file-truename (expand-file-name (funcall agent-ui-panel-trust-root-function
+                                             (file-name-as-directory (expand-file-name root)))))))
 
 (defun agent-ui-panel-trusted-projects ()
   "The projects whose panels all run: ((ROOT . TIME) ...), the latest first."

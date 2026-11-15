@@ -168,6 +168,7 @@
 (load! "agent-workspace/issues")
 (load! "agent-workspace/room")
 (load! "agent-workspace/hands")
+(load! "agent-workspace/panels")
 (load! "agent-workspace/saved")
 (load! "agent-workspace/doom")
 
@@ -242,6 +243,13 @@
 
 ;; WHAT AN AGENT IS TOLD (see ITS SESSION above), after what every session is.
 (add-hook '+my/agent-shell-claude-context-functions #'agent-workspace-agent-context t)
+
+;; AN AGENT'S PANELS (config/agent-workspace/panels.el): a project panel an
+;; agent opens runs in its worktree, "tests · ada", never popped up (its pane
+;; on the stage shows it), trusted as its project, closed with the agent.
+(setq agent-ui-panel-name-function #'agent-workspace--panel-name
+      agent-ui-panel-trust-root-function #'agent-workspace--panel-trust-root
+      agent-ui-panel-display-function #'agent-workspace--panel-display)
 
 ;; NO CREW HERE (see THE APP above): a terminal offered, git init typed in it.
 (setq agent-workspace-no-crew-function #'+my/agent-workspace-git-init)

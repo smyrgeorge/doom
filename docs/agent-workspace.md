@@ -89,6 +89,15 @@ the room, on its agent's bar and on its pane's header line:
 `a` goes to the next raised hand, across the crew, and `A` answers it. Once you answer from the room, it says what you
 picked ("→ Allow (you)"). A hand answered in its session leaves the room.
 
+## An agent's panels
+
+An agent can open [project panels](agent-ui.md#project-panels) and keep them open while it works (a test watcher, a
+service's logs). A panel it opens runs in its worktree, on its branch's code, and is its own: `tests · ada`. Two agents
+opening `tests` get one each, and yours from the main checkout stays yours. It reads them as data
+(`agent-ui get --panel tests`), and a panel nobody is looking at fetches only when its agent reads it. They share the
+project's trust: trust the project and its agents' worktrees are trusted too, but a panel file changed on an agent's
+branch is asked about again. They close when the agent is killed, put to sleep or forgotten, and when the crew closes.
+
 ## Notifications
 
 While you're in another app, a notification names the agent: a hand raised ("ada (builder) wants to run npm
