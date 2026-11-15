@@ -109,6 +109,9 @@ One chat for the whole crew: a feed of what matters, and below it a compose line
 | `M-p` / `M-n` | Your previous / next message |
 | `#` | Talk to the agent you're on (in the issues, a bar, a session) |
 
+In the feed, on a [thread between agents](#agents-asking-each-other): `TAB` folds it or unfolds it, `x` stops it or
+lets it go again.
+
 The feed is kept per project on this machine, in `.agent-shell/agent-workspace/room.jsonl`.
 
 ## The inbox
@@ -141,6 +144,13 @@ A role's `talks-to: reviewer` lets its agents message reviewers without your OK.
 [inbox](#the-inbox): it waits until its agent is free, and never wakes one asleep. It's told as from the sender, data
 and not your instructions, in plan mode. Its reply goes back to the sender the same way, as an answer, and an answer
 gets none.
+
+In the room, each exchange between two agents is a thread, with the issue the sender is on (`ada → ken … · demo-1`).
+`TAB` folds a thread to its first line, and `x` stops it: its waiting messages are dropped and the agents can't send
+more (the sender is told), until `x` again. `[Answer]` on a message answers its sender yourself, instead of the agent
+it was for. Guards: a thread waits for your OK after 5 messages without you (`agent-workspace-thread-pause`), and an
+agent sends at most 10 messages an hour (`agent-workspace-message-limit`). Each agent is told its crew, how to message,
+which roles it may message without your OK, and never to wait for an answer.
 
 ## Raised hands
 

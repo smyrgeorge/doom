@@ -160,11 +160,12 @@ TARGETS has had its day's."
         (user-error "%s had %d events today: refused (agent-workspace-inbox-agent-limit)"
                     to agent-workspace-inbox-agent-limit)))))
 
-(cl-defun agent-workspace-inbox-add (project to text &key (from "shell") kind (limits t))
+(cl-defun agent-workspace-inbox-add (project to text &key (from "shell") kind (limits t) extra)
   "Queue TEXT from FROM (a source's name) for TO in PROJECT's crew: an
 agent's name, \"#ROLE\" (its first free agent) or \"#all\" (a copy each).
 KIND, a string kept with it (\"message\", \"answer\": messages.el); LIMITS
-nil: not counted (an answer). Delivered when the agent is free. Return the
+nil: not counted (a message: messages.el's own); EXTRA, a plist kept with it
+too (its :thread, :issue: in the room). Delivered when the agent is free. Return the
 events, each as it is now (:state queued or delivered)."
   (when (or (not (stringp text)) (string-empty-p (string-trim text)))
     (user-error "send: what? An event needs its text"))
@@ -175,7 +176,8 @@ events, each as it is now (:state queued or delivered)."
          (events (mapcar (lambda (target)
                            (append (list :id (agent-workspace--inbox-next-id project) :to target :from from
                                          :text text :time (format-time-string "%FT%T%z"))
-                                   (and kind (list :kind kind))))
+                                   (and kind (list :kind kind))
+                                   extra))
                          targets)))
     (when limits
       (agent-workspace--inbox-check-limits project from targets)
@@ -183,8 +185,8 @@ events, each as it is now (:state queued or delivered)."
         (push (list (float-time) from target) (gethash key agent-workspace--inbox-sent))))
     (agent-workspace--inbox-write project (append (agent-workspace-inbox project) events))
     (dolist (event events)
-      (agent-workspace-room-post project :kind 'event :agent from :to (plist-get event :to)
-                                 :event (plist-get event :id) :text text))
+      (apply #'agent-workspace-room-post project :kind 'event :agent from :to (plist-get event :to)
+             :event (plist-get event :id) :text text extra))
     (agent-workspace--inbox-deliver project)
     (mapcar (lambda (event)
               (append event (list :state (if (agent-workspace--inbox-event project (plist-get event :id))
@@ -254,9 +256,10 @@ after its turn if it's working, in its own mode."
   (agent-workspace--inbox-take project event)
   (unless now
     (puthash agent (cons event (agent-workspace--agent-mode-id agent)) agent-workspace--event-turns))
-  (agent-workspace-room-post project :kind 'event-done :agent (plist-get event :from)
-                             :to (agent-workspace-agent-name agent) :event (plist-get event :id)
-                             :text (format "delivered to %s" (agent-workspace-agent-name agent)))
+  (apply #'agent-workspace-room-post project :kind 'event-done :agent (plist-get event :from)
+         :to (agent-workspace-agent-name agent) :event (plist-get event :id)
+         :text (format "delivered to %s" (agent-workspace-agent-name agent))
+         (agent-workspace--event-room-keys event))
   (let ((send (lambda (error)
                 (if (and error (not now))
                     (progn
@@ -297,8 +300,13 @@ next event. In `agent-workspace-state-change-functions'."
   "PROJECT's queued event ID dropped, said in the room."
   (when-let* ((event (agent-workspace--inbox-event project id)))
     (agent-workspace--inbox-take project event)
-    (agent-workspace-room-post project :kind 'event-done :agent (plist-get event :from)
-                               :to (plist-get event :to) :event id :text "dropped (you)")))
+    (apply #'agent-workspace-room-post project :kind 'event-done :agent (plist-get event :from)
+           :to (plist-get event :to) :event id :text "dropped (you)"
+           (agent-workspace--event-room-keys event))))
+
+(defun agent-workspace--event-room-keys (event)
+  "EVENT's keys the room keeps with its lines: its :thread."
+  (and (plist-get event :thread) (list :thread (plist-get event :thread))))
 
 (defun agent-workspace-inbox-send-now (project id)
   "PROJECT's queued event ID given now, as you let it: to its agent (its

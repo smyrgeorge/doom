@@ -161,6 +161,10 @@ it works in a worktree)."
             (when (file-directory-p beads)
               (list (concat "BEADS_DIR=" beads))))))
 
+(defvar agent-workspace-context-functions nil
+  "Called with the agent whose session starts: a paragraph more it's told
+\(its crew and messages: messages.el), or nil.")
+
 (defun agent-workspace-agent-context ()
   "What the agent whose session starts is told, after what every session
 is: who it is and how it works, then its role's instructions. nil for any
@@ -172,9 +176,9 @@ other session."
       (concat
        (format "You are %s, the %s in a crew of coding agents the user runs at once on \
 %s, from Emacs (its agent workspace). Each agent has a name, a role and a colour. You \
-work with the user only: what you get comes from them (in your session, from the \
-crew's room, an issue they give you), and you answer them. Don't hand work to other \
-agents or wait for them.
+work for the user: your work comes from them (in your session, from the crew's room, \
+an issue they give you), and you answer them. Don't hand work to other agents or wait \
+for them.
 
 You work in your own git worktree, %s, on the branch %s: make your changes and \
 commits there, never in the project's main checkout (%s), which is the user's. They \
@@ -187,6 +191,10 @@ carry your name already."
                (agent-workspace-agent-branch agent)
                (directory-file-name project)
                name)
+       (mapconcat (lambda (more) (concat "\n\n" more))
+                  (delq nil (mapcar (lambda (function) (funcall function agent))
+                                    agent-workspace-context-functions))
+                  "")
        (when (and instructions (not (string-empty-p (string-trim instructions))))
          (concat "\n\n" (string-trim instructions)))))))
 

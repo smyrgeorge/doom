@@ -27,6 +27,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'text-property-search)
 (require 'json)
 (require 'map)
 
@@ -64,6 +65,7 @@ more; at the bottom in narrower ones), or `bottom'."
 (defvar-local agent-workspace--room-project nil "In the room's buffers: its project.")
 (defvar-local agent-workspace--room-entries nil "In the feed: its entries, the oldest first.")
 (defvar-local agent-workspace--room-filter nil "In the feed: nil (all), `hands', or an agent's name.")
+(defvar-local agent-workspace--room-folded nil "In the feed: the threads folded (their ids).")
 (defvar-local agent-workspace--compose-history nil "In the compose line: what you sent, the latest first.")
 (defvar-local agent-workspace--compose-index -1 "In the compose line: where M-p / M-n are in it.")
 (defvar-local agent-workspace--compose-prompt nil "In the compose line: its prompt, an overlay.")
@@ -189,8 +191,9 @@ an event went to), :event (an event's id)."
     ('hands (eq (plist-get entry :kind) 'hand))
     (_ (or (equal (plist-get entry :agent) filter) (equal (plist-get entry :to) filter)))))
 
-(defun agent-workspace--room-entry-lines (project entry _width)
-  "ENTRY's lines in PROJECT's room (wrapped by Emacs, under its text)."
+(defun agent-workspace--room-entry-lines (project entry _width &optional more)
+  "ENTRY's lines in PROJECT's room (wrapped by Emacs, under its text). MORE:
+its thread folded, how many lines of it it stands for."
   (let* ((name (plist-get entry :agent))
          (agent (and name (agent-workspace-agent name project)))
          (kind (plist-get entry :kind))
@@ -217,6 +220,13 @@ an event went to), :event (an event's id)."
                  ('stuck (propertize text 'face 'error))
                  ('hand (propertize text 'face 'warning))
                  (_ text)))
+         ;; The issue its sender is on (a message between agents).
+         (text (if-let* ((issue (plist-get entry :issue)))
+                   (concat text (propertize (concat " · " issue) 'face 'shadow))
+                 text))
+         (text (if more
+                   (concat text (propertize (format "  ▸ %d more (TAB)" more) 'face 'shadow))
+                 text))
          (first (concat " " (propertize (or (plist-get entry :time) "") 'face 'shadow) " " who " " lead text)))
     (delq nil
           (list (propertize first 'agent-workspace-entry entry
@@ -245,10 +255,20 @@ end, kept where it was scrolled up."
              (inhibit-read-only t)
              (width (if windows (window-body-width (car windows)) agent-workspace-room-width)))
         (erase-buffer)
-        (dolist (entry agent-workspace--room-entries)
-          (when (agent-workspace--room-shown-p entry agent-workspace--room-filter)
-            (dolist (line (agent-workspace--room-entry-lines project entry width))
-              (insert line "\n"))))
+        (let ((seen nil))
+          (dolist (entry agent-workspace--room-entries)
+            (when (agent-workspace--room-shown-p entry agent-workspace--room-filter)
+              (let* ((thread (plist-get entry :thread))
+                     (folded (and thread (member thread agent-workspace--room-folded))))
+                ;; A folded thread: its first line only, saying how many more.
+                (unless (and folded (member thread seen))
+                  (when thread (push thread seen))
+                  (dolist (line (agent-workspace--room-entry-lines
+                                 project entry width
+                                 (and folded
+                                      (1- (seq-count (lambda (other) (equal (plist-get other :thread) thread))
+                                                     agent-workspace--room-entries)))))
+                    (insert line "\n")))))))
         (if following
             (dolist (window windows)
               (set-window-point window (point-max))
@@ -525,6 +545,22 @@ nil: \"closed doom-a1b\", \"claimed doom-a1b\", \"filed: TITLE\"."
               (agent (agent-workspace-agent (or (plist-get entry :agent) (plist-get entry :to))
                                             agent-workspace--room-project)))
     (agent-workspace-select agent t)))
+
+(defun agent-workspace-room-fold ()
+  "The thread of the line here folded to its first line, or unfolded (TAB)."
+  (interactive)
+  (let ((thread (plist-get (get-text-property (line-beginning-position) 'agent-workspace-entry) :thread)))
+    (unless thread (user-error "Not a thread between agents"))
+    (setq agent-workspace--room-folded
+          (if (member thread agent-workspace--room-folded)
+              (delete thread agent-workspace--room-folded)
+            (cons thread agent-workspace--room-folded)))
+    (agent-workspace--room-redraw agent-workspace--room-project)
+    (goto-char (point-min))
+    (when-let* ((match (text-property-search-forward
+                        'agent-workspace-entry thread
+                        (lambda (thread entry) (equal (plist-get entry :thread) thread)))))
+      (goto-char (prop-match-beginning match)))))
 
 (defun agent-workspace-room-filter ()
   "The feed filtered: all, raised hands only, the selected agent's only."

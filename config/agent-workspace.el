@@ -120,7 +120,11 @@
 ;; kept in crew.el; a role's talks-to: names the roles it may message without
 ;; your OK. Through the inbox: delivered when free, framed as from the sender
 ;; (data, not your instructions); the reply goes back to the sender, as an
-;; answer.
+;; answer. In the room, each exchange a thread: TAB folds it, x stops it (or
+;; lets it go again), [Answer] answers for the agent it's for. A thread waits
+;; for your OK after 5 messages without you; an agent sends at most 10 an
+;; hour. Each agent is told its crew and how to message (what it may without
+;; your OK, never waiting on another agent).
 
 ;; THE SAVED CREW
 ;; What the crew is, not its state, saved in the project and committed:
@@ -254,6 +258,8 @@
 (+my/agent-workspace-bind agent-workspace-room-mode-map
                           '(("RET" . agent-workspace-room-open) ("<return>" . agent-workspace-room-open)
                             ("F" . agent-workspace-room-filter) ("i" . agent-workspace-room-compose)
+                            ("TAB" . agent-workspace-room-fold) ("<tab>" . agent-workspace-room-fold)
+                            ("x" . agent-workspace-room-stop)
                             ("a" . agent-workspace-room-compose) ("#" . agent-workspace-room-compose)
                             ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room)
                             ("gr" . agent-workspace-layout) ("q" . agent-workspace-leave)

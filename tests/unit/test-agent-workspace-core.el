@@ -279,7 +279,7 @@ every session is told; nothing for a session not an agent's."
     (let* ((agent-workspace--starting agent)
            (text (agent-workspace-agent-context)))
       (dolist (part '("You are ada, the builder" "crew of coding agents" "on project"
-                      "work with the user only" "Don't hand work to other agents"
+                      "You work for the user" "Don't hand work to other agents"
                       "/tmp/project/.agent-shell/worktrees/ada, on the branch agent/ada"
                       "never in the project's main checkout (/tmp/project)"
                       "bd commands run as ada" "Your notifications carry your name already"))
