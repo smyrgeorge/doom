@@ -518,6 +518,12 @@ exiting, and the folder goes; your windows as they were (doom-51z.16)."
       (dolist (agent (agent-workspace-agents project))
         (should (file-directory-p (agent-workspace-agent-worktree agent))))
       (should (equal (agent-workspace-agent-issue (car (agent-workspace-agents project))) "demo-1"))
+      ;; Its minimap: ada reading and editing the lexer, sam asking.
+      (should (+test-wait-for (lambda () (equal (plist-get (agent-workspace-activity (car (agent-workspace-agents project)))
+                                                           :location)
+                                                '("src/lexer.el" . 12)))
+                              10))
+      (should (memq 'asked (car (last (agent-workspace-activity-lane (cadr (agent-workspace-agents project)))))))
       (should (string-search "wants to run npm install"
                              (with-current-buffer (agent-workspace--room-buffer project) (buffer-string))))
       (with-current-buffer (agent-workspace--issues-buffer project)

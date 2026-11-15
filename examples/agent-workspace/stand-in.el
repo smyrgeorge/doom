@@ -12,7 +12,8 @@
 ;;                 answered, ends its turn
 ;;   "Look into"   (at its start) the same: asks to run npm install
 ;;   "Work on"     (at its start) says it's on it, then works until it's
-;;                 cancelled (session/cancel)
+;;                 cancelled (session/cancel); with a src/lexer.el where it
+;;                 runs (the example's), reads it and starts editing it first
 ;;   "hold"        says so, then works until it's cancelled
 ;;   "slow"        says so, works a second and a half, ends its turn
 ;;   "read FILE"   reads FILE (a tool call of kind read, at its line 3), ends
@@ -88,6 +89,13 @@
         (mock-acp--send `(:jsonrpc "2.0" :id ,ours :method "fs/write_text_file"
                           :params (:sessionId ,session :path ,file :content "edited by the stand-in\n")))))
      ((string-match-p "\\`Work on" text)
+      ;; In the example's project: reads the lexer, starts editing it.
+      (when (file-exists-p "src/lexer.el")
+        (let ((file (expand-file-name "src/lexer.el")))
+          (mock-acp--update session `(:sessionUpdate "tool_call" :toolCallId "w1" :title ,(concat "Read " file)
+                                      :kind "read" :status "completed" :locations [(:path ,file :line 1)]))
+          (mock-acp--update session `(:sessionUpdate "tool_call" :toolCallId "w2" :title ,(concat "Edit " file)
+                                      :kind "edit" :status "in_progress" :locations [(:path ,file :line 12)]))))
       (mock-acp--say session "On it: reading the code first, then the tests.")
       (setq mock-acp--holding id))
      ((or (string-match-p "permission" text) (string-match-p "\\`Look into" text))
