@@ -430,6 +430,9 @@ left, its stage beside them, the selected agent's pane open."
                      (window-parameters . ((no-delete-other-windows . t)
                                            (mode-line-format . none) (tab-line-format . none)))))))
       (ignore issues))
+    ;; The minimap: under the issue list.
+    (when (fboundp 'agent-workspace--minimap-place)
+      (agent-workspace--minimap-place app))
     (agent-workspace--hint-draw project agents)
     ;; The room: beside the stage, below it, or all of it.
     (when (fboundp 'agent-workspace--room-place)
@@ -548,9 +551,10 @@ one its side area shows, in its pane if it's open and it isn't there yet."
 
 (defun agent-workspace--changed-h (agent what)
   "AGENT's WHAT changed: its app drawn again, or laid out again (a new
-agent selected, one gone, its session new). In
-`agent-workspace-change-functions'."
-  (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent))))
+agent selected, one gone, its session new); not for what it did (the minimap's).
+In `agent-workspace-change-functions'."
+  (when-let* (((not (eq what 'activity)))
+              (app (agent-workspace--app (agent-workspace-agent-project agent))))
     (pcase what
       ('created
        (setf (agent-workspace--app-selected app) agent
@@ -670,10 +674,11 @@ opened, its pane open, the cursor in it."
         (window-parameter window 'agent-workspace-side))))
 
 (defun agent-workspace--current ()
-  "The agent the command is about: the bar's, the pane's, the issue's at
-point, the canvas's or panel's, else the selected one."
+  "The agent the command is about: the bar's, the pane's, the issue's or
+the minimap's lane's at point, the canvas's or panel's, else the selected one."
   (or (buffer-local-value 'agent-workspace--bar-of (current-buffer))
       (agent-workspace-buffer-agent)
+      (get-text-property (point) 'agent-workspace-minimap-agent)
       (and (fboundp 'agent-workspace--issues-agent-at) (agent-workspace--issues-agent-at))
       (agent-workspace--side-agent (current-buffer))
       (when-let* ((app (agent-workspace--here)))
@@ -946,4 +951,4 @@ what it asks."
   "The app's keys."
   (interactive)
   (message "%s" (substitute-command-keys
-                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · a next hand · f+initial · gr lay out · q leave · Q close")))
+                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · a next hand · f+initial · m minimap · gr lay out · q leave · Q close")))

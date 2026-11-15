@@ -18,7 +18,7 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
 
 - **The issues** are on the left. In progress, each with the agent on it. Ready, grouped by the role they're for:
   a role nobody in the crew has is flagged. Blocked, by what. Done today. Moving onto an issue in progress selects its
-  agent.
+  agent. The [minimap](#the-minimap) is under them.
 - **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
   and below it (beside it from 140 columns) its Agent UI canvas and its [panels](#an-agents-panels) as tabs,
   `canvas │ logs │ tests`, one shown at a time. `v` shows the next one, `V` the one there full size, in the whole
@@ -42,6 +42,7 @@ terminal with `git init` typed.
 | `RET` | the issues | Its agent's pane, or the issue |
 | `t` | the issues | Give the issue to an agent: now if it's free, after its turn if it's working |
 | `j` / `k` | a bar | The next / previous agent, the cursor in its pane |
+| `RET` / `o` / `d` | the minimap | Its agent's pane / the file it's in / its branch's changes |
 | `RET` / `TAB` | a bar | Its pane / open or fold it |
 | `c` | anywhere | A new agent (on a ready issue: for it) |
 | `i` / `K` / `r` | anywhere | Interrupt it / kill it (gone home) / restart it fresh |
@@ -55,12 +56,37 @@ terminal with `git init` typed.
 | `f` + initial | anywhere | That agent |
 | `#` | anywhere | Talk to it in the room |
 | `1` / `2` | anywhere | The stage / the room alone |
+| `m` | anywhere | Show or hide the minimap |
 | `gr` / `gR` | anywhere | Lay it out again / read `crew.el` again |
 | `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
 In an agent's own session, the same keys follow `SPC m w` (`C-c w` in insert state), plus `]` / `[` for the next or
 previous agent. In its canvas and panels, `v` and `V` work too. A click on a bar or a pane's header line
 selects its agent, and `mouse-3` there lists its actions.
+
+## The minimap
+
+Under the issues, what each agent did over the last 15 minutes, a lane each:
+
+```text
+ CREW  15 minutes                       where now
+ ▌A ⌕⌕⌕✎✎▶✎✎✎✎▶✎✎✎▶ │ ⚙  src/lexer.el:214
+ ▌S ··⌕⌕⌕✎✎✎▶!!!!!! │ !  wants to use npm insta…
+ quiet ▌K ken ○
+ ⚠ ada + sam: src/lexer.el
+    -15m    -5m now
+    ⌕ read  ✎ edit  ▶ run  ! asks you
+```
+
+A cell is a minute: what the agent did most then (asked you, edited, ran a command, read or searched), `·` for
+nothing. After the bar: its state, and the file and line it's in, or what it asks you. Agents that did nothing in those
+minutes share the `quiet` line. A file two agents changed (on their branches or uncommitted) is marked `⚠`: they'll
+conflict when you merge.
+
+On a lane, `RET` selects its agent, `o` opens the file it's in, in its worktree at its line, and `d` shows its branch's
+changes. On a `⚠`, `RET` or `d` shows both agents' changes to that file. `m` shows or hides it, and the crew keeps
+that. `agent-workspace-minimap-height` sets its height (12 lines); `agent-workspace-minimap` set to `nil` hides it in
+new crews.
 
 ## The room
 
@@ -116,7 +142,7 @@ each kind off ([Notifications](notifications.md)).
 
 The crew is saved in the project, in `.agent-workspace/crew.el`, to commit: each agent's name, role and colour, its
 model and permission mode when they aren't its role's, whether it's asleep, the [panels](#an-agents-panels) it has
-open (by name, never their data), and which agent is selected. Not its session, state or issue.
+open (by name, never their data), which agent is selected, and whether the minimap is shown. Not its session, state or issue.
 
 ```elisp
 (agent-workspace-crew
@@ -124,7 +150,7 @@ open (by name, never their data), and which agent is selected. Not its session, 
  :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
           (:name "ken" :role "builder" :colour "green" :asleep t)
           (:name "sam" :role "investigator" :colour "magenta" :model "opus"))
- :layout (:view stage :room right :selected "ada" :open t))
+ :layout (:view stage :room right :selected "ada" :open t :minimap t))
 ```
 
 It's written when the crew changes (a panel opened or closed too), and read as data, never run. Closing the crew

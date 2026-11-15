@@ -3,7 +3,8 @@
 ;; redisplay. Its agents' lines (a bar, the open pane's header line) drawn to
 ;; the window's right edge, their avatars images; the stage tiled again after
 ;; a border dragged; closing it; an agent's canvas and panels as tabs, a panel
-;; fetching once its tab is shown. No agent runs: sessions are buffers.
+;; fetching once its tab is shown; the minimap's lanes, even. No agent runs:
+;; sessions are buffers.
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -196,3 +197,39 @@ back."
             (should (eq (window-buffer (agent-workspace--side-window ada)) logs))))))))
 
 (+test-e2e-run)
+
+(defun +test-e2e-aw--did (agent kind file line)
+  "AGENT's tool call of KIND (ACP's) at FILE (in its worktree) and LINE."
+  (agent-workspace--activity-event
+   agent `((:event . tool-call-update)
+           (:data . ((:tool-call . ((:kind . ,kind)
+                                    (:locations . ,(vector `((path . ,(expand-file-name
+                                                                       file (agent-workspace-agent-worktree agent)))
+                                                             (line . ,line)))))))))))
+
+(ert-deftest e2e-agent-workspace/the-minimap ()
+  "The minimap under the issue list: a lane each as ada and sam do things,
+drawn a moment later; its avatars images; every lane's cells and bar at the
+same pixels (its glyphs evened)."
+  (+test-e2e-aw
+    (let ((window (get-buffer-window (agent-workspace--minimap-buffer project))))
+      (should (window-live-p window))
+      (should (eq (window-parameter window 'window-side) 'left))
+      (should (string-search "quiet" (with-current-buffer (window-buffer window) (buffer-string))))
+      (+test-e2e-aw--did ada "read" "README" 1)
+      (+test-e2e-aw--did ada "edit" "README" 1)
+      (+test-e2e-aw--did sam "execute" "README" 1)
+      (should (+test-wait-for (lambda () (with-current-buffer (window-buffer window)
+                                           (and (string-search "README:1" (buffer-string))
+                                                (not (string-search "quiet" (buffer-string))))))
+                              3))
+      (redisplay t)
+      (with-current-buffer (window-buffer window)
+        (goto-char (point-min))
+        (should (text-property-search-forward 'display nil (lambda (_ value) (eq (car-safe value) 'image))))
+        (let ((bars nil))
+          (goto-char (point-min))
+          (while (search-forward "│" nil t)
+            (push (car (window-text-pixel-size window (line-beginning-position) (1- (point)))) bars))
+          (should (= (length bars) 2))
+          (should (= (car bars) (cadr bars))))))))

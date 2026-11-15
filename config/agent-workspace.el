@@ -178,6 +178,7 @@
 (load! "agent-workspace/hands")
 (load! "agent-workspace/panels")
 (load! "agent-workspace/activity")
+(load! "agent-workspace/minimap")
 (load! "agent-workspace/saved")
 (load! "agent-workspace/doom")
 
@@ -192,7 +193,8 @@
     ("a" . agent-workspace-next-hand) ("A" . agent-workspace-answer) ("f" . agent-workspace-jump)
     ("gr" . agent-workspace-layout) ("gR" . agent-workspace-crew-reload) ("q" . agent-workspace-leave)
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)
-    ("#" . agent-workspace-talk) ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room))
+    ("#" . agent-workspace-talk) ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room)
+    ("m" . agent-workspace-minimap-toggle))
   "The keys every buffer of the app has (see THE APP above).")
 
 (+my/agent-workspace-bind agent-workspace-issues-mode-map
@@ -201,6 +203,16 @@
                                     ("RET" . agent-workspace-issue-open) ("<return>" . agent-workspace-issue-open)
                                     ("l" . agent-workspace-issue-open) ("o" . agent-workspace-issue-open)
                                     ("t" . agent-workspace-issue-give) ("gr" . agent-workspace-issues-refresh))
+                                  +my/agent-workspace-keys))
+
+;; The minimap, under the issues (config/agent-workspace/minimap.el): a lane
+;; each agent, what it did minute by minute; RET its agent, o the file it's
+;; in, d its changes (on a ⚠: both agents'). m shows or hides it, anywhere.
+(+my/agent-workspace-bind agent-workspace-minimap-mode-map
+                          (append '(("j" . agent-workspace-minimap-next) ("k" . agent-workspace-minimap-previous)
+                                    ("<down>" . agent-workspace-minimap-next) ("<up>" . agent-workspace-minimap-previous)
+                                    ("RET" . agent-workspace-minimap-select) ("<return>" . agent-workspace-minimap-select)
+                                    ("o" . agent-workspace-minimap-open) ("d" . agent-workspace-minimap-diff))
                                   +my/agent-workspace-keys))
 
 (+my/agent-workspace-bind agent-workspace-bar-mode-map

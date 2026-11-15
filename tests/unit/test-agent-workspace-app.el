@@ -18,6 +18,8 @@
 
 (+test-load "config/agent-shell" "config/agent-ui" "config/tiling" "config/agent-workspace")
 (remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+;; The stage's layout, the minimap off (test-agent-workspace-minimap.el's).
+(setq agent-workspace-minimap nil)
 
 (setq agent-shell-mock-agent-acp-command
       (list (expand-file-name invocation-name invocation-directory)
