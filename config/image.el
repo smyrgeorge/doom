@@ -34,8 +34,9 @@
 ;;   Diff          SPC m g   the image as it is in git's HEAD, to compare (e.g.
 ;;                           regenerated screenshots): the image's pane halved,
 ;;                           HEAD on the left (in a pane too narrow for two,
-;;                           `+my/image-diff-min-width', above it), both fitted;
-;;                           again, closed
+;;                           `+my/image-diff-min-width', above it), at the
+;;                           image's zoom (both fitted if it is); again, or q
+;;                           in HEAD, closed
 ;;   Save                    shown while edited (see above)
 ;;   Preview       SPC m p   open it in macOS's Preview; SPC m f shows it in
 ;;                           Finder (Linux: Open, its default app; Folder, the
@@ -95,7 +96,7 @@ in columns each: a narrower pane has HEAD above the image.")
       :n "c"   #'+my/image-crop
       :n "y"   #'+my/image-copy
       :n "RET" #'+my/image-toggle-animation
-      :n "q"   #'kill-current-buffer)    ; as PDFs
+      :n "q"   #'+my/image-quit)         ; as PDFs; HEAD's as SPC m g
 
 ;; On Linux, Ctrl for Cmd (config/emacs.el, KEYS): zoom, copy.
 (map! :unless (+my/macos-p)

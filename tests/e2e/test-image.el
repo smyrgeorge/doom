@@ -342,6 +342,68 @@ fits, else as big as it fits."
               (should (= (window-total-width other) other-width))
               (should (+test-image--fitted-p window)))))))))
 
+(defun +test-image--scale (window)
+  "How big WINDOW's image is shown (1.0: its size)."
+  (with-selected-window window (+my/image-scale)))
+
+(ert-deftest e2e-image/head-at-the-image-s-zoom ()
+  "HEAD opens as the image is shown: zoomed in, at its zoom; at its actual
+size, at its own; fitted, fitted to its pane."
+  (let ((dir (+test-image--repo '(400 . 200))))
+    (pcase-dolist (`(,name ,set ,resize)
+                   `(("zoomed" ,(lambda () (+my/image-zoom-in) (+my/image-zoom-in)) 1.5625)
+                     ("actual size" +my/image-actual-size nil)
+                     ("fitted" +my/image-fit fit-window)))
+      (+test-with-reset
+        (+test-image--open (expand-file-name "a.png" dir))
+        (funcall set)
+        (let ((window (selected-window))
+              (scale (+my/image-scale)))
+          (+my/image-diff)
+          (let ((head-window (get-buffer-window +my/image--head-buffer)))
+            (ert-info (name)
+              (should (equal (buffer-local-value 'image-transform-resize +my/image--head-buffer)
+                             (if (numberp resize) (buffer-local-value 'image-transform-resize (current-buffer)) resize)))
+              (if (eq resize 'fit-window)
+                  (progn (should (+test-image--fitted-p head-window))
+                         (should (+test-image--fitted-p window)))
+                (should (< (abs (- (+test-image--scale head-window) scale)) 0.02))
+                (should (< (abs (- (+test-image--scale window) scale)) 0.02))))))))))
+
+(ert-deftest e2e-image/q-in-head-the-image-refitted-at-once ()
+  "q in HEAD's pane closes it as SPC m g does: its pane gone, the image's
+pane as it was, the image fitted to it at once. HEAD's pane closed another
+way (its tab, as tiling closes a pane with its last tab): fitted right
+after, not image-mode's second later."
+  (let ((dir (+test-image--repo '(800 . 400))))
+    (+test-with-reset
+      (let ((image (+test-image--open (expand-file-name "a.png" dir)))
+            (window (selected-window)))
+        (should (+test-image--fitted-p window))
+        (+my/image-diff)
+        (let ((head +my/image--head-buffer)
+              (head-window (get-buffer-window +my/image--head-buffer)))
+          (should (< (+test-image--scale window) 0.9))
+          (select-window head-window)
+          (call-interactively (keymap-lookup (evil-get-auxiliary-keymap +my/image-mode-map 'normal) "q"))
+          (should-not (buffer-live-p head))
+          (should-not (window-live-p head-window))
+          (should (one-window-p))
+          (should (eq (window-buffer window) image))
+          (should (+test-image--fitted-p window))
+          (should (= (+test-image--scale window) 1.0))))
+      ;; Closed another way: its buffer killed, its pane closed after.
+      (let ((window (selected-window)))
+        (+my/image-diff)
+        (let ((head +my/image--head-buffer)
+              (head-window (get-buffer-window +my/image--head-buffer)))
+          (should (< (+test-image--scale window) 0.9))
+          (kill-buffer head)
+          (delete-window head-window)
+          (redisplay t)
+          (+test-sleep 0.15)
+          (should (+test-image--fitted-p window)))))))
+
 (ert-deftest e2e-image/head-unchanged-or-not-in-git ()
   (+test-with-reset
     (let ((dir (+test-image--repo)))

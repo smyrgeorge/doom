@@ -193,7 +193,7 @@
                      ("r" . +my/image-rotate) ("R" . +my/image-rotate-left)
                      ("f" . +my/image-flip) ("F" . +my/image-flip-vertically)
                      ("c" . +my/image-crop) ("y" . +my/image-copy)
-                     ("RET" . +my/image-toggle-animation) ("q" . kill-current-buffer)
+                     ("RET" . +my/image-toggle-animation) ("q" . +my/image-quit)
                      ("SPC m t" . +my/image-toggle-toolbar) ("SPC m g" . +my/image-diff)
                      ("SPC m s" . +my/image-toggle-sharp) ("SPC m p" . +my/image-open-in-preview)
                      ("SPC m f" . +my/image-show-in-finder) ("SPC m y" . +my/image-copy-path)))
@@ -203,6 +203,62 @@
                    ("s-0" . +my/image-actual-size) ("s-c" . +my/image-copy)
                    ("C-<wheel-up>" . +my/image-zoom-in-mouse)))
     (should (eq (keymap-lookup +my/image-mode-map key) command))))
+
+;; ====== GIT'S HEAD ======
+
+(ert-deftest image/q-in-head-closes-it-as-spc-m-g ()
+  "q in HEAD's version: closed as SPC m g closes it (from the image), the image
+fitted again at once; q in an image: closed."
+  (+test-with-reset
+    (let* ((image (+test-buffer "a.png"))
+           (head (+test-buffer "a.png @ HEAD"))
+           (closed nil)
+           (refitted nil)
+           (killed nil))
+      (with-current-buffer head (setq-local +my/image--head-image image))
+      (cl-letf (((symbol-function '+my/image--close-head)
+                 (lambda () (push (current-buffer) closed)))
+                ((symbol-function '+my/image--refit-buffer)
+                 (lambda (buffer) (push buffer refitted)))
+                ((symbol-function 'kill-current-buffer)
+                 (lambda () (push (current-buffer) killed))))
+        (with-current-buffer head (+my/image-quit))
+        (should (equal closed (list image)))
+        (should (equal refitted (list image)))
+        (should-not killed)
+        ;; Its image gone: q kills HEAD, as any image.
+        (kill-buffer image)
+        (with-current-buffer head (+my/image-quit))
+        (should (equal killed (list head)))
+        (with-current-buffer (+test-buffer "b.png") (+my/image-quit))
+        (should (= (length killed) 2))))))
+
+(ert-deftest image/head-closed-the-image-refitted-right-after ()
+  "HEAD killed any way (its tab, its pane closing with it): its image's Diff
+button off, the image fitted again once HEAD's pane has gone (a timer: not
+image-mode's second); its image gone, nothing."
+  (+test-with-reset
+    (let ((image (+test-buffer "a.png"))
+          (head (+test-buffer "a.png @ HEAD")))
+      (with-current-buffer head
+        (setq-local +my/image--head-image image)
+        (add-hook 'kill-buffer-hook #'+my/image--head-closed-h nil t))
+      (kill-buffer head)
+      (let ((timer (seq-find (lambda (timer) (eq (timer--function timer) #'+my/image--refit-buffer))
+                             timer-list)))
+        (should timer)
+        (should (equal (timer--args timer) (list image)))
+        (should (< (float-time (time-subtract (timer--time timer) nil)) 0.05))
+        (cancel-timer timer))
+      ;; The image gone first: no refit.
+      (let ((head (+test-buffer "b.png @ HEAD")))
+        (with-current-buffer head
+          (setq-local +my/image--head-image (+test-buffer "b.png"))
+          (add-hook 'kill-buffer-hook #'+my/image--head-closed-h nil t))
+        (kill-buffer "b.png")
+        (kill-buffer head)
+        (should-not (seq-find (lambda (timer) (eq (timer--function timer) #'+my/image--refit-buffer))
+                              timer-list))))))
 
 (ert-deftest image/the-mode-in-image-mode-only ()
   (should (memq #'+my/image-mode-maybe-h image-mode-hook))

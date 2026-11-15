@@ -9,6 +9,9 @@
 (defvar-local +my/image--head-buffer nil
   "The image as it is in git's HEAD, opened from this one.")
 
+(defvar-local +my/image--head-image nil
+  "In the image as it is in git's HEAD: the image's buffer, it opened from.")
+
 (defun +my/image--git (dir &rest args)
   "git ARGS's output in DIR, as bytes; nil if it failed."
   (with-temp-buffer
@@ -64,6 +67,36 @@ seconds."
       (when (and (+my/image--spec) (memq image-transform-resize '(t fit-window)))
         (+my/image--redisplay)))))
 
+(defun +my/image--refit-buffer (buffer)
+  "BUFFER's image fitted again at once in each window showing it (see
+`+my/image--refit')."
+  (when (buffer-live-p buffer)
+    (mapc #'+my/image--refit (get-buffer-window-list buffer nil t))))
+
+;; CLOSED
+;; HEAD closed from its own pane (q) goes as SPC m g closes it: its pane too,
+;; the image fitted to its pane, wider again, at once. Closed otherwise (its
+;; tab's ✕, its pane closing with it), the image is fitted again right after
+;; too, not image-mode's second later.
+(defun +my/image-quit ()
+  "q: close the image; its HEAD version (SPC m g) as SPC m g closes it (see
+CLOSED)."
+  (interactive)
+  (let ((image +my/image--head-image))
+    (if (not (buffer-live-p image))
+        (kill-current-buffer)
+      (with-current-buffer image
+        (+my/image--close-head))
+      (+my/image--refit-buffer image))))
+
+(defun +my/image--head-closed-h ()
+  "HEAD's buffer killed: its image's Diff button off, the image fitted again
+once HEAD's pane has gone (see CLOSED)."
+  (let ((image +my/image--head-image))
+    (when (buffer-live-p image)
+      (with-current-buffer image (force-mode-line-update t))
+      (run-at-time 0 nil #'+my/image--refit-buffer image))))
+
 (defun +my/image--same-bytes-p (bytes)
   "Non-nil if BYTES are the image's, as saved."
   (and (not (buffer-modified-p))
@@ -95,7 +128,10 @@ config/image.el)."
             ((not bytes) (user-error "%s isn't in git's HEAD" path))
             ((+my/image--same-bytes-p bytes) (user-error "No change since HEAD (%s)" commit)))
       (let ((buffer (generate-new-buffer (format "%s @ HEAD" (file-name-nondirectory file))))
-            (image (current-buffer)))
+            (image (current-buffer))
+            ;; HEAD at the image's zoom, or fitted as it is (a wheel's zoom
+            ;; not drawn yet too).
+            (resize (or +my/image--zoom-target image-transform-resize)))
         (with-current-buffer buffer
           (set-buffer-multibyte nil)
           (insert bytes)
@@ -103,17 +139,20 @@ config/image.el)."
           (image-mode)
           ;; After: image-mode kills the buffer's local variables.
           (setq +my/image--head-of file
-                +my/image--head-commit commit)
+                +my/image--head-commit commit
+                +my/image--head-image image
+                image-transform-resize resize)
           (set-buffer-modified-p nil)
           (setq buffer-read-only t)
-          ;; Closed (q, its tab): the image's Diff button off.
-          (add-hook 'kill-buffer-hook
-                    (lambda () (when (buffer-live-p image)
-                                 (with-current-buffer image (force-mode-line-update t))))
-                    nil t))
+          ;; Closed (q, its tab): the image's Diff button off, refitted.
+          (add-hook 'kill-buffer-hook #'+my/image--head-closed-h nil t))
         (setq +my/image--head-buffer buffer)
-        ;; Both fitted to their new panes: HEAD was made in the image's.
-        (let ((window (selected-window)))
-          (+my/image--refit (+my/image--display-head buffer window))
+        ;; HEAD shown at that zoom in its pane (made in the image's), the
+        ;; image fitted to its new pane.
+        (let* ((window (selected-window))
+               (head-window (+my/image--display-head buffer window)))
+          (when (window-live-p head-window)
+            (with-selected-window head-window
+              (+my/image--redisplay)))
           (+my/image--refit window))
         (force-mode-line-update t)))))
