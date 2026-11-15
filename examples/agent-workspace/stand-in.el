@@ -43,14 +43,17 @@
   (princ (concat (json-serialize object) "\n")))
 
 (defun mock-acp--log (object)
-  "Append OBJECT to MOCK_ACP_LOG, if set."
+  "Append OBJECT to MOCK_ACP_LOG, if set. No lock file: the crew's stand-ins
+log to the same file at once, and a lock conflict can't be resolved in
+batch (the stand-in would exit)."
   (when-let* ((file (getenv "MOCK_ACP_LOG")))
-    (write-region (concat (json-serialize
+    (let ((create-lockfiles nil))
+      (write-region (concat (json-serialize
                            `(:agent ,(or (getenv "AGENT_WORKSPACE_AGENT") :null)
                              :cwd ,(expand-file-name default-directory)
                              ,@object))
                           "\n")
-                  nil file t 'silent)))
+                  nil file t 'silent))))
 
 (defun mock-acp--result (id result)
   (mock-acp--send `(:jsonrpc "2.0" :id ,id :result ,result)))
