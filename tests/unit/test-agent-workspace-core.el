@@ -136,7 +136,8 @@ then its first message."
 (ert-deftest agent-workspace/state-words ()
   "Each state in words: working says its role's verb and issue; a raised
 hand what it wants."
-  (let ((agent (+test-awc--agent)))
+  (let ((agent (+test-awc--agent :role "tester"))
+        (agent-workspace-role-function #'agent-workspace--bare-role))
     (dolist (case '((waking . "waking up") (desk . "at the desk") (working . "working")
                     (done . "done, have a look") (stuck . "stuck") (asleep . "asleep")
                     (home . "gone home") (hand . "asks you something")))

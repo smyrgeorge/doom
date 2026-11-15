@@ -27,6 +27,9 @@
             "-l" +test-aws--mock "-f" "mock-acp-main"))
 
 (add-to-list 'agent-workspace-kinds '(mock :config agent-shell-mock-agent-make-agent-config))
+;; The stand-in, given Claude Code's options as Claude Code is.
+(add-to-list 'agent-workspace-kinds '(mock-claude :config agent-shell-mock-agent-make-agent-config
+                                                  :claude-code t))
 
 ;; ====== HELPERS ======
 
@@ -80,9 +83,9 @@ its value, or nil."
   (+test-aws--wait (lambda () (eq (agent-workspace-agent-state agent) state)) timeout))
 
 (defun +test-aws--create (name &rest args)
-  "An agent NAME (a builder, the stand-in) at the desk: ARGS more of
-`agent-workspace-create''s."
-  (let ((agent (apply #'agent-workspace-create :role "builder" :name name :kind 'mock args)))
+  "An agent NAME at the desk: ARGS `agent-workspace-create''s (default: a
+builder, the stand-in)."
+  (let ((agent (apply #'agent-workspace-create (append args (list :role "builder" :name name :kind 'mock)))))
     (should (+test-aws--state agent 'desk))
     agent))
 
@@ -190,6 +193,49 @@ its session."
       (should (agent-workspace-agent-error agent))
       (should-not (agent-workspace-agent-buffer agent))
       (should-not (get-buffer "ada · builder")))))
+
+;; ====== ITS ROLE ======
+
+(defun +test-aws--new-session (name)
+  "The session/new the agent NAME's agent got: its params."
+  (cl-loop for entry in (+test-aws--log-entries)
+           when (and (equal (plist-get entry :agent) name)
+                     (equal (plist-get entry :method) "session/new"))
+           return (plist-get entry :params)))
+
+(defun +test-aws--mode-set (name)
+  "The permission modes the agent NAME's agent was set to."
+  (cl-loop for entry in (+test-aws--log-entries)
+           when (and (equal (plist-get entry :agent) name)
+                     (equal (plist-get entry :method) "session/set_mode"))
+           collect (plist-get (plist-get entry :params) :modeId)))
+
+(ert-deftest agent-workspace-session/its-role-s-tools-and-mode-reach-its-agent ()
+  "A role's tools and permission mode go to the agent, enforced there: its
+denied tools in Claude Code's disallowedTools (claude-agent-acp merges them
+into Claude Code's own: they're never offered), its allowed ones in
+allowedTools, its mode set before its first prompt; its model too."
+  (+test-aws--with-crew "role"
+    (let ((sam (+test-aws--create "sam" :role "investigator" :kind 'mock-claude))
+          (ada (+test-aws--create "ada" :kind 'mock-claude))
+          (linus (+test-aws--create "linus" :model "haiku" :kind 'mock-claude)))
+      (let ((options (plist-get (plist-get (plist-get (+test-aws--new-session "sam") :_meta) :claudeCode)
+                                :options)))
+        (should (equal (plist-get options :disallowedTools) '("Edit" "Write" "NotebookEdit")))
+        (should (member "Bash(bd:*)" (plist-get options :allowedTools)))
+        (should-not (member "Edit" (plist-get options :allowedTools))))
+      (should (equal (+test-aws--mode-set "sam") '("default")))
+      (let ((options (plist-get (plist-get (plist-get (+test-aws--new-session "ada") :_meta) :claudeCode)
+                                :options)))
+        (should (equal (plist-get options :disallowedTools) '("Bash(git push:*)")))
+        (should (member "Edit" (plist-get options :allowedTools))))
+      (should (equal (+test-aws--mode-set "ada") '("acceptEdits")))
+      (should (cl-loop for entry in (+test-aws--log-entries)
+                       thereis (and (equal (plist-get entry :agent) "linus")
+                                    (equal (plist-get entry :method) "session/set_model")
+                                    (equal (plist-get (plist-get entry :params) :modelId) "haiku"))))
+      (dolist (agent (list sam ada linus))
+        (should (eq (agent-workspace-agent-state agent) 'desk))))))
 
 ;; ====== ITS STATES ======
 

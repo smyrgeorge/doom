@@ -109,10 +109,19 @@
                                                   :promptCapabilities (:image :false :embeddedContext :false))
                               :authMethods [])))
       ("session/new"
+       ;; Claude Code's modes and models, as claude-agent-acp lists them.
        (mock-acp--result id '(:sessionId "mock-session"
                               :modes (:currentModeId "default"
                                       :availableModes [(:id "default" :name "Default")
-                                                       (:id "plan" :name "Plan")]))))
+                                                       (:id "acceptEdits" :name "Accept Edits")
+                                                       (:id "plan" :name "Plan Mode")
+                                                       (:id "dontAsk" :name "Don't Ask")
+                                                       (:id "bypassPermissions" :name "Bypass Permissions")])
+                              :models (:currentModelId "default"
+                                       :availableModels [(:modelId "default" :name "Default")
+                                                         (:modelId "opus" :name "Opus")
+                                                         (:modelId "sonnet" :name "Sonnet")
+                                                         (:modelId "haiku" :name "Haiku")]))))
       ("session/set_mode" (mock-acp--result id '()))
       ("session/set_model" (mock-acp--result id '()))
       ("session/prompt" (mock-acp--prompt id params))

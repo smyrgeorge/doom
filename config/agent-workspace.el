@@ -18,6 +18,18 @@
 ;; renamed, recoloured, forgotten (out of the crew). Only you prompt it
 ;; (`agent-workspace-send').
 
+;; ROLES
+;; What each kind of agent does and may do (config/agent-workspace/roles.el):
+;; a Markdown file each, NAME.md, as Claude Code's own agents are: a front
+;; matter (its tools allowed without asking, its tools denied, its model,
+;; permission mode, labels, how many may run, icon, verb, colour), then its
+;; instructions. The starters ship in config/agent-workspace/roles/ (scribe,
+;; investigator, builder, reviewer); a project's own, in its
+;; .agent-workspace/roles/, add to them or replace one of the same name (M-x
+;; agent-workspace-copy-role copies a starter there to change it). Its tools
+;; and permission mode are enforced by Claude Code (its options), not only
+;; told. A file's problems are warnings naming its file and line.
+
 ;; ITS STATES
 ;; waking up, at the desk (waiting for you), working (its turn's time counted
 ;; from its start), hand raised (a permission, a question: agent-shell's, or
@@ -50,6 +62,7 @@
 (load! "agent-workspace/core")
 (load! "agent-workspace/worktree")
 (load! "agent-workspace/session")
+(load! "agent-workspace/roles")
 
 ;; WHAT AN AGENT IS TOLD (see ITS SESSION above), after what every session is.
 (add-hook '+my/agent-shell-claude-context-functions #'agent-workspace-agent-context t)

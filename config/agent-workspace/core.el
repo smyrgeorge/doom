@@ -20,6 +20,8 @@
 (declare-function agent-workspace--stop "agent-workspace/session")
 (declare-function agent-workspace--process-table "agent-workspace/session")
 (declare-function agent-workspace-send "agent-workspace/session")
+(declare-function agent-workspace--check-role "agent-workspace/roles")
+(declare-function agent-workspace--check-room "agent-workspace/roles")
 (declare-function agent-shell-interrupt "agent-shell")
 
 ;; ====== VARIABLES ======
@@ -229,7 +231,8 @@ npm install\", \"at the desk\"..."
            'init-session 'init-model 'init-session-mode 'init-config-options)
        (unless (memq state '(working hand))
          (agent-workspace--set-state agent 'waking)))
-      ((or 'init-finished 'prompt-ready)
+      ;; Not prompt-ready: its prompt shows before its model and mode are set.
+      ('init-finished
        (when (eq state 'waking)
          (agent-workspace--set-state agent 'desk)))
       ('input-submitted
@@ -310,11 +313,13 @@ EXCEPT's, an agent being renamed)."
     (unless (eq other except)
       (user-error "There's an agent named %s already" (agent-workspace-agent-name other)))))
 
-(defun agent-workspace-free-colour (&optional project)
-  "The first of `agent-workspace-colours' no agent of PROJECT's crew has;
-all in use, the one fewest have."
+(defun agent-workspace-free-colour (&optional project prefer)
+  "A colour no agent of PROJECT's crew has: PREFER (its role's) if it's
+free, else the first of `agent-workspace-colours'; all in use, the one
+fewest have."
   (let ((used (mapcar #'agent-workspace-agent-colour (agent-workspace-agents project))))
-    (or (seq-find (lambda (colour) (not (member colour used))) agent-workspace-colours)
+    (or (and prefer (not (member prefer used)) prefer)
+        (seq-find (lambda (colour) (not (member colour used))) agent-workspace-colours)
         (car (seq-sort-by (lambda (colour) (seq-count (lambda (c) (equal c colour)) used))
                           #'< agent-workspace-colours)))))
 
@@ -329,13 +334,16 @@ the agent."
                      (user-error "Not in a git repository: a crew needs one"))))
     (unless (and (stringp role) (not (string-empty-p role)))
       (user-error "An agent needs a role"))
+    (agent-workspace--check-role project role)
     (agent-workspace--check-name name project)
     (when (and colour (not (member colour agent-workspace-colours)))
       (user-error "Not a colour for an agent: %s (one of %s)"
                   colour (string-join agent-workspace-colours ", ")))
     (let ((agent (agent-workspace--make-agent
                   :name name :role role :kind kind
-                  :colour (or colour (agent-workspace-free-colour project))
+                  :colour (or colour (agent-workspace-free-colour
+                                      project (plist-get (funcall agent-workspace-role-function project role)
+                                                         :colour)))
                   :model model :mode mode
                   :project (agent-workspace--root project))))
       (agent-workspace-worktree-ensure agent)
@@ -378,6 +386,7 @@ it, if still in progress and assigned to it, goes back: open, unassigned."
   "Wake AGENT (asleep or gone home): a fresh session."
   (when (agent-workspace-live-p agent)
     (user-error "%s is awake" (agent-workspace-agent-name agent)))
+  (agent-workspace--check-room (agent-workspace-agent-project agent) (agent-workspace-agent-role agent))
   (agent-workspace--start agent))
 
 (defun agent-workspace-forget (agent)
