@@ -125,21 +125,34 @@ after it. In `agent-workspace-change-functions'."
 
 ;; ====== SAVED WITH THE CREW ======
 
+(defun agent-workspace--panel-saved-name (canvas)
+  "Panel CANVAS as crew.el keeps it, as agent-ui open takes it: its name
+\(one opened from a file elsewhere in its worktree: that file, relative to
+it)."
+  (let* ((panel (buffer-local-value 'agent-ui-panels--state canvas))
+         (name (agent-ui-panels--name panel))
+         (file (agent-ui-panels--file panel))
+         (root (agent-ui-panels--root panel)))
+    (if (file-equal-p file (expand-file-name (concat name ".el")
+                                             (expand-file-name agent-ui-panel-directory root)))
+        name
+      (file-relative-name file root))))
+
 (defun agent-workspace-agent-panel-names (agent)
-  "AGENT's open panels as crew.el keeps them, sorted: each as agent-ui open
-takes it, its name (one opened from a file elsewhere in its worktree: that
-file, relative to it)."
-  (sort (mapcar (lambda (canvas)
-                  (let* ((panel (buffer-local-value 'agent-ui-panels--state canvas))
-                         (name (agent-ui-panels--name panel))
-                         (file (agent-ui-panels--file panel))
-                         (root (agent-ui-panels--root panel)))
-                    (if (file-equal-p file (expand-file-name (concat name ".el")
-                                                             (expand-file-name agent-ui-panel-directory root)))
-                        name
-                      (file-relative-name file root))))
-                (agent-workspace-agent-panels agent))
+  "AGENT's open panels as crew.el keeps them, sorted (see
+`agent-workspace--panel-saved-name')."
+  (sort (mapcar #'agent-workspace--panel-saved-name (agent-workspace-agent-panels agent))
         #'string<))
+
+(defun agent-workspace-set-panels (agent names)
+  "AGENT's panels made NAMES (crew.el's, edited): the ones missing opened,
+the others closed."
+  (dolist (canvas (agent-workspace-agent-panels agent))
+    (unless (member (agent-workspace--panel-saved-name canvas) names)
+      (let ((kill-buffer-query-functions nil))
+        (kill-buffer canvas))))
+  (agent-workspace-open-panels
+   agent (seq-difference names (agent-workspace-agent-panel-names agent))))
 
 (defun agent-workspace-open-panels (agent names)
   "AGENT's panels NAMES (crew.el's) opened again, in its worktree, as its

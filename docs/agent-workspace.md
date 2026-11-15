@@ -156,11 +156,12 @@ open (by name, never their data), which agent is selected, and whether the minim
 It's written when the crew changes (a panel opened or closed too), and read as data, never run. Closing the crew
 leaves it as it was, its agents' panels in it. `SPC o w` in a project whose crew isn't running starts every agent in
 it again: fresh, each in its worktree, with its role as it is now, its panels open again there (fetched afresh),
-waiting for you. Asleep agents stay asleep. An agent that can't start (its role is gone, its worktree can't be made)
+waiting for you. Asleep agents stay asleep, and their panels open when they wake. An agent that can't start (its role is gone, its worktree can't be made)
 is stuck, saying why, and the others start. A panel whose file is gone is skipped, saying so, and the others open. A
 wrong entry is left out, and a warning names its line.
 
-After you edit it or pull it, `gR` reads it again. It asks before it starts an agent or forgets one.
+After you edit it or pull it, `gR` reads it again. It asks before it starts an agent or forgets one; a colour or the
+panels you changed it applies.
 
 ## Making an agent
 

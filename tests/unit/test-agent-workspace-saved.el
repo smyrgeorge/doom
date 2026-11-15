@@ -490,6 +490,53 @@ Nothing written meanwhile."
       (should (equal warned '("ada's panel gone: not one of this project's: logs, tests: skipped"))))
     (should (string-search ":panels (\"gone\" \"logs\" \"tests\")" (+test-aws2--file project)))))
 
+(ert-deftest agent-workspace-saved/an-asleep-agents-panels-when-it-wakes ()
+  "Started again asleep: its panels kept in crew.el (written meanwhile), none
+open; woken, they open (doom-ukm.7)."
+  (+test-aws2-panels "asleep-panels"
+    (agent-workspace-create :role "builder" :name "ken")
+    (agent-workspace-close project)
+    (+test-aws2--write project "(agent-workspace-crew
+ :version 1
+ :agents ((:name \"ken\" :role \"builder\" :colour \"green\" :asleep t :panels (\"logs\" \"tests\")))
+ :layout (:view stage :room right :selected \"ken\" :open t))
+")
+    (agent-workspace-open t)
+    (let ((ken (agent-workspace-agent "ken" project)))
+      (should (eq (agent-workspace-agent-state ken) 'asleep))
+      (should-not (+test-aws2--open-panels))
+      (agent-workspace-recolour ken "blue")
+      (should (string-search "(:name \"ken\" :role \"builder\" :colour \"blue\" :asleep t :panels (\"logs\" \"tests\"))"
+                             (+test-aws2--file project)))
+      (agent-workspace-wake ken)
+      (should (equal (+test-aws2--open-panels) '("Agent UI: logs · ken" "Agent UI: tests · ken")))
+      (+test-sleep 0.1)
+      (should (string-search "(:name \"ken\" :role \"builder\" :colour \"blue\" :panels (\"logs\" \"tests\"))"
+                             (+test-aws2--file project))))))
+
+(ert-deftest agent-workspace-saved/read-again-applies-panels ()
+  "gR after crew.el's :panels edited: a running agent's opened and closed as
+listed; an asleep one's kept for when it wakes (doom-ukm.7)."
+  (+test-aws2-panels "reload-panels"
+    (agent-workspace-open t)
+    (let ((ada (agent-workspace-create :role "builder" :name "ada"))
+          (ken (agent-workspace-create :role "builder" :name "ken")))
+      (+test-aws2--open-panel ada "tests")
+      (agent-workspace-sleep ken)
+      (+test-sleep 0.1)
+      (+test-aws2--write project "(agent-workspace-crew
+ :version 1
+ :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :panels (\"logs\"))
+          (:name \"ken\" :role \"builder\" :colour \"magenta\" :asleep t :panels (\"tests\")))
+ :layout (:view stage :room right :selected \"ada\" :open t))
+")
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (agent-workspace-crew-reload))
+      (+test-sleep 0.1)
+      (should (equal (+test-aws2--open-panels) '("Agent UI: logs · ada")))
+      (agent-workspace-wake ken)
+      (should (equal (+test-aws2--open-panels) '("Agent UI: logs · ada" "Agent UI: tests · ken"))))))
+
 (ert-deftest agent-workspace-saved/panels-closed-and-opened-again ()
   "Q, then SPC o w: each agent's panels open again with it, in its worktree
 \(one from a file there too); the one put to sleep closed its own: none."

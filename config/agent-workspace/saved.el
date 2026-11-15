@@ -40,6 +40,10 @@
   "The projects whose crew was closed (none made since): crew.el kept as it
 was then, whatever changes in their app after.")
 
+(defvar agent-workspace--crew-panels (make-hash-table :test #'eq :weakness 'key)
+  "An agent started again asleep (or stuck): its panels in crew.el, kept
+there and opened once its session starts.")
+
 (defvar agent-workspace--crew-loading nil
   "Non-nil while a crew starts from its crew.el: nothing written meanwhile.")
 
@@ -146,7 +150,8 @@ read already), or nil."
             ;; Not Claude Code (the example's stand-in): said, so it starts again as it was.
             (unless (eq (agent-workspace-agent-kind agent) 'claude-code)
               (list :kind (agent-workspace-agent-kind agent)))
-            (let ((panels (agent-workspace-agent-panel-names agent)))
+            (let ((panels (or (agent-workspace-agent-panel-names agent)
+                              (gethash agent agent-workspace--crew-panels))))
               (and panels (list :panels panels))))))
 
 (defun agent-workspace-crew-text (project)
@@ -275,10 +280,24 @@ stuck, saying why, if it can't start."
                      (agent-workspace-agent-error agent) (concat "its worktree: " (error-message-string err)))
                t))))
     (agent-workspace--changed agent 'created)
-    (when (and (eq (agent-workspace-agent-state agent) 'waking)
-               (agent-workspace--start agent))
-      (agent-workspace-open-panels agent (plist-get entry :panels)))
+    (if (and (eq (agent-workspace-agent-state agent) 'waking)
+             (agent-workspace--start agent))
+        (agent-workspace-open-panels agent (plist-get entry :panels))
+      ;; Asleep or stuck: opened once it starts.
+      (when (plist-get entry :panels)
+        (puthash agent (plist-get entry :panels) agent-workspace--crew-panels)))
     agent))
+
+(defun agent-workspace--crew-panels-h (agent what)
+  "AGENT's session started (woken, restarted): its panels from crew.el
+opened, if it was started again asleep or stuck. In
+`agent-workspace-change-functions'."
+  (when-let* (((eq what 'session))
+              (names (gethash agent agent-workspace--crew-panels)))
+    (remhash agent agent-workspace--crew-panels)
+    (agent-workspace-open-panels agent names)))
+
+(add-hook 'agent-workspace-change-functions #'agent-workspace--crew-panels-h)
 
 (defun agent-workspace--crew-start (project)
   "PROJECT's crew started again from its crew.el, if it has one: non-nil.
@@ -305,8 +324,9 @@ In `agent-workspace-open-functions'."
 
 (defun agent-workspace-crew-reload ()
   "Read crew.el again (after a hand edit, a pull): an agent added there is
-started, one taken out forgotten, a colour changed applied; each asked
-first."
+started, one taken out forgotten (each asked first); a colour changed
+applied, its panels as listed (opened, closed; an asleep one's when it
+wakes)."
   (interactive)
   (let* ((app (agent-workspace--here-or-error))
          (project (agent-workspace--app-project app)))
@@ -321,8 +341,18 @@ first."
              ((not agent)
               (when (y-or-n-p (format "Start %s (%s), new in crew.el? " (plist-get entry :name) (plist-get entry :role)))
                 (agent-workspace--restore project entry)))
-             ((and (plist-get entry :colour) (not (equal (plist-get entry :colour) (agent-workspace-agent-colour agent))))
-              (agent-workspace-recolour agent (plist-get entry :colour))))))
+             (t
+              (when (and (plist-get entry :colour)
+                         (not (equal (plist-get entry :colour) (agent-workspace-agent-colour agent))))
+                (agent-workspace-recolour agent (plist-get entry :colour)))
+              (let ((panels (plist-get entry :panels)))
+                (if (agent-workspace-live-p agent)
+                    (unless (equal (sort (copy-sequence panels) #'string<)
+                                   (agent-workspace-agent-panel-names agent))
+                      (agent-workspace-set-panels agent panels))
+                  (if panels
+                      (puthash agent panels agent-workspace--crew-panels)
+                    (remhash agent agent-workspace--crew-panels))))))))
         (dolist (agent (agent-workspace-agents project))
           (unless (seq-find (lambda (entry) (equal (plist-get entry :name) (agent-workspace-agent-name agent))) entries)
             (when (y-or-n-p (format "Forget %s, gone from crew.el (its worktree kept)? " (agent-workspace-agent-name agent)))
