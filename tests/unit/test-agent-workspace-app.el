@@ -150,6 +150,30 @@ leaves it alone)."
         (should (+my/tiling--left-alone-p))
         (ignore ken)))))
 
+(ert-deftest agent-workspace-app/its-time-as-its-state ()
+  "An agent's turn time on its line (its pane's header line, its bar) in its
+state's words' face: the text's while it works or is at the desk, readable on
+its colour's tint (shadow wasn't); its state's own (a raised hand's, done's);
+dimmed while it isn't there to work."
+  (let ((agent (agent-workspace--make-agent :name "ada" :role "builder" :colour "cyan"
+                                            :project "/tmp/awa-time/" :since (- (float-time) 250)))
+        (agent-workspace-role-function (lambda (_project name) (list :name name :verb "building")))
+        ;; A text's faces but its tint's background (and gone home's strike).
+        (faces (lambda (line at)
+                 (let ((face (get-text-property at 'face line)))
+                   (seq-remove (lambda (f) (and (consp f) (or (plist-member f :background) (plist-member f :strike-through))))
+                               (if (keywordp (car-safe face)) (list face) (ensure-list face)))))))
+    (pcase-dolist (`(,state . ,face) '((working) (desk) (hand . warning) (done . success) (stuck . error)
+                                       (waking . shadow) (asleep . shadow) (home . shadow)))
+      (setf (agent-workspace-agent-state agent) state
+            (agent-workspace-agent-ask agent) (and (eq state 'hand) '(:kind permission :title "npm install")))
+      (dolist (how '((t) (nil t)))
+        (let* ((line (apply #'agent-workspace-line agent 120 how))
+               (time (+ 3 (string-search " · 4m" line)))
+               (words (string-search (agent-workspace-state-text agent) line)))
+          (should (equal (funcall faces line time) (funcall faces line words)))
+          (should (equal (funcall faces line time) (ensure-list face))))))))
+
 (ert-deftest agent-workspace-app/selecting-and-folding ()
   "Selecting an agent opens its pane and folds the others, the issue list
 kept; TAB folds it: every pane a bar, the hint below them."

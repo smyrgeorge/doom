@@ -148,6 +148,12 @@ asleep, gone home)."
             ((< m 60) (format "%dm" m))
             (t (format "%dh %dm" (/ m 60) (% m 60)))))))
 
+(defun agent-workspace-time-text (agent time)
+  "AGENT's turn TIME in its state's face, as its state's words: the text's
+while it works (shadow was 1.1 to 1.6 contrast on its colour's tint),
+dimmed while it isn't there to work."
+  (if-let* ((face (agent-workspace-state-face agent))) (propertize time 'face face) time))
+
 (defun agent-workspace-agent-avatar (agent)
   "AGENT's avatar, two columns: in the GUI its initial on its colour (dimmed
 while it isn't there to work, a dot for a raised hand, done, stuck); in a
@@ -241,7 +247,7 @@ and branch."
                        sep
                        (agent-workspace-state-glyph agent)
                        (agent-workspace-state-words agent)
-                       (if time (concat sep (propertize time 'face 'shadow)) "")
+                       (if time (concat sep (agent-workspace-time-text agent time)) "")
                        ;; Its events waiting (inbox.el).
                        (if-let* ((mail (and (fboundp 'agent-workspace-inbox-badge)
                                             (agent-workspace-inbox-badge agent))))
