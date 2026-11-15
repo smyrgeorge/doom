@@ -3,8 +3,9 @@
 ;; M-x +my/example-merge (or M-x +my/example, merge) makes a Git repository
 ;; in the temp folder where merging a branch conflicts in orders.py, every
 ;; way the panes handle, and opens it as Magit's e would. Try anything: the
-;; repository is deleted once the merge is closed (Done or Abort), what Done
-;; saved with it.
+;; margins' >> << x on each change, the ✨ wands on discount() and tax(), the
+;; bar's buttons. The repository is deleted once the merge is closed (Done or
+;; Abort), what Done saved with it.
 
 ;; ====== VARIABLES ======
 
@@ -210,6 +211,6 @@ once the merge is closed). See examples/merge.el."
                (+my/merge "orders.py")
              (error (+my/example-merge--cleanup (+my/merge--make :toplevel repo))
                     (signal (car err) (cdr err))))
-      (message "Merge example (a temp repo, deleted when closed): the margins' >> << x, the ✨ wands on discount() and tax(), the bar's buttons; Done or Abort"))))
+      (message "Merge example: the margins' >> << x, the ✨ wands; Done or Abort"))))
 
 (provide 'example-merge)

@@ -245,7 +245,7 @@ version there (deleted once closed). See examples/image.el."
         (+my/image-diff))
       (+my/example-delete-when-closed
        (file-name-directory (directory-file-name repo)) (list buffer))
-      (message "Image example: HEAD's version on the left; J / K the folder's images, + / - zoom, r rotates, y copies; SPC m g closes the diff")
+      (message "Image example: git's HEAD on the left; J / K other images; SPC m g closes it")
       buffer)))
 
 (defun +my/example-image-ready ()

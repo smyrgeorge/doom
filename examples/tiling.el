@@ -108,7 +108,7 @@ SPC w SPC opens them (deleted once closed). See examples/tiling.el."
         (push (current-buffer) buffers))
       (select-window main))
     (+my/example-delete-when-closed dir buffers)
-    (message "Tiling example: SPC w SPC opens another pane where the strategy puts it, SPC w a arranges them")
+    (message "Tiling example: SPC w SPC opens a pane, SPC w a arranges them")
     (nreverse buffers)))
 
 (provide 'example-tiling)

@@ -458,6 +458,36 @@ of it as one, its SKILL.md then its references (by name)."
         (insert-file-contents f))
       (buffer-string))))
 
+;; THE EXAMPLES' MESSAGES
+(defun +test-example-messages ()
+  "What the examples (examples/NAME.el) say in the echo area: (NAME . TEXT)
+for each `message' they call, read from their code: TEXT as shown, of a
+string written there, or of \"%s\" and a constant of the file (`defconst');
+nil for any other (it can't be checked)."
+  (let (messages)
+    (dolist (file (directory-files (expand-file-name "examples/" +test-root) t "\\`[^.].*\\.el\\'"))
+      (let ((name (file-name-base file))
+            forms constants)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (condition-case nil
+              (while t (push (read (current-buffer)) forms))
+            (end-of-file)))
+        (dolist (form forms)
+          (when (and (eq (car-safe form) 'defconst) (stringp (nth 2 form)))
+            (push (cons (nth 1 form) (nth 2 form)) constants)))
+        (named-let walk ((form (nreverse forms)))
+          (when (consp form)
+            (when (eq (car form) 'message)
+              (push (cons name (pcase (cdr form)
+                                 (`(,(and (pred stringp) text)) (format-message text))
+                                 (`("%s" ,(and (pred symbolp) constant)) (alist-get constant constants))))
+                    messages))
+            (while (consp form)
+              (walk (car form))
+              (setq form (cdr form)))))))
+    (nreverse messages)))
+
 ;; ====== END TO END (GUI) ======
 
 (defun +test--pump (seconds)

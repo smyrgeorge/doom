@@ -6,7 +6,8 @@
 ;; played out over a few seconds: a checklist of the release's steps, the
 ;; tests' table filling in (one fails), the build's progress bar, a chart of
 ;; the last builds' times. The agent's way of doing it is cmd/agent-ui; here,
-;; the same through Lisp. The file is deleted once both are closed.
+;; the same through Lisp. q on the canvas hides it. The file is deleted once
+;; both are closed.
 
 ;; ====== VARIABLES ======
 
@@ -76,7 +77,7 @@
                                           (:name "Publish" :status "skipped" :detail "a test failed")))
                          :canvas canvas)
         (setq +my/example-agent-ui--done t)
-        (message "Agent UI example: the canvas an agent fills in beside its conversation as it works; q hides it"))))))
+        (message "Agent UI example: an agent's canvas, filled in as it works; q hides it"))))))
 
 (defun +my/example-agent-ui--stop ()
   (when (timerp +my/example-agent-ui--timer)

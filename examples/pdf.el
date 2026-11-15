@@ -176,7 +176,7 @@ none is: a second run starts with them on), put back once the last closes.")
     file))
 
 (defconst +my/example-pdf--message
-  "PDF example: j / k scroll, J / K pages, / searches, O the outline, SPC m d light pages"
+  "PDF example: J / K pages, / searches, O the outline, SPC m d light pages"
   "What the example says: as it opens, and again once the PDF is (the
 messages opening it said after it, PDF.js installed..., not left last).")
 

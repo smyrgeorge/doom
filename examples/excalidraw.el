@@ -103,7 +103,7 @@ examples/excalidraw.el."
     (set-window-buffer (selected-window) (find-file-noselect file))
     (set-buffer (window-buffer (selected-window)))
     (+my/example-delete-when-closed dir (list (current-buffer)))
-    (message "Drawing example: draw with the mouse, r a rectangle, a an arrow, t text, ? the keys; SPC m d the dark canvas")
+    (message "Drawing example: draw with the mouse; ? the keys, SPC m d the dark canvas")
     (current-buffer)))
 
 (defun +my/example-excalidraw-ready ()

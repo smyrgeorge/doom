@@ -72,7 +72,7 @@ merges it left open closed after."
       (should (string-empty-p (+my/merge--side-text (nth 7 chunks) 'yours))) ; removed
       ;; Open as Magit's e opens it.
       (should (eq (window-buffer (selected-window)) (+my/merge-result session)))
-      (should (= (+test-messages "^Merge example (a temp repo, deleted when closed)") 1)))))
+      (should (= (+test-messages "^Merge example: ") 1)))))
 
 (ert-deftest examples/merge-leaves-nothing ()
   "Closed (Abort, Done, a pane closed): its repository deleted, whatever
@@ -150,7 +150,8 @@ images/, always that name."
 
 (ert-deftest examples/each-one-a-command-a-file-and-a-screenshot-to-be ()
   "Each example listed has its file, its command, its line in
-config/examples.el's list and docs/examples.md's table."
+config/examples.el's list and docs/examples.md's table; the docs name the
+picker (M-x +my/example) too."
   (should (equal (sort (+my/examples) #'string<)
                  '("agent-ui" "banner" "excalidraw" "image" "issues" "markdown" "merge" "mermaid" "panel" "pdf"
                    "stripe" "tiling")))
@@ -160,10 +161,23 @@ config/examples.el's list and docs/examples.md's table."
         (docs (with-temp-buffer
                 (insert-file-contents (expand-file-name "docs/examples.md" +test-root))
                 (buffer-string))))
+    (should (string-search "`M-x +my/example`" docs))
     (dolist (name (+my/examples))
       (should (fboundp (intern (format "+my/example-%s" name))))
       (should (string-match-p (format "^;;   %s " (regexp-quote name)) listed))
       (should (string-match-p (format "^| `%s` |" (regexp-quote name)) docs)))))
+
+(ert-deftest examples/messages-fit-80-columns ()
+  "What each example says in the echo area fits 80 columns (one line in an
+80-column frame; they filled 2 or 3 in 100 and 60, the panes squeezed for
+a moment): every one of them, its text known from the code."
+  (let ((messages (+test-example-messages)))
+    (should (>= (length messages) 14))
+    (should (equal (sort (delete-dups (mapcar #'car messages)) #'string<)
+                   (sort (+my/examples) #'string<)))
+    (dolist (message messages)
+      (should (equal (list (car message) (cdr message) (and (cdr message) (<= (string-width (cdr message)) 80)))
+                     (list (car message) (cdr message) t))))))
 
 (ert-deftest examples/mermaid-a-diagram-to-preview ()
   "The diagram in mermaid-mode; no preview where there's none (batch Emacs:
@@ -183,7 +197,7 @@ no GUI), Mermaid's Live Editor said instead; the file gone once closed."
         (should (string-search "subgraph report" (buffer-string)))
         (should-not +my/mermaid-preview-mode))
       (should (eq (window-buffer (selected-window)) buffer))
-      (should (seq-some (lambda (line) (string-search "SPC m o opens the diagram in Mermaid's Live Editor" line))
+      (should (seq-some (lambda (line) (string-search "SPC m o opens Mermaid's Live Editor" line))
                         said))
       (kill-buffer buffer)
       (should-not (file-exists-p file))

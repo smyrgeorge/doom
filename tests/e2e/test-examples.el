@@ -3,8 +3,9 @@
 ;; wands in the Result's margin; Done, and its repository is gone. The PDF in
 ;; PDF.js, dark; the Markdown preview loaded; the drawing in Excalidraw; the
 ;; error stripe's frame shown; the notices' frame: each ready (what the
-;; screenshots wait for), and its files gone once closed. PDF.js and
-;; Excalidraw: copies of Doom's, never downloaded here.
+;; screenshots wait for), and its files gone once closed. What each one says:
+;; one line of an 80-column frame. PDF.js and Excalidraw: copies of Doom's,
+;; never downloaded here.
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "magit"))))))
@@ -258,3 +259,22 @@ wide as the canvas's text, the rest text; closed: the file gone."
       (kill-buffer canvas)
       (kill-buffer conversation)
       (should-not (file-exists-p dir)))))
+
+(ert-deftest e2e-examples/messages-one-line-in-80-columns ()
+  "What each example says in the echo area takes one line of an 80-column
+frame (they took 2 or 3 in 100 and 60 columns); a longer one, two."
+  (+test-with-reset
+    (unwind-protect
+        (let ((lines (lambda (text)
+                       (message nil)
+                       (redisplay t)
+                       (message "%s" text)
+                       (redisplay t)
+                       (window-total-height (minibuffer-window)))))
+          (set-frame-width nil 80)
+          (should (+test-wait-for (lambda () (= (frame-width) 80)) 5))
+          (should (= (funcall lines (make-string 100 ?x)) 2))
+          (dolist (said (+test-example-messages))
+            (should (equal (list said (funcall lines (cdr said))) (list said 1)))))
+      (message nil)
+      (+test-e2e-frame-reset))))
