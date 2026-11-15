@@ -87,17 +87,22 @@ config/agent-workspace.el).")
           (current-buffer)))))
 
 (defun agent-workspace--clickable (line map)
-  "LINE with MAP on it (a click selects its agent), hovered as `hl-line';
-its buttons (a raised hand's) keep their own."
+  "LINE with MAP on it (a click selects its agent), hovered as `hl-line',
+saying so where its text says nothing else on hover (its context's usage,
+its panels); its buttons (a raised hand's) keep their own."
   (let ((line (copy-sequence line))
         (pos 0))
     (while (< pos (length line))
       (let ((next (or (next-single-property-change pos 'agent-workspace-button line) (length line))))
         (unless (get-text-property pos 'agent-workspace-button line)
-          (add-text-properties pos next
-                               (list 'keymap map 'local-map map 'mouse-face 'agent-workspace-hover
-                                     'help-echo "Select this agent: its pane opens (mouse-3: its actions)")
-                               line))
+          (add-text-properties pos next (list 'keymap map 'local-map map 'mouse-face 'agent-workspace-hover) line)
+          (let ((at pos))
+            (while (< at next)
+              (let ((end (or (next-single-property-change at 'help-echo line next) next)))
+                (unless (get-text-property at 'help-echo line)
+                  (put-text-property at end 'help-echo "Select this agent: its pane opens (mouse-3: its actions)"
+                                     line))
+                (setq at end)))))
         (setq pos next)))
     line))
 
@@ -132,15 +137,26 @@ one)."
       (set-face-background face colour))
     face))
 
+(defun agent-workspace--percent-escaped (text)
+  "TEXT for a header line: each % doubled, as itself (its colour, its hover
+kept: `string-replace''s %% has none)."
+  (let ((parts nil) (start 0) at)
+    (while (setq at (string-search "%" text start))
+      (push (substring text start (1+ at)) parts)
+      (push (substring text at (1+ at)) parts)
+      (setq start (1+ at)))
+    (apply #'concat (nreverse (cons (substring text start) parts)))))
+
 (defun agent-workspace--pane-header ()
   "The open pane's header line: its agent's line (in its window's width);
 its canvas or a panel shown there full size, their tabs at its right."
   (when-let* ((agent (or (agent-workspace-buffer-agent) (window-parameter nil 'agent-workspace-pane))))
-    (string-replace "%" "%%" (agent-workspace--clickable
-                              (agent-workspace-line agent (window-total-width) t nil
-                                                    (and (window-parameter nil 'agent-workspace-side)
-                                                         (agent-workspace--tabs-text agent (window-buffer))))
-                              agent-workspace-line-map))))
+    (agent-workspace--percent-escaped
+     (agent-workspace--clickable
+      (agent-workspace-line agent (window-total-width) t nil
+                            (and (window-parameter nil 'agent-workspace-side)
+                                 (agent-workspace--tabs-text agent (window-buffer))))
+      agent-workspace-line-map))))
 
 ;; ====== THE STACK ======
 

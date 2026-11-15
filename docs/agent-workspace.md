@@ -34,6 +34,10 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
   and how long it's been working, and `◫2` when it has two panels open. The stage arranges itself: drag a border
   and it's tiled again.
 
+  A bar and an open pane's header line show, first on their right, how full the agent's context is: `20%`, green,
+  yellow from 60%, red from 85%, as agent-shell colours it. Hover it for its tokens and cost. It's updated as the agent
+  reports its usage, and shows nothing until it has.
+
 - **The room** is on the right, 78 columns, or at the bottom in a frame under 200 columns (or with
   `agent-workspace-room-side` set to `bottom`). `2` shows the room alone, `1` the stage again.
 

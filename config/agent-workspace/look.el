@@ -12,14 +12,16 @@
 ;;
 ;; An agent's line (its pane's header line, or its bar when its pane is
 ;; folded): ▾/▸, avatar, name (↻ while it loops), role, state glyph and words,
-;; time; on the right its panels counted (◫2), its permission mode, model and
-;; branch, at the edge to the pixel; its canvas or a panel full size in its
-;; pane (V): their tabs there instead. Tinted in its colour (30% its open
-;; pane's, 14% a bar), the warning colour for a raised hand, its options then
-;; buttons before them (hands.el). Under 90 columns: name, state, buttons and
-;; panels only.
+;; time; on the right its context used (20%, agent-shell's colours for it),
+;; its panels counted (◫2), its permission mode, model and branch, at the
+;; edge to the pixel; its canvas or a panel full size in its pane (V): their
+;; tabs there instead. Tinted in its colour (30% its open pane's, 14% a bar),
+;; the warning colour for a raised hand, its options then buttons before them
+;; (hands.el). Under 90 columns: name, state, buttons, context and panels
+;; only.
 
 (require 'cl-lib)
+(require 'map)
 (require 'subr-x)
 (require 'svg)
 
@@ -34,6 +36,11 @@
 (declare-function agent-workspace-agent-panels "agent-workspace/panels")
 (declare-function agent-workspace--tab-name "agent-workspace/stage")
 (declare-function agent-workspace--ask-key "agent-workspace/hands")
+;; agent-shell's own, internal: guarded.
+(declare-function agent-shell-subscribe-to "agent-shell")
+(declare-function agent-shell--context-usage-face "agent-shell-usage")
+(declare-function agent-shell--format-usage "agent-shell-usage")
+(defvar agent-shell--state)
 
 ;; ====== VARIABLES ======
 
@@ -191,6 +198,45 @@ terminal ▌A."
   "MODE (Claude Code's id) as it's shown: kebab-case."
   (or (cdr (assoc mode agent-workspace--mode-labels)) mode))
 
+;; ====== ITS CONTEXT ======
+
+(defun agent-workspace-usage (agent)
+  "How full AGENT's context is: its session's usage (agent-shell's :usage,
+:context-used of :context-size tokens), or nil before it says."
+  (when-let* ((buffer (agent-workspace-agent-buffer agent))
+              ((buffer-live-p buffer))
+              ((local-variable-p 'agent-shell--state buffer))
+              (usage (map-elt (buffer-local-value 'agent-shell--state buffer) :usage))
+              (used (map-elt usage :context-used))
+              (size (map-elt usage :context-size))
+              ((and (numberp used) (numberp size) (> used 0) (> size 0))))
+    usage))
+
+(defun agent-workspace-usage-text (agent)
+  "AGENT's context used, a whole percentage (\"20%\") in agent-shell's
+colour for it (green, from 60% yellow, from 85% red); its tokens and cost
+on hover, as agent-shell's own indicator. nil before its session says, or
+with an agent-shell that lacks these (internal) functions."
+  (when-let* (((fboundp 'agent-shell--context-usage-face))
+              (usage (agent-workspace-usage agent)))
+    (let ((percent (floor (* 100.0 (map-elt usage :context-used)) (map-elt usage :context-size))))
+      (propertize (format "%d%%" percent)
+                  'face (agent-shell--context-usage-face percent)
+                  'help-echo (and (fboundp 'agent-shell--format-usage) (agent-shell--format-usage usage))))))
+
+(defun agent-workspace--usage-watch (agent buffer)
+  "AGENT's session BUFFER followed: its line drawn again as its context's
+usage changes (agent-shell's usage-update) and at a turn's end. In
+`agent-workspace-session-functions'."
+  (agent-shell-subscribe-to
+   :shell-buffer buffer
+   :on-event (lambda (event)
+               (when (and (memq (alist-get :event event) '(usage-update turn-complete))
+                          (eq (agent-workspace-agent-buffer agent) buffer))
+                 (agent-workspace--changed agent 'usage)))))
+
+(add-hook 'agent-workspace-session-functions #'agent-workspace--usage-watch)
+
 ;; ====== ITS LINE ======
 
 (defun agent-workspace--fit (text width)
@@ -260,12 +306,15 @@ and branch."
                        (agent-workspace--hand-buttons
                         agent (agent-workspace--ask-key (agent-workspace-agent-ask agent)))))
          (badge (and (not tabs) (agent-workspace-badge agent)))
+         ;; Its context used, first after a raised hand's buttons.
+         (usage (agent-workspace-usage-text agent))
          (right (cond
-                 (tabs (concat (if buttons (concat buttons "  ") "") tabs " "))
-                 (narrow (concat (string-join (delq nil (list buttons badge)) " ") " "))
+                 (tabs (concat (if buttons (concat buttons "  ") "") (if usage (concat usage "  ") "") tabs " "))
+                 (narrow (concat (string-join (delq nil (list buttons usage badge)) " ") " "))
                  (t (let ((settings (string-join (delq nil (list (and mode (agent-workspace-mode-label mode)) model))
                                                  " ")))
                       (concat (if buttons (concat buttons "  ") "")
+                              (if usage (concat usage "  ") "")
                               (if badge (concat badge "  ") "")
                               (propertize settings 'face 'agent-workspace-label)
                               (when-let* ((branch (agent-workspace-agent-branch agent)))

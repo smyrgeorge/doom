@@ -174,6 +174,87 @@ dimmed while it isn't there to work."
           (should (equal (funcall faces line time) (funcall faces line words)))
           (should (equal (funcall faces line time) (ensure-list face))))))))
 
+(ert-deftest agent-workspace-app/its-context-used ()
+  "An agent's context used on its line, first on its right side (before its
+mode and model): a whole percentage in agent-shell's colour for it (green
+under 60%, yellow from 60%, red from 85%), its tokens and cost on hover
+(kept as it's made clickable, its colour in a header line); its pane's
+header line and its bar alike, under 90 columns too. Nothing, no gap,
+before its session says."
+  (let* ((buffer (generate-new-buffer " *ada's session*"))
+         (agent (agent-workspace--make-agent :name "ada" :role "builder" :colour "cyan" :state 'desk
+                                             :project "/tmp/awa-usage/" :buffer buffer))
+         (agent-workspace-role-function (lambda (_project name) (list :name name :model "opus")))
+         (usage (lambda (used size)
+                  (with-current-buffer buffer
+                    (setq-local agent-shell--state
+                                `((:usage . ((:context-used . ,used) (:context-size . ,size)
+                                             (:input-tokens . 1200) (:output-tokens . 300)
+                                             (:cost-amount . 0.42)))))))))
+    (unwind-protect
+        (let ((none (substring-no-properties (agent-workspace-line agent 120))))
+          ;; None yet (no state, then nothing used): nothing, no gap.
+          (should-not (string-search "%" none))
+          (funcall usage 0 0)
+          (should (equal (substring-no-properties (agent-workspace-line agent 120)) none))
+          ;; 204k of 1m: 20%, first on its right side.
+          (funcall usage 204000 1000000)
+          (let* ((line (agent-workspace-line agent 120))
+                 (at (string-search "20%" line)))
+            (should (string-match-p "at the desk +20%  [^ ]" (substring-no-properties line)))
+            (should (< at (string-search "opus" line)))
+            (should (memq 'agent-shell-success (ensure-list (get-text-property at 'face line))))
+            (let ((hover (get-text-property at 'help-echo line)))
+              (should (string-search "Context: 204k/1m (20.4%)" hover))
+              (should (string-search "$0.42" hover)))
+            ;; Made clickable, its hover kept; elsewhere the line's.
+            (let ((clickable (agent-workspace--clickable line agent-workspace-line-map)))
+              (should (equal (get-text-property at 'help-echo clickable) (get-text-property at 'help-echo line)))
+              (should (string-prefix-p "Select this agent" (get-text-property 2 'help-echo clickable)))
+              ;; In a header line: its % doubled, as itself (its colour).
+              (let* ((header (agent-workspace--percent-escaped clickable))
+                     (percent (+ at 2)))
+                (should (equal (substring-no-properties header percent (+ percent 2)) "%%"))
+                (should (memq 'agent-shell-success (ensure-list (get-text-property (1+ percent) 'face header))))
+                (should (get-text-property (1+ percent) 'help-echo header)))))
+          ;; Its bar, and under 90 columns.
+          (should (string-search "20%" (agent-workspace-line agent 120 nil t)))
+          (should (string-search "20%" (agent-workspace-line agent 80)))
+          (should (string-search "20%" (agent-workspace-line agent 80 nil t)))
+          ;; Its colours: agent-shell's levels.
+          (pcase-dolist (`(,used . ,face) '((590000 . agent-shell-success) (599999 . agent-shell-success)
+                                            (600000 . agent-shell-warning) (849999 . agent-shell-warning)
+                                            (850000 . agent-shell-error) (1000000 . agent-shell-error)))
+            (funcall usage used 1000000)
+            (let* ((line (agent-workspace-line agent 120))
+                   (text (format "%d%%" (/ used 10000))))
+              (should (string-search text line))
+              (should (memq face (ensure-list (get-text-property (string-search text line) 'face line)))))))
+      (kill-buffer buffer))))
+
+(ert-deftest agent-workspace-app/its-context-drawn-again ()
+  "Its session's usage updates and its turn's end draw its line again (a
+change said to the hooks), nothing else; not an old session's."
+  (let* ((buffer (generate-new-buffer " *ada's session*"))
+         (agent (agent-workspace--make-agent :name "ada" :role "builder" :colour "cyan" :buffer buffer))
+         (on-event nil)
+         (changed nil)
+         (agent-workspace-change-functions (list (lambda (_agent what) (push what changed)))))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'agent-shell-subscribe-to)
+                     (lambda (&rest args) (setq on-event (plist-get args :on-event)))))
+            (agent-workspace--usage-watch agent buffer))
+          (dolist (event '(usage-update tool-call-update agent-message-chunk turn-complete))
+            (funcall on-event `((:event . ,event))))
+          (should (equal changed '(usage usage)))
+          (setq changed nil)
+          (setf (agent-workspace-agent-buffer agent) (generate-new-buffer " *ada's next session*"))
+          (funcall on-event '((:event . usage-update)))
+          (should-not changed)
+          (kill-buffer (agent-workspace-agent-buffer agent)))
+      (kill-buffer buffer))))
+
 (ert-deftest agent-workspace-app/selecting-and-folding ()
   "Selecting an agent opens its pane and folds the others, the issue list
 kept; TAB folds it: every pane a bar, the hint below them."

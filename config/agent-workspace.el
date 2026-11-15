@@ -232,8 +232,11 @@ needs your OK. nil: Claude Code's own default."
 ;;   order; the selected one's open (its session; below it, beside it from
 ;;   140 columns, its canvases (its own, ask...) and panels as tabs, one
 ;;   shown: v the next, V it full size; a question there takes no focus, its
-;;   hand says it), the others folded to a bar (◫2: its panels). It arranges
-;;   itself: tiling leaves its frame alone (config/tiling.el).
+;;   hand says it), the others folded to a bar (◫2: its panels). Its line (a
+;;   bar, the open pane's header line) shows first on its right its context
+;;   used, 20% (agent-shell's colours: yellow from 60%, red from 85%; its
+;;   tokens and cost on hover), drawn again as agent-shell reports it. It
+;;   arranges itself: tiling leaves its frame alone (config/tiling.el).
 ;; q leaves it (the crew goes on, its tally in the other workspaces' mode
 ;; line: a click comes back); Q, SPC TAB d, or quitting Emacs close it at
 ;; once: every agent exits, no question asked.
