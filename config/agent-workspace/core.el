@@ -44,7 +44,7 @@ reads as an error."
 (defvar agent-workspace-change-functions nil
   "Called with an agent and what changed, a symbol: `created', `state',
 `renamed', `colour', `role', `settings' (its model or mode), `issue',
-`panels' (one opened or closed),
+`panels' (one opened or closed), `loop' (turned on or off),
 `session' (a new one started), `forgotten', `closed' (its crew closed).")
 
 (defvar agent-workspace-closing-functions nil
@@ -91,6 +91,7 @@ order they were made.")
   error                      ; why it's stuck: the error's message
   issue                      ; the issue you gave it: "doom-a1b"
   issue-title                ; that issue's title
+  loop                       ; non-nil: it loops, taking the next ready issue (loops.el)
   stopping)                  ; non-nil while its session is stopped on purpose
 
 (defun agent-workspace-agent-face (agent)
@@ -181,10 +182,11 @@ worktree's) offered first."
 ;; ====== THE STATES ======
 ;; waking (its session starting), desk (at the desk: waiting for you), working,
 ;; hand (its hand raised: a permission, a question), done (its turn over,
-;; until you look: its pane shown), stuck (an error), asleep (its session
-;; stopped by you: s wakes it), home (gone home: killed, or its process ended).
+;; until you look: its pane shown), nap (napping: it loops, and no issue is
+;; ready for it: loops.el), stuck (an error), asleep (its session stopped by
+;; you: s wakes it), home (gone home: killed, or its process ended).
 
-(defconst agent-workspace-states '(waking desk working hand done stuck asleep home)
+(defconst agent-workspace-states '(waking desk working hand done nap stuck asleep home)
   "An agent's states (see above).")
 
 (defun agent-workspace-live-p (agent)
@@ -220,11 +222,33 @@ npm install\", \"at the desk\"..."
                   verb)))
     ('hand (agent-workspace--ask-text (agent-workspace-agent-ask agent)))
     ('done "done, have a look")
+    ('nap (format "napping: nothing to %s"
+                  (or (agent-workspace--verb-base (plist-get (agent-workspace-role agent) :verb)) "do")))
     ('stuck (if-let* ((issue (agent-workspace-agent-issue agent)))
                 (format "stuck on %s" issue)
               "stuck"))
     ('asleep "asleep")
     ('home "gone home")))
+
+(defun agent-workspace--verb-base (verb)
+  "VERB, a role's (\"building\"), as its base form (\"build\"), roughly as
+English has it: running, run; writing, write; investigating, investigate.
+nil if it isn't a word ending in -ing."
+  (when (and (stringp verb) (string-match-p "\\`[a-z]\\{2,\\}ing\\'" verb))
+    (let ((stem (substring verb 0 -3)))
+      (cond
+       ;; A consonant doubled (not adding, telling, passing).
+       ((and (> (length stem) 3) (string-match-p "\\([bdgmnprt]\\)\\1\\'" stem))
+        (substring stem 0 -1))
+       ;; An e dropped.
+       ((or (string-match-p "\\`[^aeiou]?[^aeiou][aeiouy][^aeiouwxy]\\'" stem)
+            (string-match-p (concat "\\(?:[^aeiou]at\\|[iy]z\\|ag\\|uc\\|[lr]v\\|ov\\|[^aeiou]ar\\|[^aeiou]ir"
+                                    "\\|quir\\|[^aeiou]in\\|ib\\|[^aeiou]id\\|[^aeiou]ud\\|um\\|[^aeiou]ut"
+                                    "\\|os\\|iv\\|[^aeiou]ok\\|[^aeiou]ak\\|[^aeiou]ul\\|[^aeiou]il\\|[^aeiou]al"
+                                    "\\|ur\\|rg\\|dg\\|[^aeiou]eas\\)\\'")
+                            stem))
+        (concat stem "e"))
+       (t stem)))))
 
 (defun agent-workspace--ask-text (ask)
   "What a raised hand, ASK, wants, in words."

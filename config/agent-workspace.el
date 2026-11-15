@@ -48,8 +48,25 @@
 ;; waking up, at the desk (waiting for you), working (its turn's time counted
 ;; from its start), hand raised (a permission, a question: agent-shell's, or
 ;; one waiting on its Agent UI canvas), done (until you look: its session
-;; shown), stuck (an error), asleep, gone home. They follow its session's
-;; events, never polled.
+;; shown), napping (it loops and nothing is ready for it: see LOOPS), stuck
+;; (an error), asleep, gone home. They follow its session's events, never
+;; polled.
+
+;; LOOPS
+;; (config/agent-workspace/loops.el) Off for every agent; L turns one's on
+;; (↻ on its bar; kept in crew.el). Once free (its turn ended, the issue it
+;; had closed or handed over: still in progress, it waits for you to look), it
+;; takes the next issue by itself: one you gave it first, else the next ready
+;; one its role's labels say, claimed as itself (bd ready --claim: two never
+;; get the same one), its session fresh for it. None left: it naps (☾
+;; "napping: nothing to build"), said once in the room and notified, and
+;; wakes when one comes (.beads changing; a look every
+;; `agent-workspace-loop-check' minutes). A failure (its turn's error, its
+;; session not started, bd failing) is tried again
+;; `agent-workspace-loop-retry' seconds later; after
+;; `agent-workspace-loop-failures' in a row it stops, stuck, saying why. A
+;; crew started again brings a looping agent back asleep: reopening never
+;; starts work by itself.
 
 ;; ITS WORKTREE
 ;; Always its own (config/agent-workspace/worktree.el): .agent-shell/worktrees/NAME
@@ -141,14 +158,15 @@
 ;; What the crew is, not its state, saved in the project and committed:
 ;; .agent-workspace/crew.el (config/agent-workspace/saved.el), read as data,
 ;; never evaluated. Each agent's name, role, colour (its model and mode when
-;; not its role's), whether it's asleep, its open panels by name (never their
-;; data); the layout. Written when the crew changes (a panel opened or closed
-;; too); closing the crew leaves it as it was. SPC o w with no crew running
-;; starts it again from there: every agent fresh, in its worktree, its role as
-;; it is now, its panels opened again there, asleep ones asleep, each waiting
-;; for you; one that can't start stuck, saying why; a panel whose file is
-;; gone skipped, said. gR reads it again (after an edit, a pull), asking
-;; before it starts or forgets one.
+;; not its role's), whether it's asleep, whether it loops, its open panels by
+;; name (never their data); the layout. Written when the crew changes (a panel
+;; opened or closed too); closing the crew leaves it as it was. SPC o w with
+;; no crew running starts it again from there: every agent fresh, in its
+;; worktree, its role as it is now, its panels opened again there, asleep ones
+;; and looping ones asleep, each waiting for you; one that can't start stuck,
+;; saying why; a panel whose file is gone skipped, said. gR reads it again
+;; (after an edit, a pull), asking before it starts or forgets one, or turns
+;; a loop on.
 
 ;; THE APP
 ;; SPC o w, from inside a project (outside one, asked which): its crew's own
@@ -178,10 +196,10 @@
 ;;                fresh, s sleep or wake, e edit (name, colour, role, mode,
 ;;                model), d its branch's changes, M merge its branch, v its
 ;;                canvas and panels (the cursor there; again: the next one), V
-;;                the one there full size (again: back), I its issue, a the
-;;                next raised hand, A answer it, f + an initial that agent, gr
-;;                lay out again, gR read crew.el again, q leave, Q close, ?
-;;                the keys
+;;                the one there full size (again: back), I its issue, L its
+;;                loop on or off, a the next raised hand, A answer it, f + an
+;;                initial that agent, gr lay out again, gR read crew.el again,
+;;                q leave, Q close, ? the keys
 ;;   its session  the same after SPC m w (C-c w in insert state), and ] / [
 ;;                the next / previous agent; a click on its header line or a
 ;;                bar selects it, mouse-3 its actions
@@ -217,6 +235,7 @@
 (load! "agent-workspace/panels")
 (load! "agent-workspace/activity")
 (load! "agent-workspace/minimap")
+(load! "agent-workspace/loops")
 (load! "agent-workspace/saved")
 (load! "agent-workspace/doom")
 
@@ -228,6 +247,7 @@
     ("s" . agent-workspace-sleep-here) ("e" . agent-workspace-edit)
     ("d" . agent-workspace-review-here) ("M" . agent-workspace-merge-here)
     ("v" . agent-workspace-panels-here) ("V" . agent-workspace-full-here) ("I" . agent-workspace-issue-here)
+    ("L" . agent-workspace-loop-here)
     ("a" . agent-workspace-next-hand) ("A" . agent-workspace-answer) ("f" . agent-workspace-jump)
     ("gr" . agent-workspace-layout) ("gR" . agent-workspace-crew-reload) ("q" . agent-workspace-leave)
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)

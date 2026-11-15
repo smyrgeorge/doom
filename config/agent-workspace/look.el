@@ -11,12 +11,13 @@
 ;; foreground; success, warning, error and shadow for states.
 ;;
 ;; An agent's line (its pane's header line, or its bar when its pane is
-;; folded): ▾/▸, avatar, name, role, state glyph and words, time; on the right
-;; its panels counted (◫2), its permission mode, model and branch, at the edge
-;; to the pixel; its canvas or a panel full size in its pane (V): their tabs
-;; there instead. Tinted in its colour (30% its open pane's, 14% a bar), the
-;; warning colour for a raised hand, its options then buttons before them
-;; (hands.el). Under 90 columns: name, state, buttons and panels only.
+;; folded): ▾/▸, avatar, name (↻ while it loops), role, state glyph and words,
+;; time; on the right its panels counted (◫2), its permission mode, model and
+;; branch, at the edge to the pixel; its canvas or a panel full size in its
+;; pane (V): their tabs there instead. Tinted in its colour (30% its open
+;; pane's, 14% a bar), the warning colour for a raised hand, its options then
+;; buttons before them (hands.el). Under 90 columns: name, state, buttons and
+;; panels only.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -32,6 +33,7 @@
 (declare-function agent-ui-background "agent-ui/core")
 (declare-function agent-workspace-agent-panels "agent-workspace/panels")
 (declare-function agent-workspace--tab-name "agent-workspace/stage")
+(declare-function agent-workspace--ask-key "agent-workspace/hands")
 
 ;; ====== VARIABLES ======
 
@@ -42,6 +44,8 @@
     (hand         "nf-md-hand_back_right"           "!")
     (done         "nf-md-check_circle_outline"      "✓")
     (desk         "nf-md-circle_outline"            "○")
+    (nap          "nf-md-weather_night"             "☾")
+    (loop         "nf-md-autorenew"                 "↻")
     (asleep       "nf-md-power_sleep"               "⏻")
     (stuck        "nf-md-alert_outline"             "⚠")
     (home         "nf-md-home_outline"              "×")
@@ -51,7 +55,7 @@
 its file (icon: NERD GLYPH).")
 
 (defconst agent-workspace--state-faces
-  '((waking . shadow) (hand . warning) (done . success) (stuck . error)
+  '((waking . shadow) (hand . warning) (done . success) (nap . shadow) (stuck . error)
     (asleep . shadow) (home . shadow))
   "A state's face (none: the default's).")
 
@@ -221,6 +225,10 @@ and branch."
          (left (concat (if folded "▸" "▾") " "
                        (agent-workspace-agent-avatar agent) " "
                        (agent-workspace-agent-name-text agent)
+                       (if (agent-workspace-agent-loop agent)
+                           (concat " " (propertize (string-trim-right (agent-workspace-glyph 'loop))
+                                                   'help-echo "It loops: once free, it takes the next ready issue (L)"))
+                         "")
                        (if narrow "" (concat sep (propertize (agent-workspace-agent-role agent) 'face 'shadow)))
                        sep
                        (agent-workspace-state-glyph agent)

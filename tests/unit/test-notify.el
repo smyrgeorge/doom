@@ -43,7 +43,7 @@ none off, what's shown recorded in `+test-notify--shown'."
   (should-not (default-value '+my/notify-off))
   ;; Claude Code's, Agent UI's, an agent crew's, so far.
   (should (equal (mapcar #'car +my/notify-kinds)
-                 '(agent-message agent-stuck agent-done agent-hand
+                 '(agent-napping agent-message agent-stuck agent-done agent-hand
                    agent-ui-question agent-ui-bug claude-question claude-permission claude-turn-done claude))))
 
 (ert-deftest notify/keys ()
@@ -500,9 +500,10 @@ forgotten; a click's selection recorded in `selected'."
          (kill-buffer session)))))
 
 (ert-deftest notify/crew-kinds ()
-  (dolist (kind '(agent-hand agent-done agent-stuck agent-message))
+  (dolist (kind '(agent-hand agent-done agent-stuck agent-message agent-napping))
     (should (assq kind +my/notify-kinds)))
   (should (memq #'+my/notify-crew--state-h agent-workspace-state-change-functions))
+  (should (memq #'+my/notify-crew--nap-h agent-workspace-nap-functions))
   (should (memq #'+my/notify-crew--watch agent-workspace-session-functions))
   (should (memq #'+my/notify-crew--own-p +my/notify-claude-own-functions)))
 
@@ -544,6 +545,21 @@ within `+my/notify-crew-quiet' seconds."
     (setq +test-notify--shown nil)
     (+my/notify-crew--turn-done ada '((:event . turn-complete) (:data (:stop-reason . "cancelled"))))
     (should-not +test-notify--shown)))
+
+(ert-deftest notify/crew-napping ()
+  "A looping agent with nothing left naps: said once, in its role's verb
+\(its loop calls the hook once, until it takes an issue again)."
+  (+test-notify-crew
+    (setf (agent-workspace-agent-state ada) 'nap)
+    (run-hook-with-args 'agent-workspace-nap-functions ada)
+    (should (equal (mapcar #'butlast +test-notify--shown)
+                   '(("Agent crew" "ada (builder) is napping: nothing to build"))))
+    (funcall (nth 2 (car +test-notify--shown)))
+    (should (equal selected (list (list ada t))))
+    (let ((+my/notify-off '(agent-napping)))
+      (clrhash +my/notify-crew--last)
+      (run-hook-with-args 'agent-workspace-nap-functions ada)
+      (should (= (length +test-notify--shown) 1)))))
 
 (ert-deftest notify/crew-claude-s-kinds-leave-them ()
   "A crew's agent's session: Claude Code's kinds leave it (no notification

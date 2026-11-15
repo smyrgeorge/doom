@@ -6,22 +6,24 @@
 ;;
 ;;   (agent-workspace-crew
 ;;    :version 1
-;;    :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
+;;    :agents ((:name "ada" :role "builder" :colour "blue" :loop t :panels ("logs" "tests"))
 ;;             (:name "ken" :role "builder" :colour "green" :asleep t))
 ;;    :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask
 ;;             :sources-off (("ci" . "#reviewer"))))
 ;;
 ;; What each agent is (its name, role, colour; its model and mode when not its
-;; role's; whether it's asleep; its kind when not Claude Code; its open
-;; panels, by name, never their data) and the layout; never its session, its
-;; state or its issue. Written when the crew changes (debounced), in a stable
-;; order (role order, then name), one agent a line, only if it differs; its
-;; crew closing leaves it as it was (written first, before any agent stops
-;; and its panels close). When the app opens with no crew running, every
-;; agent in it starts again, fresh, in its worktree, with its role as it is
-;; now, its panels opened again there; asleep ones stay asleep; each waits
-;; for you. One that can't start is stuck, saying why; the others start. Read
-;; again by hand (gR): it asks before starting or stopping one.
+;; role's; whether it's asleep; whether it loops (loops.el); its kind when not
+;; Claude Code; its open panels, by name, never their data) and the layout;
+;; never its session, its state or its issue. Written when the crew changes
+;; (debounced), in a stable order (role order, then name), one agent a line,
+;; only if it differs; its crew closing leaves it as it was (written first,
+;; before any agent stops and its panels close). When the app opens with no
+;; crew running, every agent in it starts again, fresh, in its worktree, with
+;; its role as it is now, its panels opened again there; asleep ones stay
+;; asleep, looping ones are asleep (reopening never starts work by itself:
+;; woken, they loop); each waits for you. One that can't start is stuck,
+;; saying why; the others start. Read again by hand (gR): it asks before
+;; starting or stopping one, or turning a loop on.
 
 (require 'cl-lib)
 (require 'seq)
@@ -148,6 +150,7 @@ read already), or nil."
             (let ((mode (agent-workspace-agent-mode agent)))
               (and mode (not (equal mode (plist-get role :mode))) (list :mode mode)))
             (and (eq (agent-workspace-agent-state agent) 'asleep) (list :asleep t))
+            (and (agent-workspace-agent-loop agent) (list :loop t))
             ;; Not Claude Code (the example's stand-in): said, so it starts again as it was.
             (unless (eq (agent-workspace-agent-kind agent) 'claude-code)
               (list :kind (agent-workspace-agent-kind agent)))
@@ -222,7 +225,7 @@ made there again): crew.el keeps it as it was."
   ;; An agent made: the crew running again, written again.
   (when (eq what 'created)
     (remhash (agent-workspace--root (agent-workspace-agent-project agent)) agent-workspace--crew-closed))
-  (when (or (memq what '(created renamed colour role settings forgotten))
+  (when (or (memq what '(created renamed colour role settings loop forgotten))
             ;; A panel opened or closed; not one closing as its crew closes
             ;; (the agent out of it already): crew.el keeps what was open.
             (and (eq what 'panels)
@@ -262,8 +265,8 @@ changing after, still open) until an agent is made there again. In
 
 (defun agent-workspace--restore (project entry)
   "The agent ENTRY of PROJECT's crew.el, in its crew again: fresh, in its
-worktree, its panels opened again there; asleep if it was (none opened);
-stuck, saying why, if it can't start."
+worktree, its panels opened again there; asleep if it was, or if it loops
+\(none opened; woken, it loops); stuck, saying why, if it can't start."
   (let* ((name (plist-get entry :name))
          (role (plist-get entry :role))
          (agent (agent-workspace--make-agent
@@ -273,7 +276,9 @@ stuck, saying why, if it can't start."
                  :colour (or (plist-get entry :colour) (agent-workspace-free-colour project))
                  :model (plist-get entry :model) :mode (plist-get entry :mode)
                  :project (agent-workspace--root project)
-                 :state (if (plist-get entry :asleep) 'asleep 'waking)))
+                 :loop (and (plist-get entry :loop) t)
+                 ;; Looping, asleep: reopening never starts work by itself.
+                 :state (if (or (plist-get entry :asleep) (plist-get entry :loop)) 'asleep 'waking)))
          (key (agent-workspace--root project)))
     (puthash key (append (gethash key agent-workspace--crews) (list agent)) agent-workspace--crews)
     (cond
@@ -343,7 +348,7 @@ In `agent-workspace-open-functions'."
   "Read crew.el again (after a hand edit, a pull): an agent added there is
 started, one taken out forgotten (each asked first); a colour changed
 applied, its panels as listed (opened, closed; an asleep one's when it
-wakes)."
+wakes), its loop turned off, or on (asked first)."
   (interactive)
   (let* ((app (agent-workspace--here-or-error))
          (project (agent-workspace--app-project app)))
@@ -362,6 +367,14 @@ wakes)."
               (when (and (plist-get entry :colour)
                          (not (equal (plist-get entry :colour) (agent-workspace-agent-colour agent))))
                 (agent-workspace-recolour agent (plist-get entry :colour)))
+              (let ((loop (and (plist-get entry :loop) t)))
+                (unless (eq loop (agent-workspace-agent-loop agent))
+                  (if (not loop)
+                      (agent-workspace-loop-set agent nil)
+                    (when (y-or-n-p (format "Turn %s's loop on, as crew.el says? " (agent-workspace-agent-name agent)))
+                      (condition-case err
+                          (agent-workspace-loop-set agent t)
+                        (user-error (message "%s" (error-message-string err))))))))
               (let ((panels (plist-get entry :panels)))
                 (if (agent-workspace-live-p agent)
                     (unless (equal (sort (copy-sequence panels) #'string<)

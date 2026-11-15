@@ -14,6 +14,7 @@ Linux's notifications. Only while Emacs isn't in front; in Emacs, you see it the
 | Agent crew: a hand | An agent of a [crew](agent-workspace.md) wants your permission or asks you something, named: "ada (builder) wants to run npm install" |
 | Agent crew: done | An agent finished its turn: "ada (builder) finished doom-a1b" |
 | Agent crew: stuck | An error stopped an agent, saying why |
+| Agent crew: napping | A [looping](agent-workspace.md#loops) agent found no ready issue left: "ada (builder) is napping: nothing to build" |
 | Agent crew: a message | An agent's own message: "ada (builder): the tests pass" |
 
 A crew's notifications come once per change, and a click opens its crew with that agent selected. Claude Code's own

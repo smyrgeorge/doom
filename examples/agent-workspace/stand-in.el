@@ -11,7 +11,11 @@
 ;;   "permission"  asks to run a tool (a permission request), runs it once
 ;;                 answered, ends its turn
 ;;   "Look into"   (at its start) the same: asks to run npm install
-;;   "Work on"     (at its start) says it's on it, then works until it's
+;;   "Work on ID: close..."  (an issue whose title starts with close, as a
+;;                 loop gives one) closes ID with bd (as its BEADS_ACTOR, in
+;;                 its BEADS_DIR), says so, ends its turn
+;;   "Work on ID: fail..."  fails the prompt (an error)
+;;   "Work on"     (at its start, else) says it's on it, then works until it's
 ;;                 cancelled (session/cancel); with a src/lexer.el where it
 ;;                 runs (the example's), reads it and starts editing it first
 ;;   "hold"        says so, then works until it's cancelled
@@ -91,6 +95,14 @@ batch (the stand-in would exit)."
         (setq mock-acp--writing (cons ours id))
         (mock-acp--send `(:jsonrpc "2.0" :id ,ours :method "fs/write_text_file"
                           :params (:sessionId ,session :path ,file :content "edited by the stand-in\n")))))
+     ((string-match "\\`Work on \\([^ :]+\\): close" text)
+      (let* ((issue (match-string 1 text))
+             (status (call-process "bd" nil nil nil "close" issue)))
+        (mock-acp--log `(:closed ,issue :status ,status))
+        (mock-acp--say session (if (eql status 0) (format "closed %s" issue) (format "couldn't close %s" issue)))
+        (mock-acp--result id '(:stopReason "end_turn"))))
+     ((string-match-p "\\`Work on [^ :]+: fail" text)
+      (mock-acp--send `(:jsonrpc "2.0" :id ,id :error (:code -32603 :message "mock failure"))))
      ((string-match-p "\\`Work on" text)
       ;; In the example's project: reads the lexer, starts editing it.
       (when (file-exists-p "src/lexer.el")

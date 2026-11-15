@@ -1,8 +1,8 @@
 # Agent workspace
 
 > **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, the
-> app (its workspace, the issues, the stage, the room), the saved crew, notifications, and raised hands answered from
-> one place.
+> app (its workspace, the issues, the stage, the room), the saved crew, notifications, raised hands answered from
+> one place, and loops.
 
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
@@ -52,6 +52,7 @@ terminal with `git init` typed.
 | `v` | anywhere | Its canvas and panels, the cursor in the one shown; there, the next one |
 | `V` | anywhere | The one shown, full size; again: back beside its session |
 | `I` | anywhere | Its issue |
+| `L` | anywhere | Its [loop](#loops) on or off: once free, it takes the next ready issue by itself |
 | `a` / `A` | anywhere | The next raised hand / answer it |
 | `f` + initial | anywhere | That agent |
 | `#` | anywhere | Talk to it in the room |
@@ -184,6 +185,33 @@ the room, on its agent's bar and on its pane's header line:
 `a` goes to the next raised hand, across the crew, and `A` answers it. Once you answer from the room, it says what you
 picked ("→ Allow (you)"). A hand answered in its session leaves the room.
 
+## Loops
+
+An agent can work through the project's issues by itself. `L` turns its loop on, and off again. Every agent starts
+with its loop off, and its bar shows `↻` while it loops.
+
+Once free, a looping agent takes the next issue: one you gave it first (`t`), else the next ready one its role's
+`labels` say, the highest priority first. It claims it as itself (`bd ready --claim`), so two looping agents never get
+the same one. Its session starts again for each issue, a fresh context, and it gets the issue as `t` gives it ("Work
+on doom-a1b: ...").
+
+It's free once its turn has ended and the issue it had is closed, or handed over. A turn that ends with its issue still
+in progress is done, for you to look: it waits. Close the issue (or tell it to) and it takes the next. A raised hand
+waits for you too.
+
+When no issue is left, it naps: `☾ napping: nothing to build`. The room says so once, with a notification. It wakes
+when an issue for it comes: when the project's issues change, and every 5 minutes (`agent-workspace-loop-check`). A
+look that finds nothing says nothing.
+
+If its turn stops on an error, its session doesn't start, or `bd` fails, it tries again 30 seconds later
+(`agent-workspace-loop-retry`): the same issue, in its session. After 3 failures in a row
+(`agent-workspace-loop-failures`) it stops: stuck, saying why. A turn that ends without an error breaks the row, and
+`r`, `s` or `L` start it again.
+
+Its loop is kept in the [saved crew](#the-saved-crew). A crew started again brings a looping agent back asleep, so
+reopening never starts work by itself: wake it (`s`) and it loops. A role without `labels` has no issues to take, and
+a project without Beads has none either: their agents can't loop.
+
 ## An agent's panels
 
 An agent can open [project panels](agent-ui.md#project-panels) and keep them open while it works (a test watcher, a
@@ -198,20 +226,21 @@ Renamed, it keeps them: they open again in its moved worktree, under its new nam
 ## Notifications
 
 While you're in another app, a notification names the agent: a hand raised ("ada (builder) wants to run npm
-install"), a turn finished, stuck, or a message of its own. A click opens its crew with it selected. `SPC t N` turns
-each kind off ([Notifications](notifications.md)).
+install"), a turn finished, stuck, napping (its [loop](#loops) found nothing left), or a message of its own. A click
+opens its crew with it selected. `SPC t N` turns each kind off ([Notifications](notifications.md)).
 
 ## The saved crew
 
 The crew is saved in the project, in `.agent-workspace/crew.el`, to commit: each agent's name, role and colour, its
-model and permission mode when they aren't its role's, whether it's asleep, the [panels](#an-agents-panels) it has
-open (by name, never their data), which agent is selected, whether the minimap is shown, whether its agents may
-message each other, and the event sources you turned off. Not its session, state or issue.
+model and permission mode when they aren't its role's, whether it's asleep, whether it [loops](#loops), the
+[panels](#an-agents-panels) it has open (by name, never their data), which agent is selected, whether the minimap is
+shown, whether its agents may message each other, and the event sources you turned off. Not its session, state or
+issue.
 
 ```elisp
 (agent-workspace-crew
  :version 1
- :agents ((:name "ada" :role "builder" :colour "blue" :panels ("logs" "tests"))
+ :agents ((:name "ada" :role "builder" :colour "blue" :loop t :panels ("logs" "tests"))
           (:name "ken" :role "builder" :colour "green" :asleep t)
           (:name "sam" :role "investigator" :colour "magenta" :model "opus"))
  :layout (:view stage :room right :selected "ada" :open t :minimap t :talk ask :sources-off nil))
@@ -220,12 +249,13 @@ message each other, and the event sources you turned off. Not its session, state
 It's written when the crew changes (a panel opened or closed too), and read as data, never run. Closing the crew
 leaves it as it was, its agents' panels in it. `SPC o w` in a project whose crew isn't running starts every agent in
 it again: fresh, each in its worktree, with its role as it is now, its panels open again there (fetched afresh),
-waiting for you. Asleep agents stay asleep, and their panels open when they wake. An agent that can't start (its role is gone, its worktree can't be made)
+waiting for you. Asleep agents stay asleep, and their panels open when they wake. Looping agents come back asleep:
+reopening never starts work by itself. An agent that can't start (its role is gone, its worktree can't be made)
 is stuck, saying why, and the others start. A panel whose file is gone is skipped, saying so, and the others open. A
 wrong entry is left out, and a warning names its line.
 
-After you edit it or pull it, `gR` reads it again. It asks before it starts an agent or forgets one; a colour or the
-panels you changed it applies.
+After you edit it or pull it, `gR` reads it again. It asks before it starts an agent, forgets one or turns a loop on;
+a colour, the panels or a loop turned off it applies.
 
 ## Making an agent
 
@@ -311,6 +341,7 @@ left out, and a warning names its file and line.
 | working | its turn runs, timed from its start |
 | hand raised | it waits for a permission or an answer: "wants to run npm install" |
 | done, have a look | its turn ended; once you show its session, it's at the desk |
+| napping | it [loops](#loops) and no issue is ready for it: "napping: nothing to build" |
 | stuck | an error stopped it |
 | asleep | you stopped it; it stays in the crew |
 | gone home | killed, or its process ended |

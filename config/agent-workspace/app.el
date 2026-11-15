@@ -741,6 +741,7 @@ cursor in its pane."
                              (cons ""
                                    '(("Interrupt" . agent-workspace-interrupt-here)
                                      ("Sleep or wake" . agent-workspace-sleep-here)
+                                     ("Loop on or off" . agent-workspace-loop-here)
                                      ("Restart fresh" . agent-workspace-restart-here)
                                      ("Kill (gone home)" . agent-workspace-kill-here)
                                      ("Edit..." . agent-workspace-edit)
@@ -951,4 +952,4 @@ what it asks."
   "The app's keys."
   (interactive)
   (message "%s" (substitute-command-keys
-                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · a next hand · f+initial · m minimap · P pause events · T talk · E inbox · gr lay out · q leave · Q close")))
+                 "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · L loop · a next hand · f+initial · m minimap · P pause events · T talk · E inbox · gr lay out · q leave · Q close")))

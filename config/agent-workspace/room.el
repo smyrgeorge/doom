@@ -475,7 +475,7 @@ added), \"handed doom-a1b back to ken\"."
            ((agent-workspace-agent name project) (cons (list (agent-workspace-agent name project)) message))
            ((let ((role (string-remove-suffix "s" name)))
               (when-let* ((of (seq-filter (lambda (agent) (equal (agent-workspace-agent-role agent) role)) agents)))
-                (cons (list (or (seq-find (lambda (agent) (memq (agent-workspace-agent-state agent) '(desk done))) of)
+                (cons (list (or (seq-find (lambda (agent) (memq (agent-workspace-agent-state agent) '(desk done nap))) of)
                                 (seq-find #'agent-workspace-live-p of)
                                 (car of)))
                       message))))

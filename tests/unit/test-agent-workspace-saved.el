@@ -291,6 +291,35 @@ asked first; a colour changed applied."
     (should (equal (agent-workspace-agent-colour (agent-workspace-agent "ada" project)) "red"))
     (should (eq (agent-workspace-agent-state (agent-workspace-agent "sam" project)) 'desk))))
 
+(ert-deftest agent-workspace-saved/its-loops-read-again ()
+  "gR: a loop crew.el turns on asked first (it starts work); one it turns
+off, applied."
+  (skip-unless (executable-find "bd"))
+  (+test-aws2 "reload-loops"
+    (make-directory (expand-file-name ".beads" project))
+    ;; Its looks and its watch on .beads not here: file-notify's events, read
+    ;; by a later test's `read-event', made a question there (a panel's
+    ;; trust) ask forever.
+    (cl-letf (((symbol-function 'agent-workspace--loop-soon) #'ignore)
+              ((symbol-function 'agent-workspace--loop-watch-update) #'ignore))
+      (agent-workspace-open t)
+      (let ((ada (agent-workspace-create :role "builder" :name "ada"))
+            (ken (agent-workspace-create :role "builder" :name "ken")))
+        (agent-workspace-loop-set ken t)
+        (+test-aws2--write project "(agent-workspace-crew
+ :version 1
+ :agents ((:name \"ada\" :role \"builder\" :colour \"blue\" :loop t)
+          (:name \"ken\" :role \"builder\" :colour \"green\"))
+ :layout (:view stage :room right :selected \"ada\" :open t))
+")
+        (let ((asked nil))
+          (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (push prompt asked) t)))
+            (with-current-buffer (agent-workspace--issues-buffer project)
+              (agent-workspace-crew-reload)))
+          (should (equal asked '("Turn ada's loop on, as crew.el says? "))))
+        (should (agent-workspace-agent-loop ada))
+        (should-not (agent-workspace-agent-loop ken))))))
+
 ;; ====== AN AGENT'S PANELS ======
 
 (defconst +test-aws2--panel

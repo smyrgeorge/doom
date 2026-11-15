@@ -3,8 +3,9 @@
 ;; redisplay. Its agents' lines (a bar, the open pane's header line) drawn to
 ;; the window's right edge, their avatars images; the stage tiled again after
 ;; a border dragged; closing it; an agent's canvas and panels as tabs, a panel
-;; fetching once its tab is shown; the minimap's lanes, even. No agent runs:
-;; sessions are buffers.
+;; fetching once its tab is shown; the minimap's lanes, even; a napping
+;; loop's watch on its project's issues (file-notify's events, which batch
+;; Emacs doesn't get). No agent runs: sessions are buffers.
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -233,3 +234,41 @@ same pixels (its glyphs evened)."
             (push (car (window-text-pixel-size window (line-beginning-position) (1- (point)))) bars))
           (should (= (length bars) 2))
           (should (= (car bars) (cadr bars))))))))
+
+(ert-deftest e2e-agent-workspace/a-napping-loop-wakes-on-its-issues-changing ()
+  "A napping agent's loop watches its project's .beads (a GUI Emacs gets
+file-notify's events): bd making its last-touched, then changing it, each
+time a look a moment later."
+  (skip-unless (executable-find "bd"))
+  (let* ((project (+test-e2e-aw--project))
+         (default-directory project)
+         (root (agent-workspace--root project))
+         (agent-workspace--crews (make-hash-table :test #'equal))
+         (session (generate-new-buffer "ada · builder"))
+         (ada (agent-workspace--make-agent :name "ada" :role "builder" :colour "blue" :state 'nap
+                                           :project root :buffer session :loop t))
+         (looks 0))
+    (call-process "bd" nil nil nil "init" "--quiet" "--skip-agents" "--prefix" "demo")
+    (puthash root (list ada) agent-workspace--crews)
+    (cl-letf (((symbol-function 'agent-workspace--loop-look) (lambda (_agent) (cl-incf looks))))
+      (unwind-protect
+          (let ((agent-workspace-loop-check nil))
+            (agent-workspace--loop-watch-update root)
+            (should (gethash root agent-workspace--loop-watches))
+            (should-not (file-exists-p (expand-file-name ".beads/last-touched" project)))
+            ;; Its first issue: last-touched made (the folder's watch).
+            (call-process "bd" nil nil nil "create" "--title" "one" "--labels" "build" "--quiet")
+            (should (+test-wait-for (lambda () (> looks 0)) 10))
+            (should (rassoc (expand-file-name ".beads/last-touched" project)
+                            (plist-get (gethash root agent-workspace--loop-watches) :notify)))
+            ;; Another: last-touched changed (its own watch).
+            (+test-sleep 1.5)
+            (setq looks 0)
+            (call-process "bd" nil nil nil "create" "--title" "two" "--labels" "build" "--quiet")
+            (should (+test-wait-for (lambda () (> looks 0)) 10))
+            ;; Its loop off: no longer watched.
+            (setf (agent-workspace-agent-loop ada) nil)
+            (agent-workspace--loop-watch-update root)
+            (should-not (gethash root agent-workspace--loop-watches)))
+        (agent-workspace--loop-unwatch root)
+        (kill-buffer session)))))

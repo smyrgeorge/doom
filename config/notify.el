@@ -45,6 +45,7 @@
 ;; - agent-hand: an agent raises its hand (a permission, a question);
 ;; - agent-done: an agent finished its turn (the issue it works on);
 ;; - agent-stuck: an error stopped an agent;
+;; - agent-napping: a looping agent found nothing left to take: it naps;
 ;; - agent-message: an agent's message, in its own words.
 (defvar +my/notify-enabled t
   "Desktop notifications on (see above); SPC t n toggles it.")

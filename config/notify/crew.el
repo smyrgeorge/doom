@@ -2,10 +2,11 @@
 ;; The agent workspace's notifications (config/agent-workspace.el).
 ;; Loaded from config/notify.el.
 ;;
-;; An agent of a crew raises its hand, finishes its turn, is stuck, or sends
-;; you a message of its own; each named by the agent ("ada (builder)"), a
-;; click opening its crew's app with it selected, its pane open. Claude
-;; Code's own kinds leave a crew's sessions to these (no notification twice).
+;; An agent of a crew raises its hand, finishes its turn, is stuck, naps (it
+;; loops and found nothing left), or sends you a message of its own; each
+;; named by the agent ("ada (builder)"), a click opening its crew's app with
+;; it selected, its pane open. Claude Code's own kinds leave a crew's
+;; sessions to these (no notification twice).
 ;; Once per change of state, and not again for the same agent and kind
 ;; within `+my/notify-crew-quiet' seconds.
 
@@ -14,6 +15,7 @@
 (+my/notify-define 'agent-done "Agent crew" "An agent of a crew finished its turn")
 (+my/notify-define 'agent-stuck "Agent crew" "An agent of a crew is stuck: an error stopped it")
 (+my/notify-define 'agent-message "Agent crew" "An agent of a crew's message, in its own words")
+(+my/notify-define 'agent-napping "Agent crew" "A looping agent of a crew found nothing left to take: it naps")
 
 (defvar +my/notify-crew-quiet 10
   "Seconds after a notification of an agent before another of the same kind
@@ -56,6 +58,14 @@ In `agent-workspace-state-change-functions'."
                                  "is stuck"))))))
 
 (add-hook 'agent-workspace-state-change-functions #'+my/notify-crew--state-h)
+
+;; ITS NAPS (a loop with nothing left: once, until it takes an issue again)
+(defun +my/notify-crew--nap-h (agent)
+  "AGENT, looping, found nothing left to take: said. In
+`agent-workspace-nap-functions'."
+  (+my/notify-crew 'agent-napping agent (concat "is " (agent-workspace-state-text agent))))
+
+(add-hook 'agent-workspace-nap-functions #'+my/notify-crew--nap-h)
 
 ;; ITS TURNS (agent-shell's turn-complete; interrupted by you: not said)
 (defun +my/notify-crew--turn-done (agent event)
