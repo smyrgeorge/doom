@@ -212,6 +212,38 @@
     }
   }
 
+  // The view a drawing opens at: all of it, centred; at 100% if it fits the
+  // page, else zoomed out to fit, a margin round it (Excalidraw's own,
+  // scrollToContent, only centres it, at 100%: in a narrow pane only the
+  // element nearest the middle showed). The view stays fitted as the pane is
+  // resized, until it's moved (zoomed, scrolled). Not a change (the drawing's
+  // the same, see signature).
+  let fitted = null;         // the view as last fitted, while it's shown
+
+  function fittedView(elements, width, height) {
+    const drawn = elements.filter((element) => !element.isDeleted);
+    if (!drawn.length || !width || !height) return null;
+    const [x1, y1, x2, y2] = L.getCommonBounds(drawn);
+    const scale = Math.min(width / Math.max(1, x2 - x1), height / Math.max(1, y2 - y1));
+    const zoom = scale >= 1 ? 1 : Math.max(0.1, scale * 0.9);
+    return { zoom: { value: zoom }, scrollX: width / 2 / zoom - (x1 + x2) / 2,
+             scrollY: height / 2 / zoom - (y1 + y2) / 2 };
+  }
+
+  // Resized: fitted again, unless the view was moved since.
+  function refit() {
+    if (!fitted) return false;
+    const now = api.getAppState();
+    if (now.zoom.value !== fitted.zoom.value || now.scrollX !== fitted.scrollX || now.scrollY !== fitted.scrollY) {
+      fitted = null;
+      return false;
+    }
+    fitted = fittedView(api.getSceneElements(), window.innerWidth, window.innerHeight);
+    if (!fitted) return false;
+    api.updateScene({ appState: fitted, commitToHistory: false });
+    return true;
+  }
+
   async function open(base64, libraryBase64) {
     const text = decode(base64);
     try {
@@ -229,7 +261,9 @@
     }
     // A new file: the empty drawing is a change (to save).
     if (blank(text)) state.version = 1;
-    const appState = Object.assign({}, scene.appState || {}, { theme: state.dark ? 'dark' : 'light' });
+    // The page fills the window (config/excalidraw/page.el).
+    fitted = fittedView(scene.elements, window.innerWidth, window.innerHeight);
+    const appState = Object.assign({}, scene.appState || {}, fitted || {}, { theme: state.dark ? 'dark' : 'light' });
     ReactDOM.createRoot(document.getElementById('app')).render(React.createElement(L.Excalidraw, {
       excalidrawAPI: (excalidraw) => {
         if (api) return;
@@ -242,7 +276,7 @@
           followSize();
         }, 0);
       },
-      initialData: { elements: scene.elements, appState, files: scene.files, scrollToContent: true,
+      initialData: { elements: scene.elements, appState, files: scene.files, scrollToContent: !fitted,
                      libraryItems },
       // Browse libraries: libraries.excalidraw.com sends the one chosen to this
       // address (Emacs opens the site and takes it from there, see
@@ -268,11 +302,12 @@
   // ResizeObserver notes whether it's now a phone's size without drawing
   // anew, so the layout stayed the old one until the mouse moved over it.
   // Drawn anew right after: this observer, made once Excalidraw is up, is
-  // called after its own. The drawing unchanged, no change counted.
+  // called after its own. The drawing unchanged, no change counted. Its view
+  // fitted again (see fittedView), which draws it anew too.
   function followSize() {
     const container = document.querySelector('.excalidraw');
     if (!container || typeof ResizeObserver === 'undefined') return;
-    new ResizeObserver(() => api.updateScene({ appState: {} })).observe(container);
+    new ResizeObserver(() => { if (!refit()) api.updateScene({ appState: {} }); }).observe(container);
   }
 
   // Another view's drawing, or the file read again: shown, not a change of

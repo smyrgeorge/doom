@@ -2,7 +2,9 @@
 
 `*.excalidraw.svg` and `*.excalidraw` files open in their tab in [Excalidraw](https://excalidraw.com). A
 `.excalidraw.svg` is also an image that Markdown and GitHub show. Excalidraw's keys work (`?` lists them), with `Cmd`
-on macOS and `Ctrl` on Linux, as Excalidraw has them there. Try it: `M-x +my/example-excalidraw`.
+on macOS and `Ctrl` on Linux, as Excalidraw has them there. A drawing opens all in view, centred: at 100% if it fits
+its pane, else zoomed out to fit, and stays fitted as the pane is resized until you zoom or scroll. Try it:
+`M-x +my/example-excalidraw`.
 
 ![A drawing in Excalidraw, inside Emacs](../examples/excalidraw.png)
 

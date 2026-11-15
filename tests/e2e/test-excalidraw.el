@@ -668,6 +668,74 @@ to the drawing."
         (should (= (plist-get (+test-exd--state) :version) version))
         (should-not (buffer-modified-p buffer))))))
 
+(defconst +test-exd--view-js
+  "(() => { const api = exd.api(), s = api.getAppState(), z = s.zoom.value;
+  const box = (e) => { const [x1, y1, x2, y2] = ExcalidrawLib.getCommonBounds([e]);
+    return [(x1 + s.scrollX) * z, (y1 + s.scrollY) * z, (x2 + s.scrollX) * z, (y2 + s.scrollY) * z]; };
+  const boxes = api.getSceneElements().map(box);
+  return JSON.stringify({zoom: z, width: innerWidth, height: innerHeight,
+    inView: boxes.every(([x1, y1, x2, y2]) => x1 >= 0 && y1 >= 0 && x2 <= innerWidth && y2 <= innerHeight),
+    left: Math.min(...boxes.map(b => b[0])), right: innerWidth - Math.max(...boxes.map(b => b[2])),
+    top: Math.min(...boxes.map(b => b[1])), bottom: innerHeight - Math.max(...boxes.map(b => b[3]))}); })()"
+  "The selected window's drawing's view: its zoom, the page's size, whether
+every element is in view, the margins round them (pixels).")
+
+(defun +test-exd--view (&optional window)
+  (json-parse-string (+test-exd--js +test-exd--view-js window) :object-type 'plist :false-object nil))
+
+(defun +test-exd--centred-p (view)
+  "Whether VIEW's drawing is in the middle of the page (a pixel either way)."
+  (and (<= (abs (- (plist-get view :left) (plist-get view :right))) 1.5)
+       (<= (abs (- (plist-get view :top) (plist-get view :bottom))) 1.5)))
+
+(ert-deftest e2e-exd/fitted-to-a-narrow-pane ()
+  "A drawing wider than a 40-column pane: opened all in view (zoomed out,
+centred, a margin round it), and again as the pane is widened and narrowed,
+until the view is zoomed; a small drawing at 100%, centred. Fitting is no
+change to the drawing."
+  (+test-exd
+    (let ((wide (+test-exd--make (+test-exd--file "wide.excalidraw.svg")
+                                 "[{type: 'rectangle', x: 0, y: 0, width: 150, height: 80}, {type: 'ellipse', x: 400, y: 200, width: 150, height: 80}, {type: 'rectangle', x: 800, y: 40, width: 150, height: 80}]"))
+          (small (+test-exd--make (+test-exd--file "small.excalidraw.svg")
+                                  "[{type: 'rectangle', x: 0, y: 0, width: 120, height: 80}]")))
+      (delete-other-windows)
+      (split-window nil 40 'right)
+      (let ((buffer (+test-exd--open wide))
+            (pane (selected-window)))
+        (should (= (window-total-width pane) 40))
+        (let ((view (+test-exd--view)))
+          (should (plist-get view :inView))
+          (should (< (plist-get view :zoom) 0.5))
+          (should (+test-exd--centred-p view))
+          (should (> (plist-get view :left) 5)))
+        ;; Widened (the pane alone), narrowed again: fitted to it each time.
+        (delete-other-windows pane)
+        (should (+test-wait-for (lambda () (> (plist-get (+test-exd--view) :zoom) 0.5)) 3))
+        (let ((view (+test-exd--view)))
+          (should (plist-get view :inView))
+          (should (<= (plist-get view :zoom) 1))
+          (should (+test-exd--centred-p view)))
+        (split-window pane 40 'left)
+        (should (+test-wait-for (lambda () (< (plist-get (+test-exd--view) :zoom) 0.5)) 3))
+        (should (plist-get (+test-exd--view) :inView))
+        ;; Zoomed (Cmd+=): the view is yours, not fitted again.
+        (+test-exd--key "s-=")
+        (let ((zoom (plist-get (+test-exd--view) :zoom)))
+          (delete-other-windows pane)
+          (+test-sleep 0.5)
+          (should (= (plist-get (+test-exd--view) :zoom) zoom)))
+        ;; None of it a change.
+        (should-not (buffer-modified-p buffer))
+        (should (eql (plist-get (+test-exd--state) :version) 0))
+        (kill-buffer buffer))
+      ;; A small drawing: at 100%, in the middle.
+      (let ((buffer (+test-exd--open small)))
+        (let ((view (+test-exd--view)))
+          (should (= (plist-get view :zoom) 1))
+          (should (+test-exd--centred-p view)))
+        (+test-sleep 1)
+        (should-not (buffer-modified-p buffer))))))
+
 ;; ====== LIBRARIES ======
 
 (defconst +test-exd--library

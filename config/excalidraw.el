@@ -13,6 +13,9 @@
 ;;   show it as any image (the preview, GitHub...), and it opens here again to
 ;;   edit, as at excalidraw.com.
 ;; - *.excalidraw: Excalidraw's own JSON (excalidraw.com's files).
+;; A drawing opens all in view, centred: at 100% if it fits its pane, else
+;; zoomed out to fit (excalidraw.js), fitted again as the pane is resized
+;; until you zoom or scroll.
 ;; A new file is a blank drawing. Draw with the mouse or trackpad (the
 ;; trackpad's scrolling pans, pinching zooms); Emacs takes the keys and gives
 ;; them to the page, so Excalidraw's work as at excalidraw.com (its ? lists
