@@ -43,8 +43,8 @@ reads as an error."
 
 (defvar agent-workspace-change-functions nil
   "Called with an agent and what changed, a symbol: `created', `state',
-`renamed', `colour', `issue', `session' (a new one started), `forgotten',
-`closed' (its crew closed).")
+`renamed', `colour', `role', `settings' (its model or mode), `issue',
+`session' (a new one started), `forgotten', `closed' (its crew closed).")
 
 (defvar agent-workspace-state-change-functions nil
   "Called with an agent, its old state and its new one, when its state

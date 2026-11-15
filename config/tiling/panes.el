@@ -73,11 +73,17 @@ order."
   (set-window-dedicated-p window (plist-get state :dedicated)))
 
 ;; A PANE CLOSED (see config/tiling.el)
+(defun +my/tiling--left-alone-p (&optional frame)
+  "Non-nil if tiling leaves FRAME (the selected one) alone
+\(`+my/tiling-left-alone')."
+  (let ((frame (or frame (selected-frame))))
+    (seq-some (lambda (fn) (and (functionp fn) (funcall fn frame))) +my/tiling-left-alone)))
+
 (defun +my/tiling--closed-h (frame)
   "FRAME's panes fewer than when last seen (one closed, however): the others
 laid out again by the strategy's :closed. Not a child frame's (notices, the
-stripe), nor down to one pane."
-  (unless (frame-parent frame)
+stripe), nor down to one pane, nor a frame left alone."
+  (unless (or (frame-parent frame) (+my/tiling--left-alone-p frame))
     (let ((count (length (+my/tiling--panes frame)))
           (before (frame-parameter frame '+my/tiling-panes)))
       (set-frame-parameter frame '+my/tiling-panes count)

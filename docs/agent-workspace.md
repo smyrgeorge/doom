@@ -1,14 +1,53 @@
 # Agent workspace
 
-> **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, and you
-> can make one. The app comes next: its workspace, the issues, the stage, the room.
+> **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, and the
+> app: its workspace, the issues and the stage. The room, the saved crew and notifications come next.
 
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
 
+## The app
+
+`SPC o w`, from inside a project, opens its crew in a workspace of its own, `crew · doom`. Outside a project, it asks
+which one. `SPC o W` opens it in the window you're in. The first time, it asks for the crew's first agent.
+
+- **The issues** are on the left. In progress, each with the agent on it. Ready, grouped by the role they're for:
+  a role nobody in the crew has is flagged. Blocked, by what. Done today. Moving onto an issue in progress selects its
+  agent.
+- **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
+  and its Agent UI canvas below it when it shows something. The others are folded to a bar: its avatar, name, role,
+  state and how long it's been working. The stage arranges itself: drag a border and it's tiled again.
+
+`q` leaves the app and the crew goes on. Its tally shows in the other workspaces' mode line (`crew · doom ▶2 !1`), and
+a click there brings you back. `Q`, or `SPC TAB d` in its workspace, closes it at once, without asking: every agent
+exits, and the crew's windows, buffers and workspace go. Its worktrees stay.
+
+A project that isn't a git repository, or has no commit yet, can't have a crew: `SPC o w` says so and offers a
+terminal with `git init` typed.
+
+| Key | In | Action |
+|---|---|---|
+| `j` / `k` | the issues | The next / previous issue |
+| `RET` | the issues | Its agent's pane, or the issue |
+| `t` | the issues | Give the issue to an agent: now if it's free, after its turn if it's working |
+| `j` / `k` | a bar | The next / previous agent, the cursor in its pane |
+| `RET` / `TAB` | a bar | Its pane / open or fold it |
+| `c` | anywhere | A new agent (on a ready issue: for it) |
+| `i` / `K` / `r` | anywhere | Interrupt it / kill it (gone home) / restart it fresh |
+| `s` | anywhere | Put it to sleep, or wake it |
+| `e` | anywhere | Change its name, colour, role, permission mode or model |
+| `d` / `M` | anywhere | Its branch's changes / merge its branch |
+| `v` / `I` | anywhere | Its canvas / its issue |
+| `a` | anywhere | The next raised hand |
+| `f` + initial | anywhere | That agent |
+| `gr` / `q` / `Q` / `?` | anywhere | Lay it out again / leave / close / the keys |
+
+In an agent's own session, the same keys follow `SPC m w` (`C-c w` in insert state), plus `]` / `[` for the next or
+previous agent. A click on a bar or a pane's header line selects its agent, and `mouse-3` there lists its actions.
+
 ## Making an agent
 
-`M-x agent-workspace-new`, in the project, asks for:
+`c` in the app (or `M-x agent-workspace-new` in the project) asks for:
 
 1. **Its role.** Each one says what it does and how many of it run against its maximum: `builder · builds what you
    give it · 2 of 4`. A role at its maximum is refused.

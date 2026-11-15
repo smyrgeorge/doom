@@ -446,6 +446,35 @@ width as it was."
         (should (+test-tiling--even-p (+test-tiling--stack-heights)))
         (should (= (window-total-width main) width))))))
 
+;; A frame left alone (the agent workspace's crew lays it out itself): no
+;; pane laid out when one closes, nothing shown redirected, no pane closed
+;; with its last tab.
+(ert-deftest tiling/a-frame-left-alone ()
+  (should (equal +my/tiling-left-alone '(agent-workspace-frame-p)))
+  (+test-tiling
+    (let ((main (selected-window))
+          (+my/tiling-left-alone (list (lambda (frame) (frame-parameter frame '+test-alone)))))
+      (dolist (name '("B" "C" "D"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (+my/tiling--closed-h (selected-frame))
+      (set-frame-parameter nil '+test-alone t)
+      (unwind-protect
+          (progn
+            (should (+my/tiling--left-alone-p))
+            (delete-window (get-buffer-window "C"))
+            (let ((heights (+test-tiling--stack-heights)))
+              (should-not (+test-tiling--even-p heights))
+              (+my/tiling--closed-h (selected-frame))
+              (should (equal (+test-tiling--stack-heights) heights)))
+            (should-not (+my/tiling--display (get-buffer-create "E") nil))
+            ;; Its last tab killed: its pane stays.
+            (let ((window (get-buffer-window "D")))
+              (kill-buffer "D")
+              (should (window-live-p window))))
+        (set-frame-parameter nil '+test-alone nil))
+      (should-not (+my/tiling--left-alone-p)))))
+
 (ert-deftest tiling/heights-kept-when-no-pane-closed ()
   "Panes resized by hand, none closed (or one added): their heights stay."
   (+test-tiling

@@ -82,6 +82,44 @@
 ;; asking nothing, and leaves no process of theirs: what hasn't exited
 ;; `agent-workspace-exit-timeout' seconds later is killed. Their worktrees stay.
 
+;; THE APP
+;; SPC o w, from inside a project (outside one, asked which): its crew's own
+;; workspace, "crew · PROJECT" (config/agent-workspace/app.el); SPC o W: in
+;; the window you're in. A project that can't have a crew (not a git
+;; repository, no commit yet) says why and offers a terminal with git init
+;; typed. The first time, its first agent is asked for. Two columns (the room
+;; comes on the right, doom-51z.6):
+;; - the issues (config/agent-workspace/issues.el), on the left: in progress
+;;   (each with its agent), ready by the role they're for, blocked, done today;
+;;   moving onto one in progress selects its agent;
+;; - the stage (config/agent-workspace/stage.el): every agent a pane, in role
+;;   order; the selected one's open (its session, its canvas below it), the
+;;   others folded to a bar. It arranges itself: tiling leaves its frame
+;;   alone (config/tiling.el).
+;; q leaves it (the crew goes on, its tally in the other workspaces' mode
+;; line: a click comes back); Q, SPC TAB d, or quitting Emacs close it at
+;; once: every agent exits, no question asked.
+;;
+;; Keys, in evil's normal state:
+;;   the issues   j / k the next / previous issue, RET (l, o) its agent's pane
+;;                or the issue, t give it to an agent, c a new agent (for it)
+;;   the bars     j / k the next / previous agent (the cursor in its pane),
+;;                RET its pane, TAB open or fold
+;;   both         c a new agent, i interrupt, K kill (gone home), r restart
+;;                fresh, s sleep or wake, e edit (name, colour, role, mode,
+;;                model), d its branch's changes, M merge its branch, v its
+;;                canvas, I its issue, a the next raised hand, f + an initial
+;;                that agent, gr lay out again, q leave, Q close, ? the keys
+;;   its session  the same after SPC m w (C-c w in insert state), and ] / [
+;;                the next / previous agent; a click on its header line or a
+;;                bar selects it, mouse-3 its actions
+
+;; ====== KEY BINDINGS ======
+
+(map! :leader
+      :desc "Agent crew"       "o w" #'agent-workspace-open
+      :desc "Agent crew, here" "o W" #'agent-workspace-open-here)
+
 ;; ====== CODE ======
 
 ;; In config/agent-workspace/, in this order: each part can use what the ones
@@ -93,9 +131,66 @@
 (load! "agent-workspace/names")
 (load! "agent-workspace/new")
 (load! "agent-workspace/request")
+(load! "agent-workspace/look")
+(load! "agent-workspace/stage")
+(load! "agent-workspace/app")
+(load! "agent-workspace/issues")
+(load! "agent-workspace/doom")
+
+;; The app's keys, in its buffers (see THE APP above). Set here, at top level:
+;; a reload sets them again.
+(defvar +my/agent-workspace-keys
+  '(("c" . agent-workspace-new-here) ("i" . agent-workspace-interrupt-here)
+    ("K" . agent-workspace-kill-here) ("r" . agent-workspace-restart-here)
+    ("s" . agent-workspace-sleep-here) ("e" . agent-workspace-edit)
+    ("d" . agent-workspace-review-here) ("M" . agent-workspace-merge-here)
+    ("v" . agent-workspace-canvas-here) ("I" . agent-workspace-issue-here)
+    ("a" . agent-workspace-next-hand) ("f" . agent-workspace-jump)
+    ("gr" . agent-workspace-layout) ("q" . agent-workspace-leave)
+    ("Q" . agent-workspace-quit) ("?" . agent-workspace-help))
+  "The keys every buffer of the app has (see THE APP above).")
+
+(+my/agent-workspace-bind agent-workspace-issues-mode-map
+                          (append '(("j" . agent-workspace-issue-next) ("k" . agent-workspace-issue-previous)
+                                    ("<down>" . agent-workspace-issue-next) ("<up>" . agent-workspace-issue-previous)
+                                    ("RET" . agent-workspace-issue-open) ("<return>" . agent-workspace-issue-open)
+                                    ("l" . agent-workspace-issue-open) ("o" . agent-workspace-issue-open)
+                                    ("t" . agent-workspace-issue-give) ("gr" . agent-workspace-issues-refresh))
+                                  +my/agent-workspace-keys))
+
+(+my/agent-workspace-bind agent-workspace-bar-mode-map
+                          (append '(("j" . agent-workspace-next) ("k" . agent-workspace-previous)
+                                    ("<down>" . agent-workspace-next) ("<up>" . agent-workspace-previous)
+                                    ("RET" . agent-workspace-go) ("<return>" . agent-workspace-go)
+                                    ("TAB" . agent-workspace-toggle) ("<tab>" . agent-workspace-toggle))
+                                  +my/agent-workspace-keys))
+
+;; In an agent's own session (agent-shell's keys): the same after a prefix.
+(defvar +my/agent-workspace-pane-map (make-sparse-keymap)
+  "The app's keys in an agent's session, after SPC m w or C-c w.")
+
+(pcase-dolist (`(,key . ,command)
+               (append '(("]" . agent-workspace-next) ("[" . agent-workspace-previous)
+                         ("TAB" . agent-workspace-toggle) ("<tab>" . agent-workspace-toggle))
+                       +my/agent-workspace-keys))
+  (define-key +my/agent-workspace-pane-map (kbd key) command))
+
+(map! :after agent-shell
+      :map agent-shell-mode-map
+      "C-c w" +my/agent-workspace-pane-map
+      :localleader
+      :desc "Agent crew" "w" +my/agent-workspace-pane-map)
+
 
 ;; WHAT AN AGENT IS TOLD (see ITS SESSION above), after what every session is.
 (add-hook '+my/agent-shell-claude-context-functions #'agent-workspace-agent-context t)
+
+;; NO CREW HERE (see THE APP above): a terminal offered, git init typed in it.
+(setq agent-workspace-no-crew-function #'+my/agent-workspace-git-init)
+
+;; AN ISSUE SHOWN (I, RET on one nobody's on): Beads' issue view
+;; (config/agent-ui.el's, config/beads.el).
+(setq agent-workspace-open-issue-function #'+my/agent-ui-open-issue)
 
 ;; ITS AVATAR on its worktree's tabs (see above).
 (add-hook '+my/tabs-prefix-functions #'agent-workspace-tab-prefix)

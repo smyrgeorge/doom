@@ -126,6 +126,16 @@ pane.")
 from the current pane (tall: of the width; of the stack's height; wide: of
 the height; of the row's width).")
 
+;; FRAMES LEFT ALONE
+;; A frame laid out by an application of its own: tiling neither redirects
+;; what's shown in it, nor evens its panes when one closes, nor closes a
+;; pane with its last tab. The agent workspace's crew (config/agent-workspace.el:
+;; its stage arranges itself). Each function, called with a frame, says so;
+;; one not defined (its module not loaded) is skipped.
+(defvar +my/tiling-left-alone '(agent-workspace-frame-p)
+  "Functions of a frame: non-nil, tiling leaves it alone (see FRAMES LEFT
+ALONE above).")
+
 ;; APPLICATIONS, by name (see TILING FIRST above). Which are is chosen in
 ;; config.el: (setq +my/tiling-apps 'all), every one of them (the default), or
 ;; a list of names, '(claude magit); M-x customize-variable +my/tiling-apps

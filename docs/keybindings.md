@@ -52,6 +52,7 @@ Vim's and Doom's keys stay as they are there. `config/emacs.el` has the rules.
 | `n` / `p`, `y`, `RET` (Claude's diffs) | the same | The next / previous hunk, accept, open the file |
 | `C-c C-d`, `SPC m d` (Claude Code) | the same | Draw for Claude |
 | `SPC o i` / `SPC o I` | `SPC o i` / `SPC o I` | The project's [issues](issues.md) / a new one |
+| `SPC o w` / `SPC o W` | `SPC o w` / `SPC o W` | The project's [agent crew](agent-workspace.md), in its own workspace / in the window you're in |
 | `C-c C-i` (Claude Code), `C-c C-a` (an issue) | the same | An issue into Claude's prompt |
 | `SPC h T` | `SPC h T` | Start / stop the profiler |
 | `SPC t n` / `SPC t N` | the same | All [notifications](notifications.md) on / off; one kind |

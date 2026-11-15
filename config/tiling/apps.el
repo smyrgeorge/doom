@@ -161,7 +161,8 @@ strategy puts it; fullscreen, shown by Emacs on its own: behind the current
 one, `+my/tiling--behind'); a file in the current pane, as a tab, from a
 popup or a side panel in the pane used last (a new pane without one). Nil
 for anything else (popups, *Completions*, transient menus, git's own
-files...), for a buffer shown in no window (ALIST's `allow-no-window'),
+files...), for a buffer shown in no window (ALIST's `allow-no-window'), in a
+frame left alone (`+my/tiling-left-alone'),
 while the minibuffer is open (previews put back what they showed), and from
 a command of `+my/tiling-here-commands' (Doom's SPC o T: the window you're
 in): as it asks; such a command from a popup or a side panel (no pane to be
@@ -169,6 +170,7 @@ in, a split made instead): in the pane used last, as a file."
   (cond
    ((active-minibuffer-window) nil)
    ((alist-get 'allow-no-window alist) nil)
+   ((+my/tiling--left-alone-p) nil)
    ((memq this-command +my/tiling-here-commands)
     (unless (memq (selected-window) (+my/tiling--panes))
       (when-let* ((pane (+my/tiling--last-pane)))
@@ -215,10 +217,12 @@ tabs the only live buffer it showed."
 
 (defun +my/tiling-close-pane-h ()
   "The buffer killed: the panes it was the last tab of close, but a frame's
-last pane (one hidden then shown: config/tiling/hidden.el)."
+last pane (one hidden then shown: config/tiling/hidden.el), and in a frame
+left alone."
   (let ((buffer (current-buffer)))
     (dolist (window (get-buffer-window-list buffer 'nomini t))
       (when (and (window-live-p window)
+                 (not (+my/tiling--left-alone-p (window-frame window)))
                  (not (window-parameter window 'window-side))
                  (or (eq (window-deletable-p window) t) (+my/tiling--shown-alone-p window))
                  (+my/tiling--last-tab-p window buffer))

@@ -22,6 +22,7 @@
 (defvar agent-shell--state)
 (defvar agent-shell-mcp-servers)
 (defvar agent-shell-buffer-name-format)
+(defvar agent-shell-show-welcome-message)
 (defvar shell-maker-prompt-before-killing-buffer)
 
 ;; ====== VARIABLES ======
@@ -40,6 +41,9 @@ killed (acp.el gives the agent's process group 5, then kills the group: this
 catches what left the group)."
   :type 'number
   :group 'agent-workspace)
+
+(defvar agent-workspace-session-functions nil
+  "Called with an agent and its session's buffer, once its session started.")
 
 (defvar agent-workspace--starting nil
   "The agent whose session starts, while its config is made (see
@@ -64,6 +68,8 @@ buffer, not shown. If it can't start, AGENT is stuck, saying why."
                        (agent-workspace--config agent)))
              ;; Its buffer named as its config says: "ada · builder".
              (agent-shell-buffer-name-format (lambda (name _project) name))
+             ;; No welcome: its pane is small, its line says who it is.
+             (agent-shell-show-welcome-message nil)
              (buffer (agent-shell--start :config config :no-focus t :new-session t
                                          :session-strategy 'new :cwd dir)))
         (with-current-buffer buffer
@@ -84,6 +90,7 @@ buffer, not shown. If it can't start, AGENT is stuck, saying why."
                      (when (eq (agent-workspace-agent-buffer agent) buffer)
                        (agent-workspace--watch-process agent buffer)
                        (agent-workspace--event agent event))))
+        (run-hook-with-args 'agent-workspace-session-functions agent buffer)
         (agent-workspace--changed agent 'session)
         buffer)
     (error
