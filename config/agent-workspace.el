@@ -122,14 +122,12 @@ needs your OK. nil: Claude Code's own default."
 ;; A branch of its own for each piece of work, in its worktree, made as the
 ;; work starts (worktree.el); its bar shows the one it's on. An issue given to
 ;; it (t, the room's offer, its loop, :issue: `agent-workspace-give', core.el)
-;; gets TYPE/ID (fix/doom-pbk.18: fix/ a bug, feat/ a feature, else its
-;; type, task/...), from the main checkout's branch as it is then; the agent,
-;; having read the issue, renames it once, before its first commit, to
-;; TYPE/ID-WORDS, 2 to 4 words of its own
-;; (fix/doom-pbk.18-minimap-lanes-line-up: it's told so, session.el; its bar
-;; follows at its turn's end, d and M at once; git carries its note). One of
-;; the issue's there already (TYPE/ID, TYPE/ID-...: given back) checked out
-;; again, taken from another agent at rest. Given while it works, as the
+;; gets TYPE/ID-SLUG (fix/doom-pbk.18-minimaps-dividers-dont-line: fix/ a
+;; bug, feat/ a feature, else its type, task/...; then its title's first 4
+;; words, small ones dropped), from the main checkout's branch as it is
+;; then; the agent never renames it (it's told so, session.el). One of the
+;; issue's there already (TYPE/ID-..., any type, any words: given back, its
+;; title changed since) checked out again, taken from another agent at rest. Given while it works, as the
 ;; issue's prompt starts its next turn. Its worktree with changes not
 ;; committed takes none: refused, saying which branch has them (as its turn
 ;; starts: it stays, said). A prompt of yours at rest (the room, #, its

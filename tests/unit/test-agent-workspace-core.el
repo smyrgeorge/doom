@@ -284,10 +284,9 @@ session is told; nothing for a session not an agent's."
                       "You work for the user" "Don't hand work to other agents"
                       "your own git worktree, /tmp/project/.agent-shell/worktrees/ada:"
                       "never in the project's main checkout (/tmp/project)"
-                      "Each piece of work gets a branch of its own there, made for you as it starts"
-                      "named after its type and id (fix/doom-a1b for a bug"
-                      "rename it once, adding 2 to 4 words of your own, lowercase and hyphenated"
-                      "never switch branches or make one yourself"
+                      "Each piece of work gets a branch of its own there, made and named for you as it starts"
+                      "an issue's after its type, id and title: fix/doom-a1b-lexer-escapes"
+                      "never switch, make or rename branches yourself"
                       "bd commands run as ada" "Your notifications carry your name already"))
         (should (string-search part text)))
       (should-not (string-search "agent/ada" text))

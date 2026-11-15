@@ -406,10 +406,10 @@ in a row, stuck, saying why."
       (should (equal (cl-loop for entry in (+test-awl--log-entries)
                               when (and (equal (plist-get entry :agent) "ada") (plist-get entry :branch))
                               collect (plist-get entry :branch))
-                     (list (concat "task/" one) (concat "task/" two))))
-      (should (equal (agent-workspace-agent-branch ada) (concat "task/" two)))
+                     (list (concat "task/" one) (concat "task/" two "-two"))))
+      (should (equal (agent-workspace-agent-branch ada) (concat "task/" two "-two")))
       (should (equal (string-trim (let ((default-directory dir)) (+test-awl--run "git" "branch" "--show-current")))
-                     (concat "task/" two)))
+                     (concat "task/" two "-two")))
       (should-not (string-search (concat "task/" one) (funcall branches)))
       ;; Changes left in its worktree: no issue claimed.
       (write-region "half\n" nil (expand-file-name "wip" dir))

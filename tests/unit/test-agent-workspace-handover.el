@@ -175,7 +175,7 @@ free, offered once one is."
               (agent-workspace-offer-take project "demo-3" "ken")
               (should (equal (car sent) (list "ken" (agent-workspace-issue-prompt "demo-3" "Fix it"))))
               (should (equal (agent-workspace-agent-issue ken) "demo-3"))
-              (should (equal (agent-workspace-agent-branch ken) "fix/demo-3"))
+              (should (equal (agent-workspace-agent-branch ken) "fix/demo-3-fix"))
               (should-not (string-search "[Give it to ken]" (funcall feed)))
               (funcall fetched nil)
               (should-not (string-search "[Give it to ken]" (funcall feed)))

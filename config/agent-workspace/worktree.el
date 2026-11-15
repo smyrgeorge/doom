@@ -31,7 +31,7 @@ of git: see `agent-workspace--keep-out-of-git')."
   "At most this many characters of a title (or a prompt) in a branch's name.")
 
 (defvar agent-workspace--branch-next (make-hash-table :test #'eq :weakness 'key)
-  "An agent given an issue while it worked: (ISSUE . TYPE), its worktree put
+  "An agent given an issue while it worked: (ISSUE TYPE TITLE), its worktree put
 on the issue's branch as its next turn starts (if it's still its issue).")
 
 (defvar agent-workspace--branch-quiet (make-hash-table :test #'eq :weakness 'key)
@@ -258,11 +258,11 @@ branch it's on is kept. Its session must not run."
 ;; ====== A BRANCH FOR EACH PIECE OF WORK ======
 ;; In the agent's own worktree, opened as the work starts: an issue given to
 ;; it (t, the room's offer, its loop, :issue as it's made: `agent-workspace-give'
-;; in core.el), TYPE/ID (fix/doom-pbk.18), from the main checkout's branch as
-;; it is then; the agent, having read the issue, renames it once to
-;; TYPE/ID-WORDS, 2 to 4 words of its own (fix/doom-pbk.18-minimap-lanes-line-up:
-;; it's told so, session.el). One of the issue's already there (TYPE/ID, or
-;; TYPE/ID-...: the issue given back) checked out again, taken from the agent
+;; in core.el), TYPE/ID-SLUG (fix/doom-pbk.18-minimaps-dividers-dont-line:
+;; its title's first words, small ones dropped), from the main checkout's
+;; branch as it is then. One of the issue's already there (TYPE/ID-..., any
+;; type, any words: the issue given back, its title changed since) checked
+;; out again, taken from the agent
 ;; at rest that has it. Given while it works, as its next turn starts (the
 ;; issue's prompt, queued). A prompt of yours while it
 ;; rests (on agent/NAME, holding nothing the main branch hasn't), a branch
@@ -297,13 +297,33 @@ at a -. \"\" when nothing's left."
                      (substring text 0 agent-workspace--slug-length)))))
     (string-trim text "-+" "-+")))
 
-(defun agent-workspace-issue-branch (issue &optional type)
-  "The branch made for ISSUE (its id) of TYPE (bd's issue_type): TYPE/ID,
-fix/ for a bug, feat/ for a feature, task/ when its type isn't known
-\(\"fix/doom-pbk.18\"). Its agent adds words of its own once
-\(fix/doom-pbk.18-minimap-lanes-line-up)."
-  (let ((type (agent-workspace-slug (or type ""))))
-    (concat (pcase type ("bug" "fix") ("feature" "feat") ("" "task") (_ type)) "/" issue)))
+(defconst agent-workspace--branch-words 4
+  "How many of an issue title's words its branch's name takes.")
+
+(defconst agent-workspace--small-words
+  '("a" "an" "the" "and" "or" "of" "on" "in" "into" "to" "for" "its" "it" "is" "are" "be" "by"
+    "with" "as" "at" "from" "that" "this" "not" "per" "one" "must" "always" "never" "than" "so")
+  "Words an issue's branch leaves out of its title.")
+
+(defun agent-workspace-branch-words (title)
+  "TITLE's first words for a branch's name: its slug's
+\(`agent-workspace-slug'), small words dropped, `agent-workspace--branch-words'
+of them (\"minimaps-dividers-dont-line\"); \"\" when none are left."
+  (string-join (seq-take (seq-remove (lambda (word) (member word agent-workspace--small-words))
+                                     (split-string (agent-workspace-slug (or title "")) "-" t))
+                         agent-workspace--branch-words)
+               "-"))
+
+(defun agent-workspace-issue-branch (issue &optional type title)
+  "The branch made for ISSUE (its id) of TYPE (bd's issue_type), titled
+TITLE: TYPE/ID-SLUG, fix/ for a bug, feat/ for a feature, task/ when its
+type isn't known, then its title's first words
+\(`agent-workspace-branch-words'): \"fix/doom-pbk.18-minimaps-dividers-dont-line\".
+No title, or none of its words left: TYPE/ID."
+  (let ((type (agent-workspace-slug (or type "")))
+        (words (agent-workspace-branch-words title)))
+    (concat (pcase type ("bug" "fix") ("feature" "feat") ("" "task") (_ type)) "/" issue
+            (if (string-empty-p words) "" (concat "-" words)))))
 
 (defun agent-workspace--branches (project)
   "PROJECT's branches, their names."
@@ -461,36 +481,35 @@ committed, or BRANCH is held."
           (agent-workspace-rest other)))
       (agent-workspace--branch-switch agent branch start))))
 
-(defun agent-workspace--issue-branch-there (project issue type)
-  "The branch of PROJECT for ISSUE of TYPE: the one there already, TYPE/ID
-or TYPE/ID-WORDS (renamed by its agent), else under another type since
-\(any other TYPE/ID...); none, TYPE/ID (`agent-workspace-issue-branch')."
-  (let* ((branch (agent-workspace-issue-branch issue type))
-         (there (agent-workspace--branches project))
-         (named (lambda (pattern)
-                  (seq-find (lambda (other) (and (not (string-prefix-p "agent/" other))
-                                                 (string-match-p pattern other)))
-                            there))))
+(defun agent-workspace--issue-branch-there (project issue type &optional title)
+  "The branch of PROJECT for ISSUE of TYPE, titled TITLE: the one there
+already, as it'd be named now, else the issue's by its id, whatever its
+type and words (TYPE/ID, TYPE/ID-...: its title changed since, or named
+otherwise before); none, as it'd be named now (`agent-workspace-issue-branch')."
+  (let* ((branch (agent-workspace-issue-branch issue type title))
+         (there (agent-workspace--branches project)))
     (or (car (member branch there))
-        (funcall named (concat "\\`" (regexp-quote branch) "-"))
-        (funcall named (concat "\\`[^/]+/" (regexp-quote issue) "\\(?:-\\|\\'\\)"))
+        (seq-find (lambda (other)
+                    (and (not (string-prefix-p "agent/" other))
+                         (string-match-p (concat "\\`[^/]+/" (regexp-quote issue) "\\(?:-\\|\\'\\)") other)))
+                  there)
         branch)))
 
-(defun agent-workspace-issue-branch-open (agent issue &optional type)
+(defun agent-workspace-issue-branch-open (agent issue &optional type title)
   "AGENT given ISSUE (of TYPE, bd's issue_type; not given: as its issues
-were last fetched, issues.el): its worktree on the issue's branch
-\(`agent-workspace-issue-branch': TYPE/ID), made from the main checkout's
-branch as it is then, or checked out again (the issue given back, as its
-agent renamed it maybe). Now, or if AGENT is working, as its next turn
+were last fetched, issues.el), titled TITLE: its worktree on the issue's
+branch (`agent-workspace-issue-branch': TYPE/ID-SLUG), made from the main
+checkout's branch as it is then, or checked out again (the issue given
+back, whatever its branch's words). Now, or if AGENT is working, as its next turn
 starts (the issue's prompt, queued). A user error if it can't be now
 \(`agent-workspace-branch-open'). Nothing without its worktree."
   (when (agent-workspace--worktree-live agent)
     (let* ((project (agent-workspace-agent-project agent))
            (type (or type (and (fboundp 'agent-workspace-issue-type) (agent-workspace-issue-type project issue)))))
       (if (memq (agent-workspace-agent-state agent) '(working hand))
-          (puthash agent (cons issue type) agent-workspace--branch-next)
+          (puthash agent (list issue type title) agent-workspace--branch-next)
         (remhash agent agent-workspace--branch-next)
-        (agent-workspace-branch-open agent (agent-workspace--issue-branch-there project issue type)
+        (agent-workspace-branch-open agent (agent-workspace--issue-branch-there project issue type title)
                                      (agent-workspace-main-branch project))))))
 
 (defun agent-workspace-branch-quiet (agent text)
@@ -544,7 +563,7 @@ words, where it is. What can't be done is said, never signalled."
            ((and next (progn (remhash agent agent-workspace--branch-next)
                              (equal (car next) (agent-workspace-agent-issue agent))))
             (condition-case err
-                (agent-workspace-branch-open agent (agent-workspace--issue-branch-there project (car next) (cdr next))
+                (agent-workspace-branch-open agent (apply #'agent-workspace--issue-branch-there project next)
                                              (agent-workspace-main-branch project))
               (user-error
                (agent-workspace--branch-say

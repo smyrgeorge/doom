@@ -189,12 +189,9 @@ for them.
 
 You work in your own git worktree, %s: make your changes and commits there, never \
 in the project's main checkout (%s), which is the user's. Each piece of work gets a \
-branch of its own there, made for you as it starts. An issue's is named after its \
-type and id (fix/doom-a1b for a bug, feat/ for a feature, else its type: task/...): \
-once you've read the issue, before your first commit, rename it once, adding 2 to 4 \
-words of your own, lowercase and hyphenated (git branch -m fix/doom-a1b-lexer-escapes; \
-the branch you're on, only). Otherwise commit on the branch you're on, and never \
-switch branches or make one yourself. The user reviews each branch and merges it. Your bd \
+branch of its own there, made and named for you as it starts (an issue's after its \
+type, id and title: fix/doom-a1b-lexer-escapes). Commit on the branch you're on, and \
+never switch, make or rename branches yourself. The user reviews each branch and merges it. Your bd \
 commands run as %s (BEADS_ACTOR), on the project's issues: an issue the user gives \
 you, claim it as yourself. Your notifications carry your name already."
                name (agent-workspace-agent-role agent)

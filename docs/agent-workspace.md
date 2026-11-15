@@ -328,9 +328,8 @@ From the shell: `cmd/agent-workspace new --role builder [--name ada] [--prompt T
 ## An agent
 
 - **Its session** is a Claude Code session in agent-shell, in the buffer `ada · builder`. It's told who it is, that
-  it works with you only, to commit in its worktree, on the branch made for its work (an issue's renamed once, with
-  words of its own), and never to switch branches,
-  then its role's instructions. Its role's model and tools apply.
+  it works with you only, to commit in its worktree, on the branch made for its work, and never to switch, make or
+  rename branches, then its role's instructions. Its role's model and tools apply.
 - **Its permission mode** is Claude Code's auto mode: Claude decides what needs your OK. A role's `mode` changes it
   for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all (`nil`: Claude Code's own default).
   The agent's bar shows it.
@@ -412,10 +411,10 @@ Each piece of an agent's work gets a branch of its own, in its worktree, made as
 it's on.
 
 - **An issue** you give it (`t`, the room's `[Give it to ken]`, its [loop](#loops), `:issue` as it's made) gets a
-  branch named after its type and id: `fix/doom-pbk.18` (`fix/` for a bug, `feat/` for a feature, else its type:
-  `task/`, `chore/`). It's made from your checkout's branch as it is then. The agent, once it has read the issue and
-  before its first commit, renames it once with 2 to 4 words of its own: `fix/doom-pbk.18-minimap-lanes-line-up`. An
-  issue given back to it finds its branch again, its work there; one another agent has, at rest, is taken from it.
+  branch named after its type, id and title: `fix/doom-pbk.18-minimaps-dividers-dont-line` (`fix/` for a bug,
+  `feat/` for a feature, else its type: `task/`, `chore/`; then the title's first 4 words, small ones like "a" or "the"
+  left out). It's made from your checkout's branch as it is then. An issue given back to it finds its branch again,
+  its work there, whatever its words; one another agent has, at rest, is taken from it.
   Given while it works, the branch comes as the issue starts its next turn.
 - **A prompt of yours** while it rests (from the room, `#`, or typed in its session) gets a branch named from its first
   words (lowercase, at most 48 characters), `fix-the-parser`, where it is: no file changes.

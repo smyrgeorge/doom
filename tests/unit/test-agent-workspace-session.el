@@ -361,9 +361,9 @@ by the agent too (at its turn's end)."
                   'queued))
       (should (equal (funcall head) "slow-please"))
       (should (+test-aws--wait (lambda () (member "Work on demo-1: Lexer: strings" (+test-aws--prompts "ada")))))
-      (should (equal (funcall head) "task/demo-1"))
-      (should (equal (agent-workspace-agent-branch agent) "task/demo-1"))
-      (should (equal (+test-aws--logged :branch "ada") '("slow-please" "task/demo-1")))
+      (should (equal (funcall head) "task/demo-1-strings"))
+      (should (equal (agent-workspace-agent-branch agent) "task/demo-1-strings"))
+      (should (equal (+test-aws--logged :branch "ada") '("slow-please" "task/demo-1-strings")))
       (let ((default-directory project))
         (should (equal (+test-aws--git "branch" "--list" "slow-please") "")))
       ;; It names its branch, as it's told; its turn ends: its bar says it.
@@ -374,10 +374,10 @@ by the agent too (at its turn's end)."
       (should (equal (agent-workspace-agent-branch agent) "task/demo-1-lexer-strings"))
       ;; At the desk: at once.
       (agent-workspace-give agent "demo-2" "Parser" "feature")
-      (should (equal (funcall head) "feat/demo-2"))
+      (should (equal (funcall head) "feat/demo-2-parser"))
       (agent-workspace-send agent (agent-workspace-issue-prompt "demo-2" "Parser") :submit t)
       (should (+test-aws--wait (lambda () (= (length (+test-aws--logged :branch "ada")) 3))))
-      (should (equal (car (last (+test-aws--logged :branch "ada"))) "feat/demo-2")))))
+      (should (equal (car (last (+test-aws--logged :branch "ada"))) "feat/demo-2-parser")))))
 
 ;; ====== WHAT YOU DO TO ONE ======
 

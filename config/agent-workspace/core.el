@@ -413,7 +413,7 @@ nothing is; its session not started, it's stuck saying why, in the crew."
           (progn
             (agent-workspace-worktree-ensure agent)
             (when issue
-              (agent-workspace-issue-branch-open agent issue issue-type)))
+              (agent-workspace-issue-branch-open agent issue issue-type issue-title)))
         (error (user-error "%s's worktree: %s" name (error-message-string err))))
       (let ((key (agent-workspace--root project)))
         (puthash key (append (gethash key agent-workspace--crews) (list agent))
@@ -523,12 +523,12 @@ works; a running session starts again, fresh, as ROLE says."
   "Give AGENT ISSUE (its TITLE, its TYPE: bd's issue_type) to work on, before
 its prompt is sent (t, the room's offer, its loop, :issue as it's made all
 come here): its branch for it opened in its worktree first (worktree.el:
-TYPE/ID, from the main checkout's branch; as its next turn starts if it's
+TYPE/ID-SLUG, from the main checkout's branch; as its next turn starts if it's
 working), a user error if it can't be (changes not committed there):
 nothing given. Then noted: what its state says. nil: none, its branch as
 it is."
   (when issue
-    (agent-workspace-issue-branch-open agent issue type))
+    (agent-workspace-issue-branch-open agent issue type title))
   (agent-workspace--note-issue agent issue title))
 
 (defun agent-workspace--note-issue (agent issue &optional title)
