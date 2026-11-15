@@ -68,6 +68,7 @@ pane opened or folded.")
   project            ; the crew's project
   selected           ; the selected agent
   open               ; the agent whose pane is open, or nil: every pane folded
+  (view 'stage)      ; the stage (and the room beside it), or the room alone
   came-from          ; the workspace q goes back to (or a window configuration)
   own                ; its own buffers: the issue list, the bars, the hint
   windows            ; the stage's windows, as last laid out
@@ -362,7 +363,8 @@ frame of the app. In `persp-activated-functions'."
 
 (defun agent-workspace--plan (app)
   "What decides APP's layout: laid out anew when it changes."
-  (list (frame-width) (frame-height) (agent-workspace--ordered (agent-workspace--app-project app))
+  (list (frame-width) (frame-height) (agent-workspace--app-view app)
+        (agent-workspace--ordered (agent-workspace--app-project app))
         (agent-workspace--app-open app)
         (mapcar (lambda (agent) (buffer-live-p (agent-workspace-agent-buffer agent)))
                 (agent-workspace-agents (agent-workspace--app-project app)))))
@@ -401,7 +403,8 @@ left, its stage beside them, the selected agent's pane open."
     (setf (agent-workspace--app-frame app) (selected-frame))
     (let ((ignore-window-parameters t))
       (delete-other-windows base))
-    (set-window-parameter base 'window-side nil)
+    (dolist (parameter '(window-side agent-workspace-room agent-workspace-pane agent-workspace-canvas))
+      (set-window-parameter base parameter nil))
     (set-window-dedicated-p base nil)
     (let ((issues (display-buffer-in-side-window
                    (agent-workspace--issues-buffer project)
@@ -411,13 +414,18 @@ left, its stage beside them, the selected agent's pane open."
                                            (mode-line-format . none) (tab-line-format . none)))))))
       (ignore issues))
     (agent-workspace--hint-draw project agents)
+    ;; The room: beside the stage, below it, or all of it.
+    (when (fboundp 'agent-workspace--room-place)
+      (setq base (agent-workspace--room-place app base)))
     (setf (agent-workspace--app-windows app)
-          (if agents
-              (agent-workspace--stack base agents (agent-workspace--app-open app))
-            (progn (set-window-buffer base (agent-workspace--hint-buffer project))
-                   (dolist (parameter '(header-line-format mode-line-format tab-line-format))
-                     (set-window-parameter base parameter 'none))
-                   (list base))))
+          (cond
+           ((not base) nil)
+           (agents
+            (agent-workspace--stack base agents (agent-workspace--app-open app)))
+           (t (set-window-buffer base (agent-workspace--hint-buffer project))
+              (dolist (parameter '(header-line-format mode-line-format tab-line-format))
+                (set-window-parameter base parameter 'none))
+              (list base))))
     (dolist (buffer (cons (agent-workspace--issues-buffer project)
                           (delq nil (mapcar #'agent-workspace-agent-buffer agents))))
       (agent-workspace--persp-add project buffer))
@@ -522,7 +530,8 @@ agent selected, one gone, its session new). In
     (pcase what
       ('created
        (setf (agent-workspace--app-selected app) agent
-             (agent-workspace--app-open app) agent))
+             (agent-workspace--app-open app) agent)
+       (run-hook-with-args 'agent-workspace-layout-functions (agent-workspace--app-project app)))
       ((or 'forgotten 'closed)
        (when (eq (agent-workspace--app-selected app) agent)
          (setf (agent-workspace--app-selected app) nil))

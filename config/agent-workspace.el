@@ -82,6 +82,19 @@
 ;; asking nothing, and leaves no process of theirs: what hasn't exited
 ;; `agent-workspace-exit-timeout' seconds later is killed. Their worktrees stay.
 
+;; THE ROOM
+;; One chat for the whole crew (config/agent-workspace/room.el), the app's
+;; right column (at the bottom, under the stage, in a frame under 200 columns,
+;; or with `agent-workspace-room-side' bottom); 2 the room alone, 1 the stage
+;; again. Its feed: each agent's turns (their answers' first lines; RET opens
+;; its pane), the issues it files, claims and closes, the crew's changes (an
+;; agent joining, going home, started again, stuck), raised hands, your
+;; messages; F filters it. Its compose line: #ada to ada, #builders to the
+;; first free builder, #all to everyone, no # to the selected agent; busy, it
+;; gets it after its turn; TAB completes #, M-p / M-n your messages. # in the
+;; app talks to the agent there. Kept per project, per machine, in
+;; .agent-shell/agent-workspace/room.jsonl.
+
 ;; THE SAVED CREW
 ;; What the crew is, not its state, saved in the project and committed:
 ;; .agent-workspace/crew.el (config/agent-workspace/saved.el), read as data,
@@ -146,6 +159,7 @@
 (load! "agent-workspace/stage")
 (load! "agent-workspace/app")
 (load! "agent-workspace/issues")
+(load! "agent-workspace/room")
 (load! "agent-workspace/saved")
 (load! "agent-workspace/doom")
 
@@ -159,7 +173,8 @@
     ("v" . agent-workspace-canvas-here) ("I" . agent-workspace-issue-here)
     ("a" . agent-workspace-next-hand) ("f" . agent-workspace-jump)
     ("gr" . agent-workspace-layout) ("gR" . agent-workspace-crew-reload) ("q" . agent-workspace-leave)
-    ("Q" . agent-workspace-quit) ("?" . agent-workspace-help))
+    ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)
+    ("#" . agent-workspace-talk) ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room))
   "The keys every buffer of the app has (see THE APP above).")
 
 (+my/agent-workspace-bind agent-workspace-issues-mode-map
@@ -176,6 +191,29 @@
                                     ("RET" . agent-workspace-go) ("<return>" . agent-workspace-go)
                                     ("TAB" . agent-workspace-toggle) ("<tab>" . agent-workspace-toggle))
                                   +my/agent-workspace-keys))
+
+;; The room: its feed, its compose line (RET sends there, in insert state too).
+(+my/agent-workspace-bind agent-workspace-room-mode-map
+                          '(("RET" . agent-workspace-room-open) ("<return>" . agent-workspace-room-open)
+                            ("F" . agent-workspace-room-filter) ("i" . agent-workspace-room-compose)
+                            ("a" . agent-workspace-room-compose) ("#" . agent-workspace-room-compose)
+                            ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room)
+                            ("gr" . agent-workspace-layout) ("q" . agent-workspace-leave)
+                            ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)))
+
+(map! :map agent-workspace-compose-mode-map
+      "RET" #'agent-workspace-compose-send
+      "M-p" #'agent-workspace-compose-previous
+      "M-n" #'agent-workspace-compose-next
+      "TAB" #'completion-at-point
+      :ni "RET" #'agent-workspace-compose-send
+      :ni "M-p" #'agent-workspace-compose-previous
+      :ni "M-n" #'agent-workspace-compose-next
+      :i "TAB" #'completion-at-point
+      :n "q" #'agent-workspace-leave)
+
+(after! evil
+  (evil-set-initial-state 'agent-workspace-compose-mode 'insert))
 
 ;; In an agent's own session (agent-shell's keys): the same after a prefix.
 (defvar +my/agent-workspace-pane-map (make-sparse-keymap)

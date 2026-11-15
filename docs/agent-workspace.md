@@ -1,7 +1,7 @@
 # Agent workspace
 
 > **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, the
-> app (its workspace, the issues and the stage) and the saved crew. The room and notifications come next.
+> app (its workspace, the issues, the stage, the room) and the saved crew. Notifications come next.
 
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
@@ -17,6 +17,9 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
 - **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
   and its Agent UI canvas below it when it shows something. The others are folded to a bar: its avatar, name, role,
   state and how long it's been working. The stage arranges itself: drag a border and it's tiled again.
+
+- **The room** is on the right, 78 columns, or at the bottom in a frame under 200 columns (or with
+  `agent-workspace-room-side` set to `bottom`). `2` shows the room alone, `1` the stage again.
 
 `q` leaves the app and the crew goes on. Its tally shows in the other workspaces' mode line (`crew · doom ▶2 !1`), and
 a click there brings you back. `Q`, or `SPC TAB d` in its workspace, closes it at once, without asking: every agent
@@ -40,11 +43,34 @@ terminal with `git init` typed.
 | `v` / `I` | anywhere | Its canvas / its issue |
 | `a` | anywhere | The next raised hand |
 | `f` + initial | anywhere | That agent |
+| `#` | anywhere | Talk to it in the room |
+| `1` / `2` | anywhere | The stage / the room alone |
 | `gr` / `gR` | anywhere | Lay it out again / read `crew.el` again |
 | `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
 In an agent's own session, the same keys follow `SPC m w` (`C-c w` in insert state), plus `]` / `[` for the next or
 previous agent. A click on a bar or a pane's header line selects its agent, and `mouse-3` there lists its actions.
+
+## The room
+
+One chat for the whole crew: a feed of what matters, and below it a compose line that stays in view.
+
+- **The feed** shows each agent's turns (their answers' first lines), the issues it files, claims and closes, the
+  crew's changes (an agent joining, going home, started again, stuck), raised hands, and your messages. At its end it
+  follows new lines; scrolled up, it stays. `RET` on a line opens its agent's pane. `F` shows raised hands only, then
+  the selected agent's only, then all.
+- **The compose line**: `#ada fix the test` goes to ada, `#builders ...` to the first free builder, `#all ...` to
+  everyone, and a message without `#` to the selected agent (`→ ada` before it). An agent that's working gets it
+  after its turn, and the feed says so. Typing `#ada ` selects ada.
+
+| Key | Action |
+|---|---|
+| `RET` | Send |
+| `TAB` | Complete a `#` name, role or `all` |
+| `M-p` / `M-n` | Your previous / next message |
+| `#` | Talk to the agent you're on (in the issues, a bar, a session) |
+
+The feed is kept per project on this machine, in `.agent-shell/agent-workspace/room.jsonl`.
 
 ## The saved crew
 

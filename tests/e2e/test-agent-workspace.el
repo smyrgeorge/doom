@@ -103,4 +103,30 @@ to what it was."
                           (window-list nil 'nomini)))
     (should-not (get-buffer (format "*issues · %s*" (file-name-nondirectory (directory-file-name project)))))))
 
+(ert-deftest e2e-agent-workspace/the-room ()
+  "The room beside the stage in a wide frame: its feed above its compose line
+(3 rows); a message sent from it said in the feed, which follows its end."
+  (let ((+test-e2e-frame-size '(230 . 50)))
+    (+test-e2e-aw
+      (let* ((sent nil)
+             (feed (get-buffer-window (agent-workspace--room-buffer project)))
+             (compose (get-buffer-window (agent-workspace--compose-buffer project))))
+        (should (window-live-p feed))
+        (should (window-live-p compose))
+        (should (= (window-total-height compose) 3))
+        (should (= (window-total-width feed) agent-workspace-room-width))
+        (cl-letf (((symbol-function 'agent-workspace-send)
+                   (lambda (agent text &rest _) (push (list (agent-workspace-agent-name agent) text) sent) 'sent)))
+          (dotimes (i 40)
+            (agent-workspace-room-post project :kind 'note :text (format "note %d" i)))
+          (with-selected-window compose
+            (insert "#sam look at this")
+            (agent-workspace-compose-send)))
+        (+test--pump 0.2)
+        (should (equal sent '(("sam" "look at this"))))
+        (with-current-buffer (window-buffer feed)
+          (should (string-search "→ sam look at this" (buffer-string))))
+        ;; The feed shows its end.
+        (should (= (window-end feed t) (with-current-buffer (window-buffer feed) (point-max))))))))
+
 (+test-e2e-run)

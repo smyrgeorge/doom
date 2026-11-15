@@ -56,7 +56,8 @@ desk; bd not run (`issues': what it answers, plists of bd's JSON)."
             (agent-workspace--apps (make-hash-table :test #'equal))
             (agent-workspace-new-asked nil))
        (ignore agent-workspace-new-asked)
-       (set-frame-size (selected-frame) 160 40)
+       ;; Wide enough for the room on the right (its own tests: test-agent-workspace-room.el).
+       (set-frame-size (selected-frame) 220 40)
        (cl-letf (((symbol-function 'agent-workspace--start)
                   (lambda (agent)
                     (let ((buffer (get-buffer-create (agent-workspace-buffer-name agent))))
@@ -80,9 +81,10 @@ desk; bd not run (`issues': what it answers, plists of bd's JSON)."
            (set-frame-parameter nil 'agent-workspace nil))))))
 
 (defun +test-awa--windows ()
-  "The frame's windows: (BUFFER-NAME WIDTH HEIGHT), in order."
+  "The frame's windows but the room's: (BUFFER-NAME WIDTH HEIGHT), in order."
   (mapcar (lambda (w) (list (buffer-name (window-buffer w)) (window-total-width w) (window-total-height w)))
-          (window-list nil 'nomini (frame-first-window))))
+          (seq-remove (lambda (w) (window-parameter w 'agent-workspace-room))
+                      (window-list nil 'nomini (frame-first-window)))))
 
 (defun +test-awa--height ()
   "The frame's windows' height, in rows."
@@ -113,8 +115,8 @@ leaves it alone)."
       (let ((app (agent-workspace-open t)))
         (should (equal (+test-awa--windows)
                        `(("*issues · layout*" 50 ,(+test-awa--height))
-                         ("ada · builder" 110 ,(- (+test-awa--height) 2)) (" *bar · ken · layout*" 110 1)
-                         (" *bar · sam · layout*" 110 1))))
+                         ("ada · builder" 92 ,(- (+test-awa--height) 2)) (" *bar · ken · layout*" 92 1)
+                         (" *bar · sam · layout*" 92 1))))
         (should (eq (agent-workspace--app-selected app) ada))
         (let ((pane (get-buffer-window (agent-workspace-agent-buffer ada))))
           (should (eq (window-parameter pane 'mode-line-format) 'none))
@@ -124,7 +126,7 @@ leaves it alone)."
             (should (string-match-p "\\`▾ ▌A ada · builder · ○ at the desk"
                                     (substring-no-properties (agent-workspace--pane-header))))))
         (should (equal (with-current-buffer (agent-workspace--bar-buffer sam) (buffer-string))
-                       (substring-no-properties (agent-workspace-line sam 110 nil t))))
+                       (substring-no-properties (agent-workspace-line sam 92 nil t))))
         (should (string-prefix-p "▸ ▌S sam · investigator · ○ at the desk"
                                  (with-current-buffer (agent-workspace--bar-buffer sam)
                                    (buffer-substring-no-properties (point-min) (point-max)))))
@@ -140,8 +142,8 @@ kept; TAB folds it: every pane a bar, the hint below them."
       (agent-workspace-open t)
       (agent-workspace-select ken t)
       (should (equal (+test-awa--windows)
-                     `(("*issues · select*" 50 ,(+test-awa--height)) (" *bar · ada · select*" 110 1)
-                       ("ken · builder" 110 ,(1- (+test-awa--height))))))
+                     `(("*issues · select*" 50 ,(+test-awa--height)) (" *bar · ada · select*" 92 1)
+                       ("ken · builder" 92 ,(1- (+test-awa--height))))))
       (should (eq (window-buffer) (agent-workspace-agent-buffer ken)))
       ;; Done becomes at the desk when selected.
       (setf (agent-workspace-agent-state ada) 'done)
