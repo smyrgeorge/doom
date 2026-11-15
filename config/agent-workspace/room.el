@@ -168,8 +168,9 @@ file trimmed to them if it's longer."
 
 (defun agent-workspace-room-post (project &rest entry)
   "Post ENTRY in PROJECT's room: a plist, :kind (you, reply, issue, joined,
-home, restarted, renamed, left, stuck, hand, note), :agent (its name), :text,
-:to (who a message of yours went to)."
+home, restarted, renamed, left, stuck, hand, note, event, event-done),
+:agent (its name, an event's source), :text, :to (who a message of yours or
+an event went to), :event (an event's id)."
   (let ((entry (append (list :time (format-time-string "%H:%M")) entry)))
     (agent-workspace--room-keep project entry)
     (when-let* ((app (agent-workspace--app project))
@@ -206,10 +207,13 @@ home, restarted, renamed, left, stuck, hand, note), :agent (its name), :text,
                  ('hand (agent-workspace-glyph 'hand 'warning))
                  ('stuck (agent-workspace-glyph 'stuck 'error))
                  ('issue (propertize "◆ " 'face 'shadow))
+                 ('event (concat (propertize "✉ → " 'face 'shadow)
+                                 (propertize (or (plist-get entry :to) "") 'face 'bold) " "))
+                 ('event-done (propertize "✉ " 'face 'shadow))
                  (_ "")))
          (text (plist-get entry :text))
          (text (pcase kind
-                 ((or 'joined 'home 'restarted 'renamed 'left 'note) (propertize text 'face 'shadow))
+                 ((or 'joined 'home 'restarted 'renamed 'left 'note 'event-done) (propertize text 'face 'shadow))
                  ('stuck (propertize text 'face 'error))
                  ('hand (propertize text 'face 'warning))
                  (_ text)))
@@ -219,7 +223,10 @@ home, restarted, renamed, left, stuck, hand, note), :agent (its name), :text,
                             'wrap-prefix (make-string agent-workspace--room-indent ?\s))
                 ;; A hand's buttons, while it's raised (hands.el).
                 (and (eq kind 'hand) (fboundp 'agent-workspace--room-hand-line)
-                     (agent-workspace--room-hand-line project entry))))))
+                     (agent-workspace--room-hand-line project entry))
+                ;; A queued event's buttons, while it waits (inbox.el).
+                (and (eq kind 'event) (fboundp 'agent-workspace--room-event-line)
+                     (agent-workspace--room-event-line project entry))))))
 
 (defun agent-workspace--pad (text width)
   "TEXT padded to WIDTH columns."

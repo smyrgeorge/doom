@@ -225,7 +225,12 @@ and branch."
                        sep
                        (agent-workspace-state-glyph agent)
                        (agent-workspace-state-words agent)
-                       (if time (concat sep (propertize time 'face 'shadow)) "")))
+                       (if time (concat sep (propertize time 'face 'shadow)) "")
+                       ;; Its events waiting (inbox.el).
+                       (if-let* ((mail (and (fboundp 'agent-workspace-inbox-badge)
+                                            (agent-workspace-inbox-badge agent))))
+                           (concat sep mail)
+                         "")))
          (role (agent-workspace-role agent))
          (mode (or (agent-workspace-agent-mode agent) (plist-get role :mode)))
          (model (or (agent-workspace-agent-model agent) (plist-get role :model)))

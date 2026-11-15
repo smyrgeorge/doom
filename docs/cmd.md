@@ -43,12 +43,17 @@ cmd/agent-ui-mcp.el -f agent-ui-mcp-main`), as each agent-shell session starts i
 
 ## cmd/agent-workspace
 
-Makes an agent in this folder's project, for your scripts; see [Agent workspace](agent-workspace.md).
+Makes an agent in this folder's project, or sends its crew an event, for your scripts; see
+[Agent workspace](agent-workspace.md).
 
 ```sh
 cmd/agent-workspace new --role builder                  # a name made for it
 cmd/agent-workspace new --role investigator --name sam --prompt "Look into doom-a1b"
+cmd/agent-workspace send --to ada --from ci "The build broke on main"
+cmd/agent-workspace send --to '#builder' --from cron - < triage.txt   # a role's first free agent; - reads stdin
 ```
 
-The reply is JSON on stdout (`{"ok":true,"name":"ada","role":"builder","worktree":...,"branch":"agent/ada",...}`); it
-exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without an Emacs server.
+An event is queued and delivered when its agent is free, as data from its source
+([The inbox](agent-workspace.md#the-inbox)). The reply is JSON on stdout
+(`{"ok":true,"name":"ada","role":"builder","worktree":...,"branch":"agent/ada",...}` for new,
+`{"ok":true,"events":[{"id":1,"to":"ada","state":"queued"}]}` for send); it exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without an Emacs server.

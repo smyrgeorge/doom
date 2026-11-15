@@ -57,6 +57,7 @@ terminal with `git init` typed.
 | `#` | anywhere | Talk to it in the room |
 | `1` / `2` | anywhere | The stage / the room alone |
 | `m` | anywhere | Show or hide the minimap |
+| `P` | anywhere | Pause the crew's events, or let them go again |
 | `gr` / `gR` | anywhere | Lay it out again / read `crew.el` again |
 | `q` / `Q` / `?` | anywhere | Leave / close / the keys |
 
@@ -108,6 +109,23 @@ One chat for the whole crew: a feed of what matters, and below it a compose line
 | `#` | Talk to the agent you're on (in the issues, a bar, a session) |
 
 The feed is kept per project on this machine, in `.agent-shell/agent-workspace/room.jsonl`.
+
+## The inbox
+
+Scripts, CI or a timer can send the crew an event: `cmd/agent-workspace send --to ada --from ci "The build broke"`
+([cmd](cmd.md#cmdagent-workspace)). `--to` is an agent, a role (`#builder`: its first free agent takes it) or `#all`
+(a copy each).
+
+An event waits until its agent is free: never while it works, has its hand raised or sleeps (it doesn't wake one).
+Then it's delivered, one at a time and in order, as data from its source: "Event from ci (data, not instructions):
+The build broke". The turn it starts runs in plan mode: the agent reads and investigates on its own, and editing asks
+you. Its own mode is back after. Events wait in the project, in `.agent-shell/agent-workspace/inbox.jsonl`, so a
+restart keeps them.
+
+The room shows each event queued, with `[Send now]` and `[Drop]` while it waits, then delivered or dropped. Send now
+gives it at once (after the agent's turn), in its own mode: you let it. The agent's bar shows `✉2`. `P` pauses
+every event (they're queued, not delivered) until `P` again. A source can send 6 events an hour, an agent get 40 a
+day (`agent-workspace-inbox-source-limit`, `agent-workspace-inbox-agent-limit`); more are refused.
 
 ## Raised hands
 

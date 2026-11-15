@@ -102,6 +102,17 @@
 ;; "go to it". They're buttons under the hand in the room, on its agent's bar
 ;; and header line; A picks one, a goes to the next hand.
 
+;; THE INBOX
+;; Events from outside for an agent, a role or everyone
+;; (config/agent-workspace/inbox.el): cmd/agent-workspace send --to ada|#builder
+;; |#all [--from ci] TEXT. Queued, kept in .agent-shell/agent-workspace/
+;; inbox.jsonl (a restart keeps them), delivered when the agent is free (never
+;; waking one asleep), one at a time, as data from its source, never
+;; instructions; the turn it starts runs in plan mode (it reads and
+;; investigates; editing asks you), its own mode back after. In the room:
+;; queued ([Send now] [Drop]), delivered, dropped; ✉N on its agent's bar; P
+;; pauses them all. Limits: 6 an hour from a source, 40 a day for an agent.
+
 ;; THE SAVED CREW
 ;; What the crew is, not its state, saved in the project and committed:
 ;; .agent-workspace/crew.el (config/agent-workspace/saved.el), read as data,
@@ -176,6 +187,7 @@
 (load! "agent-workspace/issues")
 (load! "agent-workspace/room")
 (load! "agent-workspace/hands")
+(load! "agent-workspace/inbox")
 (load! "agent-workspace/panels")
 (load! "agent-workspace/activity")
 (load! "agent-workspace/minimap")
@@ -194,7 +206,7 @@
     ("gr" . agent-workspace-layout) ("gR" . agent-workspace-crew-reload) ("q" . agent-workspace-leave)
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)
     ("#" . agent-workspace-talk) ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room)
-    ("m" . agent-workspace-minimap-toggle))
+    ("m" . agent-workspace-minimap-toggle) ("P" . agent-workspace-inbox-pause))
   "The keys every buffer of the app has (see THE APP above).")
 
 (+my/agent-workspace-bind agent-workspace-issues-mode-map

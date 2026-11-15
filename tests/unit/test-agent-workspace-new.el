@@ -296,6 +296,27 @@ reply JSON; its exit status 0, 1 when not done."
         (should (= (car run) 1))
         (should (string-match-p "\\`{\"ok\":false,\"error\":\"There.s an agent named ada" (cdr run)))))))
 
+(ert-deftest agent-workspace-new/the-script-sends ()
+  "cmd/agent-workspace send: an event queued for a role through Emacs's
+server (nobody of it free), its words joined; wrong uses: 2, saying why."
+  (+test-awn "script-send"
+    (let ((agent-workspace--inboxes (make-hash-table :test #'equal))
+          (agent-workspace--inbox-sent (make-hash-table :test #'equal)))
+      (+test-awn--with-server
+        (let ((run (+test-awn--run "send" "--to" "#builder" "--from=ci" "the" "build broke")))
+          (should (= (car run) 0))
+          (should (equal (cdr run) "{\"ok\":true,\"events\":[{\"id\":1,\"to\":\"#builder\",\"state\":\"queued\"}]}")))
+        (should (equal (plist-get (car (agent-workspace-inbox project)) :text) "the build broke"))
+        (let ((run (+test-awn--run "send" "--to" "nobody" "hi")))
+          (should (= (car run) 1))
+          (should (string-search "No agent nobody in this crew" (cdr run)))))
+      (dolist (case '((("send" "hi") "send: to whom?")
+                      (("send" "--to" "ada") "send: what?")
+                      (("send" "--to" "ada" "--bcc" "x") "send: unknown argument \\\"--bcc\\\"")))
+        (let ((run (apply #'+test-awn--run (car case))))
+          (should (= (car run) 2))
+          (should (string-search (cadr case) (cdr run))))))))
+
 (ert-deftest agent-workspace-new/the-script-s-wrong-uses ()
   "Wrong uses: 2, saying what's wrong; no Emacs: 3."
   (let ((process-environment (cons "EMACS_SOCKET_NAME=/tmp/no-such-agent-workspace-server"
