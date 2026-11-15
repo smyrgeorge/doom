@@ -54,8 +54,8 @@ needs your OK. nil: Claude Code's own default."
 ;; empty, one from `agent-workspace-names' whose initial no agent has; C-u:
 ;; its model, permission mode and colour too. From Lisp:
 ;;   (agent-workspace-create :role "builder" :name "ada" :issue "doom-a1b")
-;; (an issue's id: its first message, "Work on doom-a1b: TITLE"); from the
-;; shell, cmd/agent-workspace new --role builder [--name ada] [--prompt TEXT]
+;; (an issue's id: its worktree on the issue's branch, see ITS BRANCHES; its
+;; first message, "Work on doom-a1b: TITLE"); from the shell, cmd/agent-workspace new --role builder [--name ada] [--prompt TEXT]
 ;; (config/agent-workspace/request.el), replying JSON. A step failing says
 ;; which: its worktree not made, nothing is; its session not started, it's
 ;; stuck saying why.
@@ -92,11 +92,12 @@ needs your OK. nil: Claude Code's own default."
 ;; had closed or handed over: still in progress, it waits for you to look), it
 ;; takes the next issue by itself: one you gave it first, else the next ready
 ;; one its role's labels say, claimed as itself (bd ready --claim: two never
-;; get the same one), its session fresh for it. None left: it naps (☾
-;; "napping: nothing to build"), said once in the room and notified, and
-;; wakes when one comes (.beads changing; a look every
+;; get the same one), on its branch (see ITS BRANCHES), its session fresh for
+;; it. None left: it naps (☾ "napping: nothing to build"), said once in the
+;; room and notified, and wakes when one comes (.beads changing; a look every
 ;; `agent-workspace-loop-check' minutes). A failure (its turn's error, its
-;; session not started, bd failing) is tried again
+;; session not started, bd failing, changes not committed in its worktree:
+;; nothing claimed) is tried again
 ;; `agent-workspace-loop-retry' seconds later; after
 ;; `agent-workspace-loop-failures' in a row it stops, stuck, saying why. A
 ;; crew started again brings a looping agent back asleep: reopening never
@@ -104,21 +105,43 @@ needs your OK. nil: Claude Code's own default."
 
 ;; ITS WORKTREE
 ;; Always its own (config/agent-workspace/worktree.el):
-;; .agent-shell/worktrees/ROLE-NAME of its project (builder-ada), on the
-;; branch agent/NAME (from the main checkout's HEAD), made with it, locked
-;; with its name as the reason ("agent ada (builder), crew of doom"), kept
-;; when it stops, moved when it's renamed or its role changes (e; not while
-;; it works). One named otherwise in .agent-shell/worktrees on its branch
-;; (worktrees/NAME, as they were named before) is moved there as it starts,
-;; its work with it. A project
-;; that isn't a git repository, or has no commit, has no crew. .agent-shell/
-;; is kept out of git (the repository's info/exclude, if no .gitignore does
-;; it). Forgetting an agent removes its worktree and branch when they hold
-;; nothing the main checkout hasn't; else you're shown what they hold and
-;; asked. M-x agent-workspace-review: its branch's changes in magit
-;; (MAIN...agent/NAME); M-x agent-workspace-merge: merged into the main
-;; checkout, always with a merge commit (--no-ff, never a fast-forward), the
-;; agent told, its branch reset to it if you say so.
+;; .agent-shell/worktrees/ROLE-NAME of its project (builder-ada), made with
+;; it on the branch agent/NAME (from the main checkout's HEAD), locked with
+;; its name as the reason ("agent ada (builder), crew of doom"), kept when it
+;; stops (started again on the branch it's on), moved when it's renamed or
+;; its role changes (e; not while it works). One of its named otherwise in
+;; .agent-shell/worktrees (worktrees/NAME, as they were named before) is
+;; moved there as it starts, its work with it. A project that isn't a git
+;; repository, or has no commit, has no crew. .agent-shell/ is kept out of
+;; git (the repository's info/exclude, if no .gitignore does it). Forgetting
+;; an agent removes its worktree and branches when they hold nothing the
+;; main checkout hasn't; else you're shown what they hold (each of its
+;; branches) and asked.
+
+;; ITS BRANCHES
+;; A branch of its own for each piece of work, in its worktree, made as the
+;; work starts (worktree.el); its bar shows the one it's on. An issue given to
+;; it (t, the room's offer, its loop, :issue: `agent-workspace-give', core.el)
+;; gets ID-slug (doom-pbk.9-other-canvases-on-the-stage: its title
+;; lowercased, its "Area: " dropped, at most 48 characters), from the main
+;; checkout's branch as it is then; one of that name there already (given
+;; back) checked out again, taken from another agent at rest. Given while it
+;; works, as the issue's prompt starts its next turn. Its worktree with
+;; changes not committed takes none: refused, saying which branch has them
+;; (as its turn starts: it stays, said). A prompt of yours at rest (the room,
+;; #, its session: agent-shell's input-submitted) gets a branch named from
+;; its first words, where it is (no file changes); not a / command, nor what
+;; it's only told (a merge, an event). Between pieces of work it rests on
+;; agent/NAME at the main branch's tip: nothing is merged from it (one with
+;; work from before keeps it, merged as before). A branch it leaves holding
+;; nothing (a question, an investigation) is deleted. Each is noted as its
+;; agent's in the repository's config (branch.BRANCH.agent-workspace-agent).
+;; M-x agent-workspace-review (d): a branch's changes in magit
+;; (MAIN...BRANCH); M-x agent-workspace-merge (M): merged into the main
+;; checkout, always with a merge commit naming it (--no-ff, never a
+;; fast-forward), the agent told, the branch deleted and the agent back at
+;; rest (not while it works or has changes not committed: M again later).
+;; Both on the branch it's on, or asked which when others of its hold work.
 
 ;; ITS NAME ON IT, IN EMACS
 ;; (config/agent-workspace/names.el) Its worktree's files belong to the
@@ -208,7 +231,8 @@ needs your OK. nil: Claude Code's own default."
 ;; inbox (config/agent-workspace/saved.el), JSON, read as data, never
 ;; evaluated. Each agent's name, role, colour (its model and mode when not its
 ;; role's), whether it's asleep, whether it loops, its open panels by name
-;; (never their data); the layout. Written when the crew changes (a panel
+;; (never their data); the layout; never its branch (its worktree keeps the
+;; one it's on). Written when the crew changes (a panel
 ;; opened or closed too), one agent a line; closing the crew leaves it as it
 ;; was. SPC o w with no crew running starts it again from there: every agent
 ;; fresh, in its worktree, its role as it is now, its panels opened again

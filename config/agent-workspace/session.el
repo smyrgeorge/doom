@@ -187,15 +187,16 @@ work for the user: your work comes from them (in your session, from the crew's r
 an issue they give you), and you answer them. Don't hand work to other agents or wait \
 for them.
 
-You work in your own git worktree, %s, on the branch %s: make your changes and \
-commits there, never in the project's main checkout (%s), which is the user's. They \
-review your branch and merge it. Your bd commands run as %s (BEADS_ACTOR), on the \
-project's issues: an issue the user gives you, claim it as yourself. Your notifications \
-carry your name already."
+You work in your own git worktree, %s: make your changes and commits there, never \
+in the project's main checkout (%s), which is the user's. Each piece of work gets a \
+branch of its own there, made for you as it starts (an issue's is named after it, \
+its id then its title's words): commit on the branch you're on, and never switch \
+branches or make one yourself. The user reviews each branch and merges it. Your bd \
+commands run as %s (BEADS_ACTOR), on the project's issues: an issue the user gives \
+you, claim it as yourself. Your notifications carry your name already."
                name (agent-workspace-agent-role agent)
                (file-name-nondirectory (directory-file-name project))
                (directory-file-name (agent-workspace-agent-worktree agent))
-               (agent-workspace-agent-branch agent)
                (directory-file-name project)
                name)
        (mapconcat (lambda (more) (concat "\n\n" more))
@@ -249,11 +250,15 @@ agent raises its hand, asking it. In `agent-ui-question-waiting-functions'."
                                    (ignore-errors (agent-ui-ask-question (agent-ui-get id :canvas canvas))))
                               "a question on its canvas"))))))
 
-(cl-defun agent-workspace-send (agent text &key submit)
+(cl-defun agent-workspace-send (agent text &key submit no-branch)
   "Put TEXT in AGENT's prompt; SUBMIT: send it. Working, it gets it after
-its turn (agent-shell's queue); still waking up, once it's ready. Return
-`sent', `queued' or `inserted'."
+its turn (agent-shell's queue); still waking up, once it's ready.
+NO-BRANCH: it's no work of its own (it's told something): the turn it
+starts makes no branch for it at rest (worktree.el). Return `sent',
+`queued' or `inserted'."
   (let ((buffer (agent-workspace--live-or-error agent)))
+    (when (and submit no-branch)
+      (agent-workspace-branch-quiet agent text))
     (cond
      ((and submit (memq (agent-workspace-agent-state agent) '(working hand))
            (with-current-buffer buffer (shell-maker-busy)))

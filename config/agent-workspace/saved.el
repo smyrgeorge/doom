@@ -16,7 +16,8 @@
 ;; What each agent is (its name, role, colour; its model and mode when not its
 ;; role's; whether it's asleep; whether it loops (loops.el); its kind when not
 ;; Claude Code; its open panels, by name, never their data) and the layout;
-;; never its session, its state or its issue. Written when the crew changes
+;; never its session, its state, its issue or its branch (its worktree keeps
+;; the one it's on: worktree.el). Written when the crew changes
 ;; (debounced), in a stable order (role order, then name), one agent a line,
 ;; only if it differs; its crew closing leaves it as it was (written first,
 ;; before any agent stops and its panels close). When the app opens with no

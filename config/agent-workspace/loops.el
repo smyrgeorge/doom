@@ -15,8 +15,11 @@
 ;; sent to it at once, or after its turn), else the next ready one its role's
 ;; labels say, P0 first, then P1..., claimed as itself (bd ready --claim, as
 ;; BEADS_ACTOR): atomic, so two looping agents never get the same one. Its
-;; session starts again for it (a fresh context per issue; not if it had no
-;; turn yet), then it's given the issue as t gives one: "Work on ID: TITLE".
+;; branch for it is opened in its worktree (`agent-workspace-give': none
+;; while its worktree has changes not committed, a failure: nothing claimed),
+;; its session starts again for it (a fresh context per issue; not if it had
+;; no turn yet), then it's given the issue as t gives one: "Work on ID:
+;; TITLE".
 ;;
 ;; None left: it naps, "napping: nothing to build" (☾), said once in the room
 ;; and to `agent-workspace-nap-functions' (a notification), not again until it
@@ -26,7 +29,8 @@
 ;; nothing says nothing. A napping agent is free: a message to it starts a
 ;; turn, and it naps again after, quietly, if nothing came.
 ;;
-;; A failure: its turn stopped on an error, its session didn't start, or bd
+;; A failure: its turn stopped on an error, its session didn't start, its
+;; worktree had changes not committed (no branch for the issue), or bd
 ;; failed. It tries again `agent-workspace-loop-retry' seconds later: the same
 ;; issue again, in its session (a fresh one if it had none, or no issue); bd
 ;; again. After `agent-workspace-loop-failures' in a row it stops: stuck,
@@ -256,18 +260,20 @@ one or naps; its issue still in progress, it waits (for you to look)."
                ;; itself noted as its issue.
                (unless (seq-find (lambda (issue) (equal (alist-get 'id issue) (agent-workspace-agent-issue agent)))
                                  doing)
-                 (agent-workspace-give agent (alist-get 'id (car doing)) (alist-get 'title (car doing)))))
+                 (agent-workspace--note-issue agent (alist-get 'id (car doing)) (alist-get 'title (car doing)))))
               (_
                ;; Free: the issue it had is done (closed, or handed over).
                (when (agent-workspace-agent-issue agent)
-                 (agent-workspace-give agent nil))
+                 (agent-workspace--note-issue agent nil))
                (agent-workspace--loop-claim agent)))))))))))
 
 (defun agent-workspace--loop-claim (agent)
   "AGENT, free, claims the next ready issue of its role's labels (bd, as
-itself): takes it, or naps if there's none."
+itself): takes it, or naps if there's none. Its worktree with changes not
+committed (no branch for an issue there): a failure, nothing claimed."
   (if-let* ((labels (agent-workspace--loop-labels agent)))
-      (progn
+      (if-let* ((why (agent-workspace-branch-blocker agent)))
+          (agent-workspace--loop-failed agent why)
         (agent-workspace--loop-put agent :busy t)
         (agent-workspace--loop-bd
          agent (list "ready" "--claim" "--label-any" (string-join labels ",") "--exclude-type" "epic" "--json")
@@ -291,11 +297,16 @@ itself): takes it, or naps if there's none."
     (agent-workspace-loop-set agent nil (format "its role, %s, has no labels" (agent-workspace-agent-role agent)))))
 
 (defun agent-workspace--loop-take (agent id title)
-  "AGENT takes issue ID (its TITLE), claimed for it: its session fresh (if
-it had a turn), then given it as t gives one."
+  "AGENT takes issue ID (its TITLE), claimed for it: its branch for it, its
+session fresh (if it had a turn), then given it as t gives one. Its branch
+not opened (changes there since): the issue given back, a failure."
   (let ((woke (eq (agent-workspace-agent-state agent) 'nap)))
     (agent-workspace--loop-put agent :napped nil)
-    (agent-workspace-give agent id title)
+    (condition-case err
+        (agent-workspace-give agent id title)
+      (user-error
+       (agent-workspace--loop-give-back agent id)
+       (signal (car err) (cdr err))))
     (agent-workspace--loop-say agent 'issue (format "%s %s: %s" (if woke "woke up, took" "took") id title))
     (when (agent-workspace--loop-used-p agent)
       (let ((agent-workspace--loop-starting t))

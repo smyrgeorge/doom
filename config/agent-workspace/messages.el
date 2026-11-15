@@ -311,7 +311,7 @@ that agent."
            (agent-workspace--message-room-keys message))
     (when (agent-workspace-live-p sender)
       (agent-workspace-send sender (format "The user answers your message to %s instead: %s" to answer)
-                            :submit t))))
+                            :submit t :no-branch t))))
 
 ;; ====== DELIVERED, ANSWERED ======
 

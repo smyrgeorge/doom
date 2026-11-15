@@ -863,16 +863,20 @@ cursor in its pane."
 
 (defun agent-workspace-review-here ()
   "The agent's branch's changes (magit), where you came from (the app
-left, the crew going on)."
+left, the crew going on): the one it's on, or which of its holding work
+you choose (`agent-workspace-read-branch')."
   (interactive)
-  (let ((agent (agent-workspace--current)))
+  (let* ((agent (agent-workspace--current))
+         (branch (agent-workspace-read-branch agent "Review %s's branch: ")))
     (when (agent-workspace-frame-p) (agent-workspace-leave t))
-    (agent-workspace-review agent)))
+    (agent-workspace-review agent branch)))
 
 (defun agent-workspace-merge-here ()
-  "Merge the agent's branch into your checkout."
+  "Merge the agent's branch into your checkout: the one it's on, or which of
+its holding work you choose (`agent-workspace-read-branch')."
   (interactive)
-  (agent-workspace-merge (agent-workspace--current) 'ask))
+  (let ((agent (agent-workspace--current)))
+    (agent-workspace-merge agent (agent-workspace-read-branch agent "Merge %s's branch: "))))
 
 (defun agent-workspace-issue-here ()
   "The issue the agent works on."

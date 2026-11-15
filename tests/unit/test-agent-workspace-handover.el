@@ -111,7 +111,8 @@ claim): one gets it, the other is refused; the issue is the one's."
 
 (ert-deftest agent-workspace-handover/a-ready-issue-offered ()
   "An issue ready for the builders, ken free: offered in the room once,
-[Give it to ken] giving it him; no builder free, offered once one is."
+[Give it to ken] giving it him (his worktree on its branch); no builder
+free, offered once one is."
   (+test-with-reset
     (let* ((project (+test-awo--project "offer"))
            (default-directory project)
@@ -156,6 +157,7 @@ claim): one gets it, the other is refused; the issue is the one's."
               (agent-workspace-offer-take project "demo-3" "ken")
               (should (equal (car sent) (list "ken" (agent-workspace-issue-prompt "demo-3" "Fix it"))))
               (should (equal (agent-workspace-agent-issue ken) "demo-3"))
+              (should (equal (agent-workspace-agent-branch ken) "demo-3-fix-it"))
               (should-not (string-search "[Give it to ken]" (funcall feed)))
               (funcall fetched nil)
               (should-not (string-search "[Give it to ken]" (funcall feed)))

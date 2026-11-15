@@ -389,6 +389,40 @@ part wakes it (`agent-workspace-loop-wake'), for an issue that came."
         (should (agent-workspace-loop-wake ada))
         (should (+test-awl--wait (lambda () (equal (+test-awl--status project two) "closed"))))))))
 
+(ert-deftest agent-workspace-loops/a-branch-for-each-issue ()
+  "Each issue it takes gets its branch in its worktree (ID-slug, from the
+main branch) before its prompt comes; one left holding nothing, deleted.
+Its worktree with changes not committed: a failure, nothing claimed; three
+in a row, stuck, saying why."
+  (+test-awl--with-crew "branches"
+    (let* ((one (+test-awl--issue project "close: one" "build" 1))
+           (two (+test-awl--issue project "close: two" "build" 2))
+           (ada (+test-awl--create "ada"))
+           (dir (agent-workspace-agent-worktree ada))
+           (branches (lambda () (let ((default-directory project))
+                                  (+test-awl--run "git" "branch" "--format=%(refname:short)")))))
+      (agent-workspace-loop-set ada t)
+      (+test-awl--all-in (list ada) 'nap 90)
+      (should (equal (cl-loop for entry in (+test-awl--log-entries)
+                              when (and (equal (plist-get entry :agent) "ada") (plist-get entry :branch))
+                              collect (plist-get entry :branch))
+                     (list (concat one "-one") (concat two "-two"))))
+      (should (equal (agent-workspace-agent-branch ada) (concat two "-two")))
+      (should (equal (string-trim (let ((default-directory dir)) (+test-awl--run "git" "branch" "--show-current")))
+                     (concat two "-two")))
+      (should-not (string-search (concat one "-one") (funcall branches)))
+      ;; Changes left in its worktree: no issue claimed.
+      (write-region "half\n" nil (expand-file-name "wip" dir))
+      (let ((three (+test-awl--issue project "close: three" "build" 2)))
+        (agent-workspace--loop-changed (agent-workspace-agent-project ada))
+        (should (+test-awl--wait (lambda () (agent-workspace--loop-get ada :stopped))))
+        (should (eq (agent-workspace-agent-state ada) 'stuck))
+        (should (string-match-p (concat "\\`stopped looping, 3 failures in a row: ada has changes not committed, on "
+                                        (regexp-quote two) "-two")
+                                (agent-workspace-agent-error ada)))
+        (should (equal (+test-awl--status project three) "open"))
+        (should (= (length (+test-awl--prompts "ada")) 2))))))
+
 ;; ====== FAILURES ======
 
 (ert-deftest agent-workspace-loops/stops-after-three-failures-in-a-row ()

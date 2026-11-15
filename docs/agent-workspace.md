@@ -52,7 +52,7 @@ terminal with `git init` typed.
 |---|---|---|
 | `j` / `k` | the issues | The next / previous issue |
 | `RET` | the issues | Its agent's pane, or the issue |
-| `t` | the issues | Give the issue to an agent: now if it's free, after its turn if it's working |
+| `t` | the issues | Give the issue to an agent, on a [branch of its own](#its-branches): now if it's free, after its turn if it's working |
 | `j` / `k` | a bar | The next / previous agent, the cursor in its pane |
 | `RET` / `o` / `d` | the minimap | Its agent's pane / the file it's in / its branch's changes |
 | `RET` / `TAB` | a bar | Its pane / open or fold it |
@@ -60,7 +60,7 @@ terminal with `git init` typed.
 | `i` / `K` / `r` | anywhere | Interrupt it / kill it (gone home) / restart it fresh |
 | `s` | anywhere | Put it to sleep, or wake it |
 | `e` | anywhere | Change its name, colour, role, permission mode or model |
-| `d` / `M` | anywhere | Its branch's changes / merge its branch |
+| `d` / `M` | anywhere | Its [branch](#its-branches)'s changes / merge its branch |
 | `v` | anywhere | Its canvas and panels, the cursor in the one shown; there, the next one |
 | `V` | anywhere | The one shown, full size; again: back beside its session |
 | `I` | anywhere | Its issue |
@@ -229,8 +229,8 @@ with its loop off, and its bar shows `↻` while it loops.
 
 Once free, a looping agent takes the next issue: one you gave it first (`t`), else the next ready one its role's
 `labels` say, the highest priority first. It claims it as itself (`bd ready --claim`), so two looping agents never get
-the same one. Its session starts again for each issue, a fresh context, and it gets the issue as `t` gives it ("Work
-on doom-a1b: ...").
+the same one. Its session starts again for each issue, a fresh context, on the issue's [branch](#its-branches), and it
+gets the issue as `t` gives it ("Work on doom-a1b: ...").
 
 It's free once its turn has ended and the issue it had is closed, or handed over. A turn that ends with its issue still
 in progress is done, for you to look: it waits. Close the issue (or tell it to) and it takes the next. A raised hand
@@ -240,7 +240,8 @@ When no issue is left, it naps: `☾ napping: nothing to build`. The room says s
 when an issue for it comes: when the project's issues change, and every 5 minutes (`agent-workspace-loop-check`). A
 look that finds nothing says nothing.
 
-If its turn stops on an error, its session doesn't start, or `bd` fails, it tries again 30 seconds later
+If its turn stops on an error, its session doesn't start, `bd` fails, or its worktree has changes not committed (no
+issue is claimed then), it tries again 30 seconds later
 (`agent-workspace-loop-retry`): the same issue, in its session. After 3 failures in a row
 (`agent-workspace-loop-failures`) it stops: stuck, saying why. A turn that ends without an error breaks the row, and
 `r`, `s` or `L` start it again.
@@ -272,7 +273,8 @@ The crew is kept per project on this machine, in `.agent-shell/agent-workspace/c
 inbox, not committed: each agent's name, role and colour, its model and permission mode when they aren't its role's,
 whether it's asleep, whether it [loops](#loops), the [panels](#an-agents-panels) it has open (by name, never their
 data), which agent is selected, whether the minimap is shown, whether its agents may message each other, and the event
-sources you turned off. Not its session, state or issue.
+sources you turned off. Not its session, state, issue or branch: started again, its worktree is on the branch it was
+on.
 
 ```json
 {"version": 2,
@@ -313,7 +315,8 @@ unless its role says).
 The agent gets its worktree and its session starts. Then it waits for you. If its worktree can't be made, nothing is
 made, and you're told why. If its session doesn't start, it's stuck, saying why.
 
-From Lisp, `:issue` makes it for an issue, which is its first message ("Work on doom-a1b: ..."):
+From Lisp, `:issue` makes it for an issue: its worktree goes on the issue's [branch](#its-branches), and the issue is
+its first message ("Work on doom-a1b: ..."):
 
 ```elisp
 (agent-workspace-create :role "builder" :name "ada" :issue "doom-a1b" :issue-title "Fix the thing")
@@ -324,16 +327,17 @@ From the shell: `cmd/agent-workspace new --role builder [--name ada] [--prompt T
 ## An agent
 
 - **Its session** is a Claude Code session in agent-shell, in the buffer `ada · builder`. It's told who it is, that
-  it works with you only, and to commit in its worktree, then its role's instructions. Its role's model and tools
-  apply.
+  it works with you only, to commit in its worktree, on the branch made for its work, and never to switch branches,
+  then its role's instructions. Its role's model and tools apply.
 - **Its permission mode** is Claude Code's auto mode: Claude decides what needs your OK. A role's `mode` changes it
   for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all (`nil`: Claude Code's own default).
   The agent's bar shows it.
-- **Its worktree** is `.agent-shell/worktrees/builder-ada` (its role, then its name), on the branch `agent/ada`,
-  branched from your checkout's HEAD. It's made with the agent and kept when the agent stops, so the next start finds
-  its work. Renaming the agent or changing its role moves it; one named `worktrees/ada`, from before, moves when its
-  agent starts. It's locked with the agent's name as the reason (`git worktree list -v`). `.agent-shell/` stays out
-  of git. A project that isn't a git repository, or has no commit yet, can't have a crew.
+- **Its worktree** is `.agent-shell/worktrees/builder-ada` (its role, then its name), made with the agent on the
+  branch `agent/ada`, from your checkout's HEAD. Each piece of its work gets a [branch](#its-branches) there. It's kept
+  when the agent stops, so the next start finds its work, on the branch it was on. Renaming the agent or changing its
+  role moves it; one named `worktrees/ada`, from before, moves when its agent starts. It's locked with the agent's
+  name as the reason (`git worktree list -v`). `.agent-shell/` stays out of git. A project that isn't a git
+  repository, or has no commit yet, can't have a crew.
 - **Its colour** is one of the theme's ANSI colours, a free one by default.
 - **Its name** goes into the issues' history: its `bd` commands run as `ada`.
 
@@ -400,25 +404,43 @@ left out, and a warning names its file and line.
 - That file's tab starts with the agent's avatar, `▌A`.
 - A worktree left by an agent you've forgotten shows its name dimmed.
 
-## Its branch
+## Its branches
 
-| Command | Does |
-|---|---|
-| `M-x agent-workspace-review` | An agent's changes in magit: what its branch did since it left yours (`main...agent/ada`) |
-| `M-x agent-workspace-merge` | Merges its branch into your checkout, tells the agent, and offers to reset its branch to the result |
+Each piece of an agent's work gets a branch of its own, in its worktree, made as the work starts. Its bar shows the one
+it's on.
 
-A merge always makes a merge commit naming the agent's branch, even when it could fast-forward: its commits stay told
-apart from yours. A merge that conflicts stops in your checkout, for you to resolve.
+- **An issue** you give it (`t`, the room's `[Give it to ken]`, its [loop](#loops), `:issue` as it's made) gets a
+  branch named after it, its id then its title's words: `doom-pbk.9-other-canvases-on-the-stage` (lowercase, the
+  title's `Area: ` dropped, at most 48 characters). It's made from your checkout's branch as it is then. An issue given
+  back to it is checked out again, its work there; one another agent has, at rest, is taken from it. Given while it
+  works, the branch comes as the issue starts its next turn.
+- **A prompt of yours** while it rests (from the room, `#`, or typed in its session) gets a branch named from its first
+  words, `fix-the-parser`, where it is: no file changes.
+- **Between pieces of work** it rests on `agent/ada`, at your branch's tip. Nothing is merged from it, but an agent
+  with work there from before (an older crew's) keeps it, and `M` merges it as before.
+
+An agent whose worktree has changes not committed can't take an issue: you're told which branch has them. A branch it
+leaves holding nothing (a question answered, an investigation) is deleted.
+
+| Key | Command | Does |
+|---|---|---|
+| `d` | `M-x agent-workspace-review` | A branch's changes in magit: what it did since it left yours (`main...doom-pbk.9-…`) |
+| `M` | `M-x agent-workspace-merge` | Merges a branch into your checkout, tells the agent, deletes the branch, and the agent rests on `agent/ada` at the result |
+
+Both take the branch it's on, or ask which when others of its hold work (a looping agent's earlier issues). A merge
+always makes a merge commit naming the branch, even when it could fast-forward: `Merge branch
+'doom-pbk.9-other-canvases-on-the-stage'`. While the agent works, or has changes not committed, the branch stays for
+now, and you're told: `M` again later. A merge that conflicts stops in your checkout, for you to resolve.
 
 ## What you do to one
 
-You can interrupt an agent, kill it, restart it fresh, put it to sleep, wake it, rename it (its worktree and branch
-follow), change its role (its worktree follows; not while it works) or recolour it. Killing it gives back the issue you gave it, if it's still in progress and assigned to the
+You can interrupt an agent, kill it, restart it fresh, put it to sleep, wake it, rename it (its worktree and
+`agent/ada` follow; the branches of its work keep their names), change its role (its worktree follows; not while it works) or recolour it. Killing it gives back the issue you gave it, if it's still in progress and assigned to the
 agent.
 
-Forgetting an agent takes it out of the crew. Its worktree and branch go too when they hold nothing your checkout
-hasn't. Otherwise you're shown what they hold (changes not committed, commits not on your branch) and asked whether
-to keep them.
+Forgetting an agent takes it out of the crew. Its worktree and branches go too when they hold nothing your checkout
+hasn't. Otherwise you're shown what they hold (changes not committed, and each of its branches with commits not on
+yours) and asked whether to keep them.
 
 Closing the crew, or quitting Emacs, stops every agent at once, without asking. No process of theirs is left
 running. Their worktrees stay.

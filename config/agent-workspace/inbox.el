@@ -333,9 +333,10 @@ after its turn if it's working, in its own mode."
                       (agent-workspace-room-post project :kind 'note :agent (agent-workspace-agent-name agent)
                                                  :text (format "can't take events: its mode can't be %s"
                                                                agent-workspace-event-mode)))
-                  ;; Told first: its prompt may be submitted at once.
+                  ;; Told first: its prompt may be submitted at once. Data,
+                  ;; not work of its own: no branch made for it (worktree.el).
                   (run-hook-with-args 'agent-workspace-event-given-functions agent event)
-                  (agent-workspace-send agent (agent-workspace-event-text event) :submit t)))))
+                  (agent-workspace-send agent (agent-workspace-event-text event) :submit t :no-branch t)))))
     (if now
         (funcall send nil)
       (agent-workspace--set-session-mode agent agent-workspace-event-mode send))))

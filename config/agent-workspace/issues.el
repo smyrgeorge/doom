@@ -425,7 +425,9 @@ selected (its pane opens). The highlight follows."
 
 (defun agent-workspace-issue-give ()
   "Give the issue at point to an agent (the selected one offered first, then
-its role's): free, it takes it now; working, after its turn."
+its role's): free, it takes it now; working, after its turn. Its branch for
+it first (`agent-workspace-give'): refused if its worktree has changes not
+committed."
   (interactive)
   (let* ((issue (or (get-text-property (point) 'agent-workspace-issue) (user-error "No issue here")))
          (project agent-workspace--issues-project)
@@ -441,9 +443,12 @@ its role's): free, it takes it now; working, after its turn."
     (unless names (user-error "No agents yet: c makes one"))
     (let* ((name (completing-read (format "Give %s to: " (plist-get issue :id)) names nil t nil nil (car names)))
            (agent (agent-workspace-agent name project))
-           (how (agent-workspace-send agent (agent-workspace-issue-prompt (plist-get issue :id) (plist-get issue :title))
-                                      :submit t)))
-      (agent-workspace-give agent (plist-get issue :id) (plist-get issue :title))
+           (how (progn
+                  ;; Asleep, nothing given; its branch can't be, nothing sent.
+                  (agent-workspace--live-or-error agent)
+                  (agent-workspace-give agent (plist-get issue :id) (plist-get issue :title))
+                  (agent-workspace-send agent (agent-workspace-issue-prompt (plist-get issue :id) (plist-get issue :title))
+                                        :submit t))))
       (message (if (eq how 'queued) "%s gets %s after its turn (busy)" "%s works on %s")
                name (plist-get issue :id))
       (agent-workspace-select agent))))

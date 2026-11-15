@@ -39,11 +39,11 @@ default."
         (worktrees (expand-file-name agent-workspace-worktrees-directory project)))
     (or (agent-workspace--branch-p (agent-workspace-branch name))
         ;; Its folder: NAME, as they were named before, or ROLE-NAME (one
-        ;; whose branch says another name isn't its: ROLE-mary-NAME).
+        ;; whose lock or branch says another name isn't its: ROLE-mary-NAME).
         (seq-some (lambda (folder)
                     (or (equal folder name)
                         (and (string-suffix-p (concat "-" name) folder)
-                             (member (agent-workspace--worktree-branch-name (expand-file-name folder worktrees))
+                             (member (agent-workspace--worktree-agent-name (expand-file-name folder worktrees))
                                      (list name nil)))))
                   (and (file-directory-p worktrees) (directory-files worktrees nil "\\`[^.]"))))))
 

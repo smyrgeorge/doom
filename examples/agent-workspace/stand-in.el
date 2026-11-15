@@ -30,8 +30,9 @@
 ;;   else          answers "ok: PROMPT" and ends its turn
 ;;
 ;; With MOCK_ACP_LOG set, every message it gets is appended to that file (a
-;; JSON object a line: its agent, cwd, method, params), and its environment
-;; when it starts, for the tests to read.
+;; JSON object a line: its agent, cwd, method, params), its environment when
+;; it starts, and the branch its folder is on as each prompt comes, for the
+;; tests to read.
 
 (require 'cl-lib)
 (require 'json)
@@ -78,6 +79,8 @@ batch (the stand-in would exit)."
   "Prompt ID with PARAMS: do what it says (see above)."
   (let ((session (gethash "sessionId" params))
         (text (mock-acp--prompt-text params)))
+    (when (getenv "MOCK_ACP_LOG")
+      (mock-acp--log `(:branch ,(or (car (process-lines-ignore-status "git" "branch" "--show-current")) :null))))
     (cond
      ((string-match "\\`read \\(.+\\)" text)
       (let ((file (expand-file-name (string-trim (match-string 1 text)))))

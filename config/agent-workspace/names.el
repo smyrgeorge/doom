@@ -9,7 +9,7 @@
 ;; avatar (`agent-workspace-tab-prefix'). A file's agent is found from its
 ;; worktree's folder (ROLE-NAME) through the crew, so it's there asleep or
 ;; gone home too; a worktree left by a forgotten agent shows its name (its
-;; branch's, agent/NAME) dimmed.
+;; lock's reason says it; else its branch, agent/NAME, at rest) dimmed.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -45,8 +45,9 @@ folder and the agent's name; the outermost, for a worktree's own
 
 (defun agent-workspace--worktree-name (project folder)
   "The name of the agent whose worktree is FOLDER (ROLE-NAME) in PROJECT:
-its crew's agent there, else its branch's (agent/NAME: a forgotten agent's),
-else FOLDER."
+its crew's agent there, else a forgotten agent's (its lock's reason, else
+its branch agent/NAME: `agent-workspace--worktree-agent-name'), else
+FOLDER."
   (or (when-let* ((agent (seq-find (lambda (agent)
                                      (equal folder (file-name-nondirectory
                                                     (directory-file-name
@@ -55,7 +56,7 @@ else FOLDER."
                                                                  (agent-workspace-agent-name agent)))))))
                                    (ignore-errors (agent-workspace-agents project)))))
         (agent-workspace-agent-name agent))
-      (agent-workspace--worktree-branch-name
+      (agent-workspace--worktree-agent-name
        (expand-file-name folder (expand-file-name agent-workspace-worktrees-directory project)))
       folder))
 

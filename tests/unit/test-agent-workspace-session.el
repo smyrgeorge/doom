@@ -337,6 +337,43 @@ queue), then goes."
       (should (+test-aws--wait (lambda () (seq-find (lambda (prompt) (string-match-p "after it" prompt))
                                                     (+test-aws--prompts "ada"))))))))
 
+;; ====== ITS BRANCHES ======
+
+(ert-deftest agent-workspace-session/a-branch-for-each-piece-of-work ()
+  "Its work on branches of its own, made as its turn starts, before its
+agent gets the prompt: a prompt at rest, one named from its words; an issue
+given while it works, the issue's (ID-slug, from the main branch) as its
+prompt, queued, starts its turn, the prompt's branch left holding nothing
+deleted; given one at the desk, at once. Its bar's branch follows."
+  (+test-aws--with-crew "branches"
+    (let* ((agent (+test-aws--create "ada"))
+           (dir (agent-workspace-agent-worktree agent))
+           (head (lambda () (let ((default-directory dir)) (+test-aws--git "branch" "--show-current")))))
+      (should (equal (funcall head) "agent/ada"))
+      (agent-workspace-send agent "slow, please" :submit t)
+      (should (+test-aws--state agent 'working))
+      (should (equal (funcall head) "slow-please"))
+      (should (equal (agent-workspace-agent-branch agent) "slow-please"))
+      ;; An issue while it works: its prompt queued, its branch with it.
+      (agent-workspace-give agent "demo-1" "Lexer: strings")
+      (should (eq (agent-workspace-send agent (agent-workspace-issue-prompt "demo-1" "Lexer: strings") :submit t)
+                  'queued))
+      (should (equal (funcall head) "slow-please"))
+      (should (+test-aws--wait (lambda () (member "Work on demo-1: Lexer: strings" (+test-aws--prompts "ada")))))
+      (should (equal (funcall head) "demo-1-strings"))
+      (should (equal (agent-workspace-agent-branch agent) "demo-1-strings"))
+      (should (equal (+test-aws--logged :branch "ada") '("slow-please" "demo-1-strings")))
+      (let ((default-directory project))
+        (should (equal (+test-aws--git "branch" "--list" "slow-please") "")))
+      ;; At the desk: at once.
+      (agent-workspace-interrupt agent)
+      (should (+test-aws--state agent 'desk))
+      (agent-workspace-give agent "demo-2" "Parser")
+      (should (equal (funcall head) "demo-2-parser"))
+      (agent-workspace-send agent (agent-workspace-issue-prompt "demo-2" "Parser") :submit t)
+      (should (+test-aws--wait (lambda () (= (length (+test-aws--logged :branch "ada")) 3))))
+      (should (equal (car (last (+test-aws--logged :branch "ada"))) "demo-2-parser")))))
+
 ;; ====== WHAT YOU DO TO ONE ======
 
 (ert-deftest agent-workspace-session/interrupt ()
@@ -414,7 +451,8 @@ woken: a fresh session."
 
 (ert-deftest agent-workspace-session/rename ()
   "Renamed: its session, worktree and branch take its new name (its session
-started again); not while it works."
+started again); not while it works. On the branch of its work (a prompt's),
+it stays there; agent/NAME, where it rests, renamed."
   (+test-aws--with-crew "rename"
     (let ((agent (+test-aws--create "ada")))
       (agent-workspace-rename agent "grace")
@@ -435,7 +473,9 @@ started again); not while it works."
       (agent-workspace-sleep agent)
       (agent-workspace-rename agent "linus")
       (should (eq (agent-workspace-agent-state agent) 'asleep))
-      (should (equal (agent-workspace-agent-branch agent) "agent/linus")))))
+      (should (equal (agent-workspace-agent-branch agent) "hold"))
+      (let ((default-directory project))
+        (should (equal (+test-aws--git "branch" "--list" "agent/linus" "agent/grace") "agent/linus"))))))
 
 (ert-deftest agent-workspace-session/role-changed ()
   "Its role changed: its worktree moved to ROLE-NAME, its branch as it was,

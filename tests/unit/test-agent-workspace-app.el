@@ -802,8 +802,10 @@ long title on a second row; epics left out."
         (should (equal (plist-get (get-text-property (point) 'agent-workspace-issue) :id) "p-3"))))))
 
 (ert-deftest agent-workspace-app/giving-an-issue ()
-  "t gives a ready issue to an agent (the selected one first): sent \"Work on
-ID: TITLE\" now, or after its turn; noted as its."
+  "t gives a ready issue to an agent (the selected one first): its worktree
+on the issue's branch, then sent \"Work on ID: TITLE\" now, or after its
+turn; noted as its. Its worktree with changes not committed: refused,
+nothing sent."
   (+test-awa "give"
     (pcase-let ((`(,ada) (+test-awa--crew '("ada" "builder"))))
       (agent-workspace-open t)
@@ -817,6 +819,13 @@ ID: TITLE\" now, or after its turn; noted as its."
             (agent-workspace--issues-goto-id "p-2")
             (agent-workspace-issue-give)
             (should (equal sent '(("ada" "Work on p-2: Build the lexer, a title long enough to need two rows in a column fifty wide" (:submit t)))))
+            (should (equal (agent-workspace-agent-issue ada) "p-2"))
+            (should (equal (agent-workspace-agent-branch ada) "p-2-build-the-lexer-a-title-long-enough-to-need-two"))
+            ;; Changes there: refused, nothing sent, nothing given.
+            (write-region "half\n" nil (expand-file-name "wip" (agent-workspace-agent-worktree ada)))
+            (agent-workspace--issues-goto-id "p-3")
+            (should-error (agent-workspace-issue-give) :type 'user-error)
+            (should (= (length sent) 1))
             (should (equal (agent-workspace-agent-issue ada) "p-2"))
             ;; Not one in progress.
             (agent-workspace--issues-goto-id "p-1")

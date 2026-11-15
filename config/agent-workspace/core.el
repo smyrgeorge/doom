@@ -19,6 +19,8 @@
 (declare-function agent-workspace-worktree-move "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-fate "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-remove "agent-workspace/worktree")
+(declare-function agent-workspace-issue-branch-open "agent-workspace/worktree")
+(declare-function agent-workspace--turn-branch "agent-workspace/worktree")
 (declare-function agent-workspace--start "agent-workspace/session")
 (declare-function agent-workspace--stop "agent-workspace/session")
 (declare-function agent-workspace--process-table "agent-workspace/session")
@@ -44,7 +46,7 @@ reads as an error."
 (defvar agent-workspace-change-functions nil
   "Called with an agent and what changed, a symbol: `created', `state',
 `renamed', `colour', `role', `settings' (its model or mode), `issue',
-`panels' (one opened or closed), `canvas' (one of its Agent UI canvases
+`branch' (the one its worktree is on), `panels' (one opened or closed), `canvas' (one of its Agent UI canvases
 closed or emptied), `loop' (turned on or off),
 `session' (a new one started), `forgotten', `closed' (its crew closed).")
 
@@ -84,7 +86,7 @@ order they were made.")
   mode                       ; its permission mode, when not its role's
   project                    ; its crew's project: the main checkout's root
   worktree                   ; its worktree's folder (worktree.el)
-  branch                     ; its worktree's branch: "agent/ada"
+  branch                     ; the branch its worktree is on: "agent/ada" at rest
   buffer                     ; its agent-shell session's buffer, while it runs
   (state 'asleep)            ; see THE STATES below
   since                      ; when its turn started (`float-time'), working
@@ -284,6 +286,9 @@ nil if it isn't a word ending in -ing."
        (when (eq state 'waking)
          (agent-workspace--set-state agent 'desk)))
       ('input-submitted
+       ;; Its branch first (worktree.el), before its agent gets the prompt:
+       ;; the issue's it was given while it worked, or one made for it at rest.
+       (agent-workspace--turn-branch agent (alist-get :prompt data))
        ;; A turn starts: its time counts from here, a raised hand and its
        ;; answer don't reset it.
        (unless (memq state '(working hand))
@@ -379,11 +384,12 @@ it: ROLE (its name, required), NAME (required), COLOUR (default: its role's
 while free, else a free one), MODEL and MODE (default: its role's), KIND (an
 agent of `agent-workspace-kinds'). It gets its own worktree, always, and its
 session starts there. PROMPT, if given, is its first message, sent once it's
-ready; ISSUE (an id, and ISSUE-TITLE), the issue it's for: its first
-message unless PROMPT, \"Work on ID: TITLE\". Return the agent.
+ready; ISSUE (an id, and ISSUE-TITLE), the issue it's for (its branch for
+it opened in its worktree: `agent-workspace-give'): its first message
+unless PROMPT, \"Work on ID: TITLE\". Return the agent.
 
-A step failing says which: its worktree not made, nothing is; its session
-not started, it's stuck saying why, in the crew."
+A step failing says which: its worktree (or its issue's branch) not made,
+nothing is; its session not started, it's stuck saying why, in the crew."
   (let ((project (or project (agent-workspace-project)
                      (user-error "Not in a git repository: a crew needs one"))))
     (unless (and (stringp role) (not (string-empty-p role)))
@@ -401,7 +407,10 @@ not started, it's stuck saying why, in the crew."
                   :model model :mode mode
                   :project (agent-workspace--root project))))
       (condition-case err
-          (agent-workspace-worktree-ensure agent)
+          (progn
+            (agent-workspace-worktree-ensure agent)
+            (when issue
+              (agent-workspace-issue-branch-open agent issue issue-title)))
         (error (user-error "%s's worktree: %s" name (error-message-string err))))
       (let ((key (agent-workspace--root project)))
         (puthash key (append (gethash key agent-workspace--crews) (list agent))
@@ -508,8 +517,19 @@ works; a running session starts again, fresh, as ROLE says."
         (agent-workspace--set-state agent state)))))
 
 (defun agent-workspace-give (agent issue &optional title)
+  "Give AGENT ISSUE (its TITLE) to work on, before its prompt is sent (t, the
+room's offer, its loop, :issue as it's made all come here): its branch for
+it opened in its worktree first (worktree.el: ID-slug, from the main
+checkout's branch; as its next turn starts if it's working), a user error
+if it can't be (changes not committed there): nothing given. Then noted:
+what its state says. nil: none, its branch as it is."
+  (when issue
+    (agent-workspace-issue-branch-open agent issue title))
+  (agent-workspace--note-issue agent issue title))
+
+(defun agent-workspace--note-issue (agent issue &optional title)
   "Note that AGENT works on ISSUE (its TITLE): what its state says. nil:
-none."
+none. Its branch as it is (an issue it claimed itself: loops.el)."
   (setf (agent-workspace-agent-issue agent) issue
         (agent-workspace-agent-issue-title agent) (and issue title))
   (agent-workspace--changed agent 'issue))
@@ -525,7 +545,7 @@ open again, unassigned (bd, in the background). AGENT then has none."
         (start-process "agent-workspace-give-back" nil "bd" "update" issue
                        (concat "--if-assignee=" name) "--if-status=in_progress"
                        "--status=open" "--assignee=")))
-    (agent-workspace-give agent nil)))
+    (agent-workspace--note-issue agent nil)))
 
 (defun agent-workspace-close (&optional project)
   "Close PROJECT's crew (default: the current project's) at once: every

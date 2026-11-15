@@ -270,8 +270,9 @@ colour, its issue."
 ;; ====== ITS SESSION'S CONFIG ======
 
 (ert-deftest agent-workspace/what-the-agent-is-told ()
-  "Who it is and how it works, then its role's instructions, after what
-every session is told; nothing for a session not an agent's."
+  "Who it is and how it works (a branch made for each piece of its work,
+never one of its own), then its role's instructions, after what every
+session is told; nothing for a session not an agent's."
   (let ((agent (+test-awc--agent))
         (agent-workspace-role-function
          (lambda (_project name) (list :name name :instructions "  Build what you're given.\n"))))
@@ -280,10 +281,13 @@ every session is told; nothing for a session not an agent's."
            (text (agent-workspace-agent-context)))
       (dolist (part '("You are ada, the builder" "crew of coding agents" "on project"
                       "You work for the user" "Don't hand work to other agents"
-                      "/tmp/project/.agent-shell/worktrees/ada, on the branch agent/ada"
+                      "your own git worktree, /tmp/project/.agent-shell/worktrees/ada:"
                       "never in the project's main checkout (/tmp/project)"
+                      "Each piece of work gets a branch of its own there, made for you as it starts"
+                      "never switch branches or make one yourself"
                       "bd commands run as ada" "Your notifications carry your name already"))
         (should (string-search part text)))
+      (should-not (string-search "agent/ada" text))
       (should (string-suffix-p "\n\nBuild what you're given." text)))))
 
 (ert-deftest agent-workspace/a-session-s-config ()
