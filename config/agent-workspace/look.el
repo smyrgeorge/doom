@@ -68,6 +68,14 @@ its file (icon: NERD GLYPH).")
   "An agent's line under the mouse."
   :group 'agent-workspace)
 
+(defface agent-workspace-label '((t))
+  "An agent's role, permission mode, branch glyph and the dots between, on
+its line (its bar, its pane's header line) and in its files' mode line: the
+same for every agent, the colour of its state's words at the desk (none of
+its own: the text's), readable on any agent's colour's tint (3.9 to 6.5 on
+doom-one's; shadow was 1.1 to 1.9)."
+  :group 'agent-workspace)
+
 ;; ====== GLYPHS ======
 
 (defun agent-workspace--graphic-p ()
@@ -219,7 +227,7 @@ open one, tinted brighter) or its bar (FOLDED: ▸). TABS (its canvas and
 panels', one shown full size in its pane) at its right, for its mode, model
 and branch."
   (let* ((hand (eq (agent-workspace-agent-state agent) 'hand))
-         (sep (propertize " · " 'face 'shadow))
+         (sep (propertize " · " 'face 'agent-workspace-label))
          (narrow (< width 90))
          (time (agent-workspace-time agent))
          (left (concat (if folded "▸" "▾") " "
@@ -229,7 +237,7 @@ and branch."
                            (concat " " (propertize (string-trim-right (agent-workspace-glyph 'loop))
                                                    'help-echo "It loops: once free, it takes the next ready issue (L)"))
                          "")
-                       (if narrow "" (concat sep (propertize (agent-workspace-agent-role agent) 'face 'shadow)))
+                       (if narrow "" (concat sep (propertize (agent-workspace-agent-role agent) 'face 'agent-workspace-label)))
                        sep
                        (agent-workspace-state-glyph agent)
                        (agent-workspace-state-words agent)
@@ -249,18 +257,18 @@ and branch."
          (right (cond
                  (tabs (concat (if buttons (concat buttons "  ") "") tabs " "))
                  (narrow (concat (string-join (delq nil (list buttons badge)) " ") " "))
-                 (t (concat (if buttons (concat buttons "  ") "")
-                            (if badge (concat badge "  ") "")
-                            (propertize (string-join (delq nil (list (and mode (agent-workspace-mode-label mode))
-                                                                      model))
-                                                     " ")
-                                        'face 'shadow)
-                            (when-let* ((branch (agent-workspace-agent-branch agent)))
-                              (concat " " (propertize (concat (agent-workspace-glyph 'branch 'shadow) branch)
-                                                      'help-echo (format "Its worktree: %s"
-                                                                         (abbreviate-file-name
-                                                                          (or (agent-workspace-agent-worktree agent) ""))))))
-                            " "))))
+                 (t (let ((settings (string-join (delq nil (list (and mode (agent-workspace-mode-label mode)) model))
+                                                 " ")))
+                      (concat (if buttons (concat buttons "  ") "")
+                              (if badge (concat badge "  ") "")
+                              (propertize settings 'face 'agent-workspace-label)
+                              (when-let* ((branch (agent-workspace-agent-branch agent)))
+                                (concat (if (string-empty-p settings) "" sep)
+                                        (propertize (concat (agent-workspace-glyph 'branch 'agent-workspace-label) branch)
+                                                    'help-echo (format "Its worktree: %s"
+                                                                       (abbreviate-file-name
+                                                                        (or (agent-workspace-agent-worktree agent) ""))))))
+                              " ")))))
          (line (agent-workspace--at-right left right width)))
     (agent-ui-even-glyphs
      (agent-workspace--tint line (if hand 'warning (agent-workspace-agent-face agent)) (if open 0.3 0.14)))))

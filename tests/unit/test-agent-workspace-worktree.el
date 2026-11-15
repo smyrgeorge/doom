@@ -440,7 +440,9 @@ worktree: its name dimmed."
           (should (eq (lookup-key (get-text-property 1 'local-map text) [mode-line mouse-1])
                       #'agent-workspace-mode-line-select))
           (should (equal (plist-get (get-text-property 1 'face text) :foreground)
-                         (face-foreground 'ansi-color-blue nil t))))
+                         (face-foreground 'ansi-color-blue nil t)))
+          ;; Its role readable, the same for every agent.
+          (should (eq (get-text-property (string-search "builder" text) 'face text) 'agent-workspace-label)))
         (agent-workspace-mode-line-select (list 'mouse-1 (list (selected-window) 1 '(0 . 0) 0)))
         (should (eq selected agent))
         (should (equal (substring-no-properties (agent-workspace-tab-prefix (current-buffer))) "▌A ")))

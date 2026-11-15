@@ -111,7 +111,8 @@ face's). AGENT may be a name only (a forgotten agent's)."
     (if-let* ((agent (agent-workspace-agent (cadr where) (car where))))
         (concat " "
                 (propertize (concat (agent-workspace-avatar agent) " " (agent-workspace--name-text agent)
-                                    (propertize (concat " · " (agent-workspace-agent-role agent)) 'face 'shadow))
+                                    (propertize " · " 'face 'agent-workspace-label)
+                                    (propertize (agent-workspace-agent-role agent) 'face 'agent-workspace-label))
                             'help-echo (format "%s's worktree (%s, %s): click to select %s"
                                                (agent-workspace-agent-name agent)
                                                (agent-workspace-agent-role agent)

@@ -133,6 +133,19 @@ leaves it alone)."
         (should (string-prefix-p "▸ ▌S sam · investigator · ○ at the desk"
                                  (with-current-buffer (agent-workspace--bar-buffer sam)
                                    (buffer-substring-no-properties (point-min) (point-max)))))
+        ;; Its role, mode, branch glyph and the dots between readable on its
+        ;; colour's tint, the same for every agent; a dot between its mode and
+        ;; its branch.
+        (dolist (agent (list sam ada))
+          (let* ((line (agent-workspace-line agent 120))
+                 (at (lambda (text) (ensure-list (get-text-property (string-search text line) 'face line)))))
+            (should (memq 'agent-workspace-label (funcall at (agent-workspace-agent-role agent))))
+            (should (memq 'agent-workspace-label (funcall at " · ")))
+            (should (memq 'agent-workspace-label (funcall at "auto")))
+            (should (string-match-p "auto · .+agent/" (substring-no-properties line)))
+            (let ((glyph (1- (string-search "agent/" line))))
+              (while (eq (aref line glyph) ?\s) (setq glyph (1- glyph)))
+              (should (memq 'agent-workspace-label (ensure-list (get-text-property glyph 'face line)))))))
         (should (agent-workspace-frame-p))
         (should (+my/tiling--left-alone-p))
         (ignore ken)))))
