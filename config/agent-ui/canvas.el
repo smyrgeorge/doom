@@ -64,6 +64,12 @@ removed, cleared; not when the canvas closes.")
   "Called in a canvas with an element's id once it's gone (removed, or its
 canvas killed).")
 
+(defvar agent-ui-close-emptied-functions nil
+  "Called with a canvas left without elements (cleared, its last one
+removed), its panes closed: non-nil from one, it's killed too, gone from
+the windows' tabs (config/agent-ui/agent.el: a session's other canvas); else
+it stays. The first one's.")
+
 (defvar agent-ui-footer-functions nil
   "Called in a canvas with an element's id and the width it's drawn at (nil:
 any), as it's drawn: lines to draw under it, that wide at most (the
@@ -813,8 +819,9 @@ started or stopped as they came or went, redrawn soon. Returns ID."
 with its last tab (it stayed open, empty, after a clear). A window that
 showed something else before goes back to it (another canvas it's a tab
 beside, a session's: `agent-ui-share-window-functions'); one it alone showed
-is deleted, but a frame's last. The canvas itself stays, with its session;
-the next element shown opens a pane again."
+is deleted, but a frame's last. The canvas itself stays, with its session
+\(unless `agent-ui-close-emptied-functions' say, once it's emptied:
+`agent-ui--close-emptied'); the next element shown opens a pane again."
   (unless agent-ui--order
     (let ((canvas (current-buffer)))
       (dolist (window (get-buffer-window-list canvas nil t))
@@ -830,10 +837,26 @@ the next element shown opens a pane again."
                  (delete-window window))
                 (before (switch-to-prev-buffer window 'bury))))))))
 
+(defun agent-ui--close-emptied (canvas)
+  "CANVAS, left without elements, killed if `agent-ui-close-emptied-functions'
+say so (its panes closed already: `agent-ui--close-if-empty'). Called once
+what emptied it is done, outside it: its buffer current no more."
+  (when (and (buffer-live-p canvas)
+             (null (buffer-local-value 'agent-ui--order canvas))
+             (run-hook-with-args-until-success 'agent-ui-close-emptied-functions canvas))
+    (kill-buffer canvas)))
+
 (cl-defun agent-ui-remove (id &key canvas)
-  "Remove element ID from CANVAS. Returns ID."
-  (agent-ui--in canvas
-   (pcase (agent-ui--resolve id)
+  "Remove element ID from CANVAS. Returns ID. Its last one: CANVAS's panes
+closed, CANVAS killed if it's to be (`agent-ui--close-emptied')."
+  (let ((buffer (agent-ui--buffer canvas)))
+    (prog1 (with-current-buffer buffer (agent-ui--remove id))
+      (agent-ui--close-emptied buffer))))
+
+(defun agent-ui--remove (id)
+  "Remove element ID from the current canvas (see `agent-ui-remove'), the
+canvas kept. Returns ID."
+  (pcase (agent-ui--resolve id)
     (`(,owner . ,(and child (pred identity)))
      ;; A panel's child: out of its panel, redrawn.
      (setf (agent-ui--entry-element owner)
@@ -846,33 +869,36 @@ the next element shown opens a pane again."
      (run-hooks 'agent-ui-changed-hook)
      id)
     (_
-    (let ((entry (agent-ui--entry id))
-          (inhibit-read-only t))
-      ;; Its text and the blank line after it.
-      (delete-region (agent-ui--entry-start entry)
-                     (min (point-max) (+ (agent-ui--entry-end entry) 2)))
-      (set-marker (agent-ui--entry-start entry) nil)
-      (set-marker (agent-ui--entry-end entry) nil)
-      (remhash id agent-ui--entries)
-      (setq agent-ui--order (delete id agent-ui--order)
-            agent-ui--dirty (delete id agent-ui--dirty))
-      (agent-ui--animate)
-      (run-hook-with-args 'agent-ui-removed-functions id)
-      (agent-ui--children-stopped (agent-ui--entry-element entry))
-      (run-hooks 'agent-ui-changed-hook)
-      (agent-ui--close-if-empty)
-      id)))))
+     (let ((entry (agent-ui--entry id))
+           (inhibit-read-only t))
+       ;; Its text and the blank line after it.
+       (delete-region (agent-ui--entry-start entry)
+                      (min (point-max) (+ (agent-ui--entry-end entry) 2)))
+       (set-marker (agent-ui--entry-start entry) nil)
+       (set-marker (agent-ui--entry-end entry) nil)
+       (remhash id agent-ui--entries)
+       (setq agent-ui--order (delete id agent-ui--order)
+             agent-ui--dirty (delete id agent-ui--dirty))
+       (agent-ui--animate)
+       (run-hook-with-args 'agent-ui-removed-functions id)
+       (agent-ui--children-stopped (agent-ui--entry-element entry))
+       (run-hooks 'agent-ui-changed-hook)
+       (agent-ui--close-if-empty)
+       id))))
 
 (cl-defun agent-ui-clear (&key canvas)
-  "Remove every element from CANVAS (if it's there)."
+  "Remove every element from CANVAS (if it's there): its panes closed, it
+killed if it's to be (`agent-ui--close-emptied')."
   (when (agent-ui--live-canvas-p canvas)
-   (agent-ui--in canvas
-    (dolist (id (copy-sequence agent-ui--order))
-      (agent-ui-remove id :canvas (current-buffer)))
-    (let ((inhibit-read-only t))
-      (erase-buffer))
-    (run-hooks 'agent-ui-cleared-hook)
-    (agent-ui--close-if-empty)))
+    (let ((buffer (agent-ui--buffer canvas)))
+      (with-current-buffer buffer
+        (dolist (id (copy-sequence agent-ui--order))
+          (agent-ui--remove id))
+        (let ((inhibit-read-only t))
+          (erase-buffer))
+        (run-hooks 'agent-ui-cleared-hook)
+        (agent-ui--close-if-empty))
+      (agent-ui--close-emptied buffer)))
   nil)
 
 (cl-defun agent-ui-get (id &key canvas)

@@ -146,6 +146,17 @@ panes, each a few lines high)."
   "The session's buffer is killed: its canvases too."
   (mapc #'kill-buffer (agent-ui-session-canvases (current-buffer))))
 
+;; A session's other canvas emptied (cleared, its last element removed) is
+;; killed, as an answered question's: it stayed, an empty tab beside its
+;; session's canvas. The next element shown there makes it again. The
+;; session's own canvas stays, its pane closed.
+(defun agent-ui--close-emptied-p (canvas)
+  "Whether CANVAS, emptied, is killed (`agent-ui-close-emptied-functions'):
+a session's other canvas (see above)."
+  (and (buffer-local-value 'agent-ui--canvas-part canvas) t))
+
+(add-hook 'agent-ui-close-emptied-functions #'agent-ui--close-emptied-p)
+
 ;; ====== WHAT THE AGENT IS TOLD ======
 
 (defvar agent-ui-agent-mcp nil
@@ -487,18 +498,21 @@ Emacs is idle a moment."
 closed, its buffer killed, the cursor back in its session (if it was in
 CANVAS's pane)."
   (when (buffer-live-p canvas)
-    (with-current-buffer canvas
-      (let ((session agent-ui--session-buffer)
-            (focused (eq (window-buffer (selected-window)) canvas)))
-        (dolist (id (seq-filter (lambda (id)
+    (let ((session (buffer-local-value 'agent-ui--session-buffer canvas))
+          (focused (eq (window-buffer (selected-window)) canvas)))
+      (dolist (id (with-current-buffer canvas
+                    (seq-filter (lambda (id)
                                   (agent-ui-ask-done-p (agent-ui--entry-element (gethash id agent-ui--entries))))
-                                agent-ui--order))
-          (agent-ui-remove id :canvas canvas))
-        (unless agent-ui--order
-          ;; Its panes closed already (emptied: `agent-ui--close-if-empty').
-          (kill-buffer canvas)
-          (when-let* ((window (and focused (buffer-live-p session) (get-buffer-window session))))
-            (select-window window)))))))
+                                agent-ui--order)))
+        (when (buffer-live-p canvas)
+          (agent-ui-remove id :canvas canvas)))
+      ;; Emptied: its panes closed already (`agent-ui--close-if-empty'); a
+      ;; session's other canvas, killed already (`agent-ui--close-emptied').
+      (when (and (buffer-live-p canvas) (null (buffer-local-value 'agent-ui--order canvas)))
+        (kill-buffer canvas))
+      (when-let* ((window (and focused (not (buffer-live-p canvas))
+                               (buffer-live-p session) (get-buffer-window session))))
+        (select-window window)))))
 
 (defun agent-ui--close-answered-h ()
   "A canvas changed (`agent-ui-changed-hook'): an answer sent, the question

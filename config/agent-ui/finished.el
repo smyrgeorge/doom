@@ -107,21 +107,27 @@ they wait); those at 0 closed. TIMER, the timer: stopped once CANVAS is gone."
                    agent-ui--closing)
           (when over
             (agent-ui--close-finished canvas over)))
-        (agent-ui--closing-timer)))))
+        ;; Killed with its last one (a session's other canvas: nothing left
+        ;; to count down), not looked at again.
+        (when (buffer-live-p canvas)
+          (with-current-buffer canvas
+            (agent-ui--closing-timer)))))))
 
 (defun agent-ui--close-finished (canvas ids)
   "IDS of CANVAS removed, their countdown over: the cursor back in its
-session if it was in CANVAS's pane, closed now."
-  (with-current-buffer canvas
-    (let ((focused (eq (window-buffer (selected-window)) canvas))
-          (session (bound-and-true-p agent-ui--session-buffer)))
-      (dolist (id ids)
-        (remhash id agent-ui--closing)
-        (when (member id agent-ui--order)
-          (agent-ui-remove id :canvas canvas)))
-      (when-let* (((and focused (not (get-buffer-window canvas))))
-                  (window (and (buffer-live-p session) (get-buffer-window session))))
-        (select-window window)))))
+session if it was in CANVAS's pane, closed now (or CANVAS killed, emptied:
+`agent-ui--close-emptied')."
+  (let ((focused (eq (window-buffer (selected-window)) canvas))
+        (session (with-current-buffer canvas (bound-and-true-p agent-ui--session-buffer))))
+    (dolist (id ids)
+      (when (buffer-live-p canvas)
+        (with-current-buffer canvas
+          (remhash id agent-ui--closing)
+          (when (member id agent-ui--order)
+            (agent-ui-remove id :canvas canvas)))))
+    (when-let* (((and focused (not (and (buffer-live-p canvas) (get-buffer-window canvas)))))
+                (window (and (buffer-live-p session) (get-buffer-window session))))
+      (select-window window))))
 
 ;; ====== ITS LINE ======
 

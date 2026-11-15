@@ -120,7 +120,8 @@ tab of its canvas's pane when first shown; a name is letters, digits, spaces, `_
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
   the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, with its own elements and ids. Each opens as a tab
   of the pane showing another of the session's canvases (in front, the one before behind it; back with its session:
-  behind), else in a pane of its own. They close with the session, and are kept and come back with it. A question
+  behind), else in a pane of its own. They close with the session, and are kept and come back with it. Emptied
+  (cleared, its last element removed), one closes, its tab gone, until an element is shown there again. A question
   taking the focus is brought all into view, its pane made taller if it must.
 - **Finished, it closes:** a `steps`, `todo` or `progress` that finished well (every step done or skipped, every item
   ticked, the bar at its end) closes itself 10 seconds later, a line under it counting down with a **Keep** button; the

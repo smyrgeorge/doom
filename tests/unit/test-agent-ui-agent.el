@@ -841,3 +841,35 @@ own default), all stay."
             (+test-aua-press canvas "⏵ Proceed")
             (+test-aua-settle)
             (should (member "go" (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas))))))))))
+
+(ert-deftest agent-ui-agent/a-sessions-other-canvas-emptied-killed ()
+  "A session's other canvas emptied, here by its last finished element
+closing itself: killed, as an answered question's (it stayed, an empty tab
+beside the session's canvas: doom-j4q), its countdown stopped, the cursor
+back in the session; made again by the next element shown there. The
+session's own canvas emptied: kept."
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ emptied" "/tmp/emptied/"))
+           (name (agent-ui--session-name session))
+           (tests (agent-ui-sub-canvas name "tests"))
+           (agent-ui-display-function #'agent-ui-display-canvas)
+           (agent-ui-close-finished 1))
+      (should (memq #'agent-ui--close-emptied-p (default-value 'agent-ui-close-emptied-functions)))
+      (save-window-excursion
+        (delete-other-windows)
+        (switch-to-buffer session)
+        (agent-ui-show '(:id "build" :type "progress" :value 4 :max 4) :canvas tests)
+        (let* ((canvas (get-buffer (agent-ui-canvas-buffer-name tests)))
+               (timer (buffer-local-value 'agent-ui--closing-timer canvas)))
+          (should (timerp timer))
+          (select-window (get-buffer-window canvas))
+          (agent-ui--closing-tick canvas timer)
+          (should-not (buffer-live-p canvas))
+          (should-not (memq timer timer-list))
+          (should (eq (window-buffer (selected-window)) session)))
+        (agent-ui-show '(:id "t" :type "text" :text "x") :canvas tests)
+        (should (get-buffer-window (agent-ui-canvas-buffer-name tests)))
+        ;; The session's own.
+        (agent-ui-show '(:id "t" :type "text" :text "x") :canvas name)
+        (agent-ui-remove "t" :canvas name)
+        (should (get-buffer (agent-ui-canvas-buffer-name name)))))))

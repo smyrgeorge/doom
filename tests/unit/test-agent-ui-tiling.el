@@ -115,6 +115,49 @@ front again. Coming back with the session: behind the one shown."
       (should (eq (window-buffer pane) (get-buffer (agent-ui-canvas-buffer-name (concat name " / logs")))))
       (should (assq (get-buffer (agent-ui-canvas-buffer-name (concat name " / later"))) (window-prev-buffers pane))))))
 
+(ert-deftest agent-ui-tiling/an-emptied-canvas-its-tab-gone ()
+  "A session's other canvas emptied (cleared, its last element removed),
+in front or behind: killed, as an answered question's, its tab gone from
+its pane (it stayed there, an empty tab beside the session's canvas:
+doom-j4q); an element shown on it again, it opens again. The session's own
+canvas emptied: its pane closed, it kept."
+  (require 'tab-line)
+  (+test-auti 'tall
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (let* ((main (get-buffer (agent-ui-canvas-buffer-name name)))
+           (pane (get-buffer-window main))
+           (ask (agent-ui-sub-canvas name "ask"))
+           (canvas (lambda () (get-buffer (agent-ui-canvas-buffer-name ask))))
+           (tabs (lambda () (with-selected-window pane (tab-line-tabs-window-buffers)))))
+      ;; Cleared, in front: the session's canvas in front again, alone.
+      (agent-ui-show '(:id "q" :type "text" :text "Which?") :canvas ask)
+      (let ((shown (funcall canvas)))
+        (should (eq (window-buffer pane) shown))
+        (should (equal (funcall tabs) (list main shown)))
+        (agent-ui-clear :canvas ask)
+        (should-not (buffer-live-p shown))
+        (should (eq (window-buffer pane) main))
+        (should (equal (funcall tabs) (list main))))
+      ;; Shown again: a tab again, in front. Behind the session's canvas (an
+      ;; element shown there), its last element removed: gone too.
+      (agent-ui-show '(:id "q" :type "text" :text "Which?") :canvas ask)
+      (let ((shown (funcall canvas)))
+        (should (eq (window-buffer pane) shown))
+        (agent-ui-show '(:id "tests" :type "text" :text "running") :canvas name)
+        (should (eq (window-buffer pane) main))
+        (should (equal (funcall tabs) (list shown main)))
+        (agent-ui-remove "q" :canvas ask)
+        (should-not (buffer-live-p shown))
+        (should (equal (funcall tabs) (list main))))
+      ;; The session's own: its pane closed, it kept; the other opens again.
+      (agent-ui-clear :canvas name)
+      (should (buffer-live-p main))
+      (should-not (get-buffer-window main))
+      (should (= (length (+my/tiling--panes)) 1))
+      (agent-ui-show '(:id "q" :type "text" :text "Which?") :canvas ask)
+      (should (get-buffer-window (funcall canvas)))
+      (should (= (length (+my/tiling--panes)) 2)))))
+
 (ert-deftest agent-ui-tiling/a-questions-answer-in-view ()
   "A question taking the focus in a short pane: its pane grown to show it
 all, its first line at the top, Answer in view (5 lines showed its first
