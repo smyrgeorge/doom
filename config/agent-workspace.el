@@ -8,12 +8,26 @@
 
 ;; AGENTS
 ;; An agent of a project's crew (config/agent-workspace/core.el): a name
-;; ("ada"), a role ("builder"), a colour (one of the theme's ANSI faces, a free
+;; ("ada": a lowercase letter, then lowercase letters, digits or -), a role
+;; ("builder"), a colour (one of the theme's ANSI faces, its role's or a free
 ;; one by default: `agent-workspace-colours'), an agent kind (Claude Code:
 ;; `agent-workspace-kinds'), its session, its worktree, its state and the issue
-;; you gave it. Made from Lisp for now:
-;;   (agent-workspace-create :role "builder" :name "ada")
-;; then interrupted, killed (gone home: the issue you gave it, still in
+;; you gave it.
+
+;; MAKING ONE
+;; M-x agent-workspace-new (config/agent-workspace/new.el; the app's c) asks
+;; its role (what it does, how many run of its max), then its name: left
+;; empty, one from `agent-workspace-names' whose initial no agent has; C-u:
+;; its model, permission mode and colour too. From Lisp:
+;;   (agent-workspace-create :role "builder" :name "ada" :issue "doom-a1b")
+;; (an issue's id: its first message, "Work on doom-a1b: TITLE"); from the
+;; shell, cmd/agent-workspace new --role builder [--name ada] [--prompt TEXT]
+;; (config/agent-workspace/request.el), replying JSON. A step failing says
+;; which: its worktree not made, nothing is; its session not started, it's
+;; stuck saying why.
+
+;; WHAT YOU DO TO ONE
+;; It's interrupted, killed (gone home: the issue you gave it, still in
 ;; progress and its, goes back to open), restarted fresh, put to sleep, woken,
 ;; renamed, recoloured, forgotten (out of the crew). Only you prompt it
 ;; (`agent-workspace-send').
@@ -77,6 +91,8 @@
 (load! "agent-workspace/session")
 (load! "agent-workspace/roles")
 (load! "agent-workspace/names")
+(load! "agent-workspace/new")
+(load! "agent-workspace/request")
 
 ;; WHAT AN AGENT IS TOLD (see ITS SESSION above), after what every session is.
 (add-hook '+my/agent-shell-claude-context-functions #'agent-workspace-agent-context t)

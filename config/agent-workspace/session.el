@@ -89,9 +89,9 @@ buffer, not shown. If it can't start, AGENT is stuck, saying why."
     (error
      (setf (agent-workspace-agent-buffer agent) nil)
      (agent-workspace--set-state agent 'stuck)
-     (setf (agent-workspace-agent-error agent) (error-message-string err))
+     (setf (agent-workspace-agent-error agent) (concat "its session: " (error-message-string err)))
      (agent-workspace--changed agent 'state)
-     (message "%s can't start: %s" (agent-workspace-agent-name agent) (error-message-string err))
+     (message "%s's session didn't start: %s" (agent-workspace-agent-name agent) (error-message-string err))
      nil)))
 
 (defun agent-workspace--config (agent)

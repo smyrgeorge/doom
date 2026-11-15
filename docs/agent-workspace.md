@@ -1,16 +1,32 @@
 # Agent workspace
 
-> **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states. The app
-> comes next: its workspace, the issues, the stage, the room.
+> **Status:** being built (epic `doom-51z`). There are agents, their roles, sessions, worktrees and states, and you
+> can make one. The app comes next: its workspace, the issues, the stage, the room.
 
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
 its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
 
-For now you make an agent from Lisp, in the project:
+## Making an agent
+
+`M-x agent-workspace-new`, in the project, asks for:
+
+1. **Its role.** Each one says what it does and how many of it run against its maximum: `builder · builds what you
+   give it · 2 of 4`. A role at its maximum is refused.
+2. **Its name.** Leave it empty and one is made for it, `ada`, `grace`, `linus`..., each with an initial no other
+   agent has. A name is lowercase letters, digits and `-`.
+
+With `C-u`, it also asks for its model, permission mode and colour. Its role's are the defaults.
+
+The agent gets its worktree and its session starts. Then it waits for you. If its worktree can't be made, nothing is
+made, and you're told why. If its session doesn't start, it's stuck, saying why.
+
+From Lisp, `:issue` makes it for an issue, which is its first message ("Work on doom-a1b: ..."):
 
 ```elisp
-(agent-workspace-create :role "builder" :name "ada")
+(agent-workspace-create :role "builder" :name "ada" :issue "doom-a1b" :issue-title "Fix the thing")
 ```
+
+From the shell: `cmd/agent-workspace new --role builder [--name ada] [--prompt TEXT]` ([more](cmd.md#cmdagent-workspace)).
 
 ## An agent
 

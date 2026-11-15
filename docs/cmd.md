@@ -40,3 +40,15 @@ cmd/agent-ui show --canvas tests '{"id":"t","type":"table","columns":["Test","Re
 The reply is JSON on stdout; it exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without
 an Emacs server. `cmd/agent-ui-mcp.el` serves the same operations as MCP tools (`emacs --batch -Q -l
 cmd/agent-ui-mcp.el -f agent-ui-mcp-main`), as each agent-shell session starts it.
+
+## cmd/agent-workspace
+
+Makes an agent in this folder's project, for your scripts; see [Agent workspace](agent-workspace.md).
+
+```sh
+cmd/agent-workspace new --role builder                  # a name made for it
+cmd/agent-workspace new --role investigator --name sam --prompt "Look into doom-a1b"
+```
+
+The reply is JSON on stdout (`{"ok":true,"name":"ada","role":"builder","worktree":...,"branch":"agent/ada",...}`); it
+exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without an Emacs server.

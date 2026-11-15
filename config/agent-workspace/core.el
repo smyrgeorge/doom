@@ -310,17 +310,18 @@ npm install\", \"at the desk\"..."
 ;; ====== MAKING ONE ======
 
 (defun agent-workspace-name-valid-p (name)
-  "Non-nil if NAME can be an agent's: a letter, then letters, digits, - or _,
-at most 20 (it names its branch and folder too)."
+  "Non-nil if NAME can be an agent's: typed after # in the room, it's a
+lowercase letter, then lowercase letters, digits or -, at most 20 (it names
+its branch and folder too)."
   (and (stringp name)
-       (string-match-p "\\`[[:alpha:]][[:alnum:]_-]\\{0,19\\}\\'" name)
-       (string-match-p "\\`[[:ascii:]]*\\'" name)))
+       (let ((case-fold-search nil))
+         (string-match-p "\\`[a-z][a-z0-9-]\\{0,19\\}\\'" name))))
 
 (defun agent-workspace--check-name (name project &optional except)
   "Signal a user error if NAME can't be an agent's in PROJECT's crew (but
 EXCEPT's, an agent being renamed)."
   (unless (agent-workspace-name-valid-p name)
-    (user-error "Not a name for an agent: %S (a letter, then letters, digits, - or _)" name))
+    (user-error "Not a name for an agent: %S (a lowercase letter, then lowercase letters, digits or -)" name))
   (when-let* ((other (seq-find (lambda (agent) (string-equal-ignore-case
                                                 (agent-workspace-agent-name agent) name))
                                (agent-workspace-agents project))))
@@ -337,13 +338,18 @@ fewest have."
         (car (seq-sort-by (lambda (colour) (seq-count (lambda (c) (equal c colour)) used))
                           #'< agent-workspace-colours)))))
 
-(cl-defun agent-workspace-create (&key role name colour model mode prompt project (kind 'claude-code))
+(cl-defun agent-workspace-create (&key role name colour model mode prompt issue issue-title
+                                       project (kind 'claude-code))
   "Make an agent in PROJECT's crew (default: the current project's) and start
-it: ROLE (its name, required), NAME (required), COLOUR (default: a free one),
-MODEL and MODE (default: its role's), KIND (an agent of
-`agent-workspace-kinds'). It gets its own worktree, and its session starts
-there; PROMPT, if given, is its first message, sent once it's ready. Return
-the agent."
+it: ROLE (its name, required), NAME (required), COLOUR (default: its role's
+while free, else a free one), MODEL and MODE (default: its role's), KIND (an
+agent of `agent-workspace-kinds'). It gets its own worktree, always, and its
+session starts there. PROMPT, if given, is its first message, sent once it's
+ready; ISSUE (an id, and ISSUE-TITLE), the issue it's for: its first
+message unless PROMPT, \"Work on ID: TITLE\". Return the agent.
+
+A step failing says which: its worktree not made, nothing is; its session
+not started, it's stuck saying why, in the crew."
   (let ((project (or project (agent-workspace-project)
                      (user-error "Not in a git repository: a crew needs one"))))
     (unless (and (stringp role) (not (string-empty-p role)))
@@ -360,15 +366,24 @@ the agent."
                                                          :colour)))
                   :model model :mode mode
                   :project (agent-workspace--root project))))
-      (agent-workspace-worktree-ensure agent)
+      (condition-case err
+          (agent-workspace-worktree-ensure agent)
+        (error (user-error "%s's worktree: %s" name (error-message-string err))))
       (let ((key (agent-workspace--root project)))
         (puthash key (append (gethash key agent-workspace--crews) (list agent))
                  agent-workspace--crews))
+      (when issue
+        (agent-workspace-give agent issue issue-title))
       (agent-workspace--changed agent 'created)
-      (agent-workspace--start agent)
-      (when prompt
-        (agent-workspace-send agent prompt :submit t))
+      (when (and (agent-workspace--start agent)
+                 (or prompt issue))
+        (agent-workspace-send agent (or prompt (agent-workspace-issue-prompt issue issue-title))
+                              :submit t))
       agent)))
+
+(defun agent-workspace-issue-prompt (issue &optional title)
+  "Your message giving an agent ISSUE (with its TITLE)."
+  (if title (format "Work on %s: %s" issue title) (format "Work on %s" issue)))
 
 ;; ====== WHAT YOU DO TO ONE ======
 

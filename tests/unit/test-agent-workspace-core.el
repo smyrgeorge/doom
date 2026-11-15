@@ -52,20 +52,25 @@ its canvas raises its hand; quitting Emacs closes the crews."
 ;; ====== NAMES AND COLOURS ======
 
 (ert-deftest agent-workspace/names ()
-  "A name: a letter, then letters, digits, - or _, at most 20, ASCII."
-  (dolist (name '("ada" "Ada" "builder-3" "a" "x_y" "abcdefghijabcdefghij"))
+  "A name: a lowercase letter, then lowercase letters, digits or -, at most
+20 (test-agent-workspace-new.el has more)."
+  (dolist (name '("ada" "builder-3" "a" "abcdefghijabcdefghij"))
     (should (agent-workspace-name-valid-p name)))
-  (dolist (name '("" "3ada" "-ada" "ada lovelace" "ada/b" "abcdefghijabcdefghijk" "ádá" nil "a.b"))
+  (dolist (name '("" "3ada" "-ada" "Ada" "x_y" "ada lovelace" "ada/b" "abcdefghijabcdefghijk" "ádá" nil "a.b"))
     (should-not (agent-workspace-name-valid-p name))))
 
 (ert-deftest agent-workspace/a-name-taken ()
-  "A name taken in the crew (in any case) is refused, but the agent's own."
+  "A name taken in the crew is refused, but the agent's own; one not valid
+too."
   (let ((ada (+test-awc--agent :name "ada")))
     (+test-awc--with-crew "/tmp/project/" (list ada)
-      (should-error (agent-workspace--check-name "Ada" "/tmp/project/") :type 'user-error)
+      (should (string-match-p "There.s an agent named ada already"
+                              (cadr (should-error (agent-workspace--check-name "ada" "/tmp/project/")
+                                                  :type 'user-error))))
       (should-error (agent-workspace--check-name "no good" "/tmp/project/") :type 'user-error)
+      (should-error (agent-workspace--check-name "Ada" "/tmp/project/") :type 'user-error)
       (should-not (agent-workspace--check-name "grace" "/tmp/project/"))
-      (should-not (agent-workspace--check-name "ADA" "/tmp/project/" ada)))))
+      (should-not (agent-workspace--check-name "ada" "/tmp/project/" ada)))))
 
 (ert-deftest agent-workspace/a-free-colour ()
   "The first colour no agent has; all taken, the one fewest have."

@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# The agent workspace from the shell: a crew of coding agents on one project
+# (config/agent-workspace.el), for your scripts. See docs/agent-workspace.md.
+#
+#   agent-workspace new --role ROLE [--name NAME] [--prompt TEXT]
+#                                a new agent in this folder's project: its
+#                                worktree made, its session started; NAME
+#                                left out, one is made for it; TEXT its
+#                                first message -> {"ok": true, "name",
+#                                "role", "worktree", "branch", "state"}
+#
+# The reply is JSON on stdout: {"ok": false, "error": "what's wrong"} when it
+# isn't done. Exit status: 0 done, 1 not done (the reply says why), 2 a wrong
+# use, 3 no Emacs to talk to (it runs as a server: M-x server-start).
+#
+# EMACSCLIENT (default: emacsclient) is the client, EMACS_SOCKET_NAME its
+# server.
+
+set -u
+
+usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p;}' "$0"; }
+
+json_string() {  # json_string TEXT: TEXT as a JSON string
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\t'/\\t}
+  s=${s//$'\r'/\\r}
+  printf '"%s"' "$s"
+}
+
+fail() {  # fail STATUS MESSAGE: the reply for an error, and exit
+  printf '{"ok":false,"error":%s}\n' "$(json_string "$2")"
+  exit "$1"
+}
+
+[ $# -eq 0 ] && { usage >&2; exit 2; }
+case "$1" in -h|--help|help) usage; exit 0 ;; esac
+
+op=$1; shift
+case "$op" in
+  new)
+    role="" name="" prompt=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --role|--name|--prompt)
+          [ $# -lt 2 ] && fail 2 "$1: give it a value"
+          case "$1" in
+            --role) role=$2 ;; --name) name=$2 ;; --prompt) prompt=$2 ;;
+          esac
+          shift 2 ;;
+        --role=*) role=${1#--role=}; shift ;;
+        --name=*) name=${1#--name=}; shift ;;
+        --prompt=*) prompt=${1#--prompt=}; shift ;;
+        *) fail 2 "new: unknown argument \"$1\"; agent-workspace new --role ROLE [--name NAME] [--prompt TEXT]" ;;
+      esac
+    done
+    [ -z "$role" ] && fail 2 "new: which role? agent-workspace new --role ROLE"
+    payload=$(printf '{"role":%s,"name":%s,"prompt":%s}' \
+                     "$(json_string "$role")" "$(json_string "$name")" "$(json_string "$prompt")") ;;
+  *)
+    fail 2 "unknown operation \"$op\"; operations: new" ;;
+esac
+
+dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workspace.XXXXXXXXXX") || fail 3 "no temp folder"
+trap 'rm -rf "$dir"' EXIT
+printf '%s\n%s\n' "$op" "$PWD" >"$dir/request"
+printf '%s' "$payload" >"$dir/payload"
+
+# The folder as a Lisp string.
+lisp_dir=${dir//\\/\\\\}
+lisp_dir=${lisp_dir//\"/\\\"}
+out=$("${EMACSCLIENT:-emacsclient}" --timeout=60 --eval \
+        "(if (fboundp 'agent-workspace-request) (agent-workspace-request \"$lisp_dir\") 'agent-workspace-not-loaded)" 2>&1)
+status=$?
+
+if [ -f "$dir/reply" ]; then
+  cat "$dir/reply"
+  grep -q '^{"ok":true' "$dir/reply" && exit 0
+  exit 1
+fi
+case "$out" in
+  *agent-workspace-not-loaded*) fail 3 "Emacs runs, but without the agent workspace (config/agent-workspace.el)" ;;
+esac
+[ $status -ne 0 ] && fail 3 "no Emacs server answered (M-x server-start): ${out//$'\n'/ }"
+fail 3 "Emacs didn't answer: ${out//$'\n'/ }"
