@@ -162,6 +162,40 @@ mouse-1 command run."
       (should (+test-wait-for (lambda () (not (frame-live-p frame))) 3))
       (should-not (assq right +my/banner--frames)))))
 
+(ert-deftest e2e-banner/shown-again-while-its-frame-is-made ()
+  "The notices shown again while a window's frame is being made (an issue
+list fitting its columns as it comes): one frame for the window, none left
+on the screen untracked."
+  (+test-banner
+    (+test-banner--file "again.txt")
+    (let* ((window (selected-window))
+           (buffer (current-buffer))
+           (make (symbol-function '+my/banner--make-frame))
+           (again t))
+      (cl-letf (((symbol-function '+my/banner--make-frame)
+                 (lambda (parent)
+                   (prog1 (funcall make parent)
+                     (when again
+                       (setq again nil)
+                       (with-current-buffer buffer (+my/banner-show 'hello "Shown again")))))))
+        (+my/banner-show 'hello "Shown"))
+      (+test-sleep 0.3)
+      (let ((notices (seq-filter (lambda (f) (equal (frame-parameter f 'title) "notices")) (frame-list))))
+        (should (= (length notices) 1))
+        (should (eq (car notices) (+test-banner--frame window)))))))
+
+(ert-deftest e2e-banner/a-frame-no-window-has-goes ()
+  "A notices' frame no window has (left untracked): deleted at the next sync."
+  (+test-banner
+    (+test-banner--file "stray.txt")
+    (+my/banner-show 'hello "Here")
+    (let ((stray (+my/banner--make-frame (selected-frame))))
+      (+my/childframe-show stray)
+      (should (frame-live-p stray))
+      (+my/banner--sync)
+      (should-not (frame-live-p stray))
+      (should (frame-live-p (+test-banner--frame (selected-window)))))))
+
 (ert-deftest e2e-banner/follows-the-window-s-size ()
   (+test-banner
     (+test-banner--file "size.txt")

@@ -26,9 +26,17 @@ lays them over its header line, KEY is what it shows.")
     (with-current-buffer buffer (+my/banner--install))
     (unless (and entry (frame-live-p (nth 1 entry)))
       (when entry (+my/childframe-delete (nth 1 entry)))
-      (setq entry (list window (+my/banner--make-frame (window-frame window)) nil))
-      (setq +my/banner--frames
-            (cons entry (cl-remove window +my/banner--frames :key #'car))))
+      (let* ((frame (+my/banner--make-frame (window-frame window)))
+             ;; Making it can show the notices again meanwhile (an issue list
+             ;; fitting its columns anew): that one's frame kept, not left
+             ;; on the screen untracked.
+             (other (assq window +my/banner--frames)))
+        (if (and other (frame-live-p (nth 1 other)))
+            (progn (+my/childframe-delete frame)
+                   (setq entry other))
+          (setq entry (list window frame nil))
+          (setq +my/banner--frames
+                (cons entry (cl-remove window +my/banner--frames :key #'car))))))
     (let* ((frame (nth 1 entry))
            (columns (+my/banner--columns window))
            (key (list buffer notices +my/banner--theme columns))
@@ -60,10 +68,21 @@ lays them over its header line, KEY is what it shows.")
 
 (defun +my/banner--sync ()
   "Show each window's notices over its header line, and hide those of windows
-that no longer have any."
+that no longer have any; a notices' frame no window has, deleted."
   (+my/childframe-sync '+my/banner--frames
                        (lambda (window) (buffer-local-value '+my/banner--list (window-buffer window)))
-                       #'+my/banner--show-in "Notices"))
+                       #'+my/banner--show-in "Notices")
+  (+my/banner--sweep))
+
+(defun +my/banner--sweep ()
+  "Delete the notices' frames no window has (see `+my/banner--frames'): one
+left untracked stayed on the screen, over whatever came there."
+  (let ((ours (mapcar (lambda (entry) (nth 1 entry)) +my/banner--frames)))
+    (dolist (frame (frame-list))
+      (when (and (frame-parent frame)
+                 (equal (frame-parameter frame 'title) "notices")
+                 (not (memq frame ours)))
+        (+my/childframe-delete frame)))))
 
 (defvar +my/banner--sync-timer nil)
 
