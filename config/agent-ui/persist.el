@@ -8,6 +8,8 @@
 ;; starts with that id (resumed: picked when SPC o c asks, agent-shell's
 ;; restart), its canvas comes back, as it was. Its elements' sources aren't
 ;; started again (a command run twice): they come back as they last were.
+;; One of a type gone since (discarded; dropped from Agent UI, as the issues
+;; board) is left out, a panel's child too, the panel back with the others.
 ;; Closing a canvas, or its session, doesn't change what's saved; clearing it
 ;; does (an empty canvas, saved). A canvas closed (q) and made again by the
 ;; agent's next element keeps what was saved before in its saves, before its
@@ -157,6 +159,29 @@ changes was lost)."
                                              children))
       element)))
 
+(defun agent-ui-persist--gone-p (element)
+  "Whether ELEMENT is of a type gone since it was saved (a type discarded,
+or dropped from Agent UI)."
+  (and (agent-ui--plist-p element)
+       (plist-get element :type)
+       (not (ignore-errors (agent-ui-type (plist-get element :type))))))
+
+(defun agent-ui-persist--without-gone (element)
+  "ELEMENT without its panel's children of a type gone (their weights too),
+nor its children's: the panel back with the others."
+  (let ((children (plist-get element :children)))
+    (if (not (and children (listp children)))
+        element
+      (let ((weights (plist-get element :weights))
+            (element (copy-sequence element)))
+        (when (and (listp weights) (= (length weights) (length children)))
+          (plist-put element :weights (cl-loop for c in children for w in weights
+                                               unless (agent-ui-persist--gone-p c) collect w)))
+        (plist-put element :children
+                   (cl-loop for c in children
+                            unless (agent-ui-persist--gone-p c)
+                            collect (if (agent-ui--plist-p c) (agent-ui-persist--without-gone c) c)))))))
+
 (defun agent-ui-persist--read (file)
   "The elements saved in FILE; nil if it can't be read."
   (condition-case nil
@@ -197,9 +222,11 @@ empty: how many of its elements; nil if not."
       (dolist (element elements)
         (when (agent-ui--plist-p element)
           (condition-case nil
-              (progn (agent-ui-show (agent-ui-persist--without-sources element) :canvas name)
+              (progn (agent-ui-show (agent-ui-persist--without-sources
+                                    (agent-ui-persist--without-gone element))
+                                   :canvas name)
                      (cl-incf count))
-            ;; One of a type gone since (discarded): left out.
+            ;; One of a type gone since (discarded, dropped): left out.
             (agent-ui-error nil))))
       count)))
 

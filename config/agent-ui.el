@@ -234,11 +234,10 @@ session's name and directory read when the session starts (in its buffer)."
   (with-eval-after-load 'agent-shell
     (+my/agent-ui-mcp-register)))
 
-;; ISSUES (the issues element): opened in Emacs's issue view (config/beads.el),
-;; and boards refreshed when this config refreshes the issue lists (after the
-;; agent's bd commands, config/agent-shell/beads.el).
+;; A BUG FILED (b on an element, see BUGS IN AGENT UI above): RET right after
+;; opens it in Emacs's issue view (config/beads.el).
 (defun +my/agent-ui-open-issue (id dir)
-  "Open issue ID of DIR's project in Beads' issue view."
+  "Open issue ID of DIR's issues in Beads' issue view."
   (let ((default-directory dir))
     (if-let* (((fboundp 'beads-detail-open))
               (json (with-temp-buffer
@@ -247,14 +246,9 @@ session's name and directory read when the session starts (in its buffer)."
               (issue (ignore-errors (json-parse-string json :object-type 'alist :array-type 'list))))
         ;; bd show --json: an array of one issue.
         (beads-detail-open (if (and (consp issue) (consp (car issue)) (consp (caar issue))) (car issue) issue))
-      (agent-ui-issues-show id dir))))
+      (agent-ui-bug-show-issue id dir))))
 
 (setq agent-ui-open-issue-function #'+my/agent-ui-open-issue)
-
-(with-eval-after-load 'agent-shell
-  (advice-add '+my/agent-shell-beads-refresh :after
-              (lambda (root) (agent-ui-issues-refresh root))
-              '((name . agent-ui-issues))))
 
 ;; A QUESTION WAITING: a session's turn ended with a question on its canvas
 ;; (config/agent-ui/agent.el): C-c C-q in the session goes there.

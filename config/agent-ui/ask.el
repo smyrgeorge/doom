@@ -3,7 +3,7 @@
 ;; config/agent-ui.el, before the element types. No Doom here (see
 ;; docs/agent-ui.md).
 ;;
-;; An element that asks (choice; a table, files or issues with select; a form,
+;; An element that asks (choice; a table, files or tags with select; a form,
 ;; a rank...) lets the user pick items (one, or several), add a note, and
 ;; answer: "Answer to WHAT (QUESTION): A, B. Note: ..." goes into the session's
 ;; prompt (`agent-ui-action-function'), sent at once if it says so; then the
@@ -101,7 +101,7 @@ label or detail lost its end to a …)."
 (defun agent-ui-ask-question-p (element)
   "Whether ELEMENT asks the user something: of a type that asks
 \(`agent-ui-ask-types': a choice, a confirm, a form, a rank, a compare), with
-select (a table, files, issues), approve (a plan, steps) or accept (a
+select (a table, files, tags), approve (a plan, steps) or accept (a
 diff's hunks), or a slider set by Set (a live one sends as it moves: no
 answer)."
   (and (or (member (plist-get element :type) agent-ui-ask-types)
@@ -211,7 +211,7 @@ the element answered (locked)."
                       'face 'agent-ui-muted)))
 
 ;; ====== SELECT: A LIST ELEMENT ASKING ======
-;; A list element (a table, files, issues) asks with select: {"question",
+;; A list element (a table, files, tags) asks with select: {"question",
 ;; "multiple", "note"}: marks before its items, the question above, the note
 ;; and Answer / All / None under it (`agent-ui-ask-around').
 

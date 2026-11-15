@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code compare confirm countdown diff files form gauge graph heatmap html image issues log markdown math mermaid panel progress rank slider stats steps table tags text timeline todo)))
+  (should (equal (agent-ui-types) '(chart choice code compare confirm countdown diff files form gauge graph heatmap html image log markdown math mermaid panel progress rank slider stats steps table tags text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -40,6 +40,15 @@
           (dolist (line (split-string text "\n"))
             (should (equal (list name width line (string-width line))
                            (list name width line (min (string-width line) (max width 30)))))))))))
+
+;; doom-ht6.29
+(ert-deftest agent-ui-elements/no-issues-board ()
+  "The issues board is gone (Beads' own list shows the same): an issues
+element is refused as any unknown type, and nothing of it is left."
+  (should (string-match-p "\\`unknown type \"issues\"; types: chart, "
+                          (+test-aue-error '(:type "issues" :parent "doom-ht6"))))
+  (should-not (apropos-internal "\\`agent-ui-issues"
+                                (lambda (symbol) (or (fboundp symbol) (boundp symbol))))))
 
 ;; ====== TEXT ======
 
@@ -3145,28 +3154,6 @@ order."
   (should (string-match-p "select's question is required"
                           (+test-aue-error '(:type "files" :files ("a.c") :select (:note t))))))
 
-(ert-deftest agent-ui-elements/issues-select ()
-  "The board asking: a mark before each card, picking its issue (RET on it
-still opens it); Send names their ids."
-  (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
-    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
-    (cl-letf (((symbol-function 'agent-ui-issues-refresh) #'ignore))
-      (+test-aue-canvas
-        (let* ((sent nil)
-               (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent))))
-          (agent-ui-show '(:id "board" :type "issues" :dir "/proj/" :select (:question "Which first?")))
-          (with-current-buffer canvas
-            (agent-ui--flush)
-            (should (string-search "Which first?" (buffer-string)))
-            (should (string-search "( ) p-4 P0" (buffer-string)))
-            (should (string-search "\n    Urgent ready" (buffer-string)))
-            (goto-char (point-min)) (search-forward "p-4") (goto-char (- (match-beginning 0) 4)) (agent-ui-button-press)
-            (should (equal (plist-get (agent-ui-get "board") :selected) '("p-4")))
-            (+test-aue-press "⏵ Answer (1 chosen)")
-            (should (equal sent '(("Answer to board (Which first?): p-4" t))))))))
-    (should (string-match-p "select is {"
-                            (+test-aue-error '(:type "issues" :dir "/proj/" :select ("x")))))))
-
 (ert-deftest agent-ui-elements/files-flat-and-tree ()
   (let ((files '((:path "src/parser.c" :status "changed" :added 12 :removed 3)
                  (:path "src/lexer.h" :status "added" :added 40)
@@ -3609,19 +3596,12 @@ column widens, it's sorted, or its rows are more than drawn."
   (should (string-match-p "only lines" (agent-ui-error-message (should-error (agent-ui-append-to '(:type "log") '(:show 3)) :type 'agent-ui-error)))))
 
 ;; doom-nwj.84
-(ert-deftest agent-ui-elements/negative-show-and-limit-refused ()
-  "A log's show and an issues board's limit below 0 are refused (a log showed
-no lines; a board said \"… 4 more\" for a column of 3)."
+(ert-deftest agent-ui-elements/negative-show-refused ()
+  "A log's show below 0 is refused (it showed no lines)."
   (should (string-match-p "log: show must be 0 or more, not -3"
                           (+test-aue-error '(:type "log" :lines "a\nb" :show -3))))
-  (should (string-match-p "issues: limit must be 0 or more, not -1"
-                          (+test-aue-error '(:type "issues" :dir "/proj/" :limit -1))))
-  ;; 0: allowed (the counts only; the columns' heads only).
-  (should (equal (+test-aue-draw '(:type "log" :lines "a\nb" :show 0)) "2 lines"))
-  (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
-    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
-    (should (string-prefix-p "Ready 2\n\n… 2 more\n\nIn progress 1"
-                             (+test-aue-draw '(:type "issues" :dir "/proj/" :limit 0) :width 40)))))
+  ;; 0: allowed (the counts only).
+  (should (equal (+test-aue-draw '(:type "log" :lines "a\nb" :show 0)) "2 lines")))
 
 (ert-deftest agent-ui-elements/log-wrong ()
   (should (string-match-p "line 1 must be" (+test-aue-error '(:type "log" :lines ((:level "loud" :text "x"))))))
@@ -4114,223 +4094,6 @@ and log: tab-aligned text stays aligned (each was 4 spaces: \"a    b\" and
   (should (string-match-p "to is before from" (+test-aue-error '(:type "code" :file "a" :from 5 :to 2))))
   (should (string-match-p "mark 1's kind" (+test-aue-error '(:type "code" :code "x" :marks ((:line 1 :kind "bad"))))))
   (should (string-match-p "mark 1 must be" (+test-aue-error '(:type "code" :code "x" :marks ((:kind "error")))))))
-
-;; ====== ISSUES ======
-
-(defconst +test-aue-issues
-  '(:ready ("p-1" "p-4")
-    :issues ((:id "p-1" :title "Ready one" :status "open" :priority 2
-              :description "**Why** it matters.\n\nMore, not shown.")
-             (:id "p-4" :title "Urgent ready" :status "open" :priority 0 :labels ("ui"))
-             (:id "p-2" :title "Working on it" :status "in_progress" :priority 1)
-             (:id "p-3" :title "Waits on p-2" :status "open" :priority 2
-              :dependencies ((:depends_on_id "p-2" :type "blocks") (:depends_on_id "p-5" :type "blocks")))
-             (:id "p-5" :title "Old" :status "closed" :closed_at "2026-01-01T00:00:00Z")
-             (:id "p-6" :title "New" :status "closed" :closed_at "2026-02-01T00:00:00Z")
-             (:id "p-e" :title "An epic" :status "open" :issue_type "epic")))
-  "A project's issues as fetched: p-3 blocked (open, not ready), waiting on
-p-2 (and p-5, closed).")
-
-(ert-deftest agent-ui-elements/issues-a-board ()
-  (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
-    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
-    (let ((element '(:type "issues" :dir "/proj/")))
-      ;; Side by side: by priority; done, the latest first; no epics. A card:
-      ;; its id (P0/P1), what it waits on or when it closed; its title; what
-      ;; it's about. A line between cards.
-      (should (equal (+test-aue-draw element :width 80)
-                     (string-join
-                      (mapcar (lambda (row) (string-trim-right (apply #'format "%-20s%-20s%-20s%s" row)))
-                              '(("Ready 2" "In progress 1" "Blocked 1" "Done 2")
-                                ("" "" "" "")
-                                ("p-4 P0" "p-2 P1" "p-3  ← p-2" "p-6  ✓ 2026-02-01")
-                                ("Urgent ready" "Working on it" "Waits on p-2" "New")
-                                ("" "" "" "")
-                                ("p-1" "" "" "p-5  ✓ 2026-01-01")
-                                ("Ready one" "" "" "Old")
-                                ("Why it matters." "" "" "")))
-                      "\n")))
-      (should (eq (+test-aue-face-at element "p-4") 'agent-ui-warning))
-      (should (eq (+test-aue-face-at element "Why it") 'agent-ui-muted))
-      ;; Narrow: one under another.
-      (should (string-prefix-p "Ready 2\n\np-4 P0\nUrgent ready\n\np-1\nReady one\nWhy it matters.\n\nIn progress 1"
-                               (+test-aue-draw element :width 40))))
-    ;; An epic's, a label's.
-    (puthash "/proj/" (list :ready nil :issues '((:id "e.1" :title "child" :status "in_progress")
-                                                 (:id "x" :title "other" :status "in_progress")))
-             agent-ui-issues--cache)
-    (should (string-match-p "In progress 1" (+test-aue-draw '(:type "issues" :dir "/proj/" :parent "e") :width 80)))
-    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
-    (should (string-match-p "Ready 1" (+test-aue-draw '(:type "issues" :dir "/proj/" :label "ui") :width 80)))
-    ;; Not fetched yet; bd failing.
-    ;; All led alike: the lead left out.
-    (puthash "/proj/" '(:ready ("a") :issues ((:id "a" :title "Agent UI element: diff" :status "open")
-                                              (:id "b" :title "Agent UI: a bug" :status "in_progress")))
-             agent-ui-issues--cache)
-    (let ((board (+test-aue-draw '(:type "issues" :dir "/proj/") :width 80)))
-      (should (string-match-p "^diff +a bug" (nth 3 (split-string board "\n"))))
-      (should-not (string-search "Agent UI" board)))
-    (should (equal (+test-aue-draw '(:type "issues" :dir "/other/")) "fetching the issues…"))
-    (puthash "/bad/" '(:error "no Beads issues here (bd failed)") agent-ui-issues--cache)
-    (should (equal (+test-aue-draw '(:type "issues" :dir "/bad/")) "no Beads issues here (bd failed)"))))
-
-;; doom-nz9
-(ert-deftest agent-ui-elements/issues-cards-read-whole ()
-  "A card's title is whole (wrapped), its description's first paragraph
-two lines at most (cut with …), and an empty column is as wide as its name:
-cards were one line, titles cut at 20 characters, and In progress 0 took a
-quarter of the board."
-  (let ((agent-ui-issues--cache (make-hash-table :test #'equal))
-        (long "a title long enough to need three lines in a column this narrow"))
-    (puthash "/proj/" (list :ready '("r")
-                            :issues (list (list :id "r" :title long :status "open"
-                                                :description (concat "# Heading\n- `code` and **bold** words, "
-                                                                     (string-join (make-list 30 "more") " ")))
-                                          '(:id "b" :title "Blocked" :status "open")
-                                          '(:id "d" :title "Done" :status "closed")))
-             agent-ui-issues--cache)
-    (let* ((board (+test-aue-draw '(:type "issues" :dir "/proj/") :width 80))
-           (lines (split-string board "\n")))
-      ;; In progress 0 takes its name's width; the other three share the rest.
-      (should (string-prefix-p (concat (format "%-22s" "Ready 1") "In progress 0  " (format "%-22s" "Blocked 1") "Done 1")
-                               (car lines)))
-      ;; Every word of the title; what it's about: its Markdown marks gone, two
-      ;; lines, the second cut.
-      (let* ((ready (mapcar (lambda (line) (string-trim-right (truncate-string-to-width line 20))) lines))
-             (about (cl-position "Heading code and" ready :test #'equal)))
-        (dolist (word (split-string long)) (should (member word (split-string (string-join ready " ")))))
-        (should about)
-        (should (string-match-p "\\`bold words, more.*…\\'" (nth (1+ about) ready)))
-        (should (member (nth (+ 2 about) ready) (quote (nil ""))))))))
-
-(ert-deftest agent-ui-elements/issues-ago ()
-  (let ((now (date-to-time "2026-11-13T12:00:00Z")))
-    (should (equal (agent-ui-issues--ago "2026-11-13T11:59:30Z" now) "1m ago"))
-    (should (equal (agent-ui-issues--ago "2026-11-13T09:00:00Z" now) "3h ago"))
-    (should (equal (agent-ui-issues--ago "2026-11-01T12:00:00Z" now) "12d ago"))
-    (should (equal (agent-ui-issues--ago "2026-01-01T12:00:00Z" now) "2026-01-01"))))
-
-;; doom-nwj.73
-(ert-deftest agent-ui-elements/issues-an-epics-children-by-parent ()
-  "An epic's board has its children linked by bd dep add (their ids not
-under its own: they were left out), and their children."
-  (let ((agent-ui-issues--cache (make-hash-table :test #'equal)))
-    (puthash "/proj/" '(:ready ("t-fas.1" "t-um4" "t-zz9" "t-oth")
-                        :issues ((:id "t-fas" :title "The epic" :status "open" :issue_type "epic")
-                                 (:id "t-fas.1" :title "By its id" :status "open" :parent "t-fas")
-                                 (:id "t-um4" :title "Linked" :status "open" :parent "t-fas")
-                                 (:id "t-zz9" :title "Grandchild" :status "open" :parent "t-um4")
-                                 (:id "t-oth" :title "Elsewhere" :status "open" :parent "t-other")
-                                 (:id "t-cyc" :title "A loop" :status "open" :parent "t-cyc")))
-             agent-ui-issues--cache)
-    (let ((board (+test-aue-draw '(:type "issues" :dir "/proj/" :parent "t-fas") :width 40)))
-      (should (string-prefix-p "Ready 3\n" board))
-      ;; Its own children by their short ids; one linked, whole.
-      (dolist (id '("\n.1\n" "\nt-um4\n" "\nt-zz9\n")) (should (string-search id board)))
-      (should-not (string-search "t-oth" board))
-      (should-not (string-search "t-cyc" board)))))
-
-(ert-deftest agent-ui-elements/issues-open-one ()
-  (let ((agent-ui-issues--cache (make-hash-table :test #'equal))
-        (opened nil))
-    (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
-    (let* ((agent-ui-open-issue-function (lambda (id dir) (push (list id dir) opened)))
-           (text (agent-ui-render '(:type "issues" :dir "/proj/") (agent-ui-context :width 80))))
-      (funcall (get-text-property (string-search "Working on" text) 'agent-ui-action text))
-      (should (equal opened '(("p-2" "/proj/")))))))
-
-;; doom-nwj.72
-(ert-deftest agent-ui-elements/issues-in-a-panel-redrawn ()
-  "A board in a panel is redrawn once its issues are fetched (only boards
-on the canvas were: the panel's said \"fetching the issues…\" forever)."
-  (let ((agent-ui-issues--cache (make-hash-table :test #'equal))
-        (fetched nil))
-    (cl-letf (((symbol-function 'agent-ui-issues-refresh) (lambda (dir) (push dir fetched))))
-      (+test-aue-canvas
-        (agent-ui-show '(:id "box" :type "panel" :title "Work"
-                         :children ((:id "board" :type "issues" :dir "/proj/"))))
-        (agent-ui-show '(:id "other" :type "panel" :children ((:id "t" :type "text" :text "unrelated"))))
-        (with-current-buffer canvas
-          (agent-ui--flush)
-          (should (string-search "fetching the issues…" (buffer-string)))
-          ;; Shown: fetched.
-          (should (member "/proj/" fetched))
-          ;; Its answer: the panel redrawn, the other not.
-          (puthash "/proj/" +test-aue-issues agent-ui-issues--cache)
-          (let ((redrawn nil))
-            (cl-letf* ((dirty (symbol-function 'agent-ui--dirty))
-                       ((symbol-function 'agent-ui--dirty) (lambda (ids) (setq redrawn ids) (funcall dirty ids))))
-              (agent-ui-issues--redraw "/proj/"))
-            (should (equal redrawn '("box"))))
-          (agent-ui--flush)
-          (should-not (string-search "fetching the issues…" (buffer-string)))
-          (should (string-search "Urgent ready" (buffer-string))))))))
-
-(ert-deftest agent-ui-elements/issues-fetched-by-bd ()
-  (unless (executable-find "bd") (ert-skip "No bd"))
-  (let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "issues-home-") t)))
-         (root (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "issues-") t))))
-         (process-environment (append (list (concat "HOME=" home) (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
-                                            "GIT_CONFIG_NOSYSTEM=1" "BD_ACTOR=Tester")
-                                      process-environment))
-         (default-directory root)
-         (agent-ui-issues--cache (make-hash-table :test #'equal)))
-    (with-temp-file (expand-file-name ".gitconfig" home)
-      (insert "[user]\n\tname = T\n\temail = t@example.invalid\n[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
-    (call-process "git" nil nil nil "init" "-q")
-    (should (zerop (call-process "bd" nil nil nil "init" "--quiet" "--prefix" "t")))
-    (call-process "bd" nil nil nil "create" "--silent" "--title=First" "--priority=1")
-    (+test-aue-canvas
-      (let ((agent-ui-file-directory root))
-        (agent-ui-show '(:id "board" :type "issues"))
-        ;; Shown: fetched in the background, then drawn.
-        (with-timeout (20 (ert-fail "Not fetched"))
-          (while (not (gethash root agent-ui-issues--cache)) (accept-process-output nil 0.05)))
-        (with-current-buffer canvas
-          (agent-ui--flush)
-          (should (string-match-p "Ready 1" (buffer-string)))
-          (should (string-match-p "t-[a-z0-9]+ P1\nFirst" (buffer-string))))))))
-
-;; doom-nwj.74
-(ert-deftest agent-ui-elements/issues-closed-ones-dont-push-open-ones-off ()
-  "Every issue not closed is fetched, the closed ones limited, the latest:
-with the limit over them all, by priority, closed P0 issues pushed open
-P4 ones off the board (Ready 1 of 6 where bd ready gave 6)."
-  (unless (executable-find "bd") (ert-skip "No bd"))
-  (let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "issues-home-") t)))
-         (root (file-name-as-directory (file-truename (make-temp-file (+test-tmp-file "issues-") t))))
-         (process-environment (append (list (concat "HOME=" home) (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
-                                            "GIT_CONFIG_NOSYSTEM=1" "BD_ACTOR=Tester")
-                                      process-environment))
-         (default-directory root)
-         (agent-ui-issues--cache (make-hash-table :test #'equal))
-         (agent-ui-issues-limit 2))
-    (with-temp-file (expand-file-name ".gitconfig" home)
-      (insert "[user]\n\tname = T\n\temail = t@example.invalid\n[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
-    (call-process "git" nil nil nil "init" "-q")
-    (should (zerop (call-process "bd" nil nil nil "init" "--quiet" "--prefix" "t")))
-    (cl-flet ((create (title priority)
-                (with-temp-buffer
-                  (call-process "bd" nil t nil "create" "--silent" (concat "--title=" title)
-                                (format "--priority=%d" priority))
-                  (string-trim (buffer-string)))))
-      (dotimes (i 3) (create (format "Open %d" i) 4))
-      (let ((closed (mapcar (lambda (i) (create (format "Closed %d" i) 0)) '(0 1 2))))
-        (call-process "bd" nil nil nil "close" (car closed))
-        ;; The others closed later (closed_at: seconds).
-        (sleep-for 1.1)
-        (apply #'call-process "bd" nil nil nil "close" (cdr closed))))
-    (agent-ui-issues-refresh root)
-    (with-timeout (30 (ert-fail "Not fetched"))
-      (while (not (gethash root agent-ui-issues--cache)) (accept-process-output nil 0.05)))
-    (let ((board (+test-aue-draw (list :type "issues" :dir root) :width 40)))
-      (should (string-prefix-p "Ready 3\n" board))
-      (dolist (i '(0 1 2)) (should (string-search (format "Open %d" i) board)))
-      ;; Done: the latest 2.
-      (should (string-search "Done 2" board))
-      (should (string-search "Closed 1" board))
-      (should (string-search "Closed 2" board))
-      (should-not (string-search "Closed 0" board)))))
 
 ;; ====== HEATMAP ======
 

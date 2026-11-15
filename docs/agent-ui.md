@@ -1,7 +1,7 @@
 # Agent UI
 
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line and MCP
-> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap` and `panel` types, sources (an element
+> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `heatmap` and `panel` types, sources (an element
 > following a command, a file, a poll), actions (buttons into the prompt), types the agent makes (kept or discarded by
 > you), elements in the conversation, canvases kept with their sessions, and what the agent is told. `M-x
 > +my/example-agent-ui` shows it ([Examples](examples.md)).
@@ -220,7 +220,6 @@ tab of its canvas's pane when first shown; a name is letters, digits, spaces, `_
 | `timeline` | Tasks as bars on a time axis (seconds or timestamps), running ones growing, coloured by status, a scale under them; SVG in the GUI | `tasks` |
 | `graph` | Nodes and edges, laid out in layers by itself (no Graphviz): boxes and curved arrows in the GUI, shrunk to fit (in a pane too narrow, downwards, or as text); each node's arrows as text; nodes coloured by status | `nodes`, `edges`, `direction` |
 | `code` | A snippet highlighted by its language's mode, lines numbered and linked to its file (`RET` opens it there), marked lines with notes; or a file's lines, read when drawn | `code`, `file`, `from`, `to`, `language`, `marks` |
-| `issues` | The project's Beads issues as a board (Ready, In progress, Blocked, Done), each a card: its title whole, its description's first lines, what it waits on or when it closed; an empty column as narrow as its name; fetched by bd in the background and refreshed after the agent's bd commands; an epic's or a label's only; `RET` opens an issue in Emacs's issue view; `select` asks you to pick issues | `dir`, `parent`, `label`, `limit`, `select` |
 | `heatmap` | A grid of cells coloured by value (a scale: blue, green-red, red-green) or by state (passed, failed, flaky...), a legend; SVG cells with values in the GUI; columns whose labels don't fit numbered, a key under it | `rows`, `columns`, `values`, `scale` |
 | `panel` | Elements laid out together: a row (side by side, by weights) or a column, in a border; panels nest; a row too narrow stacks; in the GUI, a row with a chart, graph or image is one image, its children side by side (their buttons not clickable there); chips and pies, a line high, stay in its text. Each child is an element of its own: updated, appended to, removed, shown again, snapshot, linked by its id (unique in the canvas), its source running with it | `children`, `layout`, `weights`, `border`, `min-width` |
 | `diff` | Changes from a unified diff: by file (lines added and removed) and hunk, coloured, line numbers; `RET` opens the file there; a source with `"into": "diff"` follows `git diff`. With `accept`, changes the agent proposes: each hunk accepted to begin with, `x` on one rejects it (again: back; or `RET` on its mark), Accept all / Reject all; Send puts "Answer to diff ID (question): accepted: FILE @@ … @@; rejected: …" (and your comments) into the session's prompt | `diff`, `dir`, `accept` |
@@ -345,7 +344,7 @@ Both are on; in `config.el`, `(setq agent-ui-focus-questions nil)` keeps the foc
 `(setq agent-ui-close-answered nil)` keeps answered questions on their canvas.
 
 When the agent's turn ends with a question on its session's canvases not answered (a `choice`, a `confirm`, a `form`, a
-`rank`, a `slider` to set, a `compare`, a plan to approve, hunks to accept, rows to pick in a `table`, `files` or `issues`, chips to pick in `tags`, a panel's child too), you see it:
+`rank`, a `slider` to set, a `compare`, a plan to approve, hunks to accept, rows to pick in a `table` or `files`, chips to pick in `tags`, a panel's child too), you see it:
 
 - the canvas's pane is shown (if it was closed), scrolled to the question, the cursor on it; the focus stays where it
   is;
@@ -511,12 +510,12 @@ A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
   in the reply alone. Kinds of information are matched to elements: figures `stats` (one against a target `gauge`),
   records `table`, a trend or distribution `chart`, two dimensions `heatmap`, a structure or flow `graph` or `mermaid`,
   durations `timeline`, code `code`, changes `diff`, files `files`, output `log`, categories `tags`, formulas `math`, a
-  write-up `markdown`, a picture `image`, a page `html`, several together `panel`. Issues and plans go there without
-  being asked (a project's or an epic's issues as the `issues` board, a plan or the current ticket's acceptance criteria
-  as `steps`). This comes before what agent-shell's text says of tables, images and diagrams in replies: they're for
-  when the canvas can't be used.
+  write-up `markdown`, a picture `image`, a page `html`, several together `panel`. Plans go there without being asked
+  (a plan or the current ticket's acceptance criteria as `steps`); a project's issues and their status don't, as you
+  follow them in Beads' own list ([Issues](issues.md)). This comes before what agent-shell's text says of tables,
+  images and diagrams in replies: they're for when the canvas can't be used.
 - **Asking:** a question goes on a canvas of its own (`--canvas ask`), as the interactive element that fits it: a list
-  to pick from a `choice` (or `select` on a table, files, issues), alternatives to see a `compare`, something risky a
+  to pick from a `choice` (or `select` on a table, files), alternatives to see a `compare`, something risky a
   `confirm`, a plan to agree on `steps` with `approve`, proposed changes a `diff` with `accept`, several values a `form`,
   an order a `rank`, a number a `slider`; the turn ended, the answer its next prompt. Only a quick question (2 to 4
   short options, nothing to show or compare) goes in the conversation, as AskUserQuestion, with agent-shell's forms on.
@@ -525,9 +524,9 @@ A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
 
 The MCP server's instructions, also in its system prompt, say the same: information there, questions there beyond a
 quick one, and its `bug` tool. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), is read in parts, as
-the agent needs them: SKILL.md, read first, says when to use the canvas (information, issues and plans, questions),
+the agent needs them: SKILL.md, read first, says when to use the canvas (information, plans, questions),
 the command, every type in a line by what it shows and the everyday ones
-(`progress`, `steps`, `table`, `issues`) with examples; its `references/` the rest, each read only when a task needs
+(`progress`, `steps`, `table`) with examples; its `references/` the rest, each read only when a task needs
 it: asking you (`asking.md`), figures (`data.md`), content and layout (`content.md`), following a command
 (`sources.md`), a type of its own (`custom-types.md`), a bug in Agent UI (`bugs.md`). A type's every property comes
 from `agent-ui types TYPE`. It's read from there, nothing to install (as other skills, it can be installed too:
@@ -561,7 +560,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
 | `config/agent-ui/finished.el` | A finished element closing itself, a countdown under it |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `issues`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider`, `compare`, `tags`, `gauge`, `countdown`, `math` (its MathJax script in `elements/math/tex2svg.js`), `mermaid` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider`, `compare`, `tags`, `gauge`, `countdown`, `math` (its MathJax script in `elements/math/tex2svg.js`), `mermaid` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |

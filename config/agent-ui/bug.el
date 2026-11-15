@@ -35,6 +35,11 @@ none, every report given back to report by hand.")
 \(a web page's address); nil: none yet."
   :type '(choice (const nil) string) :group 'agent-ui)
 
+(defcustom agent-ui-open-issue-function #'agent-ui-bug-show-issue
+  "Opens a bug just filed (RET right after b), given its id and its issues'
+folder."
+  :type 'function :group 'agent-ui)
+
 (defvar agent-ui-bug-filed-functions nil
   "Called when a bug was filed, with its issue's id, its title, whether it's
 new (nil: the report added to a similar open one) and the issues' folder.")
@@ -216,6 +221,18 @@ by hand."
     (goto-char (point-min))
     (display-buffer (current-buffer)))
   (message "%s (shown, and copied)" message))
+
+(defun agent-ui-bug-show-issue (id dir)
+  "Show issue ID of DIR's issues (bd show) in a buffer."
+  (let ((default-directory dir)
+        (buffer (get-buffer-create (format "*bd show %s*" id))))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (call-process "bd" nil t nil "show" id))
+      (special-mode)
+      (goto-char (point-min)))
+    (pop-to-buffer buffer)))
 
 (defun agent-ui-report-bug (what expected)
   "File a bug in Agent UI's own issues: WHAT's wrong, what you EXPECTED

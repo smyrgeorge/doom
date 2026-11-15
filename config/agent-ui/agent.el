@@ -182,11 +182,11 @@ distribution, chart; values across two dimensions, heatmap; a structure, \
 dependencies or a flow, graph or mermaid; durations over time, timeline; code, \
 code; changes, diff; files and their state, files; output, log; categories \
 with counts, tags; formulas, math; a write-up, markdown; a picture, image; a \
-web page, html; several of these together, a panel. Issues and plans go there \
-too, always, without being asked: a project's or an epic's issues (bd ready, an \
-epic's children) as the issues board, which follows your bd commands; a plan, \
-or the ticket you're working on, as steps (its acceptance criteria), ticked as \
-you go; a long build or test run as progress, steps, a table filling in. This \
+web page, html; several of these together, a panel. Plans go there too, \
+always, without being asked: a plan, or the ticket you're working on, as steps \
+(its acceptance criteria), ticked as you go; a long build or test run as \
+progress, steps, a table filling in. A project's issues and their status \
+aren't shown there: the user follows them in Beads' own list. This \
 comes before what's said above of tables, images and diagrams in your replies: \
 they're for when the canvas can't be used (the command exits with 3).
 
@@ -194,8 +194,8 @@ Asking: to ask the user something, show it on a canvas of its own (--canvas \
 ask: it takes the user's focus and closes once answered) as the interactive \
 element that fits the question, say so in a line and end your turn: the answer \
 comes as your next prompt. To pick from a list (which to fix, which files, \
-which approach), a choice (multiple: several), or select on a table, files or \
-issues you show; alternatives the user has to see, side by side, compare; \
+which approach), a choice (multiple: several), or select on a table or files \
+you show; alternatives the user has to see, side by side, compare; \
 before something risky (a force-push, a deploy, deleting data), a confirm, with \
 what will happen; a plan to agree on before you start, steps with approve; \
 changes you propose, diff with accept; several values at once, form; an order, \

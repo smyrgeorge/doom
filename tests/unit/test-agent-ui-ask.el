@@ -283,32 +283,31 @@ c comments its element, d removes it (the default canvas's was asked for)."
             labels))
 
 (ert-deftest agent-ui-ask/button-rows-fit-the-width ()
-  "A select's Answer / All / None (a table's, tags', files', issues'), a
+  "A select's Answer / All / None (a table's, tags', files'), a
 review's Send / Discard and a diff's Send / Accept all / Reject all: broken
 between their buttons to the width, none cut off, each a button (the canvas
 cuts its lines at its width: 37, 43, 61 columns at 24, the last buttons
 lost)."
-  (cl-letf (((symbol-function 'agent-ui-issues--fetch) #'ignore))
-    (dolist (width '(24 39 60))
-      (let ((ctx (agent-ui-context :width width :id "x")))
-        (dolist (case `(((:type "table" :columns ("Name") :rows (("a") ("b"))
-                          :select (:question "Which?" :multiple t))
-                         "⏵ Answer (0 chosen)" "⏵ All" "⏵ None")
-                        ((:type "tags" :tags ("bug" "ui") :select (:question "Which?" :multiple t))
-                         "⏵ Answer (0 chosen)" "⏵ All" "⏵ None")
-                        ((:type "files" :files ("a.c" "b.c") :select (:question "Which?" :multiple t))
-                         "⏵ Answer (0 chosen)" "⏵ All" "⏵ None")
-                        ((:type "code" :code "int x;" :comments ((:line 1 :text "why?")))
-                         "⏵ Send the review (1 comment)" "⏵ Discard")
-                        ((:type "diff" :accept t
-                          :diff "--- a/x.c\n+++ b/x.c\n@@ -1 +1 @@\n-a\n+b\n")
-                         "⏵ Send" "⏵ Accept all" "⏵ Reject all")))
-          (let ((text (agent-ui-render (car case) ctx)))
-            (should (equal (list width (plist-get (car case) :type) (+test-aua-fits text width))
-                           (list width (plist-get (car case) :type) t)))
-            ;; At 24, "⏵ Send the review (1 comment)" is cut: its start kept.
-            (should (+test-aua-buttons text (mapcar (lambda (label) (agent-ui-truncate label (1- width)))
-                                                    (cdr case))))))))))
+  (dolist (width '(24 39 60))
+    (let ((ctx (agent-ui-context :width width :id "x")))
+      (dolist (case `(((:type "table" :columns ("Name") :rows (("a") ("b"))
+                        :select (:question "Which?" :multiple t))
+                       "⏵ Answer (0 chosen)" "⏵ All" "⏵ None")
+                      ((:type "tags" :tags ("bug" "ui") :select (:question "Which?" :multiple t))
+                       "⏵ Answer (0 chosen)" "⏵ All" "⏵ None")
+                      ((:type "files" :files ("a.c" "b.c") :select (:question "Which?" :multiple t))
+                       "⏵ Answer (0 chosen)" "⏵ All" "⏵ None")
+                      ((:type "code" :code "int x;" :comments ((:line 1 :text "why?")))
+                       "⏵ Send the review (1 comment)" "⏵ Discard")
+                      ((:type "diff" :accept t
+                        :diff "--- a/x.c\n+++ b/x.c\n@@ -1 +1 @@\n-a\n+b\n")
+                       "⏵ Send" "⏵ Accept all" "⏵ Reject all")))
+        (let ((text (agent-ui-render (car case) ctx)))
+          (should (equal (list width (plist-get (car case) :type) (+test-aua-fits text width))
+                         (list width (plist-get (car case) :type) t)))
+          ;; At 24, "⏵ Send the review (1 comment)" is cut: its start kept.
+          (should (+test-aua-buttons text (mapcar (lambda (label) (agent-ui-truncate label (1- width)))
+                                                  (cdr case)))))))))
 
 (ert-deftest agent-ui-ask/a-button-row ()
   "Buttons on a line, broken between them where it would pass the width,

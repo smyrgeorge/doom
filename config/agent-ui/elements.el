@@ -29,7 +29,6 @@
 (load! "elements/timeline")
 (load! "elements/graph")
 (load! "elements/code")
-(load! "elements/issues")
 (load! "elements/heatmap")
 (load! "elements/panel")
 ;; Its options are elements of the others, laid out as a panel's row: last.

@@ -203,10 +203,13 @@ killed after."
       ;; Before what the editor's text says of tables, images and diagrams.
       (should (string-search "This comes before what's said above of tables, images and diagrams in your replies"
                              text))
-      ;; Issues and plans: on the canvas without being asked, each in its form.
-      (should (string-search "Issues and plans go there too, always, without being asked" text))
-      (should (string-search "as the issues board" text))
+      ;; Plans: on the canvas without being asked, as steps; a project's
+      ;; issues not: Beads' own list shows them (doom-ht6.29).
+      (should (string-search "Plans go there too, always, without being asked" text))
       (should (string-search "as steps (its acceptance criteria)" text))
+      (should (string-search "A project's issues and their status aren't shown there" text))
+      (should-not (string-search "issues board" text))
+      (should-not (string-search "files or issues" text))
       ;; Questions: on a canvas of its own, as the interactive element that
       ;; fits, the turn ended.
       (should (string-search "show it on a canvas of its own (--canvas ask:" text))
@@ -256,8 +259,12 @@ the canvas, what's needed only at times goes into its references.")
                        (setq pos (match-end 0)))
                      (sort names (lambda (a b) (string< (symbol-name a) (symbol-name b)))))
                    (agent-ui-types)))
-    ;; Issues and plans: shown without being asked (doom-nwj.20).
-    (should (string-search "**Issues and plans, always, without being asked:**" core))
+    ;; Plans: shown without being asked (doom-nwj.20); a project's issues
+    ;; not, nor picked from a board (doom-ht6.29).
+    (should (string-search "**Plans, always, without being asked:**" core))
+    (should (string-search "A project's issues and their status aren't shown" core))
+    (should-not (string-search "`issues`" skill))
+    (should-not (string-match-p "issues' ids\\|files, issues" skill))
     ;; Information goes on the canvas; questions too, beyond a quick one
     ;; (doom-ht6.28).
     (should (string-search "**Information goes here:**" core))
@@ -302,9 +309,7 @@ rest in references it points to, each read when the task needs it
 
 (ert-deftest agent-ui-agent/the-skills-examples-right ()
   "Each `agent-ui show/update/append ... '{...}'' in the skill: its JSON is
-right, and does what it says on a canvas, in order. Its issues board isn't
-fetched: bd would read this repository's own issues."
-  (cl-letf (((symbol-function 'agent-ui-issues-refresh) #'ignore))
+right, and does what it says on a canvas, in order."
   (+test-aua
     (let ((agent-ui-default-canvas (make-temp-name "skill-"))
           (skill (+test-aua-skill))
@@ -326,7 +331,7 @@ fetched: bd would read this repository's own issues."
       ;; Drawn without an error.
       (with-current-buffer (agent-ui-canvas)
         (agent-ui--flush)
-        (should-not (string-search "⚠" (buffer-string))))))))
+        (should-not (string-search "⚠" (buffer-string)))))))
 
 ;; ====== ACTIONS ======
 

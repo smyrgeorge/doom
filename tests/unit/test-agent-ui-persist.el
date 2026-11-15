@@ -159,6 +159,33 @@ lost)."
     ;; A canvas with elements already: left as it is.
     (should-not (agent-ui-persist-restore session))))
 
+;; doom-ht6.29
+(ert-deftest agent-ui-persist/a-type-dropped-since ()
+  "A canvas saved with an issues board (a type dropped since): back
+without an error, the board left out; in a panel, the panel back with its
+other children, their weights kept."
+  (+test-aup
+    (make-directory (file-name-directory (+test-aup-file)) t)
+    (with-temp-file (+test-aup-file)
+      (insert "[{\"id\":\"board\",\"type\":\"issues\",\"parent\":\"doom-ht6\"},"
+              "{\"id\":\"t\",\"type\":\"text\",\"text\":\"kept\"},"
+              "{\"id\":\"p\",\"type\":\"panel\",\"weights\":[1,2,3],\"children\":["
+              "{\"id\":\"a\",\"type\":\"text\",\"text\":\"a\"},"
+              "{\"id\":\"b2\",\"type\":\"issues\"},"
+              "{\"id\":\"c\",\"type\":\"panel\",\"children\":[{\"id\":\"b3\",\"type\":\"issues\"},"
+              "{\"id\":\"d\",\"type\":\"text\",\"text\":\"d\"}]}]}]"))
+    (should (= (agent-ui-persist-restore session) 2))
+    ;; The canvas's elements, its panels' children after them.
+    (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas name)) '("t" "p" "a" "c" "d")))
+    (let ((panel (agent-ui-get "p" :canvas name)))
+      (should (equal (mapcar (lambda (c) (plist-get c :id)) (plist-get panel :children)) '("a" "c")))
+      (should (equal (plist-get panel :weights) '(1 3)))
+      (should (equal (mapcar (lambda (c) (plist-get c :id)) (plist-get (cadr (plist-get panel :children)) :children))
+                     '("d"))))
+    (with-current-buffer (agent-ui-canvas-buffer-name name)
+      (agent-ui--flush)
+      (should-not (string-search "⚠" (buffer-string))))))
+
 (ert-deftest agent-ui-persist/nothing-kept-nothing-back ()
   (+test-aup
     (should-not (agent-ui-persist-restore session))

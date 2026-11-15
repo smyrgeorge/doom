@@ -27,10 +27,9 @@ This file is the core. The rest is in `references/`, each read only when your ta
   structure, steps, changes, output): show it as the element that fits it ([The types](#the-types)), and keep your
   reply to the words: what you found, what it means, what's next, a line saying what's on the canvas. Tables, charts
   and diagrams go here rather than into your reply. What a sentence or two holds stays in the reply alone.
-- **Issues and plans, always, without being asked:** a project's or an epic's issues (`bd ready`, an epic's
-  children, a label's): the `issues` board, which follows your bd commands by itself. A search's results or a few
-  chosen tickets: a `table` (`key` the id). A plan, or the ticket you're working on: `steps`, its acceptance criteria
-  as the steps, ticked as you go.
+- **Plans, always, without being asked:** a plan, or the ticket you're working on: `steps`, its acceptance criteria
+  as the steps, ticked as you go. A project's issues and their status aren't shown: the user follows them in Beads'
+  own list. A few tickets to talk through or pick from: a `table` (`key` the id).
 - **Questions:** asked here, as the interactive element that fits ([asking.md](references/asking.md)), on a canvas
   of its own (`--canvas ask`), then end your turn: the answer comes as your next prompt. Only a quick question (2 to 4
   short options, nothing to show or compare): AskUserQuestion, in the conversation, if you have it.
@@ -75,10 +74,10 @@ and `clear` are a canvas's own. It closes, is kept and comes back with your sess
 Pick the one that fits what you have to tell.
 
 - **Here, below:** `progress` a run, a bar; `steps` a plan, a task's progress; `table` records, results, filled in
-  by key; `issues` the project's Beads issues as a board.
+  by key.
 - **Asking the user** ([asking.md](references/asking.md)): `choice` pick from a list; `compare` alternatives to see
   side by side; `confirm` yes or no before something risky; `form` several values at once; `rank` an order; `slider`
-  a number in a range; `todo` a checklist you both tick. Also: picking rows, files, issues or chips (`select`), a plan
+  a number in a range; `todo` a checklist you both tick. Also: picking rows, files or chips (`select`), a plan
   to approve (`steps`), changes to accept (`diff`).
 - **Figures** ([data.md](references/data.md)): `stats` a few figures and their changes; `gauge` one against its
   target or limits; `chart` a trend, a series, a distribution; `heatmap` values across two dimensions; `timeline`
@@ -131,17 +130,6 @@ agent-ui show '{"id":"tests","type":"table","title":"Tests","columns":["Test","R
 agent-ui append tests '{"rows":[["lexer","running",null],["parser","running",null]]}'
 agent-ui append tests '{"rows":[["lexer","passed","0.4s"]]}'
 agent-ui update tests '{"sort":"Time","descending":true,"row-actions":[{"label":"Fix","prompt":"Fix the failing test {Test}"}]}'
-```
-
-### `issues`
-
-The project's Beads issues as a board: Ready, In progress, Blocked, Done (the latest first), each issue a card: its
-title whole, what it's about, P0/P1 marked. `parent` shows an epic's issues only, `label` those with it, `limit` per
-column; `dir` is the project (default: your directory). Fetched by bd in the background, refreshed after your bd
-commands; `RET` opens an issue. To keep the work's state in view while you go through an epic.
-
-```sh
-agent-ui show '{"id":"board","type":"issues","title":"The epic","parent":"doom-erp","limit":6}'
 ```
 
 ## Actions: buttons for the user
