@@ -609,6 +609,17 @@ its `kill-buffer-hook'."
                                (with-selected-frame frame
                                  (agent-workspace-layout app))))))))
 
+(defun agent-workspace--resize-own (frame fun)
+  "FUN called to resize FRAME's windows, the app's own change (the room's
+compose line fitted to its text), not a border dragged: the sizes it leaves
+taken as laid out, neither laid out again nor counted by
+`agent-workspace--resized-h'. Not called while the sizes aren't as laid out
+\(a resize not seen yet: the layout after it does it)."
+  (when-let* ((app (agent-workspace--app (frame-parameter frame 'agent-workspace)))
+              ((equal (agent-workspace--sizes-now frame) (agent-workspace--app-sizes app))))
+    (funcall fun)
+    (setf (agent-workspace--app-sizes app) (agent-workspace--sizes-now frame))))
+
 (add-hook 'window-size-change-functions #'agent-workspace--resized-h)
 
 ;; ====== THE CREW CHANGING ======

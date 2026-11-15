@@ -19,7 +19,11 @@
 ;;   (its "→ ada" before the text). Busy, an agent gets it after its turn
 ;;   (agent-shell's queue), said. # at its start offers the agents, their roles
 ;;   and all as it's typed (Corfu; TAB completes it too), a # further on is
-;;   text; M-p / M-n your messages; typing "#name " selects that agent.
+;;   text; M-p / M-n your messages; typing "#name " selects that agent. 3
+;;   lines of text, more as its text needs them (wrapped, its newlines), its
+;;   rows the feed's: up to `agent-workspace-compose-max-lines' or half the
+;;   room, scrolling past them; 3 again once sent. The app's own change, not a
+;;   border dragged: not laid out again for it, and a layout keeps it.
 ;;
 ;; Kept per project, per machine: .agent-shell/agent-workspace/room.jsonl, its
 ;; last `agent-workspace-room-kept' entries.
@@ -50,6 +54,17 @@ more; at the bottom in narrower ones), or `bottom'."
 
 (defcustom agent-workspace-room-height 16
   "The room's height, at the bottom."
+  :type 'natnum
+  :group 'agent-workspace)
+
+(defcustom agent-workspace-compose-lines 3
+  "The compose line's lines of text, at least: it grows as its text needs."
+  :type 'natnum
+  :group 'agent-workspace)
+
+(defcustom agent-workspace-compose-max-lines 10
+  "The most lines of text the compose line grows to (half the room at most):
+past them, it scrolls."
   :type 'natnum
   :group 'agent-workspace)
 
@@ -487,14 +502,17 @@ added), \"handed doom-a1b back to ken\"."
   (propertize "  #name  #role  #all  ·  RET send  TAB complete  M-p / M-n history" 'face 'shadow))
 
 (defun agent-workspace--compose-typed ()
-  "After a command in the compose line: \"#name \" typed selects that agent."
+  "After a command in the compose line: \"#name \" typed selects that agent;
+the line sized to its text."
   (save-excursion
     (goto-char (point-min))
     (when (looking-at "#\\([a-z][a-z0-9-]*\\) ")
       (when-let* ((agent (agent-workspace-agent (match-string 1) agent-workspace--room-project)))
         (unless (eq agent (agent-workspace--compose-target agent-workspace--room-project))
           (agent-workspace-select agent)
-          (agent-workspace--compose-prompt-draw))))))
+          (agent-workspace--compose-prompt-draw)))))
+  (when-let* ((window (get-buffer-window (current-buffer))))
+    (agent-workspace--compose-fit-own window)))
 
 (defun agent-workspace--compose-corfu ()
   "With Corfu, in the compose line: # opens its completion as it's typed, not
@@ -596,6 +614,64 @@ space: \"#ada \" selects ada."
   (interactive "p")
   (agent-workspace-compose-previous (- (or n 1))))
 
+;; ====== ITS HEIGHT ======
+
+(defun agent-workspace--compose-text-lines (window)
+  "The lines WINDOW's text, the compose line's, takes as shown: wrapped, its
+newlines (a last one too)."
+  (with-current-buffer (window-buffer window)
+    (count-screen-lines (point-min) (point-max) t window)))
+
+(defun agent-workspace--compose-lines (window)
+  "The lines of text WINDOW, the compose line's, is to show: its text's
+\(`agent-workspace--compose-text-lines'), at least
+`agent-workspace-compose-lines', at most `agent-workspace-compose-max-lines'
+or as many as keep it within half the room (its feed and it)."
+  (let* ((feed (window-prev-sibling window))
+         (room (+ (window-pixel-height window) (if feed (window-pixel-height feed) 0)))
+         (chrome (- (window-pixel-height window) (window-body-height window t)))
+         (half (/ (- (/ room 2) chrome) (window-default-line-height window))))
+    (max agent-workspace-compose-lines
+         (min (agent-workspace--compose-text-lines window) agent-workspace-compose-max-lines half))))
+
+(defun agent-workspace--compose-fit (window)
+  "WINDOW, the compose line's, sized to show its text
+\(`agent-workspace--compose-lines'): its rows taken from the feed above it,
+or given back. A feed following its end still shows its last line; all the
+text fitting, it's shown from its start."
+  (when-let* ((feed (window-prev-sibling window))
+              ((window-parameter feed 'agent-workspace-room)))
+    (let* ((line (window-default-line-height window))
+           (delta (- (* (agent-workspace--compose-lines window) line) (window-body-height window t)))
+           ;; Never more than the feed can give.
+           (delta (min delta (- (window-pixel-height feed) (window-min-size feed nil nil t)))))
+      (unless (zerop delta)
+        (let ((following (with-current-buffer (window-buffer feed)
+                           (and (derived-mode-p 'agent-workspace-room-mode)
+                                (agent-workspace--room-last-line-p (window-point feed))))))
+          (adjust-window-trailing-edge feed (- delta) nil t)
+          (when following
+            (with-selected-window feed (recenter -1)))))
+      (when (<= (agent-workspace--compose-text-lines window) (/ (window-body-height window t) line))
+        (set-window-start window (with-current-buffer (window-buffer window) (point-min)) t)))))
+
+(defun agent-workspace--compose-fit-own (window)
+  "WINDOW, the compose line's, sized to its text: the app's own change, not a
+border dragged (`agent-workspace--resize-own')."
+  (agent-workspace--resize-own (window-frame window)
+                               (lambda () (agent-workspace--compose-fit window))))
+
+(defun agent-workspace--compose-resized-h (frame)
+  "FRAME's compose line, its width changed (the frame resized, the room
+moved): sized to its text again, unless the app's laid out again (that does
+it). After `agent-workspace--resized-h' in `window-size-change-functions'."
+  (dolist (window (window-list frame 'nomini))
+    (when (and (eq (buffer-local-value 'major-mode (window-buffer window)) 'agent-workspace-compose-mode)
+               (/= (window-pixel-width window) (window-pixel-width-before-size-change window)))
+      (agent-workspace--compose-fit-own window))))
+
+(add-hook 'window-size-change-functions #'agent-workspace--compose-resized-h 90)
+
 ;; ====== ITS COMMANDS ======
 
 (defun agent-workspace-room-compose (&optional to)
@@ -692,11 +768,13 @@ bottom, or all of it (the room alone). The window left for the stage, or nil."
         (dolist (parameter '(mode-line-format tab-line-format))
           (set-window-parameter room parameter 'none))
         (set-window-parameter room 'agent-workspace-room t)
+        (agent-workspace--compose-prompt-draw project)
         (when compose
           (set-window-buffer compose (agent-workspace--compose-buffer project))
           (dolist (parameter '(mode-line-format tab-line-format))
             (set-window-parameter compose parameter 'none))
-          (set-window-parameter compose 'agent-workspace-room t))
-        (agent-workspace--room-redraw project)
-        (agent-workspace--compose-prompt-draw project)))
+          (set-window-parameter compose 'agent-workspace-room t)
+          ;; Its height, its text's (3 lines at least), from the feed.
+          (agent-workspace--compose-fit compose))
+        (agent-workspace--room-redraw project)))
     (unless alone area)))

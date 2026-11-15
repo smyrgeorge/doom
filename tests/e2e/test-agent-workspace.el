@@ -107,27 +107,46 @@ to what it was."
                           (window-list nil 'nomini)))
     (should-not (get-buffer (format "*issues · %s*" (file-name-nondirectory (directory-file-name project)))))))
 
+(defun +test-e2e-aw--text-lines (window)
+  "The lines of text WINDOW shows whole, as drawn."
+  (/ (window-body-height window t) (window-default-line-height window)))
+
 (ert-deftest e2e-agent-workspace/the-room ()
   "The room beside the stage in a wide frame: its feed above its compose line
-(3 rows); a message sent from it said in the feed, which follows its end."
+(3 lines of text, its header line above them); the compose line growing as
+its text needs, the app not laid out again for it, the feed following its
+end; a message sent from it said in the feed, the compose line 3 lines
+again."
   (let ((+test-e2e-frame-size '(230 . 50)))
     (+test-e2e-aw
       (let* ((sent nil)
+             (app (agent-workspace--app project))
              (feed (get-buffer-window (agent-workspace--room-buffer project)))
              (compose (get-buffer-window (agent-workspace--compose-buffer project))))
         (should (window-live-p feed))
         (should (window-live-p compose))
-        (should (= (window-total-height compose) 3))
+        (should (= (+test-e2e-aw--text-lines compose) 3))
         (should (= (window-total-width feed) agent-workspace-room-width))
         (cl-letf (((symbol-function 'agent-workspace-send)
                    (lambda (agent text &rest _) (push (list (agent-workspace-agent-name agent) text) sent) 'sent)))
           (dotimes (i 40)
             (agent-workspace-room-post project :kind 'note :text (format "note %d" i)))
+          (+test--pump 0.2)
           (with-selected-window compose
-            (insert "#sam look at this")
-            (agent-workspace-compose-send)))
+            (insert "#sam look at this\n2\n3\n4\n5\n6")
+            (agent-workspace--compose-typed))
+          (+test--pump 0.5)
+          (should (eq (get-buffer-window (agent-workspace--compose-buffer project)) compose))
+          (should (= (+test-e2e-aw--text-lines compose) 6))
+          (should-not (agent-workspace--app-resizes app))
+          (should (= (window-end feed t) (with-current-buffer (window-buffer feed) (point-max))))
+          (with-selected-window compose
+            (agent-workspace-compose-send)
+            (agent-workspace--compose-typed)))
         (+test--pump 0.2)
-        (should (equal sent '(("sam" "look at this"))))
+        (should (equal sent '(("sam" "look at this\n2\n3\n4\n5\n6"))))
+        (should (= (+test-e2e-aw--text-lines compose) 3))
+        (should-not (agent-workspace--app-resizes app))
         (with-current-buffer (window-buffer feed)
           (should (string-search "→ sam look at this" (buffer-string))))
         ;; The feed shows its end.
