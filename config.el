@@ -183,6 +183,10 @@
 ;; AGENT UI (what the agent shows beyond its replies: progress, tables, charts)
 (load! "config/agent-ui")
 
+;; AGENT WORKSPACE (a crew of coding agents on one project, each in its own
+;; worktree, with a name, a role and a state)
+(load! "config/agent-workspace")
+
 ;; NOTIFICATIONS (on the desktop while Emacs isn't in front: Claude Code
 ;; finished, or needs your permission; SPC t n)
 (load! "config/notify")

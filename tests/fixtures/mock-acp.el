@@ -1,0 +1,150 @@
+;;; tests/fixtures/mock-acp.el -*- lexical-binding: t; -*-
+;; A stand-in coding agent for the tests: it speaks ACP (JSON-RPC, a message a
+;; line, on stdin and stdout), as claude-agent-acp does, so agent-shell runs a
+;; real session with it, without Claude. Run by a batch Emacs:
+;;
+;;   emacs --batch -Q -l tests/fixtures/mock-acp.el -f mock-acp-main
+;;
+;; What a prompt says decides what it does:
+;;   "permission"  asks to run a tool (a permission request), runs it once
+;;                 answered, ends its turn
+;;   "hold"        says so, then works until it's cancelled (session/cancel)
+;;   "slow"        says so, works a second and a half, ends its turn
+;;   "child"       starts a child process (sleep 300, in a process group of its
+;;                 own) and holds, saying its pid
+;;   "fail"        fails the prompt (an error)
+;;   "exit"        exits, as an agent that crashed
+;;   else          answers "ok: PROMPT" and ends its turn
+;;
+;; With MOCK_ACP_LOG set, every message it gets is appended to that file (a
+;; JSON object a line: its agent, cwd, method, params), and its environment
+;; when it starts, for the tests to read.
+
+(require 'cl-lib)
+(require 'json)
+(require 'subr-x)
+
+(defvar mock-acp--holding nil "The id of the prompt being held (until cancelled).")
+(defvar mock-acp--asking nil "Our permission request's id and the prompt's: (OURS . PROMPT).")
+(defvar mock-acp--next-id 1000 "The next id of a request of ours.")
+
+(defun mock-acp--send (object)
+  "Write OBJECT as a JSON line."
+  (princ (concat (json-serialize object) "\n")))
+
+(defun mock-acp--log (object)
+  "Append OBJECT to MOCK_ACP_LOG, if set."
+  (when-let* ((file (getenv "MOCK_ACP_LOG")))
+    (write-region (concat (json-serialize
+                           `(:agent ,(or (getenv "AGENT_WORKSPACE_AGENT") :null)
+                             :cwd ,(expand-file-name default-directory)
+                             ,@object))
+                          "\n")
+                  nil file t 'silent)))
+
+(defun mock-acp--result (id result)
+  (mock-acp--send `(:jsonrpc "2.0" :id ,id :result ,result)))
+
+(defun mock-acp--update (session update)
+  (mock-acp--send `(:jsonrpc "2.0" :method "session/update"
+                    :params (:sessionId ,session :update ,update))))
+
+(defun mock-acp--say (session text)
+  (mock-acp--update session `(:sessionUpdate "agent_message_chunk"
+                              :content (:type "text" :text ,text))))
+
+(defun mock-acp--prompt-text (params)
+  "The text of a prompt's PARAMS."
+  (mapconcat (lambda (block) (or (gethash "text" block) "")) (gethash "prompt" params) ""))
+
+(defun mock-acp--prompt (id params)
+  "Prompt ID with PARAMS: do what it says (see above)."
+  (let ((session (gethash "sessionId" params))
+        (text (mock-acp--prompt-text params)))
+    (cond
+     ((string-match-p "permission" text)
+      (mock-acp--update session '(:sessionUpdate "tool_call" :toolCallId "t1"
+                                  :title "npm install" :kind "execute" :status "pending"))
+      (let ((ours (cl-incf mock-acp--next-id)))
+        (setq mock-acp--asking (cons ours id))
+        (mock-acp--send
+         `(:jsonrpc "2.0" :id ,ours :method "session/request_permission"
+           :params (:sessionId ,session
+                    :toolCall (:toolCallId "t1" :title "npm install" :kind "execute" :status "pending")
+                    :options [(:optionId "allow" :name "Allow" :kind "allow_once")
+                              (:optionId "reject" :name "Reject" :kind "reject_once")])))))
+     ((string-match-p "slow" text)
+      (mock-acp--say session "slowly")
+      (sleep-for 1.5)
+      (mock-acp--result id '(:stopReason "end_turn")))
+     ((string-match-p "hold" text)
+      (mock-acp--say session "holding")
+      (setq mock-acp--holding id))
+     ((string-match-p "child" text)
+      ;; A child of its own, in a process group of its own (as a command
+      ;; run in a session of its own): the agent's group signalled, it stays.
+      (let ((pid (process-id (make-process :name "child" :connection-type 'pipe :noquery t
+                                           :command '("perl" "-e" "setpgrp(0,0); exec q(sleep), 300")))))
+        (mock-acp--log `(:child ,pid))
+        (mock-acp--say session (format "child %s" pid)))
+      (setq mock-acp--holding id))
+     ((string-match-p "fail" text)
+      (mock-acp--send `(:jsonrpc "2.0" :id ,id :error (:code -32603 :message "mock failure"))))
+     ((string-match-p "exit" text)
+      (kill-emacs 3))
+     (t
+      (mock-acp--say session (format "ok: %s" text))
+      (mock-acp--result id '(:stopReason "end_turn"))))))
+
+(defun mock-acp--handle (message)
+  "Handle MESSAGE, a JSON-RPC object (a hash table)."
+  (let ((id (gethash "id" message))
+        (method (gethash "method" message))
+        (params (gethash "params" message)))
+    (mock-acp--log `(:method ,(or method :null) :params ,(or params :null)))
+    (pcase method
+      ("initialize"
+       (mock-acp--result id '(:protocolVersion 1
+                              :agentCapabilities (:loadSession :false
+                                                  :promptCapabilities (:image :false :embeddedContext :false))
+                              :authMethods [])))
+      ("session/new"
+       (mock-acp--result id '(:sessionId "mock-session"
+                              :modes (:currentModeId "default"
+                                      :availableModes [(:id "default" :name "Default")
+                                                       (:id "plan" :name "Plan")]))))
+      ("session/set_mode" (mock-acp--result id '()))
+      ("session/set_model" (mock-acp--result id '()))
+      ("session/prompt" (mock-acp--prompt id params))
+      ("session/cancel"
+       (when mock-acp--asking
+         (setq mock-acp--holding (cdr mock-acp--asking)
+               mock-acp--asking nil))
+       (when mock-acp--holding
+         (mock-acp--result mock-acp--holding '(:stopReason "cancelled"))
+         (setq mock-acp--holding nil)))
+      ('nil
+       ;; A response to our permission request: the tool runs, the turn ends.
+       (when (and mock-acp--asking (equal id (car mock-acp--asking)))
+         (let ((prompt (cdr mock-acp--asking)))
+           (setq mock-acp--asking nil)
+           (mock-acp--update "mock-session" '(:sessionUpdate "tool_call_update" :toolCallId "t1"
+                                              :status "completed"))
+           (mock-acp--say "mock-session" "ran it")
+           (mock-acp--result prompt '(:stopReason "end_turn")))))
+      (_
+       (when id
+         (mock-acp--send `(:jsonrpc "2.0" :id ,id
+                           :error (:code -32601 :message ,(format "no method %s" method)))))))))
+
+(defun mock-acp-main ()
+  "Serve ACP on stdin and stdout until stdin closes."
+  (mock-acp--log `(:start (:BEADS_ACTOR ,(or (getenv "BEADS_ACTOR") :null)
+                           :BEADS_DIR ,(or (getenv "BEADS_DIR") :null)
+                           :pid ,(emacs-pid))))
+  (while t
+    (let ((line (condition-case nil
+                    (read-from-minibuffer "")
+                  (error (kill-emacs 0)))))
+      (unless (string-empty-p (string-trim line))
+        (mock-acp--handle (json-parse-string line :null-object nil :false-object nil))))))

@@ -6,6 +6,7 @@
 | `config.el` | The main config; loads `config/` |
 | `config/agent-shell.el`, `agent-shell/` | [Claude Code](claude-code.md), drawing for it, its issues |
 | `config/agent-ui.el`, `agent-ui/` | [Agent UI](agent-ui.md): what the agent shows beyond its replies (being built) |
+| `config/agent-workspace.el`, `agent-workspace/` | [Agent workspace](agent-workspace.md): a crew of agents on one project, each in its own worktree (being built) |
 | `config/notify.el`, `notify/` | [Notifications](notifications.md) on the desktop while Emacs isn't in front |
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
 | `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |
