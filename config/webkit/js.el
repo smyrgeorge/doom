@@ -113,3 +113,60 @@ until it has said it."
               (when-let* ((watch +my/webkit-watch-function)
                           (xwidget (+my/webkit-xwidget window)))
                 (funcall watch window xwidget)))))))))
+
+;; THE READING PLACE
+;; WebKit keeps a page's scroll in pixels: its pane narrowed or widened (tiling
+;; resizes panes all the time), the text laid out anew, another part of it was
+;; at the top. So each page, once loaded, keeps what's at its top as it's
+;; scrolled (the deepest block there: not one that's fixed or sticky, an image
+;; or an SVG whole; and how far into it the top is, or how far above it), and
+;; puts it back at the top as its view is resized. At the very top it stays at
+;; the top. A page scrolled in an element of its own (PDF.js) or not at all (a
+;; drawing) isn't concerned.
+(defconst +my/webkit--place-js
+  "(function () {
+  if (window.emacsPlace) return;
+  var anchor = null, pending = false;
+  function block(element) {
+    var style = getComputedStyle(element);
+    return style.position !== 'fixed' && style.position !== 'sticky' && !/^inline/.test(style.display);
+  }
+  function first(parent) {
+    for (var child = parent.firstElementChild; child; child = child.nextElementSibling) {
+      var box = child.getBoundingClientRect();
+      if (box.height > 0 && box.bottom > 0 && block(child)) return child;
+    }
+    return null;
+  }
+  function top() {
+    var found = null, next = document.body && first(document.body);
+    while (next) {
+      found = next;
+      if (next.getBoundingClientRect().top >= 0 || /^(svg|img|canvas|video|iframe)$/i.test(next.tagName)) break;
+      next = first(next);
+    }
+    return found;
+  }
+  function record() {
+    pending = false;
+    var element = window.scrollY > 0 ? top() : null;
+    if (!element) { anchor = null; return; }
+    var box = element.getBoundingClientRect();
+    anchor = {element: element, top: box.top, part: box.top < 0 ? -box.top / box.height : 0};
+  }
+  function restore() {
+    if (!anchor || !anchor.element.isConnected) return;
+    var box = anchor.element.getBoundingClientRect();
+    window.scrollBy(0, box.top - (anchor.top < 0 ? -anchor.part * box.height : anchor.top));
+  }
+  addEventListener('scroll', function () {
+    if (!pending) { pending = true; requestAnimationFrame(record); }
+  }, {passive: true});
+  addEventListener('resize', restore);
+  window.emacsPlace = {anchor: function () { return anchor && anchor.element; }};
+})();"
+  "JavaScript keeping a page's reading place (see above).")
+
+(defun +my/webkit--keep-place (xwidget)
+  "XWIDGET's page, just loaded, keeps its reading place (see above)."
+  (+my/webkit-execute +my/webkit--place-js xwidget))

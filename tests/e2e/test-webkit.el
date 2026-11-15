@@ -1,7 +1,7 @@
 ;;; tests/e2e/test-webkit.el -*- lexical-binding: t; -*-
 ;; config/webkit.el in a GUI Emacs, with real WebKit views: a page per window,
 ;; splits, spare and kept views, links out, JavaScript, the title read, copy,
-;; scrolling, closing.
+;; scrolling, the reading place kept as a pane is resized, closing.
 
 (+test-load "config/childframe" "config/window" "config/webkit")
 
@@ -30,8 +30,22 @@ addEventListener('scroll', say); addEventListener('resize', say); say();
 (defvar +test-webkit--loaded nil
   "The xwidgets whose page loaded, the latest first.")
 
+(defvar +test-webkit--long
+  (+test-file "page/long.html"
+              (concat "<!doctype html><html><head><meta charset=\"utf-8\"><title>tp {\"long\":1}</title>"
+                      "<style>body{margin:0 1em;font:16px sans-serif}</style></head><body>"
+                      (mapconcat (lambda (n)
+                                   (format "<p id=\"p%d\">%d. %s</p>" n n
+                                           (string-join (make-list (+ 30 (% (* n 7) 40)) "Words to read") " ")))
+                                 (number-sequence 1 120) "")
+                      "</body></html>"))
+  "A long text page: 120 paragraphs of text (p1...), to reflow.")
+
+(defvar +test-webkit--file nil
+  "The test page's file (nil: `+test-webkit--page').")
+
 (defun +test-webkit--url (_window)
-  (+my/webkit-file-url +test-webkit--page))
+  (+my/webkit-file-url (or +test-webkit--file +test-webkit--page)))
 
 (defun +test-webkit--watch (window xwidget)
   (push (cons window (+my/webkit-title-json xwidget "tp ")) +test-webkit--watched))
@@ -493,6 +507,56 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s)")
       (with-current-buffer "*test page*"
         (+my/webkit-half-screen-down))
       (should (+test-wait-for (lambda () (> (funcall y xwidget) 100)) 3)))))
+
+(defconst +test-webkit--top-js
+  "(() => { const p = [...document.querySelectorAll('p')].find((p) => p.getBoundingClientRect().bottom > 0);
+  const box = p.getBoundingClientRect();
+  return JSON.stringify({id: p.id, part: -box.top / box.height, y: scrollY, w: innerWidth}); })()"
+  "The paragraph at the page's top, how far into it the top is (0: its top).")
+
+(defun +test-webkit--top (xwidget)
+  (json-parse-string (+test-js xwidget +test-webkit--top-js) :object-type 'plist))
+
+(defun +test-webkit--resized (xwidget width)
+  "XWIDGET's page once WIDTH pixels wide, laid out and scrolled (a moment)."
+  (should (+test-wait-for (lambda () (= (plist-get (+test-webkit--top xwidget) :w) width)) 5))
+  (+test-sleep 0.3))
+
+(ert-deftest e2e-webkit/the-reading-place-kept-as-the-pane-is-resized ()
+  "A long text page, a paragraph at its top (or 40% of one), the pane narrowed
+to 40 columns and widened again: the same paragraph at its top each time (its
+text laid out anew, the scroll in pixels other); at the very top, the top."
+  (+test-webkit
+    (let ((+test-webkit--file +test-webkit--long))
+      (+test-webkit--open)
+      (let* ((pane (selected-window))
+             (wide (window-body-width pane t))
+             (xwidget (+my/webkit-xwidget pane)))
+        (pcase-dolist (`(,id ,part) '(("p60" 0) ("p30" 0.4)))
+          (+test-js xwidget (format "(() => { const p = document.getElementById('%s');
+  scrollTo(0, p.offsetTop + %s * p.offsetHeight); return 'ok'; })()" id part))
+          (+test-sleep 0.3)
+          (let ((y (plist-get (+test-webkit--top xwidget) :y)))
+            (should (equal (plist-get (+test-webkit--top xwidget) :id) id))
+            (let ((other (split-window pane 40 'right)))
+              (+test-webkit--resized xwidget (window-body-width pane t))
+              (let ((top (+test-webkit--top xwidget)))
+                (should (equal (list id (plist-get top :id)) (list id id)))
+                ;; Laid out anew: the place in pixels is another.
+                (should (> (plist-get top :y) (* 1.5 y)))
+                (should (< (abs (- (plist-get top :part) part)) 0.1)))
+              (delete-window other))
+            (+test-webkit--resized xwidget wide)
+            (let ((top (+test-webkit--top xwidget)))
+              (should (equal (list id (plist-get top :id)) (list id id)))
+              (should (< (abs (- (plist-get top :part) part)) 0.1)))))
+        ;; At the very top: the top.
+        (+test-js xwidget "(() => { scrollTo(0, 0); return 'ok'; })()")
+        (+test-sleep 0.3)
+        (let ((other (split-window pane 40 'right)))
+          (+test-webkit--resized xwidget (window-body-width pane t))
+          (should (eql (plist-get (+test-webkit--top xwidget) :y) 0))
+          (delete-window other))))))
 
 (ert-deftest e2e-webkit/point-stays-at-the-start ()
   (+test-webkit

@@ -56,11 +56,11 @@ where it came to (see above)."
       (xwidget-webkit-goto-history xwidget -1))))
 
 (defun +my/webkit--callback (xwidget event-type)
-  "WebKit's events: the page has loaded (see NO WHITE FLASH in views.el,
-`+my/webkit-load-functions'), links out of it (see above); others as usual
-(not `xwidget-webkit-callback' for loads: it renames the buffer after the
-page). Nothing for a killed view (an answer after its 5 s, see JAVASCRIPT in
-js.el): Linux's Emacs can't read a killed view."
+  "WebKit's events: the page has loaded (see NO WHITE FLASH in views.el, THE
+READING PLACE in js.el, `+my/webkit-load-functions'), links out of it (see
+above); others as usual (not `xwidget-webkit-callback' for loads: it renames
+the buffer after the page). Nothing for a killed view (an answer after its 5
+s, see JAVASCRIPT in js.el): Linux's Emacs can't read a killed view."
   (let ((buffer (and (xwidget-live-p xwidget) (xwidget-buffer xwidget))))
     (cond ((not (xwidget-live-p xwidget)))
           ((eq event-type 'javascript-callback)
@@ -75,6 +75,7 @@ js.el): Linux's Emacs can't read a killed view."
                       (+my/webkit--link-out xwidget url status))
                      ((equal status "load-finished")
                       (+my/webkit--arrived xwidget url)
+                      (+my/webkit--keep-place xwidget)
                       ;; A moment for WebKit to paint it.
                       (run-at-time 0.05 nil #'+my/webkit--uncover xwidget)
                       (run-hook-with-args '+my/webkit-load-functions xwidget)))))))))

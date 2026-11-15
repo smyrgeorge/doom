@@ -18,6 +18,8 @@
 ;;   webkit/links.el);
 ;; - JavaScript run in the selected window's view or in all of them, answers
 ;;   awaited without crashing Emacs (see JAVASCRIPT in webkit/js.el);
+;; - what's at the page's top kept there as its view is resized: WebKit keeps
+;;   the scroll in pixels (see THE READING PLACE in webkit/js.el);
 ;; - what the page says in its title, read every 0.1 s, as a page can't call
 ;;   Emacs (see WATCHING in webkit/js.el), e.g. the mouse pointer it wants
 ;;   (see POINTER in webkit/input.el);

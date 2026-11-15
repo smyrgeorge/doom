@@ -1284,6 +1284,33 @@ file's keeps its URL."
         (+my/webkit--callback xw 'load-changed))
       (should-not (+test-webkit--timers #'+my/webkit--uncover)))))
 
+(ert-deftest webkit/a-loaded-page-keeps-its-reading-place ()
+  "Each page, once loaded (each load: a link back), gets the script keeping
+what's at its top there as it's resized: in that view only, before the mode's
+own load functions (which may scroll it)."
+  (+test-webkit
+    (let* ((page (+test-webkit--page))
+           (w1 (+test-webkit--show page))
+           (x1 (+test-webkit--xw page w1))
+           (scripts nil))
+      ;; A second view, of another window: not its script.
+      (+test-webkit--show page (split-window w1 nil 'right))
+      (with-current-buffer page
+        (add-hook '+my/webkit-load-functions
+                  (lambda (_) (push (length +test-webkit--scripts) scripts)) nil t))
+      (setq +test-webkit--scripts nil)
+      (dotimes (_ 2)
+        (let ((last-input-event (+test-webkit--event x1 "load-finished")))
+          (+my/webkit--callback x1 'load-changed)))
+      (should (equal +test-webkit--scripts
+                     (make-list 2 (list x1 (concat +my/webkit--place-js "\n;void 0") nil))))
+      (should (equal scripts '(2 1)))
+      (should (= (length (+test-webkit--views page)) 2))
+      ;; The script: kept on scroll, back at the top on resize, once a page.
+      (dolist (part '("addEventListener('scroll'" "addEventListener('resize', restore)"
+                      "if (window.emacsPlace) return;" "position !== 'fixed'"))
+        (should (string-search part +my/webkit--place-js))))))
+
 ;; ====== JAVASCRIPT ======
 
 (ert-deftest webkit/execute-in-the-selected-windows-view ()

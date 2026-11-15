@@ -649,9 +649,12 @@ Markdown as it is now, at the cursor's line, in that view."
         (setq +test-md--scripts nil)
         (let ((last-input-event (list 'xwidget-event 'load-changed xw "load-finished")))
           (+my/webkit--callback xw 'load-changed))
-        (should (equal (mapcar #'car +test-md--scripts) (list xw)))
+        ;; After the reading place's script (config/webkit/js.el), every
+        ;; page's.
+        (should (equal (mapcar #'car +test-md--scripts) (list xw xw)))
+        (should (string-prefix-p +my/webkit--place-js (cadr (car +test-md--scripts))))
         (should (string-prefix-p "document.body.innerHTML=\"<p>new one\\ntwo\\n</p>\";"
-                                 (cadr (car +test-md--scripts))))))))
+                                 (cadr (cadr +test-md--scripts))))))))
 
 (ert-deftest markdown/preview-off-closes-its-pane ()
   (+test-md
