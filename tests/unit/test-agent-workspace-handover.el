@@ -1,8 +1,8 @@
 ;;; tests/unit/test-agent-workspace-handover.el -*- lexical-binding: t; -*-
 ;; config/agent-workspace/handover.el: issues as the crew's channel. What
 ;; each agent is told (its role's hands-to:), the room's words for a hand-over
-;; (an agent's bd command), and two agents claiming one issue at once (bd's
-;; claim, atomic: one gets it).
+;; (as the issue changed: its label moved, open again), and two agents
+;; claiming one issue at once (bd's claim, atomic: one gets it).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -50,20 +50,38 @@ agree."
     (should-not (agent-workspace-label-role project "nobody's"))))
 
 (ert-deftest agent-workspace-handover/said-in-the-room ()
-  "An agent's bd command handing an issue on: to a role (its label's), back
-to an agent (assigned), or only labelled."
-  (let ((project (+test-awo--dir "said")))
-    (should (equal (agent-workspace--bd-said
-                    "bd update doom-a1b --remove-label investigation --add-label build --status open --assignee \"\" --append-notes 'found it'"
-                    project)
-                   "handed doom-a1b to the builders"))
-    (should (equal (agent-workspace--bd-said
-                    "bd update doom-a1b --remove-label review --add-label=build --status open --assignee ken --append-notes \"x\""
-                    project)
-                   "handed doom-a1b back to ken"))
-    (should (equal (agent-workspace--bd-said "bd update doom-a1b --add-label wontfix" project)
-                   "labelled doom-a1b wontfix"))
-    (should (equal (agent-workspace--bd-said "bd update doom-a1b --claim --json" project) "claimed doom-a1b"))))
+  "A hand-over as the issue says it (two fetches compared): its label moved
+from its agent's role's to another role's, open again: to that role,
+unassigned; back to an agent, assigned; while agents may not talk, only
+labelled. A label just added (the builders' too): labelled, never handed
+on. A claim: claimed."
+  (let* ((project (+test-awo--dir "said"))
+         (agent-workspace--crews (make-hash-table :test #'equal))
+         (issue (lambda (id status assignee labels)
+                  (list :id id :title id :status status :assignee assignee :labels labels)))
+         (sam-had (funcall issue "p-1" 'in_progress "sam" '("investigation")))
+         (sam-handed (funcall issue "p-1" 'open nil '("build")))
+         (rex-had (funcall issue "p-2" 'in_progress "rex" '("review")))
+         (rex-handed (funcall issue "p-2" 'open "ken" '("build")))
+         (filed (funcall issue "p-3" 'open nil nil))
+         (labelled (funcall issue "p-3" 'open nil '("build"))))
+    (puthash project (list (+test-awo--agent project "sam" "investigator") (+test-awo--agent project "rex" "reviewer")
+                           (+test-awo--agent project "ken" "builder") (+test-awo--agent project "ada" "scribe"))
+             agent-workspace--crews)
+    (let ((agent-workspace-agents-talk t))
+      (should (equal (agent-workspace--issues-said project (list sam-had) (list sam-handed) "sam")
+                     '(("sam" . "handed p-1 to the builders"))))
+      (should (equal (agent-workspace--issues-said project (list rex-had) (list rex-handed) "rex")
+                     '(("rex" . "handed p-2 back to ken"))))
+      (should (equal (agent-workspace--issues-said project (list filed) (list labelled) "ada")
+                     '(("ada" . "labelled p-3 build"))))
+      (should (equal (agent-workspace--issues-said project (list labelled)
+                                                   (list (funcall issue "p-3" 'in_progress "ken" '("build")))
+                                                   "ken")
+                     '(("ken" . "claimed p-3")))))
+    (let ((agent-workspace-agents-talk nil))
+      (should (equal (agent-workspace--issues-said project (list sam-had) (list sam-handed) "sam")
+                     '(("sam" . "labelled p-1 build")))))))
 
 (ert-deftest agent-workspace-handover/two-claims-at-once ()
   "Two agents claiming the same ready issue at once (each as itself, bd's

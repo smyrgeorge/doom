@@ -7,7 +7,9 @@
 ;; they're for: a role whose labels they have; a role nobody in the crew has,
 ;; flagged), blocked (by what), done today (who, when). A title in full, on a
 ;; second row when long. Moving onto an issue in progress selects its agent.
-;; Fetched again when the app opens, gr, and after an agent's bd command.
+;; Fetched again when the app opens, gr, after an agent's bd command (that
+;; agent noted with what's fetched: the room says what it did, room.el) and
+;; at the end of each of its turns; asked while a fetch runs, once it's done.
 
 (require 'cl-lib)
 (require 'seq)
@@ -25,13 +27,20 @@
 
 (defvar agent-workspace-issues-fetched-functions nil
   "Called with a project and its issues as just fetched (a plist: :doing
-:ready :blocked :done, issue plists; :error).")
+:ready :blocked :done, issue plists, for the list; :issues, every one as bd
+has it, the open ones and those done today; :actor, the agent whose bd
+command led to the fetch, its name; :error).")
 
 (defvar-local agent-workspace--issues-project nil "In the issue list: its project.")
 (defvar-local agent-workspace--issues-data nil
   "In the issue list: its issues as last fetched, a plist: :doing :ready
 :blocked :done (issue plists), :error.")
 (defvar-local agent-workspace--issues-pending nil "In the issue list: its fetches running.")
+(defvar-local agent-workspace--issues-again nil
+  "In the issue list: a fetch asked for while one ran: done once it's over.")
+(defvar-local agent-workspace--issues-actor nil
+  "In the issue list: the agent whose bd command asks for the next fetch,
+its name.")
 (defvar-local agent-workspace--issues-hl nil "In the issue list: its highlight.")
 (defvar-local agent-workspace--issues-timer nil "In the issue list: a fetch to come.")
 
@@ -104,11 +113,15 @@ cancelled, its bd commands running stopped (its app closing)."
           (setq agent-workspace--issues-data (list :error "This project doesn't track its issues with Beads."))
           (agent-workspace--issues-redraw project))
       (with-current-buffer buffer
-        (unless agent-workspace--issues-pending
+        (if agent-workspace--issues-pending
+            ;; What it fetches may be from before: fetched again after it.
+            (setq agent-workspace--issues-again t)
           (let ((answers (list :all nil :ready nil :done nil))
                 (left 3)
-                (today (format-time-string "%Y-%m-%d")))
-            (setq agent-workspace--issues-pending t)
+                (today (format-time-string "%Y-%m-%d"))
+                (actor agent-workspace--issues-actor))
+            (setq agent-workspace--issues-pending t
+                  agent-workspace--issues-actor nil)
             (cl-flet ((got (key)
                         (lambda (json)
                           (setq answers (plist-put answers key json))
@@ -117,20 +130,27 @@ cancelled, its bd commands running stopped (its app closing)."
                               (with-current-buffer buffer
                                 (setq agent-workspace--issues-pending nil
                                       agent-workspace--issues-data
-                                      (agent-workspace--issues-parse project answers))
+                                      (append (agent-workspace--issues-parse project answers)
+                                              (list :actor actor)))
                                 (agent-workspace--issues-redraw project)
                                 (run-hook-with-args 'agent-workspace-issues-fetched-functions
-                                                    project agent-workspace--issues-data)))))))
+                                                    project agent-workspace--issues-data)
+                                (when agent-workspace--issues-again
+                                  (setq agent-workspace--issues-again nil)
+                                  (agent-workspace--issues-refresh project))))))))
               (agent-workspace--bd project '("list" "--json" "--limit" "0") (got :all))
               (agent-workspace--bd project '("ready" "--json" "--limit" "0") (got :ready))
               (agent-workspace--bd project (list "list" "--json" "--status" "closed"
                                                  "--closed-after" today "--limit" "0")
                                    (got :done)))))))))
 
-(defun agent-workspace--issues-refresh-soon (project)
-  "PROJECT's issues fetched again in a moment (a burst of bd commands: once)."
+(defun agent-workspace--issues-refresh-soon (project &optional actor)
+  "PROJECT's issues fetched again in a moment (a burst of bd commands: once).
+ACTOR: the agent whose bd command asks for it, its name (the last one's
+goes with what's fetched)."
   (when-let* ((buffer (and (agent-workspace--app project) (agent-workspace--issues-buffer project))))
     (with-current-buffer buffer
+      (when actor (setq agent-workspace--issues-actor actor))
       (when (timerp agent-workspace--issues-timer) (cancel-timer agent-workspace--issues-timer))
       (setq agent-workspace--issues-timer
             (run-at-time 0.5 nil #'agent-workspace--issues-refresh project)))))
@@ -141,6 +161,8 @@ cancelled, its bd commands running stopped (its app closing)."
         :title (or (alist-get 'title alist) "")
         :status (or status (intern (or (alist-get 'status alist) "open")))
         :assignee (alist-get 'assignee alist)
+        :created-by (alist-get 'created_by alist)
+        :created (alist-get 'created_at alist)
         :labels (alist-get 'labels alist)
         :priority (alist-get 'priority alist)
         :type (alist-get 'issue_type alist)
@@ -163,7 +185,8 @@ cancelled, its bd commands running stopped (its app closing)."
            (ready-ids (mapcar (lambda (alist) (alist-get 'id alist)) (plist-get answers :ready)))
            (work (lambda (issue) (not (equal (plist-get issue :type) "epic"))))
            (by-priority (lambda (issues) (seq-sort-by (lambda (issue) (or (plist-get issue :priority) 9)) #'< issues))))
-      (list :doing (seq-filter (lambda (issue) (eq (plist-get issue :status) 'in_progress)) all)
+      (list :issues (mapcar #'agent-workspace--issue (append (plist-get answers :all) (plist-get answers :done)))
+            :doing (seq-filter (lambda (issue) (eq (plist-get issue :status) 'in_progress)) all)
             :ready (funcall by-priority
                             (mapcar (lambda (issue)
                                       (plist-put (plist-put issue :status 'ready)
@@ -472,9 +495,16 @@ or nil."
 
 ;; ====== AN AGENT'S BD COMMANDS ======
 
+(defun agent-workspace--bd-command-p (command)
+  "Non-nil if COMMAND, an agent's shell command, may run bd: bd in it, a
+word of its own (on any of its lines, in a variable)."
+  (string-match-p "\\(?:^\\|[^[:alnum:]_-]\\)bd\\(?:$\\|[^[:alnum:]_-]\\)" command))
+
 (defun agent-workspace--issues-watch (agent buffer)
-  "AGENT's session BUFFER followed: a bd command done fetches its crew's
-issues again. In `agent-workspace-session-functions'."
+  "AGENT's session BUFFER followed: a command of its with bd in it, done,
+fetches its crew's issues again, noted as AGENT's; its turn's end too
+\(bd run otherwise: a script, a variable). In
+`agent-workspace-session-functions'."
   (agent-shell-subscribe-to
    :shell-buffer buffer
    :event 'tool-call-update
@@ -483,8 +513,14 @@ issues again. In `agent-workspace-session-functions'."
                       (command (map-elt tool-call :command)))
                  (when (and (member (map-elt tool-call :status) '("completed" "failed"))
                             (stringp command)
-                            (string-match-p "\\(?:^\\|[;&| ]\\)bd " command))
-                   (agent-workspace--issues-refresh-soon (agent-workspace-agent-project agent)))))))
+                            (agent-workspace--bd-command-p command))
+                   (agent-workspace--issues-refresh-soon (agent-workspace-agent-project agent)
+                                                         (agent-workspace-agent-name agent))))))
+  (agent-shell-subscribe-to
+   :shell-buffer buffer
+   :event 'turn-complete
+   :on-event (lambda (_event)
+               (agent-workspace--issues-refresh-soon (agent-workspace-agent-project agent)))))
 
 (add-hook 'agent-workspace-session-functions #'agent-workspace--issues-watch)
 

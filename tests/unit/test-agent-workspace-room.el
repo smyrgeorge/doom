@@ -1,7 +1,8 @@
 ;;; tests/unit/test-agent-workspace-room.el -*- lexical-binding: t; -*-
 ;; config/agent-workspace/room.el: the room. Its place in the app (a column on
 ;; the right, at the bottom, the room alone), its feed (the crew's changes,
-;; raised hands, issue events, turns' answers, your messages; filtered), its
+;; raised hands, what agents did to issues (fetches compared, from the first
+;; after the app opens), turns' answers, your messages; filtered), its
 ;; compose line (#name, #roles, #all, the selected agent; queued when busy;
 ;; completion, history), what's kept. A real turn of a stand-in agent
 ;; (examples/agent-workspace/stand-in.el) in the feed.
@@ -77,6 +78,14 @@ agents' sessions plain buffers; `sent' what they were sent."
   (with-current-buffer (agent-workspace--room-buffer project)
     (buffer-substring-no-properties (point-min) (point-max))))
 
+(defconst +test-awr2--refresh (symbol-function 'agent-workspace--issues-refresh)
+  "issues.el's fetch, as it is (the tests' crews stub it).")
+
+(defun +test-awr2--issue (id &rest props)
+  "An issue as fetched (issues.el's :issues): ID, open, no labels; PROPS
+over that."
+  (append props (list :id id :title (concat "Title of " id) :status 'open :labels nil)))
+
 (defun +test-awr2--room-windows ()
   "The room's windows: (BUFFER-NAME WIDTH HEIGHT)."
   (mapcar (lambda (w) (list (buffer-name (window-buffer w)) (window-total-width w) (window-total-height w)))
@@ -134,17 +143,122 @@ home, started again, leaving: each a line, its time and name."
         (should (string-search part feed)))
       (should (string-match-p "\\` [0-9][0-9]:[0-9][0-9] ▌A ada" feed)))))
 
-(ert-deftest agent-workspace-room/what-it-says-of-commands-and-turns ()
-  "An agent's bd commands: what they did to an issue; a turn's answer: its
-first lines, on one."
-  (should (equal (agent-workspace--bd-said "bd close doom-a1b --reason=done") "closed doom-a1b"))
-  (should (equal (agent-workspace--bd-said "cd x && bd update doom-a1b --claim --json") "claimed doom-a1b"))
-  (should (equal (agent-workspace--bd-said "bd create --title=\"Fix it\" --type=bug") "filed: Fix it"))
-  (should (equal (agent-workspace--bd-said "bd create --type=bug --title 'Two words'") "filed: Two words"))
-  (should-not (agent-workspace--bd-said "bd list --json"))
-  (should-not (agent-workspace--bd-said "git commit -m 'bd close x'"))
+(ert-deftest agent-workspace-room/what-it-says-of-a-turn ()
+  "A turn's answer: its first lines, on one."
   (should (equal (agent-workspace--first-lines "First.\n\nSecond line.\nThird.\nFourth.") "First. Second line. Third."))
   (should (= (length (agent-workspace--first-lines (make-string 400 ?x))) 160)))
+
+;; ====== WHAT AGENTS DID TO ISSUES ======
+
+(ert-deftest agent-workspace-room/what-agents-did-to-issues ()
+  "Two fetches compared, as the issues say it: filed (by its creator, an
+agent), claimed (by its assignee), closed (by its assignee; no one's, the
+agent whose bd command it was), a label added (that agent's: labelled);
+what's no agent's (you, another program; assigned to you), nothing; an
+issue reopened, not filed."
+  (let* ((project (agent-workspace--root (+test-awr2--project "said")))
+         (agent-workspace--crews (make-hash-table :test #'equal))
+         (since (float-time))
+         (now (format-time-string "%FT%TZ" nil t))
+         (before (list (+test-awr2--issue "p-1")
+                       (+test-awr2--issue "p-2")
+                       (+test-awr2--issue "p-3" :status 'in_progress :assignee "ken")
+                       (+test-awr2--issue "p-4")
+                       (+test-awr2--issue "p-5" :labels '("docs"))
+                       (+test-awr2--issue "p-6" :status 'in_progress :assignee "Yorgos")))
+         (after (list (+test-awr2--issue "p-1" :status 'in_progress :assignee "ken")
+                      (+test-awr2--issue "p-2" :status 'in_progress :assignee "Yorgos")
+                      (+test-awr2--issue "p-3" :status 'closed :assignee "ken")
+                      (+test-awr2--issue "p-4" :status 'closed)
+                      (+test-awr2--issue "p-5" :labels '("docs" "build"))
+                      (+test-awr2--issue "p-6" :status 'closed :assignee "Yorgos")
+                      (+test-awr2--issue "p-7" :title "Fix the lexer" :created-by "ada" :created now)
+                      (+test-awr2--issue "p-8" :created-by "Yorgos" :created now)
+                      (+test-awr2--issue "p-9" :created-by "ada" :created "2020-01-01T00:00:00Z"))))
+    (puthash project (list (agent-workspace--make-agent :name "ada" :role "scribe" :project project)
+                           (agent-workspace--make-agent :name "ken" :role "builder" :project project))
+             agent-workspace--crews)
+    ;; After ada's bd command.
+    (should (equal (agent-workspace--issues-said project before after "ada" since)
+                   '(("ken" . "claimed p-1") ("ken" . "closed p-3") ("ada" . "closed p-4")
+                     ("ada" . "labelled p-5 build") ("ada" . "filed: Fix the lexer"))))
+    ;; No agent's bd command led to it (gr): only what the issues say.
+    (should (equal (agent-workspace--issues-said project before after nil since)
+                   '(("ken" . "claimed p-1") ("ken" . "closed p-3") ("ada" . "filed: Fix the lexer"))))
+    ;; Nothing changed: nothing said.
+    (should-not (agent-workspace--issues-said project after after "ada" since))))
+
+(ert-deftest agent-workspace-room/what-agents-did-to-issues-in-the-feed ()
+  "An agent's command with bd in it (on several lines, through a variable)
+asks for a fetch, noted as its: the first after the app opens is the
+baseline (nothing said for what was there); then what changed, under the
+agent's name, in the feed. One asked while a fetch runs is done after it. A
+change of yours (gr: no agent's), nothing. The app opened again: a baseline
+again."
+  (should (agent-workspace--bd-command-p "bd create \\\n  --title 'Fix it' \\\n  --description \"$(cat <<'EOF'\nx\nEOF\n)\""))
+  (should (agent-workspace--bd-command-p "cd x && bd update doom-a1b --claim"))
+  (should (agent-workspace--bd-command-p "B=bd; $B close doom-a1b"))
+  (should-not (agent-workspace--bd-command-p "abd --x; bd-tool run; git status"))
+  (+test-awr2 "fetched"
+    (make-directory (expand-file-name ".beads" project))
+    (agent-workspace-create :role "scribe" :name "ada")
+    (let* ((calls nil)
+           (now (format-time-string "%FT%TZ" nil t))
+           ;; bd answering the fetch running: ALL open, DONE closed today.
+           (answer (lambda (all &optional done)
+                     (dolist (call (prog1 (nreverse calls) (setq calls nil)))
+                       (funcall (cdr call) (cond ((member "ready" (car call)) nil)
+                                                 ((member "closed" (car call)) done)
+                                                 (t all))))))
+           (issue (lambda (id &rest more)
+                    (append more `((id . ,id) (title . ,(concat "Title of " id)) (status . "open")
+                                   (created_by . "ada") (created_at . "2020-01-01T00:00:00Z"))))))
+      (cl-letf (((symbol-function 'agent-workspace--issues-refresh) +test-awr2--refresh)
+                ((symbol-function 'executable-find) (lambda (name &rest _) (and (equal name "bd") "/usr/bin/bd")))
+                ((symbol-function 'agent-workspace--bd)
+                 (lambda (_dir args callback) (push (cons args callback) calls) nil)))
+        ;; The baseline: what's there, nothing said.
+        (agent-workspace--issues-refresh project)
+        (should (= (length calls) 3))
+        (funcall answer (list (funcall issue "p-1")))
+        (should-not (string-search "p-1" (+test-awr2--feed project)))
+        ;; Ada's bd command; another while its fetch runs.
+        (agent-workspace--issues-refresh-soon project "ada")
+        (should (+test-wait-for (lambda () calls) 5))
+        (agent-workspace--issues-refresh-soon project "ada")
+        (+test-sleep 0.7)
+        (should (= (length calls) 3))
+        (funcall answer (list (funcall issue "p-1" '(status . "in_progress") '(assignee . "ada"))
+                              (funcall issue "p-2" '(title . "Fix the lexer") `(created_at . ,now))))
+        (let ((feed (+test-awr2--feed project)))
+          (should (string-search "◆ claimed p-1" feed))
+          (should (string-search "◆ filed: Fix the lexer" feed))
+          (should-not (string-search "Title of p-1" feed)))
+        ;; Fetched again, after it.
+        (should (= (length calls) 3))
+        (funcall answer (list (funcall issue "p-1" '(status . "in_progress") '(assignee . "ada"))
+                              (funcall issue "p-2" '(title . "Fix the lexer") '(labels "build"))))
+        (should (string-search "◆ labelled p-2 build" (+test-awr2--feed project)))
+        ;; Yours (gr): closed, nobody's: nothing.
+        (agent-workspace--issues-refresh project)
+        (funcall answer (list (funcall issue "p-1" '(status . "in_progress") '(assignee . "ada")))
+                 (list (funcall issue "p-2" '(status . "closed") '(title . "Fix the lexer"))))
+        (should-not (string-search "closed p-2" (+test-awr2--feed project)))
+        ;; The app opened again (its crew with it, from crew.json): its first
+        ;; fetch a baseline again.
+        (agent-workspace--close-app project)
+        (setq calls nil)
+        (agent-workspace-open t)
+        (unless (agent-workspace-agent "ada" project)
+          (agent-workspace-create :role "scribe" :name "ada"))
+        (unless calls (agent-workspace--issues-refresh project))
+        (funcall answer (list (funcall issue "p-3" `(created_at . ,now))))
+        (should-not (string-search "p-3" (+test-awr2--feed project)))
+        (agent-workspace--issues-refresh-soon project "ada")
+        (should (+test-wait-for (lambda () calls) 5))
+        (funcall answer (list (funcall issue "p-3" `(created_at . ,now))
+                              (funcall issue "p-4" '(title . "Again") `(created_at . ,now))))
+        (should (string-search "◆ filed: Again" (+test-awr2--feed project)))))))
 
 (ert-deftest agent-workspace-room/filtered ()
   "F: raised hands only, then the selected agent's only, then all."

@@ -13,7 +13,7 @@
 ;; takes it: the room offers it you ([Give it to ken], once per issue, when one
 ;; is free), or it takes it itself with its loop on. Claiming is bd's,
 ;; atomic: two agents never get the same issue. The room says each hand-over
-;; (room.el reads the agents' bd commands).
+;; (room.el, as the issue changed: its label moved, open again).
 ;;
 ;; Only with `agent-workspace-agents-talk' (config/agent-workspace.el):
 ;; without it, an agent whose role hands on is told to hand nothing on, only to

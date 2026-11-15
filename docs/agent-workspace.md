@@ -115,8 +115,9 @@ new crews.
 
 One chat for the whole crew: a feed of what matters, and below it a compose line that stays in view.
 
-- **The feed** shows each agent's turns (their answers' first lines), the issues it files, claims and closes, the
-  crew's changes (an agent joining, going home, started again, stuck), raised hands, and your messages. With the cursor
+- **The feed** shows each agent's turns (their answers' first lines), the issues it files, claims, labels, hands on
+  and closes (as the issues show it after its `bd` commands and turns, not as a command looked; your own changes, and
+  what was there when the app opened, aren't said), the crew's changes (an agent joining, going home, started again, stuck), raised hands, and your messages. With the cursor
   on its last line it follows new lines; anywhere else (scrolled up, a line clicked) it stays put, the cursor on the
   same line. `RET` on a line opens its agent's pane. `F` shows raised hands only, then the selected agent's only, then
   all.

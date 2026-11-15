@@ -7,10 +7,11 @@
 ;; the whole stage (the room alone: 2; the stage again: 1):
 ;; - the feed: a line for each thing that matters, its time, its agent's
 ;;   avatar and name: a turn's answer (its first lines; RET opens its pane),
-;;   an issue filed, claimed or closed by an agent (from its bd commands), an
-;;   agent joining, going home, started again, renamed, leaving, stuck, a hand
-;;   raised, your messages and where they went. Its cursor on its last line,
-;;   it follows new lines; elsewhere (scrolled up, a line clicked), it stays
+;;   an issue filed, claimed, handed on or closed by an agent (its issues
+;;   compared, fetched before and after: issues.el), an agent joining,
+;;   going home, started again, renamed, leaving, stuck, a hand raised, your
+;;   messages and where they went. Its cursor on its last line, it follows
+;;   new lines; elsewhere (scrolled up, a line clicked), it stays
 ;;   where it is, its cursor on the same line. F filters it: all, hands only,
 ;;   the selected agent's.
 ;; - the compose line below it, a window of its own (it never scrolls away):
@@ -413,8 +414,8 @@ the nearest one after it; none, the end."
                                                          "")))))))
 
 (defun agent-workspace--room-watch (agent buffer)
-  "AGENT's session BUFFER followed: its turn's answer, its bd commands, said
-in its room. In `agent-workspace-session-functions'."
+  "AGENT's session BUFFER followed: its turn's answer, said in its room. In
+`agent-workspace-session-functions'."
   (let ((project (agent-workspace-agent-project agent))
         (name (agent-workspace-agent-name agent)))
     (agent-shell-subscribe-to
@@ -432,13 +433,7 @@ in its room. In `agent-workspace-session-functions'."
             (setq agent-workspace--turn-text nil)
             (unless (string-empty-p text)
               (agent-workspace-room-post project :kind 'reply :agent name
-                                         :text (agent-workspace--first-lines text)))))
-         ('tool-call-update
-          (let* ((tool-call (map-nested-elt event '(:data :tool-call)))
-                 (command (map-elt tool-call :command)))
-            (when (and (equal (map-elt tool-call :status) "completed") (stringp command))
-              (when-let* ((said (agent-workspace--bd-said command project)))
-                (agent-workspace-room-post project :kind 'issue :agent name :text said))))))))))
+                                         :text (agent-workspace--first-lines text))))))))))
 
 (defun agent-workspace--first-lines (text)
   "TEXT's first lines, on one: at most 160 characters."
@@ -446,31 +441,113 @@ in its room. In `agent-workspace-session-functions'."
          (line (string-join lines " ")))
     (if (> (length line) 160) (concat (substring line 0 159) "…") line)))
 
-(defun agent-workspace--bd-said (command &optional project)
-  "What COMMAND, an agent's shell command, did to an issue, in words, or
-nil: \"closed doom-a1b\", \"claimed doom-a1b\", \"filed: TITLE\", a
-hand-over: \"handed doom-a1b to the builders\" (PROJECT's role whose label it
-added), \"handed doom-a1b back to ken\"."
-  (cond
-   ((string-match "\\(?:\\`\\|[;&|(]\\s-*\\)bd update\\s-+\\([^ ;&|]+\\)[^;&|]*--add-label[= ]\\([^ ;&|]+\\)" command)
-    (let* ((issue (match-string 1 command))
-           (label (match-string 2 command))
-           (role (and project (fboundp 'agent-workspace-label-role) (agent-workspace-label-role project label)))
-           (back (and (string-match "--assignee[= ]\\(?:\"\\([^\"]+\\)\"\\|'\\([^']+\\)'\\|\\([^ ;&|\"']+\\)\\)" command)
-                      (or (match-string 1 command) (match-string 2 command) (match-string 3 command)))))
-      (cond (back (format "handed %s back to %s" issue back))
-            (role (format "handed %s to the %ss" issue role))
-            (t (format "labelled %s %s" issue label)))))
-   ((string-match "\\(?:\\`\\|[;&|(]\\s-*\\)bd close\\s-+\\([^ ;&|]+\\)" command)
-    (format "closed %s" (match-string 1 command)))
-   ((string-match "\\(?:\\`\\|[;&|(]\\s-*\\)bd update\\s-+\\([^ ;&|]+\\).*--claim" command)
-    (format "claimed %s" (match-string 1 command)))
-   ((string-match "\\(?:\\`\\|[;&|(]\\s-*\\)bd create\\b.*--title[= ]\\(?:\"\\([^\"]+\\)\"\\|'\\([^']+\\)'\\|\\([^ ]+\\)\\)" command)
-    (format "filed: %s" (or (match-string 1 command) (match-string 2 command) (match-string 3 command))))))
+;; ====== WHAT AGENTS DID TO ISSUES ======
+;; The crew's issues as fetched (issues.el: after an agent's bd command, at
+;; its turn's end) compared with the fetch before: what changed, and whose it
+;; was, as the issues say it, never as a command looked. The first fetch after
+;; the app opens is the baseline.
+
+(declare-function agent-workspace-label-role "agent-workspace/handover")
+
+(defvar-local agent-workspace--room-issues nil
+  "In the feed: the crew's issues as last fetched (issues.el's :issues), and
+when the first fetch was, the baseline (`float-time'): (TIME . ISSUES); nil
+before it.")
+
+(defun agent-workspace--issue-new-p (issue since)
+  "Non-nil if ISSUE was made since SINCE (`float-time', a minute's leeway):
+not one reopened. No SINCE, or no date it has: made since."
+  (or (not since)
+      (not (plist-get issue :created))
+      (condition-case nil
+          (>= (float-time (date-to-time (plist-get issue :created))) (- since 60))
+        (error t))))
+
+(defun agent-workspace--handed-to (project name removed added)
+  "The role an issue was handed to by the agent NAME of PROJECT's crew, its
+labels REMOVED and ADDED: one of NAME's role's labels removed, one of
+another role's added (handover.el's way). That role, or nil."
+  (when-let* ((agent (agent-workspace-agent name project))
+              (role (agent-workspace-agent-role agent))
+              ((seq-some (lambda (label) (equal (agent-workspace-label-role project label) role)) removed)))
+    (seq-some (lambda (label)
+                (let ((to (agent-workspace-label-role project label)))
+                  (and to (not (equal to role)) to)))
+              added)))
+
+(defun agent-workspace--issues-said (project before after &optional actor since)
+  "What PROJECT's crew did to its issues between two fetches, BEFORE and
+AFTER (issues.el's :issues): (NAME . TEXT) each, NAME an agent of the crew,
+TEXT what the room says, in AFTER's order. ACTOR: the agent whose bd
+command led to AFTER, its name. SINCE: when the first fetch was (an issue
+made before it, new to AFTER, was reopened: not filed). What's no agent's
+\(you, another program) isn't said:
+- filed: an issue new to AFTER, by its creator (created_by): \"filed: TITLE\";
+- claimed: in progress now, by its assignee: \"claimed ID\";
+- handed on, while agents may talk (`agent-workspace-agents-talk'): open
+  again, its label moved from the role of its agent (its assignee before;
+  no one's, ACTOR) to another role's: \"handed ID to the builders\"
+  unassigned, \"handed ID back to ken\" assigned to ken;
+- labelled: a label added otherwise, by ACTOR: \"labelled ID build\";
+- closed: by its assignee (no one's, ACTOR): \"closed ID\".
+An issue assigned to someone outside the crew is theirs: not said."
+  (let* ((crew (lambda (name)
+                 (and (stringp name) (not (string-empty-p name)) (agent-workspace-agent name project) name)))
+         ;; Whose an issue is: its assignee's, if it has one; else ACTOR's.
+         (whose (lambda (&rest assignees)
+                  (if-let* ((name (seq-find (lambda (name) (and (stringp name) (not (string-empty-p name))))
+                                            assignees)))
+                      (funcall crew name)
+                    (funcall crew actor))))
+         (said nil))
+    (dolist (issue after)
+      (let* ((id (plist-get issue :id))
+             (old (seq-find (lambda (old) (equal (plist-get old :id) id)) before))
+             (status (plist-get issue :status)))
+        (if (not old)
+            (when-let* ((by (funcall crew (plist-get issue :created-by)))
+                        ((agent-workspace--issue-new-p issue since)))
+              (push (cons by (format "filed: %s" (plist-get issue :title))) said))
+          (let* ((was (plist-get old :status))
+                 (assignee (funcall crew (plist-get issue :assignee)))
+                 (by (funcall whose (plist-get old :assignee)))
+                 (added (seq-difference (plist-get issue :labels) (plist-get old :labels)))
+                 (removed (seq-difference (plist-get old :labels) (plist-get issue :labels)))
+                 (handed (and agent-workspace-agents-talk by added removed (eq status 'open)
+                              (agent-workspace--handed-to project by removed added))))
+            (when (and assignee (eq status 'in_progress) (not (eq was 'in_progress)))
+              (push (cons assignee (format "claimed %s" id)) said))
+            (cond
+             (handed
+              (push (cons by (let ((to (plist-get issue :assignee)))
+                               (if (and to (not (string-empty-p to)))
+                                   (format "handed %s back to %s" id to)
+                                 (format "handed %s to the %ss" id handed))))
+                    said))
+             ((and added (funcall crew actor))
+              (push (cons actor (format "labelled %s %s" id (string-join added ", "))) said)))
+            (when (and (eq status 'closed) (not (eq was 'closed)))
+              (when-let* ((by (funcall whose (plist-get issue :assignee) (plist-get old :assignee))))
+                (push (cons by (format "closed %s" id)) said)))))))
+    (nreverse said)))
+
+(defun agent-workspace--room-issues-h (project data)
+  "PROJECT's issues just fetched (DATA, issues.el's): what its agents did to
+them since the fetch before, said in its room; the first fetch, the
+baseline, says nothing. In `agent-workspace-issues-fetched-functions'."
+  (unless (plist-get data :error)
+    (with-current-buffer (agent-workspace--room-buffer project)
+      (let ((before agent-workspace--room-issues))
+        (setq agent-workspace--room-issues (cons (or (car before) (float-time)) (plist-get data :issues)))
+        (when before
+          (pcase-dolist (`(,name . ,text) (agent-workspace--issues-said project (cdr before) (plist-get data :issues)
+                                                                         (plist-get data :actor) (car before)))
+            (agent-workspace-room-post project :kind 'issue :agent name :text text)))))))
 
 (add-hook 'agent-workspace-change-functions #'agent-workspace--room-changed-h)
 (add-hook 'agent-workspace-state-change-functions #'agent-workspace--room-state-h)
 (add-hook 'agent-workspace-session-functions #'agent-workspace--room-watch)
+(add-hook 'agent-workspace-issues-fetched-functions #'agent-workspace--room-issues-h)
 (add-hook 'agent-workspace-layout-functions #'agent-workspace--compose-prompt-draw)
 
 ;; ====== THE COMPOSE LINE ======

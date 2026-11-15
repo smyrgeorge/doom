@@ -171,8 +171,10 @@ needs your OK. nil: Claude Code's own default."
 ;; right column (at the bottom, under the stage, in a frame under 200 columns,
 ;; or with `agent-workspace-room-side' bottom); 2 the room alone, 1 the stage
 ;; again. Its feed: each agent's turns (their answers' first lines; RET opens
-;; its pane), the issues it files, claims and closes, the crew's changes (an
-;; agent joining, going home, started again, stuck), raised hands, your
+;; its pane), the issues it files, claims, labels, hands on and closes (as
+;; they change, fetched before and after: never yours, nor what was there as
+;; the app opened), the crew's changes (an agent joining, going home,
+;; started again, stuck), raised hands, your
 ;; messages; F filters it. Its compose line: #ada to ada, #builders to the
 ;; first free builder, #all to everyone, no # to the selected agent; busy, it
 ;; gets it after its turn; # at its start offers the agents, roles and all as
