@@ -11,6 +11,14 @@
 #   agent-ui remove ID           remove it
 #   agent-ui clear               remove every element
 #   agent-ui list                the canvas's elements: ids, types, sources
+#   agent-ui get [ID] [--changed]
+#                                what it shows, as data: its elements (or ID's)
+#                                with their properties and values, as JSON;
+#                                --changed: only those changed since your last
+#                                read (and "removed": those gone). A panel
+#                                (--panel NAME): when it last fetched; hidden
+#                                and old, fetched first (its reply waited for,
+#                                AGENT_UI_WAIT seconds at most, default 10)
 #   agent-ui types [TYPE]        the element types: properties, an example
 #   agent-ui batch [JSON]        several at once: [{"op": "show", ...},
 #                                {"op": "update", "id": ..., ...}, ...]
@@ -95,6 +103,13 @@ set -- ${args[@]+"${args[@]}"}
 op=$1; shift
 id="" json="" takes_json=0 options=""
 if [ "$op" = render ] && [ "${1:-}" = --ansi ]; then options=ansi; shift; fi
+if [ "$op" = get ]; then
+  rest=()
+  for arg in "$@"; do
+    case "$arg" in --changed) options=changed ;; *) rest+=("$arg") ;; esac
+  done
+  set -- ${rest[@]+"${rest[@]}"}
+fi
 case "$op" in
   show|batch|render|bug)
     takes_json=1
@@ -117,6 +132,9 @@ case "$op" in
   types)
     [ $# -gt 1 ] && fail 2 "types: agent-ui types [TYPE]"
     id=${1:-} ;;
+  get)
+    [ $# -gt 1 ] && fail 2 "get: agent-ui get [ID] [--changed]"
+    id=${1:-} ;;
   define)
     takes_json=1
     [ $# -gt 1 ] && fail 2 "define: agent-ui define [FILE]"
@@ -128,7 +146,7 @@ case "$op" in
   clear|list)
     [ $# -gt 0 ] && fail 2 "$op: takes no arguments" ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, types, batch, render, define, snapshot, bug, check, panels, open" ;;
+    fail 2 "unknown operation \"$op\"; operations: show, update, append, remove, clear, list, get, types, batch, render, define, snapshot, bug, check, panels, open" ;;
 esac
 case "$id" in *$'\n'*) fail 2 "an id is one line" ;; esac
 
@@ -145,9 +163,24 @@ printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$op" "$id" "${AGENT_UI_SESSION:-}" "$PWD"
 # The folder as a Lisp string.
 lisp_dir=${dir//\\/\\\\}
 lisp_dir=${lisp_dir//\"/\\\"}
-out=$("${EMACSCLIENT:-emacsclient}" --timeout=30 --eval \
-        "(if (fboundp 'agent-ui-request) (agent-ui-request \"$lisp_dir\") 'agent-ui-not-loaded)" 2>&1)
-status=$?
+ask() {  # ask: Emacs answers the request (its reply in $dir/reply)
+  rm -f "$dir/reply"
+  out=$("${EMACSCLIENT:-emacsclient}" --timeout=30 --eval \
+          "(if (fboundp 'agent-ui-request) (agent-ui-request \"$lisp_dir\") 'agent-ui-not-loaded)" 2>&1)
+  status=$?
+}
+ask
+# get on a panel being fetched (it was hidden, its data old): asked again
+# once its queries end, AGENT_UI_WAIT seconds at most.
+if [ "$op" = get ]; then
+  waited=0
+  while [ -f "$dir/reply" ] && grep -q '"fetching":true' "$dir/reply" \
+          && [ "$waited" -lt "$(( ${AGENT_UI_WAIT:-10} * 4 ))" ]; do
+    sleep 0.25
+    waited=$((waited + 1))
+    ask
+  done
+fi
 
 if [ -f "$dir/reply" ]; then
   cat "$dir/reply"

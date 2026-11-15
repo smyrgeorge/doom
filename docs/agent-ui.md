@@ -57,6 +57,7 @@ agent-ui append tests '{"rows":[["lexer","passed","0.4s"]]}'
 agent-ui remove build
 agent-ui clear                 # every element of the canvas
 agent-ui list                  # the canvas's elements: id, type
+agent-ui get [ID] [--changed]  # what it shows, as data: its elements and their values (--changed: since the last read)
 agent-ui types [TYPE]          # the catalog: each type, its properties, an example
 agent-ui batch < ops.json      # several operations, one trip to Emacs
 agent-ui render '{"type":...}' # an element drawn as text, nothing shown: for the agent to see it

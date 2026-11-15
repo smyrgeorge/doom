@@ -35,12 +35,50 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
                            (insert-file-contents (expand-file-name "reply" dir))
                            (buffer-string)))))
 
+(defun +test-aur-request-with (op id options)
+  "OP's reply (parsed) for ID with OPTIONS (a string: \"changed\")."
+  (let ((dir (make-temp-file (+test-tmp-file "aur-") t)))
+    (with-temp-file (expand-file-name "request" dir)
+      (insert (format "%s\n%s\n\n\n%s\n" op (or id "") (or options ""))))
+    (should (eq (agent-ui-request dir) t))
+    (agent-ui-parse-json (with-temp-buffer
+                           (insert-file-contents (expand-file-name "reply" dir))
+                           (buffer-string)))))
+
 (defun +test-aur-text ()
   (with-current-buffer (agent-ui-canvas)
     (agent-ui--flush)
     (buffer-substring-no-properties (point-min) (point-max))))
 
 ;; ====== OPERATIONS ======
+
+(ert-deftest agent-ui-request/get-what-it-shows-as-data ()
+  "get: the canvas's elements with their properties and values, or one;
+--changed: only those changed since this session's last read, and those
+gone."
+  (+test-aur
+    (+test-aur-request "show" nil "{\"id\":\"build\",\"type\":\"progress\",\"max\":12,\"value\":3}")
+    (+test-aur-request "show" nil "{\"id\":\"tests\",\"type\":\"table\",\"columns\":[\"Test\",\"Result\"],\"rows\":[[\"lexer\",\"passed\"]]}")
+    (let ((reply (+test-aur-request "get")))
+      (should (eq (plist-get reply :ok) t))
+      (should (equal (mapcar (lambda (e) (plist-get e :id)) (plist-get reply :elements)) '("build" "tests")))
+      (should (equal (plist-get (car (plist-get reply :elements)) :value) 3))
+      (should (equal (plist-get (cadr (plist-get reply :elements)) :rows) '(("lexer" "passed"))))
+      (should-not (plist-member reply :panel)))
+    (should (equal (mapcar (lambda (e) (plist-get e :id)) (plist-get (+test-aur-request "get" "tests") :elements))
+                   '("tests")))
+    (should (string-match-p "no element" (plist-get (+test-aur-request "get" "nope") :error)))
+    ;; --changed: nothing, all read already (any read counts); then only
+    ;; what changed, and what's gone.
+    (should-not (plist-get (+test-aur-request-with "get" nil "changed") :elements))
+    (+test-aur-request "update" "build" "{\"value\":7}")
+    (let ((reply (+test-aur-request-with "get" nil "changed")))
+      (should (equal (mapcar (lambda (e) (plist-get e :id)) (plist-get reply :elements)) '("build")))
+      (should (equal (plist-get (car (plist-get reply :elements)) :value) 7))
+      (should-not (plist-get reply :removed)))
+    (+test-aur-request "remove" "tests")
+    (should (equal (plist-get (+test-aur-request-with "get" nil "changed") :removed) '("tests")))))
+
 
 (ert-deftest agent-ui-request/shown-though-its-pane-cant-open ()
   "Its canvas's pane can't open: shown all the same, the reply ok, saying
@@ -281,6 +319,13 @@ Asynchronously: this Emacs, its server, answers it meanwhile."
 (ert-deftest agent-ui-request/the-script ()
   (+test-aur
     (+test-aur-with-server
+      ;; get, --changed taken as its option.
+      (+test-aur-run '("show" "{\"id\":\"g\",\"type\":\"text\",\"text\":\"hi\"}"))
+      (let ((run (+test-aur-run '("get" "g" "--changed"))))
+        (should (= (car run) 0))
+        (should (string-match-p "\"text\":\"hi\"" (cdr run))))
+      (should (= (car (+test-aur-run '("get" "a" "b"))) 2))
+      (+test-aur-run '("remove" "g"))
       ;; JSON as an argument, or on stdin.
       (should (equal (+test-aur-run '("show" "{\"id\":\"p\",\"type\":\"progress\",\"max\":4}"))
                      (cons 0 (format "{\"ok\":true,\"id\":\"p\",\"link\":\"%s\"}"

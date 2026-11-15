@@ -386,6 +386,31 @@ in a project of its own; closed after."
       (should-not (agent-ui-panels--stale panel)))
     (should (memq #'agent-ui-panels--shown (buffer-local-value 'window-buffer-change-functions canvas)))))
 
+(ert-deftest agent-ui-panels/read-by-an-agent-while-hidden ()
+  "Hidden, read by an agent (agent-ui get): fetched then if its data is
+older than its :every, its reply saying it's fetching until its query ends;
+not fetched twice meanwhile, nor again while its data is fresh."
+  (+test-aup-open "read"
+    (should (+test-wait-for (lambda () (memq 'done +test-aup-calls)) 3))
+    (switch-to-buffer "*scratch*")
+    (setq +test-aup-calls nil)
+    ;; Fresh (fetched under a second ago): read as it is.
+    (should-not (agent-ui-panel-read-fetch panel))
+    (should-not +test-aup-calls)
+    (+test-sleep 1.1)
+    ;; Old: fetched now, its query running.
+    (let ((reply (agent-ui-do "get" nil nil canvas)))
+      (should (eq (plist-get reply :fetching) t))
+      (should (equal (plist-get reply :panel) "read"))
+      (should (< (plist-get reply :fetched) 1)))
+    (should (equal +test-aup-calls '(fetch)))
+    (agent-ui-panel-read-fetch panel)
+    (should (equal +test-aup-calls '(fetch)))
+    (should (+test-wait-for (lambda () (not (agent-ui-panel-read-fetch panel))) 3))
+    (let ((reply (agent-ui-do "get" "t" nil canvas)))
+      (should (eq (plist-get reply :fetching) :false))
+      (should (equal (plist-get (aref (plist-get reply :elements) 0) :text) "42")))))
+
 (ert-deftest agent-ui-panels/a-query-not-started-twice ()
   "Every 0.1 s, its command 0.6 s: not started again while it runs; the
 fetch goes on."

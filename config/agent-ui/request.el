@@ -45,7 +45,8 @@ names start with it).")
   "While a request is answered: the agent's directory (its sources' default).")
 
 (defconst agent-ui-operations
-  '("show" "update" "append" "remove" "clear" "list" "types" "batch" "render" "define" "snapshot" "bug" "check" "panels" "open")
+  '("show" "update" "append" "remove" "clear" "list" "get" "types" "batch" "render" "define" "snapshot" "bug" "check"
+    "panels" "open")
   "What cmd/agent-ui does.")
 
 ;; ====== THE CANVAS ======
@@ -128,6 +129,8 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
                                                  (agent-ui-source-status (plist-get e :id) :canvas canvas))))
                                 (append e (when source (list :source source)))))
                             (agent-ui-elements :canvas canvas)))))
+    ;; What it shows, as data: never a picture (see `agent-ui--get').
+    ("get" (agent-ui--get id canvas))
     ("render"
      ;; Drawn as text at the canvas's width (its window's, else the default):
      ;; for the agent to see what it draws.
@@ -215,12 +218,59 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
         (cond
          ((not (stringp op))
           (agent-ui--fail "batch: each operation has \"op\": show, update, append or remove"))
-         ((member op '("batch" "types" "list" "render" "define" "snapshot" "bug" "check" "panels" "open"))
+         ((member op '("batch" "types" "list" "get" "render" "define" "snapshot" "bug" "check" "panels" "open"))
           (agent-ui--fail "batch: %s isn't done in a batch" op)))
         (agent-ui-do op (plist-get rest :id)
                      (if (equal op "show") rest (agent-ui--plist-delete rest :id))
                      canvas))
     (error (list :ok :false :error (agent-ui-error-message err)))))
+
+;; ====== READING IT: get ======
+;; An agent reads what a canvas or a panel shows as data (its elements with
+;; their properties and values), never as a picture. A panel hidden whose data
+;; is old is fetched first (config/agent-ui/panels.el): the reply says it's
+;; fetching, and cmd/agent-ui reads again once its queries end. --changed:
+;; only the elements changed since this session's last read of that canvas
+;; (and the ones gone), each session's reads remembered by the canvas.
+
+(defvar-local agent-ui--reads nil
+  "In a canvas: what each session read last, by its canvas's name: a hash
+table of an element's id to its hash.")
+
+(defun agent-ui--get (id canvas)
+  "The reply to get (see above): ID's element, or all of CANVAS's."
+  (let* ((buffer (agent-ui--buffer canvas))
+         (panel (and (boundp 'agent-ui-panels--state) (buffer-local-value 'agent-ui-panels--state buffer)))
+         (fetching (and panel (fboundp 'agent-ui-panel-read-fetch) (agent-ui-panel-read-fetch panel)))
+         (ids (if (and id (not (string-empty-p id)))
+                  (progn (agent-ui-get id :canvas canvas) (list id))
+                (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas))))
+         (elements (mapcar (lambda (id) (agent-ui-get id :canvas canvas)) ids))
+         (changed (member "changed" agent-ui--request-options))
+         (reader (or agent-ui--request-canvas ""))
+         (seen (with-current-buffer buffer
+                 (or (cdr (assoc reader agent-ui--reads))
+                     (let ((table (make-hash-table :test #'equal)))
+                       (push (cons reader table) agent-ui--reads)
+                       table))))
+         (shown (if changed
+                    (seq-remove (lambda (e) (equal (gethash (plist-get e :id) seen) (sxhash-equal e))) elements)
+                  elements))
+         ;; Gone since the last read (all of them read: no ID).
+         (gone (when (and changed (not (and id (not (string-empty-p id)))))
+                 (seq-remove (lambda (old) (member old ids)) (hash-table-keys seen)))))
+    ;; Remembered once read for good: not while its fetch runs (read again).
+    (unless fetching
+      (dolist (e elements) (puthash (plist-get e :id) (sxhash-equal e) seen))
+      (dolist (old gone) (remhash old seen)))
+    (append (list :ok t :canvas (buffer-local-value 'agent-ui--canvas-name buffer))
+            (when panel
+              (list :panel (agent-ui-panels--name panel)
+                    :root (abbreviate-file-name (agent-ui-panels--root panel))
+                    :fetched (let ((ago (agent-ui-panel-fetched panel))) (and ago (round ago)))
+                    :fetching (if fetching t :false)))
+            (list :elements (vconcat shown))
+            (when changed (list :removed (vconcat gone))))))
 
 ;; ====== THE REQUEST ======
 

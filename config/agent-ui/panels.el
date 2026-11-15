@@ -240,7 +240,9 @@ its fetches' timer, its commands running, its last error."
   ;; saying how long they've been loading; the queries that ended once, by
   ;; key (their element shows something: a refresh is said loading late).
   stale errors (running (make-hash-table :test #'equal)) titles ticker
-  (loaded (make-hash-table :test #'equal)))
+  (loaded (make-hash-table :test #'equal))
+  ;; When its :fetch last ran (`float-time'), nil before.
+  fetched)
 
 (defvar-local agent-ui-panels--state nil
   "In a project panel's canvas: the panel (an `agent-ui-panels--state').")
@@ -628,17 +630,46 @@ long itself (Emacs frozen), said."
   (cond
    ((not (agent-ui-panels--live-p panel)) (agent-ui-panels--stop panel))
    ((not (agent-ui-panels--visible-p panel)) (setf (agent-ui-panels--stale panel) t))
-   (t
-    (setf (agent-ui-panels--stale panel) nil)
-    (let* ((start (float-time))
-           (well (agent-ui-panels--call panel :fetch))
-           (took (- (float-time) start)))
-      (cond
-       ((> took agent-ui-panel-slow)
-        (agent-ui-panels--failed
-         panel "fetch" (format "took %.2f s itself, Emacs frozen meanwhile: run commands with agent-ui-panel-run"
-                               took)))
-       (well (agent-ui-panels--well panel "fetch")))))))
+   (t (agent-ui-panels--fetch-now panel))))
+
+(defun agent-ui-panels--fetch-now (panel)
+  "PANEL's :fetch, now, shown or not."
+  (setf (agent-ui-panels--stale panel) nil
+        (agent-ui-panels--fetched panel) (float-time))
+  (let* ((start (float-time))
+         (well (agent-ui-panels--call panel :fetch))
+         (took (- (float-time) start)))
+    (cond
+     ((> took agent-ui-panel-slow)
+      (agent-ui-panels--failed
+       panel "fetch" (format "took %.2f s itself, Emacs frozen meanwhile: run commands with agent-ui-panel-run"
+                             took)))
+     (well (agent-ui-panels--well panel "fetch")))))
+
+;; READ BY AN AGENT, HIDDEN
+;; A panel hidden fetches nothing; read by an agent (agent-ui get), it's
+;; fetched then if its data is older than its :every (or it was never
+;; fetched, or a fetch was missed): the agent reads it again once its queries
+;; end (cmd/agent-ui does). Never fetched more often than its :every so.
+(defun agent-ui-panel-read-fetch (panel)
+  "PANEL read by an agent: fetched now if it's hidden and its data is old
+\(see above). Non-nil while its queries run."
+  (let ((every (plist-get (agent-ui-panels--script panel) :every))
+        (fetched (agent-ui-panels--fetched panel)))
+    (when (and (agent-ui-panels--script panel)
+               (agent-ui-panels--live-p panel)
+               (not (agent-ui-panels--visible-p panel))
+               (zerop (hash-table-count (agent-ui-panels--running panel)))
+               (or (null fetched)
+                   (agent-ui-panels--stale panel)
+                   (and every (> (- (float-time) fetched) every))))
+      (agent-ui-panels--fetch-now panel))
+    (> (hash-table-count (agent-ui-panels--running panel)) 0)))
+
+(defun agent-ui-panel-fetched (panel)
+  "Seconds since PANEL last fetched, or nil if it never has."
+  (when-let* ((fetched (agent-ui-panels--fetched panel)))
+    (- (float-time) fetched)))
 
 (defun agent-ui-panels--shown (window)
   "WINDOW shows a panel's canvas now (its `window-buffer-change-functions'):

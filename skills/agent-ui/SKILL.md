@@ -44,6 +44,7 @@ agent-ui append ID JSON       # add to its lists: a table's rows, a checklist's 
 agent-ui remove ID            # remove it
 agent-ui clear                # remove every element
 agent-ui list                 # the canvas's elements: ids and types
+agent-ui get [ID] [--changed] # its elements as data: how to read a panel
 agent-ui types [TYPE]         # the types, their properties, an example each
 agent-ui batch JSON           # several operations at once: [{"op":"show",...}, {"op":"update","id":...,...}]
 agent-ui render JSON          # an element drawn as text, as the canvas would (nothing shown): {"ok":true,"text":...}

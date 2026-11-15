@@ -92,6 +92,10 @@ nil if it can't be reached."
             :inputSchema '(:type "object"))
       (list :name "list" :description "The canvas's elements: ids, types, their sources' state."
             :inputSchema '(:type "object"))
+      (list :name "get" :description "What the canvas (or an open panel: its panel argument) shows, as data: its elements, or one, with their properties and values. Read panels so, never by a snapshot. changed: only those changed since your last read (and removed: those gone). A panel's reply says when it last fetched; one hidden with old data is fetched first."
+            :inputSchema (list :type "object"
+                               :properties (list :id '(:type "string" :description "One element only")
+                                                 :changed '(:type "boolean" :description "Only what changed since your last read"))))
       (list :name "types" :description "The element types: their properties, an example each."
             :inputSchema '(:type "object" :properties (:type (:type "string" :description "One type only"))))
       (list :name "render" :description "An element drawn as text, as the canvas would, nothing shown: to see what it looks like."
@@ -161,6 +165,8 @@ an error reply if it said nothing readable)."
                    ("open" (list "open" (or (arg :name) "")))
                    ("clear" (list "clear"))
                    ("list" (list "list"))
+                   ("get" (append (list "get") (and (arg :id) (list (arg :id)))
+                                  (and (eq (arg :changed) t) (list "--changed"))))
                    ("types" (if (arg :type) (list "types" (arg :type)) (list "types")))
                    ("batch" (list "batch" (json (or (arg :operations) []))))
                    ;; The bug as given, but its canvas (an argument of its own).

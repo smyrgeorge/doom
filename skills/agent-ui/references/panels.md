@@ -81,9 +81,19 @@ buffers, `project-current`, `vc`, flymake's diagnostics). Define nothing global:
 `agent-ui panels` lists the project's panels (and which are open); `agent-ui open NAME` opens one in the user's Emacs,
 in its own pane (the MCP tools `panels` and `open`). Its reply's `trusted` false: the user is being asked to let its
 code run. `--panel NAME` (the tools' `panel`) makes any operation work on an open panel: `agent-ui list --panel
-service`, `agent-ui snapshot service --panel service`. Its elements' buttons (`actions`) put their prompt into the
+service`, `agent-ui get --panel service`. Its elements' buttons (`actions`) put their prompt into the
 project's agent session, the latest. The user can also save an element of a canvas as a panel (`S`): its file
 written with the element as it was first shown and an empty `:fetch`, for you to fill in.
+
+## Reading it
+
+To know what a panel shows, read its data: `agent-ui get --panel NAME` (the MCP tool `get` with its `panel`), every
+element with its properties and values as JSON, or one (`agent-ui get ID --panel NAME`). Never take a snapshot of it
+to look at it: that's a picture, for the conversation. `--changed` gives only the elements changed since your last
+read (and `removed`: those gone), for a panel you watch while you work. The reply says when it last fetched
+(`fetched`, seconds ago). A panel the user isn't looking at fetches nothing; reading it fetches it first when its
+data is older than its `:every`, and the command answers once its queries end (10 s at most:
+`AGENT_UI_WAIT`). The same works on your canvas: `agent-ui get [ID]`.
 
 ## Checking it
 

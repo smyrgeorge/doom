@@ -63,7 +63,7 @@ recorded, its reply REPLY (a plist)."
   (+test-aum '(:ok t :types [(:name "progress" :doc "A progress bar: VALUE of MAX.\nMore." :props [(:name "value" :kind "number")])])
     (let ((tools (append (plist-get (plist-get (+test-aum-handle "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}") :result) :tools) nil)))
       (should (equal (mapcar (lambda (tool) (plist-get tool :name)) tools)
-                     '("show" "update" "append" "remove" "clear" "list" "types" "render" "snapshot" "batch" "bug" "panels" "open" "check" "define")))
+                     '("show" "update" "append" "remove" "clear" "list" "get" "types" "render" "snapshot" "batch" "bug" "panels" "open" "check" "define")))
       ;; Each its schema; show's description has the types, from Emacs.
       (dolist (tool tools)
         (should (equal (plist-get (plist-get tool :inputSchema) :type) "object")))
