@@ -3,7 +3,7 @@
 ;; keys everywhere; Linux's Ctrl keys on Linux only, macOS's keys as they
 ;; were. The files binding them are loaded as on macOS (what they bound
 ;; then kept), then again as on Linux. Drawings' keys: test-excalidraw.el;
-;; the sidebar's: test-treemacs.el.
+;; the sidebar's: test-treemacs.el; tiling's others: test-tiling.el.
 
 (require 'xwidget)
 (require 'json)
@@ -12,7 +12,7 @@
 (require 'image-mode)
 
 (defconst +test-keys--files
-  '("config/window" "config/childframe" "config/banner" "config/editor" "config/search"
+  '("config/window" "config/tiling" "config/childframe" "config/banner" "config/editor" "config/search"
     "config/webkit" "config/markdown" "config/html" "config/pdf" "config/image" "config/merge")
   "The files binding the keys below, in config.el's order.")
 
@@ -27,6 +27,9 @@
     (global-map nil "s-[" better-jumper-jump-backward)
     (global-map nil "s-]" better-jumper-jump-forward)
     (global-map nil "s-F" +default/search-project)
+    (evil-window-map nil "e" +my/tiling-choose-strategy)
+    (evil-window-map nil "TAB" +my/tiling-next-strategy)
+    (evil-window-map nil "<backtab>" +my/tiling-previous-strategy)
     (global-map nil "M-RET" nil)
     (evil-normal-state-map nil "M-RET" +my/context-actions)
     (+my/image-mode-map nil "s-=" +my/image-zoom-in)

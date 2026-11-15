@@ -49,6 +49,10 @@ The strategy, chosen in `config.el` (`(setq +my/tiling-strategy 'tall)`), says w
 | `fullscreen` | The current pane alone, the others hidden behind it in order |
 | `bsp` | No main pane: each new pane halves the current one along its longer side |
 
+`SPC w e` chooses another for the session (`M-x +my/tiling-choose-strategy`), and `SPC w TAB` / `SPC w S-TAB` switch to
+the next / previous one (`TAB` / `S-TAB` again go on): the panes are laid out its way at once, and the echo area says
+which (`Tiling: wide (3/5)`). Another workspace's panes follow at its next `SPC w a`.
+
 `SPC w SPC` opens a new pane showing the current buffer, `SPC w a` arranges the panes again (in the strategy chosen,
 the main pane staying the main one), and `SPC w RET` moves the current pane's buffer to the main pane (the main's to
 its place). `SPC w ]` / `SPC w [` make the main pane bigger / smaller, from any pane (`]` / `[` again repeat it).
@@ -64,8 +68,8 @@ it); it keeps its size when you arrange the panes, open one or close another.
 
 In `fullscreen`, a new pane opens alone, just after the current one, and closing it (`SPC w d`, its last tab, `q`)
 shows the next one. One that opens by itself (an agent's canvas) goes behind the current one, hidden just after it:
-`SPC w w` brings it up. Each workspace keeps its own hidden panes. Choosing another strategy shows them all again at its
-next `SPC w a` or `SPC w SPC`, laid out its way: as many as it has room for, the rest staying hidden.
+`SPC w w` brings it up. Each workspace keeps its own hidden panes. Choosing another strategy shows them all again, laid
+out its way: as many as it has room for, the rest staying hidden.
 
 In `bsp`, `SPC w a` lays the panes out as a spiral, each halving the last, and when a pane closes, its space goes to
 its neighbour and every split runs along its longer side again. Splits are always even: a resize lasts until the

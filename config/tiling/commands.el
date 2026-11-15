@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/tiling/commands.el -*- lexical-binding: t; -*-
-;; SPC w SPC, SPC w a, SPC w RET and resizing (SPC w ] / [).
-;; Loaded from config/tiling.el.
+;; SPC w SPC, SPC w a, SPC w RET, resizing (SPC w ] / [) and the strategy
+;; chosen (SPC w e, SPC w TAB). Loaded from config/tiling.el.
 
 (defvar +my/focus-new-windows)          ; config/window.el
 
@@ -127,3 +127,88 @@ as the strategy has it."
   "The current pane smaller, as the strategy has it (config/tiling.el)."
   (interactive)
   (+my/tiling-resize-pane -1))
+
+;; THE STRATEGY CHOSEN (SPC w e) OR ROTATED (SPC w TAB / S-TAB)
+;; For the session (config.el's is the one at startup). The selected frame's
+;; panes, the current workspace's, are laid out its way at once, as SPC w a
+;; does: from fullscreen its hidden panes shown again (as many as it has room
+;; for), to fullscreen the others hidden, the current one in front. From a
+;; side panel, as from the pane used last, the focus staying there. Another
+;; workspace's hidden panes come back at its next SPC w a or SPC w SPC.
+
+(defun +my/tiling--lay-out ()
+  "The selected frame's panes laid out as the strategy does (SPC w a), from a
+pane or from a side panel (as from the pane used last, the focus kept
+there). What to say besides, or nil: hidden panes left for want of room, no
+room for the panes (nothing changed)."
+  (let* ((from (selected-window))
+         ;; config/tiling/apps.el's.
+         (pane (if (memq from (+my/tiling--panes)) from (+my/tiling--last-pane))))
+    (when (and pane (not (eq pane from)))
+      (select-window pane 'norecord))
+    (unwind-protect
+        (condition-case err
+            (let ((strategy (+my/tiling--strategy))
+                  (panes (+my/tiling--ready-panes)))
+              (when (cdr panes)
+                (funcall (plist-get strategy :arrange) panes))
+              (unless (plist-get strategy :hides)
+                (when-let* ((hidden (remq :shown (+my/tiling--slots))))
+                  (format "No room to show %d hidden pane%s"
+                          (length hidden) (if (cdr hidden) "s" "")))))
+          (user-error (error-message-string err)))
+      (when (and (not (eq pane from)) (window-live-p from))
+        (select-window from 'norecord)))))
+
+(defun +my/tiling--set-strategy (name &optional keys)
+  "NAME, one of `+my/tiling-strategies', the strategy (for the session), the
+panes laid out its way (see above). What to say: its name, its place among
+them (KEYS repeating it, if given), what laying out had to say."
+  (unless (assq name +my/tiling-strategies)
+    (user-error "No tiling strategy `%s' (see `+my/tiling-strategies')" name))
+  (setq +my/tiling-strategy name)
+  (let ((note (+my/tiling--lay-out)))
+    (concat (format "Tiling: %s (%d/%d%s)" name
+                    (1+ (seq-position (mapcar #'car +my/tiling-strategies) name))
+                    (length +my/tiling-strategies)
+                    (if keys (format "; %s again" keys) ""))
+            (and note (concat ". " note)))))
+
+(defun +my/tiling-choose-strategy (name)
+  "SPC w e: the tiling strategy NAME, asked for among `+my/tiling-strategies'
+\(the current one the default), for the session; the panes laid out its way
+at once, said (config/tiling.el)."
+  (interactive
+   (let ((names (mapcar (lambda (strategy) (symbol-name (car strategy))) +my/tiling-strategies)))
+     (list (intern (completing-read
+                    (format-prompt "Tiling strategy" (symbol-name +my/tiling-strategy))
+                    (lambda (string predicate action)
+                      (if (eq action 'metadata)
+                          '(metadata (display-sort-function . identity))
+                        (complete-with-action action names string predicate)))
+                    nil t nil nil (symbol-name +my/tiling-strategy))))))
+  (message "%s" (+my/tiling--set-strategy name)))
+
+(defun +my/tiling--rotate-strategy (direction)
+  "The strategy after the current one in `+my/tiling-strategies' (DIRECTION
+1) or before it (-1), wrapping; the panes laid out its way; TAB / S-TAB
+then the next / previous one again (`+my/tiling-strategy-map'), said."
+  (let* ((names (mapcar #'car +my/tiling-strategies))
+         (index (seq-position names +my/tiling-strategy))
+         (name (nth (mod (if index (+ index direction) (if (> direction 0) 0 -1)) (length names))
+                    names))
+         (said (+my/tiling--set-strategy name "TAB / S-TAB")))
+    (set-transient-map +my/tiling-strategy-map t)
+    (message "%s" said)))
+
+(defun +my/tiling-next-strategy ()
+  "SPC w TAB: the next tiling strategy, the panes laid out its way, said; TAB
+again the one after, S-TAB the one before (config/tiling.el)."
+  (interactive)
+  (+my/tiling--rotate-strategy 1))
+
+(defun +my/tiling-previous-strategy ()
+  "SPC w S-TAB: the previous tiling strategy, the panes laid out its way,
+said; S-TAB again the one before, TAB the one after (config/tiling.el)."
+  (interactive)
+  (+my/tiling--rotate-strategy -1))

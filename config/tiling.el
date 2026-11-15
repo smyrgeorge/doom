@@ -7,8 +7,9 @@
 ;; TILING
 ;; SPC w SPC opens a new pane where the tiling strategy puts it, like a tiling
 ;; window manager does (its layouts). The strategy is chosen in config.el
-;; (`+my/tiling-strategy'). The usual splits (SPC w v, SPC w s...) don't
-;; change: tiling only happens on these keys.
+;; (`+my/tiling-strategy'), another for the session with SPC w e or SPC w
+;; TAB. The usual splits (SPC w v, SPC w s...) don't change: tiling only
+;; happens on these keys.
 ;;   SPC w SPC   a new pane where the strategy puts it, showing the current
 ;;               buffer (its only tab, as SPC w v), which takes focus
 ;;   SPC w a     arrange the panes as the strategy lays them out (e.g. after
@@ -29,6 +30,16 @@
 ;;   SPC w w / W the next / previous pane in front, in the fullscreen strategy
 ;;               (its panes hidden but one, see below); else the next /
 ;;               previous window, as Evil's
+;;   SPC w e     another strategy (M-x +my/tiling-choose-strategy), asked for
+;;               among `+my/tiling-strategies', for the session: the panes
+;;               laid out its way at once (as SPC w a), said
+;;   SPC w TAB / the next / previous strategy of `+my/tiling-strategies'
+;;   S-TAB       (wrapping), the panes laid out its way, said ("Tiling: wide
+;;               (3/5)"); TAB and S-TAB again the next / previous one. From
+;;               fullscreen, its hidden panes shown again (as many as fit);
+;;               to fullscreen, the others hidden, the current one in front;
+;;               from a side panel, the panes laid out all the same. Another
+;;               workspace's hidden panes: at its next SPC w a or SPC w SPC
 ;; Panes are the frame's windows besides its side panels (treemacs, popups...),
 ;; in order: left to right, top to bottom; the main pane is the first one, or
 ;; where the strategy has it (tall-right: on the right).
@@ -203,7 +214,21 @@ pane, that pane within the others. Without one: nothing to resize, said.")
         :desc "Pane bigger (tiling)"       "}" #'+my/tiling-pane-bigger
         :desc "Pane smaller (tiling)"      "{" #'+my/tiling-pane-smaller
         :desc "Next pane / window"         "w" #'+my/tiling-next-pane
-        :desc "Previous pane / window"     "W" #'+my/tiling-previous-pane))
+        :desc "Previous pane / window"     "W" #'+my/tiling-previous-pane
+        :desc "Choose strategy (tiling)"   "e" #'+my/tiling-choose-strategy
+        :desc "Next strategy (tiling)"     "TAB" #'+my/tiling-next-strategy
+        :desc "Previous strategy (tiling)" "<backtab>" #'+my/tiling-previous-strategy))
+
+(defvar +my/tiling-strategy-map
+  (let ((map (make-sparse-keymap)))
+    ;; Tab and Shift+Tab as such too: a mode binding them (org's) would take
+    ;; them before they're read as TAB and S-TAB.
+    (define-key map (kbd "TAB") #'+my/tiling-next-strategy)
+    (define-key map [tab] #'+my/tiling-next-strategy)
+    (define-key map [backtab] #'+my/tiling-previous-strategy)
+    (define-key map [S-tab] #'+my/tiling-previous-strategy)
+    map)
+  "After SPC w TAB / S-TAB: TAB the next strategy, S-TAB the previous one.")
 
 ;; ====== CODE ======
 

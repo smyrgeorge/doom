@@ -1724,6 +1724,226 @@ too small to halve: SPC w SPC says so."
           (condition-case err (+my/tiling-split) (user-error (setq error err)))))
       (should (equal (cadr error) "No room for another pane")))))
 
+;; ====== SPC w e, SPC w TAB: THE STRATEGY CHOSEN OR ROTATED ======
+
+(defmacro +test-tiling-switch (&rest body)
+  "BODY as `+test-tiling', three panes tall (A the main one, B, C), B
+selected; `said' what was said last, `map' the transient map set last; no
+pane hidden before or after."
+  (declare (indent 0))
+  `(+test-tiling
+     (set-frame-parameter nil '+my/tiling-hidden nil)
+     (unwind-protect
+         (let ((main (selected-window))
+               said map)
+           (ignore said map)
+           (dolist (name '("B" "C"))
+             (select-window main)
+             (pop-to-buffer name '(+my/tiling-display-buffer)))
+           (select-window (get-buffer-window "B"))
+           (cl-letf (((symbol-function 'message)
+                      (lambda (&rest args) (setq said (and (car args) (apply #'format args)))))
+                     ((symbol-function 'set-transient-map)
+                      (lambda (keymap &rest _) (setq map keymap))))
+             ,@body))
+       (set-frame-parameter nil '+my/tiling-hidden nil))))
+
+(defun +test-tiling--choose (name)
+  "SPC w e, NAME picked: what the prompt offered, as (PROMPT CANDIDATES
+DEFAULT)."
+  (let (asked)
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (prompt collection _predicate require-match _initial _history default)
+                 (setq asked (list prompt (all-completions "" collection) default))
+                 (should require-match)
+                 name)))
+      (call-interactively #'+my/tiling-choose-strategy))
+    asked))
+
+(defun +test-tiling--switched-p (strategy names selected)
+  "Non-nil if the panes are laid out as STRATEGY (tall, tall-right, wide), in
+the order of NAMES (the main pane first), SELECTED's pane selected."
+  (and (+my/tiling--stack-parts (symbol-value (intern (format "+my/tiling--%s" strategy)))
+                                (window-main-window))
+       (equal (+test-tiling--names (+my/tiling--ordered-panes)) names)
+       (equal (buffer-name (window-buffer (selected-window))) selected)))
+
+(ert-deftest tiling/choose-a-strategy ()
+  "SPC w e (M-x +my/tiling-choose-strategy): every strategy offered in order,
+the current one the default; the one picked set, the panes laid out its way
+at once, the selected one still so, said."
+  (+test-tiling-switch
+    (should (equal (+test-tiling--choose "wide")
+                   (list (format-prompt "Tiling strategy" "tall")
+                         (mapcar (lambda (strategy) (symbol-name (car strategy))) +my/tiling-strategies)
+                         "tall")))
+    (should (eq +my/tiling-strategy 'wide))
+    (should (+test-tiling--switched-p 'wide '("A" "B" "C") "B"))
+    (should (equal said "Tiling: wide (3/5)"))
+    (should (equal (nth 2 (+test-tiling--choose "tall-right")) "wide"))
+    (should (+test-tiling--switched-p 'tall-right '("A" "B" "C") "B"))
+    (should (equal said "Tiling: tall-right (2/5)"))))
+
+(ert-deftest tiling/choose-an-unknown-strategy ()
+  (+test-tiling-switch
+    (should-error (+my/tiling-choose-strategy 'grid) :type 'user-error)
+    (should (eq +my/tiling-strategy 'tall))))
+
+(ert-deftest tiling/rotate-the-strategies ()
+  "SPC w TAB: the next strategy, wrapping, the panes laid out its way, its
+name said; TAB / S-TAB then the next / previous one (a transient map); SPC
+w S-TAB the previous one."
+  (+test-tiling-switch
+    (+my/tiling-next-strategy)
+    (should (eq +my/tiling-strategy 'tall-right))
+    (should (+test-tiling--switched-p 'tall-right '("A" "B" "C") "B"))
+    (should (equal said "Tiling: tall-right (2/5; TAB / S-TAB again)"))
+    (should (eq map +my/tiling-strategy-map))
+    (should (eq (lookup-key map (kbd "TAB")) #'+my/tiling-next-strategy))
+    (should (eq (lookup-key map [tab]) #'+my/tiling-next-strategy))
+    (should (eq (lookup-key map [backtab]) #'+my/tiling-previous-strategy))
+    (should (eq (lookup-key map [S-tab]) #'+my/tiling-previous-strategy))
+    (+my/tiling-next-strategy)
+    (should (equal said "Tiling: wide (3/5; TAB / S-TAB again)"))
+    (should (+test-tiling--switched-p 'wide '("A" "B" "C") "B"))
+    (+my/tiling-next-strategy)
+    (should (eq +my/tiling-strategy 'fullscreen))
+    (+my/tiling-next-strategy)
+    (should (eq +my/tiling-strategy 'bsp))
+    (should (+my/tiling--bsp-p (window-main-window)))
+    (should (= (length (+my/tiling--panes)) 3))
+    ;; Wrapping, both ways.
+    (+my/tiling-next-strategy)
+    (should (equal said "Tiling: tall (1/5; TAB / S-TAB again)"))
+    (should (+test-tiling--switched-p 'tall '("A" "B" "C") "B"))
+    (+my/tiling-previous-strategy)
+    (should (equal said "Tiling: bsp (5/5; TAB / S-TAB again)"))
+    (should (eq map +my/tiling-strategy-map))
+    (+my/tiling-previous-strategy)
+    (should (eq +my/tiling-strategy 'fullscreen))))
+
+(ert-deftest tiling/rotate-by-its-keys ()
+  "C-w TAB (SPC w TAB): the next strategy; TAB again (or the Tab key, which a
+mode may bind as such): the next ones; S-TAB the one before; any other key
+ends it."
+  (+test-tiling
+    (cl-letf (((symbol-function 'message) #'ignore))
+      (evil-normal-state)
+      (pop-to-buffer "B" '(+my/tiling-display-buffer))
+      (let ((tab-map (make-sparse-keymap)))
+        ;; A mode binding the Tab key itself (org's).
+        (define-key tab-map [tab] #'ignore)
+        (let ((minor-mode-overriding-map-alist `((+test-tiling-tab . ,tab-map)))
+              (+test-tiling-tab t))
+          (execute-kbd-macro (kbd "C-w TAB"))
+          (should (eq +my/tiling-strategy 'tall-right))
+          (execute-kbd-macro (kbd "TAB <tab>"))
+          (should (eq +my/tiling-strategy 'fullscreen))
+          (execute-kbd-macro (kbd "<backtab> <S-tab>"))
+          (should (eq +my/tiling-strategy 'tall-right))
+          (should (+my/tiling--stack-parts +my/tiling--tall-right (window-main-window)))
+          (execute-kbd-macro (kbd "0 TAB"))
+          (should (eq +my/tiling-strategy 'tall-right)))))))
+
+(ert-deftest tiling/rotate-from-a-strategy-not-listed ()
+  "A strategy not among them (set by hand): the first one next, the last one
+before."
+  (+test-tiling-switch
+    (setq +my/tiling-strategy 'grid)
+    (+my/tiling-next-strategy)
+    (should (eq +my/tiling-strategy 'tall))
+    (setq +my/tiling-strategy 'grid)
+    (+my/tiling-previous-strategy)
+    (should (eq +my/tiling-strategy 'bsp))))
+
+(ert-deftest tiling/strategy-to-fullscreen-and-back ()
+  "To fullscreen: the others hidden in order, the current one in front; from
+it to another: its hidden panes shown again, laid out its way, the one in
+front selected."
+  (+test-tiling-switch
+    (+my/tiling-choose-strategy 'fullscreen)
+    (should (= (length (window-list)) 1))
+    (should (equal (+test-tiling--slots) '("A" "*B" "C")))
+    (should (equal said "Tiling: fullscreen (4/5)"))
+    (+my/tiling-next-pane)
+    (should (equal (+test-tiling--slots) '("A" "B" "*C")))
+    (+my/tiling-previous-strategy)
+    (should-not (+my/tiling--hidden-p))
+    (should (+test-tiling--switched-p 'wide '("A" "B" "C") "C"))
+    (should (equal said "Tiling: wide (3/5; TAB / S-TAB again)"))))
+
+(ert-deftest tiling/strategy-from-fullscreen-as-many-as-fit ()
+  "From fullscreen with more panes than another has room for: as many shown
+as fit, the rest still hidden, said."
+  (+test-tiling-switch
+    (+my/tiling-choose-strategy 'fullscreen)
+    (let ((room (+test-tiling--room 'tall)))
+      (dotimes (index room)
+        (+my/tiling-split)
+        (switch-to-buffer (+test-buffer (format "P%d" index))))
+      (+my/tiling-choose-strategy 'tall)
+      (should (= (length (+my/tiling--panes)) room))
+      (should (+my/tiling--tall-p (window-main-window)))
+      (should (equal said "Tiling: tall (1/5). No room to show 3 hidden panes"))
+      (should (= (length (remq :shown (+my/tiling--slots))) 3)))))
+
+(ert-deftest tiling/strategy-no-room-said ()
+  "More panes than the strategy has room for (laid out by hand): the strategy
+set, the panes as they were, said."
+  (+test-tiling
+    (cl-letf* ((said nil)
+               ((symbol-function 'message)
+                (lambda (&rest args) (setq said (and (car args) (apply #'format args))))))
+      (let* ((room (+test-tiling--room 'tall))
+             (names (apply #'+test-tiling--grid (make-list (1+ (/ room 2)) 2)))
+             (count (length names))
+             (layout (+test-tiling--layout)))
+        (should (> count room))
+        (+my/tiling-choose-strategy 'tall-right)
+        (should (eq +my/tiling-strategy 'tall-right))
+        (should (equal (+test-tiling--layout) layout))
+        (should (equal said (format "Tiling: tall-right (2/5). No room for %d panes" count)))))))
+
+(ert-deftest tiling/strategy-from-a-side-panel ()
+  "From a side panel (the sidebar, a popup): the strategy set, the panes laid
+out all the same (not \"Not in a pane\"), the side panel kept and still
+selected; to fullscreen, the pane used last in front."
+  (+test-tiling-switch
+    (let ((side (display-buffer-in-side-window (+test-buffer "SIDE")
+                                               '((side . left) (window-width . 10)))))
+      (select-window (get-buffer-window "C"))
+      (select-window side)
+      (+my/tiling-next-strategy)
+      (should (eq (selected-window) side))
+      (should (equal said "Tiling: tall-right (2/5; TAB / S-TAB again)"))
+      (should (+my/tiling--stack-parts +my/tiling--tall-right (window-main-window)))
+      (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "C")))
+      (+my/tiling-choose-strategy 'fullscreen)
+      (should (eq (selected-window) side))
+      (should (window-live-p side))
+      (should (equal (+test-tiling--slots) '("A" "B" "*C")))
+      (+my/tiling-choose-strategy 'tall)
+      (should (eq (selected-window) side))
+      (should (equal (+test-tiling--names (+my/tiling--ordered-panes)) '("A" "B" "C")))
+      (should (+my/tiling--tall-p (window-main-window))))))
+
+(ert-deftest tiling/strategy-with-one-pane ()
+  "One pane: the strategy set and said, nothing to lay out."
+  (+test-tiling
+    (cl-letf* ((said nil)
+               ((symbol-function 'message)
+                (lambda (&rest args) (setq said (and (car args) (apply #'format args)))))
+               ((symbol-function 'set-transient-map) #'ignore))
+      (let ((window (selected-window)))
+        (+my/tiling-next-strategy)
+        (should (eq +my/tiling-strategy 'tall-right))
+        (should (equal said "Tiling: tall-right (2/5; TAB / S-TAB again)"))
+        (+my/tiling-choose-strategy 'fullscreen)
+        (should (equal said "Tiling: fullscreen (4/5)"))
+        (should-not (+my/tiling--hidden-p))
+        (should (equal (window-list) (list window)))
+        (should (eq (selected-window) window))))))
+
 ;; ====== KEYS ======
 
 (ert-deftest tiling/keys ()
@@ -1735,7 +1955,10 @@ too small to halve: SPC w SPC says so."
   (should (eq (lookup-key evil-window-map "}") #'+my/tiling-pane-bigger))
   (should (eq (lookup-key evil-window-map "{") #'+my/tiling-pane-smaller))
   (should (eq (lookup-key evil-window-map "w") #'+my/tiling-next-pane))
-  (should (eq (lookup-key evil-window-map "W") #'+my/tiling-previous-pane)))
+  (should (eq (lookup-key evil-window-map "W") #'+my/tiling-previous-pane))
+  (should (eq (lookup-key evil-window-map "e") #'+my/tiling-choose-strategy))
+  (should (eq (lookup-key evil-window-map (kbd "TAB")) #'+my/tiling-next-strategy))
+  (should (eq (lookup-key evil-window-map (kbd "<backtab>")) #'+my/tiling-previous-strategy)))
 
 ;; ====== TILING FIRST ======
 
