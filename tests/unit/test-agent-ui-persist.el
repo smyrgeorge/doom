@@ -55,7 +55,11 @@ window shown, saves at once; what it makes, killed after."
     (should (equal (agent-ui-persist-file session) (+test-aup-file)))
     (agent-ui-show '(:id "b" :type "progress" :max 4 :title "Build") :canvas name)
     (agent-ui-update "b" '(:value 3) :canvas name)
-    (should (equal (+test-aup-saved) '((:id "b" :type "progress" :max 4 :title "Build" :value 3))))
+    ;; As given, with the times its values came (doom-ht6.31).
+    (let ((saved (+test-aup-saved)))
+      (should (equal (mapcar (lambda (e) (agent-ui--plist-delete e :times)) saved)
+                     '((:id "b" :type "progress" :max 4 :title "Build" :value 3))))
+      (should (equal (mapcar #'cadr (plist-get (plist-get (car saved) :times) :values)) '(3 0))))
     (agent-ui-show '(:id "t" :type "text" :text "ü ✓") :canvas name)
     (agent-ui-remove "b" :canvas name)
     (+test-aup-settle)
@@ -158,6 +162,31 @@ lost)."
                 session))
     ;; A canvas with elements already: left as it is.
     (should-not (agent-ui-persist-restore session))))
+
+;; doom-ht6.31
+(ert-deftest agent-ui-persist/a-progress-bars-times ()
+  "A progress bar's times are kept with it: back after a restart, the time
+elapsed and an item takes, the time left, the same; its next value goes
+on from them."
+  (+test-aup
+    (let* ((now 1794335400.0)
+           (agent-ui-clock (lambda () now)))
+      (cl-flet ((draw () (substring-no-properties
+                          (agent-ui-render (agent-ui-get "bugs" :canvas name)
+                                           (agent-ui-context :width 100 :id "bugs")))))
+        (agent-ui-show '(:id "bugs" :type "progress" :max 20 :unit "bugs") :canvas name)
+        (dolist (value '(1 2 3 4))
+          (setq now (+ now (* (+ 8 value) 60)))
+          (agent-ui-update "bugs" (list :value value) :canvas name))
+        (let ((before (draw)))
+          (should (string-search "\n42m 00s elapsed · ~10 min a bug (last 4) · ~2h 50m left" before))
+          (agent-ui-persist-save (get-buffer (agent-ui-canvas-buffer-name name)))
+          (kill-buffer (agent-ui-canvas-buffer-name name))
+          (should (= (agent-ui-persist-restore session) 1))
+          (should (equal (draw) before)))
+        (setq now (+ now (* 13 60)))
+        (agent-ui-update "bugs" '(:value 5) :canvas name)
+        (should (string-search "\n55m 00s elapsed · ~11 min a bug (last 5) · ~2h 45m left" (draw)))))))
 
 ;; doom-ht6.29
 (ert-deftest agent-ui-persist/a-type-dropped-since ()

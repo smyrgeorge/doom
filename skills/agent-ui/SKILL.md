@@ -73,8 +73,8 @@ and `clear` are a canvas's own. It closes, is kept and comes back with your sess
 
 Pick the one that fits what you have to tell.
 
-- **Here, below:** `progress` a run, a bar; `steps` a plan, a task's progress; `table` records, results, filled in
-  by key.
+- **Here, below:** `progress` a run, a bar, work items one by one; `steps` a plan, a task's progress; `table`
+  records, results, filled in by key.
 - **Asking the user** ([asking.md](references/asking.md)): `choice` pick from a list; `compare` alternatives to see
   side by side; `confirm` yes or no before something risky; `form` several values at once; `rank` an order; `slider`
   a number in a range; `todo` a checklist you both tick. Also: picking rows, files or chips (`select`), a plan
@@ -95,10 +95,17 @@ it. Its rate and the time left (`3.4 MB/s  19s left`) are worked out from your u
 update its `value` as it goes (every second or so) rather than once at the end. `"pie": true` draws it small, on one
 line (`◑ 7/12  58%  linking`): for a panel's corner, or several side by side.
 
+**Work items one by one** (bugs, an epic's tickets): `max` their count, `unit` what they are, its `value` updated
+after each one. Minutes apart, a line under it says the time elapsed, an item takes and left, and when it should
+end: `1h 48m elapsed · ~9 min a bug (last 8) · ~6h 50m left, about 01:40`. `started` (a timestamp, or seconds ago):
+the work began before the bar. Update it, don't show it again (its times start again).
+
 ```sh
 agent-ui show '{"id":"build","type":"progress","title":"Build","max":12,"label":"configuring"}'
 agent-ui update build '{"value":7,"label":"linking"}'
 agent-ui update build '{"value":12,"status":"done","label":"done in 41s"}'
+agent-ui show '{"id":"bugs","type":"progress","title":"Bug fixing","max":58,"unit":"bugs","label":"doom-sq6.3"}'
+agent-ui update bugs '{"value":13,"label":"doom-sq6.14"}'
 ```
 
 ### `steps`

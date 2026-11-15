@@ -208,6 +208,10 @@ killed after."
       (should (string-search "Plans go there too, always, without being asked" text))
       (should (string-search "as steps (its acceptance criteria)" text))
       (should (string-search "A project's issues and their status aren't shown there" text))
+      ;; Work items one by one: a progress bar, updated after each (doom-ht6.31).
+      (should (string-search "a long run of work items (bugs, tickets done one by one) as progress, max their count, its value updated after each one"
+                             text))
+      (should (string-search "started: when the work began, if before the bar" text))
       (should-not (string-search "issues board" text))
       (should-not (string-search "files or issues" text))
       ;; Questions: on a canvas of its own, as the interactive element that
@@ -265,6 +269,9 @@ the canvas, what's needed only at times goes into its references.")
     (should (string-search "A project's issues and their status aren't shown" core))
     (should-not (string-search "`issues`" skill))
     (should-not (string-match-p "issues' ids\\|files, issues" skill))
+    ;; Work items one by one: progress, updated after each (doom-ht6.31).
+    (should (string-search "**Work items one by one** (bugs, an epic's tickets): `max` their count" core))
+    (should (string-search "`started` (a timestamp, or seconds ago)" core))
     ;; Information goes on the canvas; questions too, beyond a quick one
     ;; (doom-ht6.28).
     (should (string-search "**Information goes here:**" core))

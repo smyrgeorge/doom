@@ -354,7 +354,7 @@ one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
          (title (or (plist-get element :title) id)))
     (make-directory dir t)
     (let ((coding-system-for-write 'utf-8))
-      ;; Drawn in its canvas, its id given: as it's shown (a bar's rate).
+      ;; Drawn in its canvas, its id given: as it's shown.
       (write-region (agent-ui-snapshot-svg (agent-ui--in canvas
                                              (agent-ui-render element (plist-put (copy-sequence ctx) :id id)))
                                            ctx)

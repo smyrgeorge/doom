@@ -198,7 +198,7 @@ tab of its canvas's pane when first shown; a name is letters, digits, spaces, `_
 | `text` | A paragraph | `text`, `face` (plain, muted, success, warning, error) |
 | `markdown` | Markdown, drawn as agent-shell draws replies (its ```` ```mermaid ```` blocks as diagrams) | `markdown` |
 | `table` | Columns and rows, fitting the width; with a `key` column (index or name), appending a row by its key replaces it; sorted by a column (`s` on it in the canvas); buttons on each row with its cells in their prompts; `select` asks you to pick rows (marks, RET or a click, All / None, a note), Send putting "Answer to ID (question): their keys" into the session's prompt | `columns`, `rows`, `key`, `align`, `sort`, `descending`, `row-actions`, `select` |
-| `progress` | A bar, or a run without an end; on a canvas, its rate and time left from its updates over time; `pie`: drawn small, one line (`◑ 7/12  58%  linking`, a pie in the GUI) | `value`, `max`, `label`, `unit`, `status`, `pie` |
+| `progress` | A bar, or a run without an end; on a canvas, its rate and time left from its updates over time (seconds apart). Work items minutes apart (bugs fixed one by one): a line under it, the time elapsed (since its first value, or `started`), an item takes (the median of the latest 8, pauses over 45 minutes left out: `agent-ui-progress-pause`) and left (a range when they vary a lot), and when it should end; stopped, the time it took. Its times are kept with it. `pie`: drawn small, one line (`◑ 7/12  58%  linking`, the time elapsed and left as room allows, a pie in the GUI) | `value`, `max`, `label`, `unit`, `status`, `started`, `pie` |
 | `steps` | A checklist whose steps change state; appending a step by its name changes it; a step's time (timed from running to done), its own steps under it. With `approve`, a plan you approve first, its steps whole (a long one wrapped, not cut; a progress checklist keeps a line each) and in the text's colour: `x` on any line of a step drops it (struck through; again: back), `e` rewords it, a note; Approve puts "Answer to steps ID (question): approved: 1. A; 2. B (edited, was: X). Dropped: C" into the session's prompt and the steps become that plan (then it goes, as every question answered: see below), or Reject says so with a note | `steps`: `["name", {"name":..., "status": "pending/running/done/failed/skipped", "detail":..., "seconds":..., "steps": [...]}]`, `approve` |
 | `chart` | Lines (several series; on a time axis, with `times`), bars (several series grouped, or stacked), a histogram or a sparkline; SVG in the GUI, characters in a terminal; appending values makes it live | `kind`, `values` or `series`, `labels`, `unit`, `min`, `max`, `height`, `window`, `stacked`, `bins`, `times` |
 | `image` | An image file (an `.excalidraw.svg` drawing too), or one from a URL (in the GUI, downloaded once with curl, kept in Doom's cache, `agent-ui/images/`), in the GUI, sized to the pane; in a terminal, a line naming it; `RET` opens it | `file` or `url`, `alt`, `width` (percent), `height` (lines) |
@@ -241,6 +241,19 @@ agent-ui update build '{"value":12,"status":"done","label":"done in 41s"}'
 ```text
 Build
 ███████████████░░░░░░░░░░░  7/12  58%  linking
+```
+
+**Work items**, bugs fixed one by one, minutes apart: the bar updated after each.
+
+```sh
+agent-ui show '{"id":"bugs","type":"progress","title":"Bug fixing","max":58,"unit":"bugs"}'
+agent-ui update bugs '{"value":12,"label":"tiling: SPC w SPC"}'
+```
+
+```text
+Bug fixing
+████████▎░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  12/58 bugs  20%  tiling: SPC w SPC
+1h 51m elapsed · ~9 min a bug (last 8) · ~6h 50m left, about 01:40
 ```
 
 **Tests as they run**, one row per test, changing state by its key:
@@ -383,9 +396,9 @@ its reply (`{"ok": false, "error": ..., "report": ...}`), for you to file by han
 A session's canvas is saved as it changes (a moment later, the changes together), as its elements' JSON, in the
 session's `.agent-shell/agent-ui/`, named by its ACP session id, beside agent-shell's transcripts
 (`config/agent-ui/persist.el`). When a session starts with that id (resumed: picked when `SPC o c` asks, or
-agent-shell's restart), its canvas comes back as it was. Its elements' sources aren't started again: a command isn't
-run twice. Closing a canvas, or its session, leaves what's saved; clearing it saves it empty. Its other canvases are
-kept beside it (`ID@tests.json`, the name hex-escaped) and come back with it.
+agent-shell's restart), its canvas comes back as it was (a progress bar's times too). Its elements' sources aren't
+started again: a command isn't run twice. Closing a canvas, or its session, leaves what's saved; clearing it saves it
+empty. Its other canvases are kept beside it (`ID@tests.json`, the name hex-escaped) and come back with it.
 
 ## Project panels
 
@@ -511,9 +524,10 @@ A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
   records `table`, a trend or distribution `chart`, two dimensions `heatmap`, a structure or flow `graph` or `mermaid`,
   durations `timeline`, code `code`, changes `diff`, files `files`, output `log`, categories `tags`, formulas `math`, a
   write-up `markdown`, a picture `image`, a page `html`, several together `panel`. Plans go there without being asked
-  (a plan or the current ticket's acceptance criteria as `steps`); a project's issues and their status don't, as you
-  follow them in Beads' own list ([Issues](issues.md)). This comes before what agent-shell's text says of tables,
-  images and diagrams in replies: they're for when the canvas can't be used.
+  (a plan or the current ticket's acceptance criteria as `steps`), a long run of work items as `progress` (updated
+  after each one); a project's issues and their status don't, as you follow them in Beads' own list
+  ([Issues](issues.md)). This comes before what agent-shell's text says of tables, images and diagrams in replies:
+  they're for when the canvas can't be used.
 - **Asking:** a question goes on a canvas of its own (`--canvas ask`), as the interactive element that fits it: a list
   to pick from a `choice` (or `select` on a table, files), alternatives to see a `compare`, something risky a
   `confirm`, a plan to agree on `steps` with `approve`, proposed changes a `diff` with `accept`, several values a `form`,

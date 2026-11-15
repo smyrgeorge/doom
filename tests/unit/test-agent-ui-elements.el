@@ -4540,25 +4540,48 @@ that can't be cut (scaled): sides as tall, drawn."
   ;; One named: the header, as before.
   (should (string-match-p "\\` +│ Time\n─+┼─+\n" (+test-aue-draw '(:type "table" :columns ("" "Time") :rows (("a" "1")))))))
 
+;; A bar on a canvas, updated as the clock goes (its times noted with it).
+
+(defconst +test-aue-t0 1794335400.0 "The clock's start: 2026-11-10T18:30:00Z.")
+
+(defvar +test-aue-now nil "The clock now (`agent-ui-clock'), in the bars' tests.")
+
+(defmacro +test-aue-clocked (&rest body)
+  "BODY on a canvas of its own (`+test-aue-canvas'), the clock faked:
+`+test-aue-bar' moves it."
+  (declare (indent 0))
+  `(let* ((+test-aue-now +test-aue-t0)
+          (agent-ui-clock (lambda () +test-aue-now)))
+     (+test-aue-canvas ,@body)))
+
+(defun +test-aue-bar-draw (id &optional width)
+  "Bar ID as the canvas draws it, WIDTH wide (100), its text only."
+  (substring-no-properties
+   (agent-ui-render (agent-ui-get id) (agent-ui-context :width (or width 100) :id id))))
+
+(defun +test-aue-bar (time id patch &optional width)
+  "At TIME (seconds from `+test-aue-t0'), bar ID changed by PATCH (shown,
+a progress, if it isn't there), then drawn WIDTH wide (100)."
+  (setq +test-aue-now (+ +test-aue-t0 time))
+  (if (ignore-errors (agent-ui-get id))
+      (agent-ui-update id patch)
+    (agent-ui-show (append (list :id id :type "progress") patch)))
+  (+test-aue-bar-draw id width))
+
 (ert-deftest agent-ui-elements/progress-fits-its-width ()
   "However narrow: a bar of 3 cells at least, its figures left out from the
 end (time left, rate, percentage) and its counts cut last, every line within
 the width (the bar was 10 at least and nothing was cut: 44 columns at 40)."
-  (let* ((now 100.0)
-         (agent-ui-clock (lambda () now)))
-    (with-temp-buffer
-      (agent-ui-canvas-mode)
-      (cl-flet ((at (time value width)
-                  (setq now time)
-                  (substring-no-properties
-                   (agent-ui-render (list :type "progress" :value value :max 100 :unit "MB"
-                                          :label "downloading dependencies")
-                                    (agent-ui-context :width width :id "dl")))))
-        (at 100.0 10 40) (at 101.0 14 40)
-        (dolist (width '(10 20 30 40))
-          (should (<= (string-width (at 102.0 18 width)) width)))
-        ;; Wide: all of it.
-        (should (string-match-p "18/100 MB  18%  4 MB/s  [0-9]+s left" (at 102.0 18 100))))))
+  (+test-aue-clocked
+    (cl-flet ((at (time value width)
+                (+test-aue-bar time "dl" (list :value value :max 100 :unit "MB"
+                                               :label "downloading dependencies")
+                               width)))
+      (at 100.0 10 40) (at 101.0 14 40)
+      (dolist (width '(10 20 30 40))
+        (should (<= (string-width (at 102.0 18 width)) width)))
+      ;; Wide: all of it.
+      (should (string-match-p "18/100 MB  18%  4 MB/s  [0-9]+s left" (at 102.0 18 100)))))
   (dolist (element '((:type "progress" :value 7 :max 12 :label "linking the final binary")
                      (:type "progress" :value 123456 :max 1000000 :unit "files" :label "indexing")))
     (dolist (width '(10 15 20 30))
@@ -4576,61 +4599,197 @@ the width (the bar was 10 at least and nothing was cut: 44 columns at 40)."
 (ert-deftest agent-ui-elements/progress-stalled ()
   "A bar not moving: past its foreseen end, no time left; past the window, no
 rate either (it kept 4 MB/s and \"1s left\" forever)."
-  (let* ((now 100.0)
-         (agent-ui-clock (lambda () now)))
-    (with-temp-buffer
-      (agent-ui-canvas-mode)
-      (cl-flet ((at (time value)
-                  (setq now time)
-                  (substring-no-properties
-                   (agent-ui-render (list :type "progress" :value value :max 100 :unit "MB")
-                                    (agent-ui-context :width 100 :id "dl")))))
-        (at 100.0 10) (at 101.0 14)
-        (should (string-match-p "4 MB/s  20s left" (at 102.0 18)))
-        ;; 25 s on, still 18: past the 20 s it foresaw, under the window.
-        (let ((text (at 127.0 18)))
-          (should (string-match-p "4 MB/s" text))
-          (should-not (string-match-p "left" text)))
-        ;; 98 s on: stalled.
-        (should-not (string-match-p "/s\\|left" (at 200.0 18)))
-        (should-not (string-match-p "/s\\|left" (at 1000.0 18)))))))
+  (+test-aue-clocked
+    (cl-flet ((at (time value) (+test-aue-bar time "dl" (list :value value :max 100 :unit "MB"))))
+      (at 100.0 10) (at 101.0 14)
+      (should (string-match-p "4 MB/s  20s left" (at 102.0 18)))
+      ;; 25 s on, still 18: past the 20 s it foresaw, under the window.
+      (let ((text (at 127.0 18)))
+        (should (string-match-p "4 MB/s" text))
+        (should-not (string-match-p "left" text)))
+      ;; 98 s on: stalled.
+      (should-not (string-match-p "/s\\|left" (at 200.0 18)))
+      (should-not (string-match-p "/s\\|left" (at 1000.0 18))))))
 
 (ert-deftest agent-ui-elements/progress-its-rate-and-time-left ()
-  (let* ((now 100.0)
-         (agent-ui-clock (lambda () now)))
-    (with-temp-buffer
-      (agent-ui-canvas-mode)
-      (cl-flet ((at (time value &optional props)
-                  (setq now time)
-                  (substring-no-properties
-                   (agent-ui-render (append (list :type "progress" :value value :max 100 :unit "MB") props)
-                                    (agent-ui-context :width 100 :id "dl")))))
-        ;; Not steady yet: two values, then three over under 2 seconds.
-        (should-not (string-match-p "/s" (at 100.0 10)))
-        (should-not (string-match-p "/s" (at 101.0 14)))
-        ;; Steady: 3 values over 2 seconds, 4 MB a second; 82 MB left: 20s.
-        (should (string-match-p "18/100 MB  18%  4 MB/s  20s left" (at 102.0 18)))
-        ;; Drawn again, nothing new: the time left counts down.
-        (should (string-match-p "4 MB/s  18s left" (at 104.5 18)))
-        ;; Slower: 13 MB over 5 seconds, under 10 to a decimal.
-        (should (string-match-p "2.6 MB/s" (at 105.0 23)))
-        ;; Done, or failed: neither.
-        (should-not (string-match-p "/s" (at 106.0 30 '(:status "done"))))
-        ;; A lower value: starts again.
-        (should-not (string-match-p "/s" (at 107.0 1)))
-        ;; Without a max: the rate, no time left; slow ones a minute.
-        (setq now 200.0)
-        (cl-flet ((open (time value)
-                    (setq now time)
-                    (substring-no-properties
-                     (agent-ui-render (list :type "progress" :value value) (agent-ui-context :width 80 :id "n")))))
-          ;; 2 more in 30 seconds (the window's): 4 a minute.
-          (open 200.0 1) (open 215.0 2)
-          (let ((text (open 230.0 3)))
-            (should (string-match-p "  3  4/min" text))
-            (should-not (string-match-p "left" text)))))))
+  "Values seconds apart (a download): its rate and time left on its line,
+as its values go; no second line."
+  (+test-aue-clocked
+    (cl-flet ((at (time value &optional props)
+                (+test-aue-bar time "dl" (append (list :value value :max 100 :unit "MB") props))))
+      ;; Not steady yet: two values, then three over under 2 seconds.
+      (should-not (string-match-p "/s" (at 100.0 10)))
+      (should-not (string-match-p "/s" (at 101.0 14)))
+      ;; Steady: 3 values over 2 seconds, 4 MB a second; 82 MB left: 20s.
+      (should (string-match-p "18/100 MB  18%  4 MB/s  20s left" (at 102.0 18)))
+      ;; Drawn again, nothing new: the time left counts down.
+      (should (string-match-p "4 MB/s  18s left" (at 104.5 18)))
+      ;; Slower: 13 MB over 5 seconds, under 10 to a decimal.
+      (let ((text (at 105.0 23)))
+        (should (string-match-p "2.6 MB/s" text))
+        (should-not (string-search "\n" text)))
+      ;; Done, or failed: neither.
+      (should-not (string-match-p "/s" (at 106.0 30 '(:status "done"))))
+      ;; A lower value: starts again.
+      (should-not (string-match-p "/s" (at 107.0 1 '(:status "running"))))
+      ;; Without a max: the rate, no time left; slow ones a minute.
+      (cl-flet ((open (time value) (+test-aue-bar time "n" (list :value value) 80)))
+        ;; 2 more in 30 seconds (the window's): 4 a minute.
+        (open 200.0 1) (open 215.0 2)
+        (let ((text (open 230.0 3)))
+          (should (string-match-p "  3  4/min" text))
+          (should-not (string-match-p "left" text))))
+      ;; Updates many times a second (a command's output): noted a second
+      ;; apart, the rate the same.
+      (dotimes (i 50)
+        (at (+ 300.0 (* i 0.1)) (* 2 i) '(:status "running")))
+      (should (string-match-p "  98/100 MB  98%  20 MB/s" (+test-aue-bar-draw "dl")))
+      (should (<= (length (plist-get (plist-get (agent-ui-get "dl") :times) :values)) 12))))
   ;; Not on a canvas (render, a snapshot): neither.
   (should-not (string-match-p "/s" (+test-aue-draw '(:type "progress" :value 5 :max 10)))))
+
+;; doom-ht6.31
+(ert-deftest agent-ui-elements/progress-work-items ()
+  "Values minutes apart (bugs fixed one by one): no rate on its line (its
+window never had more than one value), a second line: the time elapsed,
+an item takes (the median of the latest 8) and left, and when it should
+end; ticking."
+  (+test-aue-clocked
+    (+test-aue-bar 0 "bugs" '(:value 0 :max 58 :unit "bugs" :label "fixing"))
+    ;; One value: no second line yet.
+    (should-not (string-search "\n" (+test-aue-bar-draw "bugs")))
+    (let ((time 0))
+      (cl-loop for gap in '(8 10 9 11 8 9 10 9 12 8 9 10) for value from 1
+               do (cl-incf time (* gap 60)) (+test-aue-bar time "bugs" (list :value value))))
+    ;; 3 minutes after the 12th: the last 8 took 8 to 12 minutes, 9 their
+    ;; median; 46 left, the one going on begun 3 minutes ago: 411 minutes.
+    (pcase-let ((`(,line ,timing) (split-string (+test-aue-bar (* 116 60) "bugs" '(:label "tiling: SPC w SPC"))
+                                                "\n")))
+      (should (string-suffix-p "  12/58 bugs  20%  tiling: SPC w SPC" line))
+      (should (equal timing (concat "1h 56m elapsed · ~9 min a bug (last 8) · ~6h 50m left, about "
+                                    (format-time-string "%H:%M" (+ +test-aue-now (* 411 60)))))))
+    ;; Ticking: elapsed and left as the clock goes.
+    (should (agent-ui-animated-p (agent-ui-get "bugs")))
+    (should (string-search "1h 57m elapsed" (+test-aue-bar (* 117 60) "bugs" nil)))
+    ;; In the GUI too, under the bar.
+    (should (string-search "\n1h 57m elapsed · ~9 min a bug"
+                           (substring-no-properties
+                            (agent-ui-render (agent-ui-get "bugs")
+                                             (agent-ui-context :width 100 :id "bugs" :graphic t
+                                                               :char-width 8 :line-height 16)))))
+    ;; Without a max: the time an item takes, no time left.
+    (+test-aue-bar 0 "open" '(:value 0 :unit "issues"))
+    (+test-aue-bar 600 "open" '(:value 1))
+    (should (string-suffix-p "\n10m 00s elapsed · ~10 min an issue" (+test-aue-bar 600 "open" '(:value 1))))
+    ;; Without a unit: each.
+    (+test-aue-bar 0 "x" '(:value 0 :max 4))
+    (should (string-search "~5 min each · ~15 min left" (+test-aue-bar 300 "x" '(:value 1))))))
+
+(ert-deftest agent-ui-elements/progress-work-items-pauses-and-several ()
+  "A gap over the pause limit (a night) left out of the time an item takes;
+a rise of several, several items, the gap shared."
+  (+test-aue-clocked
+    (+test-aue-bar 0 "fixes" '(:value 0 :max 20 :unit "fixes"))
+    (+test-aue-bar (* 10 60) "fixes" '(:value 1))
+    (+test-aue-bar (* 22 60) "fixes" '(:value 2))
+    ;; The night: 10 hours.
+    (+test-aue-bar (* 622 60) "fixes" '(:value 3))
+    ;; Two at once, 20 minutes on: 10 each.
+    (let ((timing (cadr (split-string (+test-aue-bar (* 642 60) "fixes" '(:value 5)) "\n"))))
+      ;; 10, 10, 12, 10: 10 their median; 15 left.
+      (should (string-prefix-p "10h 42m elapsed · ~10 min a fix (last 4) · ~2h 30m left, about " timing)))
+    ;; Only pauses so far: no time an item takes.
+    (+test-aue-bar 0 "slow" '(:value 0 :max 3))
+    (should (equal (cadr (split-string (+test-aue-bar (* 50 60) "slow" '(:value 1)) "\n"))
+                   "50m 00s elapsed"))))
+
+(ert-deftest agent-ui-elements/progress-work-items-a-range ()
+  "The time left: one time while the items take about as long, a range
+when they vary a lot (a quarter's to three quarters'), the end's clock time
+too."
+  (+test-aue-clocked
+    (+test-aue-bar 0 "t" '(:value 0 :max 30 :unit "tickets"))
+    (let ((time 0))
+      (cl-loop for gap in '(4 25 6 30 5 28 7 22) for value from 1
+               do (cl-incf time (* gap 60)) (+test-aue-bar time "t" (list :value value)))
+      ;; 4 to 30 minutes, 14.5 their median: 22 left, at 5.75 to 25.75
+      ;; minutes an item, 126.5 to 566.5 minutes.
+      (should (equal (cadr (split-string (+test-aue-bar-draw "t") "\n"))
+                     (format "2h 07m elapsed · ~14 min a ticket (last 8) · 2–9h left, about %s–%s"
+                             (format-time-string "%H:%M" (+ +test-aue-now (* 126.5 60)))
+                             (format-time-string "%H:%M" (+ +test-aue-now (* 566.5 60)))))))
+    ;; Under an hour: minutes.
+    (+test-aue-bar 0 "m" '(:value 0 :max 6))
+    (let ((time 0))
+      (cl-loop for gap in '(1 5 1 5) for value from 1
+               do (cl-incf time (* gap 60)) (+test-aue-bar time "m" (list :value value))))
+    (should (string-search "· 2–10 min left, about " (+test-aue-bar-draw "m")))))
+
+(ert-deftest agent-ui-elements/progress-started ()
+  "STARTED given (a timestamp, epoch seconds, or seconds ago), the work
+begun before the bar: the time elapsed counts from it, from its first value;
+kept as epoch seconds; a wrong one said."
+  (+test-aue-clocked
+    (should (equal (cadr (split-string (+test-aue-bar 0 "b" '(:max 10 :started 5400)) "\n"))
+                   "1h 30m elapsed"))
+    (should (equal (plist-get (agent-ui-get "b") :started) (- +test-aue-t0 5400)))
+    (should (agent-ui-animated-p (agent-ui-get "b")))
+    (should (string-suffix-p "\n1h 40m elapsed" (+test-aue-bar 600 "b" nil)))
+    ;; A timestamp: half an hour before the clock's start.
+    (should (string-suffix-p "\n30m 00s elapsed" (+test-aue-bar 0 "c" '(:max 10 :started "2026-11-10T18:00:00Z")))))
+  (should (string-match-p "progress: started is a timestamp"
+                          (+test-aue-error '(:type "progress" :started "yesterday")))))
+
+(ert-deftest agent-ui-elements/progress-work-items-stopped ()
+  "Done or failed: the time it took only, no time left; no longer ticking."
+  (+test-aue-clocked
+    (dolist (status '("done" "failed"))
+      (let ((id (concat "w-" status)))
+        (+test-aue-bar 0 id '(:value 0 :max 10 :unit "bugs"))
+        (+test-aue-bar 600 id '(:value 1))
+        (+test-aue-bar 1200 id '(:value 2))
+        (should (string-match-p "\n20m 00s elapsed · .* left" (+test-aue-bar-draw id)))
+        (should (equal (cadr (split-string (+test-aue-bar 1500 id (list :status status)) "\n"))
+                       "25m 00s elapsed"))
+        (should-not (agent-ui-animated-p (agent-ui-get id)))
+        ;; An hour on: the same.
+        (should (equal (cadr (split-string (+test-aue-bar 5100 id nil) "\n")) "25m 00s elapsed"))))
+    ;; At its max: stopped too.
+    (+test-aue-bar 0 "m" '(:value 0 :max 2))
+    (+test-aue-bar 600 "m" '(:value 1))
+    (+test-aue-bar 1200 "m" '(:value 2))
+    (should (equal (cadr (split-string (+test-aue-bar 4800 "m" nil) "\n")) "20m 00s elapsed"))))
+
+(ert-deftest agent-ui-elements/progress-work-items-narrow ()
+  "Narrow panes: the second line's figures dropped from the right, the
+first cut, nothing past the width; a pie keeps one line, the time elapsed
+and left after its counts as room allows."
+  (+test-aue-clocked
+    (+test-aue-bar 0 "bugs" '(:value 0 :max 58 :unit "bugs" :label "tiling: SPC w SPC"))
+    (cl-loop for value from 1 to 12
+             do (+test-aue-bar (* value 9 60) "bugs" (list :value value)))
+    (+test-aue-bar (* 111 60) "bugs" nil)
+    (dolist (width '(8 12 20 30 40 50 60 70 80 100 120))
+      (dolist (line (split-string (+test-aue-bar-draw "bugs" width) "\n"))
+        (should (<= (string-width line) width))))
+    (cl-flet ((timing (width) (cadr (split-string (+test-aue-bar-draw "bugs" width) "\n"))))
+      (should (string-prefix-p "1h 51m elapsed · ~9 min a bug (last 8) · ~6h 50m left, about " (timing 100)))
+      ;; Too wide: the items it's taken from left out first.
+      (should (string-prefix-p "1h 51m elapsed · ~9 min a bug · ~6h 50m left, about " (timing 60)))
+      (should (equal (timing 50) "1h 51m elapsed · ~9 min a bug · ~6h 50m left"))
+      (should (equal (timing 40) "1h 51m elapsed · ~9 min a bug"))
+      (should (equal (timing 20) "1h 51m elapsed"))
+      (should (equal (timing 10) "1h 51m el…")))
+    ;; A pie: one line.
+    (cl-flet ((pie (width) (substring-no-properties
+                            (agent-ui-render (append (agent-ui-get "bugs") '(:pie t))
+                                             (agent-ui-context :width width :id "bugs")))))
+      (should (equal (pie 80) "◔ 12/58 bugs  20%  1h 51m elapsed  ~6h 50m left  tiling: SPC w SPC"))
+      (should (equal (pie 50) "◔ 12/58 bugs  20%  1h 51m elapsed  tiling: SPC w …"))
+      (should (equal (pie 30) "◔ 12/58 bugs  20%  tiling: SP…"))
+      (dolist (width '(10 20 40 60))
+        (should-not (string-search "\n" (pie width)))
+        (should (<= (string-width (pie width)) width))))))
 
 (ert-deftest agent-ui-elements/table-sorted ()
   (let ((element '(:type "table" :columns ("Test" "Time")

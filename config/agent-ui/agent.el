@@ -185,7 +185,10 @@ with counts, tags; formulas, math; a write-up, markdown; a picture, image; a \
 web page, html; several of these together, a panel. Plans go there too, \
 always, without being asked: a plan, or the ticket you're working on, as steps \
 (its acceptance criteria), ticked as you go; a long build or test run as \
-progress, steps, a table filling in. A project's issues and their status \
+progress, steps, a table filling in; a long run of work items (bugs, tickets \
+done one by one) as progress, max their count, its value updated after each \
+one (it shows the time elapsed, an item takes and left; started: when the \
+work began, if before the bar). A project's issues and their status \
 aren't shown there: the user follows them in Beads' own list. This \
 comes before what's said above of tables, images and diagrams in your replies: \
 they're for when the canvas can't be used (the command exits with 3).

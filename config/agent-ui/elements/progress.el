@@ -5,18 +5,30 @@
 ;;
 ;;   ███████████████▎░░░░░░░░░░  7/12  58%  linking
 ;;
-;; On a canvas, the values it's given over time say its rate and, with a max,
-;; the time left, once they're steady (a few values over a few seconds):
+;; On a canvas it notes when its value rose (its times, kept with it: saved
+;; with the canvas), and tells by itself how it goes. Values seconds apart (a
+;; download, a build): its rate and, with a max, the time left, once they're
+;; steady (a few values over a few seconds):
 ;;
 ;;   █████████▌░░░░░░░░░░░░░░░░  37/100 MB  37%  3.4 MB/s  19s left  downloading
 ;;
-;; With pie, drawn small (a panel's corner; a pie in the GUI, core.el's):
+;; Minutes apart (work items: bugs fixed one by one), a second line: the time
+;; elapsed (from its first value, or STARTED), ticking; the time an item
+;; takes (the median of its latest, pauses left out); the time left (a range
+;; when they vary a lot) and when it should end. Stopped: the time it took.
+;;
+;;   ████████▌░░░░░░░░░░░░░░░░░░░  12/58 bugs  20%  tiling: SPC w SPC
+;;   1h 48m elapsed · ~9 min a bug (last 8) · ~6h 50m left, about 01:40
+;;
+;; With pie, drawn small (a panel's corner; a pie in the GUI, core.el's), the
+;; time elapsed and left after its counts, as room allows:
 ;;
 ;;   ◑ 7/12  58%  linking
 
 (require 'cl-lib)
 (require 'subr-x)
 (require 'color)
+(require 'parse-time)
 
 (defconst agent-ui-progress--eighths [" " "▏" "▎" "▍" "▌" "▋" "▊" "▉"]
   "A cell partly filled, by eighths.")
@@ -24,32 +36,89 @@
 (defconst agent-ui-progress-window 30
   "Seconds of values its rate is taken over, back from the latest.")
 
-(defvar-local agent-ui-progress--samples nil
-  "In a canvas: its progress bars' values over time, by id: ((TIME . VALUE)
-...), the latest first, those of `agent-ui-progress-window'.")
+(defconst agent-ui-progress-items 8
+  "How many of its latest items the time an item takes is taken from.")
 
-;; ====== ITS RATE ======
+(defconst agent-ui-progress-item-gap (/ agent-ui-progress-window 2)
+  "Seconds between its values (their median) over which it counts work
+items (minutes apart) rather than a rate: its rate is steady only with 3
+values in `agent-ui-progress-window'.")
 
-(defun agent-ui-progress--note (id value)
-  "Bar ID's VALUE, noted now if it's new (a lower one starts again); its
-samples, the latest first."
-  (unless agent-ui-progress--samples
-    (setq agent-ui-progress--samples (make-hash-table :test #'equal)))
-  (let* ((now (funcall agent-ui-clock))
-         (samples (gethash id agent-ui-progress--samples))
-         (last (car samples)))
-    (cond ((or (null last) (< value (cdr last))) (setq samples (list (cons now value))))
-          ((> value (cdr last)) (push (cons now value) samples)))
-    (let ((from (- (caar samples) agent-ui-progress-window)))
-      (setq samples (seq-take-while (lambda (s) (>= (car s) from)) samples)))
-    (puthash id samples agent-ui-progress--samples)))
+(defcustom agent-ui-progress-pause (* 45 60)
+  "Seconds an item took over which it was a pause (a night, lunch): left out
+of the time an item takes."
+  :type 'number :group 'agent-ui)
+
+;; ====== ITS TIMES ======
+;; Noted as it's shown and changed (its type's :prepare), in its own times
+;; property: (:from TIME :values ((TIME VALUE)...) :ended TIME), its first
+;; value's time, its values as they rose (the latest first: those of the
+;; window, its latest items' at least), when it stopped.
+
+(defun agent-ui-progress--time (value now)
+  "VALUE (a timestamp, epoch seconds, or seconds ago: a number under a
+billion) as epoch seconds, from NOW; nil if it isn't a time."
+  (cond ((and (numberp value) (< value 1e9)) (- now value))
+        ((numberp value) value)
+        ((stringp value) (ignore-errors (float-time (parse-iso8601-time-string value))))))
+
+(defun agent-ui-progress--times (props)
+  "PROPS' times noted: a plist, nil if none (or not right)."
+  (let ((times (plist-get props :times)))
+    (and (agent-ui--plist-p times) times)))
+
+(defun agent-ui-progress--samples (props)
+  "PROPS' values noted, the latest first: ((TIME VALUE)...)."
+  (let ((values (plist-get (agent-ui-progress--times props) :values)))
+    (and (proper-list-p values)
+         (seq-filter (lambda (s) (and (proper-list-p s) (numberp (car s)) (numberp (cadr s)))) values))))
+
+(defun agent-ui-progress--stopped-p (props)
+  "Whether it stopped: done, failed, or at its max."
+  (let ((max (plist-get props :max))
+        (value (plist-get props :value)))
+    (or (member (format "%s" (or (plist-get props :status) "running")) '("done" "failed"))
+        (and (numberp max) (numberp value) (>= value max)))))
+
+(defun agent-ui-progress--noted (element now)
+  "ELEMENT with its times noted at NOW (see above): a new value (a lower one
+starts them again; one within a second of the one before the latest
+replaces the latest), its first value's time, when it stopped; STARTED made
+epoch seconds. Noted already: as it is."
+  (let* ((element (copy-sequence element))
+         (value (or (plist-get element :value) 0))
+         (times (copy-sequence (agent-ui-progress--times element)))
+         (samples (agent-ui-progress--samples element))
+         (last (car samples))
+         (started (plist-get element :started)))
+    (when (numberp value)
+      (setq samples (cond ((or (null last) (< value (cadr last))) (list (list now value)))
+                          ((= value (cadr last)) samples)
+                          ((and (cadr samples) (< (- now (car (cadr samples))) 1))
+                           (cons (list now value) (cdr samples)))
+                          (t (cons (list now value) samples))))
+      ;; Those of the window, the latest items' at least (pauses among them).
+      (let ((from (- (caar samples) agent-ui-progress-window)))
+        (setq samples (seq-take samples (max (cl-count-if (lambda (s) (>= (car s) from)) samples)
+                                             (+ 4 agent-ui-progress-items))))))
+    (setq times (plist-put times :values samples))
+    (unless (numberp (plist-get times :from))
+      (setq times (plist-put times :from now)))
+    (setq times (cond ((not (agent-ui-progress--stopped-p element)) (agent-ui--plist-delete times :ended))
+                      ((numberp (plist-get times :ended)) times)
+                      (t (plist-put times :ended now))))
+    (when-let* ((time (and started (agent-ui-progress--time started now))))
+      (setq element (plist-put element :started time)))
+    (plist-put element :times times)))
+
+;; ====== ITS RATE: VALUES SECONDS APART ======
 
 (defun agent-ui-progress--rate (samples)
   "SAMPLES' rate, a second, once it's steady (3 values or more, over 2
 seconds or more); else nil."
   (let ((newest (car samples)) (oldest (car (last samples))))
     (when (and (>= (length samples) 3) (>= (- (car newest) (car oldest)) 2))
-      (/ (float (- (cdr newest) (cdr oldest))) (- (car newest) (car oldest))))))
+      (/ (float (- (cadr newest) (cadr oldest))) (- (car newest) (car oldest))))))
 
 (defun agent-ui-progress--per (rate unit)
   "RATE (a second) as text, with UNIT: 12 files/s, 3.4 MB/s, 20/min."
@@ -59,30 +128,164 @@ seconds or more); else nil."
             ((>= (* rate 60) 1) (format "%s%s/min" (amount (* rate 60)) unit))
             (t (format "%s%s/h" (amount (* rate 3600)) unit))))))
 
-(defun agent-ui-progress--pace (props ctx)
-  "Its rate and time left (\"3.4 MB/s\" \"19s left\"), from its values over
-time on its canvas (CTX's :id there): a list, nil when not running, nor
-steady."
-  (let ((id (plist-get ctx :id))
-        (value (plist-get props :value))
-        (max (plist-get props :max)))
-    (if (not (and id (numberp value) (derived-mode-p 'agent-ui-canvas-mode)))
-        nil
-      (let* ((samples (agent-ui-progress--note id value))
-             (now (funcall agent-ui-clock))
-             ;; Not moved for longer than the window: stalled, no rate (it
-             ;; kept its last one, and \"1s left\" forever).
-             (rate (and (eq (plist-get props :status) 'running)
-                        (not (and max (>= value max)))
-                        (<= (- now (caar samples)) agent-ui-progress-window)
-                        (agent-ui-progress--rate samples))))
-        (when (and rate (> rate 0))
-          (cons (agent-ui-progress--per rate (plist-get props :unit))
-                (when max
-                  (let ((left (- (/ (- max (cdar samples)) rate) (- now (caar samples)))))
-                    ;; Past the end it foresaw: no time left to say.
-                    (when (>= left 1)
-                      (list (concat (agent-ui-format-duration left) " left")))))))))))
+(defun agent-ui-progress--pace (props)
+  "Its rate and time left (\"3.4 MB/s\" \"19s left\"), from its values
+noted on a canvas: a list; nil when not running, not steady, or its values
+come minutes apart (then see `agent-ui-progress--timing')."
+  (let* ((value (plist-get props :value))
+         (max (plist-get props :max))
+         (samples (agent-ui-progress--samples props))
+         (now (funcall agent-ui-clock))
+         (from (and samples (- (caar samples) agent-ui-progress-window)))
+         ;; Not moved for longer than the window: stalled, no rate (it
+         ;; kept its last one, and \"1s left\" forever).
+         (rate (and samples
+                    (eq (plist-get props :status) 'running)
+                    (not (and max (>= value max)))
+                    (not (agent-ui-progress--items-p samples))
+                    (<= (- now (caar samples)) agent-ui-progress-window)
+                    (agent-ui-progress--rate (seq-take-while (lambda (s) (>= (car s) from)) samples)))))
+    (when (and rate (> rate 0))
+      (cons (agent-ui-progress--per rate (plist-get props :unit))
+            (when max
+              (let ((left (- (/ (- max (cadar samples)) rate) (- now (caar samples)))))
+                ;; Past the end it foresaw: no time left to say.
+                (when (>= left 1)
+                  (list (concat (agent-ui-format-duration left) " left")))))))))
+
+;; ====== ITS ITEMS: VALUES MINUTES APART ======
+
+(defun agent-ui-progress--quantile (sorted q)
+  "The Q quantile (0 to 1) of SORTED numbers, between its two nearest."
+  (let* ((at (* q (1- (length sorted))))
+         (low (floor at)))
+    (if (>= (1+ low) (length sorted))
+        (float (nth low sorted))
+      (+ (nth low sorted) (* (- at low) (- (nth (1+ low) sorted) (nth low sorted)))))))
+
+(defun agent-ui-progress--gaps (samples)
+  "The gaps between SAMPLES, the latest first: ((SECONDS . RISE)...)."
+  (cl-loop for (newer older) on samples
+           while older
+           collect (cons (- (car newer) (car older)) (- (cadr newer) (cadr older)))))
+
+(defun agent-ui-progress--items-p (samples)
+  "Whether SAMPLES came minutes apart: their latest gaps' median (pauses left
+out, if not all) over `agent-ui-progress-item-gap'."
+  (when-let* ((gaps (mapcar #'car (agent-ui-progress--gaps samples)))
+              (gaps (seq-take (or (seq-remove (lambda (gap) (> gap agent-ui-progress-pause)) gaps) gaps)
+                              agent-ui-progress-items)))
+    (> (agent-ui-progress--quantile (sort gaps #'<) 0.5) agent-ui-progress-item-gap)))
+
+(defun agent-ui-progress--item-times (samples)
+  "The times its latest items took, the latest first: a gap shared by the
+items it brought (a rise of 3: 3 items), one over `agent-ui-progress-pause'
+left out; `agent-ui-progress-items' at most."
+  (seq-take (cl-loop for (gap . rise) in (agent-ui-progress--gaps samples)
+                     for each = (/ (float gap) rise)
+                     unless (> each agent-ui-progress-pause)
+                     append (make-list (max 1 (min agent-ui-progress-items (round rise))) each))
+            agent-ui-progress-items))
+
+(defun agent-ui-progress--about (seconds)
+  "SECONDS, roughly: 40s, 9 min, 6h 50m (to 5 minutes)."
+  (let ((s (round seconds)))
+    (cond ((< s 60) (format "%ds" (max 1 s)))
+          ((< s 3570) (format "%d min" (round s 60)))
+          (t (let ((m (* 5 (round s 300)))) (format "%dh %02dm" (/ m 60) (% m 60)))))))
+
+(defun agent-ui-progress--span (low high)
+  "LOW to HIGH seconds, roughly: 6–8h, 20–35 min, 40 min–2h; nil when they
+read the same."
+  (cond ((>= low 3600)
+         (let ((a (round low 3600)) (b (round high 3600)))
+           (and (/= a b) (format "%d–%dh" a b))))
+        ((>= high 3600) (format "%d min–%dh" (max 1 (round low 60)) (round high 3600)))
+        (t (let ((a (max 1 (round low 60))) (b (max 1 (round high 60))))
+             (and (/= a b) (format "%d–%d min" a b))))))
+
+(defun agent-ui-progress--one (unit)
+  "An item of UNIT: \"a bug\" (bugs), \"an issue\"; without one: \"each\"."
+  (if (or (null unit) (string-empty-p unit))
+      "each"
+    (let ((one (cond ((string-match "\\(.\\)ies\\'" unit) (replace-match "\\1y" t nil unit))
+                     ((string-match "\\(?:ch\\|sh\\|ss\\|x\\|z\\)\\(es\\)\\'" unit) (replace-match "" t t unit 1))
+                     ((string-match "[^s]\\(s\\)\\'" unit) (replace-match "" t t unit 1))
+                     (t unit))))
+      (concat (if (string-match-p "\\`[aeiouAEIOU]" one) "an " "a ") one))))
+
+(defun agent-ui-progress--clock (time now)
+  "TIME, an end foreseen from NOW, as a clock's time: 01:40; its day too
+past 12 hours from now (Tue 01:40)."
+  (format-time-string (if (< (- time now) (* 12 3600)) "%H:%M" "%a %H:%M") time))
+
+(defun agent-ui-progress--timing (props)
+  "What its second line says, from its times noted on a canvas: (:elapsed
+TEXT :each TEXT :left TEXT :end TEXT), those it has; nil without a second
+line (its values seconds apart, or one only so far; no STARTED given).
+Stopped: the time it took only."
+  (let* ((now (funcall agent-ui-clock))
+         (samples (agent-ui-progress--samples props))
+         (times (agent-ui-progress--times props))
+         (start (or (and (plist-get props :started) (agent-ui-progress--time (plist-get props :started) now))
+                    (and (numberp (plist-get times :from)) (plist-get times :from))))
+         (items (agent-ui-progress--items-p samples))
+         (stopped (agent-ui-progress--stopped-p props)))
+    (when (and start (or items (plist-get props :started)))
+      (let* ((ended (and stopped (numberp (plist-get times :ended)) (plist-get times :ended)))
+             (timing (list :elapsed (concat (agent-ui-format-duration (max 0 (- (or ended now) start)))
+                                            " elapsed")))
+             (each (and items (not stopped) (agent-ui-progress--item-times samples))))
+        (when each
+          (let* ((sorted (sort (copy-sequence each) #'<))
+                 (median (agent-ui-progress--quantile sorted 0.5))
+                 (max (plist-get props :max))
+                 (count (and max (- max (cadar samples))))
+                 (since (- now (caar samples)))
+                 ;; The time left at PER an item, the item going on begun
+                 ;; SINCE ago (taking longer: done any time now).
+                 (left (lambda (per) (max (- (* count per) since) (* (max 0 (1- count)) per))))
+                 (single (and count (> count 0) (funcall left median)))
+                 ;; They vary a lot: a range, from a quarter's to three
+                 ;; quarters' time.
+                 (spread (and single (>= single 1) (>= (length each) 4)
+                              (let ((q1 (agent-ui-progress--quantile sorted 0.25))
+                                    (q3 (agent-ui-progress--quantile sorted 0.75)))
+                                (and (> (- q3 q1) (* 0.5 median))
+                                     (cons (funcall left q1) (funcall left q3))))))
+                 (span (and spread (agent-ui-progress--span (car spread) (cdr spread)))))
+            (setq timing (append timing
+                                 (list :each (concat "~" (agent-ui-progress--about median) " "
+                                                     (agent-ui-progress--one (plist-get props :unit))
+                                                     (if (cdr each) (format " (last %d)" (length each)) "")))))
+            (when (and single (>= single 1))
+              (setq timing
+                    (append timing
+                            (if span
+                                (let ((from (agent-ui-progress--clock (+ now (car spread)) now))
+                                      (to (agent-ui-progress--clock (+ now (cdr spread)) now)))
+                                  (list :left (concat span " left")
+                                        :end (concat "about " from (if (equal from to) "" (concat "–" to)))))
+                              (list :left (concat "~" (agent-ui-progress--about single) " left")
+                                    :end (concat "about " (agent-ui-progress--clock (+ now single) now)))))))))
+        timing))))
+
+(defun agent-ui-progress--timing-line (timing width)
+  "TIMING (`agent-ui-progress--timing') as a line WIDTH wide at most, muted:
+where it doesn't fit, the items an item's time is taken from left out, then
+its figures dropped from the right, the first cut."
+  (cl-flet ((parts (timing)
+              (cl-loop for (key joiner) in '((:elapsed "") (:each " · ") (:left " · ") (:end ", "))
+                       for text = (plist-get timing key)
+                       when text collect (concat joiner text))))
+    (let ((parts (parts timing)))
+      (when-let* (((> (string-width (apply #'concat parts)) width))
+                  (each (plist-get timing :each)))
+        (setq parts (parts (plist-put (copy-sequence timing) :each
+                                      (replace-regexp-in-string " (last [0-9]+)\\'" "" each)))))
+      (while (and (cdr parts) (> (string-width (apply #'concat parts)) width))
+        (setq parts (butlast parts)))
+      (propertize (agent-ui-truncate (apply #'concat parts) (max 0 width)) 'face 'agent-ui-muted))))
 
 ;; ====== DRAWING ======
 
@@ -158,7 +361,8 @@ frame, glyphs drawn one by one leave seams between them."
       (when (and (numberp value) (/= value 0))
         (list (concat (agent-ui-format-number value) unit))))))
 
-(defun agent-ui-progress--text (props ctx)
+(defun agent-ui-progress--line (props ctx)
+  "Its bar's line: the bar, its counts and figures, its label."
   (let* ((status (plist-get props :status))
          (max (plist-get props :max))
          (face (agent-ui-progress--fill-face status))
@@ -168,7 +372,7 @@ frame, glyphs drawn one by one leave seams between them."
          ;; (they were never cut: lines past the width).
          (parts (append (agent-ui-progress--counts props)
                         (mapcar (lambda (p) (propertize p 'face 'agent-ui-muted))
-                                (agent-ui-progress--pace props ctx))))
+                                (agent-ui-progress--pace props))))
          (parts (progn (while (and (cdr parts) (> (+ 3 2 (string-width (string-join parts "  "))) width))
                          (setq parts (butlast parts)))
                        parts))
@@ -200,20 +404,42 @@ frame, glyphs drawn one by one leave seams between them."
         line
       (concat line "  " (agent-ui-truncate label room)))))
 
+(defun agent-ui-progress--text (props ctx)
+  "Its bar's line; its values minutes apart, a second line under it: the
+time elapsed, an item takes, left (`agent-ui-progress--timing')."
+  (let ((line (agent-ui-progress--line props ctx)))
+    (if-let* ((timing (agent-ui-progress--timing props)))
+        (concat line "\n" (agent-ui-progress--timing-line timing (plist-get ctx :width)))
+      line)))
+
 (defun agent-ui-progress--pie (props ctx)
   "PROPS drawn small (pie): a pie (a spinner while running without a max),
-its counts and label, on one line."
+its counts, the time elapsed and left as room allows, its label, on one
+line."
   (let* ((status (plist-get props :status))
          (max (plist-get props :max))
          (face (agent-ui-progress--fill-face status))
+         (width (max 1 (- (plist-get ctx :width) 2)))
          (pie (cond (max (agent-ui-pie (/ (float (plist-get props :value)) max) ctx face))
                     ((eq status 'running) (concat (agent-ui-spinner ctx face) " "))
                     (t (agent-ui-pie 1.0 ctx face))))
          (mark (pcase status ('done (propertize "✓" 'face face)) ('failed (propertize "✗" 'face face)) (_ nil)))
-         (rest (string-join (delq nil (append (agent-ui-progress--counts props)
-                                              (list mark (plist-get props :label))))
-                            "  ")))
-    (concat pie (agent-ui-truncate rest (max 1 (- (plist-get ctx :width) 2))))))
+         (label (plist-get props :label))
+         (timing (agent-ui-progress--timing props))
+         (figures (delq nil (list (plist-get timing :elapsed) (plist-get timing :left))))
+         (head (append (agent-ui-progress--counts props) (and mark (list mark)))))
+    ;; The figures dropped from the right while they leave the label less
+    ;; than 4 columns (all of it if shorter).
+    (while (and figures
+                (> (+ (string-width (string-join (append head figures) "  "))
+                      (if label (+ 2 (min 4 (string-width label))) 0))
+                   width))
+      (setq figures (butlast figures)))
+    (concat pie (agent-ui-truncate
+                 (string-join (append head (mapcar (lambda (f) (propertize f 'face 'agent-ui-muted)) figures)
+                                      (and label (list label)))
+                              "  ")
+                 width))))
 
 (defun agent-ui-progress--draw (props ctx gui)
   (cond ((plist-get props :pie) (agent-ui-progress--pie props ctx))
@@ -224,22 +450,35 @@ its counts and label, on one line."
   "A progress bar: VALUE of MAX, with a LABEL saying what's being done.
 Without MAX, no end is known: a block goes to and fro while it's running.
 STATUS done or failed colours it and stops it. On a canvas, its values
-over time give its rate and, with MAX, the time left."
+over time give its rate and, with MAX, the time left; values minutes apart
+\(work items, one by one), a line under it: the time elapsed (since its
+first value, or STARTED), the time an item takes, the time left and when
+it should end."
   :props ((value number "Done so far" :default 0)
           (max number "The total; none: no end known")
           (label string "What's being done now, after the bar")
-          (unit string "What VALUE counts (files, MB), after it")
+          (unit string "What VALUE counts (files, MB, bugs), after it")
           (status (choice running done failed) "running; done or failed colour it and stop it"
                   :default running)
+          (started any "When the work began, if before the bar: a timestamp, epoch seconds, or seconds ago")
+          (times any "Noted by the canvas from your updates, kept with it (don't give it)")
           (pie boolean "Drawn small: a pie, its counts and label on one line (a panel's corner)" :default :false))
   :example (:title "Build" :value 7 :max 12 :label "linking")
+  ;; Moving: a block to and fro (no max), or its time elapsed ticking.
   :animated (lambda (props)
-              (and (null (plist-get props :max)) (eq (plist-get props :status) 'running)))
+              (and (eq (plist-get props :status) 'running)
+                   (or (null (plist-get props :max))
+                       (and (agent-ui-progress--timing props)
+                            (not (agent-ui-progress--stopped-p props))))))
   :check (lambda (props)
-           (let ((max (plist-get props :max)))
+           (let ((max (plist-get props :max))
+                 (started (plist-get props :started)))
              (when (and max (<= max 0))
-               (agent-ui--fail "progress: max must be above 0, not %s" (agent-ui-format-number max))))
+               (agent-ui--fail "progress: max must be above 0, not %s" (agent-ui-format-number max)))
+             (when (and started (not (agent-ui-progress--time started 0)))
+               (agent-ui--fail "progress: started is a timestamp (\"2026-11-10T18:30:00Z\"), epoch seconds, or seconds ago")))
            props)
+  :prepare (lambda (element) (agent-ui-progress--noted element (funcall agent-ui-clock)))
   ;; Finished: done, or at its max (not failed); failed: failed.
   :finished (lambda (props)
               (pcase (plist-get props :status)
