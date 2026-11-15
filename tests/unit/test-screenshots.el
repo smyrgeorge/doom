@@ -354,3 +354,18 @@ the rest; its exit status passed on."
     (should (= (car run) 1))
     (should (string-match-p "failed (exit 1)" (cdr run)))
     (should (string-match-p "noise" (cdr run)))))
+
+(ert-deftest screenshots/a-crew-s-app-closed-between-examples ()
+  "Closing an example closes the crew's app it opened, and every crew: left,
+its tally was in the next examples' mode lines, their frame still the app's."
+  (defvar agent-workspace--apps)
+  (let ((agent-workspace--apps (make-hash-table :test #'equal))
+        (closed nil)
+        (all nil))
+    (puthash "/tmp/crew/" 'app agent-workspace--apps)
+    (cl-letf (((symbol-function 'agent-workspace--close-app)
+               (lambda (project) (push project closed) (remhash project agent-workspace--apps)))
+              ((symbol-function 'agent-workspace-close-all) (lambda () (setq all t))))
+      (+my/screenshots--close))
+    (should (equal closed '("/tmp/crew/")))
+    (should all)))

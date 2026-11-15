@@ -222,14 +222,23 @@ the window's edge (see THE SAME SCREENSHOT)."
 
 (defun +my/screenshots--close ()
   "Close what an example opened: its merges aborted (its files go with them),
-one window on *scratch* again, the echo area empty: a message of two lines
-left the next example's panes laid out around a taller echo area (tiling's,
-after stripe's), its screenshot changed with the message before it."
+its crew's app closed (every agent exits: its tally was in the next ones'
+mode lines, their frame still the app's), one window on *scratch* again, the
+notices' frames synced now (not on a timer the next example runs), the echo
+area empty: a message of two lines left the next example's panes laid out
+around a taller echo area (tiling's, after stripe's), its screenshot changed
+with the message before it."
   (dolist (buffer (buffer-list))
     (when-let* (((buffer-live-p buffer))
                 (session (buffer-local-value '+my/merge--session buffer)))
       (ignore-errors (+my/merge--finish session))))
+  (when (fboundp 'agent-workspace--close-app)
+    (dolist (project (hash-table-keys agent-workspace--apps))
+      (ignore-errors (agent-workspace--close-app project)))
+    (ignore-errors (agent-workspace-close-all)))
   (+test-reset)
+  (when (fboundp '+my/banner--sync)
+    (+my/banner--sync))
   (message nil)
   (redisplay t))
 
