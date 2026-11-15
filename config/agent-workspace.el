@@ -39,9 +39,22 @@
 
 ;; ITS WORKTREE
 ;; Always its own (config/agent-workspace/worktree.el): .agent-shell/worktrees/NAME
-;; of its project, on the branch agent/NAME, made with it, kept when it stops,
-;; moved when it's renamed. .agent-shell/ is kept out of git (the repository's
-;; info/exclude, if no .gitignore does it).
+;; of its project, on the branch agent/NAME (from the main checkout's HEAD),
+;; made with it, locked with its name as the reason ("agent ada (builder),
+;; crew of doom"), kept when it stops, moved when it's renamed. A project
+;; that isn't a git repository, or has no commit, has no crew. .agent-shell/
+;; is kept out of git (the repository's info/exclude, if no .gitignore does
+;; it). Forgetting an agent removes its worktree and branch when they hold
+;; nothing the main checkout hasn't; else you're shown what they hold and
+;; asked. M-x agent-workspace-review: its branch's changes in magit
+;; (MAIN...agent/NAME); M-x agent-workspace-merge: merged into the main
+;; checkout, the agent told, its branch reset to it if you say so.
+
+;; ITS NAME ON IT, IN EMACS
+;; (config/agent-workspace/names.el) Its worktree's files belong to the
+;; project "PROJECT · NAME"; their mode line shows the agent ("▌A ada ·
+;; builder", in its colour; a click selects it) and their tab starts with its
+;; avatar. A worktree a forgotten agent left shows its name dimmed.
 
 ;; ITS SESSION
 ;; agent-shell's (config/agent-workspace/session.el), in its worktree, its
@@ -63,9 +76,13 @@
 (load! "agent-workspace/worktree")
 (load! "agent-workspace/session")
 (load! "agent-workspace/roles")
+(load! "agent-workspace/names")
 
 ;; WHAT AN AGENT IS TOLD (see ITS SESSION above), after what every session is.
 (add-hook '+my/agent-shell-claude-context-functions #'agent-workspace-agent-context t)
+
+;; ITS AVATAR on its worktree's tabs (see above).
+(add-hook '+my/tabs-prefix-functions #'agent-workspace-tab-prefix)
 
 ;; A QUESTION WAITING on an agent's canvas (config/agent-ui/agent.el): its hand
 ;; raised.

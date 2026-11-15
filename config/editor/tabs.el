@@ -209,6 +209,7 @@ the line less the arrows (with other tabs) and its separator."
          (face (cond ((not selected) 'tab-line-tab-inactive)
                      ((mode-line-window-selected-p) 'tab-line-tab-current)
                      (t 'tab-line-tab)))
+         (prefix (run-hook-with-args-until-success '+my/tabs-prefix-functions tab))
          (icon (and (display-graphic-p) (fboundp 'nerd-icons-icon-for-buffer)
                     (with-current-buffer tab
                       (ignore-errors (nerd-icons-icon-for-buffer)))))
@@ -223,6 +224,7 @@ the line less the arrows (with other tabs) and its separator."
      (+my/tabs-label tab tabs)
      (lambda (label)
        (let ((text (concat " "
+                           (or prefix "")
                            (if (stringp icon) (concat icon " ") "")
                            label
                            (if (and (buffer-file-name tab) (buffer-modified-p tab))

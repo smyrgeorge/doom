@@ -12,10 +12,13 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'ansi-color)               ; its faces: the agents' colours
 
 ;; worktree.el and session.el, loaded after.
 (declare-function agent-workspace-worktree-ensure "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-rename "agent-workspace/worktree")
+(declare-function agent-workspace-worktree-fate "agent-workspace/worktree")
+(declare-function agent-workspace-worktree-remove "agent-workspace/worktree")
 (declare-function agent-workspace--start "agent-workspace/session")
 (declare-function agent-workspace--stop "agent-workspace/session")
 (declare-function agent-workspace--process-table "agent-workspace/session")
@@ -140,6 +143,17 @@ they were made."
   "The agent named NAME in PROJECT's crew (default: the current project's)."
   (seq-find (lambda (agent) (equal (agent-workspace-agent-name agent) name))
             (agent-workspace-agents project)))
+
+(defun agent-workspace-read-agent (prompt &optional project)
+  "An agent of PROJECT's crew (default: the current project's), read in the
+minibuffer with PROMPT; the buffer's own agent (its session's, its
+worktree's) offered first."
+  (let* ((agents (or (agent-workspace-agents project) (user-error "No crew here")))
+         (own (or (agent-workspace-buffer-agent)
+                  (and (fboundp 'agent-workspace-file-agent) (agent-workspace-file-agent))))
+         (name (completing-read prompt (mapcar #'agent-workspace-agent-name agents) nil t nil nil
+                                (and (memq own agents) (agent-workspace-agent-name own)))))
+    (seq-find (lambda (agent) (equal (agent-workspace-agent-name agent) name)) agents)))
 
 (defun agent-workspace-crews ()
   "The projects with a crew."
@@ -389,15 +403,20 @@ it, if still in progress and assigned to it, goes back: open, unassigned."
   (agent-workspace--check-room (agent-workspace-agent-project agent) (agent-workspace-agent-role agent))
   (agent-workspace--start agent))
 
-(defun agent-workspace-forget (agent)
-  "Take AGENT out of its crew (its session stopped first); its worktree is
-left as it is."
-  (agent-workspace--stop agent 'home)
-  (let ((key (agent-workspace-agent-project agent)))
-    (puthash key (remq agent (gethash key agent-workspace--crews)) agent-workspace--crews)
-    (unless (gethash key agent-workspace--crews)
-      (remhash key agent-workspace--crews)))
-  (agent-workspace--changed agent 'forgotten))
+(defun agent-workspace-forget (agent &optional worktree)
+  "Take AGENT out of its crew, its session stopped first. Its worktree and
+branch: WORKTREE (`keep' or `remove'), or if nil, removed when they hold
+nothing the main checkout hasn't, else you're shown what they hold and
+asked: no work is lost without asking."
+  (let ((how (agent-workspace-worktree-fate agent worktree)))
+    (agent-workspace--stop agent 'home)
+    (let ((key (agent-workspace-agent-project agent)))
+      (puthash key (remq agent (gethash key agent-workspace--crews)) agent-workspace--crews)
+      (unless (gethash key agent-workspace--crews)
+        (remhash key agent-workspace--crews)))
+    (when (eq how 'remove)
+      (agent-workspace-worktree-remove agent))
+    (agent-workspace--changed agent 'forgotten)))
 
 (defun agent-workspace-recolour (agent colour)
   "Give AGENT COLOUR, one of `agent-workspace-colours'."

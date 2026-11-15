@@ -438,17 +438,21 @@ started again); not while it works."
       (should (equal (agent-workspace-agent-branch agent) "agent/linus")))))
 
 (ert-deftest agent-workspace-session/forget ()
-  "Forgotten: out of the crew, its session stopped, its worktree left."
+  "Forgotten: out of the crew, its session stopped; its worktree kept if
+you say so, else removed when it holds nothing of its own."
   (+test-aws--with-crew "forget"
-    (let ((agent (+test-aws--create "ada"))
+    (let ((ada (+test-aws--create "ada"))
+          (grace (+test-aws--create "grace"))
           (whats nil))
       (let ((agent-workspace-change-functions (list (lambda (_agent what) (push what whats)))))
-        (agent-workspace-forget agent))
+        (agent-workspace-forget ada 'keep))
       (should (eq (car whats) 'forgotten))
-      (should-not (agent-workspace-agents))
+      (should (equal (agent-workspace-agents) (list grace)))
+      (should-not (buffer-live-p (agent-workspace-agent-buffer ada)))
+      (should (file-directory-p (expand-file-name ".agent-shell/worktrees/ada/" project)))
+      (agent-workspace-forget grace)
       (should-not (agent-workspace-crews))
-      (should-not (buffer-live-p (agent-workspace-agent-buffer agent)))
-      (should (file-directory-p (expand-file-name ".agent-shell/worktrees/ada/" project))))))
+      (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/grace/" project))))))
 
 ;; ====== CLOSING THE CREW ======
 

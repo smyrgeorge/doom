@@ -74,6 +74,11 @@ three times this.")
 (defvar +my/tabs-bar-width 2
   "Width of the bar marking the current tab, in pixels.")
 
+(defvar +my/tabs-prefix-functions nil
+  "Functions called with a tab's buffer, each returning text its tab starts
+with (before its icon), or nil; the first text is used. An agent's avatar on
+its worktree's files (config/agent-workspace.el).")
+
 (defvar +my/tabs-real-modes '(ibuffer-mode)
   "Major modes whose buffers keep a tab though they visit no file, as files
 do: in the workspace, listed by SPC b b, killed once no window has them as

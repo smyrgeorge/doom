@@ -505,6 +505,21 @@ workspaces' buffers its history has."
       (should (buffer-modified-p notes))
       (should-not (string-search "•" (+my/tabs-format notes (+test-tabs--tabs)))))))
 
+;; Text a tab starts with, from `+my/tabs-prefix-functions' (an agent's avatar on
+;; its worktree's files: config/agent-workspace.el).
+(ert-deftest tabs/format-prefix-from-its-functions ()
+  (+test-tabs
+    (let ((a (+test-tabs--file "a.txt"))
+          (b (+test-tabs--file "b.txt"))
+          (+my/tabs-prefix-functions
+           (list #'ignore (lambda (buffer) (and (string-match-p "a\\.txt" (buffer-name buffer)) "▌A "))
+                 (lambda (_) "second "))))
+      (+test-tabs--show a b)
+      (should (string-prefix-p " ▌A a.txt " (substring-no-properties (+my/tabs-format a (+test-tabs--tabs)))))
+      (should (string-prefix-p " second b.txt " (substring-no-properties (+my/tabs-format b (+test-tabs--tabs)))))
+      (let ((+my/tabs-prefix-functions nil))
+        (should (string-prefix-p " a.txt " (substring-no-properties (+my/tabs-format a (+test-tabs--tabs)))))))))
+
 (defun +test-tabs--tab-line ()
   "The selected window's tab line, as text (tab-line's cache used)."
   (mapconcat #'substring-no-properties
