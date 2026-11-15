@@ -103,10 +103,14 @@ needs your OK. nil: Claude Code's own default."
 ;; starts work by itself.
 
 ;; ITS WORKTREE
-;; Always its own (config/agent-workspace/worktree.el): .agent-shell/worktrees/NAME
-;; of its project, on the branch agent/NAME (from the main checkout's HEAD),
-;; made with it, locked with its name as the reason ("agent ada (builder),
-;; crew of doom"), kept when it stops, moved when it's renamed. A project
+;; Always its own (config/agent-workspace/worktree.el):
+;; .agent-shell/worktrees/ROLE-NAME of its project (builder-ada), on the
+;; branch agent/NAME (from the main checkout's HEAD), made with it, locked
+;; with its name as the reason ("agent ada (builder), crew of doom"), kept
+;; when it stops, moved when it's renamed or its role changes (e; not while
+;; it works). One named otherwise in .agent-shell/worktrees on its branch
+;; (worktrees/NAME, as they were named before) is moved there as it starts,
+;; its work with it. A project
 ;; that isn't a git repository, or has no commit, has no crew. .agent-shell/
 ;; is kept out of git (the repository's info/exclude, if no .gitignore does
 ;; it). Forgetting an agent removes its worktree and branch when they hold

@@ -302,10 +302,11 @@ From the shell: `cmd/agent-workspace new --role builder [--name ada] [--prompt T
 - **Its permission mode** is Claude Code's auto mode: Claude decides what needs your OK. A role's `mode` changes it
   for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all (`nil`: Claude Code's own default).
   The agent's bar shows it.
-- **Its worktree** is `.agent-shell/worktrees/ada`, on the branch `agent/ada`, branched from your checkout's HEAD.
-  It's made with the agent and kept when the agent stops, so the next start finds its work. It's locked with the
-  agent's name as the reason (`git worktree list -v`). `.agent-shell/` stays out of git. A project that isn't a git
-  repository, or has no commit yet, can't have a crew.
+- **Its worktree** is `.agent-shell/worktrees/builder-ada` (its role, then its name), on the branch `agent/ada`,
+  branched from your checkout's HEAD. It's made with the agent and kept when the agent stops, so the next start finds
+  its work. Renaming the agent or changing its role moves it; one named `worktrees/ada`, from before, moves when its
+  agent starts. It's locked with the agent's name as the reason (`git worktree list -v`). `.agent-shell/` stays out
+  of git. A project that isn't a git repository, or has no commit yet, can't have a crew.
 - **Its colour** is one of the theme's ANSI colours, a free one by default.
 - **Its name** goes into the issues' history: its `bd` commands run as `ada`.
 
@@ -384,7 +385,7 @@ A merge that conflicts stops in your checkout, for you to resolve.
 ## What you do to one
 
 You can interrupt an agent, kill it, restart it fresh, put it to sleep, wake it, rename it (its worktree and branch
-follow) or recolour it. Killing it gives back the issue you gave it, if it's still in progress and assigned to the
+follow), change its role (its worktree follows; not while it works) or recolour it. Killing it gives back the issue you gave it, if it's still in progress and assigned to the
 agent.
 
 Forgetting an agent takes it out of the crew. Its worktree and branch go too when they hold nothing your checkout

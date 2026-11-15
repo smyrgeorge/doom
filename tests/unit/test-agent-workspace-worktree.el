@@ -1,6 +1,6 @@
 ;;; tests/unit/test-agent-workspace-worktree.el -*- lexical-binding: t; -*-
 ;; config/agent-workspace/worktree.el and names.el: every agent's own git
-;; worktree, named after it (.agent-shell/worktrees/NAME, agent/NAME, its lock's
+;; worktree, named after it (.agent-shell/worktrees/ROLE-NAME, agent/NAME, its lock's
 ;; reason), in throwaway git repositories; forgetting it without losing work;
 ;; reviewing and merging its branch; a crew's project found from them; its
 ;; name on it in Emacs (the project's name, the mode line, its tabs).
@@ -82,12 +82,12 @@
      ,@body))
 
 (ert-deftest agent-workspace-worktree/made-named-after-it ()
-  "Its worktree: .agent-shell/worktrees/NAME, on a new branch agent/NAME
+  "Its worktree: .agent-shell/worktrees/ROLE-NAME, on a new branch agent/NAME
 from the project's HEAD; the project's checkout untouched."
   (let* ((project (+test-aww--project "made"))
          (agent (+test-aww--agent project "ada"))
          (dir (agent-workspace-worktree-ensure agent)))
-    (should (equal dir (expand-file-name ".agent-shell/worktrees/ada/" project)))
+    (should (equal dir (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
     (should (equal (agent-workspace-agent-worktree agent) dir))
     (should (equal (agent-workspace-agent-branch agent) "agent/ada"))
     (should (file-exists-p (expand-file-name "README" dir)))
@@ -107,7 +107,7 @@ from the project's HEAD; the project's checkout untouched."
     (agent-workspace-worktree-ensure (+test-aww--agent project "grace"))
     (should (= (cl-count "/.agent-shell/" (split-string (+test-aww--exclude project) "\n") :test #'equal) 1))
     ;; In the agent's worktree too (it shares info/exclude).
-    (let ((default-directory (expand-file-name ".agent-shell/worktrees/ada/" project)))
+    (let ((default-directory (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
       (make-directory ".agent-shell/transcripts" t)
       (write-region "x" nil ".agent-shell/transcripts/a.md")
       (should (equal (+test-aww--git "status" "--porcelain") ""))))
@@ -148,17 +148,18 @@ again, with its commits."
          (agent (+test-aww--agent project "ada")))
     ;; A file where its folder goes.
     (make-directory (expand-file-name ".agent-shell/worktrees/" project) t)
-    (write-region "" nil (expand-file-name ".agent-shell/worktrees/ada" project))
+    (write-region "" nil (expand-file-name ".agent-shell/worktrees/builder-ada" project))
     (should-error (agent-workspace-worktree-ensure agent) :type 'user-error)))
 
 (ert-deftest agent-workspace-worktree/renamed ()
-  "Renamed: its worktree moved and its branch renamed, its work kept."
+  "Renamed: its worktree moved and its branch renamed, its work kept; its
+role changed: moved, its branch as it was."
   (let* ((project (+test-aww--project "renamed"))
          (agent (+test-aww--agent project "ada"))
          (dir (agent-workspace-worktree-ensure agent)))
     (write-region "wip\n" nil (expand-file-name "wip" dir))
-    (agent-workspace-worktree-rename agent "grace")
-    (let ((new (expand-file-name ".agent-shell/worktrees/grace/" project)))
+    (agent-workspace-worktree-move agent "grace" "builder")
+    (let ((new (expand-file-name ".agent-shell/worktrees/builder-grace/" project)))
       (should (equal (agent-workspace-agent-worktree agent) new))
       (should (equal (agent-workspace-agent-branch agent) "agent/grace"))
       (should-not (file-exists-p dir))
@@ -166,7 +167,48 @@ again, with its commits."
       (let ((default-directory new))
         (should (equal (+test-aww--git "branch" "--show-current") "agent/grace")))
       (let ((default-directory project))
-        (should-not (string-search "agent/ada" (+test-aww--git "branch" "--list")))))))
+        (should-not (string-search "agent/ada" (+test-aww--git "branch" "--list"))))
+      ;; A reviewer now.
+      (agent-workspace-worktree-move agent "grace" "reviewer")
+      (let ((moved (expand-file-name ".agent-shell/worktrees/reviewer-grace/" project)))
+        (should (equal (agent-workspace-agent-worktree agent) moved))
+        (should (equal (agent-workspace-agent-role agent) "reviewer"))
+        (should (equal (agent-workspace-agent-branch agent) "agent/grace"))
+        (should-not (file-exists-p new))
+        (should (file-exists-p (expand-file-name "wip" moved)))
+        (should (string-search "locked agent grace (reviewer)" (+test-aww--porcelain project)))))))
+
+(ert-deftest agent-workspace-worktree/named-otherwise-moved ()
+  "A worktree on its branch named as before (worktrees/NAME), or for its
+role before (crew.el edited): moved to ROLE-NAME as its agent starts, its
+work kept, locked as it. Its branch checked out outside the agents' folder
+\(yours): never moved, git's refusal said."
+  (let* ((project (+test-aww--project "before"))
+         (old (expand-file-name ".agent-shell/worktrees/ada/" project)))
+    (let ((default-directory project))
+      (make-directory (expand-file-name ".agent-shell/worktrees/" project) t)
+      (+test-aww--git "worktree" "add" "-q" "-b" "agent/ada" (directory-file-name old) "HEAD")
+      (+test-aww--git "worktree" "lock" "--reason" "agent ada (builder), crew of before" (directory-file-name old)))
+    (write-region "wip\n" nil (expand-file-name "wip" old))
+    (let* ((agent (+test-aww--agent project "ada"))
+           (dir (agent-workspace-worktree-ensure agent)))
+      (should (equal dir (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
+      (should-not (file-exists-p old))
+      (should (file-exists-p (expand-file-name "wip" dir)))
+      (should (string-search "locked agent ada (builder)" (+test-aww--porcelain project)))
+      ;; Its role changed in crew.el meanwhile.
+      (setf (agent-workspace-agent-role agent) "reviewer")
+      (let ((moved (agent-workspace-worktree-ensure agent)))
+        (should (equal moved (expand-file-name ".agent-shell/worktrees/reviewer-ada/" project)))
+        (should (file-exists-p (expand-file-name "wip" moved)))
+        (should-not (file-exists-p dir))))
+    ;; Its branch checked out outside the agents' folder.
+    (let ((yours (expand-file-name "aww/yours/" +test-tmp)))
+      (when (file-exists-p yours) (delete-directory yours t))
+      (let ((default-directory project))
+        (+test-aww--git "worktree" "add" "-q" "-b" "agent/ken" (directory-file-name yours) "HEAD"))
+      (should-error (agent-workspace-worktree-ensure (+test-aww--agent project "ken")) :type 'user-error)
+      (should (file-exists-p (expand-file-name "README" yours))))))
 
 ;; ====== A CREW'S PROJECT ======
 
@@ -191,14 +233,14 @@ folder of it, or an agent's worktree; none outside git."
 
 (ert-deftest agent-workspace-worktree/locked-with-its-name ()
   "Its worktree is locked as it's made, its reason naming it; git's own name
-for it is its name; prune leaves it; one found unlocked is locked; renamed,
-its reason too."
+for it is its folder's; prune leaves it; one found unlocked is locked;
+renamed, its reason too."
   (let* ((project (+test-aww--project "locked"))
          (agent (+test-aww--agent project "ada"))
          (dir (agent-workspace-worktree-ensure agent)))
     (should (string-search (concat "worktree " (directory-file-name dir)) (+test-aww--porcelain project)))
     (should (string-search "locked agent ada (builder), crew of locked" (+test-aww--porcelain project)))
-    (should (file-directory-p (expand-file-name ".git/worktrees/ada" project)))
+    (should (file-directory-p (expand-file-name ".git/worktrees/builder-ada" project)))
     (let ((default-directory project))
       (+test-aww--git "worktree" "prune")
       (should (file-directory-p dir))
@@ -206,7 +248,7 @@ its reason too."
     (should-not (string-search "\nlocked" (+test-aww--porcelain project)))
     (agent-workspace-worktree-ensure agent)
     (should (string-search "locked agent ada (builder)" (+test-aww--porcelain project)))
-    (agent-workspace-worktree-rename agent "grace")
+    (agent-workspace-worktree-move agent "grace" "builder")
     (should (string-search "locked agent grace (builder), crew of locked" (+test-aww--porcelain project)))
     (should-not (string-search "agent ada" (+test-aww--porcelain project)))))
 
@@ -219,7 +261,7 @@ why; nothing made."
     (let ((default-directory empty)) (+test-aww--git "init" "-q" "-b" "main"))
     (should (string-prefix-p "no commit yet" (agent-workspace-no-crew-reason empty)))
     (should-error (agent-workspace-worktree-ensure (+test-aww--agent empty "ada")) :type 'user-error)
-    (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/ada" empty))))
+    (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/builder-ada" empty))))
   (should-not (agent-workspace-no-crew-reason (+test-aww--project "fine"))))
 
 (ert-deftest agent-workspace-worktree/two-agents-at-once ()
@@ -351,18 +393,23 @@ merged main when you say so; nothing ahead after."
 ;; ====== IN EMACS ======
 
 (ert-deftest agent-workspace-worktree/a-file-s-agent ()
-  "A file of an agent's worktree: its project and agent (the outermost
-worktree); none for the main checkout's files."
-  (should (equal (agent-workspace-worktree-of "/p/doom/.agent-shell/worktrees/ada/src/a.el")
-                 '("/p/doom/" "ada")))
-  (should (equal (agent-workspace-worktree-of "/p/doom/.agent-shell/worktrees/ada")
-                 '("/p/doom/" "ada")))
-  (should (equal (agent-workspace-worktree-of
-                  "/p/doom/.agent-shell/worktrees/ada/.agent-shell/worktrees/x/a.el")
-                 '("/p/doom/" "ada")))
-  (should-not (agent-workspace-worktree-of "/p/doom/src/a.el"))
-  (should (equal (agent-workspace-project-name "/p/doom/.agent-shell/worktrees/ada/") "doom · ada"))
-  (should-not (agent-workspace-project-name "/p/doom/")))
+  "A file of an agent's worktree (ROLE-NAME): its project and agent, found
+through the crew (the outermost worktree); a folder nobody's and unreadable,
+its own name; none for the main checkout's files."
+  (+test-aww--with-crew "/p/doom/" (list (agent-workspace--make-agent :name "ada" :role "builder"
+                                                                      :project "/p/doom/"))
+    (should (equal (agent-workspace-worktree-of "/p/doom/.agent-shell/worktrees/builder-ada/src/a.el")
+                   '("/p/doom/" "ada")))
+    (should (equal (agent-workspace-worktree-of "/p/doom/.agent-shell/worktrees/builder-ada")
+                   '("/p/doom/" "ada")))
+    (should (equal (agent-workspace-worktree-of
+                    "/p/doom/.agent-shell/worktrees/builder-ada/.agent-shell/worktrees/x/a.el")
+                   '("/p/doom/" "ada")))
+    (should (equal (agent-workspace-worktree-of "/p/doom/.agent-shell/worktrees/scribe-bob/a.el")
+                   '("/p/doom/" "scribe-bob")))
+    (should-not (agent-workspace-worktree-of "/p/doom/src/a.el"))
+    (should (equal (agent-workspace-project-name "/p/doom/.agent-shell/worktrees/builder-ada/") "doom · ada"))
+    (should-not (agent-workspace-project-name "/p/doom/"))))
 
 (ert-deftest agent-workspace-worktree/its-project-s-name ()
   "projectile's and project.el's name for its worktree: \"PROJECT · NAME\"."

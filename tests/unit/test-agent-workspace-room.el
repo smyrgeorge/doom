@@ -122,7 +122,7 @@ home, started again, leaving: each a line, its time and name."
       (agent-workspace-kill ada)
       (agent-workspace-forget ada 'keep))
     (let ((feed (+test-awr2--feed project)))
-      (dolist (part '("ada (builder) joined · .agent-shell/worktrees/ada ⑂ agent/ada"
+      (dolist (part '("ada (builder) joined · .agent-shell/worktrees/builder-ada ⑂ agent/ada"
                       "wants to run npm install" "stuck" "started again, fresh" "went home" "left the crew"))
         (should (string-search part feed)))
       (should (string-match-p "\\` [0-9][0-9]:[0-9][0-9] ▌A ada" feed)))))

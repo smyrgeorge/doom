@@ -16,7 +16,7 @@
 
 ;; worktree.el and session.el, loaded after.
 (declare-function agent-workspace-worktree-ensure "agent-workspace/worktree")
-(declare-function agent-workspace-worktree-rename "agent-workspace/worktree")
+(declare-function agent-workspace-worktree-move "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-fate "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-remove "agent-workspace/worktree")
 (declare-function agent-workspace--start "agent-workspace/session")
@@ -483,12 +483,28 @@ while it works; a running session starts again, fresh (its worktree moved)."
         (state (agent-workspace-agent-state agent)))
     (when live (agent-workspace--stop agent 'waking))
     (run-hook-with-args 'agent-workspace-moving-functions agent)
-    (agent-workspace-worktree-rename agent name)
+    (agent-workspace-worktree-move agent name (agent-workspace-agent-role agent))
     (setf (agent-workspace-agent-name agent) name)
     (agent-workspace--changed agent 'renamed)
     (if live
         (agent-workspace--start agent)
       (agent-workspace--set-state agent state))))
+
+(defun agent-workspace-set-role (agent role)
+  "Give AGENT ROLE: its worktree moved after it (ROLE-NAME). Not while it
+works; a running session starts again, fresh, as ROLE says."
+  (unless (equal role (agent-workspace-agent-role agent))
+    (when (memq (agent-workspace-agent-state agent) '(working hand))
+      (user-error "%s is working: change its role once it's done" (agent-workspace-agent-name agent)))
+    (let ((live (agent-workspace-live-p agent))
+          (state (agent-workspace-agent-state agent)))
+      (when live (agent-workspace--stop agent 'waking))
+      (run-hook-with-args 'agent-workspace-moving-functions agent)
+      (agent-workspace-worktree-move agent (agent-workspace-agent-name agent) role)
+      (agent-workspace--changed agent 'role)
+      (if live
+          (agent-workspace--start agent)
+        (agent-workspace--set-state agent state)))))
 
 (defun agent-workspace-give (agent issue &optional title)
   "Note that AGENT works on ISSUE (its TITLE): what its state says. nil:

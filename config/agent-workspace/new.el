@@ -35,9 +35,17 @@ default."
 
 (defun agent-workspace--name-left-p (project name)
   "Non-nil if a forgotten agent NAME left its worktree or branch in PROJECT."
-  (let ((default-directory project))
-    (or (file-exists-p (agent-workspace-worktree-directory project name))
-        (agent-workspace--branch-p (agent-workspace-branch name)))))
+  (let ((default-directory project)
+        (worktrees (expand-file-name agent-workspace-worktrees-directory project)))
+    (or (agent-workspace--branch-p (agent-workspace-branch name))
+        ;; Its folder: NAME, as they were named before, or ROLE-NAME (one
+        ;; whose branch says another name isn't its: ROLE-mary-NAME).
+        (seq-some (lambda (folder)
+                    (or (equal folder name)
+                        (and (string-suffix-p (concat "-" name) folder)
+                             (member (agent-workspace--worktree-branch-name (expand-file-name folder worktrees))
+                                     (list name nil)))))
+                  (and (file-directory-p worktrees) (directory-files worktrees nil "\\`[^.]"))))))
 
 (defun agent-workspace-pool-name (project role)
   "A name for a new agent of ROLE in PROJECT's crew (see

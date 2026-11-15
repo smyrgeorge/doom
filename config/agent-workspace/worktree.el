@@ -2,10 +2,13 @@
 ;; Every agent's own git worktree. Loaded from config/agent-workspace.el. No
 ;; Doom here.
 ;;
-;; Named after its agent: the folder .agent-shell/worktrees/NAME of its
-;; project, on the branch agent/NAME. Made when the agent is, kept when it's
-;; killed, put to sleep or its crew closed (the next start reuses it), moved
-;; when it's renamed.
+;; Named after its agent: the folder .agent-shell/worktrees/ROLE-NAME of its
+;; project (builder-ada), on the branch agent/NAME. Made when the agent is,
+;; kept when it's killed, put to sleep or its crew closed (the next start
+;; reuses it), moved when it's renamed or its role changes. One found
+;; elsewhere in .agent-shell/worktrees on its branch (worktrees/NAME, as
+;; they were named before; its role's before crew.el changed it) is moved
+;; to its folder as it starts.
 
 (require 'cl-lib)
 (require 'seq)
@@ -21,10 +24,23 @@ of git: see `agent-workspace--keep-out-of-git')."
 
 ;; ====== A WORKTREE ======
 
-(defun agent-workspace-worktree-directory (project name)
-  "The worktree of the agent NAME of PROJECT's crew."
+(defun agent-workspace-worktree-directory (project name role)
+  "The worktree of the agent NAME, of ROLE, of PROJECT's crew: ROLE-NAME."
   (file-name-as-directory
-   (expand-file-name name (expand-file-name agent-workspace-worktrees-directory project))))
+   (expand-file-name (concat role "-" name) (expand-file-name agent-workspace-worktrees-directory project))))
+
+(defun agent-workspace--worktree-branch-name (dir)
+  "The agent's name the worktree DIR's branch says (agent/NAME), or nil:
+read from its git files, git not run (a mode line asks)."
+  (ignore-errors
+    (let* ((gitdir (with-temp-buffer
+                     (insert-file-contents (expand-file-name ".git" dir))
+                     (and (looking-at "gitdir: \\(.*\\)") (match-string 1))))
+           (head (with-temp-buffer
+                   (insert-file-contents (expand-file-name "HEAD" (expand-file-name gitdir dir)))
+                   (buffer-string))))
+      (and (string-match "\\`ref: refs/heads/agent/\\([^\n]+\\)" head)
+           (match-string 1 head)))))
 
 (defun agent-workspace-branch (name)
   "The branch of the agent NAME: agent/NAME."
@@ -106,28 +122,53 @@ if it isn't: `git worktree prune' and `remove' leave it alone."
     (let ((default-directory project))
       (agent-workspace--git "worktree" "unlock" (directory-file-name dir)))))
 
+(defun agent-workspace--branch-worktrees (project branch)
+  "PROJECT's worktrees on BRANCH in its agents' folder
+\(`agent-workspace-worktrees-directory'; never its main checkout, nor one
+of yours elsewhere): their folders."
+  (let ((under (file-name-as-directory
+                (file-truename (expand-file-name agent-workspace-worktrees-directory project)))))
+    (delq nil (mapcar (lambda (worktree)
+                        (and (equal (plist-get worktree :branch) branch)
+                             (string-prefix-p under (plist-get worktree :dir))
+                             (plist-get worktree :dir)))
+                      (agent-workspace--worktrees project)))))
+
 (defun agent-workspace-worktree-ensure (agent)
   "AGENT's worktree, made if it isn't there yet (its branch too, from the
-project's HEAD), else reused; locked with AGENT's name. Its folder and
-branch are set in AGENT."
+project's HEAD), else reused (moved to its folder if it's elsewhere in its
+agents' folder); locked with AGENT's name. Its folder and branch are set in
+AGENT."
   (let* ((project (agent-workspace-agent-project agent))
          (name (agent-workspace-agent-name agent))
-         (dir (agent-workspace-worktree-directory project name))
+         (dir (agent-workspace-worktree-directory project name (agent-workspace-agent-role agent)))
          (branch (agent-workspace-branch name))
          (default-directory project))
     (unless (file-exists-p (expand-file-name ".git" dir))
       (when-let* ((reason (agent-workspace-no-crew-reason project)))
         (user-error "%s: %s" (file-name-nondirectory (directory-file-name project)) reason))
       (agent-workspace--keep-out-of-git project)
-      ;; Its folder went (deleted by hand) while git still lists it: locked,
-      ;; it's never pruned.
-      (when (file-directory-p (file-name-directory (directory-file-name dir)))
-        (agent-workspace--worktree-unlock project dir))
-      (agent-workspace--git "worktree" "prune")
-      (make-directory (file-name-directory (directory-file-name dir)) t)
-      (if (agent-workspace--branch-p branch)
-          (agent-workspace--git "worktree" "add" (directory-file-name dir) branch)
-        (agent-workspace--git "worktree" "add" "-b" branch (directory-file-name dir) "HEAD")))
+      (let* ((here (file-name-as-directory (file-truename dir)))
+             (others (and (agent-workspace--branch-p branch)
+                          (remove here (agent-workspace--branch-worktrees project branch))))
+             (old (seq-find #'file-directory-p others)))
+        ;; Its folder went (deleted by hand) while git still lists it: locked,
+        ;; it's never pruned.
+        (when (file-directory-p (file-name-directory (directory-file-name dir)))
+          (agent-workspace--worktree-unlock project dir))
+        (dolist (gone (seq-remove #'file-directory-p others))
+          (agent-workspace--worktree-unlock project gone))
+        (agent-workspace--git "worktree" "prune")
+        (make-directory (file-name-directory (directory-file-name dir)) t)
+        (cond
+         ;; Its worktree, named otherwise (as before, or for its role before):
+         ;; moved here, its work with it. git won't move a locked one.
+         (old
+          (agent-workspace--worktree-unlock project old)
+          (agent-workspace--git "worktree" "move" (directory-file-name old) (directory-file-name dir)))
+         ((agent-workspace--branch-p branch)
+          (agent-workspace--git "worktree" "add" (directory-file-name dir) branch))
+         (t (agent-workspace--git "worktree" "add" "-b" branch (directory-file-name dir) "HEAD")))))
     (setf (agent-workspace-agent-worktree agent) dir
           (agent-workspace-agent-branch agent) branch)
     (agent-workspace--worktree-lock agent)
@@ -137,25 +178,26 @@ branch are set in AGENT."
   "Non-nil if BRANCH is a branch of `default-directory''s repository."
   (eql 0 (process-file "git" nil nil nil "rev-parse" "--verify" "--quiet" (concat "refs/heads/" branch))))
 
-(defun agent-workspace-worktree-rename (agent name)
-  "AGENT's worktree moved to the folder of NAME, its branch renamed after
-it, its lock's reason too (AGENT renamed meanwhile). Its session must not
-run."
+(defun agent-workspace-worktree-move (agent name role)
+  "AGENT's worktree moved to the folder of NAME and ROLE, its branch renamed
+after NAME, its lock's reason too (AGENT renamed, given ROLE, meanwhile).
+Its session must not run."
   (let* ((project (agent-workspace-agent-project agent))
          (old (agent-workspace-agent-worktree agent))
-         (dir (agent-workspace-worktree-directory project name))
+         (dir (agent-workspace-worktree-directory project name role))
          (branch (agent-workspace-branch name))
          (default-directory project))
-    (when (and old (file-exists-p old))
+    (when (and old (file-exists-p old) (not (equal (file-truename old) (file-truename dir))))
       ;; git won't move a locked worktree.
       (agent-workspace--worktree-unlock project old)
       (agent-workspace--git "worktree" "move" (directory-file-name old) (directory-file-name dir)))
     (when-let* ((old-branch (agent-workspace-agent-branch agent)))
-      (when (agent-workspace--branch-p old-branch)
+      (when (and (agent-workspace--branch-p old-branch) (not (equal old-branch branch)))
         (agent-workspace--git "branch" "-m" old-branch branch)))
     (setf (agent-workspace-agent-worktree agent) dir
           (agent-workspace-agent-branch agent) branch
-          (agent-workspace-agent-name agent) name)
+          (agent-workspace-agent-name agent) name
+          (agent-workspace-agent-role agent) role)
     (when (file-exists-p dir)
       (agent-workspace--worktree-lock agent))))
 

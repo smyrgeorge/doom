@@ -146,7 +146,7 @@ builder, the stand-in)."
         (let ((agent (+test-aws--create "ada")))
           (should (equal (reverse states) '((waking . desk))))
           (let ((buffer (agent-workspace-agent-buffer agent))
-                (worktree (expand-file-name ".agent-shell/worktrees/ada/" project)))
+                (worktree (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
             (should (equal (buffer-name buffer) "ada · builder"))
             (should-not (get-buffer-window buffer t))
             (should (eq (agent-workspace-buffer-agent buffer) agent))
@@ -371,7 +371,7 @@ issue you gave it given back (open, unassigned, if still its)."
       (should (equal (agent-workspace-state-text agent) "gone home"))
       (should-not (buffer-live-p buffer))
       (should (+test-aws--wait (lambda () (not (+test-aws--pid-alive-p pid))) 10))
-      (should (file-directory-p (expand-file-name ".agent-shell/worktrees/ada/" project)))
+      (should (file-directory-p (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
       (should (equal bd '(("bd" "update" "doom-a1b" "--if-assignee=ada" "--if-status=in_progress"
                            "--status=open" "--assignee="))))
       (should-not (agent-workspace-agent-issue agent))
@@ -421,10 +421,10 @@ started again); not while it works."
       (should (equal (agent-workspace-agent-name agent) "grace"))
       (should (+test-aws--state agent 'desk))
       (should (equal (buffer-name (agent-workspace-agent-buffer agent)) "grace · builder"))
-      (let ((worktree (expand-file-name ".agent-shell/worktrees/grace/" project)))
+      (let ((worktree (expand-file-name ".agent-shell/worktrees/builder-grace/" project)))
         (should (equal (agent-workspace-agent-worktree agent) worktree))
         (should (file-directory-p worktree))
-        (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/ada/" project)))
+        (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
         (let ((default-directory worktree))
           (should (equal (+test-aws--git "branch" "--show-current") "agent/grace"))))
       (should (+test-aws--logged :start "grace"))
@@ -436,6 +436,31 @@ started again); not while it works."
       (agent-workspace-rename agent "linus")
       (should (eq (agent-workspace-agent-state agent) 'asleep))
       (should (equal (agent-workspace-agent-branch agent) "agent/linus")))))
+
+(ert-deftest agent-workspace-session/role-changed ()
+  "Its role changed: its worktree moved to ROLE-NAME, its branch as it was,
+its session started again as its role says; not while it works; asleep, it
+stays asleep."
+  (+test-aws--with-crew "role"
+    (let ((agent (+test-aws--create "ada")))
+      (agent-workspace-set-role agent "reviewer")
+      (should (equal (agent-workspace-agent-role agent) "reviewer"))
+      (should (+test-aws--state agent 'desk))
+      (should (equal (buffer-name (agent-workspace-agent-buffer agent)) "ada · reviewer"))
+      (let ((worktree (expand-file-name ".agent-shell/worktrees/reviewer-ada/" project)))
+        (should (equal (agent-workspace-agent-worktree agent) worktree))
+        (should (file-directory-p worktree))
+        (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
+        (let ((default-directory worktree))
+          (should (equal (+test-aws--git "branch" "--show-current") "agent/ada"))))
+      (agent-workspace-send agent "hold" :submit t)
+      (should (+test-aws--state agent 'working))
+      (should-error (agent-workspace-set-role agent "builder") :type 'user-error)
+      ;; Asleep, it stays asleep.
+      (agent-workspace-sleep agent)
+      (agent-workspace-set-role agent "builder")
+      (should (eq (agent-workspace-agent-state agent) 'asleep))
+      (should (file-directory-p (expand-file-name ".agent-shell/worktrees/builder-ada/" project))))))
 
 (ert-deftest agent-workspace-session/forget ()
   "Forgotten: out of the crew, its session stopped; its worktree kept if
@@ -449,10 +474,10 @@ you say so, else removed when it holds nothing of its own."
       (should (eq (car whats) 'forgotten))
       (should (equal (agent-workspace-agents) (list grace)))
       (should-not (buffer-live-p (agent-workspace-agent-buffer ada)))
-      (should (file-directory-p (expand-file-name ".agent-shell/worktrees/ada/" project)))
+      (should (file-directory-p (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
       (agent-workspace-forget grace)
       (should-not (agent-workspace-crews))
-      (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/grace/" project))))))
+      (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/builder-grace/" project))))))
 
 ;; ====== CLOSING THE CREW ======
 
@@ -487,7 +512,7 @@ group; afterwards none of their processes is left. Their worktrees stay."
           (should (eq (agent-workspace-agent-state agent) 'home)))
         (should (+test-aws--wait (lambda () (not (seq-some #'+test-aws--pid-alive-p pids))) 10))
         (dolist (name '("ada" "grace" "linus"))
-          (should (file-directory-p (expand-file-name (concat ".agent-shell/worktrees/" name "/")
+          (should (file-directory-p (expand-file-name (concat ".agent-shell/worktrees/builder-" name "/")
                                                       project))))))))
 
 (ert-deftest agent-workspace-session/quitting-emacs-asks-nothing-of-the-crew ()

@@ -101,7 +101,7 @@ a forgotten agent; none left, its role and a number."
     (should (equal (agent-workspace-pool-name project "builder") "linus"))
     ;; Left by a forgotten agent: its branch, or its worktree.
     (+test-awn--git "branch" "agent/linus")
-    (make-directory (expand-file-name ".agent-shell/worktrees/ken" project) t)
+    (make-directory (expand-file-name ".agent-shell/worktrees/builder-ken" project) t)
     (should (equal (agent-workspace-pool-name project "builder") "margaret"))
     ;; The pool run out.
     (let ((agent-workspace-names '("ada" "grace")))
@@ -159,7 +159,7 @@ with C-u its model, mode and colour asked too (its role's by default)."
         (should (equal (agent-workspace-agent-role agent) "investigator"))
         (should (equal (agent-workspace-agent-colour agent) "magenta"))
         (should (equal started '("ada")))
-        (should (file-directory-p (expand-file-name ".agent-shell/worktrees/ada" project)))
+        (should (file-directory-p (expand-file-name ".agent-shell/worktrees/investigator-ada" project)))
         (should (equal (agent-workspace-agents project) (list agent)))
         (should-not sent)))
     (+test-awn--answering '("builder" "ken" "haiku" "plan" "yellow")
@@ -197,7 +197,7 @@ it's in the crew, stuck, saying why."
   (+test-awn "failing"
     ;; A file where its worktree goes.
     (make-directory (expand-file-name ".agent-shell/worktrees" project) t)
-    (write-region "" nil (expand-file-name ".agent-shell/worktrees/ada" project))
+    (write-region "" nil (expand-file-name ".agent-shell/worktrees/builder-ada" project))
     (should (string-match-p "\\`ada.s worktree: git worktree"
                              (cadr (should-error (agent-workspace-create :role "builder" :name "ada")
                                                  :type 'user-error))))
@@ -239,7 +239,7 @@ if not given, the reply saying where it works; a wrong request said."
     (let ((reply (+test-awn--request "new" "{\"role\":\"builder\",\"name\":\"\",\"prompt\":\"\"}"
                                      (expand-file-name ".git/../" project))))
       (should (equal reply (list :ok t :name "ada" :role "builder"
-                                 :worktree (expand-file-name ".agent-shell/worktrees/ada" project)
+                                 :worktree (expand-file-name ".agent-shell/worktrees/builder-ada" project)
                                  :branch "agent/ada" :state "desk")))
       (should-not sent))
     (should (equal (plist-get (+test-awn--request "new" "{\"role\":\"investigator\",\"name\":\"sam\",\"prompt\":\"Look\"}")

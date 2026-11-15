@@ -7,8 +7,9 @@
 ;; Their mode line shows the agent: its avatar and name in its colour, its
 ;; role ("▌A ada · builder"); a click selects it. Their tab starts with its
 ;; avatar (`agent-workspace-tab-prefix'). A file's agent is found from its
-;; worktree's folder through the crew, so it's there asleep or gone home too;
-;; a worktree left by a forgotten agent shows its name dimmed.
+;; worktree's folder (ROLE-NAME) through the crew, so it's there asleep or
+;; gone home too; a worktree left by a forgotten agent shows its name (its
+;; branch's, agent/NAME) dimmed.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -38,7 +39,25 @@ folder and the agent's name; the outermost, for a worktree's own
                                 (regexp-quote (file-name-as-directory agent-workspace-worktrees-directory))
                                 "\\([^/]+\\)\\(?:/\\|\\'\\)")
                         file)
-      (list (match-string 1 file) (match-string 2 file)))))
+      (let ((project (match-string 1 file))
+            (folder (match-string 2 file)))
+        (list project (agent-workspace--worktree-name project folder))))))
+
+(defun agent-workspace--worktree-name (project folder)
+  "The name of the agent whose worktree is FOLDER (ROLE-NAME) in PROJECT:
+its crew's agent there, else its branch's (agent/NAME: a forgotten agent's),
+else FOLDER."
+  (or (when-let* ((agent (seq-find (lambda (agent)
+                                     (equal folder (file-name-nondirectory
+                                                    (directory-file-name
+                                                     (or (agent-workspace-agent-worktree agent)
+                                                         (concat (agent-workspace-agent-role agent) "-"
+                                                                 (agent-workspace-agent-name agent)))))))
+                                   (ignore-errors (agent-workspace-agents project)))))
+        (agent-workspace-agent-name agent))
+      (agent-workspace--worktree-branch-name
+       (expand-file-name folder (expand-file-name agent-workspace-worktrees-directory project)))
+      folder))
 
 (defun agent-workspace-file-agent (&optional file)
   "The agent whose worktree FILE (default: the buffer's) is in, or nil."

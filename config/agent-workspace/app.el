@@ -904,12 +904,7 @@ On a ready issue: its role offered first, the issue its first message."
                  agent (completing-read "Colour: " agent-workspace-colours nil t nil nil
                                         (agent-workspace-agent-colour agent))))
       ("role"
-       (let ((role (agent-workspace-read-role project (agent-workspace-agent-role agent))))
-         (unless (equal role (agent-workspace-agent-role agent))
-           (setf (agent-workspace-agent-role agent) role)
-           (agent-workspace--changed agent 'role)
-           (when (agent-workspace-live-p agent)
-             (agent-workspace-restart agent)))))
+       (agent-workspace-set-role agent (agent-workspace-read-role project (agent-workspace-agent-role agent))))
       ((or "mode" "model")
        (let* ((more (agent-workspace--read-more project (agent-workspace-agent-role agent))))
          (if (equal what "mode")
