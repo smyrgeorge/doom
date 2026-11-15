@@ -17,8 +17,9 @@
 ;;   "#ada fix the test" to ada, "#builders ..." to the first free builder (else
 ;;   queued for the first), "#all ..." to everyone, no # to the selected agent
 ;;   (its "→ ada" before the text). Busy, an agent gets it after its turn
-;;   (agent-shell's queue), said. TAB completes #, M-p / M-n your messages,
-;;   typing "#name " selects that agent.
+;;   (agent-shell's queue), said. # at its start offers the agents, their roles
+;;   and all as it's typed (Corfu; TAB completes it too), a # further on is
+;;   text; M-p / M-n your messages; typing "#name " selects that agent.
 ;;
 ;; Kept per project, per machine: .agent-shell/agent-workspace/room.jsonl, its
 ;; last `agent-workspace-room-kept' entries.
@@ -94,7 +95,8 @@ more; at the bottom in narrower ones), or `bottom'."
               word-wrap t
               header-line-format '(:eval (agent-workspace--compose-header))
               completion-at-point-functions (list #'agent-workspace--compose-capf))
-  (add-hook 'post-command-hook #'agent-workspace--compose-typed nil t))
+  (add-hook 'post-command-hook #'agent-workspace--compose-typed nil t)
+  (add-hook 'corfu-mode-hook #'agent-workspace--compose-corfu nil t))
 
 (defun agent-workspace--room-name (project what)
   "The name of PROJECT's room's WHAT buffer."
@@ -494,21 +496,38 @@ added), \"handed doom-a1b back to ken\"."
           (agent-workspace-select agent)
           (agent-workspace--compose-prompt-draw))))))
 
+(defun agent-workspace--compose-corfu ()
+  "With Corfu, in the compose line: # opens its completion as it's typed, not
+after `corfu-auto-prefix' more characters, and what follows narrows it at
+once. Corfu's settings elsewhere stay. In its `corfu-mode-hook' there: Corfu
+loads its auto completion as it turns on."
+  (when (boundp 'corfu-auto-trigger)
+    (setq-local corfu-auto-trigger "#"
+                corfu-auto-delay 0.05)))
+
 (defun agent-workspace--compose-capf ()
-  "Completion for # in the compose line: the agents, their roles, all."
-  (when (save-excursion (skip-chars-backward "a-z0-9-") (eq (char-before) ?#))
-    (let* ((end (point))
-           (start (save-excursion (skip-chars-backward "a-z0-9-") (point)))
-           (project agent-workspace--room-project)
-           (agents (agent-workspace-agents project))
-           (roles (delete-dups (mapcar (lambda (agent) (concat (agent-workspace-agent-role agent) "s")) agents))))
-      (list start end (append (mapcar #'agent-workspace-agent-name agents) roles '("all"))
-            :annotation-function
-            (lambda (candidate)
-              (if-let* ((agent (agent-workspace-agent candidate project)))
-                  (format "  %s · %s" (agent-workspace-agent-role agent) (agent-workspace-state-text agent))
-                (if (equal candidate "all") "  everyone" "  its first free one")))
-            :exclusive 'no))))
+  "Completion for # at the start of the compose line, where it picks who to
+\(a # further on is text): the agents, their roles, all. Taking one adds its
+space: \"#ada \" selects ada."
+  (let ((start (save-excursion (skip-chars-backward "a-z0-9-") (point))))
+    (when (and (eq (char-before start) ?#)
+               (string-blank-p (buffer-substring-no-properties (point-min) (1- start))))
+      (let* ((project agent-workspace--room-project)
+             (agents (agent-workspace-agents project))
+             (roles (delete-dups (mapcar (lambda (agent) (concat (agent-workspace-agent-role agent) "s")) agents))))
+        (list start (point) (append (mapcar #'agent-workspace-agent-name agents) roles '("all"))
+              :annotation-function
+              (lambda (candidate)
+                (if-let* ((agent (agent-workspace-agent candidate project)))
+                    (format "  %s · %s" (agent-workspace-agent-role agent) (agent-workspace-state-text agent))
+                  (if (equal candidate "all") "  everyone" "  its first free one")))
+              ;; Corfu: the list whatever's typed after the #, none or more.
+              :company-prefix-length t
+              :exit-function
+              (lambda (_candidate status)
+                (when (eq status 'finished)
+                  (if (eq (char-after) ?\s) (forward-char) (insert " "))))
+              :exclusive 'no)))))
 
 (defun agent-workspace--recipients (project text)
   "Who TEXT goes to in PROJECT's crew, and what's left of it: (AGENTS

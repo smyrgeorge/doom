@@ -118,7 +118,9 @@ One chat for the whole crew: a feed of what matters, and below it a compose line
   all.
 - **The compose line**: `#ada fix the test` goes to ada, `#builders ...` to the first free builder, `#all ...` to
   everyone, and a message without `#` to the selected agent (`→ ada` before it). An agent that's working gets it
-  after its turn, and the feed says so. Typing `#ada ` selects ada.
+  after its turn, and the feed says so. A `#` at the start of a message lists the agents (their role and state), the
+  roles and `all` as soon as it's typed (with Corfu), narrowed as you type; a `#` further on is just text. Typing
+  `#ada `, or taking ada from the list, selects ada.
 
 | Key | Action |
 |---|---|

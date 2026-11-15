@@ -147,8 +147,9 @@ needs your OK. nil: Claude Code's own default."
 ;; agent joining, going home, started again, stuck), raised hands, your
 ;; messages; F filters it. Its compose line: #ada to ada, #builders to the
 ;; first free builder, #all to everyone, no # to the selected agent; busy, it
-;; gets it after its turn; TAB completes #, M-p / M-n your messages. # in the
-;; app talks to the agent there. Kept per project, per machine, in
+;; gets it after its turn; # at its start offers the agents, roles and all as
+;; it's typed (with Corfu; TAB completes it), M-p / M-n your messages. # in
+;; the app talks to the agent there. Kept per project, per machine, in
 ;; .agent-shell/agent-workspace/room.jsonl.
 
 ;; RAISED HANDS, ANSWERED FROM ONE PLACE

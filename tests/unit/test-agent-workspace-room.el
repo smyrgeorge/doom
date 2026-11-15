@@ -395,19 +395,102 @@ the agent selected; the line emptied, the message in its history."
       (should (equal (agent-workspace-agent-name (agent-workspace--app-selected (agent-workspace--app project))) "ada")))))
 
 (ert-deftest agent-workspace-room/completion ()
-  "TAB after #: the agents (their role and state), their roles, all."
+  "# at the start of a message: the agents (their role and state), their
+roles, all, whatever follows it (none or more); a # further on is text."
   (+test-awr2 "completion"
     (agent-workspace-create :role "builder" :name "ada")
     (agent-workspace-create :role "investigator" :name "sam")
     (with-current-buffer (agent-workspace--compose-buffer project)
       (insert "#")
       (pcase-let ((`(,start ,end ,candidates . ,props) (agent-workspace--compose-capf)))
-        (should (= start end))
+        (should (= start end (point-max)))
         (should (equal candidates '("ada" "sam" "builders" "investigators" "all")))
-        (should (equal (funcall (plist-get props :annotation-function) "ada") "  builder · at the desk")))
+        (should (equal (funcall (plist-get props :annotation-function) "ada") "  builder · at the desk"))
+        ;; Corfu shows it whatever's typed after the #.
+        (should (eq (plist-get props :company-prefix-length) t)))
+      (insert "ad")
+      (should (equal (seq-take (agent-workspace--compose-capf) 2) (list 2 4)))
+      ;; Its start as `agent-workspace--recipients' reads it: blanks before it.
       (erase-buffer)
-      (insert "no hash")
-      (should-not (agent-workspace--compose-capf)))))
+      (insert " \n#")
+      (should (agent-workspace--compose-capf))
+      ;; Further on, a # is text.
+      (dolist (text '("fix the #" "fix the #ad" "#ada look at #" "#ada look at #sa" "no hash"))
+        (erase-buffer)
+        (insert text)
+        (should-not (agent-workspace--compose-capf))))))
+
+(ert-deftest agent-workspace-room/completion-takes-one ()
+  "Without Corfu, TAB completes the # (as now): taking a name or a role adds
+its space (or goes past the one there), \"#ada \" selecting ada."
+  (+test-awr2 "completion-takes"
+    (agent-workspace-create :role "builder" :name "ada")
+    (agent-workspace-create :role "investigator" :name "sam")
+    (with-current-buffer (agent-workspace--compose-buffer project)
+      (should-not (bound-and-true-p corfu-mode))
+      (insert "#ad")
+      (completion-at-point)
+      (agent-workspace--compose-typed)
+      (should (equal (buffer-string) "#ada "))
+      (should (= (point) (point-max)))
+      (should (equal (agent-workspace-agent-name (agent-workspace--app-selected (agent-workspace--app project))) "ada"))
+      ;; Its space there already: the cursor after it.
+      (erase-buffer)
+      (insert "#sa fix it")
+      (goto-char 4)
+      (completion-at-point)
+      (should (equal (buffer-string) "#sam fix it"))
+      (should (= (point) 6))
+      (erase-buffer)
+      (insert "#bu")
+      (completion-at-point)
+      (should (equal (buffer-string) "#builders ")))))
+
+(ert-deftest agent-workspace-room/completion-at-once-with-corfu ()
+  "With Corfu, # typed at the start of the compose line opens its list at
+once (its trigger, a short delay: there only; Corfu's settings elsewhere
+stay); what follows narrows it; a # further on opens nothing."
+  (require 'corfu)
+  (+test-awr2 "completion-corfu"
+    (agent-workspace-create :role "builder" :name "ada")
+    (agent-workspace-create :role "investigator" :name "sam")
+    (let ((shown 'none))
+      (cl-letf (((symbol-function 'corfu--popup-support-p) #'always)
+                ((symbol-function 'corfu--setup)
+                 (lambda (beg end table pred)
+                   (setq shown (all-completions (buffer-substring beg end) table pred))))
+                ((symbol-function 'corfu--exhibit) #'ignore))
+        (with-current-buffer (agent-workspace--compose-buffer project)
+          ;; Corfu turned on there (its auto completion loaded as it does).
+          (let ((corfu-auto t)) (corfu-mode 1))
+          (should (local-variable-p 'corfu-auto-trigger))
+          (should (equal corfu-auto-trigger "#"))
+          (should (equal corfu-auto-delay 0.05))
+          ;; # typed: the list straight away, no prefix, no timer.
+          (insert "#")
+          (let ((this-command 'self-insert-command) (last-command-event ?#))
+            (corfu-auto--post-command))
+          (should (equal shown '("ada" "sam" "builders" "investigators" "all")))
+          ;; A letter after it (the list closed): narrowed, a single letter.
+          (setq shown 'none)
+          (insert "a")
+          (let ((last-command-event ?a)) (corfu-auto--complete-deferred))
+          (should (equal shown '("ada" "all")))
+          ;; A # further on: nothing.
+          (erase-buffer)
+          (insert "fix the #")
+          (setq shown 'none)
+          (let ((this-command 'self-insert-command) (last-command-event ?#))
+            (corfu-auto--post-command))
+          (should (eq shown 'none)))
+        ;; Elsewhere, Corfu's own settings.
+        (should (equal (default-value 'corfu-auto-trigger) ""))
+        (should (equal (default-value 'corfu-auto-delay) (eval (car (get 'corfu-auto-delay 'standard-value)))))
+        (with-temp-buffer
+          (text-mode)
+          (let ((corfu-auto t)) (corfu-mode 1))
+          (should-not (local-variable-p 'corfu-auto-trigger))
+          (should-not (local-variable-p 'corfu-auto-delay)))))))
 
 ;; ====== KEPT ======
 
