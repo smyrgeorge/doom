@@ -57,23 +57,40 @@
 
 (defun agent-workspace--bd (dir args callback)
   "Run bd with ARGS in DIR, in the background; CALLBACK with its JSON (a
-list of alists), or the symbol `error' and its output."
+list of alists), or the symbol `error' and its output. The process, marked
+with its project (`agent-workspace--issues-stop')."
   (let* ((output (generate-new-buffer " *agent-workspace bd*"))
-         (default-directory dir))
-    (make-process :name "agent-workspace-bd" :buffer output
-                  :command (cons "bd" args) :connection-type 'pipe :noquery t
-                  :stderr (get-buffer-create " *agent-workspace bd errors*")
-                  :sentinel (lambda (process _event)
-                              (unless (process-live-p process)
-                                (let ((text (with-current-buffer output (buffer-string))))
-                                  (kill-buffer output)
-                                  (funcall callback
-                                           (if (eql (process-exit-status process) 0)
-                                               (condition-case nil
-                                                   (json-parse-string text :object-type 'alist :array-type 'list
-                                                                      :null-object nil :false-object nil)
-                                                 (error 'error))
-                                             'error))))))))
+         (default-directory dir)
+         (process
+          (make-process
+           :name "agent-workspace-bd" :buffer output
+           :command (cons "bd" args) :connection-type 'pipe :noquery t
+           :stderr (get-buffer-create " *agent-workspace bd errors*")
+           :sentinel (lambda (process _event)
+                       (unless (process-live-p process)
+                         (let ((text (with-current-buffer output (buffer-string))))
+                           (kill-buffer output)
+                           (funcall callback
+                                    (if (eql (process-exit-status process) 0)
+                                        (condition-case nil
+                                            (json-parse-string text :object-type 'alist :array-type 'list
+                                                               :null-object nil :false-object nil)
+                                          (error 'error))
+                                      'error))))))))
+    (process-put process 'agent-workspace-project (agent-workspace--root dir))
+    process))
+
+(defun agent-workspace--issues-stop (project)
+  "PROJECT's issue list fetching nothing more: its refresh to come
+cancelled, its bd commands running stopped (its app closing)."
+  (when-let* ((buffer (seq-find (lambda (buffer) (buffer-local-value 'agent-workspace--issues-project buffer))
+                                (agent-workspace--app-buffers project))))
+    (with-current-buffer buffer
+      (when (timerp agent-workspace--issues-timer) (cancel-timer agent-workspace--issues-timer))
+      (setq agent-workspace--issues-timer nil)))
+  (dolist (process (process-list))
+    (when (equal (process-get process 'agent-workspace-project) (agent-workspace--root project))
+      (delete-process process))))
 
 (defun agent-workspace--issues-refresh (project)
   "PROJECT's issues fetched again (bd, in the background), then drawn."

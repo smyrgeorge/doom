@@ -17,6 +17,7 @@ its own, deleted when you close them; the echo area says what to try first.
 | `agent-ui` | [An agent's canvas](agent-ui.md) beside its conversation, filled in as it works | `q` hides the canvas |
 | `issues` | [A project's issues](issues.md) in their list (needs `bd`) | `RET` opens one, Show closed shows the closed ones |
 | `panel` | [A project panel](agent-ui.md#project-panels), this config's CPU panel, filled every second | `gR` reads it again, `q` closes it |
+| `agent-workspace` | [An agent crew](agent-workspace.md) in its app: three stand-in agents, offline, each in its worktree | `a` then `A` answers sam's hand, `#ken` in the room, `j` / `k` on the bars, `Q` closes it |
 
 `scripts/screenshots.sh [NAME...]` takes the screenshots, on macOS only (macOS's `screencapture`; the terminal it runs
 from needs the Screen Recording permission). The examples themselves work on Linux too.

@@ -307,6 +307,10 @@ its buffers. Its workspace is left to its caller."
           (dolist (window (get-buffer-window-list buffer nil t))
             (ignore-errors (delete-window window)))))
       (agent-workspace-close project)
+      ;; Its issue list's bd commands stopped: nothing written in the project
+      ;; after (an example's folder deleted with its buffers).
+      (when (fboundp 'agent-workspace--issues-stop)
+        (agent-workspace--issues-stop project))
       (dolist (buffer buffers)
         (when (buffer-live-p buffer)
           (let ((kill-buffer-query-functions nil))

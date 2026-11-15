@@ -1,7 +1,7 @@
 ;;; tests/unit/test-agent-workspace-session.el -*- lexical-binding: t; -*-
 ;; config/agent-workspace/session.el, with core.el: agents' real agent-shell
 ;; sessions, each in its own worktree of a throwaway git repository, run by a
-;; stand-in agent (tests/fixtures/mock-acp.el, agent-shell's mock agent kind):
+;; stand-in agent (examples/agent-workspace/stand-in.el, agent-shell's mock agent kind):
 ;; their states following the events, what you do to one, closing a crew
 ;; leaving no process.
 
@@ -18,7 +18,7 @@
 ;; Nothing about this config's own issues in the stand-in's prompt.
 (remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
 
-(defconst +test-aws--mock (expand-file-name "fixtures/mock-acp.el" +test-dir)
+(defconst +test-aws--mock (expand-file-name "examples/agent-workspace/stand-in.el" +test-root)
   "The stand-in agent.")
 
 (setq agent-shell-mock-agent-acp-command

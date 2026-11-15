@@ -13,7 +13,7 @@
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
 (+test-load "config/childframe" "config/banner" "config/window" "config/tiling" "config/stripe"
             "config/editor" "config/merge" "config/agent-ui" "config/beads" "config/webkit"
-            "config/mermaid" "config/examples")
+            "config/mermaid" "config/agent-shell" "config/agent-workspace" "config/examples")
 (require 'mermaid-mode)
 (require 'so-long)
 (require 'tab-line)
@@ -153,8 +153,8 @@ images/, always that name."
 config/examples.el's list and docs/examples.md's table; the docs name the
 picker (M-x +my/example) too."
   (should (equal (sort (+my/examples) #'string<)
-                 '("agent-ui" "banner" "excalidraw" "image" "issues" "markdown" "merge" "mermaid" "panel" "pdf"
-                   "stripe" "tiling")))
+                 '("agent-ui" "agent-workspace" "banner" "excalidraw" "image" "issues" "markdown" "merge" "mermaid"
+                   "panel" "pdf" "stripe" "tiling")))
   (let ((listed (with-temp-buffer
                   (insert-file-contents (expand-file-name "config/examples.el" +test-root))
                   (buffer-string)))
@@ -501,3 +501,23 @@ it's closed."
       (kill-buffer canvas)
       (should-not +my/example-agent-ui--timer)
       (kill-buffer conversation))))
+
+(ert-deftest examples/agent-workspace-a-crew-offline ()
+  "Three stand-in agents in their crew's app, each in its worktree: ada
+working on demo-1, sam's hand raised, ken done; Q closes it, every agent
+exiting, and the folder goes."
+  (+test-examples
+    (set-frame-size (selected-frame) 220 40)
+    (let* ((app (+my/example-agent-workspace))
+           (project (agent-workspace--app-project app)))
+      (should (equal (mapcar #'agent-workspace-agent-name (agent-workspace-agents project)) '("ada" "sam" "ken")))
+      (should (+test-wait-for #'+my/example-agent-workspace-ready 30))
+      (dolist (agent (agent-workspace-agents project))
+        (should (file-directory-p (agent-workspace-agent-worktree agent))))
+      (should (equal (agent-workspace-agent-issue (car (agent-workspace-agents project))) "demo-1"))
+      (should (string-search "wants to run npm install"
+                             (with-current-buffer (agent-workspace--room-buffer project) (buffer-string))))
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (agent-workspace-quit))
+      (should-not (agent-workspace-agents project))
+      (should (+test-wait-for (lambda () (not (file-exists-p project))) 10)))))

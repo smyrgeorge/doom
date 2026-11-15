@@ -26,6 +26,9 @@ the conversation, Claude waiting for your answer (agent-shell's experimental for
 `(setq agent-shell-elicitation--experimental-feature-enabled nil)` in `config.el` turns them off). While you're in another app, a [notification](notifications.md) says
 when a session finished its turn (or stopped on an error) or asks for your permission.
 
+Several sessions can work on one project at once, as a crew: each an agent with a name, a role and its own git
+worktree, run from one app (`SPC o w`, [Agent workspace](agent-workspace.md)).
+
 ## Diagrams in replies
 
 Claude's ```` ```mermaid ```` blocks are drawn as diagrams in its replies, in the theme's colours

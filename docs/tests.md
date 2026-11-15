@@ -31,9 +31,9 @@ display, run those under Xvfb, one at a time: `E2E_JOBS=1 xvfb-run -a tests/run.
 - `tests/linux/` runs them on Linux: a Debian image set up by `scripts/emacs.sh` and `scripts/tools.sh` (with or
   without xwidgets), the config and Doom's folder mounted read-only, the end-to-end tests under Xvfb. Built the first
   time (~15 minutes), then from its cached layers. Tests needing what only the host built (ghostel's native module) skip there.
-- `tests/fixtures/` holds what tests load: `diff-emacs.el` is the Emacs that `cmd/diff` starts in `test-cmd.el`;
-  `mock-acp.el` a stand-in coding agent, speaking ACP as Claude Code's adapter does, run by a batch Emacs
-  (`test-agent-workspace-session.el`).
+- `tests/fixtures/` holds what tests load: `diff-emacs.el` is the Emacs that `cmd/diff` starts in `test-cmd.el`.
+  The agent workspace's tests run real sessions with `examples/agent-workspace/stand-in.el`, a stand-in coding agent
+  speaking ACP as Claude Code's adapter does, run by a batch Emacs.
 
 A failing or flaky test is a bug to fix in the config, not a test to relax.
 

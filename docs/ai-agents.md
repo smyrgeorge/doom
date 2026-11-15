@@ -31,6 +31,11 @@ of it, is what every session reads.
 Claude Code in agent-shell is told where it is, and reads it from there: no need to install it. Install it as above
 (`agent-ui` for `emacs-profiling`) for other agents, or to have it in Claude Code's list of skills.
 
+## A crew of agents
+
+Several agents on one project at once, each with a role (its instructions, tools and permission mode, in a Markdown
+file as Claude Code's own agents are) and its own worktree: the [agent workspace](agent-workspace.md#roles).
+
 ## Without installing
 
 The message `SPC h T` shows when it stops, also copied, says where the profile and the skill are. Paste it to any

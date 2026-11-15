@@ -1,14 +1,19 @@
-;;; tests/fixtures/mock-acp.el -*- lexical-binding: t; -*-
-;; A stand-in coding agent for the tests: it speaks ACP (JSON-RPC, a message a
-;; line, on stdin and stdout), as claude-agent-acp does, so agent-shell runs a
-;; real session with it, without Claude. Run by a batch Emacs:
+;;; $DOOMDIR/examples/agent-workspace/stand-in.el -*- lexical-binding: t; -*-
+;; A stand-in coding agent, for the agent workspace's example
+;; (examples/agent-workspace.el) and its tests: it speaks ACP (JSON-RPC, a
+;; message a line, on stdin and stdout), as claude-agent-acp does, so
+;; agent-shell runs a real session with it, offline, at no cost. Run by a
+;; batch Emacs (agent-shell's mock agent kind runs it):
 ;;
-;;   emacs --batch -Q -l tests/fixtures/mock-acp.el -f mock-acp-main
+;;   emacs --batch -Q -l examples/agent-workspace/stand-in.el -f mock-acp-main
 ;;
 ;; What a prompt says decides what it does:
 ;;   "permission"  asks to run a tool (a permission request), runs it once
 ;;                 answered, ends its turn
-;;   "hold"        says so, then works until it's cancelled (session/cancel)
+;;   "Look into"   (at its start) the same: asks to run npm install
+;;   "Work on"     (at its start) says it's on it, then works until it's
+;;                 cancelled (session/cancel)
+;;   "hold"        says so, then works until it's cancelled
 ;;   "slow"        says so, works a second and a half, ends its turn
 ;;   "child"       starts a child process (sleep 300, in a process group of its
 ;;                 own) and holds, saying its pid
@@ -62,7 +67,10 @@
   (let ((session (gethash "sessionId" params))
         (text (mock-acp--prompt-text params)))
     (cond
-     ((string-match-p "permission" text)
+     ((string-match-p "\\`Work on" text)
+      (mock-acp--say session "On it: reading the code first, then the tests.")
+      (setq mock-acp--holding id))
+     ((or (string-match-p "permission" text) (string-match-p "\\`Look into" text))
       (mock-acp--update session '(:sessionUpdate "tool_call" :toolCallId "t1"
                                   :title "npm install" :kind "execute" :status "pending"))
       (let ((ours (cl-incf mock-acp--next-id)))

@@ -11,7 +11,7 @@
 ;;    :layout (:view stage :room right :selected "ada" :open t))
 ;;
 ;; What each agent is (its name, role, colour; its model and mode when not its
-;; role's; whether it's asleep) and the layout; never its session, its state
+;; role's; whether it's asleep; its kind when not Claude Code) and the layout; never its session, its state
 ;; or its issue. Written when the crew changes (debounced), in a stable order
 ;; (role order, then name), one agent a line, only if it differs. When the
 ;; app opens with no crew running, every agent in it starts again, fresh, in
@@ -112,6 +112,9 @@ read already), or nil."
         ((and (plist-get entry :mode) (not (member (plist-get entry :mode) agent-workspace-modes)))
          (format "%s's mode %S isn't one of %s" (plist-get entry :name) (plist-get entry :mode)
                  (string-join agent-workspace-modes ", ")))
+        ((and (plist-get entry :kind) (not (assq (plist-get entry :kind) agent-workspace-kinds)))
+         (format "%s's kind %S isn't one of %s" (plist-get entry :name) (plist-get entry :kind)
+                 (mapconcat (lambda (kind) (symbol-name (car kind))) agent-workspace-kinds ", ")))
         ((and (plist-get entry :model) (not (stringp (plist-get entry :model))))
          (format "%s's model isn't a string" (plist-get entry :name)))
         (t (ignore project) nil)))
@@ -128,7 +131,10 @@ read already), or nil."
               (and model (not (equal model (plist-get role :model))) (list :model model)))
             (let ((mode (agent-workspace-agent-mode agent)))
               (and mode (not (equal mode (plist-get role :mode))) (list :mode mode)))
-            (and (eq (agent-workspace-agent-state agent) 'asleep) (list :asleep t)))))
+            (and (eq (agent-workspace-agent-state agent) 'asleep) (list :asleep t))
+            ;; Not Claude Code (the example's stand-in): said, so it starts again as it was.
+            (unless (eq (agent-workspace-agent-kind agent) 'claude-code)
+              (list :kind (agent-workspace-agent-kind agent))))))
 
 (defun agent-workspace-crew-text (project)
   "PROJECT's crew as crew.el's text."
@@ -221,6 +227,8 @@ worktree, asleep if it was; stuck, saying why, if it can't start."
          (role (plist-get entry :role))
          (agent (agent-workspace--make-agent
                  :name name :role role
+                 :kind (let ((kind (plist-get entry :kind)))
+                         (if (and kind (symbolp kind) (assq kind agent-workspace-kinds)) kind 'claude-code))
                  :colour (or (plist-get entry :colour) (agent-workspace-free-colour project))
                  :model (plist-get entry :model) :mode (plist-get entry :mode)
                  :project (agent-workspace--root project)

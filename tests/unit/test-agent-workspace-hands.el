@@ -1,6 +1,6 @@
 ;;; tests/unit/test-agent-workspace-hands.el -*- lexical-binding: t; -*-
 ;; config/agent-workspace/hands.el: raised hands answered from one place. Two
-;; stand-in agents (tests/fixtures/mock-acp.el) in a crew's app: one asks for
+;; stand-in agents (examples/agent-workspace/stand-in.el) in a crew's app: one asks for
 ;; a permission, the other a question on its Agent UI canvas; both answered
 ;; from the room's buttons (agent-shell's own pressed, the canvas's answer
 ;; given), and with A; their buttons on their bars; a hand answered elsewhere
@@ -18,7 +18,7 @@
 (setq agent-shell-mock-agent-acp-command
       (list (expand-file-name invocation-name invocation-directory)
             "--batch" "-Q" (concat "--init-directory=" (+test-tmp-file "mock-acp-home/"))
-            "-l" (expand-file-name "fixtures/mock-acp.el" +test-dir) "-f" "mock-acp-main"))
+            "-l" (expand-file-name "examples/agent-workspace/stand-in.el" +test-root) "-f" "mock-acp-main"))
 (add-to-list 'agent-workspace-kinds '(mock :config agent-shell-mock-agent-make-agent-config))
 
 ;; ====== HELPERS ======

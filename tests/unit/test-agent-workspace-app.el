@@ -4,7 +4,7 @@
 ;; others a bar each), selecting and folding, the crew changing, the issue
 ;; list from bd's answers, its tally elsewhere, tiling leaving its frame alone;
 ;; opening, leaving and closing it in real persp-mode workspaces, its stand-in
-;; agents (tests/fixtures/mock-acp.el) exiting with no process left.
+;; agents (examples/agent-workspace/stand-in.el) exiting with no process left.
 
 (require 'agent-shell)
 (require 'agent-shell-mock-agent)
@@ -21,7 +21,7 @@
 (setq agent-shell-mock-agent-acp-command
       (list (expand-file-name invocation-name invocation-directory)
             "--batch" "-Q" (concat "--init-directory=" (+test-tmp-file "mock-acp-home/"))
-            "-l" (expand-file-name "fixtures/mock-acp.el" +test-dir) "-f" "mock-acp-main"))
+            "-l" (expand-file-name "examples/agent-workspace/stand-in.el" +test-root) "-f" "mock-acp-main"))
 (add-to-list 'agent-workspace-kinds '(mock :config agent-shell-mock-agent-make-agent-config))
 
 ;; ====== HELPERS ======

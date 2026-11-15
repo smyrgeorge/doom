@@ -4,7 +4,7 @@
 ;; raised hands, issue events, turns' answers, your messages; filtered), its
 ;; compose line (#name, #roles, #all, the selected agent; queued when busy;
 ;; completion, history), what's kept. A real turn of a stand-in agent
-;; (tests/fixtures/mock-acp.el) in the feed.
+;; (examples/agent-workspace/stand-in.el) in the feed.
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
@@ -17,7 +17,7 @@
 (setq agent-shell-mock-agent-acp-command
       (list (expand-file-name invocation-name invocation-directory)
             "--batch" "-Q" (concat "--init-directory=" (+test-tmp-file "mock-acp-home/"))
-            "-l" (expand-file-name "fixtures/mock-acp.el" +test-dir) "-f" "mock-acp-main"))
+            "-l" (expand-file-name "examples/agent-workspace/stand-in.el" +test-root) "-f" "mock-acp-main"))
 (add-to-list 'agent-workspace-kinds '(mock :config agent-shell-mock-agent-make-agent-config))
 
 ;; ====== HELPERS ======
