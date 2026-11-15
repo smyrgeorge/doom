@@ -42,10 +42,12 @@
 ;; ERROR fails as Mermaid does, SLOW takes 3 s. CHROME starts a stand-in
 ;; Chrome as puppeteer does, in a process group of its own (its pid in
 ;; chrome.pid), and runs 30 s, but closes it and exits on SIGTERM, as mmdc
-;; does; STUBBORN ignores SIGTERM. Each run's arguments logged.
+;; does; STUBBORN ignores SIGTERM. Each run's arguments logged; --version
+;; (its run when made, below) only exits.
 
 (defconst +test-mermaid--mmdc-script
   "#!/bin/sh
+[ \"$1\" = --version ] && exit 0
 # A SIGTERM before the source is read: kept for after (STUBBORN's ignored).
 trap 'stop=1' TERM
 dir=$(dirname \"$0\")
@@ -84,10 +86,13 @@ esac
   "The stand-in mmdc (see above).")
 
 (defun +test-mermaid--make-mmdc ()
-  "A stand-in mmdc in a folder of its own: its path."
+  "A stand-in mmdc in a folder of its own: its path. Run once: a new script's
+first run on macOS waits for its check (a third of a second), and a test's
+timeout (0.3 s) could stop it before it ran a line."
   (let ((file (expand-file-name "mmdc" (make-temp-file (+test-tmp-file "mermaid/bin-") t))))
     (with-temp-file file (insert +test-mermaid--mmdc-script))
     (set-file-modes file #o755)
+    (call-process file nil nil nil "--version")
     file))
 
 (defmacro +test-mermaid--with-mmdc (&rest body)
