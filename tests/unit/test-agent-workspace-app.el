@@ -501,6 +501,88 @@ pane 140 columns wide or more, the side area is beside its session."
                          '("*issues · coming*" "ada · builder" " *bar · ken · coming*")))
           (should-not (string-search "◫" (+test-awa--header (get-buffer-window (agent-workspace-agent-buffer ada))))))))))
 
+(ert-deftest agent-workspace-app/its-canvas-closed ()
+  "q on an agent's canvas on the stage (it's killed): its side area closes
+at once, its session takes the whole pane, the cursor in it; with a panel,
+the panel shown there, the cursor in it, the canvas's tab gone. Full size:
+its pane back to its session. Its canvas emptied (cleared, its last element
+removed): the same. Never another buffer in its side area (Emacs's
+replacement for a killed buffer, Agent UI's for an emptied canvas's pane).
+Something new on it: its side area back."
+  (+test-awa "closed"
+    (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-closed-trust.eld"))
+          ;; The room low, below the stage: room for a side area.
+          (agent-workspace-room-height 4))
+      (+test-awa--panels project "logs")
+      (pcase-let ((`(,ada ,_ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
+        (agent-workspace-open t)
+        (agent-workspace-select ada)
+        ;; The batch frame its own size again (a wait gives it back, the
+        ;; stage laid out again 0.2 s later), then laid out there: the waits
+        ;; below change nothing but what they're for.
+        (accept-process-output nil 0.3)
+        (agent-workspace-layout)
+        (let ((session (agent-workspace-agent-buffer ada))
+              (alone '("*issues · closed*" "ada · builder" " *bar · ken · closed*"))
+              (beside '("*issues · closed*" "ada · builder" "Agent UI: logs · ada" " *bar · ken · closed*")))
+          ;; q, no panel: its session alone, the cursor in it.
+          (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "a" :text "A"))))
+            (should (eq (window-buffer (+test-awa--side)) canvas))
+            (+test-awa--in (+test-awa--side) (kill-current-buffer))
+            (+test-awa--timers)
+            (should (equal (mapcar #'car (+test-awa--windows)) alone))
+            (should (eq (window-buffer) session)))
+          ;; Something new: back. Cleared, its last element removed: gone.
+          (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "b" :text "B"))))
+            (should (equal (mapcar #'car (+test-awa--windows))
+                           '("*issues · closed*" "ada · builder" "Agent UI: ada · builder" " *bar · ken · closed*")))
+            (agent-ui-clear :canvas canvas)
+            (+test-awa--timers)
+            (should (equal (mapcar #'car (+test-awa--windows)) alone))
+            (+test-awa--canvas-show ada '(:type "text" :id "c" :text "C"))
+            (should (eq (window-buffer (+test-awa--side)) canvas))
+            (agent-ui-remove "c" :canvas canvas)
+            (+test-awa--timers)
+            (should (equal (mapcar #'car (+test-awa--windows)) alone)))
+          ;; With a panel: q shows it, the canvas's tab gone, the cursor in it.
+          (let* ((logs (+test-awa--open-panel ada "logs"))
+                 (canvas (+test-awa--canvas-show ada '(:type "text" :id "d" :text "D"))))
+            (should (eq (window-buffer (+test-awa--side)) canvas))
+            (should (equal (agent-workspace-agent-tabs ada) (list canvas logs)))
+            (+test-awa--in (+test-awa--side) (kill-current-buffer))
+            (+test-awa--timers)
+            (should (equal (mapcar #'car (+test-awa--windows)) beside))
+            (should (eq (window-buffer) logs))
+            (should (equal (agent-workspace-agent-tabs ada) (list logs)))
+            (should-not (string-search "canvas" (+test-awa--header (+test-awa--side))))
+            ;; Full size: q, its pane back to its session, the panel beside it.
+            (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "e" :text "E"))))
+              (with-current-buffer (agent-workspace--issues-buffer project)
+                (agent-workspace-full-here))
+              (should (eq (window-buffer) canvas))
+              (should-not (get-buffer-window session))
+              (+test-awa--in (selected-window) (kill-current-buffer))
+              (+test-awa--timers)
+              (should (equal (mapcar #'car (+test-awa--windows)) beside))
+              (should (eq (window-buffer) logs)))
+            ;; Full size, cleared: the same.
+            (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "f" :text "F"))))
+              (with-current-buffer (agent-workspace--issues-buffer project)
+                (agent-workspace-full-here))
+              (should-not (get-buffer-window session))
+              (agent-ui-clear :canvas canvas)
+              (+test-awa--timers)
+              (should (equal (mapcar #'car (+test-awa--windows)) beside))
+              ;; Its panel shown, its canvas a hidden tab, emptied: its tab gone.
+              (+test-awa--canvas-show ada '(:type "text" :id "g" :text "G"))
+              (+test-awa--in (+test-awa--side) (agent-workspace-panels-here))
+              (should (eq (window-buffer (+test-awa--side)) logs))
+              (agent-ui-remove "g" :canvas canvas)
+              (+test-awa--timers)
+              (should (equal (mapcar #'car (+test-awa--windows)) beside))
+              (should (equal (agent-workspace-agent-tabs ada) (list logs)))
+              (should-not (string-search "canvas" (+test-awa--header (+test-awa--side)))))))))))
+
 ;; ====== THE ISSUES ======
 
 (defconst +test-awa--bd

@@ -262,12 +262,16 @@ area in it, or full size): their windows."
 ;; the first. A panel hidden fetches nothing (Agent UI's: it fetches while
 ;; it's in a window). Full size (V): the one shown in the pane's whole room.
 
-(defun agent-workspace--canvas (agent)
-  "AGENT's Agent UI canvas, if it shows something."
+(defun agent-workspace--canvas-buffer (agent)
+  "AGENT's Agent UI canvas, if it has one (empty or not)."
   (when-let* (((fboundp 'agent-ui-canvas-buffer-name))
               (session (agent-workspace-agent-buffer agent))
-              ((buffer-live-p session))
-              (canvas (get-buffer (agent-ui-canvas-buffer-name (agent-ui--session-name session)))))
+              ((buffer-live-p session)))
+    (get-buffer (agent-ui-canvas-buffer-name (agent-ui--session-name session)))))
+
+(defun agent-workspace--canvas (agent)
+  "AGENT's Agent UI canvas, if it shows something."
+  (when-let* ((canvas (agent-workspace--canvas-buffer agent)))
     (and (with-current-buffer canvas (> (buffer-size) 0)) canvas)))
 
 (defun agent-workspace-agent-tabs (agent)

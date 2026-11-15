@@ -27,8 +27,9 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
 - **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
   and below it (beside it from 140 columns) its Agent UI canvas and its [panels](#an-agents-panels) as tabs,
   `canvas │ logs │ tests`, one shown at a time. `v` shows the next one, `V` the one there full size, in the whole
-  pane (`V` again: back), and a click on a tab shows it. Something new on its canvas brings the canvas back. The
-  others are folded to a bar: its avatar, name, role, state and how long it's been working, and `◫2` when it has
+  pane (`V` again: back), and a click on a tab shows it. Something new on its canvas brings the canvas back. `q` in
+  the canvas closes it, as it does when the agent clears it: the next tab is shown, or the session takes the whole
+  pane again. The others are folded to a bar: its avatar, name, role, state and how long it's been working, and `◫2` when it has
   two panels open. The stage arranges itself: drag a border and it's tiled again.
 
 - **The room** is on the right, 78 columns, or at the bottom in a frame under 200 columns (or with

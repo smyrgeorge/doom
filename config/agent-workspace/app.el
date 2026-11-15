@@ -514,6 +514,65 @@ one its side area shows, in its pane if it's open and it isn't there yet."
       (with-selected-frame (agent-workspace--app-frame app)
         (agent-workspace--retile app)))))
 
+;; ====== ITS CANVAS CLOSED ======
+;; An agent's canvas closed (q kills it) or emptied (cleared, its last
+;; element removed or closed by itself): its stage laid out again at once,
+;; as for a panel closed (panels.el). Its side area shows its next tab (a
+;; panel), else it's gone, its session taking the whole pane; shown full
+;; size, its pane is back to its session. Never what Emacs put in its window
+;; instead of a killed buffer (Doom's dashboard), or Agent UI in an emptied
+;; canvas's pane (its session again). The cursor, there, goes to what's
+;; there now: its next tab, else its session.
+
+(defun agent-workspace--canvas-gone (canvas)
+  "CANVAS, killed or emptied: if it's a crew's agent's own, its stage laid
+out again (see above)."
+  (when-let* ((agent (agent-workspace--canvas-agent canvas))
+              ((eq canvas (agent-workspace--canvas-buffer agent)))
+              (app (agent-workspace--app (agent-workspace-agent-project agent))))
+    ;; Shown full size: the tab shown as if it were still one (the first).
+    (when (and (eq (agent-workspace--app-full app) agent)
+               (eq (agent-workspace--side-tab
+                    agent (cons canvas (and (fboundp 'agent-workspace-agent-panels)
+                                            (agent-workspace-agent-panels agent))))
+                   canvas))
+      (setf (agent-workspace--app-full app) nil))
+    (run-at-time 0 nil #'agent-workspace--canvas-gone-later agent
+                 (eq (window-parameter nil 'agent-workspace-side) agent))))
+
+(defun agent-workspace--canvas-gone-later (agent focused)
+  "AGENT's canvas gone, done with: its stage laid out again; FOCUSED (the
+cursor was in its side area), the cursor in its side area, else in its
+session."
+  (agent-workspace--changed agent 'canvas)
+  (when-let* ((focused)
+              (app (agent-workspace--app (agent-workspace-agent-project agent)))
+              ((agent-workspace--shown-p app))
+              (window (or (agent-workspace--side-window agent)
+                          (let ((session (agent-workspace-agent-buffer agent)))
+                            (and (buffer-live-p session)
+                                 (get-buffer-window session (agent-workspace--app-frame app)))))))
+    (select-window window)))
+
+(defun agent-workspace--canvas-killed-h ()
+  "A canvas killed showing something: said to the stage (see above). In
+its `kill-buffer-hook'."
+  (when (> (buffer-size) 0)
+    (agent-workspace--canvas-gone (current-buffer))))
+
+(defun agent-workspace--canvas-made-h ()
+  "A canvas made: its kill said to the stage. In `agent-ui-canvas-hook'."
+  (add-hook 'kill-buffer-hook #'agent-workspace--canvas-killed-h nil t))
+
+(defun agent-workspace--canvas-emptied-h ()
+  "A canvas changed, emptied: said to the stage (see above). In
+`agent-ui-changed-hook'."
+  (when (= (buffer-size) 0)
+    (agent-workspace--canvas-gone (current-buffer))))
+
+(add-hook 'agent-ui-canvas-hook #'agent-workspace--canvas-made-h)
+(add-hook 'agent-ui-changed-hook #'agent-workspace--canvas-emptied-h)
+
 ;; ====== A FRAME RESIZED, A BORDER DRAGGED ======
 
 (defun agent-workspace--resized-h (frame)
