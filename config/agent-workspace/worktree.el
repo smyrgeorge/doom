@@ -304,11 +304,12 @@ branch (MAIN...agent/NAME): in magit, else as a diff."
         (pop-to-buffer buffer)))))
 
 (defun agent-workspace-merge (agent &optional reset)
-  "Merge AGENT's branch into the main checkout's branch. Merged, AGENT is
-told (if its session runs) and RESET: its branch reset to the merged one
-\(`ask': asked; only if its worktree has nothing uncommitted and it isn't
-working). A merge stopped on conflicts is left to you, in the main
-checkout. Return non-nil if it merged."
+  "Merge AGENT's branch into the main checkout's branch, always with a merge
+commit naming it (--no-ff: never a fast-forward, so its commits stay told
+apart from yours). Merged, AGENT is told (if its session runs) and RESET:
+its branch reset to the merged one (`ask': asked; only if its worktree has
+nothing uncommitted and it isn't working). A merge stopped on conflicts is
+left to you, in the main checkout. Return non-nil if it merged."
   (interactive (list (agent-workspace-read-agent "Merge the branch of: ") 'ask))
   (let* ((project (agent-workspace-agent-project agent))
          (branch (agent-workspace-agent-branch agent))
@@ -316,7 +317,7 @@ checkout. Return non-nil if it merged."
          (name (agent-workspace-agent-name agent))
          (default-directory project))
     (with-temp-buffer
-      (if (not (eql 0 (process-file "git" nil t nil "merge" "--no-edit" branch)))
+      (if (not (eql 0 (process-file "git" nil t nil "merge" "--no-ff" "--no-edit" branch)))
           (progn
             (message "Merging %s stopped: %s" branch (string-trim (buffer-string)))
             nil)

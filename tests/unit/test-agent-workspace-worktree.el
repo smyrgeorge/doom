@@ -374,6 +374,38 @@ merged main when you say so; nothing ahead after."
     (should (file-exists-p (expand-file-name "other" dir)))
     (should (= (agent-workspace-branch-ahead agent) 0))))
 
+(ert-deftest agent-workspace-worktree/merge-never-fast-forwards ()
+  "Merged when a fast-forward could do (the main branch hasn't moved since
+it left): a merge commit all the same, two parents, naming its branch; its
+branch reset to it, nothing ahead after."
+  (let* ((project (+test-aww--project "merge-no-ff"))
+         (agent (+test-aww--agent project "ada"))
+         (dir (agent-workspace-worktree-ensure agent))
+         (before nil)
+         (ada nil))
+    (+test-aww--change dir "feature" "done\n" "ada's feature")
+    (let ((default-directory project))
+      (setq before (+test-aww--git "rev-parse" "main")
+            ada (+test-aww--git "rev-parse" "agent/ada")))
+    (cl-letf (((symbol-function 'agent-workspace-live-p) (lambda (_) nil)))
+      (let ((default-directory project))
+        (cl-letf (((symbol-function 'process-file)
+                   (let ((process-file (symbol-function 'process-file)))
+                     (lambda (program &optional infile buffer display &rest args)
+                       (apply process-file program infile buffer display
+                              (if (equal (car args) "merge")
+                                  (append '("-c" "user.name=Test" "-c" "user.email=test@example.com")
+                                          args)
+                                args))))))
+          (should (agent-workspace-merge agent t)))))
+    (should (equal (+test-aww--read (expand-file-name "feature" project)) "done\n"))
+    (let ((default-directory project))
+      (should (equal (split-string (+test-aww--git "rev-list" "--parents" "-n" "1" "main"))
+                     (list (+test-aww--git "rev-parse" "main") before ada)))
+      (should (equal (+test-aww--git "log" "-1" "--format=%s" "main") "Merge branch 'agent/ada'"))
+      (should (equal (+test-aww--git "rev-parse" "agent/ada") (+test-aww--git "rev-parse" "main"))))
+    (should (= (agent-workspace-branch-ahead agent) 0))))
+
 (ert-deftest agent-workspace-worktree/merge-stopped-on-conflicts ()
   "A merge that conflicts is left to you, said; nothing reset or told."
   (let* ((project (+test-aww--project "conflict"))

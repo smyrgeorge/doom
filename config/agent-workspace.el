@@ -117,7 +117,8 @@ needs your OK. nil: Claude Code's own default."
 ;; nothing the main checkout hasn't; else you're shown what they hold and
 ;; asked. M-x agent-workspace-review: its branch's changes in magit
 ;; (MAIN...agent/NAME); M-x agent-workspace-merge: merged into the main
-;; checkout, the agent told, its branch reset to it if you say so.
+;; checkout, always with a merge commit (--no-ff, never a fast-forward), the
+;; agent told, its branch reset to it if you say so.
 
 ;; ITS NAME ON IT, IN EMACS
 ;; (config/agent-workspace/names.el) Its worktree's files belong to the

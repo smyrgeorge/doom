@@ -389,7 +389,8 @@ left out, and a warning names its file and line.
 | `M-x agent-workspace-review` | An agent's changes in magit: what its branch did since it left yours (`main...agent/ada`) |
 | `M-x agent-workspace-merge` | Merges its branch into your checkout, tells the agent, and offers to reset its branch to the result |
 
-A merge that conflicts stops in your checkout, for you to resolve.
+A merge always makes a merge commit naming the agent's branch, even when it could fast-forward: its commits stay told
+apart from yours. A merge that conflicts stops in your checkout, for you to resolve.
 
 ## What you do to one
 
