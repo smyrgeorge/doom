@@ -238,6 +238,44 @@ as diff-hl loads: the rest of its setup was skipped, an error.)"
                        #'external-debugging-output))
               '((name . +test-command-errors)))
 
+;; ====== A FAILURE'S REPORT ======
+
+;; ERT reports a failed test with its backtrace, then its condition. Printing
+;; the backtrace reads files: each built-in function's in Emacs's DOC file,
+;; libraries loaded as frames are printed. An error there (once, in a full
+;; run beside another: a file not read) escaped ERT's reporter, and the whole
+;; run was aborted: the failure's condition never printed, the tests after it
+;; not run (UNKNOWN). A backtrace that can't be printed so is printed plainly
+;; (each frame's function and arguments, no file read), saying why; the
+;; condition and the other tests are reported as ever.
+(require 'backtrace)
+
+(defun +test--backtrace-to-string (fn &optional frames)
+  "`backtrace-to-string' (FN) of FRAMES; printed plainly if it fails (see
+above)."
+  (condition-case err
+      (funcall fn frames)
+    (error
+     (condition-case nil
+         (let ((print-level 3)
+               (print-length 6)
+               (print-escape-newlines t))
+           (concat (format "  (printed plainly: %s)\n" (error-message-string err))
+                   (mapconcat (lambda (frame)
+                                (let* ((args (backtrace-frame-args frame))
+                                       (line (format "  %S%s" (backtrace-frame-fun frame)
+                                                     (if args (prin1-to-string args) "()"))))
+                                  ;; Not `truncate-string-to-width': a library
+                                  ;; to load.
+                                  (substring line 0 (min 200 (length line)))))
+                              (or frames (backtrace-get-frames '+test--backtrace-to-string))
+                              "\n")
+                   "\n"))
+       (error (format "  (no backtrace: %s)\n" (error-message-string err)))))))
+
+(advice-add 'backtrace-to-string :around #'+test--backtrace-to-string
+            '((name . +test-backtrace-printed)))
+
 ;; ====== LOADING THE CONFIG ======
 
 (defun +test-load (&rest files)
