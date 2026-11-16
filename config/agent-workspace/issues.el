@@ -384,8 +384,7 @@ their headings (each carrying its epic), when it has one."
 (defun agent-workspace--issues-header ()
   "The issue list's header line: the project, the crew's tally."
   (when agent-workspace--issues-project
-    (string-replace
-     "%" "%%"
+    (agent-workspace--percent-escaped
      (agent-workspace--at-right
       (concat " " (propertize "ISSUES" 'face 'bold) "  "
               (propertize (file-name-nondirectory (directory-file-name agent-workspace--issues-project))

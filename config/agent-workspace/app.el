@@ -734,7 +734,8 @@ one is shown with an agent working."
   "Keys on a crew's tally in a mode line.")
 
 (defun agent-workspace--tally-mode-line ()
-  "Each open crew's tally but the one shown in this frame: a click opens it."
+  "Each open crew's tally but the one shown in this frame: a click opens it.
+A % in it (its project's name) doubled, as itself: the mode line's text."
   (let (parts)
     (dolist (app (hash-table-values agent-workspace--apps))
       (let ((project (agent-workspace--app-project app)))
@@ -747,7 +748,7 @@ one is shown with an agent working."
                             'local-map agent-workspace-tally-map 'mouse-face 'mode-line-highlight
                             'help-echo "The crew: click to go there")
                 parts))))
-    (apply #'concat parts)))
+    (agent-workspace--percent-escaped (apply #'concat parts))))
 
 (add-to-list 'mode-line-misc-info '(:eval (agent-workspace--tally-mode-line)) t)
 

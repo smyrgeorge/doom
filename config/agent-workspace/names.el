@@ -106,27 +106,29 @@ face's). AGENT may be a name only (a forgotten agent's)."
 
 (defun agent-workspace-mode-line ()
   "In a buffer of an agent's worktree, the agent for its mode line:
-\"▌A ada · builder\"; a forgotten agent's name, dimmed. Else nil."
+\"▌A ada · builder\"; a forgotten agent's name, dimmed. Else nil. A % in
+it (its role's name) doubled, as itself: the mode line's text."
   (when-let* ((file buffer-file-name)
               (where (agent-workspace-worktree-of file)))
-    (if-let* ((agent (agent-workspace-agent (cadr where) (car where))))
-        (concat " "
-                (propertize (concat (agent-workspace-avatar agent) " " (agent-workspace--name-text agent)
-                                    (propertize " · " 'face 'agent-workspace-label)
-                                    (propertize (agent-workspace-agent-role agent) 'face 'agent-workspace-label))
-                            'help-echo (format "%s's worktree (%s, %s): click to select %s"
-                                               (agent-workspace-agent-name agent)
-                                               (agent-workspace-agent-role agent)
-                                               (agent-workspace-state-text agent)
-                                               (agent-workspace-agent-name agent))
-                            'mouse-face 'mode-line-highlight
-                            'local-map agent-workspace-mode-line-map)
-                " ")
-      (concat " "
-              (propertize (concat (agent-workspace-avatar (cadr where)) " " (cadr where))
-                          'face 'shadow
-                          'help-echo (format "%s's worktree: no longer in the crew" (cadr where)))
-              " "))))
+    (agent-workspace--percent-escaped
+     (if-let* ((agent (agent-workspace-agent (cadr where) (car where))))
+         (concat " "
+                 (propertize (concat (agent-workspace-avatar agent) " " (agent-workspace--name-text agent)
+                                     (propertize " · " 'face 'agent-workspace-label)
+                                     (propertize (agent-workspace-agent-role agent) 'face 'agent-workspace-label))
+                             'help-echo (format "%s's worktree (%s, %s): click to select %s"
+                                                (agent-workspace-agent-name agent)
+                                                (agent-workspace-agent-role agent)
+                                                (agent-workspace-state-text agent)
+                                                (agent-workspace-agent-name agent))
+                             'mouse-face 'mode-line-highlight
+                             'local-map agent-workspace-mode-line-map)
+                 " ")
+       (concat " "
+               (propertize (concat (agent-workspace-avatar (cadr where)) " " (cadr where))
+                           'face 'shadow
+                           'help-echo (format "%s's worktree: no longer in the crew" (cadr where)))
+               " ")))))
 
 (add-to-list 'mode-line-misc-info '(:eval (agent-workspace-mode-line)))
 

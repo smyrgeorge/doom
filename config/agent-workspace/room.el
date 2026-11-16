@@ -350,8 +350,7 @@ the nearest one after it; none, the end."
 
 (defun agent-workspace--room-header ()
   "The feed's header line: ROOM, its filter."
-  (string-replace
-   "%" "%%"
+  (agent-workspace--percent-escaped
    (concat " " (propertize "ROOM" 'face 'bold) "  "
            (propertize (pcase agent-workspace--room-filter
                          ('nil "all")

@@ -538,8 +538,7 @@ waits for their end (a timer, while events wait)."
   "The inbox view's header line."
   (when agent-workspace--inbox-view-project
     (let ((project agent-workspace--inbox-view-project))
-      (string-replace
-       "%" "%%"
+      (agent-workspace--percent-escaped
        (concat " " (propertize "INBOX" 'face 'bold) "  "
                (propertize (concat (format "%d waiting" (length (agent-workspace--inbox-waiting project)))
                                    (if (agent-workspace-inbox-paused-p project) ", paused" "")

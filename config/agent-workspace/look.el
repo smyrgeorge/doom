@@ -280,6 +280,17 @@ usage changes (agent-shell's usage-update) and at a turn's end. In
     (add-face-text-property 0 (length text) (list :background tint) t text)
     text))
 
+(defun agent-workspace--percent-escaped (text)
+  "TEXT for a header or mode line, where a % starts a construct: each %
+doubled as itself, its colour, hover and keys kept (`string-replace''s %%
+has none: a coloured 20% lost its colour)."
+  (let ((parts nil) (start 0) at)
+    (while (setq at (string-search "%" text start))
+      (push (substring text start (1+ at)) parts)
+      (push (substring text at (1+ at)) parts)
+      (setq start (1+ at)))
+    (apply #'concat (nreverse (cons (substring text start) parts)))))
+
 (defun agent-workspace--at-right (left right width)
   "LEFT, then RIGHT at the window's right edge (to the pixel in the GUI, its
 glyphs evened), LEFT cut to WIDTH's columns left; the line to the edge."

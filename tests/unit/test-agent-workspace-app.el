@@ -362,6 +362,41 @@ left, the crew going on."
       (should (get-buffer-window file))
       (should (agent-workspace-agents project)))))
 
+;; ====== A % IN A HEADER OR MODE LINE ======
+
+(ert-deftest agent-workspace-app/a-percent-keeps-its-face ()
+  "A % in a header or mode line's text, doubled there (else it starts a
+%-construct), keeps its face, hover and keys: the issue list's header (its
+project's name, dimmed), the tally in other workspaces' mode lines (its
+click), an agent's name in its files' mode line (its role's)."
+  (should (equal-including-properties
+           (agent-workspace--percent-escaped (concat "a " (propertize "20%" 'face 'error 'help-echo "used") " b%"))
+           (concat "a " (propertize "20%%" 'face 'error 'help-echo "used") " b%%")))
+  (+test-awa "50%-off"
+    (let ((default-directory project))
+      (make-directory ".agent-workspace/roles" t)
+      (write-region "---\ndescription: checks\n---\nCheck.\n" nil ".agent-workspace/roles/qa%.md"))
+    (let ((ken (agent-workspace-create :role "qa%" :name "ken")))
+      (agent-workspace-open t)
+      (cl-flet ((both (text part prop value)
+                  ;; Each % of PART in TEXT, doubled, has PROP's VALUE.
+                  (let ((at (string-search part text)))
+                    (should at)
+                    (dotimes (i (length part))
+                      (when (eq (aref part i) ?%)
+                        (should (equal (get-text-property (+ at i) prop text) value)))))))
+        (with-selected-window (+test-awa--issues-window project)
+          (both (agent-workspace--issues-header) "50%%-off" 'face 'shadow))
+        ;; Its files' mode line: its role's name.
+        (with-current-buffer (find-file-noselect (expand-file-name "README" (agent-workspace-agent-worktree ken)))
+          (both (agent-workspace-mode-line) "qa%%" 'face 'agent-workspace-label)
+          (both (agent-workspace-mode-line) "qa%%" 'local-map agent-workspace-mode-line-map)
+          (kill-buffer))
+        ;; Its tally, elsewhere: a click goes back.
+        (agent-workspace-leave t)
+        (both (agent-workspace--tally-mode-line) "50%%-off" 'local-map agent-workspace-tally-map)
+        (both (agent-workspace--tally-mode-line) "50%%-off" 'help-echo "The crew: click to go there")))))
+
 ;; ====== A WINDOW NOT ITS OWN: A POPUP ======
 
 (defun +test-awa--relayouts ()

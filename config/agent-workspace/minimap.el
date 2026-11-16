@@ -290,8 +290,7 @@ a mark left out where it would touch the one before."
 (defun agent-workspace--minimap-header ()
   "The minimap's header line."
   (when agent-workspace--minimap-project
-    (string-replace
-     "%" "%%"
+    (agent-workspace--percent-escaped
      (agent-workspace--at-right
       (concat " " (propertize "CREW" 'face 'bold) "  "
               (propertize (format "%d minutes" agent-workspace-activity-minutes) 'face 'shadow))

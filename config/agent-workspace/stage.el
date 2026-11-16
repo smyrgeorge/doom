@@ -137,16 +137,6 @@ one)."
       (set-face-background face colour))
     face))
 
-(defun agent-workspace--percent-escaped (text)
-  "TEXT for a header line: each % doubled, as itself (its colour, its hover
-kept: `string-replace''s %% has none)."
-  (let ((parts nil) (start 0) at)
-    (while (setq at (string-search "%" text start))
-      (push (substring text start (1+ at)) parts)
-      (push (substring text at (1+ at)) parts)
-      (setq start (1+ at)))
-    (apply #'concat (nreverse (cons (substring text start) parts)))))
-
 (defun agent-workspace--pane-header ()
   "The open pane's header line: its agent's line (in its window's width);
 its canvas or a panel shown there full size, their tabs at its right."
@@ -358,14 +348,14 @@ each a button (a click shows it)."
   "The side area's header line: its agent's tabs, the one shown marked; v
 and V at its right. Tinted in its colour, as a bar."
   (when-let* ((agent (window-parameter nil 'agent-workspace-side)))
-    (string-replace "%" "%%" (agent-workspace--clickable
-                              (agent-workspace--tint
-                               (agent-workspace--at-right
-                                (concat " " (agent-workspace--tabs-text agent (window-buffer)))
-                                (propertize "v: next · V: full size " 'face 'shadow)
-                                (window-total-width))
-                               (agent-workspace-agent-face agent) 0.14)
-                              agent-workspace-line-map))))
+    (agent-workspace--percent-escaped (agent-workspace--clickable
+                                       (agent-workspace--tint
+                                        (agent-workspace--at-right
+                                         (concat " " (agent-workspace--tabs-text agent (window-buffer)))
+                                         (propertize "v: next · V: full size " 'face 'shadow)
+                                         (window-total-width))
+                                        (agent-workspace-agent-face agent) 0.14)
+                                       agent-workspace-line-map))))
 
 (define-minor-mode agent-workspace-side-mode
   "An agent's canvas or panel shown in its pane on the stage: v shows the
