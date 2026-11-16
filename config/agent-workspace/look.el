@@ -26,6 +26,9 @@
 (require 'svg)
 
 (declare-function nerd-icons-mdicon "nerd-icons")
+(declare-function nerd-icons-codicon "nerd-icons")
+;; The Beads panel's types' look (config/beads/look.el), if it's loaded.
+(defvar +my/beads--types-look)
 ;; Agent UI's (config/agent-ui/core.el), loaded before.
 (declare-function agent-ui-even-glyphs "agent-ui/core")
 (declare-function agent-ui-svg-image "agent-ui/core")
@@ -90,9 +93,13 @@ doom-one's; shadow was 1.1 to 1.9)."
   (display-graphic-p))
 
 (defun agent-workspace--nerd (name)
-  "The nerd icon NAME (\"nf-md-hammer\"), or nil without nerd-icons."
-  (when (and name (string-prefix-p "nf-md-" name) (require 'nerd-icons nil t))
-    (ignore-errors (substring-no-properties (nerd-icons-mdicon name)))))
+  "The nerd icon NAME (\"nf-md-hammer\", a codicon \"nf-cod-bug\"), or nil
+without nerd-icons."
+  (when (and name (require 'nerd-icons nil t))
+    (ignore-errors
+      (substring-no-properties
+       (cond ((string-prefix-p "nf-md-" name) (nerd-icons-mdicon name))
+             ((string-prefix-p "nf-cod-" name) (nerd-icons-codicon name)))))))
 
 (defun agent-workspace-glyph (what &optional face)
   "WHAT's glyph (a key of `agent-workspace-glyphs', or (NERD . GLYPH)), in
@@ -103,6 +110,29 @@ FACE: two columns wide."
                     (propertize nerd 'face (delq nil (list '(:family "Symbols Nerd Font Mono") face)))
                   (propertize (or (cadr entry) "?") 'face face))))
     (concat glyph (make-string (max 0 (- 2 (string-width glyph))) ?\s))))
+
+(defun agent-workspace--type-look (type)
+  "How the Beads panel draws an issue's TYPE (bd's issue_type: \"bug\"...):
+\(TYPE ICON FACE), from config/beads/look.el's `+my/beads--types-look' (read
+there, never copied: the two never differ); nil for a type it doesn't
+know, or none, or without it (no Doom)."
+  (and type (boundp '+my/beads--types-look) (assoc type +my/beads--types-look)))
+
+(defun agent-workspace-type-glyph (type &optional dim)
+  "An issue's TYPE (bd's issue_type), one column, its word on hover: in the
+GUI the Beads panel's icon in its colour (`agent-workspace--type-look'); in
+a terminal, where its word is too wide, its first letter in that colour; a
+type it has no look for, or none, a dim ·. DIM (a done issue's): shadow,
+not its colour."
+  (let* ((look (agent-workspace--type-look type))
+         (face (if (or dim (not look)) 'shadow (nth 2 look)))
+         (icon (and look (agent-workspace--graphic-p) (agent-workspace--nerd (nth 1 look))))
+         (glyph (cond (icon (propertize icon 'face (list '(:family "Symbols Nerd Font Mono") face)))
+                      (look (propertize (substring type 0 1) 'face face))
+                      (t (propertize "·" 'face 'shadow)))))
+    (if (and type (not (string-empty-p type)))
+        (propertize glyph 'help-echo type)
+      glyph)))
 
 (defun agent-workspace-role-glyph (agent &optional face)
   "AGENT's role's glyph (its icon), in FACE."

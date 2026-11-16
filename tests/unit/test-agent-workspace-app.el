@@ -17,6 +17,8 @@
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
 
 (+test-load "config/agent-shell" "config/agent-ui" "config/tiling" "config/agent-workspace")
+;; The Beads panel's look: the issue list's types are drawn as it draws them.
+(+test-load "config/beads/look")
 (remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
 ;; The stage's layout, the minimap off (test-agent-workspace-minimap.el's).
 (setq agent-workspace-minimap nil)
@@ -876,13 +878,13 @@ long title on a second row; epics left out."
         (setq agent-workspace--issues-data (agent-workspace--issues-parse project +test-awa--bd))
         (agent-workspace--issues-redraw project)
         (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-          (dolist (part '(" IN PROGRESS" " ▌A p-1 Fix the parser" " READY" "builders  1" "p-2 Build the lexer, a"
+          (dolist (part '(" IN PROGRESS" " ▌A · p-1 Fix the parser" " READY" "builders  1" "p-2 Build the lexer, a"
                           "investigators  1" "nobody in the crew takes these" "p-3 Why does it crash"
                           "for any role  1" "p-4 Docs" " BLOCKED" "p-5 Release" "⊘ p-2" " DONE TODAY" "p-0 Set up"))
             (should (string-search part text)))
           (should-not (string-search "The epic" text))
           ;; The long title's second row, under its title.
-          (should (string-match-p "\n +[a-z ]*column fifty wide" text)))
+          (should (string-match-p "\n +[a-z ]*two rows in a column" text)))
         ;; Its agent on its issue in progress; the cursor follows the selection.
         (goto-char (point-min))
         (should (agent-workspace--issues-goto-agent ada))
@@ -892,6 +894,100 @@ long title on a second row; epics left out."
         (should (equal (plist-get (get-text-property (point) 'agent-workspace-issue) :id) "p-2"))
         (agent-workspace-issue-next)
         (should (equal (plist-get (get-text-property (point) 'agent-workspace-issue) :id) "p-3"))))))
+
+(defconst +test-awa--typed
+  (list :all (json-parse-string
+              "[{\"id\":\"t-1\",\"title\":\"Fix the parser\",\"status\":\"in_progress\",\"assignee\":\"ada\",\"issue_type\":\"bug\"},
+                {\"id\":\"t-2\",\"title\":\"Sparkles, a title long enough to need two rows in a column fifty wide\",\"status\":\"open\",\"priority\":1,\"issue_type\":\"feature\"},
+                {\"id\":\"t-3\",\"title\":\"A task\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\"},
+                {\"id\":\"t-4\",\"title\":\"A chore\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"chore\"},
+                {\"id\":\"t-5\",\"title\":\"A decision\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"decision\"},
+                {\"id\":\"t-6\",\"title\":\"A custom type\",\"status\":\"open\",\"priority\":3,\"issue_type\":\"spike\"},
+                {\"id\":\"t-7\",\"title\":\"No type\",\"status\":\"open\",\"priority\":3},
+                {\"id\":\"t-8\",\"title\":\"Blocked\",\"status\":\"open\",\"issue_type\":\"bug\",\"dependencies\":[{\"depends_on_id\":\"t-3\",\"type\":\"blocks\"}]}]"
+              :object-type 'alist :array-type 'list)
+        :ready (json-parse-string "[{\"id\":\"t-2\"},{\"id\":\"t-3\"},{\"id\":\"t-4\"},{\"id\":\"t-5\"},{\"id\":\"t-6\"},{\"id\":\"t-7\"}]"
+                                  :object-type 'alist :array-type 'list)
+        :done (json-parse-string "[{\"id\":\"t-0\",\"title\":\"Set up\",\"status\":\"closed\",\"issue_type\":\"task\",\"assignee\":\"ada\",\"closed_at\":\"2026-01-01T10:00:00Z\"}]"
+                                 :object-type 'alist :array-type 'list))
+  "What bd answers, issues of every type, for the type column's tests.")
+
+(defun +test-awa--rows (project data)
+  "PROJECT's issue list's rows from bd's answers DATA, as drawn 49 columns
+wide: (ID . FIRST-ROW) each, its first row (its type at column 4), in order."
+  (let ((rows nil))
+    (dolist (line (agent-workspace--issues-lines project (agent-workspace--issues-parse project data) 49))
+      (when-let* ((issue (get-text-property 0 'agent-workspace-issue line))
+                  ((not (assoc (plist-get issue :id) rows))))
+        (push (cons (plist-get issue :id) line) rows)))
+    (nreverse rows)))
+
+(defun +test-awa--type-at (row)
+  "ROW's type column: (GLYPH FACE HELP)."
+  (list (substring-no-properties row 4 5) (get-text-property 4 'face row) (get-text-property 4 'help-echo row)))
+
+(ert-deftest agent-workspace-app/the-issues-types ()
+  "Each issue's type before its id, a column of its own lined up from row to
+row, in every section: in a terminal its first letter in the Beads panel's
+colour (config/beads/look.el's, read there), its word on hover; a type with
+no look, or none, a dim ·, the column kept; done today's dimmed. A long
+title's second row starts under its title."
+  (+test-awa "types"
+    (+test-awa--crew '("ada" "builder"))
+    (agent-workspace-open t)
+    (let ((rows (+test-awa--rows project +test-awa--typed)))
+      (should (equal (mapcar #'car rows) '("t-1" "t-2" "t-3" "t-4" "t-5" "t-6" "t-7" "t-8" "t-0")))
+      ;; Lined up: the avatar's 2 columns (or none), the type, its id.
+      (pcase-dolist (`(,id . ,row) rows)
+        (should (string-prefix-p (concat " " (substring-no-properties row 1 3) " " (substring-no-properties row 4 5)
+                                         " " id " ")
+                                 (substring-no-properties row))))
+      (should (string-prefix-p " ▌A b t-1 Fix the parser" (substring-no-properties (cdr (assoc "t-1" rows)))))
+      (should (equal (mapcar (lambda (row) (+test-awa--type-at (cdr row))) rows)
+                     '(("b" error "bug") ("f" success "feature") ("t" font-lock-function-name-face "task")
+                       ("c" shadow "chore") ("d" font-lock-type-face "decision")
+                       ("·" shadow "spike") ("·" shadow nil)
+                       ("b" error "bug") ("t" shadow "task"))))
+      ;; Read from the Beads panel's look: its change is the list's.
+      (let ((+my/beads--types-look '(("bug" "nf-cod-debug" warning))))
+        (should (equal (+test-awa--type-at (cdr (assoc "t-1" (+test-awa--rows project +test-awa--typed))))
+                       '("b" warning "bug")))
+        (should (equal (+test-awa--type-at (cdr (assoc "t-2" (+test-awa--rows project +test-awa--typed))))
+                       '("·" shadow "feature"))))
+      ;; Without it (no Doom): a dim · each, the column kept.
+      (let ((+my/beads--types-look nil))
+        (should (string-prefix-p " ▌A · t-1 Fix the parser"
+                                 (substring-no-properties (cdr (assoc "t-1" (+test-awa--rows project +test-awa--typed))))))))
+    ;; The long title's second row, under its title.
+    (let* ((lines (agent-workspace--issues-lines project (agent-workspace--issues-parse project +test-awa--typed) 49))
+           (first (seq-find (lambda (line) (string-search "t-2 Sparkles" line)) lines))
+           (second (cadr (member first lines))))
+      (should (equal (plist-get (get-text-property 0 'agent-workspace-issue second) :id) "t-2"))
+      (should (string-match-p "\\` +[a-z ]*two rows in a column" second))
+      (should (= (- (length second) (length (string-trim-left second)))
+                 (string-search "Sparkles" first))))))
+
+(ert-deftest agent-workspace-app/the-issues-types-in-the-gui ()
+  "In the GUI, an issue's type is the Beads panel's icon, in its colour,
+one column before its id; its word on hover; a type with no icon a dim ·."
+  (+test-awa "types-gui"
+    (+test-awa--crew '("ada" "builder"))
+    (agent-workspace-open t)
+    (skip-unless (require 'nerd-icons nil t))
+    (cl-letf (((symbol-function 'agent-workspace--graphic-p) #'always))
+      (let ((rows (+test-awa--rows project +test-awa--typed)))
+        (pcase-dolist (`(,id ,icon ,face) '(("t-2" "nf-cod-sparkle" success) ("t-3" "nf-cod-checklist" font-lock-function-name-face)
+                                           ("t-4" "nf-cod-tools" shadow) ("t-5" "nf-cod-law" font-lock-type-face)
+                                           ("t-8" "nf-cod-bug" error) ("t-0" "nf-cod-checklist" shadow)))
+          (let ((row (cdr (assoc id rows))))
+            (should (equal (substring-no-properties row 4 5) (substring-no-properties (nerd-icons-codicon icon))))
+            (should (memq face (ensure-list (get-text-property 4 'face row))))
+            (should (string-prefix-p (concat " " id " ") (substring-no-properties row 5)))))
+        (should (equal (+test-awa--type-at (cdr (assoc "t-6" rows))) '("·" shadow "spike")))
+        (should (equal (get-text-property 4 'help-echo (cdr (assoc "t-8" rows))) "bug"))
+        ;; The epic's icon, as the Beads panel's.
+        (should (equal (substring-no-properties (agent-workspace-type-glyph "epic"))
+                       (substring-no-properties (nerd-icons-codicon "nf-cod-milestone"))))))))
 
 (ert-deftest agent-workspace-app/giving-an-issue ()
   "t gives a ready issue to an agent (the selected one first): its worktree

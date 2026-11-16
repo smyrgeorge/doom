@@ -2,11 +2,12 @@
 ;; The app's issues, on its left: the work, beside the agents. Loaded from
 ;; config/agent-workspace.el, after app.el. No Doom here.
 ;;
-;; The project's Beads issues (bd, in the background): in progress (each with
-;; the avatar and state of the agent on it), ready (grouped by the role
-;; they're for: a role whose labels they have; a role nobody in the crew has,
-;; flagged), blocked (by what), done today (who, when). A title in full, on a
-;; second row when long. Moving onto an issue in progress selects its agent.
+;; The project's Beads issues (bd, in the background), each with its type
+;; before its id (the Beads panel's icon): in progress (each with the avatar
+;; and state of the agent on it), ready (grouped by the role they're for: a
+;; role whose labels they have; a role nobody in the crew has, flagged),
+;; blocked (by what), done today (who, when). A title in full, on a second
+;; row when long. Moving onto an issue in progress selects its agent.
 ;; Fetched again when the app opens, gr, after an agent's bd command (that
 ;; agent noted with what's fetched: the room says what it did, room.el) and
 ;; at the end of each of its turns; asked while a fetch runs, once it's done.
@@ -234,11 +235,13 @@ rest in REST, cut with … if longer still."
 
 (defun agent-workspace--issue-lines (project issue width)
   "ISSUE's rows (one, or two when its title is long): its agent's avatar,
-its id, its title; on the right its agent's state, what blocks it, its
-priority, or when it was done."
+its type (`agent-workspace-type-glyph', a column of its own), its id, its
+title; on the right its agent's state, what blocks it, its priority, or when
+it was done."
   (let* ((status (plist-get issue :status))
          (agent (and (memq status '(in_progress closed)) (agent-workspace--issue-agent project issue)))
          (avatar (if agent (agent-workspace-agent-avatar agent) "  "))
+         (type (agent-workspace-type-glyph (plist-get issue :type) (eq status 'closed)))
          (id (propertize (plist-get issue :id) 'face (if (eq status 'closed) 'shadow 'link)))
          (title-face (if (memq status '(closed blocked)) 'shadow 'default))
          (right (pcase status
@@ -252,11 +255,11 @@ priority, or when it was done."
                                  'face 'shadow))))
          (tail (agent-ui-even-glyphs (concat right " ")))
          (end (if (agent-workspace--graphic-p) (list (string-pixel-width tail)) (+ 2 (string-width tail))))
-         (indent (+ 1 2 1 (string-width (plist-get issue :id)) 1))
+         (indent (+ 1 2 1 1 1 (string-width (plist-get issue :id)) 1))
          (titles (agent-workspace--wrap-title (plist-get issue :title)
                                               (max 8 (- width indent (string-width tail) 1))
                                               (max 8 (- width indent 1))))
-         (first (concat " " avatar " " id " " (propertize (car titles) 'face title-face)
+         (first (concat " " avatar " " type " " id " " (propertize (car titles) 'face title-face)
                         (propertize " " 'display `(space :align-to (- right ,end)))
                         tail)))
     (cons first

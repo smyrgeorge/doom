@@ -12,7 +12,10 @@
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
 
 (require 'agent-shell)
+(require 'nerd-icons)
 (+test-load "config/agent-ui" "config/agent-workspace")
+;; The Beads panel's look: the issue list's types are drawn as it draws them.
+(+test-load "config/beads/look")
 
 (defun +test-e2e-aw--project ()
   "A git repository with a commit: its folder."
@@ -260,6 +263,40 @@ back."
                                     (:locations . ,(vector `((path . ,(expand-file-name
                                                                        file (agent-workspace-agent-worktree agent)))
                                                              (line . ,line)))))))))))
+
+(ert-deftest e2e-agent-workspace/the-issues-types-line-up ()
+  "The issue list's types, the Beads panel's icons in their colours (a dim
+· for one with none): each a column, every id after them at the same x, an
+agent's avatar before them or not."
+  (+test-e2e-aw
+    (let ((window (get-buffer-window (agent-workspace--issues-buffer project)))
+          (types '("bug" "feature" "task" "chore" "decision" "spike")))
+      (with-current-buffer (window-buffer window)
+        (setq agent-workspace--issues-data
+              (agent-workspace--issues-parse
+               project
+               (list :all (cons `((id . "t-0") (title . "On it") (status . "in_progress") (assignee . "ada")
+                                  (issue_type . "epic"))
+                                (seq-map-indexed (lambda (type i)
+                                                   `((id . ,(format "t-%d" (1+ i))) (title . ,(concat "A " type))
+                                                     (status . "open") (issue_type . ,type)))
+                                                 types))
+                     :ready (seq-map-indexed (lambda (_ i) `((id . ,(format "t-%d" (1+ i))))) types)
+                     :done nil)))
+        (agent-workspace--issues-redraw project)
+        (redisplay t)
+        (let ((xs nil))
+          (goto-char (point-min))
+          (while (re-search-forward " \\(t-[0-9]\\) " nil t)
+            (push (car (window-text-pixel-size window (line-beginning-position) (match-beginning 1))) xs)
+            ;; Its type, the column before.
+            (should (memq (char-after (- (match-beginning 1) 2))
+                          (list ?· (aref (nerd-icons-codicon "nf-cod-milestone") 0)
+                                (aref (nerd-icons-codicon "nf-cod-bug") 0) (aref (nerd-icons-codicon "nf-cod-sparkle") 0)
+                                (aref (nerd-icons-codicon "nf-cod-checklist") 0) (aref (nerd-icons-codicon "nf-cod-tools") 0)
+                                (aref (nerd-icons-codicon "nf-cod-law") 0)))))
+          (should (= (length xs) 7))
+          (should (= (length (delete-dups xs)) 1)))))))
 
 (ert-deftest e2e-agent-workspace/the-minimap ()
   "The minimap under the issue list: a lane each as ada and sam do things,

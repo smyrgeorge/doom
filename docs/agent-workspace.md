@@ -22,8 +22,9 @@ Try it: `M-x +my/example-agent-workspace`, a crew of three stand-in agents, offl
 which one. `SPC o W` opens it in the window you're in. The first time, it asks for the crew's first agent.
 
 - **The issues** are on the left. In progress, each with the agent on it. Ready, grouped by the role they're for:
-  a role nobody in the crew has is flagged. Blocked, by what. Done today. Moving onto an issue in progress selects its
-  agent. The [minimap](#the-minimap) is under them.
+  a role nobody in the crew has is flagged. Blocked, by what. Done today. Each issue's type is before its id: its icon
+  in its colour, as in the [issue list](issues.md#the-list) (in a terminal, its first letter). Moving onto an issue in
+  progress selects its agent. The [minimap](#the-minimap) is under them.
 - **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
   and below it (beside it from 140 columns) its Agent UI canvas, its other canvases (`ask`, where it asks you
   things) and its [panels](#an-agents-panels) as tabs, `canvas │ ask │ logs`, one shown at a time. `v` shows the

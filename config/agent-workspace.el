@@ -255,8 +255,10 @@ needs your OK. nil: Claude Code's own default."
 ;; typed. The first time, its first agent is asked for. Two columns (the room
 ;; comes on the right, doom-51z.6):
 ;; - the issues (config/agent-workspace/issues.el), on the left: in progress
-;;   (each with its agent), ready by the role they're for, blocked, done today;
-;;   moving onto one in progress selects its agent;
+;;   (each with its agent), ready by the role they're for, blocked, done today,
+;;   each its type before its id (the Beads panel's icon, config/beads/look.el;
+;;   its first letter in a terminal); moving onto one in progress selects its
+;;   agent;
 ;; - the stage (config/agent-workspace/stage.el): every agent a pane, in role
 ;;   order; the selected one's open (its session; below it, beside it from
 ;;   140 columns, its canvases (its own, ask...) and panels as tabs, one
