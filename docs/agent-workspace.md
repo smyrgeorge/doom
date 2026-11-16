@@ -64,6 +64,7 @@ terminal with `git init` typed.
 | `s` | anywhere | Put it to sleep, or wake it |
 | `e` | anywhere | Change its name, colour, role, permission mode or model |
 | `d` / `M` | anywhere | Its [branch](#its-branches)'s changes / merge its branch |
+| `b` | anywhere | The [branches waiting to be merged](#its-branches), in the stage's place (`q` back) |
 | `v` | anywhere | Its canvas and panels, the cursor in the one shown; there, the next one |
 | `V` | anywhere | The one shown, full size; again: back beside its session |
 | `I` | anywhere | Its issue |
@@ -447,6 +448,28 @@ Both take the branch it's on, or ask which when others of its hold work (a loopi
 always makes a merge commit naming the branch, even when it could fast-forward: `Merge branch
 'fix/doom-pbk.18-minimap-lanes-line-up'`. While the agent works, or has changes not committed, the branch stays for
 now, and you're told: `M` again later. A merge that conflicts stops in your checkout, for you to resolve.
+
+`b` in the app lists every branch waiting to be merged, in the stage's place; `q` gives the stage back.
+
+```text
+ BRANCHES TO MERGE   demo → main                                        4
+  Agent   Branch                        Ahead Behind  Merges     Now
+▸ ▌K ken  feat/demo-6-tokens-numbers        3      0  cleanly    done, have a look
+  ▌K ken  fix/demo-2-parser-recover         1      4  conflicts  done, have a look
+  ▌A ada  feat/demo-1-strings-escapes       2      0  cleanly    building demo-1
+  ▌M mia  feat/demo-9-comments              1      2  cleanly    forgotten
+```
+
+Each agent's branches with commits your branch hasn't, the one it's on first, then those kept from agents you've
+forgotten. Each row shows how far it's ahead of your branch and behind it, and whether it would merge cleanly or with
+conflicts, worked out without touching your checkout. It's worked out again on `gr` and when an agent's turn ends.
+
+| Key | Does |
+|---|---|
+| `RET` | Its commits, in magit's log (`main..feat/demo-6-…`) |
+| `d` / `M` | Its changes / merges it, as on a bar, without asking which; a forgotten agent's is deleted once merged |
+| `D` | Deletes it, once you say so, shown its commits; never one an agent's on |
+| `gr` / `q` | Work it out again / the stage again |
 
 ## What you do to one
 

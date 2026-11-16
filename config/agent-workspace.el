@@ -147,6 +147,20 @@ needs your OK. nil: Claude Code's own default."
 ;; fast-forward), the agent told, the branch deleted and the agent back at
 ;; rest (not while it works or has changes not committed: M again later).
 ;; Both on the branch it's on, or asked which when others of its hold work.
+;; b in the app: the branches waiting to be merged, in the stage's place
+;; (config/agent-workspace/branches.el; the issues, minimap and room stay):
+;; each crew agent's with commits the main branch hasn't (in the stage's
+;; order, the one it's on first), then those kept from forgotten agents
+;; (noted as theirs; dimmed). A row: its agent, the branch (cut with … to
+;; fit), its commits ahead of the main branch and behind it, whether it
+;; merges cleanly or with conflicts (git merge-tree: no checkout touched;
+;; nothing said with a git older than 2.38), its agent's state. RET its
+;; commits, d its changes (both where you came from, as d on a bar), M merges
+;; it (asking nothing; a forgotten agent's the same way, deleted once merged,
+;; nobody told), D deletes it (asked, its commits shown; never one checked
+;; out), gr again, q the stage back as it was. Worked out as it opens, on gr,
+;; after RET, d, M or D, and at an agent's turn's end while it's shown; never
+;; on a timer.
 
 ;; ITS NAME ON IT, IN EMACS
 ;; (config/agent-workspace/names.el) Its worktree's files belong to the
@@ -285,7 +299,8 @@ needs your OK. nil: Claude Code's own default."
 ;;                RET its pane, TAB open or fold
 ;;   both         c a new agent, i interrupt, K kill (gone home), r restart
 ;;                fresh, s sleep or wake, e edit (name, colour, role, mode,
-;;                model), d its branch's changes, M merge its branch, v its
+;;                model), d its branch's changes, M merge its branch, b the
+;;                branches to merge (see ITS BRANCHES), v its
 ;;                canvas and panels (the cursor there; again: the next one), V
 ;;                the one there full size (again: back), I its issue, L its
 ;;                loop on or off, a the next raised hand, A answer it, f + an
@@ -321,6 +336,7 @@ needs your OK. nil: Claude Code's own default."
 (load! "agent-workspace/room")
 (load! "agent-workspace/hands")
 (load! "agent-workspace/inbox")
+(load! "agent-workspace/branches")
 (load! "agent-workspace/messages")
 (load! "agent-workspace/handover")
 (load! "agent-workspace/panels")
@@ -344,7 +360,8 @@ needs your OK. nil: Claude Code's own default."
     ("Q" . agent-workspace-quit) ("?" . agent-workspace-help)
     ("#" . agent-workspace-talk) ("1" . agent-workspace-view-stage) ("2" . agent-workspace-view-room)
     ("m" . agent-workspace-minimap-toggle) ("P" . agent-workspace-inbox-pause)
-    ("T" . agent-workspace-talk-cycle) ("E" . agent-workspace-inbox-view))
+    ("T" . agent-workspace-talk-cycle) ("E" . agent-workspace-inbox-view)
+    ("b" . agent-workspace-branches))
   "The keys every buffer of the app has (see THE APP above).")
 
 (+my/agent-workspace-bind agent-workspace-issues-mode-map
@@ -389,6 +406,17 @@ needs your OK. nil: Claude Code's own default."
                             ("M-k" . agent-workspace-inbox-view-up) ("M-j" . agent-workspace-inbox-view-down)
                             ("q" . agent-workspace-inbox-view-quit) ("Q" . agent-workspace-quit)
                             ("?" . agent-workspace-help)))
+
+;; The branches to merge (b), in the stage's place: the app's keys, and these
+;; on the branch at point (see ITS BRANCHES above).
+(+my/agent-workspace-bind agent-workspace-branches-mode-map
+                          (append +my/agent-workspace-keys
+                                  '(("j" . agent-workspace-branches-next) ("k" . agent-workspace-branches-previous)
+                                    ("<down>" . agent-workspace-branches-next) ("<up>" . agent-workspace-branches-previous)
+                                    ("RET" . agent-workspace-branches-commits) ("<return>" . agent-workspace-branches-commits)
+                                    ("d" . agent-workspace-branches-review) ("M" . agent-workspace-branches-merge)
+                                    ("D" . agent-workspace-branches-delete) ("gr" . agent-workspace-branches-refresh)
+                                    ("q" . agent-workspace-branches-quit))))
 
 ;; The room: its feed, its compose line (RET sends there, in insert state too).
 (+my/agent-workspace-bind agent-workspace-room-mode-map

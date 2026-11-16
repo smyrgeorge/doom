@@ -34,6 +34,8 @@
 (declare-function agent-workspace--issues-refresh "agent-workspace/issues")
 (declare-function agent-workspace--issues-goto-agent "agent-workspace/issues")
 (declare-function agent-workspace--issues-agent-at "agent-workspace/issues")
+(declare-function agent-workspace--branches-place "agent-workspace/branches")
+(declare-function agent-workspace--branches-agent-at "agent-workspace/branches")
 (defvar persp-mode)
 (defvar *persp-hash*)
 (defvar +workspaces-main)
@@ -68,7 +70,7 @@ pane opened or folded.")
   project            ; the crew's project
   selected           ; the selected agent
   open               ; the agent whose pane is open, or nil: every pane folded
-  (view 'stage)      ; the stage (and the room beside it), or the room alone
+  (view 'stage)      ; the stage (and the room beside it), the room alone, or the branches (b) in the stage's place
   came-from          ; the workspace q goes back to (or a window configuration)
   own                ; its own buffers: the issue list, the bars, the hint
   windows            ; the stage's windows, as last laid out
@@ -450,6 +452,8 @@ left, its stage beside them, the selected agent's pane open. A popup open
          (project (agent-workspace--app-project app))
          (agents (agent-workspace--ordered project))
          (was (current-buffer))
+         ;; Shown anew (opened, come back to), not laid out again where it was.
+         (anew (not (agent-workspace--shown-p app)))
          (base (or (seq-find (lambda (window) (not (window-parameter window 'window-side)))
                              (window-list nil 'nomini))
                    (frame-first-window))))
@@ -477,6 +481,10 @@ left, its stage beside them, the selected agent's pane open. A popup open
     (setf (agent-workspace--app-windows app)
           (cond
            ((not base) nil)
+           ;; The branches to merge in the stage's place (b: branches.el).
+           ((and (eq (agent-workspace--app-view app) 'branches) (fboundp 'agent-workspace--branches-place))
+            (agent-workspace--branches-place app base anew)
+            nil)
            (agents
             (agent-workspace--stack base agents (agent-workspace--app-open app)))
            (t (set-window-buffer base (agent-workspace--hint-buffer project))
@@ -808,12 +816,14 @@ opened, its pane open, the cursor in it."
         (window-parameter window 'agent-workspace-side))))
 
 (defun agent-workspace--current ()
-  "The agent the command is about: the bar's, the pane's, the issue's or
-the minimap's lane's at point, the canvas's or panel's, else the selected one."
+  "The agent the command is about: the bar's, the pane's, the issue's, the
+minimap's lane's or the branch's at point, the canvas's or panel's, else the
+selected one."
   (or (buffer-local-value 'agent-workspace--bar-of (current-buffer))
       (agent-workspace-buffer-agent)
       (get-text-property (point) 'agent-workspace-minimap-agent)
       (and (fboundp 'agent-workspace--issues-agent-at) (agent-workspace--issues-agent-at))
+      (and (fboundp 'agent-workspace--branches-agent-at) (agent-workspace--branches-agent-at))
       (agent-workspace--side-agent (current-buffer))
       (when-let* ((app (agent-workspace--here)))
         (agent-workspace--app-selected app))
@@ -1082,7 +1092,7 @@ what it asks."
   "The app's keys (not those of what's off: the inbox, agents talking)."
   (interactive)
   (message "%s" (substitute-command-keys
-                 (concat "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · v canvas, panels · V full size · I issue · L loop · a next hand · f+initial · m minimap · "
+                 (concat "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · b branches to merge · v canvas, panels · V full size · I issue · L loop · a next hand · f+initial · m minimap · "
                          (if (or (bound-and-true-p agent-workspace-outside-events)
                                  (bound-and-true-p agent-workspace-agents-talk))
                              "P pause events · E inbox · "

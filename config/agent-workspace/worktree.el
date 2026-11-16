@@ -337,17 +337,22 @@ branch.BRANCH.agent-workspace-agent): forgetting NAME finds it."
   (let ((default-directory project))
     (process-file "git" nil nil nil "config" (concat "branch." branch ".agent-workspace-agent") name)))
 
-(defun agent-workspace--noted-branches (project name)
-  "PROJECT's branches noted as the agent NAME's work, that are there."
+(defun agent-workspace--branch-notes (project)
+  "PROJECT's branches noted as an agent's work, that are there: ((BRANCH .
+NAME)...), as git's config lists them."
   (let ((default-directory project)
         (there (agent-workspace--branches project)))
-    (seq-filter (lambda (branch) (member branch there))
+    (seq-filter (lambda (note) (member (car note) there))
                 (delq nil (mapcar (lambda (line)
                                     (and (string-match "\\`branch\\.\\(.+\\)\\.agent-workspace-agent \\(.*\\)\\'" line)
-                                         (equal (match-string 2 line) name)
-                                         (match-string 1 line)))
+                                         (cons (match-string 1 line) (match-string 2 line))))
                                   (agent-workspace--git-lines "config" "--get-regexp"
                                                               "^branch\\..*\\.agent-workspace-agent$"))))))
+
+(defun agent-workspace--noted-branches (project name)
+  "PROJECT's branches noted as the agent NAME's work, that are there."
+  (mapcar #'car (seq-filter (lambda (note) (equal (cdr note) name))
+                            (agent-workspace--branch-notes project))))
 
 (defun agent-workspace--branch-holder (project branch)
   "The folder of PROJECT's worktree BRANCH is checked out in (its main
@@ -669,6 +674,8 @@ hasn't, else what you choose, shown what it holds."
 ;; ====== REVIEW AND MERGE ======
 
 (declare-function magit-diff-range "magit-diff")
+(declare-function magit-log-other "magit-log")
+(declare-function magit-log-arguments "magit-log")
 
 (defun agent-workspace-read-branch (agent prompt)
   "One of AGENT's branches, read with PROMPT (a format: AGENT's name): the
@@ -690,14 +697,20 @@ the main checkout's branch (MAIN...BRANCH): in magit, else as a diff."
   (interactive (let ((agent (agent-workspace-read-agent "Review the branch of: ")))
                  (list agent (agent-workspace-read-branch agent "Review %s's branch: "))))
   (agent-workspace--branch-sync agent)
-  (let* ((project (agent-workspace-agent-project agent))
-         (branch (or branch (agent-workspace-agent-branch agent)
-                     (user-error "%s is on no branch" (agent-workspace-agent-name agent))))
-         (range (concat (agent-workspace-main-branch project) "..." branch))
-         (default-directory project))
+  (agent-workspace-review-branch (agent-workspace-agent-project agent)
+                                 (or branch (agent-workspace-agent-branch agent)
+                                     (user-error "%s is on no branch" (agent-workspace-agent-name agent)))
+                                 (agent-workspace-agent-name agent)))
+
+(defun agent-workspace-review-branch (project branch name)
+  "Show what PROJECT's BRANCH, the agent NAME's (one forgotten too: no agent
+needed), changed since it left the main checkout's branch (MAIN...BRANCH):
+in magit, else as a diff."
+  (let ((range (concat (agent-workspace-main-branch project) "..." branch))
+        (default-directory project))
     (if (require 'magit nil t)
         (magit-diff-range range)
-      (let ((buffer (get-buffer-create (format "*%s's changes*" (agent-workspace-agent-name agent)))))
+      (let ((buffer (get-buffer-create (format "*%s's changes*" name))))
         (with-current-buffer buffer
           (let ((inhibit-read-only t))
             (erase-buffer)
@@ -706,6 +719,35 @@ the main checkout's branch (MAIN...BRANCH): in magit, else as a diff."
           (setq buffer-read-only t)
           (goto-char (point-min)))
         (pop-to-buffer buffer)))))
+
+(defun agent-workspace-branch-commits (project branch name)
+  "Show PROJECT's BRANCH's commits (the agent NAME's, forgotten maybe) the
+main checkout's branch hasn't (MAIN..BRANCH): magit's log, else git log's."
+  (let ((range (concat (agent-workspace-main-branch project) ".." branch))
+        (default-directory project))
+    (if (require 'magit nil t)
+        (apply #'magit-log-other (list range) (magit-log-arguments))
+      (let ((buffer (get-buffer-create (format "*%s's commits*" name))))
+        (with-current-buffer buffer
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (process-file "git" nil t nil "log" range))
+          (special-mode)
+          (setq default-directory project)
+          (goto-char (point-min)))
+        (pop-to-buffer buffer)))))
+
+(defun agent-workspace--merge-in (project branch)
+  "BRANCH merged into PROJECT's main checkout, always with a merge commit
+naming it (--no-ff: never a fast-forward, so its commits stay told apart
+from yours). Non-nil if it merged; stopped on conflicts, said, left to you
+in the main checkout."
+  (let ((default-directory project))
+    (with-temp-buffer
+      (or (eql 0 (process-file "git" nil t nil "merge" "--no-ff" "--no-edit" branch))
+          (progn
+            (message "Merging %s stopped: %s" branch (string-trim (buffer-string)))
+            nil)))))
 
 (defun agent-workspace-merge (agent &optional branch)
   "Merge AGENT's BRANCH (default: the one it's on) into the main checkout's
@@ -728,41 +770,49 @@ in the main checkout. Return non-nil if it merged."
          (dir (agent-workspace--worktree-live agent))
          (on (and dir (equal (agent-workspace--worktree-head dir) branch)))
          (default-directory project))
-    (with-temp-buffer
-      (if (not (eql 0 (process-file "git" nil t nil "merge" "--no-ff" "--no-edit" branch)))
-          (progn
-            (message "Merging %s stopped: %s" branch (string-trim (buffer-string)))
-            nil)
-        (let ((why (and on (if (memq (agent-workspace-agent-state agent) '(working hand))
-                               (format "%s is working" name)
-                             (agent-workspace-branch-blocker agent)))))
-          (cond
-           (why)
-           ;; Back at rest: the branch it leaves, merged, deleted.
-           (on (agent-workspace-rest agent))
-           ;; agent/NAME, not checked out: at the tip, merged.
-           ((equal branch rest)
-            (unless (agent-workspace--branch-holder project rest)
-              (agent-workspace--git "branch" "--force" rest main)))
-           (t (agent-workspace--branch-drop project branch)))
-          (let* ((gone (and (not why) (not (equal branch rest)) (not (agent-workspace--branch-p branch))))
-                 (said (cond
-                        (why (format "; %s kept for now (M again later): %s" branch why))
-                        ((equal branch rest) (format ": %s at its tip" rest))
-                        ((and gone on) (format ": %s deleted, %s rests on %s" branch name rest))
-                        (gone (format ": %s deleted" branch))
-                        (t ""))))
-            (when (agent-workspace-live-p agent)
-              (agent-workspace-send
-               agent (format "The user merged your branch %s into %s%s" branch main
-                             (cond
-                              ((and gone on)
-                               (format " and deleted it: your worktree is back on %s, at %s's tip. Your \
+    (when (agent-workspace--merge-in project branch)
+      (let ((why (and on (if (memq (agent-workspace-agent-state agent) '(working hand))
+                             (format "%s is working" name)
+                           (agent-workspace-branch-blocker agent)))))
+        (cond
+         (why)
+         ;; Back at rest: the branch it leaves, merged, deleted.
+         (on (agent-workspace-rest agent))
+         ;; agent/NAME, not checked out: at the tip, merged.
+         ((equal branch rest)
+          (unless (agent-workspace--branch-holder project rest)
+            (agent-workspace--git "branch" "--force" rest main)))
+         (t (agent-workspace--branch-drop project branch)))
+        (let* ((gone (and (not why) (not (equal branch rest)) (not (agent-workspace--branch-p branch))))
+               (said (cond
+                      (why (format "; %s kept for now (M again later): %s" branch why))
+                      ((equal branch rest) (format ": %s at its tip" rest))
+                      ((and gone on) (format ": %s deleted, %s rests on %s" branch name rest))
+                      (gone (format ": %s deleted" branch))
+                      (t ""))))
+          (when (agent-workspace-live-p agent)
+            (agent-workspace-send
+             agent (format "The user merged your branch %s into %s%s" branch main
+                           (cond
+                            ((and gone on)
+                             (format " and deleted it: your worktree is back on %s, at %s's tip. Your \
 next work gets a branch of its own." rest main))
-                              ((and (not why) (equal branch rest))
-                               (format ": it's at %s's tip now. Your next work gets a branch of its own." main))
-                              (gone " and deleted it.")
-                              (t ".")))
-               :submit t :no-branch t))
-            (message "Merged %s into %s%s" branch main said)
-            t))))))
+                            ((and (not why) (equal branch rest))
+                             (format ": it's at %s's tip now. Your next work gets a branch of its own." main))
+                            (gone " and deleted it.")
+                            (t ".")))
+             :submit t :no-branch t))
+          (message "Merged %s into %s%s" branch main said)
+          t)))))
+
+(defun agent-workspace-merge-kept (project branch)
+  "Merge PROJECT's BRANCH, kept from an agent no longer in the crew, into
+the main checkout's branch as `agent-workspace-merge' does (--no-ff, a
+merge commit naming it), no agent told. Merged, it's deleted (unless a
+worktree has it: a forgotten agent's kept). A merge stopped on conflicts
+is left to you. Return non-nil if it merged."
+  (let ((main (agent-workspace-main-branch project)))
+    (when (agent-workspace--merge-in project branch)
+      (let ((gone (agent-workspace--branch-drop project branch)))
+        (message "Merged %s into %s%s" branch main (if gone (format ": %s deleted" branch) ""))
+        t))))
