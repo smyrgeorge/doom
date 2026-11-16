@@ -961,6 +961,59 @@ after that turn, doesn't."
     (should-not (+test-awr2--queue ada))
     (should-not (+test-awr2--marks ada))))
 
+;; Steered instead (agent-shell's reroute): the stand-in steers, as agents
+;; saying they can do (its answer: examples/agent-workspace/stand-in.el).
+(defun +test-awr2--steer (agent answer)
+  "agent-shell's override at an empty prompt in AGENT's session, while it
+works: its last queued prompt offered as a steer instead, ANSWER (non-nil:
+yes) given; AGENT saying it can steer."
+  (with-current-buffer (agent-workspace-agent-buffer agent)
+    (map-put! agent-shell--state :supports-steering t)
+    (goto-char (point-max))
+    (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) answer)))
+      (call-interactively #'agent-shell-submit-override))))
+
+(ert-deftest agent-workspace-room/a-steer-declined ()
+  "The app's prompt queued, then steered into the turn instead (agent-shell's
+reroute) and declined: dropped, the turn interrupted; its mark goes with it,
+and the same text typed after shows in the room."
+  (+test-awr2--real "declined"
+    (agent-workspace-send ada "hold" :submit t)
+    (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state ada) 'working))))
+    (should (eq (agent-workspace-send ada "the app's next, decline it" :submit t) 'queued))
+    (+test-awr2--steer ada t)
+    (should-not (+test-awr2--queue ada))
+    (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state ada) 'desk))))
+    (should (string-search "Steered prompt declined"
+                           (with-current-buffer (agent-workspace-agent-buffer ada) (buffer-string))))
+    (should-not (+test-awr2--marks ada))
+    (+test-awr2--type ada "the app's next, decline it")
+    (should (+test-awr2--answered project "ok: the app's next, decline it"))
+    (should (equal (+test-awr2--yours project) '(("ada" "the app's next, decline it"))))))
+
+(ert-deftest agent-workspace-room/a-steer-injected ()
+  "The app's prompt queued, offered as a steer instead: no, it stays queued,
+its mark with it; yes, injected into the turn: said submitted, not yours
+(not in the room), its mark taken. The same text typed after shows."
+  (+test-awr2--real "injected"
+    (agent-workspace-send ada "hold" :submit t)
+    (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state ada) 'working))))
+    (should (eq (agent-workspace-send ada "the app's next, steered" :submit t) 'queued))
+    (should-error (+test-awr2--steer ada nil) :type 'user-error)
+    (should (equal (+test-awr2--queue ada) '("the app's next, steered")))
+    (should (equal (+test-awr2--marks ada) '("the app's next, steered")))
+    (+test-awr2--steer ada t)
+    (should (+test-awr2--until (lambda () (string-search "[steer] the app's next, steered"
+                                                         (with-current-buffer (agent-workspace-agent-buffer ada)
+                                                           (buffer-string))))))
+    (should-not (+test-awr2--marks ada))
+    (should-not (+test-awr2--yours project))
+    (agent-workspace-interrupt ada)
+    (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state ada) 'desk))))
+    (+test-awr2--type ada "the app's next, steered")
+    (should (+test-awr2--answered project "ok: the app's next, steered"))
+    (should (equal (+test-awr2--yours project) '(("ada" "the app's next, steered"))))))
+
 (ert-deftest agent-workspace-room/an-answer-on-a-canvas ()
   "An answer you give on an agent's canvas (Agent UI's Answer): yours, its
 first line."

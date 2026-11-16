@@ -255,7 +255,9 @@ agent raises its hand, asking it. In `agent-ui-question-waiting-functions'."
 not submitted yet. The room says what you send in a session as yours
 \(room.el), not these: it said them already (a message from its compose
 line), or they aren't yours (an issue given, a loop's next one, an event).
-Those of a queue removed go (`agent-workspace--queue-removed-a').")
+Those of a queue removed go (`agent-workspace--queue-removed-a'), and those
+of a prompt steered, never said submitted
+\(`agent-workspace--steer-request-a').")
 
 (cl-defun agent-workspace-send (agent text &key submit no-branch)
   "Put TEXT in AGENT's prompt; SUBMIT: send it. Working, it gets it after
@@ -342,6 +344,13 @@ still waits in the queue isn't of PROMPT, whatever its text."
 ;; nothing says so (no event, no hook): the marks of the app's prompts in it
 ;; go then, or a message of yours with the same text would be taken for one
 ;; (not shown in the room).
+(defun agent-workspace--sent-drop (buffer prompt)
+  "The app's mark of PROMPT (its very string) in the session BUFFER gone, if
+it's there: PROMPT was never sent, or never said submitted."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (setq agent-workspace--sent (cl-remove prompt agent-workspace--sent :test #'eq :count 1)))))
+
 (defun agent-workspace--queue-removed-a (fn &rest args)
   "agent-shell's queued prompts removed: the marks of the app's among them go
 \(see `agent-workspace--sent'). Around `agent-shell-prompt-queue-remove'."
@@ -353,12 +362,62 @@ still waits in the queue isn't of PROMPT, whatever its text."
     (unwind-protect (apply fn args)
       (pcase-dolist (`(,buffer . ,queued) before)
         (when (buffer-live-p buffer)
-          (with-current-buffer buffer
-            (dolist (prompt (seq-difference queued (agent-workspace--queued) #'eq))
-              (setq agent-workspace--sent (cl-remove prompt agent-workspace--sent :test #'eq :count 1)))))))))
+          (dolist (prompt (seq-difference queued (with-current-buffer buffer (agent-workspace--queued)) #'eq))
+            (agent-workspace--sent-drop buffer prompt)))))))
 
 (with-eval-after-load 'agent-shell-prompt-queue
   (advice-add 'agent-shell-prompt-queue-remove :around #'agent-workspace--queue-removed-a))
+
+;; A QUEUED PROMPT STEERED INSTEAD
+;; agent-shell's override at an empty prompt while the agent works (C-u RET)
+;; offers the last queued prompt as a steer instead
+;; (`agent-shell-busy-submit-reroute-queue-to-steer'): out of the queue, it's
+;; sent into the running turn. Injected, or left to be submitted, it's said
+;; submitted (input-submitted takes its mark). Declined, the turn interrupted,
+;; it's dropped; started as a turn of its own, it's never said submitted; and
+;; nothing says either (no event, no hook). A mark left would take a message
+;; of yours with the same text (not shown in the room): an app's prompt
+;; steered so loses its mark once the agent has answered the steer (or the
+;; request failed), if input-submitted didn't take it then.
+(defvar agent-workspace--steering nil
+  "While agent-shell steers its last queued prompt instead, an app's: (PROMPT
+. SESSION), PROMPT the very string the app queued.")
+
+(defun agent-workspace--reroute-a (fn &rest args)
+  "agent-shell steering its last queued prompt instead: an app's, noted for
+`agent-workspace--steer-request-a'. Around
+`agent-shell-busy-submit-reroute-queue-to-steer' (run in the session)."
+  (let ((agent-workspace--steering
+         (when-let* ((last (car (last (agent-workspace--queued))))
+                     ((memq last agent-workspace--sent)))
+           (cons last (current-buffer)))))
+    (apply fn args)))
+
+(defun agent-workspace--steer-request-a (fn &rest args)
+  "The steering request of an app's prompt (`agent-workspace--steering'):
+once the agent answers it (or it fails), after agent-shell has acted on the
+answer, the prompt's mark goes if nothing took it. Around
+`agent-shell--send-request'."
+  (if-let* ((steering agent-workspace--steering)
+            ((equal (map-elt (plist-get args :request) :method) "_session/steering")))
+      (let ((success (plist-get args :on-success))
+            (failure (plist-get args :on-failure))
+            (done (lambda () (agent-workspace--sent-drop (cdr steering) (car steering)))))
+        (setq agent-workspace--steering nil)
+        ;; The first of a key wins: these over the ones in ARGS.
+        (apply fn :on-success (lambda (response)
+                                (unwind-protect (when success (funcall success response))
+                                  (funcall done)))
+               :on-failure (lambda (error raw)
+                             (unwind-protect (when failure (funcall failure error raw))
+                               (funcall done)))
+               args))
+    (apply fn args)))
+
+(with-eval-after-load 'agent-shell-prompt-queue
+  (advice-add 'agent-shell-busy-submit-reroute-queue-to-steer :around #'agent-workspace--reroute-a))
+(with-eval-after-load 'agent-shell
+  (advice-add 'agent-shell--send-request :around #'agent-workspace--steer-request-a))
 
 ;; ====== STOPPING ======
 ;; A session's buffer killed: agent-shell shuts its agent down (acp.el: the

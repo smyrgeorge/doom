@@ -28,6 +28,8 @@
 ;;   "fail"        fails the prompt (an error)
 ;;   "exit"        exits, as an agent that crashed
 ;;   else          answers "ok: PROMPT" and ends its turn
+;; A prompt steered into its turn (_session/steering) is injected, or declined
+;; when it says "decline".
 ;;
 ;; With MOCK_ACP_LOG set, every message it gets is appended to that file (a
 ;; JSON object a line: its agent, cwd, method, params), its environment when
@@ -180,6 +182,13 @@ batch (the stand-in would exit)."
       ("session/set_mode" (mock-acp--result id '()))
       ("session/set_model" (mock-acp--result id '()))
       ("session/prompt" (mock-acp--prompt id params))
+      ("_session/steering"
+       ;; A prompt steered into the running turn (agent-shell sends one only
+       ;; to an agent saying it can: a test says so for it): declined when it
+       ;; says "decline", else injected.
+       (mock-acp--result id (list :outcome (if (string-match-p "decline" (mock-acp--prompt-text params))
+                                               "failed"
+                                             "injected"))))
       ("session/cancel"
        (when mock-acp--asking
          (setq mock-acp--holding (cdr mock-acp--asking)
