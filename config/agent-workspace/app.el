@@ -75,6 +75,7 @@ pane opened or folded.")
   frame              ; the frame it's laid out in
   plan               ; what decided its layout
   sizes              ; its frame's windows' sizes, as laid out
+  others             ; its frame's windows that aren't its own (a popup...), as last seen
   resizes            ; when it was last laid out after a resize
   tabs               ; ((AGENT TAB...)...): the tabs each agent's side area showed, the last first
   full)              ; the agent whose open pane shows its tab full size, or nil
@@ -143,6 +144,21 @@ made: the stage's order, which never changes."
   (let ((frame (agent-workspace--app-frame app)))
     (and (frame-live-p frame)
          (equal (frame-parameter frame 'agent-workspace) (agent-workspace--app-project app)))))
+
+(defun agent-workspace--own-window-p (window app)
+  "Non-nil if WINDOW is one of APP's own: its issue list, its minimap, its
+room, a pane, a bar or a side area of its stage."
+  (or (window-parameter window 'agent-workspace-pane)
+      (window-parameter window 'agent-workspace-room)
+      (window-parameter window 'agent-workspace-side)
+      (memq (window-buffer window) (agent-workspace--app-buffers (agent-workspace--app-project app)))))
+
+(defun agent-workspace--others (app &optional frame)
+  "FRAME's windows (the selected frame's) that aren't APP's own: a popup
+\(the *Messages* an echo area click opens, help, *Warnings*), a window
+something else split off."
+  (seq-remove (lambda (window) (agent-workspace--own-window-p window app))
+              (window-list frame 'nomini (frame-first-window frame))))
 
 ;; ====== ITS WORKSPACE ======
 
@@ -407,9 +423,24 @@ size only while its pane is the open one, with a tab to show."
                               (cons (car entry) tabs)))
                           (agent-workspace--app-tabs app)))))
 
+(defun agent-workspace--clear (app base)
+  "The selected frame's windows deleted but BASE and the side windows that
+aren't APP's own (a popup: the *Messages* an echo area click opens, help,
+*Warnings*): those stay as they are, the app laid out in the room they
+leave."
+  (let ((ignore-window-parameters t)
+        (kept (seq-filter (lambda (window) (window-parameter window 'window-side))
+                          (agent-workspace--others app))))
+    (if (not kept)
+        (delete-other-windows base)
+      (dolist (window (window-list nil 'nomini))
+        (unless (or (eq window base) (memq window kept) (not (window-live-p window)))
+          (delete-window window))))))
+
 (defun agent-workspace-layout (&optional app)
   "APP (the one here) laid out anew in the selected frame: its issues on the
-left, its stage beside them, the selected agent's pane open."
+left, its stage beside them, the selected agent's pane open. A popup open
+\(see `agent-workspace--clear') stays, the app laid out beside it."
   (interactive)
   (let* ((app (or app (agent-workspace--here-or-error)))
          (project (agent-workspace--app-project app))
@@ -421,8 +452,7 @@ left, its stage beside them, the selected agent's pane open."
     (agent-workspace--settle app agents)
     (set-frame-parameter nil 'agent-workspace project)
     (setf (agent-workspace--app-frame app) (selected-frame))
-    (let ((ignore-window-parameters t))
-      (delete-other-windows base))
+    (agent-workspace--clear app base)
     (dolist (parameter '(window-side agent-workspace-room agent-workspace-pane agent-workspace-side))
       (set-window-parameter base parameter nil))
     (set-window-dedicated-p base nil)
@@ -453,7 +483,8 @@ left, its stage beside them, the selected agent's pane open."
                           (delq nil (mapcar #'agent-workspace-agent-buffer agents))))
       (agent-workspace--persp-add project buffer))
     (setf (agent-workspace--app-plan app) (agent-workspace--plan app)
-          (agent-workspace--app-sizes app) (agent-workspace--sizes-now (selected-frame)))
+          (agent-workspace--app-sizes app) (agent-workspace--sizes-now (selected-frame))
+          (agent-workspace--app-others app) (agent-workspace--others app))
     (agent-workspace--issues-redraw project)
     (when-let* ((window (get-buffer-window was)))
       (select-window window))
@@ -482,7 +513,8 @@ when the stage isn't as it was."
           (setf (agent-workspace--app-windows app)
                 (agent-workspace--stack first agents (agent-workspace--app-open app)))
           (setf (agent-workspace--app-plan app) (agent-workspace--plan app)
-                (agent-workspace--app-sizes app) (agent-workspace--sizes-now (selected-frame)))
+                (agent-workspace--app-sizes app) (agent-workspace--sizes-now (selected-frame))
+                (agent-workspace--app-others app) (agent-workspace--others app))
           (select-window (cond ((window-live-p was) was)
                                ((get-buffer-window buffer))
                                (t (or (get-buffer-window (agent-workspace--issues-buffer
@@ -582,18 +614,31 @@ its `kill-buffer-hook'."
 
 (defun agent-workspace--resized-h (frame)
   "FRAME, an app's, resized or a border dragged: laid out again, tiled; after
-3 layouts in 3 seconds the sizes are taken as they are (never a loop). In
-`window-size-change-functions'."
+3 layouts in 3 seconds the sizes are taken as they are (never a loop). A
+window not the app's coming (a popup) is no resize; one going, laid out
+again once. In `window-size-change-functions'."
   (when-let* ((app (agent-workspace--app (frame-parameter frame 'agent-workspace))))
     (let ((now (agent-workspace--sizes-now frame))
           (was (agent-workspace--app-sizes app)))
-      (cond
-       ((equal now was))
-       ;; The echo area grew or shrank (a message on several lines): Emacs
-       ;; gave or took its rows; nothing dragged.
-       ((and (equal (car now) (car was)) (not (equal (cadr now) (cadr was))))
-        (setf (agent-workspace--app-sizes app) now))
-       (t (agent-workspace--resized app frame))))))
+      (unless (equal now was)
+        (let ((others (agent-workspace--others app frame))
+              (before (agent-workspace--app-others app)))
+          (cond
+           ;; A window not the app's came or went (a popup: the *Messages* an
+           ;; echo area click opens, help...): Emacs took the app's rows for
+           ;; it, or gave them back; nothing dragged (taken for a drag, the
+           ;; layout after it deleted the popup at once). One gone: the app
+           ;; laid out again, once, its windows as they were before it came.
+           ((not (seq-set-equal-p others before #'eq))
+            (setf (agent-workspace--app-others app) others
+                  (agent-workspace--app-sizes app) now)
+            (when (seq-difference before others #'eq)
+              (agent-workspace--relayout-soon app frame)))
+           ;; The echo area grew or shrank (a message on several lines): Emacs
+           ;; gave or took its rows; nothing dragged.
+           ((and (equal (car now) (car was)) (not (equal (cadr now) (cadr was))))
+            (setf (agent-workspace--app-sizes app) now))
+           (t (agent-workspace--resized app frame))))))))
 
 (defun agent-workspace--resized (app frame)
   "APP's FRAME resized, or a border dragged: laid out again (see
@@ -603,11 +648,20 @@ its `kill-buffer-hook'."
     (if (>= (length recent) 3)
         (setf (agent-workspace--app-sizes app) (agent-workspace--sizes-now frame))
       (setf (agent-workspace--app-resizes app) (cons (float-time) recent))
-      (run-at-time 0.2 nil (lambda ()
-                             (when (and (frame-live-p frame) (agent-workspace--shown-p app)
-                                        (not (active-minibuffer-window)))
-                               (with-selected-frame frame
-                                 (agent-workspace-layout app))))))))
+      (agent-workspace--relayout-soon app frame))))
+
+(defun agent-workspace--relayout-soon (app frame)
+  "APP laid out again in FRAME in 0.2 s (a drag's last move), if it's still
+shown there and the minibuffer isn't active."
+  (run-at-time 0.2 nil #'agent-workspace--relayout app frame))
+
+(defun agent-workspace--relayout (app frame)
+  "APP laid out again in FRAME, if it's still shown there and the minibuffer
+isn't active (see `agent-workspace--relayout-soon')."
+  (when (and (frame-live-p frame) (agent-workspace--shown-p app)
+             (not (active-minibuffer-window)))
+    (with-selected-frame frame
+      (agent-workspace-layout app))))
 
 (defun agent-workspace--resize-own (frame fun)
   "FUN called to resize FRAME's windows, the app's own change (the room's

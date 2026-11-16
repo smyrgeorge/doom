@@ -360,6 +360,98 @@ left, the crew going on."
       (should (get-buffer-window file))
       (should (agent-workspace-agents project)))))
 
+;; ====== A WINDOW NOT ITS OWN: A POPUP ======
+
+(defun +test-awa--relayouts ()
+  "The app's layouts waiting (after a border dragged, a popup gone), run now
+as their 0.2 s would: how many there were."
+  (let ((timers (seq-filter (lambda (timer) (eq (timer--function timer) #'agent-workspace--relayout))
+                            timer-list)))
+    (dolist (timer timers)
+      (cancel-timer timer)
+      (apply (timer--function timer) (timer--args timer)))
+    (length timers)))
+
+(defun +test-awa--issues-window (project)
+  "PROJECT's issue list's window."
+  (get-buffer-window (agent-workspace--issues-buffer project)))
+
+(ert-deftest agent-workspace-app/a-window-not-its-own ()
+  "A side window not the app's appearing (a popup) is no resize: nothing
+laid out, it stays; laid out again (gr), the app keeps it, its own windows
+in the room it leaves; a border dragged with it open still lays the app out
+again, and it stays. Gone: its rows back to the app, laid out as before,
+once."
+  (+test-awa "others"
+    (+test-awa--crew '("ada" "builder") '("ken" "builder"))
+    (let* ((app (agent-workspace-open t))
+           (laid-out (+test-awa--windows))
+           (other (get-buffer-create "*other*"))
+           (window (display-buffer-in-side-window other '((side . bottom) (window-height . 10)))))
+      (should-not (agent-workspace--own-window-p window app))
+      (should (seq-every-p (lambda (w) (agent-workspace--own-window-p w app))
+                           (remq window (window-list nil 'nomini))))
+      ;; Emacs gave it the app's rows: not a border dragged.
+      (agent-workspace--resized-h (selected-frame))
+      (should (= (+test-awa--relayouts) 0))
+      (should-not (agent-workspace--app-resizes app))
+      (should (eq (window-buffer window) other))
+      ;; Laid out again: it's kept, the app above it.
+      (agent-workspace-layout app)
+      (should (window-live-p window))
+      (should (eq (window-buffer window) other))
+      (should (= (window-total-height window) 10))
+      (should (equal (mapcar #'car (+test-awa--windows))
+                     '("*issues · others*" "ada · builder" " *bar · ken · others*" "*other*")))
+      (should (= (window-total-width (+test-awa--issues-window project)) 50))
+      (should (= (window-total-height (+test-awa--issues-window project)) (- (+test-awa--height) 10)))
+      ;; A border dragged with it open: laid out again, it stays.
+      (window-resize (+test-awa--issues-window project) 6 t)
+      (agent-workspace--resized-h (selected-frame))
+      (should (= (+test-awa--relayouts) 1))
+      (should (window-live-p window))
+      (should (= (window-total-width (+test-awa--issues-window project)) 50))
+      ;; Gone: laid out as before it came, once.
+      (delete-window window)
+      (agent-workspace--resized-h (selected-frame))
+      (should (= (+test-awa--relayouts) 1))
+      (should (equal (+test-awa--windows) laid-out))
+      (agent-workspace--resized-h (selected-frame))
+      (should (= (+test-awa--relayouts) 0)))))
+
+(declare-function +popup/quit-window "ui/popup/+hacks")
+
+(ert-deftest agent-workspace-app/doom-popups-stay ()
+  "In the app, Doom's popups stay until closed: the *Messages* a click on
+the echo area opens, help (C-h f), *Warnings*; through a layout (gr) too.
+Closed (q), their rows go back to the app, laid out as before."
+  (+test-with-doom-popups
+    (+test-awa "popups"
+      (+test-awa--crew '("ada" "builder"))
+      (let ((app (agent-workspace-open t))
+            (laid-out (+test-awa--windows)))
+        (dolist (open (list (lambda () (view-echo-area-messages) "*Messages*")
+                            (lambda () (describe-function 'car) "*Help*")
+                            (lambda () (display-buffer (get-buffer-create "*Warnings*")) "*Warnings*")))
+          (let* ((name (funcall open))
+                 (popup (get-buffer-window name)))
+            (should popup)
+            (should (window-parameter popup 'popup))
+            (should (eq (window-parameter popup 'window-side) 'bottom))
+            ;; Its rows Emacs took: nothing laid out, it stays.
+            (agent-workspace--resized-h (selected-frame))
+            (should (= (+test-awa--relayouts) 0))
+            (should (eq (get-buffer-window name) popup))
+            ;; gr: it stays.
+            (agent-workspace-layout app)
+            (should (eq (get-buffer-window name) popup))
+            ;; q: gone, the app as it was.
+            (with-selected-window popup (+popup/quit-window))
+            (should-not (window-live-p popup))
+            (agent-workspace--resized-h (selected-frame))
+            (should (= (+test-awa--relayouts) 1))
+            (should (equal (+test-awa--windows) laid-out))))))))
+
 ;; ====== ITS CANVAS AND PANELS ======
 
 (defconst +test-awa--panel

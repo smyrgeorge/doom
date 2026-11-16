@@ -237,6 +237,26 @@ as diff-hl loads: the rest of its setup was skipped, an error.)"
       (error "No Doom module %s %s" group module))
     (load file nil t)))
 
+(defvar +popup-mode)
+(declare-function +popup-mode "ui/popup/config")
+
+(defmacro +test-with-doom-popups (&rest body)
+  "BODY with Doom's popups on (its :ui popup module loaded the first time,
+its rules as init.el's flags have them): *Messages*, *Help*... in a window
+at the bottom. Off after."
+  (declare (indent 0))
+  `(progn
+     (unless (fboundp '+popup-buffer)
+       (let ((dir (expand-file-name "sources/doom+/modules/ui/popup/autoload/" +test-doom-emacs-dir)))
+         (unless (file-directory-p dir)
+           (setq dir (expand-file-name "modules/ui/popup/autoload/" +test-doom-emacs-dir)))
+         (load (expand-file-name "settings.el" dir) nil t)
+         (load (expand-file-name "popup.el" dir) nil t))
+       (+test-load-module :ui 'popup))
+     (+popup-mode 1)
+     (unwind-protect (progn ,@body)
+       (+popup-mode -1))))
+
 ;; Loaded in a running Emacs (Doom, config/emacs/compile.el compile): otherwise
 ;; code let-binding `byte-compile-warnings' before it's special (doom-modeline's
 ;; segments) fails as bytecomp loads in it.

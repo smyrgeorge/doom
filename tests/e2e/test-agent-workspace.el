@@ -94,6 +94,39 @@ pane's header line is the agent's."
                       3)
       (should (= (window-total-height (get-buffer-window (agent-workspace--bar-buffer sam))) 1)))))
 
+(defun +test-e2e-aw--windows ()
+  "The frame's windows: (BUFFER-NAME WIDTH HEIGHT), in order."
+  (mapcar (lambda (w) (list (buffer-name (window-buffer w)) (window-total-width w) (window-total-height w)))
+          (window-list nil 'nomini (frame-first-window))))
+
+(declare-function +popup/quit-window "ui/popup/+hacks")
+
+(ert-deftest e2e-agent-workspace/a-popup-stays ()
+  "A click on the echo area opens *Messages* (Doom's popup, at the bottom):
+it stays, the app not laid out again for it; a border dragged meanwhile
+tiles the stage again, the popup kept. q closes it: its rows back to the
+app, laid out as before."
+  (+test-with-doom-popups
+    (+test-e2e-aw
+      (should (eq (lookup-key minibuffer-inactive-mode-map [mouse-1]) #'view-echo-area-messages))
+      (let ((app (agent-workspace--app project))
+            (laid-out (+test-e2e-aw--windows)))
+        (view-echo-area-messages)
+        (+test-sleep 1)
+        (should (get-buffer-window "*Messages*"))
+        (should-not (agent-workspace--app-resizes app))
+        ;; A border dragged, the popup open: tiled again, it stays.
+        (ignore-errors (window-resize (get-buffer-window (agent-workspace--bar-buffer sam)) 3))
+        (should (+test-wait-for (lambda ()
+                                  (when-let* ((bar (get-buffer-window (agent-workspace--bar-buffer sam))))
+                                    (= (window-total-height bar) 1)))
+                                3))
+        (should (get-buffer-window "*Messages*"))
+        ;; q: gone, the app as it was.
+        (with-selected-window (get-buffer-window "*Messages*")
+          (+popup/quit-window))
+        (should (+test-wait-for (lambda () (equal (+test-e2e-aw--windows) laid-out)) 3))))))
+
 (ert-deftest e2e-agent-workspace/quit ()
   "Q: the crew closed at once, its windows and buffers gone, the frame back
 to what it was."
