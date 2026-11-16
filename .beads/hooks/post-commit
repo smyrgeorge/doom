@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# Sync this repo's issues with their Dolt remote (sync.remote in
+# .beads/config.yaml): bd sync pulls, then pushes. A commit usually finishes
+# a ticket, so the other clones see it closed.
+#
+# Skipped while git replays commits (a rebase, a cherry-pick or revert of
+# several), for bd's own commits of its config ("bd: ..."), made while it
+# holds the database, and with BEADS_NO_COMMIT_SYNC=1. A sync that fails
+# never fails the commit: it says so, and `bd sync` retries it.
+
+[ -n "$BEADS_NO_COMMIT_SYNC" ] && exit 0
+command -v bd >/dev/null 2>&1 || exit 0
+
+for state in rebase-merge rebase-apply sequencer; do
+  [ -e "$(git rev-parse --git-path "$state")" ] && exit 0
+done
+
+case "$(git log -1 --format=%s)" in
+  "bd: "*) exit 0 ;;
+esac
+
+timeout=${BEADS_HOOK_TIMEOUT:-120}
+if command -v perl >/dev/null 2>&1; then
+  perl -e '
+    my $t = shift; my $pid = fork // exit 1;
+    exec @ARGV or exit 127 if !$pid;
+    $SIG{ALRM} = sub { kill TERM => $pid; waitpid $pid, 0; exit 142 };
+    alarm $t; waitpid $pid, 0; exit($? >> 8)' -- "$timeout" bd sync --quiet
+else
+  bd sync --quiet
+fi
+status=$?
+
+case $status in
+  0) echo "beads: issues synced" ;;
+  2) echo >&2 "beads: sync stopped on a merge conflict, nothing pushed: resolve it, then bd sync" ;;
+  3) echo >&2 "beads: sync raced another clone, nothing pushed: bd sync retries it" ;;
+  142) echo >&2 "beads: sync timed out after ${timeout}s: bd sync retries it" ;;
+  *) echo >&2 "beads: sync failed (exit $status): run bd sync to see why" ;;
+esac
+exit 0
