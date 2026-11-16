@@ -574,6 +574,14 @@ or nil."
                                  (plist-get data :blocked) (plist-get data :done)))
                :type)))
 
+(defun agent-workspace-issues-ready (project)
+  "PROJECT's ready issues, as its app's issue list last fetched them (each
+with its :role), or `none' if it fetched none (no app, not yet, bd
+failing): nothing run for it."
+  (let ((data (and (agent-workspace--app project)
+                   (buffer-local-value 'agent-workspace--issues-data (agent-workspace--issues-buffer project)))))
+    (if (or (not data) (plist-get data :error)) 'none (plist-get data :ready))))
+
 (defun agent-workspace-issues-refresh ()
   "The issues fetched again, the app laid out again."
   (interactive)

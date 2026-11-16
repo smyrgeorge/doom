@@ -910,8 +910,17 @@ long title on a second row; epics left out."
     (pcase-let ((`(,ada) (+test-awa--crew '("ada" "builder"))))
       (agent-workspace-open t)
       (with-current-buffer "*issues · issues*"
+        (should (eq (agent-workspace-issues-ready project) 'none))
         (setq agent-workspace--issues-data (agent-workspace--issues-parse project +test-awa--bd))
         (agent-workspace--issues-redraw project)
+        ;; The ready ones as fetched, each its role's: the role picker counts
+        ;; them (new.el).
+        (should (equal (mapcar (lambda (issue) (list (plist-get issue :id) (plist-get issue :role)))
+                               (agent-workspace-issues-ready project))
+                       '(("p-2" "builder") ("p-3" "investigator") ("p-4" nil))))
+        (should (string-search "  build ·1 ready  "
+                               (nth 3 (assoc "builder" (agent-workspace--role-rows
+                                                        (agent-workspace--role-facts project '("builder")) 200)))))
         (let ((text (buffer-substring-no-properties (point-min) (point-max))))
           (dolist (part '(" IN PROGRESS" " ▌A · p-1 Fix the parser" " READY" "builders  1" "p-2 Build the lexer, a"
                           "investigators  1" "nobody in the crew takes these" "p-3 Why does it crash"
