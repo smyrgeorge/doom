@@ -254,7 +254,8 @@ agent raises its hand, asking it. In `agent-ui-question-waiting-functions'."
   "In an agent's session: the prompts the app sent it (`agent-workspace-send')
 not submitted yet. The room says what you send in a session as yours
 \(room.el), not these: it said them already (a message from its compose
-line), or they aren't yours (an issue given, a loop's next one, an event).")
+line), or they aren't yours (an issue given, a loop's next one, an event).
+Those of a queue removed go (`agent-workspace--queue-removed-a').")
 
 (cl-defun agent-workspace-send (agent text &key submit no-branch)
   "Put TEXT in AGENT's prompt; SUBMIT: send it. Working, it gets it after
@@ -301,25 +302,63 @@ all of it): (START . END), or nil."
           (setq start (1+ start)))))
     found))
 
+(defun agent-workspace--queued ()
+  "The prompts waiting in this session's queue (agent-shell's) for its turn's
+end: each the very string queued."
+  (and (local-variable-p 'agent-shell--state)
+       (map-elt agent-shell--state :pending-prompts)))
+
 (defun agent-workspace--not-sent-by-app (buffer prompt)
   "What of PROMPT, just submitted in the session BUFFER, the app didn't send
 it (`agent-workspace-send'): all of it, or what's left once the app's are
 taken out, each of their marks taken once (agent-shell sends the prompts
 queued during a turn as one, joined by blank lines: one the app queued, and
-one you typed meanwhile); nil if it's all the app's."
+one you typed meanwhile); nil if it's all the app's. A mark whose prompt
+still waits in the queue isn't of PROMPT, whatever its text."
   (let ((left (string-trim prompt)))
     (when (buffer-live-p buffer)
       (with-current-buffer buffer
-        (dolist (mark (reverse agent-workspace--sent))
-          (when-let* ((text (string-trim mark))
-                      ((not (string-empty-p text)))
-                      (at (agent-workspace--part-at left text)))
-            (let ((before (string-trim-right (substring left 0 (car at))))
-                  (after (string-trim-left (substring left (cdr at)))))
-              (setq left (concat before (and (not (string-empty-p before)) (not (string-empty-p after)) "\n\n")
-                                 after)
-                    agent-workspace--sent (cl-remove mark agent-workspace--sent :test #'eq :count 1 :from-end t)))))))
+        ;; The turn it waited for interrupted (or failed), agent-shell keeps
+        ;; the queue for a turn after; a message you send meanwhile isn't it.
+        (let ((waiting (agent-workspace--queued)))
+          (dolist (mark (reverse agent-workspace--sent))
+            (when-let* (((not (memq mark waiting)))
+                        (text (string-trim mark))
+                        ((not (string-empty-p text)))
+                        (at (agent-workspace--part-at left text)))
+              (let ((before (string-trim-right (substring left 0 (car at))))
+                    (after (string-trim-left (substring left (cdr at)))))
+                (setq left (concat before (and (not (string-empty-p before)) (not (string-empty-p after)) "\n\n")
+                                   after)
+                      agent-workspace--sent (cl-remove mark agent-workspace--sent :test #'eq :count 1 :from-end t))))))))
     (unless (string-empty-p left) left)))
+
+;; THE QUEUE DROPPED
+;; agent-shell keeps its queue when a turn is interrupted or fails: it asks
+;; whether to go on with it (interrupted), or says how to resume or remove it;
+;; kept, it goes after the next turn that ends well (or on M-x
+;; agent-shell-prompt-queue-resume). Removed (M-x
+;; agent-shell-prompt-queue-remove, all of it or one), it's never sent, and
+;; nothing says so (no event, no hook): the marks of the app's prompts in it
+;; go then, or a message of yours with the same text would be taken for one
+;; (not shown in the room).
+(defun agent-workspace--queue-removed-a (fn &rest args)
+  "agent-shell's queued prompts removed: the marks of the app's among them go
+\(see `agent-workspace--sent'). Around `agent-shell-prompt-queue-remove'."
+  (let ((before (delq nil (mapcar (lambda (buffer)
+                                    (when (buffer-local-value 'agent-workspace--sent buffer)
+                                      (cons buffer (with-current-buffer buffer
+                                                     (copy-sequence (agent-workspace--queued))))))
+                                  (buffer-list)))))
+    (unwind-protect (apply fn args)
+      (pcase-dolist (`(,buffer . ,queued) before)
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer
+            (dolist (prompt (seq-difference queued (agent-workspace--queued) #'eq))
+              (setq agent-workspace--sent (cl-remove prompt agent-workspace--sent :test #'eq :count 1)))))))))
+
+(with-eval-after-load 'agent-shell-prompt-queue
+  (advice-add 'agent-shell-prompt-queue-remove :around #'agent-workspace--queue-removed-a))
 
 ;; ====== STOPPING ======
 ;; A session's buffer killed: agent-shell shuts its agent down (acp.el: the

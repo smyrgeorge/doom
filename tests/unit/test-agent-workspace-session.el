@@ -336,6 +336,20 @@ queued as one, joined so)."
     (should (equal (agent-workspace--not-sent-by-app (current-buffer) "mine\n\nfix\n\nmore") "mine\n\nmore"))
     (should-not agent-workspace--sent)))
 
+(ert-deftest agent-workspace-session/what-still-waits-isn-t-sent ()
+  "A mark whose prompt still waits in agent-shell's queue (the turn it waited
+for interrupted, the queue kept) isn't taken by a prompt with its text: that
+one is yours. Out of the queue (sent), it's taken."
+  (with-temp-buffer
+    (let ((queued (copy-sequence "again please")))
+      (setq-local agent-shell--state (list (cons :pending-prompts (list queued))))
+      (setq agent-workspace--sent (list queued))
+      (should (equal (agent-workspace--not-sent-by-app (current-buffer) "again please") "again please"))
+      (should (eq (car agent-workspace--sent) queued))
+      (setf (alist-get :pending-prompts agent-shell--state) nil)
+      (should-not (agent-workspace--not-sent-by-app (current-buffer) "again please"))
+      (should-not agent-workspace--sent))))
+
 (ert-deftest agent-workspace-session/a-message-while-it-works-waits ()
   "Sent while it works, a message waits for its turn's end (agent-shell's
 queue), then goes."

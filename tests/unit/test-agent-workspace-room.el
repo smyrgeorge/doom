@@ -891,6 +891,76 @@ type while the agent works: said as it's sent, after its turn."
     (with-current-buffer (agent-workspace-agent-buffer ada)
       (should-not agent-workspace--sent))))
 
+(defun +test-awr2--held (agent &rest queued)
+  "AGENT working on a prompt it holds, the app's QUEUED prompts waiting for
+its turn's end; then interrupted, agent-shell's question whether to go on
+with them answered no: AGENT at the desk."
+  (agent-workspace-send agent "hold" :submit t)
+  (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state agent) 'working))))
+  (dolist (text queued)
+    (should (eq (agent-workspace-send agent text :submit t) 'queued)))
+  (cl-letf (((symbol-function 'y-or-n-p) #'ignore))
+    (agent-workspace-interrupt agent)
+    (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state agent) 'desk))))))
+
+(defun +test-awr2--queue (agent)
+  "AGENT's queue (agent-shell's): the prompts waiting for its turn's end."
+  (with-current-buffer (agent-workspace-agent-buffer agent)
+    (map-elt agent-shell--state :pending-prompts)))
+
+(defun +test-awr2--marks (agent)
+  "The marks of the prompts the app sent AGENT, not submitted yet."
+  (buffer-local-value 'agent-workspace--sent (agent-workspace-agent-buffer agent)))
+
+(defun +test-awr2--times (text part)
+  "How many times PART is in TEXT."
+  (let ((count 0) (start 0))
+    (while (setq start (string-search part text start))
+      (setq count (1+ count) start (1+ start)))
+    count))
+
+(ert-deftest agent-workspace-room/a-queue-removed ()
+  "The app's prompts queued, the turn interrupted (go on? no: they stay
+queued), then removed (agent-shell's M-x agent-shell-prompt-queue-remove:
+one, then all): never sent, their marks go with them; a message you type
+after with the same text shows in the room."
+  (+test-awr2--real "removed"
+    (+test-awr2--held ada "the app's next" "and another")
+    (should (equal (+test-awr2--queue ada) '("the app's next" "and another")))
+    (should (equal (+test-awr2--marks ada) '("and another" "the app's next")))
+    (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+      (with-current-buffer (agent-workspace-agent-buffer ada)
+        (agent-shell-prompt-queue-remove 0))
+      (should (equal (+test-awr2--queue ada) '("and another")))
+      (should (equal (+test-awr2--marks ada) '("and another")))
+      (with-current-buffer (agent-workspace-agent-buffer ada)
+        (agent-shell-prompt-queue-remove)))
+    (should-not (+test-awr2--queue ada))
+    (should-not (+test-awr2--marks ada))
+    (+test-awr2--type ada "the app's next")
+    (should (+test-awr2--answered project "ok: the app's next"))
+    (should (equal (+test-awr2--yours project) '(("ada" "the app's next"))))))
+
+(ert-deftest agent-workspace-room/a-queue-kept-after-an-interrupt ()
+  "The app's prompt queued, the turn interrupted (go on? no): it stays
+queued for a turn after, its mark with it. A message you type meanwhile
+with the same text shows in the room, before its answer; the app's, sent
+after that turn, doesn't."
+  (+test-awr2--real "kept"
+    (+test-awr2--held ada "again please")
+    (should (equal (+test-awr2--queue ada) '("again please")))
+    (should (equal (+test-awr2--marks ada) '("again please")))
+    (+test-awr2--type ada "again please")
+    (should (+test-awr2--answered project "ok: again please"))
+    (should (equal (+test-awr2--yours project) '(("ada" "again please"))))
+    (let ((feed (+test-awr2--feed project)))
+      (should (< (string-search "→ ada again please" feed) (string-search "↳ ok: again please" feed))))
+    ;; The app's, sent after that turn: answered too, not said as yours.
+    (should (+test-awr2--until (lambda () (= (+test-awr2--times (+test-awr2--feed project) "↳ ok: again please") 2))))
+    (should (equal (+test-awr2--yours project) '(("ada" "again please"))))
+    (should-not (+test-awr2--queue ada))
+    (should-not (+test-awr2--marks ada))))
+
 (ert-deftest agent-workspace-room/an-answer-on-a-canvas ()
   "An answer you give on an agent's canvas (Agent UI's Answer): yours, its
 first line."
