@@ -289,8 +289,12 @@ on). A `display-buffer' action."
   (agent-workspace-leave t)
   (display-buffer buffer))
 
-(add-to-list 'display-buffer-alist
-             '(agent-workspace--shown-elsewhere-p (agent-workspace--display-elsewhere)))
+(defconst agent-workspace--display-rule
+  '(agent-workspace--shown-elsewhere-p (agent-workspace--display-elsewhere))
+  "The `display-buffer-alist' rule showing a file from a crew's app where
+you came from. Doom's popups keep it too (doom.el).")
+
+(add-to-list 'display-buffer-alist agent-workspace--display-rule)
 
 (defun agent-workspace--close-app (project)
   "Close PROJECT's app: its windows, then the crew (every agent exits), then

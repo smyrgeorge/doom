@@ -362,6 +362,101 @@ left, the crew going on."
       (should (get-buffer-window file))
       (should (agent-workspace-agents project)))))
 
+(defvar +popup--display-buffer-alist)
+(defvar +popup--old-display-buffer-alist)
+
+(ert-deftest agent-workspace-app/a-file-shown-elsewhere-with-doom-popups ()
+  "With Doom's popups on, a file shown from the app still goes where you came
+from, the app left, the crew going on: from the issue list, a link in an
+agent's session, find-file in its pane (its rule lost, it went in a bar a
+row high, or over the agent's session)."
+  (+test-with-doom-popups
+    (dolist (open (list (lambda (file _pane issues)
+                          (with-current-buffer issues
+                            (pop-to-buffer file)))
+                        (lambda (file pane _issues)
+                          (with-selected-window pane
+                            (funcall agent-shell-markdown-open-file-function (buffer-file-name file))))
+                        (lambda (file pane _issues)
+                          (select-window pane)
+                          (find-file (buffer-file-name file)))))
+      (+test-awa "elsewhere"
+        (pcase-let ((`(,ada ,_ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
+          (switch-to-buffer (get-buffer-create "mine"))
+          (agent-workspace-open t)
+          (let ((file (find-file-noselect (expand-file-name "README" project)))
+                (session (agent-workspace-agent-buffer ada)))
+            (funcall open file (get-buffer-window session) (agent-workspace--issues-buffer project))
+            (should-not (agent-workspace-frame-p))
+            (should (equal (mapcar #'car (+test-awa--windows)) '("README")))
+            (should-not (get-buffer-window session))
+            (should (agent-workspace-agents project))))))))
+
+(ert-deftest agent-workspace-app/display-rule-under-doom-popups ()
+  "The app's display rule is in `display-buffer-alist' with Doom's popups on,
+whichever came first: the app loaded before them (here), before popup mode
+turned on (as in Doom), or with it on (loaded again); a popup rule set (Doom's
+rules put back in the list) keeps it, popup mode turned off and on too."
+  (cl-flet ((in-effect-p ()
+              (and (member agent-workspace--display-rule display-buffer-alist) t))
+            (dropped ()
+              ;; Out of every list, as before the app loaded.
+              (dolist (var '(display-buffer-alist +popup--display-buffer-alist
+                                                  +popup--old-display-buffer-alist))
+                (set var (remove agent-workspace--display-rule (symbol-value var)))))
+            (loaded ()
+              ;; As config/agent-workspace.el loads it: app.el adds the rule,
+              ;; doom.el keeps it.
+              (add-to-list 'display-buffer-alist agent-workspace--display-rule)
+              (+test-load "config/agent-workspace/doom"))
+            (a-popup-rule ()
+              ;; A package loading sets one: Doom's rules put back in the list.
+              (set-popup-rule! "^\\*test-awa-popup\\*" :size 0.3)
+              (should (eq display-buffer-alist +popup--display-buffer-alist))))
+    (+test-with-doom-popups
+      (let ((rules +popup--display-buffer-alist))
+        (unwind-protect
+            (progn
+              ;; This file loaded the app before Doom's popups.
+              (should (in-effect-p))
+              (a-popup-rule)
+              (should (in-effect-p))
+              (+popup-mode -1)
+              (should (in-effect-p))
+              (+popup-mode 1)
+              (should (in-effect-p))
+              ;; The same again, from scratch: the rule in the list alone (as
+              ;; app.el adds it, Doom's popups not loaded), popup mode on after.
+              (+popup-mode -1)
+              (dropped)
+              (add-to-list 'display-buffer-alist agent-workspace--display-rule)
+              (+popup-mode 1)
+              (should (in-effect-p))
+              (a-popup-rule)
+              (should (in-effect-p))
+              ;; Loaded with Doom's popups loaded, before popup mode turned on
+              ;; (as in Doom).
+              (+popup-mode -1)
+              (dropped)
+              (loaded)
+              (+popup-mode 1)
+              (should (in-effect-p))
+              (a-popup-rule)
+              (should (in-effect-p))
+              ;; Loaded with popup mode on.
+              (dropped)
+              (loaded)
+              (should (in-effect-p))
+              (a-popup-rule)
+              (should (in-effect-p))
+              (+popup-mode -1)
+              (should (in-effect-p))
+              (+popup-mode 1)
+              (should (in-effect-p)))
+          (setq +popup--display-buffer-alist rules
+                display-buffer-alist rules)
+          (+my/agent-workspace--keep-display-rule))))))
+
 ;; ====== A % IN A HEADER OR MODE LINE ======
 
 (ert-deftest agent-workspace-app/a-percent-keeps-its-face ()
