@@ -43,7 +43,7 @@
 
 (defconst agent-ui-mcp--element-schema
   '(:type "object"
-    :description "An element: \"type\" (one of the types below), \"id\" (yours, to change it later), an optional \"title\", the type's properties, optionally a \"source\" (a command, file or poll it follows), \"actions\" (buttons putting a prompt into your session's prompt: [{\"label\", \"prompt\", \"submit\"}]) and, on steps, todo and progress, \"close\" (finished well, it closes itself 10 s after: seconds, or false to keep it)."
+    :description "An element: \"type\" (one of the types below), \"id\" (yours, to change it later), an optional \"title\", the type's properties, optionally a \"source\" (a command, file or poll it follows), \"actions\" (buttons putting a prompt into your session's prompt: [{\"label\", \"prompt\", \"submit\"}]) on steps, todo and progress, \"close\" (finished well, it closes itself 10 s after: seconds, or false to keep it), and \"with\" (the id of the question it's shown with: it goes when that's answered)."
     :properties (:type (:type "string") :id (:type "string") :title (:type "string")
                  :source (:type "object"))
     :required ["type"]

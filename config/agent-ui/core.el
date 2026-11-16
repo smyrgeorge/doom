@@ -46,9 +46,10 @@ with a line saying so."
 
 (define-error 'agent-ui-error "Agent UI")
 
-(defconst agent-ui--reserved '(:id :type :title :source :actions :close)
+(defconst agent-ui--reserved '(:id :type :title :source :actions :close :with)
   "Keys every element may have; no type's property is named so. :close only
-on a type that finishes (its :finished).")
+on a type that finishes (its :finished); :with, the id of the question it's
+shown with (it goes when that's answered: config/agent-ui/agent.el).")
 
 (defvar agent-ui-file-directory nil
   "The directory a `file' property's relative name is in (nil: the current

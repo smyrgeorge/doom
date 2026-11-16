@@ -674,6 +674,9 @@ error saying what's wrong. Its :type a string, as JSON gives it."
       (agent-ui-check-actions actions))
     (when-let* ((close (plist-get element :close)))
       (agent-ui-check-close close type))
+    (when-let* ((with (plist-get element :with)))
+      (unless (and (stringp with) (string-match-p "\\`[A-Za-z0-9_.-]+\\'" with))
+        (agent-ui--fail "with: the id of the question it's shown with, not %s" (agent-ui--show-value with))))
     (let ((element (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type)))))
       ;; Its files by their full names: drawn later, wherever the agent was.
       (dolist (prop (agent-ui-type-props type))

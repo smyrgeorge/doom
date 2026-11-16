@@ -36,6 +36,7 @@ elements better (charts as SVG) and has elements of its own (images, drawings, w
 | `source` | Optional, any type: a command, file or poll it follows ([Sources](#sources)) |
 | `actions` | Optional, any type: buttons putting a prompt into the session's prompt ([Actions](#actions)) |
 | `close` | Optional, `steps`, `todo` and `progress`: seconds it stays once finished well, or `false` to keep it ([The canvas](#the-canvas)) |
+| `with` | Optional, any type: the id of the question it's shown with: it goes when that's answered ([A question waiting](#a-question-waiting)) |
 | anything else | The type's properties. An unknown one is an error naming the type's properties, so the agent learns them |
 
 **Updates** are partial: an object with the `id` and the properties that change, merged into the element's
@@ -353,9 +354,10 @@ The agent asks on a canvas of its own (`--canvas ask`: `Agent UI: SESSION / ask`
   resumed session's questions coming back.
 - **Answered, it goes:** your answer goes straight to the agent, sent at once (no Enter to press: no question
   waits in the prompt); while the agent still works (its sub-agents too), queued, sent once it's done. Once it's
-  given, the question leaves its canvas; a canvas left empty is closed, its buffer killed, and the cursor goes back
-  to the session. Beside other elements, they stay. A plan you approved goes too: the agent shows its steps again as
-  an ordinary checklist, ticked as it works.
+  given, the question leaves its canvas, with the elements shown with it (their `with` its id); on the session's ask
+  canvas, once no other question waits there, everything on it goes. A canvas left empty is closed, its buffer killed,
+  and the cursor goes back to the session. Other elements stay. A plan you approved goes too: the agent shows its
+  steps again as an ordinary checklist, ticked as it works.
 
 Both are on; in `config.el`, `(setq agent-ui-focus-questions nil)` keeps the focus where it is, and
 `(setq agent-ui-close-answered nil)` keeps answered questions on their canvas.

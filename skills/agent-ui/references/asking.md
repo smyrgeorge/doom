@@ -3,7 +3,9 @@
 Part of the agent-ui skill: read [SKILL.md](../SKILL.md) first. A type's every property: `agent-ui types TYPE`.
 
 A question goes on a canvas of its own, `--canvas ask`: its pane takes the user's focus, and once they answer, the
-question goes and the canvas closes. Show it, say in a line of your reply that it's there, and **end your turn**: the
+question goes and the canvas closes, with whatever you showed there with it (mockups, notes it asks about: show them
+on the ask canvas too). Shown elsewhere, an element goes with the question it's about when it names it: `"with":
+"QUESTION-ID"`. Show it, say in a line of your reply that it's there, and **end your turn**: the
 user is brought to it (a notification if they're away), and the answer comes as your next prompt, "Answer to TYPE ID
 (QUESTION): ...": sent to you the moment they answer, always (no `submit` on a question). Ask one question at a time,
 and wait for the answer. Pick the element by the question: below, each says when it fits. Only a quick question (2

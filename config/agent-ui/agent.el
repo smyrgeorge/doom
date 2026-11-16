@@ -451,9 +451,11 @@ without it, if it had one (it stayed until the next turn's end)."
 ;; element that asks, `agent-ui-ask-waiting-p') takes the focus: its pane
 ;; selected, the cursor on it, once Emacs is idle a moment (typing in the
 ;; session isn't taken over: the canvas's keys act), the minibuffer closed;
-;; not a resumed session's coming back. Its answer sent (`agent-ui-ask-done-p'), it leaves its canvas;
-;; a canvas left without elements is closed: its panes, its buffer killed, the
-;; cursor back in the session.
+;; not a resumed session's coming back. Its answer sent (`agent-ui-ask-done-p'), it leaves its canvas,
+;; with the elements shown with it (their :with its id); on a session's ask
+;; canvas, once no question waits there, everything on it (all of it was the
+;; question's); a canvas left without elements is closed: its panes, its
+;; buffer killed, the cursor back in the session.
 
 (defvar agent-ui-focus-questions t
   "Non-nil: a question shown on a canvas takes the focus (see above).")
@@ -493,18 +495,35 @@ Emacs is idle a moment."
 
 (add-hook 'agent-ui-shown-functions #'agent-ui--focus-question-h)
 
+(defun agent-ui--answered-going (canvas)
+  "The ids of CANVAS's elements that go now its questions are answered: the
+questions answered, and the elements shown with one (its id their :with). On
+a session's ask canvas, once no question waits there, all of them: whatever
+was shown there was the question's (mockups, notes it asked about)."
+  (with-current-buffer canvas
+    (let* ((element (lambda (id) (agent-ui--entry-element (gethash id agent-ui--entries))))
+           (answered (seq-filter (lambda (id) (agent-ui-ask-done-p (funcall element id))) agent-ui--order)))
+      (cond
+       ((null answered) nil)
+       ((and (equal agent-ui--canvas-part "ask")
+             (not (seq-some (lambda (id) (agent-ui-ask-waiting-p (funcall element id))) agent-ui--order)))
+        (copy-sequence agent-ui--order))
+       (t (seq-filter (lambda (id)
+                        (or (member id answered)
+                            (member (plist-get (funcall element id) :with) answered)))
+                      agent-ui--order))))))
+
 (defun agent-ui--close-answered (canvas)
-  "CANVAS's questions answered gone; it left without elements: its panes
-closed, its buffer killed, the cursor back in its session (if it was in
-CANVAS's pane)."
+  "CANVAS's questions answered gone, and what was shown with them
+\(`agent-ui--answered-going'); it left without elements: its panes closed,
+its buffer killed, the cursor back in its session (if it was in CANVAS's
+pane)."
   (when (buffer-live-p canvas)
     (let ((session (buffer-local-value 'agent-ui--session-buffer canvas))
           (focused (eq (window-buffer (selected-window)) canvas)))
-      (dolist (id (with-current-buffer canvas
-                    (seq-filter (lambda (id)
-                                  (agent-ui-ask-done-p (agent-ui--entry-element (gethash id agent-ui--entries))))
-                                agent-ui--order)))
-        (when (buffer-live-p canvas)
+      (dolist (id (agent-ui--answered-going canvas))
+        (when (and (buffer-live-p canvas)
+                   (gethash id (buffer-local-value 'agent-ui--entries canvas)))
           (agent-ui-remove id :canvas canvas)))
       ;; Emptied: its panes closed already (`agent-ui--close-if-empty'); a
       ;; session's other canvas, killed already (`agent-ui--close-emptied').

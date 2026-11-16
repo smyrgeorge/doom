@@ -842,6 +842,63 @@ own default), all stay."
             (+test-aua-settle)
             (should (member "go" (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas))))))))))
 
+(ert-deftest agent-ui-agent/answered-what-was-shown-with-it-goes ()
+  "An answer sent takes what was shown with its question (doom-2m9). On the
+ask canvas, everything on it once no question waits there: mockups shown
+before the question kept it open a turn. Elsewhere, an element naming the
+question (with) goes, another stays; one naming another question stays
+until that's answered. A with that isn't an id is refused."
+  (+test-aua
+    (let* ((session (+test-aua-session "Claude Agent @ with" "/tmp/with/"))
+           (name (agent-ui--session-name session))
+           (ask (concat name " / ask"))
+           (agent-ui-close-answered t)
+           (agent-ui-display-function #'agent-ui-display-canvas)
+           (sent nil)
+           (agent-ui-action-function (lambda (prompt submit) (push (list prompt submit) sent)))
+           (ids (lambda (canvas) (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas)))))
+      (save-window-excursion
+        (delete-other-windows)
+        (switch-to-buffer session)
+        ;; The ask canvas: mockups, then the question about them.
+        (agent-ui-show '(:id "mockups" :type "markdown" :markdown "### One\n\nrow 1\n\n### Two\n\nrow 2") :canvas ask)
+        (agent-ui-show '(:id "pick" :type "choice" :question "Which layout?" :options ("Columns" "Card")) :canvas ask)
+        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name ask))))
+          (select-window (get-buffer-window canvas))
+          (+test-aua-press canvas "Columns")
+          (+test-aua-press canvas "⏵ Answer")
+          (should (equal (caar sent) "Answer to choice pick (Which layout?): Columns"))
+          (+test-aua-settle)
+          (should-not (buffer-live-p canvas))
+          (should (equal (mapcar #'window-buffer (window-list)) (list session))))
+        ;; Two questions on the ask canvas: the first answered, the second
+        ;; and the notes stay, until it's answered too.
+        (agent-ui-show '(:id "notes" :type "text" :text "Both about the parser.") :canvas ask)
+        (agent-ui-show '(:id "one" :type "confirm" :question "Fix it?") :canvas ask)
+        (agent-ui-show '(:id "two" :type "confirm" :question "Test it?") :canvas ask)
+        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name ask))))
+          (+test-aua-press canvas "⏵ Proceed")
+          (+test-aua-settle)
+          (should (equal (funcall ids canvas) '("notes" "two")))
+          (+test-aua-press canvas "⏵ Proceed")
+          (+test-aua-settle)
+          (should-not (buffer-live-p canvas)))
+        ;; The session's canvas: what names the question goes with it.
+        (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+        (agent-ui-show '(:id "diff" :type "text" :text "The change" :with "go") :canvas name)
+        (agent-ui-show '(:id "later" :type "text" :text "For the next one" :with "next") :canvas name)
+        (agent-ui-show '(:id "go" :type "confirm" :question "Deploy?") :canvas name)
+        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name))))
+          (+test-aua-press canvas "⏵ Proceed")
+          (+test-aua-settle)
+          (should (buffer-live-p canvas))
+          (should (equal (funcall ids canvas) '("build" "later")))
+          (should (equal (plist-get (agent-ui-get "later" :canvas canvas) :with) "next")))
+        ;; A with that isn't an id.
+        (should (equal (cadr (should-error (agent-ui-show '(:id "x" :type "text" :text "x" :with 3) :canvas name)
+                                           :type 'agent-ui-error))
+                       "with: the id of the question it's shown with, not 3"))))))
+
 (ert-deftest agent-ui-agent/a-sessions-other-canvas-emptied-killed ()
   "A session's other canvas emptied, here by its last finished element
 closing itself: killed, as an answered question's (it stayed, an empty tab
