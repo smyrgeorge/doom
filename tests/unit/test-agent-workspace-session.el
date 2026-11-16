@@ -315,6 +315,27 @@ it said); woken, a fresh session."
         (should (+test-aws--state agent 'desk))
         (should-not (buffer-live-p old))))))
 
+(ert-deftest agent-workspace-session/what-the-app-sent ()
+  "A prompt submitted: what the app sent of it (marked as it sent it,
+`agent-workspace-send') taken out, each mark once, the rest yours (room.el
+says it); a part of it only between blank lines (agent-shell sends what was
+queued as one, joined so)."
+  (with-temp-buffer
+    (setq agent-workspace--sent (list "fix it" "Work on p-1: X"))
+    (should-not (agent-workspace--not-sent-by-app (current-buffer) "Work on p-1: X\n"))
+    (should (equal agent-workspace--sent '("fix it")))
+    ;; Its mark taken: the same again is yours.
+    (should (equal (agent-workspace--not-sent-by-app (current-buffer) "Work on p-1: X") "Work on p-1: X"))
+    ;; Sent as one with yours.
+    (should (equal (agent-workspace--not-sent-by-app (current-buffer) "fix it\n\nand the docs") "and the docs"))
+    (should-not agent-workspace--sent)
+    ;; Not a part: in a line of yours.
+    (setq agent-workspace--sent (list "fix"))
+    (should (equal (agent-workspace--not-sent-by-app (current-buffer) "fix the tests") "fix the tests"))
+    (should (equal agent-workspace--sent '("fix")))
+    (should (equal (agent-workspace--not-sent-by-app (current-buffer) "mine\n\nfix\n\nmore") "mine\n\nmore"))
+    (should-not agent-workspace--sent)))
+
 (ert-deftest agent-workspace-session/a-message-while-it-works-waits ()
   "Sent while it works, a message waits for its turn's end (agent-shell's
 queue), then goes."
@@ -336,7 +357,10 @@ queue), then goes."
       (should (+test-aws--state agent 'done))
       ;; Sent after it, with what was still queued (agent-shell merges them).
       (should (+test-aws--wait (lambda () (seq-find (lambda (prompt) (string-match-p "after it" prompt))
-                                                    (+test-aws--prompts "ada"))))))))
+                                                    (+test-aws--prompts "ada")))))
+      ;; Each one the app's, none left waiting.
+      (should (+test-aws--wait (lambda () (null (buffer-local-value 'agent-workspace--sent
+                                                                     (agent-workspace-agent-buffer agent)))))))))
 
 ;; ====== ITS BRANCHES ======
 

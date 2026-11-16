@@ -10,7 +10,8 @@
 ;;   an issue filed, claimed, handed on or closed by an agent (its issues
 ;;   compared, fetched before and after: issues.el), an agent joining,
 ;;   going home, started again, renamed, leaving, stuck, a hand raised, your
-;;   messages and where they went. Its cursor on its last line, it follows
+;;   messages and where they went (from the compose line, or typed in an
+;;   agent's session: yours too). Its cursor on its last line, it follows
 ;;   new lines; elsewhere (scrolled up, a line clicked), it stays
 ;;   where it is, its cursor on the same line. F filters it: all, hands only,
 ;;   the selected agent's.
@@ -414,7 +415,8 @@ the nearest one after it; none, the end."
                                                          "")))))))
 
 (defun agent-workspace--room-watch (agent buffer)
-  "AGENT's session BUFFER followed: its turn's answer, said in its room. In
+  "AGENT's session BUFFER followed: what you send it there (typed in it, an
+answer on its canvas) and its turn's answer, said in its room. In
 `agent-workspace-session-functions'."
   (let ((project (agent-workspace-agent-project agent))
         (name (agent-workspace-agent-name agent)))
@@ -424,7 +426,15 @@ the nearest one after it; none, the end."
      (lambda (event)
        (pcase (alist-get :event event)
          ('input-submitted
-          (setq agent-workspace--turn-text nil))
+          (setq agent-workspace--turn-text nil)
+          ;; Yours, but what the app sent it (session.el): that the room
+          ;; said already (the compose line's), or it isn't yours. Queued,
+          ;; said as it's sent.
+          (when-let* ((prompt (map-nested-elt event '(:data :prompt)))
+                      ((stringp prompt))
+                      (yours (agent-workspace--not-sent-by-app buffer prompt)))
+            (agent-workspace-room-post project :kind 'you :to (agent-workspace-agent-name agent)
+                                       :text (agent-workspace--yours-lines yours))))
          ('agent-message-chunk
           (when-let* ((chunk (map-nested-elt event '(:data :text-chunk))))
             (setq agent-workspace--turn-text (concat agent-workspace--turn-text chunk))))
@@ -440,6 +450,13 @@ the nearest one after it; none, the end."
   (let* ((lines (seq-take (seq-remove #'string-empty-p (mapcar #'string-trim (split-string text "\n"))) 3))
          (line (string-join lines " ")))
     (if (> (length line) 160) (concat (substring line 0 159) "…") line)))
+
+(defun agent-workspace--yours-lines (prompt)
+  "What the room says of PROMPT, sent in an agent's session: an answer on
+its canvas (Agent UI's \"Answer to choice ID (QUESTION): A\"), its first
+line; else its first lines, as a reply's."
+  (agent-workspace--first-lines
+   (if (string-prefix-p "Answer to " prompt) (car (split-string prompt "\n")) prompt)))
 
 ;; ====== WHAT AGENTS DID TO ISSUES ======
 ;; The crew's issues as fetched (issues.el: after an agent's bd command, at

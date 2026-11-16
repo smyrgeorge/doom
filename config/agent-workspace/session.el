@@ -250,24 +250,76 @@ agent raises its hand, asking it. In `agent-ui-question-waiting-functions'."
                                    (ignore-errors (agent-ui-ask-question (agent-ui-get id :canvas canvas))))
                               "a question on its canvas"))))))
 
+(defvar-local agent-workspace--sent nil
+  "In an agent's session: the prompts the app sent it (`agent-workspace-send')
+not submitted yet. The room says what you send in a session as yours
+\(room.el), not these: it said them already (a message from its compose
+line), or they aren't yours (an issue given, a loop's next one, an event).")
+
 (cl-defun agent-workspace-send (agent text &key submit no-branch)
   "Put TEXT in AGENT's prompt; SUBMIT: send it. Working, it gets it after
 its turn (agent-shell's queue); still waking up, once it's ready.
 NO-BRANCH: it's no work of its own (it's told something): the turn it
-starts makes no branch for it at rest (worktree.el). Return `sent',
-`queued' or `inserted'."
-  (let ((buffer (agent-workspace--live-or-error agent)))
+starts makes no branch for it at rest (worktree.el). Sent, it's the app's
+\(`agent-workspace--not-sent-by-app'), not yours. Return `sent', `queued' or
+`inserted'."
+  (let ((buffer (agent-workspace--live-or-error agent))
+        (done nil))
     (when (and submit no-branch)
       (agent-workspace-branch-quiet agent text))
-    (cond
-     ((and submit (memq (agent-workspace-agent-state agent) '(working hand))
-           (with-current-buffer buffer (shell-maker-busy)))
+    ;; Marked before it's sent: agent-shell says it's submitted as it sends
+    ;; it, now or once the turn it waits for ends.
+    (when submit
+      (with-current-buffer buffer (push text agent-workspace--sent)))
+    (unwind-protect
+        (prog1
+            (cond
+             ((and submit (memq (agent-workspace-agent-state agent) '(working hand))
+                   (with-current-buffer buffer (shell-maker-busy)))
+              (with-current-buffer buffer
+                (agent-shell--prompt-queue-enqueue :prompt text))
+              'queued)
+             (t
+              (agent-shell-insert :text text :submit submit :no-focus t :shell-buffer buffer)
+              (if submit 'sent 'inserted)))
+          (setq done t))
+      ;; Not sent: not waited for.
+      (when (and submit (not done) (buffer-live-p buffer))
+        (with-current-buffer buffer
+          (setq agent-workspace--sent (cl-remove text agent-workspace--sent :test #'eq :count 1)))))))
+
+(defun agent-workspace--part-at (whole part)
+  "Where PART is in WHOLE as one of its parts, joined by blank lines (or as
+all of it): (START . END), or nil."
+  (let ((start 0)
+        (found nil))
+    (while (and (not found) (setq start (string-search part whole start)))
+      (let ((end (+ start (length part))))
+        (if (and (or (= start 0) (string-suffix-p "\n\n" (substring whole 0 start)))
+                 (or (= end (length whole)) (string-prefix-p "\n\n" (substring whole end))))
+            (setq found (cons start end))
+          (setq start (1+ start)))))
+    found))
+
+(defun agent-workspace--not-sent-by-app (buffer prompt)
+  "What of PROMPT, just submitted in the session BUFFER, the app didn't send
+it (`agent-workspace-send'): all of it, or what's left once the app's are
+taken out, each of their marks taken once (agent-shell sends the prompts
+queued during a turn as one, joined by blank lines: one the app queued, and
+one you typed meanwhile); nil if it's all the app's."
+  (let ((left (string-trim prompt)))
+    (when (buffer-live-p buffer)
       (with-current-buffer buffer
-        (agent-shell--prompt-queue-enqueue :prompt text))
-      'queued)
-     (t
-      (agent-shell-insert :text text :submit submit :no-focus t :shell-buffer buffer)
-      (if submit 'sent 'inserted)))))
+        (dolist (mark (reverse agent-workspace--sent))
+          (when-let* ((text (string-trim mark))
+                      ((not (string-empty-p text)))
+                      (at (agent-workspace--part-at left text)))
+            (let ((before (string-trim-right (substring left 0 (car at))))
+                  (after (string-trim-left (substring left (cdr at)))))
+              (setq left (concat before (and (not (string-empty-p before)) (not (string-empty-p after)) "\n\n")
+                                 after)
+                    agent-workspace--sent (cl-remove mark agent-workspace--sent :test #'eq :count 1 :from-end t)))))))
+    (unless (string-empty-p left) left)))
 
 ;; ====== STOPPING ======
 ;; A session's buffer killed: agent-shell shuts its agent down (acp.el: the

@@ -120,10 +120,11 @@ One chat for the whole crew: a feed of what matters, and below it a compose line
 
 - **The feed** shows each agent's turns (their answers' first lines), the issues it files, claims, labels, hands on
   and closes (as the issues show it after its `bd` commands and turns, not as a command looked; your own changes, and
-  what was there when the app opened, aren't said), the crew's changes (an agent joining, going home, started again, stuck), raised hands, and your messages. With the cursor
-  on its last line it follows new lines; anywhere else (scrolled up, a line clicked) it stays put, the cursor on the
-  same line. `RET` on a line opens its agent's pane. `F` shows raised hands only, then the selected agent's only, then
-  all.
+  what was there when the app opened, aren't said), the crew's changes (an agent joining, going home, started again,
+  stuck), raised hands, and your messages: those from the compose line, and those you type in an agent's session or
+  answer on its canvas (`you → ada`, before its answer; one queued while it works, once it's sent). With the cursor on
+  its last line it follows new lines; anywhere else (scrolled up, a line clicked) it stays put, the cursor on the same
+  line. `RET` on a line opens its agent's pane. `F` shows raised hands only, then the selected agent's only, then all.
 - **The compose line**: `#ada fix the test` goes to ada, `#builders ...` to the first free builder, `#all ...` to
   everyone, and a message without `#` to the selected agent (`→ ada` before it). An agent that's working gets it
   after its turn, and the feed says so. A `#` at the start of a message lists the agents (their role and state), the

@@ -770,3 +770,135 @@ the app opens again, the file trimmed to the last ones kept."
               (should (string-search "↳ ok: hello there" (+test-awr2--feed project))))
           (when (agent-workspace--app project) (agent-workspace--close-app project))
           (agent-workspace-close-all))))))
+
+;; ====== WHAT YOU SEND IN A SESSION ======
+
+(defmacro +test-awr2--real (name &rest body)
+  "BODY with `ada', a stand-in agent of a new project NAME (`project'), at
+the desk, its crew's app open (`app'); closed after."
+  (declare (indent 1))
+  `(+test-with-reset
+     (let* ((project (+test-awr2--project ,name))
+            (default-directory project))
+       (set-frame-size (selected-frame) 220 40)
+       (cl-letf (((symbol-function 'agent-workspace--issues-refresh) #'ignore))
+         (unwind-protect
+             (let ((ada (agent-workspace-create :role "builder" :name "ada" :kind 'mock)))
+               (+test-awr2--until (lambda () (eq (agent-workspace-agent-state ada) 'desk)))
+               (let ((app (agent-workspace-open t)))
+                 (ignore app)
+                 ,@body))
+           (when (agent-workspace--app project) (agent-workspace--close-app project))
+           (agent-workspace-close-all))))))
+
+(defun +test-awr2--until (predicate &optional seconds)
+  "Wait until PREDICATE is non-nil, SECONDS at most (20): its value."
+  (let ((end (+ (float-time) (or seconds 20)))
+        value)
+    (while (and (not (setq value (funcall predicate))) (< (float-time) end))
+      (accept-process-output nil 0.05))
+    value))
+
+(defun +test-awr2--yours (project)
+  "PROJECT's room's entries of yours: (TO TEXT) each, in order."
+  (with-current-buffer (agent-workspace--room-buffer project)
+    (mapcar (lambda (entry) (list (plist-get entry :to) (plist-get entry :text)))
+            (seq-filter (lambda (entry) (eq (plist-get entry :kind) 'you)) agent-workspace--room-entries))))
+
+(defun +test-awr2--type (agent text)
+  "TEXT typed in AGENT's session, and RET."
+  (with-current-buffer (agent-workspace-agent-buffer agent)
+    (goto-char (point-max))
+    (insert text)
+    (call-interactively #'agent-shell-submit)))
+
+(defun +test-awr2--answered (project text)
+  "Non-nil once PROJECT's feed has the stand-in's answer TEXT (\"↳ TEXT\")."
+  (+test-awr2--until (lambda () (string-search (concat "↳ " text) (+test-awr2--feed project)))))
+
+(ert-deftest agent-workspace-room/what-you-type-in-a-session ()
+  "A message typed in an agent's session: in the feed as yours (you → ada,
+its first lines), before its answer; RET on it opens its pane; shown with
+its agent's filter, not another's; kept, read back once the app opens
+again."
+  (+test-awr2--real "typed"
+    (+test-awr2--type ada "typed here\n\nand a second line")
+    (should (+test-awr2--answered project "ok: typed here"))
+    (should (equal (+test-awr2--yours project) '(("ada" "typed here and a second line"))))
+    (let ((feed (+test-awr2--feed project)))
+      (should (string-match-p " you +→ ada typed here and a second line\n" feed))
+      (should (< (string-search "→ ada typed here" feed) (string-search "↳ ok: typed here" feed))))
+    ;; RET on it: its pane, open.
+    (agent-workspace-toggle)
+    (should-not (agent-workspace--app-open app))
+    (select-window (get-buffer-window (agent-workspace--room-buffer project)))
+    (goto-char (point-min))
+    (search-forward "→ ada typed here")
+    (agent-workspace-room-open)
+    (should (eq (agent-workspace--app-open app) ada))
+    (should (eq (window-buffer (selected-window)) (agent-workspace-agent-buffer ada)))
+    ;; Its agent's filter shows it, another's doesn't.
+    (with-current-buffer (agent-workspace--room-buffer project)
+      (setq agent-workspace--room-filter "ada")
+      (agent-workspace--room-redraw project)
+      (should (string-search "→ ada typed here" (+test-awr2--feed project)))
+      (setq agent-workspace--room-filter "ken")
+      (agent-workspace--room-redraw project)
+      (should-not (string-search "typed here" (+test-awr2--feed project)))
+      (setq agent-workspace--room-filter nil))
+    ;; Kept: there again once the app opens again.
+    (with-current-buffer (agent-workspace--issues-buffer project) (agent-workspace-quit))
+    (agent-workspace-open t)
+    (should (string-search "→ ada typed here and a second line" (+test-awr2--feed project)))))
+
+(require 'agent-shell-prompt-queue)
+
+(ert-deftest agent-workspace-room/what-the-app-sends-isn-t-yours ()
+  "A message sent from the compose line: in the feed once, not again as
+it's submitted, nor when it was queued (said so) and sent after the turn.
+A prompt the app sends (an issue given, a loop's next one, an event, a hand
+answered from the room: `agent-workspace-send'): not said as yours. One you
+type while the agent works: said as it's sent, after its turn."
+  (+test-awr2--real "app"
+    (with-current-buffer (agent-workspace--compose-buffer project)
+      (insert "#ada hello there")
+      (agent-workspace-compose-send))
+    (should (+test-awr2--answered project "ok: hello there"))
+    (should (equal (+test-awr2--yours project) '(("ada" "hello there"))))
+    ;; The app's: not yours.
+    (agent-workspace-send ada "the app's own" :submit t)
+    (should (+test-awr2--answered project "ok: the app's own"))
+    (should (equal (+test-awr2--yours project) '(("ada" "hello there"))))
+    ;; Queued: from the compose line, said once; typed, said once sent.
+    ;; As agent-shell has it: what's queued during a turn sent as one.
+    (should agent-shell-prompt-queue-merge)
+    (agent-workspace-send ada "slow" :submit t)
+    (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state ada) 'working))))
+    (with-current-buffer (agent-workspace--compose-buffer project)
+      (insert "#ada after that")
+      (agent-workspace-compose-send))
+    (should (string-search "→ ada after that  (queued for ada: busy)" (+test-awr2--feed project)))
+    (+test-awr2--type ada "typed meanwhile")
+    (should (equal (mapcar #'cadr (+test-awr2--yours project)) '("hello there" "after that  (queued for ada: busy)")))
+    ;; Both sent as one after its turn: what you typed said, not the
+    ;; compose line's again.
+    (should (+test-awr2--answered project "ok: after that typed meanwhile"))
+    (should (equal (mapcar #'cadr (+test-awr2--yours project))
+                   '("hello there" "after that  (queued for ada: busy)" "typed meanwhile")))
+    (let ((feed (+test-awr2--feed project)))
+      (should (< (string-search "↳ slowly" feed) (string-search "→ ada typed meanwhile" feed)
+                 (string-search "↳ ok: after that typed meanwhile" feed))))
+    (with-current-buffer (agent-workspace-agent-buffer ada)
+      (should-not agent-workspace--sent))))
+
+(ert-deftest agent-workspace-room/an-answer-on-a-canvas ()
+  "An answer you give on an agent's canvas (Agent UI's Answer): yours, its
+first line."
+  (+test-awr2--real "answer"
+    (let* ((session (agent-workspace-agent-buffer ada))
+           (canvas (agent-ui-canvas (agent-ui--session-name session))))
+      (with-current-buffer canvas
+        (setq agent-ui--session-buffer session)
+        (funcall agent-ui-action-function "Answer to choice c1 (Which one?): A. Note: first\nsecond" t))
+      (should (+test-awr2--answered project "ok: Answer to choice c1"))
+      (should (equal (+test-awr2--yours project) '(("ada" "Answer to choice c1 (Which one?): A. Note: first")))))))
