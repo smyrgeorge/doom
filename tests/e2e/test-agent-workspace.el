@@ -267,7 +267,9 @@ back."
 (ert-deftest e2e-agent-workspace/the-issues-types-line-up ()
   "The issue list's types, the Beads panel's icons in their colours (a dim
 · for one with none): each a column, every id after them at the same x, an
-agent's avatar before them or not."
+agent's avatar before them or not; an epic's heading's id there too (its
+icon the epic type's), the issues under it and under \"no epic\" 2 columns
+further in."
   (+test-e2e-aw
     (let ((window (get-buffer-window (agent-workspace--issues-buffer project)))
           (types '("bug" "feature" "task" "chore" "decision" "spike")))
@@ -275,28 +277,40 @@ agent's avatar before them or not."
         (setq agent-workspace--issues-data
               (agent-workspace--issues-parse
                project
-               (list :all (cons `((id . "t-0") (title . "On it") (status . "in_progress") (assignee . "ada")
-                                  (issue_type . "epic"))
-                                (seq-map-indexed (lambda (type i)
-                                                   `((id . ,(format "t-%d" (1+ i))) (title . ,(concat "A " type))
-                                                     (status . "open") (issue_type . ,type)))
-                                                 types))
+               (list :all (append
+                           `(((id . "t-0") (title . "On it") (status . "in_progress") (assignee . "ada")
+                              (issue_type . "task"))
+                             ((id . "e-1") (title . "An epic") (status . "open") (issue_type . "epic")))
+                           (seq-map-indexed (lambda (type i)
+                                              `((id . ,(format "t-%d" (1+ i))) (title . ,(concat "A " type))
+                                                (status . "open") (issue_type . ,type)
+                                                (parent . ,(and (< i 3) "e-1"))))
+                                            types))
                      :ready (seq-map-indexed (lambda (_ i) `((id . ,(format "t-%d" (1+ i))))) types)
                      :done nil)))
         (agent-workspace--issues-redraw project)
         (redisplay t)
-        (let ((xs nil))
+        (let ((icons (cons ?· (mapcar (lambda (icon) (aref (nerd-icons-codicon icon) 0))
+                                      '("nf-cod-milestone" "nf-cod-bug" "nf-cod-sparkle" "nf-cod-checklist"
+                                        "nf-cod-tools" "nf-cod-law"))))
+              (xs nil))
           (goto-char (point-min))
-          (while (re-search-forward " \\(t-[0-9]\\) " nil t)
-            (push (car (window-text-pixel-size window (line-beginning-position) (match-beginning 1))) xs)
+          (while (re-search-forward " \\([te]-[0-9]\\) " nil t)
+            (push (cons (match-string 1)
+                        (car (window-text-pixel-size window (line-beginning-position) (match-beginning 1))))
+                  xs)
             ;; Its type, the column before.
-            (should (memq (char-after (- (match-beginning 1) 2))
-                          (list ?· (aref (nerd-icons-codicon "nf-cod-milestone") 0)
-                                (aref (nerd-icons-codicon "nf-cod-bug") 0) (aref (nerd-icons-codicon "nf-cod-sparkle") 0)
-                                (aref (nerd-icons-codicon "nf-cod-checklist") 0) (aref (nerd-icons-codicon "nf-cod-tools") 0)
-                                (aref (nerd-icons-codicon "nf-cod-law") 0)))))
-          (should (= (length xs) 7))
-          (should (= (length (delete-dups xs)) 1)))))))
+            (should (memq (char-after (- (match-beginning 1) 2)) icons)))
+          (should (= (length xs) 8))
+          ;; The epic's heading: the epic type's icon.
+          (should (eq (save-excursion (goto-char (point-min))
+                                      (search-forward " e-1 ")
+                                      (char-before (match-beginning 0)))
+                      (aref (nerd-icons-codicon "nf-cod-milestone") 0)))
+          (let ((at (cdr (assoc "t-0" xs))))
+            (should (= (cdr (assoc "e-1" xs)) at))
+            (dolist (id '("t-1" "t-2" "t-3" "t-4" "t-5" "t-6"))
+              (should (= (cdr (assoc id xs)) (+ at (* 2 (frame-char-width))))))))))))
 
 (ert-deftest e2e-agent-workspace/the-minimap ()
   "The minimap under the issue list: a lane each as ada and sam do things,

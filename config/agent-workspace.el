@@ -255,7 +255,8 @@ needs your OK. nil: Claude Code's own default."
 ;; typed. The first time, its first agent is asked for. Two columns (the room
 ;; comes on the right, doom-51z.6):
 ;; - the issues (config/agent-workspace/issues.el), on the left: in progress
-;;   (each with its agent), ready by the role they're for, blocked, done today,
+;;   (each with its agent), ready by the role they're for then by epic (its
+;;   heading, its issues under it, those of none last), blocked, done today,
 ;;   each its type before its id (the Beads panel's icon, config/beads/look.el;
 ;;   its first letter in a terminal); moving onto one in progress selects its
 ;;   agent;
@@ -274,7 +275,8 @@ needs your OK. nil: Claude Code's own default."
 ;;
 ;; Keys, in evil's normal state:
 ;;   the issues   j / k the next / previous issue, RET (l, o) its agent's pane
-;;                or the issue, t give it to an agent, c a new agent (for it)
+;;                or the issue (on an epic's heading, the epic), t give it to
+;;                an agent, c a new agent (for it)
 ;;   the bars     j / k the next / previous agent (the cursor in its pane),
 ;;                RET its pane, TAB open or fold
 ;;   both         c a new agent, i interrupt, K kill (gone home), r restart

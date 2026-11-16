@@ -5,7 +5,8 @@
 ;; The project's Beads issues (bd, in the background), each with its type
 ;; before its id (the Beads panel's icon): in progress (each with the avatar
 ;; and state of the agent on it), ready (grouped by the role they're for: a
-;; role whose labels they have; a role nobody in the crew has, flagged),
+;; role whose labels they have; a role nobody in the crew has, flagged; then
+;; by epic, their nearest open ancestor of that type, under its heading),
 ;; blocked (by what), done today (who, when). A title in full, on a second
 ;; row when long. Moving onto an issue in progress selects its agent.
 ;; Fetched again when the app opens, gr, after an agent's bd command (that
@@ -167,6 +168,7 @@ goes with what's fetched)."
         :labels (alist-get 'labels alist)
         :priority (alist-get 'priority alist)
         :type (alist-get 'issue_type alist)
+        :parent (alist-get 'parent alist)
         :closed (alist-get 'closed_at alist)
         :blocks (seq-keep (lambda (dep) (and (equal (alist-get 'type dep) "blocks")
                                              (alist-get 'depends_on_id dep)))
@@ -177,8 +179,25 @@ goes with what's fetched)."
   (car (seq-find (lambda (role) (seq-intersection (plist-get (cdr role) :labels) labels))
                  (agent-workspace-roles project))))
 
+(defun agent-workspace--issue-epic (issue open)
+  "ISSUE's epic: its nearest ancestor of type epic (its parent, or its
+parent's parent... for a subtask) among OPEN (the open issues, as fetched),
+as (:id ID :title TITLE); nil if it has none open."
+  (let ((seen nil)
+        (parent (plist-get issue :parent))
+        (epic nil))
+    (while (and parent (not epic) (not (member parent seen)))
+      (push parent seen)
+      (let ((up (seq-find (lambda (other) (equal (plist-get other :id) parent)) open)))
+        (if (equal (plist-get up :type) "epic")
+            (setq epic (list :id parent :title (plist-get up :title)))
+          (setq parent (plist-get up :parent)))))
+    epic))
+
 (defun agent-workspace--issues-parse (project answers)
-  "ANSWERS (bd's: :all, :ready, :done) as the list's sections."
+  "ANSWERS (bd's: :all, :ready, :done) as the list's sections. A ready
+issue knows its role (:role) and its epic (:epic, see
+`agent-workspace--issue-epic')."
   (if (seq-some (lambda (key) (eq (plist-get answers key) 'error)) '(:all :ready :done))
       (list :error "bd didn't answer: SPC o i shows why.")
     (let* ((all (mapcar #'agent-workspace--issue (plist-get answers :all)))
@@ -190,8 +209,9 @@ goes with what's fetched)."
             :doing (seq-filter (lambda (issue) (eq (plist-get issue :status) 'in_progress)) all)
             :ready (funcall by-priority
                             (mapcar (lambda (issue)
-                                      (plist-put (plist-put issue :status 'ready)
-                                                 :role (agent-workspace--issue-role project (plist-get issue :labels))))
+                                      (plist-put (plist-put (plist-put issue :status 'ready)
+                                                            :role (agent-workspace--issue-role project (plist-get issue :labels)))
+                                                 :epic (agent-workspace--issue-epic issue all)))
                                     (seq-filter (lambda (issue) (and (funcall work issue)
                                                                      (member (plist-get issue :id) ready-ids)
                                                                      (eq (plist-get issue :status) 'open)))
@@ -233,11 +253,12 @@ rest in REST, cut with … if longer still."
       (list (substring text 0 cut)
             (agent-workspace--fit (string-trim-left (substring text cut)) rest)))))
 
-(defun agent-workspace--issue-lines (project issue width)
+(defun agent-workspace--issue-lines (project issue width &optional deeper)
   "ISSUE's rows (one, or two when its title is long): its agent's avatar,
 its type (`agent-workspace-type-glyph', a column of its own), its id, its
 title; on the right its agent's state, what blocks it, its priority, or when
-it was done."
+it was done. DEEPER: that many columns further in (under its epic's
+heading), its second row too."
   (let* ((status (plist-get issue :status))
          (agent (and (memq status '(in_progress closed)) (agent-workspace--issue-agent project issue)))
          (avatar (if agent (agent-workspace-agent-avatar agent) "  "))
@@ -255,30 +276,63 @@ it was done."
                                  'face 'shadow))))
          (tail (agent-ui-even-glyphs (concat right " ")))
          (end (if (agent-workspace--graphic-p) (list (string-pixel-width tail)) (+ 2 (string-width tail))))
-         (indent (+ 1 2 1 1 1 (string-width (plist-get issue :id)) 1))
+         (lead (make-string (1+ (or deeper 0)) ?\s))
+         (indent (+ (length lead) 2 1 1 1 (string-width (plist-get issue :id)) 1))
          (titles (agent-workspace--wrap-title (plist-get issue :title)
                                               (max 8 (- width indent (string-width tail) 1))
                                               (max 8 (- width indent 1))))
-         (first (concat " " avatar " " type " " id " " (propertize (car titles) 'face title-face)
+         (first (concat lead avatar " " type " " id " " (propertize (car titles) 'face title-face)
                         (propertize " " 'display `(space :align-to (- right ,end)))
                         tail)))
     (cons first
           (when (cadr titles)
             (list (concat (make-string indent ?\s) (propertize (cadr titles) 'face title-face)))))))
 
+(defun agent-workspace--by-epic (issues)
+  "ISSUES (a role group's, ready, by priority) by their epic (:epic):
+\((EPIC . ITS-ISSUES)...), the epics in the order of their first issue (a P1
+brings its epic up), those of none (EPIC nil) last; each epic's issues in
+their order."
+  (let ((groups nil))
+    (dolist (issue issues)
+      (let* ((epic (plist-get issue :epic))
+             (group (assoc (plist-get epic :id) groups)))
+        (if group
+            (push issue (cddr group))
+          (push (cl-list* (plist-get epic :id) epic (list issue)) groups))))
+    (let ((groups (mapcar (lambda (group) (cons (cadr group) (reverse (cddr group)))) (nreverse groups))))
+      (append (seq-filter #'car groups) (seq-remove #'car groups)))))
+
 (defun agent-workspace--issues-lines (project data width)
-  "The issue list's lines, each carrying its issue (and its agent)."
+  "The issue list's lines, each carrying its issue (and its agent); in
+READY, each role group's split by epic (`agent-workspace--by-epic'), under
+their headings (each carrying its epic), when it has one."
   (let ((lines nil))
     (cl-flet* ((head (title count)
                  (push (agent-workspace--at-right (concat " " (propertize title 'face '(shadow bold)))
                                                   (propertize (format "%s " count) 'face 'shadow)
                                                   width)
                        lines))
-               (add (issue)
+               (add (issue &optional deeper)
                  (let ((agent (and (eq (plist-get issue :status) 'in_progress)
                                    (agent-workspace--issue-agent project issue))))
-                   (dolist (line (agent-workspace--issue-lines project issue width))
+                   (dolist (line (agent-workspace--issue-lines project issue width deeper))
                      (push (propertize line 'agent-workspace-issue issue 'agent-workspace-agent agent) lines))))
+               ;; An epic's heading in a role group: its icon (the epic
+               ;; type's), id and title (cut to fit), how many of its
+               ;; issues the group has; nil, "no epic".
+               (epic-head (epic count role)
+                 (push (propertize
+                        (agent-workspace--at-right
+                         (if epic
+                             (concat "    " (agent-workspace-type-glyph "epic") " "
+                                     (propertize (plist-get epic :id) 'face 'shadow) " "
+                                     (propertize (or (plist-get epic :title) "") 'face 'bold))
+                           (concat "    " (propertize "no epic" 'face 'shadow)))
+                         (propertize (format "%d " count) 'face 'shadow)
+                         width)
+                        'agent-workspace-epic epic 'agent-workspace-role role)
+                       lines))
                (note (text) (push (propertize (concat "   " text) 'face 'shadow) lines)))
       (if-let* ((error (plist-get data :error)))
           (note error)
@@ -307,7 +361,14 @@ it was done."
                                  (propertize (format "for any role  %d" (length issues)) 'face 'shadow)))
                        'agent-workspace-role role)
                       lines)
-                (mapc #'add issues))))
+                ;; Under their epics, 2 columns further in; with none at
+                ;; all, as they are.
+                (let ((groups (agent-workspace--by-epic issues)))
+                  (if (not (caar groups))
+                      (mapc #'add issues)
+                    (pcase-dolist (`(,epic . ,its) groups)
+                      (epic-head epic (length its) role)
+                      (dolist (issue its) (add issue 2))))))))
           (push "" lines))
         (when-let* ((blocked (plist-get data :blocked)))
           (head "BLOCKED" (length blocked))
@@ -334,13 +395,17 @@ it was done."
       (window-total-width)))))
 
 (defun agent-workspace--issues-redraw (project)
-  "PROJECT's issue list drawn again, the cursor on the issue it was on."
+  "PROJECT's issue list drawn again, the cursor on the issue (or the epic's
+heading) it was on."
   (when-let* ((app (agent-workspace--app project))
               (buffer (agent-workspace--issues-buffer project)))
     (with-current-buffer buffer
       (let* ((window (get-buffer-window buffer t))
              (pos (if window (window-point window) (point)))
              (issue (plist-get (get-text-property pos 'agent-workspace-issue) :id))
+             (epic (and (not issue) (get-text-property pos 'agent-workspace-epic)
+                        (cons (plist-get (get-text-property pos 'agent-workspace-epic) :id)
+                              (get-text-property pos 'agent-workspace-role))))
              (start (and window (line-number-at-pos (window-start window))))
              (width (if window (max 20 (1- (window-body-width window))) (1- agent-workspace-issues-width)))
              (inhibit-read-only t))
@@ -350,9 +415,12 @@ it was done."
           (dolist (line (agent-workspace--issues-lines project agent-workspace--issues-data width))
             (insert (agent-ui-even-glyphs line)
                     (propertize "\n" 'agent-workspace-issue (get-text-property 0 'agent-workspace-issue line)
-                                'agent-workspace-agent (get-text-property 0 'agent-workspace-agent line)))))
+                                'agent-workspace-agent (get-text-property 0 'agent-workspace-agent line)
+                                'agent-workspace-epic (get-text-property 0 'agent-workspace-epic line)
+                                'agent-workspace-role (get-text-property 0 'agent-workspace-role line)))))
         (goto-char (point-min))
-        (unless (and issue (agent-workspace--issues-goto-id issue))
+        (unless (or (and issue (agent-workspace--issues-goto-id issue))
+                    (and epic (agent-workspace--issues-goto-epic epic)))
           (unless (and (agent-workspace--app-selected app)
                        (agent-workspace--issues-goto-agent (agent-workspace--app-selected app)))
             (goto-char (point-min))
@@ -368,6 +436,19 @@ it was done."
   (when-let* ((match (text-property-search-forward 'agent-workspace-issue id
                                                    (lambda (id issue) (equal id (plist-get issue :id))))))
     (goto-char (prop-match-beginning match))))
+
+(defun agent-workspace--issues-goto-epic (epic)
+  "The cursor on EPIC's heading, (ID . ROLE): its id's, in its role's group;
+non-nil if it's there."
+  (goto-char (point-min))
+  (let ((found nil))
+    (while (and (not found) (not (eobp)))
+      (let ((heading (get-text-property (point) 'agent-workspace-epic)))
+        (if (and heading (equal (plist-get heading :id) (car epic))
+                 (equal (get-text-property (point) 'agent-workspace-role) (cdr epic)))
+            (setq found t)
+          (forward-line 1))))
+    found))
 
 (defun agent-workspace--issues-goto-agent (agent)
   "The issue list's cursor on AGENT's issue in progress, if it has one."
@@ -440,9 +521,11 @@ selected (its pane opens). The highlight follows."
   (agent-workspace-issue-next (- (or n 1))))
 
 (defun agent-workspace-issue-open ()
-  "RET on an issue: the pane of the agent on it, else the issue itself."
+  "RET on an issue: the pane of the agent on it, else the issue itself; on
+an epic's heading, the epic."
   (interactive)
-  (let ((issue (get-text-property (point) 'agent-workspace-issue))
+  (let ((issue (or (get-text-property (point) 'agent-workspace-issue)
+                   (get-text-property (point) 'agent-workspace-epic)))
         (agent (get-text-property (point) 'agent-workspace-agent)))
     (cond (agent (agent-workspace-select agent t))
           ((and issue agent-workspace-open-issue-function)
@@ -455,7 +538,10 @@ its role's): free, it takes it now; working, after its turn. Its branch for
 it first (`agent-workspace-give'): refused if its worktree has changes not
 committed."
   (interactive)
-  (let* ((issue (or (get-text-property (point) 'agent-workspace-issue) (user-error "No issue here")))
+  (let* ((issue (or (get-text-property (point) 'agent-workspace-issue)
+                    (when-let* ((epic (get-text-property (point) 'agent-workspace-epic)))
+                      (user-error "%s is an epic: give one of its issues" (plist-get epic :id)))
+                    (user-error "No issue here")))
          (project agent-workspace--issues-project)
          (app (agent-workspace--app project))
          (agents (agent-workspace--ordered project))

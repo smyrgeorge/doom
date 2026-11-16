@@ -989,6 +989,138 @@ one column before its id; its word on hover; a type with no icon a dim ·."
         (should (equal (substring-no-properties (agent-workspace-type-glyph "epic"))
                        (substring-no-properties (nerd-icons-codicon "nf-cod-milestone"))))))))
 
+(defun +test-awa--bd-json (&rest issues)
+  "ISSUES, plists of bd's fields, as bd's JSON answer reads."
+  (mapcar (lambda (issue)
+            (cl-loop for (key value) on issue by #'cddr
+                     collect (cons (intern (substring (symbol-name key) 1)) value)))
+          issues))
+
+(defconst +test-awa--epics
+  (list :all (+test-awa--bd-json
+              '(:id "e-1" :title "Agent workspace: enhancements" :status "open" :issue_type "epic")
+              '(:id "e-2" :title "Modules: each one used" :status "open" :issue_type "epic")
+              '(:id "e-3" :title "Investigations" :status "open" :issue_type "epic")
+              '(:id "e-4" :title "Nothing ready in it" :status "open" :issue_type "epic")
+              '(:id "w-1" :title "On it" :status "in_progress" :assignee "ada" :issue_type "task" :parent "e-1"
+                :labels ["build"])
+              '(:id "b-1" :title "A bug, a title long enough to need two rows under its epic" :status "open"
+                :priority 2 :issue_type "bug" :parent "e-1" :labels ["build"])
+              '(:id "b-2" :title "Sparkles" :status "open" :priority 1 :issue_type "feature" :parent "e-2"
+                :labels ["build"])
+              '(:id "b-3" :title "Later" :status "open" :priority 3 :issue_type "task" :parent "e-1" :labels ["build"])
+              '(:id "b-4" :title "A subtask" :status "open" :priority 2 :issue_type "task" :parent "w-1"
+                :labels ["build"])
+              '(:id "b-5" :title "Loose" :status "open" :priority 2 :issue_type "bug" :labels ["build"])
+              '(:id "b-6" :title "Its epic closed" :status "open" :priority 2 :issue_type "bug" :parent "e-0"
+                :labels ["build"])
+              '(:id "i-1" :title "Why" :status "open" :priority 2 :issue_type "task" :parent "e-3"
+                :labels ["investigation"])
+              '(:id "a-1" :title "Docs" :status "open" :priority 2 :issue_type "chore")
+              '(:id "x-1" :title "Waits" :status "open" :issue_type "task" :parent "e-4"
+                :dependencies [((type . "blocks") (depends_on_id . "b-1"))]))
+        :ready (+test-awa--bd-json '(:id "b-1") '(:id "b-2") '(:id "b-3") '(:id "b-4") '(:id "b-5") '(:id "b-6")
+                                   '(:id "i-1") '(:id "a-1") '(:id "e-1"))
+        :done (+test-awa--bd-json '(:id "d-1" :title "Set up" :status "closed" :issue_type "task" :parent "e-1"
+                                         :assignee "ada" :closed_at "2026-01-01T10:00:00Z")))
+  "What bd answers, issues of epics, for the epics' tests: e-2's issue a P1,
+b-4 a subtask (of w-1, in progress, of e-1), b-6's epic closed, e-4 with
+nothing ready.")
+
+(defun +test-awa--text (lines)
+  "LINES as text, each its right end trimmed."
+  (mapcar (lambda (line) (string-trim-right (substring-no-properties line))) lines))
+
+(ert-deftest agent-workspace-app/the-issues-by-epic ()
+  "READY's role groups split by epic: each epic's heading (its icon, the
+epic type's; its id; its title; how many of its issues the group has), its
+issues under it 2 columns further in (their type column, their wrapped
+second row too); epics by their first issue (a P1 brings one up), issues by
+priority; a subtask under its nearest epic; none open, under \"no epic\",
+last; a group with no epic as it was; an epic with nothing ready not shown.
+IN PROGRESS, BLOCKED and DONE TODAY as they were. A narrow list cuts an
+epic's title with …."
+  (+test-awa "epics"
+    (+test-awa--crew '("ada" "builder"))
+    (agent-workspace-open t)
+    (let* ((data (agent-workspace--issues-parse project +test-awa--epics))
+           (lines (agent-workspace--issues-lines project data 49))
+           (text (+test-awa--text lines)))
+      (should (equal (seq-take (member " READY 8" text) 18)
+                     '(" READY 8"
+                       "  ⚙ builders  6"
+                       "    e e-2 Modules: each one used 1"
+                       "      f b-2 Sparkles P1"
+                       "    e e-1 Agent workspace: enhancements 3"
+                       "      b b-1 A bug, a title long enough to need"
+                       "            two rows under its epic"
+                       "      t b-4 A subtask"
+                       "      t b-3 Later"
+                       "    no epic 2"
+                       "      b b-5 Loose"
+                       "      b b-6 Its epic closed"
+                       "  ⌕ investigators  1  nobody in the crew takes these"
+                       "    e e-3 Investigations 1"
+                       "      t i-1 Why"
+                       "  for any role  1"
+                       "    c a-1 Docs"
+                       "")))
+      ;; The rest as it was: no epic's heading, the type at column 4.
+      (should (member " ▌A t w-1 On it ○" text))
+      (should (member "    t x-1 Waits ⊘ b-1" text))
+      (should (member " ▌A t d-1 Set up ada" (mapcar (lambda (line) (replace-regexp-in-string " [0-9]+h\\'" "" line)) text)))
+      (should-not (seq-some (lambda (line) (string-search "e-4" line)) text))
+      ;; A heading carries its epic and its role; the type's look, the epic's.
+      (let ((heading (seq-find (lambda (line) (string-search "e-1 Agent" line)) lines)))
+        (should (equal (get-text-property 0 'agent-workspace-epic heading) '(:id "e-1" :title "Agent workspace: enhancements")))
+        (should (equal (get-text-property 0 'agent-workspace-role heading) "builder"))
+        (should-not (get-text-property 0 'agent-workspace-issue heading))
+        (should (equal (+test-awa--type-at heading) '("e" font-lock-constant-face "epic"))))
+      ;; Narrow: the epic's title cut with ….
+      (let ((narrow (+test-awa--text (agent-workspace--issues-lines project data 34))))
+        (should (member "    e e-1 Agent workspace: en… 3" narrow))
+        (should (member "  ⚙ builders  6" narrow))))))
+
+(ert-deftest agent-workspace-app/an-epic-s-heading ()
+  "On an epic's heading: j/k go from issue to issue over it, as over a
+role's; RET opens the epic; t says it's an epic, nothing given; drawn
+again, the cursor stays on it."
+  (+test-awa "heading"
+    (+test-awa--crew '("ada" "builder"))
+    (agent-workspace-open t)
+    (let ((opened nil) (sent nil))
+      (with-current-buffer "*issues · heading*"
+        (setq agent-workspace--issues-data (agent-workspace--issues-parse project +test-awa--epics))
+        (agent-workspace--issues-redraw project)
+        (cl-flet ((at () (plist-get (get-text-property (point) 'agent-workspace-issue) :id)))
+          (agent-workspace--issues-goto-id "b-2")
+          (agent-workspace-issue-next)
+          (should (equal (at) "b-1"))
+          (agent-workspace-issue-next 3)
+          (should (equal (at) "b-5"))
+          (agent-workspace-issue-previous 2)
+          (should (equal (at) "b-4"))
+          (agent-workspace-issue-previous 2)
+          (should (equal (at) "b-2"))
+          ;; On e-1's heading.
+          (forward-line -1)
+          (agent-workspace-issue-next)
+          (should (equal (at) "b-2"))
+          (forward-line 1)
+          (should (equal (plist-get (get-text-property (point) 'agent-workspace-epic) :id) "e-1"))
+          (let ((agent-workspace-open-issue-function (lambda (id dir) (push (list id dir) opened))))
+            (agent-workspace-issue-open))
+          (should (equal opened (list (list "e-1" (agent-workspace--root project)))))
+          (cl-letf (((symbol-function 'agent-workspace-send) (lambda (&rest args) (push args sent))))
+            (should (equal (cadr (should-error (agent-workspace-issue-give) :type 'user-error))
+                           "e-1 is an epic: give one of its issues")))
+          (should-not sent)
+          (should-not (agent-workspace-agent-issue (car (agent-workspace-agents project))))
+          ;; Drawn again: still on it.
+          (agent-workspace--issues-redraw project)
+          (should (equal (plist-get (get-text-property (point) 'agent-workspace-epic) :id) "e-1"))
+          (should (equal (get-text-property (point) 'agent-workspace-role) "builder")))))))
+
 (ert-deftest agent-workspace-app/giving-an-issue ()
   "t gives a ready issue to an agent (the selected one first): its worktree
 on the issue's branch, then sent \"Work on ID: TITLE\" now, or after its
