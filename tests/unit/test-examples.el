@@ -504,9 +504,11 @@ it's closed."
       (kill-buffer conversation))))
 
 (ert-deftest examples/agent-workspace-a-crew-offline ()
-  "Three stand-in agents in their crew's app, each in its worktree: ada
-working on demo-1, sam's hand raised, ken done; Q closes it, every agent
-exiting, and the folder goes; your windows as they were (doom-51z.16)."
+  "Three stand-in agents in their crew's app, each in its worktree on its
+issue's branch (TYPE/ID-words): ada working on demo-1, sam's hand raised,
+ken done; its issues each with its type, two under their epic's heading (with
+bd); Q closes it, every agent exiting, and the folder goes; your windows as
+they were (doom-51z.16)."
   (+test-examples
     (set-frame-size (selected-frame) 220 40)
     (delete-other-windows)
@@ -519,12 +521,26 @@ exiting, and the folder goes; your windows as they were (doom-51z.16)."
       (dolist (agent (agent-workspace-agents project))
         (should (file-directory-p (agent-workspace-agent-worktree agent))))
       (should (equal (agent-workspace-agent-issue (car (agent-workspace-agents project))) "demo-1"))
+      (should (equal (mapcar #'agent-workspace-agent-branch (agent-workspace-agents project))
+                     '("feat/demo-1-strings-escapes" "fix/demo-3-why-does-repl-hang"
+                       "feat/demo-6-tokens-numbers")))
+      ;; Its issues: the builders' ready ones under their epic's heading.
+      (when (executable-find "bd")
+        (should (+test-wait-for
+                 (lambda ()
+                   (string-match-p "e demo-7 Error recovery +2 *\n +b demo-2 Parser: recover"
+                                   (with-current-buffer (agent-workspace--issues-buffer project)
+                                     (buffer-substring-no-properties (point-min) (point-max)))))
+                 30)))
       ;; Its minimap: ada reading and editing the lexer, sam asking.
       (should (+test-wait-for (lambda () (equal (plist-get (agent-workspace-activity (car (agent-workspace-agents project)))
                                                            :location)
                                                 '("src/lexer.el" . 12)))
                               10))
-      (should (memq 'asked (car (last (agent-workspace-activity-lane (cadr (agent-workspace-agents project)))))))
+      ;; In the minute sam asked, which may not be the last one by now: the
+      ;; waits above (bd, ada's edit) can take it past a minute's end.
+      (should (seq-some (lambda (kinds) (memq 'asked kinds))
+                        (agent-workspace-activity-lane (cadr (agent-workspace-agents project)))))
       (should (string-search "wants to run npm install"
                              (with-current-buffer (agent-workspace--room-buffer project) (buffer-string))))
       (with-current-buffer (agent-workspace--issues-buffer project)

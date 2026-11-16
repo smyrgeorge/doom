@@ -2,13 +2,15 @@
 ;; Example: an agent crew (config/agent-workspace.el, docs/agent-workspace.md).
 ;; M-x +my/example-agent-workspace makes a small compiler project (a git
 ;; repository in the temp folder, its issues tracked with bd if there's bd)
-;; and opens its crew's app with three agents, each in its own worktree:
-;; ada, a builder, on demo-1; sam, an investigator, its hand raised (it wants
-;; to run npm install); ken, a builder, done. They're stand-in agents
-;; (examples/agent-workspace/stand-in.el): they speak ACP as Claude Code does,
-;; offline, at no cost. Try: j / k on the bars, a then A to answer sam, #ken
-;; in the room, c a new agent, q to leave and the tally to come back, Q to
-;; close it (every agent exits). The folder is deleted once it's closed.
+;; and opens its crew's app with three agents, each in its own worktree, on
+;; its issue's branch: ada, a builder, on demo-1; sam, an investigator, on
+;; demo-3, its hand raised (it wants to run npm install); ken, a builder, done
+;; with demo-6. Its issues are bugs, features and tasks, two of them in an
+;; epic. They're stand-in agents (examples/agent-workspace/stand-in.el): they
+;; speak ACP as Claude Code does, offline, at no cost. Try: j / k on the
+;; bars, a then A to answer sam, #ken in the room, c a new agent, q to leave
+;; and the tally to come back, Q to close it (every agent exits). The folder
+;; is deleted once it's closed.
 
 ;; ====== VARIABLES ======
 
@@ -17,13 +19,15 @@
   "The stand-in agent.")
 
 (defconst +my/example-agent-workspace--issues
-  ;; id        title                                       labels            priority status         assignee blocker
-  '(("demo-1" "Lexer: strings with escapes"              ("build")          1 "in_progress"  "ada"  nil)
-    ("demo-2" "Parser: recover after a missing brace"     ("build")          1 "open"         nil    nil)
-    ("demo-3" "Why does the REPL hang on paste?"          ("investigation")  2 "open"         nil    nil)
-    ("demo-4" "Review ken's branch"                       ("review")         2 "open"         nil    nil)
-    ("demo-5" "Release 0.3"                               nil                2 "open"         nil    "demo-2")
-    ("demo-6" "Tokens for numbers"                        ("build")          2 "closed"       "ken"  nil))
+  ;; id      title                                    type      labels            priority status        assignee blocker  epic
+  '(("demo-1" "Lexer: strings with escapes"             "feature" ("build")          1 "in_progress" "ada"    nil      nil)
+    ("demo-2" "Parser: recover after a missing brace"   "bug"     ("build")          1 "open"        nil      nil      "demo-7")
+    ("demo-3" "Why does the REPL hang on paste?"        "bug"     ("investigation")  2 "in_progress" "sam"    nil      nil)
+    ("demo-4" "Review ken's branch"                     "task"    ("review")         2 "open"        nil      nil      nil)
+    ("demo-5" "Release 0.3"                             "task"    nil                2 "open"        nil      "demo-2" nil)
+    ("demo-6" "Tokens for numbers"                      "feature" ("build")          2 "closed"      "ken"    nil      nil)
+    ("demo-7" "Error recovery"                          "epic"    nil                2 "open"        nil      nil      nil)
+    ("demo-8" "Errors point at their line"              "feature" ("build")          2 "open"        nil      nil      "demo-7"))
   "The example's issues (see above).")
 
 (defconst +my/example-agent-workspace--files
@@ -41,14 +45,17 @@
   "The example's issues as bd imports them: a line of JSON each."
   (mapconcat
    (lambda (issue)
-     (seq-let (id title labels priority status assignee blocker) issue
+     (seq-let (id title type labels priority status assignee blocker epic) issue
        (json-encode
-        `((id . ,id) (title . ,title) (issue_type . "task") (priority . ,priority) (status . ,status)
+        `((id . ,id) (title . ,title) (issue_type . ,type) (priority . ,priority) (status . ,status)
           (created_at . "2026-11-02T09:00:00Z") (updated_at . "2026-11-02T09:00:00Z")
           ,@(and (equal status "closed") `((closed_at . ,(format-time-string "%FT%TZ" nil t))))
           ,@(and assignee `((assignee . ,assignee)))
           ,@(and labels `((labels . ,(vconcat labels))))
-          ,@(and blocker `((dependencies . [((issue_id . ,id) (depends_on_id . ,blocker) (type . "blocks"))])))))))
+          ,@(and (or blocker epic)
+                 `((dependencies
+                    . ,(vconcat (and blocker `(((issue_id . ,id) (depends_on_id . ,blocker) (type . "blocks"))))
+                                (and epic `(((issue_id . ,id) (depends_on_id . ,epic) (type . "parent-child"))))))))))))
    +my/example-agent-workspace--issues "\n"))
 
 (defun +my/example-agent-workspace--run (program &rest args)
@@ -107,11 +114,14 @@ folder deleted once it's closed. See examples/agent-workspace.el."
     ;; back the windows it found).
     (setq +my/example-agent-workspace--crew
           (list (agent-workspace-create :role "builder" :name "ada" :kind 'stand-in
-                                        :issue "demo-1" :issue-title "Lexer: strings with escapes")
+                                        :issue "demo-1" :issue-title "Lexer: strings with escapes"
+                                        :issue-type "feature")
                 (agent-workspace-create :role "investigator" :name "sam" :kind 'stand-in
-                                        :prompt "Look into why the REPL hangs on paste")
+                                        :issue "demo-3" :issue-title "Why does the REPL hang on paste?"
+                                        :issue-type "bug" :prompt "Look into why the REPL hangs on paste")
                 (agent-workspace-create :role "builder" :name "ken" :kind 'stand-in
-                                        :prompt "What's left on the lexer?")))
+                                        :issue "demo-6" :issue-title "Tokens for numbers"
+                                        :issue-type "feature" :prompt "What's left on the lexer?")))
     (let ((app (agent-workspace-open)))
       (agent-workspace-select (car +my/example-agent-workspace--crew))
       (+my/example-delete-when-closed dir (list (agent-workspace--issues-buffer (agent-workspace--app-project app))))
