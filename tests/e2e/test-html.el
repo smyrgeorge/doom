@@ -147,6 +147,13 @@ page goes to the browser, the view staying; M-x takes a URL."
 (defun +test-html--number (xwidget expression)
   (string-to-number (+test-html--js xwidget expression)))
 
+(defconst +test-html--measures-js
+  "JSON.stringify((() => { const w = document.getElementById('wide'), r = document.documentElement;
+  return {box: w.getBoundingClientRect().width, offset: w.offsetWidth, zoom: r.style.zoom,
+          computed: getComputedStyle(r).zoom, inner: innerWidth, client: r.clientWidth, scroll: r.scrollWidth,
+          scale: visualViewport.scale, ua: navigator.userAgent}; })())"
+  "The wide page's measures, as JSON: said when a zoom isn't seen.")
+
 (defun +test-html--loaded (buffer window)
   "BUFFER's view in WINDOW, once its page has loaded (its cover off)."
   (+test-wait-for
@@ -168,7 +175,7 @@ it."
     (let* ((file (+test-file "pages/wide.html" +test-html-wide))
            (buffer (+my/html-open-in-emacs file))
            (window (get-buffer-window buffer))
-           (wide "document.getElementById('wide').getBoundingClientRect().width"))
+           (page "document.documentElement.scrollWidth"))
       (delete-other-windows window)
       (set-window-buffer (split-window window 40 'right) "*scratch*")
       (select-window window)
@@ -185,10 +192,12 @@ it."
               (interprogram-paste-function nil))
           (+my/webkit-copy)
           (should (+test-wait-for (lambda () (equal (car kill-ring) "Some text to copy.")) 5)))
-        ;; -: smaller.
-        (let ((width (+test-html--number xwidget wide)))
+        ;; -: smaller, the page's width as laid out (its scroll width: an
+        ;; element's box counts the root's zoom in some WebKits, not in others).
+        (let ((width (+test-html--number xwidget page)))
           (+my/html-page-zoom-out)
-          (should (+test-wait-for (lambda () (< (+test-html--number xwidget wide) (* 0.9 width))) 5)))
+          (unless (+test-wait-for (lambda () (< (+test-html--number xwidget page) (* 0.9 width))) 5)
+            (ert-fail (list "- didn't make the page smaller" width (+test-js xwidget +test-html--measures-js)))))
         ;; W: as wide as the pane (wider at its own size).
         (+my/html-page-actual-size)
         (should (+test-wait-for (lambda () (> (+test-html--number xwidget "document.documentElement.scrollWidth")
