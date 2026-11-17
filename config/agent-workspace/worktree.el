@@ -197,14 +197,14 @@ with AGENT's name. Its folder and branch are set in AGENT."
       (let* ((here (file-name-as-directory (file-truename dir)))
              (others (remove here (agent-workspace--agent-worktrees project name)))
              (old (seq-find #'file-directory-p others)))
-        ;; Its folder went (deleted by hand) while git still lists it: locked,
-        ;; it's never pruned.
-        (when (file-directory-p (file-name-directory (directory-file-name dir)))
-          (agent-workspace--worktree-unlock project dir))
+        ;; Its folder went (deleted by hand, the agents' folder with it)
+        ;; while git still lists it: locked, it's never pruned. The agents'
+        ;; folder made first: git finds a worktree by its path's parent.
+        (make-directory (file-name-directory (directory-file-name dir)) t)
+        (agent-workspace--worktree-unlock project dir)
         (dolist (gone (seq-remove #'file-directory-p others))
           (agent-workspace--worktree-unlock project gone))
         (agent-workspace--git "worktree" "prune")
-        (make-directory (file-name-directory (directory-file-name dir)) t)
         (cond
          ;; Its worktree, named otherwise (as before, or for its role before):
          ;; moved here, its work with it. git won't move a locked one.

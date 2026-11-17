@@ -479,6 +479,28 @@ issue you gave it given back (open, unassigned, if still its)."
       ;; Two sessions started.
       (should (= (length (+test-aws--logged :start "ada")) 2)))))
 
+(ert-deftest agent-workspace-session/its-worktrees-folder-deleted ()
+  "The whole .agent-shell/ deleted by hand while the crew runs (git still
+listing its worktrees, locked): restarted, woken, each agent's worktree is
+made anew, on its branch, and its session starts (doom-pbk.33)."
+  (+test-aws--with-crew "folder-gone"
+    (let* ((ada (+test-aws--create "ada"))
+           (ken (+test-aws--create "ken"))
+           (dir (agent-workspace-agent-worktree ada)))
+      (agent-workspace-sleep ken)
+      (delete-directory (expand-file-name ".agent-shell" project) t)
+      (+test-aws--no-questions
+        (agent-workspace-restart ada))
+      (should (+test-aws--state ada 'desk))
+      (should (file-directory-p dir))
+      (should (equal (agent-workspace-agent-worktree ada) dir))
+      (should (equal (let ((default-directory dir)) (+test-aws--git "branch" "--show-current")) "agent/ada"))
+      (agent-workspace-wake ken)
+      (should (+test-aws--state ken 'desk))
+      (should (file-directory-p (agent-workspace-agent-worktree ken)))
+      (should (= (length (+test-aws--logged :start "ada")) 2))
+      (should (= (length (+test-aws--logged :start "ken")) 2)))))
+
 (ert-deftest agent-workspace-session/sleep-and-wake ()
   "Asleep: its session stopped, in the crew still; nothing sent to it;
 woken: a fresh session."
