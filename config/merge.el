@@ -35,8 +35,9 @@
 ;; side above the Result, as wide as the window.
 ;; The panes line up: each change takes as many rows in each, the shorter
 ;; padded with grey filler lines (not text: not saved, not copied, the cursor
-;; skips them); and they scroll together (the wheel, the trackpad, the keys,
-;; smooth scrolling's glides; sideways too).
+;; skips them), a row as tall in each (one with an emoji is taller); and they
+;; scroll together (the wheel, the trackpad, the keys, smooth scrolling's
+;; glides; sideways too).
 ;; The Result can be edited as any file; u undoes the buttons too (and C-r
 ;; redoes them). Keys in the panes: ]c / [c next / previous change; SPC m l /
 ;; SPC m r the change at point from Yours / Theirs, SPC m x ignore it, SPC m w

@@ -387,6 +387,22 @@ columns; the conflict markers name each side as Git does (NAME (ROLE))."
           (should (string-suffix-p "…" header))))
       (+my/merge-abort))))
 
+(ert-deftest merge/rows-as-tall-only-in-the-gui ()
+  "Rows that may be taller (an emoji, a symbol, CJK) measured, not plain
+text nor Greek; in a terminal every row is one line: nothing done."
+  (should (string-match-p +my/merge--maybe-tall "two ✅ done"))
+  (should (string-match-p +my/merge--maybe-tall "three 🚀"))
+  (should (string-match-p +my/merge--maybe-tall "漢字"))
+  (should-not (string-match-p +my/merge--maybe-tall "plain text, café"))
+  (should-not (string-match-p +my/merge--maybe-tall "αβγ"))
+  (+test-merge-with-repo
+    (+test-merge--conflict "a.txt" (+test-merge--lines "one" "two")
+                           (+test-merge--lines "one ✅" "two yours") (+test-merge--lines "one" "two theirs"))
+    (let ((session (+test-merge--open)))
+      (dolist (buffer (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
+        (should-not (buffer-local-value '+my/merge--tall-rows buffer)))
+      (+my/merge-abort))))
+
 (ert-deftest merge/the-changes-and-what-they-are ()
   (+test-merge
     (should (equal (mapcar #'+my/merge-chunk-kind (+my/merge-chunks session))

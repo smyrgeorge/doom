@@ -268,6 +268,44 @@ title; the panes scrolling together."
                 (+my/merge-abort))))
         (set-frame-width nil columns-before)))))
 
+(defun +test-merge--row-ys (session line)
+  "Where row LINE (from 1, the panes scrolled to the top) shows in SESSION's
+three panes: the pixel y of its top, each in its window."
+  (mapcar (lambda (buffer)
+            (nth 2 (window-line-height (1- line) (get-buffer-window buffer))))
+          (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session))))
+
+(ert-deftest e2e-merge/rows-with-emoji-line-up ()
+  "Lines with emoji on one side only (a taller row in its pane): each row at
+the same pixel y in the three panes, side by side and stacked, and again
+once the Result is edited."
+  (dolist (stacked '(nil t))
+    (+test-merge-conflict-of
+        (+test-merge--lines "one" "two" "three" "four" "five" "six" "seven" "eight" "nine" "ten")
+        (+test-merge--lines "one" "two ✅ done" "three 🚀" "four" "five" "six yours" "seven" "eight" "nine" "ten")
+        (+test-merge--lines "one" "two" "three" "four" "five" "six theirs" "seven" "eight" "nine" "ten")
+      (let* ((+my/merge-side-by-side-width (if stacked 10000 0))
+             (session (+my/merge "a.txt")))
+        (+test-sleep 0.3)
+        (dolist (line '(2 3 4 9))
+          (let ((ys (+test-merge--row-ys session line)))
+            (should (equal (list stacked line ys)
+                           (list stacked line (list (car ys) (car ys) (car ys)))))))
+        ;; An emoji typed into the Result's 8th line: lined up again.
+        (with-current-buffer (+my/merge-result session)
+          (goto-char (point-min))
+          (forward-line 7)
+          (end-of-line)
+          (insert " 🎉")
+          (run-hooks 'post-command-hook))
+        (+test-sleep 0.3)
+        (dolist (line '(8 9))
+          (let ((ys (+test-merge--row-ys session line)))
+            (should (equal (list stacked line ys)
+                           (list stacked line (list (car ys) (car ys) (car ys)))))))
+        (with-current-buffer (+my/merge-result session)
+          (+my/merge-abort))))))
+
 (ert-deftest e2e-merge/a-margin-button-clicked-where-it-shows ()
   (+test-merge-conflict
     (let* ((session (+test-merge--e))

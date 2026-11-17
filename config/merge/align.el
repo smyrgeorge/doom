@@ -75,6 +75,7 @@ panes lined up again, the changes it made done or not done shown so."
       (seq-doseq (chunk (+my/merge-chunks session))
         (+my/merge--sync chunk))
       (+my/merge--align session)
+      (+my/merge--even-rows session)
       (+my/merge--render-edited session))))
 
 (defun +my/merge--clean (start end)
@@ -93,6 +94,75 @@ panes lined up again, the changes it made done or not done shown so."
   (prog1 (+my/merge--clean beg end)
     (when delete
       (delete-region beg end))))
+
+;; ROWS AS TALL
+;; In the GUI a row holding an emoji (another font's glyphs) is taller than
+;; the others: the rows below it in its pane drifted from the other panes'.
+;; Each row taller in one pane than in another is made as tall in all three
+;; (a `line-height' on its newline, an overlay's): the rows at the same pixel
+;; y in the three. Only the rows holding a character past U+2000 (emoji,
+;; symbols, CJK...) are measured; again once the Result changed.
+(defvar-local +my/merge--tall-rows nil
+  "The overlays making the pane's rows as tall as the other panes'.")
+
+(defconst +my/merge--maybe-tall "[\u2000-\U0010FFFF]"
+  "A character that may make its row taller than the default font's.")
+
+(defvar-local +my/merge--row-heights nil
+  "The pane's rows' heights measured, by their text (a hash table): each
+measured once, not after each edit of the Result.")
+
+(defun +my/merge--row-height (window line)
+  "The height in pixels of row LINE (from 1) of WINDOW's buffer, nil if it
+has none."
+  (save-excursion
+    (goto-char (point-min))
+    (when (zerop (forward-line (1- line)))
+      (let ((text (buffer-substring-no-properties (point) (line-end-position))))
+        (unless +my/merge--row-heights
+          (setq +my/merge--row-heights (make-hash-table :test #'equal)))
+        (or (gethash text +my/merge--row-heights)
+            (puthash text (cdr (window-text-pixel-size window (point) (line-end-position)))
+                     +my/merge--row-heights))))))
+
+(defun +my/merge--even-rows (session)
+  "SESSION's panes' rows as tall in the three (see above), in the GUI."
+  (let* ((buffers (list (+my/merge-yours session) (+my/merge-result session) (+my/merge-theirs session)))
+         (windows (mapcar (lambda (buffer) (get-buffer-window buffer (+my/merge-frame session))) buffers))
+         (lines nil))
+    (when (and (seq-every-p #'identity windows)
+               (display-graphic-p (window-frame (car windows))))
+      ;; The rows holding one (by number: the same row in the three), the
+      ;; heights made before forgotten.
+      (dolist (buffer buffers)
+        (with-current-buffer buffer
+          (mapc #'delete-overlay +my/merge--tall-rows)
+          (setq +my/merge--tall-rows nil)
+          (save-excursion
+            (goto-char (point-min))
+            (let ((line 1))
+              (while (not (eobp))
+                (when (re-search-forward +my/merge--maybe-tall (line-end-position) t)
+                  (push line lines))
+                (forward-line 1)
+                (cl-incf line))))))
+      (dolist (line (delete-dups lines))
+        (let* ((heights (cl-mapcar (lambda (buffer window)
+                                     (with-current-buffer buffer (+my/merge--row-height window line)))
+                                   buffers windows))
+               (most (apply #'max (mapcar (lambda (height) (or height 0)) heights))))
+          (cl-mapc (lambda (buffer height)
+                     (when (and height (< height most))
+                       (with-current-buffer buffer
+                         (save-excursion
+                           (goto-char (point-min))
+                           (forward-line (1- line))
+                           (let ((end (line-end-position)))
+                             (when (< end (point-max))
+                               (let ((ov (make-overlay end (1+ end))))
+                                 (overlay-put ov 'line-height most)
+                                 (push ov +my/merge--tall-rows))))))))
+                   buffers heights))))))
 
 ;; LINE NUMBERS
 ;; Each pane's lines numbered as in its version, as Doom numbers a file's:

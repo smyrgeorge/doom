@@ -187,6 +187,7 @@ folder) in three panes."
             (let ((buffer-undo-list t))
               (+my/merge--align session)))
           (+my/merge--layout session)
+          (+my/merge--even-rows session)
           (+my/merge--render-bar session)
           ;; At the first change.
           (when-let* ((first (seq-first (+my/merge-chunks session))))
