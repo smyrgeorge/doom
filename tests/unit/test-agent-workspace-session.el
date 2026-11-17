@@ -471,30 +471,20 @@ turn running, its files there; the issue's branch comes with its next turn
 
 (ert-deftest agent-workspace-session/kill ()
   "Killed: gone home, its session and process gone, its worktree kept, the
-issue you gave it given back (open, unassigned, if still its)."
+issue you gave it no longer its (given back in bd: test-agent-workspace-loops.el)."
   (+test-aws--with-crew "kill"
     (let* ((agent (+test-aws--create "ada"))
            (buffer (agent-workspace-agent-buffer agent))
-           (pid (plist-get (car (+test-aws--logged :start "ada")) :pid))
-           (bd nil))
+           (pid (plist-get (car (+test-aws--logged :start "ada")) :pid)))
       (should (+test-aws--pid-alive-p pid))
       (agent-workspace-give agent "doom-a1b" "A title")
-      (cl-letf (((symbol-function 'executable-find) (lambda (&rest _) "/usr/bin/bd"))
-                ((symbol-function 'start-process)
-                 (let ((start-process (symbol-function 'start-process)))
-                   (lambda (name buffer program &rest args)
-                     (if (equal name "agent-workspace-give-back")
-                         (progn (push (cons program args) bd) nil)
-                       (apply start-process name buffer program args))))))
-        (+test-aws--no-questions
-          (agent-workspace-kill agent)))
+      (+test-aws--no-questions
+        (agent-workspace-kill agent))
       (should (eq (agent-workspace-agent-state agent) 'home))
       (should (equal (agent-workspace-state-text agent) "gone home"))
       (should-not (buffer-live-p buffer))
       (should (+test-aws--wait (lambda () (not (+test-aws--pid-alive-p pid))) 10))
       (should (file-directory-p (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
-      (should (equal bd '(("bd" "update" "doom-a1b" "--if-assignee=ada" "--if-status=in_progress"
-                           "--status=open" "--assignee="))))
       (should-not (agent-workspace-agent-issue agent))
       ;; Still in the crew; woken, fresh.
       (should (eq (agent-workspace-agent "ada") agent))

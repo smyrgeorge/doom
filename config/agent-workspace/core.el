@@ -19,6 +19,7 @@
 (declare-function agent-workspace-worktree-move "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-move-blocker "agent-workspace/worktree")
 (declare-function agent-workspace--name-left-p "agent-workspace/new")
+(declare-function agent-workspace--bd-give-back "agent-workspace/issues")
 (declare-function agent-workspace-worktree-fate "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-remove "agent-workspace/worktree")
 (declare-function agent-workspace-issue-branch-open "agent-workspace/worktree")
@@ -559,15 +560,10 @@ none. Its branch as it is (an issue it claimed itself: loops.el)."
 
 (defun agent-workspace--give-back (agent)
   "The issue AGENT had, if it's still in progress and assigned to AGENT:
-open again, unassigned (bd, in the background). AGENT then has none."
+open again, unassigned (bd as AGENT, in the background; a failure said in
+its room: `agent-workspace--bd-give-back'). AGENT then has none."
   (when-let* ((issue (agent-workspace-agent-issue agent)))
-    (let ((default-directory (agent-workspace-agent-project agent))
-          (name (agent-workspace-agent-name agent)))
-      (when (executable-find "bd")
-        ;; Guarded: only if it's still AGENT's (the assignee checked by bd).
-        (start-process "agent-workspace-give-back" nil "bd" "update" issue
-                       (concat "--if-assignee=" name) "--if-status=in_progress"
-                       "--status=open" "--assignee=")))
+    (agent-workspace--bd-give-back agent issue)
     (agent-workspace--note-issue agent nil)))
 
 (defun agent-workspace-close (&optional project)

@@ -567,15 +567,42 @@ else why not, in bd's words (another agent has it)."
 
 (defun agent-workspace--bd-give-back (agent id)
   "Issue ID, claimed for AGENT: open again, unassigned, if it's still
-AGENT's and in progress (bd as AGENT, in the background)."
-  (let ((default-directory (agent-workspace-agent-project agent))
-        (name (agent-workspace-agent-name agent))
-        (process-environment (cons (concat "BEADS_ACTOR=" (agent-workspace-agent-name agent))
-                                   process-environment)))
-    (ignore-errors
-      (start-process "agent-workspace-give-back" nil "bd" "update" id
-                     (concat "--if-assignee=" name) "--if-status=in_progress"
-                     "--status=open" "--assignee="))))
+AGENT's and in progress (bd as AGENT, in the background; nothing without
+bd or Beads in its project). bd failing is said in the room, in its words;
+not the issue no longer AGENT's (closed, someone else's: bd's 13)."
+  (let* ((project (agent-workspace-agent-project agent))
+         (name (agent-workspace-agent-name agent))
+         (default-directory project)
+         (process-environment (cons (concat "BEADS_ACTOR=" name) process-environment)))
+    (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project)))
+      (let ((output (generate-new-buffer " *agent-workspace give back*")))
+        (condition-case err
+            (make-process
+             :name "agent-workspace-give-back" :buffer output :noquery t :connection-type 'pipe
+             :command (list "bd" "update" id (concat "--if-assignee=" name) "--if-status=in_progress"
+                            "--status=open" "--assignee=")
+             :sentinel (lambda (process _event)
+                         (unless (process-live-p process)
+                           (let ((status (process-exit-status process))
+                                 (text (with-current-buffer output (buffer-string))))
+                             (kill-buffer output)
+                             (unless (memq status '(0 13))
+                               (agent-workspace--give-back-failed
+                                project name id
+                                (or (seq-find (lambda (line) (not (string-empty-p line)))
+                                              (mapcar #'string-trim (split-string text "\n")))
+                                    (format "bd failed (%s)" status))))))))
+          (error
+           (kill-buffer output)
+           (agent-workspace--give-back-failed project name id (error-message-string err))))))))
+
+(defun agent-workspace--give-back-failed (project name id why)
+  "Issue ID not given back for the agent NAME of PROJECT, WHY: said in its
+room (and as a message)."
+  (let ((text (format "couldn't give %s back: %s" id why)))
+    (message "%s %s" name text)
+    (when (fboundp 'agent-workspace-room-post)
+      (agent-workspace-room-post project :kind 'note :agent name :text text))))
 
 (defun agent-workspace-give-issue (agent id title &optional type)
   "Issue ID (its TITLE, TYPE: bd's issue_type) given to AGENT by you (t,

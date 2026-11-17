@@ -534,6 +534,42 @@ issue noted (doom-pbk.55)."
       (should-not (+test-awl--prompts "ada"))
       (should (equal (agent-workspace-agent-issue ken) given)))))
 
+(ert-deftest agent-workspace-loops/killed-it-gives-its-issue-back ()
+  "K on an agent with the issue you gave it in progress, its: open again,
+unassigned, in bd, given back as the agent; bd failing: said in the room,
+in bd's words (doom-pbk.36)."
+  (+test-awl--with-crew "give-back"
+    (let* ((one (+test-awl--issue project "the lexer" "build" 1))
+           (two (+test-awl--issue project "the parser" "build" 1))
+           (ada (+test-awl--create "ada"))
+           (ken (+test-awl--create "ken"))
+           (show (lambda (id)
+                   (let ((default-directory project))
+                     (car (json-parse-string (+test-awl--run "bd" "show" id "--json")
+                                             :object-type 'alist :array-type 'list))))))
+      (agent-workspace-give-issue ada one "the lexer" "task")
+      (should (equal (alist-get 'assignee (funcall show one)) "ada"))
+      (agent-workspace-kill ada)
+      (should (+test-awl--wait (lambda () (equal (alist-get 'status (funcall show one)) "open"))))
+      (should-not (alist-get 'assignee (funcall show one)))
+      ;; bd refusing: said.
+      (agent-workspace-give-issue ken two "the parser" "task")
+      (let* ((bin (file-name-as-directory (make-temp-file (+test-tmp-file "refusing-bd-") t)))
+             (real (executable-find "bd"))
+             (exec-path (cons bin exec-path))
+             (process-environment (cons (concat "PATH=" bin path-separator (getenv "PATH")) process-environment)))
+        (with-temp-file (expand-file-name "bd" bin)
+          (insert "#!/bin/sh\ncase \"$*\" in *--if-assignee*) echo \"Error updating $2: the database is locked\" >&2; exit 1;; esac\nexec "
+                  (shell-quote-argument real) " \"$@\"\n"))
+        (set-file-modes (expand-file-name "bd" bin) #o755)
+        (agent-workspace-kill ken)
+        (should (+test-awl--wait
+                 (lambda () (member (cons "note" (format "couldn't give %s back: Error updating %s: the database is locked"
+                                                         two two))
+                                    (+test-awl--room project "ken")))
+                 20)))
+      (should (equal (alist-get 'assignee (funcall show two)) "ken")))))
+
 ;; ====== THE SAVED CREW ======
 
 (ert-deftest agent-workspace-loops/reopening-never-starts-one ()
