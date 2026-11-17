@@ -110,6 +110,40 @@ the rest; not enough rows to open it: all folded."
   (should (equal (agent-workspace--sizes '(a b c) 'b 7) '((a . 1) (b . 1) (c . 1))))
   (should (equal (agent-workspace--sizes '(a b c) 'b 8) '((a . 1) (b . 6) (c . 1)))))
 
+(ert-deftest agent-workspace-app/keys-on-a-bar ()
+  "On an agent's bar, from the keyboard: the bar's keys (j/k between agents,
+TAB, RET) and the app's (c, i, K...) act, its line's map adding its clicks
+over them, never in their place; a header line's line keeps its clicks
+(doom-pbk.82)."
+  (+test-awa "bar-keys"
+    (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
+      (agent-workspace-open t)
+      (agent-workspace-select ada)
+      (let ((bar (get-buffer-window (agent-workspace--bar-buffer ken))))
+        (should bar)
+        (with-selected-window bar
+          (goto-char (+ (point-min) 4))
+          (should (get-text-property (point) 'keymap))
+          ;; The bar's own keys at its line, under its clicks (Evil's
+          ;; states, or none).
+          (should (memq agent-workspace-bar-mode-map (current-active-maps nil (point))))
+          (should (eq (key-binding (kbd "j") nil nil (point)) #'agent-workspace-next))
+          (should (eq (key-binding (kbd "k") nil nil (point)) #'agent-workspace-previous))
+          (should (eq (key-binding (kbd "TAB") nil nil (point)) #'agent-workspace-toggle))
+          (should (eq (key-binding (kbd "RET") nil nil (point)) #'agent-workspace-go))
+          (should (eq (key-binding (kbd "K") nil nil (point)) (lookup-key agent-workspace-bar-mode-map (kbd "K"))))
+          (should (lookup-key agent-workspace-bar-mode-map (kbd "K")))
+          ;; Its clicks.
+          (should (eq (key-binding [mouse-1] nil nil (point)) #'agent-workspace-line-click))
+          ;; TAB on ken's bar: his pane opens.
+          (call-interactively (key-binding (kbd "TAB") nil nil (point))))
+        (should (get-buffer-window (agent-workspace-agent-buffer ken))))
+      ;; A pane's header line: its clicks there.
+      (with-selected-window (get-buffer-window (agent-workspace-agent-buffer ken))
+        (let ((header (agent-workspace--pane-header)))
+          (should (eq (lookup-key (get-text-property 3 'local-map header) [header-line mouse-1])
+                      #'agent-workspace-line-click)))))))
+
 (ert-deftest agent-workspace-app/no-tint-in-256-colours ()
   "In a 256-colour terminal, no agent's colour blended behind its bar, its
 header or a raised hand's (they came out in wrong hues, dim text on them

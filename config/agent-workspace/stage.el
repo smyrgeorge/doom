@@ -90,16 +90,21 @@ config/agent-workspace.el).")
           (agent-workspace--app-buffer-add (agent-workspace-agent-project agent) (current-buffer))
           (current-buffer)))))
 
-(defun agent-workspace--clickable (line map)
+(defun agent-workspace--clickable (line map &optional header)
   "LINE with MAP on it (a click selects its agent), hovered as `hl-line',
 saying so where its text says nothing else on hover (its context's usage,
-its panels); its buttons (a raised hand's) keep their own."
+its panels); its buttons (a raised hand's) keep their own. HEADER: LINE
+is a header line's (MAP its local-map too, as a header line's clicks
+need); a buffer's (a bar's), MAP over the buffer's own keys, never in
+their place."
   (let ((line (copy-sequence line))
         (pos 0))
     (while (< pos (length line))
       (let ((next (or (next-single-property-change pos 'agent-workspace-button line) (length line))))
         (unless (get-text-property pos 'agent-workspace-button line)
-          (add-text-properties pos next (list 'keymap map 'local-map map 'mouse-face 'agent-workspace-hover) line)
+          (add-text-properties pos next (append (list 'keymap map 'mouse-face 'agent-workspace-hover)
+                                                (and header (list 'local-map map)))
+                               line)
           (let ((at pos))
             (while (< at next)
               (let ((end (or (next-single-property-change at 'help-echo line next) next)))
@@ -151,7 +156,7 @@ its canvas or a panel shown there full size, their tabs at its right."
       (agent-workspace-line agent (window-total-width) t nil
                             (and (window-parameter nil 'agent-workspace-side)
                                  (agent-workspace--tabs-text agent (window-buffer))))
-      agent-workspace-line-map))))
+      agent-workspace-line-map t))))
 
 ;; ====== THE STACK ======
 
@@ -362,7 +367,7 @@ and V at its right. Tinted in its colour, as a bar."
                                          (propertize "v: next · V: full size " 'face 'shadow)
                                          (window-total-width))
                                         (agent-workspace-agent-face agent) 0.14)
-                                       agent-workspace-line-map))))
+                                       agent-workspace-line-map t))))
 
 (define-minor-mode agent-workspace-side-mode
   "An agent's canvas or panel shown in its pane on the stage: v shows the
