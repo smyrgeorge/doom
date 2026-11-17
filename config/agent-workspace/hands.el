@@ -119,9 +119,14 @@ session shown), or its question (its canvas's tab shown: its own, ask...)."
         (with-current-buffer (agent-workspace-agent-buffer agent)
           (ignore-errors (agent-shell-jump-to-latest-permission-button-row)))))))
 
-(defun agent-workspace-hand-answer (agent label)
+(defun agent-workspace-hand-answer (agent label &optional key)
   "Answer AGENT's raised hand with its option LABEL (see
-`agent-workspace-hand-options'): said in its room."
+`agent-workspace-hand-options'): said in its room. KEY: only if it's still
+the hand KEY names (`agent-workspace--ask-key': a button drawn for it),
+else a user error, nothing answered."
+  (when (and key (not (and (eq (agent-workspace-agent-state agent) 'hand)
+                           (equal (agent-workspace--ask-key (agent-workspace-agent-ask agent)) key))))
+    (user-error "%s no longer asks that: nothing answered" (agent-workspace-agent-name agent)))
   (let ((press (cdr (assoc label (agent-workspace-hand-options agent)))))
     (unless press
       (user-error "%s's hand has no option %s" (agent-workspace-agent-name agent) label))
@@ -133,8 +138,10 @@ session shown), or its question (its canvas's tab shown: its own, ask...)."
 ;; ====== IN THE ROOM ======
 
 (defun agent-workspace--ask-key (ask)
-  "A raised hand's ASK, as the room's entry for it remembers it."
-  (or (plist-get ask :request-id)
+  "A raised hand's ASK, as the room's entry for it remembers it: its own
+key (`agent-workspace--raise-hand')."
+  (or (plist-get ask :key)
+      (plist-get ask :request-id)
       (and (plist-get ask :id) (format "%s/%s" (plist-get ask :id) (plist-get ask :title)))
       (plist-get ask :title)))
 
@@ -165,12 +172,12 @@ its options, each pressing it."
                                'help-echo (format "%s: %s" (agent-workspace-agent-name agent) label)
                                'local-map (let ((map (make-sparse-keymap))
                                                 (press (lambda () (interactive)
-                                                         (agent-workspace-hand-answer agent label))))
+                                                         (agent-workspace-hand-answer agent label ask-key))))
                                             (define-key map [header-line mouse-1] press)
                                             map)
                                'keymap (let ((map (make-sparse-keymap))
                                              (press (lambda () (interactive)
-                                                      (agent-workspace-hand-answer agent label))))
+                                                      (agent-workspace-hand-answer agent label ask-key))))
                                          (define-key map [mouse-1] press)
                                          (define-key map [header-line mouse-1] press)
                                          (define-key map (kbd "RET") press)

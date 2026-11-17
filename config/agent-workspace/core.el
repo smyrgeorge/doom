@@ -67,6 +67,12 @@ once it's `renamed' (or given a `role'), or where it was if it's `unmoved'
   "Called with an agent, its old state and its new one, when its state
 changes (before `agent-workspace-change-functions').")
 
+(defvar agent-workspace-hand-functions nil
+  "Called with an agent that raised its hand, its ask set: for each request,
+a second one while the first still waits too.")
+
+(defvar agent-workspace--hand-count 0 "Hands raised in this Emacs.")
+
 (defvar agent-workspace-role-function #'agent-workspace--bare-role
   "Called with a project and a role's name: the role, a plist. Its keys:
 :name, :description, :verb (\"building\"), :instructions (added to the
@@ -335,13 +341,18 @@ nil if it isn't a word ending in -ing."
          (agent-workspace--set-state agent 'home))))))
 
 (defun agent-workspace--raise-hand (agent ask)
-  "AGENT raises its hand: ASK says what for."
+  "AGENT raises its hand: ASK says what for, given a :key of its own (no
+other hand's, in this session or any before: a request's id is counted per
+connection)."
   (let ((since (agent-workspace-agent-since agent)))
-    (setf (agent-workspace-agent-ask agent) ask)
+    (setf (agent-workspace-agent-ask agent)
+          (append ask (list :key (format "%x.%d" (truncate (* 1000000 (float-time)))
+                                         (cl-incf agent-workspace--hand-count)))))
     (if (eq (agent-workspace-agent-state agent) 'hand)
         (agent-workspace--changed agent 'state)
       (agent-workspace--set-state agent 'hand))
-    (setf (agent-workspace-agent-since agent) (or since (float-time)))))
+    (setf (agent-workspace-agent-since agent) (or since (float-time)))
+    (run-hook-with-args 'agent-workspace-hand-functions agent)))
 
 (defun agent-workspace--looked-at-p (agent)
   "Non-nil if AGENT's session is shown, in a window of a visible frame."

@@ -213,6 +213,43 @@ sam gets the answer, the ask tab goes, its side area closes."
         (should (get-buffer-window session))
         (should (eq (window-buffer (get-buffer-window session)) session))))))
 
+(ert-deftest agent-workspace-hands/a-button-answers-only-its-own-request ()
+  "A room line's buttons answer only the request it names: a line from an
+earlier session with the same request id gets none; a second request
+while the first waits posts its own line with the buttons, the first's
+gone, and a button of the first pressed still says so and answers nothing
+\(doom-pbk.44)."
+  (+test-awh "own"
+    (let ((pressed nil))
+      (cl-letf (((symbol-function 'agent-workspace--go-to-hand)
+                 (lambda (agent) (push (plist-get (agent-workspace-agent-ask agent) :title) pressed))))
+        (cl-flet ((count (text) (with-temp-buffer
+                                  (insert (+test-awh--feed project))
+                                  (count-matches (regexp-quote text) (point-min) (point-max)))))
+          ;; (a) An earlier session's line, its request's id 7, as this one's.
+          (agent-workspace-room-post project :kind 'hand :agent "ada" :text "wants to run rm -rf build" :ask 7)
+          (agent-workspace--raise-hand ada '(:kind question :title "git status" :request-id 7))
+          (let ((feed (+test-awh--feed project)))
+            (should (= (count "[Go to it]") 1))
+            (should (< (string-search "asks: git status" feed) (string-search "[Go to it]" feed))))
+          ;; (b) A second request while it waits: a line of its own, the buttons there.
+          (let ((first (with-current-buffer (agent-workspace--room-buffer project)
+                         (goto-char (point-min))
+                         (search-forward "[Go to it]")
+                         (lookup-key (get-text-property (1- (point)) 'keymap) (kbd "RET")))))
+            (agent-workspace--raise-hand ada '(:kind question :title "git push --force" :request-id 8))
+            (let ((feed (+test-awh--feed project)))
+              (should (= (count "asks: git status") 1))
+              (should (= (count "asks: git push --force") 1))
+              (should (= (count "[Go to it]") 1))
+              (should (< (string-search "asks: git push --force" feed) (string-search "[Go to it]" feed))))
+            ;; The first's button, pressed: said, nothing answered.
+            (should (equal (cadr (should-error (funcall first) :type 'user-error))
+                           "ada no longer asks that: nothing answered"))
+            (should-not pressed)
+            (+test-awh--press project "Go to it")
+            (should (equal pressed '("git push --force")))))))))
+
 (ert-deftest agent-workspace-hands/no-hand-no-options ()
   (+test-awh "none"
     (should-not (agent-workspace-hand-options ada))

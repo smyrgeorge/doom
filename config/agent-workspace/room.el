@@ -391,16 +391,26 @@ the nearest one after it; none, the end."
   (prog1 (gethash agent agent-workspace--room-sessions)
     (puthash agent t agent-workspace--room-sessions)))
 
+(defun agent-workspace--room-hand-h (agent)
+  "AGENT raised its hand (a request, a second one too): said, a line of its
+own, its buttons under it while it's the one waiting. In
+`agent-workspace-hand-functions'."
+  (agent-workspace-room-post (agent-workspace-agent-project agent)
+                             :kind 'hand :agent (agent-workspace-agent-name agent)
+                             :text (agent-workspace-state-text agent)
+                             :ask (and (fboundp 'agent-workspace--ask-key)
+                                       (agent-workspace--ask-key (agent-workspace-agent-ask agent)))))
+
+(add-hook 'agent-workspace-hand-functions #'agent-workspace--room-hand-h)
+
 (defun agent-workspace--room-state-h (agent old new)
   "AGENT's state changed: a hand raised, gone home, stuck, said. In
 `agent-workspace-state-change-functions'."
   (let ((project (agent-workspace-agent-project agent))
         (name (agent-workspace-agent-name agent)))
     (pcase new
-      ('hand (agent-workspace-room-post project :kind 'hand :agent name
-                                        :text (agent-workspace-state-text agent)
-                                        :ask (and (fboundp 'agent-workspace--ask-key)
-                                                  (agent-workspace--ask-key (agent-workspace-agent-ask agent)))))
+      ;; A hand raised: said for each request (`agent-workspace-hand-functions').
+      ('hand)
       ('home (unless (eq old 'home)
                (agent-workspace-room-post project :kind 'home :agent name :text "went home")))
       (_ (when (and (eq old 'hand) (agent-workspace--app project))
