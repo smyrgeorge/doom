@@ -284,6 +284,23 @@ q: the stage back as it was."
           (should (equal (+test-awb--windows) laid-out))
           (should (eq (window-buffer (selected-window)) from)))))))
 
+(ert-deftest agent-workspace-branches/no-row-past-a-terminal-s-edge ()
+  "In a terminal, no row of the branches view as wide as its window (its
+last column a $), however long its agent's state; the GUI's to the edge
+\(doom-pbk.83)."
+  (+test-awb "edge"
+    (pcase-let ((`(,ken ,_ada) (+test-awb--crew)))
+      (set-frame-size (selected-frame) 150 40)
+      (agent-workspace-open t)
+      (agent-workspace--raise-hand ken '(:kind permission :title "npm install --save-dev a-long-package-name"))
+      (agent-workspace-branches)
+      (let* ((view (+test-awb--view project))
+             (window (get-buffer-window view)))
+        (should-not (agent-workspace--graphic-p))
+        (with-current-buffer view
+          (dolist (line (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n" t))
+            (should (< (string-width line) (window-body-width window)))))))))
+
 (ert-deftest agent-workspace-branches/from-the-room-alone ()
   "b from the room alone (2): the view with the room beside it; q, the room
 alone again."

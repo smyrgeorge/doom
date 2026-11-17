@@ -218,7 +218,7 @@ with … to fit): the columns' heads, a line a row (the row on it, as its
                                                            ('conflicts (propertize "conflicts" 'face 'warning))
                                                            (_ ""))
                                                          9)
-                              "  " now)))
+                              "  " (agent-workspace--fit now now-w))))
             ;; A forgotten agent's, dimmed (its Merges keeps its colour).
             (unless (agent-workspace--branches-agent row)
               (add-face-text-property 0 (length line) 'shadow t line))
@@ -244,7 +244,10 @@ its place)."
                (pos (if window (window-point window) (point)))
                (branch (plist-get (get-text-property pos 'agent-workspace-branch-row) :branch))
                (line (line-number-at-pos pos))
-               (width (if window (window-body-width window) 100))
+               ;; In a terminal its last column is kept for a $.
+               (width (if window
+                          (- (window-body-width window) (if (agent-workspace--graphic-p) 0 1))
+                        100))
                (inhibit-read-only t))
           (erase-buffer)
           (dolist (text (agent-workspace--branches-lines agent-workspace--branches-rows width))
