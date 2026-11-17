@@ -312,6 +312,32 @@ further in."
             (dolist (id '("t-1" "t-2" "t-3" "t-4" "t-5" "t-6"))
               (should (= (cdr (assoc id xs)) (+ at (* 2 (frame-char-width))))))))))))
 
+(ert-deftest e2e-agent-workspace/opened-in-a-second-frame ()
+  "The app opened in a second frame: the first unmarked, given back the
+windows it had; q in the second acts there: unmarked, its own windows
+back; no frame left marked (doom-pbk.71)."
+  (+test-e2e-aw
+    (let* ((first (selected-frame))
+           (second (make-frame `((visibility . nil) (width . 220) (height . 40)))))
+      (unwind-protect
+          (progn
+            (should (agent-workspace-frame-p first))
+            (with-selected-frame second
+              (switch-to-buffer (get-buffer-create "*second*"))
+              (agent-workspace-open t)
+              (should (agent-workspace-frame-p second))
+              (should (get-buffer-window (agent-workspace--issues-buffer project) second)))
+            ;; The first: unmarked, the app's windows gone from it.
+            (should-not (agent-workspace-frame-p first))
+            (should-not (get-buffer-window (agent-workspace--issues-buffer project) first))
+            ;; q in the second: there.
+            (with-selected-frame second
+              (agent-workspace-leave t)
+              (should (eq (window-buffer (frame-first-window second)) (get-buffer "*second*"))))
+            (should-not (seq-some #'agent-workspace-frame-p (frame-list))))
+        (delete-frame second)
+        (kill-buffer "*second*")))))
+
 (ert-deftest e2e-agent-workspace/the-minimap ()
   "The minimap under the issue list: a lane each as ada and sam do things,
 drawn a moment later; its avatars images; every lane's cells and bar at the

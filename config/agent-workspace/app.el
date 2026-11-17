@@ -80,7 +80,7 @@ pane opened or folded.")
   selected           ; the selected agent
   open               ; the agent whose pane is open, or nil: every pane folded
   (view 'stage)      ; the stage (and the room beside it), the room alone, or the branches (b) in the stage's place
-  came-from          ; the workspace q goes back to (or a window configuration)
+  came-from          ; unused: where q goes back to is each frame's (agent-workspace--came-from)
   own                ; its own buffers: the issue list, the bars, the hint
   windows            ; the stage's windows, as last laid out
   frame              ; the frame it's laid out in
@@ -237,14 +237,16 @@ its first agent is asked for."
         (unless app
           (setq app (agent-workspace--make-app :project (agent-workspace--root project)))
           (puthash (agent-workspace--root project) app agent-workspace--apps))
+        ;; Where q goes back to: this frame's (another frame showing it is
+        ;; given its own back as it's laid out here).
         (let ((from (agent-workspace--workspace)))
           (if (and (agent-workspace--persp-p) (not here))
               (progn
                 (unless (equal from (agent-workspace-workspace-name project))
-                  (setf (agent-workspace--app-came-from app) from))
+                  (set-frame-parameter nil 'agent-workspace-came-from from))
                 (agent-workspace--switch (agent-workspace-workspace-name project)))
-            (unless (agent-workspace--shown-p app)
-              (setf (agent-workspace--app-came-from app) (current-window-configuration)))))
+            (unless (equal (frame-parameter nil 'agent-workspace) (agent-workspace--app-project app))
+              (set-frame-parameter nil 'agent-workspace-came-from (current-window-configuration)))))
         (when new
           (run-hook-with-args-until-success 'agent-workspace-open-functions project))
         (agent-workspace--issues-buffer project)
@@ -273,20 +275,30 @@ its first agent is asked for."
                (equal (frame-parameter frame 'agent-workspace) (agent-workspace--app-project app)))
       (set-frame-parameter frame 'agent-workspace nil))))
 
+(defun agent-workspace--frame-back (frame &optional project)
+  "FRAME (the selected one) without the app (PROJECT's: then only if it's
+its): unmarked, given back what it showed before it (its windows, or its
+workspace)."
+  (let ((frame (or frame (selected-frame))))
+    (when (and (frame-live-p frame)
+               (or (not project) (equal (frame-parameter frame 'agent-workspace) project)))
+      (let ((from (frame-parameter frame 'agent-workspace-came-from)))
+        (set-frame-parameter frame 'agent-workspace nil)
+        (set-frame-parameter frame 'agent-workspace-came-from nil)
+        (cond ((window-configuration-p from)
+               (set-window-configuration from))
+              ((agent-workspace--persp-p)
+               (with-selected-frame frame
+                 (agent-workspace--switch (or from (bound-and-true-p +workspaces-main) "main")))))))))
+
 (defun agent-workspace-leave (&optional quiet)
-  "Leave the crew's app, back where you came from. The crew goes on (said,
-unless QUIET)."
+  "Leave the crew's app, back where you came from, in the frame you're in.
+The crew goes on (said, unless QUIET)."
   (interactive)
-  (let* ((app (agent-workspace--here-or-error))
-         (from (agent-workspace--app-came-from app)))
-    (agent-workspace--unmark app)
-    (cond ((window-configuration-p from)
-           (set-window-configuration from)
-           (setf (agent-workspace--app-came-from app) nil))
-          ((agent-workspace--persp-p)
-           (agent-workspace--switch (or from (bound-and-true-p +workspaces-main) "main"))))
-    (unless quiet
-      (message "The crew goes on: its tally is in the mode line (a click comes back)"))))
+  (agent-workspace--here-or-error)
+  (agent-workspace--frame-back (selected-frame))
+  (unless quiet
+    (message "The crew goes on: its tally is in the mode line (a click comes back)")))
 
 ;; A FILE SHOWN FROM THE APP (opened from an agent's reply, its review): where
 ;; you came from (the project's own workspace), not the crew's: its stage
@@ -361,8 +373,9 @@ back where you came from. Its worktrees and its saved crew stay."
   (interactive)
   (let* ((app (agent-workspace--here-or-error))
          (project (agent-workspace--app-project app))
-         (from (agent-workspace--app-came-from app))
+         (from (frame-parameter nil 'agent-workspace-came-from))
          (name (agent-workspace-workspace-name project)))
+    (set-frame-parameter nil 'agent-workspace-came-from nil)
     (agent-workspace--close-app project)
     (cond ((window-configuration-p from)
            (set-window-configuration from))
@@ -474,6 +487,12 @@ buffer is current: a timer's, a canvas's being shown)."
                              (window-list nil 'nomini))
                    (frame-first-window))))
     (agent-workspace--settle app agents)
+    ;; Laid out in another frame before: that one given back what it showed
+    ;; (its windows restored there: this frame selected after).
+    (let ((old (agent-workspace--app-frame app)))
+      (unless (eq old (selected-frame))
+        (with-selected-frame (selected-frame)
+          (agent-workspace--frame-back old project))))
     (set-frame-parameter nil 'agent-workspace project)
     (setf (agent-workspace--app-frame app) (selected-frame))
     (agent-workspace--clear app base)
