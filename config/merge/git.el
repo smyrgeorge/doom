@@ -13,6 +13,17 @@ nil if it failed."
                          nil t nil args))
            (buffer-string)))))
 
+(defun +my/merge--git-failed (&rest args)
+  "Run git with ARGS in the current folder: nil if it succeeded, else what it
+said, its first line (\"Unable to create '.../index.lock': File exists.\")."
+  (with-temp-buffer
+    (unless (zerop (apply #'process-file (or (bound-and-true-p magit-git-executable) "git")
+                          nil t nil args))
+      (let ((line (car (split-string (buffer-string) "\n" t "[ \t]+"))))
+        (if line
+            (replace-regexp-in-string "\\`\\(?:fatal\\|error\\): " "" line)
+          (format "git %s failed" (car args)))))))
+
 (defun +my/merge--stages (path)
   "PATH's stages in the index: ((STAGE . MODE)...)."
   (let ((out (+my/merge--git "ls-files" "-u" "--" path))

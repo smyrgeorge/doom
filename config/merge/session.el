@@ -295,14 +295,17 @@ buffer visiting it shows it then (asked first if it has changes not saved)."
 
 (defun +my/merge-done ()
   "Done: save the file, and stage it if no change is left; with some left,
-ask first, and save them as conflict markers, not staged."
+ask first, and save them as conflict markers, not staged. Git failing to
+stage it (another git holding the index): said, the panes left open (Done
+again stages it)."
   (interactive)
   (let* ((session (+my/merge--session))
          (left (car (+my/merge--counts session))))
     (cond ((zerop left)
            (+my/merge--write session (+my/merge--result-text session))
-           (let ((default-directory (+my/merge-toplevel session)))
-             (+my/merge--git "add" "--" (+my/merge-path session)))
+           (when-let* ((failed (let ((default-directory (+my/merge-toplevel session)))
+                                 (+my/merge--git-failed "add" "--" (+my/merge-path session)))))
+             (user-error "%s saved, not staged: %s" (+my/merge-path session) failed))
            (+my/merge--finish session)
            (message "%s resolved and staged" (+my/merge-path session)))
           ((y-or-n-p (format "%d change%s not done: save %s with conflict markers there, not staged? "

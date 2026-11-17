@@ -777,6 +777,27 @@ hand as it is (done)."
         (should-not (buffer-live-p buffer)))
       (should (one-window-p)))))
 
+(ert-deftest merge/done-when-git-cant-stage ()
+  "Git failing to stage the file (another git holding the index): said, with
+git's reason and the file; not \"staged\"; the panes still open, Done again
+stages it."
+  (+test-merge
+    (+my/merge-accept-right)
+    (let ((lock (expand-file-name ".git/index.lock")))
+      (+test-merge--write lock "")
+      (let ((err (should-error (+my/merge-done) :type 'user-error)))
+        (should (string-match-p "\\`a\\.txt saved, not staged: Unable to create '.*index\\.lock': File exists\\.\\'"
+                                (error-message-string err))))
+      ;; Saved, still in conflict, the merge still open.
+      (should (equal (+test-merge--read "a.txt") +test-merge--theirs))
+      (should (string-match-p "a.txt" (+test-merge--git "ls-files" "-u")))
+      (should-not (+my/merge-finished session))
+      (should (buffer-live-p (+my/merge-result session)))
+      (delete-file lock)
+      (+my/merge-done)
+      (should (string-empty-p (+test-merge--git "ls-files" "-u")))
+      (should (+my/merge-finished session)))))
+
 (ert-deftest merge/done-with-changes-left ()
   "Asked first; the changes left as Git's conflict markers; not staged."
   (+test-merge
