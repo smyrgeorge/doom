@@ -186,7 +186,8 @@ builders`.
 
 When an issue is ready for a role and one of its agents is free, the room offers it once: `demo-3 is ready for the
 builders: ken is free`, with `[Give it to ken]`. Two agents claiming one issue at once never both get it: bd's claim
-is atomic.
+is atomic. An issue you give (`t`, `[Give it to ken]`) is claimed for its agent at once, so no loop takes it while
+its agent finishes its turn; one another agent already has isn't given.
 
 With `agent-workspace-agents-talk` set to `nil`, nothing is handed on: an agent whose role hands on is told to leave
 the issue as it is and tell you. The room still offers a ready issue, for you to give.

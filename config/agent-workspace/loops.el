@@ -197,18 +197,6 @@ background; CALLBACK with (ok . JSON) or (error . WHY)."
          (done)
          (funcall callback (cons 'error (concat "bd: " (error-message-string err)))))))))
 
-(defun agent-workspace--loop-give-back (agent id)
-  "Issue ID, claimed for AGENT that's no longer free: open again,
-unassigned, if it's still AGENT's (bd, in the background)."
-  (let ((default-directory (agent-workspace-agent-project agent))
-        (name (agent-workspace-agent-name agent))
-        (process-environment (cons (concat "BEADS_ACTOR=" (agent-workspace-agent-name agent))
-                                   process-environment)))
-    (ignore-errors
-      (start-process "agent-workspace-loop-give-back" nil "bd" "update" id
-                     (concat "--if-assignee=" name) "--if-status=in_progress"
-                     "--status=open" "--assignee="))))
-
 ;; ====== TAKING THE NEXT ISSUE ======
 
 (defun agent-workspace--loop-soon (agent)
@@ -296,7 +284,7 @@ committed (no branch for an issue there): a failure, nothing claimed."
                       ;; No longer free (its loop turned off, given a message,
                       ;; put to sleep, its crew closed): the issue claimed for
                       ;; it given back.
-                      (when issue (agent-workspace--loop-give-back agent (alist-get 'id issue))))
+                      (when issue (agent-workspace--bd-give-back agent (alist-get 'id issue))))
                      ((eq (car answer) 'error) (agent-workspace--loop-failed agent (cdr answer)))
                      (issue (agent-workspace--loop-take agent (alist-get 'id issue) (alist-get 'title issue)
                                                         (alist-get 'issue_type issue)))
@@ -314,7 +302,7 @@ not opened (changes there since): the issue given back, a failure."
     (condition-case err
         (agent-workspace-give agent id title type)
       (user-error
-       (agent-workspace--loop-give-back agent id)
+       (agent-workspace--bd-give-back agent id)
        (signal (car err) (cdr err))))
     (agent-workspace--loop-say agent 'issue (format "%s %s: %s" (if woke "woke up, took" "took") id title))
     (when (agent-workspace--loop-used-p agent)

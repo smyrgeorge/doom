@@ -496,6 +496,44 @@ try again cancelled."
       (+test-awl--quiet ada)
       (should (equal (+test-awl--prompts "ada") (list (format "Work on %s: fail: once" bad) "hello"))))))
 
+;; ====== AN ISSUE YOU GIVE ======
+
+(ert-deftest agent-workspace-loops/an-issue-you-give-is-never-taken ()
+  "An issue you give a busy agent (t, an offer) is claimed for it in bd at
+once, its prompt queued: a looping agent waking doesn't take it, it naps.
+Given to another agent then: refused, saying who has it, nothing sent, no
+issue noted (doom-pbk.55)."
+  (+test-awl--with-crew "given"
+    (let* ((given (+test-awl--issue project "the lexer" "build" 1))
+           (ken (+test-awl--create "ken"))
+           (ada (+test-awl--create "ada")))
+      (agent-workspace-send ken "hold" :submit t)
+      (should (+test-awl--wait (lambda () (eq (agent-workspace-agent-state ken) 'working))))
+      (should (eq (agent-workspace-give-issue ken given "the lexer" "task") 'queued))
+      (should (equal (agent-workspace-agent-issue ken) given))
+      (let ((issue (let ((default-directory project))
+                     (car (json-parse-string (+test-awl--run "bd" "show" given "--json")
+                                             :object-type 'alist :array-type 'list)))))
+        (should (equal (alist-get 'status issue) "in_progress"))
+        (should (equal (alist-get 'assignee issue) "ken")))
+      ;; A looping builder wakes: nothing for it.
+      (agent-workspace-loop-set ada t)
+      (+test-awl--all-in (list ada) 'nap)
+      (agent-workspace--loop-changed (agent-workspace-agent-project ada))
+      (+test-awl--sleep 1)
+      (+test-awl--quiet ada)
+      (should (eq (agent-workspace-agent-state ada) 'nap))
+      (should-not (agent-workspace-agent-issue ada))
+      (should-not (+test-awl--prompts "ada"))
+      ;; Given to her too: refused, saying who has it.
+      (agent-workspace-loop-set ada nil)
+      (should (+test-awl--wait (lambda () (memq (agent-workspace-agent-state ada) '(desk done)))))
+      (should (equal (cadr (should-error (agent-workspace-give-issue ada given "the lexer" "task") :type 'user-error))
+                     (format "%s not given to ada: issue already claimed by ken" given)))
+      (should-not (agent-workspace-agent-issue ada))
+      (should-not (+test-awl--prompts "ada"))
+      (should (equal (agent-workspace-agent-issue ken) given)))))
+
 ;; ====== THE SAVED CREW ======
 
 (ert-deftest agent-workspace-loops/reopening-never-starts-one ()

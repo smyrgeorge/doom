@@ -531,10 +531,75 @@ an epic's heading, the epic."
            (funcall agent-workspace-open-issue-function (plist-get issue :id) agent-workspace--issues-project))
           (issue (message "%s: %s" (plist-get issue :id) (plist-get issue :title))))))
 
+;; ====== GIVING ONE ======
+
+(defvar agent-workspace-claim-timeout 10
+  "Seconds bd may take to claim an issue you give an agent: longer, it's
+stopped and nothing is given.")
+
+(defun agent-workspace--bd-claim (agent id)
+  "Issue ID claimed in bd for AGENT, as AGENT (BEADS_ACTOR its name), now:
+in progress and AGENT's, so no looping agent takes it while its prompt
+waits for its turn to end. nil once claimed (AGENT's already too), or with
+nothing to claim it in (no bd, its project's issues not tracked by Beads);
+else why not, in bd's words (another agent has it)."
+  (let ((project (agent-workspace-agent-project agent)))
+    (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project)))
+      (with-temp-buffer
+        (let* ((default-directory project)
+               (process-environment (cons (concat "BEADS_ACTOR=" (agent-workspace-agent-name agent))
+                                          process-environment))
+               (process (make-process :name "agent-workspace-claim" :buffer (current-buffer)
+                                      :command (list "bd" "update" id "--claim")
+                                      :connection-type 'pipe :noquery t :sentinel #'ignore))
+               (end (+ (float-time) agent-workspace-claim-timeout)))
+          (while (and (process-live-p process) (< (float-time) end))
+            (accept-process-output process 0.05))
+          (cond ((process-live-p process)
+                 (delete-process process)
+                 (format "bd didn't answer in %ss" agent-workspace-claim-timeout))
+                ((not (eql (process-exit-status process) 0))
+                 (let ((line (or (seq-find (lambda (line) (not (string-empty-p line)))
+                                           (mapcar #'string-trim (split-string (buffer-string) "\n")))
+                                 "bd failed")))
+                   ;; "Error updating demo-1: issue already claimed by ken"
+                   (if (string-match "\\`Error updating [^ ]+: \\(.+\\)" line) (match-string 1 line) line)))))))))
+
+(defun agent-workspace--bd-give-back (agent id)
+  "Issue ID, claimed for AGENT: open again, unassigned, if it's still
+AGENT's and in progress (bd as AGENT, in the background)."
+  (let ((default-directory (agent-workspace-agent-project agent))
+        (name (agent-workspace-agent-name agent))
+        (process-environment (cons (concat "BEADS_ACTOR=" (agent-workspace-agent-name agent))
+                                   process-environment)))
+    (ignore-errors
+      (start-process "agent-workspace-give-back" nil "bd" "update" id
+                     (concat "--if-assignee=" name) "--if-status=in_progress"
+                     "--status=open" "--assignee="))))
+
+(defun agent-workspace-give-issue (agent id title &optional type)
+  "Issue ID (its TITLE, TYPE: bd's issue_type) given to AGENT by you (t,
+an offer's button): claimed in bd as AGENT at once, so no looping agent
+takes it meanwhile; its branch for it (`agent-workspace-give'); then sent
+\"Work on ID: TITLE\", now if AGENT is free, after its turn if it's working
+\(`queued' then). A user error, nothing given: AGENT asleep or gone, the
+claim refused (another agent has it), its branch not opened (changes not
+committed: the claim given back)."
+  (agent-workspace--live-or-error agent)
+  (when-let* ((why (agent-workspace--bd-claim agent id)))
+    (user-error "%s not given to %s: %s" id (agent-workspace-agent-name agent) why))
+  (condition-case err
+      (agent-workspace-give agent id title type)
+    (error
+     (agent-workspace--bd-give-back agent id)
+     (signal (car err) (cdr err))))
+  (agent-workspace-send agent (agent-workspace-issue-prompt id title) :submit t))
+
 (defun agent-workspace-issue-give ()
   "Give the issue at point to an agent (the selected one offered first, then
-its role's): free, it takes it now; working, after its turn. Its branch for
-it first (`agent-workspace-give'): refused if its worktree has changes not
+its role's): free, it takes it now; working, after its turn. Claimed for it
+in bd at once, its branch for it first (`agent-workspace-give-issue'):
+refused if another agent has it, or its worktree has changes not
 committed."
   (interactive)
   (let* ((issue (or (get-text-property (point) 'agent-workspace-issue)
@@ -554,12 +619,8 @@ committed."
     (unless names (user-error "No agents yet: c makes one"))
     (let* ((name (completing-read (format "Give %s to: " (plist-get issue :id)) names nil t nil nil (car names)))
            (agent (agent-workspace-agent name project))
-           (how (progn
-                  ;; Asleep, nothing given; its branch can't be, nothing sent.
-                  (agent-workspace--live-or-error agent)
-                  (agent-workspace-give agent (plist-get issue :id) (plist-get issue :title) (plist-get issue :type))
-                  (agent-workspace-send agent (agent-workspace-issue-prompt (plist-get issue :id) (plist-get issue :title))
-                                        :submit t))))
+           (how (agent-workspace-give-issue agent (plist-get issue :id) (plist-get issue :title)
+                                            (plist-get issue :type))))
       (message (if (eq how 'queued) "%s gets %s after its turn (busy)" "%s works on %s")
                name (plist-get issue :id))
       (agent-workspace-select agent))))
