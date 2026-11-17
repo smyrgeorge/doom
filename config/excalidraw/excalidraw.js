@@ -230,11 +230,14 @@
              scrollY: height / 2 / zoom - (y1 + y2) / 2 };
   }
 
+  function sameView(a, b) {
+    return a.zoom.value === b.zoom.value && a.scrollX === b.scrollX && a.scrollY === b.scrollY;
+  }
+
   // Resized: fitted again, unless the view was moved since.
   function refit() {
     if (!fitted) return false;
-    const now = api.getAppState();
-    if (now.zoom.value !== fitted.zoom.value || now.scrollX !== fitted.scrollX || now.scrollY !== fitted.scrollY) {
+    if (!sameView(api.getAppState(), fitted)) {
       fitted = null;
       return false;
     }
@@ -303,11 +306,22 @@
   // anew, so the layout stayed the old one until the mouse moved over it.
   // Drawn anew right after: this observer, made once Excalidraw is up, is
   // called after its own. The drawing unchanged, no change counted. Its view
-  // fitted again (see fittedView), which draws it anew too.
+  // fitted again (see fittedView), which draws it anew too. Followed once
+  // Excalidraw shows the fitted view: it starts at its own (100%, at 0, 0),
+  // the drawing's (initialData's) a moment after, and a resize meanwhile
+  // (its observer's first call, at once) took the view as moved: never
+  // fitted again. Its first call then fits it to the pane as it is by then.
   function followSize() {
     const container = document.querySelector('.excalidraw');
     if (!container || typeof ResizeObserver === 'undefined') return;
-    new ResizeObserver(() => { if (!refit()) api.updateScene({ appState: {} }); }).observe(container);
+    const since = Date.now();
+    (function whenShown() {
+      if (fitted && !sameView(api.getAppState(), fitted) && Date.now() - since < 5000) {
+        setTimeout(whenShown, 50);
+        return;
+      }
+      new ResizeObserver(() => { if (!refit()) api.updateScene({ appState: {} }); }).observe(container);
+    })();
   }
 
   // Another view's drawing, or the file read again: shown, not a change of
