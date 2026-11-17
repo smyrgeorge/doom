@@ -1290,6 +1290,35 @@ nothing sent."
             (agent-workspace--issues-goto-id "p-1")
             (should-error (agent-workspace-issue-give) :type 'user-error)))))))
 
+(ert-deftest agent-workspace-app/a-small-frame-leaves-the-minibuffer-room ()
+  "In a frame 80x24 (a terminal's), the app laid out: its windows' least
+height below the frame's, a bar's its one line, the stage's rows below the
+bars theirs; the minibuffer grows (a prompt, vertico's list), the frame's
+height as it was (doom-pbk.78)."
+  (+test-awa "small"
+    (+test-awa--crew '("ada" "builder") '("ken" "builder") '("sam" "investigator")
+                     '("liz" "builder") '("tom" "builder"))
+    (set-frame-size (selected-frame) 80 24)
+    (agent-workspace-open t)
+    (let ((height (frame-height)))
+      (should (< (window-min-size (frame-root-window)) (window-total-height (frame-root-window))))
+      (dolist (agent (agent-workspace-agents project))
+        (when-let* ((bar (get-buffer-window (agent-workspace--bar-buffer agent))))
+          (should (= (window-min-size bar) 1))))
+      ;; Every pane folded: the rows below the bars, fewer than 4.
+      (setf (agent-workspace--app-open (agent-workspace--app project)) nil)
+      (agent-workspace-layout (agent-workspace--app project))
+      (let ((hint (get-buffer-window (agent-workspace--hint-buffer project))))
+        (should (< (window-total-height hint) 4))
+        (should (= (window-min-size hint) 1)))
+      (should (< (window-min-size (frame-root-window)) (window-total-height (frame-root-window))))
+      (let ((before (window-total-height (frame-root-window))))
+        (window-resize (minibuffer-window) 6)
+        (should (= (window-total-height (minibuffer-window)) 7))
+        (should (= (window-total-height (frame-root-window)) (- before 6)))
+        (window-resize (minibuffer-window) -6))
+      (should (= (frame-height) height)))))
+
 (ert-deftest agent-workspace-app/the-stage-away-the-cursor-stays ()
   "The stage not shown (the room alone, 2; the branches, b), the cursor in
 the compose line or the branches: an agent's canvas showing something new

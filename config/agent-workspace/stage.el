@@ -59,6 +59,10 @@ config/agent-workspace.el).")
 
 (define-derived-mode agent-workspace-bar-mode special-mode "Bar"
   "A folded pane's bar: one line, its agent's line."
+  ;; Its window's least height is its one line (Emacs reads it in the
+  ;; window's buffer): counted as `window-min-height' (4), a few bars left
+  ;; the minibuffer no room to grow in a small frame (doom-pbk.78).
+  (setq-local window-min-height 1)
   (setq-local truncate-lines t
               mode-line-format nil
               header-line-format nil
@@ -169,7 +173,9 @@ how to open one, or make one."
     (or (get-buffer name)
         (with-current-buffer (get-buffer-create name)
           (special-mode)
-          (setq-local mode-line-format nil header-line-format nil tab-line-exclude t cursor-type nil)
+          (setq-local mode-line-format nil header-line-format nil tab-line-exclude t cursor-type nil
+                      ;; The rows left below the bars, maybe fewer than 4: its least.
+                      window-min-height 1)
           (agent-workspace--app-buffer-add project (current-buffer))
           (current-buffer)))))
 
