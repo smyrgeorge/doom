@@ -29,6 +29,8 @@
 ;;   Done    save the file, and stage it (git add) if no change is left; with
 ;;           some left, ask first, and save them as conflict markers, unstaged
 ;;   Abort   close, the file left as it was
+;; Narrower, its labels shorter (Left, Right, the wand alone...), down to
+;; Done and Abort alone.
 ;; The panes line up: each change takes as many rows in each, the shorter
 ;; padded with grey filler lines (not text: not saved, not copied, the cursor
 ;; skips them); and they scroll together (the wheel, the trackpad, the keys,

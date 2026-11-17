@@ -169,6 +169,55 @@ Magit's status buffer and window, whatever the frame's focus did meanwhile
         (should (>= (cdr (window-margins yours)) 6))
         (should (>= (car (window-margins theirs)) 5))))))
 
+(defun +test-merge--bar-button-xy (session label)
+  "Where LABEL's button shows in SESSION's bar, whole: (X Y) in its window,
+or nil if any of it is off the screen."
+  (let ((bar (get-buffer-window (+my/merge-bar session))))
+    (with-current-buffer (+my/merge-bar session)
+      (goto-char (point-min))
+      (let (found)
+        (while-let (((not found))
+                    (button (next-button (point))))
+          (when (equal (button-label button) label)
+            (setq found button))
+          (goto-char (button-end button)))
+        (and found
+             (pos-visible-in-window-p (button-start found) bar)
+             (pos-visible-in-window-p (1- (button-end found)) bar)
+             (let ((place (pos-visible-in-window-p (button-start found) bar t)))
+               (and (consp place) (list (car place) (cadr place)))))))))
+
+(ert-deftest e2e-merge/the-bar-in-a-narrow-frame ()
+  "At 120, 60 and 40 columns, Done and Abort on the screen, whole, a click
+there on them; the bar's row whole in its window (no pixel of it hidden)."
+  (+test-merge-conflict
+    (let ((columns-before (frame-width))
+          (font-before (face-attribute 'default :font)))
+      (unwind-protect
+          (let* ((session (progn
+                            ;; config.el's font, where the wand's row was cut.
+                            (when (find-font (font-spec :family "JetBrains Mono"))
+                              (set-face-attribute 'default nil :family "JetBrains Mono" :height 130))
+                            (+test-merge--e)))
+                 (bar (get-buffer-window (+my/merge-bar session))))
+            (dolist (columns '(120 60 40))
+              (set-frame-width nil columns)
+              (should (+test-wait-for (lambda () (= (frame-width) columns)) 5))
+              (+test-sleep 0.3)
+              (let ((line (window-line-height 0 bar)))
+                (should line)
+                (should (equal (list columns (nth 3 line)) (list columns 0))))
+              (dolist (label '("Done" "Abort"))
+                (let ((xy (+test-merge--bar-button-xy session label)))
+                  (should (equal (list columns label (and xy t)) (list columns label t)))
+                  (let ((posn (posn-at-x-y (+ (car xy) 2) (+ (cadr xy) 2) bar)))
+                    (should (eq (posn-window posn) bar))
+                    (should (equal (with-current-buffer (+my/merge-bar session)
+                                     (button-label (button-at (posn-point posn))))
+                                   label)))))))
+        (set-face-attribute 'default nil :font font-before)
+        (set-frame-width nil columns-before)))))
+
 (ert-deftest e2e-merge/a-margin-button-clicked-where-it-shows ()
   (+test-merge-conflict
     (let* ((session (+test-merge--e))

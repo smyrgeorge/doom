@@ -804,6 +804,16 @@ hand as it is (done)."
       (+my/merge--render-bar session 80)
       (should (equal (funcall text) " Left  Right  ✨ Non-conflicting   6 left, 1 conflict   Done  Abort "))
       (should (<= (string-width (funcall text)) 80))
+      ;; Narrower, shorter: Done and Abort always there.
+      (pcase-dolist (`(,width ,bar) '((60 " Left  Right  ✨  6 left, 1 conflict  Done  Abort ")
+                                      (40 " Left  Right  ✨  6 left  Done  Abort ")
+                                      (30 " ✨  6 left  Done  Abort ")
+                                      (20 " Done  Abort ")
+                                      (8 " Done  Abort ")))
+        (+my/merge--render-bar session width)
+        (should (equal (funcall text) bar)))
+      ;; Cut there, not wrapped onto a line nobody sees.
+      (should (buffer-local-value 'truncate-lines (+my/merge-bar session)))
       (+my/merge-accept-left)
       (+my/merge--render-bar session 80)
       (should (string-match-p "All done" (funcall text)))
