@@ -626,7 +626,11 @@ without asking."
         (agent-workspace-forget agent))
       (should-not (agent-workspace-agents project))
       (should-not (file-exists-p dir))
-      (should-not (string-search "ada" (+test-aww--porcelain project)))
+      ;; Its worktree and branch gone from git's list (not the word "ada": the
+      ;; main worktree's HEAD, in hex, has it one commit in a hundred).
+      (let ((porcelain (+test-aww--porcelain project)))
+        (should-not (string-search (directory-file-name (file-truename dir)) porcelain))
+        (should-not (string-search "refs/heads/agent/ada" porcelain)))
       (let ((default-directory project))
         (should (equal (+test-aww--git "branch" "--list" "agent/ada") ""))))))
 
