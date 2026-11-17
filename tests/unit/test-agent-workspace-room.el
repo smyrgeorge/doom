@@ -1061,6 +1061,13 @@ after that turn, doesn't."
 
 ;; Steered instead (agent-shell's reroute): the stand-in steers, as agents
 ;; saying they can do (its answer: examples/agent-workspace/stand-in.el).
+;; agent-shell pinned to a commit that has it (packages.el); one without it
+;; (another build): skipped, said.
+(defun +test-awr2--steering ()
+  "Skip the test, saying why, unless agent-shell steers a queued prompt."
+  (unless (fboundp 'agent-shell-busy-submit-reroute-queue-to-steer)
+    (ert-skip "agent-shell has no steering (agent-shell-busy-submit-reroute-queue-to-steer): not the pinned one")))
+
 (defun +test-awr2--steer (agent answer)
   "agent-shell's override at an empty prompt in AGENT's session, while it
 works: its last queued prompt offered as a steer instead, ANSWER (non-nil:
@@ -1075,6 +1082,7 @@ yes) given; AGENT saying it can steer."
   "The app's prompt queued, then steered into the turn instead (agent-shell's
 reroute) and declined: dropped, the turn interrupted; its mark goes with it,
 and the same text typed after shows in the room."
+  (+test-awr2--steering)
   (+test-awr2--real "declined"
     (agent-workspace-send ada "hold" :submit t)
     (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state ada) 'working))))
@@ -1093,6 +1101,7 @@ and the same text typed after shows in the room."
   "The app's prompt queued, offered as a steer instead: no, it stays queued,
 its mark with it; yes, injected into the turn: said submitted, not yours
 (not in the room), its mark taken. The same text typed after shows."
+  (+test-awr2--steering)
   (+test-awr2--real "injected"
     (agent-workspace-send ada "hold" :submit t)
     (should (+test-awr2--until (lambda () (eq (agent-workspace-agent-state ada) 'working))))

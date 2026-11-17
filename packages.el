@@ -57,9 +57,12 @@
 
 ;; agent-shell: Claude Code (and other ACP agents) in a native Emacs buffer.
 ;; Needs: npm install -g @agentclientprotocol/claude-agent-acp (scripts/tools.sh)
-(package! shell-maker)
-(package! acp)
-(package! agent-shell)
+;; Pinned: the agent workspace advises agent-shell's internals (its queue, its
+;; steering: config/agent-workspace/session.el), checked with these commits
+;; (tests/unit/test-agent-workspace-*.el); the tests on GitHub build the same.
+(package! shell-maker :pin "b28ee61a2533e408ed180662f83bb84fc8f84ba6")
+(package! acp :pin "2959da5fa8657da17a78ac6ceef303a50e3e69de")
+(package! agent-shell :pin "26365eb6f2fc3a635eb10bfccc97b3f4264d64be")
 
 ;; Git: TODOs in magit status.
 (package! magit-todos)
