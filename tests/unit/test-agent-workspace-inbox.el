@@ -380,8 +380,13 @@ copies, each its own id."
     (agent-workspace-inbox-source-toggle project "ci" "#all")
     (should-not (agent-workspace-inbox-add project "#builder" "red" :from "ci"))
     (agent-workspace-crew-save project)
-    (should (string-search "\"sources_off\": [[\"ci\", \"#all\"], [\"ci\", \"ada\"]]"
-                           (with-temp-buffer (insert-file-contents (agent-workspace--crew-path project)) (buffer-string))))
+    (should (equal (plist-get (plist-get (json-parse-string
+                                          (with-temp-buffer (insert-file-contents (agent-workspace--crew-path project))
+                                                            (buffer-string))
+                                          :object-type 'plist :array-type 'list)
+                                         :layout)
+                              :sources_off)
+                   '(("ci" "#all") ("ci" "ada"))))
     (agent-workspace-inbox-source-toggle project "ci" "#all")
     (agent-workspace-inbox-source-toggle project "ci" "ada")
     (should (equal (plist-get (car (agent-workspace-inbox-add project "ada" "green" :from "ci")) :state) "queued"))))
