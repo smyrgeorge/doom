@@ -644,6 +644,11 @@ shown once and steady; closed once, as that pane's next change is saved."
         (should (= closed 1)))
       (with-current-buffer buffer (set-buffer-modified-p nil)))))
 
+(defconst +test-exd--sizes-js
+  "JSON.stringify({page: innerWidth, box: Math.round(document.querySelector('.excalidraw').getBoundingClientRect().width),
+                  excalidraw: exd.api().getAppState().width})"
+  "The page's width, its drawing's box's, and the one Excalidraw goes by.")
+
 (defun +test-exd--mobile-p ()
   "Whether the selected window's page lays out for a phone."
   (equal (+test-exd--js "String(document.querySelector('.excalidraw').classList.contains('excalidraw--mobile'))")
@@ -663,11 +668,14 @@ to the drawing."
       (let ((version (plist-get (+test-exd--state) :version))
             (other (split-window window 70 'right)))
         (should (< (window-body-width window t) 730))
-        (unless (+test-wait-for #'+test-exd--mobile-p 1)
-          (ert-fail (list "Not laid out for a phone" (+test-exd--js "String(window.innerWidth)"))))
+        ;; No input given: laid out by itself, as soon as WebKit tells the
+        ;; page it's resized (later in the tests' frame, off the screen, on a
+        ;; busy runner: 5 s).
+        (unless (+test-wait-for #'+test-exd--mobile-p 5)
+          (ert-fail (list "Not laid out for a phone" (+test-exd--js +test-exd--sizes-js))))
         (delete-window other)
-        (unless (+test-wait-for (lambda () (not (+test-exd--mobile-p))) 1)
-          (ert-fail (list "Still laid out for a phone" (+test-exd--js "String(window.innerWidth)"))))
+        (unless (+test-wait-for (lambda () (not (+test-exd--mobile-p))) 5)
+          (ert-fail (list "Still laid out for a phone" (+test-exd--js +test-exd--sizes-js))))
         (+test-sleep 0.5)
         (should (= (plist-get (+test-exd--state) :version) version))
         (should-not (buffer-modified-p buffer))))))
