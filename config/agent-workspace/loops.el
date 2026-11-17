@@ -368,7 +368,13 @@ said once, then looks again."
     (condition-case err
         (agent-workspace-give agent id title type)
       (user-error
-       (agent-workspace--bd-give-back agent id)
+       ;; Given back before the failure's counted and its try again timed:
+       ;; that try finds it ready (given back in the background, it could
+       ;; find nothing and nap, the failures never adding up).
+       (let ((name (agent-workspace-agent-name agent)))
+         (agent-workspace--bd-now (agent-workspace-agent-project agent) name
+                                  (list "update" id (concat "--if-assignee=" name) "--if-status=in_progress"
+                                        "--status=open" "--assignee=")))
        (signal (car err) (cdr err))))
     (agent-workspace--loop-say agent 'issue (format "%s %s: %s" (if woke "woke up, took" "took") id title))
     (when (agent-workspace--loop-used-p agent)
