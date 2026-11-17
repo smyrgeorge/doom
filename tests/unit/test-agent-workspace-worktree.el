@@ -446,6 +446,31 @@ before on agent/NAME (a crew of before): it goes on there."
       (+test-aww--turn linus "Finish it")
       (should (equal (+test-aww--head his) "agent/linus")))))
 
+(ert-deftest agent-workspace-worktree/a-prompt-named-as-a-folder ()
+  "A prompt's branch never a folder of branches, nor one the app makes:
+\"Fix\" gets fix-2 (a bug still gets its fix/ID-... after), \"agent\"
+agent-2, \"Docs\" with docs/x there docs-2 (doom-pbk.40)."
+  (let* ((project (+test-aww--project "folders"))
+         (ada (+test-aww--agent project "ada"))
+         (ken (+test-aww--agent project "ken"))
+         (liz (+test-aww--agent project "liz"))
+         (dir (agent-workspace-worktree-ensure ada))
+         (his (agent-workspace-worktree-ensure ken))
+         (hers (agent-workspace-worktree-ensure liz)))
+    (let ((default-directory project))
+      (+test-aww--git "branch" "docs/x"))
+    (+test-aww--turn ada "Fix")
+    (should (equal (+test-aww--head dir) "fix-2"))
+    (+test-aww--turn ken "agent")
+    (should (equal (+test-aww--head his) "agent-2"))
+    (+test-aww--turn liz "Docs")
+    (should (equal (+test-aww--head hers) "docs-2"))
+    ;; A bug for ada, at rest: its fix/ branch.
+    (setf (agent-workspace-agent-state ada) 'desk)
+    (agent-workspace--branch-switch ada (agent-workspace-branch "ada"))
+    (agent-workspace-give ada "demo-1" "Crash at start" "bug")
+    (should (equal (+test-aww--head dir) "fix/demo-1-crash-start"))))
+
 (ert-deftest agent-workspace-worktree/an-issue-s-branch-taken-from-another ()
   "An issue's branch checked out in another agent's worktree (handed on):
 taken from it while that agent rests (it goes back on agent/NAME), the work

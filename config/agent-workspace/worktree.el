@@ -585,15 +585,26 @@ an event): the turn it starts makes no branch."
     (puthash agent (remove text texts) agent-workspace--branch-quiet)
     t))
 
+(defconst agent-workspace--branch-folders
+  '("agent" "fix" "feat" "task" "chore" "epic" "decision" "docs" "spike")
+  "The folders of the branches the app makes (agent/NAME, an issue's
+TYPE/ID-...): never a prompt's branch's name, which would block them all.")
+
 (defun agent-workspace--fresh-branch (project slug)
-  "A name for a branch of PROJECT from SLUG that it hasn't yet: SLUG, else
-SLUG-2, SLUG-3... (\"work\" for an empty SLUG)."
-  (let ((slug (if (string-empty-p slug) "work" slug))
-        (there (agent-workspace--branches project)))
-    (if (member slug there)
+  "A name for a branch of PROJECT from SLUG that's free: SLUG, else SLUG-2,
+SLUG-3... (\"work\" for an empty SLUG). Not free: a branch's name, the
+folder of branches there (git can't have both: docs and docs/x), or one of
+`agent-workspace--branch-folders'."
+  (let* ((slug (if (string-empty-p slug) "work" slug))
+         (there (agent-workspace--branches project))
+         (taken (lambda (name)
+                  (or (member name there)
+                      (member name agent-workspace--branch-folders)
+                      (seq-some (lambda (branch) (string-prefix-p (concat name "/") branch)) there)))))
+    (if (funcall taken slug)
         (cl-loop for n from 2
                  for name = (format "%s-%d" slug n)
-                 unless (member name there) return name)
+                 unless (funcall taken name) return name)
       slug)))
 
 (defun agent-workspace--branch-say (agent text)
