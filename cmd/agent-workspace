@@ -24,7 +24,9 @@
 # use, 3 no Emacs to talk to (it runs as a server: M-x server-start).
 #
 # EMACSCLIENT (default: emacsclient) is the client, EMACS_SOCKET_NAME its
-# server.
+# server. Run outside a desktop session (cron: no XDG_RUNTIME_DIR), it finds
+# a desktop Emacs's server in /run/user/UID/emacs/ on Linux, which
+# emacsclient alone wouldn't look in.
 
 set -u
 
@@ -109,6 +111,15 @@ dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workspace.XXXXXXXXXX") || fail 3 "no temp
 trap 'rm -rf "$dir"' EXIT
 printf '%s\n%s\n' "$op" "$PWD" >"$dir/request"
 printf '%s' "$payload" >"$dir/payload"
+
+# On Linux emacsclient looks for its server under $XDG_RUNTIME_DIR/emacs/, or,
+# without that variable (cron), in ${TMPDIR:-/tmp}/emacsUID/ only: a desktop
+# Emacs's is in /run/user/UID/emacs/. AGENT_WORKSPACE_RUNTIME_DIR: that
+# folder elsewhere (the tests).
+if [ -z "${EMACS_SOCKET_NAME:-}" ] && [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+  runtime=${AGENT_WORKSPACE_RUNTIME_DIR:-/run/user/$(id -u)}
+  [ -S "$runtime/emacs/server" ] && export EMACS_SOCKET_NAME="$runtime/emacs/server"
+fi
 
 # The folder as a Lisp string.
 lisp_dir=${dir//\\/\\\\}

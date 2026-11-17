@@ -465,6 +465,33 @@ control characters arrives as it was (doom-pbk.37)."
           (should (string-prefix-p "{\"ok\":true" (cdr run))))
         (should (equal (plist-get (car (agent-workspace-inbox project)) :text) text))))))
 
+(ert-deftest agent-workspace-new/the-script-from-cron ()
+  "Run without XDG_RUNTIME_DIR nor EMACS_SOCKET_NAME (cron): the script
+reaches an Emacs whose server is RUNTIME/emacs/server, as a desktop
+Emacs's is in /run/user/UID/emacs/ on Linux (doom-pbk.77)."
+  (+test-awn "script-cron"
+    (let* ((agent-workspace--inboxes (make-hash-table :test #'equal))
+           (agent-workspace--inbox-sent (make-hash-table :test #'equal))
+           (runtime (make-temp-file "/tmp/awr-" t))
+           (server-socket-dir (expand-file-name "emacs" runtime))
+           (server-name "server")
+           (process-environment
+            ;; TMPDIR empty: emacsclient's own guess finds no server (never
+            ;; the Emacs running these tests' user's).
+            (append (list (concat "AGENT_WORKSPACE_RUNTIME_DIR=" runtime)
+                          (concat "TMPDIR=" (make-temp-file "/tmp/awt-" t)))
+                    (seq-remove (lambda (var) (string-match-p "\\`\\(XDG_RUNTIME_DIR\\|EMACS_SOCKET_NAME\\)=" var))
+                                process-environment))))
+      (unwind-protect
+          (progn
+            (server-start nil t)
+            (let ((run (+test-awn--run "send" "--to" "#builder" "--from=cron" "nightly build broke")))
+              (should (= (car run) 0))
+              (should (string-prefix-p "{\"ok\":true" (cdr run))))
+            (should (equal (plist-get (car (agent-workspace-inbox project)) :text) "nightly build broke")))
+        (server-force-delete)
+        (delete-directory runtime t)))))
+
 (ert-deftest agent-workspace-new/the-script-s-wrong-uses ()
   "Wrong uses: 2, saying what's wrong; no Emacs: 3."
   (let ((process-environment (cons "EMACS_SOCKET_NAME=/tmp/no-such-agent-workspace-server"
