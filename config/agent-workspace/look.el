@@ -109,10 +109,26 @@ than the selected one (a redraw from a timer while another is selected)."
          (progn ,@body)
        (with-selected-frame frame ,@body))))
 
+(defvar agent-workspace--nerd-font 'unknown
+  "Whether the nerd icons' font is installed: t, nil, or `unknown' (not
+looked for yet).")
+
+(defun agent-workspace--nerd-family ()
+  "The nerd icons' font family (nerd-icons's, \"Symbols Nerd Font Mono\")."
+  (or (bound-and-true-p nerd-icons-font-family) "Symbols Nerd Font Mono"))
+
+(defun agent-workspace--nerd-font-p ()
+  "Non-nil if the nerd icons' font is installed (looked for once): without
+it (Linux by default) every icon is a box."
+  (when (eq agent-workspace--nerd-font 'unknown)
+    (setq agent-workspace--nerd-font
+          (and (ignore-errors (find-font (font-spec :family (agent-workspace--nerd-family)))) t)))
+  agent-workspace--nerd-font)
+
 (defun agent-workspace--nerd (name)
   "The nerd icon NAME (\"nf-md-hammer\", a codicon \"nf-cod-bug\"), or nil
-without nerd-icons."
-  (when (and name (require 'nerd-icons nil t))
+without nerd-icons or its font (the plain glyphs then, as in a terminal)."
+  (when (and name (require 'nerd-icons nil t) (agent-workspace--nerd-font-p))
     (ignore-errors
       (substring-no-properties
        (cond ((string-prefix-p "nf-md-" name) (nerd-icons-mdicon name))
@@ -124,7 +140,7 @@ FACE: two columns wide."
   (let* ((entry (if (consp what) (list (car what) (cdr what)) (alist-get what agent-workspace-glyphs)))
          (nerd (and (agent-workspace--graphic-p) (agent-workspace--nerd (car entry))))
          (glyph (if nerd
-                    (propertize nerd 'face (delq nil (list '(:family "Symbols Nerd Font Mono") face)))
+                    (propertize nerd 'face (delq nil (list (list :family (agent-workspace--nerd-family)) face)))
                   (propertize (or (cadr entry) "?") 'face face))))
     (concat glyph (make-string (max 0 (- 2 (string-width glyph))) ?\s))))
 
@@ -144,7 +160,7 @@ not its colour."
   (let* ((look (agent-workspace--type-look type))
          (face (if (or dim (not look)) 'shadow (nth 2 look)))
          (icon (and look (agent-workspace--graphic-p) (agent-workspace--nerd (nth 1 look))))
-         (glyph (cond (icon (propertize icon 'face (list '(:family "Symbols Nerd Font Mono") face)))
+         (glyph (cond (icon (propertize icon 'face (list (list :family (agent-workspace--nerd-family)) face)))
                       (look (propertize (substring type 0 1) 'face face))
                       (t (propertize "·" 'face 'shadow)))))
     (if (and type (not (string-empty-p type)))

@@ -214,7 +214,9 @@ without one; a column, then a space, before its name."
     (let ((facts (agent-workspace--role-facts project '("builder"))))
       (should (equal (substring-no-properties (nth 2 (car (agent-workspace--role-rows facts 200)))) "⚙ "))
       (skip-unless (require 'nerd-icons nil t))
-      (cl-letf (((symbol-function 'agent-workspace--graphic-p) #'always))
+      (cl-letf (((symbol-function 'agent-workspace--graphic-p) #'always)
+                ;; Its font installed (batch Emacs has none).
+                ((symbol-function 'agent-workspace--nerd-font-p) #'always))
         (let ((icon (nth 2 (car (agent-workspace--role-rows facts 200)))))
           (should (equal (substring-no-properties icon)
                          (concat (substring-no-properties (nerd-icons-mdicon "nf-md-hammer")) " "))))))))

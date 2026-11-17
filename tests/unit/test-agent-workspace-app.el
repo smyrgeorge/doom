@@ -1305,7 +1305,9 @@ one column before its id; its word on hover; a type with no icon a dim ·."
     (+test-awa--crew '("ada" "builder"))
     (agent-workspace-open t)
     (skip-unless (require 'nerd-icons nil t))
-    (cl-letf (((symbol-function 'agent-workspace--graphic-p) #'always))
+    (cl-letf (((symbol-function 'agent-workspace--graphic-p) #'always)
+              ;; Its font installed (batch Emacs has none).
+              ((symbol-function 'agent-workspace--nerd-font-p) #'always))
       (let ((rows (+test-awa--rows project +test-awa--typed)))
         (pcase-dolist (`(,id ,icon ,face) '(("t-2" "nf-cod-sparkle" success) ("t-3" "nf-cod-checklist" font-lock-function-name-face)
                                            ("t-4" "nf-cod-tools" shadow) ("t-5" "nf-cod-law" font-lock-type-face)
@@ -1345,13 +1347,38 @@ terminal (doom-pbk.81)."
                  (lambda (&optional window)
                    (if (eq (or window (selected-window)) list-window) 'gui (funcall window-frame-real window))))
                 ((symbol-function 'display-graphic-p)
-                 (lambda (&optional frame) (if (eq frame 'gui) t (funcall graphic-real frame)))))
+                 (lambda (&optional frame) (if (eq frame 'gui) t (funcall graphic-real frame))))
+                ((symbol-function 'agent-workspace--nerd-font-p) #'always))
         (should-not (display-graphic-p))
         (agent-workspace--issues-redraw project)
         (should (equal (funcall type-at "t-8") (substring-no-properties (nerd-icons-codicon "nf-cod-bug")))))
       ;; In the terminal, as it is: a letter.
       (agent-workspace--issues-redraw project)
       (should (equal (funcall type-at "t-8") "b")))))
+
+(ert-deftest agent-workspace-app/no-nerd-font-plain-glyphs ()
+  "In the GUI without the nerd icons' font (Linux's default): the plain
+glyphs, as in a terminal (no box of a missing glyph), lined up as theirs
+\(doom-pbk.76)."
+  (skip-unless (require 'nerd-icons nil t))
+  (let ((agent-workspace--nerd-font 'unknown)
+        (asked nil))
+    (cl-letf (((symbol-function 'agent-workspace--graphic-p) #'always)
+              ((symbol-function 'find-font) (lambda (spec &rest _) (push (font-get spec :family) asked) nil)))
+      (should (equal (substring-no-properties (agent-workspace-glyph 'hand))
+                     (let ((agent-workspace--nerd-font nil))
+                       (cl-letf (((symbol-function 'agent-workspace--graphic-p) #'ignore))
+                         (substring-no-properties (agent-workspace-glyph 'hand))))))
+      (should (= (string-width (agent-workspace-glyph 'hand)) 2))
+      (should (equal (substring-no-properties (agent-workspace-type-glyph "bug")) "b"))
+      ;; Looked for once.
+      (agent-workspace-glyph 'done)
+      (should (= (length asked) 1)))
+    ;; With it: its icons.
+    (let ((agent-workspace--nerd-font t))
+      (cl-letf (((symbol-function 'agent-workspace--graphic-p) #'always))
+        (should (equal (substring-no-properties (agent-workspace-type-glyph "bug"))
+                       (substring-no-properties (nerd-icons-codicon "nf-cod-bug"))))))))
 
 (defun +test-awa--bd-json (&rest issues)
   "ISSUES, plists of bd's fields, as bd's JSON answer reads."
