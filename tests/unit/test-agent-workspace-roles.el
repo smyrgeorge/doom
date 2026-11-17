@@ -209,14 +209,27 @@ about, ignored; the role kept."
     ("investigator" ("Edit" "Write" "NotebookEdit") ("WebSearch") ("Edit" "Write"))
     ("reviewer" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write"))
     ("scribe" ("Edit" "Write" "NotebookEdit") () ("Edit" "Write"))
-    ("tester" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(git commit:*)") ("Edit" "Write")))
+    ("tester" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(git commit:*)") ("Edit" "Write"))
+    ("documenter" ("Bash(git push:*)") ("Edit(docs/**)" "Edit(**/*.md)" "Write(**/*.md)" "Bash(git commit:*)")
+     ("Edit" "Write"))
+    ("triager" ("Edit" "Write" "NotebookEdit") ("Bash(git log:*)") ("Edit" "Write"))
+    ("planner" ("Edit" "Write" "NotebookEdit") ("Bash(git show:*)") ("Edit" "Write"))
+    ;; Merges in a worktree of its own; into the main branch, asking.
+    ("merger" ("Bash(git push:*)" "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
+     ("Bash(git merge:*)" "Bash(git worktree:*)") ("Edit" "Write" "Bash(git -C:*)"))
+    ("designer" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit" "Write"))
+    ("security" ("Edit" "Write" "NotebookEdit") ("WebSearch" "WebFetch" "Bash(git blame:*)") ("Edit" "Write"))
+    ("profiler" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write")))
   "The starters and what each may do: denied, allowed, not allowed.")
 
 (ert-deftest agent-workspace-roles/the-starters ()
   "The starters read without a problem, each with all it needs; what each
 may do as it should: the ones that mustn't edit can't (Edit, Write
-denied), the tester only its tests, the builder anything but push; what
-each does alone is allowed (bd)."
+denied), the tester only its tests, the documenter only the docs, the
+builder anything but push, the merger merging only in a worktree of its
+own; what each does alone is allowed (bd). The triager on haiku, the
+others on your default; the reviewer's approval to the mergers, its
+changes back to the builders."
   (let ((dir agent-workspace-starter-roles-directory))
     (should (equal (mapcar #'file-name-base (directory-files dir nil "\\.md\\'"))
                    (sort (mapcar #'car +test-awr--starters) #'string<)))
@@ -233,7 +246,11 @@ each does alone is allowed (bd)."
         (should (string-width (plist-get role :glyph)))
         (should (equal (plist-get role :deny) denied))
         (dolist (tool allowed) (should (member tool (plist-get role :tools))))
-        (dolist (tool not-allowed) (should-not (member tool (plist-get role :tools))))))))
+        (dolist (tool not-allowed) (should-not (member tool (plist-get role :tools))))
+        (should (equal (plist-get role :model) (and (equal (plist-get role :name) "triager") "haiku")))))
+    (let ((reviewer (car (agent-workspace-role-read (expand-file-name "reviewer.md" dir)))))
+      (should (equal (plist-get reviewer :hands-to) '("merger")))
+      (should (equal (plist-get reviewer :returns-to) '("builder"))))))
 
 (ert-deftest agent-workspace-roles/a-project-with-none-of-its-own ()
   "A project with no roles of its own has the starters."

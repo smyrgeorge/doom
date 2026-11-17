@@ -412,11 +412,18 @@ A role is what a kind of agent does and may do. These ship with this config, the
 | scribe | writes issues with you | read, `bd`; no edits |
 | investigator | investigates what you give it, writes its findings into the issue, hands it to the builders | read, search the web, `bd`; no edits |
 | builder | builds what you give it, runs the tests, commits on its branch, hands it to the reviewers | edit, commit; never push |
-| reviewer | reviews a branch, approves it to you or hands it back to its builder | read, `bd`; no edits |
+| reviewer | reviews a branch, approves it to the mergers (to you, without one) or hands it back to its builder | read, `bd`; no edits |
 | tester | tests built work against its issue, runs the suite, reproduces a bug as a failing test | edit its tests (`tests/`), commit; never push |
+| documenter | documents finished features: how to use them, their keys and settings | edit the docs (`docs/`, Markdown), commit; never push |
+| triager | triages new issues (labelled `triage`): type, priority, duplicates, splits, then the role that takes each | read, `bd`; no edits; on haiku |
+| planner | breaks an epic into issues with acceptance criteria and their order, shown to you before filing | read, `bd`; no edits |
+| merger | merges an approved branch once the whole suite passes in a worktree of its own; failures back to its builder | merge there; into the main branch only with your OK; never push |
+| designer | draws UI and UX mockups on its canvas for you to pick, writes your pick into the issue | read, `bd`, Agent UI; no edits |
+| security | reviews a change or the code for vulnerabilities, each finding with its severity, place and fix | read, search the web, `bd`; no edits |
+| profiler | measures and profiles, finds the hot spots, proposes fixes with their expected gain | read, `bd`; no edits |
 
-The tester edits only `tests/` without asking: a project whose tests are elsewhere changes that in its copy (`M-x
-agent-workspace-copy-role`, below).
+The tester edits only `tests/` without asking, the documenter only `docs/` and Markdown files: a project whose tests or
+docs are elsewhere changes that in its copy (`M-x agent-workspace-copy-role`, below).
 
 Each role is a Markdown file, as Claude Code's own agents are: a front matter, then its instructions.
 

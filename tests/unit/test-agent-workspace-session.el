@@ -265,11 +265,20 @@ allowedTools, its mode set before its first prompt; its model too."
 (ert-deftest agent-workspace-session/the-starters-tools-reach-their-agents ()
   "Each starter beyond the first four: its denied tools in Claude Code's
 disallowedTools, its allowed ones in allowedTools (the tester's edits only
-under tests/)."
+under tests/, the documenter's in docs/ and Markdown)."
   (+test-aws--with-crew "starters"
     (pcase-dolist (`(,role ,name ,denied ,allowed ,not-allowed)
                    '(("tester" "tia" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(bd:*)")
-                      ("Edit" "Write"))))
+                      ("Edit" "Write"))
+                     ("documenter" "dot" ("Bash(git push:*)") ("Edit(docs/**)" "Edit(**/*.md)" "Write(docs/**)")
+                      ("Edit" "Write"))
+                     ("triager" "tess" ("Edit" "Write" "NotebookEdit") ("Bash(bd:*)") ("Edit"))
+                     ("planner" "pat" ("Edit" "Write" "NotebookEdit") ("Bash(bd:*)") ("Edit"))
+                     ("merger" "max" ("Bash(git push:*)" "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
+                      ("Bash(git merge:*)" "Bash(git worktree:*)") ("Edit"))
+                     ("designer" "dee" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit"))
+                     ("security" "sec" ("Edit" "Write" "NotebookEdit") ("WebFetch") ("Edit"))
+                     ("profiler" "pip" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit"))))
       (+test-aws--create name :role role :kind 'mock-claude)
       (let ((options (plist-get (plist-get (plist-get (+test-aws--new-session name) :_meta) :claudeCode)
                                 :options)))
