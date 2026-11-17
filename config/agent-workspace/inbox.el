@@ -96,8 +96,9 @@ prompt is sent (or queued after its turn).")
 \(a message from another agent: messages.el); else an event's.")
 
 (defvar agent-workspace--event-turns (make-hash-table :test #'eq :weakness 'key)
-  "An agent whose turn an event started: (EVENT . ITS-MODE), its mode to
-put back once the turn ends.")
+  "An agent given an event: a plist, :event, :mode (its own, put back once
+the event's turn ends), :sent (its prompt sent: out of the queue), :started
+\(its turn begun: a turn of yours before it, queued behind, isn't it).")
 
 ;; ====== THE QUEUE ======
 
@@ -286,6 +287,13 @@ going."
                       (list (agent-workspace-agent-name agent) (concat "#" (agent-workspace-agent-role agent)))))
             events))
 
+(defun agent-workspace--inbox-giving-p (event)
+  "Non-nil if EVENT is being given to an agent (its mode switching), still
+queued."
+  (seq-some (lambda (turn) (and (equal (plist-get (plist-get turn :event) :id) (plist-get event :id))
+                                (not (plist-get turn :sent))))
+            (hash-table-values agent-workspace--event-turns)))
+
 (defun agent-workspace--inbox-deliver (project)
   "PROJECT's queued events given to their agents that are free, one each,
 in order (unless its events are paused)."
@@ -293,7 +301,9 @@ in order (unless its events are paused)."
               (agent-workspace--inbox-quiet project))
     (dolist (agent (agent-workspace--ordered project))
       (when (agent-workspace--inbox-free-p agent)
-        (when-let* ((event (agent-workspace--inbox-for agent (agent-workspace--inbox-waiting project))))
+        (when-let* ((event (agent-workspace--inbox-for
+                            agent (seq-remove #'agent-workspace--inbox-giving-p
+                                              (agent-workspace--inbox-waiting project)))))
           (agent-workspace--inbox-give project agent event))))))
 
 (defun agent-workspace-event-text (event)
@@ -316,43 +326,91 @@ failed: called with the error)."
      :on-failure (lambda (&rest error) (funcall then (or error t))))))
 
 (defun agent-workspace--inbox-give (project agent event &optional now)
-  "EVENT given to AGENT: out of the queue, its turn in
-`agent-workspace-event-mode', the room told. NOW (you sent it): at once,
-after its turn if it's working, in its own mode."
-  (agent-workspace--inbox-take project event)
-  (unless now
-    (puthash agent (cons event (agent-workspace--agent-mode-id agent)) agent-workspace--event-turns))
-  (apply #'agent-workspace-room-post project :kind 'event-done :agent (plist-get event :from)
-         :to (agent-workspace-agent-name agent) :event (plist-get event :id)
-         :text (format "delivered to %s" (agent-workspace-agent-name agent))
-         (agent-workspace--event-room-keys event))
-  (let ((send (lambda (error)
-                (if (and error (not now))
-                    (progn
-                      ;; Not in its mode: back in the queue, said.
-                      (remhash agent agent-workspace--event-turns)
-                      (agent-workspace--inbox-write project (cons event (agent-workspace-inbox project)))
-                      (agent-workspace-room-post project :kind 'note :agent (agent-workspace-agent-name agent)
-                                                 :text (format "can't take events: its mode can't be %s"
-                                                               agent-workspace-event-mode)))
-                  ;; Told first: its prompt may be submitted at once. Data,
-                  ;; not work of its own: no branch made for it (worktree.el).
-                  (run-hook-with-args 'agent-workspace-event-given-functions agent event)
-                  (agent-workspace-send agent (agent-workspace-event-text event) :submit t :no-branch t)))))
+  "EVENT given to AGENT: its turn in `agent-workspace-event-mode' (its mode
+switched first), then its prompt sent, and only then out of the queue, the
+room told. AGENT stopped meanwhile (asleep, killed, started again), the
+event dropped or sent by you meanwhile, or its prompt not sent: it stays as
+it is (queued, said). NOW (you sent it): at once, after its turn if it's
+working, in its own mode."
+  (let* ((turn (list :event event :mode (agent-workspace--agent-mode-id agent) :sent nil :started nil))
+         (name (agent-workspace-agent-name agent))
+         (id (plist-get event :id))
+         (send
+          (lambda (error)
+            (cond
+             ;; Its agent stopped meanwhile (its turn released, said then):
+             ;; nothing given.
+             ((and (not now) (not (eq (gethash agent agent-workspace--event-turns) turn))))
+             ((not (agent-workspace--inbox-event project id))
+              (agent-workspace--inbox-release agent turn))
+             ((and error (not now))
+              ;; Not in its mode: it stays queued, said.
+              (remhash agent agent-workspace--event-turns)
+              (agent-workspace-room-post project :kind 'note :agent name
+                                         :text (format "can't take events: its mode can't be %s"
+                                                       agent-workspace-event-mode)))
+             ((not (agent-workspace-live-p agent))
+              (agent-workspace--inbox-release agent turn)
+              (agent-workspace--inbox-not-given project agent event "it stopped first"))
+             (t
+              (condition-case err
+                  (progn
+                    ;; Told first: its prompt may be submitted at once. Data,
+                    ;; not work of its own: no branch made for it (worktree.el).
+                    (run-hook-with-args 'agent-workspace-event-given-functions agent event)
+                    (let ((how (agent-workspace-send agent (agent-workspace-event-text event)
+                                                     :submit t :no-branch t)))
+                      (plist-put turn :sent t)
+                      (when (eq how 'sent) (plist-put turn :started t)))
+                    (agent-workspace--inbox-take project event)
+                    (apply #'agent-workspace-room-post project :kind 'event-done :agent (plist-get event :from)
+                           :to name :event id :text (format "delivered to %s" name)
+                           (agent-workspace--event-room-keys event)))
+                (error
+                 (agent-workspace--inbox-release agent turn)
+                 (agent-workspace--inbox-not-given project agent event (error-message-string err)))))))))
     (if now
         (funcall send nil)
+      (puthash agent turn agent-workspace--event-turns)
       (agent-workspace--set-session-mode agent agent-workspace-event-mode send))))
 
-(defun agent-workspace--inbox-state-h (agent old new)
-  "AGENT's state changed: an event's turn over, its mode back; free, its
-next event. In `agent-workspace-state-change-functions'."
-  (when-let* ((turn (gethash agent agent-workspace--event-turns))
-              ((memq old '(working hand)))
-              ((not (memq new '(working hand)))))
+(defun agent-workspace--inbox-release (agent turn)
+  "AGENT's event TURN, its prompt not sent, no longer its: its mode back
+\(if its session runs)."
+  (when (eq (gethash agent agent-workspace--event-turns) turn)
     (remhash agent agent-workspace--event-turns)
     (when (and (agent-workspace-live-p agent)
-               (not (equal (cdr turn) agent-workspace-event-mode)))
-      (agent-workspace--set-session-mode agent (cdr turn) #'ignore)))
+               (not (equal (plist-get turn :mode) agent-workspace-event-mode)))
+      (agent-workspace--set-session-mode agent (plist-get turn :mode) #'ignore))))
+
+(defun agent-workspace--inbox-not-given (project agent event why)
+  "EVENT not given to AGENT, WHY: it stays queued, said in PROJECT's room."
+  (apply #'agent-workspace-room-post project :kind 'note :agent (agent-workspace-agent-name agent)
+         :text (format "event %s stays queued: not given to %s, %s" (plist-get event :id)
+                       (agent-workspace-agent-name agent) why)
+         (agent-workspace--event-room-keys event)))
+
+(defun agent-workspace--inbox-state-h (agent old new)
+  "AGENT's state changed: its session stopped, its event's turn over (or
+its event not given yet: it stays queued); its event's turn begun (its
+prompt queued behind a turn of yours); that turn over, its mode back.
+Free, its next event. In `agent-workspace-state-change-functions'."
+  (when-let* ((turn (gethash agent agent-workspace--event-turns)))
+    (cond
+     ((memq new '(asleep home waking))
+      (remhash agent agent-workspace--event-turns)
+      ;; Its prompt not sent yet: still queued, said.
+      (let ((project (agent-workspace-agent-project agent))
+            (event (plist-get turn :event)))
+        (when (and (not (plist-get turn :sent)) (agent-workspace--inbox-event project (plist-get event :id)))
+          (agent-workspace--inbox-not-given project agent event "it stopped first"))))
+     ((and (eq new 'working) (plist-get turn :sent))
+      (plist-put turn :started t))
+     ((and (plist-get turn :started) (memq old '(working hand)) (not (memq new '(working hand))))
+      (remhash agent agent-workspace--event-turns)
+      (when (and (agent-workspace-live-p agent)
+                 (not (equal (plist-get turn :mode) agent-workspace-event-mode)))
+        (agent-workspace--set-session-mode agent (plist-get turn :mode) #'ignore)))))
   (when (memq new '(desk done nap))
     (let ((project (agent-workspace-agent-project agent)))
       (run-at-time 0 nil (lambda ()

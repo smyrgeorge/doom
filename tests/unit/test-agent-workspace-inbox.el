@@ -226,6 +226,74 @@ above them, and only the new event's line has buttons (doom-pbk.46)."
     (should (= (agent-workspace-room-id-floor project :message) 4))
     (+test-awi--free ada)))
 
+(defmacro +test-awi--mode-held (then &rest body)
+  "BODY with an event's mode switch held: the first switch put in THEN (a
+variable), a function: called, the switch done; called with t, its
+callback called as if it had been (late, its session gone)."
+  (declare (indent 1))
+  `(let ((real (symbol-function 'agent-workspace--set-session-mode))
+         (held nil))
+     (cl-letf (((symbol-function 'agent-workspace--set-session-mode)
+                (lambda (agent mode callback)
+                  (if held
+                      (funcall real agent mode callback)
+                    (setq held t
+                          ,then (lambda (&optional late)
+                                  (if late (funcall callback nil) (funcall real agent mode callback))))))))
+       ,@body)))
+
+(ert-deftest agent-workspace-inbox/stopped-before-its-event-is-sent ()
+  "An event given to ada, her mode switching, and she's put to sleep before
+its prompt goes: it stays queued, said in the room; woken, she gets it
+(doom-pbk.47)."
+  (+test-awi "stopped" (("ada" "builder"))
+    (agent-workspace-open t)
+    (let (switched)
+      (+test-awi--mode-held switched
+        (let ((id (plist-get (car (agent-workspace-inbox-add project "ada" "build 41 broke" :from "ci")) :id)))
+          (should switched)
+          (should (agent-workspace--inbox-event project id))
+          (agent-workspace-sleep ada)
+          ;; Its switch's callback, late (agent-shell's, its session gone).
+          (funcall switched t)
+          (+test-sleep 0.3)
+          (should (agent-workspace--inbox-event project id))
+          (should (= (with-temp-buffer
+                       (insert (+test-awi--room project))
+                       (count-matches (format "event %s stays queued: not given to ada, it stopped first" id)
+                                      (point-min) (point-max)))
+                     1))
+          (should-not (string-search "delivered to ada" (+test-awi--room project)))
+          (should-not (gethash ada agent-workspace--event-turns))
+          ;; Woken: she gets it.
+          (agent-workspace-wake ada)
+          (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "build 41 broke") (+test-awi--said "ada")))
+                                  20))
+          (should-not (agent-workspace--inbox-event project id))
+          (should (string-search "delivered to ada" (+test-awi--room project))))))
+    (+test-awi--free ada)))
+
+(ert-deftest agent-workspace-inbox/its-turn-in-plan-mode-after-yours ()
+  "A prompt of yours sent while an event's mode switches: the event's
+prompt, queued behind it, still runs in plan mode; its own mode back only
+after the event's turn (doom-pbk.47)."
+  (+test-awi "after-yours" (("ada" "builder"))
+    (agent-workspace-open t)
+    (let (switched)
+      (+test-awi--mode-held switched
+        (agent-workspace-inbox-add project "ada" "build 41 broke" :from "ci")
+        (agent-workspace-send ada "slow, mine" :submit t)
+        (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'working)) 10))
+        (funcall switched)
+        (let ((event (+test-awi--event-text "ci" "build 41 broke")))
+          (should (+test-wait-for (lambda () (member event (+test-awi--said "ada"))) 20))
+          (+test-awi--free ada)
+          (should (+test-wait-for (lambda () (equal (car (last (+test-awi--said "ada"))) "mode auto")) 10))
+          (let ((said (+test-awi--said "ada")))
+            ;; Plan from before the event's prompt until after its turn.
+            (should (equal (seq-drop said (cl-position "mode plan" said :test #'equal))
+                           (list "mode plan" event "mode auto")))))))))
+
 (ert-deftest agent-workspace-inbox/limits-and-wrong-ones ()
   "A source's hour, an agent's day: more refused. Nobody by that name or
 role, no text, a wrong source: refused, saying why."
