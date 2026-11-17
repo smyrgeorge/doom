@@ -231,6 +231,9 @@ its first agent is asked for."
       (let* ((project (agent-workspace-project dir))
              (app (agent-workspace--app project))
              (new (not app)))
+        ;; Its crew running in another Emacs: refused, saying where.
+        (unless (agent-workspace-agents project)
+          (agent-workspace--crew-lock-check project))
         (unless app
           (setq app (agent-workspace--make-app :project (agent-workspace--root project)))
           (puthash (agent-workspace--root project) app agent-workspace--apps))

@@ -87,6 +87,54 @@ agent's system prompt), :model, :mode (Claude Code's permission mode),
   "The crews: a project's root (the main checkout's) to its agents, in the
 order they were made.")
 
+;; ====== ONE EMACS A CREW ======
+;; A project's crew runs in one Emacs: .agent-shell/agent-workspace/crew.lock
+;; names it (its pid) while it does. Another Emacs opening the project (its
+;; app, an agent made) is refused, saying where it runs; a lock whose Emacs
+;; is gone is taken over.
+
+(defun agent-workspace--crew-lock-file (project)
+  "PROJECT's crew lock."
+  (expand-file-name ".agent-shell/agent-workspace/crew.lock" project))
+
+(defun agent-workspace--crew-lock-holder (project)
+  "The pid of another Emacs running PROJECT's crew (its lock's, alive, an
+Emacs), or nil: none, this one, or a lock left by an Emacs gone."
+  (when-let* ((file (agent-workspace--crew-lock-file project))
+              ((file-readable-p file))
+              (pid (ignore-errors
+                     (with-temp-buffer (insert-file-contents file)
+                                       (string-to-number (car (split-string (buffer-string)))))))
+              ((and (> pid 0) (/= pid (emacs-pid))))
+              (attributes (process-attributes pid)))
+    (and (not (member (alist-get 'state attributes) '("Z" "X")))
+         (string-match-p "emacs" (downcase (or (alist-get 'comm attributes) "")))
+         pid)))
+
+(defun agent-workspace--crew-lock-check (project)
+  "A user error if PROJECT's crew runs in another Emacs, saying where."
+  (when-let* ((pid (agent-workspace--crew-lock-holder project)))
+    (user-error "The crew of %s runs in another Emacs (pid %d): open it there"
+                (file-name-nondirectory (directory-file-name project)) pid)))
+
+(defun agent-workspace--crew-lock-take (project)
+  "PROJECT's crew noted as running in this Emacs (after
+`agent-workspace--crew-lock-check')."
+  (let ((file (agent-workspace--crew-lock-file project)))
+    (ignore-errors
+      (make-directory (file-name-directory file) t)
+      (write-region (format "%d %s\n" (emacs-pid) (system-name)) nil file nil 'silent))))
+
+(defun agent-workspace--crew-lock-release (project)
+  "PROJECT's crew no longer running in this Emacs: its lock gone, if it's
+this Emacs's."
+  (let ((file (agent-workspace--crew-lock-file project)))
+    (when (and (file-readable-p file)
+               (eql (ignore-errors (with-temp-buffer (insert-file-contents file)
+                                                     (string-to-number (car (split-string (buffer-string))))))
+                    (emacs-pid)))
+      (ignore-errors (delete-file file)))))
+
 ;; ====== AN AGENT ======
 
 (cl-defstruct (agent-workspace-agent
@@ -421,6 +469,9 @@ nothing is; its session not started, it's stuck saying why, in the crew."
       (user-error "An agent needs a role"))
     (agent-workspace--check-role project role)
     (agent-workspace--check-name name project)
+    ;; Its first agent here: not if the crew runs in another Emacs.
+    (unless (agent-workspace-agents project)
+      (agent-workspace--crew-lock-check project))
     (when (and colour (not (member colour agent-workspace-colours)))
       (user-error "Not a colour for an agent: %s (one of %s)"
                   colour (string-join agent-workspace-colours ", ")))
@@ -439,7 +490,8 @@ nothing is; its session not started, it's stuck saying why, in the crew."
         (error (user-error "%s's worktree: %s" name (error-message-string err))))
       (let ((key (agent-workspace--root project)))
         (puthash key (append (gethash key agent-workspace--crews) (list agent))
-                 agent-workspace--crews))
+                 agent-workspace--crews)
+        (agent-workspace--crew-lock-take key))
       (when issue
         (agent-workspace-give agent issue issue-title issue-type))
       (agent-workspace--changed agent 'created)
@@ -499,7 +551,8 @@ asked: no work is lost without asking."
     (let ((key (agent-workspace-agent-project agent)))
       (puthash key (remq agent (gethash key agent-workspace--crews)) agent-workspace--crews)
       (unless (gethash key agent-workspace--crews)
-        (remhash key agent-workspace--crews)))
+        (remhash key agent-workspace--crews)
+        (agent-workspace--crew-lock-release key)))
     (when (eq how 'remove)
       (agent-workspace-worktree-remove agent))
     (agent-workspace--changed agent 'forgotten)))
@@ -598,6 +651,7 @@ their processes, (PID . START) each."
               (agents (gethash key agent-workspace--crews)))
     (run-hook-with-args 'agent-workspace-closing-functions key)
     (remhash key agent-workspace--crews)
+    (agent-workspace--crew-lock-release key)
     (let ((table (and (seq-some #'agent-workspace-live-p agents)
                       (agent-workspace--process-table))))
       (mapcan (lambda (agent)

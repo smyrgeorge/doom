@@ -311,6 +311,9 @@ saying so, and the others open. A wrong agent is left out, and a warning names i
 colour "pink" isn't one of ...`); it stays in the file as it was, for you to mend. A file that isn't JSON, or isn't a crew, is said, nothing starts, and it's kept as it
 is until you make an agent.
 
+A project's crew runs in one Emacs at a time: opening it in another (`SPC o w`, an agent made there) is refused, saying
+which Emacs runs it.
+
 After you edit it, `gR` reads it again; until then the crew changing doesn't overwrite your edit (the room says so). It asks before it starts an agent, forgets one or turns a loop on; a colour, the
 panels or a loop turned off it applies.
 

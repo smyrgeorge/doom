@@ -468,6 +468,35 @@ stays asleep, said; r on it is refused as s is, until one stops
       (agent-workspace-restart eve)
       (should (eq (agent-workspace-agent-state eve) 'desk)))))
 
+(ert-deftest agent-workspace-saved/one-emacs-a-crew ()
+  "The crew's lock naming another Emacs, alive: SPC o w and an agent made
+are refused, saying where it runs. That Emacs gone: its lock taken over,
+the crew starts here, the lock this Emacs's; closed, the lock goes
+\(doom-pbk.66)."
+  (+test-aws2 "lock"
+    (let* ((lock (expand-file-name ".agent-shell/agent-workspace/crew.lock" project))
+           (other (make-process :name "other-emacs" :noquery t :connection-type 'pipe
+                                :command (list (expand-file-name invocation-name invocation-directory)
+                                               "--batch" "-Q" (concat "--init-directory=" (+test-tmp-file "other-emacs/"))
+                                               "--eval" "(sleep-for 60)"))))
+      (unwind-protect
+          (progn
+            (make-directory (file-name-directory lock) t)
+            (write-region (format "%d somewhere\n" (process-id other)) nil lock)
+            (should (string-match-p "\\`The crew of lock runs in another Emacs (pid [0-9]+): open it there\\'"
+                                    (cadr (should-error (agent-workspace-open t) :type 'user-error))))
+            (should-not (agent-workspace--app project))
+            (should-error (agent-workspace-create :role "builder" :name "ada") :type 'user-error)
+            (should-not (agent-workspace-agents project)))
+        (delete-process other))
+      ;; Gone: taken over.
+      (agent-workspace-open t)
+      (agent-workspace-create :role "builder" :name "ada")
+      (should (string-prefix-p (format "%d " (emacs-pid))
+                               (with-temp-buffer (insert-file-contents lock) (buffer-string))))
+      (agent-workspace-close project)
+      (should-not (file-exists-p lock)))))
+
 (ert-deftest agent-workspace-saved/closed-and-opened-again ()
   "Q, then SPC o w: the same agents (names, roles, colours, models, modes),
 fresh, waiting; the asleep one asleep; the same agent selected."

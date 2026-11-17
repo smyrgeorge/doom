@@ -468,6 +468,7 @@ worktree, its panels opened again there; asleep if it was, or if it loops
                  :state (if (or (plist-get entry :asleep) (plist-get entry :loop) full) 'asleep 'waking)))
          (key (agent-workspace--root project)))
     (puthash key (append (gethash key agent-workspace--crews) (list agent)) agent-workspace--crews)
+    (agent-workspace--crew-lock-take key)
     (cond
      ((not (assoc role (agent-workspace-roles project)))
       (setf (agent-workspace-agent-state agent) 'stuck
