@@ -169,7 +169,13 @@ its minutes, its location, its changed file, from agent-shell's events."
             (agent-workspace-send ada (concat "edit " (expand-file-name "src/a.el" (agent-workspace-agent-worktree ada)))
                                   :submit t)
             (should (+test-wait-for (lambda () (member "src/a.el" (plist-get (agent-workspace-activity ada) :changed))) 20))
-            (should (equal (car (last (agent-workspace-activity-lane ada))) '(edit read)))
+            ;; Its read, then its edit, in the same minute or the next: the
+            ;; clock's minute may turn between them (or before this looks).
+            (let* ((lane (agent-workspace-activity-lane ada))
+                   (read (cl-position-if (lambda (kinds) (memq 'read kinds)) lane))
+                   (edit (cl-position-if (lambda (kinds) (memq 'edit kinds)) lane)))
+              (should (equal (sort (delete-dups (apply #'append lane)) #'string<) '(edit read)))
+              (should (and read edit (<= 0 (- edit read) 1))))
             (should (equal (with-temp-buffer
                              (insert-file-contents (expand-file-name "src/a.el" (agent-workspace-agent-worktree ada)))
                              (buffer-string))
