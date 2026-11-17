@@ -218,7 +218,11 @@ message waiting (:state \"waiting\")."
       (user-error "No agent or role %s in this crew" to))
     (let* ((thread (agent-workspace--thread-between project from to))
            (issue (agent-workspace-agent-issue sender))
-           (message (append (list :id (cl-incf agent-workspace--message-next-id) :from from :to to :text text
+           (message (append (list :id (setq agent-workspace--message-next-id
+                                            (1+ (max agent-workspace--message-next-id
+                                                     ;; Above an Emacs before's, in the room.
+                                                     (agent-workspace-room-id-floor project :message))))
+                                  :from from :to to :text text
                                   :thread (agent-workspace--thread-id thread))
                             (and issue (list :issue issue))))
            (paused (>= (agent-workspace--thread-count thread) agent-workspace-thread-pause)))

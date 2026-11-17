@@ -257,8 +257,10 @@ source off for one: its copy dropped. Return the events, each as it is now
             events)))
 
 (defun agent-workspace--inbox-next-id (project)
-  "A new event's id in PROJECT: one more than any queued (or 1)."
-  (1+ (apply #'max 0 (mapcar (lambda (event) (or (plist-get event :id) 0))
+  "A new event's id in PROJECT: one more than any queued or taken, and than
+any in its kept room as this Emacs found it (an Emacs before's)."
+  (1+ (apply #'max (agent-workspace-room-id-floor project :event)
+             (mapcar (lambda (event) (or (plist-get event :id) 0))
                              (append (agent-workspace-inbox project)
                                      (gethash (agent-workspace--root project) agent-workspace--inboxes-taken))))))
 

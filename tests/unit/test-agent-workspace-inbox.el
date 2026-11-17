@@ -203,6 +203,29 @@ queued, not delivered, until P again."
       (agent-workspace-inbox-pause))
     (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "three") (+test-awi--said "ada"))) 20))))
 
+(ert-deftest agent-workspace-inbox/ids-above-an-emacs-before-s ()
+  "Emacs started again (nothing queued, nothing taken): a room.jsonl with
+event 1 and message 4 from before; a new event and a message get ids
+above them, and only the new event's line has buttons (doom-pbk.46)."
+  (+test-awi "ids" (("ada" "builder"))
+    (let ((file (expand-file-name ".agent-shell/agent-workspace/room.jsonl" project)))
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file
+        (insert "{\"time\":\"09:00\",\"kind\":\"event\",\"agent\":\"ci\",\"to\":\"ada\",\"event\":1,\"text\":\"OLD: build 41 broke\"}\n"
+                "{\"time\":\"09:01\",\"kind\":\"message\",\"agent\":\"ken\",\"to\":\"ada\",\"message\":4,\"text\":\"OLD: \\\"message\\\":99 in a text\"}\n")))
+    (clrhash agent-workspace--room-id-floors)
+    (agent-workspace-open t)
+    (agent-workspace-send ada "slow down" :submit t)
+    (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'working)) 10))
+    (let ((id (plist-get (car (agent-workspace-inbox-add project "ada" "NEW: build 42 broke" :from "ci")) :id)))
+      (should (= id 2))
+      (let ((lines (split-string (with-current-buffer (agent-workspace--room-buffer project) (buffer-string)) "\n")))
+        (should (= (seq-count (lambda (line) (string-search "[Send now]" line)) lines) 1))
+        (should (string-search "[Send now]" (cadr (member (seq-find (lambda (line) (string-search "NEW: build 42" line)) lines)
+                                                           lines))))))
+    (should (= (agent-workspace-room-id-floor project :message) 4))
+    (+test-awi--free ada)))
+
 (ert-deftest agent-workspace-inbox/limits-and-wrong-ones ()
   "A source's hour, an agent's day: more refused. Nobody by that name or
 role, no text, a wrong source: refused, saying why."

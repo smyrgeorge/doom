@@ -174,6 +174,35 @@ file trimmed to them if it's longer."
                                 (plist-put entry :kind (intern (or (plist-get entry :kind) "note"))))))
                           kept))))))
 
+(defvar agent-workspace--room-id-floors (make-hash-table :test #'equal)
+  "A project's highest event and message ids in its kept room, as this
+Emacs first read them: (:event N :message M).")
+
+(defun agent-workspace-room-id-floor (project key)
+  "The highest id of KEY (:event, :message) in PROJECT's kept room as this
+Emacs first read it, else 0: a new event's or message's goes above it, so
+an old line (its buttons drawn by id) never names a new one."
+  (let* ((root (agent-workspace--root project))
+         (floors (or (gethash root agent-workspace--room-id-floors)
+                     (puthash root (agent-workspace--room-id-scan project) agent-workspace--room-id-floors))))
+    (or (plist-get floors key) 0)))
+
+(defun agent-workspace--room-id-scan (project)
+  "PROJECT's kept room's highest event and message ids: (:event N :message M)."
+  (let ((event 0) (message 0)
+        (file (agent-workspace--room-file project)))
+    (when (file-readable-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        ;; Keys only: a quote in a text is \" in JSON.
+        (while (re-search-forward "\"\\(event\\|message\\)\":\\([0-9]+\\)" nil t)
+          (let ((n (string-to-number (match-string 2))))
+            (if (equal (match-string 1) "event")
+                (setq event (max event n))
+              (setq message (max message n)))))))
+    (list :event event :message message)))
+
 (defun agent-workspace--room-keep (project entry)
   "ENTRY appended to PROJECT's kept room."
   (let ((file (agent-workspace--room-file project)))
