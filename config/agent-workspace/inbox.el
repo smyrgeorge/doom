@@ -141,8 +141,8 @@ left out."
 (defun agent-workspace--inbox-redraw (project)
   "PROJECT's room (its events' buttons), app (its bars' ✉N) and inbox view
 drawn again."
-  (when (fboundp 'agent-workspace--room-redraw)
-    (agent-workspace--room-redraw project))
+  (when (fboundp 'agent-workspace--room-redraw-soon)
+    (agent-workspace--room-redraw-soon project))
   (agent-workspace--inbox-view-draw project)
   (when-let* ((app (agent-workspace--app project)))
     (agent-workspace--redraw app)))

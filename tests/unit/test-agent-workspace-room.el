@@ -312,6 +312,52 @@ answering again, the list as fetched (doom-pbk.43)."
         (should (string-search "p-1" (with-current-buffer buffer (buffer-string))))
         (should-not (funcall bds))))))
 
+(ert-deftest agent-workspace-room/a-post-appends-its-lines ()
+  "A post with nothing above it changed appends its lines, the feed not
+drawn again; at its kept limit the oldest line goes from the top. Several
+changes in a command (an #all event to 4 agents, 500 entries kept): drawn
+again once, after it, the command well under 100 ms. Neither the room nor
+the issue list keeps undo (doom-pbk.48)."
+  (+test-awr2 "appends"
+    (dolist (spec '(("ada" "builder") ("ken" "builder") ("sam" "investigator") ("liz" "builder")))
+      (agent-workspace-create :role (cadr spec) :name (car spec)))
+    (let* ((agent-workspace-room-kept 500)
+          (redraws 0)
+          (count (lambda (&rest _) (setq redraws (1+ redraws))))
+          (buffer (agent-workspace--room-buffer project)))
+      (dotimes (i 500)
+        (agent-workspace-room-post project :kind 'note :agent "ada" :text (format "note %d, some words" i)))
+      (agent-workspace--room-buffer project)
+      (advice-add 'agent-workspace--room-redraw :before count)
+      (unwind-protect
+          (progn
+            ;; A post: appended, the first line gone, nothing drawn again.
+            (let ((lines (with-current-buffer buffer (count-lines (point-min) (point-max)))))
+              (agent-workspace-room-post project :kind 'note :agent "ada" :text "the last one")
+              (should (= redraws 0))
+              (with-current-buffer buffer
+                (should (= (count-lines (point-min) (point-max)) lines))
+                (should (string-suffix-p "the last one\n" (buffer-substring-no-properties (point-min) (point-max))))
+                (should-not (string-search "note 0," (buffer-string)))
+                (should (string-search "note 1," (buffer-string)))))
+            ;; An #all event to the 4 of them: drawn again once, after it.
+            (cl-letf (((symbol-function 'agent-workspace--set-session-mode) #'ignore))
+              (let ((times nil))
+                (dotimes (_ 3)
+                  (setq redraws 0)
+                  (let ((start (float-time)))
+                    (agent-workspace-inbox-add project "#all" "build 42 broke" :from "ci" :limits nil)
+                    (push (- (float-time) start) times))
+                  (should (= redraws 0))
+                  (agent-workspace--room-buffer project)
+                  (should (= redraws 1)))
+                (should (< (apply #'min times) 0.1))))
+            (with-current-buffer buffer
+              (should (string-search "✉ → liz build 42 broke" (buffer-string)))))
+        (advice-remove 'agent-workspace--room-redraw count))
+      (should (eq (buffer-local-value 'buffer-undo-list buffer) t))
+      (should (eq (buffer-local-value 'buffer-undo-list (agent-workspace--issues-buffer project)) t)))))
+
 (ert-deftest agent-workspace-room/filtered ()
   "F: raised hands only, then the selected agent's only, then all."
   (+test-awr2 "filter"

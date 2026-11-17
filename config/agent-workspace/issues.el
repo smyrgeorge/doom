@@ -55,6 +55,8 @@ its name.")
 
 (define-derived-mode agent-workspace-issues-mode special-mode "Issues"
   "A crew's issues: the work, beside its agents."
+  ;; Drawn again and again: no undo kept of it.
+  (buffer-disable-undo)
   (setq-local truncate-lines t
               mode-line-format nil
               tab-line-exclude t

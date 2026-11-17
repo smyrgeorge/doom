@@ -86,6 +86,9 @@ past them, it scrolls."
 (defvar-local agent-workspace--room-filter nil "In the feed: nil (all), `hands', or an agent's name.")
 (defvar-local agent-workspace--room-folded nil "In the feed: the threads folded (their ids).")
 (defvar-local agent-workspace--room-drawn nil "In the feed: its entries when it was last drawn.")
+(defvar-local agent-workspace--room-soon nil
+  "In the feed: a timer drawing it all again in a moment (changes in a
+burst: once); its text until then as it was, a post appended to it.")
 (defvar-local agent-workspace--compose-history nil "In the compose line: what you sent, the latest first.")
 (defvar-local agent-workspace--compose-index -1 "In the compose line: where M-p / M-n are in it.")
 (defvar-local agent-workspace--compose-prompt nil "In the compose line: its prompt, an overlay.")
@@ -98,6 +101,8 @@ past them, it scrolls."
 
 (define-derived-mode agent-workspace-room-mode special-mode "Room"
   "The room's feed: what the crew does and says."
+  ;; Drawn again and again: no undo kept of it.
+  (buffer-disable-undo)
   (setq-local mode-line-format nil
               tab-line-exclude t
               truncate-lines nil
@@ -120,12 +125,16 @@ past them, it scrolls."
   (format "*%s · %s*" what (file-name-nondirectory (directory-file-name project))))
 
 (defun agent-workspace--room-buffer (project)
-  "PROJECT's room's feed (made the first time, its kept entries read)."
+  "PROJECT's room's feed (made the first time, its kept entries read), drawn
+as it is now (a redraw to come done)."
   (let ((name (agent-workspace--room-name project "room")))
-    (or (seq-find (lambda (buffer) (and (equal (buffer-local-value 'agent-workspace--room-project buffer)
-                                               (agent-workspace--root project))
-                                        (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-room-mode)))
-                  (agent-workspace--app-buffers project))
+    (or (when-let* ((buffer (seq-find (lambda (buffer) (and (equal (buffer-local-value 'agent-workspace--room-project buffer)
+                                                                   (agent-workspace--root project))
+                                                            (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-room-mode)))
+                                      (agent-workspace--app-buffers project))))
+          (when (buffer-local-value 'agent-workspace--room-soon buffer)
+            (agent-workspace--room-redraw project))
+          buffer)
         (with-current-buffer (generate-new-buffer name)
           (agent-workspace-room-mode)
           (setq agent-workspace--room-project (agent-workspace--root project)
@@ -228,11 +237,56 @@ an event went to), :event (an event's id)."
     (when-let* ((app (agent-workspace--app project))
                 (buffer (seq-find (lambda (buffer) (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-room-mode))
                                   (agent-workspace--app-buffers project))))
-      (with-current-buffer buffer
-        (setq agent-workspace--room-entries
-              (last (append agent-workspace--room-entries (list entry)) agent-workspace-room-kept)))
-      (agent-workspace--room-redraw project))
+      (let* ((before (buffer-local-value 'agent-workspace--room-entries buffer))
+             (after (last (append before (list entry)) agent-workspace-room-kept))
+             (dropped (seq-take before (- (1+ (length before)) (length after)))))
+        (with-current-buffer buffer
+          (setq agent-workspace--room-entries after))
+        ;; Its lines appended, nothing above them changed; else drawn again
+        ;; in a moment.
+        (unless (agent-workspace--room-append project buffer entry before dropped)
+          (agent-workspace--room-redraw-soon project))))
     entry))
+
+(defun agent-workspace--room-append (project buffer entry before dropped)
+  "ENTRY, just posted in PROJECT's feed BUFFER, its lines appended, those of
+DROPPED (the oldest, gone from it) deleted; each window following the end
+follows it. Non-nil if done; nil, the feed must be drawn again: drawn from
+other entries than BEFORE (the feed's before ENTRY), or a redraw to come,
+ENTRY in a thread folded, a thread among DROPPED."
+  (with-current-buffer buffer
+    (let ((thread (plist-get entry :thread)))
+      (when (and (not agent-workspace--room-soon)
+                 (eq agent-workspace--room-drawn before)
+                 (not (and thread (member thread agent-workspace--room-folded)))
+                 (not (seq-some (lambda (old) (plist-get old :thread)) dropped)))
+        (let* ((inhibit-read-only t)
+               (windows (get-buffer-window-list buffer nil t))
+               (following (seq-filter (lambda (window) (agent-workspace--room-last-line-p (window-point window)))
+                                      windows)))
+          ;; The oldest gone: their lines, at the top.
+          (when dropped
+            (save-excursion
+              (goto-char (point-min))
+              (while (and (< (point) (point-max))
+                          (memq (get-text-property (point) 'agent-workspace-entry) dropped))
+                (forward-line 1))
+              (delete-region (point-min) (point))))
+          (when (agent-workspace--room-shown-p entry agent-workspace--room-filter)
+            (save-excursion
+              (goto-char (point-max))
+              (let ((start (point)))
+                (dolist (line (agent-workspace--room-entry-lines
+                               project entry (if windows (window-body-width (car windows)) agent-workspace-room-width)))
+                  (insert line "\n"))
+                (put-text-property start (point) 'agent-workspace-entry entry))))
+          (setq agent-workspace--room-drawn agent-workspace--room-entries)
+          (dolist (window following)
+            (set-window-point window (point-max))
+            (with-selected-window window
+              (goto-char (point-max))
+              (recenter -1)))
+          t)))))
 
 (defun agent-workspace--room-shown-p (entry filter)
   "Non-nil if ENTRY is shown with FILTER."
@@ -304,6 +358,8 @@ the oldest entries dropped, a thread folded, a hand's buttons gone)."
   (when-let* ((buffer (seq-find (lambda (buffer) (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-room-mode))
                                 (agent-workspace--app-buffers project))))
     (with-current-buffer buffer
+      (when (timerp agent-workspace--room-soon) (cancel-timer agent-workspace--room-soon))
+      (setq agent-workspace--room-soon nil)
       (let* ((windows (get-buffer-window-list buffer nil t))
              (places (mapcar (lambda (window)
                                (list window
@@ -345,6 +401,18 @@ the oldest entries dropped, a thread folded, a hand's buttons gone)."
             ;; move it (its cursor is on the screen).
             (set-window-point window (agent-workspace--room-find point drawn))
             (set-window-start window (agent-workspace--room-find start drawn))))))))
+
+(defun agent-workspace--room-redraw-soon (project)
+  "PROJECT's feed drawn again in a moment (changes in a burst, posts among
+them: once); at once if it's asked for meanwhile (`agent-workspace--room-buffer')."
+  (when-let* ((buffer (seq-find (lambda (buffer) (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-room-mode))
+                                (agent-workspace--app-buffers project))))
+    (with-current-buffer buffer
+      (unless agent-workspace--room-soon
+        (setq agent-workspace--room-soon
+              (run-at-time 0 nil (lambda ()
+                                   (when (buffer-live-p buffer)
+                                     (agent-workspace--room-redraw project)))))))))
 
 (defun agent-workspace--room-last-line-p (position)
   "Non-nil if POSITION is on the feed's last line (or after it): there, a
@@ -394,6 +462,10 @@ the nearest one after it; none, the end."
   "AGENT's WHAT, said in its room. In `agent-workspace-change-functions'."
   (let ((project (agent-workspace-agent-project agent))
         (name (agent-workspace-agent-name agent)))
+    ;; Its lines above as they read now: its name and colour, a lookup by
+    ;; name (a rename, an agent gone or made), its buttons.
+    (when (memq what '(created renamed forgotten colour))
+      (agent-workspace--room-redraw-soon project))
     (pcase what
       ('created
        (agent-workspace-room-post project :kind 'joined :agent name
@@ -422,13 +494,15 @@ the nearest one after it; none, the end."
 
 (defun agent-workspace--room-hand-h (agent)
   "AGENT raised its hand (a request, a second one too): said, a line of its
-own, its buttons under it while it's the one waiting. In
-`agent-workspace-hand-functions'."
-  (agent-workspace-room-post (agent-workspace-agent-project agent)
-                             :kind 'hand :agent (agent-workspace-agent-name agent)
-                             :text (agent-workspace-state-text agent)
-                             :ask (and (fboundp 'agent-workspace--ask-key)
-                                       (agent-workspace--ask-key (agent-workspace-agent-ask agent)))))
+own, its buttons under it while it's the one waiting (a hand before it, its
+buttons gone). In `agent-workspace-hand-functions'."
+  (let ((project (agent-workspace-agent-project agent)))
+    (agent-workspace-room-post project
+                               :kind 'hand :agent (agent-workspace-agent-name agent)
+                               :text (agent-workspace-state-text agent)
+                               :ask (and (fboundp 'agent-workspace--ask-key)
+                                         (agent-workspace--ask-key (agent-workspace-agent-ask agent))))
+    (agent-workspace--room-redraw-soon project)))
 
 (add-hook 'agent-workspace-hand-functions #'agent-workspace--room-hand-h)
 
@@ -444,7 +518,7 @@ own, its buttons under it while it's the one waiting. In
                (agent-workspace-room-post project :kind 'home :agent name :text "went home")))
       (_ (when (and (eq old 'hand) (agent-workspace--app project))
            ;; A hand answered (here or elsewhere): its buttons go.
-           (agent-workspace--room-redraw project))))
+           (agent-workspace--room-redraw-soon project))))
     (pcase new
       ('stuck (agent-workspace-room-post project :kind 'stuck :agent name
                                          :text (concat "stuck"

@@ -156,7 +156,7 @@ key (`agent-workspace--raise-hand')."
                      (equal (plist-get entry :agent) (agent-workspace-agent-name agent))
                      (equal (plist-get entry :ask) key))
             (plist-put entry :answered label))))
-      (agent-workspace--room-redraw project))))
+      (agent-workspace--room-redraw-soon project))))
 
 (defun agent-workspace--hand-buttons (agent ask-key)
   "Buttons for AGENT's raised hand, if it's still the one ASK-KEY names:

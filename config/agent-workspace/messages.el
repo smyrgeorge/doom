@@ -147,7 +147,9 @@ more of them), or let go again."
                                :text (format (if (agent-workspace--thread-stopped thread)
                                                  "%s stopped (you): x lets it go again"
                                                "%s goes again (you)")
-                                             (agent-workspace--thread-words thread)))))
+                                             (agent-workspace--thread-words thread)))
+    ;; Its messages' buttons gone.
+    (agent-workspace--room-redraw-soon project)))
 
 (defun agent-workspace-room-stop ()
   "The thread of the line here stopped, or let go again (x)."
@@ -261,10 +263,11 @@ own)."
             (gethash (agent-workspace--root project) agent-workspace--messages-waiting)))
 
 (defun agent-workspace--message-take (project message)
-  "MESSAGE no longer waiting for your OK."
+  "MESSAGE no longer waiting for your OK: its buttons in the room gone."
   (let ((key (agent-workspace--root project)))
     (puthash key (delq message (gethash key agent-workspace--messages-waiting))
-             agent-workspace--messages-waiting)))
+             agent-workspace--messages-waiting)
+    (agent-workspace--room-redraw-soon project)))
 
 (defun agent-workspace--thread-you (project message count)
   "You took part in MESSAGE's thread: COUNT messages without you since."

@@ -104,8 +104,8 @@ the room to its first free agent, once each."
 drawn again (gone with their issue). In
 `agent-workspace-issues-fetched-functions'."
   (agent-workspace--offer-ready project data)
-  (when (fboundp 'agent-workspace--room-redraw)
-    (agent-workspace--room-redraw project)))
+  (when (fboundp 'agent-workspace--room-redraw-soon)
+    (agent-workspace--room-redraw-soon project)))
 
 (defun agent-workspace--offer-state-h (agent _old new)
   "AGENT free: its crew's ready issues offered (as last fetched). In
@@ -131,6 +131,7 @@ its worktree has changes not committed."
     (agent-workspace-give-issue agent id (plist-get issue :title) (plist-get issue :type))
     ;; Its until it's fetched again: its offer's button gone.
     (plist-put issue :assignee name)
+    (agent-workspace--room-redraw-soon project)
     (agent-workspace-room-post project :kind 'issue :agent name :text (format "given %s (you)" id))))
 
 (defun agent-workspace--room-offer-line (project entry)
