@@ -329,9 +329,11 @@ has none: a coloured 20% lost its colour)."
       (setq start (1+ at)))
     (apply #'concat (nreverse (cons (substring text start) parts)))))
 
-(defun agent-workspace--at-right (left right width)
+(defun agent-workspace--at-right (left right width &optional fill)
   "LEFT, then RIGHT at the window's right edge (to the pixel in the GUI, its
-glyphs evened), LEFT cut to WIDTH's columns left; the line to the edge."
+glyphs evened), LEFT cut to WIDTH's columns left; the line to the edge in
+the GUI, and in a terminal too with FILL (an agent's line, tinted to its
+window's last column: a bar's $ there is a space in its tint)."
   (let* ((right (agent-ui-even-glyphs right))
          (gui (agent-workspace--graphic-p))
          ;; In a terminal `right' is past the window's border column, and the
@@ -342,7 +344,7 @@ glyphs evened), LEFT cut to WIDTH's columns left; the line to the edge."
     (concat left
             (propertize " " 'display `(space :align-to (- right ,end)))
             right
-            (if gui (propertize " " 'display '(space :align-to right)) ""))))
+            (if (or gui fill) (propertize " " 'display '(space :align-to right)) ""))))
 
 (defun agent-workspace-badge (agent)
   "AGENT's panels counted, \"◫2\" (their names its help), or nil if it has
@@ -404,7 +406,7 @@ and branch."
                                                                        (abbreviate-file-name
                                                                         (or (agent-workspace-agent-worktree agent) ""))))))
                               " ")))))
-         (line (agent-workspace--at-right left right width)))
+         (line (agent-workspace--at-right left right width t)))
     (agent-ui-even-glyphs
      (agent-workspace--tint line (if hand 'warning (agent-workspace-agent-face agent)) (if open 0.3 0.14)))))
 

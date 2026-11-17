@@ -391,7 +391,7 @@ and V at its right. Tinted in its colour, as a bar."
                                         (agent-workspace--at-right
                                          (concat " " (agent-workspace--tabs-text agent (window-buffer)))
                                          (propertize "v: next · V: full size " 'face 'shadow)
-                                         (window-total-width))
+                                         (window-total-width) t)
                                         (agent-workspace-agent-face agent) 0.14)
                                        agent-workspace-line-map t)))))
 

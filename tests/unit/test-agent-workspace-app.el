@@ -151,6 +151,20 @@ columns), however long the left is (doom-pbk.84)."
     (should at)
     (should (<= (string-width (substring line 0 at)) (1- starts)))))
 
+(ert-deftest agent-workspace-app/tinted-to-the-last-column ()
+  "In a terminal an agent's bar and its pane's header line end in a stretch
+to the window's right edge, in its tint: the tint reaches the last column
+\(doom-pbk.88)."
+  (+test-awa "tint-edge"
+    (pcase-let ((`(,ada) (+test-awa--crew '("ada" "builder"))))
+      (should-not (agent-workspace--graphic-p))
+      (dolist (line (list (agent-workspace-line ada 80 nil t) (agent-workspace-line ada 80 t nil)))
+        (let ((last (1- (length line))))
+          (should (equal (get-text-property last 'display line) '(space :align-to right)))
+          (should (seq-some (lambda (face) (and (consp face) (plist-get face :background)))
+                            (let ((face (get-text-property last 'face line)))
+                              (if (and (consp face) (keywordp (car face))) (list face) (ensure-list face))))))))))
+
 (ert-deftest agent-workspace-app/keys-on-a-bar ()
   "On an agent's bar, from the keyboard: the bar's keys (j/k between agents,
 TAB, RET) and the app's (c, i, K...) act, its line's map adding its clicks
