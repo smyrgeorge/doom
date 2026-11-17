@@ -31,6 +31,8 @@
 ;;   Abort   close, the file left as it was
 ;; Narrower, its labels shorter (Left, Right, the wand alone...), down to
 ;; Done and Abort alone.
+;; Under `+my/merge-side-by-side-width' columns, Yours and Theirs open side by
+;; side above the Result, as wide as the window.
 ;; The panes line up: each change takes as many rows in each, the shorter
 ;; padded with grey filler lines (not text: not saved, not copied, the cursor
 ;; skips them); and they scroll together (the wheel, the trackpad, the keys,
@@ -50,6 +52,11 @@
 ;; M-x +my/merge-all resolves each conflicted file of the repository, one
 ;; after the other; from the shell, cmd/diff does (in this terminal, see
 ;; docs/cmd.md).
+(defvar +my/merge-side-by-side-width 120
+  "The narrowest window (columns) the three panes open side by side in;
+narrower, Yours and Theirs side by side above the Result, as wide as the
+window.")
+
 (defvar +my/merge-refine-max-lines 200
   "Changes longer than this (lines) on a side aren't refined word by word.")
 

@@ -66,7 +66,8 @@ ignoring window parameters: Emacs then forgets it was atomic): as usual."
 
 (defun +my/merge--layout (session)
   "SESSION's panes: the bar across the top, Yours, the Result (selected),
-Theirs."
+Theirs, side by side; narrower than `+my/merge-side-by-side-width', Yours
+and Theirs above the Result."
   (let ((window-min-height 1)
         (window-safe-min-height 1)
         (window-min-width 10))
@@ -80,8 +81,15 @@ Theirs."
            ;; its sibling): kept whole, below.
            (bar (let ((window-combination-limit t))
                   (split-window left -2 'above)))
-           (middle (split-window left (- (* 2 (/ (window-total-width left) 3))) 'right))
-           (right (split-window middle (- (/ (window-total-width middle) 2)) 'right)))
+           ;; Narrow: Yours and Theirs above the Result, as wide as the
+           ;; window (a third each, each showed 8 columns of code at 60).
+           (stacked (< (window-total-width left) +my/merge-side-by-side-width))
+           (middle (if stacked
+                       (split-window left (- (/ (window-total-height left) 2)) 'below)
+                     (split-window left (- (* 2 (/ (window-total-width left) 3))) 'right)))
+           (right (if stacked
+                      (split-window left (- (/ (window-total-width left) 2)) 'right)
+                    (split-window middle (- (/ (window-total-width middle) 2)) 'right))))
       (set-window-buffer bar (+my/merge-bar session))
       (set-window-dedicated-p bar t)
       (set-window-parameter bar 'no-other-window t)
@@ -108,13 +116,25 @@ Theirs."
         (set-window-parameter window 'delete-other-windows #'+my/merge--delete-other-windows))
       (list left middle right bar))))
 
+(defun +my/merge--title (pane side)
+  "PANE's title (\"Yours\", \"Theirs\"), SIDE being ((NAME . ROLE),
+`+my/merge--sides'): its role first, the part saying which side is which in
+a rebase, the subject cut first: \"Yours (rebasing onto): b642431 subject\"."
+  (concat pane (and (cdr side) (format " (%s)" (cdr side))) ": " (car side)))
+
+(defun +my/merge--header (title)
+  "A pane's header line: TITLE, cut with … to its window's width."
+  (concat " " (propertize (truncate-string-to-width title (max 1 (- (window-total-width) 2)) nil nil "…")
+                          'face 'bold)))
+
 (defun +my/merge--start (path)
   "Resolve PATH's conflict (relative to the repository's top, the current
 folder) in three panes."
   (let* ((bytes (mapcar (lambda (stage) (+my/merge--blob stage path)) '(1 2 3)))
          (coding (+my/merge--coding (nth 1 bytes)))
          (texts (mapcar (lambda (b) (decode-coding-string b coding)) bytes))
-         (labels (+my/merge--labels))
+         (sides (+my/merge--sides))
+         (labels (cons (+my/merge--label (car sides)) (+my/merge--label (cdr sides))))
          (session (+my/merge--make :path path :toplevel default-directory :coding coding
                                    :labels labels :frame (selected-frame)
                                    :winconf (current-window-configuration)
@@ -142,14 +162,14 @@ folder) in three panes."
             (setq +my/merge--session session)
             (add-hook 'kill-buffer-hook #'+my/merge--killed-h nil t)
             (add-hook 'window-size-change-functions #'+my/merge--bar-resized-h nil t))
-          (pcase-dolist (`(,buffer ,title) `((,(+my/merge-yours session) ,(concat "Yours: " (car labels)))
+          (pcase-dolist (`(,buffer ,title) `((,(+my/merge-yours session) ,(+my/merge--title "Yours" (car sides)))
                                              (,(+my/merge-result session) ,(concat "Result: " path))
-                                             (,(+my/merge-theirs session) ,(concat "Theirs: " (cdr labels)))))
+                                             (,(+my/merge-theirs session) ,(+my/merge--title "Theirs" (cdr sides)))))
             (with-current-buffer buffer
               ;; First: turned off, it puts back the buffer's `truncate-lines'.
               (when (bound-and-true-p visual-line-mode)
                 (visual-line-mode -1))
-              (setq-local header-line-format (concat " " (propertize title 'face 'bold))
+              (setq-local header-line-format `(:eval (+my/merge--header ,title))
                           ;; A row a line: lined up (see LINING UP, align.el).
                           truncate-lines t
                           filter-buffer-substring-function #'+my/merge--filter-substring)

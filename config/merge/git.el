@@ -63,19 +63,32 @@ said, its first line (\"Unable to create '.../index.lock': File exists.\")."
         (coding-system-change-text-conversion coding 'utf-8)
       coding)))
 
-(defun +my/merge--labels ()
-  "What Yours and Theirs are, (YOURS . THEIRS), from the operation going on."
+(defun +my/merge--sides ()
+  "What Yours and Theirs are, from the operation going on: ((NAME . ROLE) .
+\(NAME . ROLE)), NAME a branch or a commit (its short hash and subject), ROLE
+what it is in the operation (\"rebasing onto\"...), or nil."
   (let* ((rev (lambda (name) (and (magit-rev-verify name) name)))
          (subject (lambda (rev) (magit-rev-format "%h %s" rev)))
          (branch (or (magit-get-current-branch) (magit-rev-abbrev "HEAD") "HEAD")))
     (cond ((funcall rev "MERGE_HEAD")
-           (cons branch (or (magit-rev-name "MERGE_HEAD" "refs/heads/*")
-                            (funcall subject "MERGE_HEAD"))))
+           (cons (list branch) (list (or (magit-rev-name "MERGE_HEAD" "refs/heads/*")
+                                         (funcall subject "MERGE_HEAD")))))
           ((funcall rev "REBASE_HEAD")
-           (cons (format "%s (rebasing onto)" (funcall subject "HEAD"))
-                 (format "%s (being rebased)" (funcall subject "REBASE_HEAD"))))
+           (cons (cons (funcall subject "HEAD") "rebasing onto")
+                 (cons (funcall subject "REBASE_HEAD") "being rebased")))
           ((funcall rev "CHERRY_PICK_HEAD")
-           (cons branch (format "%s (cherry-picked)" (funcall subject "CHERRY_PICK_HEAD"))))
+           (cons (list branch) (cons (funcall subject "CHERRY_PICK_HEAD") "cherry-picked")))
           ((funcall rev "REVERT_HEAD")
-           (cons branch (format "revert of %s" (funcall subject "REVERT_HEAD"))))
-          (t (cons branch "the change applied (a stash...)")))))
+           (cons (list branch) (list (format "revert of %s" (funcall subject "REVERT_HEAD")))))
+          (t (cons (list branch) (cons "the change applied" "a stash..."))))))
+
+(defun +my/merge--label (side)
+  "SIDE ((NAME . ROLE), `+my/merge--sides') as conflict markers name it:
+NAME (ROLE)."
+  (if (cdr side) (format "%s (%s)" (car side) (cdr side)) (car side)))
+
+(defun +my/merge--labels ()
+  "What Yours and Theirs are, (YOURS . THEIRS), as conflict markers name them
+\(see `+my/merge--sides')."
+  (let ((sides (+my/merge--sides)))
+    (cons (+my/merge--label (car sides)) (+my/merge--label (cdr sides)))))

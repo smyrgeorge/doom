@@ -103,7 +103,10 @@ on feature, feature merged into main."
                            (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
                            "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "GIT_EDITOR=true")
                      process-environment))
-            (default-directory repo))
+            (default-directory repo)
+            ;; Side by side whatever the frame's width (the stacked layout's
+            ;; tests ask for it).
+            (+my/merge-side-by-side-width 0))
        (with-temp-file (expand-file-name ".gitconfig" home)
          (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
                  "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
@@ -216,6 +219,53 @@ there on them; the bar's row whole in its window (no pixel of it hidden)."
                                      (button-label (button-at (posn-point posn))))
                                    label)))))))
         (set-face-attribute 'default nil :font font-before)
+        (set-frame-width nil columns-before)))))
+
+(ert-deftest e2e-merge/a-narrow-frame-stacked ()
+  "A rebase's conflict in a frame of 80, then 60 columns: Yours and Theirs
+above the Result, as wide as the frame (at 80, the Result 40 columns of code
+at least, each side 20); each side's role in the rebase on the screen in its
+title; the panes scrolling together."
+  (+test-merge-conflict
+    (+test-merge--git "merge" "--abort")
+    (+test-merge--git "checkout" "-q" "feature")
+    (with-temp-buffer (call-process "git" nil t nil "rebase" "main"))
+    (let ((columns-before (frame-width))
+          (+my/merge-side-by-side-width 120))
+      (unwind-protect
+          (dolist (columns '(80 60))
+            (set-frame-width nil columns)
+            (should (+test-wait-for (lambda () (= (frame-width) columns)) 5))
+            (let* ((session (+my/merge "a.txt"))
+                   (windows (mapcar #'get-buffer-window
+                                    (list (+my/merge-yours session) (+my/merge-result session)
+                                          (+my/merge-theirs session))))
+                   (code (lambda (window) (- (window-body-width window) (+ +my/merge--number-width 2)))))
+              (+test-sleep 0.3)
+              (pcase-let ((`(,yours ,result ,theirs) windows))
+                (should (= (cadr (window-edges yours)) (cadr (window-edges theirs))))
+                (should (> (cadr (window-edges result)) (cadr (window-edges yours))))
+                (when (= columns 80)
+                  (should (>= (funcall code result) 40))
+                  (should (>= (funcall code yours) 20))
+                  (should (>= (funcall code theirs) 20)))
+                (pcase-dolist (`(,window ,role) `((,yours "(rebasing onto)") (,theirs "(being rebased)")))
+                  (let* ((header (format-mode-line (buffer-local-value 'header-line-format (window-buffer window))
+                                                   'header-line window (window-buffer window)))
+                         (end (string-search role header)))
+                    (should (equal (list columns role (and end t)) (list columns role t)))
+                    (should (<= (string-pixel-width (substring header 0 (+ end (length role))))
+                                (window-pixel-width window)))))
+                ;; Scrolled: the others too.
+                (with-selected-window result
+                  (scroll-up 2))
+                (+test-sleep 0.2)
+                (let ((first (lambda (window)
+                               (with-current-buffer (window-buffer window)
+                                 (line-number-at-pos (window-start window))))))
+                  (should (= (funcall first yours) (funcall first result) (funcall first theirs)))))
+              (with-current-buffer (+my/merge-result session)
+                (+my/merge-abort))))
         (set-frame-width nil columns-before)))))
 
 (ert-deftest e2e-merge/a-margin-button-clicked-where-it-shows ()

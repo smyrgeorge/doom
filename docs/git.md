@@ -21,7 +21,8 @@ pane shows that one's. It refreshes when the file is saved.
 ## Resolving conflicts
 
 `e` on a conflicted file in Magit opens three panes, **Yours**, the **Result** and **Theirs**, lined up and scrolling
-together. Try it: `M-x +my/example-merge`.
+together; in a frame under 120 columns (`+my/merge-side-by-side-width`), Yours and Theirs above the Result. Try it:
+`M-x +my/example-merge`.
 
 ![Yours, the Result and Theirs side by side](../examples/merge.png)
 

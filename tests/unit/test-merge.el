@@ -89,7 +89,10 @@ global gitconfig; one window on *scratch*, and again after."
                            (concat "XDG_CONFIG_HOME=" home ".config")
                            "GIT_TERMINAL_PROMPT=0" "GIT_EDITOR=true")
                      process-environment))
-            (default-directory repo))
+            (default-directory repo)
+            ;; Side by side whatever the frame's width (the stacked layout's
+            ;; tests ask for it).
+            (+my/merge-side-by-side-width 0))
        (with-temp-file (expand-file-name ".gitconfig" home)
          (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
                  "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
@@ -165,6 +168,15 @@ feature merged into main: in conflict."
   (with-current-buffer buffer
     (+my/merge--clean (point-min) (point-max))))
 
+(defun +test-merge--header (pane)
+  "PANE's header line as its window shows it (`format-mode-line' draws
+nothing in batch: its :eval, in the window)."
+  (let ((format (buffer-local-value 'header-line-format pane)))
+    (should (eq (car-safe format) :eval))
+    (with-selected-window (get-buffer-window pane)
+      (with-current-buffer pane
+        (eval (cadr format) t)))))
+
 (defun +test-merge--chunk (session n)
   (aref (+my/merge-chunks session) n))
 
@@ -215,8 +227,8 @@ config/emacs/compile.el may (the other tests run them so)."
     (should (equal (+test-merge--result session) +test-merge--base))
     ;; What they are.
     (should (equal (+my/merge-labels session) (cons "main" "feature")))
-    (should (string-match-p "Yours: main" (with-current-buffer (+my/merge-yours session) header-line-format)))
-    (should (string-match-p "Theirs: feature" (with-current-buffer (+my/merge-theirs session) header-line-format)))
+    (should (string-match-p "Yours: main" (+test-merge--header (+my/merge-yours session))))
+    (should (string-match-p "Theirs: feature" (+test-merge--header (+my/merge-theirs session))))
     ;; The sides read-only, the Result editable; their mode the file's.
     (should (buffer-local-value 'buffer-read-only (+my/merge-yours session)))
     (should-not (buffer-local-value 'buffer-read-only (+my/merge-result session)))
@@ -300,6 +312,80 @@ nothing beside, nothing (no error)."
       (delete-other-windows (nth 2 windows))
       (funcall intact)
       (should (eq (window-main-window) root)))))
+
+(ert-deftest merge/narrow-stacked ()
+  "Narrower than `+my/merge-side-by-side-width' (80 columns): Yours and
+Theirs side by side above the Result, as wide as the frame; the Result 40
+columns of code at least, each side 20; the panes scroll together."
+  (should (= (default-value '+my/merge-side-by-side-width) 120))
+  (+test-merge-with-repo
+    (+test-merge--conflict "a.txt" +test-merge--base +test-merge--yours +test-merge--theirs)
+    (let* ((+my/merge-side-by-side-width 120)
+           (session (+test-merge--open)))
+      (should (< (frame-width) 120))
+      (pcase-let ((`(,yours ,result ,theirs ,bar)
+                   (mapcar #'get-buffer-window
+                           (list (+my/merge-yours session) (+my/merge-result session)
+                                 (+my/merge-theirs session) (+my/merge-bar session))))
+                  (code (lambda (window) (- (window-body-width window) (+ +my/merge--number-width 2)))))
+        (should (< (car (window-edges yours)) (car (window-edges theirs))))
+        (should (= (cadr (window-edges yours)) (cadr (window-edges theirs))))
+        (should (>= (cadr (window-edges result)) (nth 3 (window-edges yours))))
+        (should (< (cadr (window-edges bar)) (cadr (window-edges yours))))
+        (should (= (window-total-width result) (window-total-width bar)))
+        (should (eq (selected-window) result))
+        (should (>= (funcall code result) 40))
+        (should (>= (funcall code yours) 20))
+        (should (>= (funcall code theirs) 20))
+        ;; Kept whole, as side by side.
+        (should (eq (window-atom-root yours) (window-atom-root bar)))
+        ;; Scrolled: the others too.
+        (set-window-start result (with-current-buffer (+my/merge-result session)
+                                   (save-excursion (goto-char (point-min)) (forward-line 5) (point))))
+        (+my/merge--sync-h result)
+        (dolist (window (list yours theirs))
+          (should (= (with-current-buffer (window-buffer window) (line-number-at-pos (window-start window)))
+                     6))))
+      (+my/merge-abort))))
+
+(ert-deftest merge/titles-their-role-first ()
+  "A pane's title: what it is in the operation first (a rebase's \"rebasing
+onto\"), cut with … to the pane's width, the role still there at 60 and 80
+columns; the conflict markers name each side as Git does (NAME (ROLE))."
+  (should (equal (+my/merge--title "Yours" '("b642431 yours" . "rebasing onto"))
+                 "Yours (rebasing onto): b642431 yours"))
+  (should (equal (+my/merge--title "Yours" '("main")) "Yours: main"))
+  (should (equal (+my/merge--label '("b642431 yours" . "rebasing onto")) "b642431 yours (rebasing onto)"))
+  ;; A subject ending in parentheses isn't a role.
+  (should (equal (+my/merge--title "Theirs" '("abc Fix it (#12)" . "being rebased"))
+                 "Theirs (being rebased): abc Fix it (#12)"))
+  (+test-merge-with-repo
+    (+test-merge--write "a.txt" +test-merge--base)
+    (+test-merge--git "add" ".")
+    (+test-merge--git "commit" "-qm" "base")
+    (+test-merge--git "checkout" "-qb" "feature")
+    (+test-merge--write "a.txt" +test-merge--theirs)
+    (+test-merge--git "commit" "-qam" "A rather long subject for their change, as they often are")
+    (+test-merge--git "checkout" "-q" "main")
+    (+test-merge--write "a.txt" +test-merge--yours)
+    (+test-merge--git "commit" "-qam" "A rather long subject for your change, as they often are")
+    (+test-merge--git "checkout" "-q" "feature")
+    (should-not (zerop (+test-merge--git-may-fail "rebase" "main")))
+    (let* ((+my/merge-side-by-side-width 120)
+           (session (+test-merge--open)))
+      (dolist (pane (list (+my/merge-yours session) (+my/merge-theirs session)))
+        (let* ((window (get-buffer-window pane))
+               (header (+test-merge--header pane)))
+          (should (string-match-p "\\` \\(Yours (rebasing onto)\\|Theirs (being rebased)\\): [0-9a-f]+ A"
+                                  header))
+          ;; A pane of a 60-column frame's: the role still there.
+          (cl-letf (((symbol-function 'window-total-width) (lambda (&rest _) 30)))
+            (should (string-match-p "\\` \\(Yours (rebasing onto)\\|Theirs (being rebased)\\): [0-9a-f]*…\\'"
+                                    (+test-merge--header pane))))
+          ;; Cut to the pane, with …
+          (should (<= (string-width header) (window-total-width window)))
+          (should (string-suffix-p "…" header))))
+      (+my/merge-abort))))
 
 (ert-deftest merge/the-changes-and-what-they-are ()
   (+test-merge
