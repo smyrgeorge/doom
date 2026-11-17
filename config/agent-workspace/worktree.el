@@ -548,13 +548,21 @@ SLUG-2, SLUG-3... (\"work\" for an empty SLUG)."
     (agent-workspace-room-post (agent-workspace-agent-project agent)
                                :kind 'note :agent (agent-workspace-agent-name agent) :text text)))
 
-(defun agent-workspace--turn-branch (agent prompt)
+(defun agent-workspace--turn-branch (agent prompt &optional steer)
   "AGENT's turn starts, with PROMPT (agent-shell's input-submitted, before
 its agent gets it): its worktree on the branch of the issue it was given
 while it worked; else, at rest (on agent/NAME, holding nothing the main
 branch hasn't) and given work (not a / command, nor something it's told:
 `agent-workspace-branch-quiet'), on a new branch named from PROMPT's first
-words, where it is. What can't be done is said, never signalled."
+words, where it is. What can't be done is said, never signalled. STEER:
+PROMPT steered into the turn running: nothing switched (the issue's
+branch waits for its next turn), PROMPT's quiet mark taken."
+  (if steer
+      (agent-workspace--branch-quiet-p agent prompt)
+    (agent-workspace--turn-branch-1 agent prompt)))
+
+(defun agent-workspace--turn-branch-1 (agent prompt)
+  "`agent-workspace--turn-branch' for a turn that starts."
   (when-let* ((dir (agent-workspace--worktree-live agent)))
     (condition-case err
         (let* ((project (agent-workspace-agent-project agent))

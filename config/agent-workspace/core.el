@@ -289,7 +289,9 @@ nil if it isn't a word ending in -ing."
       ('input-submitted
        ;; Its branch first (worktree.el), before its agent gets the prompt:
        ;; the issue's it was given while it worked, or one made for it at rest.
-       (agent-workspace--turn-branch agent (alist-get :prompt data))
+       ;; Not for a steer into the turn running (working, its hand raised):
+       ;; that turn goes on on its branch.
+       (agent-workspace--turn-branch agent (alist-get :prompt data) (memq state '(working hand)))
        ;; A turn starts: its time counts from here, a raised hand and its
        ;; answer don't reset it.
        (unless (memq state '(working hand))

@@ -95,7 +95,10 @@
           #'string<)))
 
 (defun +test-aww--turn (agent prompt)
-  "AGENT's turn starts with PROMPT, as agent-shell says it (input-submitted)."
+  "AGENT's turn starts with PROMPT, as agent-shell says it (input-submitted),
+the turn before it over (working still, it would be a steer into it)."
+  (when (memq (agent-workspace-agent-state agent) '(working hand))
+    (setf (agent-workspace-agent-state agent) 'desk))
   (agent-workspace--event agent `((:event . input-submitted) (:data (:prompt . ,prompt)))))
 
 (defmacro +test-aww--merging (&rest body)

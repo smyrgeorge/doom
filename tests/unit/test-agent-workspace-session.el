@@ -420,6 +420,44 @@ by the agent too (at its turn's end)."
       (should (+test-aws--wait (lambda () (= (length (+test-aws--logged :branch "ada")) 3))))
       (should (equal (car (last (+test-aws--logged :branch "ada"))) "feat/demo-2-parser")))))
 
+(ert-deftest agent-workspace-session/a-steer-keeps-its-branch ()
+  "An issue given while it works, its prompt steered into the turn instead
+(agent-shell's reroute, injected): its worktree stays on the branch of the
+turn running, its files there; the issue's branch comes with its next turn
+(doom-pbk.34)."
+  (+test-aws--with-crew "steer"
+    (let* ((agent (+test-aws--create "ada"))
+           (dir (agent-workspace-agent-worktree agent))
+           (head (lambda () (let ((default-directory dir)) (+test-aws--git "branch" "--show-current")))))
+      (agent-workspace-give agent "demo-1" "One")
+      (should (equal (funcall head) "task/demo-1"))
+      (let ((default-directory dir))
+        (write-region "one\n" nil "one.txt")
+        (+test-aws--git "add" "one.txt")
+        (+test-aws--git "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "one"))
+      (agent-workspace-send agent "Work on demo-1: One, hold" :submit t)
+      (should (+test-aws--state agent 'working))
+      ;; demo-2 given meanwhile, its prompt queued, then steered in.
+      (agent-workspace-give agent "demo-2" "Two")
+      (should (eq (agent-workspace-send agent (agent-workspace-issue-prompt "demo-2" "Two") :submit t) 'queued))
+      (with-current-buffer (agent-workspace-agent-buffer agent)
+        (map-put! agent-shell--state :supports-steering t)
+        (goto-char (point-max))
+        (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+          (call-interactively #'agent-shell-submit-override)))
+      (should (+test-aws--wait (lambda () (string-search "[steer] Work on demo-2"
+                                                         (with-current-buffer (agent-workspace-agent-buffer agent)
+                                                           (buffer-string))))))
+      (should (eq (agent-workspace-agent-state agent) 'working))
+      (should (equal (funcall head) "task/demo-1"))
+      (should (file-exists-p (expand-file-name "one.txt" dir)))
+      ;; Its next turn: the issue's branch.
+      (agent-workspace-interrupt agent)
+      (should (+test-aws--state agent 'desk))
+      (agent-workspace-send agent "go on" :submit t)
+      (should (+test-aws--wait (lambda () (equal (funcall head) "task/demo-2-two"))))
+      (should-not (file-exists-p (expand-file-name "one.txt" dir))))))
+
 ;; ====== WHAT YOU DO TO ONE ======
 
 (ert-deftest agent-workspace-session/interrupt ()
