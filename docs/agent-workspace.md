@@ -182,9 +182,14 @@ unshown and not delivered, until it's `t` again.
 
 The work moves between roles through the project's issues: an investigator's findings go to the builders, a builder's
 branch to the reviewers, and a reviewer's changes back to the builder who made it. A role's `hands-to:` says where its
-finished issues go. Each agent is told how: it changes the issue's labels from its role's (all of them) to the next one's, leaves
-it open and unassigned (or assigned to the builder it goes back to), and writes what they need in its notes. It does
-this with `bd`, as itself, so Beads' history says who did what. The room says each hand-over: `◆ handed demo-3 to the
+finished issues go: roles in order, the first one the crew has an agent of (awake or asleep) taking them, so a crew
+missing a role skips it; with none of them, the agent tells you it's done. `hands-to: any` is for a role that routes
+issues (a triager): it's told every role with labels the crew has, and picks. `returns-to:` says where work goes back
+(changes asked, a test failing): to the one who made it. Every agent is told the project's roles and their labels.
+
+Each agent is told how: it changes the issue's labels from its role's (all of them) to the next one's, leaves it open
+and unassigned (or assigned to the one it goes back to), and writes what they need in its notes. It does this with
+`bd`, as itself, so Beads' history says who did what. The room says each hand-over: `◆ handed demo-3 to the
 builders`.
 
 When an issue is ready for a role and one of its agents is free, the room offers it once: `demo-3 is ready for the
@@ -430,8 +435,8 @@ Write the tests first, then run them.
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the four
   have none: their agents run in auto mode). Claude Code enforces all three.
 - `max` is how many of the role may run at once. `labels` are the issues it's for. `talks-to` names the roles it may
-  [message](#agents-asking-each-other) without your OK. `hands-to` names the role its finished issues
-  [go to](#work-handed-on-through-issues).
+  [message](#agents-asking-each-other) without your OK. `hands-to` names the roles its finished issues
+  [go to](#work-handed-on-through-issues), in order (`any`: the one it's for), `returns-to` where work goes back.
 - `icon` is a nerd icon for the GUI, then a glyph for the terminal. `verb` is what its agents show while they work:
   "testing doom-a1b". `colour` is its agents' colour while it's free.
 

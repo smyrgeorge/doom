@@ -24,7 +24,10 @@
 ;;                                   bypassPermissions (or accept-edits...)
 ;;   labels: build                   the issues it's for
 ;;   talks-to: reviewer              the roles it may message without your OK
-;;   hands-to: reviewer              the role its finished issues go to
+;;   hands-to: tester, reviewer      where its finished issues go: the first
+;;                                   role the crew has; any: every role
+;;                                   with labels, the agent choosing
+;;   returns-to: builder             where work goes back (changes asked)
 ;;   max: 4                          how many of it may run at once
 ;;   icon: md-hammer ⚙               a nerd icon (GUI), a glyph (terminal)
 ;;   verb: building                  what it does, working: "building doom-a1b"
@@ -40,8 +43,8 @@
 ;; tools or deny entry not Tool or Tool(pattern), a mode, max or colour not
 ;; one there is. Warnings: an unknown key, a key given twice, a model not
 ;; one there is, an icon no nerd icon, a tool both allowed and denied, no
-;; instructions, a talks-to or hands-to naming no role of the project's (or
-;; its own). M-x agent-workspace-check-roles lists them all.
+;; instructions, a talks-to, hands-to or returns-to naming no role of the
+;; project's (or its own). M-x agent-workspace-check-roles lists them all.
 
 (require 'cl-lib)
 (require 'seq)
@@ -70,8 +73,8 @@ them too. They replace the project's and the starters of the same name."
   "Claude Code's permission modes (auto: Claude decides what needs your OK).")
 
 (defconst agent-workspace--role-keys
-  '("name" "description" "tools" "deny" "model" "mode" "labels" "talks-to" "hands-to" "max" "icon" "verb"
-    "colour" "color")
+  '("name" "description" "tools" "deny" "model" "mode" "labels" "talks-to" "hands-to" "returns-to" "max"
+    "icon" "verb" "colour" "color")
   "A role file's keys (color as Claude Code's agents spell it).")
 
 (defvar agent-workspace--roles-quiet nil
@@ -107,7 +110,7 @@ LEFT-OUT), STAMP the role files and their modification times.")
   (let ((id (replace-regexp-in-string "-\\([a-z]\\)" (lambda (m) (upcase (substring m 1))) value)))
     (car (member id agent-workspace-modes))))
 
-(defconst agent-workspace--role-list-keys '("tools" "deny" "labels" "talks-to" "hands-to")
+(defconst agent-workspace--role-list-keys '("tools" "deny" "labels" "talks-to" "hands-to" "returns-to")
   "A role file's keys holding a list.")
 
 (defun agent-workspace--tool-p (entry)
@@ -143,7 +146,7 @@ or there's no nerd-icons to tell."
   "Read the role FILE: (ROLE . PROBLEMS). ROLE is a plist (see the top of
 this file), nil if FILE has errors; PROBLEMS, each (error|warning
 \"FILE:LINE: what\" FILE LINE \"what\"). ROLE's :lines has the line of
-each item of its talks-to and hands-to: ((KEY (ITEM . LINE)...)...)."
+each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...)."
   (let* ((name (file-name-sans-extension (file-name-nondirectory file)))
          (shown (abbreviate-file-name file))
          (case-fold-search nil)
@@ -170,7 +173,7 @@ each item of its talks-to and hands-to: ((KEY (ITEM . LINE)...)...)."
                         ;; VALUE: a string, or a YAML list's items, each
                         ;; (ITEM . ITS LINE).
                         (pcase key
-                          ((or "tools" "deny" "labels" "talks-to" "hands-to")
+                          ((or "tools" "deny" "labels" "talks-to" "hands-to" "returns-to")
                            (let ((items (if (listp value)
                                             value
                                           (mapcar (lambda (item) (cons item n))
@@ -180,7 +183,7 @@ each item of its talks-to and hands-to: ((KEY (ITEM . LINE)...)...)."
                                  (unless (agent-workspace--tool-p (car item))
                                    (problem 'error (cdr item) "%s %s: not a tool, Tool or Tool(pattern)"
                                             key (car item)))))
-                             (when (member key '("talks-to" "hands-to"))
+                             (when (member key '("talks-to" "hands-to" "returns-to"))
                                (push (cons key items) lines))
                              (setq role (plist-put role (intern (concat ":" key)) (mapcar #'car items)))))
                           ("name"
@@ -270,14 +273,16 @@ each item of its talks-to and hands-to: ((KEY (ITEM . LINE)...)...)."
     (cons (unless (assq 'error problems) role) problems)))
 
 (defun agent-workspace--role-names-problems (roles)
-  "What's wrong with the talks-to and hands-to of ROLES (an alist of a name
-and its role, a project's all): each naming a role not among them, or its
-own; warnings as `agent-workspace-role-read' gives them."
+  "What's wrong with the talks-to, hands-to and returns-to of ROLES (an
+alist of a name and its role, a project's all): each naming a role not
+among them, or its own (hands-to's any is every role); warnings as
+`agent-workspace-role-read' gives them."
   (let (problems)
     (pcase-dolist (`(,name . ,role) roles)
       (pcase-dolist (`(,key . ,items) (plist-get role :lines))
         (pcase-dolist (`(,item . ,n) items)
-          (let ((what (cond ((equal item name) (format "%s %s: its own role" key item))
+          (let ((what (cond ((and (equal item "any") (equal key "hands-to")) nil)
+                            ((equal item name) (format "%s %s: its own role" key item))
                             ((not (assoc item roles))
                              (format "%s %s: no such role (%s)" key item (string-join (mapcar #'car roles) ", "))))))
             (when what

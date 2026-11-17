@@ -170,19 +170,24 @@ icon, a key given twice (the last used), a tool both allowed and denied
                    '((warning "tester.md:5: color given twice (line 4 too): the last is used"))))))
 
 (ert-deftest agent-workspace-roles/talks-to-and-hands-to-name-roles ()
-  "A talks-to or hands-to naming no role of the project's, or its own:
-warned about on its item's line, once all are read; the role kept."
+  "A talks-to, hands-to or returns-to naming no role of the project's, or
+its own: warned about on its item's line, once all are read; the role
+kept. hands-to any: every role, no warning."
   (let* ((project (+test-awr--dir "names"))
          (dir (expand-file-name ".agent-workspace/roles/" project)))
     (+test-awr--file dir "tester.md"
                      "---\ndescription: tests\nhands-to: tester\ntalks-to:\n  - builder\n  - nobody\n---\nTest.\n")
-    (+test-awr--file dir "helper.md" "---\ndescription: helps\nhands-to: tester, reviewer\n---\nHelp.\n")
+    (+test-awr--file dir "helper.md" "---\ndescription: helps\nhands-to: tester, reviewer\nreturns-to: builder\n---\nHelp.\n")
+    (+test-awr--file dir "router.md" "---\ndescription: routes\nhands-to: any\nreturns-to: nobody\n---\nRoute.\n")
     (+test-awr--quietly
       (should (member "tester" (mapcar #'car (agent-workspace-roles project))))
+      (should (equal (plist-get (alist-get "helper" (agent-workspace-roles project) nil nil #'equal) :returns-to)
+                     '("builder")))
       (should (equal (+test-awr--messages (agent-workspace-role-problems project))
-                     '((warning "tester.md:3: hands-to tester: its own role")
-                       (warning "tester.md:6: talks-to nobody: no such role (builder, investigator, reviewer, scribe, helper, tester)"))))
-      (should (= (length warnings) 2)))))
+                     '((warning "router.md:4: returns-to nobody: no such role (builder, investigator, reviewer, scribe, helper, router, tester)")
+                       (warning "tester.md:3: hands-to tester: its own role")
+                       (warning "tester.md:6: talks-to nobody: no such role (builder, investigator, reviewer, scribe, helper, router, tester)"))))
+      (should (= (length warnings) 3)))))
 
 (ert-deftest agent-workspace-roles/warnings-keep-the-role ()
   "An unknown key, or a worktree key (every agent has its own): warned

@@ -3,10 +3,15 @@
 ;; status. Loaded from config/agent-workspace.el, after messages.el. No Doom
 ;; here.
 ;;
-;; A role's file names the role its finished issues go to (hands-to:
-;; builder): an investigator's findings to the builders, a builder's branch to
-;; the reviewers, a reviewer's changes asked back to the builders. Each agent
-;; is told how: the issue's label changed from its role's to the next one's,
+;; A role's file names the roles its finished issues go to (hands-to:
+;; builder), in order: the first one the crew has an agent of (awake or
+;; asleep) takes them; any: every role with labels, the agent choosing; none
+;; in the crew, it tells you. returns-to: where work goes back (changes
+;; asked, a test failing), to the one who made it. An investigator's
+;; findings go to the builders, a builder's branch to the reviewers, a
+;; reviewer's changes asked back to the builders. Every agent is told the
+;; project's roles and their labels. Each agent is told how: the issue's
+;; label changed from its role's to the next one's,
 ;; the issue open again and unassigned, what they need in its notes (bd, as
 ;; itself: Beads' history says who did what); a reviewer asking for changes
 ;; gives it back to the builder who made it. The first free agent of that role
@@ -33,31 +38,112 @@
   (car (seq-find (lambda (role) (member label (plist-get (cdr role) :labels)))
                  (agent-workspace-roles project))))
 
+(defun agent-workspace--crew-has-p (project role)
+  "Non-nil if PROJECT's crew has an agent of ROLE, awake or asleep (not
+gone home)."
+  (seq-some (lambda (agent)
+              (and (equal (agent-workspace-agent-role agent) role)
+                   (not (eq (agent-workspace-agent-state agent) 'home))))
+            (agent-workspace-agents project)))
+
+(defun agent-workspace-hands-to (project role &optional key)
+  "Where ROLE's work goes in PROJECT's crew, by its KEY (:hands-to, the
+default, or :returns-to): of the roles it names, in order, the first one
+the crew has an agent of, as a list; `any' (hands-to): every role of the
+project with labels the crew has one of, but ROLE. nil: none."
+  (let* ((roles (agent-workspace-roles project))
+         (names (plist-get (agent-workspace--project-role project role) (or key :hands-to))))
+    (if (and (member "any" names) (not (eq key :returns-to)))
+        (seq-filter (lambda (name)
+                      (and (not (equal name role))
+                           (plist-get (cdr (assoc name roles)) :labels)
+                           (agent-workspace--crew-has-p project name)))
+                    (mapcar #'car roles))
+      (when-let* ((first (seq-find (lambda (name)
+                                     (and (agent-workspace--role-labels project name)
+                                          (agent-workspace--crew-has-p project name)))
+                                   names)))
+        (list first)))))
+
 (defun agent-workspace--handover-context (agent)
-  "How AGENT hands an issue on, if its role hands to another: in what it's
-told. While agents may not talk (`agent-workspace-agents-talk'), that it
-hands nothing on. In `agent-workspace-context-functions'."
+  "How AGENT hands an issue on, if its role hands to others: in what it's
+told. Its hands-to's first role the crew has an agent of, or with `any'
+every role with labels it has, each with its bd command; its returns-to
+the same for work going back; a role the crew has none of isn't offered
+\(none at all: it tells you). While agents may not talk
+\(`agent-workspace-agents-talk'), that it hands nothing on. In
+`agent-workspace-context-functions'."
   (let* ((project (agent-workspace-agent-project agent))
-         (next (plist-get (agent-workspace-role agent) :hands-to))
-         (next (if (listp next) (car next) next))
+         (role (agent-workspace-role agent))
+         (named (or (plist-get role :hands-to) (plist-get role :returns-to)))
          ;; Every one of its role's: one left, its loop takes the issue back.
          (mine (agent-workspace--role-labels project (agent-workspace-agent-role agent)))
-         (theirs (and next (car (agent-workspace--role-labels project next)))))
+         (next (agent-workspace-hands-to project (agent-workspace-agent-role agent)))
+         (back (car (agent-workspace-hands-to project (agent-workspace-agent-role agent) :returns-to)))
+         (command (lambda (to assignee)
+                    (format "bd update ID %s--add-label %s --status open --assignee %s --append-notes \"...\""
+                            (mapconcat (lambda (label) (format "--remove-label %s " label)) mine "")
+                            (car (agent-workspace--role-labels project to))
+                            assignee)))
+         (described (lambda (name)
+                      (let ((what (plist-get (agent-workspace--project-role project name) :description)))
+                        (if what (format "the %ss (%s)" name what) (format "the %ss" name))))))
     (cond
-     ((and next (not agent-workspace-agents-talk))
+     ((and named (not agent-workspace-agents-talk))
       "You work only with the user, never with the other agents of your crew: hand nothing on to \
 them, whatever your role's instructions say. When your part of an issue is done, leave its labels, \
 status and assignee as they are, tell the user what you did, and end your turn: the user decides what \
 comes next, and who takes it.")
-     (theirs
-      (format "Work moves between roles through the project's issues. When your part of an issue is \
-done, hand it to the %ss: its labels changed from yours (all of them) to theirs, the issue open again \
-and unassigned (or assigned to the one it goes back to), what they need in its notes: bd update ID \
-%s--add-label %s --status open --assignee \"\" --append-notes \"...\". Then tell the user, and end your \
-turn: the first free %s takes it."
-              next (mapconcat (lambda (label) (format "--remove-label %s " label)) mine "") theirs next)))))
+     ((not named) nil)
+     (t
+      (concat
+       "Work moves between roles through the project's issues."
+       (pcase next
+         ('nil
+          (if (plist-get role :hands-to)
+              (format " Your finished work goes to %s, but the crew has none of them now: when your part \
+of an issue is done, leave its labels, status and assignee as they are, tell the user what you did and \
+that it's ready for them, and end your turn."
+                      (string-join (mapcar (lambda (name) (format "the %ss" name))
+                                           (remove "any" (plist-get role :hands-to)))
+                                   " or "))
+            ""))
+         (`(,to)
+          (format " When your part of an issue is done, hand it to the %ss: its labels changed from \
+yours (all of them) to theirs, the issue open again and unassigned, what they need in its notes: %s. Then \
+tell the user, and end your turn: the first free %s takes it."
+                  to (funcall command to "\"\"") to))
+         (_
+          (concat
+           " When your part of an issue is done, hand it to the role it's for: its labels changed from \
+yours (all of them) to that role's, the issue open again and unassigned, what they need in its notes. Then \
+tell the user, and end your turn: the first free agent of that role takes it. The roles you hand to:"
+           (mapconcat (lambda (to) (format "\n- %s: %s" (funcall described to) (funcall command to "\"\"")))
+                      next ""))))
+       (when back
+         (format " When it must go back instead (changes asked, a test failing), give it back to the \
+%ss, assigned to the one who made it (its notes or bd history ID say who): %s."
+                 back (funcall command back "NAME"))))))))
 
 (add-hook 'agent-workspace-context-functions #'agent-workspace--handover-context)
+
+(defun agent-workspace--roles-context (agent)
+  "The roles of AGENT's project, a line each (its name, what it does, the
+labels of the issues it's for), from their files: the starters, the
+project's own and your local ones. In `agent-workspace-context-functions',
+before how it hands on."
+  (let ((roles (agent-workspace-roles (agent-workspace-agent-project agent))))
+    (when roles
+      (concat "The project's roles, and the labels of the issues each is for (an issue goes to a \
+role by its label):"
+              (mapconcat (lambda (role)
+                           (let ((labels (plist-get (cdr role) :labels))
+                                 (what (plist-get (cdr role) :description)))
+                             (format "\n- %s%s: %s" (car role) (if what (concat ", " what) "")
+                                     (if labels (string-join labels ", ") "no labels"))))
+                         roles "")))))
+
+(add-hook 'agent-workspace-context-functions #'agent-workspace--roles-context -10)
 
 ;; ====== A READY ISSUE OFFERED ======
 

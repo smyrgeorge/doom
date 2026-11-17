@@ -1,6 +1,7 @@
 ;;; tests/unit/test-agent-workspace-handover.el -*- lexical-binding: t; -*-
 ;; config/agent-workspace/handover.el: issues as the crew's channel. What
-;; each agent is told (its role's hands-to:), the room's words for a hand-over
+;; each agent is told (the project's roles; its role's hands-to: in order, or
+;; any, and returns-to:, the roles the crew has), the room's words for a hand-over
 ;; (as the issue changed: its label moved, open again), and two agents
 ;; claiming one issue at once (bd's claim, atomic: one gets it).
 
@@ -20,10 +21,17 @@
     (make-directory dir t)
     (file-name-as-directory (file-truename dir))))
 
-(defun +test-awo--agent (project name role)
-  (agent-workspace--make-agent :name name :role role :project project
+(defun +test-awo--agent (project name role &optional state)
+  (agent-workspace--make-agent :name name :role role :project project :state (or state 'desk)
                                :worktree (expand-file-name (concat ".agent-shell/worktrees/" name "/") project)
                                :branch (concat "agent/" name)))
+
+(defmacro +test-awo--crew (project agents &rest body)
+  "BODY with PROJECT's crew AGENTS (and no other crew)."
+  (declare (indent 2))
+  `(let ((agent-workspace--crews (make-hash-table :test #'equal)))
+     (puthash ,project ,agents agent-workspace--crews)
+     ,@body))
 
 ;; ====== TESTS ======
 
@@ -34,7 +42,10 @@ agree."
   (let* ((project (+test-awo--dir "told"))
          (investigator (+test-awo--agent project "sam" "investigator"))
          (reviewer (+test-awo--agent project "rex" "reviewer"))
-         (scribe (+test-awo--agent project "liz" "scribe")))
+         (scribe (+test-awo--agent project "liz" "scribe"))
+         (agent-workspace--crews (make-hash-table :test #'equal)))
+    (puthash project (list investigator reviewer scribe (+test-awo--agent project "ken" "builder"))
+             agent-workspace--crews)
     (let ((told (agent-workspace--handover-context investigator)))
       (should (string-search "hand it to the builders" told))
       (should (string-search "bd update ID --remove-label investigation --remove-label incident --add-label build --status open --assignee \"\""
@@ -48,6 +59,102 @@ agree."
     (should (equal (agent-workspace-label-role project "build") "builder"))
     (should (equal (agent-workspace-label-role project "incident") "investigator"))
     (should-not (agent-workspace-label-role project "nobody's"))))
+
+(defun +test-awo--roles (project)
+  "PROJECT's own roles: a tester, a router handing to any, a chain handing
+to the testers else the reviewers, returning to the builders."
+  (let ((dir (expand-file-name ".agent-workspace/roles/" project)))
+    (make-directory dir t)
+    (write-region "---\ndescription: tests it\nlabels: test\n---\nTest.\n" nil (expand-file-name "tester.md" dir))
+    (write-region "---\ndescription: routes issues\nlabels: triage\nhands-to: any\n---\nRoute.\n" nil
+                  (expand-file-name "router.md" dir))
+    (write-region "---\ndescription: makes it\nlabels: chain\nhands-to: tester, reviewer\nreturns-to: builder\n---\nMake.\n"
+                  nil (expand-file-name "chain.md" dir))))
+
+(ert-deftest agent-workspace-handover/hands-on-in-order ()
+  "hands-to in order: the first role the crew has an agent of (asleep too,
+not gone home) is the one it's told to hand to; none: it tells the user;
+returns-to: the work going back, to the one who made it."
+  (let* ((project (+test-awo--dir "order"))
+         (ann (+test-awo--agent project "ann" "chain"))
+         (tim (+test-awo--agent project "tim" "tester" 'asleep))
+         (rex (+test-awo--agent project "rex" "reviewer"))
+         (bob (+test-awo--agent project "bob" "builder"))
+         (agent-workspace-agents-talk t))
+    (+test-awo--roles project)
+    (+test-awo--crew project (list ann rex bob)
+      (should (equal (agent-workspace-hands-to project "chain") '("reviewer")))
+      (should (equal (agent-workspace-hands-to project "chain" :returns-to) '("builder")))
+      (let ((told (agent-workspace--handover-context ann)))
+        (should (string-search "hand it to the reviewers" told))
+        (should (string-search "bd update ID --remove-label chain --add-label review --status open --assignee \"\"" told))
+        (should-not (string-search "tester" told))
+        (should (string-search "give it back to the builders, assigned to the one who made it" told))
+        (should (string-search "bd update ID --remove-label chain --add-label build --status open --assignee NAME" told))))
+    ;; A tester in the crew, asleep: it comes first.
+    (+test-awo--crew project (list ann tim rex bob)
+      (should (equal (agent-workspace-hands-to project "chain") '("tester")))
+      (should (string-search "hand it to the testers" (agent-workspace--handover-context ann))))
+    ;; Gone home: not.
+    (setf (agent-workspace-agent-state tim) 'home)
+    (+test-awo--crew project (list ann tim rex bob)
+      (should (equal (agent-workspace-hands-to project "chain") '("reviewer"))))
+    ;; None of them in the crew: it tells the user; nothing goes back.
+    (+test-awo--crew project (list ann)
+      (should-not (agent-workspace-hands-to project "chain"))
+      (let ((told (agent-workspace--handover-context ann)))
+        (should (string-search "goes to the testers or the reviewers, but the crew has none of them now" told))
+        (should (string-search "tell the user what you did" told))
+        (should-not (string-search "--add-label" told))))))
+
+(ert-deftest agent-workspace-handover/hands-to-any ()
+  "hands-to any: every role with labels the crew has an agent of, but its
+own, each with its bd command; a role without labels, or none in the
+crew, not offered."
+  (let* ((project (+test-awo--dir "any"))
+         (rio (+test-awo--agent project "rio" "router"))
+         (agent-workspace-agents-talk t))
+    (+test-awo--roles project)
+    (+test-awo--crew project (list rio (+test-awo--agent project "ann" "chain") (+test-awo--agent project "tim" "tester")
+                                   (+test-awo--agent project "bob" "builder") (+test-awo--agent project "liz" "scribe"))
+      (should (equal (agent-workspace-hands-to project "router") '("builder" "chain" "tester")))
+      (let ((told (agent-workspace--handover-context rio)))
+        (should (string-search "hand it to the role it's for" told))
+        (should (string-search "\n- the builders (builds what you give it): bd update ID --remove-label triage --add-label build --status open --assignee \"\""
+                               told))
+        (should (string-search "\n- the chains (makes it): bd update ID --remove-label triage --add-label chain" told))
+        (should (string-search "\n- the testers (tests it): bd update ID --remove-label triage --add-label test" told))
+        (should-not (string-search "reviewer" told))
+        (should-not (string-search "scribe" told))
+        (should-not (string-search "add-label triage" told))))))
+
+(ert-deftest agent-workspace-handover/every-agent-told-the-roles ()
+  "Every agent is told the project's roles, a line each (name, what it
+does, its labels): the starters, the project's own and your local ones;
+before how it hands on, and the scribe's own words name no labels."
+  (let* ((project (+test-awo--dir "roles"))
+         (liz (+test-awo--agent project "liz" "scribe"))
+         (local (expand-file-name ".agent-shell/agent-workspace/roles/" project)))
+    (+test-awo--roles project)
+    (make-directory local t)
+    (write-region "---\ndescription: my own\nlabels: mine, also\n---\nMine.\n" nil (expand-file-name "mine.md" local))
+    (let ((told (agent-workspace--roles-context liz)))
+      (should (string-prefix-p "The project's roles, and the labels of the issues each is for" told))
+      (dolist (line '("\n- builder, builds what you give it: build"
+                      "\n- investigator, investigates what you give it: investigation, incident"
+                      "\n- scribe, writes issues with you: no labels"
+                      "\n- tester, tests it: test"
+                      "\n- chain, makes it: chain"
+                      "\n- mine, my own: mine, also"))
+        (should (string-search line told))))
+    (+test-awo--crew project (list liz (+test-awo--agent project "rex" "reviewer") (+test-awo--agent project "bob" "builder"))
+      (let ((text (let ((agent-workspace--starting (+test-awo--agent project "rex" "reviewer")))
+                    (agent-workspace-agent-context))))
+        (should (< (string-search "The project's roles" text) (string-search "Work moves between roles" text))))
+      (let ((text (let ((agent-workspace--starting liz)) (agent-workspace-agent-context))))
+        (should (string-search "\n- mine, my own: mine, also" text))
+        (should (string-search "Label it for the role that takes it" text))
+        (should-not (string-search "investigation, incident, build or review" text))))))
 
 (ert-deftest agent-workspace-handover/said-in-the-room ()
   "A hand-over as the issue says it (two fetches compared): its label moved
@@ -125,7 +232,8 @@ back; a builder's does (doom-pbk.57)."
   (let* ((project (+test-awo--dir "labels"))
          (default-directory project)
          (investigator (+test-awo--agent project "ivy" "investigator"))
-         (told (agent-workspace--handover-context investigator)))
+         (told (+test-awo--crew project (list investigator (+test-awo--agent project "ken" "builder"))
+                 (agent-workspace--handover-context investigator))))
     (+test-bd-init "--quiet" "--skip-agents" "--prefix" "lbl")
     (should (string-match "bd update ID \\(.*?\\) --append-notes" told))
     (let* ((flags (split-string-and-unquote (match-string 1 told)))

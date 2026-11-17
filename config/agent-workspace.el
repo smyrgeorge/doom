@@ -247,7 +247,10 @@ needs your OK. nil: Claude Code's own default."
 ;; WORK HANDED ON THROUGH ISSUES
 ;; (config/agent-workspace/handover.el) A role's hands-to: names where its
 ;; finished issues go (investigator -> builder -> reviewer, a reviewer's
-;; changes back to the builder). Each agent is told how: the label changed to
+;; changes back to the builder): roles in order, the first the crew has an
+;; agent of; any: every role with labels, the agent picking; returns-to:
+;; where work goes back. Every agent is told the project's roles and their
+;; labels. Each agent is told how: the label changed to
 ;; the next role's, the issue open and unassigned, notes for them; given back
 ;; for changes, assigned to the builder who made it. The first free agent of
 ;; that role takes it (t, or its loop). The room says each hand-over. Only
