@@ -127,6 +127,19 @@ frame; the room alone (2) the whole stage's place, the stage back with 1."
 
 ;; ====== THE FEED ======
 
+(ert-deftest agent-workspace-room/alone-its-own-header ()
+  "The room alone (2), in the window the stage's open pane had: its own
+header line, ROOM and its filter, not the pane's (doom-pbk.86)."
+  (+test-awr2 "alone-header"
+    (agent-workspace-create :role "builder" :name "ada")
+    (with-current-buffer (agent-workspace--issues-buffer project)
+      (agent-workspace-view-room))
+    (let ((window (get-buffer-window (agent-workspace--room-buffer project))))
+      (should-not (window-parameter window 'header-line-format))
+      (with-selected-window window
+        (should (equal header-line-format '(:eval (agent-workspace--room-header))))
+        (should (string-search "ROOM" (substring-no-properties (agent-workspace--room-header))))))))
+
 (ert-deftest agent-workspace-room/the-crew-s-changes ()
   "An agent joining (its worktree, its branch), its hand raised, stuck, gone
 home, started again, leaving: each a line, its time and name."

@@ -998,12 +998,16 @@ bottom, or all of it (the room alone). The window left for the stage, or nil."
         (set-window-buffer room (agent-workspace--room-buffer project))
         (dolist (parameter '(mode-line-format tab-line-format))
           (set-window-parameter room parameter 'none))
+        ;; Its own header line (ROOM, its filter), not what the window had
+        ;; (the room alone takes the stage's window: an open pane's).
+        (set-window-parameter room 'header-line-format nil)
         (set-window-parameter room 'agent-workspace-room t)
         (agent-workspace--compose-prompt-draw project)
         (when compose
           (set-window-buffer compose (agent-workspace--compose-buffer project))
           (dolist (parameter '(mode-line-format tab-line-format))
             (set-window-parameter compose parameter 'none))
+          (set-window-parameter compose 'header-line-format nil)
           (set-window-parameter compose 'agent-workspace-room t)
           ;; Its height, its text's (3 lines at least), from the feed.
           (agent-workspace--compose-fit compose))
