@@ -496,6 +496,26 @@ try again cancelled."
       (+test-awl--quiet ada)
       (should (equal (+test-awl--prompts "ada") (list (format "Work on %s: fail: once" bad) "hello"))))))
 
+;; ====== HANDED BACK ======
+
+(ert-deftest agent-workspace-loops/one-handed-back-first ()
+  "An issue handed back to a looping builder (open, assigned to him: a
+reviewer asking for changes) is the one he takes, before a higher priority
+one nobody has; then that one (doom-pbk.58)."
+  (+test-awl--with-crew "back"
+    (let* ((urgent (+test-awl--issue project "close: urgent" "build" 0))
+           (back (+test-awl--issue project "close: the changes asked" "build" 2))
+           (ken (+test-awl--create "ken")))
+      (let ((default-directory project))
+        (+test-awl--run "bd" "update" back "--assignee" "ken"))
+      (agent-workspace-loop-set ken t)
+      (+test-awl--all-in (list ken) 'nap 90)
+      (should (equal (+test-awl--prompts "ken")
+                     (list (format "Work on %s: close: the changes asked" back)
+                           (format "Work on %s: close: urgent" urgent))))
+      (should (equal (+test-awl--status project back) "closed"))
+      (should (equal (+test-awl--status project urgent) "closed")))))
+
 ;; ====== AN ISSUE YOU GIVE ======
 
 (ert-deftest agent-workspace-loops/an-issue-you-give-is-never-taken ()

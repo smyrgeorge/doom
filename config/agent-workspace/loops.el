@@ -265,31 +265,45 @@ one or naps; its issue still in progress, it waits (for you to look)."
 
 (defun agent-workspace--loop-claim (agent)
   "AGENT, free, claims the next ready issue of its role's labels (bd, as
-itself): takes it, or naps if there's none. Its worktree with changes not
-committed (no branch for an issue there): a failure, nothing claimed."
+itself): one handed back to it first (open, assigned to it: bd ready
+--claim skips those), else the first nobody has; takes it, or naps if
+there's none. Its worktree with changes not committed (no branch for an
+issue there): a failure, nothing claimed."
   (if-let* ((labels (agent-workspace--loop-labels agent)))
       (if-let* ((why (agent-workspace-branch-blocker agent)))
           (agent-workspace--loop-failed agent why)
-        (agent-workspace--loop-put agent :busy t)
-        (agent-workspace--loop-bd
-         agent (list "ready" "--claim" "--label-any" (string-join labels ",") "--exclude-type" "epic" "--json")
-         (lambda (answer)
-           (unwind-protect
-               (agent-workspace--loop-safely
-                agent
-                (lambda ()
-                  (let ((issue (and (eq (car answer) 'ok) (car (cdr answer)))))
-                    (cond
-                     ((not (and (agent-workspace--loop-active-p agent) (agent-workspace--loop-at-rest-p agent)))
-                      ;; No longer free (its loop turned off, given a message,
-                      ;; put to sleep, its crew closed): the issue claimed for
-                      ;; it given back.
-                      (when issue (agent-workspace--bd-give-back agent (alist-get 'id issue))))
-                     ((eq (car answer) 'error) (agent-workspace--loop-failed agent (cdr answer)))
-                     (issue (agent-workspace--loop-take agent (alist-get 'id issue) (alist-get 'title issue)
-                                                        (alist-get 'issue_type issue)))
-                     (t (agent-workspace--loop-nap agent))))))
-             (agent-workspace--loop-answered agent)))))
+        (let* ((filters (list "--label-any" (string-join labels ",") "--exclude-type" "epic" "--json"))
+               (claimed
+                (lambda (answer)
+                  (unwind-protect
+                      (agent-workspace--loop-safely
+                       agent
+                       (lambda ()
+                         (let ((issue (and (eq (car answer) 'ok) (car (cdr answer)))))
+                           (cond
+                            ((not (and (agent-workspace--loop-active-p agent) (agent-workspace--loop-at-rest-p agent)))
+                             ;; No longer free (its loop turned off, given a message,
+                             ;; put to sleep, its crew closed): the issue claimed for
+                             ;; it given back.
+                             (when issue (agent-workspace--bd-give-back agent (alist-get 'id issue))))
+                            ((eq (car answer) 'error) (agent-workspace--loop-failed agent (cdr answer)))
+                            (issue (agent-workspace--loop-take agent (alist-get 'id issue) (alist-get 'title issue)
+                                                               (alist-get 'issue_type issue)))
+                            (t (agent-workspace--loop-nap agent))))))
+                    (agent-workspace--loop-answered agent)))))
+          (agent-workspace--loop-put agent :busy t)
+          (agent-workspace--loop-bd
+           agent (append (list "ready" "--assignee" (agent-workspace-agent-name agent)) filters)
+           (lambda (answer)
+             (let ((back (and (eq (car answer) 'ok) (car (cdr answer)))))
+               (condition-case err
+                   (cond
+                    ((eq (car answer) 'error) (funcall claimed answer))
+                    ;; Handed back to it: claimed (in progress, its).
+                    (back (agent-workspace--loop-bd
+                           agent (list "update" (alist-get 'id back) "--claim" "--json") claimed))
+                    (t (agent-workspace--loop-bd agent (append (list "ready" "--claim") filters) claimed)))
+                 (error (funcall claimed (cons 'error (error-message-string err))))))))))
     ;; Its role lost its labels since.
     (agent-workspace-loop-set agent nil (format "its role, %s, has no labels" (agent-workspace-agent-role agent)))))
 

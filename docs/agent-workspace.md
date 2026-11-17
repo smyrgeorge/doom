@@ -187,7 +187,8 @@ builders`.
 When an issue is ready for a role and one of its agents is free, the room offers it once: `demo-3 is ready for the
 builders: ken is free`, with `[Give it to ken]`. Two agents claiming one issue at once never both get it: bd's claim
 is atomic. An issue you give (`t`, `[Give it to ken]`) is claimed for its agent at once, so no loop takes it while
-its agent finishes its turn; one another agent already has isn't given.
+its agent finishes its turn; one another agent already has isn't given. An issue handed back to an agent (a
+reviewer's changes) is offered to that agent once it's free: `demo-3 is back for ken, free now`.
 
 With `agent-workspace-agents-talk` set to `nil`, nothing is handed on: an agent whose role hands on is told to leave
 the issue as it is and tell you. The room still offers a ready issue, for you to give.
@@ -234,8 +235,8 @@ picked ("→ Allow (you)"). A hand answered in its session leaves the room.
 An agent can work through the project's issues by itself. `L` turns its loop on, and off again. Every agent starts
 with its loop off, and its bar shows `↻` while it loops.
 
-Once free, a looping agent takes the next issue: one you gave it first (`t`), else the next ready one its role's
-`labels` say, the highest priority first. It claims it as itself (`bd ready --claim`), so two looping agents never get
+Once free, a looping agent takes the next issue: one you gave it first (`t`), then one handed back to it, else the
+next ready one its role's `labels` say, the highest priority first. It claims it as itself (`bd ready --claim`), so two looping agents never get
 the same one. Its session starts again for each issue, a fresh context, on the issue's [branch](#its-branches), and it
 gets the issue as `t` gives it ("Work on doom-a1b: ...").
 

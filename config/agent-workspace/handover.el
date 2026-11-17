@@ -74,31 +74,41 @@ them itself: its loop).")
               (buffer (agent-workspace--issues-buffer project)))
     (buffer-local-value 'agent-workspace--issues-data buffer)))
 
+(defun agent-workspace--free-to-offer-p (agent)
+  "Non-nil if AGENT is free to be offered an issue: at the desk or done, on
+none, nothing skipping it (its loop)."
+  (and (memq (agent-workspace-agent-state agent) '(desk done))
+       (not (agent-workspace-agent-issue agent))
+       (not (run-hook-with-args-until-success 'agent-workspace-offer-skip-functions agent))))
+
 (defun agent-workspace--free-for (project role)
   "PROJECT's first agent of ROLE free to take an issue: at the desk or done,
 on none, nothing skipping it."
   (seq-find (lambda (agent)
               (and (equal (agent-workspace-agent-role agent) role)
-                   (memq (agent-workspace-agent-state agent) '(desk done))
-                   (not (agent-workspace-agent-issue agent))
-                   (not (run-hook-with-args-until-success 'agent-workspace-offer-skip-functions agent))))
+                   (agent-workspace--free-to-offer-p agent)))
             (agent-workspace--ordered project)))
 
 (defun agent-workspace--offer-ready (project &optional data)
   "PROJECT's ready issues for a role (DATA, else as last fetched) offered in
-the room to its first free agent, once each."
+the room to its first free agent, once each; one handed back to an agent
+\(open, assigned to it), to that agent, once it's free."
   (let ((key (agent-workspace--root project)))
     (dolist (issue (plist-get (or data (agent-workspace--issues-data project)) :ready))
-      (let ((id (plist-get issue :id))
-            (role (plist-get issue :role)))
-        (when-let* (((and role (not (plist-get issue :assignee))
-                          (not (assoc id (gethash key agent-workspace--offered)))))
-                    (agent (agent-workspace--free-for project role)))
+      (let* ((id (plist-get issue :id))
+             (role (plist-get issue :role))
+             (assignee (plist-get issue :assignee))
+             (back (and assignee (agent-workspace-agent assignee project))))
+        (when-let* (((not (assoc id (gethash key agent-workspace--offered))))
+                    (agent (cond (assignee (and back (agent-workspace--free-to-offer-p back) back))
+                                 (role (agent-workspace--free-for project role)))))
           (push (cons id (agent-workspace-agent-name agent)) (gethash key agent-workspace--offered))
           (agent-workspace-room-post project :kind 'offer :agent (agent-workspace-agent-name agent)
                                      :issue-id id
-                                     :text (format "%s is ready for the %ss: %s is free"
-                                                   id role (agent-workspace-agent-name agent))))))))
+                                     :text (if back
+                                               (format "%s is back for %s, free now" id assignee)
+                                             (format "%s is ready for the %ss: %s is free"
+                                                     id role (agent-workspace-agent-name agent)))))))))
 
 (defun agent-workspace--offer-fetched-h (project data)
   "PROJECT's issues fetched: the ready ones offered, the offers' buttons
@@ -117,9 +127,12 @@ drawn again (gone with their issue). In
 (add-hook 'agent-workspace-issues-fetched-functions #'agent-workspace--offer-fetched-h)
 (add-hook 'agent-workspace-state-change-functions #'agent-workspace--offer-state-h)
 
-(defun agent-workspace--still-ready (project id)
-  "PROJECT's issue ID if it's still ready and nobody's (as last fetched)."
-  (seq-find (lambda (issue) (and (equal (plist-get issue :id) id) (not (plist-get issue :assignee))))
+(defun agent-workspace--still-ready (project id &optional name)
+  "PROJECT's issue ID if it's still ready (as last fetched), not given
+since, and nobody's (or the agent NAME's: handed back to it)."
+  (seq-find (lambda (issue) (and (equal (plist-get issue :id) id)
+                                 (not (plist-get issue :given))
+                                 (member (plist-get issue :assignee) (list nil name))))
             (plist-get (agent-workspace--issues-data project) :ready)))
 
 (defun agent-workspace-offer-take (project id name)
@@ -127,11 +140,12 @@ drawn again (gone with their issue). In
 working, after its turn. Claimed for it in bd at once, its branch for it
 first (`agent-workspace-give-issue'): refused if another agent has it, or
 its worktree has changes not committed."
-  (let ((issue (or (agent-workspace--still-ready project id) (user-error "%s is not ready any more" id)))
+  (let ((issue (or (agent-workspace--still-ready project id name) (user-error "%s is not ready any more" id)))
         (agent (or (agent-workspace-agent name project) (user-error "%s is not in the crew now" name))))
     (agent-workspace-give-issue agent id (plist-get issue :title) (plist-get issue :type))
     ;; Its until it's fetched again: its offer's button gone.
     (plist-put issue :assignee name)
+    (plist-put issue :given name)
     (agent-workspace--room-redraw-soon project)
     (agent-workspace-room-post project :kind 'issue :agent name :text (format "given %s (you)" id))))
 
@@ -139,7 +153,7 @@ its worktree has changes not committed."
   "An offer's button while its issue is still ready: [Give it to NAME]."
   (let ((id (plist-get entry :issue-id))
         (name (plist-get entry :agent)))
-    (when (and id name (agent-workspace--still-ready project id) (agent-workspace-agent name project))
+    (when (and id name (agent-workspace--still-ready project id name) (agent-workspace-agent name project))
       (concat (make-string agent-workspace--room-indent ?\s)
               (agent-workspace--inbox-button (format "Give it to %s" name)
                                              (lambda () (agent-workspace-offer-take project id name)))))))
