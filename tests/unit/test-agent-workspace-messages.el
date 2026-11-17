@@ -158,6 +158,35 @@ session is restarted mid-turn (doom-pbk.45)."
       (+test-sleep 0.5)
       (should-not (funcall answers)))))
 
+(ert-deftest agent-workspace-messages/answered-by-you-once-delivered ()
+  "[Answer] on a queued message, delivered to its agent while you type your
+answer: yours isn't sent, said; while still queued, it is (doom-pbk.54)."
+  (+test-awg "answer-late" nil (("ada" "builder") ("ken" "builder"))
+    (let ((agent-workspace--inbox-paused (make-hash-table :test #'equal)))
+      (puthash (agent-workspace--root project) t agent-workspace--inbox-paused)
+      (let ((event (agent-workspace--inbox-event
+                    project (plist-get (car (agent-workspace-inbox-add project "ken" "What does the lexer return?"
+                                                                       :from "ada" :kind "message" :limits nil))
+                                       :id))))
+        (should event)
+        ;; Delivered as you type.
+        (cl-letf (((symbol-function 'read-string)
+                   (lambda (&rest _) (agent-workspace--inbox-take project event) "a list of tokens")))
+          (should (equal (cadr (should-error (agent-workspace-message-answer-instead project event) :type 'user-error))
+                         "ken got the message while you typed: it answers ada, your answer is not sent")))
+        (+test-sleep 0.3)
+        (should-not (seq-find (lambda (prompt) (string-search "The user answers" prompt)) (+test-awg--prompts "ada")))
+        ;; Still queued: sent.
+        (let ((again (agent-workspace--inbox-event
+                      project (plist-get (car (agent-workspace-inbox-add project "ken" "And the parser?" :from "ada"
+                                                                         :kind "message" :limits nil))
+                                         :id))))
+          (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "a tree")))
+            (agent-workspace-message-answer-instead project again))
+          (should (+test-wait-for (lambda () (seq-find (lambda (prompt) (string-search "The user answers your message to ken instead: a tree" prompt))
+                                                       (+test-awg--prompts "ada")))
+                                  20)))))))
+
 (ert-deftest agent-workspace-messages/edited-or-dropped ()
   "[Edit]: sent as you edited it; [Drop]: never sent."
   (+test-awg "edit" nil (("ada" "builder") ("ken" "builder"))

@@ -321,13 +321,17 @@ it)."
 (defun agent-workspace-message-answer-instead (project message)
   "MESSAGE (waiting for your OK, or queued) answered by you instead of the
 agent it's for: your answer to its sender, after its turn; it never reaches
-that agent."
+that agent. Delivered to it while you typed: yours isn't sent (it
+answers), said."
   (let* ((from (plist-get message :from))
          (to (plist-get message :to))
          (sender (or (agent-workspace-agent from project) (user-error "%s is not in the crew now" from)))
-         (answer (read-string (format "Your answer to %s (for %s): " from to))))
+         (answer (read-string (format "Your answer to %s (for %s): " from to)))
+         (waiting (memq message (gethash (agent-workspace--root project) agent-workspace--messages-waiting))))
     (when (string-empty-p (string-trim answer)) (user-error "No answer"))
-    (if (memq message (gethash (agent-workspace--root project) agent-workspace--messages-waiting))
+    (unless (or waiting (agent-workspace--inbox-event project (plist-get message :id)))
+      (user-error "%s got the message while you typed: it answers %s, your answer is not sent" to from))
+    (if waiting
         (agent-workspace--message-take project message)
       (agent-workspace--inbox-take project message))
     (agent-workspace--thread-you project message 0)
