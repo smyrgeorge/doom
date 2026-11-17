@@ -305,10 +305,10 @@ running (`M-x agent-workspace-new`, `cmd/agent-workspace new`) is added to it: t
 beside the new one when the app opens. An agent that can't start (its role is
 gone, its worktree can't be made) is stuck, saying why, and the others start. A panel whose file is gone is skipped,
 saying so, and the others open. A wrong agent is left out, and a warning names it (`crew.json: agent 2 (ken): its
-colour "pink" isn't one of ...`). A file that isn't JSON, or isn't a crew, is said, nothing starts, and it's kept as it
+colour "pink" isn't one of ...`); it stays in the file as it was, for you to mend. A file that isn't JSON, or isn't a crew, is said, nothing starts, and it's kept as it
 is until you make an agent.
 
-After you edit it, `gR` reads it again. It asks before it starts an agent, forgets one or turns a loop on; a colour, the
+After you edit it, `gR` reads it again; until then the crew changing doesn't overwrite your edit (the room says so). It asks before it starts an agent, forgets one or turns a loop on; a colour, the
 panels or a loop turned off it applies.
 
 ## Making an agent

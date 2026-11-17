@@ -58,6 +58,17 @@ in their app after.")
 reads it. crew.json keeps its other agents and its layout as they were,
 beside what runs, and its app opening starts them.")
 
+(defvar agent-workspace--crew-left-out (make-hash-table :test #'equal)
+  "A project's crew.json entries left out as wrong when it was last read
+\(as JSON had them): written back as they were, for you to mend.")
+
+(defvar agent-workspace--crew-seen (make-hash-table :test #'equal)
+  "A project's crew.json's text as this Emacs last read or wrote it: one
+changed on disk since (by hand) isn't overwritten until it's read (gR).")
+
+(defvar agent-workspace--crew-stale-said (make-hash-table :test #'equal)
+  "The projects whose crew.json was found changed on disk: said once.")
+
 (defvar agent-workspace--crew-panels (make-hash-table :test #'eq :weakness 'key)
   "An agent started again asleep (or stuck): its panels in crew.json, kept
 there and opened once its session starts.")
@@ -106,11 +117,14 @@ place and name."
     (when (file-readable-p file)
       (let* ((problems nil)
              (agents nil)
+             (left-out nil)
              (layout nil)
              ;; Not JSON: t, or the line where it isn't.
              (not-json nil)
              (data (with-temp-buffer
                      (let ((coding-system-for-read 'utf-8)) (insert-file-contents file))
+                     (puthash (agent-workspace--root project) (buffer-string) agent-workspace--crew-seen)
+                     (remhash (agent-workspace--root project) agent-workspace--crew-stale-said)
                      (condition-case err
                          (json-parse-string (buffer-string) :object-type 'plist :array-type 'array
                                             :null-object nil :false-object nil)
@@ -137,9 +151,11 @@ place and name."
                (let ((why (agent-workspace--crew-entry-problem entry agents))
                      (name (and (consp entry) (plist-get entry :name))))
                  (if why
-                     (problem "agent %d%s: %s: left out" (1+ i)
-                              (if (agent-workspace-name-valid-p name) (format " (%s)" name) "")
-                              why)
+                     (progn
+                       (problem "agent %d%s: %s: left out" (1+ i)
+                                (if (agent-workspace-name-valid-p name) (format " (%s)" name) "")
+                                why)
+                       (push entry left-out))
                    (push (agent-workspace--crew-entry-read entry) agents))))
              (plist-get data :agents))
             (let ((json (plist-get data :layout)))
@@ -148,7 +164,8 @@ place and name."
                      (problem "its layout isn't an object: ignored"))
                     (t (setq layout (agent-workspace--crew-layout-read json #'problem))))))))
         (cons (unless (eq layout :wrong)
-                (list :agents (nreverse agents) :layout layout))
+                (append (list :agents (nreverse agents) :layout layout)
+                        (and left-out (list :left-out (nreverse left-out)))))
               (nreverse problems))))))
 
 (defun agent-workspace--crew-entry-problem (entry before)
@@ -304,6 +321,11 @@ kept crew's layout, as read) where it says."
                                     (string< (plist-get a :name) (plist-get b :name))
                                   (< ra rb))))
                             entries))
+         (names (mapcar (lambda (entry) (plist-get entry :name)) entries))
+         ;; Those left out as wrong, after, as they were.
+         (entries (append entries
+                          (seq-remove (lambda (entry) (and (consp entry) (member (plist-get entry :name) names)))
+                                      (gethash (agent-workspace--root project) agent-workspace--crew-left-out))))
          (app (and (fboundp 'agent-workspace--app) (agent-workspace--app project))))
     (concat "{\"version\": 2,\n"
             " \"agents\": ["
@@ -323,18 +345,36 @@ it holds changed. Not for a crew closed (its app open or not, until an agent
 is made there again): crew.json keeps it as it was."
   (interactive)
   (let* ((project (or project (agent-workspace-project) (user-error "Not in a project")))
+         (key (agent-workspace--root project))
          (file (agent-workspace--crew-path project))
-         (text (agent-workspace-crew-text project)))
-    (remhash (agent-workspace--root project) agent-workspace--crew-timers)
-    (unless (or (gethash (agent-workspace--root project) agent-workspace--crew-closed)
-                (and (not (agent-workspace-agents project))
-                     (not (and (fboundp 'agent-workspace--app) (agent-workspace--app project)))
-                     (not (gethash (agent-workspace--root project) agent-workspace--crew-kept)))
-                (and (file-readable-p file)
-                     (equal text (with-temp-buffer (insert-file-contents file) (buffer-string)))))
+         (text (agent-workspace-crew-text project))
+         (there (and (file-readable-p file)
+                     (with-temp-buffer
+                       (let ((coding-system-for-read 'utf-8)) (insert-file-contents file))
+                       (buffer-string))))
+         (seen (gethash key agent-workspace--crew-seen)))
+    (remhash key agent-workspace--crew-timers)
+    (cond
+     ((or (gethash key agent-workspace--crew-closed)
+          (and (not (agent-workspace-agents project))
+               (not (and (fboundp 'agent-workspace--app) (agent-workspace--app project)))
+               (not (gethash key agent-workspace--crew-kept)))
+          (equal text there)))
+     ;; Changed on disk since it was read or written (by hand): kept, until
+     ;; it's read again (gR), said once.
+     ((and there seen (not (equal there seen)))
+      (unless (gethash key agent-workspace--crew-stale-said)
+        (puthash key t agent-workspace--crew-stale-said)
+        (let ((said (format "%s was changed outside this Emacs: gR reads it (not written until then)"
+                            (agent-workspace--crew-file-name))))
+          (message "%s" said)
+          (when (fboundp 'agent-workspace-room-post)
+            (agent-workspace-room-post project :kind 'note :text said)))))
+     (t
       (make-directory (file-name-directory file) t)
       (let ((coding-system-for-write 'utf-8-unix))
-        (write-region text nil file nil 'silent)))))
+        (write-region text nil file nil 'silent))
+      (puthash key text agent-workspace--crew-seen)))))
 
 (defun agent-workspace--crew-save-soon (project)
   "PROJECT's crew.json written in a moment (changes in a burst: once)."
@@ -368,6 +408,7 @@ and its layout stay in crew.json, started as its app opens."
     (let* ((crew (car (agent-workspace-crew-read project)))
            (others (seq-remove (lambda (entry) (equal (plist-get entry :name) (agent-workspace-agent-name agent)))
                                (plist-get crew :agents))))
+      (puthash (agent-workspace--root project) (plist-get crew :left-out) agent-workspace--crew-left-out)
       (when others
         (puthash (agent-workspace--root project) (plist-put (copy-sequence crew) :agents others)
                  agent-workspace--crew-kept)))))
@@ -472,6 +513,8 @@ any; its layout applied."
     ;; Not a crew: kept as it is, for you to mend, until an agent is made.
     (when (and problems (not crew))
       (puthash (agent-workspace--root project) t agent-workspace--crew-closed))
+    (when crew
+      (puthash (agent-workspace--root project) (plist-get crew :left-out) agent-workspace--crew-left-out))
     (when entries
       (let ((agent-workspace--crew-loading t))
         (dolist (entry entries)
@@ -511,6 +554,7 @@ wakes), its loop turned off, or on (asked first)."
     (pcase-let ((`(,crew . ,problems) (agent-workspace-crew-read project)))
       (dolist (problem problems) (display-warning 'agent-workspace problem))
       (unless crew (user-error "No crew in %s" agent-workspace-crew-file))
+      (puthash (agent-workspace--root project) (plist-get crew :left-out) agent-workspace--crew-left-out)
       (let ((entries (plist-get crew :agents))
             (agent-workspace--crew-loading t))
         (dolist (entry entries)

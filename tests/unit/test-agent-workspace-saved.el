@@ -262,6 +262,72 @@ read; an unknown key said, ignored."
                        "crew.json: agent 9 (wes): its kind \"robot\" isn't one of claude-code: left out"
                        "crew.json: agent 10 (xan): its model 4 isn't a string: left out"))))))
 
+(ert-deftest agent-workspace-saved/a-wrong-entry-kept-as-it-was ()
+  "An entry left out as wrong (ken's colour pink) stays in crew.json, as it
+was, after the running crew's agents, through every write after; mended
+and read again (gR), it's an agent of the crew (doom-pbk.61)."
+  (+test-aws2 "kept-wrong"
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"pink\", \"model\": \"opus\", \"loop\": true}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ada\", \"open\": true}}
+")
+    (let ((agent-workspace--crew-left-out (make-hash-table :test #'equal))
+          (agent-workspace--crew-seen (make-hash-table :test #'equal))
+          (agent-workspace--crew-stale-said (make-hash-table :test #'equal)))
+      (agent-workspace-open t)
+      (let ((ada (agent-workspace-agent "ada" project)))
+        (should-not (agent-workspace-agent "ken" project))
+        (agent-workspace-recolour ada "cyan")
+        (agent-workspace-create :role "investigator" :name "sam")
+        (let ((text (+test-aws2--file project)))
+          (should (string-search "{\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"cyan\"}" text))
+          (should (string-search "{\"name\": \"sam\"" text))
+          (should (string-search "  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"pink\", \"model\": \"opus\", \"loop\": true}\n ]"
+                                 text)))
+        ;; Mended by hand, read again: in the crew.
+        (+test-aws2--write project (replace-regexp-in-string "pink" "green" (+test-aws2--file project)))
+        (cl-letf (((symbol-function 'y-or-n-p) #'always)
+                  ((symbol-function 'agent-workspace--loop-soon) #'ignore)
+                  ((symbol-function 'agent-workspace--loop-watch-update) #'ignore))
+          (with-current-buffer (agent-workspace--issues-buffer project)
+            (agent-workspace-crew-reload)))
+        (should (equal (agent-workspace-agent-colour (agent-workspace-agent "ken" project)) "green"))
+        (should (= (with-temp-buffer (insert (+test-aws2--file project))
+                                     (count-matches "\"name\": \"ken\"" (point-min) (point-max)))
+                   1))))))
+
+(ert-deftest agent-workspace-saved/edited-by-hand-not-overwritten ()
+  "crew.json edited by hand and not read again: the crew changing doesn't
+overwrite it, said once (the room, a message): gR reads it; read, it's
+written again as the crew changes (doom-pbk.61)."
+  (+test-aws2 "by-hand"
+    (let ((agent-workspace--crew-left-out (make-hash-table :test #'equal))
+          (agent-workspace--crew-seen (make-hash-table :test #'equal))
+          (agent-workspace--crew-stale-said (make-hash-table :test #'equal)))
+      (agent-workspace-open t)
+      (let ((ada (agent-workspace-create :role "builder" :name "ada")))
+        (should (string-search "\"colour\": \"blue\"" (+test-aws2--file project)))
+        (let ((edited (replace-regexp-in-string "\"colour\": \"blue\"" "\"colour\": \"blue\", \"model\": \"haiku\""
+                                                (+test-aws2--file project))))
+          (+test-aws2--write project edited)
+          (agent-workspace-recolour ada "cyan")
+          (agent-workspace-recolour ada "red")
+          (should (equal (+test-aws2--file project) edited))
+          (let ((said (with-current-buffer (agent-workspace--room-buffer project) (buffer-string))))
+            (should (= (with-temp-buffer (insert said)
+                                         (count-matches "crew.json was changed outside this Emacs: gR reads it"
+                                                        (point-min) (point-max)))
+                       1))))
+        ;; gR: read; written again after.
+        (with-current-buffer (agent-workspace--issues-buffer project)
+          (agent-workspace-crew-reload))
+        (should (equal (agent-workspace-agent-colour ada) "blue"))
+        (agent-workspace-recolour ada "green")
+        (should (string-search "\"colour\": \"green\"" (+test-aws2--file project)))))))
+
 (ert-deftest agent-workspace-saved/a-wrong-layout-said ()
   "A layout that isn't an object, or a value of it that's wrong: said,
 ignored; the agents read."
