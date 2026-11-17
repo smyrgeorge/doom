@@ -463,6 +463,7 @@ left, its stage beside them, the selected agent's pane open. A popup open
 cursor stays in the buffer it was in (the selected window's, whatever
 buffer is current: a timer's, a canvas's being shown)."
   (interactive)
+  (agent-workspace--headers-stale)
   (let* ((app (or app (agent-workspace--here-or-error)))
          (project (agent-workspace--app-project app))
          (agents (agent-workspace--ordered project))
@@ -555,6 +556,7 @@ alone, the branches in its place): laid out as it comes back."
 
 (defun agent-workspace--redraw (app)
   "APP's bars, issue list and header lines drawn again (nothing laid out)."
+  (agent-workspace--headers-stale)
   (when (agent-workspace--shown-p app)
     (dolist (window (window-list (agent-workspace--app-frame app) 'nomini))
       (when (buffer-local-value 'agent-workspace--bar-of (window-buffer window))
@@ -566,6 +568,7 @@ alone, the branches in its place): laid out as it comes back."
   "APP's agents' lines drawn again: its bars, and its panes' header lines
 \(their own windows' only): a turn's time, its context's usage. Not the
 issue list, nor any other mode line."
+  (agent-workspace--headers-stale)
   (when (agent-workspace--shown-p app)
     (dolist (window (window-list (agent-workspace--app-frame app) 'nomini))
       (let ((buffer (window-buffer window)))

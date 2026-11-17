@@ -110,6 +110,34 @@ the rest; not enough rows to open it: all folded."
   (should (equal (agent-workspace--sizes '(a b c) 'b 7) '((a . 1) (b . 1) (c . 1))))
   (should (equal (agent-workspace--sizes '(a b c) 'b 8) '((a . 1) (b . 6) (c . 1)))))
 
+(ert-deftest agent-workspace-app/a-pane-s-header-kept ()
+  "An open pane's header line, made at every redisplay of its window: made
+once, then kept (no role read again, under 0.1 ms a time) until its agent
+changes, a tick, a redraw (doom-pbk.70)."
+  (+test-awa "header-kept"
+    (pcase-let ((`(,ada) (+test-awa--crew '("ada" "builder"))))
+      (agent-workspace-open t)
+      (let ((pane (get-buffer-window (agent-workspace-agent-buffer ada)))
+            (reads 0))
+        (cl-letf* ((role (symbol-function 'agent-workspace-role))
+                   ((symbol-function 'agent-workspace-role)
+                    (lambda (&rest args) (cl-incf reads) (apply role args))))
+          (with-selected-window pane
+            (let ((first (agent-workspace--pane-header)))
+              (should (> reads 0))
+              (setq reads 0)
+              (let ((start (float-time)))
+                (dotimes (_ 100) (agent-workspace--pane-header))
+                (should (< (- (float-time) start) 0.01)))
+              (should (= reads 0))
+              (should (eq (agent-workspace--pane-header) first))
+              ;; Its agent changed: made again, saying it.
+              (agent-workspace--set-state ada 'working)
+              (let ((again (agent-workspace--pane-header)))
+                (should (> reads 0))
+                (should-not (eq again first))
+                (should (string-search "building" (substring-no-properties again)))))))))))
+
 (ert-deftest agent-workspace-app/keys-on-a-bar ()
   "On an agent's bar, from the keyboard: the bar's keys (j/k between agents,
 TAB, RET) and the app's (c, i, K...) act, its line's map adding its clicks

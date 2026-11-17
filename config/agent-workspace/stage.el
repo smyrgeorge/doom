@@ -147,16 +147,41 @@ one)."
       (set-face-background face colour))
     face))
 
+(defvar agent-workspace--headers (make-hash-table :test #'equal)
+  "The header lines made: (KIND AGENT WIDTH SIDE BUFFER FRAME) to its text,
+until an agent changes (`agent-workspace--headers-stale'): a header line is
+made again at every redisplay of its window (a streamed chunk, a cursor
+move), its agent's line costly to make.")
+
+(defun agent-workspace--headers-stale (&rest _)
+  "The header lines kept made again when next shown: an agent changed, a
+turn's time ticked, the app drawn again. In
+`agent-workspace-change-functions', first."
+  (clrhash agent-workspace--headers))
+
+(add-hook 'agent-workspace-change-functions #'agent-workspace--headers-stale -90)
+
+(defmacro agent-workspace--header-kept (kind agent &rest body)
+  "BODY's text, a header line of KIND for AGENT in the selected window, made
+once until the headers go stale (`agent-workspace--headers')."
+  (declare (indent 2))
+  `(let ((key (list ,kind ,agent (window-total-width) (window-parameter nil 'agent-workspace-side)
+                    (window-buffer) (selected-frame))))
+     (or (gethash key agent-workspace--headers)
+         (puthash key (progn ,@body) agent-workspace--headers))))
+
 (defun agent-workspace--pane-header ()
   "The open pane's header line: its agent's line (in its window's width);
-its canvas or a panel shown there full size, their tabs at its right."
+its canvas or a panel shown there full size, their tabs at its right. Kept
+until something changes (`agent-workspace--headers')."
   (when-let* ((agent (or (agent-workspace-buffer-agent) (window-parameter nil 'agent-workspace-pane))))
-    (agent-workspace--percent-escaped
-     (agent-workspace--clickable
-      (agent-workspace-line agent (window-total-width) t nil
-                            (and (window-parameter nil 'agent-workspace-side)
-                                 (agent-workspace--tabs-text agent (window-buffer))))
-      agent-workspace-line-map t))))
+    (agent-workspace--header-kept 'pane agent
+      (agent-workspace--percent-escaped
+       (agent-workspace--clickable
+        (agent-workspace-line agent (window-total-width) t nil
+                              (and (window-parameter nil 'agent-workspace-side)
+                                   (agent-workspace--tabs-text agent (window-buffer))))
+        agent-workspace-line-map t)))))
 
 ;; ====== THE STACK ======
 
@@ -360,14 +385,15 @@ each a button (a click shows it)."
   "The side area's header line: its agent's tabs, the one shown marked; v
 and V at its right. Tinted in its colour, as a bar."
   (when-let* ((agent (window-parameter nil 'agent-workspace-side)))
-    (agent-workspace--percent-escaped (agent-workspace--clickable
+    (agent-workspace--header-kept 'side agent
+     (agent-workspace--percent-escaped (agent-workspace--clickable
                                        (agent-workspace--tint
                                         (agent-workspace--at-right
                                          (concat " " (agent-workspace--tabs-text agent (window-buffer)))
                                          (propertize "v: next · V: full size " 'face 'shadow)
                                          (window-total-width))
                                         (agent-workspace-agent-face agent) 0.14)
-                                       agent-workspace-line-map t))))
+                                       agent-workspace-line-map t)))))
 
 (define-minor-mode agent-workspace-side-mode
   "An agent's canvas or panel shown in its pane on the stage: v shows the
