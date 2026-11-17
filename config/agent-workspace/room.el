@@ -339,7 +339,10 @@ its thread folded, how many lines of it it stands for."
                  ('event-done (propertize "✉ " 'face 'shadow))
                  ('offer (propertize "◆ " 'face 'shadow))
                  (_ "")))
-         (text (plist-get entry :text))
+         ;; Several lines (an event's log, a message): its first, on one, as
+         ;; a reply's; kept whole.
+         (text (let ((text (or (plist-get entry :text) "")))
+                 (if (string-search "\n" text) (agent-workspace--first-lines text) text)))
          (text (pcase kind
                  ((or 'joined 'home 'restarted 'renamed 'left 'note 'event-done) (propertize text 'face 'shadow))
                  ('stuck (propertize text 'face 'error))

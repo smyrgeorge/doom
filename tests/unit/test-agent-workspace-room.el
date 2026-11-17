@@ -358,6 +358,25 @@ the issue list keeps undo (doom-pbk.48)."
       (should (eq (buffer-local-value 'buffer-undo-list buffer) t))
       (should (eq (buffer-local-value 'buffer-undo-list (agent-workspace--issues-buffer project)) t)))))
 
+(ert-deftest agent-workspace-room/several-lines-on-one ()
+  "An event or a message of several lines shows its first lines on one,
+cut as a reply's, never a line at column 0; kept whole (doom-pbk.52)."
+  (+test-awr2 "lines"
+    (agent-workspace-create :role "builder" :name "ada")
+    (agent-workspace-room-post project :kind 'event :agent "ci" :to "ada"
+                               :text "Build 42 failed:\nerror: test_lexer failed\nerror: test_parser failed\n  at line 12")
+    (agent-workspace-room-post project :kind 'you :to "ada" :text "First line\nsecond\nthird")
+    (let ((lines (split-string (+test-awr2--feed project) "\n" t)))
+      (should (seq-find (lambda (line) (string-search "✉ → ada Build 42 failed: error: test_lexer failed error: test_parser failed" line))
+                        lines))
+      (should (seq-find (lambda (line) (string-search "→ ada First line second third" line)) lines))
+      (should-not (seq-find (lambda (line) (string-prefix-p "error:" line)) lines))
+      (should-not (seq-find (lambda (line) (string-prefix-p "  at line 12" line)) lines)))
+    ;; Kept whole.
+    (should (string-search "\\n  at line 12" (with-temp-buffer
+                                                (insert-file-contents (expand-file-name ".agent-shell/agent-workspace/room.jsonl" project))
+                                                (buffer-string))))))
+
 (ert-deftest agent-workspace-room/filtered ()
   "F: raised hands only, then the selected agent's only, then all."
   (+test-awr2 "filter"
