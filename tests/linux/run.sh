@@ -46,6 +46,12 @@ args=(--rm --init
       -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*'
       -e TMPDIR=/tmp -e "E2E_TIMEOUT=${E2E_TIMEOUT:-180}" -e "E2E_WINDOW=${E2E_WINDOW:-}")
 [ -t 1 ] && args+=(-t)
+# TEST_LOGS (tests/run.sh: the failed files' logs copied there): the host's
+# folder, mounted.
+if [ -n "${TEST_LOGS:-}" ]; then
+  mkdir -p "$TEST_LOGS"
+  args+=(-v "$(cd "$TEST_LOGS" && pwd):/test-logs" -e TEST_LOGS=/test-logs)
+fi
 
 case "$KIND" in
   unit)

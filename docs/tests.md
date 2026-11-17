@@ -25,7 +25,9 @@ a PDF or a drawing once downloads them, or `emacs --batch -l tests/helper.el -l 
 end-to-end tests draw with the real `mmdc` and skip without it (the unit tests use a stand-in). `E2E_WINDOW=front`
 shows the end-to-end tests' frame, which otherwise stays off screen. They run on macOS and on Linux; `EMACS_GUI` names
 the GUI Emacs for the end-to-end tests (default: macOS's `/Applications/Emacs.app`, else `emacs`). On Linux without a
-display, run those under Xvfb, one at a time: `E2E_JOBS=1 xvfb-run -a tests/run.sh e2e`.
+display, run those under Xvfb, one at a time: `E2E_JOBS=1 xvfb-run -a tests/run.sh e2e`. A failed file's log is in the
+run's folder (the path after `full log:`); with `TEST_LOGS=DIR`, it's copied to `DIR` too, as `KIND-NAME.txt`
+(`unit-test-tabs.txt`), in `tests/linux/run.sh` as well (the folder mounted in its container).
 
 - `tests/unit/test-NAME.el` tests `config/NAME.el` or a part of it (`test-tabs.el`: `config/editor/tabs.el`); the
   language servers' settings, a file per language (`test-lsp-rust.el`: `config/lsp/rust.el`), sharing
@@ -56,3 +58,7 @@ syncs it (its packages cached until `init.el`, `packages.el` or that commit chan
 a week at a time). PDF.js and Excalidraw are
 downloaded (`tests/assets.el`), so no test skips for want of them. A newer push to a
 branch cancels the run still going there.
+
+When a job fails, its failed test files' logs (`TEST_LOGS`) are kept with the run for 14 days, an artifact per job
+(`test-logs-macos`, `test-logs-linux-with-xwidgets`, `test-logs-linux-without-xwidgets`): what a test saw where it
+fails only on GitHub. `gh run download RUN_ID` fetches them.

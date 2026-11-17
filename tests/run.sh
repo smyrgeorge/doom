@@ -17,8 +17,9 @@
 # ";; run.sh: alone" runs with none beside it, before the others (PDF.js
 # draws no page in a covered frame, and the end-to-end frames share a
 # corner); one with ";; run.sh: slow" starts before the rest (its minute or
-# two runs beside them, not after: the run ends sooner). Exits 1 if a test
-# failed.
+# two runs beside them, not after: the run ends sooner). TEST_LOGS (a
+# folder): each failed file's log copied there too, as KIND-NAME.txt (CI
+# keeps them). Exits 1 if a test failed.
 
 
 TESTS=$(cd "$(dirname "$0")" && pwd)
@@ -133,6 +134,9 @@ report_file() {  # report_file KIND FILE: its result, once it ran
     fi
     grep -h 'TIMED OUT' "$log" | sed 's/^/      /'
     echo "      full log: $log"
+    if [ -n "${TEST_LOGS:-}" ]; then
+      mkdir -p "$TEST_LOGS" && cp "$log" "$TEST_LOGS/$kind-$base.txt"
+    fi
   fi
 }
 

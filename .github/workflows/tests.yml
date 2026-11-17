@@ -112,11 +112,26 @@ jobs:
           path: ${{ runner.temp }}/doom-emacs/.local
           key: ${{ steps.doom-cache.outputs.cache-primary-key }}
 
+      # A failed test file's log copied to TEST_LOGS (tests/run.sh), kept with
+      # the run (below): what a test saw where it failed only here.
       - name: Unit tests
         run: tests/linux/run.sh unit
+        env:
+          TEST_LOGS: ${{ runner.temp }}/test-logs
 
       - name: End-to-end tests
         run: tests/linux/run.sh e2e
+        env:
+          TEST_LOGS: ${{ runner.temp }}/test-logs
+
+      - name: The failed tests' logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-linux-${{ matrix.xwidgets == 'yes' && 'with' || 'without' }}-xwidgets
+          path: ${{ runner.temp }}/test-logs
+          if-no-files-found: ignore
+          retention-days: 14
 
   macos:
     name: macOS
@@ -189,8 +204,22 @@ jobs:
           path: ~/.config/emacs/.local
           key: ${{ steps.doom-cache.outputs.cache-primary-key }}
 
+      # A failed test file's log kept with the run, as on Linux.
       - name: Unit tests
         run: tests/run.sh unit
+        env:
+          TEST_LOGS: ${{ runner.temp }}/test-logs
 
       - name: End-to-end tests
         run: tests/run.sh e2e
+        env:
+          TEST_LOGS: ${{ runner.temp }}/test-logs
+
+      - name: The failed tests' logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-macos
+          path: ${{ runner.temp }}/test-logs
+          if-no-files-found: ignore
+          retention-days: 14

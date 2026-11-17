@@ -2,7 +2,8 @@
 ;; The unit test harness itself (tests/helper.el): a failed test's report,
 ;; its backtrace unprintable (a file it reads not read), still says its
 ;; condition, and the run goes on to the tests after it; no test sees the
-;; shell's Beads settings.
+;; shell's Beads settings; tests/run.sh keeps a failed file's log in
+;; TEST_LOGS.
 
 (defun +test-harness--unreadable (&rest _)
   "What reading a file signals when it can't be (as once in a full run)."
@@ -91,3 +92,36 @@ them (DO_NOT_TRACK)."
         (should (string-match-p "^DO_NOT_TRACK=1$" env))
         (dolist (name crew)
           (should-not (string-match-p (concat "^" name "=") env)))))))
+
+(ert-deftest harness/run-sh-keeps-a-failed-file-s-log ()
+  "tests/run.sh with TEST_LOGS: a failed file's log copied there too, as
+KIND-NAME.txt, a passing one's not; nothing failed, no folder. CI keeps it
+with the run (doom-4q6)."
+  (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-") t)))
+         (tests (expand-file-name "tests/" dir))
+         (logs (expand-file-name "logs/" dir)))
+    (make-directory (expand-file-name "unit/" tests) t)
+    (make-directory (expand-file-name "scripts/" dir) t)
+    (copy-file (expand-file-name "run.sh" +test-dir) (expand-file-name "run.sh" tests))
+    (copy-file (expand-file-name "scripts/ui.sh" +test-root) (expand-file-name "scripts/ui.sh" dir))
+    (with-temp-file (expand-file-name "helper.el" tests) (insert "(require 'ert)\n"))
+    (with-temp-file (expand-file-name "unit/test-passes.el" tests)
+      (insert ";;; -*- lexical-binding: t; -*-\n(ert-deftest run/passes () (should t))\n"))
+    (with-temp-file (expand-file-name "unit/test-fails.el" tests)
+      (insert ";;; -*- lexical-binding: t; -*-\n"
+              "(ert-deftest run/fails () (message \"What it saw\") (should (= 1 2)))\n"))
+    (cl-flet ((run (&rest names)
+                (let ((process-environment
+                       (append (list (concat "EMACS=" (expand-file-name invocation-name invocation-directory))
+                                     (concat "TMPDIR=" dir) (concat "TEST_LOGS=" logs) "JOBS=2")
+                               process-environment)))
+                  (with-temp-buffer
+                    (apply #'call-process "bash" nil t nil (expand-file-name "run.sh" tests) "unit" names)))))
+      (should (= (run "passes") 0))
+      (should-not (file-exists-p logs))
+      (should (= (run) 1))
+      (should (equal (directory-files logs nil "\\`[^.]") '("unit-test-fails.txt")))
+      (with-temp-buffer
+        (insert-file-contents (expand-file-name "unit-test-fails.txt" logs))
+        (should (string-search "What it saw" (buffer-string)))
+        (should (string-search "Test run/fails condition:" (buffer-string)))))))
