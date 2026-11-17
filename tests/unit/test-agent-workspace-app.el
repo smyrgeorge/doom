@@ -110,6 +110,30 @@ the rest; not enough rows to open it: all folded."
   (should (equal (agent-workspace--sizes '(a b c) 'b 7) '((a . 1) (b . 1) (c . 1))))
   (should (equal (agent-workspace--sizes '(a b c) 'b 8) '((a . 1) (b . 6) (c . 1)))))
 
+(ert-deftest agent-workspace-app/no-tint-in-256-colours ()
+  "In a 256-colour terminal, no agent's colour blended behind its bar, its
+header or a raised hand's (they came out in wrong hues, dim text on them
+unreadable); with more colours (24-bit, the GUI), tinted as before
+\(doom-pbk.80)."
+  (+test-awa "colours"
+    (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
+      (agent-workspace--raise-hand ken '(:kind question :title "Which one?"))
+      (cl-flet ((backgrounds (text)
+                  (let (found)
+                    (dotimes (i (length text))
+                      (let ((face (get-text-property i 'face text)))
+                        (dolist (f (if (and (consp face) (keywordp (car face))) (list face) (ensure-list face)))
+                          (when-let* (((consp f)) (bg (plist-get f :background)))
+                            (cl-pushnew bg found :test #'equal)))))
+                    found)))
+        (cl-letf (((symbol-function 'display-color-cells) (lambda (&rest _) 256)))
+          (should-not (backgrounds (agent-workspace-line ada 80 nil t)))
+          (should-not (backgrounds (agent-workspace-line ada 80 t nil)))
+          (should-not (backgrounds (agent-workspace-line ken 80 nil t))))
+        (cl-letf (((symbol-function 'display-color-cells) (lambda (&rest _) 16777216)))
+          (should (backgrounds (agent-workspace-line ada 80 nil t)))
+          (should (backgrounds (agent-workspace-line ken 80 nil t))))))))
+
 (ert-deftest agent-workspace-app/laid-out ()
   "The issues on the left (50 columns, full height); the stage beside them,
 in role order: the selected agent's pane open (no mode line or tab line, its

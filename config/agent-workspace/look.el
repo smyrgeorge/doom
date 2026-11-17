@@ -274,11 +274,16 @@ usage changes (agent-shell's usage-update) and at a turn's end. In
   (if (<= (string-width text) width) text (truncate-string-to-width text width nil nil "…")))
 
 (defun agent-workspace--tint (text face share)
-  "TEXT with FACE's colour (SHARE of it) behind it."
-  (let ((tint (agent-ui-blend (agent-ui-background) (agent-ui-color face) share))
-        (text (copy-sequence text)))
-    (add-face-text-property 0 (length text) (list :background tint) t text)
-    text))
+  "TEXT with FACE's colour (SHARE of it) behind it. Not with 256 colours or
+fewer (a terminal's): a blend from the theme's background there maps to odd
+colours (amber as dark red, magenta as navy), dim text on it unreadable. (No
+display, 0 colours: batch Emacs, tinted.)"
+  (if (< 0 (display-color-cells) 257)
+      text
+    (let ((tint (agent-ui-blend (agent-ui-background) (agent-ui-color face) share))
+          (text (copy-sequence text)))
+      (add-face-text-property 0 (length text) (list :background tint) t text)
+      text)))
 
 (defun agent-workspace--percent-escaped (text)
   "TEXT for a header or mode line, where a % starts a construct: each %
