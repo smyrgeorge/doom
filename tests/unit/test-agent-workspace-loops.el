@@ -525,6 +525,34 @@ text gone, it takes it (doom-pbk.63)."
         (agent-workspace--loop-look-all root)
         (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))))))
 
+;; ====== RENAMED ======
+
+(ert-deftest agent-workspace-loops/renamed-its-issue-follows ()
+  "ada, looping, at rest with her issue in progress, renamed ann: the issue
+is ann's in bd, and her loop waits on it, taking no other (doom-pbk.64)."
+  (+test-awl--with-crew "renamed"
+    (let* ((held (+test-awl--issue project "hold: the lexer" "build" 1))
+           (next (+test-awl--issue project "close: the parser" "build" 2))
+           (ada (+test-awl--create "ada"))
+           (root (agent-workspace-agent-project ada))
+           (assignee (lambda (id)
+                       (let ((default-directory project))
+                         (alist-get 'assignee (car (json-parse-string (+test-awl--run "bd" "show" id "--json")
+                                                                      :object-type 'alist :array-type 'list)))))))
+      (agent-workspace-loop-set ada t)
+      (should (+test-awl--wait (lambda () (eq (agent-workspace-agent-state ada) 'working))))
+      (should (equal (funcall assignee held) "ada"))
+      (agent-workspace-interrupt ada)
+      (should (+test-awl--wait (lambda () (eq (agent-workspace-agent-state ada) 'desk))))
+      (+test-awl--quiet ada)
+      (agent-workspace-rename ada "ann")
+      (should (equal (funcall assignee held) "ann"))
+      (should (+test-awl--wait (lambda () (memq (agent-workspace-agent-state ada) '(desk done))) 20))
+      (agent-workspace--loop-look-all root)
+      (+test-awl--quiet ada)
+      (should (equal (+test-awl--status project next) "open"))
+      (should (equal (agent-workspace-agent-issue ada) held)))))
+
 ;; ====== HANDED BACK ======
 
 (ert-deftest agent-workspace-loops/one-handed-back-first ()

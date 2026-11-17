@@ -615,33 +615,66 @@ an epic's heading, the epic."
   "Seconds bd may take to claim an issue you give an agent: longer, it's
 stopped and nothing is given.")
 
+(defun agent-workspace--bd-now (project actor args)
+  "Run bd with ARGS in PROJECT as ACTOR (BEADS_ACTOR), waiting for it, at
+most `agent-workspace-claim-timeout' seconds: (STATUS . OUTPUT), STATUS
+its exit status, or `timeout' (stopped). nil without bd or Beads there."
+  (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project)))
+    (with-temp-buffer
+      (let* ((default-directory project)
+             (process-environment (cons (concat "BEADS_ACTOR=" actor) process-environment))
+             (process (make-process :name "agent-workspace-bd-now" :buffer (current-buffer)
+                                    :command (cons "bd" args)
+                                    :connection-type 'pipe :noquery t :sentinel #'ignore))
+             (end (+ (float-time) agent-workspace-claim-timeout)))
+        (while (and (process-live-p process) (< (float-time) end))
+          (accept-process-output process 0.05))
+        (if (process-live-p process)
+            (progn (delete-process process) (cons 'timeout ""))
+          (cons (process-exit-status process) (buffer-string)))))))
+
+(defun agent-workspace--bd-why (output)
+  "bd's OUTPUT's first line, its \"Error updating ID: \" left out."
+  (let ((line (or (seq-find (lambda (line) (not (string-empty-p line)))
+                            (mapcar #'string-trim (split-string output "\n")))
+                  "bd failed")))
+    ;; "Error updating demo-1: issue already claimed by ken"
+    (if (string-match "\\`Error updating [^ ]+: \\(.+\\)" line) (match-string 1 line) line)))
+
 (defun agent-workspace--bd-claim (agent id)
   "Issue ID claimed in bd for AGENT, as AGENT (BEADS_ACTOR its name), now:
 in progress and AGENT's, so no looping agent takes it while its prompt
 waits for its turn to end. nil once claimed (AGENT's already too), or with
 nothing to claim it in (no bd, its project's issues not tracked by Beads);
 else why not, in bd's words (another agent has it)."
-  (let ((project (agent-workspace-agent-project agent)))
-    (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project)))
-      (with-temp-buffer
-        (let* ((default-directory project)
-               (process-environment (cons (concat "BEADS_ACTOR=" (agent-workspace-agent-name agent))
-                                          process-environment))
-               (process (make-process :name "agent-workspace-claim" :buffer (current-buffer)
-                                      :command (list "bd" "update" id "--claim")
-                                      :connection-type 'pipe :noquery t :sentinel #'ignore))
-               (end (+ (float-time) agent-workspace-claim-timeout)))
-          (while (and (process-live-p process) (< (float-time) end))
-            (accept-process-output process 0.05))
-          (cond ((process-live-p process)
-                 (delete-process process)
-                 (format "bd didn't answer in %ss" agent-workspace-claim-timeout))
-                ((not (eql (process-exit-status process) 0))
-                 (let ((line (or (seq-find (lambda (line) (not (string-empty-p line)))
-                                           (mapcar #'string-trim (split-string (buffer-string) "\n")))
-                                 "bd failed")))
-                   ;; "Error updating demo-1: issue already claimed by ken"
-                   (if (string-match "\\`Error updating [^ ]+: \\(.+\\)" line) (match-string 1 line) line)))))))))
+  (pcase (agent-workspace--bd-now (agent-workspace-agent-project agent) (agent-workspace-agent-name agent)
+                                  (list "update" id "--claim"))
+    (`(timeout . ,_) (format "bd didn't answer in %ss" agent-workspace-claim-timeout))
+    (`(0 . ,_) nil)
+    (`(,_ . ,output) (agent-workspace--bd-why output))))
+
+(defun agent-workspace--bd-renamed-h (agent was)
+  "AGENT renamed from WAS: the issues in progress assigned to WAS, AGENT's
+now in bd (as WAS, its claims' holder), before its loop looks for its own;
+a failure said in its room. In `agent-workspace-renamed-functions'."
+  (let* ((project (agent-workspace-agent-project agent))
+         (name (agent-workspace-agent-name agent))
+         (doing (agent-workspace--bd-now project was (list "list" "--status" "in_progress" "--assignee" was
+                                                         "--json" "--limit" "0"))))
+    (when (eql (car doing) 0)
+      (dolist (issue (ignore-errors (json-parse-string (cdr doing) :object-type 'alist :array-type 'list
+                                                       :null-object nil :false-object nil)))
+        (let* ((id (alist-get 'id issue))
+               (done (agent-workspace--bd-now project was (list "update" id "--assignee" name))))
+          (unless (eql (car done) 0)
+            (let ((text (format "couldn't take %s over, still %s's: %s" id was
+                                (if (eq (car done) 'timeout) "bd didn't answer"
+                                  (agent-workspace--bd-why (cdr done))))))
+              (message "%s %s" name text)
+              (when (fboundp 'agent-workspace-room-post)
+                (agent-workspace-room-post project :kind 'note :agent name :text text)))))))))
+
+(add-hook 'agent-workspace-renamed-functions #'agent-workspace--bd-renamed-h)
 
 (defun agent-workspace--bd-give-back (agent id)
   "Issue ID, claimed for AGENT: open again, unassigned, if it's still
