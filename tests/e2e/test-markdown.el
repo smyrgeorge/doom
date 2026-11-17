@@ -327,11 +327,14 @@ item five levels deep still 40 px. At the usual width, the padding as ever."
       (should (+test-wait-for (lambda () (and (+test-md--has top "BOTH panes")
                                               (+test-md--has below "BOTH panes")))
                               5))
-      ;; One closed: its view goes, the preview stays.
+      ;; One closed: its view goes (a second after, later on a busy runner),
+      ;; the preview stays.
       (delete-window below)
-      (+test-sleep 1.4)
-      (should +md-preview-mode)
-      (should (= (length (buffer-local-value '+my/webkit--views (+test-md--preview))) 1)))))
+      (let ((views (lambda () (buffer-local-value '+my/webkit--views (+test-md--preview)))))
+        (unless (+test-wait-for (lambda () (= (length (funcall views)) 1)) 5)
+          (ert-fail (list "the closed pane's view stayed" :views (funcall views)
+                          :windows (+test-md--windows) :tidy +my/webkit--tidy-timer))))
+      (should +md-preview-mode))))
 
 ;; ====== LINKS ======
 
