@@ -187,8 +187,11 @@ told each change once."
       (+test-awc--emit agent 'permission-request
                        `((:request-id . 7) (:tool-call . ((:title . "npm install") (:kind . "execute")))))
       (should (eq (agent-workspace-agent-state agent) 'hand))
-      (should (equal (agent-workspace-agent-ask agent)
-                     '(:kind permission :title "npm install" :tool-kind "execute" :request-id 7)))
+      (let ((ask (agent-workspace-agent-ask agent)))
+        ;; A key of its own (doom-pbk.44), then what it asks.
+        (should (stringp (plist-get ask :key)))
+        (should (equal (butlast ask 2)
+                       '(:kind permission :title "npm install" :tool-kind "execute" :request-id 7))))
       (+test-awc--emit agent 'permission-response)
       (should (eq (agent-workspace-agent-state agent) 'working))
       (should-not (agent-workspace-agent-ask agent))
