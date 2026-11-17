@@ -256,7 +256,8 @@ issue is claimed then), it tries again 30 seconds later
 
 Its loop is kept in the [saved crew](#the-saved-crew). A crew started again brings a looping agent back asleep, so
 reopening never starts work by itself: wake it (`s`) and it loops. A role without `labels` has no issues to take, and
-a project without Beads has none either: their agents can't loop.
+a project without Beads has none either: their agents can't loop. A role whose labels go while its agents loop (its file
+saved mid-edit, or missing on the branch checked out) pauses them, saying so, until they're back.
 
 ## An agent's panels
 

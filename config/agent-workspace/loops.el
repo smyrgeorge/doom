@@ -77,6 +77,7 @@ agents look (a burst of changes: one look).")
   "A looping agent's run, a plist: :failures (in a row), :busy (its bd
 command running), :again (a look asked for meanwhile), :timer (its next try,
 after a failure), :stopped (too many failures), :napped (its nap said),
+:paused (its role without labels: said),
 :waiting (the agent at work on the branch of the issue it claimed: it
 looks again once that agent's turn ends).")
 
@@ -116,7 +117,7 @@ start begins it again).")
 (defun agent-workspace--loop-reset (agent)
   "AGENT's run begun again: no failures, not stopped, its nap to be said."
   (agent-workspace--loop-cancel agent)
-  (dolist (key '(:failures :stopped :napped :waiting))
+  (dolist (key '(:failures :stopped :napped :waiting :paused))
     (agent-workspace--loop-put agent key nil)))
 
 (defun agent-workspace--loop-active-p (agent)
@@ -278,7 +279,12 @@ itself): one handed back to it first (open, assigned to it: bd ready
 there's none. Its worktree with changes not committed (no branch for an
 issue there): a failure, nothing claimed."
   (if-let* ((labels (agent-workspace--loop-labels agent)))
-      (if-let* ((why (agent-workspace-branch-blocker agent)))
+      (if-let* ((why (progn
+                       (when (agent-workspace--loop-get agent :paused)
+                         (agent-workspace--loop-put agent :paused nil)
+                         (agent-workspace--loop-say agent 'note (format "▶ goes on: its role, %s, has labels again"
+                                                                        (agent-workspace-agent-role agent))))
+                       (agent-workspace-branch-blocker agent))))
           (agent-workspace--loop-failed agent why)
         (let* ((filters (list "--label-any" (string-join labels ",") "--exclude-type" "epic" "--json"))
                (claimed
@@ -312,8 +318,19 @@ issue there): a failure, nothing claimed."
                            agent (list "update" (alist-get 'id back) "--claim" "--json") claimed))
                     (t (agent-workspace--loop-bd agent (append (list "ready" "--claim") filters) claimed)))
                  (error (funcall claimed (cons 'error (error-message-string err))))))))))
-    ;; Its role lost its labels since.
-    (agent-workspace-loop-set agent nil (format "its role, %s, has no labels" (agent-workspace-agent-role agent)))))
+    ;; Its role without labels now (its file being edited, broken, gone from
+    ;; the branch checked out): paused, its loop kept.
+    (agent-workspace--loop-pause agent)))
+
+(defun agent-workspace--loop-pause (agent)
+  "AGENT's role has no labels now: it naps, its loop on, said once; its
+next look, its role's labels back, goes on (`agent-workspace--loop-claim')."
+  (unless (eq (agent-workspace-agent-state agent) 'nap)
+    (agent-workspace--set-state agent 'nap))
+  (unless (agent-workspace--loop-get agent :paused)
+    (agent-workspace--loop-put agent :paused t)
+    (agent-workspace--loop-say agent 'note (format "⏸ paused: its role, %s, has no labels now; goes on once it has"
+                                                   (agent-workspace-agent-role agent)))))
 
 (defun agent-workspace--loop-take (agent id title &optional type)
   "AGENT takes issue ID (its TITLE, TYPE), claimed for it: its branch for it, its
