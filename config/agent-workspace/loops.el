@@ -76,7 +76,9 @@ agents look (a burst of changes: one look).")
 (defvar agent-workspace--loop-runs (make-hash-table :test #'eq :weakness 'key)
   "A looping agent's run, a plist: :failures (in a row), :busy (its bd
 command running), :again (a look asked for meanwhile), :timer (its next try,
-after a failure), :stopped (too many failures), :napped (its nap said).")
+after a failure), :stopped (too many failures), :napped (its nap said),
+:waiting (the agent at work on the branch of the issue it claimed: it
+looks again once that agent's turn ends).")
 
 (defvar agent-workspace--loop-turned (make-hash-table :test #'eq :weakness 'key)
   "An agent to its session that had a turn: its next issue needs a fresh one.")
@@ -114,7 +116,7 @@ start begins it again).")
 (defun agent-workspace--loop-reset (agent)
   "AGENT's run begun again: no failures, not stopped, its nap to be said."
   (agent-workspace--loop-cancel agent)
-  (dolist (key '(:failures :stopped :napped))
+  (dolist (key '(:failures :stopped :napped :waiting))
     (agent-workspace--loop-put agent key nil)))
 
 (defun agent-workspace--loop-active-p (agent)
@@ -228,6 +230,12 @@ one or naps; its issue still in progress, it waits (for you to look)."
    ((agent-workspace--loop-get agent :busy) (agent-workspace--loop-put agent :again t))
    ;; A try again to come, after a failure: it waits for it.
    ((agent-workspace--loop-get agent :timer))
+   ;; Its issue's branch held by an agent at work: it waits for its turn's
+   ;; end (that agent gone, or at rest: no longer).
+   ((when-let* ((holder (agent-workspace--loop-get agent :waiting)))
+      (or (and (memq holder (agent-workspace-agents (agent-workspace-agent-project agent)))
+               (memq (agent-workspace-agent-state holder) '(working hand)))
+          (progn (agent-workspace--loop-put agent :waiting nil) nil))))
    ((eq (agent-workspace-agent-state agent) 'nap) (agent-workspace--loop-claim agent))
    (t
     (agent-workspace--loop-put agent :busy t)
@@ -310,7 +318,20 @@ issue there): a failure, nothing claimed."
 (defun agent-workspace--loop-take (agent id title &optional type)
   "AGENT takes issue ID (its TITLE, TYPE), claimed for it: its branch for it, its
 session fresh (if it had a turn), then given it as t gives one. Its branch
-not opened (changes there since): the issue given back, a failure."
+not opened (changes there since): the issue given back, a failure. Its
+branch held by an agent at work (one handing the issue on, its turn not
+over yet): the issue given back, no failure: it waits for that turn's end,
+said once, then looks again."
+  (if-let* ((holder (agent-workspace-issue-branch-busy agent id type title)))
+      (progn
+        (agent-workspace--bd-give-back agent id)
+        (agent-workspace--loop-put agent :waiting holder)
+        (agent-workspace--loop-say agent 'note (format "waits for %s to finish with %s"
+                                                       (agent-workspace-agent-name holder) id)))
+    (agent-workspace--loop-take-1 agent id title type)))
+
+(defun agent-workspace--loop-take-1 (agent id title &optional type)
+  "`agent-workspace--loop-take', its branch free."
   (let ((woke (eq (agent-workspace-agent-state agent) 'nap)))
     (agent-workspace--loop-put agent :napped nil)
     (condition-case err
@@ -465,8 +486,14 @@ of it loops (its session running); not otherwise."
 ;; ====== ITS HOOKS ======
 
 (defun agent-workspace--loop-state-h (agent old new)
-  "AGENT's state changed from OLD to NEW: its turn's end, a look; stuck, a
-failure. In `agent-workspace-state-change-functions'."
+  "AGENT's state changed from OLD to NEW: its turn's end, a look (and one
+for the looping agents waiting for it: `agent-workspace--loop-take');
+stuck, a failure. In `agent-workspace-state-change-functions'."
+  (when (and (memq old '(working hand)) (not (memq new '(working hand))))
+    (dolist (other (agent-workspace-agents (agent-workspace-agent-project agent)))
+      (when (eq (agent-workspace--loop-get other :waiting) agent)
+        (agent-workspace--loop-put other :waiting nil)
+        (agent-workspace--loop-soon other))))
   (when (eq new 'working)
     (puthash agent (agent-workspace-agent-buffer agent) agent-workspace--loop-turned))
   (when (agent-workspace-agent-loop agent)

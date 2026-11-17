@@ -495,6 +495,24 @@ must have nothing uncommitted."
         (agent-workspace--branch-switch agent rest)
       (agent-workspace--branch-switch agent rest main t))))
 
+(defun agent-workspace-issue-branch-busy (agent issue &optional type title)
+  "The agent at work (working, its hand raised) whose worktree holds the
+branch AGENT would get for ISSUE (of TYPE, titled TITLE: see
+`agent-workspace-issue-branch-open'), or nil: AGENT can't have it until
+that agent's turn ends."
+  (when (agent-workspace--worktree-live agent)
+    (let* ((project (agent-workspace-agent-project agent))
+           (type (or type (and (fboundp 'agent-workspace-issue-type) (agent-workspace-issue-type project issue))))
+           (branch (agent-workspace--issue-branch-there project issue type title))
+           (here (file-name-as-directory (file-truename (agent-workspace-agent-worktree agent))))
+           (holder (agent-workspace--branch-holder project branch)))
+      (when (and holder (not (equal holder here)))
+        (seq-find (lambda (other)
+                    (and (memq (agent-workspace-agent-state other) '(working hand))
+                         (when-let* ((worktree (agent-workspace-agent-worktree other)))
+                           (equal (file-name-as-directory (file-truename worktree)) holder))))
+                  (agent-workspace-agents project))))))
+
 (defun agent-workspace-branch-open (agent branch &optional start)
   "AGENT's worktree on BRANCH, for its next work: made from START if it
 isn't there, else checked out again. Checked out in another agent's

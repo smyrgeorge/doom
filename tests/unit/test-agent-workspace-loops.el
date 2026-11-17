@@ -516,6 +516,44 @@ one nobody has; then that one (doom-pbk.58)."
       (should (equal (+test-awl--status project back) "closed"))
       (should (equal (+test-awl--status project urgent) "closed")))))
 
+(ert-deftest agent-workspace-loops/the-branch-held-by-one-at-work ()
+  "ada hands her issue on to the reviewers while her turn still runs (on its
+branch): looping rex claims it, finds its branch hers at work, gives it
+back and waits, said once, no failure counted; her turn over, he takes it,
+on its branch (doom-pbk.59)."
+  (+test-awl--with-crew "held"
+    (let* ((issue (+test-awl--issue project "the lexer" "build" 1))
+           (ada (+test-awl--create "ada"))
+           (rex (agent-workspace-create :role "reviewer" :name "rex" :kind 'mock)))
+      (should (+test-awl--wait (lambda () (eq (agent-workspace-agent-state rex) 'desk)) 20))
+      (agent-workspace-give ada issue "the lexer" "task")
+      (let ((branch (agent-workspace-agent-branch ada)))
+        (agent-workspace-send ada "hold, please" :submit t)
+        (should (+test-awl--wait (lambda () (eq (agent-workspace-agent-state ada) 'working))))
+        ;; Handed on, as she's told, her turn still running.
+        (let ((default-directory project)
+              (process-environment (cons "BEADS_ACTOR=ada" process-environment)))
+          (+test-awl--run "bd" "update" issue "--remove-label" "build" "--add-label" "review"
+                          "--status" "open" "--assignee" ""))
+        (agent-workspace-loop-set rex t)
+        (should (+test-awl--wait (lambda () (member (cons "note" (format "waits for ada to finish with %s" issue))
+                                                    (+test-awl--room project "rex")))))
+        (+test-awl--quiet rex)
+        (agent-workspace--loop-changed (agent-workspace-agent-project rex))
+        (+test-awl--sleep 1.5)
+        (+test-awl--quiet rex)
+        (should-not (agent-workspace--loop-get rex :failures))
+        (should-not (agent-workspace--loop-get rex :stopped))
+        (should-not (+test-awl--prompts "rex"))
+        (should (= (seq-count (lambda (entry) (string-prefix-p "waits for ada" (cdr entry)))
+                              (+test-awl--room project "rex"))
+                   1))
+        ;; Her turn over: he takes it, on its branch.
+        (agent-workspace-interrupt ada)
+        (should (+test-awl--wait (lambda () (member (format "Work on %s: the lexer" issue) (+test-awl--prompts "rex")))))
+        (should (equal (agent-workspace-agent-branch rex) branch))
+        (should-not (agent-workspace--loop-get rex :failures))))))
+
 ;; ====== AN ISSUE YOU GIVE ======
 
 (ert-deftest agent-workspace-loops/an-issue-you-give-is-never-taken ()
