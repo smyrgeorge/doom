@@ -244,16 +244,78 @@ same (the position's width too); again when one changes."
           (+test-modeline--draw (selected-window))
           (should (= measured 3)))))))
 
-(ert-deftest modeline/the-narrow-layout-measures-nothing ()
-  "The narrow layout (the buffer's name only): nothing measured, the names
+(ert-deftest modeline/the-narrow-layout-chooses-no-path ()
+  "The narrow layout (the buffer's name only): no path chosen, the names
 left as they were."
   (+test-modeline--deep
     (let ((doom-modeline-window-width-limit 1000)
-          (measured nil))
-      (cl-letf (((symbol-function '+my/modeline--left) (lambda (_) (setq measured t) "")))
+          (chosen nil))
+      (cl-letf (((symbol-function '+my/modeline--choose) (lambda (&rest _) (setq chosen t) "x")))
         (+test-modeline--draw (selected-window))
         (should doom-modeline--limited-width-p)
-        (should-not measured)))))
+        (should-not chosen)))))
+
+;; ====== NARROWER STILL ======
+
+(defconst +test-modeline--narrow-left
+  (concat "<<" (propertize "AgreementController.kt" 'help-echo "Buffer name\nmouse-1: Previous buffer")
+          "  1:0 50%")
+  "A narrow layout's left side as drawn: the buffer's name, the position.")
+
+(defmacro +test-modeline--narrow (room &rest body)
+  "BODY with the mode line ROOM wide (columns), the right side's segments
+plain strings, no choice kept from before; MEASURED counts the measures."
+  (declare (indent 1))
+  `(let ((measured 0))
+     (cl-letf (((symbol-function '+my/modeline--room) (lambda () (cl-incf measured) ,room))
+               ((symbol-function '+my/modeline--string-width) #'string-width)
+               ((symbol-function 'format-mode-line)
+                (lambda (format &rest _) (apply #'concat (seq-filter #'stringp format)))))
+       (set-window-parameter nil '+my/modeline-narrower nil)
+       ,@body)))
+
+(defun +test-modeline--narrow-format (display)
+  "A narrow layout's format: its left side, the space (DISPLAY), its right
+side's segments (10 columns)."
+  (list '("left") (propertize " " 'display display) (list "check" "+ " "mode" " ")))
+
+(ert-deftest modeline/narrower-room-for-it-all ()
+  "Room for both sides: as it is, measured once while the line is the same."
+  (+test-modeline--narrow 60
+    (let ((format (+test-modeline--narrow-format '(space :align-to (- right (10))))))
+      (should (eq (+my/modeline--narrower format +test-modeline--narrow-left) format))
+      (should (eq (+my/modeline--narrower format +test-modeline--narrow-left) format))
+      (should (= measured 1)))))
+
+(ert-deftest modeline/narrower-the-right-side-goes-first ()
+  "No room: the right side's segments dropped from its left (the last kept
+longest), its space aligned to what's left (GUI's and a terminal's)."
+  (+test-modeline--narrow 40
+    (let ((result (+my/modeline--narrower (+test-modeline--narrow-format '(space :align-to (- right (10))))
+                                          +test-modeline--narrow-left)))
+      ;; The left side 33 wide, so 7 for the right: "+ ", "mode" and " ".
+      (should (equal (car result) '("left")))
+      (should (equal (nth 2 result) '("+ " "mode" " ")))
+      (should (equal (get-text-property 0 'display (nth 1 result)) '(space :align-to (- right (7)))))))
+  (+test-modeline--narrow 40
+    (let ((result (+my/modeline--narrower (+test-modeline--narrow-format '(space :align-to (100)))
+                                          +test-modeline--narrow-left)))
+      (should (equal (get-text-property 0 'display (nth 1 result)) '(space :align-to (105)))))))
+
+(ert-deftest modeline/narrower-the-name-cut ()
+  "No room for the left side alone: the right side gone, the buffer's name
+cut with …, the position kept; nothing past the window's edge."
+  (+test-modeline--narrow 25
+    (let* ((result (+my/modeline--narrower (+test-modeline--narrow-format '(space :align-to (- right (10))))
+                                           +test-modeline--narrow-left))
+           (line (car result)))
+      (should (= (length result) 1))
+      (should (stringp line))
+      (should (equal (substring-no-properties line) "<<AgreementCont…  1:0 50%%"))
+      ;; Its % escaped: shown as one.
+      (should (<= (string-width (string-replace "%%" "%" line)) 25))
+      ;; The name's properties kept (its clicks, its help).
+      (should (string-prefix-p "Buffer name" (get-text-property 2 'help-echo line))))))
 
 ;; ====== LOADED ======
 

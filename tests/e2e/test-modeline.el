@@ -3,7 +3,7 @@
 ;; drawn, in pixels. A deep project path in a 100-column pane leaves the
 ;; position and the right side on the screen; a 60-column pane shows the
 ;; name, the position and the check; a narrow pane not selected gets the
-;; narrow layout.
+;; narrow layout; 40 and 30 columns still show the name and the position.
 
 (+test-load "config/window" "config/editor")
 (require 'doom-modeline)
@@ -138,5 +138,25 @@ the wide one, worked out from the selected window)."
         (should doom-modeline--limited-width-p))
       (with-current-buffer wide
         (should-not doom-modeline--limited-width-p)))))
+
+(ert-deftest e2e-modeline/forty-and-thirty-columns ()
+  "A pane of 40 columns, then 30: the buffer's name (cut if need be) and the
+position shown, nothing past the window's edge (the right side's segments
+dropped first)."
+  (+test-with-reset
+    (+test-e2e-frame-reset)
+    (let ((buffer (+test-modeline--visit +test-modeline--path))
+          (window (selected-window)))
+      (switch-to-buffer buffer)
+      (dolist (columns '(40 30))
+        (delete-other-windows)
+        (set-window-buffer (split-window window columns 'right) (+test-buffer "other"))
+        (should (= (window-total-width window) columns))
+        (+test-modeline--drawn)
+        (pcase-let ((`(,left ,right ,left-width ,right-width ,room) (+test-modeline--sides window)))
+          (should (equal (list columns left right (<= (+ left-width right-width) room))
+                         (list columns left right t)))
+          (should (string-match-p "Agree" left))
+          (should (string-search "1:0" left)))))))
 
 ;;; test-modeline.el ends here

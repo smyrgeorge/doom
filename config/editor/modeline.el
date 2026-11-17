@@ -78,13 +78,85 @@ sides LEFT (showing the first of NAMES) and RIGHT; else the last one."
     (or (seq-find (lambda (name) (<= (+ others (+my/modeline--string-width name)) room)) names)
         (car (last names)))))
 
+;; NARROWER STILL
+;; Under ~40 columns doom-modeline's narrow layout was wider than its window:
+;; the position and the right side cut at its edge. The right side's segments
+;; now go first, from its left (the check, last, kept longest); then the
+;; buffer's name is cut with …: the name and the position always shown,
+;; nothing past the window's edge.
+
+(defun +my/modeline--space (space old width)
+  "SPACE, a layout's (aligning its right side, OLD wide), for a right side
+WIDTH wide."
+  (propertize " " 'face (get-text-property 0 'face space)
+              'display (pcase (get-text-property 0 'display space)
+                         (`(space :align-to (- ,edge (,_))) `(space :align-to (- ,edge (,width))))
+                         (`(space :align-to (,n)) `(space :align-to (,(+ n (- old width)))))
+                         (display display))))
+
+(defun +my/modeline--name-span (left)
+  "Where the buffer's name is in LEFT (a mode line's left side, drawn):
+\(START . END), or nil."
+  (let ((pos 0))
+    (while (and pos (not (string-prefix-p "Buffer name" (or (get-text-property pos 'help-echo left) ""))))
+      (setq pos (next-single-property-change pos 'help-echo left)))
+    (and pos (cons pos (next-single-property-change pos 'help-echo left (length left))))))
+
+(defun +my/modeline--cut (left span length)
+  "LEFT with the buffer's name (at SPAN) cut to LENGTH characters and …."
+  (concat (substring left 0 (+ (car span) length))
+          (apply #'propertize "…" (text-properties-at (car span) left))
+          (substring left (cdr span))))
+
+(defun +my/modeline--narrower (format left)
+  "FORMAT, a narrow layout's, its left side drawn LEFT: as it is if it has
+room in the selected window; else its right side's segments dropped (see
+above), else its left side alone, the name cut. What was chosen is kept for
+the window while its width and the sides' are the same."
+  (let* ((rhs (nth 2 format))
+         (right (format-mode-line (cons "" rhs)))
+         (key (list (current-buffer) (window-pixel-width) (string-width left) (string-width right)))
+         (kept (window-parameter nil '+my/modeline-narrower))
+         (choice (if (equal (car kept) key)
+                     (cdr kept)
+                   (let* ((room (+my/modeline--room))
+                          (left-width (+my/modeline--string-width left))
+                          (dropped 0)
+                          (segments rhs)
+                          (width (+my/modeline--string-width right)))
+                     (while (and segments (> (+ left-width width) room))
+                       (setq segments (cdr segments)
+                             dropped (1+ dropped)
+                             width (+my/modeline--string-width (format-mode-line (cons "" segments)))))
+                     (cdr (set-window-parameter
+                           nil '+my/modeline-narrower
+                           (cons key
+                                 (cond ((zerop dropped) nil)
+                                       ((<= (+ left-width width) room)
+                                        (list 'drop dropped (+my/modeline--string-width right) width))
+                                       ((when-let* ((span (+my/modeline--name-span left)))
+                                          (let ((length (- (cdr span) (car span) 1)))
+                                            (while (and (> length 1)
+                                                        (> (+my/modeline--string-width (+my/modeline--cut left span length))
+                                                           room))
+                                              (cl-decf length))
+                                            (list 'cut length))))
+                                       (t (list 'cut nil))))))))))
+    (pcase choice
+      ('nil format)
+      (`(drop ,dropped ,old ,width)
+       (list (car format) (+my/modeline--space (nth 1 format) old width) (nthcdr dropped rhs)))
+      (`(cut ,length)
+       (let ((span (+my/modeline--name-span left)))
+         (list (string-replace "%" "%%" (if (and span length) (+my/modeline--cut left span length) left))))))))
+
 (defun +my/modeline-fit-a (fn &rest args)
   "A doom-modeline layout's format (FN with ARGS) for the window whose mode
-line is drawn (the selected one then): the narrow layout if it's narrow;
-in the wide one, the longest name it has room for with the rest of the line
-\(see above). Measuring each time took 4 times doom-modeline's own: what was
-chosen is kept for the window while its width, the left side's and the
-right side's are the same."
+line is drawn (the selected one then): the narrow layout if it's narrow,
+fitted (see NARROWER STILL); in the wide one, the longest name it has room
+for with the rest of the line \(see above). Measuring each time took 4
+times doom-modeline's own: what was chosen is kept for the window while its
+width, the left side's and the right side's are the same."
   (doom-modeline-window-size-change)
   (unless (or +my/modeline--names doom-modeline--limited-width-p)
     (doom-modeline-update-buffer-file-name))
@@ -92,6 +164,8 @@ right side's are the same."
     (when names
       (setq doom-modeline--buffer-file-name (car names)))
     (let ((format (apply fn args)))
+      (when (and doom-modeline--limited-width-p (consp format) (= (length format) 3))
+        (setq format (+my/modeline--narrower format (+my/modeline--left format))))
       (when (and (cdr names) (consp format) (= (length format) 3))
         (let* ((left (+my/modeline--left format))
                (key (list (current-buffer) (window-pixel-width) names (string-width left)
