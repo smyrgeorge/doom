@@ -369,11 +369,16 @@ In `agent-workspace-change-functions'."
 ;; ====== ITS COMMANDS ======
 
 (defun agent-workspace-minimap-toggle ()
-  "Show or hide the crew's minimap, under the issue list (m)."
+  "Show or hide the crew's minimap, under the issue list (m); in a frame too
+low for it, not shown, saying so."
   (interactive)
   (let* ((app (agent-workspace--here-or-error))
          (project (agent-workspace--app-project app))
-         (shown (not (agent-workspace-minimap-shown-p project))))
+         (shown (not (agent-workspace-minimap-shown-p project)))
+         (rows (window-total-height (frame-root-window))))
+    (when (and shown (< rows (* 2 agent-workspace-minimap-height)))
+      (user-error "No room for the minimap: it needs %d rows, the frame has %d"
+                  (* 2 agent-workspace-minimap-height) rows))
     (agent-workspace--minimap-set project shown)
     (run-hook-with-args 'agent-workspace-layout-functions project)
     (agent-workspace-layout app)

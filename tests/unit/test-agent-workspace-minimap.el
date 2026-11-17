@@ -153,6 +153,23 @@ opens without it."
     (should (agent-workspace-agent "ada" project))
     (should-not (seq-find (lambda (window) (string-prefix-p "*minimap" (car window))) (+test-awm--windows)))))
 
+(ert-deftest agent-workspace-minimap/no-room-for-it ()
+  "m in a frame too low for the minimap (a terminal's 24 rows): refused,
+saying how many rows it needs, nothing changed; hiding it works anywhere
+\(doom-pbk.87)."
+  (+test-awm "no-room"
+    (agent-workspace-create :role "builder" :name "ada")
+    (agent-workspace-open t)
+    (with-current-buffer (agent-workspace--issues-buffer project)
+      (agent-workspace-minimap-toggle))
+    (should-not (agent-workspace-minimap-shown-p project))
+    (set-frame-size (selected-frame) 80 24)
+    (agent-workspace-layout (agent-workspace--app project))
+    (with-current-buffer (agent-workspace--issues-buffer project)
+      (should (string-match-p "\\`No room for the minimap: it needs 24 rows, the frame has [0-9]+\\'"
+                              (cadr (should-error (agent-workspace-minimap-toggle) :type 'user-error)))))
+    (should-not (agent-workspace-minimap-shown-p project))))
+
 (ert-deftest agent-workspace-minimap/the-lanes ()
   "A line for each agent, in the crew's order: one that did something its
 avatar and role's icon, a cell a minute (what it did most), its state's
