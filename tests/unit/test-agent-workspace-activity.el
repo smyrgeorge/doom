@@ -78,6 +78,33 @@ now; only the last minutes kept; the lane oldest first."
       (should (= (length (plist-get (agent-workspace-activity ada) :minutes)) 1))
       (should (equal (plist-get (agent-workspace-activity ada) :location) '("/elsewhere/b.el" . 1))))))
 
+(ert-deftest agent-workspace-activity/no-git-on-emacs-s-thread ()
+  "A turn's end, and a napping loop's look with nothing ready, run no git
+Emacs waits for: what the turn changed is worked out in the background
+\(doom-pbk.65)."
+  (let* ((agent-workspace--crews (make-hash-table :test #'equal))
+         (agent-workspace--activity (make-hash-table :test #'eq :weakness 'key))
+         (project (+test-awa2--project))
+         (ada (+test-awa2--agent project "ada"))
+         (waited 0))
+    (write-region "(a ada)\n" nil (expand-file-name "src/a.el" (agent-workspace-agent-worktree ada)))
+    (cl-letf* ((process-file-real (symbol-function 'process-file))
+               (call-process-real (symbol-function 'call-process))
+               ((symbol-function 'process-file)
+                (lambda (program &rest args) (when (equal program "git") (cl-incf waited)) (apply process-file-real program args)))
+               ((symbol-function 'call-process)
+                (lambda (program &rest args) (when (equal program "git") (cl-incf waited)) (apply call-process-real program args))))
+      (agent-workspace--activity-event ada '((:event . turn-complete)))
+      (should (= waited 0))
+      (should (+test-wait-for (lambda () (plist-get (agent-workspace-activity ada) :changed)) 10))
+      (should (equal (plist-get (agent-workspace-activity ada) :changed) '("src/a.el")))
+      ;; A loop's claim asks bd only (git when it takes an issue).
+      (setq waited 0)
+      (cl-letf (((symbol-function 'agent-workspace--loop-labels) (lambda (_) '("build")))
+                ((symbol-function 'agent-workspace--loop-bd) #'ignore))
+        (agent-workspace--loop-claim ada))
+      (should (= waited 0)))))
+
 (ert-deftest agent-workspace-activity/two-agents-in-one-file ()
   "The files each agent changed (written, its branch, uncommitted); one two
 of them changed, a conflict."
@@ -93,8 +120,13 @@ of them changed, a conflict."
     (write-region "(a ken)\n" nil (expand-file-name "src/a.el" (agent-workspace-agent-worktree ken)))
     (agent-workspace--activity-event ada '((:event . turn-complete)))
     (agent-workspace--activity-event ken '((:event . turn-complete)))
+    ;; Written while git works out what its turn changed: kept (doom-pbk.65).
     (agent-workspace--activity-event
      ken `((:event . file-write) (:data . ((:path . ,(expand-file-name "README" (agent-workspace-agent-worktree ken)))))))
+    ;; Worked out in the background.
+    (should (+test-wait-for (lambda () (and (plist-get (agent-workspace-activity ada) :changed)
+                                            (member "src/a.el" (plist-get (agent-workspace-activity ken) :changed))))
+                            10))
     (should (equal (plist-get (agent-workspace-activity ada) :changed) '("src/a.el")))
     (should (equal (sort (copy-sequence (plist-get (agent-workspace-activity ken) :changed)) #'string<)
                    '("README" "src/a.el")))

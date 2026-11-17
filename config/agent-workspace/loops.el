@@ -288,15 +288,15 @@ one or naps; its issue still in progress, it waits (for you to look)."
 itself): one handed back to it first (open, assigned to it: bd ready
 --claim skips those), else the first nobody has; takes it, or naps if
 there's none. Its worktree with changes not committed (no branch for an
-issue there): a failure, nothing claimed."
+issue there): found as it takes one (its branch not opened), the issue
+given back, a failure; not before each look (git status on Emacs's
+thread, for every napping agent at each change)."
   (if-let* ((labels (agent-workspace--loop-labels agent)))
-      (if-let* ((why (progn
-                       (when (agent-workspace--loop-get agent :paused)
-                         (agent-workspace--loop-put agent :paused nil)
-                         (agent-workspace--loop-say agent 'note (format "▶ goes on: its role, %s, has labels again"
-                                                                        (agent-workspace-agent-role agent))))
-                       (agent-workspace-branch-blocker agent))))
-          (agent-workspace--loop-failed agent why)
+      (progn
+        (when (agent-workspace--loop-get agent :paused)
+          (agent-workspace--loop-put agent :paused nil)
+          (agent-workspace--loop-say agent 'note (format "▶ goes on: its role, %s, has labels again"
+                                                         (agent-workspace-agent-role agent))))
         (let* ((filters (list "--label-any" (string-join labels ",") "--exclude-type" "epic" "--json"))
                (claimed
                 (lambda (answer)

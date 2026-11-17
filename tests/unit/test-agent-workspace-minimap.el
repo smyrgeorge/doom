@@ -370,6 +370,8 @@ its worktree at its line. On a ⚠: d shows both agents' changes to its file."
       (+test-awm--tool ken "read" "src/a.el" 3)
       (agent-workspace--activity-event ada '((:event . turn-complete)))
       (agent-workspace--activity-event ken '((:event . turn-complete)))
+      ;; What they changed, worked out in the background.
+      (should (+test-wait-for (lambda () (agent-workspace-conflicts project)) 10))
       (agent-workspace-open t)
       (agent-workspace-select ada)
       ;; j from ada's lane: ken's; RET selects ken.

@@ -97,7 +97,7 @@ FILE relative to its worktree; its old minutes forgotten."
          (agent-workspace--add-changed agent (list file))
          (agent-workspace--did agent 'edit (cons file nil))))
       ('turn-complete
-       (agent-workspace--add-changed agent (agent-workspace--branch-changes agent) t)))))
+       (agent-workspace--branch-changes-later agent)))))
 
 (defun agent-workspace--activity-watch (agent buffer)
   "AGENT's session BUFFER followed for what it does. In
@@ -112,23 +112,61 @@ FILE relative to its worktree; its old minutes forgotten."
 
 ;; ====== ITS CHANGED FILES ======
 
-(defun agent-workspace--branch-changes (agent)
-  "The files AGENT's worktree changed: its branch's against the main
-checkout's branch, and its uncommitted ones (relative to its worktree)."
+(defvar agent-workspace--changes-since (make-hash-table :test #'eq :weakness 'key)
+  "An agent whose changed files git works out: those noted meanwhile (a
+file written), kept with git's answer.")
+
+(defun agent-workspace--main-head (project)
+  "The branch PROJECT's main checkout is on, read from its .git/HEAD (git not
+run), or nil (a commit checked out, a .git file)."
+  (ignore-errors
+    (with-temp-buffer
+      (insert-file-contents (expand-file-name ".git/HEAD" project))
+      (and (looking-at "ref: refs/heads/\\(.+\\)") (match-string 1)))))
+
+(defun agent-workspace--branch-changes-later (agent)
+  "The files AGENT's worktree changed worked out in the background (git,
+Emacs not waiting: a big worktree takes a while), then noted as all of
+them: its branch's against the main checkout's branch, and its uncommitted
+ones (relative to its worktree)."
   (when-let* ((dir (agent-workspace-agent-worktree agent))
               ((file-directory-p dir)))
-    (let ((default-directory dir)
-          (main (ignore-errors (agent-workspace-main-branch (agent-workspace-agent-project agent)))))
-      (delete-dups
-       (append
+    (let* ((project (agent-workspace-agent-project agent))
+           (main (or (agent-workspace--main-head project)
+                     (ignore-errors (agent-workspace-main-branch project))))
+           (default-directory dir)
+           (left 0)
+           (files nil))
+      (puthash agent nil agent-workspace--changes-since)
+      (cl-flet ((run (args parse)
+                  (setq left (1+ left))
+                  (let ((output (generate-new-buffer " *agent-workspace changes*")))
+                    (make-process
+                     :name "agent-workspace-changes" :buffer output :noquery t :connection-type 'pipe
+                     :command (cons "git" args)
+                     :stderr (get-buffer-create " *agent-workspace changes errors*")
+                     :sentinel (lambda (process _event)
+                                 (unless (process-live-p process)
+                                   (let ((lines (with-current-buffer output (split-string (buffer-string) "\n" t))))
+                                     (kill-buffer output)
+                                     (when (eql 0 (process-exit-status process))
+                                       (setq files (append files (funcall parse lines))))
+                                     (when (= (setq left (1- left)) 0)
+                                       (let ((since (gethash agent agent-workspace--changes-since)))
+                                         (remhash agent agent-workspace--changes-since)
+                                         (agent-workspace--add-changed agent (delete-dups (append files since)) t))))))))))
         (when main
-          (process-lines-ignore-status "git" "diff" "--name-only" (concat main "...HEAD")))
-        (mapcar (lambda (line) (string-trim (substring line 3)))
-                (seq-filter (lambda (line) (> (length line) 3))
-                            (process-lines-ignore-status "git" "status" "--porcelain"))))))))
+          (run (list "diff" "--name-only" (concat main "...HEAD")) #'identity))
+        (run (list "status" "--porcelain")
+             (lambda (lines)
+               (mapcar (lambda (line) (string-trim (substring line 3)))
+                       (seq-filter (lambda (line) (> (length line) 3)) lines))))))))
 
 (defun agent-workspace--add-changed (agent files &optional replace)
   "FILES among AGENT's changed ones (REPLACE: they're all of them now)."
+  ;; git working them out meanwhile: kept with its answer.
+  (unless (or replace (eq (gethash agent agent-workspace--changes-since :none) :none))
+    (puthash agent (append files (gethash agent agent-workspace--changes-since)) agent-workspace--changes-since))
   (let* ((activity (agent-workspace-activity agent))
          (changed (if replace files (delete-dups (append files (plist-get activity :changed))))))
     (unless (equal changed (plist-get activity :changed))
