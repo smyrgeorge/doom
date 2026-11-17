@@ -89,13 +89,13 @@ selects its agent, and `mouse-3` there lists its actions.
 
 ## The minimap
 
-Under the issues, what each agent did over the last 15 minutes, a lane each:
+Under the issues, what each agent did over the last 15 minutes, a line each, in the crew's order:
 
 ```text
  CREW  15 minutes                         where now
  ▌A ⚙ ⌕⌕⌕✎✎▶✎✎✎✎▶✎✎✎▶ │ ⚙  src/lexer.el:214
+ ▌K ⚙ ken             │ ○  at the desk
  ▌S ⌕ ··⌕⌕⌕✎✎✎▶!!!!!! │ !  wants to use npm ins…
- quiet ▌K ⚙ ken ○
  ⚠ ada + sam: src/lexer.el
       -15m    -5m now
       ⌕ read  ✎ edit  ▶ run  ! asks you
@@ -105,15 +105,15 @@ Each agent shows as its avatar and its role's icon (`▶` for a role without one
 (waking, asleep, gone home); hover either for its name and role, `ada · builder`.
 
 A cell is a minute: what the agent did most then (asked you, edited, ran a command, read or searched), `·` for
-nothing. After the bar: its state, and the file and line it's in, or what it asks you. Agents that did nothing in those
-minutes share the `quiet` line. A file two agents changed (on their branches or uncommitted) is marked `⚠`: they'll
+nothing. After the bar: its state, and the file and line it's in, or what it asks you. An agent that did nothing in
+those minutes has its name in the cells' place, and its state in words after the bar. A file two agents changed (on their branches or uncommitted) is marked `⚠`: they'll
 conflict when you merge.
 
 Every cell is one column, so the bars line up from lane to lane: a glyph your font lacks, drawn wider from another
 font, gives way to one it has (JetBrains Mono has no `✎`: an edit is `±`, and the legend says so). A line too long for
 the window ends in `…`.
 
-On a lane, `RET` selects its agent, `o` opens the file it's in, in its worktree at its line, and `d` shows its branch's
+On an agent's line, `RET` selects its agent, `o` opens the file it's in, in its worktree at its line, and `d` shows its branch's
 changes. On a `⚠`, `RET` or `d` shows both agents' changes to that file. `m` shows or hides it, and the crew keeps
 that. `agent-workspace-minimap-height` sets its height (12 lines); `agent-workspace-minimap` set to `nil` hides it in
 new crews.

@@ -154,10 +154,11 @@ opens without it."
     (should-not (seq-find (lambda (window) (string-prefix-p "*minimap" (car window))) (+test-awm--windows)))))
 
 (ert-deftest agent-workspace-minimap/the-lanes ()
-  "A lane for each agent that did something: its avatar and role's icon, a
-cell a minute (what it did most), its state's glyph, where it is now (its
-file and line, what it asks); the quiet ones on a line; a file two agents
-changed, ⚠; the axis and the legend."
+  "A line for each agent, in the crew's order: one that did something its
+avatar and role's icon, a cell a minute (what it did most), its state's
+glyph, where it is now (its file and line, what it asks); a quiet one its
+name in the cells' place, its state in words; a file two agents changed,
+⚠; the axis and the legend (doom-pbk.91)."
   (+test-awm "lanes"
     (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
            (sam (agent-workspace-create :role "investigator" :name "sam"))
@@ -184,30 +185,33 @@ changed, ⚠; the axis and the legend."
         (should (string-match-p (concat "\\`  ?▌A ⚙ " (make-string (- agent-workspace-activity-minutes 4) ?·)
                                         "⌕··✎ │ ⚙  ?src/a\\.el:3\\'")
                                 (nth 0 lines)))
+        ;; ken, a builder too, quiet: his name, his state in words.
+        (should (string-match-p "\\`  ?▌K ⚙ ken +│ ○  ?at the desk\\'" (nth 1 lines)))
         ;; sam, an investigator (⌕): ran a command now (over a read), its hand
         ;; raised; what it asks 2 columns shorter for its icon.
-        (should (string-match-p "▌S ⌕ ·+▶ │ !  ?wants to use npm ins…" (nth 1 lines)))
-        (should (string-match-p "\\`  ?quiet +▌K ⚙ ken ○\\'" (nth 2 lines)))
+        (should (string-match-p "▌S ⌕ ·+▶ │ !  ?wants to use npm ins…" (nth 2 lines)))
         (should (string-match-p "⚠ ada \\+ sam: src/a\\.el" (nth 3 lines)))
+        (should-not (string-search "quiet" (+test-awm--text project)))
         (should (equal (string-trim (nth 4 lines)) "-15m    -5m now"))
         ;; The axis under the cells, after the avatar and icon.
         (should (= (string-search "-15m" (nth 4 lines)) (string-search "·" (nth 0 lines))))
         (should (string-search "⌕ read  ✎ edit  ▶ run  ! asks you" (nth 5 lines)))
         (should (= (length lines) 6)))
-      ;; Both lanes' │ at the same column, a space aligned to it.
+      ;; Every line's │ at the same column, a space aligned to it.
       (let ((lanes (with-current-buffer (agent-workspace--minimap-buffer project)
                      (split-string (buffer-string) "\n"))))
         (should (equal (+test-awm--bar (nth 0 lanes))
                        (list (+ 7 agent-workspace-activity-minutes)
                              `(space :align-to ,(+ 7 agent-workspace-activity-minutes)))))
-        (should (equal (+test-awm--bar (nth 1 lanes)) (+test-awm--bar (nth 0 lanes)))))
+        (should (equal (+test-awm--bar (nth 1 lanes)) (+test-awm--bar (nth 0 lanes))))
+        (should (equal (+test-awm--bar (nth 2 lanes)) (+test-awm--bar (nth 0 lanes)))))
       (ignore ken))))
 
 (ert-deftest agent-workspace-minimap/each-agent-s-role ()
-  "Each agent's role's icon right after its avatar, on its lane and on the
-quiet line: in its colour, dimmed while it is (not shadow); its name and
-role on hover, avatar and icon. A project's role without an icon: ▶, its
-lane's │ where the others' are."
+  "Each agent's role's icon right after its avatar, on its lane or its quiet
+line: in its colour, dimmed while it is (not shadow); its name and role on
+hover, avatar and icon. A project's role without an icon: ▶, its lane's │
+where the others' are."
   (+test-awm "roles"
     (make-directory (expand-file-name ".agent-workspace/roles" project) t)
     (write-region "---\ndescription: triages what comes in\n---\nTriage.\n" nil
@@ -224,10 +228,11 @@ lane's │ where the others' are."
              (line (lambda (text) (seq-find (lambda (line) (string-search text line)) lines)))
              (ada-lane (funcall line "▌A"))
              (tess-lane (funcall line "▌T"))
-             (quiet (funcall line "quiet")))
+             (quiet (funcall line "▌R")))
         (should (string-prefix-p " ▌A ⚙ " ada-lane))
         (should (string-prefix-p " ▌T ▶ " tess-lane))
-        (should (string-match-p "quiet +▌R ◎ rex" quiet))
+        (should (string-match-p "\\` ▌R ◎ rex +│ ⏻  ?asleep" quiet))
+        (should (equal (+test-awm--bar quiet) (+test-awm--bar ada-lane)))
         (should (equal (+test-awm--bar tess-lane) (+test-awm--bar ada-lane)))
         ;; ada's icon in its colour; its name and role on avatar and icon.
         (should (equal (get-text-property 4 'face ada-lane) (agent-workspace--fg ada)))
@@ -295,7 +300,7 @@ on; not while the app is left; no redraw waiting once it's closed."
     (let ((ada (agent-workspace-create :role "builder" :name "ada"))
           (draws 0))
       (agent-workspace-open t)
-      (should (string-search "quiet" (+test-awm--text project)))
+      (should (string-search "ada │ ○  at the desk" (+test-awm--text project)))
       (cl-letf* ((draw (symbol-function 'agent-workspace--minimap-draw))
                  ((symbol-function 'agent-workspace--minimap-draw)
                   (lambda (project) (cl-incf draws) (funcall draw project))))
@@ -319,6 +324,39 @@ on; not while the app is left; no redraw waiting once it's closed."
         (should (string-search "src/a.el:2" (+test-awm--text project)))
         (agent-workspace--close-app project)
         (should-not (gethash project agent-workspace--minimap-timers))))))
+
+(ert-deftest agent-workspace-minimap/a-quiet-agent-s-line ()
+  "Every agent on a line of its own, the quiet ones too: n/p reach each,
+RET selects its agent, o says it's in no file yet (its agent, not \"No
+agent on this line\"); five quiet agents in a 48-column minimap, all shown,
+none cut (doom-pbk.91)."
+  (+test-awm "quiet"
+    (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
+           (ken (agent-workspace-create :role "builder" :name "ken"))
+           (liz (agent-workspace-create :role "builder" :name "liz")))
+      (+test-awm--tool ada "edit" "src/a.el" 1)
+      (agent-workspace-open t)
+      (agent-workspace-select ada)
+      (+test-awm--goto project "▌A")
+      (agent-workspace-minimap-next)
+      (should (eq (get-text-property (point) 'agent-workspace-minimap-agent) ken))
+      (agent-workspace-minimap-next)
+      (should (eq (get-text-property (point) 'agent-workspace-minimap-agent) liz))
+      (agent-workspace-minimap-previous)
+      (should (eq (get-text-property (point) 'agent-workspace-minimap-agent) ken))
+      (should (equal (cadr (should-error (agent-workspace-minimap-open) :type 'user-error))
+                     "ken is in no file yet"))
+      (agent-workspace-minimap-select)
+      (should (eq (agent-workspace--app-selected (agent-workspace--app project)) ken))))
+  (+test-awm "five-quiet"
+    (pcase-dolist (`(,name ,role) '(("ada" "builder") ("ken" "builder") ("liz" "scribe")
+                                    ("max" "reviewer") ("zoe" "investigator")))
+      (agent-workspace-create :role role :name name))
+    (let ((lines (agent-workspace-minimap-text project 48)))
+      (should (= (length lines) 5))
+      (dolist (line lines)
+        (should-not (string-suffix-p "…" line))
+        (should (string-match-p "│ ○  ?at the desk\\'" line))))))
 
 (ert-deftest agent-workspace-minimap/its-keys ()
   "On a lane: j/k between lanes, RET selects its agent, o opens its file in
