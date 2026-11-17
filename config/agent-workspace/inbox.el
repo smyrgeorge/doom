@@ -390,6 +390,21 @@ working, in its own mode."
                        (agent-workspace-agent-name agent) why)
          (agent-workspace--event-room-keys event)))
 
+(defun agent-workspace--inbox-renamed-h (agent was)
+  "AGENT renamed from WAS: the events queued for it by name, its. In
+`agent-workspace-renamed-functions'."
+  (let* ((project (agent-workspace-agent-project agent))
+         (events (agent-workspace-inbox project)))
+    (when (seq-some (lambda (event) (equal (plist-get event :to) was)) events)
+      (agent-workspace--inbox-write
+       project (mapcar (lambda (event)
+                         (if (equal (plist-get event :to) was)
+                             (plist-put (copy-sequence event) :to (agent-workspace-agent-name agent))
+                           event))
+                       events)))))
+
+(add-hook 'agent-workspace-renamed-functions #'agent-workspace--inbox-renamed-h)
+
 (defun agent-workspace--inbox-state-h (agent old new)
   "AGENT's state changed: its session stopped, its event's turn over (or
 its event not given yet: it stays queued); its event's turn begun (its

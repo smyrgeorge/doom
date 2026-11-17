@@ -120,6 +120,23 @@ first time."
           (push thread (gethash key agent-workspace--threads))
           thread))))
 
+(defun agent-workspace--messages-renamed-h (agent was)
+  "AGENT renamed from WAS: its threads and its messages waiting for your OK,
+its new name's. In `agent-workspace-renamed-functions'."
+  (let* ((key (agent-workspace--root (agent-workspace-agent-project agent)))
+         (name (agent-workspace-agent-name agent))
+         (rename (lambda (who) (if (equal who was) name who))))
+    (dolist (thread (gethash key agent-workspace--threads))
+      (when (member was (agent-workspace--thread-pair thread))
+        (setf (agent-workspace--thread-pair thread)
+              (sort (mapcar rename (agent-workspace--thread-pair thread)) #'string<))))
+    ;; In place: the room's buttons hold them.
+    (dolist (message (gethash key agent-workspace--messages-waiting))
+      (plist-put message :from (funcall rename (plist-get message :from)))
+      (plist-put message :to (funcall rename (plist-get message :to))))))
+
+(add-hook 'agent-workspace-renamed-functions #'agent-workspace--messages-renamed-h)
+
 (defun agent-workspace--thread-by-id (project id)
   "PROJECT's thread ID, or nil."
   (seq-find (lambda (thread) (equal (agent-workspace--thread-id thread) id))

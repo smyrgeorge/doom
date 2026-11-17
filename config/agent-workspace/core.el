@@ -67,6 +67,10 @@ once it's `renamed' (or given a `role'), or where it was if it's `unmoved'
   "Called with an agent, its old state and its new one, when its state
 changes (before `agent-workspace-change-functions').")
 
+(defvar agent-workspace-renamed-functions nil
+  "Called with an agent just renamed and its name before: what's kept by
+its name (its queued events, its threads) follows it.")
+
 (defvar agent-workspace-hand-functions nil
   "Called with an agent that raised its hand, its ask set: for each request,
 a second one while the first still waits too.")
@@ -547,6 +551,8 @@ why."
     (let ((failed (condition-case err
                       (progn (agent-workspace-worktree-move agent name role) nil)
                     (error (error-message-string err)))))
+      (when (and (not failed) (eq what 'renamed) (not (equal was name)))
+        (run-hook-with-args 'agent-workspace-renamed-functions agent was))
       (agent-workspace--changed agent (if failed 'unmoved what))
       (if live
           (agent-workspace--start agent)

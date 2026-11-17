@@ -294,6 +294,26 @@ after the event's turn (doom-pbk.47)."
             (should (equal (seq-drop said (cl-position "mode plan" said :test #'equal))
                            (list "mode plan" event "mode auto")))))))))
 
+(ert-deftest agent-workspace-inbox/a-rename-takes-its-events-along ()
+  "ada renamed ann: the event queued for ada is ann's (her badge counts it,
+it's delivered to her), her thread with ken too (doom-pbk.51)."
+  (+test-awi "renamed" (("ada" "builder") ("ken" "builder"))
+    (agent-workspace-open t)
+    (puthash (agent-workspace--root project) t agent-workspace--inbox-paused)
+    (agent-workspace-inbox-add project "ada" "build 41 broke" :from "ci")
+    (let ((thread (agent-workspace--thread-between project "ada" "ken")))
+      (agent-workspace-rename ada "ann")
+      (should (equal (agent-workspace-agent-name ada) "ann"))
+      (should (equal (mapcar (lambda (event) (plist-get event :to)) (agent-workspace-inbox project)) '("ann")))
+      (should (= (agent-workspace-inbox-count ada) 1))
+      (should (equal (agent-workspace--thread-pair thread) '("ann" "ken")))
+      (should (eq (agent-workspace--thread-between project "ken" "ann") thread)))
+    (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'desk)) 20))
+    (remhash (agent-workspace--root project) agent-workspace--inbox-paused)
+    (agent-workspace--inbox-deliver project)
+    (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "build 41 broke") (+test-awi--said "ann"))) 20))
+    (+test-awi--free ada)))
+
 (ert-deftest agent-workspace-inbox/limits-and-wrong-ones ()
   "A source's hour, an agent's day: more refused. Nobody by that name or
 role, no text, a wrong source: refused, saying why."
