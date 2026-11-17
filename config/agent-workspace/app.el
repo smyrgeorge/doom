@@ -341,7 +341,7 @@ its buffers. Its workspace is left to its caller."
         (when (buffer-live-p buffer)
           (let ((kill-buffer-query-functions nil))
             (kill-buffer buffer)))))
-    (agent-workspace--tick)))
+    (agent-workspace--tick-schedule)))
 
 (defun agent-workspace-quit ()
   "Close the crew's app at once, asking nothing: every agent exits (no
@@ -504,7 +504,7 @@ buffer is current: a timer's, a canvas's being shown)."
     (agent-workspace--issues-redraw project)
     (when-let* ((window (get-buffer-window was)))
       (select-window window))
-    (agent-workspace--tick)
+    (agent-workspace--tick-schedule)
     app))
 
 (defun agent-workspace--retile (app)
@@ -550,6 +550,18 @@ alone, the branches in its place): laid out as it comes back."
         (agent-workspace--bar-draw window)))
     (agent-workspace--issues-redraw (agent-workspace--app-project app))
     (force-mode-line-update t)))
+
+(defun agent-workspace--redraw-lines (app)
+  "APP's agents' lines drawn again: its bars, and its panes' header lines
+\(their own windows' only): a turn's time, its context's usage. Not the
+issue list, nor any other mode line."
+  (when (agent-workspace--shown-p app)
+    (dolist (window (window-list (agent-workspace--app-frame app) 'nomini))
+      (let ((buffer (window-buffer window)))
+        (cond ((buffer-local-value 'agent-workspace--bar-of buffer)
+               (agent-workspace--bar-draw window))
+              ((consp (window-parameter window 'header-line-format))
+               (with-current-buffer buffer (force-mode-line-update))))))))
 
 (defun agent-workspace--tab-pick (agent tab)
   "TAB the one AGENT's side area shows, from its next layout; it gone, the
@@ -726,34 +738,54 @@ In `agent-workspace-change-functions'."
          (setf (agent-workspace--app-open app) nil))))
     (when (and (not agent-workspace--closing) (agent-workspace--shown-p app))
       (with-selected-frame (agent-workspace--app-frame app)
-        (if (or (memq what '(created forgotten session renamed))
-                (not (equal (agent-workspace--plan app) (agent-workspace--app-plan app))))
-            (agent-workspace--retile app)
-          (agent-workspace--redraw app))))
+        (cond ((or (memq what '(created forgotten session renamed))
+                   (not (equal (agent-workspace--plan app) (agent-workspace--app-plan app))))
+               (agent-workspace--retile app))
+              ;; Its context's usage: on its lines only.
+              ((eq what 'usage) (agent-workspace--redraw-lines app))
+              (t (agent-workspace--redraw app)))))
+    ;; Its time's ticks (drawn just now: not again).
     (when (memq what '(state created forgotten issue))
-      (agent-workspace--tick))))
+      (agent-workspace--tick-schedule))))
 
 (add-hook 'agent-workspace-change-functions #'agent-workspace--changed-h)
 
 ;; ====== THE TIMER ======
 
 (defun agent-workspace--tick ()
-  "The turns' times drawn again in the apps shown; the timer kept only while
-one is shown with an agent working."
-  (let ((shown (seq-filter #'agent-workspace--shown-p (hash-table-values agent-workspace--apps))))
-    (dolist (app shown)
-      (when (seq-some (lambda (agent) (agent-workspace-agent-since agent))
-                      (agent-workspace-agents (agent-workspace--app-project app)))
-        (agent-workspace--redraw app)))
-    (if (seq-some (lambda (app)
-                    (seq-some #'agent-workspace-agent-since
-                              (agent-workspace-agents (agent-workspace--app-project app))))
-                  shown)
-        (unless (timerp agent-workspace--timer)
-          (setq agent-workspace--timer (run-at-time 1 1 #'agent-workspace--tick)))
-      (when (timerp agent-workspace--timer)
-        (cancel-timer agent-workspace--timer))
-      (setq agent-workspace--timer nil))))
+  "The turns' times drawn again in the apps shown (their agents' lines
+only: `agent-workspace--redraw-lines'), then the next tick timed."
+  (setq agent-workspace--timer nil)
+  (dolist (app (seq-filter #'agent-workspace--shown-p (hash-table-values agent-workspace--apps)))
+    (when (seq-some #'agent-workspace-agent-since (agent-workspace-agents (agent-workspace--app-project app)))
+      (agent-workspace--redraw-lines app)))
+  (agent-workspace--tick-schedule))
+
+(defun agent-workspace--tick-next ()
+  "Seconds until a turn's time shown in an app changes (`agent-workspace-time':
+by the second in its first minute, then by the minute), or nil: no app
+shown with an agent working."
+  (let ((now (float-time))
+        next)
+    (dolist (app (hash-table-values agent-workspace--apps))
+      (when (agent-workspace--shown-p app)
+        (dolist (agent (agent-workspace-agents (agent-workspace--app-project app)))
+          (when-let* ((since (agent-workspace-agent-since agent)))
+            (let* ((elapsed (max 0 (- now since)))
+                   (in (if (< elapsed 60)
+                           (- 1 (- elapsed (ffloor elapsed)))
+                         (- 60 (mod elapsed 60)))))
+              (setq next (min (or next in) in)))))))
+    (and next (max next 0.05))))
+
+(defun agent-workspace--tick-schedule ()
+  "The next tick timed (`agent-workspace--tick-next'), the one before
+dropped; none while no app is shown with an agent working."
+  (when (timerp agent-workspace--timer)
+    (cancel-timer agent-workspace--timer))
+  (setq agent-workspace--timer
+        (when-let* ((next (agent-workspace--tick-next)))
+          (run-at-time next nil #'agent-workspace--tick))))
 
 ;; ====== THE TALLY, ELSEWHERE ======
 

@@ -1530,6 +1530,50 @@ exits, none of their processes left; back in the workspace you came from."
 
 ;; ====== NO TIMER WHILE HIDDEN ======
 
+(ert-deftest agent-workspace-app/a-tick-draws-only-the-times ()
+  "While an agent works: a tick draws its bar's time again, not the issue
+list nor every mode line; each second in a turn's first minute, then at
+the next minute; with 100 issues, under 5 ms. A usage change draws its
+lines only (doom-pbk.69)."
+  (+test-awa "tick"
+    (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
+      (agent-workspace-open t)
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (setq agent-workspace--issues-data
+              (agent-workspace--issues-parse
+               project
+               (list :all (cl-loop for i from 1 to 100
+                                   collect `((id . ,(format "p-%d" i)) (title . ,(format "Issue number %d, a title" i))
+                                             (status . "open") (priority . 2) (labels "build")))
+                     :ready (cl-loop for i from 1 to 100 collect `((id . ,(format "p-%d" i))))
+                     :done nil)))
+        (agent-workspace--issues-redraw project))
+      (setf (agent-workspace-agent-state ken) 'working
+            (agent-workspace-agent-since ken) (- (float-time) 10.3))
+      (agent-workspace--changed ken 'state)
+      ;; Its first minute: a tick in under a second.
+      (should (timerp agent-workspace--timer))
+      (should (< 0 (float-time (time-subtract (timer--time agent-workspace--timer) nil)) 1.01))
+      (let ((issues 0) (all 0))
+        (cl-letf* ((redraw (symbol-function 'agent-workspace--issues-redraw))
+                   ((symbol-function 'agent-workspace--issues-redraw)
+                    (lambda (&rest args) (cl-incf issues) (apply redraw args)))
+                   (force (symbol-function 'force-mode-line-update))
+                   ((symbol-function 'force-mode-line-update)
+                    (lambda (&optional every) (when every (cl-incf all)) (funcall force every))))
+          (setf (agent-workspace-agent-since ken) (- (float-time) 125))
+          (let ((start (float-time)))
+            (agent-workspace--tick)
+            (should (< (- (float-time) start) 0.005)))
+          (should (string-search "2m" (with-current-buffer (agent-workspace--bar-buffer ken) (buffer-string))))
+          ;; Past its first minute: the next at the next minute.
+          (should (< 50 (float-time (time-subtract (timer--time agent-workspace--timer) nil)) 56))
+          ;; Its context's usage: its lines only.
+          (agent-workspace--changed ken 'usage)
+          (should (= issues 0))
+          (should (= all 0))))
+      (ignore ada))))
+
 (ert-deftest agent-workspace-app/no-timer-while-hidden ()
   "The turns' times tick while the app is shown with an agent working, not
 once it's left."
