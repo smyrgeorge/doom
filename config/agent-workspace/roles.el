@@ -6,7 +6,11 @@
 ;; (.claude/agents/*.md): a front matter, then its instructions (added to its
 ;; agents' system prompt). The starters ship here, in roles/ (scribe,
 ;; investigator, builder, reviewer); a project's own, in its
-;; .agent-workspace/roles/, add to them or replace one of the same name.
+;; .agent-workspace/roles/ (committed), and your own for it, in its
+;; .agent-shell/agent-workspace/roles/ (local: .agent-shell/ is out of git),
+;; add to them; a later place's role replaces one of the same name (starter
+;; < project < local). Each role knows where it comes from (:origin) and
+;; what it replaced (:replaces).
 ;;
 ;;   ---
 ;;   name: builder                  its file's name, if given
@@ -39,7 +43,15 @@
 ;; ====== VARIABLES ======
 
 (defcustom agent-workspace-roles-directory ".agent-workspace/roles"
-  "Where a project keeps its own roles."
+  "Where a project keeps its own roles, committed: shared with whoever
+works on it."
+  :type 'string
+  :group 'agent-workspace)
+
+(defcustom agent-workspace-local-roles-directory ".agent-shell/agent-workspace/roles"
+  "Where a project keeps your own roles, out of git (.agent-shell/ is
+ignored): relative to its main checkout, so its agents' worktrees have
+them too. They replace the project's and the starters of the same name."
   :type 'string
   :group 'agent-workspace)
 
@@ -173,22 +185,34 @@ this file), nil if FILE has errors; PROBLEMS, each (error|warning
 
 ;; ====== A PROJECT'S ROLES ======
 
+(defun agent-workspace--role-places (project)
+  "Where PROJECT's roles come from, in order (a later one's replace an
+earlier one's of the same name): ((ORIGIN . FOLDER)...), ORIGIN starter,
+project or local."
+  (cons (cons 'starter agent-workspace-starter-roles-directory)
+        (when project
+          (list (cons 'project (expand-file-name agent-workspace-roles-directory project))
+                (cons 'local (expand-file-name agent-workspace-local-roles-directory project))))))
+
 (defun agent-workspace--role-files (project)
-  "The role files for PROJECT: the starters, then its own (which replace
-those of the same name)."
-  (append (directory-files agent-workspace-starter-roles-directory t "\\`[^.].*\\.md\\'")
-          (when project
-            (let ((dir (expand-file-name agent-workspace-roles-directory project)))
-              (when (file-directory-p dir)
-                (directory-files dir t "\\`[^.].*\\.md\\'"))))))
+  "The role files for PROJECT, in order: the starters, its own, then your
+local ones (each replacing those of the same name before it): ((ORIGIN .
+FILE)...)."
+  (seq-mapcat (lambda (place)
+                (when (file-directory-p (cdr place))
+                  (mapcar (lambda (file) (cons (car place) file))
+                          (directory-files (cdr place) t "\\`[^.].*\\.md\\'"))))
+              (agent-workspace--role-places project)))
 
 (defun agent-workspace--roles-read (project)
   "PROJECT's roles and their problems, read again if a file changed:
 \(ROLES . PROBLEMS), ROLES an alist of a name and its role, in order (the
-starters first). New problems are shown as warnings."
+starters first), each role's :origin where its file is (starter, project,
+local), its :replaces the origin of the one of its name it replaced. New
+problems are shown as warnings."
   (let* ((files (agent-workspace--role-files project))
          (stamp (mapcar (lambda (file)
-                          (cons file (file-attribute-modification-time (file-attributes file))))
+                          (cons (cdr file) (file-attribute-modification-time (file-attributes (cdr file)))))
                         files))
          (key (or project ""))
          (cached (gethash key agent-workspace--roles-cache)))
@@ -196,10 +220,15 @@ starters first). New problems are shown as warnings."
         (cdr cached)
       (let (roles problems)
         (dolist (file files)
-          (pcase-let ((`(,role . ,found) (agent-workspace-role-read file)))
+          (pcase-let ((`(,role . ,found) (agent-workspace-role-read (cdr file))))
             (setq problems (append problems found))
             (when role
-              (setf (alist-get (plist-get role :name) roles nil nil #'equal) role))))
+              (let* ((name (plist-get role :name))
+                     (replaced (alist-get name roles nil nil #'equal)))
+                (setq role (plist-put role :origin (car file)))
+                (when replaced
+                  (setq role (plist-put role :replaces (plist-get replaced :origin))))
+                (setf (alist-get name roles nil nil #'equal) role)))))
         (dolist (problem problems)
           (unless (member problem (cddr cached))
             (display-warning 'agent-workspace (cadr problem) (car problem))))
@@ -209,7 +238,7 @@ starters first). New problems are shown as warnings."
 
 (defun agent-workspace-roles (&optional project)
   "PROJECT's roles (default: the current project's): an alist of a name and
-its role, the starters and the project's own."
+its role, the starters, the project's own and your local ones."
   (car (agent-workspace--roles-read (or project (agent-workspace-project)))))
 
 (defun agent-workspace-role-problems (&optional project)
@@ -250,22 +279,45 @@ it allows."
       (user-error "%d %s%s run already, as many as the role allows"
                   max role (if (= max 1) "" "s")))))
 
-(defun agent-workspace-copy-role (name &optional project)
-  "Copy the starter role NAME into PROJECT's roles (default: the current
-project's), to change it there: its file. Interactively, asked, then
-visited."
+(defun agent-workspace--copy-role-sources (project where)
+  "The roles that can be copied into PROJECT's roles WHERE (project or
+local): an alist of a name and its file. Into the project's, the starters;
+into your local ones, the project's too (its own replacing a starter)."
+  (let (sources)
+    (dolist (file (agent-workspace--role-files project))
+      (when (or (eq (car file) 'starter) (and (eq where 'local) (eq (car file) 'project)))
+        (setf (alist-get (file-name-base (cdr file)) sources nil nil #'equal) (cdr file))))
+    (nreverse sources)))
+
+(defun agent-workspace-copy-role (name &optional project where)
+  "Copy the role NAME into PROJECT's roles (default: the current project's),
+to change it there: its file. WHERE: project (default), its committed
+roles, shared, a starter copied; local, your own, out of git, a starter or
+the project's own copied. Interactively, both asked, then visited."
   (interactive
-   (list (completing-read "Copy the role: "
-                          (mapcar #'file-name-base
-                                  (directory-files agent-workspace-starter-roles-directory nil "\\.md\\'"))
-                          nil t)))
+   (let* ((where (if (equal (completing-read "Copy into: "
+                                             '("project: committed, shared" "local: yours, out of git")
+                                             nil t)
+                            "local: yours, out of git")
+                     'local
+                   'project))
+          (sources (agent-workspace--copy-role-sources (agent-workspace-project) where)))
+     (list (completing-read "Copy the role: " (mapcar #'car sources) nil t)
+           nil where)))
   (let* ((project (or project (agent-workspace-project)
                       (user-error "Not in a git repository")))
-         (from (expand-file-name (concat name ".md") agent-workspace-starter-roles-directory))
-         (dir (expand-file-name agent-workspace-roles-directory project))
+         (where (or where 'project))
+         (from (alist-get name (agent-workspace--copy-role-sources project where) nil nil #'equal))
+         (dir (expand-file-name (if (eq where 'local)
+                                    agent-workspace-local-roles-directory
+                                  agent-workspace-roles-directory)
+                                project))
          (to (expand-file-name (concat name ".md") dir)))
-    (unless (file-exists-p from) (user-error "No starter role %s" name))
-    (when (file-exists-p to) (user-error "%s has its own %s already" (file-name-nondirectory (directory-file-name project)) name))
+    (unless from
+      (user-error (if (eq where 'local) "No starter or project role %s" "No starter role %s") name))
+    (when (file-exists-p to)
+      (user-error "%s has %s %s already" (file-name-nondirectory (directory-file-name project))
+                  (if (eq where 'local) "a local" "its own") name))
     (make-directory dir t)
     (copy-file from to)
     (when (called-interactively-p 'any) (find-file to))

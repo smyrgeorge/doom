@@ -427,9 +427,12 @@ Write the tests first, then run them.
 - `icon` is a nerd icon for the GUI, then a glyph for the terminal. `verb` is what its agents show while they work:
   "testing doom-a1b". `colour` is its agents' colour while it's free.
 
-A project's own roles go in its `.agent-workspace/roles/`, committed. They add to the four, or replace the one with the
-same name. `M-x agent-workspace-copy-role` copies one of the four there for you to change. A file with a mistake is
-left out, and a warning names its file and line.
+A project's own roles go in its `.agent-workspace/roles/`, committed. Your own for a project, kept out of git, go in
+its `.agent-shell/agent-workspace/roles/` (`.agent-shell/` is ignored: a crew adds it to the repository's
+`.git/info/exclude`), for a repository where the rest of the team doesn't use crews. Both add to the four; a role
+replaces the one with the same name before it: a starter, then the project's, then yours. `M-x
+agent-workspace-copy-role` copies one there for you to change: a starter into the project's, or a starter or one of
+the project's into yours. A file with a mistake is left out, and a warning names its file and line.
 
 ## Its states
 

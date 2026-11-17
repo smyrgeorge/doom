@@ -75,8 +75,11 @@ needs your OK. nil: Claude Code's own default."
 ;; permission mode, labels, how many may run, icon, verb, colour), then its
 ;; instructions. The starters ship in config/agent-workspace/roles/ (scribe,
 ;; investigator, builder, reviewer); a project's own, in its
-;; .agent-workspace/roles/, add to them or replace one of the same name (M-x
-;; agent-workspace-copy-role copies a starter there to change it). Its tools
+;; .agent-workspace/roles/ (committed), and yours for it, in its
+;; .agent-shell/agent-workspace/roles/ (out of git), add to them; a later
+;; one replaces one of the same name: starter < project < local (M-x
+;; agent-workspace-copy-role copies a starter, or a project's role into your
+;; local ones, to change it there). Its tools
 ;; and permission mode are enforced by Claude Code (its options), not only
 ;; told. A file's problems are warnings naming its file and line.
 
