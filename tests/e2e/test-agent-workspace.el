@@ -344,8 +344,9 @@ same pixels (its glyphs evened)."
 its role's icon after its avatar (a project's role without one: ▶): every
 lane's │ at the same x, its cells a column each, an edit's glyph one too
 (the legend's); no line past the window's edge (no $), a file named with
-glyphs drawn wider cut. In JetBrains Mono if it's here: it has no ✎, drawn
-from another font, 12 px for a column of 8."
+glyphs drawn wider cut, else whole. In JetBrains Mono if it's here: it has
+no ✎, drawn from another font, 12 px for a column of 8 (not there, as on
+Linux: a column)."
   (let ((font (frame-parameter nil 'font)))
     (when (find-font (font-spec :family "JetBrains Mono"))
       (set-frame-font (font-spec :family "JetBrains Mono" :size 13) nil t))
@@ -386,10 +387,13 @@ from another font, 12 px for a column of 8."
                   (should (< (car (window-text-pixel-size window (line-beginning-position) (line-end-position)))
                              (window-body-width window t)))
                   (forward-line 1))
-                ;; ada's lane, its file's name drawn wider than its columns: cut.
+                ;; ada's lane, its file's name drawn wider than its columns:
+                ;; cut; a column each: whole.
                 (goto-char (point-min))
                 (should (search-forward "▌A" nil t))
-                (should (string-suffix-p "…" (buffer-substring (point) (line-end-position))))
+                (if (> (with-selected-window window (string-pixel-width "✎")) (frame-char-width))
+                    (should (string-suffix-p "…" (buffer-substring (point) (line-end-position))))
+                  (should (string-suffix-p ".md:1" (buffer-substring (point) (line-end-position)))))
                 (should (= (string-pixel-width edit) (frame-char-width)))
                 (should (string-search (concat edit " edit") (buffer-string)))))))
       (set-frame-font font nil t))))

@@ -11,9 +11,13 @@
 ;; tabs).
 ;; run.sh: slow (~50 s: git worktrees).
 
-;; Git as git is, not as your ~/.gitconfig has it (hooks, signing...).
+;; Git as git is, not as your ~/.gitconfig has it (hooks, signing...); its
+;; commits and merges made as a test user (no identity guessed: on Linux,
+;; root@host fails).
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
+(dolist (var '("GIT_AUTHOR_NAME" "GIT_COMMITTER_NAME")) (setenv var "Test"))
+(dolist (var '("GIT_AUTHOR_EMAIL" "GIT_COMMITTER_EMAIL")) (setenv var "test@example.com"))
 
 (+test-load "config/agent-workspace")
 
