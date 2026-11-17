@@ -655,8 +655,12 @@ mended, it goes on and takes the next issue (doom-pbk.60)."
         (should-not (seq-some (lambda (entry) (string-prefix-p "stopped looping" (cdr entry)))
                               (+test-awl--room project "tia")))
         (agent-workspace-crew-save project)
-        (should (string-search "\"name\": \"tia\", \"role\": \"tester\"" (agent-workspace-crew-text project)))
-        (should (string-search "\"loop\": true" (agent-workspace-crew-text project)))
+        (let ((tia (seq-find (lambda (entry) (equal (plist-get entry :name) "tia"))
+                             (plist-get (json-parse-string (agent-workspace-crew-text project) :object-type 'plist
+                                                           :array-type 'list)
+                                        :agents))))
+          (should (equal (plist-get tia :role) "tester"))
+          (should (eq (plist-get tia :loop) t)))
         ;; Mended: it goes on.
         (write-region good nil file)
         (set-file-times file (time-add nil 4))
@@ -750,10 +754,8 @@ takes one."
       (agent-workspace-loop-set ada t)
       (+test-awl--all-in (list ada) 'nap)
       (agent-workspace-crew-save project)
-      (should (string-search "{\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"loop\": true, \"kind\": \"mock\"}"
-                             (with-temp-buffer
-                               (insert-file-contents (agent-workspace--crew-path project))
-                               (buffer-string))))
+      (should (equal (car (plist-get (car (agent-workspace-crew-read project)) :agents))
+                     '(:name "ada" :role "builder" :colour "blue" :loop t :kind mock)))
       (agent-workspace-close project))
     (let ((one (+test-awl--issue project "close: one" "build" 2)))
       (should (agent-workspace--crew-start project))
@@ -766,7 +768,11 @@ takes one."
         (should (eq (agent-workspace-agent-state ada) 'asleep))
         (should (equal (+test-awl--status project one) "open"))
         ;; Asleep, looping: both in crew.json.
-        (should (string-search "\"asleep\": true, \"loop\": true" (agent-workspace-crew-text project)))
+        (let ((entry (car (plist-get (json-parse-string (agent-workspace-crew-text project) :object-type 'plist
+                                                        :array-type 'list)
+                                     :agents))))
+          (should (eq (plist-get entry :asleep) t))
+          (should (eq (plist-get entry :loop) t)))
         ;; Woken: it loops.
         (agent-workspace-wake ada)
         (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))))))

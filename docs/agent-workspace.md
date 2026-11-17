@@ -289,18 +289,40 @@ sources you turned off. Not its session, state, issue or branch: started again, 
 on.
 
 ```json
-{"version": 2,
- "agents": [
-  {"name": "ada", "role": "builder", "colour": "blue", "loop": true, "panels": ["logs", "tests"]},
-  {"name": "ken", "role": "builder", "colour": "green", "asleep": true},
-  {"name": "sam", "role": "investigator", "colour": "magenta", "model": "opus"}
- ],
- "layout": {"view": "stage", "room": "right", "selected": "ada", "open": true, "minimap": true,
-            "talk": "ask", "sources_off": []}}
+{
+  "version": 2,
+  "agents": [
+    {
+      "name": "ada",
+      "role": "builder",
+      "colour": "blue",
+      "loop": true,
+      "panels": [
+        "logs",
+        "tests"
+      ]
+    },
+    {
+      "name": "ken",
+      "role": "builder",
+      "colour": "green",
+      "asleep": true
+    }
+  ],
+  "layout": {
+    "view": "stage",
+    "room": "right",
+    "selected": "ada",
+    "open": true,
+    "minimap": true,
+    "talk": "ask",
+    "sources_off": []
+  }
+}
 ```
 
-It's written when the crew changes (a panel opened or closed too), one agent a line, and read as JSON, never run, so
-scripts can read it too (`jq`). Closing the crew leaves it as it was, its agents' panels in it. `SPC o w` in a project
+It's written when the crew changes (a panel opened or closed too), as `jq .` prints it, a key a line, and read as
+JSON, never run, so scripts can read it too. Closing the crew leaves it as it was, its agents' panels in it. `SPC o w` in a project
 whose crew isn't running starts every agent in it again: fresh, each in its worktree, with its role as it is now, its
 panels open again there (fetched afresh), waiting for you. Asleep agents stay asleep, and their panels open when they
 wake. Looping agents come back asleep: reopening never starts work by itself. An agent made while the crew isn't

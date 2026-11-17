@@ -3,23 +3,37 @@
 ;; committed. Loaded from config/agent-workspace.el, after app.el. No Doom here.
 ;;
 ;; .agent-shell/agent-workspace/crew.json, beside the room and the inbox,
-;; holds one JSON object, read with Emacs's JSON parser, never evaluated:
+;; holds one JSON object, read with Emacs's JSON parser, never evaluated,
+;; written as jq . prints it (a key a line, two spaces an indent):
 ;;
-;;   {"version": 2,
-;;    "agents": [
-;;     {"name": "ada", "role": "builder", "colour": "blue", "loop": true, "panels": ["logs", "tests"]},
-;;     {"name": "ken", "role": "builder", "colour": "green", "asleep": true}
-;;    ],
-;;    "layout": {"view": "stage", "room": "right", "selected": "ada", "open": true, "minimap": true,
-;;               "talk": "ask", "sources_off": [["ci", "#reviewer"]]}}
+;;   {
+;;     "version": 2,
+;;     "agents": [
+;;       {
+;;         "name": "ada",
+;;         "role": "builder",
+;;         "colour": "blue",
+;;         "loop": true,
+;;         "panels": [
+;;           "logs",
+;;           "tests"
+;;         ]
+;;       }
+;;     ],
+;;     "layout": {
+;;       "view": "stage",
+;;       ...
+;;       "sources_off": []
+;;     }
+;;   }
 ;;
 ;; What each agent is (its name, role, colour; its model and mode when not its
 ;; role's; whether it's asleep; whether it loops (loops.el); its kind when not
 ;; Claude Code; its open panels, by name, never their data) and the layout;
 ;; never its session, its state, its issue or its branch (its worktree keeps
 ;; the one it's on: worktree.el). Written when the crew changes
-;; (debounced), in a stable order (role order, then name), one agent a line,
-;; only if it differs; its crew closing leaves it as it was (written first,
+;; (debounced), in a stable order (role order, then name), only if it
+;; differs (any JSON read: an older file, one agent a line, too); its crew closing leaves it as it was (written first,
 ;; before any agent stops and its panels close). When the app opens with no
 ;; crew running, every agent in it starts again, fresh, in its worktree, with
 ;; its role as it is now, its panels opened again there; asleep ones stay
@@ -85,6 +99,29 @@ there and opened once its session starts.")
 (defun agent-workspace--crew-file-name ()
   "The crew's file as its problems and questions name it: crew.json."
   (file-name-nondirectory agent-workspace-crew-file))
+
+(defun agent-workspace--crew-json-pretty (value &optional indent)
+  "VALUE as JSON text as jq . prints it, INDENT spaces in (0): a plist an
+object, a key a line; a vector an array, an element a line; an empty one
+[]; a scalar as `agent-workspace--crew-json' has it."
+  (let* ((indent (or indent 0))
+         (in (make-string (+ indent 2) ?\s))
+         (out (make-string indent ?\s)))
+    (cond ((and (vectorp value) (> (length value) 0))
+           (concat "[\n"
+                   (mapconcat (lambda (element)
+                                (concat in (agent-workspace--crew-json-pretty element (+ indent 2))))
+                              value ",\n")
+                   "\n" out "]"))
+          ((vectorp value) "[]")
+          ((and (consp value) (keywordp (car value)))
+           (concat "{\n"
+                   (mapconcat (lambda (pair)
+                                (concat in (agent-workspace--crew-json (substring (symbol-name (car pair)) 1))
+                                        ": " (agent-workspace--crew-json-pretty (cadr pair) (+ indent 2))))
+                              (seq-partition value 2) ",\n")
+                   "\n" out "}"))
+          (t (agent-workspace--crew-json value)))))
 
 (defun agent-workspace--crew-json (value)
   "VALUE as JSON text, spaced to read (\", \" and \": \"): a plist an object
@@ -305,7 +342,7 @@ kept crew's layout, as read) where it says."
     layout))
 
 (defun agent-workspace-crew-text (project)
-  "PROJECT's crew as crew.json's text: one agent a line; with a kept crew
+  "PROJECT's crew as crew.json's text, as jq . prints it; with a kept crew
 \(`agent-workspace--crew-kept'), its agents not running too."
   (let* ((roles (mapcar #'car (agent-workspace-roles project)))
          (kept (gethash (agent-workspace--root project) agent-workspace--crew-kept))
@@ -327,17 +364,11 @@ kept crew's layout, as read) where it says."
                           (seq-remove (lambda (entry) (and (consp entry) (member (plist-get entry :name) names)))
                                       (gethash (agent-workspace--root project) agent-workspace--crew-left-out))))
          (app (and (fboundp 'agent-workspace--app) (agent-workspace--app project))))
-    (concat "{\"version\": 2,\n"
-            " \"agents\": ["
-            (and entries
-                 (concat "\n"
-                         (mapconcat (lambda (entry) (concat "  " (agent-workspace--crew-json entry)))
-                                    entries ",\n")
-                         "\n "))
-            "],\n"
-            " \"layout\": "
-            (agent-workspace--crew-json (agent-workspace--crew-layout project app (plist-get kept :layout)))
-            "}\n")))
+    (concat (agent-workspace--crew-json-pretty
+             (list :version 2
+                   :agents (vconcat entries)
+                   :layout (agent-workspace--crew-layout project app (plist-get kept :layout))))
+            "\n")))
 
 (defun agent-workspace-crew-save (&optional project)
   "Write PROJECT's crew.json now (default: the current project's), if what

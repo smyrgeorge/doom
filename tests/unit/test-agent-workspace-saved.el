@@ -79,10 +79,34 @@ written at once (no wait)."
   "PROJECT's crew.json."
   (expand-file-name ".agent-shell/agent-workspace/crew.json" project))
 
+(defun +test-aws2--compact (text)
+  "crew.json's TEXT, read as JSON, as one line an agent, one the layout:
+what these tests compare (crew.json is written as jq prints it: its own
+test, agent-workspace-saved/as-jq-prints-it); TEXT itself if it isn't a
+crew's JSON (a broken file written by a test)."
+  (let ((data (ignore-errors (json-parse-string text :object-type 'plist :array-type 'array
+                                                :null-object nil :false-object :false))))
+    (if (not (and (consp data) (keywordp (car data)) (vectorp (plist-get data :agents))))
+        text
+      (concat "{\"version\": " (agent-workspace--crew-json (plist-get data :version)) ",\n"
+              " \"agents\": ["
+              (let ((agents (plist-get data :agents)))
+                (if (> (length agents) 0)
+                    (concat "\n" (mapconcat (lambda (agent) (concat "  " (agent-workspace--crew-json agent)))
+                                            agents ",\n")
+                            "\n ")
+                  ""))
+              "]"
+              (if (plist-member data :layout)
+                  (concat ",\n \"layout\": " (agent-workspace--crew-json (plist-get data :layout)))
+                "")
+              "}\n"))))
+
 (defun +test-aws2--file (project)
-  "PROJECT's crew.json's text, or nil."
+  "PROJECT's crew.json's text, or nil, as `+test-aws2--compact' has it."
   (let ((file (+test-aws2--path project)))
-    (and (file-exists-p file) (with-temp-buffer (insert-file-contents file) (buffer-string)))))
+    (and (file-exists-p file)
+         (+test-aws2--compact (with-temp-buffer (insert-file-contents file) (buffer-string))))))
 
 (defun +test-aws2--write (project text)
   "PROJECT's crew.json now TEXT."
@@ -102,7 +126,7 @@ role's, else auto); asleep said; the layout."
           (ada (agent-workspace-create :role "builder" :name "ada" :mode "plan")))
       (agent-workspace-sleep ken)
       (ignore sam ada)
-      (should (equal (agent-workspace-crew-text project)
+      (should (equal (+test-aws2--compact (agent-workspace-crew-text project))
                      "{\"version\": 2,
  \"agents\": [
   {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"mode\": \"plan\"},
@@ -117,12 +141,80 @@ role's, else auto); asleep said; the layout."
       ;; Her own mode auto, the one she'd have anyway: not written.
       (setf (agent-workspace-agent-mode ada) "auto")
       (should (string-search "{\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"}"
-                             (agent-workspace-crew-text project)))))
+                             (+test-aws2--compact (agent-workspace-crew-text project))))))
   ;; No agents (all forgotten, its app open): an empty list.
   (+test-aws2 "text-empty"
     (agent-workspace-open t)
-    (should (string-prefix-p "{\"version\": 2,\n \"agents\": [],\n \"layout\": {"
+    (should (string-prefix-p "{\n  \"version\": 2,\n  \"agents\": [],\n  \"layout\": {\n"
                              (agent-workspace-crew-text project)))))
+
+(ert-deftest agent-workspace-saved/as-jq-prints-it ()
+  "crew.json written as jq . prints it: two spaces an indent, a key a line,
+an array's elements a line each, an empty one [], a newline at its end;
+an old file, one agent a line, read as it was and written so at the next
+change; a write changing nothing leaves it as it is (doom-pbk.90)."
+  (+test-aws2 "pretty"
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"loop\": true, \"panels\": [\"logs\", \"tests\"]},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"asleep\": true}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ken\", \"open\": false, \"minimap\": false, \"talk\": \"on\", \"sources_off\": [[\"ci\", \"#reviewer\"]]}}
+")
+    (cl-letf (((symbol-function 'agent-workspace--loop-soon) #'ignore)
+              ((symbol-function 'agent-workspace--loop-watch-update) #'ignore))
+      (agent-workspace-open t)
+      (agent-workspace-recolour (agent-workspace-agent "ken" project) "cyan")
+      (let ((text (with-temp-buffer (insert-file-contents (+test-aws2--path project)) (buffer-string))))
+        (should (equal text "{
+  \"version\": 2,
+  \"agents\": [
+    {
+      \"name\": \"ada\",
+      \"role\": \"builder\",
+      \"colour\": \"blue\",
+      \"asleep\": true,
+      \"loop\": true,
+      \"panels\": [
+        \"logs\",
+        \"tests\"
+      ]
+    },
+    {
+      \"name\": \"ken\",
+      \"role\": \"builder\",
+      \"colour\": \"cyan\",
+      \"asleep\": true
+    }
+  ],
+  \"layout\": {
+    \"view\": \"stage\",
+    \"room\": \"right\",
+    \"selected\": \"ken\",
+    \"open\": false,
+    \"minimap\": false,
+    \"talk\": \"on\",
+    \"sources_off\": [
+      [
+        \"ci\",
+        \"#reviewer\"
+      ]
+    ]
+  }
+}
+"))
+        ;; As jq prints it.
+        (when (executable-find "jq")
+          (should (equal (with-temp-buffer
+                           (call-process "jq" (+test-aws2--path project) t nil ".")
+                           (buffer-string))
+                         text)))
+        ;; A write changing nothing: the file as it was.
+        (set-file-times (+test-aws2--path project) (time-subtract nil 100))
+        (let ((before (file-attribute-modification-time (file-attributes (+test-aws2--path project)))))
+          (agent-workspace-crew-save project)
+          (should (equal (file-attribute-modification-time (file-attributes (+test-aws2--path project)))
+                         before)))))))
 
 (ert-deftest agent-workspace-saved/written-when-the-crew-changes ()
   "Made, recoloured, put to sleep, woken, forgotten: written, in
