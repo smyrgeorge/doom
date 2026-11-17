@@ -80,6 +80,7 @@ pane opened or folded.")
   sizes              ; its frame's windows' sizes, as laid out
   others             ; its frame's windows that aren't its own (a popup...), as last seen
   resizes            ; when it was last laid out after a resize
+  relayout           ; its layout to come after a resize (a timer), moved at each change
   tabs               ; ((AGENT TAB...)...): the tabs each agent's side area showed, the last first
   full)              ; the agent whose open pane shows its tab full size, or nil
 
@@ -660,27 +661,37 @@ again once. In `window-size-change-functions'."
            (t (agent-workspace--resized app frame))))))))
 
 (defun agent-workspace--resized (app frame)
-  "APP's FRAME resized, or a border dragged: laid out again (see
-`agent-workspace--resized-h')."
+  "APP's FRAME resized, or a border dragged: laid out again once it's over
+\(see `agent-workspace--resized-h'). After 3 layouts in 3 seconds (each
+leading to another change: a loop) the sizes are taken as they are."
   (let ((recent (seq-filter (lambda (time) (< (- (float-time) time) 3))
                             (agent-workspace--app-resizes app))))
+    (setf (agent-workspace--app-resizes app) recent)
     (if (>= (length recent) 3)
         (setf (agent-workspace--app-sizes app) (agent-workspace--sizes-now frame))
-      (setf (agent-workspace--app-resizes app) (cons (float-time) recent))
       (agent-workspace--relayout-soon app frame))))
 
 (defun agent-workspace--relayout-soon (app frame)
-  "APP laid out again in FRAME in 0.2 s (a drag's last move), if it's still
-shown there and the minibuffer isn't active."
-  (run-at-time 0.2 nil #'agent-workspace--relayout app frame))
+  "APP laid out again in FRAME 0.2 s after the last change (each change
+moves it: a drag's last move, a resize's last step), if it's still shown
+there."
+  (when (timerp (agent-workspace--app-relayout app))
+    (cancel-timer (agent-workspace--app-relayout app)))
+  (setf (agent-workspace--app-relayout app)
+        (run-at-time 0.2 nil #'agent-workspace--relayout app frame)))
 
 (defun agent-workspace--relayout (app frame)
-  "APP laid out again in FRAME, if it's still shown there and the minibuffer
-isn't active (see `agent-workspace--relayout-soon')."
-  (when (and (frame-live-p frame) (agent-workspace--shown-p app)
-             (not (active-minibuffer-window)))
-    (with-selected-frame frame
-      (agent-workspace-layout app))))
+  "APP laid out again in FRAME, if it's still shown there (see
+`agent-workspace--relayout-soon'); while the minibuffer is active, once it
+isn't (tried again every half second)."
+  (setf (agent-workspace--app-relayout app) nil)
+  (when (and (frame-live-p frame) (agent-workspace--shown-p app))
+    (if (active-minibuffer-window)
+        (setf (agent-workspace--app-relayout app)
+              (run-at-time 0.5 nil #'agent-workspace--relayout app frame))
+      (push (float-time) (agent-workspace--app-resizes app))
+      (with-selected-frame frame
+        (agent-workspace-layout app)))))
 
 (defun agent-workspace--resize-own (frame fun)
   "FUN called to resize FRAME's windows, the app's own change (the room's

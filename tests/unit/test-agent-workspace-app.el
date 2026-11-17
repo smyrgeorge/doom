@@ -551,6 +551,44 @@ once."
       (agent-workspace--resized-h (selected-frame))
       (should (= (+test-awa--relayouts) 0)))))
 
+(ert-deftest agent-workspace-app/a-drag-or-a-resize-laid-out-once-at-its-end ()
+  "A border dragged (20 moves) or the frame widened (8 steps): one layout,
+after the last change, for the final size: bars a row, the room on the
+right once the frame is wide; a layout while the minibuffer is open done
+once it closes (doom-pbk.68)."
+  (+test-awa "drag"
+    (+test-awa--crew '("ada" "builder") '("ken" "builder") '("sam" "investigator"))
+    (set-frame-size (selected-frame) 142 40)
+    (let ((app (agent-workspace-open t))
+          (bars (lambda () (mapcar (lambda (name)
+                                     (window-total-height (get-buffer-window (format " *bar · %s · drag*" name))))
+                                   '("ken" "sam")))))
+      (agent-workspace-layout app)
+      ;; A drag: 20 moves of the issue list's border.
+      (dotimes (_ 20)
+        (ignore-errors (window-resize (+test-awa--issues-window project) 1 t))
+        (agent-workspace--resized-h (selected-frame)))
+      (should (= (+test-awa--relayouts) 1))
+      (should (= (window-total-width (+test-awa--issues-window project)) 50))
+      (should (equal (funcall bars) '(1 1)))
+      ;; The frame widened in 8 steps: one layout, the room on the right.
+      (dolist (width '(150 160 170 180 190 200 205 210))
+        (set-frame-size (selected-frame) width 40)
+        (agent-workspace--resized-h (selected-frame)))
+      (should (= (+test-awa--relayouts) 1))
+      (let ((room (get-buffer-window (agent-workspace--room-buffer project))))
+        (should (= (window-total-height room) (- (window-total-height (frame-root-window)) 4)))
+        (should (> (window-left-column room) 100)))
+      (should (equal (funcall bars) '(1 1)))
+      ;; While the minibuffer is open: done once it closes.
+      (ignore-errors (window-resize (+test-awa--issues-window project) 3 t))
+      (agent-workspace--resized-h (selected-frame))
+      (cl-letf (((symbol-function 'active-minibuffer-window) (lambda () (minibuffer-window))))
+        (should (= (+test-awa--relayouts) 1))
+        (should (= (window-total-width (+test-awa--issues-window project)) 53)))
+      (should (= (+test-awa--relayouts) 1))
+      (should (= (window-total-width (+test-awa--issues-window project)) 50)))))
+
 (declare-function +popup/quit-window "ui/popup/+hacks")
 
 (ert-deftest agent-workspace-app/doom-popups-stay ()
