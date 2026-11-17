@@ -105,6 +105,25 @@ Emacs waits for: what the turn changed is worked out in the background
         (agent-workspace--loop-claim ada))
       (should (= waited 0)))))
 
+(ert-deftest agent-workspace-activity/a-path-in-its-worktree-by-its-name ()
+  "A path in an agent's worktree is relative to it by its name, the file
+system not asked: once, on a busy machine, `file-in-directory-p' said no
+and the path stayed whole among its changed files. Elsewhere: as it is."
+  (let* ((agent-workspace--crews (make-hash-table :test #'equal))
+         (agent-workspace--activity (make-hash-table :test #'eq :weakness 'key))
+         (project (+test-awa2--project))
+         (ken (+test-awa2--agent project "ken"))
+         (worktree (agent-workspace-agent-worktree ken)))
+    (cl-letf (((symbol-function 'file-in-directory-p) #'ignore))
+      (should (equal (agent-workspace--relative ken (expand-file-name "README" worktree)) "README"))
+      (should (equal (agent-workspace--relative ken (expand-file-name "src/a.el" (directory-file-name worktree)))
+                     "src/a.el"))
+      (should (equal (agent-workspace--relative ken "src/b.el") "src/b.el"))
+      (should (equal (agent-workspace--relative ken "/elsewhere/b.el") "/elsewhere/b.el"))
+      (agent-workspace--activity-event
+       ken `((:event . file-write) (:data . ((:path . ,(expand-file-name "README" worktree))))))
+      (should (equal (plist-get (agent-workspace-activity ken) :changed) '("README"))))))
+
 (ert-deftest agent-workspace-activity/two-agents-in-one-file ()
   "The files each agent changed (written, its branch, uncommitted); one two
 of them changed, a conflict."

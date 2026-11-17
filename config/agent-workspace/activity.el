@@ -67,11 +67,16 @@ FILE relative to its worktree; its old minutes forgotten."
     (agent-workspace--changed agent 'activity)))
 
 (defun agent-workspace--relative (agent path)
-  "PATH relative to AGENT's worktree, if it's in it; else as it is."
-  (let ((worktree (agent-workspace-agent-worktree agent))
-        (path (and (stringp path) (expand-file-name path (agent-workspace-agent-worktree agent)))))
+  "PATH relative to AGENT's worktree, if it's in it; else as it is. In it by
+its name first, the file system not asked (`file-in-directory-p' is, its
+truenames and inodes: on a busy machine it once said no, the path kept
+whole); else by its truename (a link's name)."
+  (let* ((worktree (agent-workspace-agent-worktree agent))
+         (dir (and worktree (file-name-as-directory (expand-file-name worktree))))
+         (path (and (stringp path) (expand-file-name path worktree))))
     (cond ((not path) nil)
-          ((and worktree (file-in-directory-p path worktree)) (file-relative-name path worktree))
+          ((and dir (or (string-prefix-p dir path) (file-in-directory-p path dir)))
+           (file-relative-name path dir))
           (t (abbreviate-file-name path)))))
 
 (defun agent-workspace--tool-location (agent tool-call)
