@@ -306,21 +306,32 @@
   // anew, so the layout stayed the old one until the mouse moved over it.
   // Drawn anew right after: this observer, made once Excalidraw is up, is
   // called after its own. The drawing unchanged, no change counted. Its view
-  // fitted again (see fittedView), which draws it anew too. Followed once
-  // Excalidraw shows the fitted view: it starts at its own (100%, at 0, 0),
-  // the drawing's (initialData's) a moment after, and a resize meanwhile
-  // (its observer's first call, at once) took the view as moved: never
-  // fitted again. Its first call then fits it to the pane as it is by then.
+  // fitted again (see fittedView), which draws it anew too. Excalidraw
+  // starts at its own view (100%, at 0, 0), the drawing's fitted one
+  // (initialData's) a moment after: a resize before that (the observer's
+  // first call is at once) only draws it anew, the view not taken as moved
+  // (it was never fitted again); once the fitted view shows, it's fitted to
+  // the pane as it is by then. Looked at every 50 ms, 5 s at most.
   function followSize() {
     const container = document.querySelector('.excalidraw');
     if (!container || typeof ResizeObserver === 'undefined') return;
+    let shown = false, resized = false;
+    new ResizeObserver(() => {
+      if (fitted && !shown) {
+        resized = true;
+        api.updateScene({ appState: {} });
+      } else if (!refit()) {
+        api.updateScene({ appState: {} });
+      }
+    }).observe(container);
     const since = Date.now();
     (function whenShown() {
       if (fitted && !sameView(api.getAppState(), fitted) && Date.now() - since < 5000) {
         setTimeout(whenShown, 50);
         return;
       }
-      new ResizeObserver(() => { if (!refit()) api.updateScene({ appState: {} }); }).observe(container);
+      shown = true;
+      if (resized) refit();
     })();
   }
 
