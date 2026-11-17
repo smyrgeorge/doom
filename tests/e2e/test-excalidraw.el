@@ -527,7 +527,7 @@ theme loaded (dark, then light); a canvas chosen (light) stays."
       && e.contains(document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2));
   };
   const bar = document.querySelector('.App-toolbar-container');
-  const out = {mobile: document.querySelector('.excalidraw').classList.contains('excalidraw--mobile'),
+  const out = {width: w, mobile: document.querySelector('.excalidraw').classList.contains('excalidraw--mobile'),
                unreachable: []};
   // Each tool: in the page, or once the toolbar is scrolled to it.
   for (const tool of document.querySelectorAll('.App-top-bar .App-toolbar label.ToolIcon, .App-top-bar .App-toolbar button, .mobile-misc-tools-container label.ToolIcon, .mobile-misc-tools-container button')) {
@@ -539,7 +539,8 @@ theme loaded (dark, then light); a canvas chosen (light) stays."
   if (bar) bar.scrollLeft = 0;
   return JSON.stringify(out);
 })()"
-  "Whether the page lays out for a phone, and the tools it can't show.")
+  "The page's width, whether it lays out for a phone, and the tools it can't
+show.")
 
 (defconst +test-exd--library-panel-js
   "(() => {
@@ -584,7 +585,10 @@ there's room)."
           (split-window nil columns 'right)
           (+test-exd--open file)
           (let ((fits (+test-exd--js-json +test-exd--fits-js)))
-            (should (plist-get fits :mobile))
+            ;; Laid out for a phone under 730 px (config/excalidraw/page.el):
+            ;; 100 columns are under it on macOS, over it in Linux's font.
+            (should (equal (list columns (plist-get fits :mobile))
+                           (list columns (< (plist-get fits :width) 730))))
             (should (equal (list columns (plist-get fits :unreachable)) (list columns nil))))
           ;; More tools' menu.
           (+test-exd--js "(() => { document.querySelector('.App-toolbar button[title=\"More tools\"]').click(); return 'ok' })()")
