@@ -7,6 +7,7 @@
 ;; drawings, the pointer, a drawing's PNG, another drawing shown instead, and
 ;; drawings for Claude (config/agent-shell/excalidraw.el: agent-shell's
 ;; prompt stubbed, no agent).
+;; run.sh: split 2 (~110 s whole: WebKit drawings, saves waited for).
 
 ;; Doom's `use-package!' reads it (Doom's package manager defines it).
 (defvar doom-disabled-packages nil)

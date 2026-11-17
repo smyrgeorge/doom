@@ -6,6 +6,7 @@
 ;; list from bd's answers, its tally elsewhere, tiling leaving its frame alone;
 ;; opening, leaving and closing it in real persp-mode workspaces, its stand-in
 ;; agents (examples/agent-workspace/stand-in.el) exiting with no process left.
+;; run.sh: slow (~60 s in a full run: stand-in sessions, persp-mode).
 
 (require 'agent-shell)
 (require 'agent-shell-mock-agent)

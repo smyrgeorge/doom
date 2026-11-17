@@ -6,6 +6,7 @@
 ;; it's on first; those kept from a forgotten agent; nothing else), the
 ;; columns (ahead, behind, cleanly / conflicts, the agent's state; lined up, a
 ;; long name cut), the keys (RET, d, M, D, gr, q), when it's worked out.
+;; run.sh: slow (~50 s in a full run: git worktrees and merges).
 
 ;; Git as git is, not as your ~/.gitconfig has it (hooks, signing...); its
 ;; commits and merges made as a test user.

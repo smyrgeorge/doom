@@ -8,7 +8,7 @@
 ;; bd, "Work on ID: fail..." fails, else holds) on throwaway git repositories
 ;; whose issues bd tracks (skipped without bd). Batch Emacs gets no file-notify
 ;; events: a change to .beads is the watch's callback, called.
-;; run.sh: slow (~105 s alone, ~190 s in a full run: a stand-in session and bd for each issue taken).
+;; run.sh: split 3 (~110 s alone: a stand-in session and bd for each issue taken).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")

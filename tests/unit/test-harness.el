@@ -93,30 +93,49 @@ them (DO_NOT_TRACK)."
         (dolist (name crew)
           (should-not (string-match-p (concat "^" name "=") env)))))))
 
-(ert-deftest harness/run-sh-keeps-a-failed-file-s-log ()
-  "tests/run.sh with TEST_LOGS: a failed file's log copied there too, as
-KIND-NAME.txt, a passing one's not; nothing failed, no folder. CI keeps it
-with the run (doom-4q6)."
+;; ====== TESTS/RUN.SH ======
+
+(defun +test-harness--run-sh (files env &rest names)
+  "A copy of tests/run.sh run on FILES, unit tests ((NAME . CONTENT) each),
+ENV added to its environment (\"VAR=value\" each), NAMES the files to run
+(none: all): (STATUS OUTPUT). Its runs' folders in a temp folder of their
+own (TMPDIR); its helper.el loads this one."
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-") t)))
-         (tests (expand-file-name "tests/" dir))
-         (logs (expand-file-name "logs/" dir)))
+         (tests (expand-file-name "tests/" dir)))
     (make-directory (expand-file-name "unit/" tests) t)
     (make-directory (expand-file-name "scripts/" dir) t)
     (copy-file (expand-file-name "run.sh" +test-dir) (expand-file-name "run.sh" tests))
     (copy-file (expand-file-name "scripts/ui.sh" +test-root) (expand-file-name "scripts/ui.sh" dir))
-    (with-temp-file (expand-file-name "helper.el" tests) (insert "(require 'ert)\n"))
-    (with-temp-file (expand-file-name "unit/test-passes.el" tests)
-      (insert ";;; -*- lexical-binding: t; -*-\n(ert-deftest run/passes () (should t))\n"))
-    (with-temp-file (expand-file-name "unit/test-fails.el" tests)
-      (insert ";;; -*- lexical-binding: t; -*-\n"
-              "(ert-deftest run/fails () (message \"What it saw\") (should (= 1 2)))\n"))
+    (with-temp-file (expand-file-name "helper.el" tests)
+      (prin1 `(load ,(expand-file-name "helper.el" +test-dir) nil t) (current-buffer)))
+    (pcase-dolist (`(,name . ,content) files)
+      (with-temp-file (expand-file-name (concat "unit/" name) tests)
+        (insert ";;; -*- lexical-binding: t; -*-\n" content)))
+    (let ((process-environment
+           (append env
+                   (list (concat "EMACS=" (expand-file-name invocation-name invocation-directory))
+                         (concat "TMPDIR=" dir) "JOBS=2")
+                   process-environment)))
+      (with-temp-buffer
+        (list (apply #'call-process "bash" nil t nil (expand-file-name "run.sh" tests) "unit" names)
+              (buffer-string))))))
+
+(defun +test-harness--log-folder (output name)
+  "The run folder of the file NAME (test-NAME.el) whose full log OUTPUT
+shows."
+  (and (string-match (concat "full log: \\(.*/unit-test-" name "\\)/log\\.txt") output)
+       (file-name-as-directory (match-string 1 output))))
+
+(ert-deftest harness/run-sh-keeps-a-failed-file-s-log ()
+  "tests/run.sh with TEST_LOGS: a failed file's log copied there too, as
+KIND-NAME.txt, a passing one's not; nothing failed, no folder. CI keeps it
+with the run (doom-4q6)."
+  (let ((logs (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-logs-") t)))
+        (files '(("test-passes.el" . "(ert-deftest run/passes () (should t))\n")
+                 ("test-fails.el" . "(ert-deftest run/fails () (message \"What it saw\") (should (= 1 2)))\n"))))
+    (delete-directory logs)
     (cl-flet ((run (&rest names)
-                (let ((process-environment
-                       (append (list (concat "EMACS=" (expand-file-name invocation-name invocation-directory))
-                                     (concat "TMPDIR=" dir) (concat "TEST_LOGS=" logs) "JOBS=2")
-                               process-environment)))
-                  (with-temp-buffer
-                    (apply #'call-process "bash" nil t nil (expand-file-name "run.sh" tests) "unit" names)))))
+                (car (apply #'+test-harness--run-sh files (list (concat "TEST_LOGS=" logs) "RAM_DISK=0") names))))
       (should (= (run "passes") 0))
       (should-not (file-exists-p logs))
       (should (= (run) 1))
@@ -125,3 +144,68 @@ with the run (doom-4q6)."
         (insert-file-contents (expand-file-name "unit-test-fails.txt" logs))
         (should (string-search "What it saw" (buffer-string)))
         (should (string-search "Test run/fails condition:" (buffer-string)))))))
+
+(ert-deftest harness/run-sh-runs-a-split-file-in-parts ()
+  "A file with \";; run.sh: split 2\": its tests in two Emacsen, each test
+once; the parts' results one line, their tests added up; a failure in one
+part reported, its log in TEST_LOGS. The selector of a part: every PARTS-th
+test by name."
+  (let* ((logs (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-logs-") t)))
+         (ran (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-ran-") t)))
+         ;; Each test a file of its own there (two Emacsen writing one: a lock
+         ;; conflict).
+         (test (lambda (name ok)
+                 (format "(ert-deftest run/%s () (write-region \"\" nil %S) (should %s))\n"
+                         name (expand-file-name name ran) ok))))
+    (pcase-let ((`(,status ,output)
+                 (+test-harness--run-sh
+                  `(("test-parts.el" . ,(concat ";; run.sh: split 2 (two at once).\n"
+                                                (funcall test "a" "t") (funcall test "b" "t")
+                                                (funcall test "c-fails" "(= 1 2)"))))
+                  (list (concat "TEST_LOGS=" logs) "RAM_DISK=0"))))
+      (should (= status 1))
+      (should (string-match-p "test-parts +FAIL 3 tests, 1 failed · [0-9.]+ s, in 2 parts" output))
+      (should (string-search "Test run/c-fails condition:" output))
+      (should (string-match-p "full log: .*/unit-test-parts\\.1/log\\.txt" output))
+      (should-not (string-search "unit-test-parts.2/log.txt" output))
+      ;; Each test once, the first part's a and c-fails, the second's b.
+      (should (equal (directory-files ran nil "\\`[^.]") '("a" "b" "c-fails")))
+      (with-temp-buffer
+        (insert-file-contents (expand-file-name "unit-test-parts.txt" logs))
+        (should (string-search "Test run/c-fails condition:" (buffer-string))))))
+  ;; This Emacs's tests (this file's): the first part every other one by
+  ;; name, from the first; a part beyond them, none.
+  (let* ((names (sort (mapcar #'ert-test-name (ert-select-tests t t)) #'string<))
+         (one (cdr (+test-part-selector 1 2)))
+         (two (cdr (+test-part-selector 2 2))))
+    (should (> (length names) 2))
+    (should (equal (cdr (+test-part-selector 1 1)) names))
+    (should (equal one (cl-loop for name in names for i from 0 when (cl-evenp i) collect name)))
+    (should (equal (sort (append one two) #'string<) names))
+    (should (equal (+test-part-selector (1+ (length names)) (1+ (length names))) '(member)))))
+
+(ert-deftest harness/run-sh-on-a-ram-disk ()
+  "On macOS, the files' folders (TEST_TMP) on a RAM disk of the run's own,
+hidden from the Finder; a failed file's folder copied beside its log; the
+disk gone once the run ends. RAM_DISK=0: on the disk, beside the log."
+  (skip-unless (and (eq system-type 'darwin) (executable-find "hdiutil")))
+  (let ((files '(("test-disk.el" . "(ert-deftest run/disk ()
+  (write-region (getenv \"TEST_TMP\") nil (expand-file-name \"where\" (getenv \"TEST_TMP\")))
+  (message \"MOUNTS<<%s>>\" (with-temp-buffer (call-process \"mount\" nil t) (buffer-string)))
+  (should nil))\n"))))
+    (pcase-let* ((`(,status ,output) (+test-harness--run-sh files '("RAM_DISK=64")))
+                 (folder (+test-harness--log-folder output "disk"))
+                 (run (file-name-directory (directory-file-name folder)))
+                 (ram (concat run "ram")))
+      (should (= status 1))
+      (should (equal (with-temp-buffer (insert-file-contents (concat folder "where")) (buffer-string))
+                     (concat ram "/unit-test-disk")))
+      (with-temp-buffer
+        (insert-file-contents (concat folder "log.txt"))
+        (should (string-match-p (concat " on " (regexp-quote ram) " (hfs, .*nobrowse") (buffer-string))))
+      (should-not (string-search ram (with-temp-buffer (call-process "mount" nil t) (buffer-string)))))
+    (pcase-let* ((`(,status ,output) (+test-harness--run-sh files '("RAM_DISK=0")))
+                 (folder (+test-harness--log-folder output "disk")))
+      (should (= status 1))
+      (should (equal (with-temp-buffer (insert-file-contents (concat folder "where")) (buffer-string))
+                     (directory-file-name folder))))))

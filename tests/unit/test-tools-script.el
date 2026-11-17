@@ -8,7 +8,7 @@
 ;; checks. Its output: ==> steps, ✔ / ✖ lines, $ commands (scripts/ui.sh).
 ;; Dry (DRY_RUN=1) or with fake installers that record what they're asked:
 ;; nothing is installed. As each system (OS=macos|apt|dnf, scripts/os.sh).
-;; run.sh: slow (~80 s: the install script, run).
+;; run.sh: split 3 (~140 s whole in a full run: the install script, run).
 
 (defconst +test-tools-script--script (expand-file-name "scripts/tools.sh" +test-root))
 

@@ -6,6 +6,7 @@
 ;; compose line (#name, #roles, #all, the selected agent; queued when busy;
 ;; completion, history), what's kept. A real turn of a stand-in agent
 ;; (examples/agent-workspace/stand-in.el) in the feed.
+;; run.sh: slow (~55 s in a full run: a stand-in turn, bd).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")

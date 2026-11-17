@@ -406,6 +406,25 @@ nil); files BODY loads bind Linux's keys."
   (declare (indent 0))
   `(let ((system-type 'darwin)) ,@body))
 
+;; ====== A FILE'S TESTS IN PARTS ======
+
+;; A test file with a line ";; run.sh: split N" runs in N Emacsen at once,
+;; each its share of the tests (tests/run.sh): its minutes, run side by side,
+;; no longer the run's last ones.
+
+(defvar +test-selector t
+  "The tests an end-to-end Emacs runs (`+test-e2e-run'): an ERT selector,
+all of them unless tests/run.sh gives this Emacs a part of its file's.")
+
+(defun +test-part-selector (part parts)
+  "An ERT selector for part PART (from 1) of PARTS of the tests loaded:
+by name, every PARTS-th from the PART-th, the parts together the tests
+once each."
+  (let ((names (sort (mapcar #'ert-test-name (ert-select-tests t t)) #'string<)))
+    (cons 'member (cl-loop for name in names
+                           for i from 0
+                           when (= (mod i parts) (1- part)) collect name))))
+
 ;; ====== TEST TOOLS ======
 
 (defun +test-reset ()
@@ -729,7 +748,7 @@ report), and exit with their status."
                          (when format-string
                            (+test--stderr (concat (apply #'format-message format-string args) "\n")))
                          (apply message-fn format-string args))))
-             (let ((stats (ert-run-tests-batch t)))
+             (let ((stats (ert-run-tests-batch +test-selector)))
                (setq status (if (zerop (ert-stats-completed-unexpected stats)) 0 1))))
          (kill-emacs status))))))
 

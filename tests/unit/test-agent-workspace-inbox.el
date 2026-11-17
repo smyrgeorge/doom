@@ -4,6 +4,7 @@
 ;; free, framed as data, their turn in plan mode; kept across a restart;
 ;; never waking one asleep; [Send now], [Drop], P; the limits. Stand-in
 ;; agents (examples/agent-workspace/stand-in.el), their messages logged.
+;; run.sh: slow (~45 s in a full run: stand-in sessions).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
