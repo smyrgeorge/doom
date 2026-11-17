@@ -785,7 +785,10 @@ space: \"#ada \" selects ada."
         (let ((name (match-string 1 text))
               (message (string-trim (substring text (match-end 0)))))
           (cond
-           ((equal name "all") (cons (seq-filter #'agent-workspace-live-p agents) message))
+           ((equal name "all")
+            (if-let* ((awake (seq-filter #'agent-workspace-live-p agents)))
+                (cons awake message)
+              (cons nil "Nobody awake to send it to")))
            ((agent-workspace-agent name project) (cons (list (agent-workspace-agent name project)) message))
            ((let ((role (string-remove-suffix "s" name)))
               (when-let* ((of (seq-filter (lambda (agent) (equal (agent-workspace-agent-role agent) role)) agents)))

@@ -635,6 +635,20 @@ the agent selected; the line emptied, the message in its history."
         (should-error (agent-workspace-compose-send) :type 'user-error)
         (ignore ada)))))
 
+(ert-deftest agent-workspace-room/all-with-nobody-awake ()
+  "#all with no agent awake: refused, saying nobody is awake, not your
+message as the error (doom-pbk.53)."
+  (+test-awr2 "all-asleep"
+    (let ((ada (agent-workspace-create :role "builder" :name "ada")))
+      (agent-workspace-sleep ada)
+      (should (equal (agent-workspace--recipients project "#all please rebase on main")
+                     '(nil . "Nobody awake to send it to")))
+      (with-current-buffer (agent-workspace--compose-buffer project)
+        (insert "#all please rebase on main")
+        (should (equal (cadr (should-error (agent-workspace-compose-send) :type 'user-error))
+                       "Nobody awake to send it to")))
+      (should-not sent))))
+
 (ert-deftest agent-workspace-room/typing-a-name-selects-it ()
   "\"#ada \" typed in the compose line selects ada (its pane opens)."
   (+test-awr2 "typing"
