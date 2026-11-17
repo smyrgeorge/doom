@@ -115,8 +115,9 @@ closed, kept to open again. In `agent-workspace-moving-functions'."
 
 (defun agent-workspace--panels-moved-h (agent what)
   "AGENT renamed or given a role, its worktree moved: its panels opened again
-there, named after it. In `agent-workspace-change-functions'."
-  (when-let* (((memq what '(renamed role)))
+there, named after it; not moved after all (`unmoved'), where they were. In
+`agent-workspace-change-functions'."
+  (when-let* (((memq what '(renamed role unmoved)))
               (names (gethash agent agent-workspace--panels-moving)))
     (remhash agent agent-workspace--panels-moving)
     (agent-workspace-open-panels agent names)))

@@ -608,6 +608,57 @@ stays asleep."
       (should (eq (agent-workspace-agent-state agent) 'asleep))
       (should (file-directory-p (expand-file-name ".agent-shell/worktrees/builder-ada/" project))))))
 
+(ert-deftest agent-workspace-session/a-name-a-forgotten-agent-left ()
+  "Renamed to a name a forgotten agent left (ken, forgotten, his worktree and
+branch kept), or given a role whose folder a forgotten one left: refused,
+saying why, before anything changes: its name, worktree, branch, session
+as they were (doom-pbk.35)."
+  (+test-aws--with-crew "left"
+    (let* ((ada (+test-aws--create "ada"))
+           (ken (+test-aws--create "ken"))
+           (session (agent-workspace-agent-buffer ada))
+           (dir (agent-workspace-agent-worktree ada)))
+      (agent-workspace-forget ken 'keep)
+      (should (equal (cadr (should-error (agent-workspace-rename ada "ken") :type 'user-error))
+                     "ken is the name of a forgotten agent: its worktree or branch is still there"))
+      ;; A reviewer ada's folder, left.
+      (make-directory (expand-file-name ".agent-shell/worktrees/reviewer-ada/" project) t)
+      (should (equal (cadr (should-error (agent-workspace-set-role ada "reviewer") :type 'user-error))
+                     ".agent-shell/worktrees/reviewer-ada is there already"))
+      (should (equal (agent-workspace-agent-name ada) "ada"))
+      (should (equal (agent-workspace-agent-role ada) "builder"))
+      (should (eq (agent-workspace-agent-buffer ada) session))
+      (should (buffer-live-p session))
+      (should (equal (agent-workspace-agent-worktree ada) dir))
+      (should (= (length (+test-aws--logged :start "ada")) 1)))))
+
+(ert-deftest agent-workspace-session/a-rename-failing-midway ()
+  "git failing midway through a rename (its branch not renamed): the agent as
+it was: its name, its worktree where it was, locked with its name, its
+branch, a session started again; said (doom-pbk.35)."
+  (+test-aws--with-crew "midway"
+    (let* ((ada (+test-aws--create "ada"))
+           (dir (agent-workspace-agent-worktree ada))
+           (git (symbol-function 'agent-workspace--git)))
+      (cl-letf (((symbol-function 'agent-workspace--git)
+                 (lambda (&rest args)
+                   (if (equal (seq-take args 2) '("branch" "-m"))
+                       (error "git branch: fatal: refused")
+                     (apply git args)))))
+        (should (equal (cadr (should-error (agent-workspace-rename ada "grace") :type 'user-error))
+                       "ada isn't renamed: git branch: fatal: refused")))
+      (should (equal (agent-workspace-agent-name ada) "ada"))
+      (should (equal (agent-workspace-agent-worktree ada) dir))
+      (should (file-directory-p dir))
+      (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/builder-grace/" project)))
+      (let ((default-directory dir))
+        (should (equal (+test-aws--git "branch" "--show-current") "agent/ada")))
+      (should (string-prefix-p "agent ada (" (plist-get (agent-workspace--worktree-entry project dir) :locked)))
+      (should (+test-aws--state ada 'desk))
+      (should (equal (buffer-name (agent-workspace-agent-buffer ada)) "ada · builder"))
+      (should (= (length (+test-aws--logged :start "ada")) 2))
+      (should-not (+test-aws--logged :start "grace")))))
+
 (ert-deftest agent-workspace-session/forget ()
   "Forgotten: out of the crew, its session stopped; its worktree kept if
 you say so, else removed when it holds nothing of its own."

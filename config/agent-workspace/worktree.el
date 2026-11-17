@@ -223,27 +223,60 @@ with AGENT's name. Its folder and branch are set in AGENT."
   "Non-nil if BRANCH is a branch of `default-directory''s repository."
   (eql 0 (process-file "git" nil nil nil "rev-parse" "--verify" "--quiet" (concat "refs/heads/" branch))))
 
+(defun agent-workspace-worktree-move-blocker (agent name role)
+  "Why AGENT's worktree can't move to the folder of NAME and ROLE, or nil: a
+folder there already (a forgotten agent's, kept), or renamed, its resting
+branch agent/NAME there already."
+  (let* ((project (agent-workspace-agent-project agent))
+         (old (agent-workspace-agent-worktree agent))
+         (dir (agent-workspace-worktree-directory project name role))
+         (default-directory project))
+    (cond ((and (file-exists-p dir)
+                (not (and old (file-exists-p old) (equal (file-truename old) (file-truename dir)))))
+           (format "%s is there already" (file-relative-name (directory-file-name dir) project)))
+          ((and (not (equal name (agent-workspace-agent-name agent)))
+                (agent-workspace--branch-p (agent-workspace-branch name)))
+           (format "the branch %s is there already" (agent-workspace-branch name))))))
+
 (defun agent-workspace-worktree-move (agent name role)
   "AGENT's worktree moved to the folder of NAME and ROLE, the branch it rests
 on renamed after NAME (agent/NAME; those of its work keep their names, now
 NAME's), its lock's reason too (AGENT renamed, given ROLE, meanwhile). The
-branch it's on is kept. Its session must not run."
+branch it's on is kept. Its session must not run. git failing midway: what
+was done put back, its worktree locked again, AGENT as it was, the error
+signalled."
   (let* ((project (agent-workspace-agent-project agent))
          (old (agent-workspace-agent-worktree agent))
          (dir (agent-workspace-worktree-directory project name role))
          (old-name (agent-workspace-agent-name agent))
          (old-rest (agent-workspace-branch old-name))
          (rest (agent-workspace-branch name))
-         (default-directory project))
-    (when (and old (file-exists-p old) (not (equal (file-truename old) (file-truename dir))))
-      ;; git won't move a locked worktree.
-      (agent-workspace--worktree-unlock project old)
-      (agent-workspace--git "worktree" "move" (directory-file-name old) (directory-file-name dir)))
-    (unless (equal old-name name)
-      (when (agent-workspace--branch-p old-rest)
-        (agent-workspace--git "branch" "-m" old-rest rest))
-      (dolist (branch (agent-workspace--noted-branches project old-name))
-        (agent-workspace--branch-note project branch name)))
+         (noted (unless (equal old-name name) (agent-workspace--noted-branches project old-name)))
+         (default-directory project)
+         moved renamed)
+    (condition-case err
+        (progn
+          (when (and old (file-exists-p old) (not (equal (file-truename old) (file-truename dir))))
+            ;; git won't move a locked worktree.
+            (agent-workspace--worktree-unlock project old)
+            (agent-workspace--git "worktree" "move" (directory-file-name old) (directory-file-name dir))
+            (setq moved t))
+          (unless (equal old-name name)
+            (when (agent-workspace--branch-p old-rest)
+              (agent-workspace--git "branch" "-m" old-rest rest)
+              (setq renamed t))
+            (dolist (branch noted)
+              (agent-workspace--branch-note project branch name))))
+      (error
+        ;; Put back, its lock too: AGENT's slots are as they were.
+        (when renamed (ignore-errors (agent-workspace--git "branch" "-m" rest old-rest)))
+        (dolist (branch noted)
+          (ignore-errors (agent-workspace--branch-note project branch old-name)))
+        (when moved
+          (ignore-errors (agent-workspace--git "worktree" "move" (directory-file-name dir) (directory-file-name old))))
+        (when (and old (file-exists-p old))
+          (ignore-errors (agent-workspace--worktree-lock agent)))
+        (signal (car err) (cdr err))))
     (setf (agent-workspace-agent-worktree agent) dir
           (agent-workspace-agent-branch agent)
           (if (file-exists-p (expand-file-name ".git" dir))

@@ -477,7 +477,8 @@ conflicts, worked out without touching your checkout. It's worked out again on `
 ## What you do to one
 
 You can interrupt an agent, kill it, restart it fresh, put it to sleep, wake it, rename it (its worktree and
-`agent/ada` follow; the branches of its work keep their names), change its role (its worktree follows; not while it works) or recolour it. Killing it gives back the issue you gave it, if it's still in progress and assigned to the
+`agent/ada` follow; the branches of its work keep their names; not to the name of a forgotten agent whose worktree or
+branch is still there), change its role (its worktree follows; not while it works) or recolour it. Killing it gives back the issue you gave it, if it's still in progress and assigned to the
 agent.
 
 Forgetting an agent takes it out of the crew. Its worktree and branches go too when they hold nothing your checkout

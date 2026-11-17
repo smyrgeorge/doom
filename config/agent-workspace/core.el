@@ -17,6 +17,8 @@
 ;; worktree.el and session.el, loaded after.
 (declare-function agent-workspace-worktree-ensure "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-move "agent-workspace/worktree")
+(declare-function agent-workspace-worktree-move-blocker "agent-workspace/worktree")
+(declare-function agent-workspace--name-left-p "agent-workspace/new")
 (declare-function agent-workspace-worktree-fate "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-remove "agent-workspace/worktree")
 (declare-function agent-workspace-issue-branch-open "agent-workspace/worktree")
@@ -57,7 +59,8 @@ closed or emptied), `loop' (turned on or off),
 (defvar agent-workspace-moving-functions nil
   "Called with an agent whose worktree is about to move (it's renamed),
 its session stopped: what's open there closed, to open again in the new one
-once it's `renamed'.")
+once it's `renamed' (or given a `role'), or where it was if it's `unmoved'
+\(the move failed).")
 
 (defvar agent-workspace-state-change-functions nil
   "Called with an agent, its old state and its new one, when its state
@@ -490,20 +493,17 @@ asked: no work is lost without asking."
 
 (defun agent-workspace-rename (agent name)
   "Rename AGENT to NAME: its session, its worktree and its branch too. Not
-while it works; a running session starts again, fresh (its worktree moved)."
-  (agent-workspace--check-name name (agent-workspace-agent-project agent) agent)
-  (when (memq (agent-workspace-agent-state agent) '(working hand))
-    (user-error "%s is working: rename it once it's done" (agent-workspace-agent-name agent)))
-  (let ((live (agent-workspace-live-p agent))
-        (state (agent-workspace-agent-state agent)))
-    (when live (agent-workspace--stop agent 'waking))
-    (run-hook-with-args 'agent-workspace-moving-functions agent)
-    (agent-workspace-worktree-move agent name (agent-workspace-agent-role agent))
-    (setf (agent-workspace-agent-name agent) name)
-    (agent-workspace--changed agent 'renamed)
-    (if live
-        (agent-workspace--start agent)
-      (agent-workspace--set-state agent state))))
+while it works, nor to a name a forgotten agent left (its worktree or
+branch still there); a running session starts again, fresh (its worktree
+moved)."
+  (let ((project (agent-workspace-agent-project agent)))
+    (agent-workspace--check-name name project agent)
+    (when (memq (agent-workspace-agent-state agent) '(working hand))
+      (user-error "%s is working: rename it once it's done" (agent-workspace-agent-name agent)))
+    (when (and (not (equal name (agent-workspace-agent-name agent)))
+               (agent-workspace--name-left-p project name))
+      (user-error "%s is the name of a forgotten agent: its worktree or branch is still there" name))
+    (agent-workspace--move agent name (agent-workspace-agent-role agent) 'renamed)))
 
 (defun agent-workspace-set-role (agent role)
   "Give AGENT ROLE: its worktree moved after it (ROLE-NAME). Not while it
@@ -511,15 +511,32 @@ works; a running session starts again, fresh, as ROLE says."
   (unless (equal role (agent-workspace-agent-role agent))
     (when (memq (agent-workspace-agent-state agent) '(working hand))
       (user-error "%s is working: change its role once it's done" (agent-workspace-agent-name agent)))
-    (let ((live (agent-workspace-live-p agent))
-          (state (agent-workspace-agent-state agent)))
-      (when live (agent-workspace--stop agent 'waking))
-      (run-hook-with-args 'agent-workspace-moving-functions agent)
-      (agent-workspace-worktree-move agent (agent-workspace-agent-name agent) role)
-      (agent-workspace--changed agent 'role)
+    (agent-workspace--move agent (agent-workspace-agent-name agent) role 'role)))
+
+(defun agent-workspace--move (agent name role what)
+  "AGENT renamed NAME or given ROLE (WHAT: `renamed', `role'): its worktree
+moved after them, its session stopped meanwhile and started again. Refused
+before anything changes if its worktree can't move
+\(`agent-workspace-worktree-move-blocker'); failing midway, AGENT as it was
+\(its name, its worktree, locked, its branch; its session started again,
+what was open there opened again: changed `unmoved'), a user error saying
+why."
+  (when-let* ((why (agent-workspace-worktree-move-blocker agent name role)))
+    (user-error "%s" why))
+  (let ((live (agent-workspace-live-p agent))
+        (state (agent-workspace-agent-state agent))
+        (was (agent-workspace-agent-name agent)))
+    (when live (agent-workspace--stop agent 'waking))
+    (run-hook-with-args 'agent-workspace-moving-functions agent)
+    (let ((failed (condition-case err
+                      (progn (agent-workspace-worktree-move agent name role) nil)
+                    (error (error-message-string err)))))
+      (agent-workspace--changed agent (if failed 'unmoved what))
       (if live
           (agent-workspace--start agent)
-        (agent-workspace--set-state agent state)))))
+        (agent-workspace--set-state agent state))
+      (when failed
+        (user-error "%s %s: %s" was (if (eq what 'renamed) "isn't renamed" "keeps its role") failed)))))
 
 (defun agent-workspace-give (agent issue &optional title type)
   "Give AGENT ISSUE (its TITLE, its TYPE: bd's issue_type) to work on, before
