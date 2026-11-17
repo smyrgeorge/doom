@@ -604,10 +604,13 @@ waits for their end (a timer, while events wait)."
   "A crew's queued events: reorder, drop, send now, a source off."
   (setq tabulated-list-format [("To" 10 nil) ("From" 10 nil) ("Since" 6 nil) ("Event" 0 nil)]
         tabulated-list-padding 1)
+  ;; Its columns' names its first line: the header line is its own (INBOX,
+  ;; how many wait...), set after (tabulated-list's init takes it).
+  (setq-local tabulated-list-use-header-line nil)
+  (tabulated-list-init-header)
   (setq-local mode-line-format nil
               tab-line-exclude t
-              header-line-format '(:eval (agent-workspace--inbox-view-header)))
-  (tabulated-list-init-header))
+              header-line-format '(:eval (agent-workspace--inbox-view-header))))
 
 (defun agent-workspace--inbox-view-header ()
   "The inbox view's header line."
@@ -652,7 +655,18 @@ waits for their end (a timer, while events wait)."
                                     (agent-workspace--since (plist-get event :time))
                                     (car (split-string (plist-get event :text) "\n")))))
                     (agent-workspace--inbox-waiting project)))
-      (tabulated-list-print t))))
+      (tabulated-list-print t)
+      ;; Not on its columns' names: on an event.
+      (let ((window (get-buffer-window buffer t)))
+        (unless (tabulated-list-get-id (if window (window-point window) (point)))
+          (agent-workspace--inbox-view-first)
+          (when window (set-window-point window (point))))))))
+
+(defun agent-workspace--inbox-view-first ()
+  "The cursor on the inbox view's first event, if it has one."
+  (goto-char (point-min))
+  (while (and (not (tabulated-list-get-id)) (not (eobp)))
+    (forward-line 1)))
 
 (defun agent-workspace--since (time)
   "How long ago TIME (\"%FT%T%z\") was: \"4m\", \"2h\", \"3d\"."

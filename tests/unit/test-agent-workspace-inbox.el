@@ -419,7 +419,14 @@ other events for her dropped), q gives the room back."
     (should (eq (current-buffer) (agent-workspace--inbox-view-buffer project)))
     (let ((texts (lambda () (mapcar (lambda (event) (plist-get event :text)) (agent-workspace-inbox project)))))
       (should (string-search "three" (buffer-string)))
+      ;; Its header, its own; the columns' names its first line (doom-pbk.85).
+      (should (equal header-line-format '(:eval (agent-workspace--inbox-view-header))))
+      (should (string-match-p "\\` INBOX  4 waiting" (substring-no-properties (agent-workspace--inbox-view-header))))
+      ;; Opened on its first event.
+      (should (equal (aref (tabulated-list-get-entry (window-point (get-buffer-window))) 3) "one"))
       (goto-char (point-min))
+      (should (string-match-p "To +From +Since +Event" (buffer-substring-no-properties (point) (line-end-position))))
+      (agent-workspace--inbox-view-first)
       (agent-workspace-inbox-view-down)
       (should (equal (funcall texts) '("two" "one" "three" "four")))
       (should (equal (aref (tabulated-list-get-entry) 3) "one"))
@@ -428,7 +435,7 @@ other events for her dropped), q gives the room back."
       (forward-line 1)
       (agent-workspace-inbox-view-drop)
       (should (equal (funcall texts) '("one" "three" "four")))
-      (goto-char (point-min))
+      (agent-workspace--inbox-view-first)
       (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "ada")))
         (agent-workspace-inbox-view-source-off))
       (should (equal (funcall texts) '("four")))
