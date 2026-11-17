@@ -107,20 +107,39 @@ be (other rules', e.g. Doom's popups': the strategy decides)."
                                          window-parameters dedicated side slot direction)))
               alist))
 
+(defun +my/tiling--beside-atom (atom)
+  "A new pane beside ATOM, a layout kept whole (config/tiling/panes.el): the
+first on its right (below it if it's taller than wide), ATOM keeping
+`+my/tiling-tall-ratio' of the width (`+my/tiling-wide-ratio' of the
+height); the next ones halving the last pane beside it, below it (on its
+right). No room: said."
+  (if-let* ((last (car (last (+my/tiling--panes (window-frame atom))))))
+      (+my/tiling--split-window last nil (if (>= (car (window-edges last)) (nth 2 (window-edges atom)))
+                                             'below
+                                           'right))
+    (let ((across (>= (window-pixel-width atom) (window-pixel-height atom))))
+      (+my/tiling--split-window
+       atom (round (* (if across +my/tiling-tall-ratio +my/tiling-wide-ratio)
+                      (window-size atom across)))
+       (if across 'right 'below)))))
+
 (defun +my/tiling--new-pane ()
-  "A new pane where the strategy puts it, with no tabs yet; nil in a frame
-without panes."
-  (when-let* ((panes (+my/tiling--ready-panes)))
-    (let ((new (funcall (plist-get (+my/tiling--strategy) :split) panes)))
-      (set-window-prev-buffers new nil)
-      (set-window-next-buffers new nil)
-      (set-window-parameter new 'tab-line-buffers nil)
-      new)))
+  "A new pane where the strategy puts it, or beside a layout kept whole
+\(config/tiling/panes.el), with no tabs yet; nil in a frame without panes."
+  (when-let* ((new (if-let* ((atom (+my/tiling--atom)))
+                         (+my/tiling--beside-atom atom)
+                       (when-let* ((panes (+my/tiling--ready-panes)))
+                         (funcall (plist-get (+my/tiling--strategy) :split) panes)))))
+    (set-window-prev-buffers new nil)
+    (set-window-next-buffers new nil)
+    (set-window-parameter new 'tab-line-buffers nil)
+    new))
 
 (defun +my/tiling--hidden-pane (buffer)
   "A hidden pane holding BUFFER brought to the front (the strategy's :show:
 fullscreen's); its window, or nil."
-  (when-let* ((show (plist-get (alist-get +my/tiling-strategy +my/tiling-strategies) :show)))
+  (when-let* (((not (+my/tiling--atom)))
+              (show (plist-get (alist-get +my/tiling-strategy +my/tiling-strategies) :show)))
     (funcall show buffer)))
 
 (defun +my/tiling--behind (buffer)
@@ -132,6 +151,7 @@ doing), but behind it, hidden just after it, said; a hidden pane holding it
 already left so. `fail' then (`display-buffer' shows it nowhere), else nil."
   (when (and (null this-command)
              (plist-get (+my/tiling--strategy) :hides)
+             (not (+my/tiling--atom))
              (let ((panes (+my/tiling--panes))) (and panes (null (cdr panes)))))
     (cond
      ((+my/tiling--hidden-holds-p buffer) 'fail)
@@ -218,12 +238,13 @@ tabs the only live buffer it showed."
 (defun +my/tiling-close-pane-h ()
   "The buffer killed: the panes it was the last tab of close, but a frame's
 last pane (one hidden then shown: config/tiling/hidden.el), and in a frame
-left alone."
+left alone (nor a layout kept whole's windows: config/tiling/panes.el)."
   (let ((buffer (current-buffer)))
     (dolist (window (get-buffer-window-list buffer 'nomini t))
       (when (and (window-live-p window)
                  (not (+my/tiling--left-alone-p (window-frame window)))
                  (not (window-parameter window 'window-side))
+                 (not (window-parameter window 'window-atom))
                  (or (eq (window-deletable-p window) t) (+my/tiling--shown-alone-p window))
                  (+my/tiling--last-tab-p window buffer))
         (delete-window window)))))

@@ -52,6 +52,18 @@ hooks not run: no language server, linter...), read-only unless EDITABLE."
         (+my/tabs-off-h)))
     buffer))
 
+(defun +my/merge--delete-other-windows (window)
+  "`delete-other-windows' in a merge's WINDOW: the merge alone in its frame,
+its bar and panes kept whole (the windows beside them closed); nothing when
+it is already. WINDOW no longer kept whole (its layout broken by a command
+ignoring window parameters: Emacs then forgets it was atomic): as usual."
+  (let ((root (window-atom-root window)))
+    (cond ((null root)
+           (set-window-parameter window 'delete-other-windows nil)
+           (delete-other-windows window))
+          ((not (eq root (window-main-window (window-frame window))))
+           (delete-other-windows root)))))
+
 (defun +my/merge--layout (session)
   "SESSION's panes: the bar across the top, Yours, the Result (selected),
 Theirs."
@@ -64,7 +76,10 @@ Theirs."
       (select-window (+my/merge--last-pane)))
     (delete-other-windows)
     (let* ((left (selected-window))
-           (bar (split-window left -2 'above))
+           ;; A parent of their own (beside a side panel below, the bar was
+           ;; its sibling): kept whole, below.
+           (bar (let ((window-combination-limit t))
+                  (split-window left -2 'above)))
            (middle (split-window left (- (* 2 (/ (window-total-width left) 3))) 'right))
            (right (split-window middle (- (/ (window-total-width middle) 2)) 'right)))
       (set-window-buffer bar (+my/merge-bar session))
@@ -84,6 +99,13 @@ Theirs."
       (select-window middle)
       (dolist (window (list left middle right))
         (set-window-parameter window '+my/merge-view (+my/merge--view window)))
+      ;; Kept whole (an atomic window): a window split from one of them
+      ;; (an application opened, a file) opens beside them all, and a
+      ;; layout made by others (tiling's) leaves them be. C-x 1 in one:
+      ;; them alone in the frame.
+      (window-make-atom (window-parent bar))
+      (dolist (window (list bar left middle right))
+        (set-window-parameter window 'delete-other-windows #'+my/merge--delete-other-windows))
       (list left middle right bar))))
 
 (defun +my/merge--start (path)
@@ -255,7 +277,15 @@ first: no pane killed closes it again)."
   (setf (+my/merge-finished session) t)
   (when (+my/merge-winconf session)
     (ignore-errors (set-window-configuration (+my/merge-winconf session)))
-    (+my/merge--restore-tabs (+my/merge-tabs session)))
+    (+my/merge--restore-tabs (+my/merge-tabs session))
+    ;; The window the merge was laid out in is as it was but for the
+    ;; merge's parameters (a window configuration doesn't put back those):
+    ;; kept whole, others (tiling) left it be.
+    (dolist (window (and (frame-live-p (+my/merge-frame session))
+                         (window-list (+my/merge-frame session) 'nomini)))
+      (when (eq (window-parameter window 'delete-other-windows) #'+my/merge--delete-other-windows)
+        (dolist (parameter '(window-atom delete-other-windows +my/merge-view))
+          (set-window-parameter window parameter nil)))))
   (dolist (buffer (list (+my/merge-yours session) (+my/merge-theirs session)
                         (+my/merge-result session) (+my/merge-base session)
                         (+my/merge-bar session)))

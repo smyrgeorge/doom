@@ -270,6 +270,37 @@ windows as they were; nothing closed later puts a layout back."
       (should (equal (window-list nil 'nomini) windows))
       (should (= (+test-merge--fire #'+my/merge--finish) 0)))))
 
+(ert-deftest merge/kept-whole ()
+  "The bar and the three panes an atomic window: a window split from one of
+them opens beside them all; C-x 1 in one closes it, the four kept; with
+nothing beside, nothing (no error)."
+  (+test-merge
+    (let* ((windows (mapcar #'get-buffer-window
+                            (list (+my/merge-bar session) (+my/merge-yours session)
+                                  (+my/merge-result session) (+my/merge-theirs session))))
+           (root (window-atom-root (car windows)))
+           (intact (lambda ()
+                     (should (equal (mapcar #'get-buffer-window
+                                            (list (+my/merge-bar session) (+my/merge-yours session)
+                                                  (+my/merge-result session) (+my/merge-theirs session)))
+                                    windows))
+                     (let ((count 0))
+                       (walk-window-subtree (lambda (_) (cl-incf count)) root)
+                       (should (= count 4))))))
+      (should root)
+      (should (seq-every-p (lambda (window) (eq (window-atom-root window) root)) windows))
+      (funcall intact)
+      (let ((new (split-window (nth 2 windows) nil 'right)))
+        (should-not (window-parameter new 'window-atom))
+        (should (= (car (window-edges new)) (nth 2 (window-edges root))))
+        (funcall intact)
+        (delete-other-windows (nth 2 windows))
+        (should-not (window-live-p new)))
+      (funcall intact)
+      (delete-other-windows (nth 2 windows))
+      (funcall intact)
+      (should (eq (window-main-window) root)))))
+
 (ert-deftest merge/the-changes-and-what-they-are ()
   (+test-merge
     (should (equal (mapcar #'+my/merge-chunk-kind (+my/merge-chunks session))

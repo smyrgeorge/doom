@@ -418,7 +418,10 @@ nil); files BODY loads bind Linux's keys."
       (let ((ignore-window-parameters t))
         (ignore-errors (delete-window window)))))
   (select-window (frame-first-window))
-  (delete-other-windows)
+  ;; Its parameters ignored: a layout kept whole (a merge's, an atomic
+  ;; window) can't be made the only one otherwise.
+  (let ((ignore-window-parameters t))
+    (delete-other-windows))
   ;; The window left may be one only its buffer goes in (a merge's bar...).
   (set-window-dedicated-p nil nil)
   (switch-to-buffer (get-buffer-create "*scratch*"))

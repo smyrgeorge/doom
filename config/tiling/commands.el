@@ -9,14 +9,17 @@
   "SPC w SPC: a new pane where the tiling strategy puts it (config/tiling.el)."
   (interactive)
   (let* ((strategy (+my/tiling--strategy))
-         (panes (+my/tiling--ready-panes))
+         (atom (+my/tiling--atom))
+         (panes (if atom (+my/tiling--panes) (+my/tiling--ready-panes)))
          (from (selected-window)))
     (unless (memq from panes)
-      (user-error "Not in a pane: side panels aren't tiled"))
+      (+my/tiling--not-in-pane))
     (let ((buffer (window-buffer from))
           (point (window-point from))
           (start (window-start from))
-          (new (funcall (plist-get strategy :split) panes)))
+          (new (if atom
+                   (+my/tiling--beside-atom atom)
+                 (funcall (plist-get strategy :split) panes))))
       ;; The current buffer, its only tab (it showed another first).
       (set-window-buffer new buffer)
       (set-window-start new start t)
@@ -35,7 +38,7 @@
   (let* ((strategy (+my/tiling--strategy))
          (panes (+my/tiling--ready-panes)))
     (unless (memq (selected-window) panes)
-      (user-error "Not in a pane: side panels aren't tiled"))
+      (+my/tiling--not-in-pane))
     (when (cdr panes)
       (funcall (plist-get strategy :arrange) panes))))
 
@@ -51,7 +54,7 @@ did."
          (panes (+my/tiling--ready-panes))
          (from (selected-window)))
     (unless (memq from panes)
-      (user-error "Not in a pane: side panels aren't tiled"))
+      (+my/tiling--not-in-pane))
     (if swap
         (message "%s" (funcall swap))
       (unless (cdr panes)
@@ -89,7 +92,7 @@ then KEYS repeat it, and what the strategy did is said."
     (unless resize
       (user-error "The tiling strategy `%s' has no %s to resize" +my/tiling-strategy what))
     (unless (memq pane panes)
-      (user-error "Not in a pane: side panels aren't tiled"))
+      (+my/tiling--not-in-pane))
     (unless (cdr panes)
       (user-error "Only one pane"))
     (let ((said (if (eq key :resize-pane)

@@ -141,7 +141,9 @@ said."
   "The panes to lay out, the main one first (`+my/tiling--ordered-panes'):
 hidden ones shown again first, when the strategy doesn't hide panes, as many
 as it has room for (its :fits), and laid out its way (its :arrange), in their
-order."
+order. With a layout kept whole (config/tiling/panes.el): said, none."
+  (when (+my/tiling--atom)
+    (user-error "The panes stay as they are while a layout kept whole (a merge) is open"))
   (let ((strategy (alist-get +my/tiling-strategy +my/tiling-strategies)))
     (when (and (+my/tiling--hidden-p) strategy (not (plist-get strategy :hides)))
       (let ((panes (+my/tiling--show-hidden (plist-get strategy :fits))))

@@ -2,9 +2,10 @@
 ;; config/tiling.el: SPC w SPC opens a pane where the tiling strategy puts it
 ;; (tall), SPC w a arranges the panes. Tiling first (config/tiling/apps.el):
 ;; applications in new panes (not where their rules say, not their size),
-;; files as tabs in the panes of files, a pane closed with its last tab.
+;; files as tabs in the panes of files, a pane closed with its last tab. A
+;; layout kept whole (an atomic window: a merge's) left as it is.
 
-(+test-load "config/window" "config/tiling")
+(+test-load "config/window" "config/tiling" "config/merge")
 (require 'magit)
 
 ;; ====== HELPERS ======
@@ -2377,6 +2378,182 @@ Emacs puts it, from an application's pane too."
         (should (window-at-side-p window 'bottom))
         (should (= (window-total-width window) (frame-width)))
         (should (eq (window-buffer app) (get-buffer "app")))))))
+
+;; ====== A LAYOUT KEPT WHOLE ======
+
+(defun +test-tiling--atom ()
+  "The selected window made a layout kept whole, as a merge's: a bar (BAR)
+above three windows (A, B, C), an atomic window. Its windows: (BAR A B C),
+B's selected."
+  (let* ((left (selected-window))
+         (bar (split-window left -2 'above))
+         (middle (split-window left nil 'right))
+         (right (split-window middle nil 'right)))
+    (set-window-buffer bar (+test-buffer "BAR"))
+    (set-window-buffer left (get-buffer "A"))
+    (set-window-buffer middle (get-buffer "B"))
+    (set-window-buffer right (get-buffer "C"))
+    (window-make-atom (window-parent bar))
+    (select-window middle)
+    (list bar left middle right)))
+
+(defun +test-tiling--atom-intact (windows)
+  "WINDOWS (`+test-tiling--atom''s) all there, kept whole, the bar above the
+three side by side, each showing what it did."
+  (pcase-let ((`(,bar ,left ,middle ,right) windows))
+    (should (seq-every-p #'window-live-p windows))
+    (should (equal (mapcar (lambda (window) (buffer-name (window-buffer window))) windows)
+                   '("BAR" "A" "B" "C")))
+    (let ((root (window-atom-root bar)))
+      (should root)
+      (should (seq-every-p (lambda (window) (eq (window-atom-root window) root)) windows))
+      (let ((count 0))
+        (walk-window-subtree (lambda (_) (cl-incf count)) root)
+        (should (= count 4))))
+    (should (< (cadr (window-edges bar)) (cadr (window-edges middle))))
+    (should (< (car (window-edges left)) (car (window-edges middle)) (car (window-edges right))))))
+
+(ert-deftest tiling/a-layout-kept-whole-isnt-panes ()
+  "Its windows aren't panes: SPC w SPC, SPC w a, RET, resizing from them
+say so, nothing changed."
+  (+test-tiling
+    (let ((windows (+test-tiling--atom)))
+      (should (eq (+my/tiling--atom) (window-atom-root (car windows))))
+      (should-not (+my/tiling--panes))
+      (dolist (command (list #'+my/tiling-split #'+my/tiling-arrange #'+my/tiling-swap-main
+                             #'+my/tiling-main-bigger #'+my/tiling-pane-smaller))
+        (should-error (funcall command) :type 'user-error))
+      (should (equal (cadr (should-error (+my/tiling-split) :type 'user-error))
+                     "Not in a pane: a layout kept whole (a merge) stays as it is"))
+      (+test-tiling--atom-intact windows)
+      (should (= (length (window-list nil 'nomini)) 4)))))
+
+(ert-deftest tiling/beside-a-layout-kept-whole ()
+  "An application opens beside it, on its right (it keeps half the width),
+the next one below that; a file shown from it in the pane used last beside
+it; SPC w SPC there another pane below; SPC w a said. Each closed: the
+layout as it was."
+  (+test-tiling-first
+    (let* ((windows (+test-tiling--atom))
+           (atom (window-atom-root (car windows)))
+           (width (window-total-width atom))
+           (app (display-buffer (+test-tiling--app "app") +test-tiling--popup-action)))
+      (+test-tiling--atom-intact windows)
+      (should-not (window-parameter app 'window-atom))
+      (should (eq (window-buffer app) (get-buffer "app")))
+      ;; On its right, half the width each.
+      (should (= (car (window-edges app)) (nth 2 (window-edges atom))))
+      (should (<= (abs (- (window-total-width atom) (/ width 2))) 1))
+      (should (equal (+my/tiling--panes) (list app)))
+      ;; The next one below it.
+      (select-window (nth 2 windows))
+      (let ((app2 (display-buffer (+test-tiling--app "app2") +test-tiling--popup-action)))
+        (+test-tiling--atom-intact windows)
+        (should (= (car (window-edges app2)) (car (window-edges app))))
+        (should (> (cadr (window-edges app2)) (cadr (window-edges app))))
+        ;; A file from the layout: in the pane used last beside it, a tab.
+        (select-window app2)
+        (select-window (nth 2 windows))
+        (let ((file (+test-tiling--file "f.txt")))
+          (should (eq (display-buffer file '(display-buffer-same-window)) app2))
+          (should (eq (window-buffer (nth 2 windows)) (get-buffer "B"))))
+        ;; SPC w SPC beside it: a pane below; SPC w a: said.
+        (select-window app)
+        (let ((new (+my/tiling-split)))
+          (should (= (car (window-edges new)) (car (window-edges app))))
+          (should (= (length (+my/tiling--panes)) 3)))
+        (should-error (+my/tiling-arrange) :type 'user-error)
+        (+test-tiling--atom-intact windows)
+        ;; Closed, one after the other: the layout kept whole as it was.
+        (dolist (pane (+my/tiling--panes))
+          (delete-window pane))
+        (run-hook-with-args 'window-state-change-functions (selected-frame))
+        (+test-tiling--atom-intact windows)
+        (should (= (window-total-width atom) width))))))
+
+(ert-deftest tiling/a-layout-kept-whole-keeps-its-windows ()
+  "A buffer it shows killed: its window stays (not a pane closed with its last
+tab: the whole layout would go)."
+  (+test-tiling-first
+    (let ((windows (+test-tiling--atom)))
+      (display-buffer (+test-tiling--app "app") nil)
+      (let ((kill-buffer-query-functions nil))
+        (kill-buffer "C"))
+      (should (window-live-p (nth 3 windows)))
+      (should (eq (window-atom-root (nth 3 windows)) (window-atom-root (car windows)))))))
+
+(defmacro +test-tiling-with-conflict (&rest body)
+  "BODY in a new git repo (`default-directory', a temp HOME) whose a.txt is in
+conflict: a line changed on main and on feature, feature merged."
+  (declare (indent 0))
+  `(let* ((home (file-name-as-directory (make-temp-file (+test-tmp-file "tiling-merge-home-") t)))
+          (repo (file-name-as-directory (make-temp-file (+test-tmp-file "tiling-merge-repo-") t)))
+          (process-environment (append (list (concat "HOME=" home)
+                                             (concat "GIT_CONFIG_GLOBAL=" home ".gitconfig")
+                                             "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "GIT_EDITOR=true")
+                                       process-environment))
+          (default-directory repo)
+          (git (lambda (&rest args) (apply #'call-process "git" nil nil nil args)))
+          (write (lambda (text) (with-temp-file (expand-file-name "a.txt" repo) (insert text)))))
+     (with-temp-file (expand-file-name ".gitconfig" home)
+       (insert "[user]\n\tname = Tester\n\temail = tester@example.invalid\n"
+               "[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n"))
+     (funcall git "init" "-q")
+     (funcall write "one\ntwo\nthree\n")
+     (funcall git "add" ".")
+     (funcall git "commit" "-qm" "base")
+     (funcall git "checkout" "-qb" "feature")
+     (funcall write "one\ntwo theirs\nthree\n")
+     (funcall git "commit" "-qam" "theirs")
+     (funcall git "checkout" "-q" "main")
+     (funcall write "one\ntwo yours\nthree\n")
+     (funcall git "commit" "-qam" "yours")
+     (funcall git "merge" "-q" "feature")
+     ,@body))
+
+(ert-deftest tiling/a-merge-kept-whole ()
+  "A merge (config/merge.el) open: an application opened from its Result
+beside it, its bar and three panes intact; SPC w SPC and SPC w a never make
+the bar a pane; aborted, the windows as they were."
+  (+test-tiling-first
+    (let ((before (window-list nil 'nomini)))
+      (split-window-right)
+      (setq before (window-list nil 'nomini))
+      (+test-tiling-with-conflict
+        (let* ((session (+my/merge "a.txt"))
+               (windows (mapcar #'get-buffer-window
+                                (list (+my/merge-bar session) (+my/merge-yours session)
+                                      (+my/merge-result session) (+my/merge-theirs session))))
+               (intact (lambda ()
+                         (should (equal (mapcar #'get-buffer-window
+                                                (list (+my/merge-bar session) (+my/merge-yours session)
+                                                      (+my/merge-result session) (+my/merge-theirs session)))
+                                        windows))
+                         (should (seq-every-p (lambda (window) (eq (window-atom-root window)
+                                                                   (window-atom-root (car windows))))
+                                              windows)))))
+          (unwind-protect
+              (progn
+                (should (seq-every-p #'identity windows))
+                (should-not (+my/tiling--panes))
+                (should-error (+my/tiling-split) :type 'user-error)
+                (should-error (+my/tiling-arrange) :type 'user-error)
+                (funcall intact)
+                (let ((app (display-buffer (+test-tiling--app "app") +test-tiling--popup-action)))
+                  (should (eq (window-buffer app) (get-buffer "app")))
+                  (funcall intact)
+                  (should (equal (+my/tiling--panes) (list app)))
+                  (select-window app)
+                  (+my/tiling-split)
+                  (should-error (+my/tiling-arrange) :type 'user-error)
+                  (funcall intact)
+                  (should-not (memq (car windows) (+my/tiling--panes)))))
+            (with-current-buffer (+my/merge-result session)
+              (+my/merge-abort)))
+          (should (equal (window-list nil 'nomini) before))
+          ;; Its windows panes again: none kept whole.
+          (should-not (+my/tiling--atom))
+          (should (equal (+my/tiling--panes) before)))))))
 
 ;; ====== MAGIT ======
 

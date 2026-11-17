@@ -33,6 +33,8 @@ Emacs is tiling first:
   used.
 - A pane closes with its last tab (`Cmd+W`, `SPC b k`). When one closes (however: `SPC w d`, `q`, its last tab), the
   stacked panes share its rows again, at equal heights.
+- A [merge](git.md#resolving-conflicts)'s bar and three panes stay together: an application or a file opened during
+  it goes in a pane beside them, and `SPC w a` leaves them as they are.
 
 Which applications open in a new pane is chosen in `config.el`: `(setq +my/tiling-apps 'all)` (the default), or a list
 of `claude`, `terminal`, `preview`, `drawings`, `magit`, `issues`, `agent-ui`, `html` (`M-x customize-variable

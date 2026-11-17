@@ -18,14 +18,39 @@
     (nreverse children)))
 
 (defun +my/tiling--panes (&optional frame)
-  "FRAME's (the selected frame's) panes: its windows besides side panels, in
-order."
+  "FRAME's (the selected frame's) panes: its windows besides side panels and
+a layout kept whole (see below), in order."
   (let (panes)
     (named-let walk ((window (window-main-window frame)))
-      (if (window-live-p window)
-          (push window panes)
-        (mapc #'walk (+my/tiling--children window))))
+      (cond ((window-parameter window 'window-atom))
+            ((window-live-p window) (push window panes))
+            (t (mapc #'walk (+my/tiling--children window)))))
     (nreverse panes)))
+
+;; A LAYOUT KEPT WHOLE
+;; An atomic window (Emacs's `window-atom' parameter: its windows split,
+;; deleted and resized as one), as a merge's bar and three panes are
+;; (config/merge.el): its windows aren't panes, and tiling lays nothing out
+;; in its frame. An application, a file shown from it, SPC w SPC open in a
+;; pane beside it (`+my/tiling--beside-atom'); the panes beside it stay as
+;; they are (SPC w a, RET, resizing say so). Once it's gone (the merge done:
+;; its windows as they were), as before.
+(defun +my/tiling--atom (&optional frame)
+  "The root of a layout kept whole (see above) among FRAME's (the selected
+frame's) windows, or nil."
+  (catch 'found
+    (walk-window-tree (lambda (window)
+                        (when (window-parameter window 'window-atom)
+                          (throw 'found (window-atom-root window))))
+                      frame t 'nomini)
+    nil))
+
+(defun +my/tiling--not-in-pane ()
+  "Say the selected window isn't a pane: a side panel, or a layout kept
+whole's."
+  (user-error (if (window-parameter nil 'window-atom)
+                  "Not in a pane: a layout kept whole (a merge) stays as it is"
+                "Not in a pane: side panels aren't tiled")))
 
 ;; THE MAIN PANE FIRST
 ;; The panes are in order on the screen, but the main pane first: where SPC w
@@ -82,8 +107,9 @@ order."
 (defun +my/tiling--closed-h (frame)
   "FRAME's panes fewer than when last seen (one closed, however): the others
 laid out again by the strategy's :closed. Not a child frame's (notices, the
-stripe), nor down to one pane, nor a frame left alone."
-  (unless (or (frame-parent frame) (+my/tiling--left-alone-p frame))
+stripe), nor down to one pane, nor a frame left alone or holding a layout
+kept whole (the panes beside it as they are)."
+  (unless (or (frame-parent frame) (+my/tiling--left-alone-p frame) (+my/tiling--atom frame))
     (let ((count (length (+my/tiling--panes frame)))
           (before (frame-parameter frame '+my/tiling-panes)))
       (set-frame-parameter frame '+my/tiling-panes count)
