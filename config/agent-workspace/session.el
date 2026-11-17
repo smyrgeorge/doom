@@ -97,13 +97,14 @@ processes with it."
           (agent-workspace--changed agent 'session)
           buffer)
       (error
+       ;; Its error first: the state's hooks say it (the room's stuck line).
+       (setf (agent-workspace-agent-error agent) (concat "its session: " (error-message-string err)))
        ;; Made before it failed: stopped, out of reach otherwise.
        (when (buffer-live-p made)
          (setf (agent-workspace-agent-buffer agent) made)
          (ignore-errors (agent-workspace--stop agent 'stuck)))
        (setf (agent-workspace-agent-buffer agent) nil)
        (agent-workspace--set-state agent 'stuck)
-       (setf (agent-workspace-agent-error agent) (concat "its session: " (error-message-string err)))
        (agent-workspace--changed agent 'state)
        (message "%s's session didn't start: %s" (agent-workspace-agent-name agent) (error-message-string err))
        nil))))

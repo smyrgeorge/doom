@@ -333,8 +333,9 @@ nil if it isn't a word ending in -ing."
                   'desk
                 'done)))
       ('error
-       (agent-workspace--set-state agent 'stuck)
+       ;; Its error first: the state's hooks say it (the room's stuck line).
        (setf (agent-workspace-agent-error agent) (alist-get :message data))
+       (agent-workspace--set-state agent 'stuck)
        (agent-workspace--changed agent 'state))
       ('clean-up
        (unless (agent-workspace-agent-stopping agent)

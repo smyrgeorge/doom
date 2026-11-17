@@ -317,6 +317,28 @@ left out of reach (doom-pbk.39)."
       (when-let* ((pid (+test-aws--wait (lambda () (plist-get (car (+test-aws--logged :start "ada")) :pid)) 5)))
         (should (+test-aws--wait (lambda () (not (+test-aws--pid-alive-p pid))) 10))))))
 
+(defun +test-aws--room-texts (project)
+  "What PROJECT's room kept: its entries' texts, in order."
+  (let ((file (expand-file-name ".agent-shell/agent-workspace/room.jsonl" project)))
+    (when (file-exists-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (mapcar (lambda (line) (plist-get (json-parse-string line :object-type 'plist) :text))
+                (split-string (buffer-string) "\n" t))))))
+
+(ert-deftest agent-workspace-session/stuck-says-why-in-the-room ()
+  "An agent stuck says why in the room: an agent-shell error, its session
+failing to start (doom-pbk.50)."
+  (+test-aws--with-crew "stuck-why"
+    (let ((ada (+test-aws--create "ada")))
+      (agent-workspace--event ada '((:event . error) (:data . ((:message . "API Error: 529 overloaded")))))
+      (should (member "stuck: API Error: 529 overloaded" (+test-aws--room-texts project))))
+    (let* ((agent-workspace-session-functions
+            (append agent-workspace-session-functions (list (lambda (&rest _) (error "a hook failed")))))
+           (ken (agent-workspace-create :role "builder" :name "ken" :kind 'mock)))
+      (should (eq (agent-workspace-agent-state ken) 'stuck))
+      (should (member "stuck: its session: a hook failed" (+test-aws--room-texts project))))))
+
 (ert-deftest agent-workspace-session/its-process-ending-sends-it-home ()
   "Its agent exiting (a crash): gone home, its session's buffer kept (what
 it said); woken, a fresh session."
