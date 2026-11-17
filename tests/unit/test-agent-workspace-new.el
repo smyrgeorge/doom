@@ -256,7 +256,7 @@ the list, the minibuffer resized): nothing read from disk, nothing run."
 
 (ert-deftest agent-workspace-new/a-full-role-refused ()
   "A role at its max is refused, and asked again; the role given is
-offered first."
+offered first, where it is in its group; an empty answer is it."
   (+test-awn "full"
     (+test-awn--agent project "sam" "scribe")
     (+test-awn--answering '("scribe" "investigator")
@@ -265,11 +265,136 @@ offered first."
                    (lambda (prompt roles &rest args)
                      (push prompt asked)
                      (setq collection roles)
-                     (should (equal (nth 4 args) (car roles)))
+                     (should (equal (nth 4 args) "reviewer"))
                      (pop answers))))
           (should (equal (agent-workspace-read-role project "reviewer") "investigator"))
-          (should (equal (car collection) "reviewer"))
-          (should (= (length asked) 2)))))))
+          (should (equal collection '("builder" "investigator" "reviewer" "scribe")))
+          (should (= (length asked) 2)))))
+    (+test-awn--answering '("")
+      (should (equal (agent-workspace-read-role project "reviewer") "reviewer")))))
+
+(defun +test-awn--four-kinds (project)
+  "PROJECT's roles of all four kinds: a local one of its own (mine), a local
+one replacing the project's (tester) and one replacing a starter
+\(reviewer), a project's one replacing a starter (builder), the other
+starters, and two files left out (broken; a local scribe, named as the
+starter it fails to replace)."
+  (let ((own (expand-file-name ".agent-workspace/roles/" project))
+        (local (expand-file-name ".agent-shell/agent-workspace/roles/" project)))
+    (make-directory own t)
+    (make-directory local t)
+    (write-region "---\ndescription: makes things\n---\n" nil (expand-file-name "builder.md" own))
+    (write-region "---\ndescription: tests\nlabels: test\n---\n" nil (expand-file-name "tester.md" own))
+    (write-region "---\ndescription: my tests\nlabels: test\n---\n" nil (expand-file-name "tester.md" local))
+    (write-region "---\ndescription: my reviews\n---\n" nil (expand-file-name "reviewer.md" local))
+    (write-region "---\ndescription: mine\n---\n" nil (expand-file-name "mine.md" local))
+    (write-region "---\ndescription: broken\nmode: autoo\n---\n" nil (expand-file-name "broken.md" own))
+    (write-region "---\nmax: lots\n---\n" nil (expand-file-name "scribe.md" local))))
+
+(defmacro +test-awn--no-warnings (&rest body)
+  "BODY, its warnings not shown."
+  (declare (indent 0))
+  `(cl-letf (((symbol-function 'display-warning) #'ignore)) ,@body))
+
+(ert-deftest agent-workspace-new/the-role-picker-s-groups ()
+  "The roles grouped by where they come from (local, project, starters),
+then the role files left out; a replaced role says so at its row's end, the
+one it replaced not listed; a left-out file: ✗, its first error in place of
+what it does, dimmed, named ORIGIN/NAME when a role listed has its name;
+the columns lined up across the groups."
+  (+test-awn "groups"
+    (+test-awn--four-kinds project)
+    (+test-awn--no-warnings
+      (let ((facts (agent-workspace--role-picker project)))
+        (should (equal (mapcar (lambda (fact) (cons (car fact) (agent-workspace--role-group fact))) facts)
+                       '(("reviewer" . local) ("tester" . local) ("mine" . local)
+                         ("builder" . project)
+                         ("investigator" . starter) ("scribe" . starter)
+                         ("broken" . out) ("local/scribe" . out))))
+        (should (equal (mapcar #'agent-workspace--role-group-title agent-workspace--role-groups)
+                       '("local · .agent-shell/agent-workspace/roles" "project · .agent-workspace/roles"
+                         "starters" "left out")))
+        (should (equal (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
+                               (agent-workspace--role-rows facts 200))
+                       '("▶ reviewer      my reviews                             your default  auto                                      replaces the starter"
+                         "▶ tester        my tests                               your default  auto  test                                replaces the project's"
+                         "▶ mine          mine                                   your default  auto"
+                         "▶ builder       makes things                           your default  auto                                      replaces the starter"
+                         "⌕ investigator  investigates what you give it  0 of 2  your default  auto  investigation, incident  → builder"
+                         "✎ scribe        writes issues with you         0 of 1  your default  auto"
+                         "✗ broken        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions"
+                         "✗ local/scribe  line 2: max lots: not a number above 0")))
+        ;; Narrower: the role replaced goes first, then hands-to; a left-out
+        ;; file's error cut to fit; no row wider than the minibuffer.
+        (should (equal (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
+                               (agent-workspace--role-rows facts 100))
+                       '("▶ reviewer      my reviews                             your default  auto"
+                         "▶ tester        my tests                               your default  auto  test"
+                         "▶ mine          mine                                   your default  auto"
+                         "▶ builder       makes things                           your default  auto"
+                         "⌕ investigator  investigates what you give it  0 of 2  your default  auto  investigation, incident"
+                         "✎ scribe        writes issues with you         0 of 1  your default  auto"
+                         "✗ broken        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPer…"
+                         "✗ local/scribe  line 2: max lots: not a number above 0")))
+        (dolist (width '(200 140 100 80 60 40 30 24))
+          (dolist (row (agent-workspace--role-rows facts width))
+            (should (<= (string-width (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
+                        width))))
+        ;; A left-out row: its icon, name and the rest dimmed.
+        (pcase-let ((`(_ ,name ,icon ,rest ,dim) (assoc "broken" (agent-workspace--role-rows facts 200))))
+          (should dim)
+          (should (memq 'shadow (ensure-list (get-text-property 0 'face name))))
+          (should (eq (get-text-property 0 'face icon) 'shadow))
+          (should (memq 'shadow (ensure-list (get-text-property (string-search "line 3" rest) 'face rest)))))
+        ;; The role replaced, dimmed.
+        (let ((rest (nth 3 (assoc "builder" (agent-workspace--role-rows facts 200)))))
+          (should (eq (get-text-property (string-search "replaces" rest) 'face rest) 'shadow)))))))
+
+(ert-deftest agent-workspace-new/the-role-picker-s-dividers ()
+  "The completion is told its groups (each its divider's title) and to keep
+their order; the default is selected where it is: under vertico, given as
+none (vertico would move it to the top, out of its group)."
+  (+test-awn "dividers"
+    (+test-awn--four-kinds project)
+    (+test-awn--no-warnings
+      (let (seen)
+        (cl-letf (((symbol-function 'completing-read)
+                   (lambda (_prompt roles &rest args)
+                     (let ((group (plist-get completion-extra-properties :group-function)))
+                       (setq seen (list (mapcar (lambda (role) (funcall group role nil)) roles)
+                                        (funcall group "builder" 'transform)
+                                        (funcall (plist-get completion-extra-properties :display-sort-function)
+                                                 (reverse roles))
+                                        (nth 4 args))))
+                     "mine")))
+          (should (equal (agent-workspace-read-role project "builder") "mine"))
+          (should (equal (car seen)
+                         '("local · .agent-shell/agent-workspace/roles" "local · .agent-shell/agent-workspace/roles"
+                           "local · .agent-shell/agent-workspace/roles" "project · .agent-workspace/roles"
+                           "starters" "starters" "left out" "left out")))
+          (should (equal (nth 1 seen) "builder"))
+          (should (equal (nth 2 seen) (reverse '("reviewer" "tester" "mine" "builder" "investigator" "scribe"
+                                                 "broken" "local/scribe"))))
+          (should (equal (nth 3 seen) "builder"))
+          (dlet ((vertico-mode t))
+            (agent-workspace-read-role project "builder")
+            (should-not (nth 3 seen))))))))
+
+(ert-deftest agent-workspace-new/a-left-out-role-refused ()
+  "A role file left out is refused, naming its file and line, and asked
+again; never offered first."
+  (+test-awn "left-out"
+    (+test-awn--four-kinds project)
+    (+test-awn--no-warnings
+      (let ((messages nil))
+        (cl-letf (((symbol-function 'message)
+                   (lambda (format &rest args) (push (apply #'format format args) messages))))
+          (+test-awn--answering '("broken" "")
+            (should (equal (agent-workspace-read-role project "broken") "reviewer"))
+            (should (= (length asked) 2))))
+        (should (string-match-p
+                 "\\`Left out: .*/\\.agent-workspace/roles/broken\\.md:3: mode autoo: not one of"
+                 (car (last messages))))))))
 
 (ert-deftest agent-workspace-new/its-name-asked ()
   "Left empty, the name made for it; one taken or not valid, asked again."

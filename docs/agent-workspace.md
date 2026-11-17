@@ -345,16 +345,24 @@ panels or a loop turned off it applies.
 
 1. **Its role.** Each role is a row, its columns lined up: its icon in its colour, its name, what it does, how many
    of it run against its maximum, its model (`your default` if it has none), its permission mode (`auto` if it has
-   none), the issues it takes (its labels, then how many the app's issue list has ready for it), and the role it
-   hands them to:
+   none), the issues it takes (its labels, then how many the app's issue list has ready for it), the role it
+   hands them to, and the one it replaced. The roles are grouped by where they come from, each group under a
+   divider: [yours, the project's, the starters](#roles), then the role files left out for a mistake:
 
    ```
+   ──── local · .agent-shell/agent-workspace/roles ────────────────────────────────────────────────
+   ⚗ tester        my own tests                      2 of 2  your default  auto  test  replaces the project's
+   ──── starters ──────────────────────────────────────────────────────────────────────────────────
    ⚙ builder       builds what you give it           2 of 4  your default  auto  build ·3 ready  → reviewer
    ✎ scribe        writes issues with you            1 of 1  at its max
+   ──── left out ──────────────────────────────────────────────────────────────────────────────────
+   ✗ helper        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions
    ```
 
-   A role at its maximum is dimmed, says `at its max`, and is refused. In a narrower minibuffer the columns on the
-   right go first: the role it hands to, its labels, its mode, its model; then what it does is cut.
+   A role at its maximum is dimmed, says `at its max`, and is refused; so is a role file left out, naming its file
+   and line. The role offered first (an issue's) is selected, in its group. In a narrower minibuffer the columns on
+   the right go first: the role it replaced, the role it hands to, its labels, its mode, its model; then what it
+   does is cut.
 2. **Its name.** Leave it empty and one is made for it, `ada`, `grace`, `linus`..., each with an initial no other
    agent has. A name is lowercase letters, digits and `-`.
 

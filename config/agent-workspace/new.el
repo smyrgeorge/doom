@@ -4,7 +4,8 @@
 ;;
 ;; `agent-workspace-new' (what the app's c runs) asks its role, a row of
 ;; columns each (what it does, how many of it run against its max, its model,
-;; mode, issues: see WHAT YOU'RE ASKED; one at its max is refused), then its
+;; mode, issues: see WHAT YOU'RE ASKED; one at its max is refused), grouped by
+;; where the roles come from (local, project, starters, left out), then its
 ;; name: left empty, one from `agent-workspace-names'. With C-u, its model,
 ;; permission mode and colour too. Then `agent-workspace-create' makes it: its
 ;; worktree, its session; given an issue, that issue is its first message.
@@ -19,7 +20,10 @@
 (declare-function agent-workspace--fit "agent-workspace/look")
 (declare-function agent-workspace-issues-ready "agent-workspace/issues")
 (declare-function agent-ui-even-glyphs "agent-ui/core")
+(declare-function vertico--goto "vertico")
+(declare-function vertico--exhibit "vertico")
 (defvar agent-workspace-mode)
+(defvar vertico--candidates)
 
 ;; ====== VARIABLES ======
 
@@ -75,12 +79,18 @@ default."
 ;; row: its icon (in its colour, before its name: not typed nor matched), its
 ;; name, what it does, how many run of its max, its model, its permission
 ;; mode, the issues it takes (its labels, with how many the app's issue list
-;; has ready for it), who it hands them to. A role at its max: dimmed, "at its
-;; max" in place of its last columns (still refused). Fitted to the
-;; minibuffer: as it narrows, hands-to goes first, then the labels, the mode,
-;; the model; the description is cut with … last; icon, name and count stay.
-;; All of it gathered as the picker opens: nothing read from disk or bd as you
-;; move through it.
+;; has ready for it), who it hands them to, and, dimmed, the role it replaced
+;; ("replaces the starter"). A role at its max: dimmed, "at its max" in place
+;; of its last columns (still refused). Grouped by where the roles come from,
+;; each group under a divider (the completion's group titles, vertico's
+;; lines): your local ones, the project's, the starters, then the role files
+;; left out for an error (✗, dimmed, the first error in place of what it
+;; does; refused, naming its file and line). The role offered first (an
+;; issue's) is selected where it is, in its group. Fitted to the minibuffer:
+;; as it narrows, the role replaced goes first, then hands-to, the labels,
+;; the mode, the model; the description is cut with … last; icon, name and
+;; count stay. All of it gathered as the picker opens: nothing read from disk
+;; or bd as you move through it.
 
 (defconst agent-workspace--role-gap 2
   "The columns between two of the role picker's.")
@@ -99,10 +109,61 @@ the app's issue list has fetched nothing (no app: M-x outside it)."
                                                       ready)))))
             roles)))
 
+(defconst agent-workspace--role-groups '(local project starter out)
+  "The role picker's groups, in order: where roles come from, then the
+role files left out.")
+
+(defun agent-workspace--role-group (fact)
+  "The group of FACT (one of `agent-workspace--role-picker'): local,
+project, starter, or out (left out)."
+  (if (plist-get (cdr fact) :out)
+      'out
+    (or (plist-get (plist-get (cdr fact) :spec) :origin) 'starter)))
+
+(defun agent-workspace--role-group-title (group)
+  "The role picker's divider for GROUP (`agent-workspace--role-groups')."
+  (pcase group
+    ('local (concat "local · " agent-workspace-local-roles-directory))
+    ('project (concat "project · " agent-workspace-roles-directory))
+    ('out "left out")
+    (_ "starters")))
+
+(defun agent-workspace--role-picker (project)
+  "What the role picker offers for PROJECT, gathered once, in its order:
+its roles grouped by where they come from (local, project, starters), as
+`agent-workspace--role-facts' gives them, then its role files left out
+for an error, (NAME . (:out LEFT-OUT :count 0)) each, LEFT-OUT one of
+`agent-workspace-roles-left-out' (NAME is ORIGIN/NAME when a role listed
+has its name)."
+  (let* ((specs (agent-workspace-roles project))
+         (names (seq-mapcat (lambda (group)
+                              (seq-keep (lambda (role)
+                                          (and (eq (or (plist-get (cdr role) :origin) 'starter) group)
+                                               (car role)))
+                                        specs))
+                            '(local project starter)))
+         (taken (copy-sequence names)))
+    (append (agent-workspace--role-facts project names)
+            (mapcar (lambda (entry)
+                      (let ((name (if (member (car entry) taken)
+                                      (format "%s/%s" (plist-get (cdr entry) :origin) (car entry))
+                                    (car entry))))
+                        (push name taken)
+                        (cons name (list :out (cdr entry) :count 0))))
+                    (agent-workspace-roles-left-out project)))))
+
 (defun agent-workspace--role-cells (fact)
-  "FACT's columns (one of `agent-workspace--role-facts'), each its text in
+  "FACT's columns (one of `agent-workspace--role-picker'), each its text in
 its face: (:icon :name :description :count :model :mode :labels :hands
-:full)."
+:replaces :full :out)."
+  (if-let* ((out (plist-get (cdr fact) :out)))
+      (list :icon (agent-workspace-glyph '(nil . "✗") 'shadow) :name (car fact)
+            :description (plist-get out :error) :count "" :model "" :mode "" :labels "" :hands ""
+            :replaces "" :out t)
+    (agent-workspace--role-cells-1 fact)))
+
+(defun agent-workspace--role-cells-1 (fact)
+  "FACT's columns, a role's (see `agent-workspace--role-cells')."
   (let* ((spec (plist-get (cdr fact) :spec))
          (max (plist-get spec :max))
          (count (plist-get (cdr fact) :count))
@@ -128,21 +189,30 @@ its face: (:icon :name :description :count :model :mode :labels :hands
           :labels (concat (propertize (string-join labels ", ") 'face 'shadow)
                           (if (and labels ready (> ready 0)) (propertize (format " ·%d ready" ready) 'face 'success) ""))
           :hands (if hands (propertize (concat "→ " (string-join hands ", ")) 'face 'shadow) "")
+          :replaces (pcase (plist-get spec :replaces)
+                      ('starter (propertize "replaces the starter" 'face 'shadow))
+                      ('project (propertize "replaces the project's" 'face 'shadow))
+                      (_ ""))
           :full full)))
 
 (defun agent-workspace--role-rows (facts width)
-  "The role picker's rows for FACTS (`agent-workspace--role-facts'), WIDTH
-columns at most: ((NAME CANDIDATE PREFIX SUFFIX FULL)...), CANDIDATE PREFIX
-SUFFIX as an `:affixation-function' gives them (see above), FULL non-nil
-for a role at its max."
+  "The role picker's rows for FACTS (`agent-workspace--role-picker' or
+`agent-workspace--role-facts'), WIDTH columns at most: ((NAME CANDIDATE
+PREFIX SUFFIX DIM)...), CANDIDATE PREFIX SUFFIX as an
+`:affixation-function' gives them (see above), DIM non-nil for a role at
+its max or left out (refused)."
   (let* ((cells (mapcar #'agent-workspace--role-cells facts))
          (gap agent-workspace--role-gap)
          (at-max "at its max")
-         (widest (lambda (key) (apply #'max 0 (mapcar (lambda (cell) (string-width (plist-get cell key))) cells))))
+         (roles (seq-remove (lambda (cell) (plist-get cell :out)) cells))
+         ;; A left-out file's error doesn't widen the description's column:
+         ;; it has the rest of its row.
+         (widest (lambda (key) (apply #'max 0 (mapcar (lambda (cell) (string-width (plist-get cell key)))
+                                                      (if (eq key :name) cells roles)))))
          ;; A column no role says anything in takes no room.
          (room (lambda (key) (let ((w (funcall widest key))) (if (> w 0) (+ gap w) 0))))
          (start (+ 2 (funcall widest :name) (funcall room :count)))
-         (others (seq-remove (lambda (cell) (plist-get cell :full)) cells))
+         (others (seq-remove (lambda (cell) (plist-get cell :full)) roles))
          ;; A full role's "at its max", while there's room for it (its row
          ;; dimmed says it too).
          (fulls (and (<= (+ start gap (string-width at-max)) width)
@@ -150,7 +220,7 @@ for a role at its max."
          ;; After the count: the columns SHOWN, or a full role's "at its max".
          (tail (lambda (shown) (max (if others (apply #'+ (mapcar room shown)) 0)
                                     (if fulls (+ gap (string-width at-max)) 0))))
-         (shown (seq-filter (lambda (key) (> (funcall widest key) 0)) '(:model :mode :labels :hands))))
+         (shown (seq-filter (lambda (key) (> (funcall widest key) 0)) '(:model :mode :labels :hands :replaces))))
     ;; Dropped from the right while the description can't have its width.
     (while (and shown (> (+ start (funcall room :description) (funcall tail shown)) width))
       (setq shown (butlast shown)))
@@ -161,33 +231,41 @@ for a role at its max."
       (cl-mapcar
        (lambda (fact cell)
          (let* ((full (plist-get cell :full))
+                (out (plist-get cell :out))
+                (dim (or full out))
                 (pad (lambda (text w) (concat text (make-string (max 0 (- w (string-width text))) ?\s))))
-                (parts (append
-                        (and (> described 0)
-                             (list (funcall pad (agent-workspace--fit (plist-get cell :description) described)
-                                            described)))
-                        (and (> (funcall widest :count) 0)
-                             (list (funcall pad (plist-get cell :count) (funcall widest :count))))
-                        (if full
-                            (and fulls (list at-max))
-                          (mapcar (lambda (key) (funcall pad (plist-get cell key) (funcall widest key))) shown))))
+                ;; A left-out file's error: what's left of its row after its
+                ;; name, cut with … to fit; next to nothing, none.
+                (said (- width 2 (funcall widest :name) gap))
+                (parts (cond
+                        (out (and (>= said 4) (list (agent-workspace--fit (plist-get cell :description) said))))
+                        (t (append
+                            (and (> described 0)
+                                 (list (funcall pad (agent-workspace--fit (plist-get cell :description) described)
+                                                described)))
+                            (and (> (funcall widest :count) 0)
+                                 (list (funcall pad (plist-get cell :count) (funcall widest :count))))
+                            (if full
+                                (and fulls (list at-max))
+                              (mapcar (lambda (key) (funcall pad (plist-get cell key) (funcall widest key)))
+                                      shown))))))
                 (suffix (string-trim-right
                          (concat (make-string (- (funcall widest :name) (string-width (car fact))) ?\s)
                                  (mapconcat (lambda (part) (concat (make-string gap ?\s) part)) parts ""))))
                 (icon (plist-get cell :icon)))
-           ;; At its max: dimmed, the whole of it.
-           (when full
+           ;; At its max or left out: dimmed, the whole of it.
+           (when dim
              (add-face-text-property 0 (length suffix) 'shadow t suffix))
            ;; Its icon a column in the GUI too, whatever the font draws.
-           (list (car fact) (agent-workspace--role-candidate (car fact) full)
+           (list (car fact) (agent-workspace--role-candidate (car fact) dim)
                  (if (fboundp 'agent-ui-even-glyphs) (agent-ui-even-glyphs icon) icon)
-                 suffix full)))
+                 suffix dim)))
        facts cells))))
 
-(defun agent-workspace--role-candidate (name full)
+(defun agent-workspace--role-candidate (name dim)
   "NAME as the role picker shows it, its matches highlighted as the
-completion UI has them; FULL (its role at its max), dimmed."
-  (if (not full)
+completion UI has them; DIM (its role at its max, or left out), dimmed."
+  (if (not dim)
       name
     (let ((name (copy-sequence name)))
       (add-face-text-property 0 (length name) 'shadow t name)
@@ -199,12 +277,13 @@ one (a terminal's last column, where a line wraps)."
   (1- (window-body-width (or (active-minibuffer-window) (minibuffer-window)))))
 
 (defun agent-workspace-read-role (project &optional default)
-  "A role of PROJECT's read in the minibuffer (DEFAULT first), each a row of
-columns (see above); one with as many agents as it allows is refused, and
-asked again."
-  (let* ((roles (mapcar #'car (agent-workspace-roles project)))
-         (roles (if (member default roles) (cons default (delete default roles)) roles))
-         (facts (agent-workspace--role-facts project roles))
+  "A role of PROJECT's read in the minibuffer (DEFAULT selected), each a
+row of columns, grouped (see above); one with as many agents as it allows,
+or a role file left out, is refused, and asked again."
+  (let* ((facts (agent-workspace--role-picker project))
+         (names (mapcar #'car facts))
+         (default (and (member default names) (not (plist-get (cdr (assoc default facts)) :out))
+                       default))
          (rows nil)
          (completion-extra-properties
           (list :affixation-function
@@ -214,18 +293,51 @@ asked again."
                       (setq rows (cons width (agent-workspace--role-rows facts width)))))
                   (mapcar (lambda (name)
                             (pcase (assoc name (cdr rows))
-                              (`(,_ ,_ ,prefix ,suffix ,full)
-                               (list (agent-workspace--role-candidate name full) prefix suffix))
+                              (`(,_ ,_ ,prefix ,suffix ,dim)
+                               (list (agent-workspace--role-candidate name dim) prefix suffix))
                               (_ (list name "" ""))))
-                          names)))))
+                          names))
+                :group-function
+                (lambda (name transform)
+                  (if transform
+                      name
+                    (when-let* ((fact (assoc name facts)))
+                      (agent-workspace--role-group-title (agent-workspace--role-group fact)))))
+                ;; In their order: by group, then as they're read.
+                :display-sort-function #'identity
+                :cycle-sort-function #'identity)))
     (catch 'role
       (while t
-        (let ((role (completing-read "Role: " roles nil t nil nil (car roles))))
+        (let ((role (agent-workspace--read-in-place "Role: " names (or default (car names)))))
           (condition-case err
-              (progn (agent-workspace--check-room project role)
+              (progn (when-let* ((out (plist-get (cdr (assoc role facts)) :out)))
+                       (user-error "Left out: %s" (plist-get out :message)))
+                     (agent-workspace--check-room project role)
                      (throw 'role role))
             (user-error (message "%s" (error-message-string err))
                         (sit-for 1.5))))))))
+
+(defun agent-workspace--read-in-place (prompt names default)
+  "One of NAMES read in the minibuffer with PROMPT (a match required),
+DEFAULT selected where it is: vertico moves a default to the top, out of
+its group, so there it's given none and DEFAULT is selected once vertico
+has listed them. An empty answer is DEFAULT."
+  (let* ((vertico (bound-and-true-p vertico-mode))
+         (answer
+          (minibuffer-with-setup-hook
+              (lambda ()
+                (when (and vertico default (fboundp 'vertico--goto))
+                  ;; After vertico's own, which lists them as the minibuffer
+                  ;; opens; once.
+                  (letrec ((select (lambda ()
+                                     (remove-hook 'post-command-hook select t)
+                                     (when-let* ((index (and (local-variable-p 'vertico--input)
+                                                             (seq-position vertico--candidates default))))
+                                       (vertico--goto index)
+                                       (vertico--exhibit)))))
+                    (add-hook 'post-command-hook select 90 t))))
+            (completing-read prompt names nil t nil nil (unless vertico default)))))
+    (if (string-empty-p answer) (or default answer) answer)))
 
 (defun agent-workspace-read-name (project role)
   "A name for a new agent of ROLE read in the minibuffer: left empty, one

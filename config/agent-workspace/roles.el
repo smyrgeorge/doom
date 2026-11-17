@@ -68,8 +68,8 @@ them too. They replace the project's and the starters of the same name."
   "A role file's keys (color as Claude Code's agents spell it).")
 
 (defvar agent-workspace--roles-cache (make-hash-table :test #'equal)
-  "A project's roles, as last read: project to (STAMP ROLES PROBLEMS), STAMP
-the role files and their modification times.")
+  "A project's roles, as last read: project to (STAMP (ROLES . PROBLEMS)
+LEFT-OUT), STAMP the role files and their modification times.")
 
 ;; ====== A ROLE FILE ======
 
@@ -217,29 +217,45 @@ problems are shown as warnings."
          (key (or project ""))
          (cached (gethash key agent-workspace--roles-cache)))
     (if (equal (car cached) stamp)
-        (cdr cached)
-      (let (roles problems)
+        (cadr cached)
+      (let (roles problems left-out)
         (dolist (file files)
           (pcase-let ((`(,role . ,found) (agent-workspace-role-read (cdr file))))
             (setq problems (append problems found))
-            (when role
-              (let* ((name (plist-get role :name))
-                     (replaced (alist-get name roles nil nil #'equal)))
-                (setq role (plist-put role :origin (car file)))
-                (when replaced
-                  (setq role (plist-put role :replaces (plist-get replaced :origin))))
-                (setf (alist-get name roles nil nil #'equal) role)))))
+            (if role
+                (let* ((name (plist-get role :name))
+                       (replaced (alist-get name roles nil nil #'equal)))
+                  (setq role (plist-put role :origin (car file)))
+                  (when replaced
+                    (setq role (plist-put role :replaces (plist-get replaced :origin))))
+                  (setf (alist-get name roles nil nil #'equal) role))
+              (let ((error (cadr (assq 'error found)))
+                    (shown (concat (abbreviate-file-name (cdr file)) ":")))
+                (push (list (file-name-base (cdr file)) :file (cdr file) :origin (car file) :message error
+                            :error (if (string-prefix-p shown error)
+                                       (concat "line " (substring error (length shown)))
+                                     error))
+                      left-out)))))
         (dolist (problem problems)
-          (unless (member problem (cddr cached))
+          (unless (member problem (cdr (cadr cached)))
             (display-warning 'agent-workspace (cadr problem) (car problem))))
         (let ((value (cons (nreverse roles) problems)))
-          (puthash key (cons stamp value) agent-workspace--roles-cache)
+          (puthash key (list stamp value (nreverse left-out)) agent-workspace--roles-cache)
           value)))))
 
 (defun agent-workspace-roles (&optional project)
   "PROJECT's roles (default: the current project's): an alist of a name and
 its role, the starters, the project's own and your local ones."
   (car (agent-workspace--roles-read (or project (agent-workspace-project)))))
+
+(defun agent-workspace-roles-left-out (&optional project)
+  "PROJECT's role files left out for their errors (default: the current
+project's), in the order they're read: ((NAME :file FILE :origin ORIGIN
+:message MESSAGE :error TEXT)...), NAME its file's, MESSAGE its first error
+\(\"FILE:LINE: what\"), TEXT the same without its file (\"line 4: what\")."
+  (let ((project (or project (agent-workspace-project))))
+    (agent-workspace--roles-read project)
+    (nth 2 (gethash (or project "") agent-workspace--roles-cache))))
 
 (defun agent-workspace-role-problems (&optional project)
   "What's wrong with PROJECT's role files: (error|warning MESSAGE) each."

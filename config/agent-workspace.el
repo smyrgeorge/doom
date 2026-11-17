@@ -51,8 +51,10 @@ needs your OK. nil: Claude Code's own default."
 ;; MAKING ONE
 ;; M-x agent-workspace-new (config/agent-workspace/new.el; the app's c) asks
 ;; its role (a row of columns each: its icon, what it does, how many run of
-;; its max, its model, mode, labels with their ready issues, hands-to; fewer
-;; in a narrow minibuffer; one at its max dimmed, refused), then its name: left
+;; its max, its model, mode, labels with their ready issues, hands-to, the
+;; role it replaced; fewer in a narrow minibuffer; one at its max dimmed,
+;; refused; grouped under dividers: local, project, starters, then the role
+;; files left out, refused naming file and line), then its name: left
 ;; empty, one from `agent-workspace-names' whose initial no agent has; C-u:
 ;; its model, permission mode and colour too. From Lisp:
 ;;   (agent-workspace-create :role "builder" :name "ada" :issue "doom-a1b")
