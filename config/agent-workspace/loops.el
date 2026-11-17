@@ -137,12 +137,15 @@ not stopped."
 
 (defun agent-workspace--loop-typed-p (agent)
   "Non-nil if text is typed at AGENT's prompt, not sent: a fresh session
-would lose it."
+would lose it. Asked of an agent-shell buffer only: elsewhere
+`agent-shell--input' looks for a shell, and offers to make one (asking: a
+GUI Emacs waits for the answer)."
   (when-let* ((buffer (agent-workspace-agent-buffer agent))
               ((buffer-live-p buffer))
               ((fboundp 'agent-shell--input)))
     (with-current-buffer buffer
-      (ignore-errors (agent-shell--input)))))
+      (and (derived-mode-p 'agent-shell-mode)
+           (ignore-errors (agent-shell--input))))))
 
 (defun agent-workspace--loop-at-rest-p (agent)
   "Non-nil if AGENT rests: at the desk, done or napping, nothing queued,

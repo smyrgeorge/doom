@@ -525,6 +525,20 @@ text gone, it takes it (doom-pbk.63)."
         (agent-workspace--loop-look-all root)
         (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))))))
 
+(ert-deftest agent-workspace-loops/what-s-typed-asked-of-a-shell-only ()
+  "An agent whose session buffer isn't agent-shell's (the tests' stand-in
+buffers): nothing asked of agent-shell for its prompt's text, which would
+offer to make a shell, and wait for the answer (the GUI's end-to-end tests
+hung on it)."
+  (let* ((buffer (generate-new-buffer "ada · builder"))
+         (ada (agent-workspace--make-agent :name "ada" :role "builder" :state 'nap :buffer buffer))
+         (asked nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-shell--input) (lambda () (setq asked t) "typed")))
+          (should-not (agent-workspace--loop-typed-p ada))
+          (should-not asked))
+      (kill-buffer buffer))))
+
 ;; ====== RENAMED ======
 
 (ert-deftest agent-workspace-loops/renamed-its-issue-follows ()
