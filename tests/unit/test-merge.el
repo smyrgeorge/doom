@@ -226,6 +226,50 @@ config/emacs/compile.el may (the other tests run them so)."
         (should-not buffer-file-name)
         (should (derived-mode-p 'text-mode))))))
 
+(ert-deftest merge/from-a-side-panel ()
+  "Started from a side panel with two panes open: the file tree (kept, as
+treemacs keeps itself), a popup (closed meanwhile); in the pane used last;
+closed, the windows as they were."
+  (pcase-dolist (`(,name ,side ,kept) '(("*tree*" left t) ("*popup*" bottom nil)))
+    (+test-merge-with-repo
+      (+test-merge--conflict "a.txt" +test-merge--base +test-merge--yours +test-merge--theirs)
+      (let* ((first (selected-window))
+             (second (split-window-right))
+             (panel (display-buffer-in-side-window (get-buffer-create name)
+                                                   `((side . ,side) (window-width . 15) (window-height . 5)))))
+        (when kept
+          (set-window-parameter panel 'no-delete-other-windows t))
+        (select-window second)
+        (select-window panel)
+        (let ((session (+test-merge--open)))
+          (unwind-protect
+              (progn
+                (should (eq (window-buffer (selected-window)) (+my/merge-result session)))
+                (should (eq (window-live-p panel) kept))
+                ;; Yours, the Result, Theirs, the bar (and the tree): nothing else.
+                (should (= (length (window-list nil 'nomini)) (if kept 5 4))))
+            (+my/merge-abort))
+          (should (window-live-p first))
+          (should (window-live-p second))
+          (should (eq (window-buffer (selected-window)) (get-buffer name)))
+          (should (= (length (window-list nil 'nomini)) 3)))))))
+
+(ert-deftest merge/a-failed-start-leaves-nothing ()
+  "An error while the panes are made: no buffer of the merge left, the
+windows as they were; nothing closed later puts a layout back."
+  (+test-merge-with-repo
+    (+test-merge--conflict "a.txt" +test-merge--base +test-merge--yours +test-merge--theirs)
+    (let ((buffers (buffer-list))
+          (windows (window-list nil 'nomini)))
+      (split-window-right)
+      (setq windows (window-list nil 'nomini))
+      (cl-letf (((symbol-function '+my/merge--render-bar)
+                 (lambda (&rest _) (error "Broken bar"))))
+        (should-error (+my/merge "a.txt")))
+      (should (equal (seq-difference (buffer-list) buffers) nil))
+      (should (equal (window-list nil 'nomini) windows))
+      (should (= (+test-merge--fire #'+my/merge--finish) 0)))))
+
 (ert-deftest merge/the-changes-and-what-they-are ()
   (+test-merge
     (should (equal (mapcar #'+my/merge-chunk-kind (+my/merge-chunks session))

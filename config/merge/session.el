@@ -2,6 +2,12 @@
 ;; A merge opened, one file after another, closed. Loaded from config/merge.el.
 
 ;; OPENING
+(defun +my/merge--last-pane ()
+  "The selected frame's window used last, not a side panel."
+  (car (sort (seq-remove (lambda (window) (window-parameter window 'window-side))
+                         (window-list nil 'nomini))
+             (lambda (a b) (> (window-use-time a) (window-use-time b))))))
+
 (defun +my/merge--pane (name text mode-file &optional editable)
   "A pane's buffer NAME with TEXT, in the mode MODE-FILE's name gives (its
 hooks not run: no language server, linter...), read-only unless EDITABLE."
@@ -35,8 +41,10 @@ Theirs."
   (let ((window-min-height 1)
         (window-safe-min-height 1)
         (window-min-width 10))
+    ;; From a side panel (a file tree, a popup): in the pane used last
+    ;; (`window-main-window' is no window to select with 2 panes or more).
     (when (window-parameter nil 'window-side)
-      (select-window (window-main-window)))
+      (select-window (+my/merge--last-pane)))
     (delete-other-windows)
     (let* ((left (selected-window))
            (bar (split-window left -2 'above))
@@ -70,56 +78,64 @@ folder) in three panes."
          (labels (+my/merge--labels))
          (session (+my/merge--make :path path :toplevel default-directory :coding coding
                                    :labels labels :frame (selected-frame)
-                                   :winconf (current-window-configuration))))
-    (setf (+my/merge-base session) (+my/merge--pane (format " *merge base: %s*" path) (nth 0 texts) path)
-          (+my/merge-yours session) (+my/merge--pane (format "Yours: %s" path) (nth 1 texts) path)
-          (+my/merge-theirs session) (+my/merge--pane (format "Theirs: %s" path) (nth 2 texts) path)
-          (+my/merge-result session) (+my/merge--pane (format "Result: %s" path) (nth 0 texts) path t)
-          (+my/merge-bar session) (generate-new-buffer (format " *merge: %s*" path)))
-    (setf (+my/merge-chunks session) (+my/merge--chunks session))
-    (dolist (buffer (list (+my/merge-yours session) (+my/merge-theirs session)
-                          (+my/merge-result session) (+my/merge-base session)
-                          (+my/merge-bar session)))
-      (with-current-buffer buffer
-        (setq +my/merge--session session)
-        (setq default-directory (+my/merge-toplevel session))
-        (add-hook 'kill-buffer-hook #'+my/merge--killed-h nil t)))
-    (with-current-buffer (+my/merge-bar session)
-      (+my/merge-bar-mode)
-      (setq +my/merge--session session)
-      (add-hook 'kill-buffer-hook #'+my/merge--killed-h nil t)
-      (add-hook 'window-size-change-functions #'+my/merge--bar-resized-h nil t))
-    (pcase-dolist (`(,buffer ,title) `((,(+my/merge-yours session) ,(concat "Yours: " (car labels)))
-                                       (,(+my/merge-result session) ,(concat "Result: " path))
-                                       (,(+my/merge-theirs session) ,(concat "Theirs: " (cdr labels)))))
-      (with-current-buffer buffer
-        ;; First: turned off, it puts back the buffer's `truncate-lines'.
-        (when (bound-and-true-p visual-line-mode)
-          (visual-line-mode -1))
-        (setq-local header-line-format (concat " " (propertize title 'face 'bold))
-                    ;; A row a line: lined up (see LINING UP, align.el).
-                    truncate-lines t
-                    filter-buffer-substring-function #'+my/merge--filter-substring)
-        (cursor-intangible-mode 1)
-        (add-hook 'after-change-functions #'+my/merge--changed-h nil t)
-        (add-hook 'post-command-hook #'+my/merge--post-command-h nil t)
-        (+my/merge-mode 1)))
-    (with-current-buffer (+my/merge-result session)
-      (setq buffer-undo-list nil))
-    (+my/merge--refine session)
-    (seq-doseq (chunk (+my/merge-chunks session))
-      (setf (+my/merge-chunk-wand chunk) (+my/merge--wand-of chunk))
-      (+my/merge--render-chunk chunk))
-    (with-current-buffer (+my/merge-result session)
-      (let ((buffer-undo-list t))
-        (+my/merge--align session)))
-    (+my/merge--layout session)
-    (+my/merge--render-bar session)
-    ;; At the first change.
-    (when-let* ((first (seq-first (+my/merge-chunks session))))
-      (+my/merge--goto first))
-    (message "%s: %s" path (with-current-buffer (+my/merge-bar session)
-                              (string-trim (buffer-string))))
+                                   :winconf (current-window-configuration)))
+         (started nil))
+    ;; Failing on the way (C-g too): its buffers killed, the windows as
+    ;; they were (not a layout put back later, as a pane killed would).
+    (unwind-protect
+        (progn
+          (setf (+my/merge-base session) (+my/merge--pane (format " *merge base: %s*" path) (nth 0 texts) path)
+                (+my/merge-yours session) (+my/merge--pane (format "Yours: %s" path) (nth 1 texts) path)
+                (+my/merge-theirs session) (+my/merge--pane (format "Theirs: %s" path) (nth 2 texts) path)
+                (+my/merge-result session) (+my/merge--pane (format "Result: %s" path) (nth 0 texts) path t)
+                (+my/merge-bar session) (generate-new-buffer (format " *merge: %s*" path)))
+          (setf (+my/merge-chunks session) (+my/merge--chunks session))
+          (dolist (buffer (list (+my/merge-yours session) (+my/merge-theirs session)
+                                (+my/merge-result session) (+my/merge-base session)
+                                (+my/merge-bar session)))
+            (with-current-buffer buffer
+              (setq +my/merge--session session)
+              (setq default-directory (+my/merge-toplevel session))
+              (add-hook 'kill-buffer-hook #'+my/merge--killed-h nil t)))
+          (with-current-buffer (+my/merge-bar session)
+            (+my/merge-bar-mode)
+            (setq +my/merge--session session)
+            (add-hook 'kill-buffer-hook #'+my/merge--killed-h nil t)
+            (add-hook 'window-size-change-functions #'+my/merge--bar-resized-h nil t))
+          (pcase-dolist (`(,buffer ,title) `((,(+my/merge-yours session) ,(concat "Yours: " (car labels)))
+                                             (,(+my/merge-result session) ,(concat "Result: " path))
+                                             (,(+my/merge-theirs session) ,(concat "Theirs: " (cdr labels)))))
+            (with-current-buffer buffer
+              ;; First: turned off, it puts back the buffer's `truncate-lines'.
+              (when (bound-and-true-p visual-line-mode)
+                (visual-line-mode -1))
+              (setq-local header-line-format (concat " " (propertize title 'face 'bold))
+                          ;; A row a line: lined up (see LINING UP, align.el).
+                          truncate-lines t
+                          filter-buffer-substring-function #'+my/merge--filter-substring)
+              (cursor-intangible-mode 1)
+              (add-hook 'after-change-functions #'+my/merge--changed-h nil t)
+              (add-hook 'post-command-hook #'+my/merge--post-command-h nil t)
+              (+my/merge-mode 1)))
+          (with-current-buffer (+my/merge-result session)
+            (setq buffer-undo-list nil))
+          (+my/merge--refine session)
+          (seq-doseq (chunk (+my/merge-chunks session))
+            (setf (+my/merge-chunk-wand chunk) (+my/merge--wand-of chunk))
+            (+my/merge--render-chunk chunk))
+          (with-current-buffer (+my/merge-result session)
+            (let ((buffer-undo-list t))
+              (+my/merge--align session)))
+          (+my/merge--layout session)
+          (+my/merge--render-bar session)
+          ;; At the first change.
+          (when-let* ((first (seq-first (+my/merge-chunks session))))
+            (+my/merge--goto first))
+          (message "%s: %s" path (with-current-buffer (+my/merge-bar session)
+                                   (string-trim (buffer-string))))
+          (setq started t))
+      (unless started
+        (+my/merge--close session)))
     session))
 
 (defun +my/merge (file)
@@ -215,20 +231,25 @@ other (see `+my/merge-files')."
 (defun +my/merge--session ()
   (or +my/merge--session (user-error "Not in a merge")))
 
+(defun +my/merge--close (session)
+  "SESSION's windows as they were, its buffers killed (it marked finished
+first: no pane killed closes it again)."
+  (setf (+my/merge-finished session) t)
+  (when (+my/merge-winconf session)
+    (ignore-errors (set-window-configuration (+my/merge-winconf session))))
+  (dolist (buffer (list (+my/merge-yours session) (+my/merge-theirs session)
+                        (+my/merge-result session) (+my/merge-base session)
+                        (+my/merge-bar session)))
+    (when (buffer-live-p buffer)
+      (with-current-buffer buffer
+        (set-buffer-modified-p nil))
+      (let ((kill-buffer-query-functions nil))
+        (kill-buffer buffer)))))
+
 (defun +my/merge--finish (session)
   "Close SESSION: its panes, the windows as they were."
   (unless (+my/merge-finished session)
-    (setf (+my/merge-finished session) t)
-    (when (+my/merge-winconf session)
-      (ignore-errors (set-window-configuration (+my/merge-winconf session))))
-    (dolist (buffer (list (+my/merge-yours session) (+my/merge-theirs session)
-                          (+my/merge-result session) (+my/merge-base session)
-                          (+my/merge-bar session)))
-      (when (buffer-live-p buffer)
-        (with-current-buffer buffer
-          (set-buffer-modified-p nil))
-        (let ((kill-buffer-query-functions nil))
-          (kill-buffer buffer))))
+    (+my/merge--close session)
     (when (fboundp 'magit-refresh-all)
       (let ((default-directory (+my/merge-toplevel session)))
         (ignore-errors (magit-refresh-all))))
