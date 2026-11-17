@@ -1290,6 +1290,60 @@ nothing sent."
             (agent-workspace--issues-goto-id "p-1")
             (should-error (agent-workspace-issue-give) :type 'user-error)))))))
 
+(ert-deftest agent-workspace-app/the-stage-away-the-cursor-stays ()
+  "The stage not shown (the room alone, 2; the branches, b), the cursor in
+the compose line or the branches: an agent's canvas showing something new
+(Agent UI showing it, the canvas current), a panel, its session started
+again, an agent made lay nothing out, the cursor where it was; a layout
+with another buffer current (a resize's) keeps it there too. Back on the
+stage, the canvas's tab is shown (doom-pbk.67)."
+  (+test-awa "away"
+    (pcase-let ((`(,ada) (+test-awa--crew '("ada" "builder"))))
+      (let* ((app (agent-workspace-open t))
+             (layouts 0)
+             (count (lambda (&rest _) (cl-incf layouts)))
+             (canvas nil))
+        (advice-add 'agent-workspace-layout :before count)
+        (unwind-protect
+            (cl-flet ((changes (n)
+                        ;; Shown on its canvas with the canvas current, as Agent UI does.
+                        (with-current-buffer (or canvas (current-buffer))
+                          (setq canvas (+test-awa--canvas-show ada (list :type "text" :id (format "t%d" n)
+                                                                         :text "News"))))
+                        (with-current-buffer canvas
+                          (agent-workspace--changed ada 'panels)
+                          (agent-workspace--changed ada 'session))))
+              ;; The room alone, the cursor in the compose line.
+              (agent-workspace-view-room)
+              (let ((compose (get-buffer-window (agent-workspace--compose-buffer project))))
+                (select-window compose)
+                (setq layouts 0)
+                (changes 1)
+                (changes 2)
+                (agent-workspace-create :role "builder" :name "ken")
+                (should (= layouts 0))
+                (should (eq (selected-window) compose))
+                (should (eq (window-buffer) (agent-workspace--compose-buffer project)))
+                ;; A layout with the canvas current: the cursor stays.
+                (with-current-buffer canvas (agent-workspace-layout app))
+                (should (eq (window-buffer) (agent-workspace--compose-buffer project))))
+              ;; The branches in the stage's place, the cursor there.
+              (agent-workspace-view-stage)
+              (agent-workspace-branches)
+              (let ((view (window-buffer)))
+                (should (eq (agent-workspace--app-view app) 'branches))
+                (setq layouts 0)
+                (changes 3)
+                (agent-workspace-create :role "builder" :name "liz")
+                (should (= layouts 0))
+                (should (eq (window-buffer) view))
+                (with-current-buffer view (agent-workspace-branches-quit)))
+              ;; The stage back: ada's pane open shows her canvas.
+              (agent-workspace-select ada)
+              (should (eq (agent-workspace--app-view app) 'stage))
+              (should (get-buffer-window canvas)))
+          (advice-remove 'agent-workspace-layout count))))))
+
 ;; ====== WORKSPACES ======
 
 (defmacro +test-awa--persp (&rest body)

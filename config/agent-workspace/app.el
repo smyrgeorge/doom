@@ -447,12 +447,14 @@ leave."
 (defun agent-workspace-layout (&optional app)
   "APP (the one here) laid out anew in the selected frame: its issues on the
 left, its stage beside them, the selected agent's pane open. A popup open
-\(see `agent-workspace--clear') stays, the app laid out beside it."
+\(see `agent-workspace--clear') stays, the app laid out beside it. The
+cursor stays in the buffer it was in (the selected window's, whatever
+buffer is current: a timer's, a canvas's being shown)."
   (interactive)
   (let* ((app (or app (agent-workspace--here-or-error)))
          (project (agent-workspace--app-project app))
          (agents (agent-workspace--ordered project))
-         (was (current-buffer))
+         (was (window-buffer (selected-window)))
          ;; Shown anew (opened, come back to), not laid out again where it was.
          (anew (not (agent-workspace--shown-p app)))
          (base (or (seq-find (lambda (window) (not (window-parameter window 'window-side)))
@@ -507,12 +509,16 @@ left, its stage beside them, the selected agent's pane open. A popup open
 (defun agent-workspace--retile (app)
   "APP's stage sized again (its selection, an open pane changed): its windows
 made anew where they were, the issue list and the cursor kept; laid out anew
-when the stage isn't as it was."
+when the stage isn't as it was. Nothing while it isn't shown (the room
+alone, the branches in its place): laid out as it comes back."
   (let ((windows (agent-workspace--app-windows app)))
-    (if (not (and (agent-workspace--shown-p app)
-                  windows (cl-every #'window-live-p windows)
-                  (eq (window-frame (car windows)) (selected-frame))))
-        (when (agent-workspace--shown-p app) (agent-workspace-layout app))
+    (cond
+     ((not (eq (agent-workspace--app-view app) 'stage)))
+     ((not (and (agent-workspace--shown-p app)
+                windows (cl-every #'window-live-p windows)
+                (eq (window-frame (car windows)) (selected-frame))))
+      (when (agent-workspace--shown-p app) (agent-workspace-layout app)))
+     (t
       (let* ((was (selected-window))
              (buffer (window-buffer was))
              (agents (agent-workspace--ordered (agent-workspace--app-project app)))
@@ -533,7 +539,7 @@ when the stage isn't as it was."
                                (t (or (get-buffer-window (agent-workspace--issues-buffer
                                                           (agent-workspace--app-project app)))
                                       (selected-window)))))
-          (force-mode-line-update t))))))
+          (force-mode-line-update t)))))))
 
 (defun agent-workspace--redraw (app)
   "APP's bars, issue list and header lines drawn again (nothing laid out)."
