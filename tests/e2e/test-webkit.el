@@ -517,10 +517,25 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s)")
 (defun +test-webkit--top (xwidget)
   (json-parse-string (+test-js xwidget +test-webkit--top-js) :object-type 'plist))
 
-(defun +test-webkit--resized (xwidget width)
-  "XWIDGET's page once WIDTH pixels wide, laid out and scrolled (a moment)."
+(defun +test-webkit--scrolled (xwidget script id)
+  "XWIDGET's page scrolled by SCRIPT, once its reading place has taken it in:
+the paragraph ID kept (nil: at the very top, none). WebKit tells a page it's
+scrolled when it next draws it, a moment after in the tests' frame (the app
+not in front, its frame off the screen): a resize first would put back the
+place before."
+  (+test-js xwidget script)
+  (should (+test-wait-for
+           (lambda () (equal (+test-js xwidget "String((emacsPlace.anchor() || {}).id || '')") (or id "")))
+           5)))
+
+(defun +test-webkit--resized (xwidget width &optional id)
+  "XWIDGET's page once WIDTH pixels wide, laid out and scrolled: with ID, once
+that paragraph is at its top (a page is told it's resized when WebKit next
+draws it), else a moment after."
   (should (+test-wait-for (lambda () (= (plist-get (+test-webkit--top xwidget) :w) width)) 5))
-  (+test-sleep 0.3))
+  (if id
+      (+test-wait-for (lambda () (equal (plist-get (+test-webkit--top xwidget) :id) id)) 5)
+    (+test-sleep 0.3)))
 
 (ert-deftest e2e-webkit/the-reading-place-kept-as-the-pane-is-resized ()
   "A long text page, a paragraph at its top (or 40% of one), the pane narrowed
@@ -533,26 +548,25 @@ text laid out anew, the scroll in pixels other); at the very top, the top."
              (wide (window-body-width pane t))
              (xwidget (+my/webkit-xwidget pane)))
         (pcase-dolist (`(,id ,part) '(("p60" 0) ("p30" 0.4)))
-          (+test-js xwidget (format "(() => { const p = document.getElementById('%s');
-  scrollTo(0, p.offsetTop + %s * p.offsetHeight); return 'ok'; })()" id part))
-          (+test-sleep 0.3)
+          (+test-webkit--scrolled xwidget (format "(() => { const p = document.getElementById('%s');
+  scrollTo(0, p.offsetTop + %s * p.offsetHeight); return 'ok'; })()" id part)
+                                  id)
           (let ((y (plist-get (+test-webkit--top xwidget) :y)))
             (should (equal (plist-get (+test-webkit--top xwidget) :id) id))
             (let ((other (split-window pane 40 'right)))
-              (+test-webkit--resized xwidget (window-body-width pane t))
+              (+test-webkit--resized xwidget (window-body-width pane t) id)
               (let ((top (+test-webkit--top xwidget)))
                 (should (equal (list id (plist-get top :id)) (list id id)))
                 ;; Laid out anew: the place in pixels is another.
                 (should (> (plist-get top :y) (* 1.5 y)))
                 (should (< (abs (- (plist-get top :part) part)) 0.1)))
               (delete-window other))
-            (+test-webkit--resized xwidget wide)
+            (+test-webkit--resized xwidget wide id)
             (let ((top (+test-webkit--top xwidget)))
               (should (equal (list id (plist-get top :id)) (list id id)))
               (should (< (abs (- (plist-get top :part) part)) 0.1)))))
         ;; At the very top: the top.
-        (+test-js xwidget "(() => { scrollTo(0, 0); return 'ok'; })()")
-        (+test-sleep 0.3)
+        (+test-webkit--scrolled xwidget "(() => { scrollTo(0, 0); return 'ok'; })()" nil)
         (let ((other (split-window pane 40 'right)))
           (+test-webkit--resized xwidget (window-body-width pane t))
           (should (eql (plist-get (+test-webkit--top xwidget) :y) 0))

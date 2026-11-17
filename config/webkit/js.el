@@ -121,12 +121,16 @@ until it has said it."
 ;; scrolled (the deepest block there: not one that's fixed or sticky, an image
 ;; or an SVG whole; and how far into it the top is, or how far above it), and
 ;; puts it back at the top as its view is resized. At the very top it stays at
-;; the top. A page scrolled in an element of its own (PDF.js) or not at all (a
-;; drawing) isn't concerned.
+;; the top. It starts with the place the page is at: scrolled before (a key
+;; pressed at once, the scroll a reload puts back), there was no scroll after
+;; it to say it. Kept at each scroll, not at the next animation frame: WebKit
+;; holds those back for a view it doesn't show whole (a second and more), and
+;; a resize meanwhile put back the place before. A page scrolled in an element
+;; of its own (PDF.js) or not at all (a drawing) isn't concerned.
 (defconst +my/webkit--place-js
   "(function () {
   if (window.emacsPlace) return;
-  var anchor = null, pending = false;
+  var anchor = null;
   function block(element) {
     var style = getComputedStyle(element);
     return style.position !== 'fixed' && style.position !== 'sticky' && !/^inline/.test(style.display);
@@ -148,7 +152,6 @@ until it has said it."
     return found;
   }
   function record() {
-    pending = false;
     var element = window.scrollY > 0 ? top() : null;
     if (!element) { anchor = null; return; }
     var box = element.getBoundingClientRect();
@@ -159,11 +162,10 @@ until it has said it."
     var box = anchor.element.getBoundingClientRect();
     window.scrollBy(0, box.top - (anchor.top < 0 ? -anchor.part * box.height : anchor.top));
   }
-  addEventListener('scroll', function () {
-    if (!pending) { pending = true; requestAnimationFrame(record); }
-  }, {passive: true});
+  addEventListener('scroll', record, {passive: true});
   addEventListener('resize', restore);
   window.emacsPlace = {anchor: function () { return anchor && anchor.element; }};
+  record();
 })();"
   "JavaScript keeping a page's reading place (see above).")
 

@@ -1311,6 +1311,59 @@ own load functions (which may scroll it)."
                       "if (window.emacsPlace) return;" "position !== 'fixed'"))
         (should (string-search part +my/webkit--place-js))))))
 
+(defconst +test-webkit--place-page-js
+  "const boxes = {p1: [-400, 0], p2: [-50, 150], p3: [150, 350]};
+function el(id) {
+  return {id, tagName: 'P', firstElementChild: null, nextElementSibling: null, isConnected: true,
+          getBoundingClientRect() { const [top, bottom] = boxes[id]; return {top, bottom, height: bottom - top}; }};
+}
+const p1 = el('p1'), p2 = el('p2'), p3 = el('p3');
+p1.nextElementSibling = p2; p2.nextElementSibling = p3;
+const listeners = {};
+let scrolled = null;
+globalThis.window = globalThis;
+globalThis.scrollY = %d;
+globalThis.document = {body: {firstElementChild: p1}};
+globalThis.getComputedStyle = () => ({position: 'static', display: 'block'});
+globalThis.addEventListener = (type, f) => { listeners[type] = f; };
+globalThis.requestAnimationFrame = () => 0;
+globalThis.scrollBy = (x, y) => { scrolled = y; };
+%s
+if (%s) {
+  boxes.p1 = [-700, -300]; boxes.p2 = [-300, -100]; boxes.p3 = [-100, 100];
+  scrollY = 700;
+  listeners.scroll();
+}
+boxes.p2 = [900, 1300]; boxes.p3 = [1500, 1900];
+listeners.resize();
+console.log(JSON.stringify({anchor: (emacsPlace.anchor() || {}).id || null, scrolled}));"
+  "A stand-in page for the reading-place script, for `format' with its scroll,
+the script, and whether it's scrolled after (true or false): p2 at its top,
+a quarter into it (50 of its 200 pixels); scrolled after, p3, half into it
+\(100 of 200). Laid out anew (p2 900 pixels below the top, p3 1500, both
+400 high), resized. Its animation frames never come. What the script kept,
+how far it scrolled, as JSON.")
+
+(ert-deftest webkit/a-page-s-place-kept-whenever-it-was-scrolled ()
+  "A page already scrolled when its reading-place script starts (a key
+pressed at once, a reload's scroll put back: no scroll after it): what's at
+its top kept, put back at the top on resize, as far into it. Scrolled after:
+that place, kept at the scroll, not at an animation frame (WebKit holds them
+back in a view it doesn't show whole). At the very top, nothing kept
+\(doom-sq6.126)."
+  (skip-unless (executable-find "node"))
+  (let ((file (+test-tmp-file "webkit-place.js")))
+    (cl-flet ((run (scroll &optional then)
+                (with-temp-file file
+                  (insert (format +test-webkit--place-page-js scroll +my/webkit--place-js (if then "true" "false"))))
+                (with-temp-buffer
+                  (should (zerop (call-process "node" nil t nil file)))
+                  (json-parse-string (buffer-string) :object-type 'plist :null-object nil))))
+      (should (equal (run 400) '(:anchor "p2" :scrolled 1000)))
+      (should (equal (run 400 t) '(:anchor "p3" :scrolled 1700)))
+      (should (equal (run 0 t) '(:anchor "p3" :scrolled 1700)))
+      (should (equal (run 0) '(:anchor nil :scrolled nil))))))
+
 ;; ====== JAVASCRIPT ======
 
 (ert-deftest webkit/execute-in-the-selected-windows-view ()
