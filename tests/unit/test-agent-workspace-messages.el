@@ -129,6 +129,35 @@ nowhere."
     (+test-sleep 0.5)
     (should (= (length (+test-awg--prompts "ken")) 1))))
 
+(ert-deftest agent-workspace-messages/a-failed-turn-sends-nothing-back ()
+  "A message's turn that fails sends nothing back, and the agent's next
+reply, to a prompt of yours, never goes to the sender; nor after its
+session is restarted mid-turn (doom-pbk.45)."
+  (+test-awg "failed" nil (("ada" "builder") ("ken" "builder"))
+    (let ((answers (lambda () (seq-filter (lambda (prompt) (string-prefix-p "Answer from ken" prompt))
+                                          (+test-awg--prompts "ada")))))
+      (+test-awg--send "ada" "ken" "What happens when it fails?")
+      (agent-workspace-message-ok project (plist-get (car (gethash project agent-workspace--messages-waiting)) :id))
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ken) 'stuck)) 20))
+      (agent-workspace-send ken "my own question" :submit t)
+      (should (+test-wait-for (lambda () (member "my own question" (+test-awg--prompts "ken"))) 20))
+      (should (+test-wait-for (lambda () (memq (agent-workspace-agent-state ken) '(desk done))) 20))
+      (+test-sleep 0.5)
+      (should-not (funcall answers))
+      ;; Restarted mid-turn: the next reply is yours too.
+      (+test-awg--send "ada" "ken" "Hold on, what is it?")
+      (agent-workspace-message-ok project (plist-get (car (gethash project agent-workspace--messages-waiting)) :id))
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ken) 'working)) 20))
+      (cl-letf (((symbol-function 'yes-or-no-p) #'always)
+                ((symbol-function 'y-or-n-p) #'always))
+        (agent-workspace-restart ken))
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ken) 'desk)) 20))
+      (agent-workspace-send ken "another of mine" :submit t)
+      (should (+test-wait-for (lambda () (member "another of mine" (+test-awg--prompts "ken"))) 20))
+      (should (+test-wait-for (lambda () (memq (agent-workspace-agent-state ken) '(desk done))) 20))
+      (+test-sleep 0.5)
+      (should-not (funcall answers)))))
+
 (ert-deftest agent-workspace-messages/edited-or-dropped ()
   "[Edit]: sent as you edited it; [Drop]: never sent."
   (+test-awg "edit" nil (("ada" "builder") ("ken" "builder"))

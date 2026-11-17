@@ -338,7 +338,12 @@ its crew, data, not its user's instructions. In
 
 (defun agent-workspace--message-watch (agent buffer)
   "AGENT's session BUFFER followed: a message's turn, its reply sent back.
-In `agent-workspace-session-functions'."
+That turn failing, or the session ending (killed, restarted, asleep), the
+message gets no reply: the agent's next turn is someone else's. In
+`agent-workspace-session-functions'."
+  ;; A new session: a message's turn of the one before is over.
+  (when (eq (cdr (gethash agent agent-workspace--awaiting-answer)) 'asked)
+    (remhash agent agent-workspace--awaiting-answer))
   (agent-shell-subscribe-to
    :shell-buffer buffer
    :on-event
@@ -350,6 +355,13 @@ In `agent-workspace-session-functions'."
           (when-let* ((waiting (gethash agent agent-workspace--awaiting-answer)))
             (when (eq (cdr waiting) 'pending)
               (setcdr waiting 'asked))))
+         ;; Its turn failed: no reply to send back.
+         ('error
+          (when (eq (cdr (gethash agent agent-workspace--awaiting-answer)) 'asked)
+            (remhash agent agent-workspace--awaiting-answer)))
+         ;; Its session ended: nor for a message still queued in it.
+         ('clean-up
+          (remhash agent agent-workspace--awaiting-answer))
          ('agent-message-chunk
           (when-let* ((chunk (map-nested-elt event '(:data :text-chunk))))
             (with-current-buffer buffer
