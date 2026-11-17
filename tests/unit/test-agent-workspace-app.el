@@ -1164,6 +1164,40 @@ at 35, 50 and 80 columns (doom-pbk.42)."
                 (should (<= (string-width row) (window-width (get-buffer-window (current-buffer))))))))
           (agent-workspace--close-app project))))))
 
+(ert-deftest agent-workspace-app/the-issues-redrawn-the-cursor-stays ()
+  "The issue list drawn again (an agent's state changing, a fetch): the
+cursor where it was in its issue (its line and column, a second row too),
+a region kept, still active (doom-pbk.49)."
+  (+test-awa "cursor-stays"
+    (pcase-let ((`(,ada) (+test-awa--crew '("ada" "builder"))))
+      (agent-workspace-open t)
+      (let* ((buffer (agent-workspace--issues-buffer project))
+             (window (get-buffer-window buffer)))
+        (with-current-buffer buffer
+          (setq agent-workspace--issues-data (agent-workspace--issues-parse project +test-awa--bd))
+          (agent-workspace--issues-redraw project))
+        (with-selected-window window
+          ;; In p-2's second row, mid-word; the mark in p-3's title.
+          (goto-char (point-min))
+          (search-forward "two rows")
+          (backward-char 3)
+          (let ((line (line-number-at-pos)) (column (current-column)))
+            (save-excursion
+              (goto-char (point-min))
+              (search-forward "Why does")
+              (set-mark (point)))
+            (activate-mark)
+            (let ((mark-line (line-number-at-pos (mark))) (mark-column (save-excursion (goto-char (mark)) (current-column)))
+                  (deactivate-mark nil))
+              (setf (agent-workspace-agent-state ada) 'working)
+              (agent-workspace--issues-redraw project)
+              (should (= (line-number-at-pos (window-point window)) line))
+              (should (= (save-excursion (goto-char (window-point window)) (current-column)) column))
+              (should (= (line-number-at-pos (mark)) mark-line))
+              (should (= (save-excursion (goto-char (mark)) (current-column)) mark-column))
+              (should mark-active)
+              (should-not deactivate-mark))))))))
+
 (defconst +test-awa--typed
   (list :all (json-parse-string
               "[{\"id\":\"t-1\",\"title\":\"Fix the parser\",\"status\":\"in_progress\",\"assignee\":\"ada\",\"issue_type\":\"bug\"},

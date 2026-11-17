@@ -437,15 +437,43 @@ their headings (each carrying its epic), when it has one."
       (concat (or (agent-workspace-tally (agent-workspace-agents agent-workspace--issues-project)) "") " ")
       (window-total-width)))))
 
+(defun agent-workspace--issues-place (pos)
+  "Where POS is in the issue list, to find again once it's drawn anew: (ID
+. OFFSET), OFFSET from the start of its issue's rows; nil, on none."
+  (when-let* ((id (plist-get (get-text-property pos 'agent-workspace-issue) :id)))
+    (let ((start pos))
+      (while (and (> start (point-min))
+                  (equal (plist-get (get-text-property (1- start) 'agent-workspace-issue) :id) id))
+        (setq start (1- start)))
+      (cons id (- pos start)))))
+
+(defun agent-workspace--issues-place-find (place)
+  "PLACE (`agent-workspace--issues-place') in the issue list as it's now:
+its position, within its issue's rows; nil, its issue gone."
+  (save-excursion
+    (when (agent-workspace--issues-goto-id (car place))
+      (let ((start (point))
+            (end (or (next-single-property-change (point) 'agent-workspace-issue) (point-max))))
+        ;; Its rows' text is one stretch (two rows: the newline between too).
+        (while (and (< end (point-max))
+                    (equal (plist-get (get-text-property end 'agent-workspace-issue) :id) (car place)))
+          (setq end (or (next-single-property-change end 'agent-workspace-issue) (point-max))))
+        (min (+ start (cdr place)) (max start (1- end)))))))
+
 (defun agent-workspace--issues-redraw (project)
   "PROJECT's issue list drawn again, the cursor on the issue (or the epic's
-heading) it was on."
+heading) it was on, where it was in it (its line and column), the region
+kept (its mark found again, still active)."
   (when-let* ((app (agent-workspace--app project))
               (buffer (agent-workspace--issues-buffer project)))
     (with-current-buffer buffer
       (agent-workspace--in-drawing-frame
         (let* ((window (get-buffer-window buffer t))
                (pos (if window (window-point window) (point)))
+               (place (agent-workspace--issues-place pos))
+               (mark (and (mark t) (agent-workspace--issues-place (mark t))))
+               ;; Drawn from a timer: the region not deactivated after.
+               (deactivate-mark nil)
                (issue (plist-get (get-text-property pos 'agent-workspace-issue) :id))
                (epic (and (not issue) (get-text-property pos 'agent-workspace-epic)
                           (cons (plist-get (get-text-property pos 'agent-workspace-epic) :id)
@@ -469,6 +497,11 @@ heading) it was on."
                          (agent-workspace--issues-goto-agent (agent-workspace--app-selected app)))
               (goto-char (point-min))
               (agent-workspace-issue-next 1)))
+          ;; Where it was in its issue's rows; the mark too.
+          (when-let* ((at (and place (agent-workspace--issues-place-find place))))
+            (goto-char at))
+          (when-let* ((at (and mark (agent-workspace--issues-place-find mark))))
+            (set-marker (mark-marker) at))
           (when window
             (set-window-start window (save-excursion (goto-char (point-min)) (forward-line (1- (or start 1))) (point)) t)
             (set-window-point window (point)))
