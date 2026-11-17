@@ -402,6 +402,8 @@ by the agent too (at its turn's end)."
       (should (+test-aws--wait (lambda () (member "Work on demo-1: Lexer: strings" (+test-aws--prompts "ada")))))
       (should (equal (funcall head) "task/demo-1-strings"))
       (should (equal (agent-workspace-agent-branch agent) "task/demo-1-strings"))
+      ;; The stand-in logs a prompt, then runs git to log its branch.
+      (should (+test-aws--wait (lambda () (= (length (+test-aws--logged :branch "ada")) 2))))
       (should (equal (+test-aws--logged :branch "ada") '("slow-please" "task/demo-1-strings")))
       (let ((default-directory project))
         (should (equal (+test-aws--git "branch" "--list" "slow-please") "")))
