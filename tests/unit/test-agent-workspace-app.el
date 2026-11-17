@@ -100,6 +100,17 @@ desk; bd not run (`issues': what it answers, plists of bd's JSON)."
   (mapcar (lambda (spec) (agent-workspace-create :role (cadr spec) :name (car spec)))
           specs))
 
+(defun +test-awa--fastest (function &optional times)
+  "The seconds FUNCTION takes, the fastest of TIMES (5) calls, no garbage
+collected during them: the code's time, not a busy machine's (the other
+test files running beside it, a collection that falls in it)."
+  (let ((gc-cons-threshold most-positive-fixnum))
+    (garbage-collect)
+    (cl-loop repeat (or times 5)
+             minimize (let ((start (float-time)))
+                        (funcall function)
+                        (- (float-time) start)))))
+
 ;; ====== THE LAYOUT ======
 
 (ert-deftest agent-workspace-app/sizes ()
@@ -126,9 +137,8 @@ changes, a tick, a redraw (doom-pbk.70)."
             (let ((first (agent-workspace--pane-header)))
               (should (> reads 0))
               (setq reads 0)
-              (let ((start (float-time)))
-                (dotimes (_ 100) (agent-workspace--pane-header))
-                (should (< (- (float-time) start) 0.01)))
+              (should (< (+test-awa--fastest (lambda () (dotimes (_ 100) (agent-workspace--pane-header))))
+                         0.01))
               (should (= reads 0))
               (should (eq (agent-workspace--pane-header) first))
               ;; Its agent changed: made again, saying it.
@@ -1803,9 +1813,7 @@ lines only (doom-pbk.69)."
                    ((symbol-function 'force-mode-line-update)
                     (lambda (&optional every) (when every (cl-incf all)) (funcall force every))))
           (setf (agent-workspace-agent-since ken) (- (float-time) 125))
-          (let ((start (float-time)))
-            (agent-workspace--tick)
-            (should (< (- (float-time) start) 0.005)))
+          (should (< (+test-awa--fastest #'agent-workspace--tick) 0.005))
           (should (string-search "2m" (with-current-buffer (agent-workspace--bar-buffer ken) (buffer-string))))
           ;; Past its first minute: the next at the next minute.
           (should (< 50 (float-time (time-subtract (timer--time agent-workspace--timer) nil)) 56))
