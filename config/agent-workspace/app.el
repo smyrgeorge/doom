@@ -52,8 +52,9 @@
 sentence): offer what would make one (git init). nil: just say why.")
 
 (defvar agent-workspace-open-functions nil
-  "Called with a project as its app opens with no crew running, until one
-returns non-nil: start the project's saved crew again (doom-51z.5).")
+  "Called with a project as its app opens anew, until one returns non-nil:
+start the project's saved crew again (doom-51z.5), what of it isn't
+running (doom-pbk.56).")
 
 (defvar agent-workspace-layout-functions nil
   "Called with a project when its app's layout changes: an agent selected, a
@@ -232,7 +233,7 @@ its first agent is asked for."
                 (agent-workspace--switch (agent-workspace-workspace-name project)))
             (unless (agent-workspace--shown-p app)
               (setf (agent-workspace--app-came-from app) (current-window-configuration)))))
-        (when (and new (not (agent-workspace-agents project)))
+        (when new
           (run-hook-with-args-until-success 'agent-workspace-open-functions project))
         (agent-workspace--issues-buffer project)
         (agent-workspace-layout app)

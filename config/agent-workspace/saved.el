@@ -24,7 +24,9 @@
 ;; crew running, every agent in it starts again, fresh, in its worktree, with
 ;; its role as it is now, its panels opened again there; asleep ones stay
 ;; asleep, looping ones are asleep (reopening never starts work by itself:
-;; woken, they loop); each waits for you. One that can't start is stuck,
+;; woken, they loop); each waits for you. An agent made while it doesn't run
+;; (M-x, cmd, Lisp: no app) is written beside them, the rest kept as it was,
+;; and they start beside it as the app opens. One that can't start is stuck,
 ;; saying why; the others start. A wrong agent is left out, said by its place
 ;; and name; a file that isn't JSON, or not a crew, is said, nothing starts,
 ;; and it's kept as it is (for you to mend) until an agent is made. Read
@@ -49,6 +51,12 @@
   "The projects whose crew was closed, or whose crew.json wasn't a crew as it
 opened (no agent made since): crew.json kept as it was then, whatever changes
 in their app after.")
+
+(defvar agent-workspace--crew-kept (make-hash-table :test #'equal)
+  "A project's saved crew while it doesn't run, its first agent made then
+\(M-x, cmd, Lisp: no app opened it): CREW as `agent-workspace-crew-read'
+reads it. crew.json keeps its other agents and its layout as they were,
+beside what runs, and its app opening starts them.")
 
 (defvar agent-workspace--crew-panels (make-hash-table :test #'eq :weakness 'key)
   "An agent started again asleep (or stuck): its panels in crew.json, kept
@@ -237,43 +245,76 @@ isn't its role's."
                               (gethash agent agent-workspace--crew-panels))))
               (and panels (list :panels (vconcat panels)))))))
 
+(defun agent-workspace--crew-kept-entry (entry)
+  "ENTRY, an agent of a kept crew as `agent-workspace-crew-read' read it, as
+crew.json has it again, for `agent-workspace--crew-json'."
+  (cl-loop for (key value) on entry by #'cddr
+           append (list key (pcase key
+                              (:kind (symbol-name value))
+                              (:panels (vconcat value))
+                              (_ value)))))
+
+(defun agent-workspace--crew-layout (project app kept)
+  "PROJECT's layout as crew.json has it: its APP's; with no app, KEPT's (a
+kept crew's layout, as read) where it says."
+  (let* ((selected (and app (agent-workspace--app-selected app)))
+         (layout (list :view "stage" :room "right"
+                       :selected (and selected (agent-workspace-agent-name selected))
+                       :open (if (and app (agent-workspace--app-open app)) t :false)
+                       :minimap (if (and (fboundp 'agent-workspace-minimap-shown-p)
+                                         (agent-workspace-minimap-shown-p project))
+                                    t
+                                  :false)
+                       ;; As it says, even while agents may not talk.
+                       :talk (symbol-name (if (fboundp 'agent-workspace--talk-switch)
+                                              (agent-workspace--talk-switch project)
+                                            'ask))
+                       :sources_off (vconcat (mapcar (lambda (pair) (vector (car pair) (cdr pair)))
+                                                     (and (fboundp 'agent-workspace-inbox-sources-off)
+                                                          (agent-workspace-inbox-sources-off project)))))))
+    (when-let* (((not app))
+                (saved kept))
+      (when (stringp (plist-get saved :selected))
+        (setq layout (plist-put layout :selected (plist-get saved :selected))))
+      (dolist (key '(:open :minimap))
+        (when (plist-member saved key)
+          (setq layout (plist-put layout key (if (plist-get saved key) t :false)))))
+      (when (memq (plist-get saved :talk) '(off ask on))
+        (setq layout (plist-put layout :talk (symbol-name (plist-get saved :talk)))))
+      (when (plist-member saved :sources-off)
+        (setq layout (plist-put layout :sources_off
+                                (vconcat (mapcar (lambda (pair) (vector (car pair) (cdr pair)))
+                                                 (plist-get saved :sources-off)))))))
+    layout))
+
 (defun agent-workspace-crew-text (project)
-  "PROJECT's crew as crew.json's text: one agent a line."
+  "PROJECT's crew as crew.json's text: one agent a line; with a kept crew
+\(`agent-workspace--crew-kept'), its agents not running too."
   (let* ((roles (mapcar #'car (agent-workspace-roles project)))
-         (agents (seq-sort (lambda (a b)
-                             (let ((ra (or (cl-position (agent-workspace-agent-role a) roles :test #'equal) 99))
-                                   (rb (or (cl-position (agent-workspace-agent-role b) roles :test #'equal) 99)))
-                               (if (= ra rb)
-                                   (string< (agent-workspace-agent-name a) (agent-workspace-agent-name b))
-                                 (< ra rb))))
-                           (agent-workspace-agents project)))
-         (app (and (fboundp 'agent-workspace--app) (agent-workspace--app project)))
-         (selected (and app (agent-workspace--app-selected app))))
+         (kept (gethash (agent-workspace--root project) agent-workspace--crew-kept))
+         (running (agent-workspace-agents project))
+         (entries (append (mapcar #'agent-workspace--crew-entry running)
+                          (mapcar #'agent-workspace--crew-kept-entry
+                                  (seq-remove (lambda (entry) (agent-workspace-agent (plist-get entry :name) project))
+                                              (plist-get kept :agents)))))
+         (entries (seq-sort (lambda (a b)
+                              (let ((ra (or (cl-position (plist-get a :role) roles :test #'equal) 99))
+                                    (rb (or (cl-position (plist-get b :role) roles :test #'equal) 99)))
+                                (if (= ra rb)
+                                    (string< (plist-get a :name) (plist-get b :name))
+                                  (< ra rb))))
+                            entries))
+         (app (and (fboundp 'agent-workspace--app) (agent-workspace--app project))))
     (concat "{\"version\": 2,\n"
             " \"agents\": ["
-            (and agents
+            (and entries
                  (concat "\n"
-                         (mapconcat (lambda (agent)
-                                      (concat "  " (agent-workspace--crew-json (agent-workspace--crew-entry agent))))
-                                    agents ",\n")
+                         (mapconcat (lambda (entry) (concat "  " (agent-workspace--crew-json entry)))
+                                    entries ",\n")
                          "\n "))
             "],\n"
             " \"layout\": "
-            (agent-workspace--crew-json
-             (list :view "stage" :room "right"
-                   :selected (and selected (agent-workspace-agent-name selected))
-                   :open (if (and app (agent-workspace--app-open app)) t :false)
-                   :minimap (if (and (fboundp 'agent-workspace-minimap-shown-p)
-                                     (agent-workspace-minimap-shown-p project))
-                                t
-                              :false)
-                   ;; As it says, even while agents may not talk.
-                   :talk (symbol-name (if (fboundp 'agent-workspace--talk-switch)
-                                          (agent-workspace--talk-switch project)
-                                        'ask))
-                   :sources_off (vconcat (mapcar (lambda (pair) (vector (car pair) (cdr pair)))
-                                                 (and (fboundp 'agent-workspace-inbox-sources-off)
-                                                      (agent-workspace-inbox-sources-off project))))))
+            (agent-workspace--crew-json (agent-workspace--crew-layout project app (plist-get kept :layout)))
             "}\n")))
 
 (defun agent-workspace-crew-save (&optional project)
@@ -287,7 +328,8 @@ is made there again): crew.json keeps it as it was."
     (remhash (agent-workspace--root project) agent-workspace--crew-timers)
     (unless (or (gethash (agent-workspace--root project) agent-workspace--crew-closed)
                 (and (not (agent-workspace-agents project))
-                     (not (and (fboundp 'agent-workspace--app) (agent-workspace--app project))))
+                     (not (and (fboundp 'agent-workspace--app) (agent-workspace--app project)))
+                     (not (gethash (agent-workspace--root project) agent-workspace--crew-kept)))
                 (and (file-readable-p file)
                      (equal text (with-temp-buffer (insert-file-contents file) (buffer-string)))))
       (make-directory (file-name-directory file) t)
@@ -307,13 +349,28 @@ is made there again): crew.json keeps it as it was."
 `agent-workspace-change-functions'."
   ;; An agent made: the crew running again, written again.
   (when (eq what 'created)
-    (remhash (agent-workspace--root (agent-workspace-agent-project agent)) agent-workspace--crew-closed))
+    (let ((project (agent-workspace-agent-project agent)))
+      (remhash (agent-workspace--root project) agent-workspace--crew-closed)
+      (unless agent-workspace--crew-loading
+        (agent-workspace--crew-keep project agent))))
   (when (or (memq what '(created renamed colour role settings loop forgotten))
             ;; A panel opened or closed; not one closing as its crew closes
             ;; (the agent out of it already): crew.json keeps what was open.
             (and (eq what 'panels)
                  (memq agent (agent-workspace-agents (agent-workspace-agent-project agent)))))
     (agent-workspace--crew-save-soon (agent-workspace-agent-project agent))))
+
+(defun agent-workspace--crew-keep (project agent)
+  "AGENT, just made, PROJECT's only agent: its saved crew not running (no
+app started it), kept (`agent-workspace--crew-kept'): its other agents
+and its layout stay in crew.json, started as its app opens."
+  (when (equal (agent-workspace-agents project) (list agent))
+    (let* ((crew (car (agent-workspace-crew-read project)))
+           (others (seq-remove (lambda (entry) (equal (plist-get entry :name) (agent-workspace-agent-name agent)))
+                               (plist-get crew :agents))))
+      (when others
+        (puthash (agent-workspace--root project) (plist-put (copy-sequence crew) :agents others)
+                 agent-workspace--crew-kept)))))
 
 (defun agent-workspace--crew-state-h (agent old new)
   "AGENT put to sleep or woken: crew.json written. In
@@ -337,6 +394,7 @@ changing after, still open) until an agent is made there again. In
       (cancel-timer timer)
       (agent-workspace-crew-save project))
     (remhash key agent-workspace--crew-timers)
+    (remhash key agent-workspace--crew-kept)
     (puthash key t agent-workspace--crew-closed)))
 
 (add-hook 'agent-workspace-closing-functions #'agent-workspace--crew-closing-h)
@@ -395,16 +453,28 @@ opened, if it was started again asleep or stuck. In
 
 (defun agent-workspace--crew-start (project)
   "PROJECT's crew started again from its crew.json, if it has one: non-nil.
-In `agent-workspace-open-functions'."
-  (pcase-let ((`(,crew . ,problems) (agent-workspace-crew-read project)))
+With agents running already, only if its saved crew was kept as they were
+made (`agent-workspace--crew-kept'): its agents not running started beside
+them. In `agent-workspace-open-functions'."
+  (when (or (not (agent-workspace-agents project))
+            (gethash (agent-workspace--root project) agent-workspace--crew-kept))
+    (remhash (agent-workspace--root project) agent-workspace--crew-kept)
+    (agent-workspace--crew-start-from project)))
+
+(defun agent-workspace--crew-start-from (project)
+  "PROJECT's crew.json's agents not running started: non-nil if it had
+any; its layout applied."
+  (pcase-let* ((`(,crew . ,problems) (agent-workspace-crew-read project))
+               (entries (seq-remove (lambda (entry) (agent-workspace-agent (plist-get entry :name) project))
+                                    (plist-get crew :agents))))
     (dolist (problem problems)
       (display-warning 'agent-workspace problem))
     ;; Not a crew: kept as it is, for you to mend, until an agent is made.
     (when (and problems (not crew))
       (puthash (agent-workspace--root project) t agent-workspace--crew-closed))
-    (when (plist-get crew :agents)
+    (when entries
       (let ((agent-workspace--crew-loading t))
-        (dolist (entry (plist-get crew :agents))
+        (dolist (entry entries)
           (agent-workspace--restore project entry))
         (when-let* ((layout (plist-get crew :layout))
                     ((plist-member layout :minimap))

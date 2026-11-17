@@ -42,6 +42,7 @@ written at once (no wait)."
             (agent-workspace--apps (make-hash-table :test #'equal))
             (agent-workspace--crew-timers (make-hash-table :test #'equal))
             (agent-workspace--crew-closed (make-hash-table :test #'equal))
+            (agent-workspace--crew-kept (make-hash-table :test #'equal))
             (started nil))
        (ignore started)
        (set-frame-size (selected-frame) 160 40)
@@ -316,6 +317,62 @@ one whose role is gone stuck, saying why; the selected one's pane open."
         (should (get-buffer-window (agent-workspace-agent-buffer sam)))))
     ;; Started again: crew.json as it was (nothing written meanwhile).
     (should (string-search "{\"name\": \"tim\", \"role\": \"wizard\"" (+test-aws2--file project)))))
+
+(ert-deftest agent-workspace-saved/an-agent-made-while-it-doesn-t-run ()
+  "An agent made with no crew running (M-x, cmd, Lisp: no app open):
+crew.json keeps its saved agents and its layout as they were, beside it; a
+write after (it's recoloured) too. The app opened: they start beside it,
+asleep ones asleep, its layout applied; crew.json then as the app has it
+\(doom-pbk.56)."
+  (+test-aws2 "made-meanwhile"
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"loop\": true, \"panels\": [\"logs\", \"tests\"]},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"model\": \"opus\", \"asleep\": true},
+  {\"name\": \"tim\", \"role\": \"builder\", \"colour\": \"cyan\"}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ken\", \"open\": false, \"minimap\": false, \"talk\": \"on\", \"sources_off\": [[\"ci\", \"#reviewer\"]]}}
+")
+    (let ((sam (agent-workspace-create :role "investigator" :name "sam")))
+      (should (equal started '("sam")))
+      (should (equal (+test-aws2--file project) "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\", \"loop\": true, \"panels\": [\"logs\", \"tests\"]},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"model\": \"opus\", \"asleep\": true},
+  {\"name\": \"tim\", \"role\": \"builder\", \"colour\": \"cyan\"},
+  {\"name\": \"sam\", \"role\": \"investigator\", \"colour\": \"magenta\"}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": \"ken\", \"open\": false, \"minimap\": false, \"talk\": \"on\", \"sources_off\": [[\"ci\", \"#reviewer\"]]}}
+"))
+      (agent-workspace-recolour sam "yellow")
+      (should (string-search "{\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"model\": \"opus\", \"asleep\": true}"
+                             (+test-aws2--file project)))
+      (should (string-search "{\"name\": \"sam\", \"role\": \"investigator\", \"colour\": \"yellow\"}"
+                             (+test-aws2--file project))))
+    ;; The app opened: the saved ones start beside sam.
+    (setq started nil)
+    (cl-letf (((symbol-function 'agent-workspace--loop-soon) #'ignore)
+              ((symbol-function 'agent-workspace--loop-watch-update) #'ignore))
+      (let ((app (agent-workspace-open t)))
+        (should (equal started '("tim")))
+        (should (equal (mapcar #'agent-workspace-agent-name (agent-workspace-agents project))
+                       '("sam" "ada" "ken" "tim")))
+        (let ((ada (agent-workspace-agent "ada" project))
+              (ken (agent-workspace-agent "ken" project)))
+          (should (eq (agent-workspace-agent-state ada) 'asleep))
+          (should (agent-workspace-agent-loop ada))
+          (should (equal (gethash ada agent-workspace--crew-panels) '("logs" "tests")))
+          (should (eq (agent-workspace-agent-state ken) 'asleep))
+          (should (equal (agent-workspace-agent-model ken) "opus"))
+          (should (eq (agent-workspace--app-selected app) ken)))
+        (should (eq (agent-workspace--talk-switch project) 'on))
+        (should (equal (agent-workspace-inbox-sources-off project) '(("ci" . "#reviewer"))))
+        (should-not (gethash (agent-workspace--root project) agent-workspace--crew-kept))
+        (agent-workspace-crew-save project)
+        (let ((text (+test-aws2--file project)))
+          (dolist (name '("ada" "ken" "sam" "tim"))
+            (should (string-search (format "{\"name\": \"%s\"" name) text)))
+          (should (string-search "\"selected\": \"ken\", \"open\": false" text)))))))
 
 (ert-deftest agent-workspace-saved/closed-and-opened-again ()
   "Q, then SPC o w: the same agents (names, roles, colours, models, modes),

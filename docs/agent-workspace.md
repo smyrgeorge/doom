@@ -298,7 +298,9 @@ It's written when the crew changes (a panel opened or closed too), one agent a l
 scripts can read it too (`jq`). Closing the crew leaves it as it was, its agents' panels in it. `SPC o w` in a project
 whose crew isn't running starts every agent in it again: fresh, each in its worktree, with its role as it is now, its
 panels open again there (fetched afresh), waiting for you. Asleep agents stay asleep, and their panels open when they
-wake. Looping agents come back asleep: reopening never starts work by itself. An agent that can't start (its role is
+wake. Looping agents come back asleep: reopening never starts work by itself. An agent made while the crew isn't
+running (`M-x agent-workspace-new`, `cmd/agent-workspace new`) is added to it: the saved agents stay in it, and start
+beside the new one when the app opens. An agent that can't start (its role is
 gone, its worktree can't be made) is stuck, saying why, and the others start. A panel whose file is gone is skipped,
 saying so, and the others open. A wrong agent is left out, and a warning names it (`crew.json: agent 2 (ken): its
 colour "pink" isn't one of ...`). A file that isn't JSON, or isn't a crew, is said, nothing starts, and it's kept as it
