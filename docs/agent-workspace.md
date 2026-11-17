@@ -179,7 +179,7 @@ unshown and not delivered, until it's `t` again.
 
 The work moves between roles through the project's issues: an investigator's findings go to the builders, a builder's
 branch to the reviewers, and a reviewer's changes back to the builder who made it. A role's `hands-to:` says where its
-finished issues go. Each agent is told how: it changes the issue's label from its role's to the next one's, leaves
+finished issues go. Each agent is told how: it changes the issue's labels from its role's (all of them) to the next one's, leaves
 it open and unassigned (or assigned to the builder it goes back to), and writes what they need in its notes. It does
 this with `bd`, as itself, so Beads' history says who did what. The room says each hand-over: `◆ handed demo-3 to the
 builders`.

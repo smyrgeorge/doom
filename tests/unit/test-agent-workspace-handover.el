@@ -37,7 +37,7 @@ agree."
          (scribe (+test-awo--agent project "liz" "scribe")))
     (let ((told (agent-workspace--handover-context investigator)))
       (should (string-search "hand it to the builders" told))
-      (should (string-search "bd update ID --remove-label investigation --add-label build --status open --assignee \"\""
+      (should (string-search "bd update ID --remove-label investigation --remove-label incident --add-label build --status open --assignee \"\""
                              told))
       (should (string-search "the first free builder takes it" told)))
     (should (string-search "--remove-label review --add-label build" (agent-workspace--handover-context reviewer)))
@@ -115,6 +115,43 @@ claim): one gets it, the other is refused; the issue is the one's."
         (should (member assignee '("ada" "ken")))
         (should (equal assignee (if (zerop (car statuses)) "ada" "ken"))))
       (dolist (p processes) (kill-buffer (process-buffer p))))))
+
+(ert-deftest agent-workspace-handover/every-label-of-its-role-goes ()
+  "An investigator (labels investigation, incident) handing an incident on,
+as it's told: none of its role's labels left on it, so its loop's claim
+\(bd ready --claim --label-any investigation,incident) doesn't take it
+back; a builder's does (doom-pbk.57)."
+  (skip-unless (executable-find "bd"))
+  (let* ((project (+test-awo--dir "labels"))
+         (default-directory project)
+         (investigator (+test-awo--agent project "ivy" "investigator"))
+         (told (agent-workspace--handover-context investigator)))
+    (+test-bd-init "--quiet" "--skip-agents" "--prefix" "lbl")
+    (should (string-match "bd update ID \\(.*?\\) --append-notes" told))
+    (let* ((flags (split-string-and-unquote (match-string 1 told)))
+           (id (with-temp-buffer
+                 (should (eql 0 (call-process "bd" nil t nil "create" "--title" "Prod is down" "--type" "bug"
+                                              "--labels" "investigation,incident" "--json")))
+                 (goto-char (point-min))
+                 (search-forward "{")
+                 (backward-char)
+                 (plist-get (json-parse-buffer :object-type 'plist) :id)))
+           (claim (lambda (actor labels)
+                    (with-temp-buffer
+                      (let ((process-environment (cons (concat "BEADS_ACTOR=" actor) process-environment)))
+                        (should (eql 0 (call-process "bd" nil t nil "ready" "--claim" "--label-any" labels "--json"))))
+                      (goto-char (point-min))
+                      (let ((answer (and (search-forward "[" nil t)
+                                         (progn (backward-char) (json-parse-buffer :object-type 'plist :array-type 'list)))))
+                        (plist-get (car answer) :id))))))
+      (should (equal (funcall claim "ivy" "investigation,incident") id))
+      ;; As it does it: as itself.
+      (let ((process-environment (cons "BEADS_ACTOR=ivy" process-environment)))
+        (with-temp-buffer
+          (unless (eql 0 (apply #'call-process "bd" nil t nil "update" id flags))
+            (ert-fail (list flags (buffer-string))))))
+      (should-not (funcall claim "ivy" "investigation,incident"))
+      (should (equal (funcall claim "bob" "build") id)))))
 
 (defun +test-awo--project (name)
   "A git repository NAME in the temp folder, with a commit: its folder."

@@ -24,9 +24,9 @@
 (require 'seq)
 (require 'subr-x)
 
-(defun agent-workspace--role-label (project role)
-  "ROLE's first label in PROJECT (the issues it's for), or nil."
-  (car (plist-get (cdr (assoc role (agent-workspace-roles project))) :labels)))
+(defun agent-workspace--role-labels (project role)
+  "ROLE's labels in PROJECT (the issues it's for)."
+  (plist-get (cdr (assoc role (agent-workspace-roles project))) :labels))
 
 (defun agent-workspace-label-role (project label)
   "The role of PROJECT whose issues LABEL marks, or nil."
@@ -40,8 +40,9 @@ hands nothing on. In `agent-workspace-context-functions'."
   (let* ((project (agent-workspace-agent-project agent))
          (next (plist-get (agent-workspace-role agent) :hands-to))
          (next (if (listp next) (car next) next))
-         (mine (agent-workspace--role-label project (agent-workspace-agent-role agent)))
-         (theirs (and next (agent-workspace--role-label project next))))
+         ;; Every one of its role's: one left, its loop takes the issue back.
+         (mine (agent-workspace--role-labels project (agent-workspace-agent-role agent)))
+         (theirs (and next (car (agent-workspace--role-labels project next)))))
     (cond
      ((and next (not agent-workspace-agents-talk))
       "You work only with the user, never with the other agents of your crew: hand nothing on to \
@@ -50,11 +51,11 @@ status and assignee as they are, tell the user what you did, and end your turn: 
 comes next, and who takes it.")
      (theirs
       (format "Work moves between roles through the project's issues. When your part of an issue is \
-done, hand it to the %ss: its label changed from yours to theirs, the issue open again and unassigned \
-(or assigned to the one it goes back to), what they need in its notes: bd update ID %s--add-label %s \
---status open --assignee \"\" --append-notes \"...\". Then tell the user, and end your turn: the first \
-free %s takes it."
-              next (if mine (format "--remove-label %s " mine) "") theirs next)))))
+done, hand it to the %ss: its labels changed from yours (all of them) to theirs, the issue open again \
+and unassigned (or assigned to the one it goes back to), what they need in its notes: bd update ID \
+%s--add-label %s --status open --assignee \"\" --append-notes \"...\". Then tell the user, and end your \
+turn: the first free %s takes it."
+              next (mapconcat (lambda (label) (format "--remove-label %s " label)) mine "") theirs next)))))
 
 (add-hook 'agent-workspace-context-functions #'agent-workspace--handover-context)
 
