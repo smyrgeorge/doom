@@ -250,6 +250,22 @@ gone, and a button of the first pressed still says so and answers nothing
             (+test-awh--press project "Go to it")
             (should (equal pressed '("git push --force")))))))))
 
+(ert-deftest agent-workspace-hands/a-hand-wraps-under-the-text ()
+  "A raised hand's lines in a narrow room (60, 78 columns), its buttons'
+too: each wraps under the room's text column, never at column 0
+\(doom-pbk.89)."
+  (+test-awh "wraps"
+    (agent-workspace--raise-hand ada '(:kind question :title "Which of the three parsers should the lexer feed, the old one or the new one?"))
+    (dolist (width '(60 78))
+      (let ((lines (agent-workspace--room-entry-lines
+                    project (car (last (with-current-buffer (agent-workspace--room-buffer project)
+                                         agent-workspace--room-entries)))
+                    width)))
+        (should (= (length lines) 2))
+        (dolist (line lines)
+          (should (equal (get-text-property 0 'wrap-prefix line)
+                         (make-string agent-workspace--room-indent ?\s))))))))
+
 (ert-deftest agent-workspace-hands/no-hand-no-options ()
   (+test-awh "none"
     (should-not (agent-workspace-hand-options ada))

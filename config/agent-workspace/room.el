@@ -356,7 +356,13 @@ its thread folded, how many lines of it it stands for."
                    (concat text (propertize (format "  ▸ %d more (TAB)" more) 'face 'shadow))
                  text))
          (first (concat " " (propertize (or (plist-get entry :time) "") 'face 'shadow) " " who " " lead text)))
-    (delq nil
+    (mapcar
+     ;; Each line wraps under the text's column, its buttons' too.
+     (lambda (line)
+       (if (get-text-property 0 'wrap-prefix line)
+           line
+         (propertize line 'wrap-prefix (make-string agent-workspace--room-indent ?\s))))
+     (delq nil
           (list (propertize first 'agent-workspace-entry entry
                             'wrap-prefix (make-string agent-workspace--room-indent ?\s))
                 ;; A hand's buttons, while it's raised (hands.el).
@@ -367,7 +373,7 @@ its thread folded, how many lines of it it stands for."
                      (agent-workspace--room-offer-line project entry))
                 ;; A queued event's buttons, while it waits (inbox.el).
                 (and (eq kind 'event) (fboundp 'agent-workspace--room-event-line)
-                     (agent-workspace--room-event-line project entry))))))
+                     (agent-workspace--room-event-line project entry)))))))
 
 (defun agent-workspace--pad (text width)
   "TEXT padded to WIDTH columns."
