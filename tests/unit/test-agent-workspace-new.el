@@ -452,6 +452,19 @@ server (nobody of it free), its words joined; wrong uses: 2, saying why."
           (should (= (car run) 2))
           (should (string-search (cadr case) (cdr run))))))))
 
+(ert-deftest agent-workspace-new/the-script-sends-control-characters ()
+  "cmd/agent-workspace send: a text with a log's colours (ESC) and other
+control characters arrives as it was (doom-pbk.37)."
+  (+test-awn "script-control"
+    (let ((agent-workspace--inboxes (make-hash-table :test #'equal))
+          (agent-workspace--inbox-sent (make-hash-table :test #'equal))
+          (text "build failed:\n\e[31mFAIL\e[0m lexer\a\x01\x1f\tdone \"ok\" \\o/"))
+      (+test-awn--with-server
+        (let ((run (+test-awn--run "send" "--to" "#builder" "--from=ci" text)))
+          (should (= (car run) 0))
+          (should (string-prefix-p "{\"ok\":true" (cdr run))))
+        (should (equal (plist-get (car (agent-workspace-inbox project)) :text) text))))))
+
 (ert-deftest agent-workspace-new/the-script-s-wrong-uses ()
   "Wrong uses: 2, saying what's wrong; no Emacs: 3."
   (let ((process-environment (cons "EMACS_SOCKET_NAME=/tmp/no-such-agent-workspace-server"

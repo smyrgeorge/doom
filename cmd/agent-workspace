@@ -31,12 +31,21 @@ set -u
 usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p;}' "$0"; }
 
 json_string() {  # json_string TEXT: TEXT as a JSON string
-  local s=$1
+  local s=$1 i c u
   s=${s//\\/\\\\}
   s=${s//\"/\\\"}
   s=${s//$'\n'/\\n}
   s=${s//$'\t'/\\t}
   s=${s//$'\r'/\\r}
+  # Every other control character (a log's colours: ESC) as \u00XX: JSON
+  # allows none raw.
+  for ((i = 1; i < 32; i++)); do
+    case $i in 9|10|13) continue ;; esac
+    printf -v c "\\x$(printf %02x "$i")"
+    [[ $s == *"$c"* ]] || continue
+    printf -v u '\\u%04x' "$i"
+    s=${s//"$c"/"$u"}
+  done
   printf '"%s"' "$s"
 }
 
