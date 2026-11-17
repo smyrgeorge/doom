@@ -567,10 +567,33 @@ you say so, else removed when it holds nothing of its own."
 
 ;; ====== CLOSING THE CREW ======
 
+(ert-deftest agent-workspace-session/a-process-s-start-read-twice ()
+  "A process is the same while its start, read again, is under a second
+from the one noted (Linux: each read works it out anew, 10 ms off now and
+then); not later (a pid used again), nor a zombie (doom-pbk.73)."
+  (let* ((start (current-time))
+         (now start)
+         (state "S"))
+    (cl-letf (((symbol-function 'process-attributes)
+               (lambda (_pid) `((start . ,now) (state . ,state)))))
+      (should (agent-workspace--alive-p (cons 42 start)))
+      (setq now (time-add start 0.01))
+      (should (agent-workspace--alive-p (cons 42 start)))
+      (setq now (time-subtract start 0.01))
+      (should (agent-workspace--alive-p (cons 42 start)))
+      (setq now (time-add start 5))
+      (should-not (agent-workspace--alive-p (cons 42 start)))
+      (setq now start state "Z")
+      (should-not (agent-workspace--alive-p (cons 42 start))))
+    (cl-letf (((symbol-function 'process-attributes) #'ignore))
+      (should-not (agent-workspace--alive-p (cons 42 start))))))
+
 (ert-deftest agent-workspace-session/close-leaves-no-process ()
   "Closing the crew stops every agent at once, asking nothing, one working,
 one with its hand raised, a command started outside the agent's process
-group; afterwards none of their processes is left. Their worktrees stay."
+group, one that outlives its agent (killed only by the reap after it:
+doom-pbk.73); afterwards none of their processes is left. Their worktrees
+stay."
   (+test-aws--with-crew "close"
     (let* ((agent-workspace-exit-timeout 1)
            (ada (+test-aws--create "ada"))
@@ -578,17 +601,21 @@ group; afterwards none of their processes is left. Their worktrees stay."
            (linus (+test-aws--create "linus")))
       (agent-workspace-send ada "child" :submit t)
       (agent-workspace-send grace "permission" :submit t)
+      (agent-workspace-send linus "orphan" :submit t)
       (should (+test-aws--state grace 'hand))
       (should (+test-aws--wait (lambda () (+test-aws--logged :child "ada"))))
+      (should (+test-aws--wait (lambda () (+test-aws--logged :orphan "linus"))))
       ;; A message waiting for ada's turn's end: agent-shell would ask.
       (should (eq (agent-workspace-send ada "later" :submit t) 'queued))
       (let ((pids (append (mapcar (lambda (start) (plist-get start :pid))
                                   (append (+test-aws--logged :start "ada")
                                           (+test-aws--logged :start "grace")
                                           (+test-aws--logged :start "linus")))
-                          (+test-aws--logged :child "ada")))
+                          (+test-aws--logged :child "ada")
+                          (+test-aws--logged :orphan "linus")))
             (buffers (mapcar #'agent-workspace-agent-buffer (list ada grace linus))))
-        (should (= (length pids) 4))
+        (should (= (length pids) 5))
+        (should (integerp (car (+test-aws--logged :orphan "linus"))))
         (should (seq-every-p #'+test-aws--pid-alive-p pids))
         (+test-aws--no-questions
           (agent-workspace-close))

@@ -449,11 +449,19 @@ answer, the prompt's mark goes if nothing took it. Around
                           (cons pid (nth 2 entry))))
                       tree))))
 
+(defun agent-workspace--same-start-p (a b)
+  "Non-nil if A and B, start times `process-attributes' gave for one pid,
+are the same process's: under a second apart. On Linux Emacs works a
+process's start out at each call, as now minus its time since boot (each
+rounded to 1/100 s): two reads of one process differ by 10 ms now and
+then. A pid used again starts later than that."
+  (and a b (< (abs (float-time (time-subtract a b))) 1.0)))
+
 (defun agent-workspace--alive-p (process)
   "Non-nil if PROCESS, (PID . START), still runs (the same one: not a pid
 used again, nor a zombie)."
   (when-let* ((attributes (process-attributes (car process))))
-    (and (equal (alist-get 'start attributes) (cdr process))
+    (and (agent-workspace--same-start-p (alist-get 'start attributes) (cdr process))
          (not (member (alist-get 'state attributes) '("Z" "X"))))))
 
 (defun agent-workspace--reap (processes)

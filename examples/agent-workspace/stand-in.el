@@ -25,6 +25,8 @@
 ;;                 fs/write_text_file), ends its turn
 ;;   "child"       starts a child process (sleep 300, in a process group of its
 ;;                 own) and holds, saying its pid
+;;   "orphan"      starts a command it doesn't wait for (sleep 300, in a process
+;;                 group of its own), which outlives it, and holds, saying its pid
 ;;   "fail"        fails the prompt (an error)
 ;;   "exit"        exits, as an agent that crashed
 ;;   else          answers "ok: PROMPT" and ends its turn
@@ -135,6 +137,24 @@ batch (the stand-in would exit)."
       (mock-acp--result id '(:stopReason "end_turn")))
      ((string-match-p "hold" text)
       (mock-acp--say session "holding")
+      (setq mock-acp--holding id))
+     ((string-match-p "orphan" text)
+      ;; Not a process of its own (Emacs exiting kills those): call-process
+      ;; with 0, its child all the same, outliving it, out of its group.
+      (let ((file (make-temp-file "mock-acp-orphan-"))
+            (end (+ (float-time) 5))
+            pid)
+        (call-process "perl" nil 0 nil "-e"
+                      "setpgrp(0,0); open(my $f, '>', $ARGV[0]); print $f $$; close $f; exec q(sleep), 300"
+                      file)
+        (while (and (not pid) (< (float-time) end))
+          (sleep-for 0.02)
+          (setq pid (with-temp-buffer
+                      (insert-file-contents file)
+                      (and (> (buffer-size) 0) (string-to-number (buffer-string))))))
+        (delete-file file)
+        (mock-acp--log `(:orphan ,(or pid :null)))
+        (mock-acp--say session (format "orphan %s" pid)))
       (setq mock-acp--holding id))
      ((string-match-p "child" text)
       ;; A child of its own, in a process group of its own (as a command
