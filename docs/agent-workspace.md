@@ -440,7 +440,16 @@ its `.agent-shell/agent-workspace/roles/` (`.agent-shell/` is ignored: a crew ad
 `.git/info/exclude`), for a repository where the rest of the team doesn't use crews. Both add to the four; a role
 replaces the one with the same name before it: a starter, then the project's, then yours. `M-x
 agent-workspace-copy-role` copies one there for you to change: a starter into the project's, or a starter or one of
-the project's into yours. A file with a mistake is left out, and a warning names its file and line.
+the project's into yours.
+
+A role file needs its front matter and a `description`; its name (its file's) is a lowercase letter, then lowercase
+letters, digits or `-`. A file with a mistake is left out (the [picker](#making-an-agent) lists it), and a warning
+names its file and line: a key that isn't one, a `mode`, `max` or `colour` that isn't one there is, a `tools` or
+`deny` entry that isn't `Tool` or `Tool(pattern)`. Some things are only warned about, the role kept: an unknown key or
+one given twice (the last is used), a `model` that isn't `inherit`, one of `agent-workspace-models` or a model's id
+(`claude-...`), an `icon` that isn't a nerd icon, a tool both allowed and denied (it's denied), no instructions, a
+`talks-to` or `hands-to` naming no role of the project's, or its own. `M-x agent-workspace-check-roles` reads them all
+again and lists every problem, each line taking you to its file and line.
 
 ## Its states
 

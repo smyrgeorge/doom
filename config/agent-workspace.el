@@ -81,9 +81,11 @@ needs your OK. nil: Claude Code's own default."
 ;; .agent-shell/agent-workspace/roles/ (out of git), add to them; a later
 ;; one replaces one of the same name: starter < project < local (M-x
 ;; agent-workspace-copy-role copies a starter, or a project's role into your
-;; local ones, to change it there). Its tools
-;; and permission mode are enforced by Claude Code (its options), not only
-;; told. A file's problems are warnings naming its file and line.
+;; local ones, to change it there). Its tools and permission mode are
+;; enforced by Claude Code (its options), not only told. A file's problems
+;; are warnings naming its file and line (an error leaves the role out: no
+;; description, a name, mode, max, colour or tool that isn't one); M-x
+;; agent-workspace-check-roles lists them all.
 
 ;; ITS STATES
 ;; waking up, at the desk (waiting for you), working (its turn's time counted

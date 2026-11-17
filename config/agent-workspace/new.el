@@ -311,7 +311,8 @@ or a role file left out, is refused, and asked again."
         (let ((role (agent-workspace--read-in-place "Role: " names (or default (car names)))))
           (condition-case err
               (progn (when-let* ((out (plist-get (cdr (assoc role facts)) :out)))
-                       (user-error "Left out: %s" (plist-get out :message)))
+                       (user-error "Left out: %s (M-x agent-workspace-check-roles lists every problem)"
+                                   (plist-get out :message)))
                      (agent-workspace--check-room project role)
                      (throw 'role role))
             (user-error (message "%s" (error-message-string err))
