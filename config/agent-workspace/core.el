@@ -467,7 +467,10 @@ it, if still in progress and assigned to it, goes back: open, unassigned."
   (agent-workspace--give-back agent))
 
 (defun agent-workspace-restart (agent)
-  "Start AGENT again, with a fresh session."
+  "Start AGENT again, with a fresh session; not running (asleep, gone
+home), only if its role has room for one more, as when it's woken."
+  (unless (agent-workspace-live-p agent)
+    (agent-workspace--check-room (agent-workspace-agent-project agent) (agent-workspace-agent-role agent)))
   (agent-workspace--start agent))
 
 (defun agent-workspace-sleep (agent)

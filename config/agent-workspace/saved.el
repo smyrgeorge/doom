@@ -448,9 +448,14 @@ changing after, still open) until an agent is made there again. In
 (defun agent-workspace--restore (project entry)
   "The agent ENTRY of PROJECT's crew.json, in its crew again: fresh, in its
 worktree, its panels opened again there; asleep if it was, or if it loops
-\(none opened; woken, it loops); stuck, saying why, if it can't start."
+\(none opened; woken, it loops), or if its role runs as many as it allows
+\(said); stuck, saying why, if it can't start."
   (let* ((name (plist-get entry :name))
          (role (plist-get entry :role))
+         (max (plist-get (agent-workspace--project-role project role) :max))
+         ;; As many of its role run as it allows: it stays asleep.
+         (full (and max (not (or (plist-get entry :asleep) (plist-get entry :loop)))
+                    (>= (agent-workspace-role-count project role) max)))
          (agent (agent-workspace--make-agent
                  :name name :role role
                  :kind (let ((kind (plist-get entry :kind)))
@@ -460,7 +465,7 @@ worktree, its panels opened again there; asleep if it was, or if it loops
                  :project (agent-workspace--root project)
                  :loop (and (plist-get entry :loop) t)
                  ;; Looping, asleep: reopening never starts work by itself.
-                 :state (if (or (plist-get entry :asleep) (plist-get entry :loop)) 'asleep 'waking)))
+                 :state (if (or (plist-get entry :asleep) (plist-get entry :loop) full) 'asleep 'waking)))
          (key (agent-workspace--root project)))
     (puthash key (append (gethash key agent-workspace--crews) (list agent)) agent-workspace--crews)
     (cond
@@ -473,6 +478,10 @@ worktree, its panels opened again there; asleep if it was, or if it loops
                      (agent-workspace-agent-error agent) (concat "its worktree: " (error-message-string err)))
                t))))
     (agent-workspace--changed agent 'created)
+    (when full
+      (agent-workspace-room-post project :kind 'note :agent name
+                                 :text (format "stays asleep: %d %s%s run already, as many as the role allows"
+                                               max role (if (= max 1) "" "s"))))
     (if (and (eq (agent-workspace-agent-state agent) 'waking)
              (agent-workspace--start agent))
         (agent-workspace-open-panels agent (plist-get entry :panels))

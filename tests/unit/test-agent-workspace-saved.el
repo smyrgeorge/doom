@@ -440,6 +440,34 @@ asleep ones asleep, its layout applied; crew.json then as the app has it
             (should (string-search (format "{\"name\": \"%s\"" name) text)))
           (should (string-search "\"selected\": \"ken\", \"open\": false" text)))))))
 
+(ert-deftest agent-workspace-saved/no-more-than-its-role-allows ()
+  "Five builders in crew.json (a builder's max 4): four start, the fifth
+stays asleep, said; r on it is refused as s is, until one stops
+\(doom-pbk.41)."
+  (+test-aws2 "max"
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\"},
+  {\"name\": \"ben\", \"role\": \"builder\"},
+  {\"name\": \"cal\", \"role\": \"builder\"},
+  {\"name\": \"dan\", \"role\": \"builder\"},
+  {\"name\": \"eve\", \"role\": \"builder\"}
+ ]}
+")
+    (setq started nil)
+    (agent-workspace-open t)
+    (should (equal (sort (copy-sequence started) #'string<) '("ada" "ben" "cal" "dan")))
+    (let ((eve (agent-workspace-agent "eve" project)))
+      (should (eq (agent-workspace-agent-state eve) 'asleep))
+      (should (string-search "eve      stays asleep: 4 builders run already, as many as the role allows"
+                             (with-current-buffer (agent-workspace--room-buffer project) (buffer-string))))
+      (should (equal (cadr (should-error (agent-workspace-restart eve) :type 'user-error))
+                     "4 builders run already, as many as the role allows"))
+      (should-error (agent-workspace-wake eve) :type 'user-error)
+      (agent-workspace-sleep (agent-workspace-agent "ada" project))
+      (agent-workspace-restart eve)
+      (should (eq (agent-workspace-agent-state eve) 'desk)))))
+
 (ert-deftest agent-workspace-saved/closed-and-opened-again ()
   "Q, then SPC o w: the same agents (names, roles, colours, models, modes),
 fresh, waiting; the asleep one asleep; the same agent selected."
