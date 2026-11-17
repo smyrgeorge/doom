@@ -893,6 +893,38 @@ those only."
       (should-not (buffer-live-p (+my/merge-result session)))
       (should (one-window-p)))))
 
+(ert-deftest merge/the-panes-keep-their-tabs ()
+  "Done, Abort or a pane killed: each pane has the tabs it had, the one the
+merge started from too."
+  (require 'tab-line)
+  (dolist (close (list #'+my/merge-done #'+my/merge-abort
+                       (lambda ()
+                         (let ((kill-buffer-query-functions nil))
+                           (kill-buffer (+my/merge-theirs +my/merge--session)))
+                         (+test-merge--fire #'+my/merge--finish))))
+    (+test-merge-with-repo
+      (+test-merge--conflict "a.txt" +test-merge--base +test-merge--yours +test-merge--theirs)
+      (dolist (file '("f1.txt" "f2.txt" "f3.txt" "f4.txt"))
+        (+test-merge--write file (concat file "\n")))
+      (let* ((first (selected-window))
+             (second (split-window-right))
+             (tabs (lambda ()
+                     (mapcar (lambda (window)
+                               (with-selected-window window
+                                 (mapcar #'buffer-name (tab-line-tabs-fixed-window-buffers))))
+                             (list first second)))))
+        (find-file "f1.txt")
+        (find-file "f2.txt")
+        (with-selected-window second
+          (find-file "f3.txt")
+          (find-file "f4.txt"))
+        (let ((before (funcall tabs)))
+          (should (equal before '(("*scratch*" "f1.txt" "f2.txt") ("*scratch*" "f3.txt" "f4.txt"))))
+          (+test-merge--open)
+          (+my/merge-accept-left)
+          (funcall close)
+          (should (equal (funcall tabs) before)))))))
+
 (ert-deftest merge/closing-a-pane-aborts ()
   (+test-merge
     (let ((kill-buffer-query-functions nil))

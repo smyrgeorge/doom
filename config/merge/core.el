@@ -7,7 +7,9 @@
   path toplevel coding labels frame
   yours base theirs result bar          ; buffers
   chunks                                ; vector of `+my/merge-chunk'
-  winconf finished)
+  winconf                               ; the windows before
+  tabs                                  ; and their tabs (`+my/merge--window-tabs')
+  finished)
 
 (cl-defstruct (+my/merge-chunk (:constructor +my/merge-chunk--make) (:copier nil))
   "A change (a region where a side differs from the base)."

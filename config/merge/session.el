@@ -2,6 +2,23 @@
 ;; A merge opened, one file after another, closed. Loaded from config/merge.el.
 
 ;; OPENING
+(defun +my/merge--window-tabs ()
+  "The selected frame's windows' tabs, ((WINDOW PREV NEXT TABS)...): a window
+configuration puts back the windows and their buffers, not the buffers they
+showed before (their tabs)."
+  (mapcar (lambda (window)
+            (list window (window-prev-buffers window) (window-next-buffers window)
+                  (window-parameter window 'tab-line-buffers)))
+          (window-list nil 'nomini)))
+
+(defun +my/merge--restore-tabs (tabs)
+  "Put back TABS (`+my/merge--window-tabs'), the buffers killed since left out."
+  (pcase-dolist (`(,window ,prev ,next ,line) tabs)
+    (when (window-live-p window)
+      (set-window-prev-buffers window (seq-filter (lambda (entry) (buffer-live-p (car entry))) prev))
+      (set-window-next-buffers window (seq-filter #'buffer-live-p next))
+      (set-window-parameter window 'tab-line-buffers (seq-filter #'buffer-live-p line)))))
+
 (defun +my/merge--last-pane ()
   "The selected frame's window used last, not a side panel."
   (car (sort (seq-remove (lambda (window) (window-parameter window 'window-side))
@@ -78,7 +95,8 @@ folder) in three panes."
          (labels (+my/merge--labels))
          (session (+my/merge--make :path path :toplevel default-directory :coding coding
                                    :labels labels :frame (selected-frame)
-                                   :winconf (current-window-configuration)))
+                                   :winconf (current-window-configuration)
+                                   :tabs (+my/merge--window-tabs)))
          (started nil))
     ;; Failing on the way (C-g too): its buffers killed, the windows as
     ;; they were (not a layout put back later, as a pane killed would).
@@ -236,7 +254,8 @@ other (see `+my/merge-files')."
 first: no pane killed closes it again)."
   (setf (+my/merge-finished session) t)
   (when (+my/merge-winconf session)
-    (ignore-errors (set-window-configuration (+my/merge-winconf session))))
+    (ignore-errors (set-window-configuration (+my/merge-winconf session)))
+    (+my/merge--restore-tabs (+my/merge-tabs session)))
   (dolist (buffer (list (+my/merge-yours session) (+my/merge-theirs session)
                         (+my/merge-result session) (+my/merge-base session)
                         (+my/merge-bar session)))
