@@ -71,7 +71,9 @@ may hold ``` lines): drawn, mermaid.js loaded for it."
   (+test-mdm
     (let ((md (+test-mdm--open "fence.md" "# Fence\n\n````mermaid\nflowchart LR\n    A[Four backticks] --> B\n````\n")))
       (should (+test-mdm--drawn md 1))
-      (should (string-search "Four backticks" (+test-mdm--js md "document.querySelector('div.mermaid-diagram svg').textContent"))))))
+      ;; Its label, its rows joined: wider than mermaid's 120 px, it's wrapped
+      ;; (Linux's 15 px DejaVu Sans Mono: 126 px), a row each word.
+      (should (string-search "Four backticks" (+test-mdm--js md "[...document.querySelectorAll('div.mermaid-diagram svg g.node text')].map(t => [...t.querySelectorAll('.text-outer-tspan')].map(r => r.textContent.trim()).join(' ')).join('|')"))))))
 
 ;; ====== WIDE DIAGRAMS ======
 
