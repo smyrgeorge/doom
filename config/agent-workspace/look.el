@@ -335,9 +335,10 @@ glyphs evened), LEFT cut to WIDTH's columns left; the line to the edge."
   (let* ((right (agent-ui-even-glyphs right))
          (gui (agent-workspace--graphic-p))
          ;; In a terminal `right' is past the window's border column, and the
-         ;; last column is kept for a $: two short of it.
+         ;; last column is kept for a $: two short of it; LEFT a column
+         ;; shorter still, a gap between them (the two columns aren't one).
          (end (if gui (list (string-pixel-width right)) (+ 2 (string-width right))))
-         (left (agent-workspace--fit left (max 10 (- width (string-width right) 2)))))
+         (left (agent-workspace--fit left (max 10 (- width (string-width right) (if gui 2 3))))))
     (concat left
             (propertize " " 'display `(space :align-to (- right ,end)))
             right

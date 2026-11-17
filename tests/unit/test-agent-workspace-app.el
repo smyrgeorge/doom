@@ -138,6 +138,19 @@ changes, a tick, a redraw (doom-pbk.70)."
                 (should-not (eq again first))
                 (should (string-search "building" (substring-no-properties again)))))))))))
 
+(ert-deftest agent-workspace-app/a-gap-between-a-line-s-parts ()
+  "In a terminal a line's left part ends a column or more before its right
+part starts (at WIDTH less its width and 2: the border's and the $'s
+columns), however long the left is (doom-pbk.84)."
+  (should-not (agent-workspace--graphic-p))
+  (let* ((right "[Allow (y)] [Reject (C-c C-c)]")
+         (width 80)
+         (line (agent-workspace--at-right (concat "▸ ▌S sam · ! wants to run " (make-string 80 ?x)) right width))
+         (at (next-single-property-change 0 'display line))
+         (starts (- width (+ 2 (string-width right)))))
+    (should at)
+    (should (<= (string-width (substring line 0 at)) (1- starts)))))
+
 (ert-deftest agent-workspace-app/keys-on-a-bar ()
   "On an agent's bar, from the keyboard: the bar's keys (j/k between agents,
 TAB, RET) and the app's (c, i, K...) act, its line's map adding its clicks
@@ -1469,7 +1482,8 @@ epic's title with …."
         (should (equal (+test-awa--type-at heading) '("e" font-lock-constant-face "epic"))))
       ;; Narrow: the epic's title cut with ….
       (let ((narrow (+test-awa--text (agent-workspace--issues-lines project data 34))))
-        (should (member "    e e-1 Agent workspace: en… 3" narrow))
+        ;; A column between it and its count (doom-pbk.84).
+        (should (member "    e e-1 Agent workspace: e… 3" narrow))
         (should (member "  ⚙ builders  6" narrow))))))
 
 (ert-deftest agent-workspace-app/an-epic-s-heading ()
