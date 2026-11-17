@@ -59,6 +59,7 @@ a week at a time). PDF.js and Excalidraw are
 downloaded (`tests/assets.el`), so no test skips for want of them. A newer push to a
 branch cancels the run still going there.
 
-When a job fails, its failed test files' logs (`TEST_LOGS`) are kept with the run for 14 days, an artifact per job
-(`test-logs-macos`, `test-logs-linux-with-xwidgets`, `test-logs-linux-without-xwidgets`): what a test saw where it
-fails only on GitHub. `gh run download RUN_ID` fetches them.
+In each job the end-to-end tests run even when a unit test failed, so one failure doesn't hide the other; the job fails
+if either does. When a job fails, its failed test files' logs (`TEST_LOGS`) are kept with the run for 14 days, an
+artifact per job (`test-logs-macos`, `test-logs-linux-with-xwidgets`, `test-logs-linux-without-xwidgets`): what a test
+saw where it fails only on GitHub. `gh run download RUN_ID` fetches them.

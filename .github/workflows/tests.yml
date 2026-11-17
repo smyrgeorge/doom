@@ -113,13 +113,18 @@ jobs:
           key: ${{ steps.doom-cache.outputs.cache-primary-key }}
 
       # A failed test file's log copied to TEST_LOGS (tests/run.sh), kept with
-      # the run (below): what a test saw where it failed only here.
+      # the run (below): what a test saw where it failed only here. The
+      # end-to-end tests run whenever the unit tests did, failed or not: one
+      # failure doesn't hide the other (the job fails if either does); not
+      # after a failed setup step (the unit tests skipped), nor a cancel.
       - name: Unit tests
+        id: unit
         run: tests/linux/run.sh unit
         env:
           TEST_LOGS: ${{ runner.temp }}/test-logs
 
       - name: End-to-end tests
+        if: ${{ !cancelled() && steps.unit.outcome != 'skipped' }}
         run: tests/linux/run.sh e2e
         env:
           TEST_LOGS: ${{ runner.temp }}/test-logs
@@ -204,13 +209,16 @@ jobs:
           path: ~/.config/emacs/.local
           key: ${{ steps.doom-cache.outputs.cache-primary-key }}
 
-      # A failed test file's log kept with the run, as on Linux.
+      # A failed test file's log kept with the run; the end-to-end tests run
+      # whenever the unit tests did: as on Linux.
       - name: Unit tests
+        id: unit
         run: tests/run.sh unit
         env:
           TEST_LOGS: ${{ runner.temp }}/test-logs
 
       - name: End-to-end tests
+        if: ${{ !cancelled() && steps.unit.outcome != 'skipped' }}
         run: tests/run.sh e2e
         env:
           TEST_LOGS: ${{ runner.temp }}/test-logs
