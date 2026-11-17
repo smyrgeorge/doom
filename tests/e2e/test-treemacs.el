@@ -98,11 +98,15 @@ list), the sidebar refreshed."
      ;; highlighted, which point's line is before (f01.txt's too): the
      ;; follow then came during the test's first steps (its timer later on
      ;; a slow runner, after the first test's startup), and a key in the
-     ;; sidebar acted from point.
-     (should (+test-wait-for (lambda () (and (equal (+test-treemacs--selected) "f01.txt")
+     ;; sidebar acted from point. 15 s: a file's first test runs as its
+     ;; Emacs starts, which a busy runner made take 5 s and more. Not
+     ;; followed: what there was said.
+     (unless (+test-wait-for (lambda () (and (equal (+test-treemacs--selected) "f01.txt")
                                              (equal (+test-treemacs--highlighted) "f01.txt")
                                              (not +my/treemacs--follow-timer)))
-                             5))
+                             15)
+       (ert-fail (list "f01.txt not followed" :selected (+test-treemacs--selected)
+                       :highlighted (+test-treemacs--highlighted) :timer +my/treemacs--follow-timer)))
      (unwind-protect (progn ,@body)
        (dolist (buffer (buffer-list))
          (when (with-current-buffer buffer (derived-mode-p 'treemacs-mode))
