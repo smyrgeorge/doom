@@ -243,13 +243,15 @@ issue knows its role (:role) and its epic (:epic, see
 
 (defun agent-workspace--wrap-title (text first rest)
   "TEXT on two rows at most: the words that fit in FIRST columns, then the
-rest in REST, cut with … if longer still."
+rest in REST, cut with … if longer still. No space to cut at (wide
+characters, CJK): cut where FIRST columns end."
   (if (<= (string-width text) first)
       (list text)
     (let ((cut (let ((pos nil) (start 0))
-                 (while (and (string-match " " text start) (<= (match-beginning 0) first))
+                 (while (and (string-match " " text start)
+                             (<= (string-width text 0 (match-beginning 0)) first))
                    (setq pos (match-beginning 0) start (1+ (match-beginning 0))))
-                 (or pos first))))
+                 (or pos (length (truncate-string-to-width text first))))))
       (list (substring text 0 cut)
             (agent-workspace--fit (string-trim-left (substring text cut)) rest)))))
 

@@ -1034,6 +1034,40 @@ long title on a second row; epics left out."
         (agent-workspace-issue-next)
         (should (equal (plist-get (get-text-property (point) 'agent-workspace-issue) :id) "p-3"))))))
 
+(ert-deftest agent-workspace-app/a-title-of-wide-characters ()
+  "A title of wide characters without spaces (CJK) wraps onto two rows, cut
+by columns, never past its end; the issue list drawn and the app laid out
+at 35, 50 and 80 columns (doom-pbk.42)."
+  (let ((title "修复解析器的错误处理问题在边界"))
+    (should (equal (agent-workspace--wrap-title title 20 30) '("修复解析器的错误处理" "问题在边界")))
+    (should (equal (agent-workspace--wrap-title title 21 30) '("修复解析器的错误处理" "问题在边界")))
+    (should (equal (agent-workspace--wrap-title title 20 6) '("修复解析器的错误处理" "问题…")))
+    ;; Words of wide characters: cut at a space, by columns.
+    (should (equal (agent-workspace--wrap-title "修复 解析器的错误 处理问题" 17 30)
+                   '("修复 解析器的错误" "处理问题")))
+    (should (equal (agent-workspace--wrap-title "Fix the parser's recovery" 10 30) '("Fix the" "parser's recovery"))))
+  (+test-awa "wide"
+    (+test-awa--crew '("ada" "builder"))
+    (let ((data (list :all (json-parse-string
+                            "[{\"id\":\"w-1\",\"title\":\"修复解析器的错误处理问题在边界情况下的崩溃\",\"status\":\"open\",\"priority\":1,\"labels\":[\"build\"]}]"
+                            :object-type 'alist :array-type 'list)
+                      :ready (json-parse-string "[{\"id\":\"w-1\"}]" :object-type 'alist :array-type 'list)
+                      :done nil)))
+      (dolist (width '(35 50 80))
+        (let ((agent-workspace-issues-width width))
+          (agent-workspace-open t)
+          (with-current-buffer (agent-workspace--issues-buffer project)
+            (setq agent-workspace--issues-data (agent-workspace--issues-parse project data))
+            (agent-workspace--issues-redraw project)
+            (agent-workspace-layout (agent-workspace--app project))
+            (let ((rows (seq-filter (lambda (line) (string-match-p "[修复问题情况崩溃]" line))
+                                    (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n"))))
+              (should (<= 1 (length rows) 2))
+              (should (string-search "修复" (car rows)))
+              (dolist (row rows)
+                (should (<= (string-width row) (window-width (get-buffer-window (current-buffer))))))))
+          (agent-workspace--close-app project))))))
+
 (defconst +test-awa--typed
   (list :all (json-parse-string
               "[{\"id\":\"t-1\",\"title\":\"Fix the parser\",\"status\":\"in_progress\",\"assignee\":\"ada\",\"issue_type\":\"bug\"},
