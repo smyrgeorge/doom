@@ -125,6 +125,13 @@ desk, what they're sent kept in `+test-awb--told'; bd not run."
   (mapcar (lambda (w) (list (buffer-name (window-buffer w)) (window-total-width w) (window-total-height w)))
           (window-list nil 'nomini (frame-first-window))))
 
+(defun +test-awb--idle (project)
+  "PROJECT's branches' view's work-out waiting for Emacs to be idle, run
+now (no idle time in batch Emacs): non-nil if there was one."
+  (when-let* ((timer (gethash (agent-workspace--root project) agent-workspace--branches-soon)))
+    (timer-event-handler timer)
+    t))
+
 (defun +test-awb--view (project)
   "PROJECT's branches' view."
   (agent-workspace--branches-find project))
@@ -194,6 +201,8 @@ merge-tree --write-tree: nothing said in that column."
       (should (equal (+test-awb--git "status" "--porcelain") ""))
       (should (equal (+test-awb--git "log" "-1" "--format=%s") "my parser")))
     ;; An older git: merge-tree has no --write-tree (an unknown option, 129).
+    ;; Nothing kept from the work-out before (another git, as Emacs starts).
+    (clrhash agent-workspace--branch-known)
     (cl-letf (((symbol-function 'process-file)
                (let ((process-file (symbol-function 'process-file)))
                  (lambda (program &optional infile buffer display &rest args)
@@ -405,12 +414,16 @@ nothing on a timer."
         (+test-awb--commit dir "again" "x\n" "again")
         (should (= (funcall ahead) 3))
         (agent-workspace--set-state ada 'done)
+        ;; Once Emacs is idle, not in the turn's end.
+        (should (= (funcall ahead) 3))
+        (should (+test-awb--idle project))
         (should (= (funcall ahead) 4))
         ;; Not shown (the stage back): a turn's end runs nothing.
         (with-current-buffer (+test-awb--view project) (agent-workspace-branches-quit))
         (agent-workspace--set-state ada 'working)
         (+test-awb--commit dir "unseen" "x\n" "unseen")
         (agent-workspace--set-state ada 'done)
+        (should-not (+test-awb--idle project))
         (should (= (funcall ahead) 4))
         ;; Shown again: worked out.
         (agent-workspace-branches)
@@ -421,3 +434,40 @@ nothing on a timer."
                      (lambda (&rest _) (setq runs (1+ runs)) nil)))
             (+test-wait-for #'ignore 1.5))
           (should (= runs 0)))))))
+
+(ert-deftest agent-workspace-branches/only-what-moved ()
+  "A turn's end with the view shown and nothing moved: git asked for the
+main branch, the branches, the worktrees and the notes, once each, whatever
+the crew; no branch counted or merged again. A commit on one branch: that
+branch alone counted and merged again; main moved: each (doom-pbk.38)."
+  (+test-awb "moved"
+    (pcase-let ((`(,ken ,ada) (+test-awb--crew)))
+      (agent-workspace-open t)
+      (agent-workspace-branches)
+      (let ((calls nil)
+            (process-file (symbol-function 'process-file)))
+        (cl-flet ((turn (agent)
+                    (setq calls nil)
+                    (cl-letf (((symbol-function 'process-file)
+                               (lambda (program &rest args)
+                                 (when (equal program "git") (push (nth 3 args) calls))
+                                 (apply process-file program args))))
+                      (agent-workspace--set-state agent 'working)
+                      (agent-workspace--set-state agent 'done)
+                      (should (+test-awb--idle project)))
+                    (sort (copy-sequence calls) #'string<)))
+          (should (equal (turn ada) '("branch" "config" "for-each-ref" "worktree")))
+          ;; ada commits: her branch alone again.
+          (+test-awb--commit (agent-workspace-agent-worktree ada) "more" "x\n" "more")
+          (should (equal (turn ada) '("branch" "config" "for-each-ref" "merge-tree" "rev-list" "worktree")))
+          (with-current-buffer (+test-awb--view project)
+            (should (= (plist-get (seq-find (lambda (row) (equal (plist-get row :name) "ada"))
+                                            agent-workspace--branches-rows)
+                                  :ahead)
+                       3)))
+          ;; Main moves: every branch again.
+          (+test-awb--commit project "yours" "y\n" "yours")
+          (let ((again (turn ken)))
+            (should (= (seq-count (lambda (call) (equal call "rev-list")) again)
+                       (hash-table-count (gethash (agent-workspace--root project) agent-workspace--branch-known))))
+            (should (> (seq-count (lambda (call) (equal call "rev-list")) again) 4))))))))

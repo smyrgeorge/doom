@@ -370,11 +370,12 @@ branch.BRANCH.agent-workspace-agent): forgetting NAME finds it."
   (let ((default-directory project))
     (process-file "git" nil nil nil "config" (concat "branch." branch ".agent-workspace-agent") name)))
 
-(defun agent-workspace--branch-notes (project)
-  "PROJECT's branches noted as an agent's work, that are there: ((BRANCH .
-NAME)...), as git's config lists them."
+(defun agent-workspace--branch-notes (project &optional there)
+  "PROJECT's branches noted as an agent's work, that are there (THERE: its
+branches' names, if known): ((BRANCH . NAME)...), as git's config lists
+them."
   (let ((default-directory project)
-        (there (agent-workspace--branches project)))
+        (there (or there (agent-workspace--branches project))))
     (seq-filter (lambda (note) (member (car note) there))
                 (delq nil (mapcar (lambda (line)
                                     (and (string-match "\\`branch\\.\\(.+\\)\\.agent-workspace-agent \\(.*\\)\\'" line)
@@ -382,10 +383,11 @@ NAME)...), as git's config lists them."
                                   (agent-workspace--git-lines "config" "--get-regexp"
                                                               "^branch\\..*\\.agent-workspace-agent$"))))))
 
-(defun agent-workspace--noted-branches (project name)
-  "PROJECT's branches noted as the agent NAME's work, that are there."
+(defun agent-workspace--noted-branches (project name &optional notes)
+  "PROJECT's branches noted as the agent NAME's work, that are there (NOTES:
+`agent-workspace--branch-notes', if known)."
   (mapcar #'car (seq-filter (lambda (note) (equal (cdr note) name))
-                            (agent-workspace--branch-notes project))))
+                            (or notes (agent-workspace--branch-notes project)))))
 
 (defun agent-workspace--branch-holder (project branch)
   "The folder of PROJECT's worktree BRANCH is checked out in (its main
@@ -394,23 +396,25 @@ checkout's too), or nil."
                        (agent-workspace--worktrees project))
              :dir))
 
-(defun agent-workspace-agent-branches (agent)
+(defun agent-workspace-agent-branches (agent &optional there worktrees notes)
   "AGENT's branches: the one it's on, agent/NAME, and those of its work
 \(noted as its); those there, none checked out in another worktree (taken
-by another agent)."
+by another agent). THERE, WORKTREES, NOTES: its project's branches,
+`agent-workspace--worktrees' and `agent-workspace--branch-notes', if
+known (git not run again for each agent)."
   (let* ((project (agent-workspace-agent-project agent))
          (name (agent-workspace-agent-name agent))
          (dir (agent-workspace--worktree-live agent))
          (here (and dir (file-name-as-directory (file-truename dir))))
-         (there (agent-workspace--branches project))
+         (there (or there (agent-workspace--branches project)))
          (elsewhere (delq nil (mapcar (lambda (worktree)
                                         (and (not (equal (plist-get worktree :dir) here))
                                              (plist-get worktree :branch)))
-                                      (agent-workspace--worktrees project)))))
+                                      (or worktrees (agent-workspace--worktrees project))))))
     (seq-filter (lambda (branch) (and (member branch there) (not (member branch elsewhere))))
                 (delete-dups (delq nil (append (list (and dir (agent-workspace--worktree-head dir))
                                                      (agent-workspace-branch name))
-                                               (agent-workspace--noted-branches project name)))))))
+                                               (agent-workspace--noted-branches project name notes)))))))
 
 (defun agent-workspace--ahead-p (project branch main)
   "Non-nil if PROJECT's BRANCH has commits MAIN hasn't."

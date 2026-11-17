@@ -9,9 +9,11 @@
 ;; no checkout touched), its agent's state. RET its commits, d its changes, M
 ;; merges it, D deletes it (asked first), gr again, q back.
 ;;
-;; Worked out (git) as the view opens, on gr, after RET, d, M or D, and at an
-;; agent's turn's end while it's shown; drawn again from that as agents change
-;; (their states), never worked out on a timer or as it's drawn.
+;; Worked out (git) as the view opens, on gr, after RET, d, M or D, and once
+;; Emacs is idle after an agent's turn's end while it's shown; drawn again
+;; from that as agents change (their states), never worked out on a timer or
+;; as it's drawn. A branch's counts and merge are kept by its commit and the
+;; main branch's: worked out again only when either moved.
 
 (require 'cl-lib)
 (require 'seq)
@@ -38,36 +40,68 @@ if git can't say (one older than 2.38: no --write-tree)."
       (0 'cleanly)
       (1 'conflicts))))
 
-(defun agent-workspace--branch-to-merge (project main branch agent name)
+(defvar agent-workspace--branch-known (make-hash-table :test #'equal)
+  "A project's branches as last worked out: a table of (BRANCH COMMIT MAIN
+MAIN-COMMIT) to (AHEAD BEHIND MERGES), only those it had then.")
+
+(defun agent-workspace--branch-tips (project)
+  "PROJECT's branches and the commit each is at: ((NAME . COMMIT)...)."
+  (let ((default-directory project))
+    (delq nil (mapcar (lambda (line)
+                        (and (string-match "\\`\\([0-9a-f]+\\) refs/heads/\\(.+\\)\\'" line)
+                             (cons (match-string 2 line) (match-string 1 line))))
+                      (agent-workspace--git-lines "for-each-ref" "--format=%(objectname) %(refname)"
+                                                  "refs/heads/")))))
+
+(defun agent-workspace--branch-to-merge (project main branch agent name &optional tips known)
   "PROJECT's BRANCH, of AGENT (nil: forgotten) named NAME, as a row: a plist
 \(:branch :agent :name :ahead :behind :merges); nil if it has nothing MAIN
-hasn't."
-  (when-let* ((counts (agent-workspace--branch-counts project main branch))
-              ((> (car counts) 0)))
-    (list :branch branch :agent agent :name name :ahead (car counts) :behind (cdr counts)
-          :merges (agent-workspace--branch-merges project main branch))))
+hasn't. TIPS (`agent-workspace--branch-tips') and KNOWN (two tables, the
+last work-out's and this one's: see `agent-workspace--branch-known'):
+counts and merge taken from the last if neither BRANCH nor MAIN moved, kept
+in this one."
+  (let* ((key (and tips (list branch (cdr (assoc branch tips)) main (or (cdr (assoc main tips)) main))))
+         (was (and key (gethash key (car known))))
+         (counts (if was (cons (nth 0 was) (nth 1 was)) (agent-workspace--branch-counts project main branch)))
+         (merges (cond (was (nth 2 was))
+                       ((and counts (> (car counts) 0)) (agent-workspace--branch-merges project main branch)))))
+    (when (and key counts)
+      (puthash key (list (car counts) (cdr counts) merges) (cdr known)))
+    (when (and counts (> (car counts) 0))
+      (list :branch branch :agent agent :name name :ahead (car counts) :behind (cdr counts)
+            :merges merges))))
 
 (defun agent-workspace-branches-to-merge (project &optional main)
   "PROJECT's branches waiting to be merged into MAIN (its main checkout's
 branch): each crew agent's with commits MAIN hasn't, in the stage's order,
 the one it's on first (`agent-workspace-agent-branches'); then those noted
 as the work of agents no longer in the crew (forgotten, their branches
-kept), by name. Rows, as `agent-workspace--branch-to-merge' has them."
+kept), by name. Rows, as `agent-workspace--branch-to-merge' has them. git
+asked once for the branches, worktrees and notes; a branch's counts and
+merge only if it or MAIN moved since it was last worked out."
   (let* ((main (or main (agent-workspace-main-branch project)))
+         (key (agent-workspace--root project))
+         (tips (agent-workspace--branch-tips project))
+         (there (mapcar #'car tips))
+         (worktrees (agent-workspace--worktrees project))
+         (notes (agent-workspace--branch-notes project there))
+         (known (cons (or (gethash key agent-workspace--branch-known) (make-hash-table :test #'equal))
+                      (make-hash-table :test #'equal)))
          (agents (agent-workspace--ordered project))
          (names (mapcar #'agent-workspace-agent-name agents))
          (theirs nil)
          (rows nil))
     (dolist (agent agents)
-      (dolist (branch (agent-workspace-agent-branches agent))
+      (dolist (branch (agent-workspace-agent-branches agent there worktrees notes))
         (push branch theirs)
         (when-let* ((row (agent-workspace--branch-to-merge project main branch agent
-                                                           (agent-workspace-agent-name agent))))
+                                                           (agent-workspace-agent-name agent) tips known)))
           (push row rows))))
-    (pcase-dolist (`(,branch . ,name) (seq-sort-by #'cdr #'string< (agent-workspace--branch-notes project)))
+    (pcase-dolist (`(,branch . ,name) (seq-sort-by #'cdr #'string< notes))
       (unless (or (member name names) (member branch theirs))
-        (when-let* ((row (agent-workspace--branch-to-merge project main branch nil name)))
+        (when-let* ((row (agent-workspace--branch-to-merge project main branch nil name tips known)))
           (push row rows))))
+    (puthash key (cdr known) agent-workspace--branch-known)
     (nreverse rows)))
 
 ;; ====== ITS VIEW ======
@@ -422,16 +456,29 @@ agent on it: said). The view worked out again."
 
 ;; ====== KEPT UP TO DATE ======
 
+(defvar agent-workspace--branches-soon (make-hash-table :test #'equal)
+  "A project's branches' view to work out once Emacs is idle: its timer.")
+
 (defun agent-workspace--branches-turn-end-h (agent old new)
   "AGENT's turn ended (it worked or had its hand raised, now neither): its
-crew's branches' view, shown, worked out again. In
+crew's branches' view, shown, worked out again once Emacs is idle (not in
+agent-shell's event; turns ending together: once). In
 `agent-workspace-state-change-functions'."
   (when (and (memq old '(working hand)) (not (memq new '(working hand))))
-    (let ((project (agent-workspace-agent-project agent)))
-      (when (agent-workspace--branches-shown project)
-        ;; In an agent's event: git failing mustn't stop it.
-        (with-demoted-errors "Branches to merge: %S"
-          (agent-workspace--branches-work-out project))))))
+    (let ((project (agent-workspace--root (agent-workspace-agent-project agent))))
+      (when (and (agent-workspace--branches-shown project)
+                 (not (gethash project agent-workspace--branches-soon)))
+        (puthash project (run-with-idle-timer 0.3 nil #'agent-workspace--branches-idle project)
+                 agent-workspace--branches-soon)))))
+
+(defun agent-workspace--branches-idle (project)
+  "PROJECT's branches' view worked out, if it's still shown (Emacs idle
+after a turn's end)."
+  (remhash project agent-workspace--branches-soon)
+  (when (agent-workspace--branches-shown project)
+    ;; From a timer: git failing mustn't stop the others.
+    (with-demoted-errors "Branches to merge: %S"
+      (agent-workspace--branches-work-out project))))
 
 (add-hook 'agent-workspace-state-change-functions #'agent-workspace--branches-turn-end-h)
 
