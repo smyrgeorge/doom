@@ -1224,6 +1224,39 @@ one column before its id; its word on hover; a type with no icon a dim ·."
         (should (equal (substring-no-properties (agent-workspace-type-glyph "epic"))
                        (substring-no-properties (nerd-icons-codicon "nf-cod-milestone"))))))))
 
+(ert-deftest agent-workspace-app/drawn-for-its-own-frame ()
+  "A GUI frame and a terminal one on one Emacs: the app is drawn for the
+frame of the window showing it, whichever is selected as it's redrawn (a
+timer, a process): its issue list's types icons there, letters in the
+terminal (doom-pbk.81)."
+  (+test-awa "frames"
+    (+test-awa--crew '("ada" "builder"))
+    (agent-workspace-open t)
+    (skip-unless (require 'nerd-icons nil t))
+    (let* ((issues (agent-workspace--issues-buffer project))
+           (list-window (get-buffer-window issues))
+           (window-frame-real (symbol-function 'window-frame))
+           (graphic-real (symbol-function 'display-graphic-p))
+           (type-at (lambda (id)
+                      (with-current-buffer issues
+                        (agent-workspace--issues-goto-id id)
+                        (buffer-substring-no-properties (+ (line-beginning-position) 4)
+                                                        (+ (line-beginning-position) 5))))))
+      (with-current-buffer issues
+        (setq agent-workspace--issues-data (agent-workspace--issues-parse project +test-awa--typed)))
+      ;; The issue list's window in a GUI frame, the selected one a terminal.
+      (cl-letf (((symbol-function 'window-frame)
+                 (lambda (&optional window)
+                   (if (eq (or window (selected-window)) list-window) 'gui (funcall window-frame-real window))))
+                ((symbol-function 'display-graphic-p)
+                 (lambda (&optional frame) (if (eq frame 'gui) t (funcall graphic-real frame)))))
+        (should-not (display-graphic-p))
+        (agent-workspace--issues-redraw project)
+        (should (equal (funcall type-at "t-8") (substring-no-properties (nerd-icons-codicon "nf-cod-bug")))))
+      ;; In the terminal, as it is: a letter.
+      (agent-workspace--issues-redraw project)
+      (should (equal (funcall type-at "t-8") "b")))))
+
 (defun +test-awa--bd-json (&rest issues)
   "ISSUES, plists of bd's fields, as bd's JSON answer reads."
   (mapcar (lambda (issue)

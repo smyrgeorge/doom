@@ -88,9 +88,26 @@ doom-one's; shadow was 1.1 to 1.9)."
 
 ;; ====== GLYPHS ======
 
+(defun agent-workspace--drawing-frame ()
+  "The frame the current buffer is drawn for: the one of a window showing
+it, else the selected one (a GUI frame and a terminal one on one Emacs:
+each app drawn for its own, whichever is selected)."
+  (window-frame (or (get-buffer-window (current-buffer) 'visible) (selected-window))))
+
 (defun agent-workspace--graphic-p ()
-  "Non-nil when drawing for a graphical frame."
-  (display-graphic-p))
+  "Non-nil when drawing for a graphical frame: the current buffer's
+\(`agent-workspace--drawing-frame')."
+  (display-graphic-p (agent-workspace--drawing-frame)))
+
+(defmacro agent-workspace--in-drawing-frame (&rest body)
+  "BODY with the current buffer's frame (`agent-workspace--drawing-frame')
+selected, its glyphs measured with its fonts, if it's another live frame
+than the selected one (a redraw from a timer while another is selected)."
+  (declare (indent 0) (debug t))
+  `(let ((frame (agent-workspace--drawing-frame)))
+     (if (or (eq frame (selected-frame)) (not (frame-live-p frame)))
+         (progn ,@body)
+       (with-selected-frame frame ,@body))))
 
 (defun agent-workspace--nerd (name)
   "The nerd icon NAME (\"nf-md-hammer\", a codicon \"nf-cod-bug\"), or nil

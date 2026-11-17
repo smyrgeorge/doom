@@ -274,38 +274,39 @@ follows it. Non-nil if done; nil, the feed must be drawn again: drawn from
 other entries than BEFORE (the feed's before ENTRY), or a redraw to come,
 ENTRY in a thread folded, a thread among DROPPED."
   (with-current-buffer buffer
-    (let ((thread (plist-get entry :thread)))
-      (when (and (not agent-workspace--room-soon)
-                 (eq agent-workspace--room-drawn before)
-                 (not (and thread (member thread agent-workspace--room-folded)))
-                 (not (seq-some (lambda (old) (plist-get old :thread)) dropped)))
-        (let* ((inhibit-read-only t)
-               (windows (get-buffer-window-list buffer nil t))
-               (following (seq-filter (lambda (window) (agent-workspace--room-last-line-p (window-point window)))
-                                      windows)))
-          ;; The oldest gone: their lines, at the top.
-          (when dropped
-            (save-excursion
-              (goto-char (point-min))
-              (while (and (< (point) (point-max))
-                          (memq (get-text-property (point) 'agent-workspace-entry) dropped))
-                (forward-line 1))
-              (delete-region (point-min) (point))))
-          (when (agent-workspace--room-shown-p entry agent-workspace--room-filter)
-            (save-excursion
-              (goto-char (point-max))
-              (let ((start (point)))
-                (dolist (line (agent-workspace--room-entry-lines
-                               project entry (if windows (window-body-width (car windows)) agent-workspace-room-width)))
-                  (insert line "\n"))
-                (put-text-property start (point) 'agent-workspace-entry entry))))
-          (setq agent-workspace--room-drawn agent-workspace--room-entries)
-          (dolist (window following)
-            (set-window-point window (point-max))
-            (with-selected-window window
-              (goto-char (point-max))
-              (recenter -1)))
-          t)))))
+    (agent-workspace--in-drawing-frame
+      (let ((thread (plist-get entry :thread)))
+        (when (and (not agent-workspace--room-soon)
+                   (eq agent-workspace--room-drawn before)
+                   (not (and thread (member thread agent-workspace--room-folded)))
+                   (not (seq-some (lambda (old) (plist-get old :thread)) dropped)))
+          (let* ((inhibit-read-only t)
+                 (windows (get-buffer-window-list buffer nil t))
+                 (following (seq-filter (lambda (window) (agent-workspace--room-last-line-p (window-point window)))
+                                        windows)))
+            ;; The oldest gone: their lines, at the top.
+            (when dropped
+              (save-excursion
+                (goto-char (point-min))
+                (while (and (< (point) (point-max))
+                            (memq (get-text-property (point) 'agent-workspace-entry) dropped))
+                  (forward-line 1))
+                (delete-region (point-min) (point))))
+            (when (agent-workspace--room-shown-p entry agent-workspace--room-filter)
+              (save-excursion
+                (goto-char (point-max))
+                (let ((start (point)))
+                  (dolist (line (agent-workspace--room-entry-lines
+                                 project entry (if windows (window-body-width (car windows)) agent-workspace-room-width)))
+                    (insert line "\n"))
+                  (put-text-property start (point) 'agent-workspace-entry entry))))
+            (setq agent-workspace--room-drawn agent-workspace--room-entries)
+            (dolist (window following)
+              (set-window-point window (point-max))
+              (with-selected-window window
+                (goto-char (point-max))
+                (recenter -1)))
+            t))))))
 
 (defun agent-workspace--room-shown-p (entry filter)
   "Non-nil if ENTRY is shown with FILTER."
@@ -377,49 +378,50 @@ the oldest entries dropped, a thread folded, a hand's buttons gone)."
   (when-let* ((buffer (seq-find (lambda (buffer) (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-room-mode))
                                 (agent-workspace--app-buffers project))))
     (with-current-buffer buffer
-      (when (timerp agent-workspace--room-soon) (cancel-timer agent-workspace--room-soon))
-      (setq agent-workspace--room-soon nil)
-      (let* ((windows (get-buffer-window-list buffer nil t))
-             (places (mapcar (lambda (window)
-                               (list window
-                                     (agent-workspace--room-last-line-p (window-point window))
-                                     (agent-workspace--room-mark (window-start window))
-                                     (agent-workspace--room-mark (window-point window))))
-                             windows))
-             (drawn (make-hash-table :test #'eq))
-             (inhibit-read-only t)
-             (width (if windows (window-body-width (car windows)) agent-workspace-room-width)))
-        (erase-buffer)
-        (let ((seen nil))
-          (dolist (entry agent-workspace--room-entries)
-            (when (agent-workspace--room-shown-p entry agent-workspace--room-filter)
-              (let* ((thread (plist-get entry :thread))
-                     (folded (and thread (member thread agent-workspace--room-folded)))
-                     (start (point)))
-                ;; A folded thread: its first line only, saying how many more.
-                (unless (and folded (member thread seen))
-                  (when thread (push thread seen))
-                  (dolist (line (agent-workspace--room-entry-lines
-                                 project entry width
-                                 (and folded
-                                      (1- (seq-count (lambda (other) (equal (plist-get other :thread) thread))
-                                                     agent-workspace--room-entries)))))
-                    (insert line "\n"))
-                  ;; Each of its lines carries it: where a window is, kept by it.
-                  (put-text-property start (point) 'agent-workspace-entry entry)
-                  (puthash entry (cons start (point)) drawn))))))
-        (setq agent-workspace--room-drawn agent-workspace--room-entries)
-        (pcase-dolist (`(,window ,following ,start ,point) places)
-          (if following
-              (progn
-                (set-window-point window (point-max))
-                (with-selected-window window
-                  (goto-char (point-max))
-                  (recenter -1)))
-            ;; Both put back, its start forced: redisplay has no reason to
-            ;; move it (its cursor is on the screen).
-            (set-window-point window (agent-workspace--room-find point drawn))
-            (set-window-start window (agent-workspace--room-find start drawn))))))))
+      (agent-workspace--in-drawing-frame
+        (when (timerp agent-workspace--room-soon) (cancel-timer agent-workspace--room-soon))
+        (setq agent-workspace--room-soon nil)
+        (let* ((windows (get-buffer-window-list buffer nil t))
+               (places (mapcar (lambda (window)
+                                 (list window
+                                       (agent-workspace--room-last-line-p (window-point window))
+                                       (agent-workspace--room-mark (window-start window))
+                                       (agent-workspace--room-mark (window-point window))))
+                               windows))
+               (drawn (make-hash-table :test #'eq))
+               (inhibit-read-only t)
+               (width (if windows (window-body-width (car windows)) agent-workspace-room-width)))
+          (erase-buffer)
+          (let ((seen nil))
+            (dolist (entry agent-workspace--room-entries)
+              (when (agent-workspace--room-shown-p entry agent-workspace--room-filter)
+                (let* ((thread (plist-get entry :thread))
+                       (folded (and thread (member thread agent-workspace--room-folded)))
+                       (start (point)))
+                  ;; A folded thread: its first line only, saying how many more.
+                  (unless (and folded (member thread seen))
+                    (when thread (push thread seen))
+                    (dolist (line (agent-workspace--room-entry-lines
+                                   project entry width
+                                   (and folded
+                                        (1- (seq-count (lambda (other) (equal (plist-get other :thread) thread))
+                                                       agent-workspace--room-entries)))))
+                      (insert line "\n"))
+                    ;; Each of its lines carries it: where a window is, kept by it.
+                    (put-text-property start (point) 'agent-workspace-entry entry)
+                    (puthash entry (cons start (point)) drawn))))))
+          (setq agent-workspace--room-drawn agent-workspace--room-entries)
+          (pcase-dolist (`(,window ,following ,start ,point) places)
+            (if following
+                (progn
+                  (set-window-point window (point-max))
+                  (with-selected-window window
+                    (goto-char (point-max))
+                    (recenter -1)))
+              ;; Both put back, its start forced: redisplay has no reason to
+              ;; move it (its cursor is on the screen).
+              (set-window-point window (agent-workspace--room-find point drawn))
+              (set-window-start window (agent-workspace--room-find start drawn)))))))))
 
 (defun agent-workspace--room-redraw-soon (project)
   "PROJECT's feed drawn again in a moment (changes in a burst, posts among

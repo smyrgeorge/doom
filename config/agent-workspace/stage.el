@@ -113,24 +113,25 @@ its panels); its buttons (a raised hand's) keep their own."
 (defun agent-workspace--bar-draw (window)
   "WINDOW's bar drawn again, as wide as WINDOW."
   (with-current-buffer (window-buffer window)
-    (when-let* ((agent agent-workspace--bar-of))
-      (let* ((inhibit-read-only t)
-             (line (agent-workspace--clickable
-                    (agent-workspace-line agent (window-body-width window) nil t)
-                    agent-workspace-line-map))
-             (tint (plist-get (seq-find (lambda (f) (and (consp f) (plist-get f :background)))
-                                        (let ((f (get-text-property 0 'face line)))
-                                          (if (and (consp f) (keywordp (car f))) (list f) f)))
-                              :background)))
-        (erase-buffer)
-        (insert line)
-        ;; No right fringe: the last column is kept for a $ (a line too
-        ;; long): a space in the bar's tint instead.
-        (when tint
-          (set-display-table-slot buffer-display-table 'truncation
-                                  (make-glyph-code ?\s (agent-workspace--tint-face tint))))
-        (goto-char (point-min))
-        (set-window-start window (point-min) t)))))
+    (agent-workspace--in-drawing-frame
+      (when-let* ((agent agent-workspace--bar-of))
+        (let* ((inhibit-read-only t)
+               (line (agent-workspace--clickable
+                      (agent-workspace-line agent (window-body-width window) nil t)
+                      agent-workspace-line-map))
+               (tint (plist-get (seq-find (lambda (f) (and (consp f) (plist-get f :background)))
+                                          (let ((f (get-text-property 0 'face line)))
+                                            (if (and (consp f) (keywordp (car f))) (list f) f)))
+                                :background)))
+          (erase-buffer)
+          (insert line)
+          ;; No right fringe: the last column is kept for a $ (a line too
+          ;; long): a space in the bar's tint instead.
+          (when tint
+            (set-display-table-slot buffer-display-table 'truncation
+                                    (make-glyph-code ?\s (agent-workspace--tint-face tint))))
+          (goto-char (point-min))
+          (set-window-start window (point-min) t))))))
 
 (defun agent-workspace--tint-face (colour)
   "A face whose background is COLOUR (a display table's glyph needs a named
