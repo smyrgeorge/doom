@@ -496,6 +496,35 @@ try again cancelled."
       (+test-awl--quiet ada)
       (should (equal (+test-awl--prompts "ada") (list (format "Work on %s: fail: once" bad) "hello"))))))
 
+;; ====== WHAT YOU TYPE ======
+
+(ert-deftest agent-workspace-loops/text-typed-at-its-prompt-waits ()
+  "Text typed at a napping agent's prompt, not sent: an issue coming isn't
+taken (a fresh session would lose the text), the text still there; the
+text gone, it takes it (doom-pbk.63)."
+  (+test-awl--with-crew "typed"
+    (let* ((ada (+test-awl--create "ada"))
+           (root (agent-workspace-agent-project ada))
+           (buffer (agent-workspace-agent-buffer ada)))
+      (agent-workspace-loop-set ada t)
+      (+test-awl--all-in (list ada) 'nap)
+      (+test-awl--quiet ada)
+      (with-current-buffer buffer
+        (goto-char (point-max))
+        (insert "half a thought"))
+      (let ((one (+test-awl--issue project "close: one" "build" 2)))
+        (agent-workspace--loop-changed root)
+        (+test-awl--sleep 1.5)
+        (+test-awl--quiet ada)
+        (should (equal (+test-awl--status project one) "open"))
+        (should (eq (agent-workspace-agent-buffer ada) buffer))
+        (should (string-suffix-p "half a thought" (with-current-buffer buffer (buffer-string))))
+        ;; Sent, or deleted: it goes on.
+        (with-current-buffer buffer
+          (delete-region (- (point-max) (length "half a thought")) (point-max)))
+        (agent-workspace--loop-look-all root)
+        (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))))))
+
 ;; ====== HANDED BACK ======
 
 (ert-deftest agent-workspace-loops/one-handed-back-first ()

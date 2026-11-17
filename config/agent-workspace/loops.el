@@ -135,10 +135,21 @@ not stopped."
          (local-variable-p 'agent-shell--state buffer)
          (map-elt (buffer-local-value 'agent-shell--state buffer) :pending-prompts))))
 
+(defun agent-workspace--loop-typed-p (agent)
+  "Non-nil if text is typed at AGENT's prompt, not sent: a fresh session
+would lose it."
+  (when-let* ((buffer (agent-workspace-agent-buffer agent))
+              ((buffer-live-p buffer))
+              ((fboundp 'agent-shell--input)))
+    (with-current-buffer buffer
+      (ignore-errors (agent-shell--input)))))
+
 (defun agent-workspace--loop-at-rest-p (agent)
-  "Non-nil if AGENT rests: at the desk, done or napping, nothing queued."
+  "Non-nil if AGENT rests: at the desk, done or napping, nothing queued,
+nothing typed at its prompt (you're writing to it: its loop waits)."
   (and (memq (agent-workspace-agent-state agent) '(desk done nap))
-       (not (agent-workspace--loop-queued-p agent))))
+       (not (agent-workspace--loop-queued-p agent))
+       (not (agent-workspace--loop-typed-p agent))))
 
 (defun agent-workspace--loop-used-p (agent)
   "Non-nil if AGENT's session had a turn: its next issue needs a fresh one."
