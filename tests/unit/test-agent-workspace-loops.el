@@ -707,6 +707,51 @@ issue noted (doom-pbk.55)."
       (should-not (+test-awl--prompts "ada"))
       (should (equal (agent-workspace-agent-issue ken) given)))))
 
+;; Its runs counted; how it fails by $MODE.
+(defconst +test-awl--moody-bd
+  "#!/bin/sh
+n=$(cat \"$0.count\" 2>/dev/null || echo 0); n=$((n + 1)); echo $n > \"$0.count\"
+case \"$MODE:$n\" in
+  silent-then-claimed:1) exit 1;;
+  silent-then-claimed:*) echo \"Error updating $2: issue already claimed by ken\" >&2; exit 1;;
+  locked-twice:1|locked-twice:2) echo \"Error: database is locked\" >&2; exit 1;;
+  locked-twice:*) exit 0;;
+  silent:*) exit 1;;
+  condition:*) exit 13;;
+esac
+"
+  "A stand-in bd failing as $MODE says, its runs counted in bd.count.")
+
+(ert-deftest agent-workspace-loops/bd-run-again-when-it-fails-for-a-moment ()
+  "A claim bd fails for a moment (its database locked by another bd, or
+nothing said, as once on a busy machine: \"bd failed\"): run again, three
+times at most; its answer then is the claim's. Exit status 13 (an --if-
+condition not met) is an answer: not run again."
+  (let* ((project (file-name-as-directory (make-temp-file (+test-tmp-file "bd-again-") t)))
+         (bin (file-name-as-directory (make-temp-file (+test-tmp-file "moody-bd-") t)))
+         (bd (expand-file-name "bd" bin))
+         (exec-path (cons bin exec-path))
+         (ada (agent-workspace--make-agent :name "ada" :role "builder" :project project)))
+    (make-directory (expand-file-name ".beads" project))
+    (with-temp-file bd (insert +test-awl--moody-bd))
+    (set-file-modes bd #o755)
+    (cl-flet ((run (mode thunk)
+                (delete-file (concat bd ".count"))
+                (let ((process-environment (append (list (concat "MODE=" mode)
+                                                         (concat "PATH=" bin path-separator (getenv "PATH")))
+                                                   process-environment)))
+                  (list (funcall thunk)
+                        (string-to-number (with-temp-buffer (insert-file-contents (concat bd ".count"))
+                                                            (buffer-string)))))))
+      (should (equal (run "silent-then-claimed" (lambda () (agent-workspace--bd-claim ada "demo-1")))
+                     '("issue already claimed by ken" 2)))
+      (should (equal (run "locked-twice" (lambda () (agent-workspace--bd-claim ada "demo-1")))
+                     '(nil 3)))
+      (should (equal (run "silent" (lambda () (agent-workspace--bd-claim ada "demo-1")))
+                     '("bd failed" 3)))
+      (should (equal (run "condition" (lambda () (agent-workspace--bd-now project "ada" '("update" "demo-1" "--if-assignee=ada"))))
+                     '((13 . "") 1))))))
+
 (ert-deftest agent-workspace-loops/killed-it-gives-its-issue-back ()
   "K on an agent with the issue you gave it in progress, its: open again,
 unassigned, in bd, given back as the agent; bd failing: said in the room,

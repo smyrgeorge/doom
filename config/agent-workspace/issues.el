@@ -615,23 +615,48 @@ an epic's heading, the epic."
   "Seconds bd may take to claim an issue you give an agent: longer, it's
 stopped and nothing is given.")
 
+(defvar agent-workspace-bd-tries 3
+  "Times bd is run for a claim when it fails for a moment (below).")
+
+(defun agent-workspace--bd-for-a-moment-p (result)
+  "Non-nil if bd's RESULT, (STATUS . OUTPUT), is a failure for a moment:
+its database locked by another bd (a crew's loops run it all the time), or
+failing with nothing said (seen on a busy machine). Not exit status 13:
+an --if- condition not met, its answer."
+  (pcase result
+    (`(,(and (pred integerp) status (guard (not (memq status '(0 13))))) . ,output)
+     (or (string-empty-p (string-trim output)) (string-match-p "locked" output)))))
+
 (defun agent-workspace--bd-now (project actor args)
   "Run bd with ARGS in PROJECT as ACTOR (BEADS_ACTOR), waiting for it, at
 most `agent-workspace-claim-timeout' seconds: (STATUS . OUTPUT), STATUS
-its exit status, or `timeout' (stopped). nil without bd or Beads there."
+its exit status, or `timeout' (stopped). nil without bd or Beads there.
+Run again, a moment after, when it fails for a moment
+\(`agent-workspace--bd-for-a-moment-p'), `agent-workspace-bd-tries' times
+at most, within those seconds: ARGS are ones that can be (a claim, an
+assignee, a list)."
   (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project)))
-    (with-temp-buffer
-      (let* ((default-directory project)
-             (process-environment (cons (concat "BEADS_ACTOR=" actor) process-environment))
-             (process (make-process :name "agent-workspace-bd-now" :buffer (current-buffer)
-                                    :command (cons "bd" args)
-                                    :connection-type 'pipe :noquery t :sentinel #'ignore))
-             (end (+ (float-time) agent-workspace-claim-timeout)))
-        (while (and (process-live-p process) (< (float-time) end))
-          (accept-process-output process 0.05))
-        (if (process-live-p process)
-            (progn (delete-process process) (cons 'timeout ""))
-          (cons (process-exit-status process) (buffer-string)))))))
+    (let ((end (+ (float-time) agent-workspace-claim-timeout))
+          (tries agent-workspace-bd-tries)
+          result)
+      (while (progn
+               (setq result
+                     (with-temp-buffer
+                       (let* ((default-directory project)
+                              (process-environment (cons (concat "BEADS_ACTOR=" actor) process-environment))
+                              (process (make-process :name "agent-workspace-bd-now" :buffer (current-buffer)
+                                                     :command (cons "bd" args)
+                                                     :connection-type 'pipe :noquery t :sentinel #'ignore)))
+                         (while (and (process-live-p process) (< (float-time) end))
+                           (accept-process-output process 0.05))
+                         (if (process-live-p process)
+                             (progn (delete-process process) (cons 'timeout ""))
+                           (cons (process-exit-status process) (buffer-string))))))
+               (and (agent-workspace--bd-for-a-moment-p result)
+                    (> (setq tries (1- tries)) 0)
+                    (< (+ (float-time) 0.3) end)))
+        (sleep-for 0.3))
+      result)))
 
 (defun agent-workspace--bd-why (output)
   "bd's OUTPUT's first line, its \"Error updating ID: \" left out."
