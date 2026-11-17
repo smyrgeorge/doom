@@ -55,9 +55,28 @@ more; at the bottom in narrower ones), or `bottom'."
   :group 'agent-workspace)
 
 (defcustom agent-workspace-room-height 16
-  "The room's height, at the bottom."
+  "The room's height, at the bottom: less in a frame too low for it and
+an agent's pane above it (`agent-workspace--room-height-now'); none if not
+even its least fits (2 shows it alone)."
   :type 'natnum
   :group 'agent-workspace)
+
+(defconst agent-workspace--room-least 8
+  "The room's least height at the bottom: its feed's 4 rows and its compose
+line.")
+
+(defconst agent-workspace--stage-least 12
+  "The rows the stage keeps for an agent's open pane, above the room at
+the bottom.")
+
+(defun agent-workspace--room-height-now (app area)
+  "The room's height at the bottom of window AREA (APP's stage): its own,
+less if the stage would keep fewer rows than its bars and an open pane
+need, nil if not even `agent-workspace--room-least' fits."
+  (let* ((bars (max 0 (1- (length (agent-workspace-agents (agent-workspace--app-project app))))))
+         (room (min agent-workspace-room-height
+                    (- (window-total-height area) bars agent-workspace--stage-least))))
+    (and (>= room agent-workspace--room-least) room)))
 
 (defcustom agent-workspace-compose-lines 3
   "The compose line's lines of text, at least: it grows as its text needs."
@@ -960,12 +979,13 @@ bottom, or all of it (the room alone). The window left for the stage, or nil."
          (alone (eq (agent-workspace--app-view app) 'room))
          (right (and (eq agent-workspace-room-side 'right)
                      (>= (window-total-width (frame-root-window)) 200)))
+         (height (and (not alone) (not right) (agent-workspace--room-height-now app area)))
          (room (if alone
                    area
                  (condition-case nil
-                     (if right
-                         (split-window area (- agent-workspace-room-width) 'right)
-                       (split-window area (- agent-workspace-room-height) 'below))
+                     (cond (right (split-window area (- agent-workspace-room-width) 'right))
+                           ;; Too low for it: none (2 shows it alone).
+                           (height (split-window area (- height) 'below)))
                    (error nil)))))
     (when room
       (let* ((window-min-height 2)

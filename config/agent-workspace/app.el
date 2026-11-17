@@ -43,9 +43,17 @@
 ;; ====== VARIABLES ======
 
 (defcustom agent-workspace-issues-width 50
-  "The issue list's width, in columns."
+  "The issue list's width, in columns (less in a narrow frame, 24 at
+least: the stage keeps 60 for an agent's pane)."
   :type 'natnum
   :group 'agent-workspace)
+
+(defun agent-workspace--issues-width-now (frame)
+  "The issue list's width in FRAME: `agent-workspace-issues-width', less
+if the stage would keep fewer than 60 columns (a terminal's 80), 24 at
+least."
+  (min agent-workspace-issues-width
+       (max 24 (- (window-total-width (frame-root-window frame)) 60))))
 
 (defvar agent-workspace-no-crew-function nil
   "Called with a folder whose project can have no crew, and why (a
@@ -470,7 +478,7 @@ buffer is current: a timer's, a canvas's being shown)."
     (set-window-dedicated-p base nil)
     (let ((issues (display-buffer-in-side-window
                    (agent-workspace--issues-buffer project)
-                   `((side . left) (slot . 0) (window-width . ,agent-workspace-issues-width)
+                   `((side . left) (slot . 0) (window-width . ,(agent-workspace--issues-width-now (selected-frame)))
                      (dedicated . t) (preserve-size . (t . nil))
                      (window-parameters . ((no-delete-other-windows . t)
                                            (mode-line-format . none) (tab-line-format . none)))))))

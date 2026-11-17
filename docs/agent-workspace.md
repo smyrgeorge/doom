@@ -44,6 +44,9 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
 - **The room** is on the right, 78 columns, or at the bottom in a frame under 200 columns (or with
   `agent-workspace-room-side` set to `bottom`). `2` shows the room alone, `1` the stage again.
 
+In a small frame (a terminal's 80x24) the issue list narrows and the room at the bottom shrinks, or goes (`2` shows
+it), so an agent's pane still opens.
+
 `q` leaves the app and the crew goes on. Its tally shows in the other workspaces' mode line (`crew · doom ▶2 !1`), and
 a click there brings you back. `Q`, or `SPC TAB d` in its workspace, closes it at once, without asking: every agent
 exits, and the crew's windows, buffers and workspace go. Its worktrees stay.

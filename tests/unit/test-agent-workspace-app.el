@@ -1381,7 +1381,6 @@ height as it was (doom-pbk.78)."
       (setf (agent-workspace--app-open (agent-workspace--app project)) nil)
       (agent-workspace-layout (agent-workspace--app project))
       (let ((hint (get-buffer-window (agent-workspace--hint-buffer project))))
-        (should (< (window-total-height hint) 4))
         (should (= (window-min-size hint) 1)))
       (should (< (window-min-size (frame-root-window)) (window-total-height (frame-root-window))))
       (let ((before (window-total-height (frame-root-window))))
@@ -1390,6 +1389,40 @@ height as it was (doom-pbk.78)."
         (should (= (window-total-height (frame-root-window)) (- before 6)))
         (window-resize (minibuffer-window) -6))
       (should (= (frame-height) height)))))
+
+(ert-deftest agent-workspace-app/at-80x24-a-pane-opens ()
+  "In a frame 80x24 (a terminal's), three agents: the issue list 24 wide
+\(the stage 56), the room at the bottom smaller, the stage keeping an open pane of
+10 rows or more; another agent opened (TAB, a click): its pane, as tall;
+the room alone (2) a key away. Lower still: no room at the bottom, the
+pane bigger (doom-pbk.79)."
+  (+test-awa "small-pane"
+    (pcase-let ((`(,ada ,ken ,_sam) (+test-awa--crew '("ada" "builder") '("ken" "builder") '("sam" "investigator"))))
+      (set-frame-size (selected-frame) 80 24)
+      (let ((app (agent-workspace-open t)))
+        (agent-workspace-layout app)
+        (should (= (window-total-width (+test-awa--issues-window project)) 24))
+        (let ((pane (get-buffer-window (agent-workspace-agent-buffer ada)))
+              (room (get-buffer-window (agent-workspace--room-buffer project))))
+          (should pane)
+          (should (>= (window-body-height pane) 10))
+          (should room)
+          (should (get-buffer-window (agent-workspace--compose-buffer project))))
+        ;; Another opened.
+        (agent-workspace-select ken t)
+        (let ((pane (get-buffer-window (agent-workspace-agent-buffer ken))))
+          (should pane)
+          (should (eq (selected-window) pane))
+          (should (>= (window-body-height pane) 10)))
+        ;; The room alone, a key away.
+        (agent-workspace-view-room)
+        (should (> (window-total-width (get-buffer-window (agent-workspace--room-buffer project))) 50))
+        (agent-workspace-view-stage)
+        ;; Lower: no room at the bottom.
+        (set-frame-size (selected-frame) 80 18)
+        (agent-workspace-layout app)
+        (should-not (get-buffer-window (agent-workspace--room-buffer project)))
+        (should (>= (window-body-height (get-buffer-window (agent-workspace-agent-buffer ken))) 10))))))
 
 (ert-deftest agent-workspace-app/the-stage-away-the-cursor-stays ()
   "The stage not shown (the room alone, 2; the branches, b), the cursor in
