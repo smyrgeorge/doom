@@ -260,6 +260,58 @@ again."
                               (funcall issue "p-4" '(title . "Again") `(created_at . ,now))))
         (should (string-search "◆ filed: Again" (+test-awr2--feed project)))))))
 
+(ert-deftest agent-workspace-room/a-fetch-that-hangs ()
+  "bd hanging on a fetch: stopped after `agent-workspace-issues-timeout', its
+bd commands killed, the list saying so; a fetch asked for meanwhile done
+after it. gr while one hangs: it's stopped and a new one started; bd
+answering again, the list as fetched (doom-pbk.43)."
+  (+test-awr2 "hangs"
+    (make-directory (expand-file-name ".beads" project))
+    (let* ((bin (file-name-as-directory (make-temp-file (+test-tmp-file "hanging-bd-") t)))
+           (hang (expand-file-name "hang" bin))
+           (exec-path (cons bin exec-path))
+           (process-environment (cons (concat "PATH=" bin path-separator (getenv "PATH")) process-environment))
+           (agent-workspace-issues-timeout 1)
+           (buffer (agent-workspace--issues-buffer project))
+           (bds (lambda () (seq-filter (lambda (process) (and (equal (process-get process 'agent-workspace-project)
+                                                                     (agent-workspace--root project))
+                                                              (process-live-p process)))
+                                       (process-list)))))
+      (with-temp-file (expand-file-name "bd" bin)
+        (insert "#!/bin/sh\n[ \"$1\" = ready ] && [ -f " (shell-quote-argument hang) " ] && exec sleep 300\n"
+                "echo '[{\"id\":\"p-1\",\"title\":\"Fix it\",\"status\":\"open\"}]'\n"))
+      (set-file-modes (expand-file-name "bd" bin) #o755)
+      (write-region "" nil hang)
+      (cl-letf (((symbol-function 'agent-workspace--issues-refresh) +test-awr2--refresh))
+        (agent-workspace--issues-refresh project)
+        (should (buffer-local-value 'agent-workspace--issues-pending buffer))
+        ;; Another asked for meanwhile: waits for it.
+        (agent-workspace--issues-refresh project)
+        (should (buffer-local-value 'agent-workspace--issues-again buffer))
+        (should (+test-wait-for (lambda () (plist-get (buffer-local-value 'agent-workspace--issues-data buffer) :error))
+                                5))
+        (should (equal (plist-get (buffer-local-value 'agent-workspace--issues-data buffer) :error)
+                       "bd didn't answer in 1s: gr fetches again."))
+        (should (string-search "bd didn't answer in 1s" (with-current-buffer buffer (buffer-string))))
+        ;; The one asked for meanwhile, started (hanging too).
+        (should (buffer-local-value 'agent-workspace--issues-pending buffer))
+        (should-not (buffer-local-value 'agent-workspace--issues-again buffer))
+        ;; gr: stopped, a new one started.
+        (let ((before (buffer-local-value 'agent-workspace--issues-pending buffer))
+              (killed (funcall bds)))
+          (should killed)
+          (with-current-buffer buffer (agent-workspace-issues-refresh))
+          (should-not (seq-some #'process-live-p killed))
+          (should (buffer-local-value 'agent-workspace--issues-pending buffer))
+          (should-not (eq (buffer-local-value 'agent-workspace--issues-pending buffer) before)))
+        ;; bd answering again: gr fetches.
+        (delete-file hang)
+        (with-current-buffer buffer (agent-workspace-issues-refresh))
+        (should (+test-wait-for (lambda () (not (buffer-local-value 'agent-workspace--issues-pending buffer))) 10))
+        (should-not (plist-get (buffer-local-value 'agent-workspace--issues-data buffer) :error))
+        (should (string-search "p-1" (with-current-buffer buffer (buffer-string))))
+        (should-not (funcall bds))))))
+
 (ert-deftest agent-workspace-room/filtered ()
   "F: raised hands only, then the selected agent's only, then all."
   (+test-awr2 "filter"

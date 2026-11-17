@@ -37,7 +37,14 @@ command led to the fetch, its name; :error).")
 (defvar-local agent-workspace--issues-data nil
   "In the issue list: its issues as last fetched, a plist: :doing :ready
 :blocked :done (issue plists), :error.")
-(defvar-local agent-workspace--issues-pending nil "In the issue list: its fetches running.")
+(defvar-local agent-workspace--issues-pending nil
+  "In the issue list: the fetch running, a plist: :processes (its bd
+commands), :timer (its timeout).")
+
+(defvar agent-workspace-issues-timeout 30
+  "Seconds a fetch of the issues may take: longer (bd hanging: a lock, a
+prompt), it's stopped, the list says so, and the next refresh fetches
+again.")
 (defvar-local agent-workspace--issues-again nil
   "In the issue list: a fetch asked for while one ran: done once it's over.")
 (defvar-local agent-workspace--issues-actor nil
@@ -100,6 +107,7 @@ with its project (`agent-workspace--issues-stop')."
 cancelled, its bd commands running stopped (its app closing)."
   (when-let* ((buffer (seq-find (lambda (buffer) (buffer-local-value 'agent-workspace--issues-project buffer))
                                 (agent-workspace--app-buffers project))))
+    (agent-workspace--issues-fetch-stop buffer)
     (with-current-buffer buffer
       (when (timerp agent-workspace--issues-timer) (cancel-timer agent-workspace--issues-timer))
       (setq agent-workspace--issues-timer nil)))
@@ -121,30 +129,62 @@ cancelled, its bd commands running stopped (its app closing)."
           (let ((answers (list :all nil :ready nil :done nil))
                 (left 3)
                 (today (format-time-string "%Y-%m-%d"))
-                (actor agent-workspace--issues-actor))
-            (setq agent-workspace--issues-pending t
+                (actor agent-workspace--issues-actor)
+                (fetch (list :processes nil :timer nil)))
+            (setq agent-workspace--issues-pending fetch
                   agent-workspace--issues-actor nil)
             (cl-flet ((got (key)
                         (lambda (json)
                           (setq answers (plist-put answers key json))
-                          (when (= (cl-decf left) 0)
-                            (when (buffer-live-p buffer)
-                              (with-current-buffer buffer
-                                (setq agent-workspace--issues-pending nil
-                                      agent-workspace--issues-data
-                                      (append (agent-workspace--issues-parse project answers)
-                                              (list :actor actor)))
-                                (agent-workspace--issues-redraw project)
-                                (run-hook-with-args 'agent-workspace-issues-fetched-functions
-                                                    project agent-workspace--issues-data)
-                                (when agent-workspace--issues-again
-                                  (setq agent-workspace--issues-again nil)
-                                  (agent-workspace--issues-refresh project))))))))
-              (agent-workspace--bd project '("list" "--json" "--limit" "0") (got :all))
-              (agent-workspace--bd project '("ready" "--json" "--limit" "0") (got :ready))
-              (agent-workspace--bd project (list "list" "--json" "--status" "closed"
-                                                 "--closed-after" today "--limit" "0")
-                                   (got :done)))))))))
+                          (when (and (= (cl-decf left) 0)
+                                     (buffer-live-p buffer)
+                                     ;; Not one stopped (timed out, gr).
+                                     (eq (buffer-local-value 'agent-workspace--issues-pending buffer) fetch))
+                            (cancel-timer (plist-get fetch :timer))
+                            (with-current-buffer buffer
+                              (setq agent-workspace--issues-pending nil
+                                    agent-workspace--issues-data
+                                    (append (agent-workspace--issues-parse project answers)
+                                            (list :actor actor)))
+                              (agent-workspace--issues-redraw project)
+                              (run-hook-with-args 'agent-workspace-issues-fetched-functions
+                                                  project agent-workspace--issues-data)
+                              (when agent-workspace--issues-again
+                                (setq agent-workspace--issues-again nil)
+                                (agent-workspace--issues-refresh project)))))))
+              (plist-put fetch :timer (run-at-time agent-workspace-issues-timeout nil
+                                                   #'agent-workspace--issues-timed-out project fetch))
+              (plist-put fetch :processes
+                         (list (agent-workspace--bd project '("list" "--json" "--limit" "0") (got :all))
+                               (agent-workspace--bd project '("ready" "--json" "--limit" "0") (got :ready))
+                               (agent-workspace--bd project (list "list" "--json" "--status" "closed"
+                                                                  "--closed-after" today "--limit" "0")
+                                                    (got :done)))))))))))
+
+(defun agent-workspace--issues-fetch-stop (buffer)
+  "The fetch BUFFER's issue list runs, stopped: its bd commands killed, its
+answers never used. Non-nil if there was one."
+  (with-current-buffer buffer
+    (when-let* ((fetch agent-workspace--issues-pending))
+      (setq agent-workspace--issues-pending nil)
+      (when (timerp (plist-get fetch :timer)) (cancel-timer (plist-get fetch :timer)))
+      (dolist (process (plist-get fetch :processes))
+        (when (process-live-p process) (delete-process process)))
+      t)))
+
+(defun agent-workspace--issues-timed-out (project fetch)
+  "PROJECT's FETCH still running after `agent-workspace-issues-timeout':
+stopped, the list says so; one asked for meanwhile, started."
+  (when-let* ((buffer (and (agent-workspace--app project) (agent-workspace--issues-buffer project)))
+              ((eq (buffer-local-value 'agent-workspace--issues-pending buffer) fetch)))
+    (agent-workspace--issues-fetch-stop buffer)
+    (with-current-buffer buffer
+      (setq agent-workspace--issues-data
+            (list :error (format "bd didn't answer in %ss: gr fetches again." agent-workspace-issues-timeout)))
+      (agent-workspace--issues-redraw project)
+      (when agent-workspace--issues-again
+        (setq agent-workspace--issues-again nil)
+        (agent-workspace--issues-refresh project)))))
 
 (defun agent-workspace--issues-refresh-soon (project &optional actor)
   "PROJECT's issues fetched again in a moment (a burst of bd commands: once).
@@ -673,10 +713,15 @@ failing): nothing run for it."
     (if (or (not data) (plist-get data :error)) 'none (plist-get data :ready))))
 
 (defun agent-workspace-issues-refresh ()
-  "The issues fetched again, the app laid out again."
+  "The issues fetched again (a fetch still running stopped first: it may
+hang), the app laid out again."
   (interactive)
-  (let ((app (agent-workspace--here-or-error)))
-    (agent-workspace--issues-refresh (agent-workspace--app-project app))
+  (let* ((app (agent-workspace--here-or-error))
+         (project (agent-workspace--app-project app)))
+    (agent-workspace--issues-fetch-stop (agent-workspace--issues-buffer project))
+    (with-current-buffer (agent-workspace--issues-buffer project)
+      (setq agent-workspace--issues-again nil))
+    (agent-workspace--issues-refresh project)
     (agent-workspace-layout app)))
 
 ;; ====== AN AGENT'S BD COMMANDS ======
