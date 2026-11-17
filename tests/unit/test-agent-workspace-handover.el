@@ -283,6 +283,51 @@ him once he's free, not to another builder; taken, its button goes
         (when (agent-workspace--app project) (agent-workspace--close-app project))
         (agent-workspace-close-all)))))
 
+(ert-deftest agent-workspace-handover/offered-again-to-the-next-role ()
+  "demo-1 offered to ken, a builder; handed to the reviewers: offered to
+rita, free; ken's old button gone, not coming back (doom-pbk.62)."
+  (let* ((project (+test-awo--project "next-role"))
+         (default-directory project))
+    (set-frame-size (selected-frame) 220 40)
+    (cl-letf (((symbol-function 'agent-workspace--start)
+               (lambda (agent)
+                 (let ((buffer (get-buffer-create (agent-workspace-buffer-name agent))))
+                   (with-current-buffer buffer (setq agent-workspace--agent agent))
+                   (setf (agent-workspace-agent-buffer agent) buffer)
+                   (agent-workspace--set-state agent 'desk)
+                   buffer)))
+              ((symbol-function 'agent-workspace--stop)
+               (lambda (agent state &rest _)
+                 (when (buffer-live-p (agent-workspace-agent-buffer agent))
+                   (kill-buffer (agent-workspace-agent-buffer agent)))
+                 (setf (agent-workspace-agent-buffer agent) nil)
+                 (agent-workspace--set-state agent state)
+                 nil))
+              ((symbol-function 'agent-workspace--issues-refresh) #'ignore)
+              ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil))))
+      (unwind-protect
+          (let* ((ken (agent-workspace-create :role "builder" :name "ken"))
+                 (rita (agent-workspace-create :role "reviewer" :name "rita"))
+                 (feed (lambda () (with-current-buffer (agent-workspace--room-buffer project) (buffer-string))))
+                 (fetched (lambda (role)
+                            (let ((data (list :ready (list (list :id "demo-1" :title "Lexer" :role role
+                                                                 :status 'ready :type "task")))))
+                              (with-current-buffer (agent-workspace--issues-buffer project)
+                                (setq agent-workspace--issues-data data))
+                              (run-hook-with-args 'agent-workspace-issues-fetched-functions project data)))))
+            (ignore ken rita)
+            (agent-workspace-open t)
+            (funcall fetched "builder")
+            (should (string-search "demo-1 is ready for the builders: ken is free" (funcall feed)))
+            (should (string-search "[Give it to ken]" (funcall feed)))
+            ;; Handed to the reviewers.
+            (funcall fetched "reviewer")
+            (should (string-search "demo-1 is ready for the reviewers: rita is free" (funcall feed)))
+            (should (string-search "[Give it to rita]" (funcall feed)))
+            (should-not (string-search "[Give it to ken]" (funcall feed))))
+        (when (agent-workspace--app project) (agent-workspace--close-app project))
+        (agent-workspace-close-all)))))
+
 (ert-deftest agent-workspace-handover/nothing-handed-on-while-agents-may-not-talk ()
   "Agents may not talk (`agent-workspace-agents-talk' nil): a role handing
 on is told to hand nothing on, only to tell the user, not how to hand on;

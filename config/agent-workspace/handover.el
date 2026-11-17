@@ -62,7 +62,9 @@ turn: the first free %s takes it."
 ;; ====== A READY ISSUE OFFERED ======
 
 (defvar agent-workspace--offered (make-hash-table :test #'equal)
-  "A project's issues offered in the room: (ID . NAME)s, once each.")
+  "A project's issues offered in the room: ((ID ROLE ASSIGNEE) . NAME)s,
+once each: offered again once handed to another role (or back to an
+agent).")
 
 (defvar agent-workspace-offer-skip-functions nil
   "Called with an agent: non-nil if it's never offered an issue (it takes
@@ -98,13 +100,14 @@ the room to its first free agent, once each; one handed back to an agent
       (let* ((id (plist-get issue :id))
              (role (plist-get issue :role))
              (assignee (plist-get issue :assignee))
-             (back (and assignee (agent-workspace-agent assignee project))))
-        (when-let* (((not (assoc id (gethash key agent-workspace--offered))))
+             (back (and assignee (agent-workspace-agent assignee project)))
+             (offer (list id role assignee)))
+        (when-let* (((not (assoc offer (gethash key agent-workspace--offered))))
                     (agent (cond (assignee (and back (agent-workspace--free-to-offer-p back) back))
                                  (role (agent-workspace--free-for project role)))))
-          (push (cons id (agent-workspace-agent-name agent)) (gethash key agent-workspace--offered))
+          (push (cons offer (agent-workspace-agent-name agent)) (gethash key agent-workspace--offered))
           (agent-workspace-room-post project :kind 'offer :agent (agent-workspace-agent-name agent)
-                                     :issue-id id
+                                     :issue-id id :role role
                                      :text (if back
                                                (format "%s is back for %s, free now" id assignee)
                                              (format "%s is ready for the %ss: %s is free"
@@ -150,10 +153,13 @@ its worktree has changes not committed."
     (agent-workspace-room-post project :kind 'issue :agent name :text (format "given %s (you)" id))))
 
 (defun agent-workspace--room-offer-line (project entry)
-  "An offer's button while its issue is still ready: [Give it to NAME]."
-  (let ((id (plist-get entry :issue-id))
-        (name (plist-get entry :agent)))
-    (when (and id name (agent-workspace--still-ready project id name) (agent-workspace-agent name project))
+  "An offer's button while its issue is still ready, for the role it was
+offered for (not since handed to another): [Give it to NAME]."
+  (let* ((id (plist-get entry :issue-id))
+         (name (plist-get entry :agent))
+         (issue (and id name (agent-workspace--still-ready project id name))))
+    (when (and issue (agent-workspace-agent name project)
+               (or (not (plist-member entry :role)) (equal (plist-get issue :role) (plist-get entry :role))))
       (concat (make-string agent-workspace--room-indent ?\s)
               (agent-workspace--inbox-button (format "Give it to %s" name)
                                              (lambda () (agent-workspace-offer-take project id name)))))))
