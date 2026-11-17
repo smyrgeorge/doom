@@ -22,7 +22,6 @@
 (defvar agent-shell--state)
 (defvar agent-shell-mcp-servers)
 (defvar agent-shell-buffer-name-format)
-(defvar agent-shell-show-welcome-message)
 (defvar shell-maker-prompt-before-killing-buffer)
 
 ;; ====== VARIABLES ======
@@ -71,8 +70,8 @@ processes with it."
                          (agent-workspace--config agent)))
                ;; Its buffer named as its config says: "ada · builder".
                (agent-shell-buffer-name-format (lambda (name _project) name))
-               ;; No welcome: its pane is small, its line says who it is.
-               (agent-shell-show-welcome-message nil)
+               ;; Its kind's welcome (Claude Code's banner) as any
+               ;; agent-shell buffer's: `agent-shell-show-welcome-message'.
                (buffer (setq made (agent-shell--start :config config :no-focus t :new-session t
                                                       :session-strategy 'new :cwd dir))))
           (with-current-buffer buffer

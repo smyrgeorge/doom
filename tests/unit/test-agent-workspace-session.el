@@ -161,6 +161,30 @@ builder, the stand-in)."
             (should (equal (agent-workspace-agents) (list agent)))
             (should (eq (agent-workspace-agent "ada") agent))))))))
 
+(ert-deftest agent-workspace-session/its-welcome ()
+  "Its session starts with its kind's welcome (the stand-in's banner), as
+any agent-shell buffer, started again too; with
+`agent-shell-show-welcome-message' nil, none; a first message after it."
+  (+test-aws--with-crew "welcome"
+    (cl-flet ((banner-p (agent)
+                (with-current-buffer (agent-workspace-agent-buffer agent)
+                  (save-excursion
+                    (goto-char (point-min))
+                    (search-forward "███╗   ███╗" nil t)))))
+      (let ((ada (+test-aws--create "ada")))
+        (should (banner-p ada))
+        (+test-aws--no-questions
+          (agent-workspace-restart ada))
+        (should (+test-aws--state ada 'desk))
+        (should (banner-p ada)))
+      (let ((ken (let ((agent-shell-show-welcome-message nil))
+                   (+test-aws--create "ken"))))
+        (should-not (banner-p ken)))
+      (let ((sam (agent-workspace-create :role "builder" :name "sam" :kind 'mock :prompt "hello there")))
+        (should (+test-aws--state sam 'done))
+        (should (banner-p sam))
+        (should (equal (+test-aws--prompts "sam") '("hello there")))))))
+
 (ert-deftest agent-workspace-session/its-environment ()
   "Its name for Beads and for us; the project's issues where it has some."
   (+test-with-reset
