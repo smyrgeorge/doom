@@ -301,6 +301,22 @@ raised."
       (should (+test-aws--state agent 'done))
       (should-not (agent-workspace-agent-error agent)))))
 
+(ert-deftest agent-workspace-session/failing-after-it-started ()
+  "A failure after agent-shell started its session (a hook of the app's):
+the agent stuck, saying why; its session's buffer and process stopped, none
+left out of reach (doom-pbk.39)."
+  (+test-aws--with-crew "failing-after"
+    (let* ((agent-workspace-exit-timeout 1)
+           (agent-workspace-session-functions
+            (append agent-workspace-session-functions (list (lambda (&rest _) (error "a hook failed")))))
+           (agent (agent-workspace-create :role "builder" :name "ada" :kind 'mock)))
+      (should (eq (agent-workspace-agent-state agent) 'stuck))
+      (should (equal (agent-workspace-agent-error agent) "its session: a hook failed"))
+      (should-not (agent-workspace-agent-buffer agent))
+      (should-not (get-buffer "ada · builder"))
+      (when-let* ((pid (+test-aws--wait (lambda () (plist-get (car (+test-aws--logged :start "ada")) :pid)) 5)))
+        (should (+test-aws--wait (lambda () (not (+test-aws--pid-alive-p pid))) 10))))))
+
 (ert-deftest agent-workspace-session/its-process-ending-sends-it-home ()
   "Its agent exiting (a crash): gone home, its session's buffer kept (what
 it said); woken, a fresh session."

@@ -56,50 +56,57 @@ catches what left the group)."
 
 (defun agent-workspace--start (agent)
   "Start AGENT's session, fresh, in its worktree (made again if it went): its
-buffer, not shown. If it can't start, AGENT is stuck, saying why."
+buffer, not shown. If it can't start, AGENT is stuck, saying why; a session
+agent-shell made before the failure (a hook failing after) stopped, its
+processes with it."
   (require 'agent-shell)
   (when (buffer-live-p (agent-workspace-agent-buffer agent))
     (agent-workspace--stop agent 'waking))
   (setf (agent-workspace-agent-buffer agent) nil)
   (agent-workspace--set-state agent 'waking)
-  (condition-case err
-      (let* ((dir (agent-workspace-worktree-ensure agent))
-             (config (let ((agent-workspace--starting agent))
-                       (agent-workspace--config agent)))
-             ;; Its buffer named as its config says: "ada · builder".
-             (agent-shell-buffer-name-format (lambda (name _project) name))
-             ;; No welcome: its pane is small, its line says who it is.
-             (agent-shell-show-welcome-message nil)
-             (buffer (agent-shell--start :config config :no-focus t :new-session t
-                                         :session-strategy 'new :cwd dir)))
-        (with-current-buffer buffer
-          (setq agent-workspace--agent agent)
-          ;; Stopping it asks nothing: not agent-shell's "N prompts
-          ;; queued. Kill anyway?", nor shell-maker's to save its transcript,
-          ;; nor Emacs's about its process when quitting.
-          (remove-hook 'kill-buffer-query-functions #'agent-shell--prompt-queue-confirm-kill-buffer t)
-          (setq-local shell-maker-prompt-before-killing-buffer nil)
-          (when-let* ((process (ignore-errors (shell-maker--process))))
-            (set-process-query-on-exit-flag process nil))
-          (add-hook 'window-buffer-change-functions #'agent-workspace--shown-h nil t))
-        (setf (agent-workspace-agent-buffer agent) buffer)
-        (agent-shell-subscribe-to
-         :shell-buffer buffer
-         :on-event (lambda (event)
-                     ;; An old session's events, once it's been replaced, aren't its.
-                     (when (eq (agent-workspace-agent-buffer agent) buffer)
-                       (agent-workspace--watch-process agent buffer)
-                       (agent-workspace--event agent event))))
-        (run-hook-with-args 'agent-workspace-session-functions agent buffer)
-        (agent-workspace--changed agent 'session)
-        buffer)
-    (error
-     (setf (agent-workspace-agent-buffer agent) nil)
-     (agent-workspace--set-state agent 'stuck)
-     (setf (agent-workspace-agent-error agent) (concat "its session: " (error-message-string err)))
-     (agent-workspace--changed agent 'state)
-     (message "%s's session didn't start: %s" (agent-workspace-agent-name agent) (error-message-string err))
-     nil)))
+  (let ((made nil))
+    (condition-case err
+        (let* ((dir (agent-workspace-worktree-ensure agent))
+               (config (let ((agent-workspace--starting agent))
+                         (agent-workspace--config agent)))
+               ;; Its buffer named as its config says: "ada · builder".
+               (agent-shell-buffer-name-format (lambda (name _project) name))
+               ;; No welcome: its pane is small, its line says who it is.
+               (agent-shell-show-welcome-message nil)
+               (buffer (setq made (agent-shell--start :config config :no-focus t :new-session t
+                                                      :session-strategy 'new :cwd dir))))
+          (with-current-buffer buffer
+            (setq agent-workspace--agent agent)
+            ;; Stopping it asks nothing: not agent-shell's "N prompts
+            ;; queued. Kill anyway?", nor shell-maker's to save its transcript,
+            ;; nor Emacs's about its process when quitting.
+            (remove-hook 'kill-buffer-query-functions #'agent-shell--prompt-queue-confirm-kill-buffer t)
+            (setq-local shell-maker-prompt-before-killing-buffer nil)
+            (when-let* ((process (ignore-errors (shell-maker--process))))
+              (set-process-query-on-exit-flag process nil))
+            (add-hook 'window-buffer-change-functions #'agent-workspace--shown-h nil t))
+          (setf (agent-workspace-agent-buffer agent) buffer)
+          (agent-shell-subscribe-to
+           :shell-buffer buffer
+           :on-event (lambda (event)
+                       ;; An old session's events, once it's been replaced, aren't its.
+                       (when (eq (agent-workspace-agent-buffer agent) buffer)
+                         (agent-workspace--watch-process agent buffer)
+                         (agent-workspace--event agent event))))
+          (run-hook-with-args 'agent-workspace-session-functions agent buffer)
+          (agent-workspace--changed agent 'session)
+          buffer)
+      (error
+       ;; Made before it failed: stopped, out of reach otherwise.
+       (when (buffer-live-p made)
+         (setf (agent-workspace-agent-buffer agent) made)
+         (ignore-errors (agent-workspace--stop agent 'stuck)))
+       (setf (agent-workspace-agent-buffer agent) nil)
+       (agent-workspace--set-state agent 'stuck)
+       (setf (agent-workspace-agent-error agent) (concat "its session: " (error-message-string err)))
+       (agent-workspace--changed agent 'state)
+       (message "%s's session didn't start: %s" (agent-workspace-agent-name agent) (error-message-string err))
+       nil))))
 
 (defun agent-workspace-mode-of (agent)
   "The permission mode AGENT's session starts in (Claude Code's id): its own
