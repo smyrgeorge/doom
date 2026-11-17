@@ -17,6 +17,7 @@
 (require 'agent-shell-mock-agent)
 (require 'json)
 (+test-load "config/agent-shell" "config/agent-ui" "config/agent-workspace")
+(load (expand-file-name "../helper-agent-workspace" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 (remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
 
 (setq agent-shell-mock-agent-acp-command
@@ -629,45 +630,46 @@ on its branch (doom-pbk.59)."
   "Its role's file saved mid-edit (its front matter not closed: no labels):
 the loop pauses, said once, still on, crew.json keeping it; the file
 mended, it goes on and takes the next issue (doom-pbk.60)."
-  (+test-awl--with-crew "role-broken"
-    (let* ((file (expand-file-name ".agent-workspace/roles/tester.md" project))
-           (good "---\nname: tester\ndescription: tests\nlabels: test\n---\nTest what you're given.\n"))
-      (make-directory (file-name-directory file) t)
-      (write-region good nil file)
-      (let ((tia (agent-workspace-create :role "tester" :name "tia" :kind 'mock))
-            (root nil))
-        (should (+test-awl--wait (lambda () (eq (agent-workspace-agent-state tia) 'desk)) 20))
-        (setq root (agent-workspace-agent-project tia))
-        (agent-workspace-loop-set tia t)
-        (+test-awl--all-in (list tia) 'nap)
-        ;; Saved mid-edit.
-        (write-region "---\nname: tester\nlabels: te" nil file)
-        (set-file-times file (time-add nil 2))
-        (agent-workspace--loop-look-all root)
-        (+test-awl--quiet tia)
-        (agent-workspace--loop-look-all root)
-        (+test-awl--quiet tia)
-        (should (agent-workspace-agent-loop tia))
-        (should (eq (agent-workspace-agent-state tia) 'nap))
-        (should (= (seq-count (lambda (entry) (string-prefix-p "⏸ paused: its role, tester" (cdr entry)))
-                              (+test-awl--room project "tia"))
-                   1))
-        (should-not (seq-some (lambda (entry) (string-prefix-p "stopped looping" (cdr entry)))
-                              (+test-awl--room project "tia")))
-        (agent-workspace-crew-save project)
-        (let ((tia (seq-find (lambda (entry) (equal (plist-get entry :name) "tia"))
-                             (plist-get (json-parse-string (agent-workspace-crew-text project) :object-type 'plist
-                                                           :array-type 'list)
-                                        :agents))))
-          (should (equal (plist-get tia :role) "tester"))
-          (should (eq (plist-get tia :loop) t)))
-        ;; Mended: it goes on.
+  (+test-aw-with-four-starters
+    (+test-awl--with-crew "role-broken"
+      (let* ((file (expand-file-name ".agent-workspace/roles/tester.md" project))
+             (good "---\nname: tester\ndescription: tests\nlabels: test\n---\nTest what you're given.\n"))
+        (make-directory (file-name-directory file) t)
         (write-region good nil file)
-        (set-file-times file (time-add nil 4))
-        (let ((one (+test-awl--issue project "close: one" "test" 2)))
+        (let ((tia (agent-workspace-create :role "tester" :name "tia" :kind 'mock))
+              (root nil))
+          (should (+test-awl--wait (lambda () (eq (agent-workspace-agent-state tia) 'desk)) 20))
+          (setq root (agent-workspace-agent-project tia))
+          (agent-workspace-loop-set tia t)
+          (+test-awl--all-in (list tia) 'nap)
+          ;; Saved mid-edit.
+          (write-region "---\nname: tester\nlabels: te" nil file)
+          (set-file-times file (time-add nil 2))
           (agent-workspace--loop-look-all root)
-          (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))
-          (should (member '("note" . "▶ goes on: its role, tester, has labels again") (+test-awl--room project "tia"))))))))
+          (+test-awl--quiet tia)
+          (agent-workspace--loop-look-all root)
+          (+test-awl--quiet tia)
+          (should (agent-workspace-agent-loop tia))
+          (should (eq (agent-workspace-agent-state tia) 'nap))
+          (should (= (seq-count (lambda (entry) (string-prefix-p "⏸ paused: its role, tester" (cdr entry)))
+                                (+test-awl--room project "tia"))
+                     1))
+          (should-not (seq-some (lambda (entry) (string-prefix-p "stopped looping" (cdr entry)))
+                                (+test-awl--room project "tia")))
+          (agent-workspace-crew-save project)
+          (let ((tia (seq-find (lambda (entry) (equal (plist-get entry :name) "tia"))
+                               (plist-get (json-parse-string (agent-workspace-crew-text project) :object-type 'plist
+                                                             :array-type 'list)
+                                          :agents))))
+            (should (equal (plist-get tia :role) "tester"))
+            (should (eq (plist-get tia :loop) t)))
+          ;; Mended: it goes on.
+          (write-region good nil file)
+          (set-file-times file (time-add nil 4))
+          (let ((one (+test-awl--issue project "close: one" "test" 2)))
+            (agent-workspace--loop-look-all root)
+            (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))
+            (should (member '("note" . "▶ goes on: its role, tester, has labels again") (+test-awl--room project "tia")))))))))
 
 ;; ====== AN ISSUE YOU GIVE ======
 

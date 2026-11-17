@@ -262,6 +262,21 @@ allowedTools, its mode set before its first prompt; its model too."
       (dolist (agent (list sam ada linus))
         (should (eq (agent-workspace-agent-state agent) 'desk))))))
 
+(ert-deftest agent-workspace-session/the-starters-tools-reach-their-agents ()
+  "Each starter beyond the first four: its denied tools in Claude Code's
+disallowedTools, its allowed ones in allowedTools (the tester's edits only
+under tests/)."
+  (+test-aws--with-crew "starters"
+    (pcase-dolist (`(,role ,name ,denied ,allowed ,not-allowed)
+                   '(("tester" "tia" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(bd:*)")
+                      ("Edit" "Write"))))
+      (+test-aws--create name :role role :kind 'mock-claude)
+      (let ((options (plist-get (plist-get (plist-get (+test-aws--new-session name) :_meta) :claudeCode)
+                                :options)))
+        (should (equal (plist-get options :disallowedTools) denied))
+        (dolist (tool allowed) (should (member tool (plist-get options :allowedTools))))
+        (dolist (tool not-allowed) (should-not (member tool (plist-get options :allowedTools))))))))
+
 ;; ====== ITS STATES ======
 
 (ert-deftest agent-workspace-session/a-turn-done-until-you-look ()

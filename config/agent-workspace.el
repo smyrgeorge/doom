@@ -76,7 +76,7 @@ needs your OK. nil: Claude Code's own default."
 ;; matter (its tools allowed without asking, its tools denied, its model,
 ;; permission mode, labels, how many may run, icon, verb, colour), then its
 ;; instructions. The starters ship in config/agent-workspace/roles/ (scribe,
-;; investigator, builder, reviewer); a project's own, in its
+;; investigator, builder, reviewer, tester); a project's own, in its
 ;; .agent-workspace/roles/ (committed), and yours for it, in its
 ;; .agent-shell/agent-workspace/roles/ (out of git), add to them; a later
 ;; one replaces one of the same name: starter < project < local (M-x

@@ -11,6 +11,7 @@
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
 
 (+test-load "config/agent-workspace")
+(load (expand-file-name "../helper-agent-workspace" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 
 (defconst +test-awn-script (expand-file-name "cmd/agent-workspace" +test-root))
 
@@ -132,67 +133,69 @@ glyph in a terminal), name, description, how many run of its max, its model
 \(none: your default), its mode (none: auto), its labels, who it hands its
 issues to; a role without labels or hands-to, nothing there; one at its max,
 dimmed, \"at its max\" in place of its last columns."
-  (+test-awn "columns"
-    (+test-awn--crew-of-three project)
-    (let ((default-directory project))
-      (make-directory ".agent-workspace/roles" t)
-      (write-region "---\ndescription: triages\nmodel: haiku\nmode: plan\n---\nTriage.\n" nil
-                    ".agent-workspace/roles/triager.md")
-      (write-region "---\ndescription: tidies\n---\nTidy.\n" nil ".agent-workspace/roles/tidier.md"))
-    (should (equal (mapcar #'cdr (+test-awn--rows project 200))
-                   '("⚙ builder       builds what you give it           1 of 4  your default  auto  build                    → reviewer"
-                     "⌕ investigator  investigates what you give it     0 of 2  your default  auto  investigation, incident  → builder"
-                     "◎ reviewer      reviews a branch you point it to  0 of 2  your default  auto  review                   → builder"
-                     "✎ scribe        writes issues with you            1 of 1  at its max"
-                     "▶ tidier        tidies                                    your default  auto"
-                     "▶ triager       triages                                   haiku         plan")))
-    ;; Their faces: the icon its colour, the count the text's, the rest
-    ;; dimmed; the role at its max, all of it.
-    (pcase-let ((`(_ ,name ,icon ,rest ,_) (car (agent-workspace--role-rows
-                                              (agent-workspace--role-facts project '("builder" "scribe")) 200))))
-      (should (equal (get-text-property 0 'face icon)
-                     (list :foreground (face-foreground 'ansi-color-blue nil t))))
-      (should-not (get-text-property 0 'face name))
-      (should-not (get-text-property (string-search "1 of 4" rest) 'face rest))
-      (should (eq (get-text-property (string-search "your default" rest) 'face rest) 'shadow)))
-    (pcase-let ((`(_ ,name ,icon ,rest ,_) (cadr (agent-workspace--role-rows
-                                               (agent-workspace--role-facts project '("builder" "scribe")) 200))))
-      (should (memq 'shadow (ensure-list (get-text-property 0 'face name))))
-      (should (eq (get-text-property 0 'face icon) 'shadow))
-      (should (memq 'shadow (ensure-list (get-text-property (string-search "at its max" rest) 'face rest)))))))
+  (+test-aw-with-four-starters
+    (+test-awn "columns"
+      (+test-awn--crew-of-three project)
+      (let ((default-directory project))
+        (make-directory ".agent-workspace/roles" t)
+        (write-region "---\ndescription: triages\nmodel: haiku\nmode: plan\n---\nTriage.\n" nil
+                      ".agent-workspace/roles/triager.md")
+        (write-region "---\ndescription: tidies\n---\nTidy.\n" nil ".agent-workspace/roles/tidier.md"))
+      (should (equal (mapcar #'cdr (+test-awn--rows project 200))
+                     '("⚙ builder       builds what you give it           1 of 4  your default  auto  build                    → reviewer"
+                       "⌕ investigator  investigates what you give it     0 of 2  your default  auto  investigation, incident  → builder"
+                       "◎ reviewer      reviews a branch you point it to  0 of 2  your default  auto  review                   → builder"
+                       "✎ scribe        writes issues with you            1 of 1  at its max"
+                       "▶ tidier        tidies                                    your default  auto"
+                       "▶ triager       triages                                   haiku         plan")))
+      ;; Their faces: the icon its colour, the count the text's, the rest
+      ;; dimmed; the role at its max, all of it.
+      (pcase-let ((`(_ ,name ,icon ,rest ,_) (car (agent-workspace--role-rows
+                                                   (agent-workspace--role-facts project '("builder" "scribe")) 200))))
+        (should (equal (get-text-property 0 'face icon)
+                       (list :foreground (face-foreground 'ansi-color-blue nil t))))
+        (should-not (get-text-property 0 'face name))
+        (should-not (get-text-property (string-search "1 of 4" rest) 'face rest))
+        (should (eq (get-text-property (string-search "your default" rest) 'face rest) 'shadow)))
+      (pcase-let ((`(_ ,name ,icon ,rest ,_) (cadr (agent-workspace--role-rows
+                                                    (agent-workspace--role-facts project '("builder" "scribe")) 200))))
+        (should (memq 'shadow (ensure-list (get-text-property 0 'face name))))
+        (should (eq (get-text-property 0 'face icon) 'shadow))
+        (should (memq 'shadow (ensure-list (get-text-property (string-search "at its max" rest) 'face rest))))))))
 
 (ert-deftest agent-workspace-new/the-role-picker-narrower ()
   "In a narrower minibuffer, columns go from the right: hands-to, then the
 labels (at 80 columns), the mode, the model; the description cut with …
 last; icon, name and count always there; no row wider than it."
-  (+test-awn "narrower"
-    (+test-awn--crew-of-three project)
-    (should (equal (mapcar #'cdr (+test-awn--rows project 80))
-                   '("⚙ builder       builds what you give it           1 of 4  your default  auto"
-                     "⌕ investigator  investigates what you give it     0 of 2  your default  auto"
-                     "◎ reviewer      reviews a branch you point it to  0 of 2  your default  auto"
-                     "✎ scribe        writes issues with you            1 of 1  at its max")))
-    (should (equal (mapcar #'cdr (+test-awn--rows project 74))
-                   '("⚙ builder       builds what you give it           1 of 4  your default"
-                     "⌕ investigator  investigates what you give it     0 of 2  your default"
-                     "◎ reviewer      reviews a branch you point it to  0 of 2  your default"
-                     "✎ scribe        writes issues with you            1 of 1  at its max")))
-    (should (equal (mapcar #'cdr (+test-awn--rows project 60))
-                   '("⚙ builder       builds what you give it   1 of 4"
-                     "⌕ investigator  investigates what you g…  0 of 2"
-                     "◎ reviewer      reviews a branch you po…  0 of 2"
-                     "✎ scribe        writes issues with you    1 of 1  at its max")))
-    ;; Narrower still: down to its icon, name and count (at its max: the
-    ;; row dimmed says it).
-    (should (equal (mapcar #'cdr (+test-awn--rows project 30))
-                   '("⚙ builder       build…  1 of 4" "⌕ investigator  inves…  0 of 2"
-                     "◎ reviewer      revie…  0 of 2" "✎ scribe        write…  1 of 1")))
-    (should (equal (mapcar #'cdr (+test-awn--rows project 24))
-                   '("⚙ builder       1 of 4" "⌕ investigator  0 of 2" "◎ reviewer      0 of 2" "✎ scribe        1 of 1")))
-    (dolist (width '(200 113 100 80 74 60 50 40 34 30 24 22))
-      (dolist (row (+test-awn--rows project width))
-        (should (<= (string-width (cdr row)) width))
-        (should (string-match-p (format "\\`. %s +.*[0-9] of [0-9]" (car row)) (cdr row)))))))
+  (+test-aw-with-four-starters
+    (+test-awn "narrower"
+      (+test-awn--crew-of-three project)
+      (should (equal (mapcar #'cdr (+test-awn--rows project 80))
+                     '("⚙ builder       builds what you give it           1 of 4  your default  auto"
+                       "⌕ investigator  investigates what you give it     0 of 2  your default  auto"
+                       "◎ reviewer      reviews a branch you point it to  0 of 2  your default  auto"
+                       "✎ scribe        writes issues with you            1 of 1  at its max")))
+      (should (equal (mapcar #'cdr (+test-awn--rows project 74))
+                     '("⚙ builder       builds what you give it           1 of 4  your default"
+                       "⌕ investigator  investigates what you give it     0 of 2  your default"
+                       "◎ reviewer      reviews a branch you point it to  0 of 2  your default"
+                       "✎ scribe        writes issues with you            1 of 1  at its max")))
+      (should (equal (mapcar #'cdr (+test-awn--rows project 60))
+                     '("⚙ builder       builds what you give it   1 of 4"
+                       "⌕ investigator  investigates what you g…  0 of 2"
+                       "◎ reviewer      reviews a branch you po…  0 of 2"
+                       "✎ scribe        writes issues with you    1 of 1  at its max")))
+      ;; Narrower still: down to its icon, name and count (at its max: the
+      ;; row dimmed says it).
+      (should (equal (mapcar #'cdr (+test-awn--rows project 30))
+                     '("⚙ builder       build…  1 of 4" "⌕ investigator  inves…  0 of 2"
+                       "◎ reviewer      revie…  0 of 2" "✎ scribe        write…  1 of 1")))
+      (should (equal (mapcar #'cdr (+test-awn--rows project 24))
+                     '("⚙ builder       1 of 4" "⌕ investigator  0 of 2" "◎ reviewer      0 of 2" "✎ scribe        1 of 1")))
+      (dolist (width '(200 113 100 80 74 60 50 40 34 30 24 22))
+        (dolist (row (+test-awn--rows project width))
+          (should (<= (string-width (cdr row)) width))
+          (should (string-match-p (format "\\`. %s +.*[0-9] of [0-9]" (car row)) (cdr row))))))))
 
 (ert-deftest agent-workspace-new/the-role-picker-s-ready-issues ()
   "After a role's labels, how many issues the app's issue list has ready
@@ -224,54 +227,56 @@ without one; a column, then a space, before its name."
 (ert-deftest agent-workspace-new/the-role-picker-reads-nothing ()
   "The picker's rows, as the completion UI asks for them (moving through
 the list, the minibuffer resized): nothing read from disk, nothing run."
-  (+test-awn "nothing"
-    (+test-awn--crew-of-three project)
-    (let ((touched nil))
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (_prompt roles &rest _)
-                   (let ((affix (plist-get completion-extra-properties :affixation-function))
-                         (spy (lambda (&rest args) (push args touched))))
-                     (dolist (fn '(agent-workspace--roles-read file-attributes insert-file-contents
-                                                               directory-files call-process make-process))
-                       (advice-add fn :before spy '((name . +test-awn-spy))))
-                     (unwind-protect
-                         (progn
-                           (dotimes (_ 3)
-                             (should (equal (mapcar #'car (funcall affix roles)) roles)))
-                           ;; What the completion UI gives: (CANDIDATE PREFIX SUFFIX), the
-                           ;; candidate as it gave it (its matches highlighted), dimmed
-                           ;; at its max.
-                           (let ((rows (funcall affix (list (propertize "builder" 'face 'completions-common-part)
-                                                            "scribe"))))
-                             (should (string-match-p "\\`builds what you give it +1 of 4"
-                                                     (string-trim (substring-no-properties (nth 2 (car rows))))))
-                             (should (eq (get-text-property 0 'face (car (car rows))) 'completions-common-part))
-                             (should (memq 'shadow (ensure-list (get-text-property 0 'face (car (cadr rows))))))))
+  (+test-aw-with-four-starters
+    (+test-awn "nothing"
+      (+test-awn--crew-of-three project)
+      (let ((touched nil))
+        (cl-letf (((symbol-function 'completing-read)
+                   (lambda (_prompt roles &rest _)
+                     (let ((affix (plist-get completion-extra-properties :affixation-function))
+                           (spy (lambda (&rest args) (push args touched))))
                        (dolist (fn '(agent-workspace--roles-read file-attributes insert-file-contents
                                                                  directory-files call-process make-process))
-                         (advice-remove fn '+test-awn-spy))))
-                   "builder")))
-        (should (equal (agent-workspace-read-role project) "builder"))
-        (should-not touched)))))
+                         (advice-add fn :before spy '((name . +test-awn-spy))))
+                       (unwind-protect
+                           (progn
+                             (dotimes (_ 3)
+                               (should (equal (mapcar #'car (funcall affix roles)) roles)))
+                             ;; What the completion UI gives: (CANDIDATE PREFIX SUFFIX), the
+                             ;; candidate as it gave it (its matches highlighted), dimmed
+                             ;; at its max.
+                             (let ((rows (funcall affix (list (propertize "builder" 'face 'completions-common-part)
+                                                              "scribe"))))
+                               (should (string-match-p "\\`builds what you give it +1 of 4"
+                                                       (string-trim (substring-no-properties (nth 2 (car rows))))))
+                               (should (eq (get-text-property 0 'face (car (car rows))) 'completions-common-part))
+                               (should (memq 'shadow (ensure-list (get-text-property 0 'face (car (cadr rows))))))))
+                         (dolist (fn '(agent-workspace--roles-read file-attributes insert-file-contents
+                                                                   directory-files call-process make-process))
+                           (advice-remove fn '+test-awn-spy))))
+                     "builder")))
+          (should (equal (agent-workspace-read-role project) "builder"))
+          (should-not touched))))))
 
 (ert-deftest agent-workspace-new/a-full-role-refused ()
   "A role at its max is refused, and asked again; the role given is
 offered first, where it is in its group; an empty answer is it."
-  (+test-awn "full"
-    (+test-awn--agent project "sam" "scribe")
-    (+test-awn--answering '("scribe" "investigator")
-      (let ((collection nil))
-        (cl-letf (((symbol-function 'completing-read)
-                   (lambda (prompt roles &rest args)
-                     (push prompt asked)
-                     (setq collection roles)
-                     (should (equal (nth 4 args) "reviewer"))
-                     (pop answers))))
-          (should (equal (agent-workspace-read-role project "reviewer") "investigator"))
-          (should (equal collection '("builder" "investigator" "reviewer" "scribe")))
-          (should (= (length asked) 2)))))
-    (+test-awn--answering '("")
-      (should (equal (agent-workspace-read-role project "reviewer") "reviewer")))))
+  (+test-aw-with-four-starters
+    (+test-awn "full"
+      (+test-awn--agent project "sam" "scribe")
+      (+test-awn--answering '("scribe" "investigator")
+        (let ((collection nil))
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (prompt roles &rest args)
+                       (push prompt asked)
+                       (setq collection roles)
+                       (should (equal (nth 4 args) "reviewer"))
+                       (pop answers))))
+            (should (equal (agent-workspace-read-role project "reviewer") "investigator"))
+            (should (equal collection '("builder" "investigator" "reviewer" "scribe")))
+            (should (= (length asked) 2)))))
+      (+test-awn--answering '("")
+        (should (equal (agent-workspace-read-role project "reviewer") "reviewer"))))))
 
 (defun +test-awn--four-kinds (project)
   "PROJECT's roles of all four kinds: a local one of its own (mine), a local
@@ -302,99 +307,102 @@ then the role files left out; a replaced role says so at its row's end, the
 one it replaced not listed; a left-out file: ✗, its first error in place of
 what it does, dimmed, named ORIGIN/NAME when a role listed has its name;
 the columns lined up across the groups."
-  (+test-awn "groups"
-    (+test-awn--four-kinds project)
-    (+test-awn--no-warnings
-      (let ((facts (agent-workspace--role-picker project)))
-        (should (equal (mapcar (lambda (fact) (cons (car fact) (agent-workspace--role-group fact))) facts)
-                       '(("reviewer" . local) ("tester" . local) ("mine" . local)
-                         ("builder" . project)
-                         ("investigator" . starter) ("scribe" . starter)
-                         ("broken" . out) ("local/scribe" . out))))
-        (should (equal (mapcar #'agent-workspace--role-group-title agent-workspace--role-groups)
-                       '("local · .agent-shell/agent-workspace/roles" "project · .agent-workspace/roles"
-                         "starters" "left out")))
-        (should (equal (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
-                               (agent-workspace--role-rows facts 200))
-                       '("▶ reviewer      my reviews                             your default  auto                                      replaces the starter"
-                         "▶ tester        my tests                               your default  auto  test                                replaces the project's"
-                         "▶ mine          mine                                   your default  auto"
-                         "▶ builder       makes things                           your default  auto                                      replaces the starter"
-                         "⌕ investigator  investigates what you give it  0 of 2  your default  auto  investigation, incident  → builder"
-                         "✎ scribe        writes issues with you         0 of 1  your default  auto"
-                         "✗ broken        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions"
-                         "✗ local/scribe  line 2: max lots: not a number above 0")))
-        ;; Narrower: the role replaced goes first, then hands-to; a left-out
-        ;; file's error cut to fit; no row wider than the minibuffer.
-        (should (equal (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
-                               (agent-workspace--role-rows facts 100))
-                       '("▶ reviewer      my reviews                             your default  auto"
-                         "▶ tester        my tests                               your default  auto  test"
-                         "▶ mine          mine                                   your default  auto"
-                         "▶ builder       makes things                           your default  auto"
-                         "⌕ investigator  investigates what you give it  0 of 2  your default  auto  investigation, incident"
-                         "✎ scribe        writes issues with you         0 of 1  your default  auto"
-                         "✗ broken        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPer…"
-                         "✗ local/scribe  line 2: max lots: not a number above 0")))
-        (dolist (width '(200 140 100 80 60 40 30 24))
-          (dolist (row (agent-workspace--role-rows facts width))
-            (should (<= (string-width (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
-                        width))))
-        ;; A left-out row: its icon, name and the rest dimmed.
-        (pcase-let ((`(_ ,name ,icon ,rest ,dim) (assoc "broken" (agent-workspace--role-rows facts 200))))
-          (should dim)
-          (should (memq 'shadow (ensure-list (get-text-property 0 'face name))))
-          (should (eq (get-text-property 0 'face icon) 'shadow))
-          (should (memq 'shadow (ensure-list (get-text-property (string-search "line 3" rest) 'face rest)))))
-        ;; The role replaced, dimmed.
-        (let ((rest (nth 3 (assoc "builder" (agent-workspace--role-rows facts 200)))))
-          (should (eq (get-text-property (string-search "replaces" rest) 'face rest) 'shadow)))))))
+  (+test-aw-with-four-starters
+    (+test-awn "groups"
+      (+test-awn--four-kinds project)
+      (+test-awn--no-warnings
+        (let ((facts (agent-workspace--role-picker project)))
+          (should (equal (mapcar (lambda (fact) (cons (car fact) (agent-workspace--role-group fact))) facts)
+                         '(("reviewer" . local) ("tester" . local) ("mine" . local)
+                           ("builder" . project)
+                           ("investigator" . starter) ("scribe" . starter)
+                           ("broken" . out) ("local/scribe" . out))))
+          (should (equal (mapcar #'agent-workspace--role-group-title agent-workspace--role-groups)
+                         '("local · .agent-shell/agent-workspace/roles" "project · .agent-workspace/roles"
+                           "starters" "left out")))
+          (should (equal (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
+                                 (agent-workspace--role-rows facts 200))
+                         '("▶ reviewer      my reviews                             your default  auto                                      replaces the starter"
+                           "▶ tester        my tests                               your default  auto  test                                replaces the project's"
+                           "▶ mine          mine                                   your default  auto"
+                           "▶ builder       makes things                           your default  auto                                      replaces the starter"
+                           "⌕ investigator  investigates what you give it  0 of 2  your default  auto  investigation, incident  → builder"
+                           "✎ scribe        writes issues with you         0 of 1  your default  auto"
+                           "✗ broken        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions"
+                           "✗ local/scribe  line 2: max lots: not a number above 0")))
+          ;; Narrower: the role replaced goes first, then hands-to; a left-out
+          ;; file's error cut to fit; no row wider than the minibuffer.
+          (should (equal (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
+                                 (agent-workspace--role-rows facts 100))
+                         '("▶ reviewer      my reviews                             your default  auto"
+                           "▶ tester        my tests                               your default  auto  test"
+                           "▶ mine          mine                                   your default  auto"
+                           "▶ builder       makes things                           your default  auto"
+                           "⌕ investigator  investigates what you give it  0 of 2  your default  auto  investigation, incident"
+                           "✎ scribe        writes issues with you         0 of 1  your default  auto"
+                           "✗ broken        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPer…"
+                           "✗ local/scribe  line 2: max lots: not a number above 0")))
+          (dolist (width '(200 140 100 80 60 40 30 24))
+            (dolist (row (agent-workspace--role-rows facts width))
+              (should (<= (string-width (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
+                          width))))
+          ;; A left-out row: its icon, name and the rest dimmed.
+          (pcase-let ((`(_ ,name ,icon ,rest ,dim) (assoc "broken" (agent-workspace--role-rows facts 200))))
+            (should dim)
+            (should (memq 'shadow (ensure-list (get-text-property 0 'face name))))
+            (should (eq (get-text-property 0 'face icon) 'shadow))
+            (should (memq 'shadow (ensure-list (get-text-property (string-search "line 3" rest) 'face rest)))))
+          ;; The role replaced, dimmed.
+          (let ((rest (nth 3 (assoc "builder" (agent-workspace--role-rows facts 200)))))
+            (should (eq (get-text-property (string-search "replaces" rest) 'face rest) 'shadow))))))))
 
 (ert-deftest agent-workspace-new/the-role-picker-s-dividers ()
   "The completion is told its groups (each its divider's title) and to keep
 their order; the default is selected where it is: under vertico, given as
 none (vertico would move it to the top, out of its group)."
-  (+test-awn "dividers"
-    (+test-awn--four-kinds project)
-    (+test-awn--no-warnings
-      (let (seen)
-        (cl-letf (((symbol-function 'completing-read)
-                   (lambda (_prompt roles &rest args)
-                     (let ((group (plist-get completion-extra-properties :group-function)))
-                       (setq seen (list (mapcar (lambda (role) (funcall group role nil)) roles)
-                                        (funcall group "builder" 'transform)
-                                        (funcall (plist-get completion-extra-properties :display-sort-function)
-                                                 (reverse roles))
-                                        (nth 4 args))))
-                     "mine")))
-          (should (equal (agent-workspace-read-role project "builder") "mine"))
-          (should (equal (car seen)
-                         '("local · .agent-shell/agent-workspace/roles" "local · .agent-shell/agent-workspace/roles"
-                           "local · .agent-shell/agent-workspace/roles" "project · .agent-workspace/roles"
-                           "starters" "starters" "left out" "left out")))
-          (should (equal (nth 1 seen) "builder"))
-          (should (equal (nth 2 seen) (reverse '("reviewer" "tester" "mine" "builder" "investigator" "scribe"
-                                                 "broken" "local/scribe"))))
-          (should (equal (nth 3 seen) "builder"))
-          (dlet ((vertico-mode t))
-            (agent-workspace-read-role project "builder")
-            (should-not (nth 3 seen))))))))
+  (+test-aw-with-four-starters
+    (+test-awn "dividers"
+      (+test-awn--four-kinds project)
+      (+test-awn--no-warnings
+        (let (seen)
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_prompt roles &rest args)
+                       (let ((group (plist-get completion-extra-properties :group-function)))
+                         (setq seen (list (mapcar (lambda (role) (funcall group role nil)) roles)
+                                          (funcall group "builder" 'transform)
+                                          (funcall (plist-get completion-extra-properties :display-sort-function)
+                                                   (reverse roles))
+                                          (nth 4 args))))
+                       "mine")))
+            (should (equal (agent-workspace-read-role project "builder") "mine"))
+            (should (equal (car seen)
+                           '("local · .agent-shell/agent-workspace/roles" "local · .agent-shell/agent-workspace/roles"
+                             "local · .agent-shell/agent-workspace/roles" "project · .agent-workspace/roles"
+                             "starters" "starters" "left out" "left out")))
+            (should (equal (nth 1 seen) "builder"))
+            (should (equal (nth 2 seen) (reverse '("reviewer" "tester" "mine" "builder" "investigator" "scribe"
+                                                   "broken" "local/scribe"))))
+            (should (equal (nth 3 seen) "builder"))
+            (dlet ((vertico-mode t))
+              (agent-workspace-read-role project "builder")
+              (should-not (nth 3 seen)))))))))
 
 (ert-deftest agent-workspace-new/a-left-out-role-refused ()
   "A role file left out is refused, naming its file and line, and asked
 again; never offered first."
-  (+test-awn "left-out"
-    (+test-awn--four-kinds project)
-    (+test-awn--no-warnings
-      (let ((messages nil))
-        (cl-letf (((symbol-function 'message)
-                   (lambda (format &rest args) (push (apply #'format format args) messages))))
-          (+test-awn--answering '("broken" "")
-            (should (equal (agent-workspace-read-role project "broken") "reviewer"))
-            (should (= (length asked) 2))))
-        (should (string-match-p
-                 "\\`Left out: .*/\\.agent-workspace/roles/broken\\.md:3: mode autoo: not one of"
-                 (car (last messages))))))))
+  (+test-aw-with-four-starters
+    (+test-awn "left-out"
+      (+test-awn--four-kinds project)
+      (+test-awn--no-warnings
+        (let ((messages nil))
+          (cl-letf (((symbol-function 'message)
+                     (lambda (format &rest args) (push (apply #'format format args) messages))))
+            (+test-awn--answering '("broken" "")
+              (should (equal (agent-workspace-read-role project "broken") "reviewer"))
+              (should (= (length asked) 2))))
+          (should (string-match-p
+                   "\\`Left out: .*/\\.agent-workspace/roles/broken\\.md:3: mode autoo: not one of"
+                   (car (last messages)))))))))
 
 (ert-deftest agent-workspace-new/its-name-asked ()
   "Left empty, the name made for it; one taken or not valid, asked again."
@@ -497,25 +505,26 @@ PAYLOAD (JSON text), from CWD."
 (ert-deftest agent-workspace-new/a-request ()
   "new from the shell: made in the shell's folder's project, its name made
 if not given, the reply saying where it works; a wrong request said."
-  (+test-awn "request"
-    (let ((reply (+test-awn--request "new" "{\"role\":\"builder\",\"name\":\"\",\"prompt\":\"\"}"
-                                     (expand-file-name ".git/../" project))))
-      (should (equal reply (list :ok t :name "ada" :role "builder"
-                                 :worktree (expand-file-name ".agent-shell/worktrees/builder-ada" project)
-                                 :branch "agent/ada" :state "desk")))
-      (should-not sent))
-    (should (equal (plist-get (+test-awn--request "new" "{\"role\":\"investigator\",\"name\":\"sam\",\"prompt\":\"Look\"}")
-                              :name)
-                   "sam"))
-    (should (equal (car sent) '("sam" "Look" (:submit t))))
-    (dolist (case '(("new" "{\"name\":\"x\"}" "new: which role? --role ROLE")
-                    ("new" "{\"role\":\"wizard\"}" "No role wizard: builder, investigator, reviewer, scribe")
-                    ("new" "{\"role\":\"builder\",\"name\":\"Bad Name\"}" "Not a name for an agent")
-                    ("new" "{nope" "not JSON")
-                    ("old" "{}" "unknown operation \"old\"; operations: new")))
-      (let ((reply (+test-awn--request (nth 0 case) (nth 1 case))))
-        (should-not (plist-get reply :ok))
-        (should (string-search (nth 2 case) (plist-get reply :error)))))))
+  (+test-aw-with-four-starters
+    (+test-awn "request"
+      (let ((reply (+test-awn--request "new" "{\"role\":\"builder\",\"name\":\"\",\"prompt\":\"\"}"
+                                       (expand-file-name ".git/../" project))))
+        (should (equal reply (list :ok t :name "ada" :role "builder"
+                                   :worktree (expand-file-name ".agent-shell/worktrees/builder-ada" project)
+                                   :branch "agent/ada" :state "desk")))
+        (should-not sent))
+      (should (equal (plist-get (+test-awn--request "new" "{\"role\":\"investigator\",\"name\":\"sam\",\"prompt\":\"Look\"}")
+                                :name)
+                     "sam"))
+      (should (equal (car sent) '("sam" "Look" (:submit t))))
+      (dolist (case '(("new" "{\"name\":\"x\"}" "new: which role? --role ROLE")
+                      ("new" "{\"role\":\"wizard\"}" "No role wizard: builder, investigator, reviewer, scribe")
+                      ("new" "{\"role\":\"builder\",\"name\":\"Bad Name\"}" "Not a name for an agent")
+                      ("new" "{nope" "not JSON")
+                      ("old" "{}" "unknown operation \"old\"; operations: new")))
+        (let ((reply (+test-awn--request (nth 0 case) (nth 1 case))))
+          (should-not (plist-get reply :ok))
+          (should (string-search (nth 2 case) (plist-get reply :error))))))))
 
 (defmacro +test-awn--with-server (&rest body)
   "BODY with this Emacs a server only the script talks to (EMACS_SOCKET_NAME)."

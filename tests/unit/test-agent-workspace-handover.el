@@ -10,6 +10,7 @@
 
 (require (quote agent-shell))
 (+test-load "config/agent-shell" "config/agent-ui" "config/agent-workspace")
+(load (expand-file-name "../helper-agent-workspace" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 (remove-hook (quote +my/agent-shell-claude-context-functions) (function +my/agent-shell-beads-context))
 
 ;; ====== HELPERS ======
@@ -111,22 +112,23 @@ returns-to: the work going back, to the one who made it."
   "hands-to any: every role with labels the crew has an agent of, but its
 own, each with its bd command; a role without labels, or none in the
 crew, not offered."
-  (let* ((project (+test-awo--dir "any"))
-         (rio (+test-awo--agent project "rio" "router"))
-         (agent-workspace-agents-talk t))
-    (+test-awo--roles project)
-    (+test-awo--crew project (list rio (+test-awo--agent project "ann" "chain") (+test-awo--agent project "tim" "tester")
-                                   (+test-awo--agent project "bob" "builder") (+test-awo--agent project "liz" "scribe"))
-      (should (equal (agent-workspace-hands-to project "router") '("builder" "chain" "tester")))
-      (let ((told (agent-workspace--handover-context rio)))
-        (should (string-search "hand it to the role it's for" told))
-        (should (string-search "\n- the builders (builds what you give it): bd update ID --remove-label triage --add-label build --status open --assignee \"\""
-                               told))
-        (should (string-search "\n- the chains (makes it): bd update ID --remove-label triage --add-label chain" told))
-        (should (string-search "\n- the testers (tests it): bd update ID --remove-label triage --add-label test" told))
-        (should-not (string-search "reviewer" told))
-        (should-not (string-search "scribe" told))
-        (should-not (string-search "add-label triage" told))))))
+  (+test-aw-with-four-starters
+    (let* ((project (+test-awo--dir "any"))
+           (rio (+test-awo--agent project "rio" "router"))
+           (agent-workspace-agents-talk t))
+      (+test-awo--roles project)
+      (+test-awo--crew project (list rio (+test-awo--agent project "ann" "chain") (+test-awo--agent project "tim" "tester")
+                                     (+test-awo--agent project "bob" "builder") (+test-awo--agent project "liz" "scribe"))
+        (should (equal (agent-workspace-hands-to project "router") '("builder" "chain" "tester")))
+        (let ((told (agent-workspace--handover-context rio)))
+          (should (string-search "hand it to the role it's for" told))
+          (should (string-search "\n- the builders (builds what you give it): bd update ID --remove-label triage --add-label build --status open --assignee \"\""
+                                 told))
+          (should (string-search "\n- the chains (makes it): bd update ID --remove-label triage --add-label chain" told))
+          (should (string-search "\n- the testers (tests it): bd update ID --remove-label triage --add-label test" told))
+          (should-not (string-search "reviewer" told))
+          (should-not (string-search "scribe" told))
+          (should-not (string-search "add-label triage" told)))))))
 
 (ert-deftest agent-workspace-handover/every-agent-told-the-roles ()
   "Every agent is told the project's roles, a line each (name, what it

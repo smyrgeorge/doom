@@ -6,6 +6,7 @@
 ;; tools and mode reach its agent: test-agent-workspace-session.el.
 
 (+test-load "config/agent-workspace")
+(load (expand-file-name "../helper-agent-workspace" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 
 ;; ====== HELPERS ======
 
@@ -173,21 +174,22 @@ icon, a key given twice (the last used), a tool both allowed and denied
   "A talks-to, hands-to or returns-to naming no role of the project's, or
 its own: warned about on its item's line, once all are read; the role
 kept. hands-to any: every role, no warning."
-  (let* ((project (+test-awr--dir "names"))
-         (dir (expand-file-name ".agent-workspace/roles/" project)))
-    (+test-awr--file dir "tester.md"
-                     "---\ndescription: tests\nhands-to: tester\ntalks-to:\n  - builder\n  - nobody\n---\nTest.\n")
-    (+test-awr--file dir "helper.md" "---\ndescription: helps\nhands-to: tester, reviewer\nreturns-to: builder\n---\nHelp.\n")
-    (+test-awr--file dir "router.md" "---\ndescription: routes\nhands-to: any\nreturns-to: nobody\n---\nRoute.\n")
-    (+test-awr--quietly
-      (should (member "tester" (mapcar #'car (agent-workspace-roles project))))
-      (should (equal (plist-get (alist-get "helper" (agent-workspace-roles project) nil nil #'equal) :returns-to)
-                     '("builder")))
-      (should (equal (+test-awr--messages (agent-workspace-role-problems project))
-                     '((warning "router.md:4: returns-to nobody: no such role (builder, investigator, reviewer, scribe, helper, router, tester)")
-                       (warning "tester.md:3: hands-to tester: its own role")
-                       (warning "tester.md:6: talks-to nobody: no such role (builder, investigator, reviewer, scribe, helper, router, tester)"))))
-      (should (= (length warnings) 3)))))
+  (+test-aw-with-four-starters
+    (let* ((project (+test-awr--dir "names"))
+           (dir (expand-file-name ".agent-workspace/roles/" project)))
+      (+test-awr--file dir "tester.md"
+                       "---\ndescription: tests\nhands-to: tester\ntalks-to:\n  - builder\n  - nobody\n---\nTest.\n")
+      (+test-awr--file dir "helper.md" "---\ndescription: helps\nhands-to: tester, reviewer\nreturns-to: builder\n---\nHelp.\n")
+      (+test-awr--file dir "router.md" "---\ndescription: routes\nhands-to: any\nreturns-to: nobody\n---\nRoute.\n")
+      (+test-awr--quietly
+        (should (member "tester" (mapcar #'car (agent-workspace-roles project))))
+        (should (equal (plist-get (alist-get "helper" (agent-workspace-roles project) nil nil #'equal) :returns-to)
+                       '("builder")))
+        (should (equal (+test-awr--messages (agent-workspace-role-problems project))
+                       '((warning "router.md:4: returns-to nobody: no such role (builder, investigator, reviewer, scribe, helper, router, tester)")
+                         (warning "tester.md:3: hands-to tester: its own role")
+                         (warning "tester.md:6: talks-to nobody: no such role (builder, investigator, reviewer, scribe, helper, router, tester)"))))
+        (should (= (length warnings) 3))))))
 
 (ert-deftest agent-workspace-roles/warnings-keep-the-role ()
   "An unknown key, or a worktree key (every agent has its own): warned
@@ -201,16 +203,27 @@ about, ignored; the role kept."
 
 ;; ====== THE STARTERS ======
 
+(defconst +test-awr--starters
+  ;; Each starter: (NAME DENIED MUST-ALLOW MUST-NOT-ALLOW).
+  '(("builder" ("Bash(git push:*)") ("Edit" "Write" "Bash(git commit:*)") ())
+    ("investigator" ("Edit" "Write" "NotebookEdit") ("WebSearch") ("Edit" "Write"))
+    ("reviewer" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write"))
+    ("scribe" ("Edit" "Write" "NotebookEdit") () ("Edit" "Write"))
+    ("tester" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(git commit:*)") ("Edit" "Write")))
+  "The starters and what each may do: denied, allowed, not allowed.")
+
 (ert-deftest agent-workspace-roles/the-starters ()
-  "The four starters read without a problem; the ones that mustn't edit
-can't (Edit, Write denied), and what each does alone is allowed (bd, git's
-reading); the builder edits without asking, and never pushes."
+  "The starters read without a problem, each with all it needs; what each
+may do as it should: the ones that mustn't edit can't (Edit, Write
+denied), the tester only its tests, the builder anything but push; what
+each does alone is allowed (bd)."
   (let ((dir agent-workspace-starter-roles-directory))
     (should (equal (mapcar #'file-name-base (directory-files dir nil "\\.md\\'"))
-                   '("builder" "investigator" "reviewer" "scribe")))
+                   (sort (mapcar #'car +test-awr--starters) #'string<)))
     (should-not (agent-workspace-role-problems (+test-awr--dir "starters")))
     (dolist (file (directory-files dir t "\\.md\\'"))
-      (pcase-let ((`(,role . ,problems) (agent-workspace-role-read file)))
+      (pcase-let ((`(,role . ,problems) (agent-workspace-role-read file))
+                  (`(,_ ,denied ,allowed ,not-allowed) (assoc (file-name-base file) +test-awr--starters)))
         (should-not problems)
         (dolist (key '(:description :verb :icon :glyph :colour :max :instructions :tools))
           (should (plist-get role key)))
@@ -218,19 +231,15 @@ reading); the builder edits without asking, and never pushes."
         (should-not (plist-get role :mode))
         (should (member "Bash(bd:*)" (plist-get role :tools)))
         (should (string-width (plist-get role :glyph)))
-        (if (equal (plist-get role :name) "builder")
-            (progn
-              (should (member "Edit" (plist-get role :tools)))
-              (should (equal (plist-get role :deny) '("Bash(git push:*)")))
-              (should (equal (plist-get role :labels) '("build"))))
-          (should (equal (plist-get role :deny) '("Edit" "Write" "NotebookEdit")))
-          (should-not (seq-intersection '("Edit" "Write") (plist-get role :tools))))))))
+        (should (equal (plist-get role :deny) denied))
+        (dolist (tool allowed) (should (member tool (plist-get role :tools))))
+        (dolist (tool not-allowed) (should-not (member tool (plist-get role :tools))))))))
 
 (ert-deftest agent-workspace-roles/a-project-with-none-of-its-own ()
   "A project with no roles of its own has the starters."
   (let ((project (+test-awr--dir "none")))
     (should (equal (mapcar #'car (agent-workspace-roles project))
-                   '("builder" "investigator" "reviewer" "scribe")))
+                   (mapcar #'file-name-base (directory-files agent-workspace-starter-roles-directory nil "\\.md\\'"))))
     (should (equal (plist-get (agent-workspace--project-role project "builder") :verb) "building"))
     ;; A role gone (its file deleted): its agents have one with nothing of its own.
     (should (equal (agent-workspace--project-role project "gone") '(:name "gone")))))
@@ -238,28 +247,29 @@ reading); the builder edits without asking, and never pushes."
 (ert-deftest agent-workspace-roles/a-project-s-own ()
   "A project's own roles add to the starters, or replace one of the same
 name; one with errors is left out, warned about once."
-  (let* ((project (+test-awr--dir "own"))
-         (dir (expand-file-name ".agent-workspace/roles/" project)))
-    (+test-awr--file dir "tester.md" "---\ndescription: tests\nverb: testing\n---\nTest it.\n")
-    (+test-awr--file dir "builder.md" "---\ndescription: makes\nverb: making\nmodel: haiku\n---\nMake.\n")
-    (+test-awr--file dir "broken.md" "---\nmax: lots\ndescription: broken\n---\nBreak.\n")
-    (+test-awr--quietly
-      (let ((roles (agent-workspace-roles project)))
-        (should (equal (mapcar #'car roles) '("builder" "investigator" "reviewer" "scribe" "tester")))
-        (should (equal (plist-get (alist-get "builder" roles nil nil #'equal) :verb) "making"))
-        (should (equal (plist-get (alist-get "builder" roles nil nil #'equal) :model) "haiku")))
-      (should (equal (+test-awr--messages (agent-workspace-role-problems project))
-                     '((error "broken.md:2: max lots: not a number above 0"))))
-      (should (= (length warnings) 1))
-      (should (string-match-p "broken\\.md:2: max lots" (cadr (car warnings))))
-      ;; Read again: the same, not warned again.
-      (agent-workspace-roles project)
-      (should (= (length warnings) 1))
-      ;; A file changed: read again.
-      (+test-awr--file dir "broken.md" "---\nmax: 2\ndescription: broken\n---\nBreak.\n")
-      (set-file-times (expand-file-name "broken.md" dir) (time-add nil 5))
-      (should (member "broken" (mapcar #'car (agent-workspace-roles project))))
-      (should-not (agent-workspace-role-problems project)))))
+  (+test-aw-with-four-starters
+    (let* ((project (+test-awr--dir "own"))
+           (dir (expand-file-name ".agent-workspace/roles/" project)))
+      (+test-awr--file dir "tester.md" "---\ndescription: tests\nverb: testing\n---\nTest it.\n")
+      (+test-awr--file dir "builder.md" "---\ndescription: makes\nverb: making\nmodel: haiku\n---\nMake.\n")
+      (+test-awr--file dir "broken.md" "---\nmax: lots\ndescription: broken\n---\nBreak.\n")
+      (+test-awr--quietly
+        (let ((roles (agent-workspace-roles project)))
+          (should (equal (mapcar #'car roles) '("builder" "investigator" "reviewer" "scribe" "tester")))
+          (should (equal (plist-get (alist-get "builder" roles nil nil #'equal) :verb) "making"))
+          (should (equal (plist-get (alist-get "builder" roles nil nil #'equal) :model) "haiku")))
+        (should (equal (+test-awr--messages (agent-workspace-role-problems project))
+                       '((error "broken.md:2: max lots: not a number above 0"))))
+        (should (= (length warnings) 1))
+        (should (string-match-p "broken\\.md:2: max lots" (cadr (car warnings))))
+        ;; Read again: the same, not warned again.
+        (agent-workspace-roles project)
+        (should (= (length warnings) 1))
+        ;; A file changed: read again.
+        (+test-awr--file dir "broken.md" "---\nmax: 2\ndescription: broken\n---\nBreak.\n")
+        (set-file-times (expand-file-name "broken.md" dir) (time-add nil 5))
+        (should (member "broken" (mapcar #'car (agent-workspace-roles project))))
+        (should-not (agent-workspace-role-problems project))))))
 
 (ert-deftest agent-workspace-roles/local-ones ()
   "Your local roles (.agent-shell/agent-workspace/roles/) add to the
@@ -267,61 +277,62 @@ starters and the project's: same name, local replaces project replaces
 starter, each role saying where it comes from and what it replaced; a
 local file's problems name it; one added, changed or removed is read
 again."
-  (let* ((project (+test-awr--dir "local"))
-         (own (expand-file-name ".agent-workspace/roles/" project))
-         (local (expand-file-name ".agent-shell/agent-workspace/roles/" project)))
-    (+test-awr--file own "builder.md" "---\ndescription: d\nverb: making\n---\nDo.\n")
-    (+test-awr--file own "tester.md" "---\ndescription: d\nverb: testing\n---\nDo.\n")
-    (+test-awr--file local "builder.md" "---\ndescription: d\nverb: crafting\nmode: plan\ntools: Read\n---\nMine.\n")
-    (+test-awr--file local "tester.md" "---\ndescription: d\nverb: checking\n---\nDo.\n")
-    (+test-awr--file local "reviewer.md" "---\ndescription: d\nverb: reading\n---\nDo.\n")
-    (+test-awr--file local "mine.md" "---\ndescription: d\nverb: helping\n---\nDo.\n")
-    (+test-awr--quietly
-      (let ((roles (agent-workspace-roles project)))
-        (cl-flet ((role (name) (alist-get name roles nil nil #'equal)))
-          (should (equal (mapcar #'car roles)
-                         '("builder" "investigator" "reviewer" "scribe" "tester" "mine")))
-          ;; Local replaces project replaces starter.
-          (should (equal (plist-get (role "builder") :verb) "crafting"))
-          (should (equal (plist-get (role "builder") :mode) "plan"))
-          (should (equal (plist-get (role "builder") :tools) '("Read")))
-          (should (equal (plist-get (role "builder") :instructions) "Mine."))
-          (should (equal (plist-get (role "builder") :origin) 'local))
-          (should (equal (plist-get (role "builder") :replaces) 'project))
-          ;; Local replaces project.
-          (should (equal (plist-get (role "tester") :verb) "checking"))
-          (should (equal (plist-get (role "tester") :replaces) 'project))
-          ;; Local replaces starter.
-          (should (equal (plist-get (role "reviewer") :verb) "reading"))
-          (should (equal (plist-get (role "reviewer") :origin) 'local))
-          (should (equal (plist-get (role "reviewer") :replaces) 'starter))
-          ;; Its own, and a starter untouched.
-          (should (equal (plist-get (role "mine") :origin) 'local))
-          (should-not (plist-get (role "mine") :replaces))
-          (should (equal (plist-get (role "scribe") :origin) 'starter))
-          (should-not (plist-get (role "scribe") :replaces))))
-      ;; Its agents get it.
-      (should (equal (plist-get (agent-workspace--project-role project "builder") :verb) "crafting"))
-      ;; Project replaces starter, without a local one.
-      (delete-file (expand-file-name "builder.md" local))
-      (let ((builder (alist-get "builder" (agent-workspace-roles project) nil nil #'equal)))
-        (should (equal (plist-get builder :verb) "making"))
-        (should (equal (plist-get builder :origin) 'project))
-        (should (equal (plist-get builder :replaces) 'starter)))
-      ;; Added: read again.
-      (+test-awr--file local "extra.md" "---\ndescription: d\nverb: extra\n---\nDo.\n")
-      (should (member "extra" (mapcar #'car (agent-workspace-roles project))))
-      ;; Changed: read again, its problem naming its file and line.
-      (+test-awr--file local "extra.md" "---\ndescription: d\nmax: none\n---\nDo.\n")
-      (set-file-times (expand-file-name "extra.md" local) (time-add nil 5))
-      (should-not (member "extra" (mapcar #'car (agent-workspace-roles project))))
-      (should (equal (mapcar #'cadr (agent-workspace-role-problems project))
-                     (list (concat (abbreviate-file-name (expand-file-name "extra.md" local))
-                                   ":3: max none: not a number above 0"))))
-      (should (string-match-p "extra\\.md:3: max none" (cadr (car warnings))))
-      ;; Removed: gone.
-      (delete-file (expand-file-name "extra.md" local))
-      (should-not (agent-workspace-role-problems project)))))
+  (+test-aw-with-four-starters
+    (let* ((project (+test-awr--dir "local"))
+           (own (expand-file-name ".agent-workspace/roles/" project))
+           (local (expand-file-name ".agent-shell/agent-workspace/roles/" project)))
+      (+test-awr--file own "builder.md" "---\ndescription: d\nverb: making\n---\nDo.\n")
+      (+test-awr--file own "tester.md" "---\ndescription: d\nverb: testing\n---\nDo.\n")
+      (+test-awr--file local "builder.md" "---\ndescription: d\nverb: crafting\nmode: plan\ntools: Read\n---\nMine.\n")
+      (+test-awr--file local "tester.md" "---\ndescription: d\nverb: checking\n---\nDo.\n")
+      (+test-awr--file local "reviewer.md" "---\ndescription: d\nverb: reading\n---\nDo.\n")
+      (+test-awr--file local "mine.md" "---\ndescription: d\nverb: helping\n---\nDo.\n")
+      (+test-awr--quietly
+        (let ((roles (agent-workspace-roles project)))
+          (cl-flet ((role (name) (alist-get name roles nil nil #'equal)))
+            (should (equal (mapcar #'car roles)
+                           '("builder" "investigator" "reviewer" "scribe" "tester" "mine")))
+            ;; Local replaces project replaces starter.
+            (should (equal (plist-get (role "builder") :verb) "crafting"))
+            (should (equal (plist-get (role "builder") :mode) "plan"))
+            (should (equal (plist-get (role "builder") :tools) '("Read")))
+            (should (equal (plist-get (role "builder") :instructions) "Mine."))
+            (should (equal (plist-get (role "builder") :origin) 'local))
+            (should (equal (plist-get (role "builder") :replaces) 'project))
+            ;; Local replaces project.
+            (should (equal (plist-get (role "tester") :verb) "checking"))
+            (should (equal (plist-get (role "tester") :replaces) 'project))
+            ;; Local replaces starter.
+            (should (equal (plist-get (role "reviewer") :verb) "reading"))
+            (should (equal (plist-get (role "reviewer") :origin) 'local))
+            (should (equal (plist-get (role "reviewer") :replaces) 'starter))
+            ;; Its own, and a starter untouched.
+            (should (equal (plist-get (role "mine") :origin) 'local))
+            (should-not (plist-get (role "mine") :replaces))
+            (should (equal (plist-get (role "scribe") :origin) 'starter))
+            (should-not (plist-get (role "scribe") :replaces))))
+        ;; Its agents get it.
+        (should (equal (plist-get (agent-workspace--project-role project "builder") :verb) "crafting"))
+        ;; Project replaces starter, without a local one.
+        (delete-file (expand-file-name "builder.md" local))
+        (let ((builder (alist-get "builder" (agent-workspace-roles project) nil nil #'equal)))
+          (should (equal (plist-get builder :verb) "making"))
+          (should (equal (plist-get builder :origin) 'project))
+          (should (equal (plist-get builder :replaces) 'starter)))
+        ;; Added: read again.
+        (+test-awr--file local "extra.md" "---\ndescription: d\nverb: extra\n---\nDo.\n")
+        (should (member "extra" (mapcar #'car (agent-workspace-roles project))))
+        ;; Changed: read again, its problem naming its file and line.
+        (+test-awr--file local "extra.md" "---\ndescription: d\nmax: none\n---\nDo.\n")
+        (set-file-times (expand-file-name "extra.md" local) (time-add nil 5))
+        (should-not (member "extra" (mapcar #'car (agent-workspace-roles project))))
+        (should (equal (mapcar #'cadr (agent-workspace-role-problems project))
+                       (list (concat (abbreviate-file-name (expand-file-name "extra.md" local))
+                                     ":3: max none: not a number above 0"))))
+        (should (string-match-p "extra\\.md:3: max none" (cadr (car warnings))))
+        ;; Removed: gone.
+        (delete-file (expand-file-name "extra.md" local))
+        (should-not (agent-workspace-role-problems project))))))
 
 (ert-deftest agent-workspace-roles/local-ones-from-a-worktree ()
   "From one of a project's worktrees (an agent's), its main checkout's local
@@ -349,27 +360,28 @@ roles: they're not in the worktree's checkout."
 (ert-deftest agent-workspace-roles/how-many-may-run ()
   "A role's max: as many running (not asleep, not gone home), the next is
 refused; an unknown role is refused, naming the roles."
-  (let* ((project (+test-awr--dir "max"))
-         (agent-workspace--crews (make-hash-table :test #'equal)))
-    (puthash project (list (+test-awr--agent project "sam" "scribe" 'desk)
-                           (+test-awr--agent project "ada" "investigator" 'working)
-                           (+test-awr--agent project "ken" "investigator" 'asleep))
-             agent-workspace--crews)
-    (should (= (agent-workspace-role-count project "investigator") 1))
-    (should-error (agent-workspace--check-role project "scribe") :type 'user-error)
-    (should (string-match-p "1 scribe run already"
-                            (cadr (should-error (agent-workspace--check-role project "scribe")))))
-    (should-not (agent-workspace--check-role project "investigator"))
-    (should (string-match-p "No role tester: builder, investigator, reviewer, scribe"
-                            (cadr (should-error (agent-workspace--check-role project "tester")))))
-    ;; Waking one counts it too.
-    (setf (agent-workspace-agent-state (car (agent-workspace-agents project))) 'asleep)
-    (should-not (agent-workspace--check-room project "scribe"))
-    ;; create refuses before making anything.
-    (setf (agent-workspace-agent-state (car (agent-workspace-agents project))) 'desk)
-    (cl-letf (((symbol-function 'agent-workspace-worktree-ensure) (lambda (&rest _) (error "Made one"))))
-      (should-error (agent-workspace-create :project project :role "scribe" :name "grace") :type 'user-error)
-      (should-error (agent-workspace-create :project project :role "nope" :name "grace") :type 'user-error))))
+  (+test-aw-with-four-starters
+    (let* ((project (+test-awr--dir "max"))
+           (agent-workspace--crews (make-hash-table :test #'equal)))
+      (puthash project (list (+test-awr--agent project "sam" "scribe" 'desk)
+                             (+test-awr--agent project "ada" "investigator" 'working)
+                             (+test-awr--agent project "ken" "investigator" 'asleep))
+               agent-workspace--crews)
+      (should (= (agent-workspace-role-count project "investigator") 1))
+      (should-error (agent-workspace--check-role project "scribe") :type 'user-error)
+      (should (string-match-p "1 scribe run already"
+                              (cadr (should-error (agent-workspace--check-role project "scribe")))))
+      (should-not (agent-workspace--check-role project "investigator"))
+      (should (string-match-p "No role tester: builder, investigator, reviewer, scribe"
+                              (cadr (should-error (agent-workspace--check-role project "tester")))))
+      ;; Waking one counts it too.
+      (setf (agent-workspace-agent-state (car (agent-workspace-agents project))) 'asleep)
+      (should-not (agent-workspace--check-room project "scribe"))
+      ;; create refuses before making anything.
+      (setf (agent-workspace-agent-state (car (agent-workspace-agents project))) 'desk)
+      (cl-letf (((symbol-function 'agent-workspace-worktree-ensure) (lambda (&rest _) (error "Made one"))))
+        (should-error (agent-workspace-create :project project :role "scribe" :name "grace") :type 'user-error)
+        (should-error (agent-workspace-create :project project :role "nope" :name "grace") :type 'user-error)))))
 
 (ert-deftest agent-workspace-roles/its-colour-while-free ()
   "An agent gets its role's colour while no agent has it."
@@ -397,43 +409,45 @@ refused; an unknown role is refused, naming the roles."
 (ert-deftest agent-workspace-roles/copied-into-a-project ()
   "A starter copied into the project's roles, to change there; not over one
 it has."
-  (let ((project (+test-awr--dir "copy")))
-    (let ((file (agent-workspace-copy-role "builder" project)))
-      (should (equal file (expand-file-name ".agent-workspace/roles/builder.md" project)))
-      (should (equal (with-temp-buffer (insert-file-contents file) (buffer-string))
-                     (with-temp-buffer
-                       (insert-file-contents (expand-file-name "builder.md" agent-workspace-starter-roles-directory))
-                       (buffer-string)))))
-    (should-error (agent-workspace-copy-role "builder" project) :type 'user-error)
-    (should-error (agent-workspace-copy-role "nope" project) :type 'user-error)
-    ;; Into the project's: only a starter.
-    (+test-awr--file (expand-file-name ".agent-workspace/roles/" project) "tester.md" "---\ndescription: d\nverb: testing\n---\nDo.\n")
-    (should-error (agent-workspace-copy-role "tester" project 'project) :type 'user-error)))
+  (+test-aw-with-four-starters
+    (let ((project (+test-awr--dir "copy")))
+      (let ((file (agent-workspace-copy-role "builder" project)))
+        (should (equal file (expand-file-name ".agent-workspace/roles/builder.md" project)))
+        (should (equal (with-temp-buffer (insert-file-contents file) (buffer-string))
+                       (with-temp-buffer
+                         (insert-file-contents (expand-file-name "builder.md" agent-workspace-starter-roles-directory))
+                         (buffer-string)))))
+      (should-error (agent-workspace-copy-role "builder" project) :type 'user-error)
+      (should-error (agent-workspace-copy-role "nope" project) :type 'user-error)
+      ;; Into the project's: only a starter.
+      (+test-awr--file (expand-file-name ".agent-workspace/roles/" project) "tester.md" "---\ndescription: d\nverb: testing\n---\nDo.\n")
+      (should-error (agent-workspace-copy-role "tester" project 'project) :type 'user-error))))
 
 (ert-deftest agent-workspace-roles/copied-into-your-local-ones ()
   "A starter, or the project's own (its own replacing a starter), copied
 into your local roles; not over one there already."
-  (let* ((project (+test-awr--dir "copy-local"))
-         (own (expand-file-name ".agent-workspace/roles/" project))
-         (local (expand-file-name ".agent-shell/agent-workspace/roles/" project)))
-    (+test-awr--file own "tester.md" "---\nverb: testing\n---\nTest.\n")
-    (+test-awr--file own "builder.md" "---\ndescription: d\nverb: making\n---\nDo.\n")
-    (should (equal (mapcar #'car (agent-workspace--copy-role-sources project 'local))
-                   '("builder" "investigator" "reviewer" "scribe" "tester")))
-    (should (equal (mapcar #'car (agent-workspace--copy-role-sources project 'project))
-                   '("builder" "investigator" "reviewer" "scribe")))
-    (let ((file (agent-workspace-copy-role "tester" project 'local)))
-      (should (equal file (expand-file-name "tester.md" local)))
-      (should (equal (with-temp-buffer (insert-file-contents file) (buffer-string))
-                     "---\nverb: testing\n---\nTest.\n")))
-    ;; The project's own builder, not the starter.
-    (should (equal (with-temp-buffer (insert-file-contents (agent-workspace-copy-role "builder" project 'local))
-                                     (buffer-string))
-                   "---\ndescription: d\nverb: making\n---\nDo.\n"))
-    (should (file-exists-p (agent-workspace-copy-role "scribe" project 'local)))
-    (should (string-match-p "a local tester already"
-                            (cadr (should-error (agent-workspace-copy-role "tester" project 'local)))))
-    (should-error (agent-workspace-copy-role "nope" project 'local) :type 'user-error)))
+  (+test-aw-with-four-starters
+    (let* ((project (+test-awr--dir "copy-local"))
+           (own (expand-file-name ".agent-workspace/roles/" project))
+           (local (expand-file-name ".agent-shell/agent-workspace/roles/" project)))
+      (+test-awr--file own "tester.md" "---\nverb: testing\n---\nTest.\n")
+      (+test-awr--file own "builder.md" "---\ndescription: d\nverb: making\n---\nDo.\n")
+      (should (equal (mapcar #'car (agent-workspace--copy-role-sources project 'local))
+                     '("builder" "investigator" "reviewer" "scribe" "tester")))
+      (should (equal (mapcar #'car (agent-workspace--copy-role-sources project 'project))
+                     '("builder" "investigator" "reviewer" "scribe")))
+      (let ((file (agent-workspace-copy-role "tester" project 'local)))
+        (should (equal file (expand-file-name "tester.md" local)))
+        (should (equal (with-temp-buffer (insert-file-contents file) (buffer-string))
+                       "---\nverb: testing\n---\nTest.\n")))
+      ;; The project's own builder, not the starter.
+      (should (equal (with-temp-buffer (insert-file-contents (agent-workspace-copy-role "builder" project 'local))
+                                       (buffer-string))
+                     "---\ndescription: d\nverb: making\n---\nDo.\n"))
+      (should (file-exists-p (agent-workspace-copy-role "scribe" project 'local)))
+      (should (string-match-p "a local tester already"
+                              (cadr (should-error (agent-workspace-copy-role "tester" project 'local)))))
+      (should-error (agent-workspace-copy-role "nope" project 'local) :type 'user-error))))
 
 ;; ====== CHECKED ======
 
@@ -441,38 +455,39 @@ into your local roles; not over one there already."
   "M-x agent-workspace-check-roles: every problem of the three places read
 anew, a line FILE:LINE: error|warning: what, each visiting its file and
 line; none: said."
-  (let* ((project (+test-awr--dir "check"))
-         (own (expand-file-name ".agent-workspace/roles/" project))
-         (local (expand-file-name ".agent-shell/agent-workspace/roles/" project))
-         (said nil))
-    (cl-letf (((symbol-function 'message) (lambda (format &rest args) (push (apply #'format format args) said))))
-      (should-not (agent-workspace-check-roles project))
-      (should (equal (car said) "4 roles, no problems")))
-    (+test-awr--file own "tester.md" "---\ndescription: tests\nmode: autoo\n---\nTest.\n")
-    (+test-awr--file local "mine.md" "---\ndescription: mine\nhands-to: nobody\n---\n")
-    (+test-awr--quietly
-      ;; Read once: the warnings shown then.
-      (agent-workspace-roles project)
-      (setq warnings nil)
-      (let ((problems (agent-workspace-check-roles project)))
-        (should (= (length problems) 3))
-        ;; Read anew, nothing popped up.
-        (should-not warnings))
-      (with-current-buffer "*agent-workspace roles*"
-        (should (derived-mode-p 'compilation-mode))
-        (should (equal (buffer-substring-no-properties (point-min) (point-max))
-                       (concat "The roles of " (abbreviate-file-name (directory-file-name project))
-                               ": 1 error, 2 warnings\n\n"
-                               ".agent-workspace/roles/tester.md:3: error: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions\n"
-                               ".agent-shell/agent-workspace/roles/mine.md:4: warning: no instructions after its front matter\n"
-                               ".agent-shell/agent-workspace/roles/mine.md:3: warning: hands-to nobody: no such role (builder, investigator, reviewer, scribe, mine)\n")))
-        ;; Each line visits its file at its line.
-        (goto-char (point-min))
-        (let ((visited nil))
-          (dotimes (_ 3)
-            (compilation-next-error 1)
-            (save-window-excursion
-              (compile-goto-error)
-              (push (cons (file-name-nondirectory (buffer-file-name)) (line-number-at-pos)) visited)
-              (kill-buffer)))
-          (should (equal (nreverse visited) '(("tester.md" . 3) ("mine.md" . 4) ("mine.md" . 3)))))))))
+  (+test-aw-with-four-starters
+    (let* ((project (+test-awr--dir "check"))
+           (own (expand-file-name ".agent-workspace/roles/" project))
+           (local (expand-file-name ".agent-shell/agent-workspace/roles/" project))
+           (said nil))
+      (cl-letf (((symbol-function 'message) (lambda (format &rest args) (push (apply #'format format args) said))))
+        (should-not (agent-workspace-check-roles project))
+        (should (equal (car said) "4 roles, no problems")))
+      (+test-awr--file own "tester.md" "---\ndescription: tests\nmode: autoo\n---\nTest.\n")
+      (+test-awr--file local "mine.md" "---\ndescription: mine\nhands-to: nobody\n---\n")
+      (+test-awr--quietly
+        ;; Read once: the warnings shown then.
+        (agent-workspace-roles project)
+        (setq warnings nil)
+        (let ((problems (agent-workspace-check-roles project)))
+          (should (= (length problems) 3))
+          ;; Read anew, nothing popped up.
+          (should-not warnings))
+        (with-current-buffer "*agent-workspace roles*"
+          (should (derived-mode-p 'compilation-mode))
+          (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                         (concat "The roles of " (abbreviate-file-name (directory-file-name project))
+                                 ": 1 error, 2 warnings\n\n"
+                                 ".agent-workspace/roles/tester.md:3: error: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions\n"
+                                 ".agent-shell/agent-workspace/roles/mine.md:4: warning: no instructions after its front matter\n"
+                                 ".agent-shell/agent-workspace/roles/mine.md:3: warning: hands-to nobody: no such role (builder, investigator, reviewer, scribe, mine)\n")))
+          ;; Each line visits its file at its line.
+          (goto-char (point-min))
+          (let ((visited nil))
+            (dotimes (_ 3)
+              (compilation-next-error 1)
+              (save-window-excursion
+                (compile-goto-error)
+                (push (cons (file-name-nondirectory (buffer-file-name)) (line-number-at-pos)) visited)
+                (kill-buffer)))
+            (should (equal (nreverse visited) '(("tester.md" . 3) ("mine.md" . 4) ("mine.md" . 3))))))))))

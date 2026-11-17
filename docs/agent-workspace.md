@@ -405,7 +405,7 @@ From the shell: `cmd/agent-workspace new --role builder [--name ada] [--prompt T
 
 ## Roles
 
-A role is what a kind of agent does and may do. These four ship with this config:
+A role is what a kind of agent does and may do. These ship with this config, the starters:
 
 | Role | Does | May |
 |---|---|---|
@@ -413,6 +413,10 @@ A role is what a kind of agent does and may do. These four ship with this config
 | investigator | investigates what you give it, writes its findings into the issue, hands it to the builders | read, search the web, `bd`; no edits |
 | builder | builds what you give it, runs the tests, commits on its branch, hands it to the reviewers | edit, commit; never push |
 | reviewer | reviews a branch, approves it to you or hands it back to its builder | read, `bd`; no edits |
+| tester | tests built work against its issue, runs the suite, reproduces a bug as a failing test | edit its tests (`tests/`), commit; never push |
+
+The tester edits only `tests/` without asking: a project whose tests are elsewhere changes that in its copy (`M-x
+agent-workspace-copy-role`, below).
 
 Each role is a Markdown file, as Claude Code's own agents are: a front matter, then its instructions.
 
@@ -432,8 +436,8 @@ colour: yellow
 Write the tests first, then run them.
 ```
 
-- `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the four
-  have none: their agents run in auto mode). Claude Code enforces all three.
+- `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the
+  starters have none: their agents run in auto mode). Claude Code enforces all three.
 - `max` is how many of the role may run at once. `labels` are the issues it's for. `talks-to` names the roles it may
   [message](#agents-asking-each-other) without your OK. `hands-to` names the roles its finished issues
   [go to](#work-handed-on-through-issues), in order (`any`: the one it's for), `returns-to` where work goes back.
@@ -442,7 +446,7 @@ Write the tests first, then run them.
 
 A project's own roles go in its `.agent-workspace/roles/`, committed. Your own for a project, kept out of git, go in
 its `.agent-shell/agent-workspace/roles/` (`.agent-shell/` is ignored: a crew adds it to the repository's
-`.git/info/exclude`), for a repository where the rest of the team doesn't use crews. Both add to the four; a role
+`.git/info/exclude`), for a repository where the rest of the team doesn't use crews. Both add to the starters; a role
 replaces the one with the same name before it: a starter, then the project's, then yours. `M-x
 agent-workspace-copy-role` copies one there for you to change: a starter into the project's, or a starter or one of
 the project's into yours.
