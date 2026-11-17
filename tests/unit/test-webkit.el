@@ -562,6 +562,44 @@ the one latest looked at."
         (should (equal (mapcar (lambda (window) (+test-webkit--xw page window)) windows) views))
         (should (= (length +test-webkit--made) 3))))))
 
+(ert-deftest webkit/a-tidy-before-the-new-windows-get-their-views ()
+  "A layout made anew, the tidy due before its new windows get their views
+(after a redisplay, as a second after a split on a busy machine): the
+page's views left, tidied a second later; each window then gets its own,
+none made. A window that never gets one: left three times at most."
+  (+test-webkit
+    (let* ((+my/webkit--tidy-waited 0)
+           (page (+test-webkit--page))
+           (left (+test-webkit--show page))
+           (right (+test-webkit--show page (split-window left nil 'right)))
+           (views (mapcar (lambda (window) (+test-webkit--xw page window)) (list left right)))
+           (state (window-state-get (frame-root-window) t)))
+      (window-state-put state (frame-root-window))
+      (+my/webkit--tidy)
+      (should-not (+test-webkit--calls 'kill-xwidget))
+      (should (timerp +my/webkit--tidy-timer))
+      (should (< 0.9 (+test-webkit--due +my/webkit--tidy-timer) 1.01))
+      (let ((windows (window-list nil 'nomini (frame-first-window))))
+        (dolist (window windows)
+          (+test-webkit--show page window))
+        (should (equal (mapcar (lambda (window) (+test-webkit--xw page window)) windows) views))
+        (should (= (length +test-webkit--made) 2))
+        ;; Tidied then: nothing to close.
+        (should (= (+test-webkit--fire #'+my/webkit--tidy) 1))
+        (should-not (+test-webkit--calls 'kill-xwidget))
+        (should-not +my/webkit--tidy-timer)
+        ;; A window on the page that never gets its view: left three times,
+        ;; then tidied.
+        (delete-window (cadr windows))
+        (set-window-buffer (split-window (car windows) nil 'below) page)
+        (+my/webkit--tidy)
+        (should (= (+test-webkit--fire #'+my/webkit--tidy) 1))
+        (should (= (+test-webkit--fire #'+my/webkit--tidy) 1))
+        (should-not (+test-webkit--xw-killed (cadr views)))
+        (should (= (+test-webkit--fire #'+my/webkit--tidy) 1))
+        (should (+test-webkit--xw-killed (cadr views)))
+        (should-not +my/webkit--tidy-timer)))))
+
 (ert-deftest webkit/a-resized-window-s-view-kept-where-it-is ()
   "A window resized (a neighbour closed): its view kept at its new place,
 for the window that's there next."

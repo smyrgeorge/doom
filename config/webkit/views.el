@@ -17,7 +17,10 @@
 ;; it shows the page again (a tab away and back) only while no other window
 ;; needs it. A second after windows come or
 ;; go (a frame deleted too), views of closed windows are closed, but for the
-;; buffer's last one (for its next window).
+;; buffer's last one (for its next window); not while a window showing the
+;; page waits for its view (given after a redisplay: a layout made anew a
+;; second after a split, its new windows' views were closed first), a second
+;; later then.
 
 (defvar-local +my/webkit--views nil
   "The buffer's views, overlays, the one latest looked at first (see VIEWS).")
@@ -111,22 +114,41 @@ distances, its frame another's farther than any."
 
 (defvar +my/webkit--tidy-timer nil)
 
+(defun +my/webkit--waiting-p (buffer)
+  "Non-nil if a window shows BUFFER's page without its view yet (it gets one
+after a redisplay, see `+my/webkit--shown-h'). Not a child frame's."
+  (seq-some (lambda (window)
+              (and (not (frame-parent (window-frame window)))
+                   (not (with-current-buffer buffer (+my/webkit--view window)))))
+            (get-buffer-window-list buffer nil t)))
+
+(defvar +my/webkit--tidy-waited 0
+  "Times in a row the tidy left a buffer for later (see above): 3 at most (a
+window never redrawn never gets its view).")
+
 (defun +my/webkit--tidy ()
-  "Close the views of closed windows, but for each buffer's last (see above)."
+  "Close the views of closed windows, but for each buffer's last; a buffer
+with a window waiting for its view left for a second later (see above)."
   (setq +my/webkit--tidy-timer nil)
-  (dolist (buffer (buffer-list))
-    (when (buffer-local-value '+my/webkit--views buffer)
-      (with-current-buffer buffer
-        (let* ((open (seq-filter #'+my/webkit--view-xwidget +my/webkit--views))
-               (closed (seq-remove (lambda (view) (window-live-p (overlay-get view 'window)))
-                                   open))
-               ;; All closed: the latest looked at stays, for the next window.
-               (kept (and (= (length closed) (length open)) (car open))))
-          (dolist (view +my/webkit--views)
-            (when (or (not (memq view open))
-                      (and (memq view closed) (not (eq view kept))))
-              (+my/webkit--close view)))
-          (setq +my/webkit--views (seq-filter #'overlay-buffer +my/webkit--views)))))))
+  (let ((later nil))
+    (dolist (buffer (buffer-list))
+      (when (buffer-local-value '+my/webkit--views buffer)
+        (with-current-buffer buffer
+          (let* ((wait (and (< +my/webkit--tidy-waited 3) (+my/webkit--waiting-p buffer)))
+                 (open (seq-filter #'+my/webkit--view-xwidget +my/webkit--views))
+                 (closed (seq-remove (lambda (view) (window-live-p (overlay-get view 'window)))
+                                     open))
+                 ;; All closed: the latest looked at stays, for the next window.
+                 (kept (and (= (length closed) (length open)) (car open))))
+            (when wait (setq later t))
+            (dolist (view +my/webkit--views)
+              (when (or (not (memq view open))
+                        (and (not wait) (memq view closed) (not (eq view kept))))
+                (+my/webkit--close view)))
+            (setq +my/webkit--views (seq-filter #'overlay-buffer +my/webkit--views))))))
+    (setq +my/webkit--tidy-waited (if later (1+ +my/webkit--tidy-waited) 0))
+    (when (and later (not +my/webkit--tidy-timer))
+      (setq +my/webkit--tidy-timer (run-at-time 1 nil #'+my/webkit--tidy)))))
 
 (defun +my/webkit--tidy-h (_frame)
   "Windows came or went: close the views of closed windows in a second (see
