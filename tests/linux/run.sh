@@ -14,7 +14,10 @@
 # tools by scripts/tools.sh) is built, or brought up to date from its cached
 # layers, each run: the first time Emacs compiles (~15 minutes).
 # DOOM_EMACS (default ~/.config/emacs) is Doom's folder; E2E_TIMEOUT and
-# E2E_WINDOW are passed on.
+# E2E_WINDOW are passed on. The container's temp folder, where the tests'
+# folders go, is in memory (a tmpfs of RAM_DISK MB at most, taken as it's
+# written; default 4096), as on macOS (tests/run.sh): bd (Dolt) waits for
+# each write to reach the disk. RAM_DISK=0: on the disk.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -45,6 +48,10 @@ args=(--rm --init
       -v "$DOOM_EMACS:$DOOM_EMACS:ro"
       -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*'
       -e TMPDIR=/tmp -e "E2E_TIMEOUT=${E2E_TIMEOUT:-180}" -e "E2E_WINDOW=${E2E_WINDOW:-}")
+ram_disk=${RAM_DISK:-4096}
+if [ "$ram_disk" -gt 0 ] 2>/dev/null; then
+  args+=(--tmpfs "/tmp:rw,exec,mode=1777,size=${ram_disk}m")
+fi
 [ -t 1 ] && args+=(-t)
 # TEST_LOGS (tests/run.sh: the failed files' logs copied there): the host's
 # folder, mounted.

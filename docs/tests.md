@@ -42,8 +42,9 @@ run's folder (the path after `full log:`); with `TEST_LOGS=DIR`, it's copied to 
   `tests/helper.el` run code as on either); no test opens another app (`config/emacs/os.el`'s are recorded).
 - `tests/e2e/test-NAME.el` tests what needs a GUI: WebKit pages, child frames, the merge on screen.
 - `tests/linux/` runs them on Linux: a Debian image set up by `scripts/emacs.sh` and `scripts/tools.sh` (with or
-  without xwidgets), the config and Doom's folder mounted read-only, the end-to-end tests under Xvfb. Built the first
-  time (~15 minutes), then from its cached layers. Tests needing what only the host built (ghostel's native module) skip there.
+  without xwidgets), the config and Doom's folder mounted read-only, the end-to-end tests under Xvfb, the container's
+  temp folder (the tests' folders) in memory, as macOS's RAM disk (`RAM_DISK` MB; `RAM_DISK=0`: on the disk). Built
+  the first time (~15 minutes), then from its cached layers. Tests needing what only the host built (ghostel's native module) skip there.
 - `tests/fixtures/` holds what tests load: `diff-emacs.el` is the Emacs that `cmd/diff` starts in `test-cmd.el`.
   The agent workspace's tests run real sessions with `examples/agent-workspace/stand-in.el`, a stand-in coding agent
   speaking ACP as Claude Code's adapter does, run by a batch Emacs.
