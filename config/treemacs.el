@@ -106,6 +106,7 @@
 (load! "treemacs/arrows")
 (load! "treemacs/selection")
 (load! "treemacs/follow")
+(load! "treemacs/scope")
 (load! "treemacs/git")
 (load! "treemacs/branch")
 (load! "treemacs/sticky")
