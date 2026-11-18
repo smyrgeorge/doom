@@ -265,7 +265,7 @@ the starters of the same name."
 ;; instructions; the turn it starts runs in plan mode (it reads and
 ;; investigates; editing asks you), its own mode back after. In the room:
 ;; queued ([Send now] [Drop]), delivered, dropped; ✉N on its agent's bar; P
-;; pauses them all. Limits: 6 an hour from a source, 40 a day for an agent.
+;; pauses them all. Limits: 20 an hour from a source, 100 a day for an agent.
 ;; E lists them in the room's place: RET sends one now, d drops it, M-up /
 ;; M-down move it, o turns its source off for its agent or everyone (kept in
 ;; crew.json), q back. None delivered in `agent-workspace-inbox-quiet-hours'.

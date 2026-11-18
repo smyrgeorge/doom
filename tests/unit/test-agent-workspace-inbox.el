@@ -315,20 +315,25 @@ it's delivered to her), her thread with ken too (doom-pbk.51)."
     (+test-awi--free ada)))
 
 (ert-deftest agent-workspace-inbox/limits-and-wrong-ones ()
-  "A source's hour, an agent's day: more refused. Nobody by that name or
-role, no text, a wrong source: refused, saying why."
+  "A source's hour (20 events), an agent's day (100): the last taken, one
+more refused. Nobody by that name or role, no text, a wrong source:
+refused, saying why."
+  (should (= (default-value 'agent-workspace-inbox-source-limit) 20))
+  (should (= (default-value 'agent-workspace-inbox-agent-limit) 100))
   (+test-awi "limits" (("ada" "builder"))
     (agent-workspace-sleep ada)
     (dotimes (i agent-workspace-inbox-source-limit)
       (agent-workspace-inbox-add project "ada" (format "event %d" i) :from "ci"))
-    (should (string-search "ci sent 6 events in the last hour"
+    (should (string-search (format "ci sent %d events in the last hour" agent-workspace-inbox-source-limit)
                            (cadr (should-error (agent-workspace-inbox-add project "ada" "more" :from "ci")
                                                :type 'user-error))))
-    (let ((agent-workspace-inbox-agent-limit 7))
-      (agent-workspace-inbox-add project "ada" "from elsewhere" :from "cron")
-      (should (string-search "ada had 7 events today"
-                             (cadr (should-error (agent-workspace-inbox-add project "ada" "more" :from "cal")
-                                                 :type 'user-error)))))
+    ;; The rest of ada's day, each from a source of its own (none at its hour's).
+    (dotimes (i (- agent-workspace-inbox-agent-limit agent-workspace-inbox-source-limit))
+      (agent-workspace-inbox-add project "ada" (format "elsewhere %d" i) :from (format "cron%d" i)))
+    (should (= (length (agent-workspace-inbox project)) agent-workspace-inbox-agent-limit))
+    (should (string-search (format "ada had %d events today" agent-workspace-inbox-agent-limit)
+                           (cadr (should-error (agent-workspace-inbox-add project "ada" "more" :from "cal")
+                                               :type 'user-error))))
     (dolist (case '(("bob" "hi" "shell" "No agent bob in this crew; agents: ada")
                     ("#wizard" "hi" "shell" "No role wizard here")
                     ("ada" "  " "shell" "An event needs its text")
