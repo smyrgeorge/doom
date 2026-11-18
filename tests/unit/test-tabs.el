@@ -1177,6 +1177,82 @@ asks: answering no keeps it, unsaved."
       ;; The order stays.
       (should (equal (+test-tabs--tabs) (list a b c))))))
 
+;; ====== THE ORDER KEPT THROUGH A WORKSPACE SWITCH ======
+
+(defun +test-tabs--show-drawn (&rest buffers)
+  "Show BUFFERS in the selected window one after the other, its tab line
+drawn after each, as after each command (its tabs computed: tab-line
+records their order then)."
+  (dolist (buffer buffers)
+    (switch-to-buffer (+test-tabs--on buffer))
+    (+test-tabs--tabs)))
+
+(defun +test-tabs--workspace-away-and-back (&optional between)
+  "The frame's windows put away and back as Doom's workspaces (persp-mode)
+do: `window-state-get' WRITABLE, another workspace's buffer shown in one
+window, BETWEEN called (a function), `window-state-put'. The state, as text
+read back (persp's file): it must hold no buffer object."
+  (let ((state (window-state-get (frame-root-window) t)))
+    (should-not (string-search "#<" (prin1-to-string state)))
+    (setq state (car (read-from-string (prin1-to-string state))))
+    (delete-other-windows)
+    (switch-to-buffer (+test-tabs--plain "elsewhere"))
+    (set-window-prev-buffers nil nil)
+    (when between (funcall between))
+    (window-state-put state (frame-root-window) t)))
+
+(ert-deftest tabs/the-order-kept-through-a-workspace-switch ()
+  "A B C D E, C shown with Cmd+3 (or SPC b b, a click: a buffer switched
+to): another workspace and back, A B C D E, C current. Before, C went last
+\(doom-djc.14): tab-line's order is kept in no text state."
+  (dolist (show '(+my/tabs-select-3 switch-to-buffer))
+    (ert-info ((format "C shown with %s" show))
+      (+test-tabs
+        (let ((tabs (mapcar (lambda (name) (+test-tabs--file (concat name ".txt"))) '("a" "b" "c" "d" "e"))))
+          (apply #'+test-tabs--show-drawn tabs)
+          (if (eq show '+my/tabs-select-3)
+              (+my/tabs-select-3)
+            (+test-tabs--show-drawn (nth 2 tabs)))
+          (should (equal (+test-tabs--tabs) tabs))
+          (+test-tabs--workspace-away-and-back)
+          (should (eq (window-buffer) (nth 2 tabs)))
+          (should (equal (+test-tabs--tabs) tabs)))))))
+
+(ert-deftest tabs/each-pane-keeps-its-order ()
+  "Two panes, each its own tabs in its own order: another workspace and
+back, each as it was."
+  (+test-tabs
+    (let ((a (+test-tabs--file "a.txt")) (b (+test-tabs--file "b.txt")) (c (+test-tabs--file "c.txt"))
+          (x (+test-tabs--file "x.txt")) (y (+test-tabs--file "y.txt")) (z (+test-tabs--file "z.txt")))
+      (+test-tabs--show-drawn a b c a)
+      (let ((right (split-window nil nil 'right)))
+        (+test-tabs--only right x)
+        (with-selected-window right
+          (+test-tabs--show-drawn x y z x)))
+      (should (equal (+test-tabs--tabs) (list a b c)))
+      (should (equal (+test-tabs--tabs (window-in-direction 'right)) (list x y z)))
+      (+test-tabs--workspace-away-and-back)
+      (let ((left (frame-first-window)))
+        (should (eq (window-buffer left) a))
+        (should (equal (+test-tabs--tabs left) (list a b c)))
+        (should (eq (window-buffer (window-in-direction 'right left)) x))
+        (should (equal (+test-tabs--tabs (window-in-direction 'right left)) (list x y z)))))))
+
+(ert-deftest tabs/the-order-kept-a-buffer-killed-meanwhile ()
+  "A tab's buffer killed while in the other workspace: gone from the tabs
+when back, no error, the others in their order; a buffer shown after, at
+the end."
+  (+test-tabs
+    (let ((a (+test-tabs--file "a.txt")) (b (+test-tabs--file "b.txt"))
+          (c (+test-tabs--file "c.txt")) (d (+test-tabs--file "d.txt")))
+      (+test-tabs--show-drawn a b c d b)
+      (+test-tabs--workspace-away-and-back (lambda () (kill-buffer c)))
+      (should (eq (window-buffer) b))
+      (should (equal (+test-tabs--tabs) (list a b d)))
+      (let ((e (+test-tabs--file "e.txt")))
+        (+test-tabs--show-drawn e)
+        (should (equal (+test-tabs--tabs) (list a b d e)))))))
+
 (ert-deftest tabs/cmd-9-shows-the-last-tab ()
   (+test-tabs
     (let ((a (+test-tabs--file "a.txt"))

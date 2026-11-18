@@ -76,16 +76,56 @@ without workspaces."
       (not (fboundp 'persp-contain-buffer-p))
       (persp-contain-buffer-p buffer)))
 
+;; THE ORDER KEPT
+;; A window's tabs keep the order they came in (tab-line's `tab-line-buffers',
+;; a window parameter of buffers), but a workspace switched away from and back
+;; lost it: Doom's workspaces (persp-mode) keep a workspace's windows as text
+;; (`window-state-get' WRITABLE) and put them back with `window-state-put', and
+;; tab-line's parameter is kept only in a state that isn't text. Every pane's
+;; current tab went last, the others in the order they were last shown. Their
+;; buffers' names are kept too, in a parameter text holds (`+my/tabs-order'),
+;; and once windows are put back from a state, the order of each that lost
+;; it rebuilt from them: buffers gone since left out, one shown since at the
+;; end. A workspace saved to a file and loaded again (+workspace/save) keeps
+;; it the same way.
+(add-to-list 'window-persistent-parameters '(+my/tabs-order . writable))
+
+(defun +my/tabs--order-keep (buffers)
+  "BUFFERS, the selected window's in tab-line's order, kept by name (see
+above)."
+  (let ((names (delq nil (mapcar #'buffer-name buffers))))
+    (unless (equal names (window-parameter nil '+my/tabs-order))
+      (set-window-parameter nil '+my/tabs-order names))))
+
+(defun +my/tabs--order-restore-a (fn state &optional window ignore)
+  "`window-state-put': then, in its frame, each window's tab order lost
+\(tab-line's: not in a state that's text) rebuilt from its buffers' names
+\(see above). Only there: a window put back has its state's parameters
+alone, its names never another's."
+  (let ((frame (window-frame (window-normalize-window window))))
+    (prog1 (funcall fn state window ignore)
+      (when (frame-live-p frame)
+        (dolist (window (window-list frame 'nomini))
+          (unless (window-parameter window 'tab-line-buffers)
+            (when-let* ((names (window-parameter window '+my/tabs-order)))
+              (set-window-parameter window 'tab-line-buffers
+                                    (delq nil (mapcar #'get-buffer names))))))))))
+
+(advice-add 'window-state-put :around #'+my/tabs--order-restore-a)
+
 (defun +my/tabs-window-buffers ()
   "The selected window's tabs (see above): the buffers it showed that keep a
-tab, the current workspace's only. A new workspace (SPC p p) starts in the
-window the last one showed, its buffers in the window's history: their tabs
-are the other workspace's."
-  (let ((current (window-buffer)))
+tab, the current workspace's only, in the order they came (kept through a
+workspace switch: see THE ORDER KEPT). A new workspace (SPC p p) starts in
+the window the last one showed, its buffers in the window's history: their
+tabs are the other workspace's."
+  (let ((current (window-buffer))
+        (buffers (tab-line-tabs-fixed-window-buffers)))
+    (+my/tabs--order-keep buffers)
     (seq-filter (lambda (buffer)
                   (or (eq buffer current)
                       (and (+my/tabs-p buffer) (+my/tabs-in-workspace-p buffer))))
-                (tab-line-tabs-fixed-window-buffers))))
+                buffers)))
 
 ;; LABELS
 ;; Workspaces disable uniquify, so same-named files get buffer names like
