@@ -1,16 +1,17 @@
 ;;; $DOOMDIR/examples/agent-workspace.el -*- lexical-binding: t; -*-
 ;; Example: an agent crew (config/agent-workspace.el, docs/agent-workspace.md).
 ;; M-x +my/example-agent-workspace makes a small compiler project (a git
-;; repository in the temp folder, its issues tracked with bd if there's bd)
-;; and opens its crew's app with three agents, each in its own worktree, on
-;; its issue's branch: ada, a builder, on demo-1; sam, an investigator, on
-;; demo-3, its hand raised (it wants to run npm install); ken, a builder, done
-;; with demo-6. Its issues are bugs, features and tasks, two of them in an
-;; epic. They're stand-in agents (examples/agent-workspace/stand-in.el): they
-;; speak ACP as Claude Code does, offline, at no cost. Try: j / k on the
-;; bars, a then A to answer sam, #ken in the room, c a new agent, q to leave
-;; and the tally to come back, Q to close it (every agent exits). The folder
-;; is deleted once it's closed.
+;; repository in the temp folder, its issues tracked with bd if there's bd) and
+;; opens its crew's app with three agents, each in its own worktree: ada, a
+;; builder, on demo-1's branch; sam, an investigator, on demo-3 (on agent/sam:
+;; it can't edit, so no branch of its own), its hand raised (it wants to run
+;; npm install); ken, a builder, done with demo-6. Its issues are bugs,
+;; features and tasks, two of them in an epic. They're stand-in agents
+;; (examples/agent-workspace/stand-in.el): they speak ACP as Claude Code does,
+;; offline, at no cost. Try: j / k on the bars, a then A to answer sam, #ken in
+;; the room, c a new agent, q to leave and the mode line's tally (what needs
+;; you) to come back, Q to close it (every agent exits). The folder is deleted
+;; once it's closed.
 
 ;; ====== VARIABLES ======
 

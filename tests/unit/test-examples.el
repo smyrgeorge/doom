@@ -504,9 +504,9 @@ it's closed."
       (kill-buffer conversation))))
 
 (ert-deftest examples/agent-workspace-a-crew-offline ()
-  "Three stand-in agents in their crew's app, each in its worktree on its
-issue's branch (TYPE/ID-words): ada working on demo-1, sam's hand raised,
-ken done; its issues each with its type, two under their epic's heading (with
+  "Three stand-in agents in their crew's app, each in its worktree, the
+builders on their issue's branch (TYPE/ID-words), the investigator (it can't
+edit) on agent/sam: ada working on demo-1, sam's hand raised, ken done; its issues each with its type, two under their epic's heading (with
 bd); Q closes it, every agent exiting, and the folder goes; your windows as
 they were (doom-51z.16)."
   (+test-examples
@@ -522,8 +522,7 @@ they were (doom-51z.16)."
         (should (file-directory-p (agent-workspace-agent-worktree agent))))
       (should (equal (agent-workspace-agent-issue (car (agent-workspace-agents project))) "demo-1"))
       (should (equal (mapcar #'agent-workspace-agent-branch (agent-workspace-agents project))
-                     '("feat/demo-1-strings-escapes" "fix/demo-3-why-does-repl-hang"
-                       "feat/demo-6-tokens-numbers")))
+                     '("feat/demo-1-strings-escapes" "agent/sam" "feat/demo-6-tokens-numbers")))
       ;; Its issues: the builders' ready ones under their epic's heading.
       (when (executable-find "bd")
         (should (+test-wait-for
