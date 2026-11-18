@@ -839,6 +839,19 @@ back, the line sized to it."
       (agent-workspace--compose-typed)
       (should (= (window-body-height) 1)))))
 
+(ert-deftest agent-workspace-room/compose-line-without-flycheck ()
+  "Flycheck's global mode leaves the compose line alone: nothing to check
+there (it said so: no syntax checker supports agent-workspace-compose-mode)."
+  (require 'flycheck)
+  (let ((buffer (get-buffer-create "*compose · flycheck*")))
+    (unwind-protect
+        (with-current-buffer buffer
+          (agent-workspace-compose-mode)
+          (should-not (flycheck-may-enable-mode))
+          ;; Everywhere else as it was.
+          (should (eq (default-value 'flycheck-global-modes) t)))
+      (kill-buffer buffer))))
+
 (ert-deftest agent-workspace-room/compose-grows-as-the-app-s-own ()
   "The compose line growing is the app's own change, not a border dragged:
 not laid out again nor counted; a layout keeps its height; a feed following

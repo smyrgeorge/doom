@@ -886,6 +886,29 @@ Closed (q), their rows go back to the app, laid out as before."
             (should (= (+test-awa--relayouts) 1))
             (should (equal (+test-awa--windows) laid-out))))))))
 
+(ert-deftest agent-workspace-app/laid-out-when-a-window-can-t-go ()
+  "A window Emacs can't delete as the app is laid out (\"Deletion failed\":
+the windows left can't fill its room): the popups kept go too, the app laid
+out all the same, as before the popup came."
+  (+test-with-doom-popups
+    (+test-awa "undeletable"
+      (+test-awa--crew '("ada" "builder"))
+      (let ((app (agent-workspace-open t))
+            (laid-out (+test-awa--windows)))
+        (view-echo-area-messages)
+        (should (get-buffer-window "*Messages*"))
+        (let ((failed 0))
+          (cl-letf* ((delete (symbol-function 'delete-window))
+                     ((symbol-function 'delete-window)
+                      (lambda (&optional window)
+                        (if (= failed 0)
+                            (progn (cl-incf failed) (error "Deletion failed"))
+                          (funcall delete window)))))
+            (agent-workspace-layout app))
+          (should (= failed 1)))
+        (should-not (get-buffer-window "*Messages*"))
+        (should (equal (+test-awa--windows) laid-out))))))
+
 ;; ====== ITS CANVAS AND PANELS ======
 
 (defconst +test-awa--panel

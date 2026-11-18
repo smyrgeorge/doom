@@ -456,15 +456,20 @@ size only while its pane is the open one, with a tab to show."
   "The selected frame's windows deleted but BASE and the side windows that
 aren't APP's own (a popup: the *Messages* an echo area click opens, help,
 *Warnings*): those stay as they are, the app laid out in the room they
-leave."
+leave. A window Emacs can't delete: those go too, BASE alone left."
   (let ((ignore-window-parameters t)
         (kept (seq-filter (lambda (window) (window-parameter window 'window-side))
                           (agent-workspace--others app))))
     (if (not kept)
         (delete-other-windows base)
-      (dolist (window (window-list nil 'nomini))
-        (unless (or (eq window base) (memq window kept) (not (window-live-p window)))
-          (delete-window window))))))
+      (condition-case nil
+          (dolist (window (window-list nil 'nomini))
+            (unless (or (eq window base) (memq window kept) (not (window-live-p window)))
+              (delete-window window)))
+        ;; One Emacs can't delete ("Deletion failed": the windows left can't
+        ;; fill its room, a fixed or preserved size in the way): those kept
+        ;; go too, the app laid out all the same.
+        (error (delete-other-windows base))))))
 
 (defun agent-workspace-layout (&optional app)
   "APP (the one here) laid out anew in the selected frame: its issues on the

@@ -189,6 +189,48 @@ line a line again."
         ;; The feed shows its end.
         (should (= (window-end feed t) (with-current-buffer (window-buffer feed) (point-max))))))))
 
+(ert-deftest e2e-agent-workspace/an-empty-crew-with-window-dividers ()
+  "An empty crew opened in a frame with window dividers (Doom's, a pixel):
+laid out whole, the stage's hint in it (no agents yet, c makes one), the
+compose line a line of text; the frame resized, no error. In whole lines a
+divider made the compose line's least 3 lines, more than its line of text
+needed: its rows never given back (\"No resizable window below this one\"),
+the layout stopped half done, the hint never shown."
+  (let* ((project (+test-e2e-aw--project))
+         (default-directory project)
+         (window-divider-default-places t)
+         (window-divider-default-bottom-width 1)
+         (window-divider-default-right-width 1))
+    (cl-letf (((symbol-function 'agent-workspace--issues-refresh) #'ignore))
+      (+test-e2e-frame-reset)
+      (delete-other-windows)
+      (window-divider-mode 1)
+      (unwind-protect
+          (progn
+            (agent-workspace-open t)
+            (+test-sleep 0.5)
+            (let ((hint (get-buffer-window (agent-workspace--hint-buffer project)))
+                  (compose (get-buffer-window (agent-workspace--compose-buffer project))))
+              (should (window-live-p hint))
+              (with-current-buffer (window-buffer hint)
+                (should (string-search "No agents yet" (buffer-string))))
+              (should (window-live-p compose))
+              (should (= (window-bottom-divider-width compose) 1))
+              (should (= (window-body-height compose t) (window-default-line-height compose))))
+            ;; Resized: the compose line fitted again, no error.
+            (let ((from (with-current-buffer "*Messages*" (point-max))))
+              (set-frame-size nil 120 50)
+              (+test-sleep 0.8)
+              (+test-e2e-frame-reset)
+              (+test-sleep 0.8)
+              (with-current-buffer "*Messages*"
+                (should-not (string-search "No resizable window" (buffer-substring from (point-max)))))))
+        (window-divider-mode -1)
+        (when (agent-workspace--app project)
+          (agent-workspace--close-app project))
+        (agent-workspace-close-all)
+        (delete-other-windows)))))
+
 (defconst +test-e2e-aw--panel
   ";;; -*- lexical-binding: t; -*-
 (agent-ui-panel

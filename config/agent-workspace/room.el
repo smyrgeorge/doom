@@ -40,6 +40,7 @@
 (require 'map)
 
 (declare-function agent-shell-subscribe-to "agent-shell")
+(defvar flycheck-global-modes)
 
 ;; ====== VARIABLES ======
 
@@ -136,6 +137,10 @@ burst: once); its text until then as it was, a post appended to it.")
               word-wrap t
               header-line-format '(:eval (agent-workspace--compose-header))
               completion-at-point-functions (list #'agent-workspace--compose-capf))
+  ;; No Flycheck (its global mode's), nothing to check: it said so once
+  ;; ("no syntax checker supports agent-workspace-compose-mode"). Its
+  ;; modes, read in the buffer: here none.
+  (setq-local flycheck-global-modes nil)
   (add-hook 'post-command-hook #'agent-workspace--compose-typed nil t)
   (add-hook 'corfu-mode-hook #'agent-workspace--compose-corfu nil t))
 
@@ -881,20 +886,30 @@ text fitting, it's shown from its start."
   (when-let* ((feed (window-prev-sibling window))
               ((window-parameter feed 'agent-workspace-room)))
     (let* ((line (window-default-line-height window))
-           (delta (- (* (agent-workspace--compose-lines window) line) (window-body-height window t)))
+           (want (- (* (agent-workspace--compose-lines window) line) (window-body-height window t)))
            ;; Never more than the feed can give.
-           (delta (min delta (- (window-pixel-height feed) (window-min-size feed nil nil t)))))
+           (spare (- (window-pixel-height feed) (window-min-size feed nil nil t)))
+           (delta
+            ;; Its header line and a line of text at least, not
+            ;; `window-min-height''s 4 rows: bound from its buffer, which has
+            ;; no value of its own (a bar's would be bound instead), not set
+            ;; there (a layout with a popup open then failed to delete
+            ;; windows). To the pixel: in whole lines, a window divider
+            ;; (Doom's, 1 px) made its least 3 lines, and a line of text in
+            ;; 3 never gave back the rest (refused: "No resizable window
+            ;; below this one", the layout stopped half done).
+            (with-current-buffer (window-buffer window)
+              (let ((window-min-height 2)
+                    (window-resize-pixelwise t))
+                ;; Nor less than it can keep.
+                (max (min want spare) (- (window-min-size window nil nil t) (window-pixel-height window)))))))
       (unless (zerop delta)
         (let ((following (with-current-buffer (window-buffer feed)
                            (and (derived-mode-p 'agent-workspace-room-mode)
                                 (agent-workspace--room-last-line-p (window-point feed))))))
-          ;; Its header line and a line of text at least, not
-          ;; `window-min-height''s 4 rows: bound from its buffer, which has
-          ;; no value of its own (a bar's would be bound instead), not set
-          ;; there (a layout with a popup open then failed to delete
-          ;; windows).
           (with-current-buffer (window-buffer window)
-            (let ((window-min-height 2))
+            (let ((window-min-height 2)
+                  (window-resize-pixelwise t))
               (adjust-window-trailing-edge feed (- delta) nil t)))
           (when following
             (with-selected-window feed (recenter -1)))))
