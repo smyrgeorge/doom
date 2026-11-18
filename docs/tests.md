@@ -15,12 +15,15 @@ shell's Beads settings (every `BEADS_` and `BD_` variable, and `AGENT_WORKSPACE_
 their `bd` never reaches the project's issues, and it sends no usage metrics (`DO_NOT_TRACK`). A test needing a `bd`
 project calls `+test-bd-init` (`tests/helper.el`): `bd init` runs once per test file, its project copied after (5 s
 each before). Test files run several at once, their results shown in file order: `JOBS` unit test Emacsen (default: the
-number of CPUs), `E2E_JOBS` end-to-end ones (default: 4, at most `JOBS`; one at a time in `tests/linux/run.sh`, where
-they share one X server); `JOBS=1` or `E2E_JOBS=1` runs them one at a time. A test file with a line `;; run.sh: alone`
-runs with no other beside it, before the others: the end-to-end frames share a corner of the screen, PDF.js draws no
-page in a covered frame (`test-pdf.el`), and a test timing itself by the clock is slowed by the others
-(`test-large-files.el`). One with a line `;; run.sh: slow` starts before the rest, so its minute or two runs beside
-them rather than after. One with a line `;; run.sh: split N` starts before the rest too, in N Emacsen at once, each
+number of CPUs), `E2E_JOBS` end-to-end ones (default: 8, at most `JOBS`; one at a time in `tests/linux/run.sh`, where
+they share one X server); `JOBS=1` or `E2E_JOBS=1` runs them one at a time. Each end-to-end Emacs's frame is off the
+screen but for its top left corner, at the bottom right, each its own: a staircase, each corner a step right of and
+above the one before, so no frame covers another's (PDF.js draws no page in a covered frame). Keep that corner of the
+screen clear while they run: a window over it there (a video call's picture in picture) fails the PDF tests. A test
+file with a line `;; run.sh: alone` runs with no other beside it, before the others: a test timing itself by the clock
+is slowed by the others (`test-large-files.el`). One with a line `;; run.sh: slow` starts before the rest, so its
+seconds run beside them rather than after (with 8 at once, the end-to-end tests take about 80 s on an M1 Max, 160 s
+with 4 at once before). One with a line `;; run.sh: split N` starts before the rest too, in N Emacsen at once, each
 running every Nth of its tests by name; its result is still one line (`21 tests · 44.4 s, in 3 parts`), so a file of
 several minutes no longer ends the run on its own. On macOS the unit test files' folders (their Emacs's init folder,
 what their tests write) are on a RAM disk made for the run: `bd` waits for each of its writes to reach the disk, and
@@ -30,8 +33,8 @@ folder is copied beside its log first. The end-to-end tests' folders stay on the
 another volume (PDF.js and Excalidraw never load). `Ctrl+C` stops them all. The PDF and drawing tests copy PDF.js and Excalidraw from Doom's data folder, and skip without them: opening
 a PDF or a drawing once downloads them, or `emacs --batch -l tests/helper.el -l tests/assets.el` does. The Mermaid
 end-to-end tests draw with the real `mmdc` and skip without it (the unit tests use a stand-in). `E2E_WINDOW=front`
-shows the end-to-end tests' frame, which otherwise stays off screen. They run on macOS and on Linux; `EMACS_GUI` names
-the GUI Emacs for the end-to-end tests (default: macOS's `/Applications/Emacs.app`, else `emacs`). On Linux without a
+shows the end-to-end tests' frames whole, each a step down and right of the one before, which otherwise stay off
+screen. They run on macOS and on Linux; `EMACS_GUI` names the GUI Emacs for the end-to-end tests (default: macOS's `/Applications/Emacs.app`, else `emacs`). On Linux without a
 display, run those under Xvfb, one at a time: `E2E_JOBS=1 xvfb-run -a tests/run.sh e2e`. A failed file's log is in the
 run's folder (the path after `full log:`); with `TEST_LOGS=DIR`, it's copied to `DIR` too, as `KIND-NAME.txt`
 (`unit-test-tabs.txt`), in `tests/linux/run.sh` as well (the folder mounted in its container).

@@ -6,6 +6,7 @@
 ;; screenshots wait for), and its files gone once closed. What each one says:
 ;; one line of an 80-column frame. PDF.js and Excalidraw: copies of Doom's,
 ;; never downloaded here.
+;; run.sh: slow (~40 s beside the others: started first).
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "magit"))))))

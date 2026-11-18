@@ -2,6 +2,7 @@
 ;; config/treemacs.el's selection in a GUI Emacs: the sidebar scrolled away
 ;; from the open file stays where it was (the file still selected), and shows
 ;; the file again when the buffer changes.
+;; run.sh: slow (~25 s beside the others: started first).
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "treemacs"))))))

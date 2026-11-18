@@ -7,6 +7,7 @@
 ;; (pandoc, WebKit), drawings (Excalidraw) and the drawing for Claude, a
 ;; file's diff (magit) and RET in it, files opened from an application's
 ;; pane, a popup's links, tabs closing their pane, popups left alone.
+;; run.sh: slow (~20 s beside the others: started first).
 
 ;; Doom's `use-package!' reads it (Doom's package manager defines it).
 (defvar doom-disabled-packages nil)

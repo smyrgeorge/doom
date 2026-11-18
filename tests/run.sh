@@ -11,23 +11,23 @@
 # EMACS (default: emacs) runs the unit tests, EMACS_GUI (default: macOS's
 # Emacs.app if there's one, else emacs) the end-to-end ones; E2E_TIMEOUT (default 180) seconds per
 # end-to-end file; E2E_WINDOW=front shows their frame whole, focused (by
-# default it's off the screen but for a corner). JOBS (default: the CPUs)
-# unit test Emacsen run at once, E2E_JOBS (default: 4, at most JOBS)
+# default it's off the screen but for a corner, each Emacs's its own: its
+# slot, E2E_SLOT of E2E_SLOTS, tests/helper.el). JOBS (default: the CPUs)
+# unit test Emacsen run at once, E2E_JOBS (default: 8, at most JOBS)
 # end-to-end ones, the files' results shown in their order. A file with a
-# line ";; run.sh: alone" runs with none beside it, before the others (PDF.js
-# draws no page in a covered frame, and the end-to-end frames share a
-# corner); one with ";; run.sh: slow" starts before the rest (its minute or
-# two runs beside them, not after: the run ends sooner); one with ";; run.sh:
-# split N" too, in N Emacsen at once, each a share of its tests (its minutes
-# no longer the run's last ones), its result one line. On macOS the unit
-# test files' folders are on a RAM disk made for the run (RAM_DISK MB at
-# most, taken as they're written; default 4096, 0: on the disk): bd (Dolt)
-# waits for each write to reach the disk, ~40% of a run's time there; a
-# failed file's folder is copied beside its log, the disk gone once the run
-# ends. Not the end-to-end ones': WebKit reads no page from another volume
-# (PDF.js and Excalidraw, copied there, never loaded). TEST_LOGS
-# (a folder): each failed file's log copied there too, as KIND-NAME.txt (CI
-# keeps them). Exits 1 if a test failed.
+# line ";; run.sh: alone" runs with none beside it, before the others (a
+# test timing itself by the clock); one with ";; run.sh: slow" starts before
+# the rest (its seconds run beside them, not after: the run ends sooner);
+# one with ";; run.sh: split N" too, in N Emacsen at once, each a share of
+# its tests (its minutes no longer the run's last ones), its result one
+# line. On macOS the unit test files' folders are on a RAM disk made for the
+# run (RAM_DISK MB at most, taken as they're written; default 4096, 0: on
+# the disk): bd (Dolt) waits for each write to reach the disk, ~40% of a
+# run's time there; a failed file's folder is copied beside its log, the
+# disk gone once the run ends. Not the end-to-end ones': WebKit reads no
+# page from another volume (PDF.js and Excalidraw, copied there, never
+# loaded). TEST_LOGS (a folder): each failed file's log copied there too, as
+# KIND-NAME.txt (CI keeps them). Exits 1 if a test failed.
 
 
 TESTS=$(cd "$(dirname "$0")" && pwd)
@@ -46,7 +46,7 @@ if [ -z "${EMACS_GUI:-}" ]; then
 fi
 E2E_TIMEOUT=${E2E_TIMEOUT:-180}
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}
-E2E_JOBS=${E2E_JOBS:-$((JOBS < 4 ? JOBS : 4))}
+E2E_JOBS=${E2E_JOBS:-$((JOBS < 8 ? JOBS : 8))}
 RAM_DISK=${RAM_DISK:-4096}
 # A template with X's: GNU's and BSD's mktemp both take it.
 TMP_ROOT=${TMPDIR:-/tmp}
@@ -106,8 +106,8 @@ ran() {  # ran KIND FILE: each of FILE's parts done
 # one for its Emacs: its init folder (home), the files its tests make
 # (TEST_TMP), a unit test file's on the RAM disk if there's one, else the
 # same.
-run_file() {  # run_file KIND FILE PART PARTS
-  local kind=$1 file=$2 part=$3 parts=$4 tmp work log status pid waited select=()
+run_file() {  # run_file KIND FILE PART PARTS [SLOT SLOTS]: an end-to-end one's frame in SLOT
+  local kind=$1 file=$2 part=$3 parts=$4 slot=${5:-0} slots=${6:-1} tmp work log status pid waited select=()
   tmp=$(folder "$RUN" "$kind" "$file" "$part" "$parts")
   work=$(folder "$(work_root "$kind")" "$kind" "$file" "$part" "$parts")
   log="$tmp/log.txt"
@@ -123,7 +123,7 @@ run_file() {  # run_file KIND FILE PART PARTS
     status=$?
   else
     [ "$parts" -gt 1 ] && select=(--eval "(setq +test-selector (+test-part-selector $part $parts))")
-    TEST_TMP="$work" "$EMACS_GUI" -Q --init-directory="$work/home" \
+    TEST_TMP="$work" E2E_SLOT="$slot" E2E_SLOTS="$slots" "$EMACS_GUI" -Q --init-directory="$work/home" \
       -l "$TESTS/helper.el" -l "$file" "${select[@]}" -f +test-e2e-run >"$log" 2>&1 &
     pid=$!
     echo "$pid" >"$tmp/pid"
@@ -210,9 +210,11 @@ report_file() {  # report_file KIND FILE: its result (its parts' together), once
 }
 
 run_files() {  # run_files KIND N FILE...: N Emacsen running at once, the files shown in their order
-  local kind=$1 n=$2 next=0 shown=0 waiting="" base running solo="" file pass part parts
+  local kind=$1 n=$2 next=0 shown=0 waiting="" base running solo="" file pass part parts slot
   shift 2
-  local files=("$@") starts=() start_parts=() start_counts=()
+  # slots: the folder of the file each slot's Emacs runs (an end-to-end
+  # one's frame: its own corner of the screen, `+test-e2e-frame-place').
+  local files=("$@") starts=() start_parts=() start_counts=() slots=()
   # Those running alone first, then the slow ones (each part of a split
   # one), then the others.
   for pass in alone slow rest; do
@@ -238,7 +240,13 @@ run_files() {  # run_files KIND N FILE...: N Emacsen running at once, the files 
         [ "${running:-0}" -eq 0 ] || break
         solo=$(folder "$RUN" "$kind" "${starts[$next]}" 1 1)
       fi
-      run_file "$kind" "${starts[$next]}" "${start_parts[$next]}" "${start_counts[$next]}" &
+      # A slot free: none running there, or its file done (its Emacs gone).
+      slot=0
+      while [ -n "${slots[$slot]:-}" ] && [ ! -e "${slots[$slot]}/status" ]; do
+        slot=$((slot + 1))
+      done
+      slots[slot]=$(folder "$RUN" "$kind" "${starts[$next]}" "${start_parts[$next]}" "${start_counts[$next]}")
+      run_file "$kind" "${starts[$next]}" "${start_parts[$next]}" "${start_counts[$next]}" "$slot" "$n" &
       next=$((next + 1))
     done
     base=$(basename "${files[$shown]}" .el)

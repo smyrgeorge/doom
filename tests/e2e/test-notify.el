@@ -63,10 +63,13 @@ desktop while Emacs is away, t printed back; in front, nil."
           (server-start)
           (let ((process (make-process
                           :name "emacsclient" :buffer output :connection-type 'pipe
-                          :sentinel #'ignore     ; no "Process ... finished" in OUTPUT
+                          ;; No "Process ... finished" in OUTPUT; ended once
+                          ;; its output is all read (its reply, on a busy
+                          ;; machine, read after it exited).
+                          :sentinel #'+test-process-sentinel
                           :command (list client "-s" (expand-file-name server-name server-socket-dir)
                                          "--eval" "(+my/notify-claude \"The tests pass\" \"/home/me/dev/rskit/\")"))))
-            (should (+test-wait-for (lambda () (not (process-live-p process))) 10))
+            (should (+test-wait-for (lambda () (+test-process-ended-p process)) 10))
             (should (zerop (process-exit-status process))))
           (let ((printed (string-trim (with-current-buffer output (buffer-string)))))
             (if (+my/notify-emacs-in-front-p)

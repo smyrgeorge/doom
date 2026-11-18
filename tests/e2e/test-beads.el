@@ -3,6 +3,7 @@
 ;; laid over its column titles by the banner's child frame, the titles kept in
 ;; the row under them; an issue's view in narrow panes, on screen. The real bd
 ;; (skipped without it), in a temp git repo with a temp HOME.
+;; run.sh: slow (~20 s beside the others: started first).
 
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
 (+test-load "config/childframe" "config/banner" "config/window" "config/tiling" "config/beads")

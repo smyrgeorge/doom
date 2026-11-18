@@ -3,8 +3,9 @@
 ;; (a copy of Doom's, never downloaded here). Pages, splits, settings,
 ;; outline, history, search, zoom, copy, Option+Enter, the toolbar's
 ;; requests, places, links out, revert, no PDF.js, closing.
-;; run.sh: alone. PDF.js draws no page while its frame is covered (macOS
-;; takes it as hidden), and the frames of tests run beside it would be.
+;; run.sh: slow (~35 s). PDF.js draws no page while its frame is covered
+;; (macOS takes it as hidden): beside the others all the same, each frame
+;; with a corner of its own (tests/helper.el, `+test-e2e-frame-place').
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit" "config/pdf")
 

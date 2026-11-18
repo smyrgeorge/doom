@@ -2,6 +2,7 @@
 ;; config/webkit.el in a GUI Emacs, with real WebKit views: a page per window,
 ;; splits, spare and kept views, links out, JavaScript, the title read, copy,
 ;; scrolling, the reading place kept as a pane is resized, closing.
+;; run.sh: slow (~30 s beside the others: started first).
 
 (+test-load "config/childframe" "config/window" "config/webkit")
 

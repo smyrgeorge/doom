@@ -718,6 +718,30 @@ redisplay)."
                                   (= (frame-height) (cdr +test-e2e-frame-size))))
                   5))
 
+(defconst +test-e2e-corner 24
+  "Pixels of an end-to-end test frame's top left corner left on the screen,
+each way: the rest of it off the screen.")
+
+(defun +test-e2e-frame-place (slot slots)
+  "This frame out of the way at the bottom right of the screen's work area
+\(above the Dock), off the screen but for its top left corner: SLOT's of
+SLOTS (run.sh's E2E_SLOT, E2E_SLOTS: the end-to-end Emacsen at once).
+Their corners a staircase, each a step right of and above the one before:
+a frame covers the screen right of and below its corner, so no frame
+covers another's (macOS takes a window covered by others as hidden, and
+WebKit doesn't draw there: PDF.js renders no page)."
+  (let ((step +test-e2e-corner))
+    (pcase-let* ((`(,x ,y ,width ,height) (frame-monitor-workarea))
+                 (left (- (+ x width) (* (- slots slot) step)))
+                 (bottom (- (+ y height) step)))
+      ;; macOS keeps a window's top higher (52 px above the screen's bottom:
+      ;; asked lower, two frames' corners would be one): the lowest it takes,
+      ;; read back at once, is the first step. On X it's read only later.
+      (when (eq (window-system) 'ns)
+        (set-frame-position nil left bottom)
+        (setq bottom (min bottom (cdr (frame-position)))))
+      (set-frame-position nil left (- bottom (* slot step))))))
+
 (defun +test-e2e-run ()
   "Run this GUI Emacs's tests once it's up, report them on stderr (ERT's batch
 report), and exit with their status."
@@ -726,18 +750,19 @@ report), and exit with their status."
    (lambda ()
      ;; On top of other windows while the tests run: macOS takes a window
      ;; covered by others as hidden, and WebKit doesn't draw there (PDF.js
-     ;; renders no page). Out of the way all the same: off the screen but for
-     ;; its top left corner, at the bottom right of the screen's work area
-     ;; (above the Dock), not taking the keyboard. E2E_WINDOW=front: all of
-     ;; it on screen, focused (to watch the tests).
+     ;; renders no page). Out of the way all the same, its own corner of the
+     ;; screen (`+test-e2e-frame-place'), not taking the keyboard.
+     ;; E2E_WINDOW=front: all of it on screen, focused (to watch the tests),
+     ;; each a step down and right of the one before.
      (set-frame-parameter nil 'z-group 'above)
      (set-frame-parameter nil 'fullscreen nil) ; config/window.el maximizes
      (+test-e2e-frame-reset)
-     (if (equal (getenv "E2E_WINDOW") "front")
-         (progn (set-frame-position nil 60 60)
-                (select-frame-set-input-focus (selected-frame)))
-       (pcase-let ((`(,x ,y ,width ,height) (frame-monitor-workarea)))
-         (set-frame-position nil (+ x width -24) (+ y height -24))))
+     (let* ((slots (max 1 (string-to-number (or (getenv "E2E_SLOTS") "1"))))
+            (slot (min (1- slots) (max 0 (string-to-number (or (getenv "E2E_SLOT") "0"))))))
+       (if (equal (getenv "E2E_WINDOW") "front")
+           (progn (set-frame-position nil (+ 60 (* slot 40)) (+ 60 (* slot 40)))
+                  (select-frame-set-input-focus (selected-frame)))
+         (+test-e2e-frame-place slot slots)))
      (+test-wait-for (lambda () (frame-visible-p (selected-frame))) 5)
      (+test-sleep 0.3)
      (let ((status 1))

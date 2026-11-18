@@ -13,6 +13,7 @@
 ;; edited one drawn again, an error in place, re-themed with the page. In a
 ;; reply of Claude Code's, as agent-shell renders it: drawn, copied back.
 ;; Agent UI's mermaid element: drawn, in a snapshot as shown.
+;; run.sh: slow (~30 s beside the others: started first).
 
 (require 'markdown-mode)
 ;; The Markdown preview's stylesheets (Doom's markdown module sets GitHub's).

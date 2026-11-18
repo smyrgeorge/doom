@@ -7,6 +7,7 @@
 ;; up (each its role's icon) and no line past its edge in a font without ✎; a
 ;; napping loop's watch on its project's issues (file-notify's events, which
 ;; batch Emacs doesn't get). No agent runs: sessions are buffers.
+;; run.sh: slow (~40 s beside the others: started first).
 
 (setenv "GIT_CONFIG_GLOBAL" "/dev/null")
 (setenv "GIT_CONFIG_NOSYSTEM" "1")

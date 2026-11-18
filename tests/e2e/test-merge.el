@@ -2,6 +2,7 @@
 ;; config/merge.el in a GUI Emacs: Magit's e on a conflicted file opens the
 ;; three panes under the bar; the margins' buttons clicked where they show;
 ;; Done writes and stages the file, Magit's status shows it.
+;; run.sh: slow (~40 s beside the others: started first).
 
 (let ((build (file-name-directory
               (directory-file-name (file-name-directory (locate-library "magit"))))))

@@ -2,6 +2,7 @@
 ;; config/markdown.el's live preview in a GUI Emacs: pandoc's HTML in WebKit
 ;; (config/webkit.el) beside the file, following the cursor and the typing,
 ;; splits, links, keys, closing.
+;; run.sh: slow (~30 s beside the others: started first).
 
 (require 'markdown-mode)
 ;; The preview's stylesheets (Doom's markdown module sets GitHub's).

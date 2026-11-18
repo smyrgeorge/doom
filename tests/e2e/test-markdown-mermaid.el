@@ -4,6 +4,7 @@
 ;; xwidgets or pandoc): a block fenced by four backticks; a wide diagram in
 ;; a narrow pane, readable, scrolled in its box; an edited one's versions not
 ;; kept. Drawing, redrawing and re-theming: tests/e2e/test-mermaid.el.
+;; run.sh: slow (~20 s beside the others: started first).
 
 (require 'markdown-mode)
 ;; The preview's stylesheets (Doom's markdown module sets GitHub's).
