@@ -40,7 +40,15 @@
 ;;                           fits the pair. Again, or q, closed. Kept while
 ;;                           the file changes on disk (shown anew beside HEAD)
 ;;                           and while rotating or flipping; cropping closes
-;;                           it first; J / K show another image, without it
+;;                           it first; J / K show another image, without it.
+;;                 TAB       flip: git's HEAD in the image's place, at its zoom
+;;                           and scrolled to the same spot, one image in the
+;;                           whole pane; again, the image; and so on, the eye
+;;                           catching what changed. The toolbar says HEAD
+;;                           abc1234 while it's shown; edits wait for the
+;;                           image; J / K, a revert: the image. SPC m g:
+;;                           side by side again; q: closed.
+;;       The Diff button: a menu of both, with their keys.
 ;;   Save                    shown while edited (see above)
 ;;   Preview       SPC m p   open it in macOS's Preview; SPC m f shows it in
 ;;                           Finder (Linux: Open, its default app; Folder, the
@@ -100,6 +108,8 @@ in columns each: a pane narrower than twice this has HEAD above the image.")
       :n "c"   #'+my/image-crop
       :n "y"   #'+my/image-copy
       :n "RET" #'+my/image-toggle-animation
+      :n "TAB"   #'+my/image-toggle-head
+      :n "<tab>" #'+my/image-toggle-head
       :n "q"   #'+my/image-quit)         ; as PDFs; the diff first, as SPC m g
 
 ;; On Linux, Ctrl for Cmd (config/emacs.el, KEYS): zoom, copy.
@@ -115,6 +125,7 @@ in columns each: a pane narrower than twice this has HEAD above the image.")
       :localleader
       :desc "Toolbar"                "t" #'+my/image-toggle-toolbar
       :desc "Diff with git's HEAD"   "g" #'+my/image-diff
+      :desc "HEAD in its place"      "h" #'+my/image-toggle-head
       :desc "Sharp pixels"           "s" #'+my/image-toggle-sharp
       :desc "Crop"                   "c" #'+my/image-crop
       :desc "Copy the path"          "y" #'+my/image-copy-path

@@ -141,6 +141,7 @@ STATE) each."
          (file buffer-file-name)
          (scale (or +my/image--zoom-target (+my/image-scale)))
          (head (+my/image--head-shown-p))
+         (view (+my/image--head-view))
          (menu nil))
     (cl-flet ((button (group name help command &optional state)
                 (if (not (memq group out))
@@ -148,7 +149,13 @@ STATE) each."
                   (unless (eq state 'off)
                     (push (list help command state) menu))
                   nil)))
-      (let* ((place
+      (let* ((flipped
+              ;; Git's HEAD in the image's place (TAB): said, always.
+              (when (eq view 'head)
+                (propertize (format " HEAD %s " (plist-get +my/image--head :commit))
+                            'face '+my/image-toolbar-on
+                            'help-echo "Git's HEAD, in the image's place (TAB: the image)")))
+             (place
               (when file
                 (pcase-let* ((`(,index . ,count) (+my/image--position))
                              (state (and (< count 2) 'off)))
@@ -169,12 +176,15 @@ STATE) each."
                       (button 'view 'actual "Actual size (0, Cmd+0)" #'+my/image-actual-size
                               (and scale (< (abs (- scale 1.0)) 0.005) 'on))))
              (edits
-              (when (+my/image--editable-p)
-                (concat (button 'edits 'rotate-left "Rotate anticlockwise (R)" #'+my/image-rotate-left)
-                        (button 'edits 'rotate "Rotate clockwise (r)" #'+my/image-rotate)
-                        (button 'edits 'flip "Flip horizontally (f)" #'+my/image-flip)
-                        (button 'edits 'flip-v "Flip vertically (F)" #'+my/image-flip-vertically)
-                        (button 'edits 'crop "Crop: drag, RET crops, q cancels (c)" #'+my/image-crop))))
+              ;; Git's HEAD in the image's place: there, off (the toolbar
+              ;; as tall as with the image, which doesn't move a pixel).
+              (when (+my/image--editable-kind-p)
+                (let ((state (and (eq view 'head) 'off)))
+                  (concat (button 'edits 'rotate-left "Rotate anticlockwise (R)" #'+my/image-rotate-left state)
+                          (button 'edits 'rotate "Rotate clockwise (r)" #'+my/image-rotate state)
+                          (button 'edits 'flip "Flip horizontally (f)" #'+my/image-flip state)
+                          (button 'edits 'flip-v "Flip vertically (F)" #'+my/image-flip-vertically state)
+                          (button 'edits 'crop "Crop: drag, RET crops, q cancels (c)" #'+my/image-crop state)))))
              (looks
               (concat (when image-multi-frame
                         (if (+my/image-playing-p)
@@ -183,7 +193,7 @@ STATE) each."
                       (button 'view 'sharp "Sharp pixels: no smoothing (SPC m s)" #'+my/image-toggle-sharp
                               (and (+my/image--sharp-p) 'on))))
              (left (mapconcat #'identity
-                              (seq-remove #'string-empty-p (delq nil (list place zoom edits looks)))
+                              (seq-remove #'string-empty-p (delq nil (list flipped place zoom edits looks)))
                               (+my/image--separator)))
              (right
               (concat
@@ -193,10 +203,14 @@ STATE) each."
                        #'+my/image-copy)
                (when file
                  (concat
-                  (button (if head 'diff 'apps) 'diff
-                          (if head "Close the diff with git's HEAD (SPC m g, q)"
-                            "The image as in git's HEAD, beside it (SPC m g)")
-                          #'+my/image-diff (and head 'on))
+                  ;; Diff: a menu (diff.el); left out, its items in the
+                  ;; … button's.
+                  (if (memq (if head 'diff 'apps) out)
+                      (progn (dolist (item (+my/image--diff-menu-items))
+                               (push item menu))
+                             nil)
+                    (+my/image--button 'diff "Compare with git's HEAD: beside it (SPC m g), in its place (TAB)"
+                                       #'+my/image-diff-menu (and head 'on) (memq 'tight out)))
                   (when (buffer-modified-p)
                     (button 'save 'save "Save the edited image (SPC f s)" #'+my/image-save 'on))
                   (button 'apps 'preview (format "Open in %s (SPC m p)" (+my/os-app-name 'viewer))
@@ -250,7 +264,7 @@ with their keys."
   (list (window-body-width nil t) (buffer-chars-modified-tick) (buffer-modified-p)
         image-transform-resize +my/image--zoom-target (+my/image-scale)
         (+my/image--sharp-p) (and image-multi-frame (+my/image-playing-p) t)
-        (+my/image--head-shown-p) (and buffer-file-name (+my/image--position))
+        (+my/image--head-view) (and buffer-file-name (+my/image--position))
         (and (fboundp 'nerd-icons-codicon) t)))
 
 (defun +my/image--toolbar ()

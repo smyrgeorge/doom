@@ -526,6 +526,153 @@ image, without it."
       (+test-image--open (expand-file-name "a.png" (+test-image--folder)))
       (should-error (+my/image-diff) :type 'user-error))))
 
+;; ====== FLIPPING WITH GIT'S HEAD ======
+
+(defun +test-image--in-place ()
+  "HEAD's image drawn in the image's place (TAB), if it is."
+  (when-let* ((overlay (plist-get +my/image--head :overlay)))
+    (and (overlay-buffer overlay) (overlay-get overlay 'display))))
+
+(defun +test-image--press (key)
+  "KEY (a key description) pressed in normal state in the image."
+  (call-interactively (key-binding (kbd key))))
+
+(ert-deftest e2e-image/tab-flips-head-in-place-and-back ()
+  "TAB: HEAD in the image's place, one image, the toolbar saying it; again,
+the image; no new buffer or pane, nothing refitted or recentered between
+flips. From the diff side by side too; SPC m g back to it, q closes."
+  (+test-with-reset
+    (let* ((dir (+test-image--repo '(400 . 200)))
+           (image (+test-image--open (expand-file-name "a.png" dir)))
+           (window (selected-window))
+           (windows (window-list))
+           (commit (+test-image--commit dir)))
+      (evil-normal-state)
+      (+test-image--press "TAB")
+      (redisplay t)
+      (should (eq (+my/image--head-view) 'head))
+      (should (equal (window-list) windows))
+      (should (eq (window-buffer window) image))
+      (let ((head (+test-image--in-place))
+            (room (+my/image--room window)))
+        (should head)
+        (should (equal (plist-get (cdr head) :data) (+my/image--git dir "show" "HEAD:a.png")))
+        ;; No captions, HEAD not drawn before the image: one image.
+        (should-not (+test-image--head-drawn window))
+        (should (string-match-p (format "HEAD %s" commit) (+test-image--toolbar)))
+        (should (+test-image--diff-button-on-p))
+        ;; Its own image untouched, at HEAD's scale.
+        (should (equal (plist-get (cdr (+my/image--spec)) :data) nil))
+        (should (< (abs (- (+test-image--scale window)
+                           (/ (float (car (image-size head t))) 400)))
+                   0.01))
+        ;; Again: the image, the same room (nothing recentered).
+        (+test-image--press "TAB")
+        (redisplay t)
+        (should (eq (+my/image--head-view) 'image))
+        (should-not (+test-image--in-place))
+        (should-not (string-match-p "HEAD" (+test-image--toolbar)))
+        (should (equal (+my/image--room window) room))
+        (+test-image--press "<tab>")
+        (redisplay t)
+        (should (eq (+my/image--head-view) 'head))
+        (should (equal (+my/image--room window) room)))
+      ;; SPC m g: side by side; TAB from there: in place; q: closed.
+      (+my/image-diff)
+      (redisplay t)
+      (should (eq (+my/image--head-view) 'pair))
+      (should-not (+test-image--in-place))
+      (should (+test-image--head-drawn window))
+      (+my/image-toggle-head)
+      (should (eq (+my/image--head-view) 'head))
+      (+my/image-quit)
+      (redisplay t)
+      (should-not (+my/image--head-shown-p))
+      (should-not (+test-image--in-place))
+      (should (+test-image--fitted-p window))
+      (should (buffer-live-p image)))))
+
+(ert-deftest e2e-image/tab-keeps-the-zoom-and-the-spot ()
+  "Zoomed in past the pane and scrolled: flipping keeps the zoom and the
+spot; a zoom while HEAD is shown applies to both."
+  (+test-with-reset
+    (let ((dir (+test-image--repo '(400 . 200))))
+      (+test-image--open (expand-file-name "a.png" dir))
+      (dotimes (_ 12) (+my/image-zoom-in))
+      (redisplay t)
+      (image-forward-hscroll 10)
+      (image-next-line 5)
+      (redisplay t)
+      (let* ((window (selected-window))
+             (spot (list (window-hscroll window) (window-vscroll window t)))
+             (scale (+test-image--scale window)))
+        (should (> (car spot) 0))
+        (should (> (cadr spot) 0))
+        (+my/image-toggle-head)
+        (redisplay t)
+        (should (equal (list (window-hscroll window) (window-vscroll window t)) spot))
+        (should (< (abs (- (/ (float (car (image-size (+test-image--in-place) t))) 400) scale)) 0.01))
+        (+my/image-toggle-head)
+        (redisplay t)
+        (should (equal (list (window-hscroll window) (window-vscroll window t)) spot))
+        (should (= (+test-image--scale window) scale))
+        ;; Zoomed out while HEAD is shown: both.
+        (+my/image-toggle-head)
+        (+my/image-zoom-out)
+        (redisplay t)
+        (let ((zoomed (/ (float (car (image-size (+test-image--in-place) t))) 400)))
+          (should (< (abs (- zoomed (/ scale +my/image-zoom-step))) 0.01))
+          (+my/image-toggle-head)
+          (redisplay t)
+          (should (< (abs (- (+test-image--scale window) zoomed)) 0.01)))))))
+
+(ert-deftest e2e-image/tab-head-of-another-size-lines-up ()
+  "HEAD of another size: both at one scale, their top left corners at the
+same place (the room is the bigger's)."
+  (+test-with-reset
+    (let* ((dir (+test-image--repo))
+           (file (expand-file-name "a.png" dir)))
+      (+test-image--resize file 80 40)          ; HEAD: 40x20
+      (+test-image--open file)
+      (+my/image-actual-size)
+      (let ((window (selected-window)))
+        (+my/image-toggle-head)
+        (redisplay t)
+        (let ((room (+my/image--room window)))
+          (should (equal (image-size (+test-image--in-place) t) '(40 . 20)))
+          (+my/image-toggle-head)
+          (redisplay t)
+          (should (equal (+my/image--room window) room))
+          (should (equal (image-size (+my/image--spec) t) '(80 . 40))))))))
+
+(ert-deftest e2e-image/tab-edits-wait-and-a-revert-shows-the-image ()
+  "HEAD in its place: rotating, flipping, cropping refused; a revert (the
+file changed on disk): the image again; J: another image, without it; the
+same errors as SPC m g."
+  (+test-with-reset
+    (let* ((dir (+test-image--repo))
+           (file (expand-file-name "a.png" dir)))
+      (+test-image--open file)
+      (+my/image-toggle-head)
+      (should-not (+my/image--editable-p))
+      (should-error (+my/image-rotate) :type 'user-error)
+      (should-error (+my/image-crop) :type 'user-error)
+      (should-not (buffer-modified-p))
+      (+test-image--write file +test-image--red)
+      (auto-revert-handler)
+      (redisplay t)
+      (should (eq (+my/image--head-view) 'image))
+      (should-not (+test-image--in-place))
+      (should (+my/image--editable-p))
+      (+my/image-toggle-head)
+      (+my/image-next)
+      (redisplay t)
+      (should (equal buffer-file-name (expand-file-name "b.png" dir)))
+      (should-not (+my/image--head-shown-p))
+      ;; b.png isn't in HEAD: as SPC m g.
+      (should-error (+my/image-toggle-head) :type 'user-error)
+      (should-not (+my/image--head-shown-p)))))
+
 ;; ====== THE TOOLBAR IN NARROW PANES ======
 
 (defun +test-image--toolbar-width (window)
@@ -560,9 +707,12 @@ pushing its right side to the window's edge."
             (let ((menu (+my/image--menu (nth 2 (+my/image--toolbar-fit)))))
               (should (eq (lookup-key menu [+my/image-rotate]) #'+my/image-rotate))
               (should (eq (lookup-key menu [+my/image-open-in-preview]) #'+my/image-open-in-preview))
+              ;; The Diff menu's items, in it.
               (should (equal (assq '+my/image-diff (cdr menu))
-                             '(+my/image-diff menu-item "The image as in git's HEAD, beside it (SPC m g)"
-                                              +my/image-diff))))
+                             '(+my/image-diff menu-item "Beside git's HEAD (SPC m g)" +my/image-diff)))
+              (should (equal (assq '+my/image-toggle-head (cdr menu))
+                             '(+my/image-toggle-head menu-item "HEAD in its place (TAB)"
+                                                     +my/image-toggle-head))))
             ;; HEAD shown: Diff kept.
             (+my/image-diff)
             (+test-image--fits window)

@@ -200,7 +200,9 @@
                      ("RET" . +my/image-toggle-animation) ("q" . +my/image-quit)
                      ("SPC m t" . +my/image-toggle-toolbar) ("SPC m g" . +my/image-diff)
                      ("SPC m s" . +my/image-toggle-sharp) ("SPC m p" . +my/image-open-in-preview)
-                     ("SPC m f" . +my/image-show-in-finder) ("SPC m y" . +my/image-copy-path)))
+                     ("SPC m f" . +my/image-show-in-finder) ("SPC m y" . +my/image-copy-path)
+                     ("TAB" . +my/image-toggle-head) ("<tab>" . +my/image-toggle-head)
+                     ("SPC m h" . +my/image-toggle-head)))
       (should (eq (keymap-lookup normal key) command))))
   (pcase-dolist (`(,key . ,command)
                  '(("s-=" . +my/image-zoom-in) ("s--" . +my/image-zoom-out)
@@ -231,6 +233,20 @@
           (+my/image-quit)
           (should (equal killed (list image)))
           (should (= redrawn 1)))))))
+
+(ert-deftest image/the-diff-menu ()
+  "The toolbar's Diff menu: beside HEAD and in its place, their keys, the
+one shown ticked, and closing once one is."
+  (with-temp-buffer
+    (should (equal (mapcar #'cadr (+my/image--diff-menu-items))
+                   '(+my/image-diff +my/image-toggle-head)))
+    (should-not (delq nil (mapcar #'caddr (+my/image--diff-menu-items))))
+    (setq-local +my/image--head (list :commit "abc1234" :view 'head))
+    (let ((items (+my/image--diff-menu-items)))
+      (should (equal (mapcar #'cadr items) '(+my/image-diff +my/image-toggle-head +my/image-quit)))
+      (should (equal (mapcar #'caddr items) '(nil on nil)))
+      (should (string-match-p "(TAB)" (car (nth 1 items))))
+      (should (string-match-p "(SPC m g)" (car (nth 0 items)))))))
 
 (ert-deftest image/diff-scale-the-image-s-zoom-or-fitted ()
   "HEAD and the image at one scale: a zoom's, 1:1's, or fitted (scaled up
