@@ -298,8 +298,8 @@ The lead answers your questions about the crew, and runs it when you tell it to.
 the agents sleep, or what the minimap's ⚠ means: it reads `cmd/agent-workspace status`, the issues and the room, and
 says why ("linus is asleep, and his loop is off"). Tell it what to do and it does it from its shell: gives an issue to
 an agent, wakes one or puts it to sleep, turns its loop on or off, messages one. It doesn't ask your OK for each: you
-asked. The room says each one as the lead's (`max turned linus's loop on`, `max woke linus`). Its messages wait for
-your OK as `T` says, as any agent's.
+asked. The room says each one as the lead's (`max turned linus's loop on`, `max woke linus`). Its messages go as `T`
+says, as any agent's: at once, or each waiting for your OK while the crew asks.
 
 It acts only on your word: it never starts work by itself, doesn't watch the room, and doesn't loop (it has no labels:
 `L` is refused). It can't edit and writes no issues: new work is the scribe's, and it sends you there. When you ask, it
