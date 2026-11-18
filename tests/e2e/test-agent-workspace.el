@@ -389,9 +389,11 @@ same pixels (its glyphs evened)."
     (let ((window (get-buffer-window (agent-workspace--minimap-buffer project))))
       (should (window-live-p window))
       (should (eq (window-parameter window 'window-side) 'left))
-      ;; Each agent its line, quiet ones too (doom-pbk.91).
+      ;; Each agent its line, quiet ones too (doom-pbk.91); as tall as they
+      ;; are.
       (should (= 2 (with-current-buffer (window-buffer window)
                      (how-many "at the desk" (point-min) (point-max)))))
+      (should (= (window-body-height window t) (* 2 (window-default-line-height window))))
       (+test-e2e-aw--did ada "read" "README" 1)
       (+test-e2e-aw--did ada "edit" "README" 1)
       (+test-e2e-aw--did sam "execute" "README" 1)
@@ -400,6 +402,8 @@ same pixels (its glyphs evened)."
                                                 (not (string-search "at the desk" (buffer-string))))))
                               3))
       (redisplay t)
+      ;; Grown by the axis and legend under the lanes.
+      (should (= (window-body-height window t) (* 4 (window-default-line-height window))))
       (with-current-buffer (window-buffer window)
         (goto-char (point-min))
         (should (text-property-search-forward 'display nil (lambda (_ value) (eq (car-safe value) 'image))))
@@ -409,6 +413,39 @@ same pixels (its glyphs evened)."
             (push (car (window-text-pixel-size window (line-beginning-position) (1- (point)))) bars))
           (should (= (length bars) 2))
           (should (= (car bars) (cadr bars))))))))
+
+(ert-deftest e2e-agent-workspace/the-minimap-scrolls-past-10-lanes ()
+  "Twelve agents in a frame with window dividers (Doom's, a pixel): the
+minimap shows 10 lanes, whole (in whole lines a divider cut the last by a
+pixel, the cursor there scrolling them); j to the last lane scrolls it into
+view, whole."
+  (+test-e2e-aw
+    (let ((window-divider-default-places t)
+          (window-divider-default-bottom-width 1)
+          (window-divider-default-right-width 1))
+      (window-divider-mode 1)
+      (unwind-protect
+          (progn
+            (dolist (spec '(("bo" "builder") ("cy" "builder") ("di" "builder") ("ed" "investigator")
+                            ("kim" "reviewer") ("fay" "reviewer") ("gus" "tester") ("hal" "tester")
+                            ("ivy" "designer") ("jo" "planner")))
+              (agent-workspace-create :role (cadr spec) :name (car spec)))
+            (agent-workspace-layout (agent-workspace--app project))
+            (+test-sleep 0.5)
+            (agent-workspace--minimap-draw project)
+            (let ((window (get-buffer-window (agent-workspace--minimap-buffer project))))
+              (should (= (window-bottom-divider-width window) 1))
+              (should (= (window-body-height window t) (* 10 (window-default-line-height window))))
+              (with-selected-window window
+                (goto-char (point-min))
+                (agent-workspace-minimap-next 11)
+                (should (get-text-property (point) 'agent-workspace-minimap-agent))
+                (redisplay t)
+                (should (> (window-start window) (point-min)))
+                ;; Whole: nothing of it cut at the bottom.
+                (should (equal (nth 3 (pos-visible-in-window-p (point) window t)) nil))
+                (should (pos-visible-in-window-p (point) window)))))
+        (window-divider-mode -1)))))
 
 (ert-deftest e2e-agent-workspace/the-minimap-s-bars-line-up ()
   "Lanes of different minutes (an edit every minute, none, mixed), each

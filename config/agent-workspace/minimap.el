@@ -14,7 +14,9 @@
 ;; cell on the screen: a glyph drawn wider (a font lacking it draws it from
 ;; another) replaced by its fallback, measured once a frame; the │ at its
 ;; column whatever comes before it; every line evened and cut to its window's
-;; pixels, never past its edge. Faces only.
+;; pixels, never past its edge. Faces only. As tall as its lines: a lane each,
+;; growing as agents come, at most `agent-workspace-minimap-lines' (then it
+;; scrolls), the axis and legend under them while a lane has cells.
 ;;
 ;; Drawn again as the agents do things, a few times a second at most, and once
 ;; a minute (its cells move on) while a lane has something; only while it's
@@ -38,8 +40,10 @@ hides it; crew.json keeps what you chose."
   :type 'boolean
   :group 'agent-workspace)
 
-(defcustom agent-workspace-minimap-height 12
-  "The minimap's height, in lines."
+(defcustom agent-workspace-minimap-lines 10
+  "The most lanes the minimap shows at once (an agent's, a file two agents
+change): past them it scrolls. Its header line, axis and legend not
+counted. Fewer lanes, it's as tall as they are."
   :type 'natnum
   :group 'agent-workspace)
 
@@ -116,19 +120,49 @@ what they were measured with.")
                                 (agent-workspace--app-buffers project))))
     (get-buffer-window buffer (agent-workspace--app-frame app))))
 
+(defun agent-workspace--minimap-lines (project &optional now)
+  "The lines PROJECT's minimap shows at once: a lane each (an agent's, a
+conflict's), at most `agent-workspace-minimap-lines', its one line with no
+agents; the axis and legend under them while a lane has cells."
+  (let ((agents (agent-workspace-agents project)))
+    (+ (max 1 (min agent-workspace-minimap-lines
+                   (+ (length agents) (length (agent-workspace-conflicts project)))))
+       (if (seq-some (lambda (agent) (agent-workspace--minimap-busy-p agent now)) agents) 2 0))))
+
+(defun agent-workspace--minimap-height (project)
+  "PROJECT's minimap's rows: its lines and its header line."
+  (1+ (agent-workspace--minimap-lines project)))
+
+(defun agent-workspace--minimap-size (window project)
+  "WINDOW, PROJECT's minimap's, as tall as its lines and header line, to the
+pixel: in whole lines a window divider (Doom's, a pixel) cut its last line,
+and the cursor there scrolled the lanes. What the issue list above it can
+give at most."
+  (let* ((window-resize-pixelwise t)
+         (want (+ (window-header-line-height window)
+                  (* (agent-workspace--minimap-lines project) (window-default-line-height window))
+                  (window-mode-line-height window)
+                  (window-scroll-bar-height window)
+                  (window-bottom-divider-width window)))
+         (delta (window-resizable window (- want (window-pixel-height window)) nil 'preserved t)))
+    (unless (zerop delta)
+      (window-resize window delta nil 'preserved t))))
+
 (defun agent-workspace--minimap-place (app)
   "APP's minimap under its issue list, if it's shown and there's room for it
-\(twice its height): drawn. Called as APP is laid out."
+\(twice its height), as tall as its lines: drawn. Called as APP is laid
+out."
   (let ((project (agent-workspace--app-project app)))
     (when (and (agent-workspace-minimap-shown-p project)
-               (>= (window-total-height (frame-root-window)) (* 2 agent-workspace-minimap-height)))
+               (>= (window-total-height (frame-root-window)) (* 2 (agent-workspace--minimap-height project))))
       (when-let* ((window (display-buffer-in-side-window
                            (agent-workspace--minimap-buffer project)
-                           `((side . left) (slot . 1) (window-height . ,agent-workspace-minimap-height)
+                           `((side . left) (slot . 1) (window-height . ,(agent-workspace--minimap-height project))
                              (dedicated . t) (preserve-size . (nil . t))
                              (window-parameters . ((no-delete-other-windows . t)
                                                    (mode-line-format . none) (tab-line-format . none)))))))
         (set-window-fringes window 0 0)
+        (agent-workspace--minimap-size window project)
         (agent-workspace--minimap-draw project)))))
 
 ;; ====== ITS LINES ======
@@ -327,6 +361,11 @@ was on; drawn again at the next minute while a lane has something."
             (forward-line (1- line)))
           (set-window-point window (point))
           (set-window-start window (point-min) t))))
+    ;; As tall as its lines: an agent come or gone, a lane's first cells (the
+    ;; axis and legend). The app's own change, not a border dragged; while
+    ;; it's being laid out (its sizes not taken yet), placing it did it.
+    (agent-workspace--resize-own (window-frame window)
+                                 (lambda () (agent-workspace--minimap-size window project)))
     (when (seq-some (lambda (agent) (seq-some #'identity (agent-workspace-activity-lane agent)))
                     (agent-workspace-agents project))
       (agent-workspace--minimap-later project (- 60.5 (mod (float-time) 60))))))
@@ -376,9 +415,9 @@ low for it, not shown, saying so."
          (project (agent-workspace--app-project app))
          (shown (not (agent-workspace-minimap-shown-p project)))
          (rows (window-total-height (frame-root-window))))
-    (when (and shown (< rows (* 2 agent-workspace-minimap-height)))
+    (when (and shown (< rows (* 2 (agent-workspace--minimap-height project))))
       (user-error "No room for the minimap: it needs %d rows, the frame has %d"
-                  (* 2 agent-workspace-minimap-height) rows))
+                  (* 2 (agent-workspace--minimap-height project)) rows))
     (agent-workspace--minimap-set project shown)
     (run-hook-with-args 'agent-workspace-layout-functions project)
     (agent-workspace-layout app)

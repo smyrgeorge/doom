@@ -118,18 +118,35 @@ minimap; its buffer current."
   (when-let* ((window (get-buffer-window (current-buffer))))
     (set-window-point window (point))))
 
+(defconst +test-awm--twelve
+  '(("ada" "builder") ("sam" "investigator") ("kim" "reviewer") ("bo" "builder")
+    ("cy" "builder") ("di" "builder") ("ed" "investigator") ("fay" "reviewer")
+    ("gus" "tester") ("hal" "tester") ("ivy" "designer") ("jo" "planner"))
+  "Twelve agents (NAME ROLE), no role past its most.")
+
+(defun +test-awm--crew (n &optional from)
+  "The first N of `+test-awm--twelve' made, but the FROM first (made
+already): the agents made."
+  (mapcar (lambda (spec) (agent-workspace-create :role (cadr spec) :name (car spec)))
+          (nthcdr (or from 0) (seq-take +test-awm--twelve n))))
+
+(defun +test-awm--rows (project)
+  "The rows of PROJECT's minimap's window."
+  (window-total-height (get-buffer-window (agent-workspace--minimap-buffer project))))
+
 ;; ====== TESTS ======
 
 (ert-deftest agent-workspace-minimap/under-the-issues ()
-  "Under the issue list, 12 lines; m hides it (the issues the whole column)
-and shows it again; crew.json keeps it hidden, and a crew started again from it
-opens without it."
+  "Under the issue list, as tall as its lines (one agent: its lane, its
+header line); m hides it (the issues the whole column) and shows it again;
+crew.json keeps it hidden, and a crew started again from it opens without
+it."
   (+test-awm "under"
     (agent-workspace-create :role "builder" :name "ada")
     (agent-workspace-open t)
     (let ((windows (+test-awm--windows)))
-      (should (equal (nth 0 windows) '("*issues · under*" 50 27)))
-      (should (equal (nth 1 windows) '("*minimap · under*" 50 12))))
+      (should (equal (nth 0 windows) '("*issues · under*" 50 37)))
+      (should (equal (nth 1 windows) '("*minimap · under*" 50 2))))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
     (should (equal (nth 0 (+test-awm--windows)) '("*issues · under*" 50 39)))
@@ -140,7 +157,7 @@ opens without it."
                                               (buffer-string))))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
-    (should (equal (nth 1 (+test-awm--windows)) '("*minimap · under*" 50 12)))
+    (should (equal (nth 1 (+test-awm--windows)) '("*minimap · under*" 50 2)))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
     ;; Closed, then started again from crew.json: hidden as it was.
@@ -153,11 +170,12 @@ opens without it."
     (should-not (seq-find (lambda (window) (string-prefix-p "*minimap" (car window))) (+test-awm--windows)))))
 
 (ert-deftest agent-workspace-minimap/no-room-for-it ()
-  "m in a frame too low for the minimap (a terminal's 24 rows): refused,
-saying how many rows it needs, nothing changed; hiding it works anywhere
+  "m in a frame too low for the minimap (a terminal's 24 rows, twelve
+agents, one at work: its 10 lanes, axis and legend): refused, saying how
+many rows it needs, nothing changed; hiding it works anywhere
 \(doom-pbk.87)."
   (+test-awm "no-room"
-    (agent-workspace-create :role "builder" :name "ada")
+    (+test-awm--tool (car (+test-awm--crew 12)) "read" "README" 1)
     (agent-workspace-open t)
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
@@ -165,9 +183,40 @@ saying how many rows it needs, nothing changed; hiding it works anywhere
     (set-frame-size (selected-frame) 80 24)
     (agent-workspace-layout (agent-workspace--app project))
     (with-current-buffer (agent-workspace--issues-buffer project)
-      (should (string-match-p "\\`No room for the minimap: it needs 24 rows, the frame has [0-9]+\\'"
+      (should (string-match-p "\\`No room for the minimap: it needs 26 rows, the frame has [0-9]+\\'"
                               (cadr (should-error (agent-workspace-minimap-toggle) :type 'user-error)))))
     (should-not (agent-workspace-minimap-shown-p project))))
+
+(ert-deftest agent-workspace-minimap/as-tall-as-its-lines ()
+  "The minimap as tall as its lines, its header line above them: no agents,
+its one line; a lane an agent, growing as they come and shrinking as one's
+forgotten; the axis and legend under them while a lane has cells; at most
+`agent-workspace-minimap-lines' lanes (10), then it scrolls. Its own change:
+the app's sizes taken, not a border dragged."
+  (+test-awm "tall"
+    (let ((app (agent-workspace-open t)))
+      (cl-flet ((drawn ()
+                  (agent-workspace--minimap-draw project)
+                  (should (equal (agent-workspace--app-sizes app) (agent-workspace--sizes-now (selected-frame))))
+                  (+test-awm--rows project)))
+        (should (= (+test-awm--rows project) 2))
+        (should (string-search "No agents yet" (+test-awm--text project)))
+        (let ((agents (+test-awm--crew 3)))
+          (should (= (drawn) 4))
+          ;; ada reads: her lane has cells, the axis and legend under the lanes.
+          (+test-awm--tool (car agents) "read" "README" 1)
+          (should (= (drawn) 6)))
+        ;; Twelve: 10 lanes shown, the rest scrolled to.
+        (+test-awm--crew 12 3)
+        (should (= (length (agent-workspace-agents project)) 12))
+        (should (= (drawn) 13))
+        (should (= (agent-workspace--minimap-lines project) 12))
+        (with-current-buffer (agent-workspace--minimap-buffer project)
+          (should (= (count-lines (point-min) (point-max)) 14)))
+        ;; Four forgotten: 8 lanes.
+        (dolist (name '("fay" "gus" "hal" "ivy"))
+          (agent-workspace-forget (agent-workspace-agent name project) 'keep))
+        (should (= (drawn) 11))))))
 
 (ert-deftest agent-workspace-minimap/the-lanes ()
   "A line for each agent, in the crew's order: one that did something its
