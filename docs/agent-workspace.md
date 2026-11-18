@@ -444,7 +444,8 @@ there. These ship with this config, the starters:
 | full | scribe, builder, reviewer, merger |
 | extended | scribe, two builders, reviewer, merger |
 
-For each role, it makes the file's count less the crew's agents of that role, asleep and gone home ones counting.
+For each role, it makes the file's count less the crew's agents of that role, asleep and gone home ones counting,
+and, while the crew isn't running, those `crew.json` keeps.
 Each is made as `c` makes one with its name left empty: a name from the pool, its role's colour, model and mode.
 Nothing is asked, not even with `C-u`. The room says who was made: `crew full: + reviewer ken, merger margaret`.
 

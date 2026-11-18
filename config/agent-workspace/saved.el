@@ -143,13 +143,14 @@ null; a string, a number as `json-serialize' has them."
 
 ;; ====== READING ======
 
-(defun agent-workspace-crew-read (project)
+(defun agent-workspace-crew-read (project &optional peek)
   "Read PROJECT's crew.json (JSON, never evaluated): (CREW . PROBLEMS), CREW
 a plist (:agents, a list of agent plists that are right, :layout) as the code
 takes them (symbols where it takes symbols, false and null nil), nil without
 a file or with one that isn't JSON or isn't a crew; PROBLEMS, each
 \"crew.json: what\". An agent entry that's wrong is left out, said by its
-place and name."
+place and name. PEEK: only looked at, not as this Emacs reading it
+\(`agent-workspace--crew-seen': one changed by hand still isn't written)."
   (let ((file (agent-workspace--crew-path project)))
     (when (file-readable-p file)
       (let* ((problems nil)
@@ -160,8 +161,9 @@ place and name."
              (not-json nil)
              (data (with-temp-buffer
                      (let ((coding-system-for-read 'utf-8)) (insert-file-contents file))
-                     (puthash (agent-workspace--root project) (buffer-string) agent-workspace--crew-seen)
-                     (remhash (agent-workspace--root project) agent-workspace--crew-stale-said)
+                     (unless peek
+                       (puthash (agent-workspace--root project) (buffer-string) agent-workspace--crew-seen)
+                       (remhash (agent-workspace--root project) agent-workspace--crew-stale-said))
                      (condition-case err
                          (json-parse-string (buffer-string) :object-type 'plist :array-type 'array
                                             :null-object nil :false-object nil)
@@ -369,6 +371,22 @@ kept crew's layout, as read) where it says."
                    :agents (vconcat entries)
                    :layout (agent-workspace--crew-layout project app (plist-get kept :layout))))
             "\n")))
+
+(defun agent-workspace-crew-members (project)
+  "PROJECT's crew, running or not: ((NAME . ROLE)...), the agents running,
+then those of its saved crew not running, as crew.json keeps them
+\(`agent-workspace-crew-text'): a kept crew's (`agent-workspace--crew-kept');
+with none running and nothing kept, crew.json's, if it reads as a crew (only
+looked at)."
+  (let* ((running (agent-workspace-agents project))
+         (saved (cond ((gethash (agent-workspace--root project) agent-workspace--crew-kept))
+                      ((not running) (car (agent-workspace-crew-read project t))))))
+    (append (mapcar (lambda (agent) (cons (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))
+                    running)
+            (seq-keep (lambda (entry)
+                        (unless (agent-workspace-agent (plist-get entry :name) project)
+                          (cons (plist-get entry :name) (plist-get entry :role))))
+                      (plist-get saved :agents)))))
 
 (defun agent-workspace-crew-save (&optional project)
   "Write PROJECT's crew.json now (default: the current project's), if what

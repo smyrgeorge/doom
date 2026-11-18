@@ -22,6 +22,7 @@
 (declare-function agent-workspace-mode-label "agent-workspace/look")
 (declare-function agent-workspace--fit "agent-workspace/look")
 (declare-function agent-workspace-issues-ready "agent-workspace/issues")
+(declare-function agent-workspace-crew-members "agent-workspace/saved")
 (declare-function agent-ui-even-glyphs "agent-ui/core")
 (declare-function vertico--goto "vertico")
 (declare-function vertico--exhibit "vertico")
@@ -64,8 +65,9 @@ default."
 
 (defun agent-workspace-pool-name (project role)
   "A name for a new agent of ROLE in PROJECT's crew (see
-`agent-workspace-names')."
-  (let* ((names (mapcar #'agent-workspace-agent-name (agent-workspace-agents project)))
+`agent-workspace-names'): none of its agents' names or initials, those
+crew.json keeps while it doesn't run too (`agent-workspace-crew-members')."
+  (let* ((names (mapcar #'car (agent-workspace-crew-members project)))
          (initials (mapcar (lambda (name) (aref name 0)) names)))
     (or (seq-find (lambda (name)
                     (and (not (member name names))
@@ -147,14 +149,15 @@ project, starter, crew, or out (left out)."
   "What the picker shows of PROJECT's crews, gathered once: ((NAME . (:crew
 CREW :missing MISSING :count 0))...), the local ones, the project's, then
 the starters, MISSING what the crew lacks of it
-\(`agent-workspace-crew-missing')."
-  (let ((specs (agent-workspace-crew-specs project)))
+\(`agent-workspace-crew-missing'), its agents running or not read once."
+  (let ((specs (agent-workspace-crew-specs project))
+        (members (agent-workspace-crew-members project)))
     (seq-mapcat (lambda (origin)
                   (seq-keep (lambda (spec)
                               (and (eq (plist-get (cdr spec) :origin) origin)
                                    (cons (car spec)
                                          (list :crew (cdr spec)
-                                               :missing (agent-workspace-crew-missing project (cdr spec))
+                                               :missing (agent-workspace-crew-missing project (cdr spec) members)
                                                :count 0))))
                             specs))
                 '(local project starter))))

@@ -105,8 +105,9 @@ needs your OK. nil: Claude Code's own default."
 ;; roles: a row each, its icon, name, description, its agents, and what it
 ;; would add here (+ reviewer, merger), or, dimmed and refused, nothing to
 ;; add. Picked, it makes for each role its count less the crew's agents of
-;; that role (asleep and gone home ones counting), no name asked, as c makes
-;; one with its name left empty; the room says who was made ("crew full: +
+;; that role (asleep and gone home ones counting, and those crew.json keeps
+;; while the crew isn't running), no name asked, as c makes one with its
+;; name left empty; the room says who was made ("crew full: +
 ;; reviewer ken, merger margaret"). It only adds: an agent beyond its count,
 ;; or of a role it doesn't list, stays as it is. A file's problems are
 ;; warnings naming file and line; an error leaves it out (a role that isn't
