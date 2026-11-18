@@ -446,8 +446,8 @@ the starters of the same name."
                                    ("t" . agent-workspace-issue-give) ("gr" . agent-workspace-issues-refresh))))
 
 ;; The minimap, under the issues (config/agent-workspace/minimap.el): a lane
-;; each agent (its avatar and role's icon, its name and role on hover; the
-;; quiet ones' too), what it did minute by minute, a cell a column on the
+;; each agent (its avatar and role's icon, its name and role on hover), what
+;; it did minute by minute (a quiet one's all ·), a cell a column on the
 ;; screen (a glyph the font draws wider: its fallback, ± for ✎), every lane's
 ;; │ at the same column, a line too long cut with …; RET its agent, o the
 ;; file it's in, d its changes (on a ⚠: both agents'). m shows or hides it,
