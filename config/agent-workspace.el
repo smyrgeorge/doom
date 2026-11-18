@@ -87,7 +87,10 @@ needs your OK. nil: Claude Code's own default."
 ;; one replaces one of the same name: starter < project < local (M-x
 ;; agent-workspace-copy-role copies a starter, or a project's role into your
 ;; local ones, to change it there). Its tools and permission mode are
-;; enforced by Claude Code (its options), not only told. A file's problems
+;; enforced by Claude Code (its options), not only told. Its tools, deny and
+;; instructions may name {main} (the main checkout), {main-branch}, {name}
+;; and {project}, filled in as its session starts: the merger's rules name
+;; its two merges exactly, no * before merge. A file's problems
 ;; are warnings naming its file and line (an error leaves the role out: no
 ;; description, a name, mode, max, colour or tool that isn't one); M-x
 ;; agent-workspace-check-roles lists them all.
@@ -289,7 +292,8 @@ does."
 ;; an agent's shell: cmd/agent-workspace send --to ken TEXT. T in the app: may
 ;; they, off / ask me (each waits in the room for [Send] [Edit] [Drop]) / on,
 ;; kept in crew.json; on for a new crew (`agent-workspace-talk'); a role's
-;; talks-to: names the roles it may message without your OK while it asks. Through the inbox: delivered when free, framed as from the sender
+;; talks-to: names the roles it may message without your OK while it asks.
+;; Through the inbox: delivered when free, framed as from the sender
 ;; (data, not your instructions); the reply goes back to the sender, as an
 ;; answer. In the room, each exchange a thread: TAB folds it, x stops it (or
 ;; lets it go again), [Answer] answers for the agent it's for. A thread waits

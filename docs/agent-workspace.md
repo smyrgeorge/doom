@@ -308,12 +308,12 @@ issue is claimed then), it tries again 30 seconds later
 
 Its loop is kept in the [saved crew](#the-saved-crew). A crew started again brings a looping agent back awake, and it
 takes the next ready issue; one you put to sleep (`Z`) stays asleep. A role without `labels` has no issues to take, and
-a project without Beads has none either: their agents can't loop.
+a project without Beads has none either: their agents can't loop. A role whose labels go while its agents loop (its
+file saved mid-edit, or missing on the branch checked out) pauses them, saying so, until they're back.
 
 With `agent-workspace-loop` set to `nil`, loops wait for you: a new agent starts with its loop off (`L` turns it on),
 and a crew started again brings a looping agent back asleep, so reopening never starts work by itself: wake it (`Z`)
-and it loops. A role whose labels go while its agents loop (its file
-saved mid-edit, or missing on the branch checked out) pauses them, saying so, until they're back.
+and it loops.
 
 ## An agent's panels
 
@@ -546,6 +546,11 @@ Write the tests first, then run them.
 
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the
   starters have none: their agents run in auto mode). Claude Code enforces all three.
+- `tools`, `deny` and the instructions can name the agent's own paths, filled in as its session starts: `{main}` (the
+  project's main checkout), `{main-branch}` (its branch), `{name}` (the agent's name) and `{project}` (the main
+  checkout's folder name). A rule then names the exact command, as the merger's do: `Bash(git -C {main} merge
+  --no-ff *)`. A `*` before a git command's subcommand (`Bash(git -C * merge *)`) would allow git's own options there
+  too, and `-c` runs anything without a prompt.
 - `max` is how many of the role may run at once. `labels` are the issues it's for. `talks-to` names the roles it may
   [message](#agents-asking-each-other) without your OK while the crew asks. `hands-to` names the roles its finished issues
   [go to](#work-handed-on-through-issues), in order (`any`: the one it's for), `returns-to` where work goes back.
@@ -564,9 +569,10 @@ letters, digits or `-`. A file with a mistake is left out (the [picker](#making-
 names its file and line: a key that isn't one, a `mode`, `max` or `colour` that isn't one there is, a `tools` or
 `deny` entry that isn't `Tool` or `Tool(pattern)`. Some things are only warned about, the role kept: an unknown key or
 one given twice (the last is used), a `model` that isn't `inherit`, one of `agent-workspace-models` or a model's id
-(`claude-...`), an `icon` that isn't a nerd icon, a tool both allowed and denied (it's denied), no instructions, a
-`talks-to` or `hands-to` naming no role of the project's, or its own. `M-x agent-workspace-check-roles` reads them all
-again and lists every problem, each line taking you to its file and line.
+(`claude-...`), an `icon` that isn't a nerd icon, a `{word}` in `tools` or `deny` that isn't one of the placeholders
+(left as it is), a tool both allowed and denied (it's denied), no instructions, a `talks-to` or `hands-to` naming no
+role of the project's, or its own. `M-x agent-workspace-check-roles` reads them all again and lists every problem, each
+line taking you to its file and line.
 
 ## Its states
 
