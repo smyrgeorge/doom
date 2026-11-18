@@ -150,11 +150,19 @@ STATE) each."
                     (push (list help command state) menu))
                   nil)))
       (let* ((flipped
-              ;; Git's HEAD in the image's place (TAB): said, always.
-              (when (eq view 'head)
-                (propertize (format " HEAD %s " (plist-get +my/image--head :commit))
-                            'face '+my/image-toolbar-on
-                            'help-echo "Git's HEAD, in the image's place (TAB: the image)")))
+              ;; Git's HEAD in the image's place (TAB), the changed pixels
+              ;; (D): said, always.
+              (pcase view
+                ('head
+                 (propertize (format " HEAD %s " (plist-get +my/image--head :commit))
+                             'face '+my/image-toolbar-on
+                             'help-echo "Git's HEAD, in the image's place (TAB: the image)"))
+                ('difference
+                 ;; %% for the header line: % starts its constructs.
+                 (propertize (format " %s " (string-replace "%" "%%" (+my/image--difference-text)))
+                             'face '+my/image-toolbar-on
+                             'help-echo (format "The pixels changed since git's HEAD (%s), in red (D: back)"
+                                                (plist-get +my/image--head :commit))))))
              (place
               (when file
                 (pcase-let* ((`(,index . ,count) (+my/image--position))
@@ -209,7 +217,7 @@ STATE) each."
                       (progn (dolist (item (+my/image--diff-menu-items))
                                (push item menu))
                              nil)
-                    (+my/image--button 'diff "Compare with git's HEAD: beside it (SPC m g), in its place (TAB)"
+                    (+my/image--button 'diff "Compare with git's HEAD: beside it (SPC m g), in its place (TAB), the changed pixels (D)"
                                        #'+my/image-diff-menu (and head 'on) (memq 'tight out)))
                   (when (buffer-modified-p)
                     (button 'save 'save "Save the edited image (SPC f s)" #'+my/image-save 'on))
@@ -264,7 +272,8 @@ with their keys."
   (list (window-body-width nil t) (buffer-chars-modified-tick) (buffer-modified-p)
         image-transform-resize +my/image--zoom-target (+my/image-scale)
         (+my/image--sharp-p) (and image-multi-frame (+my/image-playing-p) t)
-        (+my/image--head-view) (and buffer-file-name (+my/image--position))
+        (+my/image--head-view) (and (eq (+my/image--head-view) 'difference) (+my/image--difference-text))
+        (and buffer-file-name (+my/image--position))
         (and (fboundp 'nerd-icons-codicon) t)))
 
 (defun +my/image--toolbar ()

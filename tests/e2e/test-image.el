@@ -673,6 +673,121 @@ same errors as SPC m g."
       (should-error (+my/image-toggle-head) :type 'user-error)
       (should-not (+my/image--head-shown-p)))))
 
+;; ====== THE CHANGED PIXELS ======
+
+(defun +test-image--magick (&rest args)
+  (should (zerop (apply #'call-process (+my/os-imagemagick) nil nil nil args))))
+
+(defun +test-image--changed-repo (change)
+  "A git repository whose HEAD has a.png, 40×20 red, then CHANGE made to it
+\(ImageMagick's arguments, the file after them); its path."
+  (let* ((dir (+test-image--folder))
+         (file (expand-file-name "a.png" dir))
+         (default-directory dir)
+         (process-environment (append '("GIT_CONFIG_GLOBAL=/dev/null" "GIT_CONFIG_NOSYSTEM=1"
+                                        "GIT_AUTHOR_NAME=t" "GIT_AUTHOR_EMAIL=t@t"
+                                        "GIT_COMMITTER_NAME=t" "GIT_COMMITTER_EMAIL=t@t")
+                                      process-environment)))
+    (+test-image--magick "-size" "40x20" "xc:red" file)
+    (dolist (args '(("init" "-q") ("add" "a.png") ("commit" "-q" "-m" "a")))
+      (should (zerop (apply #'call-process "git" nil nil nil args))))
+    (apply #'+test-image--magick file (append change (list file)))
+    dir))
+
+(defun +test-image--compared ()
+  (+test-wait-for (lambda () (not (equal (+my/image--difference-text) "Comparing…"))) 20))
+
+(ert-deftest e2e-image/d-shows-the-changed-pixels ()
+  "D: the pixels changed since HEAD in the image's place, one image, its
+count in the toolbar; made once, not at each zoom; again, back to the
+diff it came from, or the image."
+  (skip-unless (+my/image--compare-programs))
+  (+test-with-reset
+    (let* ((dir (+test-image--changed-repo '("-fill" "blue" "-draw" "point 3,3" "-draw" "point 5,5")))
+           (image (+test-image--open (expand-file-name "a.png" dir)))
+           (window (selected-window)))
+      (+my/image-diff)
+      (should (eq (+my/image--head-view) 'pair))
+      (+my/image-difference)
+      (should (eq (+my/image--head-view) 'difference))
+      (should (string-match-p "Comparing…" (+test-image--toolbar)))
+      (should (+test-image--compared))
+      (redisplay t)
+      (should (equal (+my/image--difference-text) "2 px changed (0.2%)"))
+      (should (string-match-p (regexp-quote "2 px changed (0.2%)") (+test-image--toolbar)))
+      (let ((drawn (+test-image--in-place)))
+        (should drawn)
+        (should (equal (image-size drawn t) (image-size (+my/image--spec) t)))
+        ;; One image: HEAD not beside it, no captions.
+        (should-not (+test-image--head-drawn window)))
+      ;; No files left; zoomed: not compared again.
+      (should-not (plist-get +my/image--difference :dir))
+      (let ((bytes (plist-get +my/image--difference :bytes)))
+        (+my/image-zoom-in)
+        (redisplay t)
+        (should (eq (plist-get +my/image--difference :bytes) bytes))
+        (should-not (plist-get +my/image--difference :process))
+        (should (< (abs (- (/ (float (car (image-size (+test-image--in-place) t))) 40)
+                           (+test-image--scale window)))
+                   0.01)))
+      ;; Again: the diff side by side, as before.
+      (+my/image-difference)
+      (redisplay t)
+      (should (eq (+my/image--head-view) 'pair))
+      (should-not (+test-image--in-place))
+      (should (+test-image--head-drawn window))
+      ;; From no diff: D, then D closes it.
+      (+my/image-quit)
+      (+my/image-difference)
+      (should (+test-image--compared))
+      (should (eq (+my/image--head-view) 'difference))
+      (+my/image-difference)
+      (should-not (+my/image--head-shown-p))
+      (should (buffer-live-p image)))))
+
+(ert-deftest e2e-image/d-same-pixels-and-sizes-that-differ ()
+  "The bytes changed, not the pixels: said so, the image shown. HEAD of
+another size: both sizes said, the room added counted as changed."
+  (skip-unless (+my/image--compare-programs))
+  (+test-with-reset
+    (let ((dir (+test-image--changed-repo '("-set" "comment" "changed" "-define" "png:compression-level=1"))))
+      (+test-image--open (expand-file-name "a.png" dir))
+      (+my/image-difference)
+      (should (+test-image--compared))
+      (redisplay t)
+      (should (equal (+my/image--difference-text) "Same pixels as HEAD"))
+      (should-not (+test-image--in-place))))
+  (+test-with-reset
+    (let ((dir (+test-image--changed-repo '("-resize" "80x40!"))))
+      (+test-image--open (expand-file-name "a.png" dir))
+      (+my/image-difference)
+      (should (+test-image--compared))
+      (redisplay t)
+      (should (equal (+my/image--difference-text)
+                     "Sizes differ: 80×40 · HEAD 40×20 · 2400 px changed (75.0%)"))
+      (should (equal (image-size (+test-image--in-place) t) (image-size (+my/image--spec) t))))))
+
+(ert-deftest e2e-image/d-closed-while-comparing-stops-it ()
+  "Closing the diff (or the image) while comparing kills ImageMagick and
+removes its files."
+  (skip-unless (+my/image--compare-programs))
+  (+test-with-reset
+    (let ((dir (+test-image--changed-repo '("-fill" "blue" "-draw" "point 3,3"))))
+      (+test-image--open (expand-file-name "a.png" dir))
+      (+my/image-difference)
+      (let ((process (plist-get +my/image--difference :process))
+            (files (plist-get +my/image--difference :dir)))
+        (should (process-live-p process))
+        (+my/image-quit)
+        (should-not (process-live-p process))
+        (should-not (file-exists-p files)))
+      (+my/image-difference)
+      (let ((process (plist-get +my/image--difference :process))
+            (files (plist-get +my/image--difference :dir)))
+        (kill-buffer (current-buffer))
+        (should-not (process-live-p process))
+        (should-not (file-exists-p files))))))
+
 ;; ====== THE TOOLBAR IN NARROW PANES ======
 
 (defun +test-image--toolbar-width (window)

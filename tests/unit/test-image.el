@@ -202,7 +202,8 @@
                      ("SPC m s" . +my/image-toggle-sharp) ("SPC m p" . +my/image-open-in-preview)
                      ("SPC m f" . +my/image-show-in-finder) ("SPC m y" . +my/image-copy-path)
                      ("TAB" . +my/image-toggle-head) ("<tab>" . +my/image-toggle-head)
-                     ("SPC m h" . +my/image-toggle-head)))
+                     ("SPC m h" . +my/image-toggle-head)
+                     ("D" . +my/image-difference) ("SPC m d" . +my/image-difference)))
       (should (eq (keymap-lookup normal key) command))))
   (pcase-dolist (`(,key . ,command)
                  '(("s-=" . +my/image-zoom-in) ("s--" . +my/image-zoom-out)
@@ -239,14 +240,47 @@
 one shown ticked, and closing once one is."
   (with-temp-buffer
     (should (equal (mapcar #'cadr (+my/image--diff-menu-items))
-                   '(+my/image-diff +my/image-toggle-head)))
+                   '(+my/image-diff +my/image-toggle-head +my/image-difference)))
     (should-not (delq nil (mapcar #'caddr (+my/image--diff-menu-items))))
     (setq-local +my/image--head (list :commit "abc1234" :view 'head))
     (let ((items (+my/image--diff-menu-items)))
-      (should (equal (mapcar #'cadr items) '(+my/image-diff +my/image-toggle-head +my/image-quit)))
-      (should (equal (mapcar #'caddr items) '(nil on nil)))
+      (should (equal (mapcar #'cadr items)
+                     '(+my/image-diff +my/image-toggle-head +my/image-difference +my/image-quit)))
+      (should (equal (mapcar #'caddr items) '(nil on nil nil)))
+      (should (string-match-p "(D)" (car (nth 2 items))))
       (should (string-match-p "(TAB)" (car (nth 1 items))))
       (should (string-match-p "(SPC m g)" (car (nth 0 items)))))))
+
+(ert-deftest image/the-changed-pixels-said ()
+  "What the toolbar says of the changed pixels: comparing, how many, the
+same pixels, sizes that differ, a failure; never a silent 0."
+  (with-temp-buffer
+    (setq-local +my/image--head (list :commit "abc1234" :view 'difference))
+    (let ((key (+my/image--difference-key)))
+      (should (equal (+my/image--difference-text) "Comparing…"))
+      (setq-local +my/image--difference (list :key key :process t))
+      (should (equal (+my/image--difference-text) "Comparing…"))
+      (setq-local +my/image--difference (list :key key :count 412 :total 144000))
+      (should (equal (+my/image--difference-text) "412 px changed (0.3%)"))
+      (setq-local +my/image--difference (list :key key :count 2 :total 1440000))
+      (should (equal (+my/image--difference-text) "2 px changed (0.00%)"))
+      (setq-local +my/image--difference (list :key key :count 0 :total 800))
+      (should (equal (+my/image--difference-text) "Same pixels as HEAD"))
+      (setq-local +my/image--difference (list :key key :count 2400 :total 3200
+                                              :sizes '((80 . 40) . (40 . 20))))
+      (should (equal (+my/image--difference-text)
+                     "Sizes differ: 80×40 · HEAD 40×20 · 2400 px changed (75.0%)"))
+      (setq-local +my/image--difference (list :key key :error "no decode delegate"))
+      (should (equal (+my/image--difference-text) "Couldn't compare: no decode delegate"))
+      ;; The image changed since: compared again.
+      (setq-local +my/image--difference (list :key (list "abc1234" -1 0) :count 3 :total 9))
+      (should (equal (+my/image--difference-text) "Comparing…")))))
+
+(ert-deftest image/the-changed-pixels-need-imagemagick ()
+  (with-temp-buffer
+    (cl-letf (((symbol-function '+my/image--compare-programs) #'ignore))
+      (should-error (+my/image-difference) :type 'user-error)
+      (should-not +my/image--head))))
 
 (ert-deftest image/diff-scale-the-image-s-zoom-or-fitted ()
   "HEAD and the image at one scale: a zoom's, 1:1's, or fitted (scaled up

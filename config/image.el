@@ -48,7 +48,15 @@
 ;;                           abc1234 while it's shown; edits wait for the
 ;;                           image; J / K, a revert: the image. SPC m g:
 ;;                           side by side again; q: closed.
-;;       The Diff button: a menu of both, with their keys.
+;;                 D         the pixels changed since git's HEAD, in red over a
+;;                           faded copy of the image, in its place at its zoom,
+;;                           the toolbar saying how many ("412 px changed
+;;                           (0.3%)"; HEAD of another size: both sizes, the
+;;                           room added counted); again, back. It needs
+;;                           ImageMagick (made in the background, once per
+;;                           HEAD commit and change of the image);
+;;                           `+my/image-diff-fuzz' for JPEGs' noise.
+;;       The Diff button: a menu of the three, with their keys.
 ;;   Save                    shown while edited (see above)
 ;;   Preview       SPC m p   open it in macOS's Preview; SPC m f shows it in
 ;;                           Finder (Linux: Open, its default app; Folder, the
@@ -77,6 +85,11 @@
 (defvar +my/image-diff-min-width 30
   "The narrowest the image and its HEAD version get side by side (SPC m g),
 in columns each: a pane narrower than twice this has HEAD above the image.")
+
+(defvar +my/image-diff-fuzz 0
+  "How different a pixel's colour may be from HEAD's and still count as the
+same, in percent, for the changed pixels (D): a few for JPEGs, whose
+re-encoding moves them.")
 
 (defvar +my/image-mode-map (make-sparse-keymap)
   "Keys of images (see `+my/image-mode').")
@@ -110,6 +123,7 @@ in columns each: a pane narrower than twice this has HEAD above the image.")
       :n "RET" #'+my/image-toggle-animation
       :n "TAB"   #'+my/image-toggle-head
       :n "<tab>" #'+my/image-toggle-head
+      :n "D"     #'+my/image-difference
       :n "q"   #'+my/image-quit)         ; as PDFs; the diff first, as SPC m g
 
 ;; On Linux, Ctrl for Cmd (config/emacs.el, KEYS): zoom, copy.
@@ -126,6 +140,7 @@ in columns each: a pane narrower than twice this has HEAD above the image.")
       :desc "Toolbar"                "t" #'+my/image-toggle-toolbar
       :desc "Diff with git's HEAD"   "g" #'+my/image-diff
       :desc "HEAD in its place"      "h" #'+my/image-toggle-head
+      :desc "Changed pixels"         "d" #'+my/image-difference
       :desc "Sharp pixels"           "s" #'+my/image-toggle-sharp
       :desc "Crop"                   "c" #'+my/image-crop
       :desc "Copy the path"          "y" #'+my/image-copy-path
@@ -140,6 +155,7 @@ in columns each: a pane narrower than twice this has HEAD above the image.")
 (load! "image/commands")
 (load! "image/edit")
 (load! "image/diff")
+(load! "image/difference")
 (load! "image/center")
 (load! "image/toolbar")
 (load! "image/mode")

@@ -18,8 +18,9 @@
   "Git's HEAD of the image while the diff (SPC m g, TAB) is shown: a plist,
 :bytes its bytes, :commit HEAD's commit (short), :size its size in pixels,
 :spec its image as drawn now, :view how they're shown (pair: side by side;
-head or image: flipping, HEAD or the image in the image's place), :overlay
-the one drawing HEAD in its place.")
+head or image: flipping, HEAD or the image in the image's place; difference:
+the changed pixels there, difference.el), :before the view D left, :overlay
+the one drawing HEAD (or the difference) in its place.")
 
 (defun +my/image--git (dir &rest args)
   "git ARGS's output in DIR, as bytes; nil if it failed."
@@ -37,12 +38,14 @@ image, or flipping with it."
 
 (defun +my/image--head-view ()
   "How the diff is shown: pair (side by side), head or image (flipping: HEAD
-or the image in the image's place); nil, not shown."
+or the image in the image's place), difference (the changed pixels there,
+difference.el); nil, not shown."
   (and +my/image--head (or (plist-get +my/image--head :view) 'pair)))
 
 (defun +my/image--flipping-p ()
-  "Non-nil while flipping between HEAD and the image (TAB)."
-  (memq (+my/image--head-view) '(head image)))
+  "Non-nil while one image is shown at a time in the image's place: HEAD or
+the image (TAB), the changed pixels (D)."
+  (memq (+my/image--head-view) '(head image difference)))
 
 ;; BESIDE THE IMAGE
 ;; image-mode shows one image, the buffer's text: HEAD's is drawn before it,
@@ -131,7 +134,12 @@ window showing them."
                                   append (list key (plist-get (cdr own) key))))))
         (unless (equal head (plist-get +my/image--head :spec))
           (setq +my/image--head (plist-put +my/image--head :spec head)))
-        (+my/image--head-in-place (and (eq (+my/image--head-view) 'head) head))))))
+        (+my/image--head-in-place
+         (pcase (+my/image--head-view)
+           ('head head)
+           ;; Once compared (difference.el): till then, the image.
+           ('difference (+my/image--difference-start)
+                        (+my/image--difference-spec scale))))))))
 
 (defun +my/image--diff-captions ()
   "(HEAD-CAPTION . IMAGE-CAPTION): what's over each (see BESIDE THE IMAGE)."
@@ -217,6 +225,7 @@ buffer's image goes (see BESIDE THE IMAGE)."
 at once."
   (when +my/image--head
     (+my/image--head-in-place nil)
+    (+my/image--difference-stop)
     (setq +my/image--head nil)
     (when (+my/image--spec)
       (+my/image--redisplay))
@@ -311,6 +320,8 @@ what's shown."
                       #'+my/image-diff (and (eq view 'pair) 'on))
                 (list (if (eq view 'head) "HEAD in its place: the image again (TAB)" "HEAD in its place (TAB)")
                       #'+my/image-toggle-head (and (eq view 'head) 'on))
+                (list (if (eq view 'difference) "The changed pixels: back (D)" "The changed pixels (D)")
+                      #'+my/image-difference (and (eq view 'difference) 'on))
                 (and view (list "Close the diff (q)" #'+my/image-quit nil))))))
 
 (defun +my/image-diff-menu ()

@@ -66,7 +66,7 @@ TOOLS=(
   "config            | font:JetBrains Mono | cask:font-jetbrains-mono | apt:fonts-jetbrains-mono | dnf:jetbrains-mono-fonts | the font (config.el)"
   "config            | font:Symbols Nerd Font | cask:font-symbols-only-nerd-font | manual:M-x_nerd-icons-install-fonts | manual:M-x_nerd-icons-install-fonts | icons (nerd-icons)"
   "config            | delta            | brew:git-delta        | apt:git-delta         | dnf:git-delta          | magit's diffs (config/magit.el)"
-  "config            | magick/convert   | brew:imagemagick      | apt:imagemagick       | dnf:ImageMagick        | images: crop; rotate, flip on Linux (config/image.el)"
+  "config            | magick/convert   | brew:imagemagick      | apt:imagemagick       | dnf:ImageMagick        | images: crop, the changed pixels; rotate, flip on Linux (config/image.el)"
   "config            | npm              | brew:node             | apt:nodejs apt:npm    | dnf:nodejs dnf:nodejs-npm | Claude Code's bridge, npm's servers"
   "config            | claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | Claude Code in Emacs (config/agent-shell.el)"
   "config            | bd               | brew:beads            | npm:@beads/bd         | npm:@beads/bd          | issues: Beads (config/beads.el)"

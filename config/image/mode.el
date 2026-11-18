@@ -48,6 +48,8 @@
       (auto-revert-mode 1))
     ;; Reverted while flipping with git's HEAD (diff.el): the image shown.
     (add-hook 'after-revert-hook #'+my/image--head-reverted-h nil t)
+    ;; Comparing (difference.el) stopped with it, its files removed.
+    (add-hook 'kill-buffer-hook #'+my/image--difference-stop nil t)
     ;; No cursor: image-mode has none, but Evil's normal state drew its box
     ;; around the whole image (as Doom does for pdf-tools).
     (setq-local evil-normal-state-cursor (list nil)
@@ -64,6 +66,8 @@
     (when (bound-and-true-p auto-revert-mode)
       (auto-revert-mode -1))
     (remove-hook 'after-revert-hook #'+my/image--head-reverted-h t)
+    (remove-hook 'kill-buffer-hook #'+my/image--difference-stop t)
+    (+my/image--difference-stop)
     (when +my/image--head
       (+my/image--head-in-place nil)
       (setq +my/image--head nil))
