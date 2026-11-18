@@ -180,33 +180,49 @@ MODULES=$("$EMACS" --batch -Q --eval '
                           (mapconcat (function symbol-name) (cdr item) " ")))))))' \
   "$DOOM_INIT")
 
+# The matching below is bash alone, no subshell or program per row: a
+# dry run took 13-20 s when it ran one per row and module.
+
+# trim VAR STRING: VAR set to STRING without the spaces around it.
 trim() {
-  local s=$1
+  local s=$2
   s=${s#"${s%%[![:space:]]*}"}
-  printf '%s' "${s%"${s##*[![:space:]]}"}"
+  printf -v "$1" '%s' "${s%"${s##*[![:space:]]}"}"
 }
+
+# What init.el enables, as WHENs between bars: "|:lang cc|:lang cc +lsp|...",
+# a module alone and with each of its flags.
+ENABLED="|"
+while read -r category module flags; do
+  [ -n "$module" ] || continue
+  ENABLED="$ENABLED$category $module|"
+  for flag in $flags; do
+    ENABLED="$ENABLED$category $module $flag|"
+  done
+done <<<"$MODULES"
 
 # enabled WHEN: does WHEN (doom, config, ":CATEGORY MODULE [+FLAG]") apply?
 enabled() {
-  local category module flag
   case "$1" in doom|config) return 0 ;; esac
-  read -r category module flag <<<"$1"
-  awk -v c="$category" -v m="$module" -v f="${flag:-}" '
-    $1 == c && $2 == m { if (f == "") ok = 1; else for (i = 3; i <= NF; i++) if ($i == f) ok = 1 }
-    END { exit !ok }' <<<"$MODULES"
+  case "$ENABLED" in *"|$1|"*) return 0 ;; esac
+  return 1
 }
 
-# listed CATEGORY MODULE [FLAG]: is it in TOOLS's or NOTHING's WHENs?
+# TOOLS's and NOTHING's WHENs, between bars, as `enabled' reads init.el's.
+LISTED="|"
+for row in "${TOOLS[@]}" "${NOTHING[@]}"; do
+  trim when "${row%%|*}"
+  LISTED="$LISTED$when|"
+done
+
+# listed CATEGORY MODULE [FLAG]: is it in TOOLS's or NOTHING's WHENs (the
+# module alone: any of its rows, flagged or not)?
 listed() {
-  local want="$1 $2${3:+ $3}" row when
-  for row in "${TOOLS[@]}" "${NOTHING[@]}"; do
-    when=$(trim "${row%%|*}")
-    if [ -n "${3:-}" ]; then
-      [ "$when" = "$want" ] && return 0
-    else
-      case "$when" in "$want"|"$want "*) return 0 ;; esac
-    fi
-  done
+  local want="$1 $2${3:+ $3}"
+  case "$LISTED" in *"|$want|"*) return 0 ;; esac
+  if [ -z "${3:-}" ]; then
+    case "$LISTED" in *"|$want +"*) return 0 ;; esac
+  fi
   return 1
 }
 
@@ -246,12 +262,14 @@ BREW=() CASK=() SYSTEM=() PIPX=() RUSTUP=() NPM=() UV=() APPLIES=()
 
 for row in "${TOOLS[@]}"; do
   IFS='|' read -r when program macos apt dnf why <<<"$row"
-  when=$(trim "$when")
+  trim when "$when"
   enabled "$when" || continue
   case $column in 3) cell=$macos ;; 4) cell=$apt ;; 5) cell=$dnf ;; esac
-  cell=$(trim "$cell")
+  trim cell "$cell"
   [ "$cell" = - ] && continue
-  APPLIES+=("$(trim "$program")|$cell|$(trim "$why")")
+  trim program "$program"
+  trim why "$why"
+  APPLIES+=("$program|$cell|$why")
   for spec in $cell; do
     case "$spec" in
       brew:*) BREW+=("${spec#*:}") ;;
@@ -262,7 +280,7 @@ for row in "${TOOLS[@]}"; do
       npm:*) NPM+=("${spec#*:}") ;;
       uv:*) UV+=("${spec#*:}") ;;
       builtin|manual:*) ;;
-      *) ui_error "tools.sh: bad installer \"$spec\" in TOOLS ($(trim "$program"))"; exit 2 ;;
+      *) ui_error "tools.sh: bad installer \"$spec\" in TOOLS ($program)"; exit 2 ;;
     esac
   done
 done
@@ -471,16 +489,17 @@ for entry in "${APPLIES[@]}"; do
   # Each program once (rows share some: npm, python3, prettier...).
   case "$checked" in *" $program "*) continue ;; esac
   checked="$checked$program "
+  printf -v padded '%-30s' "$program"
   if found "$program"; then
     present=$((present + 1))
-    ui_ok "$(printf '%-30s' "$program") $(ui_dim "$why")"
+    ui_ok "$padded $(ui_dim "$why")"
   else
     missing=$((missing + 1))
     case "$cell" in
       *manual:*) how=" (by hand: $(sed -E 's/.*manual:([^ ]*).*/\1/; s/_/ /g' <<<"$cell"))" ;;
       *) how= ;;
     esac
-    ui_fail "$(printf '%-30s' "$program") $why$how $(ui_red missing)"
+    ui_fail "$padded $why$how $(ui_red missing)"
   fi
 done
 

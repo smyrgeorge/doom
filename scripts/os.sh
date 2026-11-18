@@ -55,30 +55,32 @@ quiet() {
 # outdated, else said to be up to date (Homebrew asked once what's installed
 # and what's outdated). A failure is noted (`os_summary'), not fatal.
 brew_latest() {
-  local cask=() name installed outdated
+  local cask=() name installed outdated padded
   if [ "${1:-}" = --cask ]; then
     cask=(--cask)
     shift
   fi
-  installed=$(brew list ${cask[@]+"${cask[@]}"} -1 2>/dev/null || true)
-  outdated=$(brew outdated ${cask[@]+"${cask[@]}"} --quiet 2>/dev/null || true)
+  # A line each, between newlines: a name matched without a grep each.
+  installed=$'\n'$(brew list ${cask[@]+"${cask[@]}"} -1 2>/dev/null || true)$'\n'
+  outdated=$'\n'$(brew outdated ${cask[@]+"${cask[@]}"} --quiet 2>/dev/null || true)$'\n'
   for name in "$@"; do
-    if ! grep -qx "$name" <<<"$installed"; then
+    printf -v padded '%-30s' "$name"
+    if [[ "$installed" != *$'\n'"$name"$'\n'* ]]; then
       if run brew install ${cask[@]+"${cask[@]}"} "$name"; then
-        ui_ok "$(printf '%-30s' "$name") $(ui_green installed)"
+        ui_ok "$padded $(ui_green installed)"
       else
         ui_fail "$name: couldn't install it"
         OS_SKIPPED+=("$name")
       fi
-    elif grep -qx "$name" <<<"$outdated"; then
+    elif [[ "$outdated" == *$'\n'"$name"$'\n'* ]]; then
       if run brew upgrade ${cask[@]+"${cask[@]}"} "$name"; then
-        ui_ok "$(printf '%-30s' "$name") $(ui_green upgraded)"
+        ui_ok "$padded $(ui_green upgraded)"
       else
         ui_fail "$name: couldn't upgrade it"
         OS_SKIPPED+=("$name")
       fi
     else
-      ui_ok "$(printf '%-30s' "$name") $(ui_dim 'up to date')"
+      ui_ok "$padded $(ui_dim 'up to date')"
     fi
   done
 }
