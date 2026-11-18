@@ -66,7 +66,7 @@ terminal with `git init` typed.
 | `c` | anywhere | A new agent, or the agents a [crew](#crews) lacks (on a ready issue: an agent for it) |
 | `i` / `K` / `r` | anywhere | Interrupt it / kill it (gone home) / restart it fresh |
 | `X` | anywhere | [Forget it](#what-you-do-to-one): out of the crew (asked first) |
-| `s` | anywhere | Put it to sleep, or wake it |
+| `Z` | anywhere | Put it to sleep, or wake it |
 | `e` | anywhere | Change its name, colour, role, permission mode or model |
 | `d` / `M` | anywhere | Its [branch](#its-branches)'s changes / merge its branch |
 | `b` | anywhere | The [branches waiting to be merged](#its-branches), in the stage's place (`q` back) |
@@ -97,7 +97,7 @@ Under the issues, what each agent did over the last 15 minutes, a line each, in 
 ```text
  CREW  15 minutes                         where now
  ▌A ⚙ ⌕⌕⌕✎✎▶✎✎✎✎▶✎✎✎▶ │ ⚙  src/lexer.el:214
- ▌K ⚙ ken             │ ○  at the desk
+ ▌K ⚙ ··············· │ ○  at the desk
  ▌S ⌕ ··⌕⌕⌕✎✎✎▶!!!!!! │ !  wants to use npm ins…
  ⚠ ada + sam: src/lexer.el
       -15m    -5m now
@@ -110,10 +110,10 @@ Each agent shows as its avatar and its role's icon (`▶` for a role without one
 A cell is a minute: what the agent did most then (asked you, edited, ran a command, read or searched), `·` for
 nothing. After the bar: its state, then, while it works, the file and line it's in this turn (each tool call's), or
 what it asks you while its hand is raised; otherwise (before its turn touches a file, done, at the desk) its state in
-words, dimmed. An agent that did nothing in those minutes has its name in the cells' place, and its state in words
-after the bar. A file changed on two branches (committed there, or uncommitted in two worktrees) is marked `⚠`: they'll
-conflict when you merge. Agents on one branch (a reviewer on its builder's) count as one. An agent's changed files are
-worked out again when its turn ends and when its branch changes: a branch it leaves no longer counts as its.
+words, dimmed. An agent that did nothing in those minutes has a lane of `·`, and its state in words after the bar. A
+file changed on two branches (committed there, or uncommitted in two worktrees) is marked `⚠`: they'll conflict when
+you merge. Agents on one branch (a reviewer on its builder's) count as one. An agent's changed files are worked out
+again when its turn ends and when its branch changes: a branch it leaves no longer counts as its.
 
 Every cell is one column, so the bars line up from lane to lane: a glyph your font lacks, drawn wider from another
 font, gives way to one it has (JetBrains Mono has no `✎`: an edit is `±`, and the legend says so). A line too long for
@@ -122,9 +122,9 @@ the window ends in `…`.
 On an agent's line, `RET` selects its agent, `o` opens the file it's in (its turn over, the one it was last in), in
 its worktree at its line, and `d` shows its branch's changes. On a `⚠`, `RET` or `d` shows both agents' changes to
 that file. `m` shows or hides it, and the crew keeps that. It's as tall as its lines: one with no agents
-(`No agents yet.`), growing as agents come, the axis and legend under them while a lane has cells, with half a line of
-space above and below them (a blank line below in a terminal). Past 10 lanes (`agent-workspace-minimap-lines`) it
-scrolls. `agent-workspace-minimap` set to `nil` hides it in new crews.
+(`No agents yet.`), growing as agents come, the axis and legend under them, with half a line of space above and below
+them (a blank line below in a terminal). Past 10 lanes (`agent-workspace-minimap-lines`) it scrolls.
+`agent-workspace-minimap` set to `nil` hides it in new crews.
 
 ## The crew under treemacs
 
@@ -302,10 +302,10 @@ If its turn stops on an error, its session doesn't start, `bd` fails, or its wor
 issue is claimed then), it tries again 30 seconds later
 (`agent-workspace-loop-retry`): the same issue, in its session. After 3 failures in a row
 (`agent-workspace-loop-failures`) it stops: stuck, saying why. A turn that ends without an error breaks the row, and
-`r`, `s` or `L` start it again.
+`r`, `Z` or `L` start it again.
 
 Its loop is kept in the [saved crew](#the-saved-crew). A crew started again brings a looping agent back asleep, so
-reopening never starts work by itself: wake it (`s`) and it loops. A role without `labels` has no issues to take, and
+reopening never starts work by itself: wake it (`Z`) and it loops. A role without `labels` has no issues to take, and
 a project without Beads has none either: their agents can't loop. A role whose labels go while its agents loop (its file
 saved mid-edit, or missing on the branch checked out) pauses them, saying so, until they're back.
 
