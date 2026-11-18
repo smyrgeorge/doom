@@ -31,15 +31,24 @@
      if(t) t.scrollIntoView();
    });")
 
+;; The cursor's line a third of the way down; also the page's reading place
+;; (see READING PLACE in config/webkit/js.el): its view resized (its pane, a
+;; pane opening or closing beside it, the view moved to a pane of another
+;; size), the page laid out anew, it's put back there. By the page as it's
+;; resized, once laid out: Emacs, which sees its pane's size change first,
+;; would scroll it before, the page then putting its top back.
 (defconst +md-preview--scroll-js
-  "(function(line){
-     var best=null, bestLine=-1;
-     document.querySelectorAll('[data-pos]:not([data-wrapper])').forEach(function(el){
-       var m=/^(\\d+):/.exec(el.getAttribute('data-pos')); if(!m) return;
-       var l=+m[1]; if(l<=line && l>=bestLine){best=el; bestLine=l;}
-     });
-     if(best) window.scrollTo(0, best.getBoundingClientRect().top + window.scrollY - window.innerHeight/3);
-   })(%d);")
+  "window.emacsKeepPlace=(function(line){
+     return function(){
+       var best=null, bestLine=-1;
+       document.querySelectorAll('[data-pos]:not([data-wrapper])').forEach(function(el){
+         var m=/^(\\d+):/.exec(el.getAttribute('data-pos')); if(!m) return;
+         var l=+m[1]; if(l<=line && l>=bestLine){best=el; bestLine=l;}
+       });
+       if(best) window.scrollTo(0, best.getBoundingClientRect().top + window.scrollY - window.innerHeight/3);
+     };
+   })(%d);
+   window.emacsKeepPlace();")
 
 (defconst +md-preview--alerts-filter
   (expand-file-name "alerts.lua" (file-name-directory (or load-file-name buffer-file-name)))

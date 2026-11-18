@@ -46,6 +46,15 @@ failed."
           (buffer-string))
       (delete-file errors))))
 
+(defun +test-awl--repository ()
+  "`default-directory', an empty folder, a git repository with a commit, made
+as a test user (`+test-git-user': bd init's own commit too)."
+  (+test-awl--run "git" "init" "-q" "-b" "main")
+  (+test-git-user)
+  (write-region "hello\n" nil "README")
+  (+test-awl--run "git" "add" "README")
+  (+test-awl--run "git" "commit" "-q" "-m" "first"))
+
 (defun +test-awl--project (name &optional no-beads)
   "A project NAME in the temp folder, a copy of the template: a git
 repository with a commit, its issues tracked by bd (NO-BEADS: not). Its
@@ -55,21 +64,16 @@ folder."
       (when (file-exists-p dir) (delete-directory dir t))
       (make-directory dir t)
       (let ((default-directory dir))
-        (+test-awl--run "git" "init" "-q" "-b" "main")
-        (write-region "hello\n" nil "README")
-        (+test-awl--run "git" "add" "README")
-        (+test-awl--run "git" "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "first")
-        (+test-awl--run "bd" "init" "--quiet" "--skip-agents" "--prefix" "demo"))
+        (+test-awl--repository)
+        (+test-awl--run "bd" "init" "--quiet" "--skip-agents" "--prefix" "demo")
+        (+test-bd-init-check))
       (setq +test-awl--template dir)))
   (let ((dir (file-name-as-directory (expand-file-name (concat "awl/" name) +test-tmp))))
     (when (file-exists-p dir) (delete-directory dir t))
     (make-directory (file-name-directory (directory-file-name dir)) t)
     (if no-beads
         (let ((default-directory (progn (make-directory dir t) dir)))
-          (+test-awl--run "git" "init" "-q" "-b" "main")
-          (write-region "hello\n" nil "README")
-          (+test-awl--run "git" "add" "README")
-          (+test-awl--run "git" "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "first"))
+          (+test-awl--repository))
       (copy-directory +test-awl--template dir nil t t))
     (file-name-as-directory (file-truename dir))))
 

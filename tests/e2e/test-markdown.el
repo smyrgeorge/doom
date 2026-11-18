@@ -220,6 +220,24 @@ line moved by screens): the cursor's line a third of the way down again."
                    (lambda () (< (abs (+test-md--from-a-third preview-window 111)) 30))
                    3)))))))
 
+(ert-deftest e2e-markdown/resized-late-the-page-puts-the-cursor-s-line-back ()
+  "Its page resized after Emacs saw its pane's size change (WebKit lays a
+loaded machine's pages out late), its scroll elsewhere then (the top it kept
+put back): the page, as it's resized, puts the cursor's line a third of the
+way down again itself."
+  (+test-md
+    (+test-md--open)
+    (let ((preview-window (car (+test-md--windows))))
+      (with-current-buffer (+test-md--source)
+        (goto-char (point-min))
+        (forward-line 110)
+        (+md-preview--post-command-h))
+      (should (+test-wait-for (lambda () (< (abs (+test-md--from-a-third preview-window 111)) 30)) 3))
+      (+test-md--js preview-window "window.scrollTo(0, 200); String(scrollY)")
+      (should (+test-wait-for (lambda () (> (abs (+test-md--from-a-third preview-window 111)) 100)) 3))
+      (+test-md--js preview-window "window.dispatchEvent(new Event('resize')); 'resized'")
+      (should (+test-wait-for (lambda () (< (abs (+test-md--from-a-third preview-window 111)) 30)) 3)))))
+
 (ert-deftest e2e-markdown/github-alerts-look-as-on-github ()
   "> [!CAUTION] typed in: shown as GitHub shows it (github-markdown-css): a
 coloured bar on the left, the title in that colour with its icon."

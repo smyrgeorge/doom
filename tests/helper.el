@@ -128,6 +128,14 @@ name (macOS's /var is a link to /private/var): buffers visit files by theirs
 ;; adds, its git config), the one absolute path it writes (core.hooksPath)
 ;; pointed at the copy. A copy takes ~0.1 s; bd works on it as on the
 ;; original, from any HOME, and never touches the template.
+;;
+;; bd init commits what it adds, as git's user. The tests have none
+;; (GIT_CONFIG_GLOBAL=/dev/null): git makes one up from the host's name where
+;; it has a domain (a Mac), and refuses where it hasn't (a Linux container),
+;; and bd init says nothing: its files left staged, a merge in the project
+;; later refused ("Your local changes would be overwritten"). So a template
+;; has a test user in its own git config (each copy too), and one bd init
+;; left with anything uncommitted is an error, there.
 
 (defvar +test-bd--templates nil
   "Projects `bd init' made, to copy: (ARGS . FOLDER) each.")
@@ -140,6 +148,19 @@ it fails."
       (unless (eql status 0)
         (error "%s %s: %s" program (string-join args " ") (string-trim (buffer-string)))))))
 
+(defun +test-git-user ()
+  "`default-directory', a git repository, commits as a test user (in its own
+config: its copies too, and git run by the code under test)."
+  (+test-bd--call "git" "config" "user.name" "T")
+  (+test-bd--call "git" "config" "user.email" "t@t"))
+
+(defun +test-bd-init-check ()
+  "An error if bd init, just run in `default-directory', left anything
+uncommitted."
+  (when-let* ((left (process-lines "git" "status" "--porcelain")))
+    (error "bd init left these uncommitted in %s: %s" default-directory
+           (string-join left ", "))))
+
 (defun +test-bd-init (&rest args)
   "Make `default-directory' (a folder: empty, or a new git repository) a bd
 project, as `bd init ARGS' there would: copied from the one bd init made
@@ -149,7 +170,9 @@ in a template folder, the first time this process asked for ARGS."
                        (let ((folder (file-name-as-directory (make-temp-file (+test-tmp-file "bd-template-") t))))
                          (let ((default-directory folder))
                            (+test-bd--call "git" "init" "-q")
-                           (apply #'+test-bd--call "bd" "init" args))
+                           (+test-git-user)
+                           (apply #'+test-bd--call "bd" "init" args)
+                           (+test-bd-init-check))
                          (push (cons args folder) +test-bd--templates)
                          folder))))
     ;; Its own repository (a git init there) replaced by the template's.

@@ -14,7 +14,9 @@ Each test file runs in a throwaway Emacs, so your Emacs and its files are never 
 shell's Beads settings (every `BEADS_` and `BD_` variable, and `AGENT_WORKSPACE_AGENT`): run by an agent of a crew,
 their `bd` never reaches the project's issues, and it sends no usage metrics (`DO_NOT_TRACK`). A test needing a `bd`
 project calls `+test-bd-init` (`tests/helper.el`): `bd init` runs once per test file, its project copied after (5 s
-each before). Test files run several at once, their results shown in file order: `JOBS` unit test Emacsen (default: the
+each before). Its repository commits as a test user (`+test-git-user`): the tests read no `~/.gitconfig`, and `bd init`
+commits what it adds (where git can't make a user up, in a Linux container, it left its files staged and a merge was
+refused); one that leaves anything uncommitted stops there. Test files run several at once, their results shown in file order: `JOBS` unit test Emacsen (default: the
 number of CPUs), `E2E_JOBS` end-to-end ones (default: 8, at most `JOBS`; one at a time in `tests/linux/run.sh`, where
 they share one X server); `JOBS=1` or `E2E_JOBS=1` runs them one at a time. Each end-to-end Emacs's frame is off the
 screen but for its top left corner, at the bottom right, each its own: a staircase, each corner a step right of and

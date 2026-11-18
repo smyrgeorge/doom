@@ -25,33 +25,6 @@ line."
       (+my/webkit-execute (with-current-buffer src (+md-preview--update-script))
                           xwidget))))
 
-;; RESIZED
-;; A view of another size (its pane resized, a pane opening or closing beside
-;; it, the view moved to a pane of another size) lays its page out anew: the
-;; cursor's line moves away, off screen even. Watched (see WATCHING in
-;; config/webkit/js.el): a view whose size has held for 0.1 s, not the size
-;; it was last scrolled at, is scrolled to the cursor's line again. A new
-;; view is, once loaded (above).
-(defun +md-preview--size (window)
-  "WINDOW's text area, in pixels: (WIDTH . HEIGHT)."
-  (cons (window-body-width window t) (window-body-height window t)))
-
-(defun +md-preview--watch (window xwidget)
-  "WINDOW shows XWIDGET's view: at the cursor's line again once resized (see
-above)."
-  (let ((size (+md-preview--size window))
-        (seen (xwidget-get xwidget '+md-preview-seen))
-        (src +md-preview--source))
-    (xwidget-put xwidget '+md-preview-seen size)
-    (cond ((not seen) (xwidget-put xwidget '+md-preview-synced size))
-          ((and (equal size seen)
-                (not (equal size (xwidget-get xwidget '+md-preview-synced)))
-                (buffer-live-p src))
-           (xwidget-put xwidget '+md-preview-synced size)
-           (+my/webkit-execute (format +md-preview--scroll-js
-                                       (with-current-buffer src (line-number-at-pos)))
-                               xwidget)))))
-
 (defun +md-preview--follow (url)
   "A link out of the preview, to URL: a file opens in Emacs, in the Markdown
 file's pane (else beside the preview); anything else in the browser."
@@ -84,8 +57,7 @@ preview off."
 \\{+md-preview-page-mode-map}"
   (setq-local +my/webkit-url-function #'+md-preview--url
               +my/webkit-background #'+md-preview--page-color
-              +my/webkit-link-function #'+md-preview--follow
-              +my/webkit-watch-function #'+md-preview--watch)
+              +my/webkit-link-function #'+md-preview--follow)
   (add-hook '+my/webkit-load-functions #'+md-preview--loaded nil t)
   ;; What the views don't cover, in the page's colour.
   (+md-preview--paint-background)

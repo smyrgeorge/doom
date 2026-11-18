@@ -583,55 +583,23 @@ reloading."
                        (concat (format +md-preview--scroll-js 5) "\n;void 0")))
         (should (eq (caar +test-md--scripts) (car (+test-md--xws preview))))))))
 
-(ert-deftest markdown/preview-resized-scrolls-to-the-cursors-line-again ()
-  "Its pane resized (its page laid out anew): once the size has held for a
-watch (0.1 s), that view scrolled to the cursor's line again, once; not while
-the size doesn't change; a view moved to a pane of another size too. Its
-Markdown buffer gone: nothing, no error."
+(ert-deftest markdown/preview-the-cursors-line-is-its-pages-place ()
+  "The cursor's line is its page's reading place (window.emacsKeepPlace, see
+READING PLACE in config/webkit/js.el), set as it's scrolled there: put back by
+the page as it's resized, once laid out, not by Emacs as its pane's size
+changes (it would scroll the page before, the page then putting its top
+back). Seen run: e2e-markdown/resized-keeps-the-cursor-s-line."
   (+test-md
     (let* ((md (+test-md--file "resized.md" "a\nb\nc\nd\ne\n"))
            (preview (+test-md--open-preview md))
-           (pane (get-buffer-window preview))
-           (xw (car (+test-md--xws preview)))
-           (scroll (concat (format +md-preview--scroll-js 4) "\n;void 0")))
+           (scroll (format +md-preview--scroll-js 4)))
       (with-current-buffer preview
-        (should (eq +my/webkit-watch-function #'+md-preview--watch)))
-      (with-current-buffer md
-        (goto-char (point-min))
-        (forward-line 3))
-      (setq +test-md--scripts nil)
-      (dotimes (_ 3) (+my/webkit--watch))
-      (should-not +test-md--scripts)
-      ;; Narrower: scrolled once the size holds.
-      (window-resize pane -10 t)
-      (+my/webkit--watch)
-      (should-not +test-md--scripts)
-      (dotimes (_ 3) (+my/webkit--watch))
-      (should (equal +test-md--scripts (list (list xw scroll nil))))
-      ;; Taller too (the line goes a third down).
-      (setq +test-md--scripts nil)
-      (with-selected-window pane (split-window-below))
-      (dotimes (_ 3) (+my/webkit--watch))
-      (should (equal (mapcar #'cadr +test-md--scripts) (list scroll)))
-      ;; The view moved to a pane of another size: there too.
-      (setq +test-md--scripts nil)
-      (let ((other (next-window pane)))
-        (window-resize other 2)
-        (should-not (equal (+md-preview--size other) (+md-preview--size pane)))
-        (set-window-buffer pane (+test-buffer "other"))
-        (set-window-buffer other preview)
-        (+test-md--redisplay)
-        (should (eq (with-current-buffer preview (+my/webkit-xwidget other)) xw))
-        (dotimes (_ 3) (+my/webkit--watch))
-        (should (equal +test-md--scripts (list (list xw scroll nil))))
-        ;; Its Markdown buffer gone.
-        (setq +test-md--scripts nil)
-        (with-current-buffer preview
-          (setq +md-preview--source (+test-buffer "gone"))
-          (kill-buffer +md-preview--source))
-        (window-resize other -5 t)
-        (dotimes (_ 3) (+my/webkit--watch))
-        (should-not +test-md--scripts)))))
+        (should-not +my/webkit-watch-function))
+      (should (string-prefix-p "window.emacsKeepPlace=" scroll))
+      (should (string-suffix-p "window.emacsKeepPlace();" scroll))
+      (should (string-match-p "})(4);" scroll))
+      (should (string-match-p (regexp-quote "if (typeof window.emacsKeepPlace === 'function') return window.emacsKeepPlace();")
+                              +my/webkit--place-js)))))
 
 (ert-deftest markdown/preview-loaded-shows-the-markdown-as-it-is ()
   "Back from a link, WebKit loads the page's file as it was written: the

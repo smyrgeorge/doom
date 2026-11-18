@@ -126,7 +126,9 @@ until it has said it."
 ;; it to say it. Kept at each scroll, not at the next animation frame: WebKit
 ;; holds those back for a view it doesn't show whole (a second and more), and
 ;; a resize meanwhile put back the place before. A page scrolled in an element
-;; of its own (PDF.js) or not at all (a drawing) isn't concerned.
+;; of its own (PDF.js) or not at all (a drawing) isn't concerned. A page whose
+;; place is something else (the Markdown preview's: the cursor's line) puts it
+;; back itself: window.emacsKeepPlace, a function, is called instead.
 (defconst +my/webkit--place-js
   "(function () {
   if (window.emacsPlace) return;
@@ -158,6 +160,7 @@ until it has said it."
     anchor = {element: element, top: box.top, part: box.top < 0 ? -box.top / box.height : 0};
   }
   function restore() {
+    if (typeof window.emacsKeepPlace === 'function') return window.emacsKeepPlace();
     if (!anchor || !anchor.element.isConnected) return;
     var box = anchor.element.getBoundingClientRect();
     window.scrollBy(0, box.top - (anchor.top < 0 ? -anchor.part * box.height : anchor.top));
