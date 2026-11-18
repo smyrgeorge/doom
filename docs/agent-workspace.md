@@ -126,17 +126,18 @@ set to `nil` hides it in new crews.
 
 ## The crew under treemacs
 
-Once you've left the app, while treemacs shows the crew's project, its lanes are under treemacs, as wide as it: the
-minimap's left part, without where each agent is now.
+Once you've left the app, while treemacs shows the crew's project, the minimap is under treemacs, as wide as it, its
+lines cut to fit:
 
 ```text
- CREW · doom          ▶2 !1 ✓1
- ▌M ✎ ⌕⌕·±▶!▶▶·!▶··▶ │ ▶
- ▌A ⚙ ±±±±▶▶±±▶▶±±▶± │ ▶
- ▌K ✎ ken             │ at the desk
+ CREW · doom          ▶1 !1
+ ▌A ⚙ ⌕⌕⌕✎✎▶✎✎✎✎▶✎✎✎▶ │ ⚙  …el:214
+ ▌S ⌕ ··⌕⌕⌕✎✎✎▶!!!!!! │ !  wants…
+      -15m    -5m now
+      ⌕ read  ✎ edit  ▶ run  ! as…
 ```
 
-A line an agent, at most 8 (`agent-workspace-sidebar-lines`), then it scrolls; narrower, fewer minutes. `RET` or a
+As tall as the minimap and padded alike: at most 10 lanes (`agent-workspace-minimap-lines`), then it scrolls. `RET` or a
 click on a lane opens the app with that agent selected, a click on its header the app. treemacs closed, or on another
 project, it goes. Not in the crew's own frame, where the minimap shows it all.
 

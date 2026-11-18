@@ -310,8 +310,9 @@ needs your OK. nil: Claude Code's own default."
 ;; agent selected. treemacs hidden, or on another project: the mode line
 ;; shows the crew's hands raised, done and stuck (` !1 ✓1 `; nothing for
 ;; working agents), a click opening the app. `agent-workspace-sidebar' nil:
-;; never under treemacs; `agent-workspace-sidebar-lines' its most lines;
-;; `agent-workspace-mode-line-tally': needs-you, all (working too) or nil.
+;; never under treemacs; `agent-workspace-minimap-lines' its most lanes, as
+;; the minimap's; `agent-workspace-mode-line-tally': needs-you, all (working
+;; too) or nil.
 ;;
 ;; Keys, in evil's normal state:
 ;;   the issues   j / k the next / previous issue, RET (l, o) its agent's pane

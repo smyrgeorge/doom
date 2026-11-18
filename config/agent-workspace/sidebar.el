@@ -5,16 +5,17 @@
 ;; THE CREW UNDER TREEMACS
 ;; While treemacs is shown in a frame and the project it shows has a crew
 ;; open in this Emacs (the app left with q), a side window under treemacs's
-;; shows the minimap's left part: a line an agent, its avatar and role's
-;; icon, its last minutes that fit (the newest at the right), │, its state's
-;; glyph; a quiet agent, its name in the cells' place and its state in
-;; words. No "where now", axis or legend; a conflict's line kept, cut to fit.
-;; Its header line: CREW · PROJECT, the tally at its right. As wide as
-;; treemacs (one column of side windows), as tall as its lines, at most
-;; `agent-workspace-sidebar-lines' (then it scrolls); never in the crew's own
-;; frame (the app has its minimap). treemacs hidden, or on a project without
-;; a crew: gone. RET or a click on a lane: the app, that agent selected; on
-;; its header: the app.
+;; shows the minimap as the app does (minimap.el's lanes' window): a lane an
+;; agent (its avatar and role's icon, its last minutes, │, its state's glyph,
+;; where it is now), a conflict's line, the axis and legend while a lane has
+;; cells, padded; as wide as treemacs (one column of side windows), cut to
+;; it; as tall as they are, at most `agent-workspace-minimap-lines' lanes
+;; (then it scrolls), whatever made it otherwise (treemacs shown again on a
+;; workspace switch, split from it; a border dragged): sized again as its
+;; frame's windows change. Its header line its own: CREW · PROJECT, the
+;; tally at its right. Never in the crew's own frame (the app has its
+;; minimap). treemacs hidden, or on a project without a crew: gone. RET or a
+;; click on a lane: the app, that agent selected; on its header: the app.
 ;;
 ;; Drawn again as the minimap is (as agents change, a few times a second at
 ;; most; once a minute while a lane has cells), only while it's shown: no
@@ -37,12 +38,6 @@
   "Non-nil: a crew's lanes under treemacs while treemacs shows its project
 \(see THE CREW UNDER TREEMACS)."
   :type 'boolean
-  :group 'agent-workspace)
-
-(defcustom agent-workspace-sidebar-lines 8
-  "The most lines the crew under treemacs takes, its header line not
-counted: past them it scrolls."
-  :type 'natnum
   :group 'agent-workspace)
 
 (defvar agent-workspace-sidebar-mode-map
@@ -69,40 +64,7 @@ counted: past them it scrolls."
               cursor-in-non-selected-windows nil
               header-line-format '(:eval (agent-workspace--sidebar-header))))
 
-;; ====== ITS LINES ======
-
-(defun agent-workspace--sidebar-cells (width)
-  "How many minutes' cells a lane has in WIDTH columns: the avatar and icon
-before them, \" │ \" and room for a quiet agent's state after (\"at the
-desk\"); 3 at least."
-  (max 3 (min agent-workspace-activity-minutes
-              (- width (length agent-workspace--minimap-indent) 3 11))))
-
-(defun agent-workspace--sidebar-lane (agent width &optional now)
-  "AGENT's line under treemacs, WIDTH columns (see THE CREW UNDER
-TREEMACS), fitted to them on the screen, never wrapping."
-  (let* ((who (concat " " (agent-workspace--minimap-who agent)))
-         (cells (agent-workspace--sidebar-cells width))
-         (busy (agent-workspace--minimap-busy-p agent now))
-         (line (concat who
-                       (if busy
-                           (mapconcat (lambda (kinds) (agent-workspace--minimap-cell agent kinds))
-                                      (last (agent-workspace-activity-lane agent now) cells) "")
-                         (agent-workspace--fit (agent-workspace-agent-name-text agent) (1- cells)))
-                       (propertize " " 'display `(space :align-to ,(+ (string-width who) cells 1)))
-                       (propertize "│" 'face 'shadow) " "
-                       (if busy
-                           (agent-workspace-state-glyph agent)
-                         (propertize (agent-workspace-state-text agent) 'face 'shadow)))))
-    (propertize (agent-workspace--minimap-fit line width) 'agent-workspace-sidebar-agent agent)))
-
-(defun agent-workspace-sidebar-text (project width &optional now)
-  "PROJECT's crew under treemacs, WIDTH columns, up to NOW: its lines."
-  (let ((agents (agent-workspace--ordered project)))
-    (append (mapcar (lambda (agent) (agent-workspace--sidebar-lane agent width now)) agents)
-            (mapcar (lambda (conflict) (agent-workspace--minimap-conflict conflict width))
-                    (agent-workspace-conflicts project))
-            (and (not agents) (list (propertize "  No agents yet." 'face 'shadow))))))
+;; ====== ITS HEADER LINE ======
 
 (defun agent-workspace--sidebar-header ()
   "The header line under treemacs: CREW · PROJECT, its tally at the right."
@@ -165,12 +127,12 @@ CREW UNDER TREEMACS)."
                   ((agent-workspace--app project)))
         project))))
 
-(defun agent-workspace--sidebar-height (project)
-  "The total height of PROJECT's lanes' window: its header line and a line
-each, at most `agent-workspace-sidebar-lines' of them."
-  (1+ (max 1 (min agent-workspace-sidebar-lines
-                  (+ (length (agent-workspace-agents project))
-                     (length (agent-workspace-conflicts project)))))))
+(defun agent-workspace--sidebar-fit (window project)
+  "WINDOW, PROJECT's lanes' under treemacs, as tall as they are
+\(`agent-workspace--lanes-size'), whatever made it otherwise: treemacs shown
+again (a workspace switch: quit, then split from it, half each), a
+workspace's windows put back, a border dragged."
+  (ignore-errors (agent-workspace--lanes-size window (agent-workspace--minimap-lines project))))
 
 (defun agent-workspace--sidebar-show (frame project)
   "PROJECT's lanes under treemacs in FRAME: their window."
@@ -180,7 +142,7 @@ each, at most `agent-workspace-sidebar-lines' of them."
                          `((side . ,(or (bound-and-true-p treemacs-position) 'left))
                            ;; treemacs's is -1 or 0 (as shown): under it.
                            (slot . 1)
-                           (window-height . ,(agent-workspace--sidebar-height project))
+                           (window-height . ,(agent-workspace--minimap-height project))
                            (dedicated . t)
                            (preserve-size . (nil . t))
                            (window-parameters . ((no-delete-other-windows . t)
@@ -192,7 +154,8 @@ each, at most `agent-workspace-sidebar-lines' of them."
 
 (defun agent-workspace--sidebar-sync (&optional frame)
   "FRAME's crew under treemacs as it should be (see THE CREW UNDER
-TREEMACS): shown, for the project treemacs shows, or gone."
+TREEMACS): shown, for the project treemacs shows, as tall as its lanes; or
+gone."
   (let* ((frame (or frame (selected-frame)))
          (project (agent-workspace--sidebar-wanted frame))
          (window (agent-workspace--sidebar-window frame)))
@@ -203,12 +166,16 @@ TREEMACS): shown, for the project treemacs shows, or gone."
     (unless (equal (frame-parameter frame 'agent-workspace-sidebar) project)
       (set-frame-parameter frame 'agent-workspace-sidebar project)
       (force-mode-line-update t))
-    (when (and project (not window) (agent-workspace--sidebar-show frame project))
-      (agent-workspace--sidebar-draw project))))
+    (cond
+     ((not project))
+     (window (agent-workspace--sidebar-fit window project))
+     ((agent-workspace--sidebar-show frame project)
+      (agent-workspace--sidebar-draw project)))))
 
 (defun agent-workspace--sidebar-state-h (frame)
-  "FRAME's windows changed: its crew under treemacs as it should be. Nothing
-while no crew is open and none is shown. In `window-state-change-functions'."
+  "FRAME's windows changed (one come or gone, resized, another buffer): its
+crew under treemacs as it should be. Nothing while no crew is open and none
+is shown. In `window-state-change-functions'."
   (when (or (> (hash-table-count agent-workspace--apps) 0)
             (frame-parameter frame 'agent-workspace-sidebar))
     (agent-workspace--sidebar-sync frame)))
@@ -233,34 +200,19 @@ while no crew is open and none is shown. In `window-state-change-functions'."
               (apply #'append (mapcar (lambda (frame) (window-list frame 'nomini)) (frame-list)))))
 
 (defun agent-workspace--sidebar-draw (project)
-  "PROJECT's lanes under treemacs drawn again where they're shown, their
-window as tall as they are; again at the next minute while a lane has
-cells."
+  "PROJECT's lanes under treemacs drawn again where they're shown, as the
+minimap's (`agent-workspace--lanes-draw': its lines, padded, the cursor on
+its lane), their window as tall as they are; again at the next minute while
+a lane has cells."
   (let ((project (agent-workspace--root project)))
     (agent-workspace--sidebar-cancel project)
     (when-let* ((windows (agent-workspace--sidebar-windows project)))
       (with-current-buffer (window-buffer (car windows))
-        (let* ((window (car windows))
-               (pos (window-point window))
-               (agent (get-text-property pos 'agent-workspace-sidebar-agent))
-               (lines (with-selected-frame (window-frame window)
-                        (agent-workspace-sidebar-text project (max 12 (1- (window-body-width window))))))
-               (inhibit-read-only t))
-          (erase-buffer)
-          (insert (string-join lines "\n"))
-          (goto-char (point-min))
-          (when-let* ((match (and agent (text-property-search-forward 'agent-workspace-sidebar-agent agent #'eq))))
-            (goto-char (prop-match-beginning match)))
+        (let ((point (agent-workspace--lanes-draw (car windows) project)))
           (dolist (window windows)
-            (set-window-point window (point))
+            (set-window-point window point)
             (set-window-start window (point-min) t)
-            (let ((delta (- (agent-workspace--sidebar-height project) (window-total-height window))))
-              (unless (zerop delta)
-                (ignore-errors
-                  (let ((window-size-fixed nil))
-                    (window-preserve-size window t nil)
-                    (window-resize window delta nil t)
-                    (window-preserve-size window t t))))))))
+            (agent-workspace--sidebar-fit window project))))
       (when (seq-some (lambda (agent) (seq-some #'identity (agent-workspace-activity-lane agent)))
                       (agent-workspace-agents project))
         (agent-workspace--sidebar-later project (- 60.5 (mod (float-time) 60)))))))
@@ -317,7 +269,7 @@ otherwise). In `agent-workspace-closing-functions'."
   (interactive)
   (when agent-workspace--sidebar-project
     (agent-workspace--sidebar-go agent-workspace--sidebar-project
-                                 (get-text-property (point) 'agent-workspace-sidebar-agent))))
+                                 (get-text-property (point) 'agent-workspace-minimap-agent))))
 
 (defun agent-workspace-sidebar-click (event)
   "A click under treemacs (EVENT): on a lane, the app with its agent
@@ -332,4 +284,4 @@ selected; on the header line, the app."
            agent-workspace--sidebar-project
            (and (not (eq (posn-area posn) 'header-line))
                 (posn-point posn)
-                (get-text-property (posn-point posn) 'agent-workspace-sidebar-agent))))))))
+                (get-text-property (posn-point posn) 'agent-workspace-minimap-agent))))))))

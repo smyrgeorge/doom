@@ -36,9 +36,22 @@
 (defun +test-e2e-aws--panel ()
   (agent-workspace--sidebar-window (selected-frame)))
 
+(defun +test-e2e-aws--tall-p (lines)
+  "Non-nil if the crew under treemacs is as tall as its header line, LINES
+and its padding (half a line above and under them), to the pixel."
+  (when-let* ((panel (+test-e2e-aws--panel)))
+    (let ((line (window-default-line-height panel)))
+      (= (window-pixel-height panel)
+         (+ (window-header-line-height panel) (/ line 2) (* lines line) (/ line 2)
+            (window-bottom-divider-width panel))))))
+
 (ert-deftest e2e-agent-workspace-sidebar/under-treemacs ()
   "The app left, treemacs on the crew's project: its lanes under treemacs,
-as wide, drawn; treemacs closed: gone; opened again: back."
+as wide, drawn, as tall as the minimap's (its header line, a lane each, its
+padding), to the pixel. treemacs quit and shown again at once (a workspace
+switch: treemacs--change-buffer-on-scope-change; its new window split from
+the crew's, half each), or a border dragged: back to that height
+\(doom-pbk.127). treemacs closed: gone; opened again: back."
   (let* ((project (+test-e2e-aws--project))
          (default-directory project))
     (cl-letf (((symbol-function 'agent-workspace--start)
@@ -67,14 +80,22 @@ as wide, drawn; treemacs closed: gone; opened again: back."
                   (treemacs (treemacs-get-local-window)))
               (should (eq (window-in-direction 'below treemacs t) panel))
               (should (= (window-total-width panel) (window-total-width treemacs)))
-              (should (= (window-total-height panel) 3))
               (redisplay t)
+              (should (+test-e2e-aws--tall-p 2))
               (with-current-buffer (window-buffer panel)
                 (should (string-search "ada" (buffer-string)))
                 (should (string-search "sam" (buffer-string))))
               (should (string-match-p "CREW" (format-mode-line (buffer-local-value 'header-line-format
                                                                                    (window-buffer panel))
                                                                nil panel (window-buffer panel)))))
+            ;; A workspace switch: treemacs quit and shown again. Back to its
+            ;; height, not half the column.
+            (save-selected-window (treemacs--change-buffer-on-scope-change))
+            (should (+test-wait-for (lambda () (redisplay t) (+test-e2e-aws--tall-p 2)) 5))
+            ;; A border dragged: back.
+            (let ((window-resize-pixelwise t))
+              (window-resize (+test-e2e-aws--panel) (* 5 (frame-char-height)) nil t t))
+            (should (+test-wait-for (lambda () (redisplay t) (+test-e2e-aws--tall-p 2)) 5))
             ;; treemacs closed: gone; opened again: back.
             (delete-window (treemacs-get-local-window))
             (should (+test-wait-for (lambda () (redisplay t) (not (+test-e2e-aws--panel))) 5))

@@ -43,9 +43,10 @@ hides it; crew.json keeps what you chose."
   :group 'agent-workspace)
 
 (defcustom agent-workspace-minimap-lines 10
-  "The most lanes the minimap shows at once (an agent's, a file two agents
-change): past them it scrolls. Its header line, axis and legend not
-counted. Fewer lanes, it's as tall as they are."
+  "The most lanes the minimap, and the crew under treemacs, show at once (an
+agent's, a file two agents change): past them they scroll. Their header
+line, padding, axis and legend not counted. Fewer lanes, they're as tall as
+they are."
   :type 'natnum
   :group 'agent-workspace)
 
@@ -86,6 +87,104 @@ what they were measured with.")
               cursor-in-non-selected-windows nil
               header-line-format '(:eval (agent-workspace--minimap-header))))
 
+;; ====== A CREW'S LANES' WINDOW ======
+;; The minimap's and the crew's under treemacs (sidebar.el) alike: the
+;; minimap's lines, as wide as its window, padded, the cursor on its lane; a
+;; side window as tall as they are, its header line and its padding, to the
+;; pixel, its height kept.
+
+(defun agent-workspace--lanes (project)
+  "How many lanes PROJECT's crew shows at once: an agent's each, a
+conflict's each, at most `agent-workspace-minimap-lines' (then they
+scroll); one line with no agents."
+  (max 1 (min agent-workspace-minimap-lines
+              (+ (length (agent-workspace-agents project))
+                 (length (agent-workspace-conflicts project))))))
+
+(defun agent-workspace--lanes-rows (lines)
+  "The rows of a lanes' window LINES tall: its lines, its header line and
+its padding (a line: half above, half under; a terminal's under). For
+`display-buffer': `agent-workspace--lanes-size' makes it exact."
+  (+ 2 lines))
+
+(defun agent-workspace--lanes-pads (window)
+  "WINDOW's padding, a lanes' window's, in pixels: (ABOVE . UNDER), half a
+line each; in a terminal, where a line can't be halved, a line under."
+  (let ((line (window-default-line-height window)))
+    (if (display-graphic-p (window-frame window))
+        (cons (/ line 2) (/ line 2))
+      (cons 0 line))))
+
+(defun agent-workspace--lanes-pad (pixels &optional last)
+  "An empty line PIXELS tall, padding: a newline that high (`line-height'),
+in a tiny font (the default one made it a whole line). The LAST line, with
+no newline: a space that tall, a pixel wide (of no width, a truncated
+line's first glyph counts for nothing)."
+  (propertize (if last
+                  (propertize " " 'display `(space :width (1) :height (,pixels)))
+                (propertize "\n" 'face '(:height 0.1) 'line-height pixels))
+              'agent-workspace-lanes-pad t))
+
+(defun agent-workspace--lanes-size (window lines)
+  "WINDOW, a lanes' window, as tall as LINES, its header line and padding,
+to the pixel: in whole lines a window divider (Doom's, a pixel) cut its
+last line, and the cursor there scrolled the lanes. Smaller, under
+`window-min-height' if it needs (one agent's: 3 lines of 4), as
+`display-buffer''s window-height makes it; taller, what the window above it
+can give at most. Its height kept as it is then (`window-preserve-size'): a
+window resized beside it doesn't take it."
+  (let* ((window-resize-pixelwise t)
+         (pads (agent-workspace--lanes-pads window))
+         (want (+ (window-header-line-height window)
+                  (car pads)
+                  (* lines (window-default-line-height window))
+                  (cdr pads)
+                  (window-mode-line-height window)
+                  (window-scroll-bar-height window)
+                  (window-bottom-divider-width window)))
+         (delta (- want (window-pixel-height window))))
+    (unless (zerop delta)
+      ;; Its own kept height let go while it's resized.
+      (window-preserve-size window nil nil)
+      (let ((ignore (and (< delta 0) 'safe)))
+        (setq delta (window-resizable window delta nil ignore t))
+        (unless (zerop delta)
+          (window-resize window delta nil ignore t))))
+    (unless (eql (window-preserved-size window) (window-pixel-height window))
+      (window-preserve-size window nil t))))
+
+(defun agent-workspace--lanes-draw (window project)
+  "PROJECT's minimap's lines (`agent-workspace-minimap-text') drawn in
+WINDOW's buffer (the current one), a lanes' window's: as wide as it (a
+column short: none on its edge), its glyphs measured in its frame; padded,
+half a line above them and half a line under them, each an empty line that
+tall (a terminal's line under them the empty one after their last newline).
+The cursor on the lane of the agent it was on, else on the line it was on,
+off the padding: where it is, returned."
+  (let* ((pos (window-point window))
+         (agent (get-text-property pos 'agent-workspace-minimap-agent))
+         (line (line-number-at-pos pos))
+         (lines (with-selected-frame (window-frame window)
+                  (agent-workspace-minimap-text project (max 12 (1- (window-body-width window))))))
+         (pads (agent-workspace--lanes-pads window))
+         (inhibit-read-only t))
+    (erase-buffer)
+    (unless (zerop (car pads))
+      (insert (agent-workspace--lanes-pad (car pads))))
+    (insert (string-join lines "\n") "\n")
+    (when (display-graphic-p (window-frame window))
+      (insert (agent-workspace--lanes-pad (cdr pads) t)))
+    (goto-char (point-min))
+    (if-let* ((match (and agent (text-property-search-forward 'agent-workspace-minimap-agent agent #'eq))))
+        (goto-char (prop-match-beginning match))
+      (forward-line (1- line)))
+    (when (or (get-text-property (line-beginning-position) 'agent-workspace-lanes-pad)
+              (and (eobp) (bolp)))
+      (goto-char (point-min))
+      (when (get-text-property (point) 'agent-workspace-lanes-pad)
+        (forward-line 1)))
+    (point)))
+
 ;; ====== ITS BUFFER, ITS WINDOW ======
 
 (defun agent-workspace--minimap-buffer (project)
@@ -123,54 +222,23 @@ what they were measured with.")
     (get-buffer-window buffer (agent-workspace--app-frame app))))
 
 (defun agent-workspace--minimap-lines (project &optional now)
-  "The lines PROJECT's minimap shows at once: a lane each (an agent's, a
-conflict's), at most `agent-workspace-minimap-lines', its one line with no
-agents; the axis and legend under them while a lane has cells."
-  (let ((agents (agent-workspace-agents project)))
-    (+ (max 1 (min agent-workspace-minimap-lines
-                   (+ (length agents) (length (agent-workspace-conflicts project)))))
-       (if (seq-some (lambda (agent) (agent-workspace--minimap-busy-p agent now)) agents) 2 0))))
+  "The lines PROJECT's minimap shows at once: its lanes
+\(`agent-workspace--lanes'), the axis and legend under them while a lane
+has cells."
+  (+ (agent-workspace--lanes project)
+     (if (seq-some (lambda (agent) (agent-workspace--minimap-busy-p agent now))
+                   (agent-workspace-agents project))
+         2 0)))
 
 (defun agent-workspace--minimap-height (project)
-  "PROJECT's minimap's rows: its lines, its header line and its padding (a
-line: half above, half under; a terminal's under)."
-  (+ 2 (agent-workspace--minimap-lines project)))
-
-(defun agent-workspace--minimap-pads (window)
-  "WINDOW's padding, a minimap's, in pixels: (ABOVE . UNDER), half a line
-each; in a terminal, where a line can't be halved, a line under."
-  (let ((line (window-default-line-height window)))
-    (if (display-graphic-p (window-frame window))
-        (cons (/ line 2) (/ line 2))
-      (cons 0 line))))
-
-(defun agent-workspace--minimap-pad (pixels &optional last)
-  "An empty line PIXELS tall, padding: a newline that high (`line-height'),
-in a tiny font (the default one made it a whole line). The LAST line, with
-no newline: a space that tall, a pixel wide (of no width, a truncated
-line's first glyph counts for nothing)."
-  (propertize (if last
-                  (propertize " " 'display `(space :width (1) :height (,pixels)))
-                (propertize "\n" 'face '(:height 0.1) 'line-height pixels))
-              'agent-workspace-minimap-pad t))
+  "PROJECT's minimap's rows (`agent-workspace--lanes-rows')."
+  (agent-workspace--lanes-rows (agent-workspace--minimap-lines project)))
 
 (defun agent-workspace--minimap-size (window project)
-  "WINDOW, PROJECT's minimap's, as tall as its lines, header line and
-padding, to the pixel: in whole lines a window divider (Doom's, a pixel)
-cut its last line, and the cursor there scrolled the lanes. What the issue
-list above it can give at most."
-  (let* ((window-resize-pixelwise t)
-         (pads (agent-workspace--minimap-pads window))
-         (want (+ (window-header-line-height window)
-                  (car pads)
-                  (* (agent-workspace--minimap-lines project) (window-default-line-height window))
-                  (cdr pads)
-                  (window-mode-line-height window)
-                  (window-scroll-bar-height window)
-                  (window-bottom-divider-width window)))
-         (delta (window-resizable window (- want (window-pixel-height window)) nil 'preserved t)))
-    (unless (zerop delta)
-      (window-resize window delta nil 'preserved t))))
+  "WINDOW, PROJECT's minimap's, as tall as its lines
+\(`agent-workspace--lanes-size'): what the issue list above it can give at
+most."
+  (agent-workspace--lanes-size window (agent-workspace--minimap-lines project)))
 
 (defun agent-workspace--minimap-place (app)
   "APP's minimap under its issue list, if it's shown and there's room for it
@@ -364,42 +432,15 @@ a mark left out where it would touch the one before."
 ;; ====== DRAWING IT ======
 
 (defun agent-workspace--minimap-draw (project)
-  "PROJECT's minimap drawn again, if it's shown, padded: the cursor on the
-line it was on (off the padding); drawn again at the next minute while a
+  "PROJECT's minimap drawn again, if it's shown (`agent-workspace--lanes-draw':
+padded, the cursor on its lane); drawn again at the next minute while a
 lane has something."
   (agent-workspace--minimap-cancel project)
   (when-let* ((window (agent-workspace--minimap-window project)))
     (with-current-buffer (window-buffer window)
       (agent-workspace--in-drawing-frame
-        (let* ((pos (window-point window))
-               (agent (get-text-property pos 'agent-workspace-minimap-agent))
-               (line (line-number-at-pos pos))
-               ;; Its glyphs measured in its own frame.
-               (lines (with-selected-frame (window-frame window)
-                        (agent-workspace-minimap-text project (max 20 (1- (window-body-width window))))))
-               (pads (agent-workspace--minimap-pads window))
-               (inhibit-read-only t))
-          (erase-buffer)
-          ;; Half a line above its lines and half a line under them, each an
-          ;; empty line that tall; a terminal's line under them the empty one
-          ;; after their last newline.
-          (unless (zerop (car pads))
-            (insert (agent-workspace--minimap-pad (car pads))))
-          (insert (string-join lines "\n") "\n")
-          (when (display-graphic-p (window-frame window))
-            (insert (agent-workspace--minimap-pad (cdr pads) t)))
-          (goto-char (point-min))
-          (if-let* ((match (and agent (text-property-search-forward 'agent-workspace-minimap-agent agent #'eq))))
-              (goto-char (prop-match-beginning match))
-            (forward-line (1- line)))
-          ;; Off the padding: on its first line.
-          (when (or (get-text-property (line-beginning-position) 'agent-workspace-minimap-pad)
-                    (and (eobp) (bolp)))
-            (goto-char (point-min))
-            (when (get-text-property (point) 'agent-workspace-minimap-pad)
-              (forward-line 1)))
-          (set-window-point window (point))
-          (set-window-start window (point-min) t))))
+        (set-window-point window (agent-workspace--lanes-draw window project))
+        (set-window-start window (point-min) t)))
     ;; As tall as its lines: an agent come or gone, a lane's first cells (the
     ;; axis and legend). The app's own change, not a border dragged; while
     ;; it's being laid out (its sizes not taken yet), placing it did it.
