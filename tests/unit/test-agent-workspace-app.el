@@ -176,6 +176,71 @@ to the window's right edge, in its tint: the tint reaches the last column
                             (let ((face (get-text-property last 'face line)))
                               (if (and (consp face) (keywordp (car face))) (list face) (ensure-list face))))))))))
 
+(ert-deftest agent-workspace-app/help-names-each-view-s-keys ()
+  "? names the keys of the view it's pressed in first, each with what it
+does there, and none that view hasn't; then the app's it keeps: gr and q
+with their meaning there; what's off left out (doom-pbk.110)."
+  (let ((agent-workspace-outside-events nil)
+        (agent-workspace-agents-talk nil)
+        (case-fold-search nil))
+    (cl-flet ((help (map)
+                (let ((lines (split-string (agent-workspace-help-text map) "\n")))
+                  (should (= (length lines) 2))
+                  (should (string-prefix-p "Here: " (car lines)))
+                  (should (string-prefix-p "The app: " (cadr lines)))
+                  lines)))
+      ;; The minimap: its RET, o, d; no TAB.
+      (pcase-let ((`(,here ,app) (help agent-workspace-minimap-mode-map)))
+        (should (string-match-p "j/k next / previous agent" here))
+        (should (string-match-p "RET select its agent" here))
+        (should (string-match-p "o the file it's in" here))
+        (should (string-match-p "d its changes (on a ⚠, both agents')" here))
+        (should-not (string-match-p "TAB" (concat here app)))
+        ;; d is the minimap's there, not the bar's.
+        (should-not (string-match-p "d its changes ·" app))
+        (should (string-match-p (regexp-quote "f + a letter: the agent with that initial") app))
+        (should (string-match-p "gr lay the app out again" app)))
+      ;; The bars: TAB.
+      (should (string-match-p "TAB open / fold" (car (help agent-workspace-bar-mode-map))))
+      ;; The issues: gr refreshes there.
+      (pcase-let ((`(,here ,app) (help agent-workspace-issues-mode-map)))
+        (should (string-match-p "RET/l/o its agent's pane, or the issue" here))
+        (should (string-match-p "t give it to an agent" here))
+        (should (string-match-p "gr refresh" here))
+        (should-not (string-match-p "gr" app))
+        (should (eq (lookup-key agent-workspace-issues-mode-map (kbd "gr")) #'agent-workspace-issues-refresh)))
+      ;; The branches: q back to the stage, not leave.
+      (pcase-let ((`(,here ,app) (help agent-workspace-branches-mode-map)))
+        (should (string-match-p "q the stage again" here))
+        (should (string-match-p "D delete it" here))
+        (should-not (string-match-p "q leave" app)))
+      ;; The room and the inbox.
+      (pcase-let ((`(,here ,_) (help agent-workspace-room-mode-map)))
+        (should (string-match-p "F filter" here))
+        (should (string-match-p "i/a/# write" here))
+        (should (string-match-p "x stop a thread" here)))
+      (pcase-let ((`(,here ,app) (help agent-workspace-inbox-mode-map)))
+        (should (string-match-p "M-k/M-j move it up / down" here))
+        (should (string-match-p "q the room again" here))
+        (should-not (string-match-p "c new agent" app)))
+      ;; What's off: the inbox's P and E, T.
+      (let ((all (string-join (help agent-workspace-bar-mode-map) " ")))
+        (should-not (string-match-p "P pause events" all))
+        (should-not (string-match-p "E the events waiting" all))
+        (should-not (string-match-p "T may agents talk" all)))
+      (let ((agent-workspace-agents-talk t))
+        (let ((all (string-join (help agent-workspace-bar-mode-map) " ")))
+          (should (string-match-p "P pause events" all))
+          (should (string-match-p "T may agents talk" all))))
+      ;; A key bound elsewhere shows there; a command without one doesn't.
+      (let ((map (make-sparse-keymap)))
+        (set-keymap-parent map agent-workspace-bar-mode-map)
+        (define-key map (kbd "z") #'agent-workspace-go)
+        (should (string-match-p "z its pane" (car (help map)))))
+      ;; In an agent's session: its prefix map's.
+      (should (string-match-p "]/\\[ next / previous agent"
+                              (car (help agent-workspace-session-keymap)))))))
+
 (ert-deftest agent-workspace-app/keys-on-a-bar ()
   "On an agent's bar, from the keyboard: the bar's keys (j/k between agents,
 TAB, RET) and the app's (c, i, K...) act, its line's map adding its clicks

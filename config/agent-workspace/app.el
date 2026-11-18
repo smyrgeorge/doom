@@ -1171,14 +1171,147 @@ what it asks."
       (agent-workspace--go-to-hand agent)
       (message "%s %s" (agent-workspace-agent-name agent) (agent-workspace-state-text agent)))))
 
+(defvar agent-workspace-app-commands nil
+  "The commands every buffer of the app has keys for (set where they're
+bound: config/agent-workspace.el): ? tells them from a view's own.")
+
+(defvar agent-workspace-session-keymap nil
+  "The app's keys in an agent's session, after its prefix (C-c w): what ?
+lists there.")
+
+;; THE KEYS (?)
+;; ? lists the keys of the view it's pressed in first (the bars, the issues,
+;; the minimap, the room, the branches, the inbox: its own map's), then the
+;; app's keys that view has and doesn't bind to something else: two lines.
+;; The keys are read from the view's map, so a key bound elsewhere shows,
+;; and one a view lacks isn't listed; each command once, its keys joined
+;; (j/k), named as below. What's off stays out: P and E without the inbox,
+;; T while agents don't talk.
+(defconst agent-workspace--help-labels
+  '(((agent-workspace-next agent-workspace-previous) . "next / previous agent")
+    (agent-workspace-go . "its pane")
+    (agent-workspace-toggle . "open / fold")
+    ((agent-workspace-issue-next agent-workspace-issue-previous) . "next / previous issue")
+    (agent-workspace-issue-open . "its agent's pane, or the issue")
+    (agent-workspace-issue-give . "give it to an agent")
+    (agent-workspace-issues-refresh . "refresh")
+    ((agent-workspace-minimap-next agent-workspace-minimap-previous) . "next / previous agent")
+    (agent-workspace-minimap-select . "select its agent")
+    (agent-workspace-minimap-open . "the file it's in")
+    (agent-workspace-minimap-diff . "its changes (on a ⚠, both agents')")
+    ((agent-workspace-branches-next agent-workspace-branches-previous) . "next / previous branch")
+    (agent-workspace-branches-commits . "its commits")
+    (agent-workspace-branches-review . "its changes")
+    (agent-workspace-branches-merge . "merge it")
+    (agent-workspace-branches-delete . "delete it")
+    (agent-workspace-branches-refresh . "refresh")
+    (agent-workspace-branches-quit . "the stage again")
+    (agent-workspace-room-open . "its agent's pane")
+    (agent-workspace-room-filter . "filter: hands, its agent, all")
+    (agent-workspace-room-compose . "write")
+    (agent-workspace-room-fold . "fold a thread")
+    (agent-workspace-room-stop . "stop a thread")
+    (agent-workspace-inbox-view-send-now . "send it now")
+    (agent-workspace-inbox-view-drop . "drop it")
+    (agent-workspace-inbox-view-source-off . "its source off")
+    ((agent-workspace-inbox-view-up agent-workspace-inbox-view-down) . "move it up / down")
+    (agent-workspace-inbox-view-quit . "the room again")
+    (agent-workspace-new-here . "new agent")
+    (agent-workspace-interrupt-here . "interrupt")
+    (agent-workspace-kill-here . "kill (gone home)")
+    (agent-workspace-forget-here . "forget (out of the crew)")
+    (agent-workspace-restart-here . "restart")
+    (agent-workspace-sleep-here . "sleep / wake")
+    (agent-workspace-edit . "edit")
+    (agent-workspace-review-here . "its changes")
+    (agent-workspace-merge-here . "merge")
+    (agent-workspace-branches . "branches to merge")
+    (agent-workspace-panels-here . "canvas, panels")
+    (agent-workspace-full-here . "full size")
+    (agent-workspace-issue-here . "its issue")
+    (agent-workspace-loop-here . "loop")
+    (agent-workspace-next-hand . "next hand")
+    (agent-workspace-answer . "answer it")
+    (agent-workspace-jump . "+ a letter: the agent with that initial")
+    (agent-workspace-talk . "talk to it in the room")
+    ((agent-workspace-view-stage agent-workspace-view-room) . "the stage / the room")
+    (agent-workspace-minimap-toggle . "minimap")
+    (agent-workspace-inbox-pause . "pause events")
+    (agent-workspace-inbox-view . "the events waiting")
+    (agent-workspace-talk-cycle . "may agents talk")
+    (agent-workspace-layout . "lay the app out again")
+    (agent-workspace-crew-reload . "read crew.json again")
+    (agent-workspace-leave . "leave")
+    (agent-workspace-quit . "close")
+    (agent-workspace-help . "these keys"))
+  "(COMMANDS . LABEL): how ? names a command (or a pair: their keys joined).")
+
+(defun agent-workspace--help-off-p (command)
+  "Non-nil if COMMAND is off here (see THE KEYS)."
+  (pcase command
+    ((or 'agent-workspace-inbox-pause 'agent-workspace-inbox-view)
+     (not (or (bound-and-true-p agent-workspace-outside-events)
+              (bound-and-true-p agent-workspace-agents-talk))))
+    ('agent-workspace-talk-cycle (not (bound-and-true-p agent-workspace-agents-talk)))))
+
+(defun agent-workspace--help-keys (command map)
+  "COMMAND's keys in MAP that run it there, as typed: evil's states' copies
+left out, and function keys where a plain one does the same (<down> for
+j, <return> for RET)."
+  (let* ((keys (seq-filter (lambda (key)
+                             (and (eq (lookup-key map key) command)
+                                  (not (and (symbolp (aref key 0))
+                                            (string-suffix-p "-state" (symbol-name (aref key 0)))))))
+                           (where-is-internal command map)))
+         (plain (seq-filter (lambda (key) (seq-every-p #'integerp key)) keys)))
+    (delete-dups
+     (mapcar (lambda (key)
+               ;; gr, not g r: letters typed one after the other.
+               (if (and (> (length key) 1) (seq-every-p (lambda (event) (and (integerp event) (< 32 event 127))) key))
+                   (concat key)
+                 (key-description key)))
+             ;; In the order they were bound.
+             (reverse (or plain keys))))))
+
+(defun agent-workspace--help-entries (map commands)
+  "MAP's keys for COMMANDS (a list; nil: those not in
+`agent-workspace-app-commands'), as \"KEYS LABEL\", in the labels' order."
+  (delq nil
+        (mapcar
+         (pcase-lambda (`(,which . ,label))
+           (let ((which (ensure-list which)))
+             (when (and (if commands
+                            (seq-some (lambda (command) (memq command commands)) which)
+                          (not (seq-some (lambda (command) (memq command agent-workspace-app-commands)) which)))
+                        (not (seq-some #'agent-workspace--help-off-p which)))
+               ;; One command: all its keys (RET/l/o); a pair: the first
+               ;; of each (j/k).
+               (let ((keys (if (cdr which)
+                               (mapcar (lambda (command) (car (agent-workspace--help-keys command map))) which)
+                             (agent-workspace--help-keys (car which) map))))
+                 (when (and keys (seq-every-p #'identity keys))
+                   (format "%s %s" (string-join keys "/") label))))))
+         agent-workspace--help-labels)))
+
+(defun agent-workspace--help-map ()
+  "The keymap of the view ? is pressed in: its major mode's, an agent's
+session's prefix map."
+  (if (and (derived-mode-p 'agent-shell-mode) agent-workspace-session-keymap)
+      agent-workspace-session-keymap
+    (current-local-map)))
+
+(defun agent-workspace-help-text (&optional map)
+  "The keys ? lists for MAP (default: the view's), two lines (see THE
+KEYS)."
+  (let* ((map (or map (agent-workspace--help-map)))
+         (own (agent-workspace--help-entries map nil))
+         (app (agent-workspace--help-entries map agent-workspace-app-commands)))
+    (string-join (delq nil (list (and own (concat "Here: " (string-join own " · ")))
+                                 (and app (concat "The app: " (string-join app " · ")))))
+                 "\n")))
+
 (defun agent-workspace-help ()
-  "The app's keys (not those of what's off: the inbox, agents talking)."
+  "?: the keys of the view it's pressed in, then the app's (see THE KEYS)."
   (interactive)
-  (message "%s" (substitute-command-keys
-                 (concat "\\<agent-workspace-bar-mode-map>j/k agents · RET its pane · TAB open/fold · c new · i interrupt · K kill · r restart · s sleep/wake · e edit · d its changes · M merge · b branches to merge · v canvas, panels · V full size · I issue · L loop · a next hand · f+initial · m minimap · "
-                         (if (or (bound-and-true-p agent-workspace-outside-events)
-                                 (bound-and-true-p agent-workspace-agents-talk))
-                             "P pause events · E inbox · "
-                           "")
-                         (if (bound-and-true-p agent-workspace-agents-talk) "T talk · " "")
-                         "gr lay out · q leave · Q close"))))
+  (let ((message-truncate-lines nil))
+    (message "%s" (agent-workspace-help-text))))

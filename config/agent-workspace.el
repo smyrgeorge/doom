@@ -305,7 +305,7 @@ needs your OK. nil: Claude Code's own default."
 ;; Keys, in evil's normal state:
 ;;   the issues   j / k the next / previous issue, RET (l, o) its agent's pane
 ;;                or the issue (on an epic's heading, the epic), t give it to
-;;                an agent, c a new agent (for it)
+;;                an agent, c a new agent (for it), gr read them again
 ;;   the bars     j / k the next / previous agent (the cursor in its pane),
 ;;                RET its pane, TAB open or fold
 ;;   both         c a new agent, i interrupt, K kill (gone home), r restart
@@ -314,9 +314,10 @@ needs your OK. nil: Claude Code's own default."
 ;;                branches to merge (see ITS BRANCHES), v its
 ;;                canvas and panels (the cursor there; again: the next one), V
 ;;                the one there full size (again: back), I its issue, L its
-;;                loop on or off, a the next raised hand, A answer it, f + an
-;;                initial that agent, gr lay out again, gR read crew.json again,
-;;                q leave, Q close, ? the keys
+;;                loop on or off, a the next raised hand, A answer it, f + a
+;;                letter the agent whose name starts with it, gr lay the app
+;;                out again, gR read crew.json again, q leave, Q close, ? the
+;;                keys of where you are (its own first), then the app's
 ;;   its session  the same after SPC m w (C-c w in insert state), and ] / [
 ;;                the next / previous agent; a click on its header line or a
 ;;                bar selects it, mouse-3 its actions
@@ -358,7 +359,8 @@ needs your OK. nil: Claude Code's own default."
 (load! "agent-workspace/doom")
 
 ;; The app's keys, in its buffers (see THE APP above). Set here, at top level:
-;; a reload sets them again.
+;; a reload sets them again. A view's own keys are bound after them: they
+;; win where both have a key (gr refreshes the issues, d in the minimap).
 (defvar +my/agent-workspace-keys
   '(("c" . agent-workspace-new-here) ("i" . agent-workspace-interrupt-here)
     ("K" . agent-workspace-kill-here) ("r" . agent-workspace-restart-here)
@@ -375,13 +377,16 @@ needs your OK. nil: Claude Code's own default."
     ("b" . agent-workspace-branches))
   "The keys every buffer of the app has (see THE APP above).")
 
+;; ? tells them from a view's own (config/agent-workspace/app.el's THE KEYS).
+(setq agent-workspace-app-commands (mapcar #'cdr +my/agent-workspace-keys))
+
 (+my/agent-workspace-bind agent-workspace-issues-mode-map
-                          (append '(("j" . agent-workspace-issue-next) ("k" . agent-workspace-issue-previous)
-                                    ("<down>" . agent-workspace-issue-next) ("<up>" . agent-workspace-issue-previous)
-                                    ("RET" . agent-workspace-issue-open) ("<return>" . agent-workspace-issue-open)
-                                    ("l" . agent-workspace-issue-open) ("o" . agent-workspace-issue-open)
-                                    ("t" . agent-workspace-issue-give) ("gr" . agent-workspace-issues-refresh))
-                                  +my/agent-workspace-keys))
+                          (append +my/agent-workspace-keys
+                                  '(("j" . agent-workspace-issue-next) ("k" . agent-workspace-issue-previous)
+                                   ("<down>" . agent-workspace-issue-next) ("<up>" . agent-workspace-issue-previous)
+                                   ("RET" . agent-workspace-issue-open) ("<return>" . agent-workspace-issue-open)
+                                   ("l" . agent-workspace-issue-open) ("o" . agent-workspace-issue-open)
+                                   ("t" . agent-workspace-issue-give) ("gr" . agent-workspace-issues-refresh))))
 
 ;; The minimap, under the issues (config/agent-workspace/minimap.el): a lane
 ;; each agent (its avatar and role's icon, its name and role on hover; the
@@ -391,18 +396,18 @@ needs your OK. nil: Claude Code's own default."
 ;; file it's in, d its changes (on a ⚠: both agents'). m shows or hides it,
 ;; anywhere.
 (+my/agent-workspace-bind agent-workspace-minimap-mode-map
-                          (append '(("j" . agent-workspace-minimap-next) ("k" . agent-workspace-minimap-previous)
-                                    ("<down>" . agent-workspace-minimap-next) ("<up>" . agent-workspace-minimap-previous)
-                                    ("RET" . agent-workspace-minimap-select) ("<return>" . agent-workspace-minimap-select)
-                                    ("o" . agent-workspace-minimap-open) ("d" . agent-workspace-minimap-diff))
-                                  +my/agent-workspace-keys))
+                          (append +my/agent-workspace-keys
+                                  '(("j" . agent-workspace-minimap-next) ("k" . agent-workspace-minimap-previous)
+                                   ("<down>" . agent-workspace-minimap-next) ("<up>" . agent-workspace-minimap-previous)
+                                   ("RET" . agent-workspace-minimap-select) ("<return>" . agent-workspace-minimap-select)
+                                   ("o" . agent-workspace-minimap-open) ("d" . agent-workspace-minimap-diff))))
 
 (+my/agent-workspace-bind agent-workspace-bar-mode-map
-                          (append '(("j" . agent-workspace-next) ("k" . agent-workspace-previous)
-                                    ("<down>" . agent-workspace-next) ("<up>" . agent-workspace-previous)
-                                    ("RET" . agent-workspace-go) ("<return>" . agent-workspace-go)
-                                    ("TAB" . agent-workspace-toggle) ("<tab>" . agent-workspace-toggle))
-                                  +my/agent-workspace-keys))
+                          (append +my/agent-workspace-keys
+                                  '(("j" . agent-workspace-next) ("k" . agent-workspace-previous)
+                                   ("<down>" . agent-workspace-next) ("<up>" . agent-workspace-previous)
+                                   ("RET" . agent-workspace-go) ("<return>" . agent-workspace-go)
+                                   ("TAB" . agent-workspace-toggle) ("<tab>" . agent-workspace-toggle))))
 
 ;; An agent's canvas or panel, in its pane on the stage: v and V there too, in
 ;; place of evil's visual state.
@@ -463,6 +468,8 @@ needs your OK. nil: Claude Code's own default."
                          ("TAB" . agent-workspace-toggle) ("<tab>" . agent-workspace-toggle))
                        +my/agent-workspace-keys))
   (define-key +my/agent-workspace-pane-map (kbd key) command))
+
+(setq agent-workspace-session-keymap +my/agent-workspace-pane-map)
 
 (map! :after agent-shell
       :map agent-shell-mode-map

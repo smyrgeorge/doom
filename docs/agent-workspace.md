@@ -59,6 +59,7 @@ terminal with `git init` typed.
 | `j` / `k` | the issues | The next / previous issue |
 | `RET` | the issues | Its agent's pane, or the issue (on an epic's heading, the epic) |
 | `t` | the issues | Give the issue to an agent, on a [branch of its own](#its-branches): now if it's free, after its turn if it's working |
+| `gr` | the issues | Read the issues again |
 | `j` / `k` | a bar | The next / previous agent, the cursor in its pane |
 | `RET` / `o` / `d` | the minimap | Its agent's pane / the file it's in / its branch's changes |
 | `RET` / `TAB` | a bar | Its pane / open or fold it |
@@ -73,15 +74,16 @@ terminal with `git init` typed.
 | `I` | anywhere | Its issue |
 | `L` | anywhere | Its [loop](#loops) on or off: once free, it takes the next ready issue by itself |
 | `a` / `A` | anywhere | The next raised hand / answer it |
-| `f` + initial | anywhere | That agent |
+| `f` + a letter | anywhere | The agent whose name starts with it |
 | `#` | anywhere | Talk to it in the room |
 | `1` / `2` | anywhere | The stage / the room alone |
 | `m` | anywhere | Show or hide the minimap |
 | `P` | anywhere | Pause the crew's events, or let them go again (with the inbox on) |
 | `T` | anywhere | May its agents message each other: off, ask me, on (while they may talk) |
 | `E` | anywhere | The events waiting: reorder, drop, send now, a source off (with the inbox on) |
-| `gr` / `gR` | anywhere | Lay it out again / read `crew.json` again |
-| `q` / `Q` / `?` | anywhere | Leave / close / the keys |
+| `gr` / `gR` | anywhere | Lay the app out again / read `crew.json` again |
+| `q` / `Q` | anywhere | Leave / close |
+| `?` | anywhere | The keys of where you are (a bar, the issues, the minimap, the room, the branches, the inbox), then the app's |
 
 In an agent's own session, the same keys follow `SPC m w` (`C-c w` in insert state), plus `]` / `[` for the next or
 previous agent. In its canvas and panels, `v` and `V` work too. A click on a bar or a pane's header line
