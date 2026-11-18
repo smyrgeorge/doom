@@ -60,6 +60,7 @@ model: haiku
 mode: accept-edits
 labels: test, qa
 max: 3
+leads: true
 icon: md-flask ⚗
 verb: testing
 # a comment
@@ -79,6 +80,7 @@ Then run them.
     (should (equal (plist-get role :mode) "acceptEdits"))
     (should (equal (plist-get role :labels) '("test" "qa")))
     (should (equal (plist-get role :max) 3))
+    (should (eq (plist-get role :leads) t))
     (should (equal (plist-get role :icon) "md-flask"))
     (should (equal (plist-get role :glyph) "⚗"))
     (should (equal (plist-get role :verb) "testing"))
@@ -98,7 +100,17 @@ inherit, Claude Code's color spelling; no instructions, warned about."
     (should-not (plist-get role :model))
     (should (equal (plist-get role :colour) "green"))
     (should (equal (plist-get role :mode) "dontAsk"))
+    (should-not (plist-get role :leads))
     (should-not (plist-get role :instructions))))
+
+(ert-deftest agent-workspace-roles/leads ()
+  "leads: true (or yes, any case), it runs the crew from its shell; false
+or no, it doesn't, as without it (doom-pbk.134)."
+  (dolist (case '(("true" . t) ("True" . t) ("yes" . t) ("false" . nil) ("no" . nil)))
+    (pcase-let ((`(,role . ,problems)
+                 (+test-awr--read (format "---\ndescription: runs it\nleads: %s\n---\nRun it.\n" (car case)))))
+      (should-not problems)
+      (should (eq (plist-get role :leads) (cdr case))))))
 
 (ert-deftest agent-workspace-roles/errors-name-the-file-and-line ()
   "An error leaves the role out; each says its file and line."
@@ -108,6 +120,7 @@ inherit, Claude Code's color spelling; no instructions, warned about."
                    (error "tester.md:3: mode yolo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions"))
                   ("---\nmax: many\ndescription: x\n---\nDo.\n" (error "tester.md:2: max many: not a number above 0"))
                   ("---\nmax: 0\ndescription: x\n---\nDo.\n" (error "tester.md:2: max 0: not a number above 0"))
+                  ("---\ndescription: x\nleads: always\n---\nDo.\n" (error "tester.md:3: leads always: true or false"))
                   ("---\ncolour: #ff0000\ndescription: x\n---\nDo.\n"
                    (error "tester.md:2: colour #ff0000: not one of blue, magenta, green, yellow, cyan, red, white, black"))
                   ("---\nname: builder\ndescription: x\n---\nDo.\n"

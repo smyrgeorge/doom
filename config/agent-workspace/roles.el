@@ -30,6 +30,9 @@
 ;;                                   with labels, the agent choosing
 ;;   returns-to: builder             where work goes back (changes asked)
 ;;   max: 4                          how many of it may run at once
+;;   leads: true                     it runs the crew from its shell
+;;                                   (cmd/agent-workspace give, wake, sleep,
+;;                                   loop): true or false (default)
 ;;   icon: md-hammer ⚙               a nerd icon (GUI), a glyph (terminal)
 ;;   verb: building                  what it does, working: "building doom-a1b"
 ;;   colour: blue                    its agents' colour, while it's free
@@ -42,10 +45,11 @@
 ;; description (or an empty one), a name (its file's) not a lowercase
 ;; letter then lowercase letters, digits or -, a name: not its file's, a
 ;; tools or deny entry not Tool or Tool(pattern), a mode, max or colour not
-;; one there is. Warnings: an unknown key, a key given twice, a model not
-;; one there is, an icon no nerd icon, a tool both allowed and denied, no
-;; instructions, a talks-to, hands-to or returns-to naming no role of the
-;; project's (or its own). M-x agent-workspace-check-roles lists them all.
+;; one there is, a leads neither true nor false. Warnings: an unknown key, a
+;; key given twice, a model not one there is, an icon no nerd icon, a tool
+;; both allowed and denied, no instructions, a talks-to, hands-to or
+;; returns-to naming no role of the project's (or its own). M-x
+;; agent-workspace-check-roles lists them all.
 
 (require 'cl-lib)
 (require 'seq)
@@ -75,7 +79,7 @@ them too. They replace the project's and the starters of the same name."
 
 (defconst agent-workspace--role-keys
   '("name" "description" "tools" "deny" "model" "mode" "labels" "talks-to" "hands-to" "returns-to" "max"
-    "icon" "verb" "colour" "color")
+    "leads" "icon" "verb" "colour" "color")
   "A role file's keys (color as Claude Code's agents spell it).")
 
 (defvar agent-workspace--roles-quiet nil
@@ -276,6 +280,11 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
                   (if (string-match-p "\\`[1-9][0-9]*\\'" value)
                       (setq role (plist-put role :max (string-to-number value)))
                     (problem 'error n "max %s: not a number above 0" value)))
+                 ("leads"
+                  (pcase (downcase value)
+                    ((or "true" "yes") (setq role (plist-put role :leads t)))
+                    ((or "false" "no"))
+                    (_ (problem 'error n "leads %s: true or false" value))))
                  ("colour"
                   (if (member value agent-workspace-colours)
                       (setq role (plist-put role :colour value))
