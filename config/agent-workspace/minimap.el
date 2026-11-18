@@ -7,18 +7,21 @@
 ;; working (activity.el's data): its avatar and its role's icon (its name and
 ;; role on hover), its last `agent-workspace-activity-minutes' minutes a cell
 ;; each (read, edit, run, a hand raised: what it did most then), then its
-;; state's glyph and where it is now (its file and line, what it asks you).
-;; One with nothing done in those minutes (at the desk, asleep): its name in
-;; the cells' place, then its state in words. A file two agents change on a
-;; line of its own (⚠ ada + ken: FILE). One column a
-;; cell on the screen: a glyph drawn wider (a font lacking it draws it from
-;; another) replaced by its fallback, measured once a frame; the │ at its
-;; column whatever comes before it; every line evened and cut to its window's
-;; pixels, never past its edge. Faces only. As tall as its lines: a lane each,
-;; growing as agents come, at most `agent-workspace-minimap-lines' (then it
-;; scrolls), the axis and legend under them while a lane has cells; half a
-;; line of padding above them and half a line under them (in a terminal,
-;; where a line can't be halved, a blank line under them).
+;; state's glyph and where it is now: the file and line it's in this turn
+;; while it works, what it asks you while its hand is raised; otherwise
+;; (before its turn's first file, done, at the desk) its state in words, o
+;; opening the file it was last in. One with nothing done in those minutes
+;; (at the desk, asleep): its name in the cells' place, then its state in
+;; words. A file two agents change on a line of its own (⚠ ada + ken: FILE).
+;; One column a cell on the screen: a glyph drawn wider (a font lacking it
+;; draws it from another) replaced by its fallback, measured once a frame;
+;; the │ at its column whatever comes before it; every line evened and cut
+;; to its window's pixels, never past its edge. Faces only. As tall as its
+;; lines: a lane each, growing as agents come, at most
+;; `agent-workspace-minimap-lines' (then it scrolls), the axis and legend
+;; under them while a lane has cells; half a line of padding above them and
+;; half a line under them (in a terminal, where a line can't be halved, a
+;; blank line under them).
 ;;
 ;; Drawn again as the agents do things, a few times a second at most, and once
 ;; a minute (its cells move on) while a lane has something; only while it's
@@ -327,14 +330,16 @@ and role on hover, \"ada · scribe\"."
                 'help-echo (format "%s · %s" (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))))
 
 (defun agent-workspace--minimap-where (agent width)
-  "Where AGENT is now, WIDTH columns at most: its file and line (the file cut
-on the left), what it asks you, else its state in words."
-  (let ((location (plist-get (agent-workspace-activity agent) :location))
+  "Where AGENT is now, WIDTH columns at most: working, the file and line it's
+in this turn (`agent-workspace-activity-where', the file cut on the left);
+its hand raised, what it asks you; else (no file yet this turn, done, at
+the desk...) its state in words, dimmed."
+  (let ((location (agent-workspace-activity-where agent))
         (state (agent-workspace-agent-state agent)))
     (cond
      ((eq state 'hand)
       (agent-workspace--fit (propertize (agent-workspace-state-text agent) 'face 'warning) width))
-     ((and location (memq state '(working done desk)))
+     ((and location (eq state 'working))
       (let* ((line (and (cdr location) (propertize (format ":%s" (cdr location)) 'face 'shadow)))
              (room (- width (if line (string-width line) 0)))
              (file (car location)))
@@ -541,8 +546,9 @@ conflict, both agents' changes to its file."
     (`(conflict . ,conflict) (agent-workspace-minimap-conflict-diff conflict))))
 
 (defun agent-workspace-minimap-open ()
-  "The file the lane's agent is in, in its worktree, at its line (where you
-came from: the app left, the crew going on)."
+  "The file the lane's agent is in, or was last in (its turn over), in its
+worktree, at its line (where you came from: the app left, the crew going
+on)."
   (interactive)
   (pcase (agent-workspace--minimap-at)
     (`(agent . ,agent)
