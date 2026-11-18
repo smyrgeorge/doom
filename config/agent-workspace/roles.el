@@ -6,7 +6,7 @@
 ;; (.claude/agents/*.md): a front matter, then its instructions (added to its
 ;; agents' system prompt). The starters ship here, in roles/ (scribe,
 ;; investigator, builder, reviewer, tester, documenter, triager, planner,
-;; merger, designer, security, profiler); a project's own, in its
+;; merger, designer, security, profiler, lead); a project's own, in its
 ;; .agent-workspace/roles/ (committed), and your own for it, in its
 ;; .agent-shell/agent-workspace/roles/ (local: .agent-shell/ is out of git),
 ;; add to them; a later place's role replaces one of the same name (starter

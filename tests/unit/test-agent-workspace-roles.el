@@ -232,7 +232,9 @@ about, ignored; the role kept."
      ("Bash(git merge:*)" "Bash(git worktree:*)") ("Edit" "Write" "Bash(git -C:*)"))
     ("designer" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit" "Write"))
     ("security" ("Edit" "Write" "NotebookEdit") ("WebSearch" "WebFetch" "Bash(git blame:*)") ("Edit" "Write"))
-    ("profiler" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write")))
+    ("profiler" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write"))
+    ;; Runs the crew from its shell, on your word.
+    ("lead" ("Edit" "Write" "NotebookEdit") ("Bash(cmd/agent-workspace:*)" "Bash(git log:*)") ("Edit" "Write")))
   "The starters and what each may do: denied, allowed, not allowed.")
 
 (ert-deftest agent-workspace-roles/the-starters ()
@@ -242,7 +244,8 @@ denied), the tester only its tests, the documenter only the docs, the
 builder anything but push, the merger merging only in a worktree of its
 own; what each does alone is allowed (bd). The triager on haiku, the
 others on your default; the reviewer's approval to the mergers, its
-changes back to the builders."
+changes back to the builders. Only the lead leads: one per crew, no
+labels (no issue its, no loop), handing nothing on."
   (let ((dir agent-workspace-starter-roles-directory))
     (should (equal (mapcar #'file-name-base (directory-files dir nil "\\.md\\'"))
                    (sort (mapcar #'car +test-awr--starters) #'string<)))
@@ -260,10 +263,15 @@ changes back to the builders."
         (should (equal (plist-get role :deny) denied))
         (dolist (tool allowed) (should (member tool (plist-get role :tools))))
         (dolist (tool not-allowed) (should-not (member tool (plist-get role :tools))))
-        (should (equal (plist-get role :model) (and (equal (plist-get role :name) "triager") "haiku")))))
+        (should (equal (plist-get role :model) (and (equal (plist-get role :name) "triager") "haiku")))
+        (should (eq (plist-get role :leads) (equal (plist-get role :name) "lead")))))
     (let ((reviewer (car (agent-workspace-role-read (expand-file-name "reviewer.md" dir)))))
       (should (equal (plist-get reviewer :hands-to) '("merger")))
-      (should (equal (plist-get reviewer :returns-to) '("builder"))))))
+      (should (equal (plist-get reviewer :returns-to) '("builder"))))
+    (let ((lead (car (agent-workspace-role-read (expand-file-name "lead.md" dir)))))
+      (should (eql (plist-get lead :max) 1))
+      (dolist (key '(:labels :hands-to :returns-to :talks-to))
+        (should-not (plist-get lead key))))))
 
 (ert-deftest agent-workspace-roles/a-project-with-none-of-its-own ()
   "A project with no roles of its own has the starters."

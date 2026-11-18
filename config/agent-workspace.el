@@ -81,7 +81,7 @@ needs your OK. nil: Claude Code's own default."
 ;; permission mode, labels, how many may run, whether it leads, icon, verb,
 ;; colour), then its instructions. The starters ship in config/agent-workspace/roles/ (scribe,
 ;; investigator, builder, reviewer, tester, documenter, triager, planner,
-;; merger, designer, security, profiler); a project's own, in its
+;; merger, designer, security, profiler, lead); a project's own, in its
 ;; .agent-workspace/roles/ (committed), and yours for it, in its
 ;; .agent-shell/agent-workspace/roles/ (out of git), add to them; a later
 ;; one replaces one of the same name: starter < project < local (M-x
@@ -294,8 +294,10 @@ the starters of the same name."
 ;; ISSUE --to NAME, wake NAME, sleep NAME and loop NAME on|off do what t, Z
 ;; and L do, said in the room by who did them ("shell gave doom-a1b to
 ;; grace"). From an agent's shell (AGENT_WORKSPACE_AGENT) those four are
-;; refused unless its role leads (leads: true in its file); status answers
-;; anyone.
+;; refused unless its role leads (leads: true in its file: the starter
+;; lead, which answers about the crew and runs it on your word, never
+;; starting work by itself, its context saying so: session.el); status
+;; answers anyone.
 
 ;; WORK HANDED ON THROUGH ISSUES
 ;; (config/agent-workspace/handover.el) A role's hands-to: names where its

@@ -32,7 +32,7 @@
 
 (defun +test-awq--project (name &optional beads)
   "A git repository NAME in the temp folder, with a commit (BEADS: its
-issues tracked by bd), a lead role of its own, local: its folder."
+issues tracked by bd): its folder."
   (let ((dir (file-name-as-directory (expand-file-name (concat "awq/" name) +test-tmp))))
     (when (file-exists-p dir) (delete-directory dir t))
     (make-directory dir t)
@@ -43,10 +43,7 @@ issues tracked by bd), a lead role of its own, local: its folder."
         (+test-git-user)
         (write-region "hello\n" nil "README")
         (call-process "git" nil nil nil "add" "README")
-        (call-process "git" nil nil nil "commit" "-q" "-m" "first"))
-      (make-directory ".agent-shell/agent-workspace/roles" t)
-      (write-region "---\ndescription: runs the crew\nleads: true\nmax: 1\n---\nRun the crew on the user's word.\n"
-                    nil ".agent-shell/agent-workspace/roles/lead.md"))
+        (call-process "git" nil nil nil "commit" "-q" "-m" "first")))
     (file-name-as-directory (file-truename dir))))
 
 (defmacro +test-awq (name beads agents &rest body)
@@ -408,6 +405,28 @@ to sleep."
     (should (equal (+test-awq--said project)
                    '(("max" "note" "ada" "put ada to sleep")
                      ("max" "note" "ada" "woke ada"))))))
+
+(ert-deftest agent-workspace-request/a-lead-finds-why-and-acts ()
+  "The starter lead, asked why linus takes no review: status shows him
+asleep, his loop off. On the user's word it turns his loop on and wakes
+him, the room saying so as the lead's; woken, he loops (nothing to
+review: he naps). Its own loop refused: the lead has no labels."
+  (+test-awq "lead-acts" t (("max" "lead") ("linus" "reviewer"))
+    (agent-workspace-sleep linus)
+    (let ((seen (seq-find (lambda (agent) (equal (plist-get agent :name) "linus"))
+                          (plist-get (+test-awq--request "status" "{\"agent\":\"max\"}") :agents))))
+      (should (equal (plist-get seen :state) "asleep"))
+      (should (eq (plist-get seen :loop) :false)))
+    (should (eq (plist-get (+test-awq--request "loop" "{\"name\":\"linus\",\"on\":true,\"agent\":\"max\"}") :ok) t))
+    (should (eq (plist-get (+test-awq--request "wake" "{\"name\":\"linus\",\"agent\":\"max\"}") :ok) t))
+    (should (agent-workspace-agent-loop linus))
+    (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state linus) 'nap)) 20))
+    (should (equal (+test-awq--said project)
+                   '(("max" "note" "linus" "turned linus's loop on")
+                     ("max" "note" "linus" "woke linus"))))
+    (should (equal (+test-awq--error "loop" "{\"name\":\"max\",\"on\":true,\"agent\":\"max\"}")
+                   (format-message "max's role, lead, has no labels: no issue is its to take")))
+    (should-not (agent-workspace-agent-loop max))))
 
 ;; ====== THE SCRIPT ======
 
