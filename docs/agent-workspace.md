@@ -97,7 +97,7 @@ Under the issues, what each agent did over the last 15 minutes, a line each, in 
 ```text
  CREW  15 minutes                         where now
  ▌A ⚙ ⌕⌕⌕✎✎▶✎✎✎✎▶✎✎✎▶ │ ⚙  src/lexer.el:214
- ▌K ⚙ ken             │ ○  at the desk
+ ▌K ⚙ ··············· │ ○  at the desk
  ▌S ⌕ ··⌕⌕⌕✎✎✎▶!!!!!! │ !  wants to use npm ins…
  ⚠ ada + sam: src/lexer.el
       -15m    -5m now
@@ -110,9 +110,8 @@ Each agent shows as its avatar and its role's icon (`▶` for a role without one
 A cell is a minute: what the agent did most then (asked you, edited, ran a command, read or searched), `·` for
 nothing. After the bar: its state, then, while it works, the file and line it's in this turn (each tool call's), or
 what it asks you while its hand is raised; otherwise (before its turn touches a file, done, at the desk) its state in
-words, dimmed. An agent that did nothing in those minutes has its name in the cells' place, and its state in words
-after the bar. A file two agents changed (on their branches or uncommitted) is marked `⚠`: they'll conflict when you
-merge.
+words, dimmed. An agent that did nothing in those minutes has a lane of `·`, and its state in words after the bar. A
+file two agents changed (on their branches or uncommitted) is marked `⚠`: they'll conflict when you merge.
 
 Every cell is one column, so the bars line up from lane to lane: a glyph your font lacks, drawn wider from another
 font, gives way to one it has (JetBrains Mono has no `✎`: an edit is `±`, and the legend says so). A line too long for
@@ -121,9 +120,9 @@ the window ends in `…`.
 On an agent's line, `RET` selects its agent, `o` opens the file it's in (its turn over, the one it was last in), in
 its worktree at its line, and `d` shows its branch's changes. On a `⚠`, `RET` or `d` shows both agents' changes to
 that file. `m` shows or hides it, and the crew keeps that. It's as tall as its lines: one with no agents
-(`No agents yet.`), growing as agents come, the axis and legend under them while a lane has cells, with half a line of
-space above and below them (a blank line below in a terminal). Past 10 lanes (`agent-workspace-minimap-lines`) it
-scrolls. `agent-workspace-minimap` set to `nil` hides it in new crews.
+(`No agents yet.`), growing as agents come, the axis and legend under them, with half a line of space above and below
+them (a blank line below in a terminal). Past 10 lanes (`agent-workspace-minimap-lines`) it scrolls.
+`agent-workspace-minimap` set to `nil` hides it in new crews.
 
 ## The crew under treemacs
 

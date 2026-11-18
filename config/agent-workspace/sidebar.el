@@ -7,8 +7,8 @@
 ;; open in this Emacs (the app left with q), a side window under treemacs's
 ;; shows the minimap as the app does (minimap.el's lanes' window): a lane an
 ;; agent (its avatar and role's icon, its last minutes, │, its state's glyph,
-;; where it is now), a conflict's line, the axis and legend while a lane has
-;; cells, padded; as wide as treemacs (one column of side windows), cut to
+;; where it is now), a conflict's line, the axis and legend while there's
+;; an agent, padded; as wide as treemacs (one column of side windows), cut to
 ;; it; as tall as they are, at most `agent-workspace-minimap-lines' lanes
 ;; (then it scrolls), whatever made it otherwise (treemacs shown again on a
 ;; workspace switch, split from it; a border dragged): sized again as its
@@ -18,7 +18,7 @@
 ;; click on a lane: the app, that agent selected; on its header: the app.
 ;;
 ;; Drawn again as the minimap is (as agents change, a few times a second at
-;; most; once a minute while a lane has cells), only while it's shown: no
+;; most; once a minute while a lane has something), only while it's shown: no
 ;; timer otherwise. Whether it's shown is worked out as a frame's windows
 ;; change (nothing while no crew is open) and as treemacs follows another
 ;; project.
@@ -203,7 +203,7 @@ is shown. In `window-state-change-functions'."
   "PROJECT's lanes under treemacs drawn again where they're shown, as the
 minimap's (`agent-workspace--lanes-draw': its lines, padded, the cursor on
 its lane), their window as tall as they are; again at the next minute while
-a lane has cells."
+a lane has something."
   (let ((project (agent-workspace--root project)))
     (agent-workspace--sidebar-cancel project)
     (when-let* ((windows (agent-workspace--sidebar-windows project)))
@@ -213,8 +213,7 @@ a lane has cells."
             (set-window-point window point)
             (set-window-start window (point-min) t)
             (agent-workspace--sidebar-fit window project))))
-      (when (seq-some (lambda (agent) (seq-some #'identity (agent-workspace-activity-lane agent)))
-                      (agent-workspace-agents project))
+      (when (agent-workspace--minimap-busy-p project)
         (agent-workspace--sidebar-later project (- 60.5 (mod (float-time) 60)))))))
 
 (defun agent-workspace--sidebar-cancel (project)

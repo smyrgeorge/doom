@@ -148,16 +148,16 @@ already): the agents made."
 ;; ====== TESTS ======
 
 (ert-deftest agent-workspace-minimap/under-the-issues ()
-  "Under the issue list, as tall as its lines (one agent: its lane, its
-header line); m hides it (the issues the whole column) and shows it again;
+  "Under the issue list, as tall as its lines (one agent: its lane, the axis
+and legend, its header line); m hides it (the issues the whole column) and shows it again;
 crew.json keeps it hidden, and a crew started again from it opens without
 it."
   (+test-awm "under"
     (agent-workspace-create :role "builder" :name "ada")
     (agent-workspace-open t)
     (let ((windows (+test-awm--windows)))
-      (should (equal (nth 0 windows) '("*issues · under*" 50 36)))
-      (should (equal (nth 1 windows) '("*minimap · under*" 50 3))))
+      (should (equal (nth 0 windows) '("*issues · under*" 50 34)))
+      (should (equal (nth 1 windows) '("*minimap · under*" 50 5))))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
     (should (equal (nth 0 (+test-awm--windows)) '("*issues · under*" 50 39)))
@@ -168,7 +168,7 @@ it."
                                               (buffer-string))))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
-    (should (equal (nth 1 (+test-awm--windows)) '("*minimap · under*" 50 3)))
+    (should (equal (nth 1 (+test-awm--windows)) '("*minimap · under*" 50 5)))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
     ;; Closed, then started again from crew.json: hidden as it was.
@@ -182,11 +182,11 @@ it."
 
 (ert-deftest agent-workspace-minimap/no-room-for-it ()
   "m in a frame too low for the minimap (a terminal's 24 rows, twelve
-agents, one at work: its 10 lanes, axis, legend and padding): refused, saying how
-many rows it needs, nothing changed; hiding it works anywhere
-\(doom-pbk.87)."
+agents, none at work: its 10 lanes, axis, legend and padding): refused,
+saying how many rows it needs, nothing changed; hiding it works anywhere
+\(doom-pbk.87, doom-pbk.130)."
   (+test-awm "no-room"
-    (+test-awm--tool (car (+test-awm--crew 12)) "read" "README" 1)
+    (+test-awm--crew 12)
     (agent-workspace-open t)
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-minimap-toggle))
@@ -202,10 +202,10 @@ many rows it needs, nothing changed; hiding it works anywhere
   "The minimap as tall as its lines, its header line above them, a blank
 line under them (a terminal's padding: none above, its first line a lane):
 no agents, its one line; a lane an agent, growing as they come and shrinking
-as one's forgotten; the axis and legend under them while a lane has cells;
-at most `agent-workspace-minimap-lines' lanes (10), then it scrolls. Its own
+as one's forgotten; the axis and legend under them, quiet agents' too; at
+most `agent-workspace-minimap-lines' lanes (10), then it scrolls. Its own
 change: the app's sizes taken, not a border dragged (doom-pbk.123,
-doom-pbk.125)."
+doom-pbk.125, doom-pbk.130)."
   (+test-awm "tall"
     (let ((app (agent-workspace-open t)))
       (cl-flet ((drawn ()
@@ -215,10 +215,13 @@ doom-pbk.125)."
         (should (= (+test-awm--rows project) 3))
         (should (equal (+test-awm--text project) "  No agents yet.\n"))
         (let ((agents (+test-awm--crew 3)))
-          (should (= (drawn) 5))
+          ;; Three quiet: their lanes of dots, the axis and legend under them.
+          (should (= (drawn) 7))
           (should (string-prefix-p " ▌A " (+test-awm--text project)))
-          (should (string-suffix-p "at the desk\n" (+test-awm--text project)))
-          ;; ada reads: her lane has cells, the axis and legend under the lanes.
+          (should (equal (string-trim (nth 3 (split-string (+test-awm--text project) "\n")))
+                         "-15m    -5m now"))
+          (should (string-suffix-p "asks you\n" (+test-awm--text project)))
+          ;; ada reads: as tall.
           (+test-awm--tool (car agents) "read" "README" 1)
           (should (= (drawn) 7))
           (should (string-suffix-p "asks you\n" (+test-awm--text project))))
@@ -238,8 +241,8 @@ doom-pbk.125)."
   "A line for each agent, in the crew's order: one that did something its
 avatar and role's icon, a cell a minute (what it did most), its state's
 glyph, where it is now (its file and line, what it asks); a quiet one its
-name in the cells' place, its state in words; a file two agents changed,
-⚠; the axis and the legend (doom-pbk.91)."
+cells all ·, no name (on hover only), its state in words; a file two agents
+changed, ⚠; the axis and the legend (doom-pbk.91, doom-pbk.130)."
   (+test-awm "lanes"
     (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
            (sam (agent-workspace-create :role "investigator" :name "sam"))
@@ -267,8 +270,12 @@ name in the cells' place, its state in words; a file two agents changed,
         (should (string-match-p (concat "\\`  ?▌A ⚙ " (make-string (- agent-workspace-activity-minutes 4) ?·)
                                         "⌕··✎ │ ⚙  ?src/a\\.el:3\\'")
                                 (nth 0 lines)))
-        ;; ken, a builder too, quiet: his name, his state in words.
-        (should (string-match-p "\\`  ?▌K ⚙ ken +│ ○  ?at the desk\\'" (nth 1 lines)))
+        ;; ken, a builder too, quiet: its cells all ·, its state in words;
+        ;; its name only on hover.
+        (should (string-match-p (concat "\\`  ?▌K ⚙ " (make-string agent-workspace-activity-minutes ?·)
+                                        " │ ○  ?at the desk\\'")
+                                (nth 1 lines)))
+        (should-not (string-search "ken" (nth 1 lines)))
         ;; sam, an investigator (⌕): ran a command now (over a read), its hand
         ;; raised; what it asks 2 columns shorter for its icon.
         (should (string-match-p "▌S ⌕ ·+▶ │ !  ?wants to use npm ins…" (nth 2 lines)))
@@ -383,7 +390,10 @@ where the others' are."
              (quiet (funcall line "▌R")))
         (should (string-prefix-p " ▌A ⚙ " ada-lane))
         (should (string-prefix-p " ▌T ▶ " tess-lane))
-        (should (string-match-p "\\` ▌R ◎ rex +│ ⏻  ?asleep" quiet))
+        (should (string-match-p (concat "\\` ▌R ◎ " (make-string agent-workspace-activity-minutes ?·)
+                                        " │ ⏻  ?asleep")
+                                quiet))
+        (should-not (string-search "rex" quiet))
         (should (equal (+test-awm--bar quiet) (+test-awm--bar ada-lane)))
         (should (equal (+test-awm--bar tess-lane) (+test-awm--bar ada-lane)))
         ;; ada's icon in its colour; its name and role on avatar and icon.
@@ -448,12 +458,15 @@ cut to its pixels, … at its end; its │ where every lane's is."
 
 (ert-deftest agent-workspace-minimap/drawn-as-they-do-things ()
   "Drawn again as an agent does things, a burst once, a quarter of a second
-on; not while the app is left; no redraw waiting once it's closed."
+on; at the next minute while a lane has something, not while every lane is
+dots; not while the app is left; no redraw waiting once it's closed."
   (+test-awm "live"
     (let ((ada (agent-workspace-create :role "builder" :name "ada"))
           (draws 0))
       (agent-workspace-open t)
-      (should (string-search "ada │ ○  at the desk" (+test-awm--text project)))
+      (should (string-search "· │ ○  at the desk" (+test-awm--text project)))
+      ;; Every lane dots: no redraw at the next minute.
+      (should-not (gethash project agent-workspace--minimap-timers))
       ;; At work: its turn's files shown.
       (+test-awm--turn ada)
       (cl-letf* ((draw (symbol-function 'agent-workspace--minimap-draw))
@@ -484,7 +497,8 @@ on; not while the app is left; no redraw waiting once it's closed."
   "Every agent on a line of its own, the quiet ones too: n/p reach each,
 RET selects its agent, o says it's in no file yet (its agent, not \"No
 agent on this line\"); five quiet agents in a 48-column minimap, all shown,
-none cut (doom-pbk.91)."
+their lanes dots, the axis and legend under them, none cut (doom-pbk.91,
+doom-pbk.130)."
   (+test-awm "quiet"
     (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
            (ken (agent-workspace-create :role "builder" :name "ken"))
@@ -508,10 +522,15 @@ none cut (doom-pbk.91)."
                                     ("max" "reviewer") ("zoe" "investigator")))
       (agent-workspace-create :role role :name name))
     (let ((lines (agent-workspace-minimap-text project 48)))
-      (should (= (length lines) 5))
+      (should (= (length lines) 7))
       (dolist (line lines)
-        (should-not (string-suffix-p "…" line))
-        (should (string-match-p "│ ○  ?at the desk\\'" line))))))
+        (should-not (string-suffix-p "…" line)))
+      (dolist (line (seq-take lines 5))
+        (should (string-match-p (concat (make-string agent-workspace-activity-minutes ?·)
+                                        " │ ○  ?at the desk\\'")
+                                line)))
+      (should (string-search "-15m" (nth 5 lines)))
+      (should (string-search "asks you" (nth 6 lines))))))
 
 (ert-deftest agent-workspace-minimap/its-keys ()
   "On a lane: j/k between lanes, RET selects its agent, o opens its file in

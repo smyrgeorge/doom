@@ -103,9 +103,9 @@ after; agents' sessions plain buffers, at the desk; treemacs stood in for
 
 (ert-deftest agent-workspace-sidebar/the-minimap-s-lines ()
   "Under treemacs, the minimap's lines as the app shows them (doom-pbk.127):
-a lane each (its minutes, │, its state's glyph, where it is now), the axis
-and legend while a lane has cells, cut to treemacs's width, never past it;
-the lane's agent for RET and a click."
+a lane each (its minutes, │, its state's glyph, where it is now; a quiet
+agent's all ·, no name), the axis and legend, cut to treemacs's width, never
+past it; the lane's agent for RET and a click (doom-pbk.130)."
   (+test-aws "lanes"
     (let ((ada (agent-workspace-create :role "builder" :name "ada"))
           (_ken (agent-workspace-create :role "builder" :name "ken")))
@@ -122,7 +122,10 @@ the lane's agent for RET and a click."
                                           "\n")
                                "\n")))
         (should (string-match-p "\\` ▌A ⚙ ·+✎ │" text))
-        (should (string-match-p "\n ▌K ⚙ ken +│ ○  ?at th…\n" text))
+        (should (string-match-p (format "\n ▌K ⚙ %s │ ○  ?at th…\n"
+                                        (make-string agent-workspace-activity-minutes ?·))
+                                text))
+        (should-not (string-search "ken" text))
         (should (string-search "-15m" text))
         (should (string-search "⌕ read" text))
         (dolist (line (split-string text "\n"))
@@ -155,10 +158,10 @@ while the crew isn't open, nor in the crew's own frame."
         (should window)
         (should (eq (window-in-direction 'below treemacs t) window))
         (should (= (window-total-width window) (window-total-width treemacs)))
-        ;; Its header line, a lane each, its padding (a terminal's: a line
-        ;; under them).
-        (should (= (window-total-height window) 4))
-        (should (string-search "ken" (with-current-buffer (window-buffer window) (buffer-string))))
+        ;; Its header line, a lane each, the axis and legend, its padding (a
+        ;; terminal's: a line under them).
+        (should (= (window-total-height window) 6))
+        (should (string-search "▌K" (with-current-buffer (window-buffer window) (buffer-string))))
         (with-selected-window window
           (should (string-match-p "CREW · under" (substring-no-properties (agent-workspace--sidebar-header)))))
         ;; Its tally isn't in this frame's mode line.
@@ -179,26 +182,28 @@ while the crew isn't open, nor in the crew's own frame."
 
 (ert-deftest agent-workspace-sidebar/drawn-again-as-agents-change ()
   "Shown: a change drawn again in a moment (a timer), a new agent a line
-more (its window taller)."
+more (its window taller); no agent doing anything: no redraw at the next
+minute (a lane of dots doesn't change)."
   (+test-aws "drawn"
     (agent-workspace-create :role "builder" :name "ada")
     (agent-workspace-open t)
     (agent-workspace-leave)
     (+test-aws--treemacs-show project)
     (let ((window (agent-workspace--sidebar-window (selected-frame))))
-      (should (= (window-total-height window) 3))
+      (should (= (window-total-height window) 5))
       (agent-workspace-create :role "builder" :name "ken")
       (should (gethash project agent-workspace--sidebar-timers))
       (agent-workspace--sidebar-draw project)
-      (should (= (window-total-height window) 4))
-      (should (string-search "ken" (with-current-buffer (window-buffer window) (buffer-string)))))))
+      (should (= (window-total-height window) 6))
+      (should (string-search "▌K" (with-current-buffer (window-buffer window) (buffer-string))))
+      (should-not (gethash project agent-workspace--sidebar-timers)))))
 
 (ert-deftest agent-workspace-sidebar/as-tall-as-the-minimap-s-lanes ()
   "Under treemacs as tall as the minimap: its header line, a line an agent,
-its padding (a terminal's: a blank line under them), the cursor on a lane;
-twelve agents, 10 lanes (`agent-workspace-minimap-lines'), then it scrolls;
-the axis and legend under them while a lane has cells. Whatever made it otherwise, back to that as its frame's windows
-change: treemacs quit and shown again at once (a workspace switch: its new
+the axis and legend under them (quiet agents' too), its padding (a
+terminal's: a blank line under them), the cursor on a lane; twelve agents,
+10 lanes (`agent-workspace-minimap-lines'), then it scrolls. Whatever made
+it otherwise, back to that as its frame's windows change: treemacs quit and shown again at once (a workspace switch: its new
 window split from the crew's, half each), a border dragged (doom-pbk.127)."
   (+test-aws "tall"
     (agent-workspace-create :role "builder" :name "ada")
@@ -206,9 +211,10 @@ window split from the crew's, half each), a border dragged (doom-pbk.127)."
     (agent-workspace-leave)
     (+test-aws--treemacs-show project)
     (let ((window (agent-workspace--sidebar-window (selected-frame))))
-      (should (= (window-total-height window) 3))
+      (should (= (window-total-height window) 5))
       (with-current-buffer (window-buffer window)
-        (should (string-suffix-p "│ ○  at th…\n" (buffer-string)))
+        (should (string-search "│ ○  at th…\n" (buffer-string)))
+        (should (string-search "-15m" (buffer-string)))
         (should (get-text-property (window-point window) 'agent-workspace-minimap-agent)))
       ;; treemacs quit and shown again, nothing in between (treemacs--change-
       ;; buffer-on-scope-change): the crew's window the whole column, then
@@ -220,21 +226,21 @@ window split from the crew's, half each), a border dragged (doom-pbk.127)."
       (should (> (window-total-height window) 10))
       (agent-workspace--sidebar-sync)
       (should (eq (agent-workspace--sidebar-window (selected-frame)) window))
-      (should (= (window-total-height window) 3))
+      (should (= (window-total-height window) 5))
       ;; A border dragged: back.
       (window-resize window 6 nil t)
-      (should (= (window-total-height window) 9))
+      (should (= (window-total-height window) 11))
       (agent-workspace--sidebar-sync)
-      (should (= (window-total-height window) 3))
+      (should (= (window-total-height window) 5))
       ;; Twelve agents: 10 lanes, then it scrolls.
       (pcase-dolist (`(,name ,role) '(("bo" "builder") ("cy" "builder") ("di" "builder") ("ed" "investigator")
                                       ("sam" "investigator") ("kim" "reviewer") ("fay" "reviewer")
                                       ("gus" "tester") ("hal" "tester") ("ivy" "designer") ("jo" "planner")))
         (agent-workspace-create :role role :name name))
       (agent-workspace--sidebar-draw project)
-      (should (= (window-total-height window) 12))
+      (should (= (window-total-height window) 14))
       (should (= (agent-workspace--lanes project) 10))
-      ;; ada edits: her lane has cells, the axis and legend under the lanes.
+      ;; ada edits: as tall (the axis and legend there already).
       (+test-aws--tool (agent-workspace-agent "ada" project) "edit")
       (agent-workspace--sidebar-draw project)
       (should (= (window-total-height window) 14)))))
@@ -252,7 +258,7 @@ window split from the crew's, half each), a border dragged (doom-pbk.127)."
                 ((symbol-function 'agent-workspace-select) (lambda (agent &rest _) (setq selected agent))))
         (with-current-buffer (window-buffer (agent-workspace--sidebar-window (selected-frame)))
           (goto-char (point-min))
-          (search-forward "ken")
+          (search-forward "▌K")
           (should (eq (key-binding (kbd "RET")) #'agent-workspace-sidebar-open))
           (agent-workspace-sidebar-open)))
       (should (equal opened project))

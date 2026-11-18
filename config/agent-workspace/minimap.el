@@ -11,21 +11,22 @@
 ;; while it works, what it asks you while its hand is raised; otherwise
 ;; (before its turn's first file, done, at the desk) its state in words, o
 ;; opening the file it was last in. One with nothing done in those minutes
-;; (at the desk, asleep): its name in the cells' place, then its state in
-;; words. A file two agents change on a line of its own (⚠ ada + ken: FILE).
-;; One column a cell on the screen: a glyph drawn wider (a font lacking it
-;; draws it from another) replaced by its fallback, measured once a frame;
-;; the │ at its column whatever comes before it; every line evened and cut
-;; to its window's pixels, never past its edge. Faces only. As tall as its
-;; lines: a lane each, growing as agents come, at most
+;; (at the desk, asleep): its cells all ·, as any idle minute's, then its
+;; state in words. A file two agents change on a line of its own (⚠ ada +
+;; ken: FILE). One column a cell on the screen: a glyph drawn wider (a font
+;; lacking it draws it from another) replaced by its fallback, measured once
+;; a frame; the │ at its column whatever comes before it; every line evened
+;; and cut to its window's pixels, never past its edge. Faces only. As tall
+;; as its lines: a lane each, growing as agents come, at most
 ;; `agent-workspace-minimap-lines' (then it scrolls), the axis and legend
-;; under them while a lane has cells; half a line of padding above them and
+;; under them while there's an agent; half a line of padding above them and
 ;; half a line under them (in a terminal, where a line can't be halved, a
 ;; blank line under them).
 ;;
 ;; Drawn again as the agents do things, a few times a second at most, and once
-;; a minute (its cells move on) while a lane has something; only while it's
-;; shown: no timer otherwise. Shown or hidden with m, kept in crew.json's layout.
+;; a minute (its cells move on) while a lane has something (a lane of dots
+;; doesn't change); only while it's shown: no timer otherwise. Shown or
+;; hidden with m, kept in crew.json's layout.
 
 (require 'cl-lib)
 (require 'seq)
@@ -224,14 +225,12 @@ off the padding: where it is, returned."
                                 (agent-workspace--app-buffers project))))
     (get-buffer-window buffer (agent-workspace--app-frame app))))
 
-(defun agent-workspace--minimap-lines (project &optional now)
+(defun agent-workspace--minimap-lines (project)
   "The lines PROJECT's minimap shows at once: its lanes
-\(`agent-workspace--lanes'), the axis and legend under them while a lane
-has cells."
+\(`agent-workspace--lanes'), the axis and legend under them while there's
+an agent."
   (+ (agent-workspace--lanes project)
-     (if (seq-some (lambda (agent) (agent-workspace--minimap-busy-p agent now))
-                   (agent-workspace-agents project))
-         2 0)))
+     (if (agent-workspace-agents project) 2 0)))
 
 (defun agent-workspace--minimap-height (project)
   "PROJECT's minimap's rows (`agent-workspace--lanes-rows')."
@@ -351,17 +350,14 @@ the desk...) its state in words, dimmed."
 
 (defun agent-workspace--minimap-lane (agent width &optional now)
   "AGENT's line, WIDTH columns: avatar and role's icon, its minutes up to
-NOW (with nothing done in them: its name in their place), │ at the lanes'
-column (a space aligned to it: a cell a pixel off can't move it), its
-state's glyph, where it is (or its state in words); fitted to WIDTH columns
-on the screen."
+NOW (a minute with nothing done ·, all of them for a quiet agent: its name
+only on hover), │ at the lanes' column (a space aligned to it: a cell a
+pixel off can't move it), its state's glyph, where it is (or its state in
+words); fitted to WIDTH columns on the screen."
   (let* ((who (concat " " (agent-workspace--minimap-who agent)))
          (minutes (concat who
-                          (if (agent-workspace--minimap-busy-p agent now)
-                              (mapconcat (lambda (kinds) (agent-workspace--minimap-cell agent kinds))
-                                         (agent-workspace-activity-lane agent now) "")
-                            (agent-workspace--fit (agent-workspace-agent-name-text agent)
-                                                  (1- agent-workspace-activity-minutes)))))
+                          (mapconcat (lambda (kinds) (agent-workspace--minimap-cell agent kinds))
+                                     (agent-workspace-activity-lane agent now) "")))
          (head (concat minutes
                        (propertize " " 'display `(space :align-to ,(+ (string-width who)
                                                                        agent-workspace-activity-minutes 1)))
@@ -372,11 +368,12 @@ on the screen."
                  width)
                 'agent-workspace-minimap-agent agent)))
 
-(defun agent-workspace--minimap-busy-p (agent &optional now)
-  "Non-nil if AGENT gets a lane: it did something in the last minutes, or
-it's working, its hand raised, stuck."
-  (or (memq (agent-workspace-agent-state agent) '(working hand stuck))
-      (seq-some #'identity (agent-workspace-activity-lane agent now))))
+(defun agent-workspace--minimap-busy-p (project)
+  "Non-nil if a lane of PROJECT's crew has something in it: an agent did
+something in the last minutes, its cells moving on as minutes pass (a lane
+of dots doesn't change)."
+  (seq-some (lambda (agent) (seq-some #'identity (agent-workspace-activity-lane agent)))
+            (agent-workspace-agents project)))
 
 (defun agent-workspace--minimap-conflict (conflict width)
   "CONFLICT (FILE AGENT...), a file several agents change: its line."
@@ -424,14 +421,13 @@ a mark left out where it would touch the one before."
 
 (defun agent-workspace-minimap-text (project width &optional now)
   "PROJECT's minimap, WIDTH columns, up to NOW: its lines."
-  (let* ((agents (agent-workspace--ordered project))
-         (busy (seq-filter (lambda (agent) (agent-workspace--minimap-busy-p agent now)) agents))
-         (conflicts (agent-workspace-conflicts project)))
-    ;; Every agent a line, in the crew's order; the axis and legend while a
-    ;; lane has cells.
+  (let ((agents (agent-workspace--ordered project))
+        (conflicts (agent-workspace-conflicts project)))
+    ;; Every agent a lane, in the crew's order, its cells (a quiet one's all
+    ;; ·); the axis and legend under them.
     (append (mapcar (lambda (agent) (agent-workspace--minimap-lane agent width now)) agents)
             (mapcar (lambda (conflict) (agent-workspace--minimap-conflict conflict width)) conflicts)
-            (and busy (list (agent-workspace--minimap-axis) (agent-workspace--minimap-legend width)))
+            (and agents (list (agent-workspace--minimap-axis) (agent-workspace--minimap-legend width)))
             (and (not agents) (list (propertize "  No agents yet." 'face 'shadow))))))
 
 ;; ====== DRAWING IT ======
@@ -446,13 +442,12 @@ lane has something."
       (agent-workspace--in-drawing-frame
         (set-window-point window (agent-workspace--lanes-draw window project))
         (set-window-start window (point-min) t)))
-    ;; As tall as its lines: an agent come or gone, a lane's first cells (the
-    ;; axis and legend). The app's own change, not a border dragged; while
-    ;; it's being laid out (its sizes not taken yet), placing it did it.
+    ;; As tall as its lines: an agent come or gone (the first: the axis and
+    ;; legend). The app's own change, not a border dragged; while it's being
+    ;; laid out (its sizes not taken yet), placing it did it.
     (agent-workspace--resize-own (window-frame window)
                                  (lambda () (agent-workspace--minimap-size window project)))
-    (when (seq-some (lambda (agent) (seq-some #'identity (agent-workspace-activity-lane agent)))
-                    (agent-workspace-agents project))
+    (when (agent-workspace--minimap-busy-p project)
       (agent-workspace--minimap-later project (- 60.5 (mod (float-time) 60))))))
 
 (defun agent-workspace--minimap-cancel (project)
