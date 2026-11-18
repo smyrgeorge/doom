@@ -7,9 +7,11 @@
 ;; builder), in order: the first one the crew has an agent of (awake or
 ;; asleep) takes them; any: every role with labels, the agent choosing; none
 ;; in the crew, it tells you. returns-to: where work goes back (changes
-;; asked, a test failing), to the one who made it. An investigator's
-;; findings go to the builders, a builder's branch to the reviewers, a
-;; reviewer's changes asked back to the builders. Every agent is told the
+;; asked, a test failing), to the one who made it. The starters hand work
+;; along one chain: builder, tester, documenter, reviewer, merger, a role the
+;; crew has none of skipped; changes asked, a test or the suite failing, back
+;; to the builder who made it. An investigator's findings (and a designer's,
+;; security's, a profiler's) go to the builders. Every agent is told the
 ;; project's roles and their labels. Each agent is told how: the issue's
 ;; label changed from its role's to the next one's,
 ;; the issue open again and unassigned, what they need in its notes (bd, as
@@ -90,10 +92,15 @@ the same for work going back; a role the crew has none of isn't offered
                         (if what (format "the %ss (%s)" name what) (format "the %ss" name))))))
     (cond
      ((and named (not agent-workspace-agents-talk))
-      "You work only with the user, never with the other agents of your crew: hand nothing on to \
+      (concat
+       "You work only with the user, never with the other agents of your crew: hand nothing on to \
 them, whatever your role's instructions say. When your part of an issue is done, leave its labels, \
-status and assignee as they are, tell the user what you did, and end your turn: the user decides what \
-comes next, and who takes it.")
+status and assignee as they are, tell the user what you did"
+       (pcase next
+         (`(,to) (format " and which role is next (\"next: the %ss\")" to))
+         ('nil "")
+         (_ " and which role it's for next"))
+       ", and end your turn: the user decides what comes next, and who takes it."))
      ((not named) nil)
      (t
       (concat

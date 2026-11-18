@@ -204,8 +204,19 @@ unshown and not delivered, until it's `t` again.
 
 ## Work handed on through issues
 
-The work moves between roles through the project's issues: an investigator's findings go to the builders, a builder's
-branch to the reviewers, and a reviewer's changes back to the builder who made it. A role's `hands-to:` says where its
+The work moves between roles through the project's issues. The starters hand it along one chain, a role the crew has
+none of skipped:
+
+```text
+ investigator ─▶ builder ─▶ tester ─▶ documenter ─▶ reviewer ─▶ merger
+                    ▲          │                       │          │
+                    └──────────┴───────────────────────┴──────────┘
+                     changes asked, a test or the suite failing
+```
+
+The tester checks the builder's tests against the issue and runs the whole suite; the documenter documents what users
+see. Either, with nothing to do, says so in the issue and hands it on. Work going back goes to the builder who made
+it; a reviewer's approval to the merger, or to you without one. A role's `hands-to:` says where its
 finished issues go: roles in order, the first one the crew has an agent of (awake or asleep) taking them, so a crew
 missing a role skips it; with none of them, the agent tells you it's done. `hands-to: any` is for a role that routes
 issues (a triager): it's told every role with labels the crew has, and picks. `returns-to:` says where work goes back
@@ -223,7 +234,7 @@ its agent finishes its turn; one another agent already has isn't given. An issue
 reviewer's changes) is offered to that agent once it's free: `demo-3 is back for ken, free now`.
 
 With `agent-workspace-agents-talk` set to `nil`, nothing is handed on: an agent whose role hands on is told to leave
-the issue as it is and tell you. The room still offers a ready issue, for you to give.
+the issue as it is and tell you, with the role next ("next: the testers"), for you to give it on (`t`). The room still offers a ready issue, for you to give.
 
 ## Agents asking each other
 
@@ -382,7 +393,7 @@ panels or a loop turned off it applies.
    ──── local · .agent-shell/agent-workspace/roles ────────────────────────────────────────────────
    ⚗ tester        my own tests                      2 of 2  your default  auto  test  replaces the project's
    ──── starters ──────────────────────────────────────────────────────────────────────────────────
-   ⚙ builder       builds what you give it           2 of 4  your default  auto  build ·3 ready  → reviewer
+   ⚙ builder       builds what you give it           2 of 4  your default  auto  build ·3 ready  → tester, documenter, reviewer
    ✎ scribe        writes issues with you            1 of 1  at its max
    ──── left out ──────────────────────────────────────────────────────────────────────────────────
    ✗ helper        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions
@@ -435,9 +446,9 @@ A role is what a kind of agent does and may do. These ship with this config, the
 |---|---|---|
 | scribe | writes issues with you | read, `bd`; no edits |
 | investigator | investigates what you give it, writes its findings into the issue, hands it to the builders | read, search the web, `bd`; no edits |
-| builder | builds what you give it, runs the tests, commits on its branch, hands it to the reviewers | edit, commit; never push |
+| builder | builds what you give it with its tests, runs them, commits on its branch, hands it on (to the testers, the documenters or the reviewers) | edit, commit; never push |
 | reviewer | reviews a branch, approves it to the mergers (to you, without one) or hands it back to its builder | read, `bd`; no edits |
-| tester | tests built work against its issue, runs the suite, reproduces a bug as a failing test | edit its tests (`tests/`), commit; never push |
+| tester | tests built work against its issue, runs the suite, reproduces a bug as a failing test; hands it on (to the documenters or the reviewers), or back to its builder | edit its tests (`tests/`), commit; never push |
 | documenter | documents finished features: how to use them, their keys and settings | edit the docs (`docs/`, Markdown), commit; never push |
 | triager | triages new issues (labelled `triage`): type, priority, duplicates, splits, then the role that takes each | read, `bd`; no edits; on haiku |
 | planner | breaks an epic into issues with acceptance criteria and their order, shown to you before filing | read, `bd`; no edits |

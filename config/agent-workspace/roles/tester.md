@@ -4,7 +4,7 @@ description: tests built work, reproduces a bug as a failing test
 tools: Read, Grep, Glob, Edit(tests/**), Write(tests/**), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git add:*), Bash(git commit:*), Bash(bd:*), Bash(ls:*)
 deny: Bash(git push:*)
 labels: test
-hands-to: reviewer
+hands-to: documenter, reviewer
 returns-to: builder
 max: 2
 icon: md-flask ⚗

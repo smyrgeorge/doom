@@ -108,6 +108,53 @@ returns-to: the work going back, to the one who made it."
         (should (string-search "tell the user what you did" told))
         (should-not (string-search "--add-label" told))))))
 
+(ert-deftest agent-workspace-handover/the-starters-chain ()
+  "The starters hand work along one chain: builder, tester, documenter,
+reviewer, merger, a role the crew has none of skipped (gone home too); none
+left, nobody (the user is told). Back: to the builders (doom-pbk.115)."
+  (let ((project (+test-awo--dir "chain")))
+    (cl-flet ((next (role &rest crew)
+                (+test-awo--crew project (seq-map-indexed (lambda (r i) (+test-awo--agent project (format "a%d" i) r))
+                                                          crew)
+                  (agent-workspace-hands-to project role))))
+      ;; The builder's: the tester, else the documenter, else the reviewer.
+      (should (equal (next "builder" "builder" "tester" "documenter" "reviewer") '("tester")))
+      (should (equal (next "builder" "builder" "documenter" "reviewer") '("documenter")))
+      (should (equal (next "builder" "builder" "reviewer" "merger") '("reviewer")))
+      (should-not (next "builder" "builder"))
+      ;; The tester's, the documenter's.
+      (should (equal (next "tester" "tester" "documenter" "reviewer") '("documenter")))
+      (should (equal (next "tester" "tester" "reviewer") '("reviewer")))
+      (should (equal (next "documenter" "documenter" "reviewer") '("reviewer")))
+      ;; The reviewer's: the merger, else the user.
+      (should (equal (next "reviewer" "reviewer" "merger") '("merger")))
+      (should-not (next "reviewer" "reviewer" "builder"))
+      ;; A tester gone home: skipped.
+      (+test-awo--crew project (list (+test-awo--agent project "ada" "builder")
+                                     (+test-awo--agent project "tom" "tester" 'home)
+                                     (+test-awo--agent project "rex" "reviewer"))
+        (should (equal (agent-workspace-hands-to project "builder") '("reviewer"))))
+      ;; Back, to the builders: from the tester, the reviewer, the merger.
+      (+test-awo--crew project (list (+test-awo--agent project "ada" "builder"))
+        (dolist (role '("tester" "reviewer" "merger"))
+          (should (equal (agent-workspace-hands-to project role :returns-to) '("builder"))))))))
+
+(ert-deftest agent-workspace-handover/not-talking-says-who-is-next ()
+  "Agents not talking: one hands nothing on, telling the user which role is
+next for them to give it on; none next: only what it did (doom-pbk.115)."
+  (let* ((project (+test-awo--dir "next"))
+         (ada (+test-awo--agent project "ada" "builder"))
+         (tom (+test-awo--agent project "tom" "tester"))
+         (rex (+test-awo--agent project "rex" "reviewer"))
+         (agent-workspace-agents-talk nil))
+    (+test-awo--crew project (list ada tom rex)
+      (let ((told (agent-workspace--handover-context ada)))
+        (should (string-search "hand nothing on" told))
+        (should (string-search "which role is next (\"next: the testers\")" told)))
+      (should (string-search "\"next: the reviewers\"" (agent-workspace--handover-context tom))))
+    (+test-awo--crew project (list rex)
+      (should-not (string-search "next:" (agent-workspace--handover-context rex))))))
+
 (ert-deftest agent-workspace-handover/hands-to-any ()
   "hands-to any: every role with labels the crew has an agent of, but its
 own, each with its bd command; a role without labels, or none in the
