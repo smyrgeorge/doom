@@ -286,8 +286,23 @@ agent's issue, an issue for an agent asleep or gone home, an agent asleep put to
 a role with no labels.
 
 From an agent's shell, `give`, `wake`, `sleep` and `loop` work only if its role leads (`leads: true`, see
-[Roles](#roles)); another agent gets `only a lead runs the crew`. A lead can't put itself to sleep. `status` works from
-any shell.
+[Roles](#roles)), as [the lead](#the-lead) does; another agent gets `only a lead runs the crew`. A lead can't put
+itself to sleep. `status` works from any shell.
+
+## The lead
+
+The lead answers your questions about the crew, and runs it when you tell it to. Ask it why linus takes no review, why
+the agents sleep, or what the minimap's ⚠ means: it reads `cmd/agent-workspace status`, the issues and the room, and
+says why ("linus is asleep, and his loop is off"). Tell it what to do and it does it from its shell: gives an issue to
+an agent, wakes one or puts it to sleep, turns its loop on or off, messages one. It doesn't ask your OK for each: you
+asked. The room says each one as the lead's (`max turned linus's loop on`, `max woke linus`). Its messages wait for
+your OK as `T` says, as any agent's.
+
+It acts only on your word: it never starts work by itself, doesn't watch the room, and doesn't loop (it has no labels:
+`L` is refused). It can't edit and writes no issues: new work is the scribe's, and it sends you there. When you ask, it
+moves an issue on or back, its labels changed from one role's to another's.
+
+A crew has one at most: `c`, then lead.
 
 ## Raised hands
 
@@ -506,8 +521,9 @@ From the shell: `cmd/agent-workspace crew full` ([more](cmd.md#cmdagent-workspac
 ## An agent
 
 - **Its session** is a Claude Code session in agent-shell, in the buffer `ada · builder`. It's told who it is, that
-  it works with you only, to commit in its worktree, on the branch made for its work, and never to switch, make or
-  rename branches, then its role's instructions. Its role's model and tools apply.
+  it works with you only (a [lead](#the-lead): that it runs the crew on your word), to commit in its worktree, on the
+  branch made for its work, and never to switch, make or rename branches, then its role's instructions. Its role's
+  model and tools apply.
 - **Its permission mode** is Claude Code's auto mode: Claude decides what needs your OK. A role's `mode` changes it
   for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all (`nil`: Claude Code's own default).
   The agent's bar shows it.
@@ -538,6 +554,7 @@ A role is what a kind of agent does and may do. These ship with this config, the
 | designer | draws UI and UX mockups on its canvas for you to pick, writes your pick into the issue | read, `bd`, Agent UI; no edits |
 | security | reviews a change or the code for vulnerabilities, each finding with its severity, place and fix | read, search the web, `bd`; no edits |
 | profiler | measures and profiles, finds the hot spots, proposes fixes with their expected gain | read, `bd`; no edits |
+| lead | answers your questions about the crew, runs it when you tell it to: gives an issue, wakes or puts an agent to sleep, turns a loop on or off, messages one ([more](#the-lead)) | read, `bd`, `cmd/agent-workspace`; no edits, no issues written |
 
 The tester edits only `tests/` without asking, the documenter only `docs/` and Markdown files: a project whose tests or
 docs are elsewhere changes that in its copy (`M-x agent-workspace-copy-role`, below).
@@ -568,7 +585,7 @@ Write the tests first, then run them.
 - `icon` is a nerd icon for the GUI, then a glyph for the terminal. `verb` is what its agents show while they work:
   "testing doom-a1b". `colour` is its agents' colour while it's free.
 - `leads: true` lets its agents run the crew from their shell: `cmd/agent-workspace give`, `wake`, `sleep` and `loop`
-  ([The crew from the shell](#the-crew-from-the-shell)). Other agents are refused. No starter leads.
+  ([The crew from the shell](#the-crew-from-the-shell)). Other agents are refused. The [lead](#the-lead) does.
 
 A project's own roles go in its `.agent-workspace/roles/`, committed. Your own for a project, kept out of git, go in
 its `.agent-shell/agent-workspace/roles/` (`.agent-shell/` is ignored: a crew adds it to the repository's
@@ -626,8 +643,8 @@ it's on.
   with work there from before (an older crew's) keeps it, and `M` merges it as before.
 
 An agent that can't edit gets none: one whose role denies it editing (the scribe, the investigator, the reviewer, the
-triager, the planner, the designer, security, the profiler) or in plan mode stays on `agent/ada`, for a prompt or an
-issue. An issue's branch a builder made is still checked out for it: a reviewer reviews there.
+triager, the planner, the designer, security, the profiler, the lead) or in plan mode stays on `agent/ada`, for a
+prompt or an issue. An issue's branch a builder made is still checked out for it: a reviewer reviews there.
 
 An agent whose worktree has changes not committed can't take an issue: you're told which branch has them. A branch it
 leaves holding nothing (a question answered, an investigation) is deleted.
