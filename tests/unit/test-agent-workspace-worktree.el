@@ -446,6 +446,52 @@ before on agent/NAME (a crew of before): it goes on there."
       (+test-aww--turn linus "Finish it")
       (should (equal (+test-aww--head his) "agent/linus")))))
 
+(ert-deftest agent-workspace-worktree/one-that-can-t-edit-gets-no-branch ()
+  "An agent that can't edit (its role denying Edit and Write: a scribe; or
+in plan mode): no branch for a prompt, none made for an issue: it stays on
+agent/NAME. An issue's branch a builder made: checked out for it; then an
+issue with none: back on agent/NAME. A builder's as before (doom-pbk.112)."
+  (let* ((project (+test-aww--project "no-edit"))
+         (ada (+test-aww--agent project "ada"))
+         (meg (agent-workspace--make-agent :name "meg" :role "scribe" :colour "blue" :project project))
+         (ken (agent-workspace--make-agent :name "ken" :role "builder" :mode "plan" :colour "blue"
+                                           :project project))
+         (hers (agent-workspace-worktree-ensure meg))
+         (his (agent-workspace-worktree-ensure ken))
+         (dir (agent-workspace-worktree-ensure ada)))
+    (+test-aww--with-crew project (list ada meg ken)
+      (should (member "Edit" (plist-get (agent-workspace-role meg) :deny)))
+      (should-not (agent-workspace-edits-p meg))
+      (should-not (agent-workspace-edits-p ken))
+      (should (agent-workspace-edits-p ada))
+      ;; A prompt: no branch.
+      (+test-aww--turn meg "I want some more agent workspace enhancements so")
+      (should (equal (+test-aww--head hers) "agent/meg"))
+      (+test-aww--turn ken "Plan the parser")
+      (should (equal (+test-aww--head his) "agent/ken"))
+      ;; An issue with no branch, at the desk: none made.
+      (setf (agent-workspace-agent-state meg) 'desk)
+      (agent-workspace-give meg "demo-1" "Lexer" "bug")
+      (should (equal (+test-aww--head hers) "agent/meg"))
+      (should (equal (agent-workspace-agent-issue meg) "demo-1"))
+      (should (equal (+test-aww--branches project) '("agent/ada" "agent/ken" "agent/meg" "main")))
+      ;; A builder's branch: taken from the builder at rest, for it.
+      (agent-workspace-give ada "demo-2" "Parser" "bug")
+      (should (equal (+test-aww--head dir) "fix/demo-2-parser"))
+      (+test-aww--change dir "parser" "done
+" "ada's parser")
+      (agent-workspace-give meg "demo-2" "Parser" "bug")
+      (should (equal (+test-aww--head hers) "fix/demo-2-parser"))
+      (should (equal (+test-aww--head dir) "agent/ada"))
+      ;; Then an issue with none: back at rest.
+      (agent-workspace-give meg "demo-3" "Docs" "task")
+      (should (equal (+test-aww--head hers) "agent/meg"))
+      (should-not (member "task/demo-3-docs" (+test-aww--branches project)))
+      ;; Its mode no longer plan: a builder again, from its next turn.
+      (setf (agent-workspace-agent-mode ken) nil)
+      (+test-aww--turn ken "Build the parser")
+      (should (equal (+test-aww--head his) "build-the-parser")))))
+
 (ert-deftest agent-workspace-worktree/a-prompt-named-as-a-folder ()
   "A prompt's branch never a folder of branches, nor one the app makes:
 \"Fix\" gets fix-2 (a bug still gets its fix/ID-... after), \"agent\"

@@ -508,6 +508,10 @@ it's on.
 - **Between pieces of work** it rests on `agent/ada`, at your branch's tip. Nothing is merged from it, but an agent
   with work there from before (an older crew's) keeps it, and `M` merges it as before.
 
+An agent that can't edit gets none: one whose role denies it editing (the scribe, the investigator, the reviewer, the
+triager, the planner, the designer, security, the profiler) or in plan mode stays on `agent/ada`, for a prompt or an
+issue. An issue's branch a builder made is still checked out for it: a reviewer reviews there.
+
 An agent whose worktree has changes not committed can't take an issue: you're told which branch has them. A branch it
 leaves holding nothing (a question answered, an investigation) is deleted.
 

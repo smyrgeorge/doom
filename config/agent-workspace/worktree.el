@@ -555,22 +555,59 @@ otherwise before); none, as it'd be named now (`agent-workspace-issue-branch')."
                   there)
         branch)))
 
+(declare-function agent-workspace-mode-of "agent-workspace/session")
+
+;; NO BRANCH FOR ONE THAT CAN'T EDIT
+;; An agent that can't edit (its role denies Edit and Write: the scribe, the
+;; investigator, the reviewer...; or in plan mode) never commits: no branch
+;; is made for it, for a prompt or an issue, and it stays on agent/NAME. An
+;; issue's branch already there (a builder's) is still checked out for it:
+;; a reviewer reviews on it. Its role or mode changed, from its next turn.
+(defun agent-workspace-edits-p (agent)
+  "Non-nil if AGENT can edit files (see NO BRANCH FOR ONE THAT CAN'T EDIT)."
+  (let ((deny (plist-get (agent-workspace-role agent) :deny)))
+    (not (or (and (member "Edit" deny) (member "Write" deny))
+             (equal (agent-workspace-mode-of agent) "plan")))))
+
+(defun agent-workspace--issue-branch-for (agent issue type title)
+  "The branch AGENT works on ISSUE (of TYPE, titled TITLE) on: the issue's
+\(`agent-workspace--issue-branch-there'); for an agent that can't edit, only
+if it's there already, else nil (see NO BRANCH FOR ONE THAT CAN'T EDIT)."
+  (let* ((project (agent-workspace-agent-project agent))
+         (branch (agent-workspace--issue-branch-there project issue type title)))
+    (when (or (agent-workspace-edits-p agent)
+              (member branch (agent-workspace--branches project)))
+      branch)))
+
+(defun agent-workspace--issue-branch-go (agent issue type title)
+  "AGENT's worktree on ISSUE's branch (`agent-workspace--issue-branch-for'),
+made from the main checkout's branch if need be; none for it: at rest, on
+agent/NAME."
+  (let ((branch (agent-workspace--issue-branch-for agent issue type title))
+        (project (agent-workspace-agent-project agent)))
+    (cond (branch
+           (agent-workspace-branch-open agent branch (agent-workspace-main-branch project)))
+          ((not (equal (agent-workspace--worktree-head (agent-workspace-agent-worktree agent))
+                       (agent-workspace-branch (agent-workspace-agent-name agent))))
+           (agent-workspace-rest agent)))))
+
 (defun agent-workspace-issue-branch-open (agent issue &optional type title)
   "AGENT given ISSUE (of TYPE, bd's issue_type; not given: as its issues
 were last fetched, issues.el), titled TITLE: its worktree on the issue's
 branch (`agent-workspace-issue-branch': TYPE/ID-SLUG), made from the main
 checkout's branch as it is then, or checked out again (the issue given
-back, whatever its branch's words). Now, or if AGENT is working, as its next turn
-starts (the issue's prompt, queued). A user error if it can't be now
-\(`agent-workspace-branch-open'). Nothing without its worktree."
+back, whatever its branch's words); for an agent that can't edit, only one
+there already (see NO BRANCH FOR ONE THAT CAN'T EDIT). Now, or if AGENT is
+working, as its next turn starts (the issue's prompt, queued). A user error
+if it can't be now \(`agent-workspace-branch-open'). Nothing without its
+worktree."
   (when (agent-workspace--worktree-live agent)
     (let* ((project (agent-workspace-agent-project agent))
            (type (or type (and (fboundp 'agent-workspace-issue-type) (agent-workspace-issue-type project issue)))))
       (if (memq (agent-workspace-agent-state agent) '(working hand))
           (puthash agent (list issue type title) agent-workspace--branch-next)
         (remhash agent agent-workspace--branch-next)
-        (agent-workspace-branch-open agent (agent-workspace--issue-branch-there project issue type title)
-                                     (agent-workspace-main-branch project))))))
+        (agent-workspace--issue-branch-go agent issue type title)))))
 
 (defun agent-workspace-branch-quiet (agent text)
   "TEXT, sent to AGENT, is no work of its own (it's told of a merge, given
@@ -620,7 +657,8 @@ its agent gets it): its worktree on the branch of the issue it was given
 while it worked; else, at rest (on agent/NAME, holding nothing the main
 branch hasn't) and given work (not a / command, nor something it's told:
 `agent-workspace-branch-quiet'), on a new branch named from PROMPT's first
-words, where it is. What can't be done is said, never signalled. STEER:
+words, where it is: not an agent that can't edit (see NO BRANCH FOR ONE
+THAT CAN'T EDIT). What can't be done is said, never signalled. STEER:
 PROMPT steered into the turn running: nothing switched (the issue's
 branch waits for its next turn), PROMPT's quiet mark taken."
   (if steer
@@ -642,13 +680,13 @@ branch waits for its next turn), PROMPT's quiet mark taken."
            ((and next (progn (remhash agent agent-workspace--branch-next)
                              (equal (car next) (agent-workspace-agent-issue agent))))
             (condition-case err
-                (agent-workspace-branch-open agent (apply #'agent-workspace--issue-branch-there project next)
-                                             (agent-workspace-main-branch project))
+                (apply #'agent-workspace--issue-branch-go agent next)
               (user-error
                (agent-workspace--branch-say
                 agent (format "stays on %s for %s: %s" (or head "no branch") (car next)
                               (error-message-string err))))))
            ((and (not quiet) (stringp prompt)
+                 (agent-workspace-edits-p agent)
                  (not (string-prefix-p "/" (string-trim-left prompt)))
                  (equal head (agent-workspace-branch (agent-workspace-agent-name agent)))
                  (not (agent-workspace--ahead-p project head (agent-workspace-main-branch project))))
