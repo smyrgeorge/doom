@@ -302,17 +302,47 @@ its figures dropped from the right, the first cut."
     (concat (propertize filled 'face face)
             (propertize (make-string (- width (length filled)) ?░) 'face 'agent-ui-muted))))
 
-(defun agent-ui-progress--bounce (tick width face)
-  "A bar WIDTH cells wide, a block in FACE at a place TICK says, going to
-and fro."
+(defun agent-ui-progress--bounce-at (tick width)
+  "(AT . BLOCK): where a bar WIDTH cells wide without an end has its block
+at TICK (going to and fro), and how many cells it is."
   (let* ((block (min 4 width))
          (span (- width block))
          (period (max 1 (* 2 span)))
-         (step (mod tick period))
-         (at (if (<= step span) step (- period step))))
+         (step (mod tick period)))
+    (cons (if (<= step span) step (- period step)) block)))
+
+(defun agent-ui-progress--bounce (tick width face)
+  "A bar WIDTH cells wide, a block in FACE at a place TICK says, going to
+and fro."
+  (pcase-let ((`(,at . ,block) (agent-ui-progress--bounce-at tick width)))
     (concat (propertize (make-string at ?░) 'face 'agent-ui-muted)
             (propertize (make-string block ?█) 'face face)
             (propertize (make-string (- width at block) ?░) 'face 'agent-ui-muted))))
+
+;; ROUNDED IN THE GUI
+;; In a graphic frame the bar is drawn over its cells (as many columns, so
+;; what follows it doesn't move): a rounded track (rx 2, as a chart's bars,
+;; 0.6 of the line's height from 0.2) in the muted blend, and over it a
+;; rounded rectangle in its fill's face: the fraction done, to the pixel
+;; (nothing at 0), or the block going to and fro of a bar without an end.
+;; Its cells' text stays the terminal's.
+(defun agent-ui-progress--gui-bar (text width ctx face &optional fraction bounce)
+  "TEXT, a bar WIDTH cells wide, drawn in the GUI (CTX: its cells' size)
+over its cells (see ROUNDED IN THE GUI): FRACTION (0 to 1) of it filled in
+FACE, or BOUNCE's block (AT . BLOCK cells)."
+  (let* ((cw (plist-get ctx :char-width))
+         (lh (plist-get ctx :line-height))
+         (w (* cw width))
+         (y (* 0.2 lh))
+         (h (* 0.6 lh))
+         (color (agent-ui-color face))
+         (svg (svg-create w lh)))
+    (svg-rectangle svg 0 y w h :rx 2 :fill (agent-ui-blend (agent-ui-background) (agent-ui-color 'agent-ui-muted) 0.3))
+    (cond (bounce
+           (svg-rectangle svg (* cw (car bounce)) y (* cw (cdr bounce)) h :rx 2 :fill color))
+          ((and fraction (> fraction 0))
+           (svg-rectangle svg 0 y (max 1 (* w (min 1.0 fraction))) h :rx 2 :fill color)))
+    (propertize text 'display (agent-ui-svg-image svg))))
 
 (defun agent-ui-progress--color (face)
   "FACE's foreground, a colour (#RRGGBB where it can say)."
@@ -326,27 +356,6 @@ and fro."
         (apply #'color-rgb-to-hex (append (cl-mapcar (lambda (x y) (+ (* x (- 1 share)) (* y share))) ra rb)
                                           '(2)))
       a)))
-
-(defun agent-ui-progress--seamless (text)
-  "TEXT, a bar's line, its blocks as spaces on their colour: in a graphic
-frame, glyphs drawn one by one leave seams between them."
-  (let ((bg (or (face-background 'default nil t) "black"))
-        (pos 0)
-        (out nil))
-    (while (< pos (length text))
-      (let* ((c (aref text pos))
-             (next (or (next-single-property-change pos 'face text) (length text)))
-             (run-end (let ((i pos)) (while (and (< i next) (eq (aref text i) c)) (cl-incf i)) i)))
-        (push (pcase c
-                (?█ (propertize (make-string (- run-end pos) ?\s)
-                                'face (list :background (agent-ui-progress--color (get-text-property pos 'face text)))))
-                (?░ (propertize (make-string (- run-end pos) ?\s)
-                                'face (list :background (agent-ui-progress--blend
-                                                         bg (agent-ui-progress--color 'agent-ui-muted) 0.3))))
-                (_ (substring text pos run-end)))
-              out)
-        (setq pos run-end)))
-    (apply #'concat (nreverse out))))
 
 (defun agent-ui-progress--counts (props)
   "Its counts' parts: (\"7/12 files\" \"58%\"), or without a max (\"37 files\")
@@ -391,11 +400,17 @@ frame, glyphs drawn one by one leave seams between them."
                                                     (- rest (string-width label))
                                                   (floor (* rest 0.6)))))
                                 (- width (if (string-empty-p counts) 0 (+ 2 (string-width counts)))))))
-         (bar (cond
-               (max (agent-ui-progress--bar (/ (float (plist-get props :value)) max) bar-width face))
-               ((eq status 'running)
-                (agent-ui-progress--bounce (plist-get ctx :tick) bar-width face))
-               (t (agent-ui-progress--bar 1.0 bar-width face))))
+         (fraction (cond (max (/ (float (plist-get props :value)) max))
+                         ((not (eq status 'running)) 1.0)))
+         (bar (if fraction
+                  (agent-ui-progress--bar fraction bar-width face)
+                (agent-ui-progress--bounce (plist-get ctx :tick) bar-width face)))
+         ;; In the GUI: rounded, over its cells (see ROUNDED IN THE GUI).
+         (bar (if (agent-ui--gui-p ctx)
+                  (agent-ui-progress--gui-bar bar bar-width ctx face fraction
+                                              (unless fraction
+                                                (agent-ui-progress--bounce-at (plist-get ctx :tick) bar-width)))
+                bar))
          (line (string-join (seq-remove #'string-empty-p (list bar counts)) "  "))
          (room (- width (string-width line) 2)))
     ;; A label with room (4 columns, or less if it's only a mark: a done bar
@@ -441,9 +456,9 @@ line."
                               "  ")
                  width))))
 
-(defun agent-ui-progress--draw (props ctx gui)
+(defun agent-ui-progress--draw (props ctx _gui)
   (cond ((plist-get props :pie) (agent-ui-progress--pie props ctx))
-        (gui (agent-ui-progress--seamless (agent-ui-progress--text props ctx)))
+        ;; In the GUI its bar drawn over its cells (see ROUNDED IN THE GUI).
         (t (agent-ui-progress--text props ctx))))
 
 (agent-ui-define progress

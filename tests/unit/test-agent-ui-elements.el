@@ -1230,21 +1230,6 @@ they were), and its title on one line (it kept its newlines)."
           (should (string-suffix-p "  (not found)" (+test-aue-draw (list :type "html" :file (concat dir "x.html")) :width 300))))
       (delete-directory dir t))))
 
-(ert-deftest agent-ui-elements/progress-seamless-in-the-gui ()
-  ;; Its blocks as spaces on their colour (glyphs leave seams); the counts
-  ;; and label as they are.
-  (let* ((text (agent-ui-render '(:type "progress" :value 1 :max 2 :label "half")
-                                (agent-ui-context :width 60 :graphic t)))
-         (plain (substring-no-properties text)))
-    (should-not (string-match-p "[█░]" plain))
-    (should (string-match-p "\\`  +1/2  50%  half\\'" plain))
-    (should (plist-get (get-text-property 0 'face text) :background))
-    ;; The gap before the counts: no colour.
-    (should-not (get-text-property (1- (string-search "1/2" plain)) 'face text))
-    (let ((empty (get-text-property (- (string-search "1/2" plain) 3) 'face text)))
-      (should (stringp (plist-get empty :background)))
-      (should-not (equal (plist-get empty :background) (plist-get (get-text-property 0 'face text) :background))))))
-
 ;; ====== DIFF ======
 
 (defconst +test-aue-diff
@@ -4188,6 +4173,39 @@ value's arc round at its start, flat at its end, round at the max
     (should (= (length dots) 4)))
   (pcase-let ((`(,dots . ,_) (+test-aue-gauge-ends '(:type "gauge" :value 0 :min 0 :max 10))))
     (should (= (length dots) 2))))
+
+(ert-deftest agent-ui-elements/a-progress-bar-rounded-in-the-gui ()
+  "In the GUI a progress bar is an SVG over its cells: a rounded track and a
+rounded fill (its colour by status), what follows it where it was; without
+a max, its moving block rounded; in a terminal, as before (doom-ht6.37)."
+  (let* ((element '(:type "progress" :value 1 :max 4 :label "linking"))
+         (ctx (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16))
+         (gui (agent-ui-render element ctx))
+         (text (agent-ui-render element (agent-ui-context :width 60))))
+    ;; The same columns, the same words after the bar.
+    (should (equal (substring-no-properties gui) (substring-no-properties text)))
+    (should (string-match-p "\\`█+░+  1/4  25%  linking\\'" (substring-no-properties text)))
+    (let* ((dom (+test-aue-svg-dom element 60))
+           (rects (+test-aue-rects dom))
+           (svg-width (string-to-number (dom-attr dom 'width))))
+      (should (= (length rects) 2))
+      (dolist (rect rects) (should (equal (plist-get rect :rx) 2)))
+      ;; Its track the bar's cells' width; its fill a quarter of it.
+      (should (= (plist-get (car rects) :width) svg-width))
+      (should (= svg-width (* 8 (length (car (split-string (substring-no-properties text) " "))))))
+      (should (< (abs (- (plist-get (cadr rects) :width) (/ svg-width 4.0))) 0.01))
+      (should (equal (plist-get (cadr rects) :fill) (agent-ui-color 'agent-ui-accent)))))
+  ;; Done, failed: their colours; at 0, nothing filled.
+  (pcase-dolist (`(,status . ,face) '((done . agent-ui-success) (failed . agent-ui-error)))
+    (let ((rects (+test-aue-rects (+test-aue-svg-dom (list :type "progress" :value 4 :max 4 :status (symbol-name status)) 60))))
+      (should (equal (plist-get (cadr rects) :fill) (agent-ui-color face)))))
+  (should (= 1 (length (+test-aue-rects (+test-aue-svg-dom '(:type "progress" :value 0 :max 4) 60)))))
+  ;; Without a max: the block, rounded, where its text has it.
+  (let* ((rects (+test-aue-rects (+test-aue-svg-dom '(:type "progress" :label "waiting") 60)))
+         (block (cadr rects)))
+    (should (= (length rects) 2))
+    (should (equal (plist-get block :rx) 2))
+    (should (= (plist-get block :width) (* 8 4)))))
 
 ;; ====== HEATMAP ======
 
