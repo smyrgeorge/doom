@@ -21,10 +21,10 @@
 ;;   (its "→ ada" before the text). Busy, an agent gets it after its turn
 ;;   (agent-shell's queue), said. # at its start offers the agents, their roles
 ;;   and all as it's typed (Corfu; TAB completes it too), a # further on is
-;;   text; M-p / M-n your messages; typing "#name " selects that agent. 3
-;;   lines of text, more as its text needs them (wrapped, its newlines), its
-;;   rows the feed's: up to `agent-workspace-compose-max-lines' or half the
-;;   room, scrolling past them; 3 again once sent. The app's own change, not a
+;;   text; M-p / M-n your messages; typing "#name " selects that agent. A
+;;   line of text, more as its text needs them (wrapped, its newlines), its
+;;   rows the feed's: up to `agent-workspace-compose-max-lines' (5) or half
+;;   the room, scrolling past them; a line again once sent. The app's own change, not a
 ;;   border dragged: not laid out again for it, and a layout keeps it.
 ;;
 ;; Kept per project, per machine: .agent-shell/agent-workspace/room.jsonl, its
@@ -78,12 +78,12 @@ need, nil if not even `agent-workspace--room-least' fits."
                     (- (window-total-height area) bars agent-workspace--stage-least))))
     (and (>= room agent-workspace--room-least) room)))
 
-(defcustom agent-workspace-compose-lines 3
+(defcustom agent-workspace-compose-lines 1
   "The compose line's lines of text, at least: it grows as its text needs."
   :type 'natnum
   :group 'agent-workspace)
 
-(defcustom agent-workspace-compose-max-lines 10
+(defcustom agent-workspace-compose-max-lines 5
   "The most lines of text the compose line grows to (half the room at most):
 past them, it scrolls."
   :type 'natnum
@@ -888,7 +888,14 @@ text fitting, it's shown from its start."
         (let ((following (with-current-buffer (window-buffer feed)
                            (and (derived-mode-p 'agent-workspace-room-mode)
                                 (agent-workspace--room-last-line-p (window-point feed))))))
-          (adjust-window-trailing-edge feed (- delta) nil t)
+          ;; Its header line and a line of text at least, not
+          ;; `window-min-height''s 4 rows: bound from its buffer, which has
+          ;; no value of its own (a bar's would be bound instead), not set
+          ;; there (a layout with a popup open then failed to delete
+          ;; windows).
+          (with-current-buffer (window-buffer window)
+            (let ((window-min-height 2))
+              (adjust-window-trailing-edge feed (- delta) nil t)))
           (when following
             (with-selected-window feed (recenter -1)))))
       (when (<= (agent-workspace--compose-text-lines window) (/ (window-body-height window t) line))
@@ -1018,7 +1025,7 @@ bottom, or all of it (the room alone). The window left for the stage, or nil."
             (set-window-parameter compose parameter 'none))
           (set-window-parameter compose 'header-line-format nil)
           (set-window-parameter compose 'agent-workspace-room t)
-          ;; Its height, its text's (3 lines at least), from the feed.
+          ;; Its height, its text's (a line at least), from the feed.
           (agent-workspace--compose-fit compose))
         (agent-workspace--room-redraw project)))
     (unless alone area)))

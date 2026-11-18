@@ -820,7 +820,7 @@ once it closes (doom-pbk.68)."
         (agent-workspace--resized-h (selected-frame)))
       (should (= (+test-awa--relayouts) 1))
       (let ((room (get-buffer-window (agent-workspace--room-buffer project))))
-        (should (= (window-total-height room) (- (window-total-height (frame-root-window)) 4)))
+        (should (= (window-total-height room) (- (window-total-height (frame-root-window)) 2)))
         (should (> (window-left-column room) 100)))
       (should (equal (funcall bars) '(1 1)))
       ;; While the minibuffer is open: done once it closes.

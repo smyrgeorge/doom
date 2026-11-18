@@ -159,9 +159,9 @@ One chat for the whole crew: a feed of what matters, and below it a compose line
   roles and `all` as soon as it's typed (with Corfu), narrowed as you type; a `#` further on is just text. Typing
   `#ada `, or taking ada from the list, selects ada.
 
-The compose line shows 3 lines of text (`agent-workspace-compose-lines`). When what you write needs more (a long line
-wrapping, or new lines), it grows into the feed, up to 10 lines (`agent-workspace-compose-max-lines`) or half the room,
-and scrolls past that. It shrinks back as you delete, and is 3 lines again once the message is sent. A feed following
+The compose line shows a line of text (`agent-workspace-compose-lines`). When what you write needs more (a long line
+wrapping, or new lines), it grows into the feed, up to 5 lines (`agent-workspace-compose-max-lines`) or half the room,
+and scrolls past that. It shrinks back as you delete, and is a line again once the message is sent. A feed following
 its last line keeps it in view, and resizing the frame or the app keeps the compose line's height.
 
 | Key | Action |

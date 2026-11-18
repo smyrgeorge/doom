@@ -149,10 +149,10 @@ to what it was."
 
 (ert-deftest e2e-agent-workspace/the-room ()
   "The room beside the stage in a wide frame: its feed above its compose line
-(3 lines of text, its header line above them); the compose line growing as
-its text needs, the app not laid out again for it, the feed following its
-end; a message sent from it said in the feed, the compose line 3 lines
-again."
+(a line of text, its header line above it); the compose line growing as its
+text needs (5 lines at most), the app not laid out again for it, the feed
+following its end; a message sent from it said in the feed, the compose
+line a line again."
   (let ((+test-e2e-frame-size '(230 . 50)))
     (+test-e2e-aw
       (let* ((sent nil)
@@ -161,7 +161,7 @@ again."
              (compose (get-buffer-window (agent-workspace--compose-buffer project))))
         (should (window-live-p feed))
         (should (window-live-p compose))
-        (should (= (+test-e2e-aw--text-lines compose) 3))
+        (should (= (+test-e2e-aw--text-lines compose) 1))
         (should (= (window-total-width feed) agent-workspace-room-width))
         (cl-letf (((symbol-function 'agent-workspace-send)
                    (lambda (agent text &rest _) (push (list (agent-workspace-agent-name agent) text) sent) 'sent)))
@@ -173,7 +173,7 @@ again."
             (agent-workspace--compose-typed))
           (+test--pump 0.5)
           (should (eq (get-buffer-window (agent-workspace--compose-buffer project)) compose))
-          (should (= (+test-e2e-aw--text-lines compose) 6))
+          (should (= (+test-e2e-aw--text-lines compose) 5))
           (should-not (agent-workspace--app-resizes app))
           (should (= (window-end feed t) (with-current-buffer (window-buffer feed) (point-max))))
           (with-selected-window compose
@@ -181,7 +181,7 @@ again."
             (agent-workspace--compose-typed)))
         (+test--pump 0.2)
         (should (equal sent '(("sam" "look at this\n2\n3\n4\n5\n6"))))
-        (should (= (+test-e2e-aw--text-lines compose) 3))
+        (should (= (+test-e2e-aw--text-lines compose) 1))
         (should-not (agent-workspace--app-resizes app))
         (with-current-buffer (window-buffer feed)
           (should (string-search "→ sam look at this" (buffer-string))))

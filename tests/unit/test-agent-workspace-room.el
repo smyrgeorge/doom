@@ -101,14 +101,14 @@ over that."
 
 (ert-deftest agent-workspace-room/its-place ()
   "A column on the right, 78 wide: the feed, the compose line (its header
-line, 3 lines of text) below it; at the bottom (16 rows) in a narrower
+line, a line of text) below it; at the bottom (16 rows) in a narrower
 frame; the room alone (2) the whole stage's place, the stage back with 1."
   (+test-awr2 "place"
     (agent-workspace-create :role "builder" :name "ada")
     (should (equal (+test-awr2--room-windows)
-                   `(("*room · place*" 78 ,(- (window-total-height (frame-root-window)) 4))
-                     ("*compose · place*" 78 4))))
-    (should (= (window-body-height (+test-awr2--compose-window project)) 3))
+                   `(("*room · place*" 78 ,(- (window-total-height (frame-root-window)) 2))
+                     ("*compose · place*" 78 2))))
+    (should (= (window-body-height (+test-awr2--compose-window project)) 1))
     (with-current-buffer (agent-workspace--compose-buffer project)
       (should (string-search "→ ada" (overlay-get agent-workspace--compose-prompt 'before-string))))
     (with-current-buffer (agent-workspace--issues-buffer project)
@@ -116,15 +116,15 @@ frame; the room alone (2) the whole stage's place, the stage back with 1."
     (should (equal (mapcar #'car (+test-awr2--room-windows)) '("*room · place*" "*compose · place*")))
     (should-not (get-buffer-window (agent-workspace-agent-buffer (agent-workspace-agent "ada" project))))
     (should (= (window-total-width (get-buffer-window (agent-workspace--room-buffer project))) 170))
-    (should (= (window-body-height (+test-awr2--compose-window project)) 3))
+    (should (= (window-body-height (+test-awr2--compose-window project)) 1))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (agent-workspace-view-stage))
     (should (get-buffer-window (agent-workspace-agent-buffer (agent-workspace-agent "ada" project))))
     ;; A narrower frame: at the bottom.
     (set-frame-size (selected-frame) 160 40)
     (agent-workspace-layout (agent-workspace--app project))
-    (should (equal (mapcar #'cdr (+test-awr2--room-windows)) '((110 12) (110 4))))
-    (should (= (window-body-height (+test-awr2--compose-window project)) 3))))
+    (should (equal (mapcar #'cdr (+test-awr2--room-windows)) '((110 14) (110 2))))
+    (should (= (window-body-height (+test-awr2--compose-window project)) 1))))
 
 ;; ====== THE FEED ======
 
@@ -772,8 +772,8 @@ after it: its window's body height then."
 
 (ert-deftest agent-workspace-room/compose-grows ()
   "The compose line grows as its text needs, as shown (a long line wrapped,
-newlines), its rows the feed's; up to 10 lines; shrinking back as text goes,
-never under 3."
+newlines), its rows the feed's; up to 5 lines; shrinking back as text goes,
+never under 1 (doom-pbk.114)."
   (+test-awr2 "grows"
     (agent-workspace-create :role "builder" :name "ada")
     (let* ((window (+test-awr2--compose-window project))
@@ -781,19 +781,20 @@ never under 3."
            (room (+ (window-total-height feed) (window-total-height window)))
            (shown (lambda () (with-selected-window window
                                (count-screen-lines (point-min) (point-max) t window)))))
-      (should (= (+test-awr2--typed project "fix the test") 3))
-      ;; A line wrapping past 3 lines: all of it shown.
-      (let ((height (+test-awr2--typed project (concat " " (string-join (make-list 60 "word") " ")))))
-        (should (> height 3))
+      (should (= (+test-awr2--typed project "fix the test") 1))
+      ;; A line wrapping past 1 line: all of it shown.
+      (let ((height (+test-awr2--typed project (concat " " (string-join (make-list 20 "word") " ")))))
+        (should (> height 1))
+        (should (<= height 3))
         (should (= height (funcall shown)))
         ;; Newlines.
         (should (= (+test-awr2--typed project "\n\nmore") (+ height 2))))
       (should (= (+ (window-total-height feed) (window-total-height window)) room))
-      ;; At most 10.
-      (should (= (+test-awr2--typed project (apply #'concat (make-list 12 "\nline"))) 10))
-      (should (> (funcall shown) 10))
+      ;; At most 5.
+      (should (= (+test-awr2--typed project (apply #'concat (make-list 12 "\nline"))) 5))
+      (should (> (funcall shown) 5))
       (should (= (+ (window-total-height feed) (window-total-height window)) room))
-      ;; Text deleted: shrinking back, never under 3.
+      ;; Text deleted: shrinking back, never under 1.
       (with-selected-window window
         (erase-buffer)
         (insert "one\ntwo\nthree\nfour\nfive")
@@ -803,29 +804,41 @@ never under 3."
         (delete-region (save-excursion (goto-char (point-min)) (line-end-position 2)) (point-max))
         (should (equal (buffer-string) "one\ntwo"))
         (agent-workspace--compose-typed)
-        (should (= (window-body-height window) 3))
+        (should (= (window-body-height window) 2))
         (erase-buffer)
         (agent-workspace--compose-typed)
-        (should (= (window-body-height window) 3)))
+        (should (= (window-body-height window) 1)))
       (should (= (+ (window-total-height feed) (window-total-height window)) room)))))
 
-(ert-deftest agent-workspace-room/compose-back-to-3 ()
-  "A message sent, the compose line is 3 lines again; M-p / M-n bring one
+(ert-deftest agent-workspace-room/compose-lines-1-to-5 ()
+  "The compose line's lines: 1 for an empty text, as many as its text's up
+to 5 (doom-pbk.114)."
+  (should (= agent-workspace-compose-lines 1))
+  (should (= agent-workspace-compose-max-lines 5))
+  (+test-awr2 "one-to-five"
+    (agent-workspace-create :role "builder" :name "ada")
+    (let ((window (+test-awr2--compose-window project)))
+      (pcase-dolist (`(,text . ,lines) '((0 . 1) (1 . 1) (3 . 3) (5 . 5) (8 . 5)))
+        (cl-letf (((symbol-function 'agent-workspace--compose-text-lines) (lambda (_) text)))
+          (should (= (agent-workspace--compose-lines window) lines)))))))
+
+(ert-deftest agent-workspace-room/compose-back-to-1 ()
+  "A message sent, the compose line is a line again; M-p / M-n bring one
 back, the line sized to it."
-  (+test-awr2 "back-to-3"
+  (+test-awr2 "back-to-1"
     (agent-workspace-create :role "builder" :name "ada")
     (should (= (+test-awr2--typed project "#ada one\ntwo\nthree\nfour\nfive") 5))
     (with-selected-window (+test-awr2--compose-window project)
       (agent-workspace-compose-send)
       (agent-workspace--compose-typed)
       (should (equal (buffer-string) ""))
-      (should (= (window-body-height) 3))
+      (should (= (window-body-height) 1))
       (agent-workspace-compose-previous)
       (agent-workspace--compose-typed)
       (should (= (window-body-height) 5))
       (agent-workspace-compose-next)
       (agent-workspace--compose-typed)
-      (should (= (window-body-height) 3)))))
+      (should (= (window-body-height) 1)))))
 
 (ert-deftest agent-workspace-room/compose-grows-as-the-app-s-own ()
   "The compose line growing is the app's own change, not a border dragged:
@@ -839,7 +852,7 @@ most."
     (let ((app (agent-workspace--app project))
           (feed (+test-awr2--window project)))
       (should (+test-awr2--at-end-p feed))
-      (should (= (+test-awr2--typed project "1\n2\n3\n4\n5\n6") 6))
+      (should (= (+test-awr2--typed project "1\n2\n3\n4") 4))
       ;; The feed's last line still in view.
       (with-current-buffer (window-buffer feed)
         (should (<= (count-screen-lines (window-start feed) (point-max) nil feed)
@@ -850,7 +863,7 @@ most."
       (should-not (agent-workspace--app-resizes app))
       ;; Laid out again: its height kept.
       (agent-workspace-layout app)
-      (should (= (window-body-height (+test-awr2--compose-window project)) 6))
+      (should (= (window-body-height (+test-awr2--compose-window project)) 4))
       ;; Narrower, a long line wraps on more lines: fitted, once the app has
       ;; its sizes (3 layouts in 3 seconds); before, it's the layout's.
       (with-selected-window (+test-awr2--compose-window project)
@@ -867,8 +880,8 @@ most."
       ;; At the bottom (16 rows): half of it at most.
       (set-frame-size (selected-frame) 160 40)
       (agent-workspace-layout app)
-      (should (= (+test-awr2--typed project (apply #'concat (make-list 12 "\nline"))) 7))
-      (should (equal (mapcar #'cdr (+test-awr2--room-windows)) '((110 8) (110 8)))))))
+      (should (= (+test-awr2--typed project (apply #'concat (make-list 12 "\nline"))) 5))
+      (should (equal (mapcar #'cdr (+test-awr2--room-windows)) '((110 10) (110 6)))))))
 
 ;; ====== KEPT ======
 
