@@ -4145,6 +4145,50 @@ plain or grouped bar's own corners rounded, as before (doom-ht6.35)."
       (dolist (rect (+test-aue-rects dom))
         (should (equal (plist-get rect :rx) 2))))))
 
+(defun +test-aue-gauge-ends (element)
+  "ELEMENT, a gauge, drawn for the GUI: its round ends, the points (X . Y)
+of its circles, and its arcs' (START . END) points."
+  (let* ((dom (+test-aue-svg-dom element 40))
+         (point (lambda (text) (cons (string-to-number (car text)) (string-to-number (cadr text))))))
+    (list (mapcar (lambda (c) (cons (string-to-number (dom-attr c 'cx)) (string-to-number (dom-attr c 'cy))))
+                  (dom-by-tag dom 'circle))
+          (mapcar (lambda (path)
+                    (let ((d (split-string (dom-attr path 'd))))
+                      (cons (funcall point (list (nth 1 d) (nth 2 d)))
+                            (funcall point (last d 2)))))
+                  (dom-by-tag dom 'path))
+          dom)))
+
+(ert-deftest agent-ui-elements/a-gauge-s-ends-rounded ()
+  "A gauge's track: round at its two outer ends only (a dot each, its
+colour), its arcs flat where they meet, nothing below the baseline; the
+value's arc round at its start, flat at its end, round at the max
+\(doom-ht6.36)."
+  (pcase-let* ((`(,dots ,arcs ,dom) (+test-aue-gauge-ends +test-aue-coverage))
+               (baseline (apply #'max (mapcar #'cdr (append (mapcar #'car arcs) (mapcar #'cdr arcs)))))
+               (radius (string-to-number (dom-attr (car (dom-by-tag dom 'circle)) 'r))))
+    (should-not (string-search "stroke-linecap" (+test-aue-svg +test-aue-coverage 40)))
+    ;; The track's two ends and the value's start: 3 dots, at the arc's
+    ;; first and last points.
+    (should (= (length dots) 3))
+    (let ((left (apply #'min (mapcar #'car dots)))
+          (right (apply #'max (mapcar #'car dots))))
+      (should (= (seq-count (lambda (d) (< (abs (- (car d) left)) 0.01)) dots) 2))
+      (should (= (seq-count (lambda (d) (< (abs (- (car d) right)) 0.01)) dots) 1)))
+    ;; Each dot no lower than the baseline's line less its radius: nothing
+    ;; under the baseline but the half dot reaching it.
+    (dolist (dot dots)
+      (should (<= (+ (cdr dot) radius) (+ baseline radius 0.5))))
+    ;; Zones meet end to end: each arc but the value's starts where one ends.
+    (let ((track (butlast arcs)))
+      (cl-loop for (a b) on track while b
+               do (should (< (abs (- (car (cdr a)) (car (car b)))) 0.01)))))
+  ;; At its max: its end round too (4 dots); without zones, the track's two.
+  (pcase-let ((`(,dots . ,_) (+test-aue-gauge-ends (append '(:value 100) +test-aue-coverage))))
+    (should (= (length dots) 4)))
+  (pcase-let ((`(,dots . ,_) (+test-aue-gauge-ends '(:type "gauge" :value 0 :min 0 :max 10))))
+    (should (= (length dots) 2))))
+
 ;; ====== HEATMAP ======
 
 (defun +test-aue-svg (element width)

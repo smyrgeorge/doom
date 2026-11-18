@@ -114,6 +114,19 @@ line of its own above (it was left out: \"lines covered\" gone at 24)."
       (svg-node svg 'path :fill "none" :stroke color :stroke-width width
                 :d (format "M %.2f %.2f A %.2f %.2f 0 0 1 %.2f %.2f" (car a) (cdr a) r r (car b) (cdr b))))))
 
+;; ROUNDED ENDS
+;; The track's two outer ends are round, as every other element's shapes
+;; (bars, cells, tiles): a dot of the stroke's width on each end, the arcs
+;; between shortened by it (its angle at the radius), so the round reaches
+;; the baseline and nothing goes below it (the numbers under the ends stay
+;; where they were). The joins between zones stay flat, end to end; the
+;; value's arc starts round (over the track's), ends flat inside it, round
+;; at the max.
+(defun agent-ui-gauge--cap (svg cx cy r f color stroke)
+  "A round end of the half circle at fraction F in COLOR, STROKE wide."
+  (let ((at (agent-ui-gauge--point cx cy r f)))
+    (svg-circle svg (car at) (cdr at) (/ stroke 2.0) :fill color)))
+
 (defun agent-ui-gauge--gui (props ctx)
   (let* ((cw (plist-get ctx :char-width))
          (lh (plist-get ctx :line-height))
@@ -133,17 +146,32 @@ line of its own above (it was left out: \"lines covered\" gone at 24)."
          (svg (svg-create w h)))
     (if (< r (* 2 cw))
         (agent-ui-gauge--text props ctx)
-      ;; Its track: each zone in its colour, dimmed (no zones: muted).
-      (if (null zones)
-          (agent-ui-gauge--arc svg cx cy r 0 1 (agent-ui-blend bg (agent-ui-color 'agent-ui-muted) 0.5) stroke)
-        (cl-loop for (zone . rest) on (cons (cons min (cdr (car zones))) zones)
-                 for from = (agent-ui-gauge--fraction props (car zone))
-                 for to = (if rest (agent-ui-gauge--fraction props (car (car rest))) 1.0)
-                 do (agent-ui-gauge--arc svg cx cy r from to
-                                         (agent-ui-blend bg (agent-ui-color (agent-ui-gauge--face zones (car zone))) 0.3)
-                                         stroke)))
-      ;; Its value.
-      (agent-ui-gauge--arc svg cx cy r 0 (agent-ui-gauge--fraction props value) (agent-ui-color face) stroke)
+      ;; Its track: each zone in its colour, dimmed (no zones: muted),
+      ;; between its round ends (see ROUNDED ENDS).
+      (let* ((end (/ (/ stroke 2.0) r float-pi))
+             (within (lambda (f) (max end (min (- 1 end) f)))))
+        (if (null zones)
+            (let ((muted (agent-ui-blend bg (agent-ui-color 'agent-ui-muted) 0.5)))
+              (agent-ui-gauge--arc svg cx cy r end (- 1 end) muted stroke)
+              (agent-ui-gauge--cap svg cx cy r end muted stroke)
+              (agent-ui-gauge--cap svg cx cy r (- 1 end) muted stroke))
+          (cl-loop for (zone . rest) on (cons (cons min (cdr (car zones))) zones)
+                   for first = t then nil
+                   for from = (funcall within (agent-ui-gauge--fraction props (car zone)))
+                   for to = (funcall within (if rest (agent-ui-gauge--fraction props (car (car rest))) 1.0))
+                   for color = (agent-ui-blend bg (agent-ui-color (agent-ui-gauge--face zones (car zone))) 0.3)
+                   do (agent-ui-gauge--arc svg cx cy r from to color stroke)
+                   (when first (agent-ui-gauge--cap svg cx cy r end color stroke))
+                   (unless rest (agent-ui-gauge--cap svg cx cy r (- 1 end) color stroke))))
+        ;; Its value: from the track's round start, flat where it ends, round
+        ;; at the max.
+        (let ((f (agent-ui-gauge--fraction props value))
+              (color (agent-ui-color face)))
+          (when (> f 0)
+            (agent-ui-gauge--arc svg cx cy r end (funcall within f) color stroke)
+            (agent-ui-gauge--cap svg cx cy r end color stroke)
+            (when (>= f 1)
+              (agent-ui-gauge--cap svg cx cy r (- 1 end) color stroke)))))
       ;; Its target: a tick across the track.
       (when-let* ((target (plist-get props :target)))
         (let ((in (agent-ui-gauge--point cx cy (- r stroke) (agent-ui-gauge--fraction props target)))
