@@ -849,6 +849,70 @@ main checkout's branch hasn't (MAIN..BRANCH): magit's log, else git log's."
           (goto-char (point-min)))
         (pop-to-buffer buffer)))))
 
+;; MERGED, ITS ISSUE CLOSED
+;; A branch merged by the app (M on a bar, M in the branches view, a
+;; forgotten agent's) closes the issue it's for, the last step of an issue's
+;; way from filed to merged: its name is TYPE/ID or TYPE/ID-WORDS, the id the
+;; first of its dash-separated beginnings bd knows. Only an open or
+;; in-progress issue; a prompt's branch, agent/NAME, an issue closed
+;; already, a merge stopped on conflicts: nothing. bd failing: the merge
+;; stands, said. An epic isn't touched as its last child closes.
+(defcustom agent-workspace-close-on-merge t
+  "Non-nil: merging an issue's branch closes the issue (see MERGED, ITS
+ISSUE CLOSED)."
+  :type 'boolean
+  :group 'agent-workspace)
+
+(defun agent-workspace--bd-status (project id)
+  "Issue ID of PROJECT's status (\"open\", \"closed\"...), or nil if bd
+doesn't know it."
+  (let ((default-directory project))
+    (with-temp-buffer
+      (when (eql 0 (process-file "bd" nil (list t nil) nil "show" id "--json"))
+        (let ((data (ignore-errors (json-parse-string (buffer-string) :object-type 'alist :array-type 'list))))
+          (alist-get 'status (if (consp (car-safe data)) (car data) data)))))))
+
+(defun agent-workspace--branch-issue (project branch)
+  "The issue PROJECT's BRANCH (TYPE/ID or TYPE/ID-WORDS) is for, and its
+status: (ID . STATUS), or nil (a prompt's branch, agent/NAME, no issue bd
+knows)."
+  (when (and (string-match "\\`\\([^/]+\\)/\\(.+\\)\\'" branch)
+             (not (equal (match-string 1 branch) "agent")))
+    (let* ((parts (split-string (match-string 2 branch) "-"))
+           (candidates (cl-loop for n from 2 to (length parts)
+                                collect (string-join (seq-take parts n) "-"))))
+      (cl-loop for id in candidates
+               for status = (agent-workspace--bd-status project id)
+               when status return (cons id status)))))
+
+(defun agent-workspace--merged-close (project branch main &optional agent)
+  "BRANCH merged into MAIN in PROJECT: the issue it's for closed (see MERGED,
+ITS ISSUE CLOSED), said in the room (as AGENT's, if given). What the
+merge's message adds: \": ID closed\", a failure, or \"\"."
+  (or (when-let* (((and agent-workspace-close-on-merge
+                        (executable-find "bd")
+                        (file-directory-p (expand-file-name ".beads" project))))
+                  (issue (agent-workspace--branch-issue project branch))
+                  ((member (cdr issue) '("open" "in_progress"))))
+        (let* ((id (car issue))
+               (default-directory project)
+               (said (with-temp-buffer
+                       ;; --force: the issue its agent holds (claimed, as
+                       ;; bd refuses otherwise): you merged it.
+                       (if (eql 0 (process-file "bd" nil t nil "close" id "--force" "--reason"
+                                                (format "Merged %s into %s" branch main)))
+                           (format ": %s closed" id)
+                         (format "; %s not closed: %s" id
+                                 (or (seq-find (lambda (line) (not (string-empty-p line)))
+                                               (mapcar #'string-trim (split-string (buffer-string) "\n")))
+                                     "bd failed"))))))
+          (when (fboundp 'agent-workspace-room-post)
+            (agent-workspace-room-post project :kind 'note
+                                       :agent (and agent (agent-workspace-agent-name agent))
+                                       :text (format "merged %s into %s%s" branch main said)))
+          said))
+      ""))
+
 (defun agent-workspace--merge-in (project branch)
   "BRANCH merged into PROJECT's main checkout, always with a merge commit
 naming it (--no-ff: never a fast-forward, so its commits stay told apart
@@ -869,8 +933,9 @@ branch is deleted and AGENT rests on agent/NAME at the merged tip
 \(`agent-workspace-rest'): if it's on it, only while it isn't working and
 its worktree has nothing uncommitted, else left for later (M again), said.
 agent/NAME itself (work from before) isn't deleted: it rests there. AGENT
-is told (if its session runs). A merge stopped on conflicts is left to you,
-in the main checkout. Return non-nil if it merged."
+is told (if its session runs). The issue it's for closed (see MERGED, ITS
+ISSUE CLOSED). A merge stopped on conflicts is left to you, in the main
+checkout. Return non-nil if it merged."
   (interactive (let ((agent (agent-workspace-read-agent "Merge the branch of: ")))
                  (list agent (agent-workspace-read-branch agent "Merge %s's branch: "))))
   (agent-workspace--branch-sync agent)
@@ -883,7 +948,8 @@ in the main checkout. Return non-nil if it merged."
          (on (and dir (equal (agent-workspace--worktree-head dir) branch)))
          (default-directory project))
     (when (agent-workspace--merge-in project branch)
-      (let ((why (and on (if (memq (agent-workspace-agent-state agent) '(working hand))
+      (let ((closed (agent-workspace--merged-close project branch main agent))
+            (why (and on (if (memq (agent-workspace-agent-state agent) '(working hand))
                              (format "%s is working" name)
                            (agent-workspace-branch-blocker agent)))))
         (cond
@@ -914,7 +980,10 @@ next work gets a branch of its own." rest main))
                             (gone " and deleted it.")
                             (t ".")))
              :submit t :no-branch t))
-          (message "Merged %s into %s%s" branch main said)
+          (message "Merged %s into %s%s%s" branch main closed
+                   (if (and (string-prefix-p ": " said) (not (string-empty-p closed)))
+                       (concat "; " (substring said 2))
+                     said))
           t)))))
 
 (defun agent-workspace-merge-kept (project branch)
@@ -925,6 +994,7 @@ worktree has it: a forgotten agent's kept). A merge stopped on conflicts
 is left to you. Return non-nil if it merged."
   (let ((main (agent-workspace-main-branch project)))
     (when (agent-workspace--merge-in project branch)
-      (let ((gone (agent-workspace--branch-drop project branch)))
-        (message "Merged %s into %s%s" branch main (if gone (format ": %s deleted" branch) ""))
+      (let ((closed (agent-workspace--merged-close project branch main))
+            (gone (agent-workspace--branch-drop project branch)))
+        (message "Merged %s into %s%s%s" branch main closed (if gone (format "; %s deleted" branch) ""))
         t))))

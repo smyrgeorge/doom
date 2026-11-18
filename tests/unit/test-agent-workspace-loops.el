@@ -807,6 +807,95 @@ open again, unassigned, as K does (doom-pbk.111)."
       (should (+test-awl--wait (lambda () (equal (alist-get 'status (funcall show one)) "open"))))
       (should-not (alist-get 'assignee (funcall show one))))))
 
+;; ====== MERGED, ITS ISSUE CLOSED ======
+
+(defmacro +test-awl--git-user (&rest body)
+  "BODY, git's commits and merges made as a test user (no ~/.gitconfig)."
+  (declare (indent 0))
+  `(let ((process-environment (append '("GIT_AUTHOR_NAME=T" "GIT_AUTHOR_EMAIL=t@t"
+                                        "GIT_COMMITTER_NAME=T" "GIT_COMMITTER_EMAIL=t@t")
+                                      process-environment)))
+     ,@body))
+
+(defun +test-awl--worked (agent file)
+  "AGENT's worktree with FILE committed on its branch: its branch."
+  (let ((default-directory (agent-workspace-agent-worktree agent)))
+    (write-region "done\n" nil file)
+    (+test-awl--run "git" "add" file)
+    (+test-awl--run "git" "commit" "-q" "-m" (concat "ada's " file))
+    (string-trim (+test-awl--run "git" "branch" "--show-current"))))
+
+(ert-deftest agent-workspace-loops/merging-closes-the-issue ()
+  "M on an issue's branch merges it and closes the issue, its reason naming
+the branch, the room saying so; a forgotten agent's kept branch too. Not:
+a branch of no issue, an issue closed already, with
+`agent-workspace-close-on-merge' nil, a merge stopped on conflicts
+\(doom-pbk.116)."
+  (+test-awl--with-crew "merge-closes"
+    (+test-awl--git-user
+      (let* ((one (+test-awl--issue project "the lexer" "build" 1 "bug"))
+             (two (+test-awl--issue project "the parser" "build" 1))
+             (three (+test-awl--issue project "the docs" "build" 1))
+             (ada (+test-awl--create "ada"))
+             (reason (lambda (id)
+                       (let ((default-directory project))
+                         (alist-get 'close_reason (car (json-parse-string (+test-awl--run "bd" "show" id "--json")
+                                                                          :object-type 'alist :array-type 'list)))))))
+        ;; An issue's branch: merged, closed.
+        (agent-workspace-give-issue ada one "the lexer" "bug")
+        (let ((branch (+test-awl--worked ada "lexer")))
+          (should (string-prefix-p (concat "fix/" one) branch))
+          (should (agent-workspace-merge ada))
+          (should (equal (+test-awl--status project one) "closed"))
+          (should (equal (funcall reason one) (format "Merged %s into main" branch)))
+          (should (member (cons "note" (format "merged %s into main: %s closed" branch one))
+                          (+test-awl--room project "ada"))))
+        ;; Off: merged, not closed.
+        (let ((ken (+test-awl--create "ken")))
+          (agent-workspace-give-issue ken two "the parser" "task")
+          (+test-awl--worked ken "parser")
+          (let ((agent-workspace-close-on-merge nil))
+            (should (agent-workspace-merge ken))))
+        (should (equal (+test-awl--status project two) "in_progress"))
+        ;; Closed already: nothing more.
+        (let* ((liz (+test-awl--create "liz"))
+               (branch (progn (agent-workspace-give-issue liz three "the docs" "task")
+                              (+test-awl--worked liz "docs"))))
+          (let ((default-directory project))
+            (+test-awl--run "bd" "close" three "--force" "--reason" "by hand"))
+          (should (agent-workspace-merge liz))
+          (should (equal (funcall reason three) "by hand"))
+          (should-not (agent-workspace--branch-issue project "fix-the-parser"))
+          (should-not (agent-workspace--branch-issue project "agent/ada"))
+          (should (equal (car (agent-workspace--branch-issue project branch)) three)))))))
+
+(ert-deftest agent-workspace-loops/a-kept-branch-merged-closes-its-issue ()
+  "A forgotten agent's branch merged (the branches view's M) closes its issue;
+a merge stopped on conflicts closes nothing."
+  (+test-awl--with-crew "merge-kept"
+    (+test-awl--git-user
+      (let* ((one (+test-awl--issue project "the lexer" "build" 1 "bug"))
+             (two (+test-awl--issue project "the parser" "build" 1 "bug"))
+             (ada (+test-awl--create "ada"))
+             (ken (+test-awl--create "ken")))
+        (agent-workspace-give-issue ada one "the lexer" "bug")
+        (let ((branch (+test-awl--worked ada "lexer")))
+          (agent-workspace-forget ada 'keep)
+          (should (agent-workspace-merge-kept project branch))
+          (should (equal (+test-awl--status project one) "closed")))
+        ;; Conflicts: README changed on both sides.
+        (agent-workspace-give-issue ken two "the parser" "bug")
+        (let ((default-directory (agent-workspace-agent-worktree ken)))
+          (write-region "ken's\n" nil "README")
+          (+test-awl--run "git" "commit" "-q" "-am" "ken's README"))
+        (let ((default-directory project))
+          (write-region "yours\n" nil "README")
+          (+test-awl--run "git" "commit" "-q" "-am" "your README"))
+        (should-not (agent-workspace-merge ken))
+        (let ((default-directory project))
+          (+test-awl--run "git" "merge" "--abort"))
+        (should (equal (+test-awl--status project two) "in_progress"))))))
+
 ;; ====== THE SAVED CREW ======
 
 (ert-deftest agent-workspace-loops/reopening-never-starts-one ()

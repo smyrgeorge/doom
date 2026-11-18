@@ -550,12 +550,17 @@ leaves holding nothing (a question answered, an investigation) is deleted.
 | Key | Command | Does |
 |---|---|---|
 | `d` | `M-x agent-workspace-review` | A branch's changes in magit: what it did since it left yours (`main...fix/doom-pbk.18-…`) |
-| `M` | `M-x agent-workspace-merge` | Merges a branch into your checkout, tells the agent, deletes the branch, and the agent rests on `agent/ada` at the result |
+| `M` | `M-x agent-workspace-merge` | Merges a branch into your checkout, closes the issue it's for, tells the agent, deletes the branch, and the agent rests on `agent/ada` at the result |
 
 Both take the branch it's on, or ask which when others of its hold work (a looping agent's earlier issues). A merge
 always makes a merge commit naming the branch, even when it could fast-forward: `Merge branch
 'fix/doom-pbk.18-minimap-lanes-line-up'`. While the agent works, or has changes not committed, the branch stays for
 now, and you're told: `M` again later. A merge that conflicts stops in your checkout, for you to resolve.
+
+Merging an issue's branch (`fix/doom-a1b-…`) closes the issue, its reason naming the branch, and the room says so:
+`merged fix/doom-a1b-… into main: doom-a1b closed`. Not an issue closed already, nor a branch of no issue, nor a merge
+stopped on conflicts (close it once you've finished it); `(setq agent-workspace-close-on-merge nil)` in `config.el`
+closes none. A merger closes the issue of each branch it merges.
 
 `b` in the app lists every branch waiting to be merged, in the stage's place; `q` gives the stage back.
 
