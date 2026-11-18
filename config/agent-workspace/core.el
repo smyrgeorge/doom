@@ -19,6 +19,8 @@
 (declare-function agent-workspace-worktree-move "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-move-blocker "agent-workspace/worktree")
 (declare-function agent-workspace--name-left-p "agent-workspace/new")
+(declare-function agent-workspace-crew-members "agent-workspace/saved")
+(declare-function agent-workspace-crew-saved "agent-workspace/saved")
 (declare-function agent-workspace--bd-give-back "agent-workspace/issues")
 (declare-function agent-workspace-worktree-fate "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-remove "agent-workspace/worktree")
@@ -431,20 +433,23 @@ its branch and folder too)."
 
 (defun agent-workspace--check-name (name project &optional except)
   "Signal a user error if NAME can't be an agent's in PROJECT's crew (but
-EXCEPT's, an agent being renamed)."
+EXCEPT's, an agent being renamed): taken by one running or one its saved
+crew keeps while it doesn't run (`agent-workspace-crew-members')."
   (unless (agent-workspace-name-valid-p name)
     (user-error "Not a name for an agent: %S (a lowercase letter, then lowercase letters, digits or -)" name))
-  (when-let* ((other (seq-find (lambda (agent) (string-equal-ignore-case
-                                                (agent-workspace-agent-name agent) name))
-                               (agent-workspace-agents project))))
-    (unless (eq other except)
-      (user-error "There's an agent named %s already" (agent-workspace-agent-name other)))))
+  (when-let* ((other (car (seq-find (lambda (member) (string-equal-ignore-case (car member) name))
+                                    (agent-workspace-crew-members project)))))
+    (unless (and except (equal other (agent-workspace-agent-name except)))
+      (user-error "There's an agent named %s already" other))))
 
 (defun agent-workspace-free-colour (&optional project prefer)
-  "A colour no agent of PROJECT's crew has: PREFER (its role's) if it's
-free, else the first of `agent-workspace-colours'; all in use, the one
-fewest have."
-  (let ((used (mapcar #'agent-workspace-agent-colour (agent-workspace-agents project))))
+  "A colour no agent of PROJECT's crew has, running or saved
+\(`agent-workspace-crew-saved'): PREFER (its role's) if it's free, else the
+first of `agent-workspace-colours'; all in use, the one fewest have."
+  (let* ((project (or project (agent-workspace-project)))
+         (used (append (mapcar #'agent-workspace-agent-colour (agent-workspace-agents project))
+                       (seq-keep (lambda (entry) (plist-get entry :colour))
+                                 (and project (agent-workspace-crew-saved project))))))
     (or (and prefer (not (member prefer used)) prefer)
         (seq-find (lambda (colour) (not (member colour used))) agent-workspace-colours)
         (car (seq-sort-by (lambda (colour) (seq-count (lambda (c) (equal c colour)) used))

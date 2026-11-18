@@ -372,21 +372,24 @@ kept crew's layout, as read) where it says."
                    :layout (agent-workspace--crew-layout project app (plist-get kept :layout))))
             "\n")))
 
+(defun agent-workspace-crew-saved (project)
+  "The agents of PROJECT's saved crew not running, as crew.json keeps them
+\(`agent-workspace-crew-text'), each a plist as `agent-workspace-crew-read'
+reads it: a kept crew's (`agent-workspace--crew-kept'); with none running
+and nothing kept, crew.json's, if it reads as a crew (only looked at)."
+  (let ((saved (cond ((gethash (agent-workspace--root project) agent-workspace--crew-kept))
+                     ((not (agent-workspace-agents project))
+                      (car (agent-workspace-crew-read project t))))))
+    (seq-remove (lambda (entry) (agent-workspace-agent (plist-get entry :name) project))
+                (plist-get saved :agents))))
+
 (defun agent-workspace-crew-members (project)
   "PROJECT's crew, running or not: ((NAME . ROLE)...), the agents running,
-then those of its saved crew not running, as crew.json keeps them
-\(`agent-workspace-crew-text'): a kept crew's (`agent-workspace--crew-kept');
-with none running and nothing kept, crew.json's, if it reads as a crew (only
-looked at)."
-  (let* ((running (agent-workspace-agents project))
-         (saved (cond ((gethash (agent-workspace--root project) agent-workspace--crew-kept))
-                      ((not running) (car (agent-workspace-crew-read project t))))))
-    (append (mapcar (lambda (agent) (cons (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))
-                    running)
-            (seq-keep (lambda (entry)
-                        (unless (agent-workspace-agent (plist-get entry :name) project)
-                          (cons (plist-get entry :name) (plist-get entry :role))))
-                      (plist-get saved :agents)))))
+then those of its saved crew not running (`agent-workspace-crew-saved')."
+  (append (mapcar (lambda (agent) (cons (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))
+                  (agent-workspace-agents project))
+          (mapcar (lambda (entry) (cons (plist-get entry :name) (plist-get entry :role)))
+                  (agent-workspace-crew-saved project))))
 
 (defun agent-workspace-crew-save (&optional project)
   "Write PROJECT's crew.json now (default: the current project's), if what

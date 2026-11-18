@@ -454,7 +454,8 @@ panels or a loop turned off it applies.
    its model; then what it does is cut. A crew's row loses where it comes from, then its agents; what it would add
    is cut last. `c` on a ready issue makes an agent for that issue: no crews there.
 2. **Its name.** Leave it empty and one is made for it, `ada`, `grace`, `linus`..., each with an initial no other
-   agent has. A name is lowercase letters, digits and `-`.
+   agent has. A name is lowercase letters, digits and `-`. One the crew has is refused, an agent
+   [saved](#the-saved-crew) but not running included.
 
 With `C-u`, it also asks for its model, permission mode and colour. Its role's are the defaults (its mode: auto,
 unless its role says). A crew picked asks nothing more: see [Crews](#crews).
@@ -533,7 +534,8 @@ From the shell: `cmd/agent-workspace crew full` ([more](cmd.md#cmdagent-workspac
   role moves it; one named `worktrees/ada`, from before, moves when its agent starts. It's locked with the agent's
   name as the reason (`git worktree list -v`). `.agent-shell/` stays out of git. A project that isn't a git
   repository, or has no commit yet, can't have a crew.
-- **Its colour** is one of the theme's ANSI colours, a free one by default.
+- **Its colour** is one of the theme's ANSI colours, a free one by default: none of the crew's, saved agents not
+  running included.
 - **Its name** goes into the issues' history: its `bd` commands run as `ada`.
 
 ## Roles
