@@ -309,7 +309,13 @@ role itself untouched; the main branch asked once."
          (agent-workspace-role-function (lambda (_project _name) role))
          (asked 0))
     (cl-letf (((symbol-function 'agent-workspace-main-branch)
-               (lambda (project) (cl-incf asked) (should (string-prefix-p "/tmp/" project)) "main")))
+               (lambda (project)
+                 (cl-incf asked)
+                 (should (string-prefix-p "/tmp/" project))
+                 ;; A lookup changing the match data: the value still
+                 ;; where its placeholder was.
+                 (string-match "o\\(o\\)" "xoo")
+                 "main")))
       (let ((filled (agent-workspace-role-filled (+test-awc--agent :name "ken" :role "merger"))))
         (should (equal (plist-get filled :tools)
                        '("Read" "Bash(git -C /tmp/project merge --no-ff *)"
