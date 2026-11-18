@@ -970,7 +970,7 @@ other a row."
           (should (eq (window-buffer side) canvas))
           (should-not (get-buffer-window logs))
           (should-not (get-buffer-window tests))
-          (should (string-prefix-p " canvas │ logs │ tests" (+test-awa--header side)))
+          (should (string-prefix-p " Canvas │ logs │ tests" (+test-awa--header side)))
           (should (string-search "v: next · V: full size" (+test-awa--header side)))
           ;; Its badge, its panels counted; none on ken's bar.
           (should (string-search "◫2" (+test-awa--header pane)))
@@ -989,13 +989,24 @@ other a row."
           (should (eq (window-buffer) logs))
           (should (eq (selected-window) (+test-awa--side)))
           (should-not (get-buffer-window canvas))
-          (should (string-prefix-p " canvas │ logs │ tests" (+test-awa--header (selected-window))))
+          (should (string-prefix-p " Canvas │ logs │ tests" (+test-awa--header (selected-window))))
           (+test-awa--in (selected-window) (agent-workspace-panels-here))
           (should (eq (window-buffer) tests))
           (should-not (get-buffer-window logs))
           ;; Wrapping.
           (+test-awa--in (selected-window) (agent-workspace-panels-here))
           (should (eq (window-buffer) canvas))
+          ;; Its header readable on its tint: the tabs not shown, the │s
+          ;; and v / V in the agent's line's text colour, none in shadow;
+          ;; the one shown bold in the agent's colour (doom-pbk.117).
+          (let* ((text (with-selected-window (selected-window) (agent-workspace--side-header)))
+                 (faces (lambda (part) (ensure-list (get-text-property (string-search part text) 'face text)))))
+            (dolist (part '("logs" "│" "v: next · V: full size"))
+              (should (memq 'agent-workspace-label (funcall faces part))))
+            (should (memq 'bold (funcall faces "Canvas")))
+            (should-not (memq 'agent-workspace-label (funcall faces "Canvas")))
+            (dotimes (i (length text))
+              (should-not (memq 'shadow (ensure-list (get-text-property i 'face text))))))
           ;; A click on a tab shows it.
           (let* ((side (selected-window))
                  (text (with-selected-window side (agent-workspace--side-header)))
@@ -1042,7 +1053,7 @@ raised hand gone to shows its session."
           (should-not (get-buffer-window session))
           (let ((header (+test-awa--header (selected-window))))
             (should (string-prefix-p "▾ ▌A ada · builder · ○ at the desk" header))
-            (should (string-match-p "canvas │ logs *\\'" header)))
+            (should (string-match-p "Canvas │ logs *\\'" header)))
           ;; v: the next one, full size.
           (+test-awa--in (selected-window) (agent-workspace-panels-here))
           (should (eq (window-buffer) logs))
@@ -1084,13 +1095,13 @@ last tab killed (q): the side area closes, nothing else shown there."
                (tests (+test-awa--other-canvas-show ada "tests" '(:type "text" :id "t" :text "Tests")))
                (issues (get-buffer-window (agent-workspace--issues-buffer project))))
           (should (eq (window-buffer (+test-awa--side)) tests))
-          (should (string-prefix-p " canvas │ tests │ logs" (+test-awa--header (+test-awa--side))))
+          (should (string-prefix-p " Canvas │ tests │ logs" (+test-awa--header (+test-awa--side))))
           ;; A question on ask: its tab picked, before tests; the cursor
           ;; stays where it was.
           (select-window issues)
           (let ((ask (+test-awa--other-canvas-show ada "ask" '(:type "confirm" :id "q1" :question "Push?"))))
             (should (eq (window-buffer (+test-awa--side)) ask))
-            (should (string-prefix-p " canvas │ ask │ tests │ logs" (+test-awa--header (+test-awa--side))))
+            (should (string-prefix-p " Canvas │ ask │ tests │ logs" (+test-awa--header (+test-awa--side))))
             (should-not (buffer-local-value 'agent-ui-focus-questions ask))
             (+test-awa--due-timers)
             (should (eq (selected-window) issues))
@@ -1109,7 +1120,7 @@ last tab killed (q): the side area closes, nothing else shown there."
             (+test-awa--in (selected-window) (agent-workspace-full-here))
             (should (eq (window-buffer) ask))
             (should-not (get-buffer-window (agent-workspace-agent-buffer ada)))
-            (should (string-match-p "canvas │ ask │ tests │ logs *\\'" (+test-awa--header (selected-window))))
+            (should (string-match-p "Canvas │ ask │ tests │ logs *\\'" (+test-awa--header (selected-window))))
             (+test-awa--in (selected-window) (agent-workspace-full-here))
             (should (get-buffer-window (agent-workspace-agent-buffer ada)))
             ;; Something new on tests, hidden: its tab shown; then ask again.
@@ -1124,7 +1135,7 @@ last tab killed (q): the side area closes, nothing else shown there."
             (should-not (buffer-live-p ask))
             (should (equal (mapcar #'car (+test-awa--windows))
                            '("*issues · others*" "ada · builder" "Agent UI: ada · builder / tests" " *bar · ken · others*")))
-            (should (string-prefix-p " canvas │ tests │ logs" (+test-awa--header (+test-awa--side))))))
+            (should (string-prefix-p " Canvas │ tests │ logs" (+test-awa--header (+test-awa--side))))))
         ;; ken's only tab, an ask canvas: answered, its side area closes,
         ;; its session alone in its pane.
         (agent-workspace-select ken)
@@ -1232,7 +1243,7 @@ Something new on it: its side area back."
             (should (equal (mapcar #'car (+test-awa--windows)) beside))
             (should (eq (window-buffer) logs))
             (should (equal (agent-workspace-agent-tabs ada) (list logs)))
-            (should-not (string-search "canvas" (+test-awa--header (+test-awa--side))))
+            (should-not (string-search "Canvas" (+test-awa--header (+test-awa--side))))
             ;; Full size: q, its pane back to its session, the panel beside it.
             (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "e" :text "E"))))
               (with-current-buffer (agent-workspace--issues-buffer project)
@@ -1259,7 +1270,7 @@ Something new on it: its side area back."
               (+test-awa--timers)
               (should (equal (mapcar #'car (+test-awa--windows)) beside))
               (should (equal (agent-workspace-agent-tabs ada) (list logs)))
-              (should-not (string-search "canvas" (+test-awa--header (+test-awa--side)))))))))))
+              (should-not (string-search "Canvas" (+test-awa--header (+test-awa--side)))))))))))
 
 ;; ====== THE ISSUES ======
 

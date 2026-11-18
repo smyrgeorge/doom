@@ -358,20 +358,22 @@ if it has none."
     (agent-workspace--side-tab agent)))
 
 (defun agent-workspace--tab-name (tab)
-  "TAB's name: its panel's (\"tests\"), its other canvas's (\"ask\"), or
-\"canvas\"."
+  "TAB's name: its panel's (\"tests\"), its other canvas's (\"ask\"), as
+they were named, or \"Canvas\": the app's word for its main one, as CREW
+is the minimap's."
   (if-let* (((boundp 'agent-ui-panels--state))
             (panel (buffer-local-value 'agent-ui-panels--state tab)))
       (agent-ui-panels--name panel)
     (or (and (boundp 'agent-ui--canvas-part) (buffer-local-value 'agent-ui--canvas-part tab))
-        "canvas")))
+        "Canvas")))
 
 (defun agent-workspace--tabs-text (agent shown)
-  "AGENT's tabs between │, SHOWN's bold in its colour, the others dimmed:
-each a button (a click shows it)."
+  "AGENT's tabs between │, SHOWN's bold in its colour, the others (and the
+│s) in `agent-workspace-label', readable on its tint (shadow wasn't): each
+a button (a click shows it)."
   (mapconcat (lambda (tab)
                (propertize (agent-workspace--tab-name tab)
-                           'face (if (eq tab shown) (list (agent-workspace--fg agent) 'bold) 'shadow)
+                           'face (if (eq tab shown) (list (agent-workspace--fg agent) 'bold) 'agent-workspace-label)
                            'agent-workspace-tab tab
                            'agent-workspace-button t
                            'mouse-face 'agent-workspace-hover
@@ -379,7 +381,7 @@ each a button (a click shows it)."
                            'keymap agent-workspace-tab-map
                            'local-map agent-workspace-tab-map))
              (agent-workspace-agent-tabs agent)
-             (propertize " │ " 'face 'shadow)))
+             (propertize " │ " 'face 'agent-workspace-label)))
 
 (defun agent-workspace--side-header ()
   "The side area's header line: its agent's tabs, the one shown marked; v
@@ -390,7 +392,7 @@ and V at its right. Tinted in its colour, as a bar."
                                        (agent-workspace--tint
                                         (agent-workspace--at-right
                                          (concat " " (agent-workspace--tabs-text agent (window-buffer)))
-                                         (propertize "v: next · V: full size " 'face 'shadow)
+                                         (propertize "v: next · V: full size " 'face 'agent-workspace-label)
                                          (window-total-width) t)
                                         (agent-workspace-agent-face agent) 0.14)
                                        agent-workspace-line-map t)))))

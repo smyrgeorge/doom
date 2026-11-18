@@ -227,7 +227,7 @@ back."
           (let ((side (agent-workspace--side-window ada))
                 (pane (get-buffer-window session)))
             (should (eq (window-buffer side) canvas))
-            (should (string-prefix-p " canvas │ logs │ tests" (+test-e2e-aw--header side)))
+            (should (string-prefix-p " Canvas │ logs │ tests" (+test-e2e-aw--header side)))
             (should (string-search (substring-no-properties (agent-workspace-badge ada))
                                    (+test-e2e-aw--header pane)))
             ;; Hidden, not fetched.
@@ -245,7 +245,7 @@ back."
             (+test--pump 0.3)
             (should (eq (window-buffer) logs))
             (should-not (get-buffer-window session))
-            (should (string-match-p "▾ .*ada · builder.*canvas │ logs │ tests *\\'"
+            (should (string-match-p "▾ .*ada · builder.*Canvas │ logs │ tests *\\'"
                                     (+test-e2e-aw--header (selected-window))))
             ;; V again: back beside its session.
             (with-current-buffer (window-buffer) (agent-workspace-full-here))

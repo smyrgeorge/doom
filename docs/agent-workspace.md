@@ -29,7 +29,7 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
   under them.
 - **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
   and below it (beside it from 140 columns) its Agent UI canvas, its other canvases (`ask`, where it asks you
-  things) and its [panels](#an-agents-panels) as tabs, `canvas │ ask │ logs`, one shown at a time. `v` shows the
+  things) and its [panels](#an-agents-panels) as tabs, `Canvas │ ask │ logs`, one shown at a time. `v` shows the
   next one, `V` the one there full size, in the whole pane (`V` again: back), and a click on a tab shows it.
   Something new on a canvas brings its tab back; a question there doesn't take your cursor. `q` in a canvas closes
   it, as it does when the agent clears it, or once you've answered the question on `ask`: the tab shown before is
