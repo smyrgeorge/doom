@@ -298,9 +298,20 @@ needs your OK. nil: Claude Code's own default."
 ;;   used, 20% (agent-shell's colours: yellow from 60%, red from 85%; its
 ;;   tokens and cost on hover), drawn again as agent-shell reports it. It
 ;;   arranges itself: tiling leaves its frame alone (config/tiling.el).
-;; q leaves it (the crew goes on, its tally in the other workspaces' mode
-;; line: a click comes back); Q, SPC TAB d, or quitting Emacs close it at
-;; once: every agent exits, no question asked.
+;; q leaves it (the crew goes on: see THE CREW UNDER TREEMACS below); Q,
+;; SPC TAB d, or quitting Emacs close it at once: every agent exits, no
+;; question asked.
+;;
+;; THE CREW UNDER TREEMACS (config/agent-workspace/sidebar.el)
+;; Once you've left the app, while treemacs shows the crew's project (in any
+;; frame but the crew's), its lanes are under treemacs: a line an agent (its
+;; avatar and role's icon, its last minutes that fit, its state), CREW ·
+;; PROJECT and the tally over them; RET or a click on a lane: the app, that
+;; agent selected. treemacs hidden, or on another project: the mode line
+;; shows the crew's hands raised, done and stuck (` !1 ✓1 `; nothing for
+;; working agents), a click opening the app. `agent-workspace-sidebar' nil:
+;; never under treemacs; `agent-workspace-sidebar-lines' its most lines;
+;; `agent-workspace-mode-line-tally': needs-you, all (working too) or nil.
 ;;
 ;; Keys, in evil's normal state:
 ;;   the issues   j / k the next / previous issue, RET (l, o) its agent's pane
@@ -355,6 +366,7 @@ needs your OK. nil: Claude Code's own default."
 (load! "agent-workspace/panels")
 (load! "agent-workspace/activity")
 (load! "agent-workspace/minimap")
+(load! "agent-workspace/sidebar")
 (load! "agent-workspace/loops")
 (load! "agent-workspace/saved")
 (load! "agent-workspace/doom")
@@ -415,6 +427,10 @@ needs your OK. nil: Claude Code's own default."
 ;; place of evil's visual state.
 (+my/agent-workspace-bind agent-workspace-side-mode-map
                           '(("v" . agent-workspace-panels-here) ("V" . agent-workspace-full-here)))
+
+;; The crew under treemacs: RET on a lane, the app with its agent selected.
+(+my/agent-workspace-bind agent-workspace-sidebar-mode-map
+                          '(("RET" . agent-workspace-sidebar-open) ("<return>" . agent-workspace-sidebar-open)))
 
 ;; The inbox's view (E).
 (+my/agent-workspace-bind agent-workspace-inbox-mode-map

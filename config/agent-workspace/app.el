@@ -9,8 +9,8 @@
 ;; no crew says why (`agent-workspace-no-crew-function' offers git init); a
 ;; crew with no agent asks for its first (`agent-workspace-new'). Leaving it
 ;; (`agent-workspace-leave', q) goes back to the workspace you came from: the
-;; crew goes on, its tally in the other workspaces' mode line (a click comes
-;; back). Closing it (`agent-workspace-quit', Q, or its workspace killed
+;; crew goes on, its lanes under treemacs (sidebar.el), what needs you in
+;; the mode line (a click comes back). Closing it (`agent-workspace-quit', Q, or its workspace killed
 ;; however: SPC TAB d...) closes the crew at once (core.el): every agent
 ;; exits; then the app's windows, buffers and workspace go.
 ;;
@@ -298,7 +298,7 @@ The crew goes on (said, unless QUIET)."
   (agent-workspace--here-or-error)
   (agent-workspace--frame-back (selected-frame))
   (unless quiet
-    (message "The crew goes on: its tally is in the mode line (a click comes back)")))
+    (message "The crew goes on: its lanes under treemacs, what needs you in the mode line (a click comes back)")))
 
 ;; A FILE SHOWN FROM THE APP (opened from an agent's reply, its review): where
 ;; you came from (the project's own workspace), not the crew's: its stage
@@ -822,6 +822,14 @@ dropped; none while no app is shown with an agent working."
 
 ;; ====== THE TALLY, ELSEWHERE ======
 
+(defcustom agent-workspace-mode-line-tally 'needs-you
+  "What a crew's tally says in the mode line of a frame not showing it (the
+app, or its lanes under treemacs: sidebar.el): needs-you, its hands raised,
+done and stuck (nothing when none); all, its working agents too; nil,
+nothing."
+  :type '(choice (const :tag "What needs you" needs-you) (const :tag "All" all) (const :tag "Nothing" nil))
+  :group 'agent-workspace)
+
 (defvar agent-workspace-tally-map
   (let ((map (make-sparse-keymap)))
     (define-key map [mode-line mouse-1] #'agent-workspace-tally-open)
@@ -829,21 +837,31 @@ dropped; none while no app is shown with an agent working."
   "Keys on a crew's tally in a mode line.")
 
 (defun agent-workspace--tally-mode-line ()
-  "Each open crew's tally but the one shown in this frame: a click opens it.
-A % in it (its project's name) doubled, as itself: the mode line's text."
-  (let (parts)
-    (dolist (app (hash-table-values agent-workspace--apps))
-      (let ((project (agent-workspace--app-project app)))
-        (unless (equal (frame-parameter nil 'agent-workspace) project)
-          (push (propertize (concat " " (agent-workspace-workspace-name project)
-                                    (if-let* ((tally (agent-workspace-tally (agent-workspace-agents project))))
-                                        (concat " " tally) "")
-                                    " ")
-                            'agent-workspace-project project
-                            'local-map agent-workspace-tally-map 'mouse-face 'mode-line-highlight
-                            'help-echo "The crew: click to go there")
-                parts))))
-    (agent-workspace--percent-escaped (apply #'concat parts))))
+  "Each open crew's tally (as `agent-workspace-mode-line-tally' says) but
+the one this frame shows (its app, its lanes under treemacs): a click
+opens it. Several crews counted: each named. A % in it (its project's
+name) doubled, as itself: the mode line's text."
+  (when agent-workspace-mode-line-tally
+    (let ((states (and (eq agent-workspace-mode-line-tally 'needs-you) '(hand done stuck)))
+          (shown (list (frame-parameter nil 'agent-workspace) (frame-parameter nil 'agent-workspace-sidebar)))
+          (crews nil)
+          (several nil))
+      (dolist (app (hash-table-values agent-workspace--apps))
+        (let ((project (agent-workspace--app-project app)))
+          (unless (member (agent-workspace--root project) (mapcar (lambda (p) (and p (agent-workspace--root p))) shown))
+            (when-let* ((tally (agent-workspace-tally (agent-workspace-agents project) states)))
+              (push (cons project tally) crews)))))
+      (setq several (cdr crews))
+      (agent-workspace--percent-escaped
+       (mapconcat (pcase-lambda (`(,project . ,tally))
+                    (propertize (concat " " (if several
+                                                (concat (file-name-nondirectory (directory-file-name project)) " ")
+                                              "")
+                                        tally " ")
+                                'agent-workspace-project project
+                                'local-map agent-workspace-tally-map 'mouse-face 'mode-line-highlight
+                                'help-echo (format "%s: click to go there" (agent-workspace-workspace-name project))))
+                  (nreverse crews) "")))))
 
 (add-to-list 'mode-line-misc-info '(:eval (agent-workspace--tally-mode-line)) t)
 

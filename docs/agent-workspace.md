@@ -47,8 +47,8 @@ which one. `SPC o W` opens it in the window you're in. The first time, it asks f
 In a small frame (a terminal's 80x24) the issue list narrows and the room at the bottom shrinks, or goes (`2` shows
 it), so an agent's pane still opens.
 
-`q` leaves the app and the crew goes on. Its tally shows in the other workspaces' mode line (`crew · doom ▶2 !1`), and
-a click there brings you back. `Q`, or `SPC TAB d` in its workspace, closes it at once, without asking: every agent
+`q` leaves the app and the crew goes on: its lanes [under treemacs](#the-crew-under-treemacs) while treemacs shows the
+project, and what needs you in the mode line, a click there bringing you back. `Q`, or `SPC TAB d` in its workspace, closes it at once, without asking: every agent
 exits, and the crew's windows, buffers and workspace go. Its worktrees stay.
 
 A project that isn't a git repository, or has no commit yet, can't have a crew: `SPC o w` says so and offers a
@@ -120,6 +120,27 @@ On an agent's line, `RET` selects its agent, `o` opens the file it's in, in its 
 changes. On a `⚠`, `RET` or `d` shows both agents' changes to that file. `m` shows or hides it, and the crew keeps
 that. `agent-workspace-minimap-height` sets its height (12 lines); `agent-workspace-minimap` set to `nil` hides it in
 new crews.
+
+## The crew under treemacs
+
+Once you've left the app, while treemacs shows the crew's project, its lanes are under treemacs, as wide as it: the
+minimap's left part, without where each agent is now.
+
+```text
+ CREW · doom          ▶2 !1 ✓1
+ ▌M ✎ ⌕⌕·±▶!▶▶·!▶··▶ │ ▶
+ ▌A ⚙ ±±±±▶▶±±▶▶±±▶± │ ▶
+ ▌K ✎ ken             │ at the desk
+```
+
+A line an agent, at most 8 (`agent-workspace-sidebar-lines`), then it scrolls; narrower, fewer minutes. `RET` or a
+click on a lane opens the app with that agent selected, a click on its header the app. treemacs closed, or on another
+project, it goes. Not in the crew's own frame, where the minimap shows it all.
+
+Meanwhile, the mode line of the frames not showing the crew says what needs you: hands raised, done, stuck (`!1 ✓1`;
+nothing while they only work), and a click there opens the app. `(setq agent-workspace-mode-line-tally 'all)` in
+`config.el` counts the working agents too, `nil` nothing; `(setq agent-workspace-sidebar nil)` keeps the crew from
+treemacs.
 
 ## The room
 

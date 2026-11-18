@@ -556,8 +556,13 @@ closes it: its agents exit, its buffers go, your windows back."
       (should (equal (mapcar #'car (+test-awa--windows)) '("mine" "mine")))
       (should-not (agent-workspace-frame-p))
       (should (agent-workspace-agents project))
-      ;; Its tally, elsewhere: a click goes back.
-      (should (string-match-p "crew · here" (agent-workspace--tally-mode-line)))
+      ;; Its tally, elsewhere: what needs you (nothing at the desk); a
+      ;; click goes back.
+      (should (equal (agent-workspace--tally-mode-line) ""))
+      (setf (agent-workspace-agent-state ada) 'done)
+      (should (string-match-p "✓1" (agent-workspace--tally-mode-line)))
+      (should (equal (get-text-property 1 'help-echo (agent-workspace--tally-mode-line))
+                     "crew · here: click to go there"))
       (agent-workspace-open t)
       (agent-workspace-quit)
       (should (equal (mapcar #'car (+test-awa--windows)) '("mine" "mine")))
@@ -702,7 +707,7 @@ click). (A role's name can't have one: its file is left out.)"
     (let ((default-directory project))
       (make-directory ".agent-workspace/roles" t)
       (write-region "---\ndescription: checks\n---\nCheck.\n" nil ".agent-workspace/roles/qa.md"))
-    (let ((_ken (agent-workspace-create :role "qa" :name "ken")))
+    (let ((ken (agent-workspace-create :role "qa" :name "ken")))
       (agent-workspace-open t)
       (cl-flet ((both (text part prop value)
                   ;; Each % of PART in TEXT, doubled, has PROP's VALUE.
@@ -713,10 +718,22 @@ click). (A role's name can't have one: its file is left out.)"
                         (should (equal (get-text-property (+ at i) prop text) value)))))))
         (with-selected-window (+test-awa--issues-window project)
           (both (agent-workspace--issues-header) "50%%-off" 'face 'shadow))
-        ;; Its tally, elsewhere: a click goes back.
+        ;; Its tally, elsewhere (its name said with another crew's): a
+        ;; click goes back.
         (agent-workspace-leave t)
-        (both (agent-workspace--tally-mode-line) "50%%-off" 'local-map agent-workspace-tally-map)
-        (both (agent-workspace--tally-mode-line) "50%%-off" 'help-echo "The crew: click to go there")))))
+        (setf (agent-workspace-agent-state ken) 'hand)
+        (let ((other (agent-workspace--make-app :project "/tmp/other-crew/")))
+          (puthash "/tmp/other-crew/" other agent-workspace--apps)
+          (cl-letf (((symbol-function 'agent-workspace-agents)
+                     (let ((agents (symbol-function 'agent-workspace-agents)))
+                       (lambda (&optional project)
+                         (if (equal project "/tmp/other-crew/")
+                             (list (agent-workspace--make-agent :name "zed" :state 'done))
+                           (funcall agents project))))))
+            (both (agent-workspace--tally-mode-line) "50%%-off" 'local-map agent-workspace-tally-map)
+            (both (agent-workspace--tally-mode-line) "50%%-off" 'help-echo
+                  "crew · 50%-off: click to go there"))
+          (remhash "/tmp/other-crew/" agent-workspace--apps))))))
 
 ;; ====== A WINDOW NOT ITS OWN: A POPUP ======
 
@@ -1825,7 +1842,8 @@ the crew closes, its agents exit, its buffers go."
         (should (memq (agent-workspace-agent-buffer ada) (persp-buffers (get-current-persp))))
         (agent-workspace-leave)
         (should (equal (safe-persp-name (get-current-persp)) "main"))
-        (should (string-match-p "crew · persp" (agent-workspace--tally-mode-line)))
+        (setf (agent-workspace-agent-state ada) 'hand)
+        (should (string-match-p "!1" (agent-workspace--tally-mode-line)))
         (agent-workspace-open)
         (should (equal (safe-persp-name (get-current-persp)) "crew · persp"))
         ;; Killed as SPC TAB d kills it.

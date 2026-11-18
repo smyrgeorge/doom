@@ -412,12 +412,15 @@ and branch."
 
 ;; ====== THE TALLY ======
 
-(defun agent-workspace-tally (agents)
+(defun agent-workspace-tally (agents &optional states)
   "AGENTS counted by what needs you: working, hands raised, done, stuck
-\(\"▶2 !1 ✓1\"), each its glyph and count; nil if none."
+\(\"▶2 !1 ✓1\"), each its glyph and count; nil if none. STATES: only
+those (`hand', `done', `stuck': what needs you)."
   (let ((parts nil))
     (pcase-dolist (`(,state . ,face) '((working . nil) (hand . warning) (done . success) (stuck . error)))
-      (let ((n (seq-count (lambda (agent) (eq (agent-workspace-agent-state agent) state)) agents)))
+      (let ((n (if (and states (not (memq state states)))
+                   0
+                 (seq-count (lambda (agent) (eq (agent-workspace-agent-state agent) state)) agents))))
         (when (> n 0)
           (push (concat (string-trim-right (agent-workspace-glyph state face))
                         (propertize (number-to-string n) 'face face))
