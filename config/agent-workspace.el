@@ -423,6 +423,13 @@ needs your OK. nil: Claude Code's own default."
                                    ("RET" . agent-workspace-go) ("<return>" . agent-workspace-go)
                                    ("TAB" . agent-workspace-toggle) ("<tab>" . agent-workspace-toggle))))
 
+;; The stage's hint (no agents yet: c makes one; every pane folded): the app's
+;; keys, not evil's change, macro recorded and last macro run. j/k: nowhere to
+;; go, nothing said (no "Beginning of buffer").
+(+my/agent-workspace-bind agent-workspace-hint-mode-map
+                          (append +my/agent-workspace-keys
+                                  '(("j" . ignore) ("k" . ignore) ("<down>" . ignore) ("<up>" . ignore))))
+
 ;; An agent's canvas or panel, in its pane on the stage: v and V there too, in
 ;; place of evil's visual state.
 (+my/agent-workspace-bind agent-workspace-side-mode-map
@@ -472,7 +479,9 @@ needs your OK. nil: Claude Code's own default."
       :ni "M-p" #'agent-workspace-compose-previous
       :ni "M-n" #'agent-workspace-compose-next
       :i "TAB" #'completion-at-point
-      :n "q" #'agent-workspace-leave)
+      :n "q" #'agent-workspace-leave
+      ;; As in the app's other buffers, not evil's last macro run.
+      :n "Q" #'agent-workspace-quit)
 
 (after! evil
   (evil-set-initial-state 'agent-workspace-compose-mode 'insert))

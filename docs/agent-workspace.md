@@ -19,7 +19,8 @@ Try it: `M-x +my/example-agent-workspace`, a crew of three stand-in agents, offl
 ## The app
 
 `SPC o w`, from inside a project, opens its crew in a workspace of its own, `crew · doom`. Outside a project, it asks
-which one. `SPC o W` opens it in the window you're in. The first time, the stage is empty: `c` makes an agent.
+which one. `SPC o W` opens it in the window you're in. The first time, the stage is empty and says so: `c`, there
+as anywhere in the app, makes an agent.
 
 - **The issues** are on the left. In progress, each with the agent on it. Ready, grouped by the role they're for
   (a role nobody in the crew has is flagged), then by epic: each epic's heading with how many of its issues are
@@ -169,6 +170,7 @@ its last line keeps it in view, and resizing the frame or the app keeps the comp
 | `RET` | Send |
 | `TAB` | Complete a `#` name, role or `all` |
 | `M-p` / `M-n` | Your previous / next message |
+| `q` / `Q` | In Evil's normal state: leave / close the app, as anywhere in it |
 | `#` | Talk to the agent you're on (in the issues, a bar, a session) |
 
 In the feed, on a [thread between agents](#agents-asking-each-other): `TAB` folds it or unfolds it, `x` stops it or

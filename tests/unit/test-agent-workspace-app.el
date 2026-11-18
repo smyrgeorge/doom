@@ -886,6 +886,32 @@ Closed (q), their rows go back to the app, laid out as before."
             (should (= (+test-awa--relayouts) 1))
             (should (equal (+test-awa--windows) laid-out))))))))
 
+(ert-deftest agent-workspace-app/an-empty-crew-s-stage ()
+  "An empty crew: the stage says there are no agents yet and that c makes
+one. There, as in the app's other buffers (in evil's normal and motion
+states too), c makes one, q leaves, Q closes and ? helps, not evil's
+change, macro recorded and last macro run; j/k go nowhere, saying nothing.
+The compose line in evil's normal state: q leaves, Q closes."
+  (+test-awa "empty"
+    (agent-workspace-open t)
+    (let ((hint (get-buffer-window (agent-workspace--hint-buffer project))))
+      (should (window-live-p hint))
+      (with-selected-window hint
+        (should (string-search "No agents yet" (buffer-string)))
+        (should (string-search "c: a new agent" (buffer-string)))
+        (dolist (state '(emacs normal motion))
+          (evil-change-state state)
+          (should (eq (key-binding "c") #'agent-workspace-new-here))
+          (should (eq (key-binding "q") #'agent-workspace-leave))
+          (should (eq (key-binding "Q") #'agent-workspace-quit))
+          (should (eq (key-binding "?") #'agent-workspace-help))
+          (should (eq (key-binding "j") #'ignore))
+          (should (eq (key-binding "k") #'ignore)))))
+    (with-current-buffer (agent-workspace--compose-buffer project)
+      (evil-normal-state)
+      (should (eq (key-binding "q") #'agent-workspace-leave))
+      (should (eq (key-binding "Q") #'agent-workspace-quit)))))
+
 (ert-deftest agent-workspace-app/laid-out-when-a-window-can-t-go ()
   "A window Emacs can't delete as the app is laid out (\"Deletion failed\":
 the windows left can't fill its room): the popups kept go too, the app laid

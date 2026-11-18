@@ -197,16 +197,21 @@ folded but OPEN's, which takes the rows left (if there are enough)."
                             agent-workspace--folded-rows)))
             agents)))
 
+(define-derived-mode agent-workspace-hint-mode special-mode "Stage"
+  "The stage's hint: no agents yet (c makes one), or every pane folded. The
+app's keys (config/agent-workspace.el): c, q, Q there are the app's, not
+evil's (a change, a macro recorded, the last one run)."
+  (setq-local mode-line-format nil header-line-format nil tab-line-exclude t cursor-type nil
+              ;; The rows left below the bars, maybe fewer than 4: its least.
+              window-min-height 1))
+
 (defun agent-workspace--hint-buffer (project)
   "What's below the bars when every pane is folded (or there's no agent):
 how to open one, or make one."
   (let ((name (format "*stage · %s*" (file-name-nondirectory (directory-file-name project)))))
     (or (get-buffer name)
         (with-current-buffer (get-buffer-create name)
-          (special-mode)
-          (setq-local mode-line-format nil header-line-format nil tab-line-exclude t cursor-type nil
-                      ;; The rows left below the bars, maybe fewer than 4: its least.
-                      window-min-height 1)
+          (agent-workspace-hint-mode)
           (agent-workspace--app-buffer-add project (current-buffer))
           (current-buffer)))))
 
