@@ -384,16 +384,27 @@ back; no frame left marked (doom-pbk.71)."
 (ert-deftest e2e-agent-workspace/the-minimap ()
   "The minimap under the issue list: a lane each as ada and sam do things,
 drawn a moment later; its avatars images; every lane's cells and bar at the
-same pixels (its glyphs evened)."
+same pixels (its glyphs evened); half a line of padding above its lanes and
+half a line under its last line (doom-pbk.125), the cursor on its first lane."
   (+test-e2e-aw
-    (let ((window (get-buffer-window (agent-workspace--minimap-buffer project))))
+    (let* ((window (get-buffer-window (agent-workspace--minimap-buffer project)))
+           (line (window-default-line-height window))
+           (pad (/ line 2)))
       (should (window-live-p window))
       (should (eq (window-parameter window 'window-side) 'left))
       ;; Each agent its line, quiet ones too (doom-pbk.91); as tall as they
-      ;; are.
+      ;; are, and their padding.
       (should (= 2 (with-current-buffer (window-buffer window)
                      (how-many "at the desk" (point-min) (point-max)))))
-      (should (= (window-body-height window t) (* 2 (window-default-line-height window))))
+      (should (= (window-body-height window t) (+ pad (* 2 line) pad)))
+      (redisplay t)
+      (with-current-buffer (window-buffer window)
+        ;; The first lane half a line down, the cursor on it; the window's
+        ;; end, under the last lane, half a line further.
+        (should (get-text-property (window-point window) 'agent-workspace-minimap-agent))
+        (should (= (cdr (posn-x-y (posn-at-point (window-point window) window))) pad))
+        (should (= (cdr (window-text-pixel-size window (point-min) (point-max))) (+ pad (* 2 line) pad)))
+        (should (pos-visible-in-window-p (point-max) window)))
       (+test-e2e-aw--did ada "read" "README" 1)
       (+test-e2e-aw--did ada "edit" "README" 1)
       (+test-e2e-aw--did sam "execute" "README" 1)
@@ -403,7 +414,7 @@ same pixels (its glyphs evened)."
                               3))
       (redisplay t)
       ;; Grown by the axis and legend under the lanes.
-      (should (= (window-body-height window t) (* 4 (window-default-line-height window))))
+      (should (= (window-body-height window t) (+ pad (* 4 line) pad)))
       (with-current-buffer (window-buffer window)
         (goto-char (point-min))
         (should (text-property-search-forward 'display nil (lambda (_ value) (eq (car-safe value) 'image))))
@@ -417,8 +428,8 @@ same pixels (its glyphs evened)."
 (ert-deftest e2e-agent-workspace/the-minimap-scrolls-past-10-lanes ()
   "Twelve agents in a frame with window dividers (Doom's, a pixel): the
 minimap shows 10 lanes, whole (in whole lines a divider cut the last by a
-pixel, the cursor there scrolling them); j to the last lane scrolls it into
-view, whole."
+pixel, the cursor there scrolling them), and its padding; j to the last
+lane scrolls it into view, whole."
   (+test-e2e-aw
     (let ((window-divider-default-places t)
           (window-divider-default-bottom-width 1)
@@ -435,10 +446,18 @@ view, whole."
             (agent-workspace--minimap-draw project)
             (let ((window (get-buffer-window (agent-workspace--minimap-buffer project))))
               (should (= (window-bottom-divider-width window) 1))
-              (should (= (window-body-height window t) (* 10 (window-default-line-height window))))
+              (should (= (window-body-height window t) (let ((line (window-default-line-height window)))
+                                                         (+ (* 10 line) (* 2 (/ line 2))))))
               (with-selected-window window
+                (redisplay t)
+                ;; Its first 10 lanes whole, the padding above them.
                 (goto-char (point-min))
-                (agent-workspace-minimap-next 11)
+                (agent-workspace-minimap-next 10)
+                (should (pos-visible-in-window-p (point) window))
+                (should-not (nth 2 (pos-visible-in-window-p (point) window t)))
+                (agent-workspace-minimap-next 1)
+                (should (get-text-property (point) 'agent-workspace-minimap-agent))
+                (agent-workspace-minimap-next 1)
                 (should (get-text-property (point) 'agent-workspace-minimap-agent))
                 (redisplay t)
                 (should (> (window-start window) (point-min)))
