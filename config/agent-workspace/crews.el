@@ -16,8 +16,6 @@
 ;;   agents: scribe, builder 2, reviewer, merger
 ;;                                   its roles, each with how many (none: 1);
 ;;                                   a YAML list too (  - builder 2)
-;;   loop: builder                   the roles whose agents it makes loop
-;;                                   (none by default)
 ;;   ---
 ;;   Anything after it: notes for you, not read.
 ;;
@@ -26,8 +24,8 @@
 ;; the crew's agents of that role (asleep and gone home ones too, and those
 ;; crew.json keeps while the crew doesn't run: saved.el), each as c
 ;; makes one with its name left empty, one after another (each in the crew
-;; before the next one's name is picked); those of a role in its loop: their
-;; loop on. It only adds: an agent beyond its count, of a role it doesn't
+;; before the next one's name is picked), looping as any new one does
+;; (loops.el). It only adds: an agent beyond its count, of a role it doesn't
 ;; list, or there already (its loop as it was) is left alone. One whose
 ;; worktree can't be made isn't made, said; one whose session doesn't start
 ;; is stuck, saying why; the others go on. The room says what was made
@@ -40,10 +38,10 @@
 ;; (or an empty one), a name (its file's) not a lowercase letter then
 ;; lowercase letters, digits or -, a name: not its file's; and no agents, a
 ;; role that isn't one of the project's, a count that isn't a whole number
-;; above 0, more agents of a role than its max: allows, a loop: role not
-;; among its agents. Warnings: an unknown key, a key or a role given twice, a
-;; loop: role without labels (no issue is its to take: not looped). M-x
-;; agent-workspace-check-roles lists them with the roles'.
+;; above 0, more agents of a role than its max: allows. Warnings: an unknown
+;; key (loop:, of crew files before: a new agent loops by itself now), a key
+;; or a role given twice. M-x agent-workspace-check-roles lists them with the
+;; roles'.
 
 (require 'cl-lib)
 (require 'seq)
@@ -51,7 +49,6 @@
 
 ;; Their own parts', loaded after.
 (declare-function agent-workspace-pool-name "agent-workspace/new")
-(declare-function agent-workspace-loop-set "agent-workspace/loops")
 (declare-function agent-workspace-room-post "agent-workspace/room")
 (declare-function agent-workspace-crew-members "agent-workspace/saved")
 
@@ -65,7 +62,7 @@
   (expand-file-name "crews/" (file-name-directory (or load-file-name buffer-file-name)))
   "The starter crews, shipped with this module.")
 
-(defconst agent-workspace--crew-keys '("name" "description" "agents" "loop")
+(defconst agent-workspace--crew-keys '("name" "description" "agents")
   "A crew file's keys.")
 
 (defvar agent-workspace--crew-specs-cache (make-hash-table :test #'equal)
@@ -79,18 +76,17 @@ times.")
 (defun agent-workspace-crew-spec-read (file roles)
   "Read the crew FILE, against ROLES (its project's: an alist of a name and
 its role): (CREW . PROBLEMS). CREW is a plist, :name, :file, :description,
-:agents ((ROLE . COUNT)..., in its file's order), :loop (ROLE...); nil if
-FILE has errors. PROBLEMS, as `agent-workspace-role-read' gives them."
+:agents ((ROLE . COUNT)..., in its file's order); nil if FILE has
+errors. PROBLEMS, as `agent-workspace-role-read' gives them."
   (let* ((name (file-name-sans-extension (file-name-nondirectory file)))
          (shown (abbreviate-file-name file))
          (case-fold-search nil)
          (crew (list :name name :file file))
          (problems nil)
          ;; Its agents, the last first: ((ROLE COUNT . LINE)...); how many
-         ;; it listed (some maybe wrong); its loop's roles ((ROLE . LINE)...).
+         ;; it listed (some maybe wrong).
          (agents nil)
-         (listed 0)
-         (loop nil))
+         (listed 0))
     (cl-flet ((problem (level n format &rest args)
                 (let ((what (apply #'format format args)))
                   (push (list level (format "%s:%d: %s" shown n what) file n what) problems))))
@@ -102,7 +98,7 @@ FILE has errors. PROBLEMS, as `agent-workspace-role-read' gives them."
             (agent-workspace--front-matter-read
              file
              :keys agent-workspace--crew-keys
-             :list-keys '("agents" "loop")
+             :list-keys '("agents")
              :problem #'problem
              :store
              (lambda (key value n)
@@ -136,23 +132,15 @@ FILE has errors. PROBLEMS, as `agent-workspace-role-read' gives them."
                             (problem 'warning n "agents %s given twice (line %d too): the last is used"
                                      role (cddr before))
                             (setq agents (delq before agents)))
-                          (push (cons role (cons count n)) agents)))))))
-                 ("loop" (setq loop value)))))))
+                          (push (cons role (cons count n)) agents))))))))))))
         (when closed
           (unless (assoc "description" seen)
             (problem 'error 1 "no description: say what it's for (description: ...)"))
           (when (= listed 0)
             (problem 'error (or (cdr (assoc "agents" seen)) 1)
-                     "no agents: its roles, each with how many (agents: scribe, builder 2)"))
-          (pcase-dolist (`(,role . ,n) loop)
-            (cond ((not (assoc role agents))
-                   (problem 'error n "loop %s: not among its agents" role))
-                  ((not (plist-get (cdr (assoc role roles)) :labels))
-                   (problem 'warning n "loop %s: its role has no labels, no issue is its to take: not looped"
-                            role)))))))
+                     "no agents: its roles, each with how many (agents: scribe, builder 2)")))))
     (setq crew (plist-put crew :agents (mapcar (lambda (agent) (cons (car agent) (cadr agent)))
                                                (reverse agents))))
-    (setq crew (plist-put crew :loop (seq-uniq (mapcar #'car loop))))
     (setq problems (nreverse problems))
     (cons (unless (assq 'error problems) crew) problems)))
 
@@ -274,28 +262,21 @@ out (saying why)."
 
 (defun agent-workspace-crew-make (project name)
   "Make what PROJECT's crew lacks of the crew NAME (see the top of this
-file), each agent as c makes one with its name left empty, those of a role
-in its loop looping; the room says what was made. Return (MADE FAILED
+file), each agent as c makes one with its name left empty (looping as any
+new one does: loops.el); the room says what was made. Return (MADE FAILED
 TEXT): the agents made (a stuck one too), in order, those not made ((ROLE
 . WHY)...), and what the room was told (nil: nothing to add, nothing
 said)."
   (let* ((project (agent-workspace--root project))
          (crew (agent-workspace--crew-spec project name))
          (made nil)
-         (failed nil)
-         (notes nil))
+         (failed nil))
     (pcase-dolist (`(,role . ,count) (agent-workspace-crew-missing project crew))
       (dotimes (_ count)
         (condition-case err
-            (let ((agent (agent-workspace-create :project project :role role
-                                                 :name (agent-workspace-pool-name project role))))
-              (push agent made)
-              (when (member role (plist-get crew :loop))
-                (condition-case err
-                    (agent-workspace-loop-set agent t)
-                  (error (push (format "%s not looping: %s" (agent-workspace-agent-name agent)
-                                       (error-message-string err))
-                               notes)))))
+            (push (agent-workspace-create :project project :role role
+                                          :name (agent-workspace-pool-name project role))
+                  made)
           (error (push (cons role (error-message-string err)) failed)))))
     (setq made (nreverse made) failed (nreverse failed))
     (let ((text (and (or made failed)
@@ -310,8 +291,7 @@ said)."
                                                                         (agent-workspace-agent-name agent)))
                                                               made ", "))))
                                      (mapcar (lambda (failure) (format "%s not made: %s" (car failure) (cdr failure)))
-                                             failed)
-                                     (nreverse notes)))
+                                             failed)))
                               "; ")))))
       (when text
         (agent-workspace-room-post project :kind 'note :text text))

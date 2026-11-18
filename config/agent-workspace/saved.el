@@ -37,8 +37,9 @@
 ;; before any agent stops and its panels close). When the app opens with no
 ;; crew running, every agent in it starts again, fresh, in its worktree, with
 ;; its role as it is now, its panels opened again there; asleep ones stay
-;; asleep, looping ones are asleep (reopening never starts work by itself:
-;; woken, they loop); each waits for you. An agent made while it doesn't run
+;; asleep, looping ones take the next ready issue (with `agent-workspace-loop'
+;; nil they're asleep: reopening never starts work by itself; woken, they
+;; loop); the others wait for you. An agent made while it doesn't run
 ;; (M-x, cmd, Lisp: no app) is written beside them, the rest kept as it was,
 ;; and they start beside it as the app opens. One that can't start is stuck,
 ;; saying why; the others start. A wrong agent is left out, said by its place
@@ -52,6 +53,9 @@
 (require 'subr-x)
 
 ;; ====== VARIABLES ======
+
+;; config/agent-workspace.el's.
+(defvar agent-workspace-loop)
 
 (defcustom agent-workspace-crew-file ".agent-shell/agent-workspace/crew.json"
   "The crew's configuration, in its project (per machine, not committed)."
@@ -324,7 +328,7 @@ kept crew's layout, as read) where it says."
                        ;; As it says, even while agents may not talk.
                        :talk (symbol-name (if (fboundp 'agent-workspace--talk-switch)
                                               (agent-workspace--talk-switch project)
-                                            'ask))
+                                            'on))
                        :sources_off (vconcat (mapcar (lambda (pair) (vector (car pair) (cdr pair)))
                                                      (and (fboundp 'agent-workspace-inbox-sources-off)
                                                           (agent-workspace-inbox-sources-off project)))))))
@@ -496,15 +500,17 @@ changing after, still open) until an agent is made there again. In
 
 (defun agent-workspace--restore (project entry)
   "The agent ENTRY of PROJECT's crew.json, in its crew again: fresh, in its
-worktree, its panels opened again there; asleep if it was, or if it loops
+worktree, its panels opened again there (looping, it takes the next ready
+issue); asleep if it was, or if it loops and `agent-workspace-loop' is nil
 \(none opened; woken, it loops), or if its role runs as many as it allows
 \(said); stuck, saying why, if it can't start."
   (let* ((name (plist-get entry :name))
          (role (plist-get entry :role))
          (max (plist-get (agent-workspace--project-role project role) :max))
+         ;; Asleep as it was, or looping while loops wait for you.
+         (asleep (or (plist-get entry :asleep) (and (plist-get entry :loop) (not agent-workspace-loop))))
          ;; As many of its role run as it allows: it stays asleep.
-         (full (and max (not (or (plist-get entry :asleep) (plist-get entry :loop)))
-                    (>= (agent-workspace-role-count project role) max)))
+         (full (and max (not asleep) (>= (agent-workspace-role-count project role) max)))
          (agent (agent-workspace--make-agent
                  :name name :role role
                  :kind (let ((kind (plist-get entry :kind)))
@@ -513,8 +519,7 @@ worktree, its panels opened again there; asleep if it was, or if it loops
                  :model (plist-get entry :model) :mode (plist-get entry :mode)
                  :project (agent-workspace--root project)
                  :loop (and (plist-get entry :loop) t)
-                 ;; Looping, asleep: reopening never starts work by itself.
-                 :state (if (or (plist-get entry :asleep) (plist-get entry :loop) full) 'asleep 'waking)))
+                 :state (if (or asleep full) 'asleep 'waking)))
          (key (agent-workspace--root project)))
     (puthash key (append (gethash key agent-workspace--crews) (list agent)) agent-workspace--crews)
     (agent-workspace--crew-lock-take key)

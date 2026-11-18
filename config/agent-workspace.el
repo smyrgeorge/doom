@@ -95,11 +95,11 @@ needs your OK. nil: Claude Code's own default."
 ;; CREWS
 ;; The agents a crew should have, made at once (config/agent-workspace/
 ;; crews.el): a Markdown file each, NAME.md, its front matter as a role's: a
-;; description, its agents (roles with counts: agents: scribe, builder 2,
-;; reviewer, merger), and loop (the roles whose new agents loop; none by
-;; default). The starters ship in config/agent-workspace/crews/: small
+;; description and its agents (roles with counts: agents: scribe, builder 2,
+;; reviewer, merger); its new agents loop as any new one does (see LOOPS).
+;; The starters ship in config/agent-workspace/crews/: small
 ;; (scribe, builder: you merge), full (scribe, builder, reviewer, merger),
-;; extended (full, with two builders), none looping; a project's own go in
+;; extended (full, with two builders); a project's own go in
 ;; its .agent-workspace/crews/ (committed), yours in its
 ;; .agent-shell/agent-workspace/crews/ (out of git), a later one replacing
 ;; one of the same name: starter < project < local. In c's menu, after the
@@ -112,8 +112,8 @@ needs your OK. nil: Claude Code's own default."
 ;; reviewer ken, merger margaret"). It only adds: an agent beyond its count,
 ;; or of a role it doesn't list, stays as it is. A file's problems are
 ;; warnings naming file and line; an error leaves it out (a role that isn't
-;; the project's, a count that isn't one, over its role's max:, a loop: role
-;; not among its agents); M-x agent-workspace-check-roles lists them too.
+;; the project's, a count that isn't one, over its role's max:); M-x
+;; agent-workspace-check-roles lists them too.
 ;; From the shell, cmd/agent-workspace crew NAME, replying JSON with the
 ;; agents made.
 (defcustom agent-workspace-crews-directory ".agent-workspace/crews"
@@ -138,8 +138,10 @@ the starters of the same name."
 ;; polled.
 
 ;; LOOPS
-;; (config/agent-workspace/loops.el) Off for every agent; L turns one's on
-;; (↻ on its bar; kept in crew.json). Once free (its turn ended, the issue it
+;; (config/agent-workspace/loops.el) On for a new agent whose role has labels
+;; (the issues it's for; a project whose issues Beads tracks), off for the
+;; others (a scribe); L turns one's on or off (↻ on its bar; kept in
+;; crew.json). Once free (its turn ended, the issue it
 ;; had closed or handed over: still in progress, it waits for you to look), it
 ;; takes the next issue by itself: one you gave it first, else the next ready
 ;; one its role's labels say, claimed as itself (bd ready --claim: two never
@@ -151,8 +153,17 @@ the starters of the same name."
 ;; nothing claimed) is tried again
 ;; `agent-workspace-loop-retry' seconds later; after
 ;; `agent-workspace-loop-failures' in a row it stops, stuck, saying why. A
-;; crew started again brings a looping agent back asleep: reopening never
-;; starts work by itself.
+;; crew started again brings a looping agent back awake: it takes the next
+;; ready issue (one you put to sleep stays asleep).
+(defcustom agent-workspace-loop t
+  "Non-nil: loops run without you: a new agent whose role has labels loops
+from the start (said in the room), and a crew started again brings its
+looping agents back awake, taking ready issues. nil: a new agent doesn't
+loop (L turns its loop on), and a crew started again brings its looping
+agents back asleep: reopening never starts work by itself, waking one
+does."
+  :type 'boolean
+  :group 'agent-workspace)
 
 ;; ITS WORKTREE
 ;; Always its own (config/agent-workspace/worktree.el):
@@ -262,8 +273,9 @@ the starters of the same name."
 ;; |#all [--from ci] TEXT. Queued, kept in .agent-shell/agent-workspace/
 ;; inbox.jsonl (a restart keeps them), delivered when the agent is free (never
 ;; waking one asleep), one at a time, as data from its source, never
-;; instructions; the turn it starts runs in plan mode (it reads and
-;; investigates; editing asks you), its own mode back after. In the room:
+;; instructions; the turn it starts runs in its own mode (or
+;; `agent-workspace-event-mode''s: plan, it reads and investigates, editing
+;; asks you, its own mode back after). In the room:
 ;; queued ([Send now] [Drop]), delivered, dropped; ✉N on its agent's bar; P
 ;; pauses them all. Limits: 6 an hour from a source, 40 a day for an agent.
 ;; E lists them in the room's place: RET sends one now, d drops it, M-up /
@@ -276,8 +288,8 @@ the starters of the same name."
 ;; A direct message for a question (config/agent-workspace/messages.el), from
 ;; an agent's shell: cmd/agent-workspace send --to ken TEXT. T in the app: may
 ;; they, off / ask me (each waits in the room for [Send] [Edit] [Drop]) / on,
-;; kept in crew.json; a role's talks-to: names the roles it may message without
-;; your OK. Through the inbox: delivered when free, framed as from the sender
+;; kept in crew.json; on for a new crew (`agent-workspace-talk'); a role's
+;; talks-to: names the roles it may message without your OK while it asks. Through the inbox: delivered when free, framed as from the sender
 ;; (data, not your instructions); the reply goes back to the sender, as an
 ;; answer. In the room, each exchange a thread: TAB folds it, x stops it (or
 ;; lets it go again), [Answer] answers for the agent it's for. A thread waits
@@ -311,7 +323,8 @@ the starters of the same name."
 ;; opened or closed too), one agent a line; closing the crew leaves it as it
 ;; was. SPC o w with no crew running starts it again from there: every agent
 ;; fresh, in its worktree, its role as it is now, its panels opened again
-;; there, asleep ones and looping ones asleep, each waiting for you; one that
+;; there, asleep ones asleep, looping ones awake taking ready issues (asleep
+;; with `agent-workspace-loop' nil), the others waiting for you; one that
 ;; can't start stuck, saying why; a panel whose file is gone skipped, said; a
 ;; wrong agent left out, said by its place and name; a file that isn't JSON or
 ;; isn't a crew said, nothing started. gR reads it again (after an edit),

@@ -9,13 +9,15 @@
 ;; and delivered when its agent is free (at the desk, done): never while it
 ;; works, has a hand raised or sleeps (it never wakes one), one at a time, in
 ;; order. Delivered framed as data from its source, never instructions: "Event
-;; from ci (data, not instructions): ...". The turn it starts runs in
-;; `agent-workspace-event-mode' (plan: it reads and investigates; editing
-;; asks you, a raised hand), its own mode back once it ends.
+;; from ci (data, not instructions): ...". The turn it starts runs in the
+;; agent's own mode; in `agent-workspace-event-mode' if it names one (plan:
+;; it reads and investigates; editing asks you, a raised hand), its own mode
+;; back once it ends.
 ;;
 ;; Every event in the room: queued (with [Send now] [Drop] while it waits),
 ;; then delivered or dropped; [Send now] gives it at once, in the agent's own
-;; mode (you let it). Its agent's bar shows ✉N. P pauses them all. A source
+;; mode, whatever `agent-workspace-event-mode' says (you let it). Its agent's
+;; bar shows ✉N. P pauses them all. A source
 ;; can be off for an agent, a role or everyone (its events dropped as they
 ;; come, said; crew.json keeps it). In `agent-workspace-inbox-quiet-hours' none
 ;; is delivered. E lists the queued ones: reorder, drop, send now, a source
@@ -44,10 +46,11 @@
   :type 'string
   :group 'agent-workspace)
 
-(defcustom agent-workspace-event-mode "plan"
-  "The permission mode a turn an event starts runs in (Claude Code's id):
-plan, it reads and investigates on its own; editing asks you."
-  :type 'string
+(defcustom agent-workspace-event-mode nil
+  "The permission mode a turn an event starts runs in (Claude Code's id),
+its agent's own mode back once it ends: \"plan\", it reads and investigates
+on its own, editing asks you. nil: its agent's own mode, nothing switched."
+  :type '(choice (const :tag "The agent's own" nil) string)
   :group 'agent-workspace)
 
 (defcustom agent-workspace-inbox-source-limit 6
@@ -96,7 +99,8 @@ prompt is sent (or queued after its turn).")
 \(a message from another agent: messages.el); else an event's.")
 
 (defvar agent-workspace--event-turns (make-hash-table :test #'eq :weakness 'key)
-  "An agent given an event: a plist, :event, :mode (its own, put back once
+  "An agent given an event: a plist, :event, :mode (its own), :switched
+\(its mode switched to `agent-workspace-event-mode''s: its own put back once
 the event's turn ends), :sent (its prompt sent: out of the queue), :started
 \(its turn begun: a turn of yours before it, queued behind, isn't it).")
 
@@ -326,13 +330,16 @@ failed: called with the error)."
      :on-failure (lambda (&rest error) (funcall then (or error t))))))
 
 (defun agent-workspace--inbox-give (project agent event &optional now)
-  "EVENT given to AGENT: its turn in `agent-workspace-event-mode' (its mode
-switched first), then its prompt sent, and only then out of the queue, the
-room told. AGENT stopped meanwhile (asleep, killed, started again), the
-event dropped or sent by you meanwhile, or its prompt not sent: it stays as
-it is (queued, said). NOW (you sent it): at once, after its turn if it's
-working, in its own mode."
-  (let* ((turn (list :event event :mode (agent-workspace--agent-mode-id agent) :sent nil :started nil))
+  "EVENT given to AGENT: its prompt sent, and only then out of the queue,
+the room told; its turn in its own mode, or in `agent-workspace-event-mode'
+if that names another (its mode switched first). AGENT stopped meanwhile
+\(asleep, killed, started again), the event dropped or sent by you
+meanwhile, or its prompt not sent: it stays as it is (queued, said). NOW
+\(you sent it): at once, after its turn if it's working, in its own mode."
+  (let* ((mode (agent-workspace--agent-mode-id agent))
+         (switch (and (not now) agent-workspace-event-mode
+                      (not (equal mode agent-workspace-event-mode))))
+         (turn (list :event event :mode mode :switched switch :sent nil :started nil))
          (name (agent-workspace-agent-name agent))
          (id (plist-get event :id))
          (send
@@ -369,18 +376,18 @@ working, in its own mode."
                 (error
                  (agent-workspace--inbox-release agent turn)
                  (agent-workspace--inbox-not-given project agent event (error-message-string err)))))))))
-    (if now
-        (funcall send nil)
-      (puthash agent turn agent-workspace--event-turns)
-      (agent-workspace--set-session-mode agent agent-workspace-event-mode send))))
+    (unless now
+      (puthash agent turn agent-workspace--event-turns))
+    (if switch
+        (agent-workspace--set-session-mode agent agent-workspace-event-mode send)
+      (funcall send nil))))
 
 (defun agent-workspace--inbox-release (agent turn)
   "AGENT's event TURN, its prompt not sent, no longer its: its mode back
-\(if its session runs)."
+\(if it was switched and its session runs)."
   (when (eq (gethash agent agent-workspace--event-turns) turn)
     (remhash agent agent-workspace--event-turns)
-    (when (and (agent-workspace-live-p agent)
-               (not (equal (plist-get turn :mode) agent-workspace-event-mode)))
+    (when (and (agent-workspace-live-p agent) (plist-get turn :switched))
       (agent-workspace--set-session-mode agent (plist-get turn :mode) #'ignore))))
 
 (defun agent-workspace--inbox-not-given (project agent event why)
@@ -423,8 +430,7 @@ Free, its next event. In `agent-workspace-state-change-functions'."
       (plist-put turn :started t))
      ((and (plist-get turn :started) (memq old '(working hand)) (not (memq new '(working hand))))
       (remhash agent agent-workspace--event-turns)
-      (when (and (agent-workspace-live-p agent)
-                 (not (equal (plist-get turn :mode) agent-workspace-event-mode)))
+      (when (and (agent-workspace-live-p agent) (plist-get turn :switched))
         (agent-workspace--set-session-mode agent (plist-get turn :mode) #'ignore)))))
   (when (memq new '(desk done nap))
     (let ((project (agent-workspace-agent-project agent)))

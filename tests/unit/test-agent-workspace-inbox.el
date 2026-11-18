@@ -1,7 +1,8 @@
 ;;; tests/unit/test-agent-workspace-inbox.el -*- lexical-binding: t; -*-
 ;; config/agent-workspace/inbox.el, with cmd/agent-workspace send: events
 ;; for an agent, a role or everyone, queued and delivered when the agent is
-;; free, framed as data, their turn in plan mode; kept across a restart;
+;; free, framed as data, their turn in its own mode (in plan mode with
+;; `agent-workspace-event-mode' "plan"); kept across a restart;
 ;; never waking one asleep; [Send now], [Drop], P; the limits. Stand-in
 ;; agents (examples/agent-workspace/stand-in.el), their messages logged.
 ;; run.sh: slow (~45 s in a full run: stand-in sessions).
@@ -105,29 +106,55 @@ MODE\" for each mode set."
 
 ;; ====== TESTS ======
 
-(ert-deftest agent-workspace-inbox/delivered-when-free-as-data-in-plan-mode ()
+(ert-deftest agent-workspace-inbox/delivered-when-free-as-data-in-its-own-mode ()
   "An event for ada while she works: queued (✉1, the room says so), then
-delivered once she's free, framed as data, her turn in plan mode, her own
-mode (auto: her role has none) back after; the queue empty, its file gone."
-  (+test-awi "delivered" (("ada" "builder"))
+delivered once she's free, framed as data, her turn in her own mode (by
+default: nothing switched, no plan prompt); the queue empty, its file gone."
+  (should-not agent-workspace-event-mode)
+  (+test-awi "own-mode" (("ada" "builder"))
     (agent-workspace-send ada "hold on" :submit t)
     (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'working)) 10))
     (let ((events (agent-workspace-inbox-add project "ada" "the build broke on main" :from "ci")))
       (should (equal (plist-get (car events) :state) "queued")))
     (should (equal (agent-workspace-inbox-badge ada) "✉1"))
-    (should (file-exists-p (agent-workspace--inbox-path project)))
     (agent-workspace-interrupt ada)
     (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "the build broke on main")
                                                (+test-awi--said "ada")))
                             20))
     (+test-awi--free ada)
-    (should (+test-wait-for (lambda () (equal (last (+test-awi--said "ada") 3)
-                                              (list "mode plan" (+test-awi--event-text "ci" "the build broke on main")
-                                                    "mode auto")))
-                            10))
+    (+test-sleep 0.3)
+    ;; Nothing switched: no mode set after her prompt, before or after the event's.
+    (should (equal (member "hold on" (+test-awi--said "ada"))
+                   (list "hold on" (+test-awi--event-text "ci" "the build broke on main"))))
+    (should-not (gethash ada agent-workspace--event-turns))
     (should-not (agent-workspace-inbox project))
-    (should-not (agent-workspace-inbox-badge ada))
     (should-not (file-exists-p (agent-workspace--inbox-path project)))))
+
+(ert-deftest agent-workspace-inbox/delivered-when-free-as-data-in-plan-mode ()
+  "With `agent-workspace-event-mode' \"plan\" (as before doom-pbk.137): an
+event for ada while she works, queued (✉1, the room says so), then delivered
+once she's free, framed as data, her turn in plan mode, her own mode (auto:
+her role has none) back after; the queue empty, its file gone."
+  (let ((agent-workspace-event-mode "plan"))
+    (+test-awi "delivered" (("ada" "builder"))
+      (agent-workspace-send ada "hold on" :submit t)
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'working)) 10))
+      (let ((events (agent-workspace-inbox-add project "ada" "the build broke on main" :from "ci")))
+        (should (equal (plist-get (car events) :state) "queued")))
+      (should (equal (agent-workspace-inbox-badge ada) "✉1"))
+      (should (file-exists-p (agent-workspace--inbox-path project)))
+      (agent-workspace-interrupt ada)
+      (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "the build broke on main")
+                                                 (+test-awi--said "ada")))
+                              20))
+      (+test-awi--free ada)
+      (should (+test-wait-for (lambda () (equal (last (+test-awi--said "ada") 3)
+                                                (list "mode plan" (+test-awi--event-text "ci" "the build broke on main")
+                                                      "mode auto")))
+                              10))
+      (should-not (agent-workspace-inbox project))
+      (should-not (agent-workspace-inbox-badge ada))
+      (should-not (file-exists-p (agent-workspace--inbox-path project))))))
 
 (ert-deftest agent-workspace-inbox/a-role-s-first-free-agent-one-at-a-time ()
   "Two events for the builders while both work: the first one free takes
@@ -243,56 +270,59 @@ callback called as if it had been (late, its session gone)."
        ,@body)))
 
 (ert-deftest agent-workspace-inbox/stopped-before-its-event-is-sent ()
-  "An event given to ada, her mode switching, and she's put to sleep before
-its prompt goes: it stays queued, said in the room; woken, she gets it
-(doom-pbk.47)."
-  (+test-awi "stopped" (("ada" "builder"))
-    (agent-workspace-open t)
-    (let (switched)
-      (+test-awi--mode-held switched
-        (let ((id (plist-get (car (agent-workspace-inbox-add project "ada" "build 41 broke" :from "ci")) :id)))
-          (should switched)
-          (should (agent-workspace--inbox-event project id))
-          (agent-workspace-sleep ada)
-          ;; Its switch's callback, late (agent-shell's, its session gone).
-          (funcall switched t)
-          (+test-sleep 0.3)
-          (should (agent-workspace--inbox-event project id))
-          (should (= (with-temp-buffer
-                       (insert (+test-awi--room project))
-                       (count-matches (format "event %s stays queued: not given to ada, it stopped first" id)
-                                      (point-min) (point-max)))
-                     1))
-          (should-not (string-search "delivered to ada" (+test-awi--room project)))
-          (should-not (gethash ada agent-workspace--event-turns))
-          ;; Woken: she gets it.
-          (agent-workspace-wake ada)
-          (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "build 41 broke") (+test-awi--said "ada")))
-                                  20))
-          (should-not (agent-workspace--inbox-event project id))
-          (should (string-search "delivered to ada" (+test-awi--room project))))))
-    (+test-awi--free ada)))
+  "An event given to ada, her mode switching (to plan), and she's put to
+sleep before its prompt goes: it stays queued, said in the room; woken, she
+gets it (doom-pbk.47)."
+  (let ((agent-workspace-event-mode "plan"))
+    (+test-awi "stopped" (("ada" "builder"))
+      (agent-workspace-open t)
+      (let (switched)
+        (+test-awi--mode-held switched
+          (let ((id (plist-get (car (agent-workspace-inbox-add project "ada" "build 41 broke" :from "ci")) :id)))
+            (should switched)
+            (should (agent-workspace--inbox-event project id))
+            (agent-workspace-sleep ada)
+            ;; Its switch's callback, late (agent-shell's, its session gone).
+            (funcall switched t)
+            (+test-sleep 0.3)
+            (should (agent-workspace--inbox-event project id))
+            (should (= (with-temp-buffer
+                         (insert (+test-awi--room project))
+                         (count-matches (format "event %s stays queued: not given to ada, it stopped first" id)
+                                        (point-min) (point-max)))
+                       1))
+            (should-not (string-search "delivered to ada" (+test-awi--room project)))
+            (should-not (gethash ada agent-workspace--event-turns))
+            ;; Woken: she gets it.
+            (agent-workspace-wake ada)
+            (should (+test-wait-for (lambda () (member (+test-awi--event-text "ci" "build 41 broke") (+test-awi--said "ada")))
+                                    20))
+            (should-not (agent-workspace--inbox-event project id))
+            (should (string-search "delivered to ada" (+test-awi--room project))))))
+      (+test-awi--free ada))))
 
 (ert-deftest agent-workspace-inbox/its-turn-in-plan-mode-after-yours ()
   "A prompt of yours sent while an event's mode switches: the event's
 prompt, queued behind it, still runs in plan mode; its own mode back only
-after the event's turn (doom-pbk.47)."
-  (+test-awi "after-yours" (("ada" "builder"))
-    (agent-workspace-open t)
-    (let (switched)
-      (+test-awi--mode-held switched
-        (agent-workspace-inbox-add project "ada" "build 41 broke" :from "ci")
-        (agent-workspace-send ada "slow, mine" :submit t)
-        (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'working)) 10))
-        (funcall switched)
-        (let ((event (+test-awi--event-text "ci" "build 41 broke")))
-          (should (+test-wait-for (lambda () (member event (+test-awi--said "ada"))) 20))
-          (+test-awi--free ada)
-          (should (+test-wait-for (lambda () (equal (car (last (+test-awi--said "ada"))) "mode auto")) 10))
-          (let ((said (+test-awi--said "ada")))
-            ;; Plan from before the event's prompt until after its turn.
-            (should (equal (seq-drop said (cl-position "mode plan" said :test #'equal))
-                           (list "mode plan" event "mode auto")))))))))
+after the event's turn (doom-pbk.47). With `agent-workspace-event-mode'
+\"plan\"."
+  (let ((agent-workspace-event-mode "plan"))
+    (+test-awi "after-yours" (("ada" "builder"))
+      (agent-workspace-open t)
+      (let (switched)
+        (+test-awi--mode-held switched
+          (agent-workspace-inbox-add project "ada" "build 41 broke" :from "ci")
+          (agent-workspace-send ada "slow, mine" :submit t)
+          (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'working)) 10))
+          (funcall switched)
+          (let ((event (+test-awi--event-text "ci" "build 41 broke")))
+            (should (+test-wait-for (lambda () (member event (+test-awi--said "ada"))) 20))
+            (+test-awi--free ada)
+            (should (+test-wait-for (lambda () (equal (car (last (+test-awi--said "ada"))) "mode auto")) 10))
+            (let ((said (+test-awi--said "ada")))
+              ;; Plan from before the event's prompt until after its turn.
+              (should (equal (seq-drop said (cl-position "mode plan" said :test #'equal))
+                             (list "mode plan" event "mode auto"))))))))))
 
 (ert-deftest agent-workspace-inbox/a-rename-takes-its-events-along ()
   "ada renamed ann: the event queued for ada is ann's (her badge counts it,

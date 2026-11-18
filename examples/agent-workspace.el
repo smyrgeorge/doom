@@ -40,6 +40,9 @@
 (defvar +my/example-agent-workspace--crew nil
   "The example's agents, as made.")
 
+;; config/agent-workspace.el's: bound dynamically below.
+(defvar agent-workspace-loop)
+
 ;; ====== CODE ======
 
 (defun +my/example-agent-workspace--jsonl ()
@@ -112,17 +115,19 @@ folder deleted once it's closed. See examples/agent-workspace.el."
     (+my/example-agent-workspace--project dir)
     (+my/example-agent-workspace--kind)
     ;; Your windows left as they are: the crew has its own workspace (or gives
-    ;; back the windows it found).
+    ;; back the windows it found). Its agents don't loop (L turns one's on):
+    ;; each stays on the issue it shows, not taking the others.
     (setq +my/example-agent-workspace--crew
-          (list (agent-workspace-create :role "builder" :name "ada" :kind 'stand-in
-                                        :issue "demo-1" :issue-title "Lexer: strings with escapes"
-                                        :issue-type "feature")
-                (agent-workspace-create :role "investigator" :name "sam" :kind 'stand-in
-                                        :issue "demo-3" :issue-title "Why does the REPL hang on paste?"
-                                        :issue-type "bug" :prompt "Look into why the REPL hangs on paste")
-                (agent-workspace-create :role "builder" :name "ken" :kind 'stand-in
-                                        :issue "demo-6" :issue-title "Tokens for numbers"
-                                        :issue-type "feature" :prompt "What's left on the lexer?")))
+          (let ((agent-workspace-loop nil))
+            (list (agent-workspace-create :role "builder" :name "ada" :kind 'stand-in
+                                          :issue "demo-1" :issue-title "Lexer: strings with escapes"
+                                          :issue-type "feature")
+                  (agent-workspace-create :role "investigator" :name "sam" :kind 'stand-in
+                                          :issue "demo-3" :issue-title "Why does the REPL hang on paste?"
+                                          :issue-type "bug" :prompt "Look into why the REPL hangs on paste")
+                  (agent-workspace-create :role "builder" :name "ken" :kind 'stand-in
+                                          :issue "demo-6" :issue-title "Tokens for numbers"
+                                          :issue-type "feature" :prompt "What's left on the lexer?"))))
     (let ((app (agent-workspace-open)))
       (agent-workspace-select (car +my/example-agent-workspace--crew))
       (+my/example-delete-when-closed dir (list (agent-workspace--issues-buffer (agent-workspace--app-project app))))

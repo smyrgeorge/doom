@@ -5,13 +5,14 @@
 ;; An agent sends one from its shell: cmd/agent-workspace send --to ken TEXT
 ;; (its name from AGENT_WORKSPACE_AGENT). Issues carry the work between
 ;; agents; a message is for a question. The crew's switch (T, kept in
-;; crew.json) says whether they may: off, ask me (each message waits in the
-;; room for [Send] [Edit] [Drop]) or on. A role's file names the roles it may
-;; message without your OK (talks-to: reviewer). Sent, it goes through the
-;; inbox (inbox.el): delivered when its agent is free, never waking one
-;; asleep, framed as from the sender (data, not your instructions), its turn
-;; in plan mode. Its answer, that turn's reply, goes back to the sender the
-;; same way, as an answer: no answer to an answer.
+;; crew.json; a new crew's `agent-workspace-talk', on) says whether they may:
+;; off, ask me (each message waits in the room for [Send] [Edit] [Drop]) or
+;; on. A role's file names the roles it may message without your OK while it
+;; asks (talks-to: reviewer). Sent, it goes through the inbox (inbox.el):
+;; delivered when its agent is free, never waking one asleep, framed as from
+;; the sender (data, not your instructions), its turn in its agent's own mode
+;; (`agent-workspace-event-mode'). Its answer, that turn's reply, goes back
+;; to the sender the same way, as an answer: no answer to an answer.
 ;;
 ;; All of it only with `agent-workspace-agents-talk' (config/agent-workspace.el):
 ;; without it the crew's switch is off whatever it says (crew.json keeps what it
@@ -26,10 +27,11 @@
 
 ;; ====== VARIABLES ======
 
-(defcustom agent-workspace-talk 'ask
-  "Whether a new crew's agents may message each other: off, ask (each
-message waits for your OK in the room) or on. T in the app changes a
-crew's; crew.json keeps it."
+(defcustom agent-workspace-talk 'on
+  "Whether a new crew's agents may message each other: on (each message
+sent at once), ask (each waits for your OK in the room) or off. T in the
+app changes a crew's; crew.json keeps it (a crew whose crew.json says ask
+asks, until T changes it)."
   :type '(choice (const off) (const ask) (const on))
   :group 'agent-workspace)
 

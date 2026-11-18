@@ -3,9 +3,14 @@
 ;; itself, or naps and says so. Loaded from config/agent-workspace.el, after
 ;; minimap.el (saved.el, after it, keeps them in crew.json). No Doom here.
 ;;
-;; Off for every agent; L turns an agent's on or off (its bar shows ↻). A crew
-;; started again from crew.json brings a looping agent back asleep, still
-;; looping: reopening never starts work by itself, waking it does.
+;; On for a new agent whose role has labels, in a project whose issues Beads
+;; tracks (`agent-workspace-loop', config/agent-workspace.el: said in the
+;; room as it joins); off for the others. L turns an agent's on or off (its
+;; bar shows ↻). A crew started again from crew.json brings a looping agent
+;; back awake: it takes the next ready issue (one put to sleep stays asleep).
+;; With `agent-workspace-loop' nil, a new agent doesn't loop, and one started
+;; again comes back asleep, still looping: reopening never starts work by
+;; itself, waking it does.
 ;;
 ;; Free: at rest (at the desk, done or napping), nothing queued for it, and no
 ;; issue in progress of its own (bd): the one it had is closed, or handed over.
@@ -46,6 +51,10 @@
 (require 'filenotify)
 
 (defvar agent-shell--state)
+
+;; config/agent-workspace.el's; saved.el's, loaded after.
+(defvar agent-workspace-loop)
+(defvar agent-workspace--crew-loading)
 
 ;; ====== VARIABLES ======
 
@@ -162,6 +171,11 @@ nothing typed at its prompt (you're writing to it: its loop waits)."
 (defun agent-workspace--loop-labels (agent)
   "AGENT's role's labels: the issues it's for."
   (plist-get (agent-workspace-role agent) :labels))
+
+(defun agent-workspace--loop-beads-p (project)
+  "Non-nil if PROJECT's issues are tracked with Beads (bd there to take
+them)."
+  (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project))))
 
 (defun agent-workspace--loop-say (agent kind text)
   "TEXT said in AGENT's room, an entry of KIND."
@@ -563,8 +577,23 @@ from its crew, its run ended. In `agent-workspace-change-functions'."
 `agent-workspace-closing-functions'."
   (agent-workspace--loop-unwatch (agent-workspace--root project)))
 
+(defun agent-workspace--loop-created-h (agent what)
+  "AGENT just made (c, a crew, cmd/agent-workspace new, Lisp): its loop on,
+said in the room after it joined, with `agent-workspace-loop', if its role
+has labels and its project's issues are Beads'. Not one started again from
+crew.json: its loop as crew.json says. In `agent-workspace-change-functions'."
+  (when (and (eq what 'created)
+             agent-workspace-loop
+             (not (bound-and-true-p agent-workspace--crew-loading))
+             (not (agent-workspace-agent-loop agent))
+             (agent-workspace--loop-labels agent)
+             (agent-workspace--loop-beads-p (agent-workspace-agent-project agent)))
+    (agent-workspace-loop-set agent t)))
+
 (add-hook 'agent-workspace-state-change-functions #'agent-workspace--loop-state-h)
 (add-hook 'agent-workspace-change-functions #'agent-workspace--loop-changed-h)
+;; After the others: the room says it joined first, crew.json keeps it.
+(add-hook 'agent-workspace-change-functions #'agent-workspace--loop-created-h 90)
 (add-hook 'agent-workspace-closing-functions #'agent-workspace--loop-closing-h)
 
 ;; ====== WHAT YOU DO ======
@@ -579,7 +608,7 @@ off, it no longer does (a napping one is at the desk). Return ON."
       (unless (agent-workspace--loop-labels agent)
         (user-error "%s's role, %s, has no labels: no issue is its to take"
                     (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))
-      (unless (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project)))
+      (unless (agent-workspace--loop-beads-p project)
         (user-error "%s doesn't track its issues with Beads: a loop takes them"
                     (file-name-nondirectory (directory-file-name project)))))
     (unless (eq on (agent-workspace-agent-loop agent))
