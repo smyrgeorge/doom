@@ -197,9 +197,10 @@ and editing asks you, its own mode back after. Events wait in the project, in `.
 so a restart keeps them.
 
 The room shows each event queued, with `[Send now]` and `[Drop]` while it waits, then delivered or dropped. Send now
-gives it at once (after the agent's turn), in its own mode, whatever `agent-workspace-event-mode` says: you let it. The agent's bar shows `✉2`. `P` pauses
-every event (they're queued, not delivered) until `P` again. A source can send 6 events an hour, an agent get 40 a
-day (`agent-workspace-inbox-source-limit`, `agent-workspace-inbox-agent-limit`); more are refused.
+gives it at once (after the agent's turn), in its own mode, whatever `agent-workspace-event-mode` says: you let it. The
+agent's bar shows `✉2`. `P` pauses every event (they're queued, not delivered) until `P` again. A source can send 20
+events an hour, an agent get 100 a day (`agent-workspace-inbox-source-limit`, `agent-workspace-inbox-agent-limit`); more
+are refused.
 
 `E` lists the events waiting, in the room's place (`q` gives the room back): `RET` sends one now, `d` drops it,
 `M-↑` / `M-↓` move it (the order they're delivered in), and `o` turns its source off for its agent or for everyone.

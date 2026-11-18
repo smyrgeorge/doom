@@ -53,12 +53,12 @@ on its own, editing asks you. nil: its agent's own mode, nothing switched."
   :type '(choice (const :tag "The agent's own" nil) string)
   :group 'agent-workspace)
 
-(defcustom agent-workspace-inbox-source-limit 6
+(defcustom agent-workspace-inbox-source-limit 20
   "At most this many events an hour from one source (to a project)."
   :type 'natnum
   :group 'agent-workspace)
 
-(defcustom agent-workspace-inbox-agent-limit 40
+(defcustom agent-workspace-inbox-agent-limit 100
   "At most this many events a day for one agent (or role)."
   :type 'natnum
   :group 'agent-workspace)
