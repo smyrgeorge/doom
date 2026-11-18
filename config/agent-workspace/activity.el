@@ -7,7 +7,8 @@
 ;; relative to the agent's worktree, so every agent is on the same map of the
 ;; project); a hand raised (asked you). Kept in memory, for the last
 ;; `agent-workspace-activity-minutes' minutes, a minute a bucket of what it
-;; did; and where it is now. Never saved.
+;; did; and where it was last, and when: where it is in its turn while it
+;; works (`agent-workspace-activity-where'). Never saved.
 ;;
 ;; Each agent's changed files: the files it writes (agent-shell's
 ;; file-write), and at its turn's end its branch's changes against the main
@@ -31,8 +32,9 @@
 (defvar agent-workspace--activity (make-hash-table :test #'eq :weakness 'key)
   "Each agent's activity: a plist, :minutes ((MINUTE . KINDS)...), the
 latest first, MINUTE a minute's number (`float-time' / 60), KINDS what it did
-then (read, edit, run, asked); :location (FILE . LINE), where it is now;
-:changed, the files it changed (relative to its worktree).")
+then (read, edit, run, asked); :location (FILE . LINE), where it was last,
+in this turn or one before; :located, when (a `float-time'); :changed, the
+files it changed (relative to its worktree).")
 
 (defconst agent-workspace--tool-kinds
   '(("read" . read) ("search" . read) ("fetch" . read) ("think" . read)
@@ -62,9 +64,21 @@ FILE relative to its worktree; its old minutes forgotten."
       (push (list minute kind) minutes))
     (setq activity (plist-put activity :minutes minutes))
     (when location
-      (setq activity (plist-put activity :location location)))
+      (setq activity (plist-put (plist-put activity :location location) :located (float-time))))
     (puthash agent activity agent-workspace--activity)
     (agent-workspace--changed agent 'activity)))
+
+(defun agent-workspace-activity-where (agent)
+  "Where AGENT is in its turn: (FILE . LINE), its last tool call's with a
+file, if it came in this turn (since it started:
+`agent-workspace-agent-since', a prompt sent); nil before its turn's first
+file, and at rest (done, at the desk: no turn). Where it was last, whatever
+the turn: its activity's :location."
+  (when-let* ((since (agent-workspace-agent-since agent))
+              (activity (agent-workspace-activity agent))
+              (located (plist-get activity :located))
+              ((>= located since)))
+    (plist-get activity :location)))
 
 (defun agent-workspace--relative (agent path)
   "PATH relative to AGENT's worktree, if it's in it; else as it is. In it by

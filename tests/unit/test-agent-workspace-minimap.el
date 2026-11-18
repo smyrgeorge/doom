@@ -91,6 +91,17 @@ the minimap shown (as by default)."
                                                                                  file (agent-workspace-agent-worktree agent)))
                                                                        (line . ,line))))))))))))
 
+(defun +test-awm--turn (agent &optional since)
+  "AGENT at work, its turn started SINCE (a `float-time', default now), as a
+prompt sent starts it: its tool calls' files from then on shown."
+  (agent-workspace--set-state agent 'working)
+  (setf (agent-workspace-agent-since agent) (or since (float-time))))
+
+(defun +test-awm--event (agent event &optional data)
+  "AGENT's session emits EVENT (agent-shell's) with DATA: its state follows
+\(core.el's handler: a prompt sent starts its turn)."
+  (agent-workspace--event agent `((:event . ,event) (:data . ,data))))
+
 (defmacro +test-awm--wide (&rest body)
   "BODY with ✎ drawn a column wider than it is (a font without it: another
 font's, wider), its cells' glyphs measured afresh."
@@ -237,6 +248,8 @@ changed, ⚠; the axis and the legend (doom-pbk.91, doom-pbk.130)."
            (sam (agent-workspace-create :role "investigator" :name "sam"))
            (ken (agent-workspace-create :role "builder" :name "ken"))
            (now (float-time)))
+      ;; ada at work, its turn started 10 minutes ago.
+      (+test-awm--turn ada (- now 600))
       (cl-letf (((symbol-function 'float-time) (lambda (&rest _) now)))
         (setq now (- (float-time) 180))
         (+test-awm--tool ada "read" "README" 1)
@@ -248,7 +261,6 @@ changed, ⚠; the axis and the legend (doom-pbk.91, doom-pbk.130)."
         (+test-awm--tool sam "read" "src/a.el" 1))
       (agent-workspace--set-state sam 'hand)
       (setf (agent-workspace-agent-ask sam) '(:kind permission :title "npm install"))
-      (agent-workspace--set-state ada 'working)
       (agent-workspace--add-changed ada '("src/a.el"))
       (agent-workspace--add-changed sam '("src/a.el" "README"))
       (agent-workspace-open t)
@@ -285,6 +297,74 @@ changed, ⚠; the axis and the legend (doom-pbk.91, doom-pbk.130)."
         (should (equal (+test-awm--bar (nth 1 lanes)) (+test-awm--bar (nth 0 lanes))))
         (should (equal (+test-awm--bar (nth 2 lanes)) (+test-awm--bar (nth 0 lanes)))))
       (ignore ken))))
+
+(ert-deftest agent-workspace-minimap/where-it-is-this-turn ()
+  "After the bar, the file and line only while the agent works, and only
+its turn's: each tool call's; its hand raised, what it asks. Done, then at
+the desk: its state in words, dimmed, no file, its cells as they were; o
+opens the file it was last in, at its line. A new turn before its first
+file: its verb, not the turn before's file; its first file then
+\(doom-pbk.129)."
+  (+test-awm "where"
+    (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
+           ;; A minute's start: its cells don't move on as the seconds go.
+           (now (* 60 (ffloor (/ (float-time) 60)))))
+      (cl-letf (((symbol-function 'float-time) (lambda (&rest _) now))
+                ((symbol-function 'agent-workspace--turn-branch) #'ignore)
+                ((symbol-function 'agent-workspace--branch-sync) #'ignore))
+        (cl-flet* ((lane () (agent-workspace--minimap-lane ada 80))
+                   (cells () (substring-no-properties (lane) 0 (string-search "│" (lane))))
+                   (later () (setq now (+ now 1)))
+                   (dimmed (text)
+                     (let ((lane (lane)))
+                       (should (string-suffix-p text lane))
+                       (should-not (string-search "src/a.el" lane))
+                       (should (eq (get-text-property (1- (length lane)) 'face lane) 'shadow)))))
+          ;; Its turn: its verb until its first file, then each tool call's.
+          (+test-awm--event ada 'input-submitted '((:prompt . "Build the lexer")))
+          (should (eq (agent-workspace-agent-state ada) 'working))
+          (dimmed "│ ⚙  building")
+          (later)
+          (+test-awm--tool ada "read" "README" 1)
+          (should (string-suffix-p "README:1" (lane)))
+          (later)
+          (+test-awm--tool ada "edit" "src/a.el" 2)
+          (should (string-suffix-p "src/a.el:2" (lane)))
+          ;; Its hand raised: what it asks; answered: its file again.
+          (+test-awm--event ada 'permission-request '((:tool-call . ((:title . "npm install") (:kind . "execute")))))
+          (should (string-suffix-p "wants to run npm install" (lane)))
+          (+test-awm--event ada 'permission-response)
+          (should (string-suffix-p "src/a.el:2" (lane)))
+          ;; Its turn over: done, then at the desk once looked at; no file.
+          (let ((before (cells)))
+            (later)
+            (+test-awm--event ada 'turn-complete '((:stop-reason . "end_turn")))
+            (should (eq (agent-workspace-agent-state ada) 'done))
+            (dimmed "done, have a look")
+            (agent-workspace-seen ada)
+            (should (eq (agent-workspace-agent-state ada) 'desk))
+            (dimmed "at the desk")
+            (should (equal (cells) before)))
+          ;; o at rest: the file it was last in, at its line.
+          (with-temp-buffer
+            (insert (lane))
+            (goto-char (point-min))
+            (save-window-excursion
+              (agent-workspace-minimap-open)
+              (should (equal (buffer-file-name)
+                             (expand-file-name "src/a.el" (agent-workspace-agent-worktree ada))))
+              (should (= (line-number-at-pos) 2))
+              (kill-buffer)))
+          ;; A new turn, commands only: its verb, not the last turn's file.
+          (later)
+          (+test-awm--event ada 'input-submitted '((:prompt . "Go on")))
+          (later)
+          (+test-awm--tool ada "execute")
+          (dimmed "building")
+          ;; Its first file.
+          (later)
+          (+test-awm--tool ada "read" "README" 3)
+          (should (string-suffix-p "README:3" (lane))))))))
 
 (ert-deftest agent-workspace-minimap/each-agent-s-role ()
   "Each agent's role's icon right after its avatar, on its lane or its quiet
@@ -360,6 +440,7 @@ a column wide kept. Measured once a frame, again when its font changes."
 cut to its pixels, … at its end; its │ where every lane's is."
   (+test-awm "edge"
     (let ((ada (agent-workspace-create :role "builder" :name "ada")))
+      (+test-awm--turn ada)
       (+test-awm--tool ada "edit" "src/✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎✎.el" 3)
       (+test-awm--wide
         (let ((lane (agent-workspace--minimap-lane ada 50)))
@@ -386,6 +467,8 @@ dots; not while the app is left; no redraw waiting once it's closed."
       (should (string-search "· │ ○  at the desk" (+test-awm--text project)))
       ;; Every lane dots: no redraw at the next minute.
       (should-not (gethash project agent-workspace--minimap-timers))
+      ;; At work: its turn's files shown.
+      (+test-awm--turn ada)
       (cl-letf* ((draw (symbol-function 'agent-workspace--minimap-draw))
                  ((symbol-function 'agent-workspace--minimap-draw)
                   (lambda (project) (cl-incf draws) (funcall draw project))))

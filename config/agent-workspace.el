@@ -363,7 +363,7 @@ the starters of the same name."
 ;;                RET its pane, TAB open or fold
 ;;   both         c a new agent, i interrupt, K kill (gone home), X forget
 ;;                (out of the crew, asked first), r restart
-;;                fresh, s sleep or wake, e edit (name, colour, role, mode,
+;;                fresh, Z sleep or wake, e edit (name, colour, role, mode,
 ;;                model), d its branch's changes, M merge its branch, b the
 ;;                branches to merge (see ITS BRANCHES), v its
 ;;                canvas and panels (the cursor there; again: the next one), V
@@ -421,7 +421,7 @@ the starters of the same name."
   '(("c" . agent-workspace-new-here) ("i" . agent-workspace-interrupt-here)
     ("K" . agent-workspace-kill-here) ("X" . agent-workspace-forget-here)
     ("r" . agent-workspace-restart-here)
-    ("s" . agent-workspace-sleep-here) ("e" . agent-workspace-edit)
+    ("Z" . agent-workspace-sleep-here) ("e" . agent-workspace-edit)
     ("d" . agent-workspace-review-here) ("M" . agent-workspace-merge-here)
     ("v" . agent-workspace-panels-here) ("V" . agent-workspace-full-here) ("I" . agent-workspace-issue-here)
     ("L" . agent-workspace-loop-here)

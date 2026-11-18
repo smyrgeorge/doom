@@ -479,6 +479,11 @@ line of padding above its lanes and half a line under its last line
         (should (= (cdr (posn-x-y (posn-at-point (window-point window) window))) pad))
         (should (= (cdr (window-text-pixel-size window (point-min) (point-max))) (+ pad (* 4 line) pad)))
         (should (pos-visible-in-window-p (point-max) window)))
+      ;; At work, a turn each, as a prompt sent starts it: its tool calls'
+      ;; files shown.
+      (dolist (agent (list ada sam))
+        (agent-workspace--set-state agent 'working)
+        (setf (agent-workspace-agent-since agent) (float-time)))
       (+test-e2e-aw--did ada "read" "README" 1)
       (+test-e2e-aw--did ada "edit" "README" 1)
       (+test-e2e-aw--did sam "execute" "README" 1)
@@ -562,6 +567,11 @@ Linux: a column)."
                         (agent-workspace-create :role "triager" :name "ken")))
                  (start (float-time))
                  (now start))
+            ;; ada and sam at work, their turns started before their first
+            ;; tool calls: their files shown.
+            (dolist (agent (list ada sam))
+              (agent-workspace--set-state agent 'working)
+              (setf (agent-workspace-agent-since agent) (- start (* 60 15))))
             (cl-letf (((symbol-function 'float-time) (lambda (&rest _) now)))
               (dotimes (i 14)
                 (setq now (- start (* 60 (- 14 i))))
