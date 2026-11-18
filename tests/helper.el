@@ -658,16 +658,95 @@ the sentinel. Wait with `+test-process-ended-p', not `process-live-p'."
 output was read."
   (process-get process '+test-ended))
 
-(defun +test-wait-for (predicate &optional timeout)
-  "Wait until PREDICATE returns non-nil (timers, redisplay and WebKit's events
-run meanwhile, see `+test--pump'), TIMEOUT seconds at most (default 10);
-return its value, or nil if it never did."
-  (let ((end (+ (float-time) (or timeout 10)))
+;; A PAGE HIDDEN
+;; WebKit draws nothing in a page macOS takes as hidden: its frame covered (a
+;; window over the run's corner of the screen, a call's picture in picture) or
+;; on a Space not shown (another desktop, a video full screen). What waited
+;; for it to draw (PDF.js's pages, a scroll or a resize told to a page) failed
+;; in a row while it lasted. So in a GUI frame showing a page, a wait's clock
+;; stops while the page is hidden, for 2 minutes at most: what's tested is the
+;; config, which can't draw there either, not the screen. A wait that failed
+;; says on stderr (its log) how long its page was hidden.
+(defvar +test--visibility nil
+  "The visibility the selected frame's page said last (\"hidden\"...).")
+
+(defvar +test--waiting nil
+  "Non-nil in a wait: one inside it (a JS answer's) keeps its own clock.")
+
+(defvar +test-hidden 0.0
+  "The seconds the last wait spent with its page hidden.")
+
+(defun +test--watch-pages-p ()
+  "Non-nil if a wait's page can be hidden: a GUI frame, config/webkit.el's
+views."
+  (and (display-graphic-p) (fboundp '+my/webkit-ask) (fboundp '+my/webkit-xwidget)))
+
+(defun +test--visibility-answered (state)
+  "The page's visibility STATE, answered (see `+test--visibility-ask')."
+  (setq +test--visibility state))
+
+(defun +test--visibility-ask ()
+  "The selected frame's page (the first window's showing one) asked its
+visibility, not waited for: the answer in `+test--visibility' (not
+`+test-js': its one answer, waited for by the wait it's asked in, would be
+lost). Asked as the config asks (`+my/webkit-ask'): its function a symbol (a
+closure, taken by the garbage collector before WebKit answered, had the
+answer go to what took its place), the view not closed while it's on its
+way."
+  (let ((xwidget (seq-some (lambda (window)
+                             (with-current-buffer (window-buffer window)
+                               (ignore-errors (+my/webkit-xwidget window))))
+                           (window-list))))
+    (if (not xwidget)
+        (setq +test--visibility nil)
+      (+my/webkit-ask "document.visibilityState" #'+test--visibility-answered xwidget))))
+
+(defun +test--wait (predicate timeout)
+  "Wait until PREDICATE returns non-nil, TIMEOUT seconds at most: its value."
+  (let ((end (+ (float-time) timeout))
         value)
     (while (and (not (setq value (funcall predicate)))
                 (< (float-time) end))
       (+test--pump 0.05))
     value))
+
+(defun +test-wait-for (predicate &optional timeout)
+  "Wait until PREDICATE returns non-nil (timers, redisplay and WebKit's events
+run meanwhile, see `+test--pump'), TIMEOUT seconds at most (default 10), not
+counting those with the selected frame's page hidden (see A PAGE HIDDEN);
+return its value, or nil if it never did."
+  (let ((timeout (or timeout 10)))
+    (cond
+     (+test--waiting (+test--wait predicate timeout))
+     ((not (+test--watch-pages-p))
+      (setq +test-hidden 0.0)
+      (+test--wait predicate timeout))
+     (t
+      (let ((+test--waiting t)
+            (left timeout)
+            (hidden 0.0)
+            result)
+        ;; Its first answer waited for: the first half second counted right.
+        (setq +test--visibility 'asked)
+        (+test--visibility-ask)
+        (let ((end (+ (float-time) 0.5)))
+          (while (and (eq +test--visibility 'asked) (< (float-time) end))
+            (+test--pump 0.02)))
+        ;; Half a second at a time, those with the page hidden not counted.
+        (while (and (not (setq result
+                               (let ((start (float-time)))
+                                 (+test--visibility-ask)
+                                 (prog1 (+test--wait predicate (min left 0.5))
+                                   (let ((spent (- (float-time) start)))
+                                     (if (equal +test--visibility "hidden")
+                                         (setq hidden (+ hidden spent))
+                                       (setq left (- left spent))))))))
+                    (> left 0)
+                    (< hidden 120)))
+        (setq +test-hidden hidden)
+        (when (and (not result) (> hidden 0))
+          (+test--stderr (format "A wait failed, its page hidden %.1f s of it\n" hidden)))
+        result)))))
 
 (defun +test-sleep (seconds)
   "Let SECONDS pass, timers, redisplay and WebKit's events running."

@@ -5,7 +5,9 @@
 ;; requests, places, links out, revert, no PDF.js, closing.
 ;; run.sh: slow (~35 s). PDF.js draws no page while its frame is covered
 ;; (macOS takes it as hidden): beside the others all the same, each frame
-;; with a corner of its own (tests/helper.el, `+test-e2e-frame-place').
+;; with a corner of its own (tests/helper.el, `+test-e2e-frame-place'); a
+;; window over it or another Space shown, its waits wait (tests/helper.el's
+;; A PAGE HIDDEN).
 
 (+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit" "config/pdf")
 
@@ -58,22 +60,31 @@
 (defun +test-pdf--wait-page (page &optional window)
   (+test-wait-for (lambda () (eql (+test-pdf--page window) page)) 5))
 
+(defun +test-pdf--drawn (window)
+  "WINDOW's xwidget, if PDF.js has opened its PDF and drawn page 1's text."
+  (with-current-buffer (window-buffer window)
+    (let ((xwidget (+my/webkit-xwidget window)))
+      (and xwidget
+           (xwidget-view-lookup xwidget window)
+           (natnump (plist-get (+test-pdf--state window) :pages))
+           (> (plist-get (+test-pdf--state window) :pages) 0)
+           (equal (+test-js xwidget "String(document.querySelectorAll('.textLayer span').length > 0)")
+                  "true")
+           xwidget))))
+
 (defun +test-pdf--ready (&optional window)
   "WINDOW's view of its PDF, once PDF.js has opened it and drawn page 1's
-text."
-  (let ((window (or window (selected-window))))
-    (+test-wait-for
-     (lambda ()
-       (with-current-buffer (window-buffer window)
-         (let ((xwidget (+my/webkit-xwidget window)))
-           (and xwidget
-                (xwidget-view-lookup xwidget window)
-                (natnump (plist-get (+test-pdf--state window) :pages))
-                (> (plist-get (+test-pdf--state window) :pages) 0)
-                (equal (+test-js xwidget "String(document.querySelectorAll('.textLayer span').length > 0)")
-                       "true")
-                xwidget))))
-     15)))
+text: within 15 s of its page shown (tests/helper.el's A PAGE HIDDEN: not
+the seconds it's hidden). Slower than 5 s, or not drawn, said on stderr: how
+long, how long hidden."
+  (let* ((window (or window (selected-window)))
+         (start (float-time))
+         (xwidget (+test-wait-for (lambda () (+test-pdf--drawn window)) 15))
+         (took (- (float-time) start)))
+    (when (or (not xwidget) (> took 5))
+      (+test--stderr (format "PDF.js %s after %.1f s, %.1f s of it hidden\n"
+                             (if xwidget "drew page 1" "drew no page") took +test-hidden)))
+    xwidget))
 
 (defun +test-pdf--open (file)
   "FILE opened in the selected window, ready."

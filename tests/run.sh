@@ -202,6 +202,9 @@ report_file() {  # report_file KIND FILE: its result (its parts' together), once
       tail -20 "$log" | sed 's/^/      /'
     fi
     grep -h 'TIMED OUT' "$log" | sed 's/^/      /'
+    # A wait failed with its page hidden (tests/helper.el's A PAGE HIDDEN):
+    # the screen, not the config, most likely.
+    grep -h 'A wait failed, its page hidden' "$log" | sed 's/^/      /'
     # What its tests left, beside its log: the RAM disk goes with the run.
     [ "$work" = "$tmp" ] || cp -R "$work/." "$tmp/" 2>/dev/null
     echo "      full log: $log"
