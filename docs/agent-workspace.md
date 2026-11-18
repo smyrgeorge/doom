@@ -5,12 +5,11 @@
 > one place, and loops.
 
 Several coding agents work on a project at once, a **crew**. Each agent has a name, a role and a colour. Each works in
-its own git worktree, so they don't get in each other's way or touch your checkout. Each works only with you.
+its own git worktree, so they don't get in each other's way or touch your checkout. Agents
+[ask each other](#agents-asking-each-other) and [hand work on](#work-handed-on-through-issues) as their roles say.
 
-For now, only with you: agents don't talk to each other, and no event from outside reaches them. `config.el` sets
-`agent-workspace-agents-talk` and `agent-workspace-outside-events` to `nil`. [The inbox](#the-inbox),
-[work handed on](#work-handed-on-through-issues) and [agents asking each other](#agents-asking-each-other) work
-again once they're `t`.
+For now, no event from outside reaches them: `config.el` sets `agent-workspace-outside-events` to `nil`, and
+[the inbox](#the-inbox) takes events from outside again once it's `t`.
 
 ![The crew's app: the issues and the minimap, the stage, the room](../examples/agent-workspace.png)
 

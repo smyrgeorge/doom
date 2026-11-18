@@ -289,11 +289,11 @@ default: every new prompt started with the line)."
   "PDFs open with dark pages (config/pdf.el's own default: light)."
   (should (eq +my/pdf-dark-pages t)))
 
-(ert-deftest config/agent-workspace-only-you ()
-  "The agent workspace's agents work only with you, for now: they don't talk
-to each other, no event from outside reaches them (config/agent-workspace.el's
-own defaults: both on)."
-  (should-not agent-workspace-agents-talk)
+(ert-deftest config/agent-workspace-agents-talk-nothing-from-outside ()
+  "The agent workspace's agents talk to each other (config/agent-workspace.el's
+own default), but no event from outside reaches them, for now (its own
+default: on)."
+  (should (eq agent-workspace-agents-talk t))
   (should-not agent-workspace-outside-events))
 
 ;; ====== LOAD ORDER ======
@@ -312,8 +312,7 @@ them)."
              (+test-config--position '(load! "config/tiling"))))
   (should (< (+test-config--position '(setq +my/pdf-dark-pages t))
              (+test-config--position '(load! "config/pdf"))))
-  (should (< (+test-config--position '(setq agent-workspace-agents-talk nil
-                                            agent-workspace-outside-events nil))
+  (should (< (+test-config--position '(setq agent-workspace-outside-events nil))
              (+test-config--position '(load! "config/agent-workspace"))))
   (should (< (+test-config--position '(setq-default fill-column 120))
              (+test-config--position '(load! "config/editor")))))

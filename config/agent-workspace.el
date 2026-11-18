@@ -8,8 +8,9 @@
 
 ;; WHO AN AGENT WORKS WITH
 ;; You, always. Its crew's other agents, and events from outside, only while
-;; these say so (both on here; config.el turns them off for now): each one off,
-;; refused, its keys saying so, what was left queued kept and not delivered.
+;; these say so (both on here; config.el turns events from outside off for
+;; now): each one off, refused, its keys saying so, what was left queued kept
+;; and not delivered.
 (defcustom agent-workspace-agents-talk t
   "Non-nil: the crew's agents talk to each other: their messages (as the
 crew's switch says: `agent-workspace-talk', T) and their issues handed on
