@@ -293,6 +293,7 @@ session is told; nothing for a session not an agent's."
                       "bd commands run as ada" "Your notifications carry your name already"))
         (should (string-search part text)))
       (should-not (string-search "agent/ada" text))
+      (should-not (string-search "You run the crew" text))
       (should (string-suffix-p "\n\nBuild what you're given." text)))))
 
 (ert-deftest agent-workspace/a-role-s-placeholders-filled-in ()
@@ -335,6 +336,21 @@ role itself untouched; the main branch asked once."
                        ["Bash(git -C * push)" "Bash(git -C /tmp/my\\ project reset:*)"]))
         (should (string-suffix-p "git -C /tmp/my\\ project merge --no-ff BRANCH, into main (main); {NAME}."
                                  (alist-get 'append (alist-get 'systemPrompt meta))))))))
+
+(ert-deftest agent-workspace/what-a-lead-is-told ()
+  "An agent whose role leads is told it runs the crew for the user, on their
+word, from its shell, never starting work by itself; not that it doesn't
+hand work to other agents."
+  (let* ((agent (+test-awc--agent :name "max" :role "lead"))
+         (agent-workspace-role-function
+          (lambda (_project name) (list :name name :leads t :instructions "Run the crew.")))
+         (text (let ((agent-workspace--starting agent)) (agent-workspace-agent-context))))
+    (dolist (part '("You are max, the lead" "You run the crew for the user, on their word"
+                    "cmd/agent-workspace status" "only when they ask you to"
+                    "Never start work by yourself." "your own git worktree"))
+      (should (string-search part text)))
+    (should-not (string-search "Don't hand work to other agents" text))
+    (should (string-suffix-p "\n\nRun the crew." text))))
 
 (ert-deftest agent-workspace/a-session-s-config ()
   "Claude Code's config for an agent: its buffer's name, its role's model and

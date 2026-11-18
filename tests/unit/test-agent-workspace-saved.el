@@ -616,6 +616,63 @@ app opened, the four run, none asleep for its role's max."
                             (agent-workspace-agents project)))
       (should (equal (agent-workspace-crew-make project "full") '(nil nil nil))))))
 
+(defun +test-aws2--request (op payload)
+  "OP's reply (parsed) as cmd/agent-workspace gets it from
+`default-directory': a request folder with PAYLOAD (JSON text)."
+  (let ((dir (make-temp-file (+test-tmp-file "aws2-request-") t)))
+    (with-temp-file (expand-file-name "request" dir) (insert op "\n" default-directory "\n"))
+    (with-temp-file (expand-file-name "payload" dir) (insert payload))
+    (should (eq (agent-workspace-request dir) t))
+    (with-temp-buffer
+      (insert-file-contents (expand-file-name "reply" dir))
+      (json-parse-buffer :object-type 'plist :false-object nil :null-object nil))))
+
+(ert-deftest agent-workspace-saved/a-saved-agent-s-name-and-colour ()
+  "An agent crew.json keeps, not running, still has its name and colour
+\(doom-pbk.138): a new agent named as it is refused, as for one running (c's
+name prompt asks again, cmd new and a rename are refused), and crew.json
+keeps it; a new agent's colour is none of theirs while one is free."
+  (+test-aws2 "saved-names"
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"scribe\", \"colour\": \"blue\"},
+  {\"name\": \"grace\", \"role\": \"builder\", \"colour\": \"magenta\"}
+ ]}
+")
+    (let ((said nil))
+      ;; c, builder, ada: refused, asked again; tim made.
+      (cl-letf* ((answers '("builder" "ada" "tim"))
+                 (answer (lambda (&rest _) (or (pop answers) (error "Asked more"))))
+                 ((symbol-function 'completing-read) answer)
+                 ((symbol-function 'read-string) answer)
+                 ((symbol-function 'sit-for) #'ignore)
+                 ((symbol-function 'message)
+                  (lambda (format &rest args) (when format (push (apply #'format format args) said)))))
+        ;; Not running: crew.json read.
+        (should (string-match-p "\\`There.s an agent named ada already\\'"
+                                (plist-get (+test-aws2--request "new" "{\"role\":\"builder\",\"name\":\"ada\"}")
+                                           :error)))
+        (should (equal (agent-workspace-free-colour project "blue") "green"))
+        (let ((tim (agent-workspace-new)))
+          (should (seq-find (lambda (text) (string-match-p "\\`There.s an agent named ada already\\'" text)) said))
+          (should (equal (agent-workspace-agent-name tim) "tim"))
+          ;; The builder's blue is ada's, magenta grace's.
+          (should (equal (agent-workspace-agent-colour tim) "green"))
+          (should (equal (agent-workspace-agents project) (list tim)))
+          ;; Running beside the kept crew: its names still taken.
+          (should (string-match-p "\\`There.s an agent named grace already\\'"
+                                  (plist-get (+test-aws2--request "new" "{\"role\":\"reviewer\",\"name\":\"grace\"}")
+                                             :error)))
+          (dolist (name '("ada" "grace"))
+            (should (string-match-p (format "\\`There.s an agent named %s already\\'" name)
+                                    (cadr (should-error (agent-workspace-rename tim name) :type 'user-error)))))
+          (should (equal (agent-workspace-free-colour project "blue") "yellow"))
+          (should (equal (agent-workspace-agents project) (list tim))))))
+    (let ((text (+test-aws2--file project)))
+      (should (string-search "{\"name\": \"ada\", \"role\": \"scribe\", \"colour\": \"blue\"}" text))
+      (should (string-search "{\"name\": \"grace\", \"role\": \"builder\", \"colour\": \"magenta\"}" text))
+      (should (string-search "{\"name\": \"tim\", \"role\": \"builder\", \"colour\": \"green\"}" text)))))
+
 (ert-deftest agent-workspace-saved/no-more-than-its-role-allows ()
   "Five builders in crew.json (a builder's max 4): four start, the fifth
 stays asleep, said; r on it is refused as s is, until one stops

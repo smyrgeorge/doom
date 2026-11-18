@@ -60,6 +60,7 @@ model: haiku
 mode: accept-edits
 labels: test, qa
 max: 3
+leads: true
 icon: md-flask ⚗
 verb: testing
 # a comment
@@ -79,6 +80,7 @@ Then run them.
     (should (equal (plist-get role :mode) "acceptEdits"))
     (should (equal (plist-get role :labels) '("test" "qa")))
     (should (equal (plist-get role :max) 3))
+    (should (eq (plist-get role :leads) t))
     (should (equal (plist-get role :icon) "md-flask"))
     (should (equal (plist-get role :glyph) "⚗"))
     (should (equal (plist-get role :verb) "testing"))
@@ -98,7 +100,17 @@ inherit, Claude Code's color spelling; no instructions, warned about."
     (should-not (plist-get role :model))
     (should (equal (plist-get role :colour) "green"))
     (should (equal (plist-get role :mode) "dontAsk"))
+    (should-not (plist-get role :leads))
     (should-not (plist-get role :instructions))))
+
+(ert-deftest agent-workspace-roles/leads ()
+  "leads: true (or yes, any case), it runs the crew from its shell; false
+or no, it doesn't, as without it (doom-pbk.134)."
+  (dolist (case '(("true" . t) ("True" . t) ("yes" . t) ("false" . nil) ("no" . nil)))
+    (pcase-let ((`(,role . ,problems)
+                 (+test-awr--read (format "---\ndescription: runs it\nleads: %s\n---\nRun it.\n" (car case)))))
+      (should-not problems)
+      (should (eq (plist-get role :leads) (cdr case))))))
 
 (ert-deftest agent-workspace-roles/errors-name-the-file-and-line ()
   "An error leaves the role out; each says its file and line."
@@ -108,6 +120,7 @@ inherit, Claude Code's color spelling; no instructions, warned about."
                    (error "tester.md:3: mode yolo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions"))
                   ("---\nmax: many\ndescription: x\n---\nDo.\n" (error "tester.md:2: max many: not a number above 0"))
                   ("---\nmax: 0\ndescription: x\n---\nDo.\n" (error "tester.md:2: max 0: not a number above 0"))
+                  ("---\ndescription: x\nleads: always\n---\nDo.\n" (error "tester.md:3: leads always: true or false"))
                   ("---\ncolour: #ff0000\ndescription: x\n---\nDo.\n"
                    (error "tester.md:2: colour #ff0000: not one of blue, magenta, green, yellow, cyan, red, white, black"))
                   ("---\nname: builder\ndescription: x\n---\nDo.\n"
@@ -241,7 +254,9 @@ isn't."
      ("Edit" "Write" "Bash(git -C:*)" "Bash(git -C * merge --no-ff *)"))
     ("designer" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit" "Write"))
     ("security" ("Edit" "Write" "NotebookEdit") ("WebSearch" "WebFetch" "Bash(git blame:*)") ("Edit" "Write"))
-    ("profiler" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write")))
+    ("profiler" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write"))
+    ;; Runs the crew from its shell, on your word.
+    ("lead" ("Edit" "Write" "NotebookEdit") ("Bash(cmd/agent-workspace:*)" "Bash(git log:*)") ("Edit" "Write")))
   "The starters and what each may do: denied, allowed, not allowed.")
 
 (ert-deftest agent-workspace-roles/the-starters ()
@@ -251,9 +266,10 @@ denied), the tester only its tests, the documenter only the docs, the
 builder anything but push, the merger merging (git -C ... merge --no-ff,
 its worktree's and the main checkout's, each path exact) but never
 pushing; no git rule with a * before its subcommand; what each does
-alone is allowed (bd). The triager on haiku, the
-others on your default; the reviewer's approval to the mergers, its
-changes back to the builders."
+alone is allowed (bd). The triager on haiku, the others on your default;
+the reviewer's approval to the mergers, its changes back to the
+builders. Only the lead leads: one per crew, no labels (no issue its, no
+loop), handing nothing on."
   (let ((dir agent-workspace-starter-roles-directory))
     (should (equal (mapcar #'file-name-base (directory-files dir nil "\\.md\\'"))
                    (sort (mapcar #'car +test-awr--starters) #'string<)))
@@ -276,10 +292,15 @@ changes back to the builders."
         (dolist (tool (plist-get role :tools))
           (when (string-prefix-p "Bash(git " tool)
             (should (string-match-p "\\`Bash(git \\(?:-C [^ *]+ \\)?[a-z]" tool))))
-        (should (equal (plist-get role :model) (and (equal (plist-get role :name) "triager") "haiku")))))
+        (should (equal (plist-get role :model) (and (equal (plist-get role :name) "triager") "haiku")))
+        (should (eq (plist-get role :leads) (equal (plist-get role :name) "lead")))))
     (let ((reviewer (car (agent-workspace-role-read (expand-file-name "reviewer.md" dir)))))
       (should (equal (plist-get reviewer :hands-to) '("merger")))
-      (should (equal (plist-get reviewer :returns-to) '("builder"))))))
+      (should (equal (plist-get reviewer :returns-to) '("builder"))))
+    (let ((lead (car (agent-workspace-role-read (expand-file-name "lead.md" dir)))))
+      (should (eql (plist-get lead :max) 1))
+      (dolist (key '(:labels :hands-to :returns-to :talks-to))
+        (should-not (plist-get lead key))))))
 
 (ert-deftest agent-workspace-roles/a-project-with-none-of-its-own ()
   "A project with no roles of its own has the starters."

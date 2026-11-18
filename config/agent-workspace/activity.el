@@ -11,9 +11,12 @@
 ;; works (`agent-workspace-activity-where'). Never saved.
 ;;
 ;; Each agent's changed files: the files it writes (agent-shell's
-;; file-write), and at its turn's end its branch's changes against the main
-;; checkout's branch and its uncommitted files (git, in its worktree). A file
-;; two agents change means a merge conflict later: `agent-workspace-conflicts'.
+;; file-write), and at its turn's end and whenever its branch changes its
+;; branch's changes against the main checkout's branch and its uncommitted
+;; files (git, in its worktree; a branch it leaves, its files dropped at
+;; once). A file changed on two branches means a merge conflict later:
+;; `agent-workspace-conflicts' (agents on one branch, a reviewer on its
+;; builder's, count as one).
 
 (require 'cl-lib)
 (require 'seq)
@@ -132,8 +135,10 @@ whole); else by its truename (a link's name)."
 ;; ====== ITS CHANGED FILES ======
 
 (defvar agent-workspace--changes-since (make-hash-table :test #'eq :weakness 'key)
-  "An agent whose changed files git works out: those noted meanwhile (a
-file written), kept with git's answer.")
+  "An agent whose changed files git works out: (RUN . FILES), RUN its
+latest run's token (an earlier run's answer is dropped: its worktree may
+have moved since), FILES those noted meanwhile (a file written), kept with
+git's answer.")
 
 (defun agent-workspace--main-head (project)
   "The branch PROJECT's main checkout is on, read from its .git/HEAD (git not
@@ -147,22 +152,25 @@ run), or nil (a commit checked out, a .git file)."
   "The files AGENT's worktree changed worked out in the background (git,
 Emacs not waiting: a big worktree takes a while), then noted as all of
 them: its branch's against the main checkout's branch, and its uncommitted
-ones (relative to its worktree)."
+ones (relative to its worktree). Only the latest run's answer is noted."
   (when-let* ((dir (agent-workspace-agent-worktree agent))
               ((file-directory-p dir)))
     (let* ((project (agent-workspace-agent-project agent))
            (main (or (agent-workspace--main-head project)
                      (ignore-errors (agent-workspace-main-branch project))))
            (default-directory dir)
+           (token (list 'run))
            (left 0)
            (files nil))
-      (puthash agent nil agent-workspace--changes-since)
+      (puthash agent (list token) agent-workspace--changes-since)
       (cl-flet ((run (args parse)
                   (setq left (1+ left))
                   (let ((output (generate-new-buffer " *agent-workspace changes*")))
                     (make-process
                      :name "agent-workspace-changes" :buffer output :noquery t :connection-type 'pipe
-                     :command (cons "git" args)
+                     ;; Its index never locked: the agent's own git (git
+                     ;; add, at its turn's start) would fail on it.
+                     :command (append '("git" "--no-optional-locks") args)
                      :stderr (get-buffer-create " *agent-workspace changes errors*")
                      :sentinel (lambda (process _event)
                                  (unless (process-live-p process)
@@ -172,8 +180,11 @@ ones (relative to its worktree)."
                                        (setq files (append files (funcall parse lines))))
                                      (when (= (setq left (1- left)) 0)
                                        (let ((since (gethash agent agent-workspace--changes-since)))
-                                         (remhash agent agent-workspace--changes-since)
-                                         (agent-workspace--add-changed agent (delete-dups (append files since)) t))))))))))
+                                         ;; A later run's answer is the one.
+                                         (when (eq (car since) token)
+                                           (remhash agent agent-workspace--changes-since)
+                                           (agent-workspace--add-changed
+                                            agent (delete-dups (append files (cdr since))) t)))))))))))
         (when main
           (run (list "diff" "--name-only" (concat main "...HEAD")) #'identity))
         (run (list "status" "--porcelain")
@@ -184,23 +195,44 @@ ones (relative to its worktree)."
 (defun agent-workspace--add-changed (agent files &optional replace)
   "FILES among AGENT's changed ones (REPLACE: they're all of them now)."
   ;; git working them out meanwhile: kept with its answer.
-  (unless (or replace (eq (gethash agent agent-workspace--changes-since :none) :none))
-    (puthash agent (append files (gethash agent agent-workspace--changes-since)) agent-workspace--changes-since))
+  (when-let* ((since (and (not replace) (gethash agent agent-workspace--changes-since))))
+    (setcdr since (append files (cdr since))))
   (let* ((activity (agent-workspace-activity agent))
          (changed (if replace files (delete-dups (append files (plist-get activity :changed))))))
     (unless (equal changed (plist-get activity :changed))
       (puthash agent (plist-put activity :changed changed) agent-workspace--activity)
       (agent-workspace--changed agent 'activity))))
 
+(defun agent-workspace--activity-branch-h (agent what)
+  "AGENT's worktree on another branch: the files of the one it left
+dropped at once, its changed files worked out again. In
+`agent-workspace-change-functions'."
+  (when (eq what 'branch)
+    ;; A run under way answers for the branch it left: dropped.
+    (remhash agent agent-workspace--changes-since)
+    (agent-workspace--add-changed agent nil t)
+    (agent-workspace--branch-changes-later agent)))
+
+(add-hook 'agent-workspace-change-functions #'agent-workspace--activity-branch-h)
+
+(defun agent-workspace--apart-p (agents)
+  "Non-nil if AGENTS are on two branches or more: agents on one branch (a
+reviewer on its builder's) count as one, one on no branch (a commit
+checked out) as a branch of its own."
+  (let ((branches (mapcar #'agent-workspace-agent-branch agents)))
+    (> (+ (length (delete-dups (remq nil branches))) (cl-count nil branches)) 1)))
+
 (defun agent-workspace-conflicts (&optional project)
-  "The files two agents or more of PROJECT's crew changed: ((FILE AGENT...)
-...), by file."
+  "The files of PROJECT's crew changed on two branches or more (committed
+there or uncommitted in their worktrees): ((FILE AGENT...) ...), by file,
+every agent that changed it. Agents on one branch count as one: a branch
+can't conflict with itself."
   (let ((by-file (make-hash-table :test #'equal)))
     (dolist (agent (agent-workspace-agents project))
       (dolist (file (plist-get (agent-workspace-activity agent) :changed))
         (push agent (gethash file by-file))))
     (sort (cl-loop for file being the hash-keys of by-file using (hash-values agents)
-                   when (cdr agents) collect (cons file (reverse agents)))
+                   when (agent-workspace--apart-p agents) collect (cons file (reverse agents)))
           (lambda (a b) (string< (car a) (car b))))))
 
 ;; ====== ITS LANE ======

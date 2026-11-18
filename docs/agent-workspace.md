@@ -111,7 +111,9 @@ A cell is a minute: what the agent did most then (asked you, edited, ran a comma
 nothing. After the bar: its state, then, while it works, the file and line it's in this turn (each tool call's), or
 what it asks you while its hand is raised; otherwise (before its turn touches a file, done, at the desk) its state in
 words, dimmed. An agent that did nothing in those minutes has a lane of `·`, and its state in words after the bar. A
-file two agents changed (on their branches or uncommitted) is marked `⚠`: they'll conflict when you merge.
+file changed on two branches (committed there, or uncommitted in two worktrees) is marked `⚠`: they'll conflict when
+you merge. Agents on one branch (a reviewer on its builder's) count as one. An agent's changed files are worked out
+again when its turn ends and when its branch changes: a branch it leaves no longer counts as its.
 
 Every cell is one column, so the bars line up from lane to lane: a glyph your font lacks, drawn wider from another
 font, gives way to one it has (JetBrains Mono has no `✎`: an edit is `±`, and the legend says so). A line too long for
@@ -267,6 +269,43 @@ which roles it may message without your OK, and never to wait for an answer.
 
 With `agent-workspace-agents-talk` set to `nil`, a message is refused, whatever `T` says (`crew.json` keeps it), and
 `T` says so. Agents aren't told of messages, and those queued before wait, not delivered.
+
+## The crew from the shell
+
+`cmd/agent-workspace` shows the crew and runs it, from your shell, a script, or a lead agent's shell. Each command
+replies JSON ([more](cmd.md#cmdagent-workspace)).
+
+| Command | Does |
+|---|---|
+| `status` | the crew: each agent's state in its bar's words, its turn's time, loop, issue, branch, worktree, changed files, raised hand and events waiting; then the files two agents changed (the minimap's ⚠), the room's offers still standing, and the talk setting |
+| `give ISSUE --to NAME` | what `t` does: the issue claimed as the agent, its branch opened, `Work on ISSUE: TITLE` sent now, or after its turn |
+| `wake NAME` | what `Z` does to an agent asleep or gone home: a fresh session |
+| `sleep NAME` | what `Z` does to an awake agent: its session stopped |
+| `loop NAME on` / `off` | what `L` does |
+
+The room says each action and who did it: `shell gave doom-a1b to grace`, `max woke linus`. Refused, nothing is done
+and the reply says why: an agent not in the crew, an issue `bd` doesn't know, a closed issue or an epic, another
+agent's issue, an issue for an agent asleep or gone home, an agent asleep put to sleep, an awake one woken, a loop for
+a role with no labels.
+
+From an agent's shell, `give`, `wake`, `sleep` and `loop` work only if its role leads (`leads: true`, see
+[Roles](#roles)), as [the lead](#the-lead) does; another agent gets `only a lead runs the crew`. A lead can't put
+itself to sleep. `status` works from any shell.
+
+## The lead
+
+The lead answers your questions about the crew, and runs it when you tell it to. Ask it why linus takes no review, why
+the agents sleep, or what the minimap's ⚠ means: it reads `cmd/agent-workspace status`, the issues and the room, and
+says why ("linus is asleep, and his loop is off"). Tell it what to do and it does it from its shell: gives an issue to
+an agent, wakes one or puts it to sleep, turns its loop on or off, messages one. It doesn't ask your OK for each: you
+asked. The room says each one as the lead's (`max turned linus's loop on`, `max woke linus`). Its messages wait for
+your OK as `T` says, as any agent's.
+
+It acts only on your word: it never starts work by itself, doesn't watch the room, and doesn't loop (it has no labels:
+`L` is refused). It can't edit and writes no issues: new work is the scribe's, and it sends you there. When you ask, it
+moves an issue on or back, its labels changed from one role's to another's.
+
+A crew has one at most: `c`, then lead.
 
 ## Raised hands
 
@@ -424,7 +463,8 @@ panels or a loop turned off it applies.
    its model; then what it does is cut. A crew's row loses where it comes from, then its agents; what it would add
    is cut last. `c` on a ready issue makes an agent for that issue: no crews there.
 2. **Its name.** Leave it empty and one is made for it, `ada`, `grace`, `linus`..., each with an initial no other
-   agent has. A name is lowercase letters, digits and `-`.
+   agent has. A name is lowercase letters, digits and `-`. One the crew has is refused, an agent
+   [saved](#the-saved-crew) but not running included.
 
 With `C-u`, it also asks for its model, permission mode and colour. Its role's are the defaults (its mode: auto,
 unless its role says). A crew picked asks nothing more: see [Crews](#crews).
@@ -490,8 +530,9 @@ From the shell: `cmd/agent-workspace crew full` ([more](cmd.md#cmdagent-workspac
 ## An agent
 
 - **Its session** is a Claude Code session in agent-shell, in the buffer `ada · builder`. It's told who it is, that
-  it works with you only, to commit in its worktree, on the branch made for its work, and never to switch, make or
-  rename branches, then its role's instructions. Its role's model and tools apply.
+  it works with you only (a [lead](#the-lead): that it runs the crew on your word), to commit in its worktree, on the
+  branch made for its work, and never to switch, make or rename branches, then its role's instructions. Its role's
+  model and tools apply.
 - **Its permission mode** is Claude Code's auto mode: Claude decides what needs your OK. A role's `mode` changes it
   for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all (`nil`: Claude Code's own default).
   The agent's bar shows it.
@@ -501,7 +542,8 @@ From the shell: `cmd/agent-workspace crew full` ([more](cmd.md#cmdagent-workspac
   role moves it; one named `worktrees/ada`, from before, moves when its agent starts. It's locked with the agent's
   name as the reason (`git worktree list -v`). `.agent-shell/` stays out of git. A project that isn't a git
   repository, or has no commit yet, can't have a crew.
-- **Its colour** is one of the theme's ANSI colours, a free one by default.
+- **Its colour** is one of the theme's ANSI colours, a free one by default: none of the crew's, saved agents not
+  running included.
 - **Its name** goes into the issues' history: its `bd` commands run as `ada`.
 
 ## Roles
@@ -522,6 +564,7 @@ A role is what a kind of agent does and may do. These ship with this config, the
 | designer | draws UI and UX mockups on its canvas for you to pick, writes your pick into the issue | read, `bd`, Agent UI; no edits |
 | security | reviews a change or the code for vulnerabilities, each finding with its severity, place and fix | read, search the web, `bd`; no edits |
 | profiler | measures and profiles, finds the hot spots, proposes fixes with their expected gain | read, `bd`; no edits |
+| lead | answers your questions about the crew, runs it when you tell it to: gives an issue, wakes or puts an agent to sleep, turns a loop on or off, messages one ([more](#the-lead)) | read, `bd`, `cmd/agent-workspace`; no edits, no issues written |
 
 The tester edits only `tests/` without asking, the documenter only `docs/` and Markdown files: a project whose tests or
 docs are elsewhere changes that in its copy (`M-x agent-workspace-copy-role`, below).
@@ -556,6 +599,8 @@ Write the tests first, then run them.
   [go to](#work-handed-on-through-issues), in order (`any`: the one it's for), `returns-to` where work goes back.
 - `icon` is a nerd icon for the GUI, then a glyph for the terminal. `verb` is what its agents show while they work:
   "testing doom-a1b". `colour` is its agents' colour while it's free.
+- `leads: true` lets its agents run the crew from their shell: `cmd/agent-workspace give`, `wake`, `sleep` and `loop`
+  ([The crew from the shell](#the-crew-from-the-shell)). Other agents are refused. The [lead](#the-lead) does.
 
 A project's own roles go in its `.agent-workspace/roles/`, committed. Your own for a project, kept out of git, go in
 its `.agent-shell/agent-workspace/roles/` (`.agent-shell/` is ignored: a crew adds it to the repository's
@@ -566,7 +611,8 @@ the project's into yours.
 
 A role file needs its front matter and a `description`; its name (its file's) is a lowercase letter, then lowercase
 letters, digits or `-`. A file with a mistake is left out (the [picker](#making-an-agent) lists it), and a warning
-names its file and line: a key that isn't one, a `mode`, `max` or `colour` that isn't one there is, a `tools` or
+names its file and line: a key that isn't one, a `mode`, `max` or `colour` that isn't one there is, a `leads` that
+isn't `true` or `false`, a `tools` or
 `deny` entry that isn't `Tool` or `Tool(pattern)`. Some things are only warned about, the role kept: an unknown key or
 one given twice (the last is used), a `model` that isn't `inherit`, one of `agent-workspace-models` or a model's id
 (`claude-...`), an `icon` that isn't a nerd icon, a `{word}` in `tools` or `deny` that isn't one of the placeholders
@@ -613,8 +659,8 @@ it's on.
   with work there from before (an older crew's) keeps it, and `M` merges it as before.
 
 An agent that can't edit gets none: one whose role denies it editing (the scribe, the investigator, the reviewer, the
-triager, the planner, the designer, security, the profiler) or in plan mode stays on `agent/ada`, for a prompt or an
-issue. An issue's branch a builder made is still checked out for it: a reviewer reviews there.
+triager, the planner, the designer, security, the profiler, the lead) or in plan mode stays on `agent/ada`, for a
+prompt or an issue. An issue's branch a builder made is still checked out for it: a reviewer reviews there.
 
 An agent whose worktree has changes not committed can't take an issue: you're told which branch has them. A branch it
 leaves holding nothing (a question answered, an investigation) is deleted.

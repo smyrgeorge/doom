@@ -78,10 +78,10 @@ needs your OK. nil: Claude Code's own default."
 ;; What each kind of agent does and may do (config/agent-workspace/roles.el):
 ;; a Markdown file each, NAME.md, as Claude Code's own agents are: a front
 ;; matter (its tools allowed without asking, its tools denied, its model,
-;; permission mode, labels, how many may run, icon, verb, colour), then its
-;; instructions. The starters ship in config/agent-workspace/roles/ (scribe,
+;; permission mode, labels, how many may run, whether it leads, icon, verb,
+;; colour), then its instructions. The starters ship in config/agent-workspace/roles/ (scribe,
 ;; investigator, builder, reviewer, tester, documenter, triager, planner,
-;; merger, designer, security, profiler); a project's own, in its
+;; merger, designer, security, profiler, lead); a project's own, in its
 ;; .agent-workspace/roles/ (committed), and yours for it, in its
 ;; .agent-shell/agent-workspace/roles/ (out of git), add to them; a later
 ;; one replaces one of the same name: starter < project < local (M-x
@@ -301,6 +301,19 @@ does."
 ;; hour. Each agent is told its crew and how to message (what it may without
 ;; your OK, never waiting on another agent). Only with
 ;; `agent-workspace-agents-talk'.
+
+;; THE CREW FROM THE SHELL
+;; (config/agent-workspace/request.el) cmd/agent-workspace status: the crew
+;; as JSON, each agent's state in its bar's words, loop, issue, branch,
+;; changed files, raised hand and events waiting, then the files two agents
+;; changed, the room's offers still standing and the talk setting. give
+;; ISSUE --to NAME, wake NAME, sleep NAME and loop NAME on|off do what t, Z
+;; and L do, said in the room by who did them ("shell gave doom-a1b to
+;; grace"). From an agent's shell (AGENT_WORKSPACE_AGENT) those four are
+;; refused unless its role leads (leads: true in its file: the starter
+;; lead, which answers about the crew and runs it on your word, never
+;; starting work by itself, its context saying so: session.el); status
+;; answers anyone.
 
 ;; WORK HANDED ON THROUGH ISSUES
 ;; (config/agent-workspace/handover.el) A role's hands-to: names where its

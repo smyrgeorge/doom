@@ -230,18 +230,17 @@ it works in a worktree)."
 
 (defun agent-workspace-agent-context ()
   "What the agent whose session starts is told, after what every session
-is: who it is and how it works, then its role's instructions. nil for any
-other session."
+is: who it is and how it works (one whose role leads, that it runs the
+crew on the user's word; the others, that they don't hand work to each
+other), then its role's instructions. nil for any other session."
   (when-let* ((agent agent-workspace--starting))
     (let* ((name (agent-workspace-agent-name agent))
            (project (agent-workspace-agent-project agent))
-           (instructions (plist-get (agent-workspace-role-filled agent) :instructions)))
+           (role (agent-workspace-role-filled agent))
+           (instructions (plist-get role :instructions)))
       (concat
        (format "You are %s, the %s in a crew of coding agents the user runs at once on \
-%s, from Emacs (its agent workspace). Each agent has a name, a role and a colour. You \
-work for the user: your work comes from them (in your session, from the crew's room, \
-an issue they give you), and you answer them. Don't hand work to other agents or wait \
-for them.
+%s, from Emacs (its agent workspace). Each agent has a name, a role and a colour. %s
 
 You work in your own git worktree, %s: make your changes and commits there, never \
 in the project's main checkout (%s), which is the user's. Each piece of work gets a \
@@ -253,6 +252,14 @@ commands run as %s (BEADS_ACTOR), on the project's issues: an issue the user giv
 you, claim it as yourself. Your notifications carry your name already."
                name (agent-workspace-agent-role agent)
                (file-name-nondirectory (directory-file-name project))
+               (if (plist-get role :leads)
+                   "You run the crew for the user, on their word: you see it from your \
+shell (cmd/agent-workspace status) and act on it (give an issue to an agent, wake one or \
+put it to sleep, turn its loop on or off, message one) only when they ask you to, in your \
+session or from the crew's room, and you answer them. Never start work by yourself."
+                 "You work for the user: your work comes from them (in your session, from \
+the crew's room, an issue they give you), and you answer them. Don't hand work to other \
+agents or wait for them.")
                (directory-file-name (agent-workspace-agent-worktree agent))
                (directory-file-name project)
                name)

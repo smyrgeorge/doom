@@ -151,6 +151,108 @@ of them changed, a conflict."
                    '("README" "src/a.el")))
     (should (equal (agent-workspace-conflicts project) (list (list "src/a.el" ada ken))))))
 
+(defun +test-awa2--commit (agent &rest files)
+  "FILES changed in AGENT's worktree, committed on the branch it's on."
+  (let ((default-directory (agent-workspace-agent-worktree agent)))
+    (dolist (file files)
+      (write-region (format "(%s)\n" (agent-workspace-agent-name agent)) nil file))
+    (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-am"
+                  (agent-workspace-agent-name agent))))
+
+(defun +test-awa2--changed (agent)
+  "AGENT's changed files, sorted."
+  (sort (copy-sequence (plist-get (agent-workspace-activity agent) :changed)) #'string<))
+
+(defun +test-awa2--settled (&rest agents)
+  "Non-nil once git works out none of AGENTS' changed files, nor any
+agent's (an earlier run, its answer to come)."
+  (and (seq-every-p (lambda (agent) (not (gethash agent agent-workspace--changes-since))) agents)
+       (not (seq-some (lambda (process) (string-prefix-p "agent-workspace-changes" (process-name process)))
+                      (process-list)))))
+
+(ert-deftest agent-workspace-activity/a-reviewer-on-its-builder-s-branch ()
+  "A reviewer on its builder's branch: no ⚠ with that builder, one branch
+can't conflict with itself; nor once it's taken back, the reviewer's turn
+having ended on it: its files dropped at once, and that turn's answer
+from git, come later, dropped too (doom-pbk.133)."
+  (let* ((agent-workspace--crews (make-hash-table :test #'equal))
+         (agent-workspace--activity (make-hash-table :test #'eq :weakness 'key))
+         (agent-workspace--changes-since (make-hash-table :test #'eq :weakness 'key))
+         (project (+test-awa2--project))
+         (grace (+test-awa2--agent project "grace"))
+         (linus (+test-awa2--agent project "linus"))
+         (files '("README" "src/a.el")))
+    (agent-workspace--branch-switch grace "feat/x" "main")
+    (+test-awa2--commit grace "README" "src/a.el")
+    (agent-workspace--activity-event grace '((:event . turn-complete)))
+    (should (+test-wait-for (lambda () (equal (+test-awa2--changed grace) files)) 10))
+    ;; linus takes it for its review: grace rests, her files dropped at once.
+    (agent-workspace-branch-open linus "feat/x")
+    (should (equal (agent-workspace-agent-branch grace) "agent/grace"))
+    (should-not (plist-get (agent-workspace-activity grace) :changed))
+    (should (+test-wait-for (lambda () (and (equal (+test-awa2--changed linus) files)
+                                            (+test-awa2--settled grace linus)))
+                            10))
+    (should-not (plist-get (agent-workspace-activity grace) :changed))
+    (should-not (agent-workspace-conflicts project))
+    ;; Its review over, its turn ends on her branch; she takes it back.
+    (agent-workspace--activity-event linus '((:event . turn-complete)))
+    (agent-workspace-branch-open grace "feat/x")
+    (should (equal (agent-workspace-agent-branch linus) "agent/linus"))
+    (should-not (plist-get (agent-workspace-activity linus) :changed))
+    (should-not (agent-workspace-conflicts project))
+    (should (+test-wait-for (lambda () (and (equal (+test-awa2--changed grace) files)
+                                            (+test-awa2--settled grace linus)))
+                            10))
+    ;; The turn's git, answered meanwhile (before or after), dropped.
+    (should-not (plist-get (agent-workspace-activity linus) :changed))
+    (should-not (agent-workspace-conflicts project))
+    ;; linus checks her branch out itself (beside hers): both on it, no ⚠.
+    (let ((default-directory (agent-workspace-agent-worktree linus)))
+      (call-process "git" nil nil nil "switch" "--quiet" "--ignore-other-worktrees" "feat/x"))
+    (agent-workspace--branch-sync linus)
+    (should (+test-wait-for (lambda () (and (equal (+test-awa2--changed linus) files)
+                                            (+test-awa2--settled linus)))
+                            10))
+    (should (equal (+test-awa2--changed grace) files))
+    (should-not (agent-workspace-conflicts project))))
+
+(ert-deftest agent-workspace-activity/two-branches-in-one-file ()
+  "A file changed on two different branches, or uncommitted in two
+worktrees on no branch: ⚠, every agent that changed it; agents on one
+branch among them (doom-pbk.133)."
+  (let* ((agent-workspace--crews (make-hash-table :test #'equal))
+         (agent-workspace--activity (make-hash-table :test #'eq :weakness 'key))
+         (agent-workspace--changes-since (make-hash-table :test #'eq :weakness 'key))
+         (project (+test-awa2--project))
+         (ada (+test-awa2--agent project "ada"))
+         (ken (+test-awa2--agent project "ken"))
+         (liz (+test-awa2--agent project "liz"))
+         (sam (+test-awa2--agent project "sam"))
+         (zoe (+test-awa2--agent project "zoe")))
+    (agent-workspace--branch-switch ada "feat/one" "main")
+    (agent-workspace--branch-switch ken "fix/two" "main")
+    (+test-awa2--commit ada "src/a.el")
+    (+test-awa2--commit ken "src/a.el")
+    ;; liz on ken's branch: one with him.
+    (let ((default-directory (agent-workspace-agent-worktree liz)))
+      (call-process "git" nil nil nil "switch" "--quiet" "--ignore-other-worktrees" "fix/two"))
+    ;; sam and zoe on no branch, README not committed in either.
+    (dolist (agent (list sam zoe))
+      (let ((default-directory (agent-workspace-agent-worktree agent)))
+        (call-process "git" nil nil nil "switch" "--quiet" "--detach")
+        (write-region "hi\n" nil "README")))
+    (dolist (agent (list ada ken liz sam zoe))
+      (agent-workspace--branch-sync agent)
+      (agent-workspace--activity-event agent '((:event . turn-complete))))
+    (should (+test-wait-for (lambda () (apply #'+test-awa2--settled (list ada ken liz sam zoe))) 10))
+    (should-not (agent-workspace-agent-branch sam))
+    (should (equal (agent-workspace-conflicts project)
+                   (list (list "README" sam zoe) (list "src/a.el" ada ken liz))))
+    ;; ada and ken only: ken and liz on one branch, no ⚠ between them.
+    (puthash project (list ken liz) agent-workspace--crews)
+    (should-not (agent-workspace-conflicts project))))
+
 (ert-deftest agent-workspace-activity/a-stand-in-agent-s-own ()
   "A stand-in agent reads a file, then edits one (agent-shell writing it):
 its minutes, its location, its changed file, from agent-shell's events."

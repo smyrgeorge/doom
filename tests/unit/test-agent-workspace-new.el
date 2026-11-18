@@ -282,6 +282,21 @@ offered first, where it is in its group; an empty answer is it."
       (+test-awn--answering '("")
         (should (equal (agent-workspace-read-role project "reviewer") "reviewer"))))))
 
+(ert-deftest agent-workspace-new/the-lead-one-per-crew ()
+  "c's menu offers the starter lead, one per crew: with one in it, a second
+is refused and asked again."
+  (let ((agent-workspace--roles-cache (make-hash-table :test #'equal)))
+    (+test-awn "lead"
+      (let ((collection nil))
+        (cl-letf (((symbol-function 'completing-read)
+                   (lambda (_prompt roles &rest _) (setq collection roles) "lead")))
+          (should (equal (agent-workspace-read-role project) "lead")))
+        (should (member "lead" collection)))
+      (+test-awn--agent project "max" "lead")
+      (+test-awn--answering '("lead" "scribe")
+        (should (equal (agent-workspace-read-role project) "scribe"))
+        (should (= (length asked) 2))))))
+
 (defun +test-awn--four-kinds (project)
   "PROJECT's roles of all four kinds: a local one of its own (mine), a local
 one replacing the project's (tester) and one replacing a starter
