@@ -265,18 +265,21 @@ allowedTools, its mode set before its first prompt; its model too."
 (ert-deftest agent-workspace-session/the-starters-tools-reach-their-agents ()
   "Each starter beyond the first four: its denied tools in Claude Code's
 disallowedTools, its allowed ones in allowedTools (the tester's edits only
-under tests/, the documenter's in docs/ and Markdown)."
+under tests/, the documenter's in docs/ and Markdown; the merger's merges
+with this project's paths, the ones its instructions say)."
   (+test-aws--with-crew "starters"
     (pcase-dolist (`(,role ,name ,denied ,allowed ,not-allowed)
-                   '(("tester" "tia" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(bd:*)")
+                   `(("tester" "tia" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(bd:*)")
                       ("Edit" "Write"))
                      ("documenter" "dot" ("Bash(git push:*)") ("Edit(docs/**)" "Edit(**/*.md)" "Write(docs/**)")
                       ("Edit" "Write"))
                      ("triager" "tess" ("Edit" "Write" "NotebookEdit") ("Bash(bd:*)") ("Edit"))
                      ("planner" "pat" ("Edit" "Write" "NotebookEdit") ("Bash(bd:*)") ("Edit"))
-                     ("merger" "max" ("Bash(git push:*)" "Bash(git -C * push *)" "Bash(git reset --hard:*)"
-                                      "Bash(git branch -D:*)")
-                      ("Bash(git merge:*)" "Bash(git -C * merge --no-ff *)" "Bash(git worktree:*)") ("Edit"))
+                     ("merger" "max" ("Bash(git push:*)" "Bash(git -C * push)" "Bash(git -C * push *)"
+                                      "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
+                      ("Bash(git merge:*)" ,(format "Bash(git -C %s merge --no-ff *)" (directory-file-name project))
+                       "Bash(git -C /tmp/merge-starters-max merge --no-ff *)" "Bash(git worktree:*)")
+                      ("Edit" "Bash(git -C * merge --no-ff *)" "Bash(git -C {main} merge --no-ff *)"))
                      ("designer" "dee" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit"))
                      ("security" "sec" ("Edit" "Write" "NotebookEdit") ("WebFetch") ("Edit"))
                      ("profiler" "pip" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit"))))
@@ -285,7 +288,18 @@ under tests/, the documenter's in docs/ and Markdown)."
                                 :options)))
         (should (equal (plist-get options :disallowedTools) denied))
         (dolist (tool allowed) (should (member tool (plist-get options :allowedTools))))
-        (dolist (tool not-allowed) (should-not (member tool (plist-get options :allowedTools))))))))
+        (dolist (tool not-allowed) (should-not (member tool (plist-get options :allowedTools))))))
+    ;; The merges its instructions say are the ones its rules allow.
+    (let* ((merger (seq-find (lambda (agent) (equal (agent-workspace-agent-role agent) "merger"))
+                             (agent-workspace-agents project)))
+           (role (agent-workspace-role-filled merger))
+           (merges (seq-filter (lambda (tool) (string-search " merge --no-ff *)" tool)) (plist-get role :tools))))
+      (should (= (length merges) 2))
+      (dolist (rule merges)
+        (let ((command (concat (substring rule (length "Bash(") (- (length "*)"))) "--no-edit BRANCH")))
+          (should (string-search command (plist-get role :instructions)))))
+      (should-not (string-match-p "{[a-z-]+}" (plist-get role :instructions)))
+      (should (string-search "worktree add --detach /tmp/merge-starters-max main" (plist-get role :instructions))))))
 
 ;; ====== ITS STATES ======
 

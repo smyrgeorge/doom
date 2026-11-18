@@ -201,6 +201,21 @@ about, ignored; the role kept."
                    '((warning "tester.md:2: unknown key loop: ignored")
                      (warning "tester.md:3: worktree: ignored (every agent has its own worktree)"))))))
 
+(ert-deftest agent-workspace-roles/a-placeholder-that-isn-t-one ()
+  "A tools or deny {word} that isn't a placeholder is warned about, the
+role kept with it as it is; a placeholder, or a {word} in its instructions,
+isn't."
+  (pcase-let ((`(,role . ,problems)
+               (+test-awr--read (concat "---\ndescription: d\n"
+                                        "tools: Bash(git -C {main} merge *), Bash(ls {mian}:*)\n"
+                                        "deny: Bash(git -C {name}-{where} push)\n"
+                                        "---\nDo {it}.\n"))))
+    (should role)
+    (should (member "Bash(ls {mian}:*)" (plist-get role :tools)))
+    (should (equal (+test-awr--messages problems)
+                   '((warning "tester.md:3: tools Bash(ls {mian}:*): {mian} isn't one of {main}, {main-branch}, {name}, {project}: left as it is")
+                     (warning "tester.md:4: deny Bash(git -C {name}-{where} push): {where} isn't one of {main}, {main-branch}, {name}, {project}: left as it is"))))))
+
 ;; ====== THE STARTERS ======
 
 (defconst +test-awr--starters
@@ -216,10 +231,14 @@ about, ignored; the role kept."
     ("planner" ("Edit" "Write" "NotebookEdit") ("Bash(git show:*)") ("Edit" "Write"))
     ;; Merges in a worktree of its own, then into the main branch without
     ;; asking (git -C MAIN merge --no-ff BRANCH: Claude Code's rules are a
-    ;; command's prefix, Bash(git merge:*) not matching it); never pushes, no
-    ;; other git -C allowed.
-    ("merger" ("Bash(git push:*)" "Bash(git -C * push *)" "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
-     ("Bash(git merge:*)" "Bash(git -C * merge --no-ff *)" "Bash(git worktree:*)") ("Edit" "Write" "Bash(git -C:*)"))
+    ;; command's prefix, Bash(git merge:*) not matching it), both paths
+    ;; exact: a * before merge would take git's own options too (-c runs
+    ;; anything); never pushes (a bare push too), no other git -C allowed.
+    ("merger" ("Bash(git push:*)" "Bash(git -C * push)" "Bash(git -C * push *)" "Bash(git reset --hard:*)"
+               "Bash(git branch -D:*)")
+     ("Bash(git merge:*)" "Bash(git -C {main} merge --no-ff *)"
+      "Bash(git -C /tmp/merge-{project}-{name} merge --no-ff *)" "Bash(git worktree:*)")
+     ("Edit" "Write" "Bash(git -C:*)" "Bash(git -C * merge --no-ff *)"))
     ("designer" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit" "Write"))
     ("security" ("Edit" "Write" "NotebookEdit") ("WebSearch" "WebFetch" "Bash(git blame:*)") ("Edit" "Write"))
     ("profiler" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write")))
@@ -230,7 +249,8 @@ about, ignored; the role kept."
 may do as it should: the ones that mustn't edit can't (Edit, Write
 denied), the tester only its tests, the documenter only the docs, the
 builder anything but push, the merger merging (git -C ... merge --no-ff,
-its worktree's and the main checkout's) but never pushing; what each does
+its worktree's and the main checkout's, each path exact) but never
+pushing; no git rule with a * before its subcommand; what each does
 alone is allowed (bd). The triager on haiku, the
 others on your default; the reviewer's approval to the mergers, its
 changes back to the builders."
@@ -251,6 +271,11 @@ changes back to the builders."
         (should (equal (plist-get role :deny) denied))
         (dolist (tool allowed) (should (member tool (plist-get role :tools))))
         (dolist (tool not-allowed) (should-not (member tool (plist-get role :tools))))
+        ;; No * before a git command's subcommand: git's own options (-c,
+        ;; --exec-path) run anything, and an allowed rule skips the check.
+        (dolist (tool (plist-get role :tools))
+          (when (string-prefix-p "Bash(git " tool)
+            (should (string-match-p "\\`Bash(git \\(?:-C [^ *]+ \\)?[a-z]" tool))))
         (should (equal (plist-get role :model) (and (equal (plist-get role :name) "triager") "haiku")))))
     (let ((reviewer (car (agent-workspace-role-read (expand-file-name "reviewer.md" dir)))))
       (should (equal (plist-get reviewer :hands-to) '("merger")))

@@ -115,11 +115,60 @@ Claude Code's own default."
   (or (agent-workspace-agent-mode agent) (plist-get (agent-workspace-role agent) :mode)
       agent-workspace-mode))
 
+;; ====== ITS ROLE, FILLED IN ======
+;; A role's tools, deny and instructions may name what's the agent's own,
+;; in braces: {main} its project's main checkout, {main-branch} the branch
+;; that's on, {name} the agent's name, {project} the main checkout's folder
+;; name. Each is filled in, shell-quoted, as its session starts. A rule then
+;; names the exact command, with no * where git's own options go (-c,
+;; --exec-path: they'd run anything without a prompt): the merger's
+;; Bash(git -C {main} merge --no-ff *). Its instructions say that command, so
+;; it runs one its rules allow. Any other {word} is left as it is.
+
+(defconst agent-workspace-role-placeholders '("main" "main-branch" "name" "project")
+  "What a role's tools, deny and instructions may name in braces: see ITS
+ROLE, FILLED IN.")
+
+(declare-function agent-workspace-main-branch "agent-workspace/worktree")
+
+(defun agent-workspace--placeholder (agent word)
+  "AGENT's value of the placeholder WORD (\"main\"...), not quoted; nil if
+it has none."
+  (let ((project (directory-file-name (agent-workspace-agent-project agent))))
+    (pcase word
+      ("main" project)
+      ("main-branch" (agent-workspace-main-branch project))
+      ("name" (agent-workspace-agent-name agent))
+      ("project" (file-name-nondirectory project)))))
+
+(defun agent-workspace-role-filled (agent)
+  "AGENT's role (a copy), its tools, deny and instructions with their
+placeholders filled in (see ITS ROLE, FILLED IN)."
+  (let* ((role (copy-sequence (agent-workspace-role agent)))
+         (values nil)
+         (fill (lambda (text)
+                 (replace-regexp-in-string
+                  "{\\([a-z-]+\\)}"
+                  (lambda (match)
+                    (let ((word (match-string 1 match)))
+                      (or (and (member word agent-workspace-role-placeholders)
+                               (with-memoization (alist-get word values nil nil #'equal)
+                                 (when-let* ((value (agent-workspace--placeholder agent word)))
+                                   (shell-quote-argument value))))
+                          match)))
+                  text t t))))
+    (dolist (key '(:tools :deny))
+      (when (plist-get role key)
+        (setq role (plist-put role key (mapcar fill (plist-get role key))))))
+    (when (plist-get role :instructions)
+      (setq role (plist-put role :instructions (funcall fill (plist-get role :instructions)))))
+    role))
+
 (defun agent-workspace--config (agent)
   "agent-shell's config for AGENT's session (see the top of this file)."
   (let* ((kind (or (alist-get (agent-workspace-agent-kind agent) agent-workspace-kinds)
                    (error "No such kind of agent: %s" (agent-workspace-agent-kind agent))))
-         (role (agent-workspace-role agent))
+         (role (agent-workspace-role-filled agent))
          (model (or (agent-workspace-agent-model agent) (plist-get role :model)))
          (mode (agent-workspace-mode-of agent))
          ;; A copy: the maker's own values (a quoted session meta) stay.
@@ -186,7 +235,7 @@ other session."
   (when-let* ((agent agent-workspace--starting))
     (let* ((name (agent-workspace-agent-name agent))
            (project (agent-workspace-agent-project agent))
-           (instructions (plist-get (agent-workspace-role agent) :instructions)))
+           (instructions (plist-get (agent-workspace-role-filled agent) :instructions)))
       (concat
        (format "You are %s, the %s in a crew of coding agents the user runs at once on \
 %s, from Emacs (its agent workspace). Each agent has a name, a role and a colour. You \

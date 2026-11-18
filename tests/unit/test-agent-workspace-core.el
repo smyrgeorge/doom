@@ -295,6 +295,47 @@ session is told; nothing for a session not an agent's."
       (should-not (string-search "agent/ada" text))
       (should (string-suffix-p "\n\nBuild what you're given." text)))))
 
+(ert-deftest agent-workspace/a-role-s-placeholders-filled-in ()
+  "Its role's tools, deny and instructions with {main}, {main-branch},
+{name} and {project} filled in, shell-quoted, as its session starts (in
+Claude Code's options and what it's told); any other {word} left; the
+role itself untouched; the main branch asked once."
+  (let* ((role (list :name "merger"
+                     :tools '("Read" "Bash(git -C {main} merge --no-ff *)"
+                              "Bash(git -C /tmp/merge-{project}-{name} merge --no-ff *)" "Bash(ls {other}:*)")
+                     :deny '("Bash(git -C * push)" "Bash(git -C {main} reset:*)")
+                     :instructions "git -C {main} merge --no-ff BRANCH, into {main-branch} ({main-branch}); {NAME}."))
+         (agent-workspace-role-function (lambda (_project _name) role))
+         (asked 0))
+    (cl-letf (((symbol-function 'agent-workspace-main-branch)
+               (lambda (project) (cl-incf asked) (should (string-prefix-p "/tmp/" project)) "main")))
+      (let ((filled (agent-workspace-role-filled (+test-awc--agent :name "ken" :role "merger"))))
+        (should (equal (plist-get filled :tools)
+                       '("Read" "Bash(git -C /tmp/project merge --no-ff *)"
+                         "Bash(git -C /tmp/merge-project-ken merge --no-ff *)" "Bash(ls {other}:*)")))
+        (should (equal (plist-get filled :deny) '("Bash(git -C * push)" "Bash(git -C /tmp/project reset:*)")))
+        (should (equal (plist-get filled :instructions)
+                       "git -C /tmp/project merge --no-ff BRANCH, into main (main); {NAME}."))
+        (should (= asked 1))
+        (setq asked 0)
+        ;; The role as it was.
+        (should (equal (plist-get role :tools)
+                       '("Read" "Bash(git -C {main} merge --no-ff *)"
+                         "Bash(git -C /tmp/merge-{project}-{name} merge --no-ff *)" "Bash(ls {other}:*)"))))
+      ;; Reaching Claude Code's options and what it's told.
+      (let* ((agent (+test-awc--agent :name "ken" :role "merger" :project "/tmp/my project/"))
+             (config (let ((agent-workspace--starting agent)) (agent-workspace--config agent)))
+             (meta (alist-get :session-meta config))
+             (options (alist-get 'options (alist-get 'claudeCode meta))))
+        ;; A path with a space: quoted, as the command the agent runs has it.
+        (should (equal (alist-get 'allowedTools options)
+                       ["Read" "Bash(git -C /tmp/my\\ project merge --no-ff *)"
+                        "Bash(git -C /tmp/merge-my\\ project-ken merge --no-ff *)" "Bash(ls {other}:*)"]))
+        (should (equal (alist-get 'disallowedTools options)
+                       ["Bash(git -C * push)" "Bash(git -C /tmp/my\\ project reset:*)"]))
+        (should (string-suffix-p "git -C /tmp/my\\ project merge --no-ff BRANCH, into main (main); {NAME}."
+                                 (alist-get 'append (alist-get 'systemPrompt meta))))))))
+
 (ert-deftest agent-workspace/a-session-s-config ()
   "Claude Code's config for an agent: its buffer's name, its role's model and
 mode, tools and MCP servers, its environment added to its client's, what
