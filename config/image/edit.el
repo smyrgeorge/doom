@@ -9,23 +9,17 @@
   "Image types sips (macOS) and ImageMagick (Linux) write: what rotating,
 flipping and cropping change.")
 
-(defvar-local +my/image--head-of nil
-  "In the image as it is in git's HEAD (config/image/diff.el): the image's
-file.")
-
 (defun +my/image--editable-p ()
   "Non-nil if rotating, flipping and cropping can change the image: one sips
-or ImageMagick writes (not an SVG: text), not an animation (one frame would be left), not
-git's HEAD."
+or ImageMagick writes (not an SVG: text), not an animation (one frame would
+be left)."
   (and (memq image-type +my/image--editable-types)
        (not image-multi-frame)
-       (not buffer-read-only)
-       (not +my/image--head-of)))
+       (not buffer-read-only)))
 
 (defun +my/image--check-editable ()
   (unless (+my/image--editable-p)
-    (user-error (cond (+my/image--head-of "Git's HEAD: not to edit")
-                      (image-multi-frame "Not an animation: one frame would be left")
+    (user-error (cond (image-multi-frame "Not an animation: one frame would be left")
                       (buffer-read-only "Read-only")
                       (t (format "Can't change a%s %s image"
                                  (if (memq image-type '(svg xpm)) "n" "")
@@ -77,7 +71,8 @@ config/image.el)."
 
 (defun +my/image-crop ()
   "c: crop the image, with Emacs's image-crop: drag a rectangle, RET crops, q
-cancels (changes it)."
+cancels (changes it). The diff (SPC m g) closed first: crop the image, not
+HEAD beside it."
   (interactive)
   (+my/image--check-editable)
   (require 'image-crop)
@@ -85,6 +80,7 @@ cancels (changes it)."
     (user-error "Cropping needs ImageMagick's %s (%s)"
                 (car image-crop-crop-command)
                 (if (+my/macos-p) "brew install imagemagick" "your distribution's imagemagick package")))
+  (+my/image--close-head)
   (let ((tick (buffer-chars-modified-tick)))
     (goto-char (point-min))
     (image-crop)

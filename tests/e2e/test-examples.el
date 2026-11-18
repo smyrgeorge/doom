@@ -102,21 +102,20 @@ first, off or on (not as the second found them, on)."
       (setq +my/pdf-dark-pages saved))))
 
 (ert-deftest e2e-examples/image-beside-its-head ()
-  "The picture in the image viewer, its version in git's HEAD on its left,
-both with the toolbar; closed: the HEAD's pane with it, the repository gone."
+  "The picture in the image viewer, its version in git's HEAD on its left in
+the same pane; closed: the repository gone."
   (+test-with-reset
     (let* ((buffer (+my/example-image))
            (dir (+test-examples--folder buffer)))
       (should (+test-wait-for #'+my/example-image-ready 20))
-      (let ((head (buffer-local-value '+my/image--head-buffer buffer)))
-        (should (eq (window-buffer (selected-window)) buffer))
-        (should (eq (window-in-direction 'left (selected-window)) (get-buffer-window head)))
-        (should (= (length (window-list)) 2))
-        (with-current-buffer buffer
-          (should (equal (+my/image-size) '(480 . 300)))
-          (should (equal (+my/image--position) '(1 . 3)))) ; dawn, landscape, night
-        (kill-buffer buffer)
-        (should-not (buffer-live-p head)))
+      (should (eq (window-buffer (selected-window)) buffer))
+      (should (= (length (window-list)) 1))
+      (with-current-buffer buffer
+        (should (+my/image--head-shown-p))
+        (should (+my/image--diff-side-p (selected-window)))
+        (should (equal (+my/image-size) '(480 . 300)))
+        (should (equal (+my/image--position) '(1 . 3)))) ; dawn, landscape, night
+      (kill-buffer buffer)
       (should-not (file-exists-p dir)))))
 
 (ert-deftest e2e-examples/image-j-k-in-its-folder ()

@@ -279,130 +279,236 @@ fits, else as big as it fits."
            (or (equal (cons width height) (+my/image-size))
                (>= width (- right left 2)) (>= height (- bottom top 2)))))))
 
-(ert-deftest e2e-image/head-beside-the-image ()
+(defun +test-image--before (window)
+  "The before-string of the image's overlay in WINDOW (center.el)."
+  (with-current-buffer (window-buffer window)
+    (when-let* ((overlay (cdr (assq window +my/image--centering))))
+      (overlay-get overlay 'before-string))))
+
+(defun +test-image--head-drawn (window)
+  "HEAD's image drawn in WINDOW, before the image (diff.el), if it is."
+  (let ((string (or (+test-image--before window) ""))
+        (found nil))
+    (dotimes (i (length string))
+      (let ((display (get-text-property i 'display string)))
+        (when (eq (car-safe display) 'image)
+          (setq found display))))
+    found))
+
+(defun +test-image--scale (window)
+  "How big WINDOW's image is shown (1.0: its size)."
+  (with-selected-window window (+my/image-scale)))
+
+(defun +test-image--head-scale (window)
+  "How big HEAD is drawn in WINDOW (1.0: its size)."
+  (let ((head (+test-image--head-drawn window)))
+    (/ (float (car (image-size head t))) (car (+my/image--head-size (plist-get (cdr head) :data))))))
+
+(defun +test-image--same-scale-p (window)
+  (< (abs (- (+test-image--scale window) (+test-image--head-scale window))) 0.01))
+
+(defun +test-image--diff-fitted-p (window)
+  "Non-nil if WINDOW's diff (HEAD, the image, their captions) fits it, as
+big as it fits: no room left on one side."
+  (with-selected-window window
+    (pcase-let ((`(,width . ,height) (+my/image--diff-size window))
+                (body-width (window-body-width window t))
+                (body-height (window-body-height window t)))
+      (and (<= width body-width) (<= height body-height)
+           (or (>= width (- body-width 4)) (>= height (- body-height 4)))))))
+
+(defun +test-image--commit (dir)
+  (string-trim (+my/image--git dir "rev-parse" "--short" "HEAD")))
+
+(defun +test-image--diff-button-on-p ()
+  "Non-nil if the toolbar's Diff button is on."
+  (let* ((toolbar (format-mode-line header-line-format nil (selected-window)))
+         (at (string-match "Diff" toolbar)))
+    (and at (memq '+my/image-toolbar-on (ensure-list (get-text-property at 'face toolbar))))))
+
+(ert-deftest e2e-image/head-beside-the-image-in-its-own-pane ()
+  "SPC m g: git's HEAD drawn in the image's own buffer, pane and tab, on its
+left, a caption over each: no new buffer, no new pane. Again: gone, the
+image fitted to its whole pane; the image closed with it shown, nothing
+left."
   (+test-with-reset
     (let* ((dir (+test-image--repo))
            (image (+test-image--open (expand-file-name "a.png" dir)))
-           (window (selected-window)))
+           (window (selected-window))
+           (buffers (length (buffer-list)))
+           (windows (window-list)))
       (+my/image-diff)
-      (let* ((head +my/image--head-buffer)
-             (head-window (get-buffer-window head)))
-        (should head-window)
-        (should (eq (window-in-direction 'left window) head-window))
-        (should (eq (selected-window) window))
-        (with-current-buffer head
-          (should (equal (buffer-string) +test-image--red))
-          (should +my/image-mode)
-          (should-not (+my/image--editable-p))
-          (with-selected-window head-window
-            (should (string-match-p "HEAD [0-9a-f]+" (+test-image--toolbar)))
-            (should-not (string-match-p "Diff" (+test-image--toolbar)))))
-        ;; Again: closed, its pane too.
-        (+my/image-diff)
-        (should-not (buffer-live-p head))
-        (should (one-window-p))
-        ;; Closing the image closes it.
-        (+my/image-diff)
-        (setq head +my/image--head-buffer)
-        (kill-buffer image)
-        (should-not (buffer-live-p head))))))
+      (redisplay t)
+      (should (+my/image--head-shown-p))
+      (should (= (length (buffer-list)) buffers))
+      (should (equal (window-list) windows))
+      (should (eq (window-buffer window) image))
+      (should (eq (selected-window) window))
+      (let ((head (+test-image--head-drawn window))
+            (before (substring-no-properties (+test-image--before window))))
+        (should head)
+        (should (equal (plist-get (cdr head) :data) +test-image--red))
+        (should (string-match-p (format "HEAD %s.*Working tree" (+test-image--commit dir)) before)))
+      (should (+my/image--diff-side-p window))
+      (should (+test-image--diff-button-on-p))
+      (should (+test-image--same-scale-p window))
+      ;; Again: closed, the image as before.
+      (+my/image-diff)
+      (redisplay t)
+      (should-not (+my/image--head-shown-p))
+      (should-not (+test-image--head-drawn window))
+      (should-not (+test-image--diff-button-on-p))
+      (should (+test-image--fitted-p window))
+      ;; Closing the image with the diff shown: nothing left.
+      (+my/image-diff)
+      (kill-buffer image)
+      (should (= (length (buffer-list)) (1- buffers))))))
 
-(ert-deftest e2e-image/head-halves-the-image-s-pane-of-any-width ()
+(ert-deftest e2e-image/head-in-the-image-s-pane-of-any-width ()
+  "The diff in a pane of any width: HEAD on the left (above, in a pane
+narrower than twice `+my/image-diff-min-width'), the pair fitted to it at
+one scale; the other pane untouched. Closed: the image fitted to its
+whole pane again."
   (let ((dir (+test-image--repo '(800 . 400))))
     (dolist (cols '(120 60 40 30))
       (+test-with-reset
         (let* ((other (+test-image--pane cols))
                (other-width (window-total-width other))
                (window (selected-window))
-               (height (window-total-height window))
-               (side (>= cols (* 2 +my/image-diff-min-width))))
+               (windows (window-list)))
           (+test-image--open (expand-file-name "a.png" dir))
           (should (= (window-total-width window) cols))
           (+my/image-diff)
-          (let ((head-window (get-buffer-window +my/image--head-buffer)))
-            (ert-info ((format "%d columns" cols))
-              ;; Its pane halved, on the left or (narrow) above; the other
-              ;; pane as it was.
-              (should (eq (window-in-direction (if side 'left 'above) window) head-window))
-              (if side
-                  (progn (should (= (+ (window-total-width head-window) (window-total-width window)) cols))
-                         (should (<= (abs (- (window-total-width head-window) (window-total-width window))) 1)))
-                (should (= (window-total-width head-window) (window-total-width window) cols))
-                (should (= (+ (window-total-height head-window) (window-total-height window)) height))
-                (should (<= (abs (- (window-total-height head-window) (window-total-height window))) 1)))
-              (should (= (window-total-width other) other-width))
-              ;; Both fitted to their panes at once.
-              (should (+test-image--fitted-p head-window))
-              (should (+test-image--fitted-p window))
-              ;; Again: the image's pane as it was, fitted to it.
-              (+my/image-diff)
-              (should-not (window-live-p head-window))
-              (should (= (window-total-width window) cols))
-              (should (= (window-total-height window) height))
-              (should (= (window-total-width other) other-width))
-              (should (+test-image--fitted-p window)))))))))
+          (redisplay t)
+          (ert-info ((format "%d columns: body %dx%d, diff %S, columns %S" cols
+                             (window-body-width window t) (window-body-height window t)
+                             (+my/image--diff-size window) (+my/image--diff-columns window)))
+            (should (equal (window-list) windows))
+            (should (= (window-total-width window) cols))
+            (should (= (window-total-width other) other-width))
+            (should (eq (+my/image--diff-side-p window) (>= cols (* 2 +my/image-diff-min-width))))
+            ;; Side by side: both captions on one line; stacked: the
+            ;; image's under HEAD.
+            (should (eq (and (string-match-p "HEAD [^\n]*Working tree" (+test-image--before window)) t)
+                        (+my/image--diff-side-p window)))
+            (should (+test-image--diff-fitted-p window))
+            (should (+test-image--same-scale-p window))
+            (should (< (+test-image--scale window) 0.9))
+            ;; Again: the image fitted to its whole pane.
+            (+my/image-diff)
+            (redisplay t)
+            (should (= (window-total-width window) cols))
+            (should (= (window-total-width other) other-width))
+            (should (+test-image--fitted-p window))))))))
 
-(defun +test-image--scale (window)
-  "How big WINDOW's image is shown (1.0: its size)."
-  (with-selected-window window (+my/image-scale)))
-
-(ert-deftest e2e-image/head-at-the-image-s-zoom ()
-  "HEAD opens as the image is shown: zoomed in, at its zoom; at its actual
-size, at its own; fitted, fitted to its pane."
+(ert-deftest e2e-image/head-and-the-image-zoomed-together ()
+  "The diff at the image's zoom; zoom, Fit, 1:1 and Sharp change both."
   (let ((dir (+test-image--repo '(400 . 200))))
-    (pcase-dolist (`(,name ,set ,resize)
-                   `(("zoomed" ,(lambda () (+my/image-zoom-in) (+my/image-zoom-in)) 1.5625)
-                     ("actual size" +my/image-actual-size nil)
-                     ("fitted" +my/image-fit fit-window)))
-      (+test-with-reset
-        (+test-image--open (expand-file-name "a.png" dir))
-        (funcall set)
-        (let ((window (selected-window))
-              (scale (+my/image-scale)))
-          (+my/image-diff)
-          (let ((head-window (get-buffer-window +my/image--head-buffer)))
-            (ert-info (name)
-              (should (equal (buffer-local-value 'image-transform-resize +my/image--head-buffer)
-                             (if (numberp resize) (buffer-local-value 'image-transform-resize (current-buffer)) resize)))
-              (if (eq resize 'fit-window)
-                  (progn (should (+test-image--fitted-p head-window))
-                         (should (+test-image--fitted-p window)))
-                (should (< (abs (- (+test-image--scale head-window) scale)) 0.02))
-                (should (< (abs (- (+test-image--scale window) scale)) 0.02))))))))))
+    (+test-with-reset
+      (+test-image--open (expand-file-name "a.png" dir))
+      (+my/image-zoom-in)
+      (+my/image-diff)
+      (redisplay t)
+      (let ((window (selected-window)))
+        (should (< (abs (- (+test-image--scale window) 1.25)) 0.02))
+        (should (+test-image--same-scale-p window))
+        (+my/image-zoom-in)
+        (redisplay t)
+        (should (< (abs (- (+test-image--scale window) 1.5625)) 0.02))
+        (should (+test-image--same-scale-p window))
+        (+my/image-actual-size)
+        (redisplay t)
+        (should (= (+test-image--scale window) 1.0))
+        (should (+test-image--same-scale-p window))
+        (+my/image-fit)
+        (redisplay t)
+        (should (+test-image--diff-fitted-p window))
+        (should (+test-image--same-scale-p window))
+        (let ((+my/image-sharp +my/image-sharp))
+          (+my/image-toggle-sharp)
+          (redisplay t)
+          (should (equal (plist-member (cdr (+test-image--head-drawn window)) :transform-smoothing)
+                         '(:transform-smoothing nil)))
+          (+my/image-toggle-sharp)
+          (redisplay t)
+          (should (plist-get (cdr (+test-image--head-drawn window)) :transform-smoothing)))
+        (should (+my/image--head-shown-p))))))
 
-(ert-deftest e2e-image/q-in-head-the-image-refitted-at-once ()
-  "q in HEAD's pane closes it as SPC m g does: its pane gone, the image's
-pane as it was, the image fitted to it at once. HEAD's pane closed another
-way (its tab, as tiling closes a pane with its last tab): fitted right
-after, not image-mode's second later."
+(ert-deftest e2e-image/q-closes-the-diff-the-image-refitted-at-once ()
+  "q with the diff shown closes it as SPC m g does, the image fitted to its
+whole pane at once; q again closes the image."
   (let ((dir (+test-image--repo '(800 . 400))))
     (+test-with-reset
       (let ((image (+test-image--open (expand-file-name "a.png" dir)))
-            (window (selected-window)))
+            (window (selected-window))
+            (q (keymap-lookup (evil-get-auxiliary-keymap +my/image-mode-map 'normal) "q")))
         (should (+test-image--fitted-p window))
         (+my/image-diff)
-        (let ((head +my/image--head-buffer)
-              (head-window (get-buffer-window +my/image--head-buffer)))
-          (should (< (+test-image--scale window) 0.9))
-          (select-window head-window)
-          (call-interactively (keymap-lookup (evil-get-auxiliary-keymap +my/image-mode-map 'normal) "q"))
-          (should-not (buffer-live-p head))
-          (should-not (window-live-p head-window))
-          (should (one-window-p))
-          (should (eq (window-buffer window) image))
-          (should (+test-image--fitted-p window))
-          (should (= (+test-image--scale window) 1.0))))
-      ;; Closed another way: its buffer killed, its pane closed after.
-      (let ((window (selected-window)))
+        (redisplay t)
+        (should (< (+test-image--scale window) 0.9))
+        (call-interactively q)
+        (should (buffer-live-p image))
+        (should-not (+my/image--head-shown-p))
+        (should (+test-image--fitted-p window))
+        (should (= (+test-image--scale window) 1.0))
+        (call-interactively q)
+        (should-not (buffer-live-p image))))))
+
+(ert-deftest e2e-image/head-centered-in-each-pane ()
+  "The diff smaller than its panes: centered in each (a split), from the
+pair's size."
+  (+test-with-reset
+    (let ((dir (+test-image--repo)))
+      (+test-image--open (expand-file-name "a.png" dir))
+      (let ((top (selected-window))
+            (bottom (split-window-below)))
         (+my/image-diff)
-        (let ((head +my/image--head-buffer)
-              (head-window (get-buffer-window +my/image--head-buffer)))
-          (should (< (+test-image--scale window) 0.9))
-          (kill-buffer head)
-          (delete-window head-window)
-          (redisplay t)
-          (+test-sleep 0.15)
-          (should (+test-image--fitted-p window)))))))
+        (redisplay t)
+        (dolist (window (list top bottom))
+          (should (+test-image--head-drawn window))
+          (pcase-let ((`(,left . ,_) (with-current-buffer (window-buffer window) (+my/image--room window)))
+                      (`(,width . ,_) (+my/image--diff-size window)))
+            (should (> left 0))
+            (should (<= (abs (- left (/ (- (window-body-width window t) width) 2))) 1))))))))
+
+(ert-deftest e2e-image/head-kept-on-a-revert-and-an-edit-not-on-j ()
+  "The diff kept while the file changes on disk (the image shown anew beside
+HEAD) and while rotating or flipping (its caption Edited); J: another
+image, without it."
+  (+test-with-reset
+    (let* ((dir (+test-image--repo))
+           (file (expand-file-name "a.png" dir)))
+      (+test-image--open file)
+      (+my/image-diff)
+      (+test-image--write file +test-image--red)
+      (auto-revert-handler)
+      (redisplay t)
+      (should (equal (buffer-string) +test-image--red))
+      (should (+my/image--head-shown-p))
+      (should (+test-image--head-drawn (selected-window)))
+      (+my/image-flip)
+      (redisplay t)
+      (should (+my/image--head-shown-p))
+      (should (string-match-p "Edited" (+test-image--before (selected-window))))
+      (set-buffer-modified-p nil)
+      (+my/image-next)
+      (redisplay t)
+      (should (equal buffer-file-name (expand-file-name "b.png" dir)))
+      (should-not (+my/image--head-shown-p))
+      (should-not (+test-image--head-drawn (selected-window))))))
+
+(ert-deftest e2e-image/crop-closes-the-diff-first ()
+  (require 'image-crop)
+  (skip-unless (executable-find (car image-crop-crop-command)))
+  (+test-with-reset
+    (+test-image--open (expand-file-name "a.png" (+test-image--repo)))
+    (+my/image-diff)
+    (let ((shown 'unset))
+      (cl-letf (((symbol-function 'image-crop)
+                 (lambda (&rest _) (setq shown (+my/image--head-shown-p)))))
+        (+my/image-crop))
+      (should-not shown)
+      (should-not (+my/image--head-shown-p)))))
 
 (ert-deftest e2e-image/head-unchanged-or-not-in-git ()
   (+test-with-reset
@@ -411,8 +517,13 @@ after, not image-mode's second later."
       (+test-image--write (expand-file-name "a.png" dir) +test-image--red)
       (+test-image--open (expand-file-name "a.png" dir))
       (should-error (+my/image-diff) :type 'user-error)
+      (should-not (+my/image--head-shown-p))
       (should (one-window-p))
       (+test-image--open (expand-file-name "b.png" dir)) ; not committed
+      (should-error (+my/image-diff) :type 'user-error)
+      (should-not (+my/image--head-shown-p))
+      ;; Not in a git repository.
+      (+test-image--open (expand-file-name "a.png" (+test-image--folder)))
       (should-error (+my/image-diff) :type 'user-error))))
 
 ;; ====== THE TOOLBAR IN NARROW PANES ======
@@ -452,10 +563,9 @@ pushing its right side to the window's edge."
               (should (equal (assq '+my/image-diff (cdr menu))
                              '(+my/image-diff menu-item "The image as in git's HEAD, beside it (SPC m g)"
                                               +my/image-diff))))
-            ;; HEAD shown: Diff kept, its toolbar fitting too.
+            ;; HEAD shown: Diff kept.
             (+my/image-diff)
             (+test-image--fits window)
-            (+test-image--fits (get-buffer-window +my/image--head-buffer))
             (should (string-match-p "Diff" (+test-image--toolbar)))
             ;; Edited: Save kept as well.
             (+my/image-flip)

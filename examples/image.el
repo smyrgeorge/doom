@@ -3,10 +3,10 @@
 ;; +my/example-image makes a Git repository in the temp folder with a picture,
 ;; landscape.png (mountains, a sun, a lake), committed by day and then changed
 ;; to a sunset, two smaller pictures beside it, and opens it with its version
-;; in git's HEAD on the left (SPC m g): the toolbar above each, the pictures in
-;; the middle of their panes. Try J / K for the folder's images, + / - to zoom,
-;; r to rotate, y to copy it; SPC m g closes the diff. The repository is
-;; deleted once the picture is closed.
+;; in git's HEAD on its left (SPC m g), in the same pane, in the middle of it.
+;; Try + / - to zoom both, J / K for the folder's images, r to rotate, y to
+;; copy it; SPC m g or q closes the diff. The repository is deleted once the
+;; picture is closed.
 ;; The pictures are drawn here, a PNG written byte by byte (its deflate blocks
 ;; stored, not compressed): no image tool needed.
 

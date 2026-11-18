@@ -129,7 +129,7 @@ space before it instead of one on each side."
   '(size apps edits view folder zoom tight save diff copy)
   "What a narrow window's toolbar leaves out, first to last: the image's size;
 Diff (HEAD not shown), Preview and Finder; rotate, flip and crop; Fit, 1:1
-and Sharp; the folder's ‹ n/m › (HEAD's commit); zoom and play / pause; the
+and Sharp; the folder's ‹ n/m ›; zoom and play / pause; the
 room around Copy, Diff and Save, and their labels (icons kept); then Save,
 Diff and Copy.")
 
@@ -138,7 +138,7 @@ Diff and Copy.")
 \(LEFT RIGHT MENU), its two sides and the buttons left out, (HELP COMMAND
 STATE) each."
   (let* ((out (seq-take +my/image--narrowing level))
-         (file (and buffer-file-name (not +my/image--head-of)))
+         (file buffer-file-name)
          (scale (or +my/image--zoom-target (+my/image-scale)))
          (head (+my/image--head-shown-p))
          (menu nil))
@@ -149,12 +149,7 @@ STATE) each."
                     (push (list help command state) menu))
                   nil)))
       (let* ((place
-              (cond
-               (+my/image--head-of
-                (propertize (if (memq 'folder out) " HEAD " (format " HEAD %s " +my/image--head-commit))
-                            'face '+my/image-toolbar-on
-                            'help-echo (format "The image as in git's HEAD (%s)" +my/image--head-commit)))
-               (file
+              (when file
                 (pcase-let* ((`(,index . ,count) (+my/image--position))
                              (state (and (< count 2) 'off)))
                   (concat (button 'folder 'previous "Previous image in the folder (K)"
@@ -162,7 +157,7 @@ STATE) each."
                           (unless (memq 'folder out)
                             (+my/image--text (format "%d/%d" (1+ index) count)))
                           (button 'folder 'next "Next image in the folder (J)"
-                                  #'+my/image-next state))))))
+                                  #'+my/image-next state)))))
              (zoom
               (concat (button 'zoom 'zoom-out "Zoom out (-, Cmd+-)" #'+my/image-zoom-out)
                       (unless (memq 'zoom out)
@@ -199,7 +194,8 @@ STATE) each."
                (when file
                  (concat
                   (button (if head 'diff 'apps) 'diff
-                          (if head "Close git's HEAD (SPC m g)" "The image as in git's HEAD, beside it (SPC m g)")
+                          (if head "Close the diff with git's HEAD (SPC m g, q)"
+                            "The image as in git's HEAD, beside it (SPC m g)")
                           #'+my/image-diff (and head 'on))
                   (when (buffer-modified-p)
                     (button 'save 'save "Save the edited image (SPC f s)" #'+my/image-save 'on))
@@ -254,7 +250,7 @@ with their keys."
   (list (window-body-width nil t) (buffer-chars-modified-tick) (buffer-modified-p)
         image-transform-resize +my/image--zoom-target (+my/image-scale)
         (+my/image--sharp-p) (and image-multi-frame (+my/image-playing-p) t)
-        (+my/image--head-shown-p) +my/image--head-of (and buffer-file-name (+my/image--position))
+        (+my/image--head-shown-p) (and buffer-file-name (+my/image--position))
         (and (fboundp 'nerd-icons-codicon) t)))
 
 (defun +my/image--toolbar ()

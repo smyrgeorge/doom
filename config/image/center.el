@@ -6,15 +6,20 @@
 ;; window, it gets room before it, in each window showing it (a split's panes
 ;; apart): an overlay's before-string, a line as tall as the room above, then a
 ;; space as wide as the room on the left. Bigger, none: it scrolls as before.
+;; With the diff shown (SPC m g), the same for the image and HEAD together,
+;; HEAD in that before-string (diff.el).
 ;; Made again when the image is shown anew (zoom, fit, an edit, a revert) and
 ;; when its windows change size.
 (defvar-local +my/image--centering nil
   "(WINDOW . OVERLAY): the room before the image in each window.")
 
 (defun +my/image--room (window)
-  "(LEFT . TOP): the room in pixels around the image in WINDOW, to center it."
+  "(LEFT . TOP): the room in pixels around the image in WINDOW, to center it;
+with the diff shown (SPC m g, diff.el), around it and HEAD."
   (when-let* ((spec (+my/image--spec)))
-    (let ((size (image-display-size spec t (window-frame window))))
+    (let ((size (if (+my/image--head-shown-p)
+                    (+my/image--diff-size window)
+                  (image-display-size spec t (window-frame window)))))
       (cons (max 0 (/ (- (window-body-width window t) (car size)) 2))
             (max 0 (/ (- (window-body-height window t) (cdr size)) 2))))))
 
@@ -27,8 +32,11 @@ above when TOP is less than one (a line can't be lower than its font)."
             (propertize " " 'display `(space :width (,left))))))
 
 (defun +my/image-center ()
-  "Center the image in each window showing it (see above)."
+  "Center the image in each window showing it (see above); with the diff
+shown, it and HEAD, drawn before it in the same overlay (diff.el)."
   (when +my/image-mode
+    (when (+my/image--head-shown-p)
+      (+my/image--diff-layout))
     (let ((windows (get-buffer-window-list nil 'nomini t)))
       ;; Windows no longer showing it: their overlay gone.
       (setq +my/image--centering
@@ -44,7 +52,10 @@ above when TOP is less than one (a line can't be lower than its font)."
                                     (push (cons window new) +my/image--centering)
                                     new))))
           (move-overlay overlay (point-min) (point-min))
-          (overlay-put overlay 'before-string (+my/image--room-string left top window)))))))
+          (overlay-put overlay 'before-string
+                       (if (+my/image--head-shown-p)
+                           (+my/image--diff-string window left top)
+                         (+my/image--room-string left top window))))))))
 
 (defun +my/image--uncenter ()
   (mapc (lambda (entry) (delete-overlay (cdr entry))) +my/image--centering)

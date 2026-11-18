@@ -73,8 +73,8 @@ shows them: \"1600×900 · PNG · 412 kB\"."
     (write-region (point-min) (point-max) file nil 'silent)))
 
 (defun +my/image--file (dir)
-  "A file of the image as shown: its own, unless edited (or not a file: git's
-HEAD), then its bytes written to DIR."
+  "A file of the image as shown: its own, unless edited (or not a file),
+then its bytes written to DIR."
   (if (and buffer-file-name (not (buffer-modified-p)) (file-readable-p buffer-file-name))
       buffer-file-name
     (let ((file (expand-file-name (concat "image." (+my/image--extension)) dir)))

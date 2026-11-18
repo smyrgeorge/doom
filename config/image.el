@@ -32,11 +32,15 @@
 ;;                           Linux: Ctrl+Shift+C, with wl-copy or xclip), to
 ;;                           paste in Slack, GitHub...; SPC m y copies its path
 ;;   Diff          SPC m g   the image as it is in git's HEAD, to compare (e.g.
-;;                           regenerated screenshots): the image's pane halved,
-;;                           HEAD on the left (in a pane too narrow for two,
-;;                           `+my/image-diff-min-width', above it), at the
-;;                           image's zoom (both fitted if it is); again, or q
-;;                           in HEAD, closed
+;;                           regenerated screenshots): in the image's own pane
+;;                           and tab, HEAD on its left (in a pane too narrow
+;;                           for two, `+my/image-diff-min-width', above it), a
+;;                           caption over each; both at one scale, the image's
+;;                           zoom: zoom, Fit, 1:1 and Sharp change both, Fit
+;;                           fits the pair. Again, or q, closed. Kept while
+;;                           the file changes on disk (shown anew beside HEAD)
+;;                           and while rotating or flipping; cropping closes
+;;                           it first; J / K show another image, without it
 ;;   Save                    shown while edited (see above)
 ;;   Preview       SPC m p   open it in macOS's Preview; SPC m f shows it in
 ;;                           Finder (Linux: Open, its default app; Folder, the
@@ -64,7 +68,7 @@
 
 (defvar +my/image-diff-min-width 30
   "The narrowest the image and its HEAD version get side by side (SPC m g),
-in columns each: a narrower pane has HEAD above the image.")
+in columns each: a pane narrower than twice this has HEAD above the image.")
 
 (defvar +my/image-mode-map (make-sparse-keymap)
   "Keys of images (see `+my/image-mode').")
@@ -96,7 +100,7 @@ in columns each: a narrower pane has HEAD above the image.")
       :n "c"   #'+my/image-crop
       :n "y"   #'+my/image-copy
       :n "RET" #'+my/image-toggle-animation
-      :n "q"   #'+my/image-quit)         ; as PDFs; HEAD's as SPC m g
+      :n "q"   #'+my/image-quit)         ; as PDFs; the diff first, as SPC m g
 
 ;; On Linux, Ctrl for Cmd (config/emacs.el, KEYS): zoom, copy.
 (map! :unless (+my/macos-p)

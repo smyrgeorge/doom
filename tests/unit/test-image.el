@@ -105,7 +105,11 @@
     (setq-local image-multi-frame t)    ; an animation: one frame would be left
     (should-not (+my/image--editable-p))
     (setq-local image-multi-frame nil)
-    (setq-local +my/image--head-of "/tmp/x.png") ; git's HEAD
+    ;; The diff with git's HEAD shown: the image still changes (crop closes
+    ;; the diff first).
+    (setq-local +my/image--head '(:commit "abc1234"))
+    (should (+my/image--editable-p))
+    (setq-local buffer-read-only t)
     (should-not (+my/image--editable-p))
     (should-error (+my/image-crop) :type 'user-error)))
 
@@ -206,59 +210,63 @@
 
 ;; ====== GIT'S HEAD ======
 
-(ert-deftest image/q-in-head-closes-it-as-spc-m-g ()
-  "q in HEAD's version: closed as SPC m g closes it (from the image), the image
-fitted again at once; q in an image: closed."
-  (+test-with-reset
-    (let* ((image (+test-buffer "a.png"))
-           (head (+test-buffer "a.png @ HEAD"))
-           (closed nil)
-           (refitted nil)
-           (killed nil))
-      (with-current-buffer head (setq-local +my/image--head-image image))
-      (cl-letf (((symbol-function '+my/image--close-head)
-                 (lambda () (push (current-buffer) closed)))
-                ((symbol-function '+my/image--refit-buffer)
-                 (lambda (buffer) (push buffer refitted)))
-                ((symbol-function 'kill-current-buffer)
-                 (lambda () (push (current-buffer) killed))))
-        (with-current-buffer head (+my/image-quit))
-        (should (equal closed (list image)))
-        (should (equal refitted (list image)))
-        (should-not killed)
-        ;; Its image gone: q kills HEAD, as any image.
-        (kill-buffer image)
-        (with-current-buffer head (+my/image-quit))
-        (should (equal killed (list head)))
-        (with-current-buffer (+test-buffer "b.png") (+my/image-quit))
-        (should (= (length killed) 2))))))
-
-(ert-deftest image/head-closed-the-image-refitted-right-after ()
-  "HEAD killed any way (its tab, its pane closing with it): its image's Diff
-button off, the image fitted again once HEAD's pane has gone (a timer: not
-image-mode's second); its image gone, nothing."
+(ert-deftest image/q-closes-the-diff-then-the-image ()
+  "q with the diff (SPC m g) shown: the diff closed, the image shown anew
+\(fitted to its whole pane); q again: the image closed."
   (+test-with-reset
     (let ((image (+test-buffer "a.png"))
-          (head (+test-buffer "a.png @ HEAD")))
-      (with-current-buffer head
-        (setq-local +my/image--head-image image)
-        (add-hook 'kill-buffer-hook #'+my/image--head-closed-h nil t))
-      (kill-buffer head)
-      (let ((timer (seq-find (lambda (timer) (eq (timer--function timer) #'+my/image--refit-buffer))
-                             timer-list)))
-        (should timer)
-        (should (equal (timer--args timer) (list image)))
-        (should (< (float-time (time-subtract (timer--time timer) nil)) 0.05))
-        (cancel-timer timer))
-      ;; The image gone first: no refit.
-      (let ((head (+test-buffer "b.png @ HEAD")))
-        (with-current-buffer head
-          (setq-local +my/image--head-image (+test-buffer "b.png"))
-          (add-hook 'kill-buffer-hook #'+my/image--head-closed-h nil t))
-        (kill-buffer "b.png")
-        (kill-buffer head)
-        (should-not (seq-find (lambda (timer) (eq (timer--function timer) #'+my/image--refit-buffer))
-                              timer-list))))))
+          (redrawn 0)
+          (killed nil))
+      (cl-letf (((symbol-function '+my/image--redisplay) (lambda () (cl-incf redrawn)))
+                ((symbol-function '+my/image--spec) (lambda () '(image :type png)))
+                ((symbol-function 'kill-current-buffer)
+                 (lambda () (push (current-buffer) killed))))
+        (with-current-buffer image
+          (setq-local +my/image--head (list :commit "abc1234"))
+          (should (+my/image--head-shown-p))
+          (+my/image-quit)
+          (should-not (+my/image--head-shown-p))
+          (should (= redrawn 1))
+          (should-not killed)
+          (+my/image-quit)
+          (should (equal killed (list image)))
+          (should (= redrawn 1)))))))
+
+(ert-deftest image/diff-scale-the-image-s-zoom-or-fitted ()
+  "HEAD and the image at one scale: a zoom's, 1:1's, or fitted (scaled up
+too with Fit; only down as it opens, fitted if bigger)."
+  (with-temp-buffer
+    (cl-letf (((symbol-function '+my/image--diff-fit) (lambda (_) 0.5)))
+      (setq-local image-transform-resize 1.5625)
+      (should (= (+my/image--diff-scale nil) 1.5625))
+      (setq-local image-transform-resize nil)
+      (should (= (+my/image--diff-scale nil) 1.0))
+      (setq-local image-transform-resize t)
+      (should (= (+my/image--diff-scale nil) 0.5))
+      (setq-local image-transform-resize 'fit-window)
+      (should (= (+my/image--diff-scale nil) 0.5)))
+    (cl-letf (((symbol-function '+my/image--diff-fit) (lambda (_) 2.0)))
+      (setq-local image-transform-resize t)
+      (should (= (+my/image--diff-scale nil) 1.0))
+      (setq-local image-transform-resize 'fit-window)
+      (should (= (+my/image--diff-scale nil) 2.0)))))
+
+(ert-deftest image/diff-respec-at-one-scale ()
+  "The image drawn at the pair's scale: image-mode's sizes left out, the
+rest kept."
+  (should (equal (+my/image--respec '(image :type png :data "x" :max-width 800 :max-height 600
+                                            :width 800 :scale 1 :transform-smoothing nil)
+                                    0.25)
+                 '(image :type png :data "x" :transform-smoothing nil :scale 0.25))))
+
+(ert-deftest image/diff-side-by-side-or-stacked ()
+  "HEAD beside the image in a pane at least twice `+my/image-diff-min-width'
+wide, above it in a narrower one."
+  (let ((+my/image-diff-min-width 30))
+    (cl-letf (((symbol-function 'window-total-width) (lambda (&rest _) 60)))
+      (should (+my/image--diff-side-p nil)))
+    (cl-letf (((symbol-function 'window-total-width) (lambda (&rest _) 59)))
+      (should-not (+my/image--diff-side-p nil)))))
 
 (ert-deftest image/the-mode-in-image-mode-only ()
   (should (memq #'+my/image-mode-maybe-h image-mode-hook))

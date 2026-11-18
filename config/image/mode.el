@@ -46,7 +46,6 @@
     ;; modes: image-mode's buffer-local transforms stay).
     (when (and buffer-file-name (not (file-remote-p buffer-file-name)))
       (auto-revert-mode 1))
-    (add-hook 'kill-buffer-hook #'+my/image--close-head nil t)
     ;; No cursor: image-mode has none, but Evil's normal state drew its box
     ;; around the whole image (as Doom does for pdf-tools).
     (setq-local evil-normal-state-cursor (list nil)
@@ -62,7 +61,7 @@
     (+my/image--show-toolbar nil)
     (when (bound-and-true-p auto-revert-mode)
       (auto-revert-mode -1))
-    (remove-hook 'kill-buffer-hook #'+my/image--close-head t)
+    (setq +my/image--head nil)
     (dolist (variable '(evil-normal-state-cursor evil-motion-state-cursor
                         cursor-in-non-selected-windows))
       (kill-local-variable variable))
