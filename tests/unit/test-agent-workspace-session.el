@@ -274,8 +274,9 @@ under tests/, the documenter's in docs/ and Markdown)."
                       ("Edit" "Write"))
                      ("triager" "tess" ("Edit" "Write" "NotebookEdit") ("Bash(bd:*)") ("Edit"))
                      ("planner" "pat" ("Edit" "Write" "NotebookEdit") ("Bash(bd:*)") ("Edit"))
-                     ("merger" "max" ("Bash(git push:*)" "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
-                      ("Bash(git merge:*)" "Bash(git worktree:*)") ("Edit"))
+                     ("merger" "max" ("Bash(git push:*)" "Bash(git -C * push *)" "Bash(git reset --hard:*)"
+                                      "Bash(git branch -D:*)")
+                      ("Bash(git merge:*)" "Bash(git -C * merge --no-ff *)" "Bash(git worktree:*)") ("Edit"))
                      ("designer" "dee" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit"))
                      ("security" "sec" ("Edit" "Write" "NotebookEdit") ("WebFetch") ("Edit"))
                      ("profiler" "pip" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit"))))

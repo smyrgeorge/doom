@@ -214,9 +214,12 @@ about, ignored; the role kept."
      ("Edit" "Write"))
     ("triager" ("Edit" "Write" "NotebookEdit") ("Bash(git log:*)") ("Edit" "Write"))
     ("planner" ("Edit" "Write" "NotebookEdit") ("Bash(git show:*)") ("Edit" "Write"))
-    ;; Merges in a worktree of its own; into the main branch, asking.
-    ("merger" ("Bash(git push:*)" "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
-     ("Bash(git merge:*)" "Bash(git worktree:*)") ("Edit" "Write" "Bash(git -C:*)"))
+    ;; Merges in a worktree of its own, then into the main branch without
+    ;; asking (git -C MAIN merge --no-ff BRANCH: Claude Code's rules are a
+    ;; command's prefix, Bash(git merge:*) not matching it); never pushes, no
+    ;; other git -C allowed.
+    ("merger" ("Bash(git push:*)" "Bash(git -C * push *)" "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
+     ("Bash(git merge:*)" "Bash(git -C * merge --no-ff *)" "Bash(git worktree:*)") ("Edit" "Write" "Bash(git -C:*)"))
     ("designer" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit" "Write"))
     ("security" ("Edit" "Write" "NotebookEdit") ("WebSearch" "WebFetch" "Bash(git blame:*)") ("Edit" "Write"))
     ("profiler" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write")))
@@ -226,8 +229,9 @@ about, ignored; the role kept."
   "The starters read without a problem, each with all it needs; what each
 may do as it should: the ones that mustn't edit can't (Edit, Write
 denied), the tester only its tests, the documenter only the docs, the
-builder anything but push, the merger merging only in a worktree of its
-own; what each does alone is allowed (bd). The triager on haiku, the
+builder anything but push, the merger merging (git -C ... merge --no-ff,
+its worktree's and the main checkout's) but never pushing; what each does
+alone is allowed (bd). The triager on haiku, the
 others on your default; the reviewer's approval to the mergers, its
 changes back to the builders."
   (let ((dir agent-workspace-starter-roles-directory))
