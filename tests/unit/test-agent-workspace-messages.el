@@ -61,8 +61,7 @@ app open; no crew, inbox or app before or after."
             (agent-workspace--messages-waiting (make-hash-table :test #'equal)))
        (ignore-errors (delete-file +test-awg--log))
        (set-frame-size (selected-frame) 220 40)
-       (cl-letf (((symbol-function 'agent-workspace--issues-refresh) #'ignore)
-                 ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil))))
+       (cl-letf (((symbol-function 'agent-workspace--issues-refresh) #'ignore))
          (unwind-protect
              (let ,(mapcar (lambda (agent)
                              `(,(intern (car agent))

@@ -66,8 +66,7 @@ the minimap shown (as by default)."
                     (setf (agent-workspace-agent-buffer agent) nil
                           (agent-workspace-agent-state agent) state)
                     nil))
-                 ((symbol-function 'agent-workspace--issues-refresh) #'ignore)
-                 ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil))))
+                 ((symbol-function 'agent-workspace--issues-refresh) #'ignore))
          (unwind-protect (progn ,@body)
            (when (agent-workspace--app project) (agent-workspace--close-app project))
            (agent-workspace-close-all))))))

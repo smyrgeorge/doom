@@ -64,7 +64,6 @@ after; agents' sessions plain buffers, at the desk; treemacs stood in for
                           (agent-workspace-agent-state agent) state)
                     nil))
                  ((symbol-function 'agent-workspace--issues-refresh) #'ignore)
-                 ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil)))
                  ((symbol-function 'treemacs-get-local-window)
                   (lambda () (and +test-aws--treemacs (window-live-p (car +test-aws--treemacs))
                                   (car +test-aws--treemacs))))

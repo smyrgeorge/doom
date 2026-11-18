@@ -281,8 +281,8 @@ needs your OK. nil: Claude Code's own default."
 ;; workspace, "crew · PROJECT" (config/agent-workspace/app.el); SPC o W: in
 ;; the window you're in. A project that can't have a crew (not a git
 ;; repository, no commit yet) says why and offers a terminal with git init
-;; typed. The first time, its first agent is asked for. Two columns (the room
-;; comes on the right, doom-51z.6):
+;; typed. The first time, the stage is empty: c makes an agent. Two
+;; columns (the room comes on the right, doom-51z.6):
 ;; - the issues (config/agent-workspace/issues.el), on the left: in progress
 ;;   (each with its agent), ready by the role they're for then by epic (its
 ;;   heading, its issues under it, those of none last), blocked, done today,

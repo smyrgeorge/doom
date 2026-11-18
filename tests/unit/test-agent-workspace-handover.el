@@ -347,7 +347,6 @@ free, offered once one is."
                    (agent-workspace--set-state agent state)
                    nil))
                 ((symbol-function 'agent-workspace--issues-refresh) #'ignore)
-                ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil)))
                 ((symbol-function 'agent-workspace-send)
                  (lambda (agent text &rest _) (push (list (agent-workspace-agent-name agent) text) sent) 'sent)))
         (unwind-protect
@@ -411,7 +410,6 @@ him once he's free, not to another builder; taken, its button goes
                  (agent-workspace--set-state agent state)
                  nil))
               ((symbol-function 'agent-workspace--issues-refresh) #'ignore)
-              ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil)))
               ((symbol-function 'agent-workspace-send)
                (lambda (agent text &rest _) (push (list (agent-workspace-agent-name agent) text) sent) 'sent)))
       (unwind-protect
@@ -460,8 +458,7 @@ rita, free; ken's old button gone, not coming back (doom-pbk.62)."
                  (setf (agent-workspace-agent-buffer agent) nil)
                  (agent-workspace--set-state agent state)
                  nil))
-              ((symbol-function 'agent-workspace--issues-refresh) #'ignore)
-              ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil))))
+              ((symbol-function 'agent-workspace--issues-refresh) #'ignore))
       (unwind-protect
           (let* ((ken (agent-workspace-create :role "builder" :name "ken"))
                  (rita (agent-workspace-create :role "reviewer" :name "rita"))

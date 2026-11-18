@@ -19,7 +19,7 @@ Try it: `M-x +my/example-agent-workspace`, a crew of three stand-in agents, offl
 ## The app
 
 `SPC o w`, from inside a project, opens its crew in a workspace of its own, `crew · doom`. Outside a project, it asks
-which one. `SPC o W` opens it in the window you're in. The first time, it asks for the crew's first agent.
+which one. `SPC o W` opens it in the window you're in. The first time, the stage is empty: `c` makes an agent.
 
 - **The issues** are on the left. In progress, each with the agent on it. Ready, grouped by the role they're for
   (a role nobody in the crew has is flagged), then by epic: each epic's heading with how many of its issues are

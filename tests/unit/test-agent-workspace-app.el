@@ -534,15 +534,36 @@ empty. In its mouse-3 menu too, after Kill (doom-pbk.111)."
                        '("Forget (out of the crew)..." . agent-workspace-forget-here)))))))
 
 (ert-deftest agent-workspace-app/no-agents-yet ()
-  "Opened with no agent: its first is asked for; asked nothing (C-g), the
-stage says how to make one."
+  "Opened with no agent: nothing asked; the stage says how to make one, the
+cursor in the issue list, where c makes one (doom-pbk.120)."
   (+test-awa "empty"
     (let ((asked nil))
-      (cl-letf (((symbol-function 'agent-workspace-new) (lambda (&rest _) (setq asked t) (signal 'quit nil))))
-        (agent-workspace-open t))
-      (should asked)
-      (should (equal (mapcar #'car (+test-awa--windows)) '("*issues · empty*" "*stage · empty*")))
-      (should (string-search "No agents yet" (with-current-buffer "*stage · empty*" (buffer-string)))))))
+      (cl-letf (((symbol-function 'agent-workspace-new) (lambda (&rest _) (setq asked t))))
+        (agent-workspace-open t)
+        (should-not asked)
+        (should (equal (mapcar #'car (+test-awa--windows)) '("*issues · empty*" "*stage · empty*")))
+        (let ((stage (with-current-buffer "*stage · empty*" (buffer-string))))
+          (should (string-search "No agents yet" stage))
+          (should (string-search "c: a new agent" stage)))
+        (should (eq (window-buffer) (agent-workspace--issues-buffer project)))
+        (should (eq (key-binding (kbd "c")) #'agent-workspace-new-here))))))
+
+(ert-deftest agent-workspace-app/a-crew-json-of-no-agents-asks-nothing ()
+  "A crew.json of no agents, or one that isn't a crew: the app opens empty,
+nothing asked (doom-pbk.120)."
+  (pcase-dolist (`(,name . ,json) '(("none" . "{\"version\": 2, \"agents\": []}\n")
+                                    ("wrong" . "{\"version\": 2}\n")))
+    (+test-awa name
+      (let ((asked nil)
+            (file (expand-file-name ".agent-shell/agent-workspace/crew.json" project)))
+        (make-directory (file-name-directory file) t)
+        (write-region json nil file)
+        (cl-letf (((symbol-function 'agent-workspace-new) (lambda (&rest _) (setq asked t))))
+          (agent-workspace-open t))
+        (should-not asked)
+        (should-not (agent-workspace-agents project))
+        (should (string-search "No agents yet"
+                               (with-current-buffer (format "*stage · %s*" name) (buffer-string))))))))
 
 (ert-deftest agent-workspace-app/leave-and-quit-without-workspaces ()
   "Without workspaces: q gives your windows back, the crew going on; Q

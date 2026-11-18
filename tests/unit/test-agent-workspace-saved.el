@@ -63,7 +63,6 @@ written at once (no wait)."
                     (agent-workspace--set-state agent state)
                     nil))
                  ((symbol-function 'agent-workspace--issues-refresh) #'ignore)
-                 ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil)))
                  ((symbol-function 'run-at-time)
                   (let ((run-at-time (symbol-function 'run-at-time)))
                     (lambda (time repeat fn &rest args)

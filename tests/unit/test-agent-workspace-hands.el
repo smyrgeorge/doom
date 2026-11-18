@@ -63,8 +63,7 @@
             (process-environment (cons (concat "MOCK_ACP_LOG=" +test-awh--log) process-environment)))
        (ignore-errors (delete-file +test-awh--log))
        (set-frame-size (selected-frame) 220 40)
-       (cl-letf (((symbol-function 'agent-workspace--issues-refresh) #'ignore)
-                 ((symbol-function 'agent-workspace-new) (lambda (&rest _) (signal 'quit nil))))
+       (cl-letf (((symbol-function 'agent-workspace--issues-refresh) #'ignore))
          (unwind-protect
              (let ((ada (agent-workspace-create :role "builder" :name "ada" :kind 'mock))
                    (sam (agent-workspace-create :role "investigator" :name "sam" :kind 'mock)))

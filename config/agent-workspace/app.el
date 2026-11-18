@@ -7,12 +7,14 @@
 ;; Opening it (`agent-workspace-open') from inside a project switches to its
 ;; workspace, "crew · PROJECT" (made the first time); a project that can have
 ;; no crew says why (`agent-workspace-no-crew-function' offers git init); a
-;; crew with no agent asks for its first (`agent-workspace-new'). Leaving it
+;; crew with no agent opens empty, c making its first (`agent-workspace-new'),
+;; nothing asked. Leaving it
 ;; (`agent-workspace-leave', q) goes back to the workspace you came from: the
 ;; crew goes on, its lanes under treemacs (sidebar.el), what needs you in
-;; the mode line (a click comes back). Closing it (`agent-workspace-quit', Q, or its workspace killed
-;; however: SPC TAB d...) closes the crew at once (core.el): every agent
-;; exits; then the app's windows, buffers and workspace go.
+;; the mode line (a click comes back). Closing it (`agent-workspace-quit',
+;; Q, or its workspace killed however: SPC TAB d...) closes the crew at once
+;; (core.el): every agent exits; then the app's windows, buffers and
+;; workspace go.
 ;;
 ;; One timer ticks the turns' times, and only while an app is shown.
 
@@ -216,8 +218,9 @@ switches."
   "Open the crew of the project you're in, in its own workspace (\"crew ·
 PROJECT\"); outside a project, asked which (one not a git repository, or
 without a commit, says why it has no crew). HERE (SPC o W): in the window
-you're in, the workspace kept (q gives its windows back). The first time,
-its first agent is asked for."
+you're in, the workspace kept (q gives its windows back). A saved crew
+\(crew.json) is started again; a new one opens empty: c makes its first
+agent, nothing asked."
   (interactive "P")
   (let* ((dir (or (agent-workspace-project)
                   (and (fboundp 'project-current) (ignore-errors (project-root (project-current))))
@@ -254,12 +257,6 @@ its first agent is asked for."
         (agent-workspace--issues-refresh project)
         (when-let* ((window (get-buffer-window (agent-workspace--issues-buffer project))))
           (select-window window))
-        ;; Its first agent, the first time.
-        (unless (agent-workspace-agents project)
-          (condition-case nil
-              (let ((default-directory project))
-                (agent-workspace-new))
-            (quit (message "No agents yet: c makes one"))))
         app))))
 
 (defun agent-workspace-open-here ()
