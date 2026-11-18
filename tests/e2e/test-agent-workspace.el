@@ -231,6 +231,71 @@ the layout stopped half done, the hint never shown."
         (agent-workspace-close-all)
         (delete-other-windows)))))
 
+(ert-deftest e2e-agent-workspace/c-then-a-crew ()
+  "On an empty stage (its hint saying c: a new agent, or a crew), c then
+full typed in its menu: a scribe, a builder, a reviewer and a merger made
+and started, named from the pool, none looping, no name asked; the room
+says who was made, the stage has them. c then full again: nothing to add,
+refused, nothing made."
+  (let* ((project (+test-e2e-aw--project))
+         (default-directory project))
+    (cl-letf (((symbol-function 'agent-workspace--start)
+               (lambda (agent)
+                 (let ((buffer (get-buffer-create (agent-workspace-buffer-name agent))))
+                   (with-current-buffer buffer
+                     (setq agent-workspace--agent agent)
+                     (insert "A session.\n"))
+                   (setf (agent-workspace-agent-buffer agent) buffer
+                         (agent-workspace-agent-state agent) 'desk)
+                   (agent-workspace--changed agent 'session)
+                   buffer)))
+              ((symbol-function 'agent-workspace--issues-refresh) #'ignore))
+      (+test-e2e-frame-reset)
+      (delete-other-windows)
+      (unwind-protect
+          (progn
+            (agent-workspace-open t)
+            (+test-sleep 0.5)
+            (let ((hint (get-buffer-window (agent-workspace--hint-buffer project))))
+              (should (window-live-p hint))
+              (with-current-buffer (window-buffer hint)
+                (should (string-search "c: a new agent, or a crew" (buffer-string))))
+              (select-window hint))
+            (with-timeout (20 (ert-fail "c then full: still asking"))
+              (execute-kbd-macro (vconcat "c" "full" (kbd "RET"))))
+            (+test-sleep 0.5)
+            (let ((agents (agent-workspace-agents project)))
+              (should (equal (mapcar (lambda (agent) (list (agent-workspace-agent-name agent)
+                                                           (agent-workspace-agent-role agent)))
+                                     agents)
+                             '(("ada" "scribe") ("grace" "builder") ("linus" "reviewer") ("ken" "merger"))))
+              (should (seq-every-p (lambda (agent) (eq (agent-workspace-agent-state agent) 'desk)) agents))
+              (should-not (seq-some #'agent-workspace-agent-loop agents))
+              ;; Each on the stage: its pane open, or its bar.
+              (dolist (agent agents)
+                (should (or (get-buffer-window (agent-workspace-agent-buffer agent))
+                            (get-buffer-window (agent-workspace--bar-buffer agent)))))
+              (with-current-buffer (agent-workspace--room-buffer project)
+                (should (string-search "crew full: + scribe ada, builder grace, reviewer linus, merger ken"
+                                       (buffer-string))))
+              ;; Again, from a bar: refused (C-g ends the question asked again).
+              (select-window (seq-some (lambda (agent) (get-buffer-window (agent-workspace--bar-buffer agent)))
+                                       agents))
+              (let ((from (with-current-buffer "*Messages*" (point-max))))
+                (cl-letf (((symbol-function 'sit-for) #'ignore))
+                  (with-timeout (20 (ert-fail "c then full again: still asking"))
+                    (condition-case nil
+                        (execute-kbd-macro (vconcat "c" "full" (kbd "RET") (kbd "C-g")))
+                      (quit nil))))
+                (should (equal (agent-workspace-agents project) agents))
+                (with-current-buffer "*Messages*"
+                  (should (string-search "Nothing to add: the crew has every agent of full already"
+                                         (buffer-substring from (point-max))))))))
+        (when (agent-workspace--app project)
+          (agent-workspace--close-app project))
+        (agent-workspace-close-all)
+        (delete-other-windows)))))
+
 (defconst +test-e2e-aw--panel
   ";;; -*- lexical-binding: t; -*-
 (agent-ui-panel

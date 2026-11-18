@@ -1151,8 +1151,9 @@ in it."
 (define-key agent-workspace-tab-map [mouse-1] #'agent-workspace-tab-click)
 
 (defun agent-workspace-new-here (&optional more)
-  "Make a new agent in this crew (MORE, C-u: its model, mode and colour too).
-On a ready issue: its role offered first, the issue its first message."
+  "Make a new agent in this crew (MORE, C-u: its model, mode and colour too),
+or the agents a crew file has that it lacks. On a ready issue: an agent
+for it, its role offered first, the issue its first message (no crews)."
   (interactive "P")
   (let* ((app (agent-workspace--here-or-error))
          (default-directory (agent-workspace--app-project app))
@@ -1257,7 +1258,7 @@ lists there.")
     (agent-workspace-inbox-view-source-off . "its source off")
     ((agent-workspace-inbox-view-up agent-workspace-inbox-view-down) . "move it up / down")
     (agent-workspace-inbox-view-quit . "the room again")
-    (agent-workspace-new-here . "new agent")
+    (agent-workspace-new-here . "new agent or crew")
     (agent-workspace-interrupt-here . "interrupt")
     (agent-workspace-kill-here . "kill (gone home)")
     (agent-workspace-forget-here . "forget (out of the crew)")

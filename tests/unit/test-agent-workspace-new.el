@@ -226,7 +226,8 @@ without one; a column, then a space, before its name."
 
 (ert-deftest agent-workspace-new/the-role-picker-reads-nothing ()
   "The picker's rows, as the completion UI asks for them (moving through
-the list, the minibuffer resized): nothing read from disk, nothing run."
+the list, the minibuffer resized), with its crews too: nothing read from
+disk, nothing run."
   (+test-aw-with-four-starters
     (+test-awn "nothing"
       (+test-awn--crew-of-three project)
@@ -235,7 +236,8 @@ the list, the minibuffer resized): nothing read from disk, nothing run."
                    (lambda (_prompt roles &rest _)
                      (let ((affix (plist-get completion-extra-properties :affixation-function))
                            (spy (lambda (&rest args) (push args touched))))
-                       (dolist (fn '(agent-workspace--roles-read file-attributes insert-file-contents
+                       (dolist (fn '(agent-workspace--roles-read agent-workspace--crew-specs-read
+                                                                 file-attributes insert-file-contents
                                                                  directory-files call-process make-process))
                          (advice-add fn :before spy '((name . +test-awn-spy))))
                        (unwind-protect
@@ -251,11 +253,13 @@ the list, the minibuffer resized): nothing read from disk, nothing run."
                                                        (string-trim (substring-no-properties (nth 2 (car rows))))))
                                (should (eq (get-text-property 0 'face (car (car rows))) 'completions-common-part))
                                (should (memq 'shadow (ensure-list (get-text-property 0 'face (car (cadr rows))))))))
-                         (dolist (fn '(agent-workspace--roles-read file-attributes insert-file-contents
+                         (dolist (fn '(agent-workspace--roles-read agent-workspace--crew-specs-read
+                                                                   file-attributes insert-file-contents
                                                                    directory-files call-process make-process))
                            (advice-remove fn '+test-awn-spy))))
                      "builder")))
           (should (equal (agent-workspace-read-role project) "builder"))
+          (should (equal (agent-workspace-read-role-or-crew project) "builder"))
           (should-not touched))))))
 
 (ert-deftest agent-workspace-new/a-full-role-refused ()
@@ -319,7 +323,7 @@ the columns lined up across the groups."
                            ("broken" . out) ("local/scribe" . out))))
           (should (equal (mapcar #'agent-workspace--role-group-title agent-workspace--role-groups)
                          '("local · .agent-shell/agent-workspace/roles" "project · .agent-workspace/roles"
-                           "starters" "left out")))
+                           "starters" "crews" "left out")))
           (should (equal (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
                                  (agent-workspace--role-rows facts 200))
                          '("▶ reviewer      my reviews                             your default  auto                                      replaces the starter"
@@ -403,6 +407,143 @@ again; never offered first."
           (should (string-match-p
                    "\\`Left out: .*/\\.agent-workspace/roles/broken\\.md:3: mode autoo: not one of"
                    (car (last messages)))))))))
+
+;; ====== CREWS IN THE MENU ======
+
+(defun +test-awn--three-crews (project)
+  "PROJECT's own crews: pair (in place of the starter), scribe (named as a
+role) and broken (left out)."
+  (let ((own (expand-file-name ".agent-workspace/crews/" project)))
+    (make-directory own t)
+    (write-region "---\ndescription: mine, with a long description for once\nagents: builder 3\n---\n" nil
+                  (expand-file-name "pair.md" own))
+    (write-region "---\ndescription: named as a role\nagents: scribe\n---\n" nil (expand-file-name "scribe.md" own))
+    (write-region "---\ndescription: broken\nagents: wizard\n---\n" nil (expand-file-name "broken.md" own))))
+
+(defun +test-awn--crew-rows (facts width)
+  "The picker's rows for FACTS, WIDTH columns wide, as shown."
+  (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
+          (agent-workspace--role-rows facts width)))
+
+(ert-deftest agent-workspace-new/the-crews-in-the-menu ()
+  "With crews: a section of them after the roles' groups, before the files
+left out (a crew file's among them): the local ones, the project's, then
+the starters. A row each: its icon, its name (crew/NAME when a role has
+it), its description in the roles' column, then its agents, what it would
+add and where it comes from, lined up; nothing to add: dimmed, saying so.
+Narrower: where it comes from goes first, then its agents; what it would
+add is cut last; no row wider than the minibuffer."
+  (+test-aw-with-four-starters
+    (+test-awn "crews"
+      (+test-awn--agent project "ada" "scribe")
+      (+test-awn--three-crews project)
+      (+test-awn--no-warnings
+        (let ((facts (agent-workspace--role-picker project t)))
+          (should (equal (mapcar (lambda (fact) (cons (car fact) (agent-workspace--role-group fact))) facts)
+                         '(("builder" . starter) ("investigator" . starter) ("reviewer" . starter)
+                           ("scribe" . starter) ("crew/scribe" . crew) ("pair" . crew) ("review" . crew)
+                           ("broken" . out))))
+          (should (equal (agent-workspace--role-group-title 'crew) "crews"))
+          (should (equal (+test-awn--crew-rows facts 200)
+                         '("⚙ builder       builds what you give it                 0 of 4  your default  auto  build                    → reviewer"
+                           "⌕ investigator  investigates what you give it           0 of 2  your default  auto  investigation, incident  → builder"
+                           "◎ reviewer      reviews a branch you point it to        0 of 2  your default  auto  review                   → builder"
+                           "✎ scribe        writes issues with you                  1 of 1  at its max"
+                           "⁂ crew/scribe   named as a role                         scribe                       nothing to add         project"
+                           "⁂ pair          mine, with a long description for once  builder 3                    + builder 3            project, replaces the starter"
+                           "⁂ review        write, build, review                    scribe, builder 2, reviewer  + builder 2, reviewer"
+                           "✗ broken        line 3: agents wizard: no such role (builder, investigator, reviewer, scribe)")))
+          (should (equal (+test-awn--crew-rows facts 100)
+                         '("⚙ builder       builds what you give it                 0 of 4  your default  auto"
+                           "⌕ investigator  investigates what you give it           0 of 2  your default  auto"
+                           "◎ reviewer      reviews a branch you point it to        0 of 2  your default  auto"
+                           "✎ scribe        writes issues with you                  1 of 1  at its max"
+                           "⁂ crew/scribe   named as a role                         nothing to add"
+                           "⁂ pair          mine, with a long description for once  + builder 3"
+                           "⁂ review        write, build, review                    + builder 2, reviewer"
+                           "✗ broken        line 3: agents wizard: no such role (builder, investigator, reviewer, scribe)")))
+          (should (equal (+test-awn--crew-rows facts 60)
+                         '("⚙ builder       builds what you give it   0 of 4"
+                           "⌕ investigator  investigates what you g…  0 of 2"
+                           "◎ reviewer      reviews a branch you po…  0 of 2"
+                           "✎ scribe        writes issues with you    1 of 1  at its max"
+                           "⁂ crew/scribe   named as a role           nothing to add"
+                           "⁂ pair          mine, with a long descr…  + builder 3"
+                           "⁂ review        write, build, review      + builder 2, revi…"
+                           "✗ broken        line 3: agents wizard: no such role (builde…")))
+          (dolist (width '(200 140 100 80 60 40 30 24))
+            (dolist (row (+test-awn--crew-rows facts width))
+              (should (<= (string-width row) width))))
+          ;; Nothing to add: dimmed, the whole of it; what it would add, not.
+          (pcase-let ((`(_ ,name ,icon ,rest ,dim) (assoc "crew/scribe" (agent-workspace--role-rows facts 200))))
+            (should dim)
+            (should (memq 'shadow (ensure-list (get-text-property 0 'face name))))
+            (should (eq (get-text-property 0 'face icon) 'shadow))
+            (should (memq 'shadow (ensure-list (get-text-property (string-search "nothing" rest) 'face rest)))))
+          (pcase-let ((`(_ ,_ ,icon ,rest ,dim) (assoc "review" (agent-workspace--role-rows facts 200))))
+            (should-not dim)
+            (should-not (get-text-property 0 'face icon))
+            (should (eq (get-text-property (string-search "scribe" rest) 'face rest) 'shadow))
+            (should-not (get-text-property (string-search "+ builder" rest) 'face rest))))
+        ;; Without crews (a role to change, e), as before.
+        (should-not (seq-some (lambda (fact) (plist-get (cdr fact) :crew)) (agent-workspace--role-picker project)))))))
+
+(ert-deftest agent-workspace-new/a-crew-picked ()
+  "c, a crew picked: what the crew lacks made, no name asked, nor with C-u
+its model, mode and colour; returned. Again: nothing to add, refused, asked
+again. A crew file left out: refused, naming its file and line."
+  (+test-aw-with-four-starters
+    (+test-awn "crew-picked"
+      (+test-awn--three-crews project)
+      (+test-awn--no-warnings
+        (+test-awn--answering '("review")
+          (let ((made (agent-workspace-new '(4))))
+            (should (equal (car asked) "Role or crew: "))
+            (should (= (length asked) 1))
+            (should (equal (mapcar (lambda (agent) (list (agent-workspace-agent-name agent)
+                                                         (agent-workspace-agent-role agent)))
+                                   made)
+                           '(("ada" "scribe") ("grace" "builder") ("linus" "builder") ("ken" "reviewer"))))
+            (should (equal (agent-workspace-agents project) made))
+            (should (equal (reverse started) '("ada" "grace" "linus" "ken")))))
+        (let ((messages nil))
+          (cl-letf (((symbol-function 'message)
+                     (lambda (format &rest args) (when format (push (apply #'format format args) messages)))))
+            (+test-awn--answering '("review" "broken" "investigator" "")
+              (let ((agent (agent-workspace-new)))
+                (should (equal (agent-workspace-agent-role agent) "investigator"))
+                (should (= (length asked) 4))))
+            (should (member "Nothing to add: the crew has every agent of review already (scribe, builder 2, reviewer)"
+                            messages))
+            (should (seq-some (lambda (message)
+                                (string-match-p "\\`Left out: .*/\\.agent-workspace/crews/broken\\.md:3: agents wizard"
+                                                message))
+                              messages))))))))
+
+(ert-deftest agent-workspace-new/no-crews-for-an-issue ()
+  "c on a ready issue makes an agent for it: no crews offered, its prompt
+Role:."
+  (+test-aw-with-four-starters
+    (+test-awn "crews-issue"
+      (let ((collection nil))
+        (+test-awn--answering '("builder" "")
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (prompt names &rest _)
+                       (push prompt asked)
+                       (setq collection names)
+                       (pop answers))))
+            (agent-workspace-new nil "builder" "doom-a1b" "Fix it" "bug")
+            (should (equal (car (last asked)) "Role: "))
+            (should (equal collection '("builder" "investigator" "reviewer" "scribe")))))
+        ;; Without one: the crews after the roles.
+        (+test-awn--answering '("pair")
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (prompt names &rest _)
+                       (push prompt asked)
+                       (setq collection names)
+                       (pop answers))))
+            (agent-workspace-new)
+            (should (equal collection '("builder" "investigator" "reviewer" "scribe" "pair" "review")))))))))
 
 (ert-deftest agent-workspace-new/its-name-asked ()
   "Left empty, the name made for it; one taken or not valid, asked again."
@@ -526,6 +667,27 @@ if not given, the reply saying where it works; a wrong request said."
           (should-not (plist-get reply :ok))
           (should (string-search (nth 2 case) (plist-get reply :error))))))))
 
+(ert-deftest agent-workspace-new/a-crew-request ()
+  "crew from the shell: what the crew lacks made, the reply listing them;
+again, none; an unknown crew refused, naming the crews there are."
+  (+test-aw-with-four-starters
+    (+test-awn "crew-request"
+      (let ((reply (+test-awn--request "crew" "{\"name\":\"pair\"}")))
+        (should (equal reply
+                       (list :ok t
+                             :made (vector (list :name "ada" :role "scribe"
+                                                 :worktree (expand-file-name ".agent-shell/worktrees/scribe-ada" project)
+                                                 :branch "agent/ada" :state "desk")
+                                           (list :name "grace" :role "builder"
+                                                 :worktree (expand-file-name ".agent-shell/worktrees/builder-grace" project)
+                                                 :branch "agent/grace" :state "desk"))))))
+      (should (equal (+test-awn--request "crew" "{\"name\":\"pair\"}") (list :ok t :made [])))
+      (dolist (case '(("{\"name\":\"nope\"}" "No crew nope: pair, review")
+                      ("{}" "crew: which one? crew NAME")))
+        (let ((reply (+test-awn--request "crew" (car case))))
+          (should-not (plist-get reply :ok))
+          (should (equal (plist-get reply :error) (cadr case))))))))
+
 (defmacro +test-awn--with-server (&rest body)
   "BODY with this Emacs a server only the script talks to (EMACS_SOCKET_NAME)."
   (declare (indent 0))
@@ -566,6 +728,27 @@ reply JSON; its exit status 0, 1 when not done."
       (let ((run (+test-awn--run "new" "--role=builder" "--name=ada")))
         (should (= (car run) 1))
         (should (string-match-p "\\`{\"ok\":false,\"error\":\"There.s an agent named ada" (cdr run)))))))
+
+(ert-deftest agent-workspace-new/the-script-makes-a-crew ()
+  "cmd/agent-workspace crew NAME: what the crew lacks made through Emacs's
+server, the reply JSON; an unknown crew: 1, saying so; a wrong use: 2."
+  (+test-aw-with-four-starters
+    (+test-awn "script-crew"
+      (+test-awn--with-server
+        (let ((run (+test-awn--run "crew" "pair")))
+          (should (= (car run) 0))
+          (should (string-prefix-p "{\"ok\":true,\"made\":[{\"name\":\"ada\",\"role\":\"scribe\"" (cdr run))))
+        (should (= (length (agent-workspace-agents project)) 2))
+        (should (equal (+test-awn--run "crew" "pair") '(0 . "{\"ok\":true,\"made\":[]}")))
+        (let ((run (+test-awn--run "crew" "nope")))
+          (should (= (car run) 1))
+          (should (equal (cdr run) "{\"ok\":false,\"error\":\"No crew nope: pair, review\"}"))))
+      (dolist (case '((("crew") "crew: which one?")
+                      (("crew" "pair" "extra") "crew: unknown argument \\\"extra\\\"")
+                      (("crew" "--name" "pair") "crew: unknown argument \\\"--name\\\"")))
+        (let ((run (apply #'+test-awn--run (car case))))
+          (should (= (car run) 2))
+          (should (string-search (cadr case) (cdr run))))))))
 
 (ert-deftest agent-workspace-new/the-script-sends ()
   "cmd/agent-workspace send: an event queued for a role through Emacs's
