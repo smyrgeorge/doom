@@ -111,8 +111,9 @@ A cell is a minute: what the agent did most then (asked you, edited, ran a comma
 nothing. After the bar: its state, then, while it works, the file and line it's in this turn (each tool call's), or
 what it asks you while its hand is raised; otherwise (before its turn touches a file, done, at the desk) its state in
 words, dimmed. An agent that did nothing in those minutes has its name in the cells' place, and its state in words
-after the bar. A file two agents changed (on their branches or uncommitted) is marked `⚠`: they'll conflict when you
-merge.
+after the bar. A file changed on two branches (committed there, or uncommitted in two worktrees) is marked `⚠`: they'll
+conflict when you merge. Agents on one branch (a reviewer on its builder's) count as one. An agent's changed files are
+worked out again when its turn ends and when its branch changes: a branch it leaves no longer counts as its.
 
 Every cell is one column, so the bars line up from lane to lane: a glyph your font lacks, drawn wider from another
 font, gives way to one it has (JetBrains Mono has no `✎`: an edit is `±`, and the legend says so). A line too long for
