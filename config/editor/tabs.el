@@ -154,6 +154,30 @@ above)."
 
 (advice-add 'tab-line-format-template :around #'+my/tabs-no-separator-a)
 
+;; A PANE BELOW ANOTHER
+;; The tab line of a pane below another is where Emacs drags the pane's top
+;; edge: wherever its text had no keymap (and past its end), the pointer was
+;; the up-down resize one and a press resized the pane: right after a tab's
+;; ✕, on its bar, between tabs, after the last (an Agent UI canvas below its
+;; session). Every part of it has a keymap now: a tab's bar and the space
+;; after its ✕ the tab's own (a press selects it, as on its label), the
+;; space between tabs (`+my/tabs-format'), a text terminal's separators and
+;; the rest of the line, filled to the window's edge, `+my/tabs-line-map'.
+(defun +my/tabs--filler ()
+  "The rest of the tab line, after its tabs, to the window's edge (see
+above): past the text's right edge, over the right margin and fringe too."
+  (propertize " " 'display '(space :align-to (+ right right-fringe right-margin))
+              'keymap +my/tabs-line-map))
+
+(defun +my/tabs-whole-line-a (fn tabs)
+  "`tab-line-format-template': its separators with `+my/tabs-line-map',
+the rest of the line filled (see above)."
+  (let ((tab-line-separator (propertize (or tab-line-separator (if (window-system) " " "|"))
+                                        'keymap +my/tabs-line-map)))
+    (append (funcall fn tabs) (list (+my/tabs--filler)))))
+
+(advice-add 'tab-line-format-template :around #'+my/tabs-whole-line-a)
+
 ;; A TAB TOO WIDE
 ;; A tab wider than its window was never brought into view: tab-line scrolls
 ;; to the current tab by finding where a tab starts past the window's width,
@@ -217,9 +241,10 @@ the line less the arrows (with other tabs) and its separator."
                    (+my/tabs-bar (if selected
                                      (face-background 'highlight nil t)
                                    (face-background face nil t)))))
-         ;; Between tabs, not before the first (see NO GAP above).
+         ;; Between tabs, not before the first (see NO GAP above); never
+         ;; dragged (see A PANE BELOW ANOTHER).
          (gap (and (display-graphic-p) (not (eq tab (car tabs)))
-                   (propertize " " 'face 'tab-line))))
+                   (propertize " " 'face 'tab-line 'keymap +my/tabs-line-map))))
     (+my/tabs--fit
      (+my/tabs-label tab tabs)
      (lambda (label)
@@ -235,14 +260,16 @@ the line less the arrows (with other tabs) and its separator."
          (add-face-text-property 0 (length text) face t text)
          (add-face-text-property 0 (length close) face t close)
          (concat (or gap "")
-                 (propertize (concat (or bar "")
+                 ;; Its bar and the space after its ✕ the tab's too (see A
+                 ;; PANE BELOW ANOTHER).
+                 (propertize (concat (if bar (propertize bar 'keymap tab-line-tab-map) "")
                                      (propertize text
                                                  'keymap tab-line-tab-map
                                                  'help-echo (if selected "Current tab"
                                                               "Click to select tab")
                                                  'follow-link 'ignore)
                                      close
-                                     (propertize " " 'face face))
+                                     (propertize " " 'face face 'keymap tab-line-tab-map))
                              'tab tab
                              'selected selected
                              'mouse-face 'tab-line-highlight))))

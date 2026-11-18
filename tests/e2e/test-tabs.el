@@ -118,3 +118,48 @@ at any width (they cut it at some: 49 columns, macOS's font)."
         (should (+test-tabs--whole-p window buffer))
         (should (string-search (buffer-name buffer) (nth 3 (+test-tabs--drawn window buffer))))
         (should-not (string-search "…" (nth 3 (+test-tabs--drawn window buffer))))))))
+
+;; ====== A PANE BELOW ANOTHER ======
+
+(defun +test-tabs--off-keymap (window)
+  "Where WINDOW's tab line, as drawn, has no keymap (Emacs drags the pane's
+top edge from there): (X TEXT INDEX) for each such pixel across the window's
+whole width, TEXT the string there (nil past the line's end). Not its
+divider with a pane on its right (it resizes them side by side)."
+  (let (off)
+    (dotimes (x (window-pixel-width window))
+      (let* ((posn (posn-at-x-y x 3 window t))
+             (at (posn-string posn)))
+        (unless (or (not (eq (posn-area posn) 'tab-line))
+                    (and at (< (cdr at) (length (car at)))
+                         (get-text-property (cdr at) 'keymap (car at))))
+          (push (list x (and at (substring-no-properties (car at))) (cdr at)) off))))
+    (nreverse off)))
+
+(ert-deftest e2e-tabs/a-pane-below-another-never-dragged-from-its-tab-line ()
+  "A tabbed pane below another (an Agent UI canvas below its session): its
+tab line has a keymap at every pixel across the window, right after a tab,
+between tabs and after the last, so the pointer is the arrow and a press
+there selects (a tab, or the pane) instead of resizing it; scrolled in a
+narrow pane too."
+  (+test-with-reset
+    (delete-other-windows)
+    (select-window (split-window-below))
+    (let ((buffers (apply #'+test-tabs--files
+                          (append (mapcar (lambda (i) (format "file%02d.txt" i)) (number-sequence 1 5))
+                                  (list +test-tabs--long))))
+          (window (selected-window)))
+      (redisplay t)
+      (should-not (window-at-side-p window 'top))
+      (should (+test-tabs--whole-p window (car (last buffers))))
+      (should-not (+test-tabs--off-keymap window))
+      ;; Its last pixel the tab line's, filled to there.
+      (should (eq (posn-area (posn-at-x-y (1- (window-pixel-width window)) 3 window t)) 'tab-line))
+      ;; Narrow: scrolled, its arrows first.
+      (split-window-right 40)
+      (switch-to-buffer (nth 2 buffers))
+      (redisplay t)
+      (should (window-parameter window 'tab-line-hscroll))
+      (should-not (+test-tabs--off-keymap window))
+      ;; The pane above is still resized from its mode line.
+      (should (eq (lookup-key global-map [mode-line down-mouse-1]) #'mouse-drag-mode-line)))))

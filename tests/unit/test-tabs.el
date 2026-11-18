@@ -698,6 +698,56 @@ tab-line's `|' separators, as ever."
             (should (eq (get-text-property 1 'display second) 'bar))
             (should (eq (tab-line--get-tab-property 'tab second) b))))))))
 
+(ert-deftest tabs/every-part-of-the-tab-line-has-a-keymap ()
+  "The tab line of a pane below another never drags its pane (Emacs drags
+from wherever it has no keymap): every position of it has one, in a
+graphical frame and on a text terminal, scrolled or not. A tab's bar and
+the space after its ✕ are the tab's (a press selects it); between tabs,
+the separators and the rest of the line, filled to the window's edge, a
+press does nothing but select the window. A press on a ✕ doesn't drag
+either; its click closes the tab."
+  (should (advice-member-p #'+my/tabs-whole-line-a 'tab-line-format-template))
+  (should (eq (keymap-lookup +my/tabs-line-map "<tab-line> <down-mouse-1>") #'ignore))
+  (should (eq (keymap-lookup +my/tabs-line-map "<tab-line> <mouse-1>") #'mouse-select-window))
+  (should (eq (keymap-lookup tab-line-tab-close-map "<tab-line> <down-mouse-1>") #'ignore))
+  (should (eq (keymap-lookup tab-line-tab-close-map "<tab-line> <mouse-1>") #'tab-line-close-tab))
+  (+test-tabs
+    (let* ((files (mapcar (lambda (i) (+test-tabs--file (format "file%02d.txt" i))) (number-sequence 1 12)))
+           (a (car files))
+           (b (cadr files)))
+      (apply #'+test-tabs--show files)
+      (cl-letf (((symbol-function '+my/tabs-bar) (lambda (_) (propertize "|" 'display 'bar)))
+                ((symbol-function 'face-background) (lambda (&rest _) "black")))
+        (cl-flet ((check (graphic)
+                    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) graphic))
+                              ((symbol-function 'window-system) (lambda (&rest _) (and graphic 'ns)))
+                              ((symbol-function 'nerd-icons-icon-for-buffer) (lambda () nil)))
+                      (dolist (hscroll '(nil 3))
+                        (set-window-parameter nil 'tab-line-hscroll hscroll)
+                        (let* ((parts (seq-filter (lambda (part) (and (stringp part) (> (length part) 0)))
+                                                  (tab-line-format-template (+test-tabs--tabs))))
+                               (filler (car (last parts))))
+                          (dolist (part parts)
+                            (dotimes (i (length part))
+                              (should (get-text-property i 'keymap part))))
+                          (should (equal (get-text-property 0 'display filler) '(space :align-to (+ right right-fringe right-margin))))
+                          (should (eq (get-text-property 0 'keymap filler) +my/tabs-line-map))))
+                      (set-window-parameter nil 'tab-line-hscroll nil))))
+          (check nil)
+          (check t)
+          ;; A tab's bar (first) and its last space: the tab's own map.
+          (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                    ((symbol-function 'nerd-icons-icon-for-buffer) (lambda () nil)))
+            (let ((tab (+my/tabs-format b (+test-tabs--tabs))))
+              ;; The space between tabs, then its bar.
+              (should (eq (get-text-property 0 'keymap tab) +my/tabs-line-map))
+              (should (eq (get-text-property 1 'display tab) 'bar))
+              (should (eq (get-text-property 1 'keymap tab) tab-line-tab-map))
+              (should (eq (get-text-property (1- (length tab)) 'keymap tab) tab-line-tab-map))
+              (should (eq (get-text-property (1- (length tab)) 'tab tab) b)))
+            (should (eq (get-text-property 0 'keymap (+my/tabs-format a (+test-tabs--tabs)))
+                        tab-line-tab-map))))))))
+
 (ert-deftest tabs/format-gui-icon-failing-or-missing ()
   (+test-tabs
     (let ((a (+test-tabs--file "a.txt")))

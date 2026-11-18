@@ -84,6 +84,16 @@ its worktree's files (config/agent-workspace.el).")
 do: in the workspace, listed by SPC b b, killed once no window has them as
 a tab (q too). The buffer list (SPC b i).")
 
+;; A pane's tab line never resizes it (a pane below another: Emacs drags its
+;; top edge from wherever its tab line has no keymap): every part of it has
+;; one (config/editor/tabs.el). Off its tabs, this one: a press selects the
+;; window; the pane is resized from the mode line above it or the divider.
+(defvar-keymap +my/tabs-line-map
+  :doc "The tab line's keymap off its tabs: between them, after the last."
+  "<tab-line> <down-mouse-1>" #'ignore
+  "<tab-line> <drag-mouse-1>" #'ignore
+  "<tab-line> <mouse-1>" #'mouse-select-window)
+
 ;; A MINIBUFFER LEFT OPEN (M-x, a prompt) while you're in another window:
 ;; tinted with the theme's yellow, its prompt and input in their own colours,
 ;; instead of Emacs's bold dark red on bright yellow
@@ -281,9 +291,11 @@ An entry overrides a mode's own (set in config.el).")
 ;; On Linux also Ctrl+Shift+W (Ctrl+W is Vim's windows), as Linux's terminals.
 (map! :unless (+my/macos-p) "C-S-w" #'+my/tabs-close-current)
 
-;; The tab menu (right click, see above).
+;; The tab menu (right click, see above). A press on a tab's ✕ doesn't resize
+;; its pane either (Emacs's map for it has only the click, which closes it).
 (after! tab-line
-  (keymap-set tab-line-tab-map "<tab-line> <down-mouse-3>" #'+my/tabs-context-menu))
+  (keymap-set tab-line-tab-map "<tab-line> <down-mouse-3>" #'+my/tabs-context-menu)
+  (keymap-set tab-line-tab-close-map "<tab-line> <down-mouse-1>" #'ignore))
 
 ;; OPTION+ENTER
 ;; Visual state too: code actions and Claude actions work on the selection.
