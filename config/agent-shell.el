@@ -213,6 +213,11 @@ KEYS above.")
         ;; New shells (e.g. from the Option+Enter Claude actions) start Claude
         ;; Code without asking which agent to use.
         agent-shell-preferred-agent-config 'claude-code
+        ;; AGENT BUFFERS: a session's buffer is named after its agent alone
+        ;; (config/agent-shell/name.el): "Claude", a second one "Claude<2>"
+        ;; (in any project: buffer names are Emacs's, not a project's), and
+        ;; so every agent ("Codex", "Gemini"...), not "Claude Agent @ doom".
+        agent-shell-buffer-name-format #'+my/agent-shell-buffer-name
         ;; Images (screenshots, charts) as wide as the window (beside a
         ;; reply's indent: config/agent-shell/images.el): agent-shell shrinks
         ;; them to 40% of it. Smaller ones keep their own size.
@@ -222,6 +227,7 @@ KEYS above.")
 
 ;; In config/agent-shell/, in this order: each part can use what the ones
 ;; before it define.
+(load! "agent-shell/name")
 (load! "agent-shell/context")
 (load! "agent-shell/images")
 (load! "agent-shell/excalidraw")

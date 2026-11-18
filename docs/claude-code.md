@@ -10,6 +10,9 @@ CLI's login.
 | `Option+Enter` (Linux: `Alt+Enter`) | Send the error at point or the selection to Claude |
 | `RET` (normal state too) | Send the prompt (`S-RET`: a newline) |
 
+A session's buffer is named after its agent: `Claude`, a second one `Claude<2>`, a third `Claude<3>`, in whichever
+project they run (as same-named files are), and so for any agent agent-shell runs (`Codex`, `Gemini`...).
+
 `(setq +my/agent-shell-insert-ret-newline t)` in `config.el` makes `RET` in insert state a newline instead, the prompt
 sent with `RET` from normal state.
 

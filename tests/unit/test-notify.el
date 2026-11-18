@@ -417,34 +417,34 @@ a click; no directory, or the root (no folder's name): the message alone."
     (should-not (seq-some (lambda (shown) (nth 2 shown)) +test-notify--shown))))
 
 (ert-deftest notify/claude-two-sessions-in-one-folder ()
-  "Two sessions in one folder: each named by its buffer (\"doom\",
-\"doom<2>\"), not both \"doom\"; a message from the one named, else the
-one whose turn is running (the caller), not the last used; a click shows
-it."
+  "Two sessions in one folder: each named by its folder and buffer
+\(\"doom · Claude\", \"doom · Claude<2>\"), not both \"doom\"; a message
+from the one named, else the one whose turn is running (the caller), not
+the last used; a click shows it."
   (+test-with-reset
     (+test-notify nil
       (let ((dir (+test-tmp-file "dev/doom/"))
             (busy nil))
         (make-directory dir t)
         (+test-notify--sessions (list dir dir)
-          (with-current-buffer (nth 0 sessions) (rename-buffer "Claude Code Agent @ doom"))
-          (with-current-buffer (nth 1 sessions) (rename-buffer "Claude Code Agent @ doom<2>"))
+          (with-current-buffer (nth 0 sessions) (rename-buffer "Claude"))
+          (with-current-buffer (nth 1 sessions) (rename-buffer "Claude<2>"))
           (cl-letf (((symbol-function 'shell-maker-busy) (lambda () (eq (current-buffer) busy)))
                     ((symbol-function 'select-frame-set-input-focus) #'ignore))
-            (should (equal (mapcar #'+my/notify-claude--name sessions) '("doom" "doom<2>")))
+            (should (equal (mapcar #'+my/notify-claude--name sessions) '("doom · Claude" "doom · Claude<2>")))
             ;; The first used last; the second's turn running: its message.
             (switch-to-buffer (nth 0 sessions))
             (setq busy (nth 1 sessions))
             (should (+my/notify-claude "b's tests pass" dir))
-            (should (equal (cadr (car +test-notify--shown)) "doom<2>: b's tests pass"))
+            (should (equal (cadr (car +test-notify--shown)) "doom · Claude<2>: b's tests pass"))
             (switch-to-buffer "*scratch*")
             (funcall (nth 2 (car +test-notify--shown)))
             (should (eq (window-buffer (selected-window)) (nth 1 sessions)))
             ;; Named by the caller, as a buffer or its name.
             (should (+my/notify-claude "a's done" dir (nth 0 sessions)))
-            (should (equal (cadr (car +test-notify--shown)) "doom: a's done"))
-            (should (+my/notify-claude "b's done" dir "Claude Code Agent @ doom<2>"))
-            (should (equal (cadr (car +test-notify--shown)) "doom<2>: b's done"))
+            (should (equal (cadr (car +test-notify--shown)) "doom · Claude: a's done"))
+            (should (+my/notify-claude "b's done" dir "Claude<2>"))
+            (should (equal (cadr (car +test-notify--shown)) "doom · Claude<2>: b's done"))
             ;; One left: its folder again.
             (kill-buffer (nth 1 sessions))
             (should (equal (+my/notify-claude--name (nth 0 sessions)) "doom"))))))))

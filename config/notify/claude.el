@@ -38,15 +38,15 @@ first."
 
 (defun +my/notify-claude--name (buffer)
   "BUFFER's session, as a notification names it: its project's folder;
-with another session working there, its buffer's name, what follows its
-\" @ \" (\"doom<2>\"): else the two read alike."
+with another session working there, the folder and its buffer's name
+\(\"doom · Claude<2>\"): else the two read alike. No folder: its buffer's
+name."
   (with-current-buffer buffer
     (let* ((cwd (ignore-errors (agent-shell-cwd)))
-           (folder (and cwd (+my/notify-claude--folder cwd)))
-           (own (replace-regexp-in-string "\\`.* @ " "" (buffer-name))))
-      (cond ((and folder (not (cdr (+my/notify-claude--sessions cwd)))) folder)
-            ((not (string-empty-p own)) own)
-            (t (buffer-name))))))
+           (folder (and cwd (+my/notify-claude--folder cwd))))
+      (cond ((not folder) (buffer-name))
+            ((cdr (+my/notify-claude--sessions cwd)) (format "%s · %s" folder (buffer-name)))
+            (t folder)))))
 
 (defvar +my/notify-claude-own-functions nil
   "Called with a session's buffer: one returning non-nil notifies of that

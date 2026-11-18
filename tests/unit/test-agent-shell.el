@@ -203,6 +203,47 @@ login is used), and no OAuth token."
                                                   (+my/agent-shell-claude-theme)))
                                   "\n\n"))))))
 
+(ert-deftest agent-shell/buffers-named-after-the-agent ()
+  "A session's buffer is named after its agent alone (\"Claude\", not
+\"Claude Agent @ doom\"), every agent the same: no code of its own."
+  (should (eq agent-shell-buffer-name-format #'+my/agent-shell-buffer-name))
+  (let ((names (mapcar (lambda (config) (map-elt config :buffer-name))
+                       (agent-shell--resolved-agent-configs))))
+    (should (member "Claude" names))
+    (should (member "Codex" names))
+    (should (member "Gemini" names))
+    (dolist (name names)
+      (should (equal (agent-shell--format-buffer-name name "doom") name)))))
+
+(ert-deftest agent-shell/a-second-session-is-claude-2 ()
+  "A new session asks shell-maker for the agent's name alone, as a new
+session: the first \"Claude\", the next \"Claude<2>\", \"Claude<3>\"
+\(shell-maker makes it unique), in any project."
+  (+test-with-reset
+    (let ((asked nil)
+          (made nil)
+          (default-directory (file-name-as-directory (+test-tmp-file "named/"))))
+      (make-directory default-directory t)
+      (cl-letf (((symbol-function 'shell-maker-start-v2)
+                 (cl-function
+                  (lambda (&key buffer-name new-session &allow-other-keys)
+                    (push (list buffer-name new-session) asked)
+                    ;; What shell-maker does with them (shell-maker.el).
+                    (let ((buffer (get-buffer-create
+                                   (if new-session (generate-new-buffer-name buffer-name) buffer-name))))
+                      (push buffer made)
+                      ;; Stop agent-shell there: nothing past the name.
+                      (throw '+test-named buffer)))))
+                ((symbol-function 'agent-shell-cwd) (lambda () default-directory)))
+        (unwind-protect
+            (let ((config (agent-shell-anthropic-make-claude-code-config)))
+              (dotimes (_ 3)
+                (catch '+test-named
+                  (agent-shell--start :config config :new-session t :no-focus t)))
+              (should (equal (reverse asked) '(("Claude" t) ("Claude" t) ("Claude" t))))
+              (should (equal (mapcar #'buffer-name (reverse made)) '("Claude" "Claude<2>" "Claude<3>"))))
+          (mapc #'kill-buffer made))))))
+
 (ert-deftest agent-shell/sessions-display-as-agent-shell-has-them ()
   "Where a session opens is agent-shell's (its window); tiling, when on,
 puts it in a new pane (config/tiling/apps.el)."
