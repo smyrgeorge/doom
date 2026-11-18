@@ -491,6 +491,48 @@ a state changed: its bar drawn again."
         (agent-workspace-forget ken 'keep)
         (should (equal (mapcar #'car (+test-awa--windows)) '("*issues · changing*" "ada · builder")))))))
 
+(ert-deftest agent-workspace-app/x-forgets-an-agent ()
+  "X on an agent: asked first (working: said so), then out of the crew, gone
+from the stage, the next agent selected; the last one forgotten, the stage
+empty. In its mouse-3 menu too, after Kill (doom-pbk.111)."
+  (+test-awa "forget"
+    (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder")))
+                (asked nil))
+      (dolist (map (list agent-workspace-bar-mode-map agent-workspace-minimap-mode-map
+                         agent-workspace-issues-mode-map agent-workspace-branches-mode-map))
+        (should (eq (lookup-key map (kbd "X")) #'agent-workspace-forget-here)))
+      (agent-workspace-open t)
+      (agent-workspace-select ada t)
+      ;; Working, and you say no: still there.
+      (setf (agent-workspace-agent-state ada) 'working)
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (setq asked prompt) nil)))
+        (with-current-buffer (agent-workspace--bar-buffer ada) (agent-workspace-forget-here)))
+      (should (equal asked "ada is working: forget it anyway (out of the crew)? "))
+      (should (memq ada (agent-workspace-agents project)))
+      (setf (agent-workspace-agent-state ada) 'desk)
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (setq asked prompt) t))
+                ((symbol-function 'agent-workspace-worktree-fate) (lambda (&rest _) 'keep)))
+        (with-current-buffer (agent-workspace--bar-buffer ada) (agent-workspace-forget-here))
+        (should (equal asked "Forget ada (out of the crew)? "))
+        (should-not (memq ada (agent-workspace-agents project)))
+        (should (eq (agent-workspace--app-selected (agent-workspace--app project)) ken))
+        (should (equal (mapcar #'car (+test-awa--windows)) '("*issues · forget*" "ken · builder")))
+        ;; The last one: the stage as for a new crew.
+        (with-current-buffer (agent-workspace--bar-buffer ken) (agent-workspace-forget-here))
+        (should-not (agent-workspace-agents project))
+        (should (string-search "No agents yet" (with-current-buffer "*stage · forget*" (buffer-string))))))))
+
+(ert-deftest agent-workspace-app/forget-in-the-mouse-3-menu ()
+  (+test-awa "forget-menu"
+    (pcase-let ((`(,ada) (+test-awa--crew '("ada" "builder")))
+                (menu nil))
+      (agent-workspace-open t)
+      (cl-letf (((symbol-function 'x-popup-menu) (lambda (_event items) (setq menu items) nil)))
+        (agent-workspace-line-menu `(mouse-3 (,(get-buffer-window (agent-workspace-agent-buffer ada) t) 1 (0 . 0) 0))))
+      (let ((items (cdr (cadr menu))))
+        (should (equal (cadr (member '("Kill (gone home)" . agent-workspace-kill-here) items))
+                       '("Forget (out of the crew)..." . agent-workspace-forget-here)))))))
+
 (ert-deftest agent-workspace-app/no-agents-yet ()
   "Opened with no agent: its first is asked for; asked nothing (C-g), the
 stage says how to make one."

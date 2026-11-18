@@ -308,7 +308,8 @@ needs your OK. nil: Claude Code's own default."
 ;;                an agent, c a new agent (for it), gr read them again
 ;;   the bars     j / k the next / previous agent (the cursor in its pane),
 ;;                RET its pane, TAB open or fold
-;;   both         c a new agent, i interrupt, K kill (gone home), r restart
+;;   both         c a new agent, i interrupt, K kill (gone home), X forget
+;;                (out of the crew, asked first), r restart
 ;;                fresh, s sleep or wake, e edit (name, colour, role, mode,
 ;;                model), d its branch's changes, M merge its branch, b the
 ;;                branches to merge (see ITS BRANCHES), v its
@@ -363,7 +364,8 @@ needs your OK. nil: Claude Code's own default."
 ;; win where both have a key (gr refreshes the issues, d in the minimap).
 (defvar +my/agent-workspace-keys
   '(("c" . agent-workspace-new-here) ("i" . agent-workspace-interrupt-here)
-    ("K" . agent-workspace-kill-here) ("r" . agent-workspace-restart-here)
+    ("K" . agent-workspace-kill-here) ("X" . agent-workspace-forget-here)
+    ("r" . agent-workspace-restart-here)
     ("s" . agent-workspace-sleep-here) ("e" . agent-workspace-edit)
     ("d" . agent-workspace-review-here) ("M" . agent-workspace-merge-here)
     ("v" . agent-workspace-panels-here) ("V" . agent-workspace-full-here) ("I" . agent-workspace-issue-here)

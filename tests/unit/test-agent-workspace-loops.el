@@ -790,6 +790,23 @@ in bd's words (doom-pbk.36)."
                  20)))
       (should (equal (alist-get 'assignee (funcall show two)) "ken")))))
 
+(ert-deftest agent-workspace-loops/forgotten-it-gives-its-issue-back ()
+  "X (forgotten) on an agent with the issue you gave it in progress, its:
+open again, unassigned, as K does (doom-pbk.111)."
+  (+test-awl--with-crew "forget-give-back"
+    (let* ((one (+test-awl--issue project "the lexer" "build" 1))
+           (ada (+test-awl--create "ada"))
+           (show (lambda (id)
+                   (let ((default-directory project))
+                     (car (json-parse-string (+test-awl--run "bd" "show" id "--json")
+                                             :object-type 'alist :array-type 'list))))))
+      (agent-workspace-give-issue ada one "the lexer" "task")
+      (should (equal (alist-get 'assignee (funcall show one)) "ada"))
+      (agent-workspace-forget ada 'keep)
+      (should-not (agent-workspace-agents project))
+      (should (+test-awl--wait (lambda () (equal (alist-get 'status (funcall show one)) "open"))))
+      (should-not (alist-get 'assignee (funcall show one))))))
+
 ;; ====== THE SAVED CREW ======
 
 (ert-deftest agent-workspace-loops/reopening-never-starts-one ()

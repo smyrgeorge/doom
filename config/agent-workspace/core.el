@@ -545,9 +545,11 @@ home), only if its role has room for one more, as when it's woken."
   "Take AGENT out of its crew, its session stopped first. Its worktree and
 branch: WORKTREE (`keep' or `remove'), or if nil, removed when they hold
 nothing the main checkout hasn't, else you're shown what they hold and
-asked: no work is lost without asking."
+asked: no work is lost without asking. The issue you gave it goes back,
+as when it's killed (`agent-workspace--give-back')."
   (let ((how (agent-workspace-worktree-fate agent worktree)))
     (agent-workspace--stop agent 'home)
+    (agent-workspace--give-back agent)
     (let ((key (agent-workspace-agent-project agent)))
       (puthash key (remq agent (gethash key agent-workspace--crews)) agent-workspace--crews)
       (unless (gethash key agent-workspace--crews)

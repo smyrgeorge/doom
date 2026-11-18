@@ -65,6 +65,7 @@ terminal with `git init` typed.
 | `RET` / `TAB` | a bar | Its pane / open or fold it |
 | `c` | anywhere | A new agent (on a ready issue: for it) |
 | `i` / `K` / `r` | anywhere | Interrupt it / kill it (gone home) / restart it fresh |
+| `X` | anywhere | [Forget it](#what-you-do-to-one): out of the crew (asked first) |
 | `s` | anywhere | Put it to sleep, or wake it |
 | `e` | anywhere | Change its name, colour, role, permission mode or model |
 | `d` / `M` | anywhere | Its [branch](#its-branches)'s changes / merge its branch |
@@ -549,9 +550,10 @@ You can interrupt an agent, kill it, restart it fresh, put it to sleep, wake it,
 branch is still there), change its role (its worktree follows; not while it works) or recolour it. Killing it gives back the issue you gave it, if it's still in progress and assigned to the
 agent.
 
-Forgetting an agent takes it out of the crew. Its worktree and branches go too when they hold nothing your checkout
-hasn't. Otherwise you're shown what they hold (changes not committed, and each of its branches with commits not on
-yours) and asked whether to keep them.
+Forgetting an agent (`X`, or its mouse-3 menu; asked first) takes it out of the crew: its session ends, the issue you
+gave it goes back as when it's killed, and the next agent is selected. Its worktree and branches go too when they hold
+nothing your checkout hasn't. Otherwise you're shown what they hold (changes not committed, and each of its branches
+with commits not on yours) and asked whether to keep them.
 
 Closing the crew, or quitting Emacs, stops every agent at once, without asking. No process of theirs is left
 running. Their worktrees stay.

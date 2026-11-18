@@ -971,6 +971,7 @@ cursor in its pane."
                                      ("Loop on or off" . agent-workspace-loop-here)
                                      ("Restart fresh" . agent-workspace-restart-here)
                                      ("Kill (gone home)" . agent-workspace-kill-here)
+                                     ("Forget (out of the crew)..." . agent-workspace-forget-here)
                                      ("Edit..." . agent-workspace-edit)
                                      ("Its branch's changes" . agent-workspace-review-here)
                                      ("Merge its branch" . agent-workspace-merge-here)
@@ -999,6 +1000,26 @@ cursor in its pane."
   (let ((agent (agent-workspace--current)))
     (when (y-or-n-p (format "Send %s home (its session ends)? " (agent-workspace-agent-name agent)))
       (agent-workspace-kill agent))))
+
+(defun agent-workspace-forget-here ()
+  "X: forget the agent, out of the crew (asked first): its session ends, the
+issue you gave it goes back, its worktree and branch are removed when they
+hold nothing, else you're shown what they hold and asked
+\(`agent-workspace-forget'). The next agent selected."
+  (interactive)
+  (let* ((agent (agent-workspace--current))
+         (name (agent-workspace-agent-name agent))
+         (agents (agent-workspace--ordered (agent-workspace-agent-project agent)))
+         (next (or (cadr (memq agent agents)) (car (remq agent agents))))
+         (go (not (derived-mode-p 'agent-workspace-issues-mode))))
+    (when (y-or-n-p (pcase (agent-workspace-agent-state agent)
+                      ('working (format "%s is working: forget it anyway (out of the crew)? " name))
+                      ('hand (format "%s has its hand raised: forget it anyway (out of the crew)? " name))
+                      (_ (format "Forget %s (out of the crew)? " name))))
+      (agent-workspace-forget agent)
+      (when next
+        (agent-workspace-select next go))
+      (message "%s left the crew" name))))
 
 (defun agent-workspace-restart-here ()
   "Restart the agent, with a fresh session."
