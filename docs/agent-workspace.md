@@ -66,7 +66,7 @@ terminal with `git init` typed.
 | `c` | anywhere | A new agent, or the agents a [crew](#crews) lacks (on a ready issue: an agent for it) |
 | `i` / `K` / `r` | anywhere | Interrupt it / kill it (gone home) / restart it fresh |
 | `X` | anywhere | [Forget it](#what-you-do-to-one): out of the crew (asked first) |
-| `s` | anywhere | Put it to sleep, or wake it |
+| `Z` | anywhere | Put it to sleep, or wake it |
 | `e` | anywhere | Change its name, colour, role, permission mode or model |
 | `d` / `M` | anywhere | Its [branch](#its-branches)'s changes / merge its branch |
 | `b` | anywhere | The [branches waiting to be merged](#its-branches), in the stage's place (`q` back) |
@@ -301,10 +301,10 @@ If its turn stops on an error, its session doesn't start, `bd` fails, or its wor
 issue is claimed then), it tries again 30 seconds later
 (`agent-workspace-loop-retry`): the same issue, in its session. After 3 failures in a row
 (`agent-workspace-loop-failures`) it stops: stuck, saying why. A turn that ends without an error breaks the row, and
-`r`, `s` or `L` start it again.
+`r`, `Z` or `L` start it again.
 
 Its loop is kept in the [saved crew](#the-saved-crew). A crew started again brings a looping agent back asleep, so
-reopening never starts work by itself: wake it (`s`) and it loops. A role without `labels` has no issues to take, and
+reopening never starts work by itself: wake it (`Z`) and it loops. A role without `labels` has no issues to take, and
 a project without Beads has none either: their agents can't loop. A role whose labels go while its agents loop (its file
 saved mid-edit, or missing on the branch checked out) pauses them, saying so, until they're back.
 

@@ -250,7 +250,7 @@ worktree's) offered first."
 ;; hand (its hand raised: a permission, a question), done (its turn over,
 ;; until you look: its pane shown), nap (napping: it loops, and no issue is
 ;; ready for it: loops.el), stuck (an error), asleep (its session stopped by
-;; you: s wakes it), home (gone home: killed, or its process ended).
+;; you: Z wakes it), home (gone home: killed, or its process ended).
 
 (defconst agent-workspace-states '(waking desk working hand done nap stuck asleep home)
   "An agent's states (see above).")

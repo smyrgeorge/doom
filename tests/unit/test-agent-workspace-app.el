@@ -239,7 +239,39 @@ with their meaning there; what's off left out (doom-pbk.110)."
         (should (string-match-p "z its pane" (car (help map)))))
       ;; In an agent's session: its prefix map's.
       (should (string-match-p "]/\\[ next / previous agent"
-                              (car (help agent-workspace-session-keymap)))))))
+                              (car (help agent-workspace-session-keymap))))
+      ;; Z sleeps or wakes, s doesn't (doom-pbk.132).
+      (let ((app (cadr (help agent-workspace-bar-mode-map))))
+        (should (string-match-p "Z sleep / wake" app))
+        (should-not (string-match-p "\\_<s sleep" app))))))
+
+(ert-deftest agent-workspace-app/z-sleeps-or-wakes-s-is-evil-snipe-s ()
+  "Z sleeps or wakes an agent in the bars, the issues, the minimap, the
+stage's hint and the branches, in evil's normal and motion states with
+evil-snipe on there (its s, a minor mode's, comes before the app's): s is
+evil-snipe's, not the app's, anywhere (doom-pbk.132)."
+  (let ((snipe (require 'evil-snipe nil t)))
+    (dolist (map (list agent-workspace-bar-mode-map agent-workspace-issues-mode-map
+                       agent-workspace-minimap-mode-map agent-workspace-hint-mode-map
+                       agent-workspace-branches-mode-map +my/agent-workspace-pane-map))
+      (should (eq (lookup-key map "Z") #'agent-workspace-sleep-here))
+      (should-not (eq (lookup-key map "s") #'agent-workspace-sleep-here)))
+    (should (equal (rassq 'agent-workspace-sleep-here +my/agent-workspace-keys)
+                   '("Z" . agent-workspace-sleep-here)))
+    (dolist (mode '(agent-workspace-bar-mode agent-workspace-issues-mode agent-workspace-minimap-mode
+                    agent-workspace-hint-mode agent-workspace-branches-mode))
+      (with-temp-buffer
+        (funcall mode)
+        (evil-local-mode 1)
+        (when snipe (evil-snipe-local-mode 1))
+        (dolist (state '(normal motion))
+          (evil-change-state state)
+          (evil-normalize-keymaps)
+          (ert-info ((format "%s, %s state" mode state))
+            (should (eq (key-binding "Z") #'agent-workspace-sleep-here))
+            (should-not (eq (key-binding "s") #'agent-workspace-sleep-here))
+            (when snipe
+              (should (eq (key-binding "s") #'evil-snipe-s)))))))))
 
 (ert-deftest agent-workspace-app/keys-on-a-bar ()
   "On an agent's bar, from the keyboard: the bar's keys (j/k between agents,
