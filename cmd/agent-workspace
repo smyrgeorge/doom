@@ -24,6 +24,30 @@
 #                                agent's shell (AGENT_WORKSPACE_AGENT), no
 #                                --from: its message to another agent,
 #                                "waiting" for your OK if the crew asks
+#   agent-workspace status       the crew as it is -> {"ok": true, "project",
+#                                "agents": [{"name", "role", "state",
+#                                "words", "time", "loop", "issue",
+#                                "issue_title", "branch", "worktree",
+#                                "changed", "asking", "events"}...],
+#                                "conflicts": [{"file", "agents"}...],
+#                                "offers": [{"issue", "title", "to",
+#                                "role"}...], "talk"}
+#   agent-workspace give ISSUE --to NAME
+#                                ISSUE given to the agent NAME, as t does:
+#                                claimed as it, its branch opened, "Work on
+#                                ISSUE: TITLE" sent now, or after its turn
+#                                -> {"ok": true, "name", ..., "issue",
+#                                "prompt": "sent"|"queued"}
+#   agent-workspace wake NAME    the agent NAME woken (asleep or gone home)
+#   agent-workspace sleep NAME   the agent NAME put to sleep, as Z does
+#                                -> {"ok": true, "name", ..., "state"}
+#   agent-workspace loop NAME on|off
+#                                its loop turned on or off, as L does
+#                                -> {"ok": true, "name", ..., "loop"}
+#
+# give, wake, sleep and loop are said in the room, with who did them (the
+# agent, or shell). From an agent's shell (AGENT_WORKSPACE_AGENT) they're
+# refused unless its role leads (leads: true); status works from any.
 #
 # The reply is JSON on stdout: {"ok": false, "error": "what's wrong"} when it
 # isn't done. Exit status: 0 done, 1 not done (the reply says why), 2 a wrong
@@ -114,8 +138,48 @@ case "$op" in
     payload=$(printf '{"to":%s,"from":%s,"text":%s,"agent":%s}' \
                      "$(json_string "$to")" "$(json_string "$from")" "$(json_string "$text")" \
                      "$(json_string "$agent")") ;;
+  status)
+    [ $# -gt 0 ] && fail 2 "status: unknown argument \"$1\"; agent-workspace status"
+    payload='{}' ;;
+  give)
+    issue="" to=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --to)
+          [ $# -lt 2 ] && fail 2 "$1: give it a value"
+          to=$2; shift 2 ;;
+        --to=*) to=${1#--to=}; shift ;;
+        -*) fail 2 "give: unknown argument \"$1\"; agent-workspace give ISSUE --to NAME" ;;
+        *)
+          [ -n "$issue" ] && fail 2 "give: unknown argument \"$1\"; agent-workspace give ISSUE --to NAME"
+          issue=$1; shift ;;
+      esac
+    done
+    [ -z "$issue" ] && fail 2 "give: which issue? agent-workspace give ISSUE --to NAME"
+    [ -z "$to" ] && fail 2 "give: to whom? agent-workspace give $issue --to NAME"
+    payload=$(printf '{"issue":%s,"to":%s,"agent":%s}' \
+                     "$(json_string "$issue")" "$(json_string "$to")" \
+                     "$(json_string "${AGENT_WORKSPACE_AGENT:-}")") ;;
+  wake|sleep)
+    [ $# -eq 0 ] && fail 2 "$op: whom? agent-workspace $op NAME"
+    case "$1" in -*) fail 2 "$op: unknown argument \"$1\"; agent-workspace $op NAME" ;; esac
+    [ $# -gt 1 ] && fail 2 "$op: unknown argument \"$2\"; agent-workspace $op NAME"
+    payload=$(printf '{"name":%s,"agent":%s}' \
+                     "$(json_string "$1")" "$(json_string "${AGENT_WORKSPACE_AGENT:-}")") ;;
+  loop)
+    [ $# -eq 0 ] && fail 2 "loop: whose? agent-workspace loop NAME on|off"
+    case "$1" in -*) fail 2 "loop: unknown argument \"$1\"; agent-workspace loop NAME on|off" ;; esac
+    case "${2:-}" in
+      on) on=true ;;
+      off) on=false ;;
+      '') fail 2 "loop: on or off? agent-workspace loop $1 on|off" ;;
+      *) fail 2 "loop: \"$2\" isn't on or off; agent-workspace loop $1 on|off" ;;
+    esac
+    [ $# -gt 2 ] && fail 2 "loop: unknown argument \"$3\"; agent-workspace loop NAME on|off"
+    payload=$(printf '{"name":%s,"on":%s,"agent":%s}' \
+                     "$(json_string "$1")" "$on" "$(json_string "${AGENT_WORKSPACE_AGENT:-}")") ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: new, crew, send" ;;
+    fail 2 "unknown operation \"$op\"; operations: new, crew, send, status, give, wake, sleep, loop" ;;
 esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workspace.XXXXXXXXXX") || fail 3 "no temp folder"

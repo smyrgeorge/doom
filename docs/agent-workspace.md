@@ -265,6 +265,28 @@ which roles it may message without your OK, and never to wait for an answer.
 With `agent-workspace-agents-talk` set to `nil`, a message is refused, whatever `T` says (`crew.json` keeps it), and
 `T` says so. Agents aren't told of messages, and those queued before wait, not delivered.
 
+## The crew from the shell
+
+`cmd/agent-workspace` shows the crew and runs it, from your shell, a script, or a lead agent's shell. Each command
+replies JSON ([more](cmd.md#cmdagent-workspace)).
+
+| Command | Does |
+|---|---|
+| `status` | the crew: each agent's state in its bar's words, its turn's time, loop, issue, branch, worktree, changed files, raised hand and events waiting; then the files two agents changed (the minimap's ⚠), the room's offers still standing, and the talk setting |
+| `give ISSUE --to NAME` | what `t` does: the issue claimed as the agent, its branch opened, `Work on ISSUE: TITLE` sent now, or after its turn |
+| `wake NAME` | what `Z` does to an agent asleep or gone home: a fresh session |
+| `sleep NAME` | what `Z` does to an awake agent: its session stopped |
+| `loop NAME on` / `off` | what `L` does |
+
+The room says each action and who did it: `shell gave doom-a1b to grace`, `max woke linus`. Refused, nothing is done
+and the reply says why: an agent not in the crew, an issue `bd` doesn't know, a closed issue or an epic, another
+agent's issue, an issue for an agent asleep or gone home, an agent asleep put to sleep, an awake one woken, a loop for
+a role with no labels.
+
+From an agent's shell, `give`, `wake`, `sleep` and `loop` work only if its role leads (`leads: true`, see
+[Roles](#roles)); another agent gets `only a lead runs the crew`. A lead can't put itself to sleep. `status` works from
+any shell.
+
 ## Raised hands
 
 When several agents wait for you, you can answer them from one place. A raised hand's options are buttons under it in
@@ -543,6 +565,8 @@ Write the tests first, then run them.
   [go to](#work-handed-on-through-issues), in order (`any`: the one it's for), `returns-to` where work goes back.
 - `icon` is a nerd icon for the GUI, then a glyph for the terminal. `verb` is what its agents show while they work:
   "testing doom-a1b". `colour` is its agents' colour while it's free.
+- `leads: true` lets its agents run the crew from their shell: `cmd/agent-workspace give`, `wake`, `sleep` and `loop`
+  ([The crew from the shell](#the-crew-from-the-shell)). Other agents are refused. No starter leads.
 
 A project's own roles go in its `.agent-workspace/roles/`, committed. Your own for a project, kept out of git, go in
 its `.agent-shell/agent-workspace/roles/` (`.agent-shell/` is ignored: a crew adds it to the repository's
@@ -553,7 +577,8 @@ the project's into yours.
 
 A role file needs its front matter and a `description`; its name (its file's) is a lowercase letter, then lowercase
 letters, digits or `-`. A file with a mistake is left out (the [picker](#making-an-agent) lists it), and a warning
-names its file and line: a key that isn't one, a `mode`, `max` or `colour` that isn't one there is, a `tools` or
+names its file and line: a key that isn't one, a `mode`, `max` or `colour` that isn't one there is, a `leads` that
+isn't `true` or `false`, a `tools` or
 `deny` entry that isn't `Tool` or `Tool(pattern)`. Some things are only warned about, the role kept: an unknown key or
 one given twice (the last is used), a `model` that isn't `inherit`, one of `agent-workspace-models` or a model's id
 (`claude-...`), an `icon` that isn't a nerd icon, a tool both allowed and denied (it's denied), no instructions, a
