@@ -4095,6 +4095,56 @@ and log: tab-aligned text stays aligned (each was 4 spaces: \"a    b\" and
   (should (string-match-p "mark 1's kind" (+test-aue-error '(:type "code" :code "x" :marks ((:line 1 :kind "bad"))))))
   (should (string-match-p "mark 1 must be" (+test-aue-error '(:type "code" :code "x" :marks ((:kind "error")))))))
 
+;; ====== ROUNDED ENDS (doom-ht6.35-37) ======
+
+(defun +test-aue-svg-dom (element width)
+  "ELEMENT drawn for the GUI at WIDTH columns: its SVG, parsed."
+  (with-temp-buffer
+    (insert (+test-aue-svg element width))
+    (libxml-parse-xml-region (point-min) (point-max))))
+
+(defun +test-aue-rects (dom)
+  "DOM's rectangles as plists: :x :width :rx :clip, numbers read."
+  (mapcar (lambda (rect)
+            (let ((get (lambda (attr) (dom-attr rect attr))))
+              (list :x (string-to-number (funcall get 'x))
+                    :width (string-to-number (funcall get 'width))
+                    :rx (and (funcall get 'rx) (string-to-number (funcall get 'rx)))
+                    :clip (funcall get 'clip-path)
+                    :fill (funcall get 'fill))))
+          (dom-by-tag dom 'rect)))
+
+(ert-deftest agent-ui-elements/a-stacked-bar-s-ends-rounded ()
+  "A stacked bar: its parts square, end to end, clipped to one rounded
+rectangle their total length (its outer ends rounded as a plain bar's); a
+plain or grouped bar's own corners rounded, as before (doom-ht6.35)."
+  (let* ((dom (+test-aue-svg-dom '(:type "chart" :kind "bar" :stacked t :labels ("a" "b")
+                                   :series ((:name "x" :values (3 0)) (:name "y" :values (2 5))))
+                                 60))
+         (clips (dom-by-tag dom 'clipPath))
+         (parts (seq-filter (lambda (rect) (plist-get rect :clip)) (+test-aue-rects dom))))
+    ;; Row a: two parts, one clip; row b: one part of 5 (and an empty one).
+    (should (= (length clips) 2))
+    (let* ((clip (car clips))
+           (shape (car (dom-by-tag clip 'rect)))
+           (id (dom-attr clip 'id))
+           (mine (seq-filter (lambda (rect) (equal (plist-get rect :clip) (format "url(#%s)" id))) parts)))
+      (should (equal (dom-attr shape 'rx) "2"))
+      (should (= (length mine) 2))
+      ;; Square, touching, together the clip's length.
+      (should-not (plist-get (car mine) :rx))
+      (should (< (abs (- (+ (plist-get (car mine) :x) (plist-get (car mine) :width)) (plist-get (cadr mine) :x))) 0.01))
+      (should (< (abs (- (+ (plist-get (car mine) :width) (plist-get (cadr mine) :width))
+                         (string-to-number (dom-attr shape 'width))))
+                 0.01))))
+  ;; Plain and grouped: rounded, no clip.
+  (dolist (element '((:type "chart" :kind "bar" :labels ("a" "b") :series ((:values (3 5))))
+                     (:type "chart" :kind "bar" :labels ("a") :series ((:name "x" :values (3)) (:name "y" :values (5))))))
+    (let ((dom (+test-aue-svg-dom element 60)))
+      (should-not (dom-by-tag dom 'clipPath))
+      (dolist (rect (+test-aue-rects dom))
+        (should (equal (plist-get rect :rx) 2))))))
+
 ;; ====== HEATMAP ======
 
 (defun +test-aue-svg (element width)
@@ -4891,13 +4941,14 @@ and left after its counts as room allows."
         (should (eq (get-text-property 10 'face b) (agent-ui-chart--face 0)))
         (should (eq (get-text-property 11 'face b) (agent-ui-chart--face 1)))
         (should (eq (get-text-property 3 'face b) (agent-ui-chart--face 0)))))
-    ;; As SVG: a rectangle per segment, a legend.
+    ;; As SVG: a rectangle per segment (clipped to its bar's: doom-ht6.35),
+    ;; a legend.
     (let ((svg (plist-get (cdr (get-text-property 0 'display (agent-ui-render (append '(:stacked t) grouped)
                                                                               (agent-ui-context :width 40 :graphic t :char-width 8 :line-height 16))))
                           :data)))
       (with-temp-buffer
         (insert svg)
-        (should (= (count-matches "<rect" (point-min) (point-max)) 4))
+        (should (= (count-matches "<rect[^>]*clip-path" (point-min) (point-max)) 4))
         (should (= (count-matches "<circle" (point-min) (point-max)) 2))))))
 
 (ert-deftest agent-ui-elements/chart-histogram ()

@@ -757,17 +757,35 @@ labels under them (none on another's), as two lines; nil without times."
          (muted (agent-ui-chart--color 'agent-ui-muted)))
     (cl-loop for r in rows
              for y in ys
-             do (let ((x bar-left))
+             for n from 0
+             do (let* ((x bar-left)
+                       ;; Each part's length, cut at the bar's end.
+                       (lengths (let ((at bar-left))
+                                  (mapcar (lambda (segment)
+                                            (let ((length (max 0 (min (- (+ bar-left bar-width) at)
+                                                                      (* scale (car segment))))))
+                                              (setq at (+ at length))
+                                              length))
+                                          (nth 1 r))))
+                       (total (apply #'+ lengths))
+                       ;; A stacked bar: its parts square, end to end, clipped
+                       ;; to one rounded bar their length (its ends rounded as
+                       ;; a plain bar's, no notch between them).
+                       (clip (when (and (cdr (nth 1 r)) (> total 0))
+                               (let ((id (format "agent-ui-bar-%d" n)))
+                                 (svg-rectangle (svg-clip-path svg :id id)
+                                                bar-left (+ y (* 0.2 row)) (max 1 total) (* 0.6 row) :rx 2)
+                                 (format "url(#%s)" id)))))
                   (unless (string-empty-p (car r))
                     (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (car r) (/ label-width cw))
                                               0 (+ y (* 0.7 row)) :fill fg))
-                  (dolist (segment (nth 1 r))
-                    (let ((length (min (- (+ bar-left bar-width) x) (* scale (car segment)))))
-                      (when (> length 0)
-                        (svg-rectangle svg x (+ y (* 0.2 row)) (max 1 length) (* 0.6 row)
-                                       :fill (agent-ui-chart--color (agent-ui-chart--face (cdr segment)))
-                                       :rx (if (cdr (nth 1 r)) 0 2))
-                        (setq x (+ x length)))))
+                  (cl-loop for segment in (nth 1 r)
+                           for length in lengths
+                           when (> length 0)
+                           do (apply #'svg-rectangle svg x (+ y (* 0.2 row)) (max 1 length) (* 0.6 row)
+                                     :fill (agent-ui-chart--color (agent-ui-chart--face (cdr segment)))
+                                     (if clip (list :clip-path clip) (list :rx 2)))
+                              (setq x (+ x length)))
                   (agent-ui-chart--svg-text svg ctx (nth 2 r)
                                             (+ (max x (+ bar-left 1)) cw) (+ y (* 0.7 row))
                                             :fill muted)))
