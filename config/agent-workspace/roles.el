@@ -84,6 +84,11 @@ listed elsewhere).")
 
 (defvar agent-workspace-models)
 
+;; crews.el's, loaded after.
+(defvar agent-workspace--crew-specs-cache)
+(declare-function agent-workspace-crew-spec-problems "agent-workspace/crews")
+(declare-function agent-workspace-crew-specs "agent-workspace/crews")
+
 (defvar agent-workspace--roles-cache (make-hash-table :test #'equal)
   "A project's roles, as last read: project to (STAMP (ROLES . PROBLEMS)
 LEFT-OUT), STAMP the role files and their modification times.")
@@ -143,6 +148,72 @@ or there's no nerd-icons to tell."
               ((string-prefix-p "nf-cod-" name)
                (and (boundp 'nerd-icons/codicon-alist) (assoc name nerd-icons/codicon-alist)))))))
 
+(cl-defun agent-workspace--front-matter-read (file &key keys list-keys aliases ignored problem store)
+  "Read FILE's front matter, as role and crew files have it: a first line
+---, its keys, then a line --- (blank lines and # comments between them
+skipped). A key is KEY: VALUE, its quotes taken off; one of LIST-KEYS
+holds a list, inline (a, b or [a, b]) or, nothing after its colon, as YAML
+items on the lines below (  - a). KEYS are the keys it takes, ALIASES
+other spellings of them ((ALIAS . KEY)...), IGNORED keys warned about as
+ignored ((KEY . WHY)...). Each key's value is given to STORE (KEY VALUE
+LINE), KEY as KEYS spell it: VALUE a string, or a list key's items ((ITEM
+. ITS LINE)...); each problem to PROBLEM (LEVEL LINE FORMAT ARGS...).
+Return (CLOSED SEEN REST): the line closing it (nil: not closed, or no
+front matter), the keys seen ((KEY . LINE)..., the last first), what's
+after it, trimmed."
+  (let ((line 0) (seen nil) (closed nil) (rest ""))
+    (cl-flet ((store (key value n)
+                (funcall store key
+                         (if (and (member key list-keys) (stringp value))
+                             (mapcar (lambda (item) (cons item n)) (agent-workspace--role-list value))
+                           value)
+                         n)))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (if (not (looking-at-p "---[ \t]*$"))
+            (funcall problem 'error 1 "no front matter: it starts with a line ---, its keys, then a line ---")
+          (forward-line 1)
+          (setq line 2)
+          (let ((key nil) (list nil))
+            (while (and (not closed) (not (eobp)))
+              (let ((text (buffer-substring-no-properties (point) (line-end-position))))
+                (cond
+                 ((string-match-p "\\`---[ \t]*\\'" text)
+                  (when key (store key (nreverse list) (1- line)))
+                  (setq closed line key nil))
+                 ((string-match-p "\\`[ \t]*\\(#.*\\)?\\'" text))
+                 ;; An item of a YAML list, under its key.
+                 ((string-match "\\`[ \t]+-[ \t]+\\(.*\\)\\'" text)
+                  (if key
+                      (push (cons (agent-workspace--role-unquote (string-trim (match-string 1 text))) line) list)
+                    (funcall problem 'error line "a list item with no key before it")))
+                 ((string-match "\\`\\([A-Za-z_-]+\\):[ \t]*\\(.*\\)\\'" text)
+                  (let* ((k (downcase (match-string 1 text)))
+                         (value (agent-workspace--role-unquote (string-trim (match-string 2 text))))
+                         (same (or (cdr (assoc k aliases)) k)))
+                    (when key (store key (nreverse list) (1- line)))
+                    (setq key nil list nil)
+                    (when-let* ((before (and (member same keys) (assoc same seen))))
+                      (funcall problem 'warning line "%s given twice (line %d too): the last is used" k (cdr before)))
+                    (push (cons same line) seen)
+                    (cond
+                     ((assoc k ignored)
+                      (funcall problem 'warning line "%s" (cdr (assoc k ignored))))
+                     ((not (member same keys))
+                      (funcall problem 'warning line "unknown key %s: ignored" k))
+                     ((and (string-empty-p value) (member same list-keys))
+                      ;; Its items on the lines below.
+                      (setq key same))
+                     (t (store same value line)))))
+                 (t (funcall problem 'error line "not a key: %s" (string-trim text))))
+                (forward-line 1)
+                (cl-incf line)))
+            (if (not closed)
+                (funcall problem 'error line "its front matter isn't closed: a line --- after its keys")
+              (setq rest (string-trim (buffer-substring-no-properties (point) (point-max)))))))))
+    (list closed seen rest)))
+
 (defun agent-workspace-role-read (file)
   "Read the role FILE: (ROLE . PROBLEMS). ROLE is a plist (see the top of
 this file), nil if FILE has errors; PROBLEMS, each (error|warning
@@ -153,121 +224,81 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
          (case-fold-search nil)
          (role (list :name name :file file))
          (problems nil)
-         (seen nil)
-         (lines nil)
-         (line 0))
+         (lines nil))
     (cl-flet ((problem (level n format &rest args)
                 (let ((what (apply #'format format args)))
                   (push (list level (format "%s:%d: %s" shown n what) file n what) problems))))
       (unless (string-match-p "\\`[a-z][a-z0-9-]*\\'" name)
         (problem 'error 1 "its name %s (its file's): a lowercase letter, then lowercase letters, digits or -"
                  name))
-      (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
-        (if (not (looking-at-p "---[ \t]*$"))
-            (problem 'error 1 "no front matter: it starts with a line ---, its keys, then a line ---")
-          (forward-line 1)
-          (setq line 2)
-          (let ((key nil) (list nil) (closed nil))
-            (cl-flet ((store (key value n)
-                        ;; VALUE: a string, or a YAML list's items, each
-                        ;; (ITEM . ITS LINE).
-                        (pcase key
-                          ((or "tools" "deny" "labels" "talks-to" "hands-to" "returns-to")
-                           (let ((items (if (listp value)
-                                            value
-                                          (mapcar (lambda (item) (cons item n))
-                                                  (agent-workspace--role-list value)))))
-                             (when (member key '("tools" "deny"))
-                               (dolist (item items)
-                                 (unless (agent-workspace--tool-p (car item))
-                                   (problem 'error (cdr item) "%s %s: not a tool, Tool or Tool(pattern)"
-                                            key (car item)))))
-                             (when (member key '("talks-to" "hands-to" "returns-to"))
-                               (push (cons key items) lines))
-                             (setq role (plist-put role (intern (concat ":" key)) (mapcar #'car items)))))
-                          ("name"
-                           (unless (equal value name)
-                             (problem 'error n "its name is %s, its file's %s: they must agree" value name)))
-                          ("description"
-                           (if (string-empty-p value)
-                               (problem 'error n "description: empty: say what it does")
-                             (setq role (plist-put role :description value))))
-                          ("verb" (setq role (plist-put role :verb value)))
-                          ("model"
-                           (unless (member value '("" "inherit"))
-                             (unless (agent-workspace--model-p value)
-                               (problem 'warning n "model %s: not inherit, one of %s, nor a model's id (claude-...)"
-                                        value (string-join (bound-and-true-p agent-workspace-models) ", ")))
-                             (setq role (plist-put role :model value))))
-                          ("mode"
-                           (if-let* ((id (agent-workspace--mode-id value)))
-                               (setq role (plist-put role :mode id))
-                             (problem 'error n "mode %s: not one of %s" value
-                                      (string-join agent-workspace-modes ", "))))
-                          ("max"
-                           (if (string-match-p "\\`[1-9][0-9]*\\'" value)
-                               (setq role (plist-put role :max (string-to-number value)))
-                             (problem 'error n "max %s: not a number above 0" value)))
-                          ((or "colour" "color")
-                           (if (member value agent-workspace-colours)
-                               (setq role (plist-put role :colour value))
-                             (problem 'error n "colour %s: not one of %s" value
-                                      (string-join agent-workspace-colours ", "))))
-                          ("icon"
-                           (let ((parts (split-string value)))
-                             (when (and (car parts) (not (agent-workspace--nerd-name-p (car parts))))
-                               (problem 'warning n "icon %s: not a nerd icon (md-NAME or cod-NAME): %s is shown"
-                                        (car parts) (or (cadr parts) "its glyph")))
-                             (setq role (plist-put role :icon (car parts)))
-                             (when (cadr parts)
-                               (setq role (plist-put role :glyph (cadr parts)))))))))
-              (while (and (not closed) (not (eobp)))
-                (let ((text (buffer-substring-no-properties (point) (line-end-position))))
-                  (cond
-                   ((string-match-p "\\`---[ \t]*\\'" text)
-                    (when key (store key (nreverse list) (1- line)))
-                    (setq closed line key nil))
-                   ((string-match-p "\\`[ \t]*\\(#.*\\)?\\'" text))
-                   ;; An item of a YAML list, under its key.
-                   ((string-match "\\`[ \t]+-[ \t]+\\(.*\\)\\'" text)
-                    (if key
-                        (push (cons (agent-workspace--role-unquote (string-trim (match-string 1 text))) line) list)
-                      (problem 'error line "a list item with no key before it")))
-                   ((string-match "\\`\\([A-Za-z_-]+\\):[ \t]*\\(.*\\)\\'" text)
-                    (let* ((k (downcase (match-string 1 text)))
-                           (value (agent-workspace--role-unquote (string-trim (match-string 2 text))))
-                           (same (if (equal k "color") "colour" k)))
-                      (when key (store key (nreverse list) (1- line)))
-                      (setq key nil list nil)
-                      (when-let* ((before (and (member k agent-workspace--role-keys) (assoc same seen))))
-                        (problem 'warning line "%s given twice (line %d too): the last is used" k (cdr before)))
-                      (push (cons same line) seen)
-                      (cond
-                       ((equal k "worktree")
-                        (problem 'warning line "worktree: ignored (every agent has its own worktree)"))
-                       ((not (member k agent-workspace--role-keys))
-                        (problem 'warning line "unknown key %s: ignored" k))
-                       ((and (string-empty-p value) (member k agent-workspace--role-list-keys))
-                        ;; Its items on the lines below.
-                        (setq key k))
-                       (t (store k value line)))))
-                   (t (problem 'error line "not a key: %s" (string-trim text))))
-                  (forward-line 1)
-                  (cl-incf line)))
-              (if (not closed)
-                  (problem 'error line "its front matter isn't closed: a line --- after its keys")
-                (unless (assoc "description" seen)
-                  (problem 'error 1 "no description: say what it does (description: ...)"))
-                (dolist (tool (plist-get role :tools))
-                  (when (member tool (plist-get role :deny))
-                    (problem 'warning (or (cdr (assoc "deny" seen)) 1)
-                             "%s both allowed (tools) and denied (deny): denied" tool)))
-                (let ((instructions (string-trim (buffer-substring-no-properties (point) (point-max)))))
-                  (if (string-empty-p instructions)
-                      (problem 'warning closed "no instructions after its front matter")
-                    (setq role (plist-put role :instructions instructions))))))))))
+      (pcase-let
+          ((`(,closed ,seen ,instructions)
+            (agent-workspace--front-matter-read
+             file
+             :keys (remove "color" agent-workspace--role-keys)
+             :list-keys agent-workspace--role-list-keys
+             :aliases '(("color" . "colour"))
+             :ignored '(("worktree" . "worktree: ignored (every agent has its own worktree)"))
+             :problem #'problem
+             :store
+             (lambda (key value n)
+               ;; VALUE: a string, or a list's items, each (ITEM . ITS LINE).
+               (pcase key
+                 ((or "tools" "deny" "labels" "talks-to" "hands-to" "returns-to")
+                  (when (member key '("tools" "deny"))
+                    (dolist (item value)
+                      (unless (agent-workspace--tool-p (car item))
+                        (problem 'error (cdr item) "%s %s: not a tool, Tool or Tool(pattern)"
+                                 key (car item)))))
+                  (when (member key '("talks-to" "hands-to" "returns-to"))
+                    (push (cons key value) lines))
+                  (setq role (plist-put role (intern (concat ":" key)) (mapcar #'car value))))
+                 ("name"
+                  (unless (equal value name)
+                    (problem 'error n "its name is %s, its file's %s: they must agree" value name)))
+                 ("description"
+                  (if (string-empty-p value)
+                      (problem 'error n "description: empty: say what it does")
+                    (setq role (plist-put role :description value))))
+                 ("verb" (setq role (plist-put role :verb value)))
+                 ("model"
+                  (unless (member value '("" "inherit"))
+                    (unless (agent-workspace--model-p value)
+                      (problem 'warning n "model %s: not inherit, one of %s, nor a model's id (claude-...)"
+                               value (string-join (bound-and-true-p agent-workspace-models) ", ")))
+                    (setq role (plist-put role :model value))))
+                 ("mode"
+                  (if-let* ((id (agent-workspace--mode-id value)))
+                      (setq role (plist-put role :mode id))
+                    (problem 'error n "mode %s: not one of %s" value
+                             (string-join agent-workspace-modes ", "))))
+                 ("max"
+                  (if (string-match-p "\\`[1-9][0-9]*\\'" value)
+                      (setq role (plist-put role :max (string-to-number value)))
+                    (problem 'error n "max %s: not a number above 0" value)))
+                 ("colour"
+                  (if (member value agent-workspace-colours)
+                      (setq role (plist-put role :colour value))
+                    (problem 'error n "colour %s: not one of %s" value
+                             (string-join agent-workspace-colours ", "))))
+                 ("icon"
+                  (let ((parts (split-string value)))
+                    (when (and (car parts) (not (agent-workspace--nerd-name-p (car parts))))
+                      (problem 'warning n "icon %s: not a nerd icon (md-NAME or cod-NAME): %s is shown"
+                               (car parts) (or (cadr parts) "its glyph")))
+                    (setq role (plist-put role :icon (car parts)))
+                    (when (cadr parts)
+                      (setq role (plist-put role :glyph (cadr parts)))))))))))
+        (when closed
+          (unless (assoc "description" seen)
+            (problem 'error 1 "no description: say what it does (description: ...)"))
+          (dolist (tool (plist-get role :tools))
+            (when (member tool (plist-get role :deny))
+              (problem 'warning (or (cdr (assoc "deny" seen)) 1)
+                       "%s both allowed (tools) and denied (deny): denied" tool)))
+          (if (string-empty-p instructions)
+              (problem 'warning closed "no instructions after its front matter")
+            (setq role (plist-put role :instructions instructions))))))
     (when lines
       (setq role (plist-put role :lines (nreverse lines))))
     (setq problems (nreverse problems))
@@ -371,24 +402,27 @@ project's), in the order they're read: ((NAME :file FILE :origin ORIGIN
   (cdr (agent-workspace--roles-read (or project (agent-workspace-project)))))
 
 (defun agent-workspace-check-roles (&optional project)
-  "Check PROJECT's role files (default: the current project's), all of
-them read anew (the starters, the project's, your local ones): every
-problem a line FILE:LINE: error|warning: what, in a buffer whose lines
-visit their file and line (RET, a click); none, said. Return the
+  "Check PROJECT's role and crew files (default: the current project's),
+all of them read anew (the starters, the project's, your local ones):
+every problem a line FILE:LINE: error|warning: what, in a buffer whose
+lines visit their file and line (RET, a click); none, said. Return the
 problems."
   (interactive)
   (let* ((project (or project (agent-workspace-project)))
          (problems (progn (remhash (or project "") agent-workspace--roles-cache)
+                          (remhash (or project "") agent-workspace--crew-specs-cache)
                           (let ((agent-workspace--roles-quiet t))
-                            (agent-workspace-role-problems project)))))
+                            (append (agent-workspace-role-problems project)
+                                    (agent-workspace-crew-spec-problems project))))))
     (if (not problems)
-        (message "%d roles, no problems" (length (agent-workspace-roles project)))
+        (message "%d roles, %d crews, no problems" (length (agent-workspace-roles project))
+                 (length (agent-workspace-crew-specs project)))
       (let ((buffer (get-buffer-create "*agent-workspace roles*")))
         (with-current-buffer buffer
           (let ((inhibit-read-only t))
             (erase-buffer)
             (setq default-directory (or project default-directory))
-            (insert (format "The roles of %s: %d error%s, %d warning%s\n\n"
+            (insert (format "The roles and crews of %s: %d error%s, %d warning%s\n\n"
                             (if project (abbreviate-file-name (directory-file-name project)) "no project")
                             (seq-count (lambda (p) (eq (car p) 'error)) problems)
                             (if (= 1 (seq-count (lambda (p) (eq (car p) 'error)) problems)) "" "s")
@@ -417,12 +451,12 @@ file gone since)."
 
 ;; ====== MAKING AN AGENT OF IT ======
 
-(defun agent-workspace-role-count (project role)
+(defun agent-workspace-role-count (project role &optional all)
   "How many agents of ROLE run in PROJECT's crew (not asleep, not gone
-home)."
+home); ALL: how many it has, asleep and gone home too."
   (seq-count (lambda (agent)
                (and (equal (agent-workspace-agent-role agent) role)
-                    (not (memq (agent-workspace-agent-state agent) '(asleep home)))))
+                    (or all (not (memq (agent-workspace-agent-state agent) '(asleep home))))))
              (agent-workspace-agents project)))
 
 (defun agent-workspace--check-role (project role)

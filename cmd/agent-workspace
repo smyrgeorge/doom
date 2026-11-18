@@ -8,6 +8,12 @@
 #                                left out, one is made for it; TEXT its
 #                                first message -> {"ok": true, "name",
 #                                "role", "worktree", "branch", "state"}
+#   agent-workspace crew NAME    the agents the crew file NAME has that this
+#                                folder's project's crew lacks, made at once
+#                                (none if it lacks nothing) -> {"ok": true,
+#                                "made": [{"name", "role", "worktree",
+#                                "branch", "state"}...]}; those not made too,
+#                                "failed": [{"role", "error"}...]
 #   agent-workspace send --to NAME|#ROLE|#all [--from SOURCE] TEXT|-
 #                                an event for an agent, a role's first free
 #                                agent or every agent (TEXT, or - for stdin),
@@ -80,6 +86,11 @@ case "$op" in
     [ -z "$role" ] && fail 2 "new: which role? agent-workspace new --role ROLE"
     payload=$(printf '{"role":%s,"name":%s,"prompt":%s}' \
                      "$(json_string "$role")" "$(json_string "$name")" "$(json_string "$prompt")") ;;
+  crew)
+    [ $# -eq 0 ] && fail 2 "crew: which one? agent-workspace crew NAME"
+    case "$1" in -*) fail 2 "crew: unknown argument \"$1\"; agent-workspace crew NAME" ;; esac
+    [ $# -gt 1 ] && fail 2 "crew: unknown argument \"$2\"; agent-workspace crew NAME"
+    payload=$(printf '{"name":%s}' "$(json_string "$1")") ;;
   send)
     to="" from="" text="" have_text=""
     while [ $# -gt 0 ]; do
@@ -104,7 +115,7 @@ case "$op" in
                      "$(json_string "$to")" "$(json_string "$from")" "$(json_string "$text")" \
                      "$(json_string "$agent")") ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: new, send" ;;
+    fail 2 "unknown operation \"$op\"; operations: new, crew, send" ;;
 esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workspace.XXXXXXXXXX") || fail 3 "no temp folder"

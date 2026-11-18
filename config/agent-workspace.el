@@ -51,13 +51,16 @@ needs your OK. nil: Claude Code's own default."
 
 ;; MAKING ONE
 ;; M-x agent-workspace-new (config/agent-workspace/new.el; the app's c) asks
-;; its role (a row of columns each: its icon, what it does, how many run of
-;; its max, its model, mode, labels with their ready issues, hands-to, the
-;; role it replaced; fewer in a narrow minibuffer; one at its max dimmed,
-;; refused; grouped under dividers: local, project, starters, then the role
-;; files left out, refused naming file and line), then its name: left
-;; empty, one from `agent-workspace-names' whose initial no agent has; C-u:
-;; its model, permission mode and colour too. From Lisp:
+;; its role or a crew, "Role or crew:" (a row of columns each: its icon, what
+;; it does, how many run of its max, its model, mode, labels with their ready
+;; issues, hands-to, the role it replaced; fewer in a narrow minibuffer; one
+;; at its max dimmed, refused; grouped under dividers: local, project,
+;; starters, then the crews (see CREWS below), then the role and crew files
+;; left out, refused naming file and line), then, a role picked, its name:
+;; left empty, one from `agent-workspace-names' whose initial no agent has;
+;; C-u: its model, permission mode and colour too. A crew picked: the agents
+;; it lacks made at once, nothing more asked. c on a ready issue makes an
+;; agent for it: no crews offered there. From Lisp:
 ;;   (agent-workspace-create :role "builder" :name "ada" :issue "doom-a1b")
 ;; (an issue's id: its worktree on the issue's branch, see ITS BRANCHES; its
 ;; first message, "Work on doom-a1b: TITLE"); from the shell, cmd/agent-workspace new --role builder [--name ada] [--prompt TEXT]
@@ -88,6 +91,43 @@ needs your OK. nil: Claude Code's own default."
 ;; are warnings naming its file and line (an error leaves the role out: no
 ;; description, a name, mode, max, colour or tool that isn't one); M-x
 ;; agent-workspace-check-roles lists them all.
+
+;; CREWS
+;; The agents a crew should have, made at once (config/agent-workspace/
+;; crews.el): a Markdown file each, NAME.md, its front matter as a role's: a
+;; description, its agents (roles with counts: agents: scribe, builder 2,
+;; reviewer, merger), and loop (the roles whose new agents loop; none by
+;; default). The starters ship in config/agent-workspace/crews/: small
+;; (scribe, builder: you merge), full (scribe, builder, reviewer, merger),
+;; extended (full, with two builders), none looping; a project's own go in
+;; its .agent-workspace/crews/ (committed), yours in its
+;; .agent-shell/agent-workspace/crews/ (out of git), a later one replacing
+;; one of the same name: starter < project < local. In c's menu, after the
+;; roles: a row each, its icon, name, description, its agents, and what it
+;; would add here (+ reviewer, merger), or, dimmed and refused, nothing to
+;; add. Picked, it makes for each role its count less the crew's agents of
+;; that role (asleep and gone home ones counting, and those crew.json keeps
+;; while the crew isn't running), no name asked, as c makes one with its
+;; name left empty; the room says who was made ("crew full: +
+;; reviewer ken, merger margaret"). It only adds: an agent beyond its count,
+;; or of a role it doesn't list, stays as it is. A file's problems are
+;; warnings naming file and line; an error leaves it out (a role that isn't
+;; the project's, a count that isn't one, over its role's max:, a loop: role
+;; not among its agents); M-x agent-workspace-check-roles lists them too.
+;; From the shell, cmd/agent-workspace crew NAME, replying JSON with the
+;; agents made.
+(defcustom agent-workspace-crews-directory ".agent-workspace/crews"
+  "Where a project keeps its own crew files, committed: shared with whoever
+works on it."
+  :type 'string
+  :group 'agent-workspace)
+
+(defcustom agent-workspace-local-crews-directory ".agent-shell/agent-workspace/crews"
+  "Where a project keeps your own crew files, out of git (.agent-shell/ is
+ignored): relative to its main checkout. They replace the project's and
+the starters of the same name."
+  :type 'string
+  :group 'agent-workspace)
 
 ;; ITS STATES
 ;; waking up, at the desk (waiting for you), working (its turn's time counted
@@ -282,8 +322,8 @@ needs your OK. nil: Claude Code's own default."
 ;; workspace, "crew · PROJECT" (config/agent-workspace/app.el); SPC o W: in
 ;; the window you're in. A project that can't have a crew (not a git
 ;; repository, no commit yet) says why and offers a terminal with git init
-;; typed. The first time, the stage is empty: c makes an agent. Two
-;; columns (the room comes on the right, doom-51z.6):
+;; typed. The first time, the stage is empty: c makes an agent, or a crew
+;; (see CREWS). Two columns (the room comes on the right, doom-51z.6):
 ;; - the issues (config/agent-workspace/issues.el), on the left: in progress
 ;;   (each with its agent), ready by the role they're for then by epic (its
 ;;   heading, its issues under it, those of none last), blocked, done today,
@@ -352,6 +392,7 @@ needs your OK. nil: Claude Code's own default."
 (load! "agent-workspace/worktree")
 (load! "agent-workspace/session")
 (load! "agent-workspace/roles")
+(load! "agent-workspace/crews")
 (load! "agent-workspace/names")
 (load! "agent-workspace/new")
 (load! "agent-workspace/request")

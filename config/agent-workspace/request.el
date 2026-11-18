@@ -10,6 +10,11 @@
 ;;   new  {"role": "builder", "name": "ada", "prompt": "..."}  (name, prompt:
 ;;        optional) -> {"ok": true, "name", "role", "worktree", "branch",
 ;;        "state"}
+;;   crew {"name": "full"} -> {"ok": true, "made": [{"name", "role",
+;;        "worktree", "branch", "state"}...]}: what the crew lacks of the
+;;        crew file full made (crews.el), none if it lacks nothing; those not
+;;        made (their worktree), "failed": [{"role", "error"}...] too. An
+;;        unknown crew: {"ok": false, "error"} naming the crews there are
 ;;   send {"to": "ada" | "#builder" | "#all", "from": "ci", "text": "..."}
 ;;        (from: optional, "shell") -> {"ok": true, "events": [{"id", "to",
 ;;        "state": "queued" | "delivered"}]} (inbox.el); with "agent": "ada"
@@ -43,12 +48,30 @@ reply, a plist."
                             name
                           (agent-workspace-pool-name project role))
                   :prompt (and (stringp prompt) (not (string-empty-p prompt)) prompt))))
-      (list :ok t
-            :name (agent-workspace-agent-name agent)
-            :role (agent-workspace-agent-role agent)
-            :worktree (directory-file-name (agent-workspace-agent-worktree agent))
-            :branch (agent-workspace-agent-branch agent)
-            :state (symbol-name (agent-workspace-agent-state agent))))))
+      (cons :ok (cons t (agent-workspace--request-agent agent))))))
+
+(defun agent-workspace--request-agent (agent)
+  "AGENT as a reply says it: a plist."
+  (list :name (agent-workspace-agent-name agent)
+        :role (agent-workspace-agent-role agent)
+        :worktree (directory-file-name (agent-workspace-agent-worktree agent))
+        :branch (agent-workspace-agent-branch agent)
+        :state (symbol-name (agent-workspace-agent-state agent))))
+
+(defun agent-workspace--request-crew (directory payload)
+  "Make what DIRECTORY's project's crew lacks of the crew file PAYLOAD (a
+plist) names: the reply, a plist."
+  (let* ((default-directory (file-name-as-directory directory))
+         (project (or (agent-workspace-project)
+                      (user-error "No crew here: %s" (agent-workspace-no-crew-reason))))
+         (name (plist-get payload :name)))
+    (unless (and (stringp name) (not (string-empty-p name)))
+      (user-error "crew: which one? crew NAME"))
+    (pcase-let ((`(,made ,failed ,_) (agent-workspace-crew-make project name)))
+      (append (list :ok t :made (vconcat (mapcar #'agent-workspace--request-agent made)))
+              (and failed
+                   (list :failed (vconcat (mapcar (lambda (failure) (list :role (car failure) :error (cdr failure)))
+                                                  failed))))))))
 
 (defun agent-workspace--request-send (directory payload)
   "Queue an event in DIRECTORY's project, as PAYLOAD (a plist) says: the
@@ -95,8 +118,9 @@ its reply written to DIR/reply. Return t."
                                                     :false-object nil)))))
                 (pcase op
                   ("new" (agent-workspace--request-new directory payload))
+                  ("crew" (agent-workspace--request-crew directory payload))
                   ("send" (agent-workspace--request-send directory payload))
-                  (_ (list :ok :false :error (format "unknown operation %S; operations: new, send" op)))))
+                  (_ (list :ok :false :error (format "unknown operation %S; operations: new, crew, send" op)))))
             (json-parse-error (list :ok :false :error (format "not JSON: %s" (error-message-string err))))
             (error (list :ok :false :error (error-message-string err))))))
     (let ((coding-system-for-write 'utf-8-unix))

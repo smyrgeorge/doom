@@ -479,7 +479,7 @@ line; none: said."
            (said nil))
       (cl-letf (((symbol-function 'message) (lambda (format &rest args) (push (apply #'format format args) said))))
         (should-not (agent-workspace-check-roles project))
-        (should (equal (car said) "4 roles, no problems")))
+        (should (equal (car said) "4 roles, 2 crews, no problems")))
       (+test-awr--file own "tester.md" "---\ndescription: tests\nmode: autoo\n---\nTest.\n")
       (+test-awr--file local "mine.md" "---\ndescription: mine\nhands-to: nobody\n---\n")
       (+test-awr--quietly
@@ -493,7 +493,7 @@ line; none: said."
         (with-current-buffer "*agent-workspace roles*"
           (should (derived-mode-p 'compilation-mode))
           (should (equal (buffer-substring-no-properties (point-min) (point-max))
-                         (concat "The roles of " (abbreviate-file-name (directory-file-name project))
+                         (concat "The roles and crews of " (abbreviate-file-name (directory-file-name project))
                                  ": 1 error, 2 warnings\n\n"
                                  ".agent-workspace/roles/tester.md:3: error: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions\n"
                                  ".agent-shell/agent-workspace/roles/mine.md:4: warning: no instructions after its front matter\n"

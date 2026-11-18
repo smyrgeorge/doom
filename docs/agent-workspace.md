@@ -19,7 +19,7 @@ Try it: `M-x +my/example-agent-workspace`, a crew of three stand-in agents, offl
 
 `SPC o w`, from inside a project, opens its crew in a workspace of its own, `crew · doom`. Outside a project, it asks
 which one. `SPC o W` opens it in the window you're in. The first time, the stage is empty and says so: `c`, there
-as anywhere in the app, makes an agent.
+as anywhere in the app, makes an agent, or a whole [crew](#crews).
 
 - **The issues** are on the left. In progress, each with the agent on it. Ready, grouped by the role they're for
   (a role nobody in the crew has is flagged), then by epic: each epic's heading with how many of its issues are
@@ -63,7 +63,7 @@ terminal with `git init` typed.
 | `j` / `k` | a bar | The next / previous agent, the cursor in its pane |
 | `RET` / `o` / `d` | the minimap | Its agent's pane / the file it's in / its branch's changes |
 | `RET` / `TAB` | a bar | Its pane / open or fold it |
-| `c` | anywhere | A new agent (on a ready issue: for it) |
+| `c` | anywhere | A new agent, or the agents a [crew](#crews) lacks (on a ready issue: an agent for it) |
 | `i` / `K` / `r` | anywhere | Interrupt it / kill it (gone home) / restart it fresh |
 | `X` | anywhere | [Forget it](#what-you-do-to-one): out of the crew (asked first) |
 | `s` | anywhere | Put it to sleep, or wake it |
@@ -370,7 +370,7 @@ JSON, never run, so scripts can read it too. Closing the crew leaves it as it wa
 whose crew isn't running starts every agent in it again: fresh, each in its worktree, with its role as it is now, its
 panels open again there (fetched afresh), waiting for you. Asleep agents stay asleep, and their panels open when they
 wake. Looping agents come back asleep: reopening never starts work by itself. An agent made while the crew isn't
-running (`M-x agent-workspace-new`, `cmd/agent-workspace new`) is added to it: the saved agents stay in it, and start
+running (`M-x agent-workspace-new`, `cmd/agent-workspace new` or `crew`) is added to it: the saved agents stay in it, and start
 beside the new one when the app opens. An agent that can't start (its role is
 gone, its worktree can't be made) is stuck, saying why, and the others start. A panel whose file is gone is skipped,
 saying so, and the others open. A wrong agent is left out, and a warning names it (`crew.json: agent 2 (ken): its
@@ -387,31 +387,37 @@ panels or a loop turned off it applies.
 
 `c` in the app (or `M-x agent-workspace-new` in the project) asks for:
 
-1. **Its role.** Each role is a row, its columns lined up: its icon in its colour, its name, what it does, how many
-   of it run against its maximum, its model (`your default` if it has none), its permission mode (`auto` if it has
-   none), the issues it takes (its labels, then how many the app's issue list has ready for it), the role it
-   hands them to, and the one it replaced. The roles are grouped by where they come from, each group under a
-   divider: [yours, the project's, the starters](#roles), then the role files left out for a mistake:
+1. **Its role, or a crew** (`Role or crew:`). Each role is a row, its columns lined up: its icon in its colour, its
+   name, what it does, how many of it run against its maximum, its model (`your default` if it has none), its
+   permission mode (`auto` if it has none), the issues it takes (its labels, then how many the app's issue list has
+   ready for it), the role it hands them to, and the one it replaced. The roles are grouped by where they come from,
+   each group under a divider: [yours, the project's, the starters](#roles), then the [crews](#crews), then the
+   role and crew files left out for a mistake:
 
    ```
    ──── local · .agent-shell/agent-workspace/roles ────────────────────────────────────────────────
    ⚗ tester        my own tests                      2 of 2  your default  auto  test  replaces the project's
    ──── starters ──────────────────────────────────────────────────────────────────────────────────
-   ⚙ builder       builds what you give it           2 of 4  your default  auto  build ·3 ready  → tester, documenter, reviewer
+   ⚙ builder       builds what you give it           1 of 4  your default  auto  build ·3 ready  → tester, documenter, reviewer
    ✎ scribe        writes issues with you            1 of 1  at its max
+   ──── crews ─────────────────────────────────────────────────────────────────────────────────────
+   ⁂ small         write and build; you merge        scribe, builder                      nothing to add
+   ⁂ full          write, build, review, merge       scribe, builder, reviewer, merger    + reviewer, merger
+   ⁂ extended      full, with two builders           scribe, builder 2, reviewer, merger  + builder, reviewer, merger
    ──── left out ──────────────────────────────────────────────────────────────────────────────────
    ✗ helper        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions
    ```
 
-   A role at its maximum is dimmed, says `at its max`, and is refused; so is a role file left out, naming its file
-   and line. The role offered first (an issue's) is selected, in its group. In a narrower minibuffer the columns on
-   the right go first: the role it replaced, the role it hands to, its labels, its mode, its model; then what it
-   does is cut.
+   A role at its maximum is dimmed, says `at its max`, and is refused; so is a crew with nothing to add, and a file
+   left out, naming its file and line. The role offered first (an issue's) is selected, in its group. In a narrower
+   minibuffer the columns on the right go first: the role it replaced, the role it hands to, its labels, its mode,
+   its model; then what it does is cut. A crew's row loses where it comes from, then its agents; what it would add
+   is cut last. `c` on a ready issue makes an agent for that issue: no crews there.
 2. **Its name.** Leave it empty and one is made for it, `ada`, `grace`, `linus`..., each with an initial no other
    agent has. A name is lowercase letters, digits and `-`.
 
 With `C-u`, it also asks for its model, permission mode and colour. Its role's are the defaults (its mode: auto,
-unless its role says).
+unless its role says). A crew picked asks nothing more: see [Crews](#crews).
 
 The agent gets its worktree and its session starts. Then it waits for you. If its worktree can't be made, nothing is
 made, and you're told why. If its session doesn't start, it's stuck, saying why.
@@ -424,6 +430,53 @@ its first message ("Work on doom-a1b: ..."):
 ```
 
 From the shell: `cmd/agent-workspace new --role builder [--name ada] [--prompt TEXT]` ([more](cmd.md#cmdagent-workspace)).
+
+## Crews
+
+A crew file lists the agents a crew should have. Pick it in `c`'s menu and the ones the crew lacks are made at
+once: the whole crew on an empty stage, only what's missing in a crew that has some, nothing when every agent is
+there. These ship with this config, the starters:
+
+| Crew | Agents |
+|---|---|
+| small | scribe, builder: you review and merge, the builder telling you its work is ready |
+| full | scribe, builder, reviewer, merger |
+| extended | scribe, two builders, reviewer, merger |
+
+For each role, it makes the file's count less the crew's agents of that role, asleep and gone home ones counting,
+and, while the crew isn't running, those `crew.json` keeps.
+Each is made as `c` makes one with its name left empty: a name from the pool, its role's colour, model and mode.
+Nothing is asked, not even with `C-u`. The room says who was made: `crew full: + reviewer ken, merger margaret`.
+
+It only adds: the crew's agents stay as they are, one beyond the file's count, one of a role it doesn't list, and
+one of a looping role too (its loop as it was). An agent whose worktree can't be made isn't made, and the room says
+why; one whose session doesn't start is stuck, saying why. The others are made.
+
+A crew file is Markdown, as a role file is:
+
+```markdown
+---
+description: write, build, review, merge
+agents: scribe, builder 2, reviewer, merger
+loop: builder
+---
+Notes for you: not read.
+```
+
+- `agents` are roles, each with how many (none: 1). A YAML list works too (`- builder 2`).
+- `loop` names the roles whose new agents [loop](#loops). The starters loop none.
+
+A project's own crews go in its `.agent-workspace/crews/`, committed, yours in its
+`.agent-shell/agent-workspace/crews/`, out of git. A crew replaces the one with the same name before it: a starter,
+then the project's, then yours. Its row in the menu says where it comes from.
+
+A crew file needs its front matter, a `description` and `agents`. A file with a mistake is left out (the menu lists
+it, refused), and a warning names its file and line: a role that isn't one of the project's, a count that isn't a
+whole number above 0, more agents of a role than its `max` allows, a `loop` role not among its agents. An unknown
+key, a role given twice (the last is used) and a `loop` role without labels (not looped) are only warned about. `M-x
+agent-workspace-check-roles` lists the crew files' problems with the roles'.
+
+From the shell: `cmd/agent-workspace crew full` ([more](cmd.md#cmdagent-workspace)).
 
 ## An agent
 

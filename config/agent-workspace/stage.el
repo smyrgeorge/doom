@@ -222,7 +222,7 @@ how to open one, or make one."
       (erase-buffer)
       (insert (propertize (if agents
                               "\n  Every pane is folded.\n\n  Open one: TAB, a click or RET on its bar, j/k on the bars,\n  moving onto its issue in the list.\n"
-                            "\n  No agents yet.\n\n  c: a new agent\n")
+                            "\n  No agents yet.\n\n  c: a new agent, or a crew\n")
                           'face 'shadow)))))
 
 (defun agent-workspace--show-pane (window agent)
