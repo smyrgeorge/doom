@@ -235,6 +235,34 @@ from outside to such a role: refused too."
     (should (member (plist-get (car (+test-awg--send "ada" "#builder" "Who has the lexer?")) :state)
                     '("queued" "delivered")))))
 
+(ert-deftest agent-workspace-messages/its-sender-renamed ()
+  "ada's message to ken, queued while he works, ada renamed alice: he's
+told it's from alice (builder), his answer goes to alice, not to a new ada
+made meanwhile; one he's answering when its sender is renamed: the answer
+to her new name too (doom-pbk.149: dropped, nothing said)."
+  (let ((+test-awg--talk 'on))
+    (+test-awg "renamed" nil (("ada" "builder") ("ken" "builder"))
+      (agent-workspace-send ken "slow work of yours" :submit t)
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ken) 'working)) 20))
+      (should (equal (plist-get (car (+test-awg--send "ada" "ken" "What does the lexer return?")) :state) "queued"))
+      (agent-workspace-rename ada "alice")
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ada) 'desk)) 20))
+      (let ((new (agent-workspace-create :role "builder" :name "ada" :kind 'mock))
+            (asked (+test-awg--asked "alice" "builder" "What does the lexer return?")))
+        (should (+test-wait-for (lambda () (member asked (+test-awg--prompts "ken"))) 20))
+        (should (+test-wait-for (lambda () (member (+test-awg--answer "ken (builder)" (concat "ok: " asked))
+                                                   (+test-awg--prompts "alice")))
+                                20))
+        (+test-sleep 0.5)
+        (should-not (seq-find (lambda (prompt) (string-prefix-p "Answer from" prompt)) (+test-awg--prompts "ada")))
+        (ignore new))
+      ;; Renamed while ken answers her.
+      (+test-awg--send "alice" "ken" "slow question from alice")
+      (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state ken) 'working)) 20))
+      (agent-workspace-rename ada "ali")
+      (should (+test-wait-for (lambda () (member (+test-awg--answer "ken (builder)" "slowly") (+test-awg--prompts "ali")))
+                              20)))))
+
 (ert-deftest agent-workspace-messages/a-failed-turn-sends-nothing-back ()
   "A message's turn that fails sends nothing back, and the agent's next
 reply, to a prompt of yours, never goes to the sender; nor after its

@@ -127,8 +127,9 @@ first time."
           thread))))
 
 (defun agent-workspace--messages-renamed-h (agent was)
-  "AGENT renamed from WAS: its threads and its messages waiting for your OK,
-its new name's. In `agent-workspace-renamed-functions'."
+  "AGENT renamed from WAS: its threads, its messages waiting for your OK
+and those being answered (the answer goes to its new name), its new
+name's. In `agent-workspace-renamed-functions'."
   (let* ((key (agent-workspace--root (agent-workspace-agent-project agent)))
          (name (agent-workspace-agent-name agent))
          (rename (lambda (who) (if (equal who was) name who))))
@@ -139,7 +140,12 @@ its new name's. In `agent-workspace-renamed-functions'."
     ;; In place: the room's buttons hold them.
     (dolist (message (gethash key agent-workspace--messages-waiting))
       (plist-put message :from (funcall rename (plist-get message :from)))
-      (plist-put message :to (funcall rename (plist-get message :to))))))
+      (plist-put message :to (funcall rename (plist-get message :to))))
+    (dolist (other (agent-workspace-agents key))
+      (dolist (entry (gethash other agent-workspace--awaiting-answer))
+        (let ((message (plist-get entry :message)))
+          (plist-put message :from (funcall rename (plist-get message :from)))
+          (plist-put message :to (funcall rename (plist-get message :to))))))))
 
 (add-hook 'agent-workspace-renamed-functions #'agent-workspace--messages-renamed-h)
 

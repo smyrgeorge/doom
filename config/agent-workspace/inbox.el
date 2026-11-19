@@ -411,17 +411,23 @@ meanwhile, or its prompt not sent: it stays as it is (queued, said). NOW
          (agent-workspace--event-room-keys event)))
 
 (defun agent-workspace--inbox-renamed-h (agent was)
-  "AGENT renamed from WAS: the events queued for it by name, its. In
-`agent-workspace-renamed-functions'."
+  "AGENT renamed from WAS: the events queued for it by name, its; its
+messages and answers queued, from its new name (their answers go to it,
+never to an agent made with the old one). In place: the room's buttons
+and an event being given hold them. In `agent-workspace-renamed-functions'."
   (let* ((project (agent-workspace-agent-project agent))
-         (events (agent-workspace-inbox project)))
-    (when (seq-some (lambda (event) (equal (plist-get event :to) was)) events)
-      (agent-workspace--inbox-write
-       project (mapcar (lambda (event)
-                         (if (equal (plist-get event :to) was)
-                             (plist-put (copy-sequence event) :to (agent-workspace-agent-name agent))
-                           event))
-                       events)))))
+         (name (agent-workspace-agent-name agent))
+         (changed nil))
+    (dolist (event (agent-workspace-inbox project))
+      (when (equal (plist-get event :to) was)
+        (plist-put event :to name)
+        (setq changed t))
+      (when (and (member (plist-get event :kind) '("message" "answer"))
+                 (equal (plist-get event :from) was))
+        (plist-put event :from name)
+        (setq changed t)))
+    (when changed
+      (agent-workspace--inbox-write project (agent-workspace-inbox project)))))
 
 (add-hook 'agent-workspace-renamed-functions #'agent-workspace--inbox-renamed-h)
 
