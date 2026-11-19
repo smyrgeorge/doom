@@ -98,8 +98,14 @@
 
 (defun agent-workspace--sidebar-project-of (path)
   "The project of PATH, a folder treemacs shows, as the crews' key, or nil
-\(asked of git once a folder)."
+\(asked of git once a folder; again for one that was no repository once a
+crew's project holds it: git init since, its crew opened)."
   (let ((known (gethash path agent-workspace--sidebar-projects)))
+    (when (and (eq known :none)
+               (let ((dir (file-name-as-directory (file-truename path))))
+                 (seq-some (lambda (root) (string-prefix-p root dir))
+                           (hash-table-keys agent-workspace--apps))))
+      (setq known nil))
     (unless known
       (setq known (puthash path (or (ignore-errors
                                       (when-let* ((project (agent-workspace-project path)))

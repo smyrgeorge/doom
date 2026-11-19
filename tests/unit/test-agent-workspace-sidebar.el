@@ -260,6 +260,28 @@ window split from the crew's, half each), a border dragged (doom-pbk.127)."
       (agent-workspace--sidebar-draw project)
       (should (= (window-total-height window) 14)))))
 
+(ert-deftest agent-workspace-sidebar/a-folder-made-a-repository ()
+  "treemacs on a folder before it's a git repository: no crew there; git
+init, a commit, its crew opened and left: its lanes under treemacs
+\(doom-pbk.156: no repository kept for good, no lanes)."
+  (+test-aws "later"
+    (let ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "aws-later-") t))))
+      (should-not (agent-workspace--sidebar-project-of (directory-file-name dir)))
+      (let ((default-directory dir))
+        (call-process "git" nil nil nil "init" "-q" "-b" "main")
+        (write-region "hello\n" nil "README")
+        (call-process "git" nil nil nil "add" "README")
+        (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "first")
+        (agent-workspace-create :role "builder" :name "ada")
+        (agent-workspace-open t)
+        (agent-workspace-leave))
+      (should (equal (agent-workspace--sidebar-project-of (directory-file-name dir)) (agent-workspace--root dir)))
+      (+test-aws--treemacs-show dir)
+      (should (agent-workspace--sidebar-window (selected-frame)))
+      (+test-aws--treemacs-hide)
+      (let ((default-directory dir))
+        (when (agent-workspace--app dir) (agent-workspace--close-app dir))))))
+
 (ert-deftest agent-workspace-sidebar/ret-opens-the-app-its-agent-selected ()
   (+test-aws "ret"
     (let ((_ada (agent-workspace-create :role "builder" :name "ada"))
