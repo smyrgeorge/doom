@@ -123,7 +123,8 @@ On an agent's line, `RET` selects its agent, `o` opens the file it's in (its tur
 its worktree at its line, and `d` shows its branch's changes. On a `⚠`, `RET` or `d` shows both agents' changes to
 that file. `m` shows or hides it, and the crew keeps that. It's as tall as its lines: one with no agents
 (`No agents yet.`), growing as agents come, the axis and legend under them, with half a line of space above and below
-them (a blank line below in a terminal). Past 10 lanes (`agent-workspace-minimap-lines`) it scrolls.
+them (a blank line below in a terminal). Past 10 lanes (`agent-workspace-minimap-lines`) the lanes scroll (`j`, `k`
+or the wheel), the axis and legend staying under them.
 `agent-workspace-minimap` set to `nil` hides it in new crews.
 
 ## The crew under treemacs
@@ -139,9 +140,10 @@ lines cut to fit:
       ⌕ read  ✎ edit  ▶ run  ! as…
 ```
 
-As tall as the minimap and padded alike: at most 10 lanes (`agent-workspace-minimap-lines`), then it scrolls. `RET` or a
-click on a lane opens the app with that agent selected, a click on its header the app. treemacs closed, or on another
-project, it goes. Not in the crew's own frame, where the minimap shows it all.
+As tall as the minimap and padded alike: at most 10 lanes (`agent-workspace-minimap-lines`), then they scroll with the
+wheel, the axis and legend under them. `RET` or a click on a lane opens the app with that agent selected, a click on
+its header the app. treemacs closed, or on another project, it goes. Not in the crew's own frame, where the minimap
+shows it all.
 
 Meanwhile, the mode line of the frames not showing the crew says what needs you: hands raised, done, stuck (`!1 ✓1`;
 nothing while they only work), and a click there opens the app. `(setq agent-workspace-mode-line-tally 'all)` in

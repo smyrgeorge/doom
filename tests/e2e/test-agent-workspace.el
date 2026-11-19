@@ -508,8 +508,11 @@ line of padding above its lanes and half a line under its last line
   "Fourteen agents in a frame with window dividers (Doom's, a pixel): the
 minimap as tall as 10 lanes, the axis and legend, and its padding, its
 lines whole (in whole lines a divider cut the last by a pixel, the cursor
-there scrolling them): its first 12 lanes; j to the last lane scrolls it
-into view, whole."
+there scrolling them): its first 10 lanes, the axis and legend under them.
+j past the tenth scrolls the lanes, not the window: the lanes from the
+second, the cursor on the eleventh, the axis and legend still under them,
+all whole; to the last lane, the same (doom-pbk.139: the window scrolled,
+the axis and legend under its bottom)."
   (+test-e2e-aw
     (let ((window-divider-default-places t)
           (window-divider-default-bottom-width 1)
@@ -524,26 +527,53 @@ into view, whole."
             (agent-workspace-layout (agent-workspace--app project))
             (+test-sleep 0.5)
             (agent-workspace--minimap-draw project)
-            (let ((window (get-buffer-window (agent-workspace--minimap-buffer project))))
+            (let ((window (get-buffer-window (agent-workspace--minimap-buffer project)))
+                  (order (agent-workspace--ordered project)))
+              (should (= (length order) 14))
               (should (= (window-bottom-divider-width window) 1))
               (should (= (window-body-height window t) (let ((line (window-default-line-height window)))
                                                          (+ (* 12 line) (* 2 (/ line 2))))))
               (with-selected-window window
-                (redisplay t)
-                ;; Its first 12 lanes whole, the padding above them.
-                (goto-char (point-min))
-                (agent-workspace-minimap-next 12)
-                (should (pos-visible-in-window-p (point) window))
-                (should-not (nth 2 (pos-visible-in-window-p (point) window t)))
-                (agent-workspace-minimap-next 1)
-                (should (get-text-property (point) 'agent-workspace-minimap-agent))
-                (agent-workspace-minimap-next 1)
-                (should (get-text-property (point) 'agent-workspace-minimap-agent))
-                (redisplay t)
-                (should (> (window-start window) (point-min)))
-                ;; Whole: nothing of it cut at the bottom.
-                (should (equal (nth 3 (pos-visible-in-window-p (point) window t)) nil))
-                (should (pos-visible-in-window-p (point) window)))))
+                (cl-flet ((whole (lane)
+                            ;; Lane LANE's (from 0) agent's lanes drawn, from
+                            ;; the first shown, the cursor on it, the axis and
+                            ;; legend under them: all of it whole on the
+                            ;; screen, the window unscrolled.
+                            (redisplay t)
+                            (should (= (window-start window) (point-min)))
+                            (should (eq (get-text-property (point) 'agent-workspace-minimap-agent) (nth lane order)))
+                            (goto-char (point-min))
+                            (let ((lanes 0))
+                              (while (not (eobp))
+                                (when (get-text-property (point) 'agent-workspace-minimap-agent)
+                                  (setq lanes (1+ lanes)))
+                                (forward-line 1))
+                              (should (= lanes 10)))
+                            (goto-char (point-min))
+                            (should (search-forward "asks you" nil t))
+                            (should (pos-visible-in-window-p (point) window))
+                            (should-not (nth 2 (pos-visible-in-window-p (point) window t)))
+                            (should (search-backward "-15m" nil t))
+                            (should-not (nth 2 (pos-visible-in-window-p (point) window t)))
+                            (agent-workspace--lanes-goto lane)))
+                  ;; Its first 10 lanes whole, the padding above them.
+                  (goto-char (point-min))
+                  (agent-workspace-minimap-next 10)
+                  (should (= agent-workspace--lanes-top 0))
+                  (whole 9)
+                  (should-not (nth 2 (pos-visible-in-window-p (point) window t)))
+                  ;; j: the lanes from the second, the axis and legend under.
+                  (agent-workspace-minimap-next 1)
+                  (should (= agent-workspace--lanes-top 1))
+                  (whole 10)
+                  (should (eq (get-text-property (save-excursion (goto-char (point-min)) (forward-line 1) (point))
+                                                 'agent-workspace-minimap-agent)
+                              (nth 1 order)))
+                  ;; To the last: the lanes from the fifth.
+                  (agent-workspace-minimap-next 3)
+                  (should (= agent-workspace--lanes-top 4))
+                  (whole 13)
+                  (should-not (nth 2 (pos-visible-in-window-p (point) window t)))))))
         (window-divider-mode -1)))))
 
 (ert-deftest e2e-agent-workspace/the-minimap-s-bars-line-up ()

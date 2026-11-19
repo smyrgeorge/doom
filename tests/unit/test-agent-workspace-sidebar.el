@@ -202,7 +202,8 @@ minute (a lane of dots doesn't change)."
   "Under treemacs as tall as the minimap: its header line, a line an agent,
 the axis and legend under them (quiet agents' too), its padding (a
 terminal's: a blank line under them), the cursor on a lane; twelve agents,
-10 lanes (`agent-workspace-minimap-lines'), then it scrolls. Whatever made
+10 lanes (`agent-workspace-minimap-lines'), the axis and legend under them,
+the wheel scrolling the lanes (doom-pbk.139). Whatever made
 it otherwise, back to that as its frame's windows change: treemacs quit and shown again at once (a workspace switch: its new
 window split from the crew's, half each), a border dragged (doom-pbk.127)."
   (+test-aws "tall"
@@ -240,6 +241,20 @@ window split from the crew's, half each), a border dragged (doom-pbk.127)."
       (agent-workspace--sidebar-draw project)
       (should (= (window-total-height window) 14))
       (should (= (agent-workspace--lanes project) 10))
+      (cl-flet ((first-lane ()
+                  (with-current-buffer (window-buffer window)
+                    (agent-workspace-agent-name (get-text-property (point-min) 'agent-workspace-minimap-agent)))))
+        (with-current-buffer (window-buffer window)
+          (should (= (count-lines (point-min) (point-max)) 12))
+          (should (string-prefix-p "⌕ read" (string-trim (car (last (split-string (buffer-string) "\n" t)))))))
+        (should (equal (first-lane) "ada"))
+        ;; The wheel: the lanes from the second, the axis and legend under them.
+        (agent-workspace-lanes-wheel `(wheel-down (,window ,(window-point window) (0 . 0) 0)))
+        (should (equal (first-lane) "bo"))
+        (with-current-buffer (window-buffer window)
+          (should (= (count-lines (point-min) (point-max)) 12))
+          (should (string-search "-15m" (buffer-string)))
+          (should (get-text-property (window-point window) 'agent-workspace-minimap-agent))))
       ;; ada edits: as tall (the axis and legend there already).
       (+test-aws--tool (agent-workspace-agent "ada" project) "edit")
       (agent-workspace--sidebar-draw project)

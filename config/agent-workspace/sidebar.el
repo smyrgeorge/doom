@@ -10,7 +10,7 @@
 ;; where it is now), a conflict's line, the axis and legend while there's
 ;; an agent, padded; as wide as treemacs (one column of side windows), cut to
 ;; it; as tall as they are, at most `agent-workspace-minimap-lines' lanes
-;; (then it scrolls), whatever made it otherwise (treemacs shown again on a
+;; (then they scroll with the wheel, the axis and legend under them), whatever made it otherwise (treemacs shown again on a
 ;; workspace switch, split from it; a border dragged): sized again as its
 ;; frame's windows change. Its header line its own: CREW · PROJECT, the
 ;; tally at its right. Never in the crew's own frame (the app has its

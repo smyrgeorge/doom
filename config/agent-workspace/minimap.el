@@ -18,10 +18,11 @@
 ;; a frame; the │ at its column whatever comes before it; every line evened
 ;; and cut to its window's pixels, never past its edge. Faces only. As tall
 ;; as its lines: a lane each, growing as agents come, at most
-;; `agent-workspace-minimap-lines' (then it scrolls), the axis and legend
-;; under them while there's an agent; half a line of padding above them and
-;; half a line under them (in a terminal, where a line can't be halved, a
-;; blank line under them).
+;; `agent-workspace-minimap-lines' (then the lanes scroll, j/k or the wheel:
+;; only the lanes shown are drawn, the window never scrolls), the axis and
+;; legend under them while there's an agent; half a line of padding above
+;; them and half a line under them (in a terminal, where a line can't be
+;; halved, a blank line under them).
 ;;
 ;; Drawn again as the agents do things, a few times a second at most, and once
 ;; a minute (its cells move on) while a lane has something (a lane of dots
@@ -31,7 +32,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'text-property-search)
 
 (declare-function agent-ui-even-glyphs "agent-ui/core")
 (declare-function agent-ui-blend "agent-ui/core")
@@ -48,9 +48,9 @@ hides it; crew.json keeps what you chose."
 
 (defcustom agent-workspace-minimap-lines 10
   "The most lanes the minimap, and the crew under treemacs, show at once (an
-agent's, a file two agents change): past them they scroll. Their header
-line, padding, axis and legend not counted. Fewer lanes, they're as tall as
-they are."
+agent's, a file two agents change): past them the lanes scroll, the axis
+and legend staying under them. Their header line, padding, axis and legend
+not counted. Fewer lanes, they're as tall as they are."
   :type 'natnum
   :group 'agent-workspace)
 
@@ -83,6 +83,24 @@ what they were measured with.")
 
 (defvar-local agent-workspace--minimap-project nil "In the minimap: its project.")
 
+(defvar-local agent-workspace--lanes-top 0
+  "In a lanes' window's buffer (the minimap's, the crew's under treemacs):
+the first lane it shows (0: the crew's first). Past
+`agent-workspace-minimap-lines' lanes only that many are drawn, from it.")
+
+(defvar-local agent-workspace--lanes-count 0
+  "In a lanes' window's buffer: its lanes as last drawn, those not shown
+too.")
+
+(defvar agent-workspace-lanes-map
+  (let ((map (make-sparse-keymap)))
+    (dolist (event '(wheel-up wheel-down double-wheel-up double-wheel-down
+                     triple-wheel-up triple-wheel-down mouse-4 mouse-5))
+      (define-key map (vector event) #'agent-workspace-lanes-wheel))
+    map)
+  "Keys on a lanes' window's lines, the wheel's: before smooth scrolling's,
+which scrolled the window, the axis and legend off it.")
+
 (define-derived-mode agent-workspace-minimap-mode special-mode "Minimap"
   "A crew's minimap: what each agent did, minute by minute."
   (setq-local truncate-lines t
@@ -100,7 +118,7 @@ what they were measured with.")
 (defun agent-workspace--lanes (project)
   "How many lanes PROJECT's crew shows at once: an agent's each, a
 conflict's each, at most `agent-workspace-minimap-lines' (then they
-scroll); one line with no agents."
+scroll: `agent-workspace--lanes-draw'); one line with no agents."
   (max 1 (min agent-workspace-minimap-lines
               (+ (length (agent-workspace-agents project))
                  (length (agent-workspace-conflicts project))))))
@@ -157,37 +175,121 @@ window resized beside it doesn't take it."
     (unless (eql (window-preserved-size window) (window-pixel-height window))
       (window-preserve-size window nil t))))
 
-(defun agent-workspace--lanes-draw (window project)
-  "PROJECT's minimap's lines (`agent-workspace-minimap-text') drawn in
+(defun agent-workspace--lanes-key (text &optional pos)
+  "The agent, or the conflict, whose lane TEXT is (a string), or the line
+at POS is in the current buffer (TEXT nil; default point), or nil."
+  (let ((pos (if text 0 (save-excursion (goto-char (or pos (point))) (line-beginning-position)))))
+    (or (get-text-property pos 'agent-workspace-minimap-agent text)
+        (get-text-property pos 'agent-workspace-minimap-conflict text))))
+
+(defun agent-workspace--lanes-draw (window project &optional lane)
+  "PROJECT's minimap's lines (`agent-workspace--minimap-parts') drawn in
 WINDOW's buffer (the current one), a lanes' window's: as wide as it (a
 column short: none on its edge), its glyphs measured in its frame; padded,
 half a line above them and half a line under them, each an empty line that
 tall (a terminal's line under them the empty one after their last newline).
-The cursor on the lane of the agent it was on, else on the line it was on,
-off the padding: where it is, returned."
+Past `agent-workspace-minimap-lines' lanes, only that many, from
+`agent-workspace--lanes-top', the axis and legend under them: the lanes
+scroll, never the window (it scrolled them all, the axis and legend
+past its bottom). The cursor on LANE (from 0: the crew's first) if given,
+else on the lane of the agent or conflict it was on, else on the line it
+was on, off the padding; its lane drawn: where it is, returned. The wheel
+on them scrolls them (`agent-workspace-lanes-wheel')."
   (let* ((pos (window-point window))
-         (agent (get-text-property pos 'agent-workspace-minimap-agent))
+         (key (agent-workspace--lanes-key nil pos))
          (line (line-number-at-pos pos))
-         (lines (with-selected-frame (window-frame window)
-                  (agent-workspace-minimap-text project (max 12 (1- (window-body-width window))))))
+         (parts (with-selected-frame (window-frame window)
+                  (agent-workspace--minimap-parts project (max 12 (1- (window-body-width window))))))
+         (lanes (car parts))
+         (shown (min (length lanes) agent-workspace-minimap-lines))
+         (lane (cond ((null lanes) nil)
+                     (lane (max 0 (min lane (1- (length lanes)))))
+                     (key (seq-position lanes key (lambda (text key)
+                                                    (let ((its (agent-workspace--lanes-key text)))
+                                                      ;; An agent the same one, a conflict an
+                                                      ;; equal one.
+                                                      (or (eq its key) (and (consp its) (equal its key)))))))))
+         (top (max 0 (min agent-workspace--lanes-top (- (length lanes) shown))))
          (pads (agent-workspace--lanes-pads window))
-         (inhibit-read-only t))
+         (inhibit-read-only t)
+         first)
+    ;; Its lane among those drawn.
+    (when lane
+      (setq top (max (min top lane) (- lane (1- shown)))))
+    (setq agent-workspace--lanes-top top
+          agent-workspace--lanes-count (length lanes))
     (erase-buffer)
     (unless (zerop (car pads))
       (insert (agent-workspace--lanes-pad (car pads))))
-    (insert (string-join lines "\n") "\n")
+    (setq first (point))
+    (insert (string-join (append (seq-subseq lanes top (+ top shown)) (cdr parts)) "\n") "\n")
     (when (display-graphic-p (window-frame window))
       (insert (agent-workspace--lanes-pad (cdr pads) t)))
-    (goto-char (point-min))
-    (if-let* ((match (and agent (text-property-search-forward 'agent-workspace-minimap-agent agent #'eq))))
-        (goto-char (prop-match-beginning match))
+    (put-text-property (point-min) (point-max) 'keymap agent-workspace-lanes-map)
+    (if lane
+        (progn (goto-char first)
+               (forward-line (- lane top)))
+      (goto-char (point-min))
       (forward-line (1- line)))
     (when (or (get-text-property (line-beginning-position) 'agent-workspace-lanes-pad)
               (and (eobp) (bolp)))
-      (goto-char (point-min))
-      (when (get-text-property (point) 'agent-workspace-lanes-pad)
-        (forward-line 1)))
+      (goto-char first))
     (point)))
+
+(defun agent-workspace--lanes-at ()
+  "In a lanes' window's buffer: the lane the cursor is on (from 0: the
+crew's first), or nil (the axis, the legend)."
+  (when (agent-workspace--lanes-key nil)
+    (save-excursion
+      (beginning-of-line)
+      (let ((n 0))
+        (while (and (zerop (forward-line -1)) (agent-workspace--lanes-key nil))
+          (setq n (1+ n)))
+        (+ agent-workspace--lanes-top n)))))
+
+(defun agent-workspace--lanes-shown ()
+  "In a lanes' window's buffer: how many lanes it draws at once."
+  (min agent-workspace--lanes-count agent-workspace-minimap-lines))
+
+(defun agent-workspace--lanes-goto (lane)
+  "In a lanes' window's buffer: the cursor on LANE (from 0: the crew's
+first), drawn."
+  (goto-char (point-min))
+  (when (get-text-property (point) 'agent-workspace-lanes-pad)
+    (forward-line 1))
+  (forward-line (- lane agent-workspace--lanes-top)))
+
+(defun agent-workspace--lanes-redraw (window lane)
+  "WINDOW's lanes drawn again, the cursor on LANE (scrolled to): the
+minimap's or the crew's under treemacs."
+  (with-current-buffer (window-buffer window)
+    (let ((project (or agent-workspace--minimap-project
+                       (bound-and-true-p agent-workspace--sidebar-project))))
+      (when project
+        (agent-workspace--in-drawing-frame
+          (let ((point (agent-workspace--lanes-draw window project lane)))
+            (dolist (shown (get-buffer-window-list (current-buffer) nil t))
+              (set-window-point shown point)
+              (set-window-start shown (point-min) t))))))))
+
+(defun agent-workspace-lanes-wheel (event)
+  "The wheel on a lanes' window (EVENT): its lanes scrolled, a lane a
+notch, the axis and legend staying under them."
+  (interactive "e")
+  (let* ((window (posn-window (event-start event)))
+         (down (memq (event-basic-type event) '(wheel-down mouse-5))))
+    (when (window-live-p window)
+      (with-current-buffer (window-buffer window)
+        (let* ((top agent-workspace--lanes-top)
+               (at (with-selected-window window (agent-workspace--lanes-at)))
+               (shown (agent-workspace--lanes-shown))
+               (new (max 0 (min (- agent-workspace--lanes-count shown) (+ top (if down 1 -1))))))
+          (unless (= new top)
+            (setq agent-workspace--lanes-top new)
+            ;; The cursor kept on its lane while it's drawn, else on the
+            ;; nearest that is.
+            (agent-workspace--lanes-redraw
+             window (and at (max new (min at (+ new shown -1)))))))))))
 
 ;; ====== ITS BUFFER, ITS WINDOW ======
 
@@ -419,16 +521,25 @@ a mark left out where it would touch the one before."
       (concat (propertize "where now" 'face 'shadow) " ")
       (window-total-width)))))
 
-(defun agent-workspace-minimap-text (project width &optional now)
-  "PROJECT's minimap, WIDTH columns, up to NOW: its lines."
+(defun agent-workspace--minimap-parts (project width &optional now)
+  "PROJECT's minimap, WIDTH columns, up to NOW: (LANES . UNDER), its lanes
+\(an agent's, a conflict's) and the lines under them (the axis and legend;
+no agents, a line saying so)."
   (let ((agents (agent-workspace--ordered project))
         (conflicts (agent-workspace-conflicts project)))
     ;; Every agent a lane, in the crew's order, its cells (a quiet one's all
     ;; ·); the axis and legend under them.
-    (append (mapcar (lambda (agent) (agent-workspace--minimap-lane agent width now)) agents)
-            (mapcar (lambda (conflict) (agent-workspace--minimap-conflict conflict width)) conflicts)
-            (and agents (list (agent-workspace--minimap-axis) (agent-workspace--minimap-legend width)))
-            (and (not agents) (list (propertize "  No agents yet." 'face 'shadow))))))
+    (cons (append (mapcar (lambda (agent) (agent-workspace--minimap-lane agent width now)) agents)
+                  (mapcar (lambda (conflict) (agent-workspace--minimap-conflict conflict width)) conflicts))
+          (if agents
+              (list (agent-workspace--minimap-axis) (agent-workspace--minimap-legend width))
+            (list (propertize "  No agents yet." 'face 'shadow))))))
+
+(defun agent-workspace-minimap-text (project width &optional now)
+  "PROJECT's minimap, WIDTH columns, up to NOW: its lines, every lane's
+\(`agent-workspace--minimap-parts')."
+  (let ((parts (agent-workspace--minimap-parts project width now)))
+    (append (car parts) (cdr parts))))
 
 ;; ====== DRAWING IT ======
 
@@ -513,19 +624,28 @@ low for it, not shown, saying so."
       (user-error "No agent on this line")))
 
 (defun agent-workspace-minimap-next (&optional n)
-  "The next line with an agent or a conflict (N: that many; back if negative)."
+  "The next line with an agent or a conflict (N: that many; back if
+negative), its lanes scrolled to it (past `agent-workspace-minimap-lines',
+the axis and legend staying under them)."
   (interactive "p")
-  (let ((n (or n 1)))
-    (dotimes (_ (abs n))
-      (let ((start (point)))
-        (forward-line (if (< n 0) -1 1))
-        (while (and (not (if (< n 0) (bobp) (eobp)))
-                    (not (or (get-text-property (point) 'agent-workspace-minimap-agent)
-                             (get-text-property (point) 'agent-workspace-minimap-conflict))))
-          (forward-line (if (< n 0) -1 1)))
-        (unless (or (get-text-property (point) 'agent-workspace-minimap-agent)
-                    (get-text-property (point) 'agent-workspace-minimap-conflict))
-          (goto-char start))))))
+  (let* ((n (or n 1))
+         (at (agent-workspace--lanes-at))
+         (top agent-workspace--lanes-top)
+         (shown (agent-workspace--lanes-shown))
+         (from (cond (at)
+                     ;; On the padding above them: on to the first.
+                     ((save-excursion (beginning-of-line) (bobp)) (and (> n 0) (1- top)))
+                     ;; Under them (the axis, the legend): back to the last.
+                     ((< n 0) (+ top shown))))
+         (to (and from (> shown 0) (max 0 (min (1- agent-workspace--lanes-count) (+ from n))))))
+    (cond
+     ((or (null to) (eql to at)))
+     ((and (>= to top) (< to (+ top shown)))
+      (agent-workspace--lanes-goto to))
+     ((when-let* ((window (if (eq (window-buffer) (current-buffer))
+                              (selected-window)
+                            (get-buffer-window (current-buffer) t))))
+        (agent-workspace--lanes-redraw window to))))))
 
 (defun agent-workspace-minimap-previous (&optional n)
   "The previous line with an agent or a conflict."

@@ -203,9 +203,10 @@ saying how many rows it needs, nothing changed; hiding it works anywhere
 line under them (a terminal's padding: none above, its first line a lane):
 no agents, its one line; a lane an agent, growing as they come and shrinking
 as one's forgotten; the axis and legend under them, quiet agents' too; at
-most `agent-workspace-minimap-lines' lanes (10), then it scrolls. Its own
-change: the app's sizes taken, not a border dragged (doom-pbk.123,
-doom-pbk.125, doom-pbk.130)."
+most `agent-workspace-minimap-lines' lanes (10), then they scroll, only
+those shown drawn, the axis and legend under them. Its own change: the
+app's sizes taken, not a border dragged (doom-pbk.123, doom-pbk.125,
+doom-pbk.130, doom-pbk.139)."
   (+test-awm "tall"
     (let ((app (agent-workspace-open t)))
       (cl-flet ((drawn ()
@@ -225,17 +226,92 @@ doom-pbk.125, doom-pbk.130)."
           (+test-awm--tool (car agents) "read" "README" 1)
           (should (= (drawn) 7))
           (should (string-suffix-p "asks you\n" (+test-awm--text project))))
-        ;; Twelve: 10 lanes shown, the rest scrolled to.
+        ;; Twelve: 10 lanes drawn, the axis and legend under them, the rest
+        ;; scrolled to.
         (+test-awm--crew 12 3)
         (should (= (length (agent-workspace-agents project)) 12))
         (should (= (drawn) 14))
         (should (= (agent-workspace--minimap-lines project) 12))
         (with-current-buffer (agent-workspace--minimap-buffer project)
-          (should (= (count-lines (point-min) (point-max)) 14)))
+          (should (= (count-lines (point-min) (point-max)) 12))
+          (should (string-suffix-p "asks you\n" (buffer-string))))
         ;; Four forgotten: 8 lanes.
         (dolist (name '("fay" "gus" "hal" "ivy"))
           (agent-workspace-forget (agent-workspace-agent name project) 'keep))
         (should (= (drawn) 12))))))
+
+(defun +test-awm--shown (project)
+  "PROJECT's minimap's lanes as drawn: their agents' names, the cursor's
+in capitals; then its last two lines (the axis and legend), trimmed."
+  (with-current-buffer (agent-workspace--minimap-buffer project)
+    (let ((at (window-point (get-buffer-window (current-buffer))))
+          (names nil))
+      (save-excursion
+        (goto-char (point-min))
+        (while (not (eobp))
+          (when-let* ((agent (get-text-property (point) 'agent-workspace-minimap-agent)))
+            (push (if (= (line-number-at-pos at) (line-number-at-pos))
+                      (upcase (agent-workspace-agent-name agent))
+                    (agent-workspace-agent-name agent))
+                  names))
+          (forward-line 1)))
+      (append (nreverse names)
+              (mapcar #'string-trim (last (split-string (buffer-string) "\n" t) 2))))))
+
+(ert-deftest agent-workspace-minimap/past-10-lanes-they-scroll ()
+  "Twelve agents: 10 lanes drawn, the axis and legend always under them
+\(the window scrolled them all, the axis and legend off its bottom), in
+the crew's order. j past the tenth: the lanes from the second, the cursor
+on the eleventh; to the last and back to the first; drawn again, the cursor's agent's lanes
+kept. The wheel scrolls them a lane a notch, the cursor kept on its lane,
+on the nearest shown if it's gone; at either end, nothing (doom-pbk.139)."
+  (+test-awm "scroll"
+    (+test-awm--crew 12)
+    (agent-workspace-open t)
+    (agent-workspace--minimap-draw project)
+    (let* ((window (get-buffer-window (agent-workspace--minimap-buffer project)))
+           (order (mapcar #'agent-workspace-agent-name (agent-workspace--ordered project)))
+           (under '("-15m    -5m now" "⌕ read  ✎ edit  ▶ run  ! asks you")))
+      (cl-flet ((names (from to at)
+                  ;; The crew's names, in its order, from FROM to TO, the AT-th
+                  ;; in capitals.
+                  (append (seq-map-indexed (lambda (name i) (if (= (+ from i) at) (upcase name) name))
+                                           (seq-subseq order from to))
+                          under))
+                (wheel (event)
+                  (agent-workspace-lanes-wheel
+                   `(,event (,window ,(window-point window) (0 . 0) 0)))))
+        (should (equal (+test-awm--shown project) (names 0 10 0)))
+        (with-selected-window window
+          (agent-workspace-minimap-next 9)
+          (should (equal (+test-awm--shown project) (names 0 10 9)))
+          (agent-workspace-minimap-next)
+          (should (equal (+test-awm--shown project) (names 1 11 10)))
+          (should (= (window-start window) (point-min)))
+          (agent-workspace-minimap-next 5)
+          (should (equal (+test-awm--shown project) (names 2 12 11)))
+          ;; Drawn again (an agent did something): as it was.
+          (agent-workspace--minimap-draw project)
+          (should (equal (+test-awm--shown project) (names 2 12 11)))
+          (agent-workspace-minimap-previous 11)
+          (should (equal (+test-awm--shown project) (names 0 10 0)))
+          ;; k on the first, nowhere to go.
+          (agent-workspace-minimap-previous)
+          (should (equal (+test-awm--shown project) (names 0 10 0))))
+        ;; The wheel: the first lane scrolled off, the cursor on the second.
+        (wheel 'wheel-up)
+        (should (equal (+test-awm--shown project) (names 0 10 0)))
+        (wheel 'wheel-down)
+        (should (equal (+test-awm--shown project) (names 1 11 1)))
+        (wheel 'wheel-down)
+        (wheel 'wheel-down)
+        (should (equal (+test-awm--shown project) (names 2 12 2)))
+        (wheel 'wheel-up)
+        (should (equal (+test-awm--shown project) (names 1 11 2)))
+        ;; The wheel's key on its lines, before smooth scrolling's.
+        (with-current-buffer (window-buffer window)
+          (should (eq (lookup-key (get-text-property (point-min) 'keymap) [wheel-down])
+                      #'agent-workspace-lanes-wheel)))))))
 
 (ert-deftest agent-workspace-minimap/the-lanes ()
   "A line for each agent, in the crew's order: one that did something its
