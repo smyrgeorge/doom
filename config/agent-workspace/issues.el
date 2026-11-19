@@ -264,9 +264,13 @@ issue knows its role (:role) and its epic (:epic, see
                                (plist-put (plist-put issue :status 'blocked)
                                           :blocked-by (seq-filter (lambda (id) (member id open-ids))
                                                                   (plist-get issue :blocks))))
+                             ;; Open but not ready (blocked by another), or
+                             ;; bd's blocked status. Deferred, pinned and
+                             ;; hooked left out: not work to take now.
                              (seq-filter (lambda (issue) (and (funcall work issue)
-                                                              (eq (plist-get issue :status) 'open)
-                                                              (not (member (plist-get issue :id) ready-ids))))
+                                                              (or (eq (plist-get issue :status) 'blocked)
+                                                                  (and (eq (plist-get issue :status) 'open)
+                                                                       (not (member (plist-get issue :id) ready-ids))))))
                                          all))
             :done (seq-sort-by (lambda (issue) (or (plist-get issue :closed) "")) #'string>
                                (mapcar (lambda (alist) (agent-workspace--issue alist 'closed))

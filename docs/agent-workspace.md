@@ -23,7 +23,8 @@ as anywhere in the app, makes an agent, or a whole [crew](#crews).
 
 - **The issues** are on the left. In progress, each with the agent on it. Ready, grouped by the role they're for
   (a role nobody in the crew has is flagged), then by epic: each epic's heading with how many of its issues are
-  there, its issues under it (a subtask under its nearest epic), those of no epic last. Blocked, by what. Done today.
+  there, its issues under it (a subtask under its nearest epic), those of no epic last. Blocked, by what (bd's
+  `blocked` status too). Done today. Deferred issues aren't shown, nor bd's pinned and hooked ones.
   Each issue's type is before its id: its icon in its colour, as in the [issue list](issues.md#the-list) (in a
   terminal, its first letter). Moving onto an issue in progress selects its agent. The [minimap](#the-minimap) is
   under them.

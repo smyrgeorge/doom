@@ -1455,6 +1455,30 @@ Something new on it: its side area back."
                                  :object-type 'alist :array-type 'list))
   "What bd answers, for the issue list's tests.")
 
+(ert-deftest agent-workspace-app/bd-s-blocked-status ()
+  "An issue with bd's own blocked status (bd update --status blocked) is
+under BLOCKED, by what blocks it if anything does, as an open one blocked
+by another is; deferred, pinned and hooked ones aren't shown
+\(doom-pbk.154: in no section)."
+  (+test-awa "blocked-status"
+    (let ((data (agent-workspace--issues-parse
+                 project
+                 (list :all (json-parse-string
+                             "[{\"id\":\"t-1\",\"title\":\"Waits on legal\",\"status\":\"blocked\"},
+                               {\"id\":\"t-2\",\"title\":\"Ready\",\"status\":\"open\"},
+                               {\"id\":\"t-3\",\"title\":\"Needs t-2\",\"status\":\"blocked\",\"dependencies\":[{\"depends_on_id\":\"t-2\",\"type\":\"blocks\"}]},
+                               {\"id\":\"t-4\",\"title\":\"Later\",\"status\":\"deferred\"},
+                               {\"id\":\"t-5\",\"title\":\"Pinned\",\"status\":\"pinned\"},
+                               {\"id\":\"t-6\",\"title\":\"Hooked\",\"status\":\"hooked\"}]"
+                             :object-type 'alist :array-type 'list)
+                       :ready (json-parse-string "[{\"id\":\"t-2\"}]" :object-type 'alist :array-type 'list)
+                       :done nil))))
+      (should (equal (mapcar (lambda (issue) (list (plist-get issue :id) (plist-get issue :blocked-by)))
+                             (plist-get data :blocked))
+                     '(("t-1" nil) ("t-3" ("t-2")))))
+      (should (equal (mapcar (lambda (issue) (plist-get issue :id)) (plist-get data :ready)) '("t-2")))
+      (should-not (plist-get data :doing)))))
+
 (ert-deftest agent-workspace-app/the-issues ()
   "In progress (its agent's avatar and state), ready by the role it's for
 (one nobody in the crew takes, flagged), blocked (by what), done today; a
