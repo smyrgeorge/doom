@@ -357,15 +357,17 @@ last."
         (delete-frame child t)))))
 
 (ert-deftest e2e-webkit/killing-the-buffer-closes-its-views ()
+  "Killing the buffer closes its views: one with an answer from its page on
+its way (asked here) once it has come (see `+test-views-gone')."
   (+test-webkit
     (+test-webkit--open)
     (let ((right (split-window-right)))
       (should (+test-webkit--loaded-in right))
       (let ((xwidgets (with-current-buffer "*test page*" (+my/webkit-xwidgets))))
         (should (= (length xwidgets) 2))
+        (should (+my/webkit-ask "document.title" #'ignore (car xwidgets)))
         (kill-buffer "*test page*")
-        (dolist (xwidget xwidgets)
-          (should-not (memq xwidget (bound-and-true-p xwidget-list))))
+        (should (+test-views-gone xwidgets))
         (should (= (+test-visible-frames) 1))))))
 
 (ert-deftest e2e-webkit/another-mode-closes-the-views ()
@@ -376,7 +378,7 @@ last."
         (fundamental-mode)
         (should-not +my/webkit--views)
         (should-not (get-text-property (point-min) 'display)))
-      (should-not (memq xwidget (bound-and-true-p xwidget-list))))))
+      (should (+test-views-gone (list xwidget))))))
 
 ;; ====== LINKS OUT ======
 

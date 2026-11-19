@@ -696,7 +696,7 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
       (+test-sleep 0.2)
       (kill-buffer (current-buffer))
       (should-not (file-directory-p dir))
-      (should-not (memq xwidget (bound-and-true-p xwidget-list))))))
+      (should (+test-views-gone (list xwidget))))))
 
 (ert-deftest e2e-pdf/q-closes ()
   (+test-pdf

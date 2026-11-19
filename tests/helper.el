@@ -777,6 +777,17 @@ return its value, or nil if it never did."
     (while (< (float-time) end)
       (+test--pump (min 0.05 (max 0.001 (- end (float-time))))))))
 
+(defun +test-views-gone (xwidgets)
+  "Wait until no view of XWIDGETS is alive (in `xwidget-list'), 6 s at
+most; non-nil if none is. A view closed while an answer from its page is
+on its way (a wait's own visibility question, see A PAGE HIDDEN) is killed
+once it has come, 5 s at most (JAVASCRIPT in config/webkit/js.el), not at
+once."
+  (+test--wait (lambda ()
+                 (not (seq-some (lambda (xwidget) (memq xwidget (bound-and-true-p xwidget-list)))
+                                xwidgets)))
+               6))
+
 (defun +test-visible-frames ()
   "How many frames are on screen (a WebKit page's cover is one while it
 loads; a window's notices frame stays, invisible, once they're gone): those
