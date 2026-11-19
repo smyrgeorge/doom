@@ -400,6 +400,37 @@ part wakes it (`agent-workspace-loop-wake'), for an issue that came."
         (should (agent-workspace-loop-wake ada))
         (should (+test-awl--wait (lambda () (equal (+test-awl--status project two) "closed"))))))))
 
+(ert-deftest agent-workspace-loops/its-looks-not-back-to-back ()
+  "bd slower than its looks come (one every 1.2 s here, bd's ready taking
+1.5 s, as a busy machine makes it): a look come while one runs isn't
+queued behind it (that one's answer is as new), so the loop is idle
+between them; a look asked for meanwhile by something else (.beads
+changed) still is (doom-pbk.142: each began as the last answered, never
+idle)."
+  (+test-awl--with-crew "idle"
+    (let* ((bin (file-name-as-directory (make-temp-file (+test-tmp-file "slow-bd-") t)))
+           (real (executable-find "bd"))
+           (exec-path (cons bin exec-path))
+           (process-environment (cons (concat "PATH=" bin path-separator (getenv "PATH")) process-environment))
+           (agent-workspace-loop-check 0.02))
+      (with-temp-file (expand-file-name "bd" bin)
+        (insert "#!/bin/sh\n[ \"$1\" = ready ] && sleep 1.5\nexec " (shell-quote-argument real) " \"$@\"\n"))
+      (set-file-modes (expand-file-name "bd" bin) #o755)
+      (let ((ada (+test-awl--create "ada")))
+        (agent-workspace-loop-set ada t)
+        (+test-awl--all-in (list ada) 'nap 60)
+        ;; Idle between its looks.
+        (+test-awl--quiet ada)
+        ;; Its look every few minutes while one runs: nothing more.
+        (agent-workspace--loop-look ada)
+        (should (agent-workspace--loop-get ada :busy))
+        (agent-workspace--loop-look-all (agent-workspace-agent-project ada) 'poll)
+        (should-not (agent-workspace--loop-get ada :again))
+        ;; .beads changed meanwhile: it looks again.
+        (agent-workspace--loop-look-all (agent-workspace-agent-project ada))
+        (should (agent-workspace--loop-get ada :again))
+        (+test-awl--quiet ada)))))
+
 (ert-deftest agent-workspace-loops/a-slow-bd-still-gets-somewhere ()
   "bd slower than its looks come (one every 1.2 s here, bd's list taking
 1.5 s): each look's answer is used, then the next look, not thrown away for

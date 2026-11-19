@@ -655,7 +655,7 @@ time a look a moment later."
          (looks 0))
     (call-process "bd" nil nil nil "init" "--quiet" "--skip-agents" "--prefix" "demo")
     (puthash root (list ada) agent-workspace--crews)
-    (cl-letf (((symbol-function 'agent-workspace--loop-look) (lambda (_agent) (cl-incf looks))))
+    (cl-letf (((symbol-function 'agent-workspace--loop-look) (lambda (_agent &optional _poll) (cl-incf looks))))
       (unwind-protect
           (let ((agent-workspace-loop-check nil))
             (agent-workspace--loop-watch-update root)

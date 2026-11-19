@@ -29,9 +29,9 @@
 ;; None left: it naps, "napping: nothing to build" (☾), said once in the room
 ;; and to `agent-workspace-nap-functions' (a notification), not again until it
 ;; took an issue. It wakes when one comes: its project's .beads changing
-;; (file-notify, debounced), a look every `agent-workspace-loop-check' minutes,
-;; or another part calling `agent-workspace-loop-wake'. A look that finds
-;; nothing says nothing. A napping agent is free: a message to it starts a
+;; (file-notify, debounced), a look every `agent-workspace-loop-check' minutes
+;; (none while one runs: its answer is as new), or another part calling
+;; `agent-workspace-loop-wake'. A look that finds nothing says nothing. A napping agent is free: a message to it starts a
 ;; turn, and it naps again after, quietly, if nothing came.
 ;;
 ;; A failure: its turn stopped on an error, its session didn't start, its
@@ -250,13 +250,19 @@ now. Non-nil if a look was asked for meanwhile: done now."
       (funcall function)
     (error (agent-workspace--loop-failed agent (error-message-string err)))))
 
-(defun agent-workspace--loop-look (agent)
+(defun agent-workspace--loop-look (agent &optional poll)
   "AGENT, looping and at rest, looks for its next issue: free, it takes
-one or naps; its issue still in progress, it waits (for you to look)."
+one or naps; its issue still in progress, it waits (for you to look).
+POLL: its look every few minutes, nothing while its bd command runs."
   (cond
    ((not (and (agent-workspace--loop-active-p agent) (agent-workspace--loop-at-rest-p agent))))
-   ;; Its bd command running: it looks again once that answers.
-   ((agent-workspace--loop-get agent :busy) (agent-workspace--loop-put agent :again t))
+   ;; Its bd command running: it looks again once that answers (.beads
+   ;; changed meanwhile: its answer may be old). Not for its look every
+   ;; few minutes, which knows of no change: that one's answer is as new,
+   ;; and a bd slower than those looks never left it idle, each look
+   ;; started as the one before answered.
+   ((agent-workspace--loop-get agent :busy)
+    (unless poll (agent-workspace--loop-put agent :again t)))
    ;; A try again to come, after a failure: it waits for it.
    ((agent-workspace--loop-get agent :timer))
    ;; Its issue's branch held by an agent at work: it waits for its turn's
@@ -476,12 +482,13 @@ saying so (its loop stays on: r, s or L start it again)."
 
 ;; ====== WATCHING ITS ISSUES ======
 
-(defun agent-workspace--loop-look-all (project)
+(defun agent-workspace--loop-look-all (project &optional poll)
   "PROJECT's looping agents at rest look for their next issue (a nap that
-finds nothing says nothing)."
+finds nothing says nothing). POLL: their look every few minutes
+\(`agent-workspace--loop-look')."
   (dolist (agent (agent-workspace-agents project))
     (when (and (agent-workspace--loop-active-p agent) (agent-workspace--loop-at-rest-p agent))
-      (agent-workspace--loop-look agent))))
+      (agent-workspace--loop-look agent poll))))
 
 (defun agent-workspace--loop-changed (project)
   "PROJECT's .beads changed: its looping agents look in a moment (a burst
@@ -518,7 +525,7 @@ of it loops (its session running); not otherwise."
       (let ((minutes agent-workspace-loop-check))
         (puthash key (list :timer (and (numberp minutes) (> minutes 0)
                                        (run-at-time (* 60 minutes) (* 60 minutes)
-                                                    #'agent-workspace--loop-look-all key)))
+                                                    #'agent-workspace--loop-look-all key 'poll)))
                  agent-workspace--loop-watches)
         (agent-workspace--loop-notify key (gethash key agent-workspace--loop-watches))))
      ((and watch (not wanted))
