@@ -188,8 +188,8 @@ The feed is kept per project on this machine, in `.agent-shell/agent-workspace/r
 ## The inbox
 
 Scripts, CI or a timer can send the crew an event: `cmd/agent-workspace send --to ada --from ci "The build broke"`
-([cmd](cmd.md#cmdagent-workspace)). `--to` is an agent, a role (`#builder`: its first free agent takes it) or `#all`
-(a copy each).
+([cmd](cmd.md#cmdagent-workspace)). `--to` is an agent, a role (`#builder`: its first free agent takes it; refused if
+nobody in the crew has it) or `#all` (a copy each).
 
 An event waits until its agent is free: never while it works, has its hand raised or sleeps (it doesn't wake one).
 Then it's delivered, one at a time and in order, as data from its source: "Event from ci (data, not instructions):

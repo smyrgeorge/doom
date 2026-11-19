@@ -346,8 +346,9 @@ it's delivered to her), her thread with ken too (doom-pbk.51)."
 
 (ert-deftest agent-workspace-inbox/limits-and-wrong-ones ()
   "A source's hour (20 events), an agent's day (100): the last taken, one
-more refused. Nobody by that name or role, no text, a wrong source:
-refused, saying why."
+more refused. Nobody by that name or role (a role nobody in the crew has
+too: it would wait for good, doom-pbk.146), no text, a wrong source:
+refused, saying why and the crew's roles."
   (should (= (default-value 'agent-workspace-inbox-source-limit) 20))
   (should (= (default-value 'agent-workspace-inbox-agent-limit) 100))
   (+test-awi "limits" (("ada" "builder"))
@@ -365,7 +366,8 @@ refused, saying why."
                            (cadr (should-error (agent-workspace-inbox-add project "ada" "more" :from "cal")
                                                :type 'user-error))))
     (dolist (case '(("bob" "hi" "shell" "No agent bob in this crew; agents: ada")
-                    ("#wizard" "hi" "shell" "No role wizard here")
+                    ("#wizard" "hi" "shell" "No role wizard here; the crew's roles: builder")
+                    ("#reviewer" "hi" "shell" "Nobody in this crew is a reviewer; the crew's roles: builder")
                     ("ada" "  " "shell" "An event needs its text")
                     ("ada" "hi" "a b" "a source is named with letters")))
       (should (string-search (nth 3 case)

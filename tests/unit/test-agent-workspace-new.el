@@ -767,10 +767,12 @@ server, the reply JSON; an unknown crew: 1, saying so; a wrong use: 2."
 
 (ert-deftest agent-workspace-new/the-script-sends ()
   "cmd/agent-workspace send: an event queued for a role through Emacs's
-server (nobody of it free), its words joined; wrong uses: 2, saying why."
+server (its agent asleep: nobody of it free), its words joined; wrong uses:
+2, saying why."
   (+test-awn "script-send"
     (let ((agent-workspace--inboxes (make-hash-table :test #'equal))
           (agent-workspace--inbox-sent (make-hash-table :test #'equal)))
+      (+test-awn--agent project "ada" "builder" 'asleep)
       (+test-awn--with-server
         (let ((run (+test-awn--run "send" "--to" "#builder" "--from=ci" "the" "build broke")))
           (should (= (car run) 0))
@@ -793,6 +795,7 @@ control characters arrives as it was (doom-pbk.37)."
     (let ((agent-workspace--inboxes (make-hash-table :test #'equal))
           (agent-workspace--inbox-sent (make-hash-table :test #'equal))
           (text "build failed:\n\e[31mFAIL\e[0m lexer\a\x01\x1f\tdone \"ok\" \\o/"))
+      (+test-awn--agent project "ada" "builder" 'asleep)
       (+test-awn--with-server
         (let ((run (+test-awn--run "send" "--to" "#builder" "--from=ci" text)))
           (should (= (car run) 0))
@@ -816,6 +819,7 @@ Emacs's is in /run/user/UID/emacs/ on Linux (doom-pbk.77)."
                           (concat "TMPDIR=" (make-temp-file "/tmp/awt-" t)))
                     (seq-remove (lambda (var) (string-match-p "\\`\\(XDG_RUNTIME_DIR\\|EMACS_SOCKET_NAME\\)=" var))
                                 process-environment))))
+      (+test-awn--agent project "ada" "builder" 'asleep)
       (unwind-protect
           (progn
             (server-start nil t)

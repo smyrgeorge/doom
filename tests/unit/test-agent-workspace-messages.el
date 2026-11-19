@@ -209,6 +209,32 @@ it)."
         (should (+test-wait-for (lambda () (member answer (+test-awg--prompts "ada"))) 20))
         (should (+test-wait-for (lambda () (member answer (+test-awg--prompts "bob"))) 20))))))
 
+(ert-deftest agent-workspace-messages/to-a-role-nobody-has ()
+  "A message to a role nobody in the crew has (#reviewer, ada and ken both
+builders), or to a #word that's no role: refused at once, saying the
+crew's roles, also while the crew asks (not only once you'd let it go);
+nothing queued or waiting (doom-pbk.146: queued, it waited for good). One
+from outside to such a role: refused too."
+  (+test-awg "nobody" nil (("ada" "builder") ("ken" "builder"))
+    (should (eq (agent-workspace-talk-mode project) 'ask))
+    (should (equal (+test-awg--send "ada" "#reviewer" "Can you review my change?")
+                   "Nobody in this crew is a reviewer; the crew's roles: builder"))
+    (should (equal (+test-awg--send "ada" "#wizard" "Abracadabra?")
+                   "No role wizard here; the crew's roles: builder"))
+    (agent-workspace--talk-set project 'on)
+    (should (eq (agent-workspace-talk-mode project) 'on))
+    (should (equal (+test-awg--send "ada" "#reviewer" "Can you review my change?")
+                   "Nobody in this crew is a reviewer; the crew's roles: builder"))
+    (let ((agent-workspace-outside-events t))
+      (should (string-search "Nobody in this crew is a reviewer"
+                             (cadr (should-error (agent-workspace-inbox-add project "#reviewer" "CI failed" :from "ci")
+                                                 :type 'user-error)))))
+    (should-not (gethash project agent-workspace--messages-waiting))
+    (should-not (agent-workspace-inbox project))
+    ;; One of the role: taken.
+    (should (member (plist-get (car (+test-awg--send "ada" "#builder" "Who has the lexer?")) :state)
+                    '("queued" "delivered")))))
+
 (ert-deftest agent-workspace-messages/a-failed-turn-sends-nothing-back ()
   "A message's turn that fails sends nothing back, and the agent's next
 reply, to a prompt of yours, never goes to the sender; nor after its

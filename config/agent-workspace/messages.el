@@ -241,6 +241,10 @@ message waiting (:state \"waiting\")."
       (user-error "send: a message goes to another agent or a role"))
     (unless (agent-workspace--message-target-role project to)
       (user-error "No agent or role %s in this crew" to))
+    ;; A role: one of the crew has it (as the inbox asks), checked now, not
+    ;; only once you let it go.
+    (when (string-prefix-p "#" to)
+      (agent-workspace--inbox-targets project to))
     (let* ((thread (agent-workspace--thread-between project from to))
            (issue (agent-workspace-agent-issue sender))
            (message (append (list :id (setq agent-workspace--message-next-id

@@ -180,22 +180,35 @@ messages between agents."
   "PROJECT's queued event ID, or nil (held: nil too)."
   (seq-find (lambda (event) (eql (plist-get event :id) id)) (agent-workspace--inbox-waiting project)))
 
+(defun agent-workspace--inbox-crew-roles (project)
+  "The roles PROJECT's crew has, its agents' running or saved, in order."
+  (delete-dups (mapcar #'cdr (if (fboundp 'agent-workspace-crew-members)
+                                 (agent-workspace-crew-members project)
+                               (mapcar (lambda (agent) (cons nil (agent-workspace-agent-role agent)))
+                                       (agent-workspace-agents project))))))
+
 (defun agent-workspace--inbox-targets (project to)
   "Whom TO names in PROJECT's crew: a list of names and \"#ROLE\"s (\"#all\":
-every agent's name); a user error if nobody."
+every agent's name); a user error if nobody: a role only if one of the
+crew (running or saved, as a name) has it, else it would wait for good."
   (let ((names (delete-dups
                 (append (mapcar #'agent-workspace-agent-name (agent-workspace-agents project))
                         (and (fboundp 'agent-workspace-crew-read)
                              (mapcar (lambda (entry) (plist-get entry :name))
-                                     (plist-get (car (agent-workspace-crew-read project)) :agents)))))))
+                                     (plist-get (car (agent-workspace-crew-read project)) :agents))))))
+        (roles (agent-workspace--inbox-crew-roles project)))
     (cond
      ((equal to "#all")
       (or names (user-error "No agents in this crew")))
      ((string-prefix-p "#" to)
-      (if (assoc (substring to 1) (agent-workspace-roles project))
-          (list to)
-        (user-error "No role %s here; roles: %s" (substring to 1)
-                    (mapconcat #'car (agent-workspace-roles project) ", "))))
+      (let ((role (substring to 1))
+            (has (if roles (concat "the crew's roles: " (string-join roles ", ")) "the crew has no agents")))
+        (cond
+         ((not (assoc role (agent-workspace-roles project)))
+          (user-error "No role %s here; %s" role has))
+         ((not (member role roles))
+          (user-error "Nobody in this crew is a %s; %s" role has))
+         (t (list to)))))
      ((member to names) (list to))
      (t (user-error "No agent %s in this crew%s" to
                     (if names (concat "; agents: " (string-join names ", ")) ""))))))
