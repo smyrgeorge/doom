@@ -209,9 +209,12 @@ evil's (a change, a macro recorded, the last one run)."
   "What's below the bars when every pane is folded (or there's no agent):
 how to open one, or make one."
   (let ((name (format "*stage · %s*" (file-name-nondirectory (directory-file-name project)))))
-    (or (get-buffer name)
-        (with-current-buffer (get-buffer-create name)
+    ;; Its project's: another of the same folder name has its own.
+    (or (seq-find (lambda (buffer) (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-hint-mode))
+                  (agent-workspace--app-buffers project))
+        (with-current-buffer (generate-new-buffer name)
           (agent-workspace-hint-mode)
+          (setq default-directory (agent-workspace--root project))
           (agent-workspace--app-buffer-add project (current-buffer))
           (current-buffer)))))
 

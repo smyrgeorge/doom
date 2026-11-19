@@ -2109,6 +2109,40 @@ were, its side window too (doom-pbk.159: down to one window)."
           (should (equal (mapcar (lambda (window) (buffer-name (window-buffer window))) (window-list nil 'nomini))
                          before)))))))
 
+(ert-deftest agent-workspace-app/two-crews-of-one-folder-name ()
+  "Two projects named web (a/web, b/web), a crew each: each its own
+workspace (the second's name telling them apart: crew · b/web), SPC o w
+and its workspace killed acting on its own; each its own stage hint
+\(doom-pbk.160: one workspace, the second opened in the first's)."
+  (+test-awa "same-name"
+    (let* ((a (+test-awa--project "a/web"))
+           (b (+test-awa--project "b/web")))
+      (+test-awa--persp
+        (let ((ada (let ((default-directory a)) (agent-workspace-create :role "builder" :name "ada")))
+              (bob (let ((default-directory b)) (agent-workspace-create :role "builder" :name "bob"))))
+          (let ((default-directory a)) (agent-workspace-open))
+          (should (equal (safe-persp-name (get-current-persp)) "crew · web"))
+          (should (equal (frame-parameter nil 'agent-workspace) (agent-workspace--root a)))
+          (agent-workspace-leave)
+          (let ((default-directory b)) (agent-workspace-open))
+          (should (equal (safe-persp-name (get-current-persp)) "crew · b/web"))
+          (should (equal (frame-parameter nil 'agent-workspace) (agent-workspace--root b)))
+          (should-not (eq (agent-workspace--hint-buffer a) (agent-workspace--hint-buffer b)))
+          (agent-workspace-leave)
+          ;; a's again: its own.
+          (let ((default-directory a)) (agent-workspace-open))
+          (+test-sleep 0.1)
+          (should (equal (safe-persp-name (get-current-persp)) "crew · web"))
+          (should (equal (frame-parameter nil 'agent-workspace) (agent-workspace--root a)))
+          (agent-workspace-leave)
+          ;; b's killed: b's crew closed, a's on.
+          (let ((persp-kill-foreign-buffer-behaviour 'kill))
+            (persp-kill "crew · b/web"))
+          (should-not (agent-workspace--app b))
+          (should (eq (agent-workspace-agent-state bob) 'home))
+          (should (agent-workspace--app a))
+          (should (eq (agent-workspace-agent-state ada) 'desk)))))))
+
 (ert-deftest agent-workspace-app/quit-leaves-no-process ()
   "Q with real (stand-in) agents, one working: no question, every agent
 exits, none of their processes left; back in the workspace you came from."

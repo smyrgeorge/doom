@@ -92,7 +92,8 @@ pane opened or folded.")
   resizes            ; when it was last laid out after a resize
   relayout           ; its layout to come after a resize (a timer), moved at each change
   tabs               ; ((AGENT TAB...)...): the tabs each agent's side area showed, the last first
-  full)              ; the agent whose open pane shows its tab full size, or nil
+  full               ; the agent whose open pane shows its tab full size, or nil
+  workspace)         ; its workspace's name, chosen as it's made (`agent-workspace-workspace-name')
 
 (defvar agent-workspace--apps (make-hash-table :test #'equal)
   "The apps open: a project to its app.")
@@ -127,8 +128,22 @@ tiling leaves it alone (config/tiling.el's frames left alone)."
     (agent-workspace--persp-add project buffer)))
 
 (defun agent-workspace-workspace-name (project)
-  "The name of PROJECT's crew's workspace: \"crew · doom\"."
-  (concat "crew · " (file-name-nondirectory (directory-file-name project))))
+  "The name of PROJECT's crew's workspace: \"crew · doom\"; another crew's
+open of the same folder name, its parent's too, \"crew · b/doom\". Chosen
+as its app is made, kept while it's open."
+  (let ((key (agent-workspace--root project)))
+    (or (when-let* ((app (gethash key agent-workspace--apps)))
+          (agent-workspace--app-workspace app))
+        (let* ((folder (directory-file-name key))
+               (name (concat "crew · " (file-name-nondirectory folder)))
+               (taken (delq nil (mapcar (lambda (app)
+                                          (and (not (equal (agent-workspace--app-project app) key))
+                                               (agent-workspace--app-workspace app)))
+                                        (hash-table-values agent-workspace--apps)))))
+          (if (not (member name taken))
+              name
+            (concat "crew · " (file-name-nondirectory (directory-file-name (file-name-directory folder)))
+                    "/" (file-name-nondirectory folder)))))))
 
 (defun agent-workspace--ordered (project)
   "PROJECT's agents in role order (the roles' order), then as they were
@@ -203,6 +218,12 @@ switches."
   (seq-find (lambda (project) (equal (agent-workspace-workspace-name project) name))
             (hash-table-keys agent-workspace--apps)))
 
+(defun agent-workspace--app-make (project)
+  "PROJECT's app, made: its workspace's name chosen then
+\(`agent-workspace-workspace-name')."
+  (let ((name (agent-workspace-workspace-name project)))
+    (agent-workspace--make-app :project (agent-workspace--root project) :workspace name)))
+
 ;; ====== OPENING, LEAVING, CLOSING ======
 
 (defun agent-workspace--read-project ()
@@ -238,7 +259,7 @@ agent, nothing asked."
         (unless (agent-workspace-agents project)
           (agent-workspace--crew-lock-check project))
         (unless app
-          (setq app (agent-workspace--make-app :project (agent-workspace--root project)))
+          (setq app (agent-workspace--app-make project))
           (puthash (agent-workspace--root project) app agent-workspace--apps))
         ;; Where q goes back to: this frame's (another frame showing it is
         ;; given its own back as it's laid out here).
