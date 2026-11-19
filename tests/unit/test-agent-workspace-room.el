@@ -277,11 +277,14 @@ again."
   "bd hanging on a fetch: stopped after `agent-workspace-issues-timeout', its
 bd commands killed, the list saying so; a fetch asked for meanwhile done
 after it. gr while one hangs: it's stopped and a new one started; bd
-answering again, the list as fetched (doom-pbk.43)."
+answering again, the list as fetched, however slowly bd answers within
+the fetch's usual time (doom-pbk.43; doom-pbk.144: the full suite's load
+took its three bd commands past the 1 s the hanging part has)."
   (+test-awr2 "hangs"
     (make-directory (expand-file-name ".beads" project))
     (let* ((bin (file-name-as-directory (make-temp-file (+test-tmp-file "hanging-bd-") t)))
            (hang (expand-file-name "hang" bin))
+           (slow (expand-file-name "slow" bin))
            (exec-path (cons bin exec-path))
            (process-environment (cons (concat "PATH=" bin path-separator (getenv "PATH")) process-environment))
            (agent-workspace-issues-timeout 1)
@@ -292,6 +295,7 @@ answering again, the list as fetched (doom-pbk.43)."
                                        (process-list)))))
       (with-temp-file (expand-file-name "bd" bin)
         (insert "#!/bin/sh\n[ \"$1\" = ready ] && [ -f " (shell-quote-argument hang) " ] && exec sleep 300\n"
+                "[ -f " (shell-quote-argument slow) " ] && sleep 1.5\n"
                 "echo '[{\"id\":\"p-1\",\"title\":\"Fix it\",\"status\":\"open\"}]'\n"))
       (set-file-modes (expand-file-name "bd" bin) #o755)
       (write-region "" nil hang)
@@ -317,10 +321,13 @@ answering again, the list as fetched (doom-pbk.43)."
           (should-not (seq-some #'process-live-p killed))
           (should (buffer-local-value 'agent-workspace--issues-pending buffer))
           (should-not (eq (buffer-local-value 'agent-workspace--issues-pending buffer) before)))
-        ;; bd answering again: gr fetches.
+        ;; bd answering again, slower than the 1 s above (as a busy machine
+        ;; makes it): gr fetches, in the fetch's usual time.
         (delete-file hang)
-        (with-current-buffer buffer (agent-workspace-issues-refresh))
-        (should (+test-wait-for (lambda () (not (buffer-local-value 'agent-workspace--issues-pending buffer))) 10))
+        (write-region "" nil slow)
+        (let ((agent-workspace-issues-timeout 30))
+          (with-current-buffer buffer (agent-workspace-issues-refresh)))
+        (should (+test-wait-for (lambda () (not (buffer-local-value 'agent-workspace--issues-pending buffer))) 30))
         (should-not (plist-get (buffer-local-value 'agent-workspace--issues-data buffer) :error))
         (should (string-search "p-1" (with-current-buffer buffer (buffer-string))))
         (should-not (funcall bds))))))
