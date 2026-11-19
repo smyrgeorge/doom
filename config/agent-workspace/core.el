@@ -208,8 +208,13 @@ fails."
         (unless (string-empty-p line) line)))))
 
 (defun agent-workspace--root (project)
-  "PROJECT as the crews' key: its folder's true name, with a slash."
-  (file-name-as-directory (file-truename (expand-file-name project))))
+  "PROJECT as the crews' key: its folder's true name, with a slash. A
+crew's key is its own, no file looked at: this is called a few times for
+each line drawn, and `file-truename' reads each of its folders (in a
+tick, every second of a turn, most of its time)."
+  (if (not (eq (gethash project agent-workspace--crews :none) :none))
+      project
+    (file-name-as-directory (file-truename (expand-file-name project)))))
 
 (defun agent-workspace-agents (&optional project)
   "PROJECT's crew (default: the current project's): its agents, in the order

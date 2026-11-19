@@ -2018,8 +2018,10 @@ exits, none of their processes left; back in the workspace you came from."
 (ert-deftest agent-workspace-app/a-tick-draws-only-the-times ()
   "While an agent works: a tick draws its bar's time again, not the issue
 list nor every mode line; each second in a turn's first minute, then at
-the next minute; with 100 issues, under 5 ms. A usage change draws its
-lines only (doom-pbk.69)."
+the next minute; with 100 issues, under 5 ms, no folder's true name worked
+out and the role files checked once (under load their system calls took it
+past 5 ms). A usage change draws its lines only (doom-pbk.69,
+doom-pbk.141)."
   (+test-awa "tick"
     (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
       (agent-workspace-open t)
@@ -2047,6 +2049,18 @@ lines only (doom-pbk.69)."
                    ((symbol-function 'force-mode-line-update)
                     (lambda (&optional every) (when every (cl-incf all)) (funcall force every))))
           (setf (agent-workspace-agent-since ken) (- (float-time) 125))
+          ;; No file looked at but the role folders, once: no true name
+          ;; worked out (system calls a busy machine slows).
+          (let ((truenames 0) (listed 0))
+            (cl-letf* ((truename (symbol-function 'file-truename))
+                       ((symbol-function 'file-truename)
+                        (lambda (&rest args) (cl-incf truenames) (apply truename args)))
+                       (list-files (symbol-function 'directory-files))
+                       ((symbol-function 'directory-files)
+                        (lambda (&rest args) (cl-incf listed) (apply list-files args))))
+              (agent-workspace--tick))
+            (should (= truenames 0))
+            (should (<= 1 listed (length (agent-workspace--role-places project)))))
           (should (< (+test-awa--fastest #'agent-workspace--tick) 0.005))
           (should (string-search "2m" (with-current-buffer (agent-workspace--bar-buffer ken) (buffer-string))))
           ;; Past its first minute: the next at the next minute.

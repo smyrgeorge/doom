@@ -41,17 +41,21 @@
     (agent-workspace-agent (cadr where) (car where))))
 
 (defun agent-workspace-agent-panels (agent)
-  "AGENT's open panels: their canvases, by name (none without Agent UI)."
-  (let ((worktree (and (agent-workspace-agent-worktree agent)
-                       (file-truename (agent-workspace-agent-worktree agent)))))
-    (when (and worktree (boundp 'agent-ui-panels--state))
+  "AGENT's open panels: their canvases, by name (none without Agent UI).
+True names worked out only while a panel is open: its bar asks at each
+tick."
+  (when-let* (((agent-workspace-agent-worktree agent))
+              ((boundp 'agent-ui-panels--state))
+              (panels (seq-filter (lambda (buffer) (buffer-local-value 'agent-ui-panels--state buffer))
+                                  (buffer-list))))
+    (let ((worktree (file-name-as-directory (file-truename (agent-workspace-agent-worktree agent)))))
       (seq-sort-by
        #'buffer-name #'string<
        (seq-filter (lambda (buffer)
-                     (when-let* ((panel (buffer-local-value 'agent-ui-panels--state buffer)))
-                       (equal (file-name-as-directory (file-truename (agent-ui-panels--root panel)))
-                              (file-name-as-directory worktree))))
-                   (buffer-list))))))
+                     (equal (file-name-as-directory
+                             (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state buffer))))
+                            worktree))
+                   panels)))))
 
 ;; ====== AGENT UI, TOLD ======
 

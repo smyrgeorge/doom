@@ -103,6 +103,12 @@ listed elsewhere).")
   "A project's roles, as last read: project to (STAMP (ROLES . PROBLEMS)
 LEFT-OUT), STAMP the role files and their modification times.")
 
+(defvar agent-workspace--roles-checked nil
+  "Bound to a table while lines are drawn (`agent-workspace--redraw-lines',
+each tick of a turn's time): the projects whose role files were checked
+then, not checked again (each role asked lists their folders and reads
+every file's time, most of a tick's time).")
+
 ;; ====== A ROLE FILE ======
 
 (defun agent-workspace--role-list (value)
@@ -379,7 +385,21 @@ FILE)...)."
 \(ROLES . PROBLEMS), ROLES an alist of a name and its role, in order (the
 starters first), each role's :origin where its file is (starter, project,
 local), its :replaces the origin of the one of its name it replaced. New
-problems are shown as warnings."
+problems are shown as warnings. Checked once while
+`agent-workspace--roles-checked' is bound."
+  (let* ((key (or project ""))
+         (cached (and agent-workspace--roles-checked
+                      (gethash key agent-workspace--roles-checked)
+                      (gethash key agent-workspace--roles-cache))))
+    (if cached
+        (cadr cached)
+      (prog1 (agent-workspace--roles-check project)
+        (when agent-workspace--roles-checked
+          (puthash key t agent-workspace--roles-checked))))))
+
+(defun agent-workspace--roles-check (project)
+  "PROJECT's roles and their problems (`agent-workspace--roles-read'), its
+files checked: read again if one changed."
   (let* ((files (agent-workspace--role-files project))
          (stamp (mapcar (lambda (file)
                           (cons (cdr file) (file-attribute-modification-time (file-attributes (cdr file)))))

@@ -588,15 +588,17 @@ alone, the branches in its place): laid out as it comes back."
 (defun agent-workspace--redraw-lines (app)
   "APP's agents' lines drawn again: its bars, and its panes' header lines
 \(their own windows' only): a turn's time, its context's usage. Not the
-issue list, nor any other mode line."
+issue list, nor any other mode line. Its role files checked once for them
+all (`agent-workspace--roles-checked')."
   (agent-workspace--headers-stale)
   (when (agent-workspace--shown-p app)
-    (dolist (window (window-list (agent-workspace--app-frame app) 'nomini))
-      (let ((buffer (window-buffer window)))
-        (cond ((buffer-local-value 'agent-workspace--bar-of buffer)
-               (agent-workspace--bar-draw window))
-              ((consp (window-parameter window 'header-line-format))
-               (with-current-buffer buffer (force-mode-line-update))))))))
+    (let ((agent-workspace--roles-checked (or agent-workspace--roles-checked (make-hash-table :test #'equal))))
+      (dolist (window (window-list (agent-workspace--app-frame app) 'nomini))
+        (let ((buffer (window-buffer window)))
+          (cond ((buffer-local-value 'agent-workspace--bar-of buffer)
+                 (agent-workspace--bar-draw window))
+                ((consp (window-parameter window 'header-line-format))
+                 (with-current-buffer buffer (force-mode-line-update)))))))))
 
 (defun agent-workspace--tab-pick (agent tab)
   "TAB the one AGENT's side area shows, from its next layout; it gone, the
