@@ -672,10 +672,17 @@ assignee, a list)."
                      (with-temp-buffer
                        (let* ((default-directory project)
                               (process-environment (cons (concat "BEADS_ACTOR=" actor) process-environment))
+                              ;; Done once its sentinel ran: Emacs reads what
+                              ;; it said first. It's not live as soon as it
+                              ;; exits, maybe before that's read (a busy
+                              ;; machine): bd's answer lost, run again.
                               (process (make-process :name "agent-workspace-bd-now" :buffer (current-buffer)
                                                      :command (cons "bd" args)
-                                                     :connection-type 'pipe :noquery t :sentinel #'ignore)))
-                         (while (and (process-live-p process) (< (float-time) end))
+                                                     :connection-type 'pipe :noquery t
+                                                     :sentinel (lambda (process _event)
+                                                                 (unless (process-live-p process)
+                                                                   (process-put process 'done t))))))
+                         (while (and (not (process-get process 'done)) (< (float-time) end))
                            (accept-process-output process 0.05))
                          (if (process-live-p process)
                              (progn (delete-process process) (cons 'timeout ""))

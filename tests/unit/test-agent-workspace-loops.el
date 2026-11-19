@@ -759,6 +759,7 @@ case \"$MODE:$n\" in
   locked-twice:1|locked-twice:2) echo \"Error: database is locked\" >&2; exit 1;;
   locked-twice:*) exit 0;;
   silent:*) exit 1;;
+  claimed:*) echo \"Error updating $2: issue already claimed by ken\" >&2; exit 1;;
   condition:*) exit 13;;
 esac
 "
@@ -792,7 +793,18 @@ condition not met) is an answer: not run again."
       (should (equal (run "silent" (lambda () (agent-workspace--bd-claim ada "demo-1")))
                      '("bd failed" 3)))
       (should (equal (run "condition" (lambda () (agent-workspace--bd-now project "ada" '("update" "demo-1" "--if-assignee=ada"))))
-                     '((13 . "") 1))))))
+                     '((13 . "") 1)))
+      ;; Emacs busy (reading nothing) as bd answers and exits: its answer
+      ;; still read, not taken for nothing said and run again.
+      (let ((busy (lambda (make &rest args)
+                    (prog1 (apply make args)
+                      (let ((end (+ (float-time) 0.5)))
+                        (while (< (float-time) end)))))))
+        (advice-add 'make-process :around busy)
+        (unwind-protect
+            (should (equal (run "claimed" (lambda () (agent-workspace--bd-claim ada "demo-1")))
+                           '("issue already claimed by ken" 1)))
+          (advice-remove 'make-process busy))))))
 
 (ert-deftest agent-workspace-loops/killed-it-gives-its-issue-back ()
   "K on an agent with the issue you gave it in progress, its: open again,
