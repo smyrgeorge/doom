@@ -113,7 +113,9 @@ agent-ui append labels '{"tags":[{"label":"bug","count":11}]}'
 ### `log`
 
 Lines of output, each coloured by its level (found by its words: error, fatal, panic, failed; warn; info; debug,
-trace; or given as `{"level", "text"}`), errors and warnings counted above, the last `show` shown (`keep` kept).
+trace; or given as `{"level", "text"}`: `error`, `warning`, `info`, `debug`, or their words, case aside, and syslog's,
+Datadog's, a logger's names: `warn`, `WARNING`, `crit`, `alert`, `trace`, `ok`...), errors and warnings counted above,
+the last `show` shown (`keep` kept).
 `lines` is text (a line each) or a list; append adds lines. To follow a log as it grows:
 
 ```sh

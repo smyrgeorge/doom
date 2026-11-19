@@ -4,7 +4,9 @@
 ;;
 ;; LINES (text: one per line; or a list of them) as they come, the last KEEP
 ;; kept; each line's level found by its words (error, fatal, panic, failed;
-;; warn; info; debug, trace: case aside) or given as {"level", "text"}.
+;; warn; info; debug, trace: case aside) or given as {"level", "text"}: by
+;; the same words, case aside, and syslog's, Datadog's and Java's names
+;; (warn, WARNING, fatal, crit, alert, trace, ok...).
 ;; Errors red, warnings yellow, debug muted; a line above counts them. With
 ;; a source, appended as they come: {"file": "app.log", "from": "end",
 ;; "into": "lines"}, or rules appending {"lines": ["$0"]}.
@@ -43,6 +45,21 @@ errors\", Maven's \"Errors: 0\", \"0 Warning(s)\".")
          (text (replace-regexp-in-string agent-ui-log--none " " text)))
     (car (seq-find (lambda (l) (string-match-p (nth 1 l) text)) agent-ui-log--levels))))
 
+(defconst agent-ui-log--given-words
+  '(("emerg" . error) ("emergency" . error) ("alert" . error) ("crit" . error) ("severe" . error)
+    ("ok" . info) ("fine" . debug) ("finer" . debug) ("finest" . debug))
+  "Levels a line is given by, not found in its text: syslog's, Datadog's,
+Java's (alert, ok, fine in a line's text are no level).")
+
+(defun agent-ui-log--given (level)
+  "A line's given LEVEL (text or a symbol: error, warn, WARNING, fatal,
+trace, Datadog's statuses...) as a level, read by the words a line's text is
+and `agent-ui-log--given-words', case aside; nil if none."
+  (when-let* ((name (cond ((stringp level) level)
+                          ((and level (symbolp level)) (symbol-name level)))))
+    (or (cdr (assoc-string (string-trim name) agent-ui-log--given-words t))
+        (agent-ui-log--level name))))
+
 (defun agent-ui-log--plain (text)
   "TEXT without a terminal's escape sequences: colours (tools forcing them
 showed ^[[31m...), cursor moves, titles and links."
@@ -66,7 +83,7 @@ drawn again (a line appended) reads each of its lines once.")
                (if (stringp entry)
                    (let ((text (agent-ui-log--plain entry)))
                      (cons (agent-ui-log--level text) text))
-                 (cons (let ((l (plist-get entry :level))) (if (stringp l) (intern l) l))
+                 (cons (agent-ui-log--given (plist-get entry :level))
                        (agent-ui-log--plain (agent-ui-cell (plist-get entry :text)))))
                agent-ui-log--parsed)))
 
@@ -82,12 +99,11 @@ drawn again (a line appended) reads each of its lines once.")
     (when (listp raw)
       (cl-loop for e in raw
                for i from 1
-               unless (or (stringp e)
-                          (and (agent-ui--plist-p e) (plist-get e :text)
-                               (or (null (plist-get e :level))
-                                   (assq (let ((l (plist-get e :level))) (if (stringp l) (intern-soft l) l))
-                                         agent-ui-log--levels))))
-               do (agent-ui--fail "log: line %d must be text, or {\"level\": error/warning/info/debug, \"text\": ...}" i))))
+               unless (or (stringp e) (and (agent-ui--plist-p e) (plist-get e :text)))
+               do (agent-ui--fail "log: line %d must be text, or {\"level\", \"text\"}" i)
+               when (and (consp e) (plist-get e :level) (not (agent-ui-log--given (plist-get e :level))))
+               do (agent-ui--fail "log: line %d's level %S is none of error, warning, info, debug (nor their words: warn, fatal, critical, trace, notice...)"
+                                  i (plist-get e :level)))))
   (unless (<= 1 (plist-get props :keep) 5000)
     (agent-ui--fail "log: keep is 1 to 5000 lines"))
   ;; Below 0: no lines shown, silently.
@@ -164,7 +180,8 @@ lines shown no more dropped from the top, the new ones at the end."
 (agent-ui-define log
   "Lines of output, each coloured by its level (found by its words: error,
 fatal, panic, failed; warn; info; debug, trace; or given as {\"level\",
-\"text\"}), errors and warnings counted above, the last SHOW shown (KEEP
+\"text\"}, by the same words, case aside: warn, WARNING, fatal, trace...),
+errors and warnings counted above, the last SHOW shown (KEEP
 kept). LINES is text (a line each) or a list. Follow a log as it grows
 with a source: {\"file\": \"app.log\", \"from\": \"end\", \"into\": \"lines\"};
 append adds lines."

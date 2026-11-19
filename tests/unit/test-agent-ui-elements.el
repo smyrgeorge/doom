@@ -3408,6 +3408,32 @@ a unit that isn't text is refused (it broke the drawing)."
                  "1 warning · 3 lines\nc\nd"))
   (should (equal (+test-aue-draw '(:type "log")) "no lines yet")))
 
+;; doom-4qj
+(ert-deftest agent-ui-elements/log-levels-given-by-their-words ()
+  "A line's given level is read by the words its text is, case aside, and
+syslog's, Datadog's and Java's names: a script passing Datadog's status
+(warn) had its log refused, the panel's whole update with it."
+  (dolist (given '(("error" . error) ("ERROR" . error) ("Error" . error) ("err" . error) ("fatal" . error)
+                   ("critical" . error) ("CRITICAL" . error) ("crit" . error) ("emerg" . error)
+                   ("emergency" . error) ("alert" . error) ("SEVERE" . error)
+                   ("warning" . warning) ("warn" . warning) ("WARN" . warning) ("WARNING" . warning)
+                   ("info" . info) ("INFO" . info) ("notice" . info) ("ok" . info)
+                   ("debug" . debug) ("trace" . debug) ("TRACE" . debug) ("fine" . debug)
+                   (warning . warning) (warn . warning)))
+    (should (eq (agent-ui-log--given (car given)) (cdr given))))
+  (dolist (none '(nil "loud" "" 3 :false))
+    (should-not (agent-ui-log--given none)))
+  ;; Coloured and counted as given; none, not found in the text.
+  (should (equal (+test-aue-draw '(:type "log" :lines ((:level "info" :text "started")
+                                                       (:level "warn" :text "slow query")
+                                                       (:level "CRITICAL" :text "down")
+                                                       (:text "an error, given no level"))))
+                 "1 error · 1 warning · 4 lines\nstarted\nslow query\ndown\nan error, given no level"))
+  (should (eq (get-text-property 0 'face (agent-ui-log--line-text (agent-ui-log--line '(:level "warn" :text "slow")) 80))
+              'agent-ui-warning))
+  ;; Alert, ok, fine in a line's text are no level.
+  (should-not (agent-ui-log--level "alert: ok, all fine")))
+
 ;; doom-nwj.75
 (ert-deftest agent-ui-elements/log-summaries-of-none-arent-errors ()
   "Success summaries aren't errors: a count of none (cargo's \"0 failed\",
@@ -3589,7 +3615,9 @@ column widens, it's sorted, or its rows are more than drawn."
   (should (equal (+test-aue-draw '(:type "log" :lines "a\nb" :show 0)) "2 lines")))
 
 (ert-deftest agent-ui-elements/log-wrong ()
-  (should (string-match-p "line 1 must be" (+test-aue-error '(:type "log" :lines ((:level "loud" :text "x"))))))
+  (should (string-match-p "line 1's level \"loud\" is none of error, warning, info, debug"
+                          (+test-aue-error '(:type "log" :lines ((:level "loud" :text "x"))))))
+  (should (string-match-p "line 2 must be text" (+test-aue-error '(:type "log" :lines ("a" (:level "info"))))))
   (should (string-match-p "keep is 1 to 5000" (+test-aue-error '(:type "log" :keep 0))))
   (should (string-match-p "lines is text or a list" (+test-aue-error '(:type "log" :lines 3)))))
 
