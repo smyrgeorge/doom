@@ -1079,6 +1079,34 @@ shows it: the canvas."
     (agent-ui-show element :canvas canvas)
     canvas))
 
+(ert-deftest agent-workspace-app/the-cursor-stays-in-its-buffer ()
+  "The cursor in the open agent's canvas (answering a choice), the stage
+tiled again (another agent restarted): still in the canvas, where it was,
+the open agent first on the stage or second (doom-pbk.158: first, it
+ended in her session, the canvas's keys typed into her prompt)."
+  (+test-awa "cursor-kept"
+    (+test-awa--crew '("ada" "builder") '("ken" "builder"))
+    (let ((app (agent-workspace-open t)))
+      (dolist (index '(0 1))
+        (let* ((agents (agent-workspace--ordered project))
+               (agent (nth index agents))
+               (other (nth (- 1 index) agents))
+               (canvas (+test-awa--canvas-show agent '(:type "text" :id "q" :text "line one\nline two\nline three"))))
+          (agent-workspace-select agent t)
+          (agent-workspace--retile app)
+          (let ((window (get-buffer-window canvas)))
+            (should window)
+            (select-window window)
+            (goto-char (point-min))
+            (forward-line 1)
+            (let ((point (point)))
+              (cl-letf (((symbol-function 'yes-or-no-p) #'always)
+                        ((symbol-function 'y-or-n-p) #'always))
+                (agent-workspace-restart other))
+              (agent-workspace--retile app)
+              (should (eq (window-buffer (selected-window)) canvas))
+              (should (= (window-point (selected-window)) point)))))))))
+
 (defun +test-awa--header (window)
   "WINDOW's header line, as text (its :eval's, as redisplay has it: no
 `format-mode-line' in batch)."

@@ -560,6 +560,7 @@ alone, the branches in its place): laid out as it comes back."
      (t
       (let* ((was (selected-window))
              (buffer (window-buffer was))
+             (point (window-point was))
              (agents (agent-workspace--ordered (agent-workspace--app-project app)))
              (first (car windows))
              ;; Its open pane shown again where it was.
@@ -575,11 +576,17 @@ alone, the branches in its place): laid out as it comes back."
           (setf (agent-workspace--app-plan app) (agent-workspace--plan app)
                 (agent-workspace--app-sizes app) (agent-workspace--sizes-now (selected-frame))
                 (agent-workspace--app-others app) (agent-workspace--others app))
-          (select-window (cond ((window-live-p was) was)
-                               ((get-buffer-window buffer))
-                               (t (or (get-buffer-window (agent-workspace--issues-buffer
-                                                          (agent-workspace--app-project app)))
-                                      (selected-window)))))
+          ;; The cursor in the buffer it was in, at its place: not the
+          ;; window it was in, which may show another now (the first pane's
+          ;; side window, before, kept as the stage's area).
+          (let ((window (or (and (window-live-p was) (eq (window-buffer was) buffer) was)
+                            (get-buffer-window buffer)
+                            (and (window-live-p was) was)
+                            (get-buffer-window (agent-workspace--issues-buffer (agent-workspace--app-project app)))
+                            (selected-window))))
+            (select-window window)
+            (when (and (eq (window-buffer window) buffer) (not (eq window was)))
+              (set-window-point window point)))
           (force-mode-line-update t)))))))
 
 (defun agent-workspace--redraw (app)
