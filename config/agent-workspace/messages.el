@@ -47,8 +47,12 @@ in memory only.")
   "The last waiting message's id.")
 
 (defvar agent-workspace--awaiting-answer (make-hash-table :test #'eq :weakness 'key)
-  "An agent given a message: (MESSAGE . STEP), STEP pending (its prompt not
-sent yet: after the turn it's in) or asked; its turn's reply then goes back.")
+  "An agent given messages: their entries, the first given first, each a
+plist (:message MESSAGE :step STEP :text PROMPT), STEP pending (its PROMPT
+not sent yet: queued after the turn it's in) or asked (sent: its turn's
+reply goes back). Several: one sent now ([Send now]) while it answers
+another, or merged into one prompt by agent-shell's queue (each sender
+gets that turn's reply).")
 
 (defvar-local agent-workspace--message-turn-text nil
   "In an agent's session: its turn's reply so far (for an answer).")
@@ -361,19 +365,41 @@ its crew, data, not its user's instructions. In
                who (plist-get event :text))))))
 
 (defun agent-workspace--message-given-h (agent event)
-  "AGENT given EVENT: a message, its turn's reply to go back. In
-`agent-workspace-event-given-functions'."
+  "AGENT given EVENT: a message, its turn's reply to go back (after those
+it was given before). In `agent-workspace-event-given-functions'."
   (when (equal (plist-get event :kind) "message")
-    (puthash agent (cons event 'pending) agent-workspace--awaiting-answer)))
+    (puthash agent (append (gethash agent agent-workspace--awaiting-answer)
+                           (list (list :message event :step 'pending
+                                       :text (agent-workspace-event-text event))))
+             agent-workspace--awaiting-answer)))
+
+(defun agent-workspace--message-entries-drop (agent step)
+  "AGENT's messages at STEP (pending, asked; nil: all) no longer awaiting
+an answer: those left."
+  (let ((left (and step (seq-remove (lambda (entry) (eq (plist-get entry :step) step))
+                                    (gethash agent agent-workspace--awaiting-answer)))))
+    (if left
+        (puthash agent left agent-workspace--awaiting-answer)
+      (remhash agent agent-workspace--awaiting-answer))
+    left))
+
+(defun agent-workspace--message-asked (agent prompt)
+  "AGENT's turn starts with PROMPT: its pending messages PROMPT is (or
+holds, agent-shell's queue merging several prompts into one), asked."
+  (dolist (entry (gethash agent agent-workspace--awaiting-answer))
+    (when (and (eq (plist-get entry :step) 'pending)
+               (stringp prompt)
+               (agent-workspace--part-at prompt (plist-get entry :text)))
+      (plist-put entry :step 'asked))))
 
 (defun agent-workspace--message-watch (agent buffer)
-  "AGENT's session BUFFER followed: a message's turn, its reply sent back.
-That turn failing, or the session ending (killed, restarted, asleep), the
-message gets no reply: the agent's next turn is someone else's. In
+  "AGENT's session BUFFER followed: a message's turn, its reply sent back
+\(to each message's sender, several in one turn). That turn failing, or
+the session ending (killed, restarted, asleep), the message gets no
+reply: the agent's next turn is someone else's. In
 `agent-workspace-session-functions'."
   ;; A new session: a message's turn of the one before is over.
-  (when (eq (cdr (gethash agent agent-workspace--awaiting-answer)) 'asked)
-    (remhash agent agent-workspace--awaiting-answer))
+  (agent-workspace--message-entries-drop agent 'asked)
   (agent-shell-subscribe-to
    :shell-buffer buffer
    :on-event
@@ -382,26 +408,24 @@ message gets no reply: the agent's next turn is someone else's. In
        (pcase (alist-get :event event)
          ('input-submitted
           (with-current-buffer buffer (setq agent-workspace--message-turn-text nil))
-          (when-let* ((waiting (gethash agent agent-workspace--awaiting-answer)))
-            (when (eq (cdr waiting) 'pending)
-              (setcdr waiting 'asked))))
+          (agent-workspace--message-asked agent (map-nested-elt event '(:data :prompt))))
          ;; Its turn failed: no reply to send back.
          ('error
-          (when (eq (cdr (gethash agent agent-workspace--awaiting-answer)) 'asked)
-            (remhash agent agent-workspace--awaiting-answer)))
+          (agent-workspace--message-entries-drop agent 'asked))
          ;; Its session ended: nor for a message still queued in it.
          ('clean-up
-          (remhash agent agent-workspace--awaiting-answer))
+          (agent-workspace--message-entries-drop agent nil))
          ('agent-message-chunk
           (when-let* ((chunk (map-nested-elt event '(:data :text-chunk))))
             (with-current-buffer buffer
               (setq agent-workspace--message-turn-text (concat agent-workspace--message-turn-text chunk)))))
          ('turn-complete
-          (let ((text (string-trim (or (buffer-local-value 'agent-workspace--message-turn-text buffer) ""))))
-            (when-let* ((waiting (gethash agent agent-workspace--awaiting-answer))
-                        ((eq (cdr waiting) 'asked)))
-              (remhash agent agent-workspace--awaiting-answer)
-              (agent-workspace--message-answer agent (car waiting) text)))))))))
+          (let ((text (string-trim (or (buffer-local-value 'agent-workspace--message-turn-text buffer) "")))
+                (asked (seq-filter (lambda (entry) (eq (plist-get entry :step) 'asked))
+                                   (gethash agent agent-workspace--awaiting-answer))))
+            (agent-workspace--message-entries-drop agent 'asked)
+            (dolist (entry asked)
+              (agent-workspace--message-answer agent (plist-get entry :message) text)))))))))
 
 (defun agent-workspace--message-answer (agent message text)
   "AGENT's reply TEXT to MESSAGE, back to its sender as an answer (not
