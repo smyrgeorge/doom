@@ -892,11 +892,16 @@ it is."
     (agent-workspace-issue-branch-open agent issue type title))
   (agent-workspace--note-issue agent issue title))
 
+(defvar agent-workspace--issue-noted (make-hash-table :test #'eq :weakness 'key)
+  "When each agent's issue was noted, a `float-time': a fetch of the issues
+started before it may not have its claim yet.")
+
 (defun agent-workspace--note-issue (agent issue &optional title)
   "Note that AGENT works on ISSUE (its TITLE): what its state says. nil:
 none. Its branch as it is (an issue it claimed itself: loops.el)."
   (setf (agent-workspace-agent-issue agent) issue
         (agent-workspace-agent-issue-title agent) (and issue title))
+  (puthash agent (float-time) agent-workspace--issue-noted)
   (agent-workspace--changed agent 'issue))
 
 (defun agent-workspace--give-back (agent)

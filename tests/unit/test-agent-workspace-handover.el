@@ -328,7 +328,8 @@ back; a builder's does (doom-pbk.57)."
 (ert-deftest agent-workspace-handover/a-ready-issue-offered ()
   "An issue ready for the builders, ken free: offered in the room once,
 [Give it to ken] giving it him (his worktree on its branch); no builder
-free, offered once one is."
+free, offered once one is: his issue closed, he's on none, his loop off
+\(doom-pbk.152: nothing cleared it, he was never offered one again)."
   (+test-with-reset
     (let* ((project (+test-awo--project "offer"))
            (default-directory project)
@@ -356,8 +357,8 @@ free, offered once one is."
                  (lambda (agent text &rest _) (push (list (agent-workspace-agent-name agent) text) sent) 'sent)))
         (unwind-protect
             (let ((ken (agent-workspace-create :role "builder" :name "ken"))
-                  (fetched (lambda (ready)
-                             (let ((data (list :ready ready)))
+                  (fetched (lambda (ready &optional issues)
+                             (let ((data (list :ready ready :issues (append ready issues) :started (float-time))))
                                (with-current-buffer (agent-workspace--issues-buffer project)
                                  (setq agent-workspace--issues-data data))
                                (run-hook-with-args 'agent-workspace-issues-fetched-functions project data))))
@@ -374,23 +375,56 @@ free, offered once one is."
               (should (equal (agent-workspace-agent-issue ken) "demo-3"))
               (should (equal (agent-workspace-agent-branch ken) "fix/demo-3-fix"))
               (should-not (string-search "[Give it to ken]" (funcall feed)))
-              (funcall fetched nil)
+              (funcall fetched nil (list (list :id "demo-3" :status 'in_progress :assignee "ken")))
               (should-not (string-search "[Give it to ken]" (funcall feed)))
-              ;; No builder free: offered once he is.
+              (should (equal (agent-workspace-agent-issue ken) "demo-3"))
+              ;; No builder free: offered once he is. He closed demo-3: on none.
               (agent-workspace--set-state ken 'working)
-              (agent-workspace-give ken nil)
-              (funcall fetched (list (list :id "demo-4" :title "More" :role "builder" :status 'ready)))
+              (funcall fetched (list (list :id "demo-4" :title "More" :role "builder" :status 'ready))
+                       (list (list :id "demo-3" :status 'closed :assignee "ken")))
+              (should-not (agent-workspace-agent-issue ken))
               (should-not (string-search "demo-4 is ready" (funcall feed)))
               (agent-workspace--set-state ken 'done)
               (should (string-search "demo-4 is ready for the builders: ken is free" (funcall feed)))
               ;; Looping, he takes them himself: none offered.
               (setf (agent-workspace-agent-loop ken) t)
-              (agent-workspace-give ken nil)
               (funcall fetched (list (list :id "demo-5" :title "Loop it" :role "builder" :status 'ready)))
               (should-not (string-search "demo-5 is ready" (funcall feed)))
               (setf (agent-workspace-agent-loop ken) nil))
           (when (agent-workspace--app project) (agent-workspace--close-app project))
           (agent-workspace-close-all))))))
+
+(ert-deftest agent-workspace-handover/an-agent-s-issue-once-it-isn-t-its ()
+  "An agent's issue as bd has it, its loop on or off: handed on and claimed
+by another, the issue's row that agent's at once, and once fetched it's
+forgotten; closed, unassigned (handed on, given back), gone from bd: the
+same; still its (in progress, or handed back to it): kept. A fetch started
+before it got the issue: nothing forgotten (doom-pbk.152)."
+  (let* ((project (+test-awo--dir "mine"))
+         (ada (+test-awo--agent project "ada" "builder"))
+         (kim (+test-awo--agent project "kim" "reviewer"))
+         (ken (+test-awo--agent project "ken" "builder")))
+    (+test-awo--crew project (list ada kim ken)
+      (cl-flet ((fetched (&rest issues)
+                  (agent-workspace--issues-mine-h project (list :started (+ (float-time) 1) :issues issues))))
+        (dolist (agent (list ada ken)) (agent-workspace--note-issue agent "t-1"))
+        ;; kim claimed it: its row hers, before any fetch.
+        (should (eq (agent-workspace--issue-agent project '(:id "t-1" :assignee "kim")) kim))
+        (should (eq (agent-workspace--issue-agent project '(:id "t-1" :assignee "you")) ada))
+        ;; A fetch from before they got it: kept.
+        (agent-workspace--issues-mine-h project (list :started (- (float-time) 60) :issues nil))
+        (should (equal (agent-workspace-agent-issue ada) "t-1"))
+        ;; Another's: forgotten; its own (handed back, open): kept.
+        (agent-workspace--note-issue ken "t-2")
+        (fetched '(:id "t-1" :status in_progress :assignee "kim") '(:id "t-2" :status open :assignee "ken"))
+        (should-not (agent-workspace-agent-issue ada))
+        (should (equal (agent-workspace-agent-issue ken) "t-2"))
+        (dolist (issue '((:id "t-2" :status closed :assignee "ken")
+                         (:id "t-2" :status open :assignee nil)
+                         nil))
+          (agent-workspace--note-issue ken "t-2")
+          (apply #'fetched (and issue (list issue)))
+          (should-not (agent-workspace-agent-issue ken)))))))
 
 (ert-deftest agent-workspace-handover/one-handed-back-offered-to-its-agent ()
   "A ready issue handed back to ken (open, assigned to him) is offered to

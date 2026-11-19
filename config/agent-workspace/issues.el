@@ -31,7 +31,8 @@
   "Called with a project and its issues as just fetched (a plist: :doing
 :ready :blocked :done, issue plists, for the list; :issues, every one as bd
 has it, the open ones and those done today; :actor, the agent whose bd
-command led to the fetch, its name; :error).")
+command led to the fetch, its name; :started, when the fetch began, a
+`float-time'; :error).")
 
 (defvar-local agent-workspace--issues-project nil "In the issue list: its project.")
 (defvar-local agent-workspace--issues-data nil
@@ -132,6 +133,7 @@ cancelled, its bd commands running stopped (its app closing)."
                 (left 3)
                 (today (format-time-string "%Y-%m-%d"))
                 (actor agent-workspace--issues-actor)
+                (started (float-time))
                 (fetch (list :processes nil :timer nil)))
             (setq agent-workspace--issues-pending fetch
                   agent-workspace--issues-actor nil)
@@ -147,7 +149,7 @@ cancelled, its bd commands running stopped (its app closing)."
                               (setq agent-workspace--issues-pending nil
                                     agent-workspace--issues-data
                                     (append (agent-workspace--issues-parse project answers)
-                                            (list :actor actor)))
+                                            (list :actor actor :started started)))
                               (agent-workspace--issues-redraw project)
                               (run-hook-with-args 'agent-workspace-issues-fetched-functions
                                                   project agent-workspace--issues-data)
@@ -273,10 +275,32 @@ issue knows its role (:role) and its epic (:epic, see
 ;; ====== DRAWING ======
 
 (defun agent-workspace--issue-agent (project issue)
-  "The agent of PROJECT's crew on ISSUE (its assignee, or given it)."
-  (seq-find (lambda (agent) (or (equal (agent-workspace-agent-name agent) (plist-get issue :assignee))
-                                (equal (agent-workspace-agent-issue agent) (plist-get issue :id))))
-            (agent-workspace-agents project)))
+  "The agent of PROJECT's crew on ISSUE: its assignee, else the one given it
+\(an agent's issue lags behind bd's: one handed on and claimed by another is
+the other's)."
+  (let ((agents (agent-workspace-agents project)))
+    (or (seq-find (lambda (agent) (equal (agent-workspace-agent-name agent) (plist-get issue :assignee))) agents)
+        (seq-find (lambda (agent) (equal (agent-workspace-agent-issue agent) (plist-get issue :id))) agents))))
+
+(defun agent-workspace--issues-mine-h (project data)
+  "PROJECT's issues just fetched (DATA): each agent's issue no longer its,
+forgotten: closed (or gone from bd), handed on or given back (unassigned),
+or another's (assigned to it), whether it loops or not; not by a fetch
+started before it got the issue (its claim maybe not in yet). In
+`agent-workspace-issues-fetched-functions', before the rest."
+  (when-let* ((started (plist-get data :started))
+              ((not (plist-get data :error))))
+    (let ((issues (plist-get data :issues)))
+      (dolist (agent (agent-workspace-agents project))
+        (when-let* ((id (agent-workspace-agent-issue agent))
+                    ((> started (gethash agent agent-workspace--issue-noted 0))))
+          (let ((issue (seq-find (lambda (issue) (equal (plist-get issue :id) id)) issues)))
+            (when (or (not issue)
+                      (eq (plist-get issue :status) 'closed)
+                      (not (equal (plist-get issue :assignee) (agent-workspace-agent-name agent))))
+              (agent-workspace--note-issue agent nil))))))))
+
+(add-hook 'agent-workspace-issues-fetched-functions #'agent-workspace--issues-mine-h -50)
 
 (defun agent-workspace--ago (time)
   "How long ago TIME (an ISO 8601 string) was: \"now\", \"5m\", \"2h\"."
