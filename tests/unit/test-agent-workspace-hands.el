@@ -147,6 +147,25 @@ from; a hand's buttons on its agent's bar."
         (agent-workspace-answer)))
     (should (+test-awh--wait (lambda () (memq (agent-workspace-agent-state ada) '(done desk)))))))
 
+(ert-deftest agent-workspace-hands/A-answers-only-what-it-showed ()
+  "A's prompt open on ada's request, another asked meanwhile (output read
+as it waits): what you picked answers nothing, said; the new one still
+waits (doom-pbk.150: it got your answer)."
+  (+test-awh "A-changed"
+    (agent-workspace-send ada "permission please" :submit t)
+    (should (+test-awh--wait (lambda () (eq (agent-workspace-agent-state ada) 'hand))))
+    (agent-workspace-select ada)
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (_prompt options &rest _)
+                 (agent-workspace--raise-hand ada (list :kind 'permission :title "rm -rf build"
+                                                        :tool-kind "execute" :request-id 99))
+                 (car options))))
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (should (string-search "ada no longer asks that: nothing answered"
+                               (cadr (should-error (agent-workspace-answer) :type 'user-error))))))
+    (should (eq (agent-workspace-agent-state ada) 'hand))
+    (should (eql (plist-get (agent-workspace-agent-ask ada) :request-id) 99))))
+
 (ert-deftest agent-workspace-hands/answered-elsewhere-leaves-the-room ()
   "A hand answered in its own session: its buttons leave the room (nothing
 said answered from here)."

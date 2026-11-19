@@ -203,7 +203,8 @@ raised, what you answered from here, else nothing."
 
 (defun agent-workspace-answer ()
   "Answer the raised hand of the agent here (else the next one): its
-options picked from."
+options picked from. Its hand changed while you pick: nothing answered,
+said."
   (interactive)
   (let ((agent (agent-workspace--current)))
     (unless (eq (agent-workspace-agent-state agent) 'hand)
@@ -212,7 +213,10 @@ options picked from."
     (unless (eq (agent-workspace-agent-state agent) 'hand)
       (user-error "No hand raised"))
     (let* ((options (agent-workspace-hand-options agent))
+           ;; The hand asked: one asked meanwhile (output read as the prompt
+           ;; waits) isn't answered with what you picked for this one.
+           (key (agent-workspace--ask-key (agent-workspace-agent-ask agent)))
            (label (completing-read (format "%s %s: " (agent-workspace-agent-name agent)
                                            (agent-workspace-state-text agent))
                                    (mapcar #'car options) nil t nil nil (caar options))))
-      (agent-workspace-hand-answer agent label))))
+      (agent-workspace-hand-answer agent label key))))
