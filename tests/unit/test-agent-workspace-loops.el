@@ -1017,7 +1017,7 @@ issue; one you put to sleep stays asleep, still looping (doom-pbk.137)."
         (should-not (member (format "Work on %s: close: one" one) (+test-awl--prompts "ken")))))))
 
 (ert-deftest agent-workspace-loops/a-new-agent-loops-from-the-start ()
-  "By default (`agent-workspace-loop' t): a new builder, reviewer or merger
+  "By default (`agent-workspace-loop' t): a new builder or reviewer
 loops from the start (said in the room after it joined; crew.json keeps it)
 and takes its ready issue by itself; a scribe doesn't (its role has no
 labels), nor an agent of a project without Beads; nil, none does
@@ -1027,11 +1027,10 @@ labels), nor an agent of a project without Beads; nil, none does
            (one (+test-awl--issue project "close: one" "build" 2))
            (ada (agent-workspace-create :role "builder" :name "ada" :kind 'mock))
            (rex (agent-workspace-create :role "reviewer" :name "rex" :kind 'mock))
-           (mel (agent-workspace-create :role "merger" :name "mel" :kind 'mock))
            (sam (agent-workspace-create :role "scribe" :name "sam" :kind 'mock)))
-      (should (equal (mapcar #'agent-workspace-agent-loop (list ada rex mel sam)) '(t t t nil)))
+      (should (equal (mapcar #'agent-workspace-agent-loop (list ada rex sam)) '(t t nil)))
       (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))
-      (+test-awl--all-in (list ada rex mel) 'nap)
+      (+test-awl--all-in (list ada rex) 'nap)
       (should (eq (agent-workspace-agent-state sam) 'desk))
       (should-not (+test-awl--prompts "sam"))
       ;; Said after it joined.
@@ -1043,7 +1042,7 @@ labels), nor an agent of a project without Beads; nil, none does
       (should (equal (sort (mapcar (lambda (entry) (list (plist-get entry :name) (plist-get entry :loop)))
                                    (plist-get (car (agent-workspace-crew-read project)) :agents))
                            (lambda (a b) (string< (car a) (car b))))
-                     '(("ada" t) ("mel" t) ("rex" t) ("sam" nil)))))
+                     '(("ada" t) ("rex" t) ("sam" nil)))))
     ;; With it nil: a new builder doesn't loop.
     (let* ((agent-workspace-loop nil)
            (ken (agent-workspace-create :role "builder" :name "ken" :kind 'mock)))

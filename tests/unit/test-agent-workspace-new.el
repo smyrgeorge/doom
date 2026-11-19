@@ -207,7 +207,7 @@ for it; none fetched (no app), nothing."
                                     (:id "p-3" :role "reviewer") (:id "p-4" :role nil)))))
       (let ((rows (+test-awn--rows project 200)))
         (should (string-search "  build ·2 ready  " (cdr (assoc "builder" rows))))
-        (should (string-search "  review ·1 ready  " (cdr (assoc "reviewer" rows))))
+        (should (string-search "  review ·1 ready" (cdr (assoc "reviewer" rows))))
         (should-not (string-search "ready" (cdr (assoc "investigator" rows))))))))
 
 (ert-deftest agent-workspace-new/the-role-picker-s-icons ()

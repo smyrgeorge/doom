@@ -235,23 +235,24 @@ isn't."
   ;; Each starter: (NAME DENIED MUST-ALLOW MUST-NOT-ALLOW).
   '(("builder" ("Bash(git push:*)") ("Edit" "Write" "Bash(git commit:*)") ())
     ("investigator" ("Edit" "Write" "NotebookEdit") ("WebSearch") ("Edit" "Write"))
-    ("reviewer" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write"))
+    ;; Reviews (no edits), then merges what it approves: in a worktree of
+    ;; its own, then into the main branch without asking (git -C MAIN merge
+    ;; --no-ff BRANCH: Claude Code's rules are a command's prefix), both
+    ;; paths exact: a * before merge would take git's own options too (-c
+    ;; runs anything); a merge stopped in the main checkout undone (merge
+    ;; --abort, exact); never pushes (a bare push too), no other git -C
+    ;; allowed, no merge in its own folder.
+    ("reviewer" ("Edit" "Write" "NotebookEdit" "Bash(git push:*)" "Bash(git -C * push)" "Bash(git -C * push *)"
+                 "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
+     ("Bash(git diff:*)" "Bash(git -C {main} merge --no-ff *)" "Bash(git -C {main} merge --abort)"
+      "Bash(git -C /tmp/merge-{project}-{name} merge --no-ff *)" "Bash(git worktree:*)")
+     ("Edit" "Write" "Bash(git merge:*)" "Bash(git -C:*)" "Bash(git -C * merge --no-ff *)"))
     ("scribe" ("Edit" "Write" "NotebookEdit") () ("Edit" "Write"))
     ("tester" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(git commit:*)") ("Edit" "Write"))
     ("documenter" ("Bash(git push:*)") ("Edit(docs/**)" "Edit(**/*.md)" "Write(**/*.md)" "Bash(git commit:*)")
      ("Edit" "Write"))
     ("triager" ("Edit" "Write" "NotebookEdit") ("Bash(git log:*)") ("Edit" "Write"))
     ("planner" ("Edit" "Write" "NotebookEdit") ("Bash(git show:*)") ("Edit" "Write"))
-    ;; Merges in a worktree of its own, then into the main branch without
-    ;; asking (git -C MAIN merge --no-ff BRANCH: Claude Code's rules are a
-    ;; command's prefix, Bash(git merge:*) not matching it), both paths
-    ;; exact: a * before merge would take git's own options too (-c runs
-    ;; anything); never pushes (a bare push too), no other git -C allowed.
-    ("merger" ("Bash(git push:*)" "Bash(git -C * push)" "Bash(git -C * push *)" "Bash(git reset --hard:*)"
-               "Bash(git branch -D:*)")
-     ("Bash(git merge:*)" "Bash(git -C {main} merge --no-ff *)"
-      "Bash(git -C /tmp/merge-{project}-{name} merge --no-ff *)" "Bash(git worktree:*)")
-     ("Edit" "Write" "Bash(git -C:*)" "Bash(git -C * merge --no-ff *)"))
     ("designer" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit" "Write"))
     ("security" ("Edit" "Write" "NotebookEdit") ("WebSearch" "WebFetch" "Bash(git blame:*)") ("Edit" "Write"))
     ("profiler" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit" "Write"))
@@ -263,13 +264,13 @@ isn't."
   "The starters read without a problem, each with all it needs; what each
 may do as it should: the ones that mustn't edit can't (Edit, Write
 denied), the tester only its tests, the documenter only the docs, the
-builder anything but push, the merger merging (git -C ... merge --no-ff,
-its worktree's and the main checkout's, each path exact) but never
-pushing; no git rule with a * before its subcommand; what each does
-alone is allowed (bd). The triager on haiku, the others on your default;
-the reviewer's approval to the mergers, its changes back to the
-builders. Only the lead leads: one per crew, no labels (no issue its, no
-loop), handing nothing on."
+builder anything but push, the reviewer merging what it approves (git -C
+... merge --no-ff, its worktree's and the main checkout's, each path exact)
+but never pushing; no merger (doom-pbk.163); no git rule with a * before
+its subcommand; what each does alone is allowed (bd). The triager on
+haiku, the others on your default; the reviewer handing nothing on (it
+merges), its changes back to the builders. Only the lead leads: one per crew, no labels (no issue its, no loop),
+handing nothing on."
   (let ((dir agent-workspace-starter-roles-directory))
     (should (equal (mapcar #'file-name-base (directory-files dir nil "\\.md\\'"))
                    (sort (mapcar #'car +test-awr--starters) #'string<)))
@@ -295,8 +296,9 @@ loop), handing nothing on."
         (should (equal (plist-get role :model) (and (equal (plist-get role :name) "triager") "haiku")))
         (should (eq (plist-get role :leads) (equal (plist-get role :name) "lead")))))
     (let ((reviewer (car (agent-workspace-role-read (expand-file-name "reviewer.md" dir)))))
-      (should (equal (plist-get reviewer :hands-to) '("merger")))
-      (should (equal (plist-get reviewer :returns-to) '("builder"))))
+      (should-not (plist-get reviewer :hands-to))
+      (should (equal (plist-get reviewer :returns-to) '("builder")))
+      (should (equal (plist-get reviewer :labels) '("review"))))
     (let ((lead (car (agent-workspace-role-read (expand-file-name "lead.md" dir)))))
       (should (eql (plist-get lead :max) 1))
       (dolist (key '(:labels :hands-to :returns-to :talks-to))

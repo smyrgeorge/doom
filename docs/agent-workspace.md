@@ -220,15 +220,17 @@ The work moves between roles through the project's issues. The starters hand it 
 none of skipped:
 
 ```text
- investigator ─▶ builder ─▶ tester ─▶ documenter ─▶ reviewer ─▶ merger
-                    ▲          │                       │          │
-                    └──────────┴───────────────────────┴──────────┘
+ investigator ─▶ builder ─▶ tester ─▶ documenter ─▶ reviewer ─▶ merged
+                    ▲          │                       │
+                    └──────────┴───────────────────────┘
                      changes asked, a test or the suite failing
 ```
 
 The tester checks the builder's tests against the issue and runs the whole suite; the documenter documents what users
 see. Either, with nothing to do, says so in the issue and hands it on. Work going back goes to the builder who made
-it; a reviewer's approval to the merger, or to you without one. A role's `hands-to:` says where its
+it. A reviewer merges what it approves: it tries the merge in a worktree of its own and runs the whole suite there,
+then merges into the main branch without asking you, closes the issue and never pushes; a merge that conflicts or a
+suite that fails goes back to the builder, and you're told. A role's `hands-to:` says where its
 finished issues go: roles in order, the first one the crew has an agent of (awake or asleep) taking them, so a crew
 missing a role skips it; with none of them, the agent tells you it's done. `hands-to: any` is for a role that routes
 issues (a triager): it picks among the roles with labels the crew has. `returns-to:` says where work goes back
@@ -331,8 +333,8 @@ picked ("→ Allow (you)"). A hand answered in its session leaves the room.
 
 ## Loops
 
-An agent can work through the project's issues by itself. A new agent whose role has `labels` (a builder, a reviewer,
-a merger) loops from the start, in a project whose issues Beads tracks, and the room says so as it joins; one without
+An agent can work through the project's issues by itself. A new agent whose role has `labels` (a builder, a reviewer)
+loops from the start, in a project whose issues Beads tracks, and the room says so as it joins; one without
 (a scribe) doesn't. `L` turns its loop off, and on again. Its bar shows `↻` while it loops.
 
 Once free, a looping agent takes the next issue: one you gave it first (`t`), then one handed back to it, else the
@@ -459,9 +461,9 @@ panels or a loop turned off it applies.
    ⚙ builder       builds what you give it           1 of 4  your default  auto  build ·3 ready  → tester, documenter, reviewer
    ✎ scribe        writes issues with you            1 of 1  at its max
    ──── crews ─────────────────────────────────────────────────────────────────────────────────────
-   ⁂ small         write and build; you merge        scribe, builder                      nothing to add
-   ⁂ full          write, build, review, merge       scribe, builder, reviewer, merger    + reviewer, merger
-   ⁂ extended      full, with two builders           scribe, builder 2, reviewer, merger  + builder, reviewer, merger
+   ⁂ small         write and build; you merge        scribe, builder              nothing to add
+   ⁂ full          write, build, review and merge    scribe, builder, reviewer    + reviewer
+   ⁂ extended      full, with two builders           scribe, builder 2, reviewer  + builder, reviewer
    ──── left out ──────────────────────────────────────────────────────────────────────────────────
    ✗ helper        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions
    ```
@@ -500,14 +502,14 @@ there. These ship with this config, the starters:
 | Crew | Agents |
 |---|---|
 | small | scribe, builder: you review and merge, the builder telling you its work is ready |
-| full | scribe, builder, reviewer, merger |
-| extended | scribe, two builders, reviewer, merger |
+| full | scribe, builder, reviewer: the reviewer merges what it approves |
+| extended | scribe, two builders, reviewer |
 
 For each role, it makes the file's count less the crew's agents of that role, asleep and gone home ones counting,
 and, while the crew isn't running, those `crew.json` keeps.
 Each is made as `c` makes one with its name left empty: a name from the pool, its role's colour, model and mode,
 [looping](#loops) if its role has labels. Nothing is asked, not even with `C-u`. The room says who was made:
-`crew full: + reviewer ken, merger margaret`.
+`crew full: + builder ada, reviewer ken`.
 
 It only adds: the crew's agents stay as they are, one beyond the file's count and one of a role it doesn't list
 too (its loop as it was). An agent whose worktree can't be made isn't made, and the room says
@@ -517,8 +519,8 @@ A crew file is Markdown, as a role file is:
 
 ```markdown
 ---
-description: write, build, review, merge
-agents: scribe, builder 2, reviewer, merger
+description: write, build, review and merge
+agents: scribe, builder 2, reviewer
 ---
 Notes for you: not read.
 ```
@@ -565,12 +567,11 @@ A role is what a kind of agent does and may do. These ship with this config, the
 | scribe | writes issues with you | read, `bd`; no edits |
 | investigator | investigates what you give it, writes its findings into the issue, hands it to the builders | read, search the web, `bd`; no edits |
 | builder | builds what you give it with its tests, runs them, commits on its branch, hands it on (to the testers, the documenters or the reviewers) | edit, commit; never push |
-| reviewer | reviews a branch, approves it to the mergers (to you, without one) or hands it back to its builder | read, `bd`; no edits |
+| reviewer | reviews a branch; approved, merges it once the whole suite passes in a worktree of its own, without asking you, and closes its issue; changes asked, a conflict or a failure back to its builder | read, `bd`, merge there, then into the main branch; no edits, never push |
 | tester | tests built work against its issue, runs the suite, reproduces a bug as a failing test; hands it on (to the documenters or the reviewers), or back to its builder | edit its tests (`tests/`), commit; never push |
 | documenter | documents finished features: how to use them, their keys and settings | edit the docs (`docs/`, Markdown), commit; never push |
 | triager | triages new issues (labelled `triage`): type, priority, duplicates, splits, then the role that takes each | read, `bd`; no edits; on haiku |
 | planner | breaks an epic into issues with acceptance criteria and their order, shown to you before filing | read, `bd`; no edits |
-| merger | merges an approved branch once the whole suite passes in a worktree of its own, without asking you; failures back to its builder | merge there, then into the main branch; never push |
 | designer | draws UI and UX mockups on its canvas for you to pick, writes your pick into the issue | read, `bd`, Agent UI; no edits |
 | security | reviews a change or the code for vulnerabilities, each finding with its severity, place and fix | read, search the web, `bd`; no edits |
 | profiler | measures and profiles, finds the hot spots, proposes fixes with their expected gain | read, `bd`; no edits |
@@ -601,7 +602,7 @@ Write the tests first, then run them.
   starters have none: their agents run in auto mode). Claude Code enforces all three.
 - `tools`, `deny` and the instructions can name the agent's own paths, filled in as its session starts: `{main}` (the
   project's main checkout), `{main-branch}` (its branch), `{name}` (the agent's name) and `{project}` (the main
-  checkout's folder name). A rule then names the exact command, as the merger's do: `Bash(git -C {main} merge
+  checkout's folder name). A rule then names the exact command, as the reviewer's do: `Bash(git -C {main} merge
   --no-ff *)`. A `*` before a git command's subcommand (`Bash(git -C * merge *)`) would allow git's own options there
   too, and `-c` runs anything without a prompt.
 - `max` is how many of the role may run at once. `labels` are the issues it's for. `talks-to` names the roles it may
@@ -695,7 +696,7 @@ now, and you're told: `M` again later. A merge that conflicts stops in your chec
 Merging an issue's branch (`fix/doom-a1b-…`) closes the issue, its reason naming the branch, and the room says so:
 `merged fix/doom-a1b-… into main: doom-a1b closed`. Not an issue closed already, nor a branch of no issue, nor a merge
 stopped on conflicts (close it once you've finished it); `(setq agent-workspace-close-on-merge nil)` in `config.el`
-closes none. A merger closes the issue of each branch it merges.
+closes none. A reviewer closes the issue of each branch it merges.
 
 `b` in the app lists every branch waiting to be merged, in the stage's place; `q` gives the stage back.
 

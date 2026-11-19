@@ -54,7 +54,10 @@ agree."
       (should (string-search "the first free builder takes it" told)))
     (should (string-search "--remove-label review --add-label build" (agent-workspace--handover-context reviewer)))
     (should-not (agent-workspace--handover-context scribe))
-    (let ((text (let ((agent-workspace--starting reviewer)) (agent-workspace-agent-context))))
+    ;; The reviewer's instructions name {main-branch}: a folder, not a
+    ;; repository, has none.
+    (let ((text (cl-letf (((symbol-function 'agent-workspace-main-branch) (lambda (_) "main")))
+                  (let ((agent-workspace--starting reviewer)) (agent-workspace-agent-context)))))
       (should (string-search "assigned to the one who made it (--assignee NAME)" text))
       (should (string-search "Work moves between roles" text)))
     (should (equal (agent-workspace-label-role project "build") "builder"))
@@ -92,7 +95,7 @@ order, each with its command, the first the crew has then, else the user
       (let ((told (agent-workspace--handover-context ann)))
         (should (string-search "hand it to the first of these roles the crew has an agent of (cmd/agent-workspace status" told))
         (should (string-search "\n- the testers (tests it): bd update ID --remove-label chain --add-label test --status open --assignee \"\"" told))
-        (should (string-search "\n- the reviewers (reviews a branch you point it to): bd update ID --remove-label chain --add-label review --status open --assignee \"\"" told))
+        (should (string-search "\n- the reviewers (reviews a branch, then merges it): bd update ID --remove-label chain --add-label review --status open --assignee \"\"" told))
         (should (< (string-search "the testers" told) (string-search "the reviewers" told)))
         (should (string-search "If the crew has none of them, leave its labels" told))
         (should (string-search "give it back to the builders, assigned to the one who made it" told))
@@ -113,8 +116,9 @@ order, each with its command, the first the crew has then, else the user
 
 (ert-deftest agent-workspace-handover/the-starters-chain ()
   "The starters hand work along one chain: builder, tester, documenter,
-reviewer, merger, a role the crew has none of skipped (gone home too); none
-left, nobody (the user is told). Back: to the builders (doom-pbk.115)."
+reviewer, a role the crew has none of skipped (gone home too); none left,
+nobody (the user is told). The reviewer hands nothing on: it merges what
+it approves (doom-pbk.163). Back: to the builders (doom-pbk.115)."
   (let ((project (+test-awo--dir "chain")))
     (cl-flet ((next (role &rest crew)
                 (+test-awo--crew project (seq-map-indexed (lambda (r i) (+test-awo--agent project (format "a%d" i) r))
@@ -123,23 +127,22 @@ left, nobody (the user is told). Back: to the builders (doom-pbk.115)."
       ;; The builder's: the tester, else the documenter, else the reviewer.
       (should (equal (next "builder" "builder" "tester" "documenter" "reviewer") '("tester")))
       (should (equal (next "builder" "builder" "documenter" "reviewer") '("documenter")))
-      (should (equal (next "builder" "builder" "reviewer" "merger") '("reviewer")))
+      (should (equal (next "builder" "builder" "reviewer") '("reviewer")))
       (should-not (next "builder" "builder"))
       ;; The tester's, the documenter's.
       (should (equal (next "tester" "tester" "documenter" "reviewer") '("documenter")))
       (should (equal (next "tester" "tester" "reviewer") '("reviewer")))
       (should (equal (next "documenter" "documenter" "reviewer") '("reviewer")))
-      ;; The reviewer's: the merger, else the user.
-      (should (equal (next "reviewer" "reviewer" "merger") '("merger")))
-      (should-not (next "reviewer" "reviewer" "builder"))
+      ;; The reviewer's: nobody, whatever the crew has (it merges).
+      (should-not (next "reviewer" "reviewer" "builder" "tester" "documenter"))
       ;; A tester gone home: skipped.
       (+test-awo--crew project (list (+test-awo--agent project "ada" "builder")
                                      (+test-awo--agent project "tom" "tester" 'home)
                                      (+test-awo--agent project "rex" "reviewer"))
         (should (equal (agent-workspace-hands-to project "builder") '("reviewer"))))
-      ;; Back, to the builders: from the tester, the reviewer, the merger.
+      ;; Back, to the builders: from the tester, the reviewer.
       (+test-awo--crew project (list (+test-awo--agent project "ada" "builder"))
-        (dolist (role '("tester" "reviewer" "merger"))
+        (dolist (role '("tester" "reviewer"))
           (should (equal (agent-workspace-hands-to project role :returns-to) '("builder"))))))))
 
 (ert-deftest agent-workspace-handover/not-talking-says-who-is-next ()
@@ -157,10 +160,9 @@ crew has then; none next: only what it did (doom-pbk.115, doom-pbk.147)."
         (should (string-search "which role is next: the first of the testers, the documenters, the reviewers the crew has an agent of (cmd/agent-workspace status" told))
         (should (string-search "as \"next: the testers\"" told)))
       (should (string-search "the first of the documenters, the reviewers the crew" (agent-workspace--handover-context tom))))
-    (+test-awo--crew project (list rex)
-      (should (string-search "which role is next (\"next: the mergers\")" (agent-workspace--handover-context rex))))
-    (should-not (string-search "which role" (agent-workspace--handover-context
-                                       (+test-awo--agent project "mo" "merger"))))))
+    ;; The reviewer: none next (it merges).
+    (+test-awo--crew project (list ada rex)
+      (should-not (string-search "which role" (agent-workspace--handover-context rex))))))
 
 (ert-deftest agent-workspace-handover/hands-to-any ()
   "hands-to any: every role with labels the crew has an agent of, but its
@@ -202,8 +204,11 @@ before how it hands on, and the scribe's own words name no labels."
                       "\n- mine, my own: mine, also"))
         (should (string-search line told))))
     (+test-awo--crew project (list liz (+test-awo--agent project "rex" "reviewer") (+test-awo--agent project "bob" "builder"))
-      (let ((text (let ((agent-workspace--starting (+test-awo--agent project "rex" "reviewer")))
-                    (agent-workspace-agent-context))))
+      ;; The reviewer's instructions name {main-branch}: a folder, not a
+      ;; repository, has none.
+      (let ((text (cl-letf (((symbol-function 'agent-workspace-main-branch) (lambda (_) "main")))
+                    (let ((agent-workspace--starting (+test-awo--agent project "rex" "reviewer")))
+                      (agent-workspace-agent-context)))))
         (should (< (string-search "The project's roles" text) (string-search "Work moves between roles" text))))
       (let ((text (let ((agent-workspace--starting liz)) (agent-workspace-agent-context))))
         (should (string-search "\n- mine, my own: mine, also" text))

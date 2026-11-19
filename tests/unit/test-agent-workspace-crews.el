@@ -190,8 +190,8 @@ extended, the smallest first, no problem."
                                                 (plist-get (cdr crew) :origin)))
                            (agent-workspace-crew-specs dir))
                    '(("small" (("scribe" . 1) ("builder" . 1)) starter)
-                     ("full" (("scribe" . 1) ("builder" . 1) ("reviewer" . 1) ("merger" . 1)) starter)
-                     ("extended" (("scribe" . 1) ("builder" . 2) ("reviewer" . 1) ("merger" . 1)) starter))))
+                     ("full" (("scribe" . 1) ("builder" . 1) ("reviewer" . 1)) starter)
+                     ("extended" (("scribe" . 1) ("builder" . 2) ("reviewer" . 1)) starter))))
     (dolist (crew (agent-workspace-crew-specs dir))
       (should (plist-get (cdr crew) :description)))))
 

@@ -102,8 +102,8 @@ crew.json keeps while it doesn't run too (`agent-workspace-crew-members')."
 ;; files with an error among them): the local ones, the project's, then the
 ;; starters, each a row: its icon (⁂), its name (crew/NAME when a role has
 ;; it), its description in the roles' column, then, over the columns the
-;; roles have after it, its agents, what it would add here (+ reviewer,
-;; merger) and, dimmed, where it comes from (local, project; the one it
+;; roles have after it, its agents, what it would add here (+ builder,
+;; reviewer) and, dimmed, where it comes from (local, project; the one it
 ;; replaced): each lined up from crew to crew. Narrowed, where it comes from
 ;; goes first, then its agents; what it would add is cut with … last.
 ;; Nothing to add: dimmed, "nothing to add", refused as a role at its max.

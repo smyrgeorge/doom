@@ -8,12 +8,13 @@
 ;; asleep) takes them; any: every role with labels, the agent choosing; none
 ;; in the crew, it tells you. returns-to: where work goes back (changes
 ;; asked, a test failing), to the one who made it. The starters hand work
-;; along one chain: builder, tester, documenter, reviewer, merger, a role the
-;; crew has none of skipped; changes asked, a test or the suite failing, back
-;; to the builder who made it. An investigator's findings (and a designer's,
-;; security's, a profiler's) go to the builders. Every agent is told the
-;; project's roles and their labels. Each agent is told how: the issue's
-;; label changed from its role's to the next one's,
+;; along one chain: builder, tester, documenter, reviewer (which merges what
+;; it approves), a role the crew has none of skipped; changes asked, a test
+;; or the suite failing, back to the builder who made it. An
+;; investigator's findings (and a designer's, security's, a profiler's) go to
+;; the builders. Every agent is told the project's roles and their labels.
+;; Each agent is told how: the issue's label changed from its role's to the
+;; next one's,
 ;; the issue open again and unassigned, what they need in its notes (bd, as
 ;; itself: Beads' history says who did what); a reviewer asking for changes
 ;; gives it back to the builder who made it. The first free agent of that role

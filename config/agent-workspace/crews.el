@@ -12,8 +12,8 @@
 ;;
 ;;   ---
 ;;   name: full                      its file's name, if given
-;;   description: write, build, review, merge
-;;   agents: scribe, builder 2, reviewer, merger
+;;   description: write, build, review and merge
+;;   agents: scribe, builder 2, reviewer
 ;;                                   its roles, each with how many (none: 1);
 ;;                                   a YAML list too (  - builder 2)
 ;;   ---
@@ -29,7 +29,7 @@
 ;; list, or there already (its loop as it was) is left alone. One whose
 ;; worktree can't be made isn't made, said; one whose session doesn't start
 ;; is stuck, saying why; the others go on. The room says what was made
-;; ("crew full: + reviewer ken, merger margaret"). Not saved in crew.json:
+;; ("crew full: + builder ada, reviewer ken"). Not saved in crew.json:
 ;; the crew is still just its agents.
 ;;
 ;; A problem names the file and line: an error leaves the crew out (c's menu

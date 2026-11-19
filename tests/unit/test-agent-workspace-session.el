@@ -265,8 +265,9 @@ allowedTools, its mode set before its first prompt; its model too."
 (ert-deftest agent-workspace-session/the-starters-tools-reach-their-agents ()
   "Each starter beyond the first four: its denied tools in Claude Code's
 disallowedTools, its allowed ones in allowedTools (the tester's edits only
-under tests/, the documenter's in docs/ and Markdown; the merger's merges
-with this project's paths, the ones its instructions say)."
+under tests/, the documenter's in docs/ and Markdown; the reviewer's merges
+with this project's paths, the ones its instructions say, its merge undone
+in the main checkout too)."
   (+test-aws--with-crew "starters"
     (pcase-dolist (`(,role ,name ,denied ,allowed ,not-allowed)
                    `(("tester" "tia" ("Bash(git push:*)") ("Edit(tests/**)" "Write(tests/**)" "Bash(bd:*)")
@@ -275,11 +276,12 @@ with this project's paths, the ones its instructions say)."
                       ("Edit" "Write"))
                      ("triager" "tess" ("Edit" "Write" "NotebookEdit") ("Bash(bd:*)") ("Edit"))
                      ("planner" "pat" ("Edit" "Write" "NotebookEdit") ("Bash(bd:*)") ("Edit"))
-                     ("merger" "max" ("Bash(git push:*)" "Bash(git -C * push)" "Bash(git -C * push *)"
-                                      "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
-                      ("Bash(git merge:*)" ,(format "Bash(git -C %s merge --no-ff *)" (directory-file-name project))
-                       "Bash(git -C /tmp/merge-starters-max merge --no-ff *)" "Bash(git worktree:*)")
-                      ("Edit" "Bash(git -C * merge --no-ff *)" "Bash(git -C {main} merge --no-ff *)"))
+                     ("reviewer" "rex" ("Edit" "Write" "NotebookEdit" "Bash(git push:*)" "Bash(git -C * push)"
+                                        "Bash(git -C * push *)" "Bash(git reset --hard:*)" "Bash(git branch -D:*)")
+                      (,(format "Bash(git -C %s merge --no-ff *)" (directory-file-name project))
+                       ,(format "Bash(git -C %s merge --abort)" (directory-file-name project))
+                       "Bash(git -C /tmp/merge-starters-rex merge --no-ff *)" "Bash(git worktree:*)")
+                      ("Edit" "Bash(git merge:*)" "Bash(git -C * merge --no-ff *)" "Bash(git -C {main} merge --no-ff *)"))
                      ("designer" "dee" ("Edit" "Write" "NotebookEdit") ("mcp__agent-ui") ("Edit"))
                      ("security" "sec" ("Edit" "Write" "NotebookEdit") ("WebFetch") ("Edit"))
                      ("profiler" "pip" ("Edit" "Write" "NotebookEdit") ("Bash(git diff:*)") ("Edit"))
@@ -292,16 +294,104 @@ with this project's paths, the ones its instructions say)."
         (dolist (tool allowed) (should (member tool (plist-get options :allowedTools))))
         (dolist (tool not-allowed) (should-not (member tool (plist-get options :allowedTools))))))
     ;; The merges its instructions say are the ones its rules allow.
-    (let* ((merger (seq-find (lambda (agent) (equal (agent-workspace-agent-role agent) "merger"))
-                             (agent-workspace-agents project)))
-           (role (agent-workspace-role-filled merger))
+    (let* ((reviewer (seq-find (lambda (agent) (equal (agent-workspace-agent-role agent) "reviewer"))
+                               (agent-workspace-agents project)))
+           (role (agent-workspace-role-filled reviewer))
            (merges (seq-filter (lambda (tool) (string-search " merge --no-ff *)" tool)) (plist-get role :tools))))
       (should (= (length merges) 2))
       (dolist (rule merges)
         (let ((command (concat (substring rule (length "Bash(") (- (length "*)"))) "--no-edit BRANCH")))
           (should (string-search command (plist-get role :instructions)))))
+      (should (string-search (format "git -C %s merge --abort" (directory-file-name project))
+                             (plist-get role :instructions)))
       (should-not (string-match-p "{[a-z-]+}" (plist-get role :instructions)))
-      (should (string-search "worktree add --detach /tmp/merge-starters-max main" (plist-get role :instructions))))))
+      (should (string-search "worktree add --detach /tmp/merge-starters-rex main" (plist-get role :instructions))))))
+
+;; Two reviewers merging into one main checkout (doom-pbk.163).
+
+(defun +test-aws--allowed-p (command tools)
+  "Non-nil if COMMAND is allowed by one of TOOLS' Bash rules, as Claude Code
+matches them: Bash(PREFIX:*) a command that's PREFIX or starts with it and
+a space, Bash(PREFIX *) one starting with PREFIX and a space, else the
+command itself."
+  (seq-some (lambda (tool)
+              (when (string-match "\\`Bash(\\(.*\\))\\'" tool)
+                (let ((rule (match-string 1 tool)))
+                  (cond ((string-suffix-p ":*" rule)
+                         (let ((prefix (substring rule 0 -2)))
+                           (or (equal command prefix) (string-prefix-p (concat prefix " ") command))))
+                        ((string-suffix-p " *" rule)
+                         (string-prefix-p (substring rule 0 -1) command))
+                        (t (equal rule command))))))
+            tools))
+
+(defun +test-aws--told (role regexp)
+  "Each command ROLE's instructions say matching REGEXP, in order."
+  (let ((text (plist-get role :instructions)) (start 0) found)
+    (while (string-match regexp text start)
+      (push (match-string 0 text) found)
+      (setq start (match-end 0)))
+    (nreverse found)))
+
+(ert-deftest agent-workspace-session/two-reviewers-merging-at-once ()
+  "Two reviewers, each its own trial worktree, merging into one main
+checkout, by the commands their instructions say (each allowed by their
+rules, no prompt): the second's branch conflicting with the first's
+merge stops, and its merge --abort leaves the checkout as the first left
+it, nothing of the second merged; one not conflicting merges after."
+  (let* ((project (+test-aws--project "two-reviewers"))
+         (default-directory project)
+         (process-environment (append '("GIT_AUTHOR_NAME=T" "GIT_AUTHOR_EMAIL=t@t"
+                                        "GIT_COMMITTER_NAME=T" "GIT_COMMITTER_EMAIL=t@t")
+                                      process-environment))
+         (roles (mapcar (lambda (name)
+                          (agent-workspace-role-filled
+                           (agent-workspace--make-agent :name name :role "reviewer" :project project)))
+                        '("rex" "ria")))
+         (trials nil))
+    (cl-flet* ((run (role command &optional branch)
+                 (let ((command (if branch (string-replace "BRANCH" branch command) command)))
+                   (should (+test-aws--allowed-p command (plist-get role :tools)))
+                   (with-temp-buffer
+                     (call-process shell-file-name nil t nil shell-command-switch command))))
+               (branch (name file text)
+                 (+test-aws--git "checkout" "-q" "-b" name "main")
+                 (write-region text nil file)
+                 (+test-aws--git "add" file)
+                 (+test-aws--git "commit" "-q" "-m" name)
+                 (+test-aws--git "checkout" "-q" "main")))
+      (branch "fix/a" "README" "a\n")
+      (branch "fix/b" "README" "b\n")
+      (branch "feat/c" "c" "c\n")
+      (unwind-protect
+          (pcase-let ((`(,rex ,ria) roles))
+            ;; Each one's trial, at main as it is: both pass.
+            (pcase-dolist (`(,role . ,branch) (list (cons rex "fix/a") (cons ria "fix/b")))
+              (let* ((add (car (+test-aws--told role "git worktree add --detach [^ ]+ main")))
+                     (trial (car (+test-aws--told role "git -C /tmp/merge-[^ ]+ merge --no-ff --no-edit BRANCH")))
+                     (path (nth 4 (split-string add " "))))
+                (push path trials)
+                (when (file-exists-p path) (+test-aws--git "worktree" "remove" "--force" path))
+                (should (eql (run role add) 0))
+                (should (eql (run role trial branch) 0))))
+            (let ((into-main (lambda (role)
+                               (car (+test-aws--told role (concat "git -C " (regexp-quote (shell-quote-argument
+                                                                                           (directory-file-name project)))
+                                                                  " merge --no-ff --no-edit BRANCH"))))))
+              ;; The first into main.
+              (should (eql (run rex (funcall into-main rex) "fix/a") 0))
+              (let ((head (+test-aws--git "rev-parse" "HEAD")))
+                ;; The second's conflicts: stopped, undone.
+                (should-not (eql (run ria (funcall into-main ria) "fix/b") 0))
+                (should (eql (run ria (car (+test-aws--told ria "git -C [^ ]+ merge --abort"))) 0))
+                (should (equal (+test-aws--git "status" "--porcelain") ""))
+                (should (equal (+test-aws--git "rev-parse" "HEAD") head))
+                (should (equal (+test-aws--git "show" "HEAD:README") "a")))
+              ;; Not conflicting: merged after the first's.
+              (should (eql (run ria (funcall into-main ria) "feat/c") 0))
+              (should (equal (+test-aws--git "log" "-1" "--format=%s") "Merge branch 'feat/c'"))))
+        (dolist (path trials)
+          (ignore-errors (+test-aws--git "worktree" "remove" "--force" path)))))))
 
 ;; ====== ITS STATES ======
 

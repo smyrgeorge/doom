@@ -6,7 +6,7 @@
 ;; (.claude/agents/*.md): a front matter, then its instructions (added to its
 ;; agents' system prompt). The starters ship here, in roles/ (scribe,
 ;; investigator, builder, reviewer, tester, documenter, triager, planner,
-;; merger, designer, security, profiler, lead); a project's own, in its
+;; designer, security, profiler, lead); a project's own, in its
 ;; .agent-workspace/roles/ (committed), and your own for it, in its
 ;; .agent-shell/agent-workspace/roles/ (local: .agent-shell/ is out of git),
 ;; add to them; a later place's role replaces one of the same name (starter
@@ -42,7 +42,7 @@
 ;; Its tools, deny and instructions may name the agent's own paths:
 ;; {main} (its project's main checkout), {main-branch}, {name} (the
 ;; agent's), {project} (the main checkout's folder name), filled in as its
-;; session starts (session.el, ITS ROLE, FILLED IN): the merger's
+;; session starts (session.el, ITS ROLE, FILLED IN): the reviewer's
 ;; Bash(git -C {main} merge --no-ff *).
 ;;
 ;; There's no worktree key: every agent has its own (worktree.el). A

@@ -530,7 +530,7 @@ session is told; nothing for a session not an agent's."
 {name} and {project} filled in, shell-quoted, as its session starts (in
 Claude Code's options and what it's told); any other {word} left; the
 role itself untouched; the main branch asked once."
-  (let* ((role (list :name "merger"
+  (let* ((role (list :name "reviewer"
                      :tools '("Read" "Bash(git -C {main} merge --no-ff *)"
                               "Bash(git -C /tmp/merge-{project}-{name} merge --no-ff *)" "Bash(ls {other}:*)")
                      :deny '("Bash(git -C * push)" "Bash(git -C {main} reset:*)")
@@ -545,7 +545,7 @@ role itself untouched; the main branch asked once."
                  ;; where its placeholder was.
                  (string-match "o\\(o\\)" "xoo")
                  "main")))
-      (let ((filled (agent-workspace-role-filled (+test-awc--agent :name "ken" :role "merger"))))
+      (let ((filled (agent-workspace-role-filled (+test-awc--agent :name "ken" :role "reviewer"))))
         (should (equal (plist-get filled :tools)
                        '("Read" "Bash(git -C /tmp/project merge --no-ff *)"
                          "Bash(git -C /tmp/merge-project-ken merge --no-ff *)" "Bash(ls {other}:*)")))
@@ -559,7 +559,7 @@ role itself untouched; the main branch asked once."
                        '("Read" "Bash(git -C {main} merge --no-ff *)"
                          "Bash(git -C /tmp/merge-{project}-{name} merge --no-ff *)" "Bash(ls {other}:*)"))))
       ;; Reaching Claude Code's options and what it's told.
-      (let* ((agent (+test-awc--agent :name "ken" :role "merger" :project "/tmp/my project/"))
+      (let* ((agent (+test-awc--agent :name "ken" :role "reviewer" :project "/tmp/my project/"))
              (config (let ((agent-workspace--starting agent)) (agent-workspace--config agent)))
              (meta (alist-get :session-meta config))
              (options (alist-get 'options (alist-get 'claudeCode meta))))

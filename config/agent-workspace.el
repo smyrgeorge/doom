@@ -81,7 +81,7 @@ needs your OK. nil: Claude Code's own default."
 ;; permission mode, labels, how many may run, whether it leads, icon, verb,
 ;; colour), then its instructions. The starters ship in config/agent-workspace/roles/ (scribe,
 ;; investigator, builder, reviewer, tester, documenter, triager, planner,
-;; merger, designer, security, profiler, lead); a project's own, in its
+;; designer, security, profiler, lead); a project's own, in its
 ;; .agent-workspace/roles/ (committed), and yours for it, in its
 ;; .agent-shell/agent-workspace/roles/ (out of git), add to them; a later
 ;; one replaces one of the same name: starter < project < local (M-x
@@ -89,7 +89,7 @@ needs your OK. nil: Claude Code's own default."
 ;; local ones, to change it there). Its tools and permission mode are
 ;; enforced by Claude Code (its options), not only told. Its tools, deny and
 ;; instructions may name {main} (the main checkout), {main-branch}, {name}
-;; and {project}, filled in as its session starts: the merger's rules name
+;; and {project}, filled in as its session starts: the reviewer's rules name
 ;; its two merges exactly, no * before merge. A file's problems
 ;; are warnings naming its file and line (an error leaves the role out: no
 ;; description, a name, mode, max, colour or tool that isn't one); M-x
@@ -99,20 +99,20 @@ needs your OK. nil: Claude Code's own default."
 ;; The agents a crew should have, made at once (config/agent-workspace/
 ;; crews.el): a Markdown file each, NAME.md, its front matter as a role's: a
 ;; description and its agents (roles with counts: agents: scribe, builder 2,
-;; reviewer, merger); its new agents loop as any new one does (see LOOPS).
+;; reviewer); its new agents loop as any new one does (see LOOPS).
 ;; The starters ship in config/agent-workspace/crews/: small
-;; (scribe, builder: you merge), full (scribe, builder, reviewer, merger),
+;; (scribe, builder: you merge), full (scribe, builder, reviewer: it merges),
 ;; extended (full, with two builders); a project's own go in
 ;; its .agent-workspace/crews/ (committed), yours in its
 ;; .agent-shell/agent-workspace/crews/ (out of git), a later one replacing
 ;; one of the same name: starter < project < local. In c's menu, after the
 ;; roles: a row each, its icon, name, description, its agents, and what it
-;; would add here (+ reviewer, merger), or, dimmed and refused, nothing to
+;; would add here (+ builder, reviewer), or, dimmed and refused, nothing to
 ;; add. Picked, it makes for each role its count less the crew's agents of
 ;; that role (asleep and gone home ones counting, and those crew.json keeps
 ;; while the crew isn't running), no name asked, as c makes one with its
 ;; name left empty; the room says who was made ("crew full: +
-;; reviewer ken, merger margaret"). It only adds: an agent beyond its count,
+;; builder ada, reviewer ken"). It only adds: an agent beyond its count,
 ;; or of a role it doesn't list, stays as it is. A file's problems are
 ;; warnings naming file and line; an error leaves it out (a role that isn't
 ;; the project's, a count that isn't one, over its role's max:); M-x

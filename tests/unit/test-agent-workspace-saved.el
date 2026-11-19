@@ -577,20 +577,19 @@ asleep ones asleep, its layout applied; crew.json then as the app has it
 crew.json keeps are the crew's, counted as its running ones are, their names
 and initials not given again (doom-pbk.128). Every agent of full kept:
 nothing to add (its row in c's menu says so), nothing made, crew.json only
-looked at. A scribe and a builder kept: a reviewer and a merger made; the
-app opened, the four run, none asleep for its role's max."
+looked at. A scribe and a builder kept: a reviewer made; the app opened,
+the three run, none asleep for its role's max."
   (+test-aws2 "crew-meanwhile"
     (let ((full "{\"version\": 2,
  \"agents\": [
   {\"name\": \"ada\", \"role\": \"scribe\"},
   {\"name\": \"grace\", \"role\": \"builder\"},
-  {\"name\": \"linus\", \"role\": \"reviewer\"},
-  {\"name\": \"ken\", \"role\": \"merger\"}
+  {\"name\": \"linus\", \"role\": \"reviewer\"}
  ]}
 "))
       (+test-aws2--write project full)
       (should (equal (agent-workspace-crew-members project)
-                     '(("ada" . "scribe") ("grace" . "builder") ("linus" . "reviewer") ("ken" . "merger"))))
+                     '(("ada" . "scribe") ("grace" . "builder") ("linus" . "reviewer"))))
       (should-not (agent-workspace-crew-missing
                    project (alist-get "full" (agent-workspace-crew-specs project) nil nil #'equal)))
       (should-not (plist-get (alist-get "full" (agent-workspace--crew-facts project) nil nil #'equal) :missing))
@@ -608,14 +607,14 @@ app opened, the four run, none asleep for its role's max."
 ")
     (should (equal (agent-workspace-crew-agents-text
                     (plist-get (alist-get "full" (agent-workspace--crew-facts project) nil nil #'equal) :missing))
-                   "reviewer, merger"))
+                   "reviewer"))
     (pcase-let ((`(,made ,failed ,text) (agent-workspace-crew-make project "full")))
-      (should (equal (mapcar #'agent-workspace-agent-name made) '("linus" "ken")))
+      (should (equal (mapcar #'agent-workspace-agent-name made) '("linus")))
       (should-not failed)
-      (should (equal text "crew full: + reviewer linus, merger ken")))
-    (should (equal (reverse started) '("linus" "ken")))
+      (should (equal text "crew full: + reviewer linus")))
+    (should (equal (reverse started) '("linus")))
     (let ((text (+test-aws2--file project)))
-      (dolist (name '("ada" "grace" "linus" "ken"))
+      (dolist (name '("ada" "grace" "linus"))
         (should (string-search (format "{\"name\": \"%s\"" name) text))))
     ;; The app opened: the kept ones start beside them, none over its max.
     (setq started nil)
@@ -624,7 +623,7 @@ app opened, the four run, none asleep for its role's max."
       (agent-workspace-open t)
       (should (equal (sort started #'string<) '("ada" "grace")))
       (should (equal (sort (mapcar #'agent-workspace-agent-name (agent-workspace-agents project)) #'string<)
-                     '("ada" "grace" "ken" "linus")))
+                     '("ada" "grace" "linus")))
       (should-not (seq-some (lambda (agent) (eq (agent-workspace-agent-state agent) 'asleep))
                             (agent-workspace-agents project)))
       (should (equal (agent-workspace-crew-make project "full") '(nil nil nil))))))

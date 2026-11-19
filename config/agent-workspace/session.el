@@ -121,7 +121,7 @@ Claude Code's own default."
 ;; that's on, {name} the agent's name, {project} the main checkout's folder
 ;; name. Each is filled in, shell-quoted, as its session starts. A rule then
 ;; names the exact command, with no * where git's own options go (-c,
-;; --exec-path: they'd run anything without a prompt): the merger's
+;; --exec-path: they'd run anything without a prompt): the reviewer's
 ;; Bash(git -C {main} merge --no-ff *). Its instructions say that command, so
 ;; it runs one its rules allow. Any other {word} is left as it is.
 
@@ -250,7 +250,7 @@ in the project's main checkout (%s), which is the user's. Each piece of work get
 branch of its own there, made and named for you as it starts (an issue's after its \
 type, id and title: fix/doom-a1b-lexer-escapes). Commit on the branch you're on, and \
 never switch, make or rename branches yourself. The user reviews each branch and \
-merges it (or the crew's merger does). Your bd commands run as %s (BEADS_ACTOR), on \
+merges it (or the crew's reviewer does). Your bd commands run as %s (BEADS_ACTOR), on \
 the project's issues: an issue the user gives you, claim it as yourself. Your \
 notifications carry your name already."
                name (agent-workspace-agent-role agent)

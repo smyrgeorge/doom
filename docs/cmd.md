@@ -67,7 +67,7 @@ An event is queued and delivered when its agent is free, as data from its source
 ([The inbox](agent-workspace.md#the-inbox)). For now `send` is refused: this config turns events from outside off. The reply is JSON on stdout
 (`{"ok":true,"name":"ada","role":"builder","worktree":...,"branch":"agent/ada",...}` for new,
 `{"ok":true,"made":[{"name":"ken","role":"reviewer",...}]}` for crew, `"made":[]` when it lacks nothing, those not
-made in `"failed":[{"role":"merger","error":...}]`, an unknown crew naming the crews there are,
+made in `"failed":[{"role":"reviewer","error":...}]`, an unknown crew naming the crews there are,
 `{"ok":true,"events":[{"id":1,"to":"ada","state":"queued"}]}` for send, `{"ok":true,"agents":[...],"conflicts":[...],
 "offers":[...],"talk":"ask"}` for status, the agent as new has it for give, wake, sleep and loop, with `"prompt":"sent"`
 or `"queued"` for give and `"loop":true` for loop); it exits with 0 when done, 1 when not (the reply says why), 2 for a

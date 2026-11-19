@@ -233,8 +233,8 @@ the layout stopped half done, the hint never shown."
 
 (ert-deftest e2e-agent-workspace/c-then-a-crew ()
   "On an empty stage (its hint saying c: a new agent, or a crew), c then
-full typed in its menu: a scribe, a builder, a reviewer and a merger made
-and started, named from the pool, none looping, no name asked; the room
+full typed in its menu: a scribe, a builder and a reviewer made and
+started, named from the pool, none looping, no name asked; the room
 says who was made, the stage has them. c then full again: nothing to add,
 refused, nothing made."
   (let* ((project (+test-e2e-aw--project))
@@ -268,7 +268,7 @@ refused, nothing made."
               (should (equal (mapcar (lambda (agent) (list (agent-workspace-agent-name agent)
                                                            (agent-workspace-agent-role agent)))
                                      agents)
-                             '(("ada" "scribe") ("grace" "builder") ("linus" "reviewer") ("ken" "merger"))))
+                             '(("ada" "scribe") ("grace" "builder") ("linus" "reviewer"))))
               (should (seq-every-p (lambda (agent) (eq (agent-workspace-agent-state agent) 'desk)) agents))
               (should-not (seq-some #'agent-workspace-agent-loop agents))
               ;; Each on the stage: its pane open, or its bar.
@@ -276,7 +276,7 @@ refused, nothing made."
                 (should (or (get-buffer-window (agent-workspace-agent-buffer agent))
                             (get-buffer-window (agent-workspace--bar-buffer agent)))))
               (with-current-buffer (agent-workspace--room-buffer project)
-                (should (string-search "crew full: + scribe ada, builder grace, reviewer linus, merger ken"
+                (should (string-search "crew full: + scribe ada, builder grace, reviewer linus"
                                        (buffer-string))))
               ;; Again, from a bar: refused (C-g ends the question asked again).
               (select-window (seq-some (lambda (agent) (get-buffer-window (agent-workspace--bar-buffer agent)))
@@ -522,7 +522,7 @@ the axis and legend under its bottom)."
           (progn
             (dolist (spec '(("bo" "builder") ("cy" "builder") ("di" "builder") ("ed" "investigator")
                             ("kim" "reviewer") ("fay" "reviewer") ("gus" "tester") ("hal" "tester")
-                            ("ivy" "designer") ("jo" "planner") ("lu" "merger") ("mo" "documenter")))
+                            ("ivy" "designer") ("jo" "planner") ("lu" "profiler") ("mo" "documenter")))
               (agent-workspace-create :role (cadr spec) :name (car spec)))
             (agent-workspace-layout (agent-workspace--app project))
             (+test-sleep 0.5)
