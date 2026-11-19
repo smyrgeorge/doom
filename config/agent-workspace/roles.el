@@ -39,6 +39,12 @@
 ;;   ---
 ;;   Its instructions.
 ;;
+;; Its tools, deny and instructions may name the agent's own paths:
+;; {main} (its project's main checkout), {main-branch}, {name} (the
+;; agent's), {project} (the main checkout's folder name), filled in as its
+;; session starts (session.el, ITS ROLE, FILLED IN): the merger's
+;; Bash(git -C {main} merge --no-ff *).
+;;
 ;; There's no worktree key: every agent has its own (worktree.el). A
 ;; problem names the file and line: an error leaves the role out, a warning
 ;; doesn't. Errors: no front matter or not closed, a line not a key, no
@@ -46,10 +52,10 @@
 ;; letter then lowercase letters, digits or -, a name: not its file's, a
 ;; tools or deny entry not Tool or Tool(pattern), a mode, max or colour not
 ;; one there is, a leads neither true nor false. Warnings: an unknown key, a
-;; key given twice, a model not one there is, an icon no nerd icon, a tool
-;; both allowed and denied, no instructions, a talks-to, hands-to or
-;; returns-to naming no role of the project's (or its own). M-x
-;; agent-workspace-check-roles lists them all.
+;; key given twice, a model not one there is, an icon no nerd icon, a tools
+;; or deny {word} not a placeholder, a tool both allowed and denied, no
+;; instructions, a talks-to, hands-to or returns-to naming no role of the
+;; project's (or its own). M-x agent-workspace-check-roles lists them all.
 
 (require 'cl-lib)
 (require 'seq)
@@ -135,6 +141,16 @@ too)."
                (?\( (cl-incf depth))
                (?\) (when (< (cl-decf depth) 0) (throw 'open nil)))))
            (= depth 0)))))
+
+(defun agent-workspace--unknown-placeholders (entry)
+  "The {words} in ENTRY (a tools or deny entry) that aren't placeholders
+\(`agent-workspace-role-placeholders'), without their braces."
+  (let ((start 0) words)
+    (while (string-match "{\\([a-z-]+\\)}" entry start)
+      (unless (member (match-string 1 entry) agent-workspace-role-placeholders)
+        (push (match-string 1 entry) words))
+      (setq start (match-end 0)))
+    (nreverse words)))
 
 (defun agent-workspace--model-p (model)
   "Non-nil if MODEL is one Claude Code takes: one of
@@ -251,9 +267,14 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
                  ((or "tools" "deny" "labels" "talks-to" "hands-to" "returns-to")
                   (when (member key '("tools" "deny"))
                     (dolist (item value)
-                      (unless (agent-workspace--tool-p (car item))
-                        (problem 'error (cdr item) "%s %s: not a tool, Tool or Tool(pattern)"
-                                 key (car item)))))
+                      (if (not (agent-workspace--tool-p (car item)))
+                          (problem 'error (cdr item) "%s %s: not a tool, Tool or Tool(pattern)"
+                                   key (car item))
+                        (dolist (word (agent-workspace--unknown-placeholders (car item)))
+                          (problem 'warning (cdr item) "%s %s: {%s} isn't one of %s: left as it is"
+                                   key (car item) word
+                                   (mapconcat (lambda (one) (concat "{" one "}"))
+                                              agent-workspace-role-placeholders ", "))))))
                   (when (member key '("talks-to" "hands-to" "returns-to"))
                     (push (cons key value) lines))
                   (setq role (plist-put role (intern (concat ":" key)) (mapcar #'car value))))

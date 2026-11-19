@@ -49,7 +49,8 @@ issues tracked by bd): its folder."
 (defmacro +test-awq (name beads agents &rest body)
   "BODY in a new project NAME (`project'; BEADS: its issues tracked by bd,
 skipped without it) whose AGENTS ((NAME ROLE)...), stand-ins, are at the
-desk, each bound to its name; no crew, inbox or app before or after."
+desk, their loop off, each bound to its name; no crew, inbox or app
+before or after."
   (declare (indent 3))
   `(progn
      ,@(when beads '((skip-unless (executable-find "bd"))))
@@ -63,6 +64,10 @@ desk, each bound to its name; no crew, inbox or app before or after."
               (agent-workspace--roles-cache (make-hash-table :test #'equal))
               (agent-workspace--inboxes (make-hash-table :test #'equal))
               (agent-workspace--inbox-sent (make-hash-table :test #'equal))
+              ;; Its agents start with their loop off, each test turning it
+              ;; on as it says: a new one looping from the start has its
+              ;; own tests (test-agent-workspace-loops.el).
+              (agent-workspace-loop nil)
               (agent-workspace-loop-retry 0.2)
               (agent-workspace-loop-check nil))
          (ignore-errors (delete-file +test-awq--log))

@@ -2,8 +2,8 @@
 ;; config/agent-workspace/crews.el: crew files read and checked (their
 ;; problems naming the file and line), the starters as they ship, a project's
 ;; own and your local ones, what a crew lacks of one, and making it: each
-;; agent as c makes one with its name left empty, looping as its file says,
-;; one failing while the others go on, the room told. In throwaway git
+;; agent as c makes one with its name left empty, looping as any new one
+;; does, one failing while the others go on, the room told. In throwaway git
 ;; repositories; no session starts. c's menu with crews and the shell's crew:
 ;; test-agent-workspace-new.el.
 
@@ -99,8 +99,8 @@ the agents started, `said' what the room was told (its notes)."
 
 (ert-deftest agent-workspace-crews/a-crew-file ()
   "Its keys read: its agents inline with their counts (none: 1), or as YAML
-items (ROLE: N too); its loop; quotes taken off; what's after its front
-matter not read."
+items (ROLE: N too); quotes taken off; what's after its front matter not
+read."
   (+test-aw-with-four-starters
     (let* ((dir (make-temp-file (+test-tmp-file "awc-read-") t))
            (roles (agent-workspace-roles dir)))
@@ -111,7 +111,6 @@ name: team
 description: \"a team\"
 # a comment
 agents: scribe, builder 2, reviewer
-loop: builder
 ---
 Notes for you: builder 9, not read.
 ")
@@ -120,7 +119,6 @@ Notes for you: builder 9, not read.
         (should (equal (plist-get crew :name) "team"))
         (should (equal (plist-get crew :description) "a team"))
         (should (equal (plist-get crew :agents) '(("scribe" . 1) ("builder" . 2) ("reviewer" . 1))))
-        (should (equal (plist-get crew :loop) '("builder")))
         (should (= (agent-workspace-crew-size crew) 4))
         (should (equal (agent-workspace-crew-agents-text (plist-get crew :agents)) "scribe, builder 2, reviewer")))
       (pcase-let ((`(,crew . ,problems)
@@ -130,20 +128,19 @@ description: listed
 agents:
   - investigator
   - builder: 3
-loop: [builder, investigator]
 ---
 ")
                     roles)))
         (should-not problems)
         (should (equal (plist-get crew :agents) '(("investigator" . 1) ("builder" . 3))))
-        (should (equal (plist-get crew :loop) '("builder" "investigator")))))))
+        (should-not (plist-member crew :loop))))))
 
 (ert-deftest agent-workspace-crews/a-crew-file-s-problems ()
   "Each problem names the file and line. Errors leave the crew out: no
 description, no agents, a role that isn't the project's, a count that isn't
-one, over its role's max:, a loop: role not among its agents, a name not
-its file's; warnings don't: an unknown key, a role given twice, a loop: role
-without labels."
+one, over its role's max:, a name not its file's; warnings don't: an
+unknown key (loop:, of crew files before doom-pbk.137: a new agent loops by
+itself now), a role given twice."
   (+test-aw-with-four-starters
     (let* ((dir (make-temp-file (+test-tmp-file "awc-problems-") t))
            (roles (agent-workspace-roles dir))
@@ -152,7 +149,6 @@ without labels."
                    (funcall read "bad.md" "---
 name: good
 agents: scribe, wizard, builder x2, reviewer 0, builder 5, scribe 2
-loop: investigator
 ---
 ")))
         (should-not crew)
@@ -164,8 +160,7 @@ loop: investigator
                          (error "bad.md:3: agents builder 5: more than the role allows (max: 4)")
                          (error "bad.md:3: agents scribe 2: more than the role allows (max: 1)")
                          (warning "bad.md:3: agents scribe given twice (line 3 too): the last is used")
-                         (error "bad.md:1: no description: say what it's for (description: ...)")
-                         (error "bad.md:4: loop investigator: not among its agents")))))
+                         (error "bad.md:1: no description: say what it's for (description: ...)")))))
       (pcase-let ((`(,crew . ,problems) (funcall read "none.md" "---\ndescription: none\nagents:\n---\n")))
         (should-not crew)
         (should (equal (+test-awc--messages problems)
@@ -174,28 +169,29 @@ loop: investigator
         (should-not crew)
         (should (equal (+test-awc--messages problems)
                        '((error "open.md:4: its front matter isn't closed: a line --- after its keys")))))
-      ;; Only warnings: kept, not looped where its role takes no issue.
+      ;; Only warnings: kept; loop: (crew files before doom-pbk.137) unknown now.
       (pcase-let ((`(,crew . ,problems) (funcall read "warned.md" "---\ndescription: warned\nagents: scribe\nloop: scribe\ncolour: blue\n---\n")))
         (should crew)
+        (should-not (plist-member crew :loop))
         (should (equal (+test-awc--messages problems)
-                       '((warning "warned.md:5: unknown key colour: ignored")
-                         (warning "warned.md:4: loop scribe: its role has no labels, no issue is its to take: not looped"))))))))
+                       '((warning "warned.md:4: unknown key loop: ignored")
+                         (warning "warned.md:5: unknown key colour: ignored"))))))))
 
 ;; ====== A PROJECT'S CREWS ======
 
 (ert-deftest agent-workspace-crews/the-starters ()
   "The starters as they ship, with the starter roles: small, full,
-extended, the smallest first, none looping, no problem."
+extended, the smallest first, no problem."
   (let* ((agent-workspace--roles-cache (make-hash-table :test #'equal))
          (agent-workspace--crew-specs-cache (make-hash-table :test #'equal))
          (dir (make-temp-file (+test-tmp-file "awc-starters-") t)))
     (should-not (agent-workspace-crew-spec-problems dir))
-    (should (equal (mapcar (lambda (crew) (list (car crew) (plist-get (cdr crew) :agents) (plist-get (cdr crew) :loop)
+    (should (equal (mapcar (lambda (crew) (list (car crew) (plist-get (cdr crew) :agents)
                                                 (plist-get (cdr crew) :origin)))
                            (agent-workspace-crew-specs dir))
-                   '(("small" (("scribe" . 1) ("builder" . 1)) nil starter)
-                     ("full" (("scribe" . 1) ("builder" . 1) ("reviewer" . 1) ("merger" . 1)) nil starter)
-                     ("extended" (("scribe" . 1) ("builder" . 2) ("reviewer" . 1) ("merger" . 1)) nil starter))))
+                   '(("small" (("scribe" . 1) ("builder" . 1)) starter)
+                     ("full" (("scribe" . 1) ("builder" . 1) ("reviewer" . 1) ("merger" . 1)) starter)
+                     ("extended" (("scribe" . 1) ("builder" . 2) ("reviewer" . 1) ("merger" . 1)) starter))))
     (dolist (crew (agent-workspace-crew-specs dir))
       (should (plist-get (cdr crew) :description)))))
 
@@ -296,32 +292,29 @@ builder beyond its count, an investigator it doesn't list, one asleep."
     (should (equal (agent-workspace-crew-make project "review") '(nil nil nil)))
     (should (= (length (agent-workspace-agents project)) 6))))
 
-(ert-deftest agent-workspace-crews/its-loop ()
-  "A crew file's loop: its new agents of those roles loop; one there
-already keeps its loop as it was; a role without labels isn't looped, said."
+(ert-deftest agent-workspace-crews/its-agents-loop-as-any-new-one ()
+  "A crew's new agents loop as any new agent does (`agent-workspace-loop',
+loops.el: a role with labels, a project whose issues Beads tracks); one
+there already keeps its loop as it was; the room says only who was made
+\(doom-pbk.137: no crew file loop: any more)."
   (+test-awc "loop"
-    (+test-awc--file (expand-file-name ".agent-workspace/crews/" project) "busy.md"
-                     "---\ndescription: busy\nagents: scribe, builder 2\nloop: builder, scribe\n---\n")
-    (let ((looped nil)
-          (real (symbol-function 'agent-workspace-loop-set)))
-      (cl-letf (((symbol-function 'agent-workspace-loop-set)
+    (let ((looped nil))
+      (cl-letf (((symbol-function 'agent-workspace--loop-beads-p) #'always)
+                ((symbol-function 'agent-workspace-loop-set)
                  (lambda (agent on &rest _)
-                   ;; Its checks (a role with labels), not its watch.
-                   (if (equal (agent-workspace-agent-role agent) "scribe")
-                       (funcall real agent on)
-                     (push (agent-workspace-agent-name agent) looped)
-                     (setf (agent-workspace-agent-loop agent) on)))))
+                   ;; Not its watch, nor its look.
+                   (push (agent-workspace-agent-name agent) looped)
+                   (setf (agent-workspace-agent-loop agent) on))))
         (+test-awc--agent project "bob" "builder")
         (+test-awc--quietly
-          (pcase-let ((`(,made ,_ ,text) (agent-workspace-crew-make project "busy")))
-            (should (equal (mapcar #'agent-workspace-agent-name made) '("ada" "grace")))
-            (should (equal looped '("grace")))
-            ;; Its quotes as `user-error' curls them.
-            (should (string-match-p "\\`crew busy: \\+ scribe ada, builder grace; ada not looping: ada.s role, scribe, has no labels: no issue is its to take\\'"
-                                    text))))
-        (should (agent-workspace-agent-loop (agent-workspace-agent "grace" project)))
-        (should-not (agent-workspace-agent-loop (agent-workspace-agent "bob" project)))
-        (should-not (agent-workspace-agent-loop (agent-workspace-agent "ada" project)))))))
+          (pcase-let ((`(,made ,_ ,text) (agent-workspace-crew-make project "review")))
+            (should (equal (mapcar #'agent-workspace-agent-role made) '("scribe" "builder" "reviewer")))
+            ;; The builder and the reviewer loop; the scribe's role has no labels.
+            (should (equal (mapcar #'agent-workspace-agent-loop made) '(nil t t)))
+            (should (equal (sort looped #'string<)
+                           (sort (mapcar #'agent-workspace-agent-name (cdr made)) #'string<)))
+            (should (string-match-p "\\`crew review: \\+ scribe [a-z]+, builder [a-z]+, reviewer [a-z]+\\'" text))))
+        (should-not (agent-workspace-agent-loop (agent-workspace-agent "bob" project)))))))
 
 (ert-deftest agent-workspace-crews/one-failing ()
   "One whose worktree can't be made isn't made, said (the next of its role

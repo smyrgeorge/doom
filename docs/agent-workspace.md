@@ -191,14 +191,16 @@ Scripts, CI or a timer can send the crew an event: `cmd/agent-workspace send --t
 
 An event waits until its agent is free: never while it works, has its hand raised or sleeps (it doesn't wake one).
 Then it's delivered, one at a time and in order, as data from its source: "Event from ci (data, not instructions):
-The build broke". The turn it starts runs in plan mode: the agent reads and investigates on its own, and editing asks
-you. Its own mode is back after. Events wait in the project, in `.agent-shell/agent-workspace/inbox.jsonl`, so a
-restart keeps them.
+The build broke". The turn it starts runs in the agent's own mode, as your messages do. Set
+`agent-workspace-event-mode` to `"plan"` and it runs in plan mode instead: the agent reads and investigates on its own,
+and editing asks you, its own mode back after. Events wait in the project, in `.agent-shell/agent-workspace/inbox.jsonl`,
+so a restart keeps them.
 
 The room shows each event queued, with `[Send now]` and `[Drop]` while it waits, then delivered or dropped. Send now
-gives it at once (after the agent's turn), in its own mode: you let it. The agent's bar shows `✉2`. `P` pauses
-every event (they're queued, not delivered) until `P` again. A source can send 20 events an hour, an agent get 100 a
-day (`agent-workspace-inbox-source-limit`, `agent-workspace-inbox-agent-limit`); more are refused.
+gives it at once (after the agent's turn), in its own mode, whatever `agent-workspace-event-mode` says: you let it. The
+agent's bar shows `✉2`. `P` pauses every event (they're queued, not delivered) until `P` again. A source can send 20
+events an hour, an agent get 100 a day (`agent-workspace-inbox-source-limit`, `agent-workspace-inbox-agent-limit`); more
+are refused.
 
 `E` lists the events waiting, in the room's place (`q` gives the room back): `RET` sends one now, `d` drops it,
 `M-↑` / `M-↓` move it (the order they're delivered in), and `o` turns its source off for its agent or for everyone.
@@ -249,13 +251,15 @@ Issues carry the work between agents; a message is for a question. An agent send
 `cmd/agent-workspace send --to ken "What does the lexer return?"` (to an agent, or `#reviewer`, a role's first free
 agent). `T` in the app says whether they may, kept in `crew.json`:
 
-- **Ask me**, at first: each message waits in the room, `ada → ken`, for `[Send]`, `[Edit]` or `[Drop]`.
-- **On**: sent at once. **Off**: refused, and the agent is told so.
+- **On**, at first (`agent-workspace-talk`): sent at once.
+- **Ask me**: each message waits in the room, `ada → ken`, for `[Send]`, `[Edit]` or `[Drop]`.
+- **Off**: refused, and the agent is told so.
 
-A role's `talks-to: reviewer` lets its agents message reviewers without your OK. Once sent, a message goes through the
-[inbox](#the-inbox): it waits until its agent is free, and never wakes one asleep. It's told as from the sender, data
-and not your instructions, in plan mode. Its reply goes back to the sender the same way, as an answer, and an answer
-gets none.
+A crew whose `crew.json` says ask keeps asking until `T` changes it. While it asks, a role's `talks-to: reviewer` lets
+its agents message reviewers without your OK. Once sent, a message goes through the [inbox](#the-inbox): it waits until
+its agent is free, and never wakes one asleep. It's told as from the sender, data and not your instructions, and its
+turn runs in the agent's own mode (as an event's: `agent-workspace-event-mode`). Its reply goes back to the sender the
+same way, as an answer, and an answer gets none.
 
 In the room, each exchange between two agents is a thread, with the issue the sender is on (`ada → ken … · demo-1`).
 `TAB` folds a thread to its first line, and `x` stops it: its waiting messages are dropped and the agents can't send
@@ -295,8 +299,8 @@ The lead answers your questions about the crew, and runs it when you tell it to.
 the agents sleep, or what the minimap's ⚠ means: it reads `cmd/agent-workspace status`, the issues and the room, and
 says why ("linus is asleep, and his loop is off"). Tell it what to do and it does it from its shell: gives an issue to
 an agent, wakes one or puts it to sleep, turns its loop on or off, messages one. It doesn't ask your OK for each: you
-asked. The room says each one as the lead's (`max turned linus's loop on`, `max woke linus`). Its messages wait for
-your OK as `T` says, as any agent's.
+asked. The room says each one as the lead's (`max turned linus's loop on`, `max woke linus`). Its messages go as `T`
+says, as any agent's: at once, or each waiting for your OK while the crew asks.
 
 It acts only on your word: it never starts work by itself, doesn't watch the room, and doesn't loop (it has no labels:
 `L` is refused). It can't edit and writes no issues: new work is the scribe's, and it sends you there. When you ask, it
@@ -319,8 +323,9 @@ picked ("→ Allow (you)"). A hand answered in its session leaves the room.
 
 ## Loops
 
-An agent can work through the project's issues by itself. `L` turns its loop on, and off again. Every agent starts
-with its loop off, and its bar shows `↻` while it loops.
+An agent can work through the project's issues by itself. A new agent whose role has `labels` (a builder, a reviewer,
+a merger) loops from the start, in a project whose issues Beads tracks, and the room says so as it joins; one without
+(a scribe) doesn't. `L` turns its loop off, and on again. Its bar shows `↻` while it loops.
 
 Once free, a looping agent takes the next issue: one you gave it first (`t`), then one handed back to it, else the
 next ready one its role's `labels` say, the highest priority first. It claims it as itself (`bd ready --claim`), so two looping agents never get
@@ -341,10 +346,14 @@ issue is claimed then), it tries again 30 seconds later
 (`agent-workspace-loop-failures`) it stops: stuck, saying why. A turn that ends without an error breaks the row, and
 `r`, `Z` or `L` start it again.
 
-Its loop is kept in the [saved crew](#the-saved-crew). A crew started again brings a looping agent back asleep, so
-reopening never starts work by itself: wake it (`Z`) and it loops. A role without `labels` has no issues to take, and
-a project without Beads has none either: their agents can't loop. A role whose labels go while its agents loop (its file
-saved mid-edit, or missing on the branch checked out) pauses them, saying so, until they're back.
+Its loop is kept in the [saved crew](#the-saved-crew). A crew started again brings a looping agent back awake, and it
+takes the next ready issue; one you put to sleep (`Z`) stays asleep. A role without `labels` has no issues to take, and
+a project without Beads has none either: their agents can't loop. A role whose labels go while its agents loop (its
+file saved mid-edit, or missing on the branch checked out) pauses them, saying so, until they're back.
+
+With `agent-workspace-loop` set to `nil`, loops wait for you: a new agent starts with its loop off (`L` turns it on),
+and a crew started again brings a looping agent back asleep, so reopening never starts work by itself: wake it (`Z`)
+and it loops.
 
 ## An agent's panels
 
@@ -399,7 +408,7 @@ on.
     "selected": "ada",
     "open": true,
     "minimap": true,
-    "talk": "ask",
+    "talk": "on",
     "sources_off": []
   }
 }
@@ -408,8 +417,9 @@ on.
 It's written when the crew changes (a panel opened or closed too), as `jq .` prints it, a key a line, and read as
 JSON, never run, so scripts can read it too. Closing the crew leaves it as it was, its agents' panels in it. `SPC o w` in a project
 whose crew isn't running starts every agent in it again: fresh, each in its worktree, with its role as it is now, its
-panels open again there (fetched afresh), waiting for you. Asleep agents stay asleep, and their panels open when they
-wake. Looping agents come back asleep: reopening never starts work by itself. An agent made while the crew isn't
+panels open again there (fetched afresh). Asleep agents stay asleep, and their panels open when they wake. Looping
+agents come back awake and take the next ready issue (asleep, with `agent-workspace-loop` set to `nil`); the others
+wait for you. An agent made while the crew isn't
 running (`M-x agent-workspace-new`, `cmd/agent-workspace new` or `crew`) is added to it: the saved agents stay in it, and start
 beside the new one when the app opens. An agent that can't start (its role is
 gone, its worktree can't be made) is stuck, saying why, and the others start. A panel whose file is gone is skipped,
@@ -486,11 +496,12 @@ there. These ship with this config, the starters:
 
 For each role, it makes the file's count less the crew's agents of that role, asleep and gone home ones counting,
 and, while the crew isn't running, those `crew.json` keeps.
-Each is made as `c` makes one with its name left empty: a name from the pool, its role's colour, model and mode.
-Nothing is asked, not even with `C-u`. The room says who was made: `crew full: + reviewer ken, merger margaret`.
+Each is made as `c` makes one with its name left empty: a name from the pool, its role's colour, model and mode,
+[looping](#loops) if its role has labels. Nothing is asked, not even with `C-u`. The room says who was made:
+`crew full: + reviewer ken, merger margaret`.
 
-It only adds: the crew's agents stay as they are, one beyond the file's count, one of a role it doesn't list, and
-one of a looping role too (its loop as it was). An agent whose worktree can't be made isn't made, and the room says
+It only adds: the crew's agents stay as they are, one beyond the file's count and one of a role it doesn't list
+too (its loop as it was). An agent whose worktree can't be made isn't made, and the room says
 why; one whose session doesn't start is stuck, saying why. The others are made.
 
 A crew file is Markdown, as a role file is:
@@ -499,13 +510,11 @@ A crew file is Markdown, as a role file is:
 ---
 description: write, build, review, merge
 agents: scribe, builder 2, reviewer, merger
-loop: builder
 ---
 Notes for you: not read.
 ```
 
 - `agents` are roles, each with how many (none: 1). A YAML list works too (`- builder 2`).
-- `loop` names the roles whose new agents [loop](#loops). The starters loop none.
 
 A project's own crews go in its `.agent-workspace/crews/`, committed, yours in its
 `.agent-shell/agent-workspace/crews/`, out of git. A crew replaces the one with the same name before it: a starter,
@@ -513,8 +522,8 @@ then the project's, then yours. Its row in the menu says where it comes from.
 
 A crew file needs its front matter, a `description` and `agents`. A file with a mistake is left out (the menu lists
 it, refused), and a warning names its file and line: a role that isn't one of the project's, a count that isn't a
-whole number above 0, more agents of a role than its `max` allows, a `loop` role not among its agents. An unknown
-key, a role given twice (the last is used) and a `loop` role without labels (not looped) are only warned about. `M-x
+whole number above 0, more agents of a role than its `max` allows. An unknown key (`loop`, of crew files before: a
+new agent loops by itself now) and a role given twice (the last is used) are only warned about. `M-x
 agent-workspace-check-roles` lists the crew files' problems with the roles'.
 
 From the shell: `cmd/agent-workspace crew full` ([more](cmd.md#cmdagent-workspace)).
@@ -552,7 +561,7 @@ A role is what a kind of agent does and may do. These ship with this config, the
 | documenter | documents finished features: how to use them, their keys and settings | edit the docs (`docs/`, Markdown), commit; never push |
 | triager | triages new issues (labelled `triage`): type, priority, duplicates, splits, then the role that takes each | read, `bd`; no edits; on haiku |
 | planner | breaks an epic into issues with acceptance criteria and their order, shown to you before filing | read, `bd`; no edits |
-| merger | merges an approved branch once the whole suite passes in a worktree of its own; failures back to its builder | merge there; into the main branch only with your OK; never push |
+| merger | merges an approved branch once the whole suite passes in a worktree of its own, without asking you; failures back to its builder | merge there, then into the main branch; never push |
 | designer | draws UI and UX mockups on its canvas for you to pick, writes your pick into the issue | read, `bd`, Agent UI; no edits |
 | security | reviews a change or the code for vulnerabilities, each finding with its severity, place and fix | read, search the web, `bd`; no edits |
 | profiler | measures and profiles, finds the hot spots, proposes fixes with their expected gain | read, `bd`; no edits |
@@ -581,8 +590,13 @@ Write the tests first, then run them.
 
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the
   starters have none: their agents run in auto mode). Claude Code enforces all three.
+- `tools`, `deny` and the instructions can name the agent's own paths, filled in as its session starts: `{main}` (the
+  project's main checkout), `{main-branch}` (its branch), `{name}` (the agent's name) and `{project}` (the main
+  checkout's folder name). A rule then names the exact command, as the merger's do: `Bash(git -C {main} merge
+  --no-ff *)`. A `*` before a git command's subcommand (`Bash(git -C * merge *)`) would allow git's own options there
+  too, and `-c` runs anything without a prompt.
 - `max` is how many of the role may run at once. `labels` are the issues it's for. `talks-to` names the roles it may
-  [message](#agents-asking-each-other) without your OK. `hands-to` names the roles its finished issues
+  [message](#agents-asking-each-other) without your OK while the crew asks. `hands-to` names the roles its finished issues
   [go to](#work-handed-on-through-issues), in order (`any`: the one it's for), `returns-to` where work goes back.
 - `icon` is a nerd icon for the GUI, then a glyph for the terminal. `verb` is what its agents show while they work:
   "testing doom-a1b". `colour` is its agents' colour while it's free.
@@ -602,9 +616,10 @@ names its file and line: a key that isn't one, a `mode`, `max` or `colour` that 
 isn't `true` or `false`, a `tools` or
 `deny` entry that isn't `Tool` or `Tool(pattern)`. Some things are only warned about, the role kept: an unknown key or
 one given twice (the last is used), a `model` that isn't `inherit`, one of `agent-workspace-models` or a model's id
-(`claude-...`), an `icon` that isn't a nerd icon, a tool both allowed and denied (it's denied), no instructions, a
-`talks-to` or `hands-to` naming no role of the project's, or its own. `M-x agent-workspace-check-roles` reads them all
-again and lists every problem, each line taking you to its file and line.
+(`claude-...`), an `icon` that isn't a nerd icon, a `{word}` in `tools` or `deny` that isn't one of the placeholders
+(left as it is), a tool both allowed and denied (it's denied), no instructions, a `talks-to` or `hands-to` naming no
+role of the project's, or its own. `M-x agent-workspace-check-roles` reads them all again and lists every problem, each
+line taking you to its file and line.
 
 ## Its states
 

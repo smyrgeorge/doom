@@ -2,8 +2,10 @@
 ;; config/agent-workspace/loops.el: an agent that, once free, takes the next
 ;; ready issue of its role by itself (claimed as itself, a fresh session for
 ;; each), or naps and says so once, waking when one comes; two looping agents
-;; never take the same issue; one stops after failures in a row; a crew started
-;; again brings a looping agent back asleep. Stand-in agents
+;; never take the same issue; one stops after failures in a row; a new agent
+;; of a role with labels loops from the start, and a crew started again brings
+;; a looping agent back awake (with `agent-workspace-loop' nil: neither, a
+;; looping one back asleep). Stand-in agents
 ;; (examples/agent-workspace/stand-in.el: "Work on ID: close..." closes it with
 ;; bd, "Work on ID: fail..." fails, else holds) on throwaway git repositories
 ;; whose issues bd tracks (skipped without bd). Batch Emacs gets no file-notify
@@ -95,7 +97,9 @@ folder."
 (defmacro +test-awl--with-crew (name &rest body)
   "BODY in a new project NAME whose issues bd tracks (`project'; skipped
 without bd), its crew closed after, the stand-in's log fresh; a failure tried
-again at once; no look every few minutes."
+again at once; no look every few minutes. A new agent doesn't loop: L (its
+`agent-workspace-loop-set') turns it on, as each test says; the default,
+looping from the start, has its own tests (`agent-workspace-loop' t)."
   (declare (indent 1))
   `(progn
      (skip-unless (executable-find "bd"))
@@ -104,6 +108,7 @@ again at once; no look every few minutes."
               (default-directory project)
               (+test-awl--log (expand-file-name (concat "awl/" ,name ".log") +test-tmp))
               (process-environment (cons (concat "MOCK_ACP_LOG=" +test-awl--log) process-environment))
+              (agent-workspace-loop nil)
               (agent-workspace-loop-retry 0.2)
               (agent-workspace-loop-check nil))
          (ignore-errors (delete-file +test-awl--log))
@@ -903,9 +908,9 @@ a merge stopped on conflicts closes nothing."
 ;; ====== THE SAVED CREW ======
 
 (ert-deftest agent-workspace-loops/reopening-never-starts-one ()
-  "Its loop in crew.json; the crew started again from it brings it back
-asleep, still looping, its session not started, no issue taken; woken, it
-takes one."
+  "With `agent-workspace-loop' nil (as before doom-pbk.137): its loop in
+crew.json; the crew started again from it brings it back asleep, still
+looping, its session not started, no issue taken; woken, it takes one."
   (+test-awl--with-crew "reopen"
     (let ((ada (+test-awl--create "ada")))
       (agent-workspace-loop-set ada t)
@@ -933,3 +938,79 @@ takes one."
         ;; Woken: it loops.
         (agent-workspace-wake ada)
         (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))))))
+
+(ert-deftest agent-workspace-loops/reopening-brings-them-back-awake ()
+  "By default (`agent-workspace-loop' t): the crew started again from
+crew.json brings a looping agent back awake, and it takes the next ready
+issue; one you put to sleep stays asleep, still looping (doom-pbk.137)."
+  (+test-awl--with-crew "reopen-awake"
+    (let ((ada (+test-awl--create "ada"))
+          (ken (+test-awl--create "ken")))
+      (agent-workspace-loop-set ada t)
+      (agent-workspace-loop-set ken t)
+      (+test-awl--all-in (list ada ken) 'nap)
+      (agent-workspace-sleep ken)
+      (agent-workspace-crew-save project)
+      (should (equal (mapcar (lambda (entry) (list (plist-get entry :name) (plist-get entry :loop)
+                                                   (plist-get entry :asleep)))
+                             (plist-get (car (agent-workspace-crew-read project)) :agents))
+                     '(("ada" t nil) ("ken" t t))))
+      (agent-workspace-close project))
+    (let ((agent-workspace-loop t)
+          (one (+test-awl--issue project "close: one" "build" 2)))
+      (should (agent-workspace--crew-start project))
+      (let ((ada (agent-workspace-agent "ada" project))
+            (ken (agent-workspace-agent "ken" project)))
+        (should (agent-workspace-agent-loop ada))
+        (should-not (eq (agent-workspace-agent-state ada) 'asleep))
+        ;; Awake, it takes the ready issue by itself.
+        (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))
+        (should (member (cons "issue" (format "took %s: close: one" one)) (+test-awl--room project "ada")))
+        (+test-awl--all-in (list ada) 'nap)
+        ;; Put to sleep by you: asleep, still looping, nothing taken.
+        (should (eq (agent-workspace-agent-state ken) 'asleep))
+        (should (agent-workspace-agent-loop ken))
+        (should-not (agent-workspace-agent-buffer ken))
+        (should-not (member (format "Work on %s: close: one" one) (+test-awl--prompts "ken")))))))
+
+(ert-deftest agent-workspace-loops/a-new-agent-loops-from-the-start ()
+  "By default (`agent-workspace-loop' t): a new builder, reviewer or merger
+loops from the start (said in the room after it joined; crew.json keeps it)
+and takes its ready issue by itself; a scribe doesn't (its role has no
+labels), nor an agent of a project without Beads; nil, none does
+\(doom-pbk.137)."
+  (+test-awl--with-crew "from-the-start"
+    (let* ((agent-workspace-loop t)
+           (one (+test-awl--issue project "close: one" "build" 2))
+           (ada (agent-workspace-create :role "builder" :name "ada" :kind 'mock))
+           (rex (agent-workspace-create :role "reviewer" :name "rex" :kind 'mock))
+           (mel (agent-workspace-create :role "merger" :name "mel" :kind 'mock))
+           (sam (agent-workspace-create :role "scribe" :name "sam" :kind 'mock)))
+      (should (equal (mapcar #'agent-workspace-agent-loop (list ada rex mel sam)) '(t t t nil)))
+      (should (+test-awl--wait (lambda () (equal (+test-awl--status project one) "closed"))))
+      (+test-awl--all-in (list ada rex mel) 'nap)
+      (should (eq (agent-workspace-agent-state sam) 'desk))
+      (should-not (+test-awl--prompts "sam"))
+      ;; Said after it joined.
+      (let ((room (+test-awl--room project "ada")))
+        (should (equal (car (car room)) "joined"))
+        (should (equal (cadr room) '("note" . "↻ loops: once free, takes the next ready build issue"))))
+      (should-not (seq-find (lambda (entry) (string-search "loops" (cdr entry))) (+test-awl--room project "sam")))
+      (agent-workspace-crew-save project)
+      (should (equal (sort (mapcar (lambda (entry) (list (plist-get entry :name) (plist-get entry :loop)))
+                                   (plist-get (car (agent-workspace-crew-read project)) :agents))
+                           (lambda (a b) (string< (car a) (car b))))
+                     '(("ada" t) ("mel" t) ("rex" t) ("sam" nil)))))
+    ;; With it nil: a new builder doesn't loop.
+    (let* ((agent-workspace-loop nil)
+           (ken (agent-workspace-create :role "builder" :name "ken" :kind 'mock)))
+      (should-not (agent-workspace-agent-loop ken))))
+  ;; A project without Beads: none loops, nothing said.
+  (+test-with-reset
+    (let* ((agent-workspace-loop t)
+           (agent-workspace--crews (make-hash-table :test #'equal))
+           (project (+test-awl--project "from-the-start-no-beads" t))
+           (ada (agent-workspace--make-agent :name "ada" :role "builder" :state 'waking :project project)))
+      (puthash project (list ada) agent-workspace--crews)
+      (agent-workspace--loop-created-h ada 'created)
+      (should-not (agent-workspace-agent-loop ada)))))

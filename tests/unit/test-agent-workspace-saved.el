@@ -33,11 +33,14 @@
 (defmacro +test-aws2 (name &rest body)
   "BODY in a new project NAME (`project'), no crew or app before or after;
 sessions plain buffers (`started' lists the agents started); crew.json
-written at once (no wait)."
+written at once (no wait). Loops wait for you (`agent-workspace-loop' nil:
+a looping agent started again asleep, a new one not looping), as these
+tests were written; test-agent-workspace-loops.el tests the default."
   (declare (indent 1))
   `(+test-with-reset
      (let* ((project (+test-aws2--project ,name))
             (default-directory project)
+            (agent-workspace-loop nil)
             (agent-workspace--crews (make-hash-table :test #'equal))
             (agent-workspace--apps (make-hash-table :test #'equal))
             (agent-workspace--crew-timers (make-hash-table :test #'equal))
@@ -132,7 +135,7 @@ role's, else auto); asleep said; the layout."
   {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"mode\": \"acceptEdits\", \"asleep\": true},
   {\"name\": \"sam\", \"role\": \"investigator\", \"colour\": \"magenta\", \"model\": \"opus\"}
  ],
- \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": null, \"open\": false, \"minimap\": true, \"talk\": \"ask\", \"sources_off\": []}}
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"selected\": null, \"open\": false, \"minimap\": true, \"talk\": \"on\", \"sources_off\": []}}
 "))
       ;; JSON indeed, as jq and scripts read it.
       (should (equal (plist-get (json-parse-string (agent-workspace-crew-text project) :object-type 'plist) :version)
@@ -474,6 +477,31 @@ one whose role is gone stuck, saying why; the selected one's pane open."
         (should (get-buffer-window (agent-workspace-agent-buffer sam)))))
     ;; Started again: crew.json as it was (nothing written meanwhile).
     (should (string-search "{\"name\": \"tim\", \"role\": \"wizard\"" (+test-aws2--file project)))))
+
+(ert-deftest agent-workspace-saved/its-talk-switch-kept ()
+  "A new crew's agents message each other freely (`agent-workspace-talk',
+on), crew.json saying so; a crew whose crew.json says ask keeps asking,
+started again, until T changes it (doom-pbk.137)."
+  (should (eq (default-value 'agent-workspace-talk) 'on))
+  (+test-aws2 "talk-new"
+    (agent-workspace-create :role "builder" :name "ada")
+    (should (eq (agent-workspace-talk-mode project) 'on))
+    (should (string-search "\"talk\": \"on\"" (+test-aws2--file project))))
+  (+test-aws2 "talk-ask"
+    (+test-aws2--write project "{\"version\": 2,
+ \"agents\": [
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"}
+ ],
+ \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"talk\": \"ask\"}}
+")
+    (agent-workspace-open t)
+    (should (agent-workspace-agent "ada" project))
+    (should (eq (agent-workspace-talk-mode project) 'ask))
+    (with-current-buffer (agent-workspace--issues-buffer project)
+      (agent-workspace-talk-cycle))
+    (should (eq (agent-workspace-talk-mode project) 'on))
+    (agent-workspace-crew-save project)
+    (should (string-search "\"talk\": \"on\"" (+test-aws2--file project)))))
 
 (ert-deftest agent-workspace-saved/an-agent-made-while-it-doesn-t-run ()
   "An agent made with no crew running (M-x, cmd, Lisp: no app open):
