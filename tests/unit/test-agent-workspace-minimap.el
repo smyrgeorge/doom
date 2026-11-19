@@ -313,6 +313,35 @@ on the nearest shown if it's gone; at either end, nothing (doom-pbk.139)."
           (should (eq (lookup-key (get-text-property (point-min) 'keymap) [wheel-down])
                       #'agent-workspace-lanes-wheel)))))))
 
+(ert-deftest agent-workspace-minimap/a-role-changed ()
+  "An asleep agent's role changed (no session to start again: no state
+change): the minimap drawn again in the new order, with its new role's
+icon, and the issue list too, the flag on its role's issues gone
+\(doom-pbk.155: both as they were until another agent's event)."
+  (+test-awm "role"
+    (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
+           (kim (agent-workspace-create :role "reviewer" :name "kim"))
+           (app (agent-workspace-open t))
+           (lanes (lambda () (let ((text (+test-awm--text project)))
+                               (list (string-search "▌A" text) (string-search "▌K" text))))))
+      (ignore app)
+      (agent-workspace-sleep ada)
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (setq agent-workspace--issues-data
+              (agent-workspace--issues-parse
+               project (list :all '(((id . "t-1") (title . "Test it") (status . "open") (labels "test")))
+                             :ready '(((id . "t-1")))
+                             :done nil)))
+        (agent-workspace--issues-redraw project)
+        (should (string-search "nobody in the crew takes these" (buffer-string))))
+      (agent-workspace--minimap-draw project)
+      (should (apply #'< (funcall lanes)))
+      (agent-workspace-set-role ada "tester")
+      (should (eq (agent-workspace-agent-state ada) 'asleep))
+      (should (+test-wait-for (lambda () (apply #'> (funcall lanes))) 3))
+      (with-current-buffer (agent-workspace--issues-buffer project)
+        (should-not (string-search "nobody in the crew takes these" (buffer-string)))))))
+
 (ert-deftest agent-workspace-minimap/the-lanes ()
   "A line for each agent, in the crew's order: one that did something its
 avatar and role's icon, a cell a minute (what it did most), its state's

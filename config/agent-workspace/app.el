@@ -812,7 +812,11 @@ In `agent-workspace-change-functions'."
       (with-selected-frame (agent-workspace--app-frame app)
         (cond ((or (memq what '(created forgotten session renamed))
                    (not (equal (agent-workspace--plan app) (agent-workspace--app-plan app))))
-               (agent-workspace--retile app))
+               (agent-workspace--retile app)
+               ;; Its role changed: the issue list too (whom its roles' issues
+               ;; are for: "nobody in the crew takes these").
+               (when (eq what 'role)
+                 (agent-workspace--issues-redraw (agent-workspace--app-project app))))
               ;; Its context's usage: on its lines only.
               ((eq what 'usage) (agent-workspace--redraw-lines app))
               (t (agent-workspace--redraw app)))))

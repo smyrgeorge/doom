@@ -590,7 +590,7 @@ it's shown."
 (defun agent-workspace--minimap-changed-h (agent what)
   "AGENT did something, or its state changed: its minimap drawn again soon.
 In `agent-workspace-change-functions'."
-  (when (memq what '(activity state created forgotten renamed colour closed))
+  (when (memq what '(activity state created forgotten renamed colour role closed))
     (agent-workspace--minimap-soon (agent-workspace-agent-project agent))))
 
 (add-hook 'agent-workspace-change-functions #'agent-workspace--minimap-changed-h)
