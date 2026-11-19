@@ -294,9 +294,10 @@ and the reply says why: an agent not in the crew, an issue `bd` doesn't know, a 
 agent's issue, an issue for an agent asleep or gone home, an agent asleep put to sleep, an awake one woken, a loop for
 a role with no labels.
 
-From an agent's shell, `give`, `wake`, `sleep` and `loop` work only if its role leads (`leads: true`, see
-[Roles](#roles)), as [the lead](#the-lead) does; another agent gets `only a lead runs the crew`. A lead can't put
-itself to sleep. `status` works from any shell.
+From an agent's session, `give`, `wake`, `sleep`, `loop`, `new` and `crew` work only if its role leads (`leads:
+true`, see [Roles](#roles)), as [the lead](#the-lead) does; another agent gets `only a lead runs the crew`. Emacs
+knows which agent's session ran the command, whatever its shell's `AGENT_WORKSPACE_AGENT` says, and an agent's `send`
+is always its message (no `--from`). A lead can't put itself to sleep. `status` works from any shell.
 
 ## The lead
 

@@ -60,8 +60,8 @@ cmd/agent-workspace loop linus on                       # as L; off turns it off
 ```
 
 `give`, `wake`, `sleep` and `loop` are said in the room with who did them (`shell gave doom-a1b to grace`). From an
-agent's shell they're refused unless its role leads (the [lead](agent-workspace.md#the-lead)); `status` works from
-any.
+agent's session they're refused unless its role leads (the [lead](agent-workspace.md#the-lead)), `new` and `crew`
+too, whatever its `AGENT_WORKSPACE_AGENT` says; `status` works from any.
 
 An event is queued and delivered when its agent is free, as data from its source
 ([The inbox](agent-workspace.md#the-inbox)). For now `send` is refused: this config turns events from outside off. The reply is JSON on stdout

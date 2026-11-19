@@ -21,9 +21,9 @@
 #                                it's free, as data, never instructions
 #                                -> {"ok": true, "events": [{"id", "to",
 #                                "state": "queued"|"delivered"}]}; from an
-#                                agent's shell (AGENT_WORKSPACE_AGENT), no
-#                                --from: its message to another agent,
-#                                "waiting" for your OK if the crew asks
+#                                agent's session: its message to another
+#                                agent (no --from), "waiting" for your OK
+#                                if the crew asks
 #   agent-workspace status       the crew as it is -> {"ok": true, "project",
 #                                "agents": [{"name", "role", "state",
 #                                "words", "time", "loop", "issue",
@@ -46,8 +46,11 @@
 #                                -> {"ok": true, "name", ..., "loop"}
 #
 # give, wake, sleep and loop are said in the room, with who did them (the
-# agent, or shell). From an agent's shell (AGENT_WORKSPACE_AGENT) they're
-# refused unless its role leads (leads: true); status works from any.
+# agent, or shell). From an agent's session they're refused unless its role
+# leads (leads: true), new and crew too; status works from any. Emacs tells
+# an agent's session by this script's process (one of its descendants),
+# whatever AGENT_WORKSPACE_AGENT says; elsewhere (yours, a script's) that
+# variable's word is taken.
 #
 # The reply is JSON on stdout: {"ok": false, "error": "what's wrong"} when it
 # isn't done. Exit status: 0 done, 1 not done (the reply says why), 2 a wrong
@@ -108,13 +111,14 @@ case "$op" in
       esac
     done
     [ -z "$role" ] && fail 2 "new: which role? agent-workspace new --role ROLE"
-    payload=$(printf '{"role":%s,"name":%s,"prompt":%s}' \
-                     "$(json_string "$role")" "$(json_string "$name")" "$(json_string "$prompt")") ;;
+    payload=$(printf '{"role":%s,"name":%s,"prompt":%s,"agent":%s}' \
+                     "$(json_string "$role")" "$(json_string "$name")" "$(json_string "$prompt")" \
+                     "$(json_string "${AGENT_WORKSPACE_AGENT:-}")") ;;
   crew)
     [ $# -eq 0 ] && fail 2 "crew: which one? agent-workspace crew NAME"
     case "$1" in -*) fail 2 "crew: unknown argument \"$1\"; agent-workspace crew NAME" ;; esac
     [ $# -gt 1 ] && fail 2 "crew: unknown argument \"$2\"; agent-workspace crew NAME"
-    payload=$(printf '{"name":%s}' "$(json_string "$1")") ;;
+    payload=$(printf '{"name":%s,"agent":%s}' "$(json_string "$1")" "$(json_string "${AGENT_WORKSPACE_AGENT:-}")") ;;
   send)
     to="" from="" text="" have_text=""
     while [ $# -gt 0 ]; do
@@ -184,7 +188,9 @@ esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workspace.XXXXXXXXXX") || fail 3 "no temp folder"
 trap 'rm -rf "$dir"' EXIT
-printf '%s\n%s\n' "$op" "$PWD" >"$dir/request"
+# Its own process's id: Emacs tells which agent's session ran it from its
+# ancestors, whatever AGENT_WORKSPACE_AGENT says.
+printf '%s\n%s\n%s\n' "$op" "$PWD" "$$" >"$dir/request"
 printf '%s' "$payload" >"$dir/payload"
 
 # On Linux emacsclient looks for its server under $XDG_RUNTIME_DIR/emacs/, or,

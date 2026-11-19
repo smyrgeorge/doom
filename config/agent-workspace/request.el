@@ -45,7 +45,16 @@
 ;; (AGENT_WORKSPACE_AGENT), its name, and they're refused unless its role
 ;; leads (leads: true, roles.el); from yours or a script's, none, and they
 ;; all work. Each said in the room, by who did it: "linus woke ken", "shell
-;; gave doom-a1b to grace".
+;; gave doom-a1b to grace". new and crew alike.
+;;
+;; WHO ASKS
+;; Not what its shell says (AGENT_WORKSPACE_AGENT can be unset or changed)
+;; but where a request comes from: the script sends its process's id, and
+;; the agent whose session's process is one of its ancestors sent it (a
+;; command its session ran), whatever its shell says. None: yours, or a
+;; script's (your terminal in an agent's worktree too), its shell's word
+;; taken. An agent's send is its message, never an event --from a source
+;; (no way round the crew's switch, a thread stopped, its limit).
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -69,6 +78,35 @@
 (declare-function agent-workspace-room-post "agent-workspace/room")
 (declare-function agent-workspace--room-redraw-soon "agent-workspace/room")
 (defvar agent-workspace--offered)
+(declare-function agent-workspace--session-process "agent-workspace/session")
+
+;; ====== WHO ASKS ======
+
+(defvar agent-workspace--request-from nil
+  "While a request is answered: the agent whose session sent it
+\(`agent-workspace--request-caller'), or nil (your shell, a script).")
+
+(defun agent-workspace--pid-ancestors (pid)
+  "PID and its ancestors' ids, itself first (at most 64)."
+  (let ((pids nil))
+    (while (and (natnump pid) (> pid 1) (not (memq pid pids)) (< (length pids) 64))
+      (push pid pids)
+      (setq pid (alist-get 'ppid (ignore-errors (process-attributes pid)))))
+    (nreverse pids)))
+
+(defun agent-workspace--agent-pid (agent)
+  "The id of AGENT's session's process (its ACP client's), or nil."
+  (when-let* ((process (agent-workspace--session-process (agent-workspace-agent-buffer agent)))
+              ((process-live-p process)))
+    (process-id process)))
+
+(defun agent-workspace--request-caller (pid)
+  "The agent whose session ran the command that sent a request (see WHO
+ASKS): of every crew's, the one whose session's process is an ancestor of
+PID (the script's); nil if none."
+  (when-let* ((ancestors (and pid (agent-workspace--pid-ancestors pid))))
+    (seq-find (lambda (agent) (memq (agent-workspace--agent-pid agent) ancestors))
+              (apply #'append (mapcar #'agent-workspace-agents (agent-workspace-crews))))))
 
 (defun agent-workspace--request-new (directory payload)
   "Make an agent in DIRECTORY's project, as PAYLOAD (a plist) says: the
@@ -79,6 +117,7 @@ reply, a plist."
          (role (plist-get payload :role))
          (name (plist-get payload :name))
          (prompt (plist-get payload :prompt)))
+    (agent-workspace--request-actor project payload)
     (unless (stringp role)
       (user-error "new: which role? --role ROLE"))
     (let ((agent (agent-workspace-create
@@ -104,6 +143,7 @@ plist) names: the reply, a plist."
          (project (or (agent-workspace-project)
                       (user-error "No crew here: %s" (agent-workspace-no-crew-reason))))
          (name (plist-get payload :name)))
+    (agent-workspace--request-actor project payload)
     (unless (and (stringp name) (not (string-empty-p name)))
       (user-error "crew: which one? crew NAME"))
     (pcase-let ((`(,made ,failed ,_) (agent-workspace-crew-make project name)))
@@ -120,10 +160,15 @@ reply, a plist."
                       (user-error "No crew here: %s" (agent-workspace-no-crew-reason))))
          (to (plist-get payload :to))
          (from (plist-get payload :from))
-         (sender (and (stringp (plist-get payload :agent))
-                      (agent-workspace-agent (plist-get payload :agent) project))))
+         ;; Its session's agent, whatever its shell says; else as it says.
+         (sender (or agent-workspace--request-from
+                     (and (stringp (plist-get payload :agent))
+                          (agent-workspace-agent (plist-get payload :agent) project)))))
     (unless (and (stringp to) (not (string-empty-p to)))
       (user-error "send: to whom? --to NAME, --to #ROLE or --to #all"))
+    (when (and agent-workspace--request-from (stringp from) (not (string-empty-p from)))
+      (user-error "%s" (format "send: --from is for scripts outside the agents' sessions; from %s's, a send is its message"
+                               (agent-workspace-agent-name agent-workspace--request-from))))
     (list :ok t
           :events (vconcat
                    (mapcar (lambda (event)
@@ -209,10 +254,13 @@ oldest first: plists."
 ;; ====== THE CREW RUN ======
 
 (defun agent-workspace--request-actor (project payload)
-  "Who runs PROJECT's crew, as PAYLOAD says: from an agent's shell (its
-:agent), that agent's name, a user error unless its role leads; else
+  "Who runs PROJECT's crew: the agent whose session sent the request
+\(`agent-workspace--request-from'), else the one PAYLOAD's :agent names
+\(its shell's word), its name, a user error unless its role leads; else
 \"shell\"."
-  (let ((name (plist-get payload :agent)))
+  (let ((name (if agent-workspace--request-from
+                  (agent-workspace-agent-name agent-workspace--request-from)
+                (plist-get payload :agent))))
     (if (not (and (stringp name) (not (string-empty-p name))))
         "shell"
       (let ((agent (agent-workspace-agent name project)))
@@ -353,6 +401,8 @@ its reply written to DIR/reply. Return t."
                               "\n"))
          (op (nth 0 lines))
          (directory (nth 1 lines))
+         (pid (and (nth 2 lines) (string-match-p "\\`[0-9]+\\'" (nth 2 lines)) (string-to-number (nth 2 lines))))
+         (agent-workspace--request-from (ignore-errors (agent-workspace--request-caller pid)))
          (payload-file (expand-file-name "payload" dir))
          (reply
           (condition-case err

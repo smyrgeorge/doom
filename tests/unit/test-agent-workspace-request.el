@@ -496,6 +496,65 @@ sleep."
                      '(("shell" "note" "ada" "put ada to sleep")
                        ("shell" "note" "ada" "woke ada")))))))
 
+(defun +test-awq--run-from (pid-var &rest args)
+  "Run cmd/agent-workspace with ARGS as a command an agent's session runs:
+its child, the session's process a sh whose id PID-VAR (a symbol) is set
+to as it starts. (STATUS . OUTPUT)."
+  (let* ((output (generate-new-buffer " *agent-workspace-run*"))
+         (process (make-process :name "agent-session" :buffer output
+                                ;; The script its child (not exec'd: a command after it).
+                                :command (append (list "sh" "-c" "\"$0\" \"$@\"; exit $?" +test-awq-script) args)
+                                :connection-type 'pipe :noquery t :sentinel #'+test-process-sentinel
+                                :stderr (get-buffer-create " *agent-workspace-stderr*"))))
+    (set pid-var (process-id process))
+    (with-timeout (30 (delete-process process) (ert-fail "cmd/agent-workspace didn't end"))
+      (while (not (+test-process-ended-p process))
+        (accept-process-output nil 0.02)))
+    (prog1 (cons (process-exit-status process)
+                 (with-current-buffer output (string-trim (buffer-string))))
+      (kill-buffer output))))
+
+(defvar +test-awq--session-pid nil "The id of the process standing for ada's session.")
+
+(ert-deftest agent-workspace-request/who-asks-is-where-it-comes-from ()
+  "A command ada's session runs is hers, whatever its shell says: its
+AGENT_WORKSPACE_AGENT unset, or the lead's name, give, wake, sleep, loop,
+new and crew refused (she doesn't lead), nothing done; send --from
+refused, a send her message, not ken's. Yours: done, from her worktree
+too (your terminal there isn't her session) (doom-pbk.148)."
+  (+test-awq "who" nil (("max" "lead") ("ada" "builder") ("ken" "builder"))
+    (cl-letf* ((pid (symbol-function 'agent-workspace--agent-pid))
+               ((symbol-function 'agent-workspace--agent-pid)
+                (lambda (agent) (if (eq agent ada) +test-awq--session-pid (funcall pid agent)))))
+      (+test-awq--with-server
+        (let ((refused "{\"ok\":false,\"error\":\"only a lead runs the crew: ada's role, builder, doesn't lead\"}"))
+          (dolist (env '(nil "AGENT_WORKSPACE_AGENT=max" "AGENT_WORKSPACE_AGENT="))
+            (let ((process-environment (cons (or env "AGENT_WORKSPACE_AGENT") process-environment)))
+              (dolist (args '(("sleep" "ken") ("wake" "ken") ("loop" "ken" "on") ("give" "demo-1" "--to" "ken")
+                              ("new" "--role" "builder") ("crew" "pair")))
+                (let ((run (apply #'+test-awq--run-from '+test-awq--session-pid args)))
+                  (should (= (car run) 1))
+                  (should (equal (cdr run) refused))))
+              ;; Not an event from a source.
+              (let ((run (+test-awq--run-from '+test-awq--session-pid "send" "--to" "ken" "--from" "ci" "hi")))
+                (should (= (car run) 1))
+                (should (string-search "--from is for scripts outside the agents' sessions; from ada's" (cdr run))))))
+          (should (agent-workspace-live-p ken))
+          (should-not (agent-workspace-agent-loop ken))
+          (should (= (length (agent-workspace-agents project)) 3))
+          (should-not (+test-awq--said project))
+          ;; Her message, though her shell says ken.
+          (let ((process-environment (cons "AGENT_WORKSPACE_AGENT=ken" process-environment)))
+            (should (= (car (+test-awq--run-from '+test-awq--session-pid "send" "--to" "max" "who are you?")) 0)))
+          (should (+test-wait-for (lambda () (seq-find (lambda (prompt) (string-prefix-p "Message from ada (builder)" prompt))
+                                                       (+test-awq--prompts "max")))
+                                  20))
+          ;; Yours: done, from her worktree too.
+          (setq +test-awq--session-pid nil)
+          (let ((default-directory (agent-workspace-agent-worktree ada)))
+            (should (= (car (+test-awq--run "sleep" "ken")) 0)))
+          (should (eq (agent-workspace-agent-state ken) 'asleep)))))))
+
 (ert-deftest agent-workspace-request/the-script-s-wrong-uses ()
   "status, give, wake, sleep and loop used wrong: 2, saying what's wrong,
 no Emacs asked."
