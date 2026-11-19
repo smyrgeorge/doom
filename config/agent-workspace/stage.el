@@ -225,8 +225,27 @@ how to open one, or make one."
                             "\n  No agents yet.\n\n  c: a new agent, or a crew\n")
                           'face 'shadow)))))
 
+(defvar agent-workspace--pane-places nil
+  "While the stage is tiled again or laid out: where its panes' sessions
+were shown, ((BUFFER POINT START END)...), END non-nil if at their end
+\(`agent-workspace--pane-places'): shown there again.")
+
+(defun agent-workspace--pane-places (frame)
+  "Where FRAME's panes show their sessions now: ((BUFFER POINT START
+END)...), END non-nil if at its end (following what comes)."
+  (delq nil (mapcar (lambda (window)
+                      (when-let* ((agent (window-parameter window 'agent-workspace-pane))
+                                  ((agent-workspace-agent-p agent))
+                                  (buffer (window-buffer window))
+                                  ((eq buffer (agent-workspace-agent-buffer agent))))
+                        (list buffer (window-point window) (window-start window)
+                              (>= (window-point window) (with-current-buffer buffer (point-max))))))
+                    (window-list frame 'nomini))))
+
 (defun agent-workspace--show-pane (window agent)
-  "AGENT's session (or its bar, if it has none) in WINDOW, at its end."
+  "AGENT's session (or its bar, if it has none) in WINDOW: where it was
+shown, the stage tiled again or laid out (`agent-workspace--pane-places'),
+else (opened now, or following its end) at its end."
   (set-window-dedicated-p window nil)
   (set-window-parameter window 'agent-workspace-side nil)
   (let ((buffer (agent-workspace-agent-buffer agent)))
@@ -235,8 +254,13 @@ how to open one, or make one."
                (agent-workspace--bar-draw window))
       (set-window-buffer window buffer)
       (set-window-parameter window 'header-line-format '(:eval (agent-workspace--pane-header)))
-      (with-current-buffer buffer
-        (set-window-point window (point-max))))
+      (let ((place (assq buffer agent-workspace--pane-places)))
+        (if (and place (not (nth 3 place)))
+            (progn (set-window-point window (nth 1 place))
+                   ;; Its start too, unless the cursor isn't in view then.
+                   (set-window-start window (nth 2 place) t))
+          (with-current-buffer buffer
+            (set-window-point window (point-max))))))
     (set-window-parameter window 'mode-line-format 'none)
     (set-window-parameter window 'tab-line-format 'none)
     (set-window-fringes window 0 0)

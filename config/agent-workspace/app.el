@@ -485,6 +485,8 @@ buffer is current: a timer's, a canvas's being shown)."
          (was (window-buffer (selected-window)))
          ;; Shown anew (opened, come back to), not laid out again where it was.
          (anew (not (agent-workspace--shown-p app)))
+         ;; Its panes shown again where they were (laid out again, not anew).
+         (agent-workspace--pane-places (and (not anew) (agent-workspace--pane-places (selected-frame))))
          (base (or (seq-find (lambda (window) (not (window-parameter window 'window-side)))
                              (window-list nil 'nomini))
                    (frame-first-window))))
@@ -556,7 +558,9 @@ alone, the branches in its place): laid out as it comes back."
       (let* ((was (selected-window))
              (buffer (window-buffer was))
              (agents (agent-workspace--ordered (agent-workspace--app-project app)))
-             (first (car windows)))
+             (first (car windows))
+             ;; Its open pane shown again where it was.
+             (agent-workspace--pane-places (agent-workspace--pane-places (selected-frame))))
         (let ((ignore-window-parameters t))
           (dolist (window (cdr windows))
             (when (window-live-p window) (delete-window window))))

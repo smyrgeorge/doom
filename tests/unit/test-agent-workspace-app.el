@@ -122,6 +122,45 @@ the rest; not enough rows to open it: all folded."
   (should (equal (agent-workspace--sizes '(a b c) 'b 7) '((a . 1) (b . 1) (c . 1))))
   (should (equal (agent-workspace--sizes '(a b c) 'b 8) '((a . 1) (b . 6) (c . 1)))))
 
+(ert-deftest agent-workspace-app/the-open-pane-stays-where-you-read ()
+  "ada's pane read back in (its cursor mid-way): the stage tiled again
+\(another agent restarted, an open pane's side changed) or the app laid
+out again (a popup closed): her session where it was; following its end, it
+still follows it; a pane opened now at its end (doom-pbk.157: sent to its
+end each time)."
+  (+test-awa "read-back"
+    (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
+      (dolist (agent (list ada ken))
+        (with-current-buffer (agent-workspace-agent-buffer agent)
+          (dotimes (i 200) (insert (format "%s line %d\n" (agent-workspace-agent-name agent) i)))))
+      (let ((app (agent-workspace-open t)))
+        (agent-workspace-select ada t)
+        (cl-flet ((window () (get-buffer-window (agent-workspace-agent-buffer ada)))
+                  (at (line) (with-current-buffer (agent-workspace-agent-buffer ada)
+                               (save-excursion (goto-char (point-min)) (forward-line line) (point)))))
+          (should (= (window-point (window)) (with-current-buffer (agent-workspace-agent-buffer ada) (point-max))))
+          (set-window-start (window) (at 60))
+          (set-window-point (window) (at 70))
+          (dolist (step (list (lambda () (cl-letf (((symbol-function 'yes-or-no-p) #'always)
+                                                   ((symbol-function 'y-or-n-p) #'always))
+                                           (agent-workspace-restart ken)))
+                              (lambda () (agent-workspace--retile app))
+                              (lambda () (agent-workspace-layout app))))
+            (funcall step)
+            (should (window-live-p (window)))
+            (should (= (window-point (window)) (at 70)))
+            (should (= (window-start (window)) (at 60))))
+          ;; At its end: still at it, past what came meanwhile.
+          (set-window-point (window) (with-current-buffer (agent-workspace-agent-buffer ada) (point-max)))
+          (with-current-buffer (agent-workspace-agent-buffer ada) (goto-char (point-max)) (insert "more\n"))
+          (agent-workspace--retile app)
+          (should (= (window-point (window)) (with-current-buffer (agent-workspace-agent-buffer ada) (point-max))))
+          ;; ken's, opened now: at its end.
+          (with-current-buffer (agent-workspace-agent-buffer ken) (goto-char (point-min)))
+          (agent-workspace-select ken t)
+          (let ((window (get-buffer-window (agent-workspace-agent-buffer ken))))
+            (should (= (window-point window) (with-current-buffer (agent-workspace-agent-buffer ken) (point-max))))))))))
+
 (ert-deftest agent-workspace-app/a-pane-s-header-kept ()
   "An open pane's header line, made at every redisplay of its window: made
 once, then kept (no role read again, under 0.1 ms a time) until its agent
