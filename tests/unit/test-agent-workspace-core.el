@@ -229,6 +229,235 @@ told each change once."
                      (desk . working) (working . desk) (desk . stuck) (stuck . working)
                      (working . home))))))
 
+(defun +test-awc--tool (agent id status &optional meta)
+  "AGENT's tool call ID updated, STATUS (ACP's: \"in_progress\"...), with
+META (its _meta)."
+  (+test-awc--emit agent 'tool-call-update
+                   (append `((:tool-call-id . ,id) (:tool-call . ((:status . ,status))))
+                           (when meta (list (cons :meta meta))))))
+
+(defun +test-awc--long-after (agent)
+  "AGENT's last turn ended long ago: its updates aren't late ones."
+  (puthash agent (- (float-time) 60) agent-workspace--turn-ends))
+
+(ert-deftest agent-workspace/a-turn-it-starts-by-itself ()
+  "Woken by a background task (updates, no input-submitted, no
+turn-complete): working from its first update, timed from then, a tool
+running holding its turn however quiet; done once its session is quiet.
+Its model's result (a usage update naming its origin) ends one at once."
+  (let* ((agent (+test-awc--agent :state 'desk))
+         (changes nil)
+         (agent-workspace-quiet-turn 0.2)
+         (agent-workspace-state-change-functions
+          (list (lambda (_agent old new) (push (cons old new) changes)))))
+    (unwind-protect
+        (progn
+          (+test-awc--emit agent 'agent-message-chunk '((:text-chunk . "The suite runs.")))
+          (should (eq (agent-workspace-agent-state agent) 'working))
+          (should (agent-workspace-agent-since agent))
+          ;; A command running: its turn goes on, quiet as it is.
+          (+test-awc--tool agent "t1" "in_progress")
+          (should-not (+test-wait-for (lambda () (not (eq (agent-workspace-agent-state agent) 'working))) 0.6))
+          (+test-awc--tool agent "t1" "completed")
+          ;; Then quiet: done.
+          (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state agent) 'done)) 5))
+          (should-not (agent-workspace-agent-since agent))
+          (should-not (gethash agent agent-workspace--self-turns))
+          (should (equal (reverse changes) '((desk . working) (working . done))))
+          ;; Its model's result: over at once, a tool still said running.
+          (+test-awc--long-after agent)
+          (let ((agent-workspace-quiet-turn 60))
+            (+test-awc--tool agent "t2" "pending")
+            (should (eq (agent-workspace-agent-state agent) 'working))
+            ;; Its context's size only: not a result.
+            (+test-awc--emit agent 'usage-update '((:usage . ((:context-used . 1000)))))
+            (should (eq (agent-workspace-agent-state agent) 'working))
+            (+test-awc--emit agent 'usage-update
+                             '((:usage . ((:context-used . 1200)))
+                               (:meta . ((_claude/origin . ((kind . "task-notification")))))))
+            (should (eq (agent-workspace-agent-state agent) 'done))
+            (should-not (gethash agent agent-workspace--self-turns))))
+      (agent-workspace--self-turn-stop agent))))
+
+(ert-deftest agent-workspace/a-hand-raised-in-a-turn-it-started ()
+  "Its hand raised in a turn it started by itself, then answered: working
+again, its time from its turn's start, then done once its turn is over, no
+prompt of yours. Its hand raised as it rests, nothing before: a turn of its
+own too."
+  (let ((agent (+test-awc--agent :state 'nap))
+        (agent-workspace-quiet-turn 0.2))
+    (unwind-protect
+        (progn
+          (+test-awc--tool agent "q1" "pending")
+          (should (eq (agent-workspace-agent-state agent) 'working))
+          (let ((since (agent-workspace-agent-since agent)))
+            (+test-awc--emit agent 'permission-request
+                             '((:request-id . 3) (:tool-call . ((:title . "Which branch?")))))
+            (should (eq (agent-workspace-agent-state agent) 'hand))
+            ;; Raised, it stays raised, quiet or not.
+            (should-not (+test-wait-for (lambda () (not (eq (agent-workspace-agent-state agent) 'hand))) 0.6))
+            (+test-awc--emit agent 'permission-response)
+            (should (eq (agent-workspace-agent-state agent) 'working))
+            (should (equal (agent-workspace-agent-since agent) since)))
+          (+test-awc--tool agent "q1" "completed")
+          (+test-awc--emit agent 'agent-message-chunk '((:text-chunk . "Merging main.")))
+          (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state agent) 'done)) 5))
+          ;; Asked first thing.
+          (+test-awc--long-after agent)
+          (+test-awc--emit agent 'permission-request
+                           '((:request-id . 4) (:tool-call . ((:title . "rm -rf build")))))
+          (should (eq (agent-workspace-agent-state agent) 'hand))
+          (should (agent-workspace-agent-since agent))
+          (+test-awc--emit agent 'permission-response)
+          (should (eq (agent-workspace-agent-state agent) 'working))
+          (should (+test-wait-for (lambda () (eq (agent-workspace-agent-state agent) 'done)) 5)))
+      (agent-workspace--self-turn-stop agent))))
+
+(ert-deftest agent-workspace/a-question-on-its-canvas-through-a-turn-it-started ()
+  "Its hand raised for a question on its canvas (asked at its turn's end),
+then woken by a background task: its updates don't lower it (its answer
+is a prompt), the turn tracked all the same, over when quiet or at its
+model's result, the hand still raised; not free meanwhile (its loop, the
+inbox)."
+  (+test-with-reset
+    (let* ((buffer (get-buffer-create "ada · builder"))
+           (agent (+test-awc--agent :state 'desk :loop t :buffer buffer))
+           (agent-workspace-state-change-functions nil)
+           (agent-workspace-quiet-turn 0.2)
+           (ask '(:kind question :canvas nil :id "q1" :title "Merge it?")))
+      (unwind-protect
+          (progn
+            (agent-workspace--raise-hand agent ask)
+            (should (eq (agent-workspace-agent-state agent) 'hand))
+            (+test-awc--long-after agent)
+            (+test-awc--emit agent 'agent-message-chunk '((:text-chunk . "The suite passed.")))
+            (should (eq (agent-workspace-agent-state agent) 'hand))
+            (should (equal (plist-get (agent-workspace-agent-ask agent) :id) "q1"))
+            (should (equal (plist-get (gethash agent agent-workspace--self-turns) :ask)
+                           (agent-workspace-agent-ask agent)))
+            (should-not (agent-workspace--loop-at-rest-p agent))
+            (should-not (agent-workspace--inbox-free-p agent))
+            ;; A tool running holds it; then quiet: over, the hand kept.
+            (+test-awc--tool agent "t1" "in_progress")
+            (should-not (+test-wait-for (lambda () (not (gethash agent agent-workspace--self-turns))) 0.6))
+            (+test-awc--tool agent "t1" "completed")
+            (should (+test-wait-for (lambda () (not (gethash agent agent-workspace--self-turns))) 5))
+            (should (eq (agent-workspace-agent-state agent) 'hand))
+            (should (equal (plist-get (agent-workspace-agent-ask agent) :id) "q1"))
+            ;; Its model's result: over at once, the hand kept.
+            (+test-awc--long-after agent)
+            (let ((agent-workspace-quiet-turn 60))
+              (+test-awc--tool agent "t2" "pending")
+              (should (gethash agent agent-workspace--self-turns))
+              (+test-awc--emit agent 'usage-update '((:meta . ((_claude/origin . ((kind . "task-notification")))))))
+              (should-not (gethash agent agent-workspace--self-turns))
+              (should (eq (agent-workspace-agent-state agent) 'hand)))
+            ;; Its answer, a prompt: to work.
+            (+test-awc--emit agent 'input-submitted '((:prompt . "Answer to choice q1 (Merge it?): Yes")))
+            (should (eq (agent-workspace-agent-state agent) 'working)))
+        (agent-workspace--self-turn-stop agent)
+        (kill-buffer buffer)))))
+
+(ert-deftest agent-workspace/its-canvas-question-asked-again-after-a-permission ()
+  "Its hand raised for a question on its canvas, a turn it started by
+itself asking a permission (that hand in its place), answered: working;
+over, the question asked again if it still waits (a new hand), else done."
+  (+test-with-reset
+    (let* ((buffer (get-buffer-create "ada · builder"))
+           (canvas (get-buffer-create "Agent UI: ada"))
+           (agent (+test-awc--agent :state 'desk :buffer buffer))
+           (agent-workspace-state-change-functions nil)
+           (agent-workspace-quiet-turn 0.2)
+           (waiting (list (cons canvas "q1"))))
+      (cl-letf (((symbol-function 'agent-ui--waiting)
+                 (lambda (session &rest _) (and (eq session buffer) waiting))))
+        (unwind-protect
+            (dolist (still '(t nil))
+              (setq waiting (and still (list (cons canvas "q1"))))
+              (agent-workspace--set-state agent 'desk)
+              (agent-workspace--raise-hand agent (list :kind 'question :canvas canvas :id "q1" :title "Merge it?"))
+              (let ((key (plist-get (agent-workspace-agent-ask agent) :key)))
+                (+test-awc--long-after agent)
+                (+test-awc--tool agent "t1" "in_progress")
+                (+test-awc--emit agent 'permission-request
+                                 '((:request-id . 3) (:tool-call . ((:title . "git push")))))
+                (should (eq (plist-get (agent-workspace-agent-ask agent) :kind) 'permission))
+                (+test-awc--emit agent 'permission-response)
+                (should (eq (agent-workspace-agent-state agent) 'working))
+                (+test-awc--tool agent "t1" "completed")
+                (should (+test-wait-for (lambda () (not (gethash agent agent-workspace--self-turns))) 5))
+                (if still
+                    (progn
+                      (should (eq (agent-workspace-agent-state agent) 'hand))
+                      (should (equal (plist-get (agent-workspace-agent-ask agent) :id) "q1"))
+                      (should (eq (plist-get (agent-workspace-agent-ask agent) :canvas) canvas))
+                      (should-not (equal (plist-get (agent-workspace-agent-ask agent) :key) key))
+                      (should (= (cl-count :key (agent-workspace-agent-ask agent)) 1)))
+                  (should (eq (agent-workspace-agent-state agent) 'done)))))
+          (agent-workspace--self-turn-stop agent)
+          (kill-buffer buffer)
+          (kill-buffer canvas))))))
+
+(ert-deftest agent-workspace/updates-that-start-no-turn ()
+  "No turn of its own from its turn's late updates (just after its
+turn-complete), a subagent's, a background command's end, a stale answer.
+Your prompt into a turn it started makes it the prompt's: over at its
+turn-complete, not when quiet nor at a result."
+  (let ((agent (+test-awc--agent :state 'desk))
+        (agent-workspace-quiet-turn 0.2))
+    (unwind-protect
+        (progn
+          (+test-awc--emit agent 'input-submitted '((:prompt . "hi")))
+          (+test-awc--emit agent 'turn-complete '((:stop-reason . "end_turn")))
+          (should (eq (agent-workspace-agent-state agent) 'done))
+          (+test-awc--tool agent "t1" "completed")
+          (+test-awc--emit agent 'agent-message-chunk '((:text-chunk . "…")))
+          (should (eq (agent-workspace-agent-state agent) 'done))
+          (+test-awc--long-after agent)
+          (+test-awc--emit agent 'agent-message-chunk
+                           '((:text-chunk . "found it") (:meta . ((claudeCode . ((parentToolUseId . "toolu_1")))))))
+          (+test-awc--tool agent "b1" "completed"
+                           '((terminal_exit . ((terminal_id . "b1") (exit_code) (signal)))))
+          (+test-awc--emit agent 'permission-response)
+          (should (eq (agent-workspace-agent-state agent) 'done))
+          (should-not (gethash agent agent-workspace--self-turns))
+          ;; A turn it starts, your prompt into it.
+          (+test-awc--emit agent 'agent-message-chunk '((:text-chunk . "The suite passed.")))
+          (should (eq (agent-workspace-agent-state agent) 'working))
+          (let ((since (agent-workspace-agent-since agent)))
+            (+test-awc--emit agent 'input-submitted '((:prompt . "then merge it")))
+            (should-not (gethash agent agent-workspace--self-turns))
+            (should (equal (agent-workspace-agent-since agent) since)))
+          (should-not (+test-wait-for (lambda () (not (eq (agent-workspace-agent-state agent) 'working))) 0.6))
+          (+test-awc--emit agent 'usage-update '((:meta . ((_claude/origin . ((kind . "task-notification")))))))
+          (should (eq (agent-workspace-agent-state agent) 'working))
+          (+test-awc--emit agent 'turn-complete '((:stop-reason . "end_turn")))
+          (should (eq (agent-workspace-agent-state agent) 'done)))
+      (agent-workspace--self-turn-stop agent))))
+
+(ert-deftest agent-workspace/no-issue-nor-event-in-a-turn-it-started ()
+  "In a turn it started by itself, an agent isn't free: its loop gives it no
+issue, the inbox no event. Over, it's free again."
+  (+test-with-reset
+    (let* ((buffer (get-buffer-create "ada · builder"))
+           (agent (+test-awc--agent :state 'nap :loop t :buffer buffer))
+           (agent-workspace-state-change-functions nil)
+           (agent-workspace-quiet-turn 60))
+      (unwind-protect
+          (progn
+            (should (agent-workspace--loop-at-rest-p agent))
+            (should (agent-workspace--inbox-free-p agent))
+            (+test-awc--emit agent 'agent-message-chunk '((:text-chunk . "Still running.")))
+            (should (eq (agent-workspace-agent-state agent) 'working))
+            (should-not (agent-workspace--loop-at-rest-p agent))
+            (should-not (agent-workspace--inbox-free-p agent))
+            (+test-awc--emit agent 'usage-update '((:meta . ((_claude/origin . ((kind . "task-notification")))))))
+            (should (eq (agent-workspace-agent-state agent) 'done))
+            (should (agent-workspace--loop-at-rest-p agent))
+            (should (agent-workspace--inbox-free-p agent)))
+        (agent-workspace--self-turn-stop agent)
+        (kill-buffer buffer)))))
+
 (ert-deftest agent-workspace/stopped-on-purpose-isn-t-gone-home ()
   "Its session cleaned up while we stop it (sleep, restart): not gone home."
   (let ((agent (+test-awc--agent :state 'desk :stopping t)))

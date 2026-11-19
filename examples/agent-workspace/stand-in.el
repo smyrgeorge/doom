@@ -19,6 +19,11 @@
 ;;                 cancelled (session/cancel); with a src/lexer.el where it
 ;;                 runs (the example's), reads it and starts editing it first
 ;;   "hold"        says so, then works until it's cancelled
+;;   "background"  (at its start) says it runs a command in the background,
+;;                 ends its turn; 2.5 seconds later, woken by it as Claude
+;;                 Code is (a task notification), works with no prompt: a
+;;                 tool call for a second, its answer, its model's result (a
+;;                 usage update naming its origin), as claude-agent-acp sends
 ;;   "slow"        says so, works a second and a half, ends its turn
 ;;   "read FILE"   reads FILE (a tool call of kind read, at its line 3), ends
 ;;   "edit FILE"   edits FILE (a tool call of kind edit; agent-shell writes it,
@@ -131,6 +136,22 @@ batch (the stand-in would exit)."
                     :toolCall (:toolCallId "t1" :title "npm install" :kind "execute" :status "pending")
                     :options [(:optionId "allow" :name "Allow" :kind "allow_once")
                               (:optionId "reject" :name "Reject" :kind "reject_once")])))))
+     ((string-match-p "\\`background" text)
+      (mock-acp--say session "running the suite in the background")
+      (mock-acp--result id '(:stopReason "end_turn"))
+      ;; Woken by its task, out of any turn. What it wrote sent first (a
+      ;; batch Emacs's stdout to a pipe is written out when it reads).
+      (send-string-to-terminal "")
+      (sleep-for 2.5)
+      (mock-acp--update session '(:sessionUpdate "tool_call" :toolCallId "b1" :title "git log -1"
+                                  :kind "execute" :status "in_progress"))
+      (send-string-to-terminal "")
+      (sleep-for 1)
+      (mock-acp--update session '(:sessionUpdate "tool_call_update" :toolCallId "b1" :status "completed"))
+      (mock-acp--say session "the suite passed")
+      (mock-acp--update session '(:sessionUpdate "usage_update" :used 1000 :size 200000
+                                  :cost (:amount 0.01 :currency "USD")
+                                  :_meta (:_claude/origin (:kind "task-notification")))))
      ((string-match-p "slow" text)
       (mock-acp--say session "slowly")
       (sleep-for 1.5)

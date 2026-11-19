@@ -31,6 +31,9 @@
 (declare-function agent-workspace--stop "agent-workspace/session")
 (declare-function agent-workspace--process-table "agent-workspace/session")
 (declare-function agent-workspace-send "agent-workspace/session")
+(declare-function agent-shell--emit-event "agent-shell")
+(declare-function agent-ui--waiting "agent-ui/agent")
+(defvar agent-shell--state)
 (declare-function agent-workspace--check-role "agent-workspace/roles")
 (declare-function agent-workspace--check-room "agent-workspace/roles")
 (declare-function agent-shell-interrupt "agent-shell")
@@ -275,6 +278,8 @@ said before its process ended)."
     (unless (eq state 'stuck) (setf (agent-workspace-agent-error agent) nil))
     (unless (memq state '(working hand)) (setf (agent-workspace-agent-since agent) nil))
     (unless (eq old state)
+      (when (and (memq old '(working hand)) (not (memq state '(working hand))))
+        (agent-workspace--turn-ended agent))
       (setf (agent-workspace-agent-state agent) state)
       (run-hook-with-args 'agent-workspace-state-change-functions agent old state)
       (agent-workspace--changed agent 'state))))
@@ -337,6 +342,204 @@ nil if it isn't a word ending in -ing."
          "wants your permission"))
       (_ (if title (format "asks: %s" title) "asks you something")))))
 
+;; ====== TURNS IT STARTS BY ITSELF ======
+;; A turn starts with a prompt (input-submitted) and ends with its answer
+;; (turn-complete). An agent woken by a background task it left running (a
+;; command, a monitor: Claude Code's task notification) has neither: its
+;; updates come while it rests. The first starts its turn (working, timed
+;; from then); the turn is over at its model's result (claude-agent-acp's
+;; usage update naming its origin), or once its session has been quiet for
+;; `agent-workspace-quiet-turn' seconds, no tool of it running. Over, it's
+;; said as a prompt's answer is: agent-shell's turn-complete, emitted in its
+;; session, for all that follows its turns (its state here, the room's
+;; reply line, its notification, Agent UI's questions waiting: one asked
+;; raises its hand). Updates just after a turn's end are its late ones; a
+;; subagent's, or a background command's end (its terminal's exit), aren't
+;; the agent at work: none starts a turn. (A second turn of its own that
+;; follows at once, a task notification queued, starts at its first update
+;; past those 2 s: done till then.)
+;;
+;; Its hand raised for a question on its canvas (asked at its turn's end:
+;; its answer is a prompt) stays raised through such a turn: it still asks
+;; you, and isn't free (its loop, the inbox). A hand of the turn's own (a
+;; permission) replacing it, then answered: the question asked again at the
+;; turn's end, if it still waits.
+
+(defcustom agent-workspace-quiet-turn 120
+  "Seconds an agent's session stays quiet, no tool of it running, before a
+turn it started by itself (woken by a background task) is taken as over,
+when nothing said so."
+  :type 'number
+  :group 'agent-workspace)
+
+(defconst agent-workspace--turn-late 2
+  "Seconds after a turn's end when its session's updates are late ones of
+that turn, not a turn starting.")
+
+(defvar agent-workspace--self-turns (make-hash-table :test #'eq :weakness 'key)
+  "The agents in a turn they started by themselves, to a plist: :timer (its
+quiet stretch's), :heard (when its last update came, a `float-time'),
+:open (the ids of its tool calls running), :ask (the question on its
+canvas its hand was raised for as the turn started, or nil).")
+
+(defvar agent-workspace--turn-ends (make-hash-table :test #'eq :weakness 'key)
+  "When each agent's last turn ended, a `float-time'.")
+
+(defun agent-workspace--turn-ended (agent)
+  "AGENT's turn ended (it worked or had its hand raised, now neither):
+noted, a turn it started by itself over."
+  (puthash agent (float-time) agent-workspace--turn-ends)
+  (agent-workspace--self-turn-stop agent))
+
+(defun agent-workspace--self-turn-stop (agent)
+  "AGENT no longer in a turn it started by itself: its quiet stretch's
+timer cancelled. Its state as it is."
+  (when-let* ((self (gethash agent agent-workspace--self-turns)))
+    (when-let* ((timer (plist-get self :timer)))
+      (cancel-timer timer))
+    (remhash agent agent-workspace--self-turns)))
+
+(defun agent-workspace--canvas-hand-p (agent)
+  "Non-nil if AGENT's hand is raised for a question on its canvas
+\(session.el's `agent-workspace--question-waiting'): its answer is a
+prompt, never an update of its turn."
+  (and (eq (agent-workspace-agent-state agent) 'hand)
+       (plist-member (agent-workspace-agent-ask agent) :canvas)))
+
+(defun agent-workspace--self-turn-can-start-p (agent)
+  "Non-nil if a turn of AGENT's own can start: it rests (at the desk, done,
+napping), or its hand is raised for a question on its canvas."
+  (or (memq (agent-workspace-agent-state agent) '(desk done nap))
+      (agent-workspace--canvas-hand-p agent)))
+
+(defun agent-workspace--self-turn-start (agent)
+  "AGENT's turn started by itself: noted, its quiet stretch waited for, the
+question on its canvas it asks kept. Return its plist
+\(`agent-workspace--self-turns')."
+  (agent-workspace--self-turn-stop agent)
+  (puthash agent (list :timer (run-at-time agent-workspace-quiet-turn nil
+                                           #'agent-workspace--self-turn-quiet agent)
+                       :heard (float-time) :open nil
+                       :ask (and (agent-workspace--canvas-hand-p agent) (agent-workspace-agent-ask agent)))
+           agent-workspace--self-turns))
+
+(defun agent-workspace--update-aside-p (event)
+  "Non-nil if EVENT, an update of an agent's session, isn't its agent at
+work: a subagent's, or a background command's terminal exiting (its tool
+call over long before)."
+  (let ((meta (alist-get :meta (alist-get :data event))))
+    (or (alist-get 'terminal_exit meta)
+        (alist-get 'parentToolUseId (alist-get 'claudeCode meta)))))
+
+(defun agent-workspace--self-turn-update (agent event)
+  "AGENT's session sent EVENT (a tool call's update, a message's chunk, a
+hand's answer). In a turn it started by itself: heard, its tool call noted
+running or not. At rest (`agent-workspace--self-turn-can-start-p'), a turn
+it starts by itself, unless EVENT is a hand's answer, late
+\(`agent-workspace--turn-late' after its turn's end), or not it at work
+\(`agent-workspace--update-aside-p'): working, or its hand for a question
+on its canvas kept raised."
+  (let ((self (gethash agent agent-workspace--self-turns))
+        (what (alist-get :event event)))
+    (when (and (not self)
+               (memq what '(tool-call-update agent-message-chunk))
+               (agent-workspace--self-turn-can-start-p agent)
+               (>= (- (float-time) (gethash agent agent-workspace--turn-ends 0))
+                   agent-workspace--turn-late)
+               (not (agent-workspace--update-aside-p event)))
+      (setq self (agent-workspace--self-turn-start agent))
+      (unless (eq (agent-workspace-agent-state agent) 'hand)
+        (setf (agent-workspace-agent-since agent) (float-time))
+        (agent-workspace--set-state agent 'working)))
+    (when self
+      (plist-put self :heard (float-time))
+      (when-let* (((eq what 'tool-call-update))
+                  ((not (agent-workspace--update-aside-p event)))
+                  (data (alist-get :data event))
+                  (id (alist-get :tool-call-id data)))
+        (plist-put self :open
+                   (if (member (alist-get :status (alist-get :tool-call data)) '("pending" "in_progress"))
+                       (cl-adjoin id (plist-get self :open) :test #'equal)
+                     (cl-remove id (plist-get self :open) :test #'equal)))))))
+
+(defun agent-workspace--self-turn-asked (agent)
+  "AGENT asks something (a permission, a question) as it rests: a turn it
+started by itself, its hand about to be raised (for a question on its
+canvas raised already: that one kept, to ask again at the turn's end). Its
+state as it is."
+  (if-let* ((self (gethash agent agent-workspace--self-turns)))
+      (plist-put self :heard (float-time))
+    (when (agent-workspace--self-turn-can-start-p agent)
+      (agent-workspace--self-turn-start agent))))
+
+(defun agent-workspace--session-heard (agent)
+  "When AGENT's session last heard from its agent (agent-shell's last
+activity: any update, its thinking too), a `float-time', or nil."
+  (when-let* ((buffer (agent-workspace-agent-buffer agent))
+              ((buffer-live-p buffer))
+              ((local-variable-p 'agent-shell--state buffer))
+              (time (alist-get :last-activity-time (buffer-local-value 'agent-shell--state buffer))))
+    (float-time time)))
+
+(defun agent-workspace--self-turn-quiet (agent)
+  "AGENT's quiet stretch's timer, in a turn it started by itself: the turn
+over if its session has been quiet `agent-workspace-quiet-turn' seconds,
+working (or its hand raised for a question on its canvas), no tool of it
+running; else waited for again (its hand raised in the turn, until it's
+answered). No longer at work: forgotten."
+  (when-let* ((self (gethash agent agent-workspace--self-turns)))
+    (plist-put self :timer nil)
+    (let ((state (agent-workspace-agent-state agent))
+          (left (- (+ (max (plist-get self :heard) (or (agent-workspace--session-heard agent) 0))
+                      agent-workspace-quiet-turn)
+                   (float-time))))
+      (cond
+       ((not (memq state '(working hand)))
+        (agent-workspace--self-turn-stop agent))
+       ((and (<= left 0)
+             (or (eq state 'working) (agent-workspace--canvas-hand-p agent))
+             (not (plist-get self :open)))
+        (agent-workspace--self-turn-end agent))
+       (t
+        (plist-put self :timer (run-at-time (if (> left 0) left agent-workspace-quiet-turn) nil
+                                            #'agent-workspace--self-turn-quiet agent)))))))
+
+(defun agent-workspace--self-turn-end (agent)
+  "AGENT's turn it started by itself is over: agent-shell's turn-complete
+emitted in its session, as at a prompt's answer, for all that follows its
+turns (here: done, or at the desk if you're looking at it; its hand for a
+question on its canvas kept raised). Then the question on its canvas it
+asked as the turn started, if its hand went down meanwhile and it still
+waits, asked again (Agent UI raises a hand only for a question new since
+the turn before)."
+  (when-let* ((self (gethash agent agent-workspace--self-turns)))
+    (let ((ask (plist-get self :ask))
+          (buffer (agent-workspace-agent-buffer agent)))
+      (when (and (buffer-live-p buffer) (fboundp 'agent-shell--emit-event)
+                 (local-variable-p 'agent-shell--state buffer))
+        (with-current-buffer buffer
+          (agent-shell--emit-event
+           :event 'turn-complete
+           :data (list (cons :stop-reason "end_turn")
+                       (cons :usage (alist-get :usage agent-shell--state))
+                       (cons :meta '((agent-workspace . "a turn it started by itself")))))))
+      ;; No session to say it in (or its subscription gone): over here.
+      (when (gethash agent agent-workspace--self-turns)
+        (agent-workspace--turn-over agent))
+      (when (and ask (not (eq (agent-workspace-agent-state agent) 'hand))
+                 (agent-workspace--question-waiting-p agent ask))
+        (let ((again (copy-sequence ask)))
+          (cl-remf again :key)
+          (agent-workspace--raise-hand agent again))))))
+
+(defun agent-workspace--question-waiting-p (agent ask)
+  "Non-nil if the question on its canvas ASK (a raised hand's) is still
+waiting on AGENT's canvas, unanswered."
+  (and (fboundp 'agent-ui--waiting)
+       (buffer-live-p (agent-workspace-agent-buffer agent))
+       (member (cons (plist-get ask :canvas) (plist-get ask :id))
+               (agent-ui--waiting (agent-workspace-agent-buffer agent)))))
+
 ;; ====== EVENTS ======
 ;; agent-shell's events (session.el subscribes to them all) move an agent
 ;; from state to state.
@@ -365,15 +568,30 @@ nil if it isn't a word ending in -ing."
        ;; answer don't reset it.
        (unless (memq state '(working hand))
          (setf (agent-workspace-agent-since agent) (float-time)))
+       ;; Into a turn it started by itself: that turn is now your prompt's,
+       ;; over at its turn-complete.
+       (agent-workspace--self-turn-stop agent)
        (agent-workspace--set-state agent 'working))
       ((or 'tool-call-update 'agent-message-chunk 'permission-response)
-       ;; A hand answered: back to work. (Updates also come after a turn's
-       ;; end: those leave it as it is.)
-       (when (eq state 'hand)
+       ;; A hand answered: back to work. Not one for a question on its
+       ;; canvas: its answer is a prompt; these are a turn it started by
+       ;; itself meanwhile.
+       (when (and (eq state 'hand) (not (agent-workspace--canvas-hand-p agent)))
          (let ((since (agent-workspace-agent-since agent)))
            (agent-workspace--set-state agent 'working)
-           (setf (agent-workspace-agent-since agent) since))))
+           (setf (agent-workspace-agent-since agent) since)))
+       ;; At rest, a turn it starts by itself (but an answer, or an update
+       ;; late after its turn's end); in one, heard.
+       (agent-workspace--self-turn-update agent event))
+      ('usage-update
+       ;; Its model's result (claude-agent-acp names its origin): a turn it
+       ;; started by itself is over.
+       (when (and (or (eq state 'working) (agent-workspace--canvas-hand-p agent))
+                  (gethash agent agent-workspace--self-turns)
+                  (alist-get '_claude/origin (alist-get :meta data)))
+         (agent-workspace--self-turn-end agent)))
       ('permission-request
+       (agent-workspace--self-turn-asked agent)
        (let ((tool-call (alist-get :tool-call data)))
          (agent-workspace--raise-hand
           agent (list :kind 'permission
@@ -381,16 +599,11 @@ nil if it isn't a word ending in -ing."
                       :tool-kind (alist-get :kind tool-call)
                       :request-id (alist-get :request-id data)))))
       ('elicitation-request
+       (agent-workspace--self-turn-asked agent)
        (agent-workspace--raise-hand
         agent (list :kind 'question :title (alist-get :message data))))
       ('turn-complete
-       ;; Its branch as its worktree is: renamed by it, once (worktree.el).
-       (agent-workspace--branch-sync agent)
-       (agent-workspace--set-state
-        agent (if (or (equal (alist-get :stop-reason data) "cancelled")
-                      (agent-workspace--looked-at-p agent))
-                  'desk
-                'done)))
+       (agent-workspace--turn-over agent (equal (alist-get :stop-reason data) "cancelled")))
       ('error
        ;; Its error first: the state's hooks say it (the room's stuck line).
        (setf (agent-workspace-agent-error agent) (alist-get :message data))
@@ -399,6 +612,17 @@ nil if it isn't a word ending in -ing."
       ('clean-up
        (unless (agent-workspace-agent-stopping agent)
          (agent-workspace--set-state agent 'home))))))
+
+(defun agent-workspace--turn-over (agent &optional cancelled)
+  "AGENT's turn is over (CANCELLED: you interrupted it): done, or at the
+desk if you're looking at it or interrupted it. Its hand raised for a
+question on its canvas (a turn it started by itself, as it asked): kept."
+  ;; Its branch as its worktree is: renamed by it, once (worktree.el).
+  (agent-workspace--branch-sync agent)
+  (if (and (not cancelled) (agent-workspace--canvas-hand-p agent))
+      (agent-workspace--turn-ended agent)
+    (agent-workspace--set-state
+     agent (if (or cancelled (agent-workspace--looked-at-p agent)) 'desk 'done))))
 
 (defun agent-workspace--raise-hand (agent ask)
   "AGENT raises its hand: ASK says what for, given a :key of its own (no

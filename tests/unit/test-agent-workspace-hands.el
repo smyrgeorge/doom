@@ -270,3 +270,43 @@ too: each wraps under the room's text column, never at column 0
     (should-not (agent-workspace-hand-options ada))
     (with-current-buffer (agent-workspace--issues-buffer project)
       (should-error (agent-workspace-answer) :type 'user-error))))
+
+;; ====== IN A TURN IT STARTS BY ITSELF ======
+
+(ert-deftest agent-workspace-hands/a-question-asked-in-a-turn-it-started ()
+  "Woken by a background task (the stand-in's \"background\"), it asks a
+question on its canvas in that turn: at the turn's end (its model's
+result) its hand is raised for it, as at a prompt's answer; its reply in
+the room (doom-pbk.143: done, nothing said)."
+  (+test-awh "self-asked"
+    (agent-workspace-send ada "background" :submit t)
+    (should (+test-awh--wait (lambda () (memq (agent-workspace-agent-state ada) '(done desk)))))
+    (should (+test-awh--wait (lambda () (eq (agent-workspace-agent-state ada) 'working)) 10))
+    (let ((agent-ui-display-function #'ignore))
+      (agent-ui-show '(:id "q1" :type "choice" :question "Merge it?" :options ("Merge" "Wait"))
+                     :canvas (agent-ui--session-name (agent-workspace-agent-buffer ada))))
+    (should (+test-awh--wait (lambda () (eq (agent-workspace-agent-state ada) 'hand)) 10))
+    (should (equal (plist-get (agent-workspace-agent-ask ada) :id) "q1"))
+    (should (equal (mapcar #'car (agent-workspace-hand-options ada)) '("Merge" "Wait")))
+    (should-not (gethash ada agent-workspace--self-turns))
+    (should (+test-awh--wait (lambda () (string-search "the suite passed" (+test-awh--feed project))) 5))))
+
+(ert-deftest agent-workspace-hands/its-canvas-question-through-a-turn-it-started ()
+  "Its hand raised for a question on its canvas, then woken by a background
+task: the hand stays raised through that turn and after it (its answer is
+a prompt), its options still there; answered, it works."
+  (+test-awh "self-hand"
+    (agent-workspace-send ada "background" :submit t)
+    (should (+test-awh--wait (lambda () (memq (agent-workspace-agent-state ada) '(done desk)))))
+    (+test-awh--canvas-question ada)
+    (should (eq (agent-workspace-agent-state ada) 'hand))
+    (should (+test-awh--wait (lambda () (gethash ada agent-workspace--self-turns)) 10))
+    (should (eq (agent-workspace-agent-state ada) 'hand))
+    (should (+test-awh--wait (lambda () (not (gethash ada agent-workspace--self-turns))) 10))
+    (should (eq (agent-workspace-agent-state ada) 'hand))
+    (should (equal (plist-get (agent-workspace-agent-ask ada) :id) "q1"))
+    (should (equal (mapcar #'car (agent-workspace-hand-options ada)) '("Restore" "Rebuild")))
+    (+test-awh--press project "Rebuild")
+    (should (+test-awh--wait (lambda () (member "Answer to choice q1 (Restore or rebuild?): Rebuild"
+                                                (+test-awh--prompts "ada")))))
+    (should (+test-awh--wait (lambda () (memq (agent-workspace-agent-state ada) '(done desk)))))))

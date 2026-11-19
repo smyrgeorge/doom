@@ -341,6 +341,24 @@ to work, its time not reset; its turn then over."
         (should-not (agent-workspace-agent-ask agent)))
       (should (+test-aws--state agent 'done)))))
 
+(ert-deftest agent-workspace-session/a-turn-it-starts-by-itself ()
+  "Woken by a background task after its turn, with no prompt and no
+turn-complete (the stand-in's \"background\"): working while it works, timed
+from then; done at its model's result."
+  (+test-aws--with-crew "woken"
+    (let* ((agent (+test-aws--create "ada"))
+           (states nil)
+           (agent-workspace-state-change-functions
+            (cons (lambda (a _old new) (when (eq a agent) (push new states)))
+                  agent-workspace-state-change-functions)))
+      (agent-workspace-send agent "background" :submit t)
+      (should (+test-aws--wait (lambda () (equal states '(done working)))))
+      (should (+test-aws--wait (lambda () (equal states '(working done working))) 10))
+      (should (agent-workspace-agent-since agent))
+      (should (+test-aws--state agent 'done 10))
+      (should (equal states '(done working done working)))
+      (should-not (agent-workspace-agent-since agent)))))
+
 (ert-deftest agent-workspace-session/a-question-on-its-canvas ()
   "Its turn ended with a question waiting on its Agent UI canvas: its hand
 raised."
