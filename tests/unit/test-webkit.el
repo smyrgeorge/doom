@@ -1596,6 +1596,22 @@ answer going nowhere."
         (should-not +test-webkit--answers)
         (should (= (length (+test-webkit--calls 'kill-xwidget)) 2))))))
 
+(ert-deftest webkit/a-view-killed-as-it-loads-left-alone-on-linux ()
+  "Linux's Emacs can't read a killed view: one closed just after its page
+loaded, its cover's timer still to run, then WebKit's events for it, read
+by Emacs's handler: no error."
+  (+test-webkit
+    (+test-webkit-as-on-linux
+      (let* ((page (+test-webkit--page))
+             (xw (+test-webkit--xw page (+test-webkit--show page))))
+        (+test-webkit--callback-load xw)
+        (kill-buffer page)
+        (+test-webkit--fire #'+my/webkit--kill-now)
+        (should (+test-webkit--xw-killed xw))
+        (should (= (+test-webkit--fire #'+my/webkit--uncover) 1))
+        (let ((last-input-event (+test-webkit--event xw "load-finished")))
+          (xwidget-event-handler))))))
+
 (defun +test-webkit--callback-load (xw)
   "WebKit says XW's page loaded (an event for a view maybe killed)."
   (let ((last-input-event (list 'xwidget-event 'load-changed xw "load-finished")))

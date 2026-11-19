@@ -79,3 +79,11 @@ s, see JAVASCRIPT in js.el): Linux's Emacs can't read a killed view."
                       ;; A moment for WebKit to paint it.
                       (run-at-time 0.05 nil #'+my/webkit--uncover xwidget)
                       (run-hook-with-args '+my/webkit-load-functions xwidget)))))))))
+
+(defun +my/webkit--event-live-p (&rest _)
+  "Non-nil if the xwidget event being handled is a live view's. Emacs's
+handler reads its view's callback before calling it, and WebKit's last
+events for a view can come after it was killed: on Linux, an error."
+  (xwidget-live-p (nth 2 last-input-event)))
+
+(advice-add 'xwidget-event-handler :before-while #'+my/webkit--event-live-p)
