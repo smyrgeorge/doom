@@ -129,6 +129,12 @@ the table doesn't know, the script stops and names it, so a new language never g
 Run `scripts/emacs.sh` and `scripts/tools.sh` again: each brings what it installs to the latest version and leaves
 alone what already is.
 
+`scripts/upgrade.sh` updates Doom's packages. `packages.el` pins the ones whose internals this config changes
+(agent-shell, acp, shell-maker, beads.el, vui), so `doom sync -u` leaves them as they are. The script moves each pin to
+its package's latest commit, runs `doom sync -u` and the tests (`tests/run.sh all`), and commits `packages.el` when they
+pass. When a test fails it puts the old pins back; `--keep` keeps the new ones, to fix the config for them. Restart
+Emacs after.
+
 After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` and restart Emacs, and run
 `scripts/tools.sh` if you enabled a module. Changes to `config.el` and `config/*.el` only need a restart.
 

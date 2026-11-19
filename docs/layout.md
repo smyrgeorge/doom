@@ -33,7 +33,7 @@
 | `skills/` | [Agent skills](ai-agents.md): `emacs-profiling` reads a profile, `agent-ui` shows things on the canvas |
 | `cmd/` | [Shell commands](cmd.md) |
 | `dict/tech.txt` | Programming words for spelling, built by `scripts/dict.sh` |
-| `scripts/` | Installers (`emacs.sh`; `tools.sh`: what `init.el` and this config need; `os.sh`: Homebrew, apt or dnf), `dict.sh`, `screenshots.sh` |
+| `scripts/` | Installers (`emacs.sh`; `tools.sh`: what `init.el` and this config need; `os.sh`: Homebrew, apt or dnf), `upgrade.sh` (Doom's packages, the pinned ones too, [tested](../README.md#keeping-it-up-to-date)), `dict.sh`, `screenshots.sh` |
 | `tests/` | [Tests](tests.md); `tests/linux/`: the same on Linux, in Docker |
 | `.github/workflows/tests.yml` | The tests on each push, on Linux and macOS ([Tests](tests.md#on-github)) |
 | `.beads/` | This config's own [issues](issues.md); `hooks/post-commit` syncs them with their Dolt remote (`sync.remote` in `config.yaml`) on each commit |
