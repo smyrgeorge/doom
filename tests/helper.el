@@ -725,10 +725,14 @@ way."
       (+my/webkit-ask "document.visibilityState" #'+test--visibility-answered xwidget))))
 
 (defun +test--wait (predicate timeout)
-  "Wait until PREDICATE returns non-nil, TIMEOUT seconds at most: its value."
+  "Wait until PREDICATE returns non-nil, TIMEOUT seconds at most: its value.
+A page's question in PREDICATE not answered in its time (`+test-js': a
+loaded machine, its page hidden) is PREDICATE's nil: asked again, under
+this wait's clock, not an error ending it."
   (let ((end (+ (float-time) timeout))
         value)
-    (while (and (not (setq value (funcall predicate)))
+    (while (and (not (setq value (condition-case nil (funcall predicate)
+                                   (+test-js-no-answer nil))))
                 (< (float-time) end))
       (+test--pump 0.05))
     value))
@@ -800,13 +804,17 @@ loads; a window's notices frame stays, invisible, once they're gone): those
   "WebKit's answer to `+test-js' (a symbol: see config/webkit.el)."
   (setq +test--js-answer (list value)))
 
+(define-error '+test-js-no-answer "No answer from WebKit to")
+
 (defun +test-js (xwidget script &optional timeout)
   "SCRIPT's value in XWIDGET's page, waited for (no answer left pending: a
-view closed while one was crashed Emacs)."
+view closed while one was crashed Emacs), TIMEOUT seconds at most (default
+5): none then, a `+test-js-no-answer' error; in a wait's predicate, the
+predicate's nil (see `+test--wait')."
   (setq +test--js-answer nil)
   (xwidget-webkit-execute-script xwidget script #'+test--js-answered)
   (unless (+test-wait-for (lambda () +test--js-answer) (or timeout 5))
-    (error "No answer from WebKit to: %s" script))
+    (signal '+test-js-no-answer (list script)))
   (car +test--js-answer))
 
 (defun +test-needs-webkit ()

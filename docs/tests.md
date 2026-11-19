@@ -23,7 +23,9 @@ screen but for its top left corner, at the bottom right, each its own: a stairca
 above the one before, so no frame covers another's (PDF.js draws no page in a covered frame). A window over that
 corner (a video call's picture in picture), or another Space shown (a video full screen, a desktop of its own), hides
 them too: a test's waits stop their clock while WebKit says the frame's page is hidden (WebKit draws nothing there),
-for 2 minutes at most, and the PDF tests' log says how long a page took and how much of it hidden. A test file with a
+for 2 minutes at most, and the PDF tests' log says how long a page took and how much of it hidden. A question to a
+page that a wait asks and WebKit doesn't answer in time (a loaded machine) is asked again, under the wait's clock,
+not an error ending the test. A test file with a
 line `;; run.sh: alone` runs with no other beside it, before the others: a test timing itself by the clock is slowed by
 the others (`test-large-files.el`). One with a line `;; run.sh: slow` starts before the rest, so its seconds run beside
 them rather than after (with 8 at once, the end-to-end tests take about 80 s on an M1 Max, 160 s with 4 at once before).

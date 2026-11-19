@@ -3,7 +3,7 @@
 ;; its backtrace unprintable (a file it reads not read), still says its
 ;; condition, and the run goes on to the tests after it; no test sees the
 ;; shell's Beads settings; tests/run.sh keeps a failed file's log in
-;; TEST_LOGS.
+;; TEST_LOGS; a page's question unanswered in a wait is asked again.
 
 (defun +test-harness--unreadable (&rest _)
   "What reading a file signals when it can't be (as once in a full run)."
@@ -25,6 +25,21 @@
   ;; Printable: as ever.
   (let ((frames (list (backtrace-make-frame :evald t :fun 'car :args '((1 2))))))
     (should (equal (backtrace-to-string frames) "  car((1 2))\n"))))
+
+(ert-deftest harness/a-page-s-question-unanswered-in-a-wait-asked-again ()
+  "`+test-js' in a wait's predicate, WebKit not answering in its time (a
+loaded machine, its page hidden: doom-5kt): the wait asks again, under its
+own clock, not ended by an error; outside a wait, an error."
+  (let ((asked 0))
+    (cl-letf (((symbol-function '+test--pump) (lambda (seconds) (accept-process-output nil seconds)))
+              ((symbol-function 'xwidget-webkit-execute-script)
+               (lambda (_xwidget _script callback)
+                 (when (= (cl-incf asked) 3)
+                   (run-at-time 0 nil callback "true")))))
+      (should (equal (+test-wait-for (lambda () (+test-js 'page "String(true)" 0.2)) 5) "true"))
+      (should (= asked 3))
+      (should (equal (should-error (+test-js 'page "String(1)" 0.2) :type '+test-js-no-answer)
+                     '(+test-js-no-answer "String(1)"))))))
 
 (ert-deftest harness/a-failure-reported-the-run-goes-on ()
   "A batch run (as tests/run.sh runs a file) whose failing test's backtrace
