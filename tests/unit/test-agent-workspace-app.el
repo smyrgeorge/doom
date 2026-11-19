@@ -240,6 +240,26 @@ to the window's right edge, in its tint: the tint reaches the last column
                             (let ((face (get-text-property last 'face line)))
                               (if (and (consp face) (keywordp (car face))) (list face) (ensure-list face))))))))))
 
+(ert-deftest agent-workspace-app/a-bar-once-a-pane-keeps-its-tint ()
+  "ada's pane open, then ken selected (her pane folded to its bar, in a
+window that showed a pane): her bar's window has no display table of its
+own, so her bar's tinted truncation glyph shows, as on a bar never open;
+the hint's too (doom-pbk.161: the pane's, a plain space, won)."
+  (+test-awa "tint-kept"
+    (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
+      (let ((app (agent-workspace-open t)))
+        (agent-workspace-select ada t)
+        (should (window-display-table (get-buffer-window (agent-workspace-agent-buffer ada))))
+        (dolist (step (list (lambda () (agent-workspace-select ken t))
+                            (lambda () (agent-workspace--retile app))
+                            (lambda () (agent-workspace-layout app))))
+          (funcall step)
+          (dolist (window (window-list nil 'nomini))
+            (when (or (buffer-local-value 'agent-workspace--bar-of (window-buffer window))
+                      (eq (buffer-local-value 'major-mode (window-buffer window)) 'agent-workspace-hint-mode))
+              (should-not (window-display-table window))))
+          (should (get-buffer-window (agent-workspace--bar-buffer ada))))))))
+
 (ert-deftest agent-workspace-app/help-names-each-view-s-keys ()
   "? names the keys of the view it's pressed in first, each with what it
 does there, and none that view hasn't; then the app's it keeps: gr and q

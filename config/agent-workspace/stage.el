@@ -254,6 +254,8 @@ else (opened now, or following its end) at its end."
   (let ((buffer (agent-workspace-agent-buffer agent)))
     (if (not (buffer-live-p buffer))
         (progn (set-window-buffer window (agent-workspace--bar-buffer agent))
+               ;; Its bar's own display table (its tinted truncation glyph).
+               (set-window-display-table window nil)
                (agent-workspace--bar-draw window))
       (set-window-buffer window buffer)
       (set-window-parameter window 'header-line-format '(:eval (agent-workspace--pane-header)))
@@ -270,16 +272,19 @@ else (opened now, or following its end) at its end."
     (set-window-margins window 0 0)
     ;; No fringes: a wrapped line's mark, a cut one's, a space (not a \ or $
     ;; in the text), the window's own: its buffer untouched.
-    (let ((table (make-display-table)))
-      (set-display-table-slot table 'wrap ?\s)
-      (set-display-table-slot table 'truncation ?\s)
-      (set-window-display-table window table))))
+    (when (buffer-live-p buffer)
+      (let ((table (make-display-table)))
+        (set-display-table-slot table 'wrap ?\s)
+        (set-display-table-slot table 'truncation ?\s)
+        (set-window-display-table window table)))))
 
 (defun agent-workspace--show-bar (window agent)
-  "AGENT's bar in WINDOW."
+  "AGENT's bar in WINDOW: its buffer's display table (its tinted truncation
+glyph), not a pane's the window had (a window's wins over its buffer's)."
   (set-window-dedicated-p window nil)
   (set-window-parameter window 'agent-workspace-side nil)
   (set-window-buffer window (agent-workspace--bar-buffer agent))
+  (set-window-display-table window nil)
   (dolist (parameter '(header-line-format mode-line-format tab-line-format))
     (set-window-parameter window parameter 'none))
   (set-window-fringes window 0 0)
@@ -317,6 +322,7 @@ area in it, or full size): their windows."
                                  (agent-workspace--full-tab agent))))
                   (cond ((eq agent :hint)
                          (set-window-buffer w (agent-workspace--hint-buffer (agent-workspace-agent-project (car agents))))
+                         (set-window-display-table w nil)
                          (dolist (parameter '(header-line-format mode-line-format tab-line-format))
                            (set-window-parameter w parameter 'none))
                          (set-window-parameter w 'agent-workspace-side nil))
