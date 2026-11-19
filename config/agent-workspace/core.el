@@ -22,6 +22,7 @@
 (declare-function agent-workspace-crew-members "agent-workspace/saved")
 (declare-function agent-workspace-crew-saved "agent-workspace/saved")
 (declare-function agent-workspace--bd-give-back "agent-workspace/issues")
+(declare-function agent-workspace--bd-claim "agent-workspace/issues")
 (declare-function agent-workspace-worktree-fate "agent-workspace/worktree")
 (declare-function agent-workspace-worktree-remove "agent-workspace/worktree")
 (declare-function agent-workspace-issue-branch-open "agent-workspace/worktree")
@@ -693,10 +694,12 @@ agent of `agent-workspace-kinds'). It gets its own worktree, always, and its
 session starts there. PROMPT, if given, is its first message, sent once it's
 ready; ISSUE (an id, and ISSUE-TITLE, ISSUE-TYPE), the issue it's for (its
 branch for it opened in its worktree: `agent-workspace-give'): its first
-message unless PROMPT, \"Work on ID: TITLE\". Return the agent.
+message unless PROMPT, \"Work on ID: TITLE\", claimed in bd as it first (as t
+does: no looping agent takes it meanwhile). Return the agent.
 
-A step failing says which: its worktree (or its issue's branch) not made,
-nothing is; its session not started, it's stuck saying why, in the crew."
+A step failing says which: the issue claimed by another, or its worktree
+\(or its issue's branch) not made, nothing is (the claim given back); its
+session not started, it's stuck saying why, in the crew."
   (let ((project (or project (agent-workspace-project)
                      (user-error "Not in a git repository: a crew needs one"))))
     (unless (and (stringp role) (not (string-empty-p role)))
@@ -716,12 +719,16 @@ nothing is; its session not started, it's stuck saying why, in the crew."
                                                          :colour)))
                   :model model :mode mode
                   :project (agent-workspace--root project))))
+      (when-let* ((why (and issue (agent-workspace--bd-claim agent issue))))
+        (user-error "%s not given to %s: %s" issue name why))
       (condition-case err
           (progn
             (agent-workspace-worktree-ensure agent)
             (when issue
               (agent-workspace-issue-branch-open agent issue issue-type issue-title)))
-        (error (user-error "%s's worktree: %s" name (error-message-string err))))
+        (error
+         (when issue (agent-workspace--bd-give-back agent issue))
+         (user-error "%s's worktree: %s" name (error-message-string err))))
       (let ((key (agent-workspace--root project)))
         (puthash key (append (gethash key agent-workspace--crews) (list agent))
                  agent-workspace--crews)

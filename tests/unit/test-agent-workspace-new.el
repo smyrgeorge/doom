@@ -610,6 +610,45 @@ message, noted as its."
       (should (equal (car sent) '("ken" "Look at it" (:submit t))))
       (should (equal (agent-workspace-agent-branch ken) "task/doom-b2c")))))
 
+(ert-deftest agent-workspace-new/made-for-an-issue-claims-it ()
+  "Made for an issue: claimed in bd as the new agent at once, as t does
+\(no looping agent takes it meanwhile); claimed by another first: nothing
+made, said (doom-pbk.153: never claimed)."
+  (skip-unless (executable-find "bd"))
+  (+test-awn "claimed"
+    (+test-bd-init "--quiet" "--skip-agents" "--prefix" "cl")
+    (cl-flet ((issue (title)
+                (with-temp-buffer
+                  (should (eql 0 (call-process "bd" nil t nil "create" "--title" title "--type" "task" "--json")))
+                  (goto-char (point-min))
+                  (search-forward "{")
+                  (backward-char)
+                  (plist-get (json-parse-buffer :object-type 'plist) :id)))
+              (shown (id)
+                (with-temp-buffer
+                  (should (eql 0 (call-process "bd" nil t nil "show" id "--json")))
+                  (goto-char (point-min))
+                  (re-search-forward "[[{]")
+                  (backward-char)
+                  (let ((issue (json-parse-buffer :object-type 'plist :array-type 'list)))
+                    (if (consp issue) (car issue) issue)))))
+      (let ((one (issue "One")) (two (issue "Two")))
+        (+test-awn--answering '("builder" "")
+          (let ((agent (agent-workspace-new nil "builder" one "One" "task")))
+            (should (equal (agent-workspace-agent-issue agent) one))
+            (let ((issue (shown one)))
+              (should (equal (plist-get issue :status) "in_progress"))
+              (should (equal (plist-get issue :assignee) (agent-workspace-agent-name agent))))))
+        ;; Claimed by another first.
+        (let ((process-environment (cons "BEADS_ACTOR=zed" process-environment)))
+          (should (eql 0 (call-process "bd" nil nil nil "update" two "--claim"))))
+        (+test-awn--answering '("builder" "")
+          (should (string-search (format "%s not given to" two)
+                                 (cadr (should-error (agent-workspace-new nil "builder" two "Two" "task")
+                                                     :type 'user-error)))))
+        (should (= (length (agent-workspace-agents project)) 1))
+        (should (equal (plist-get (shown two) :assignee) "zed"))))))
+
 (ert-deftest agent-workspace-new/no-crew-here ()
   "Outside git, or with no commit: no crew, saying why; nothing asked."
   (let ((default-directory (file-name-as-directory (make-temp-file (+test-tmp-file "awn-nogit-") t))))

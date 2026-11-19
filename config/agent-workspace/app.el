@@ -1162,12 +1162,14 @@ in it."
 (defun agent-workspace-new-here (&optional more)
   "Make a new agent in this crew (MORE, C-u: its model, mode and colour too),
 or the agents a crew file has that it lacks. On a ready issue: an agent
-for it, its role offered first, the issue its first message (no crews)."
+for it, its role offered first, the issue claimed for it and its first
+message (no crews); on any other (in progress, blocked, done): a plain one."
   (interactive "P")
   (let* ((app (agent-workspace--here-or-error))
          (default-directory (agent-workspace--app-project app))
          (issue (and (derived-mode-p 'agent-workspace-issues-mode)
-                     (get-text-property (point) 'agent-workspace-issue))))
+                     (let ((issue (get-text-property (point) 'agent-workspace-issue)))
+                       (and (eq (plist-get issue :status) 'ready) issue)))))
     (agent-workspace-new more
                          (or (plist-get issue :role)
                              (get-text-property (point) 'agent-workspace-role))

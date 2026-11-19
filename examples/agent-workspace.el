@@ -125,9 +125,12 @@ folder deleted once it's closed. See examples/agent-workspace.el."
                   (agent-workspace-create :role "investigator" :name "sam" :kind 'stand-in
                                           :issue "demo-3" :issue-title "Why does the REPL hang on paste?"
                                           :issue-type "bug" :prompt "Look into why the REPL hangs on paste")
-                  (agent-workspace-create :role "builder" :name "ken" :kind 'stand-in
-                                          :issue "demo-6" :issue-title "Tokens for numbers"
-                                          :issue-type "feature" :prompt "What's left on the lexer?"))))
+                  ;; Done with demo-6, closed: given it (its branch), not
+                  ;; made for it (that claims it, as for work to do).
+                  (let ((ken (agent-workspace-create :role "builder" :name "ken" :kind 'stand-in)))
+                    (agent-workspace-give ken "demo-6" "Tokens for numbers" "feature")
+                    (agent-workspace-send ken "What's left on the lexer?" :submit t)
+                    ken))))
     (let ((app (agent-workspace-open)))
       (agent-workspace-select (car +my/example-agent-workspace--crew))
       (+my/example-delete-when-closed dir (list (agent-workspace--issues-buffer (agent-workspace--app-project app))))

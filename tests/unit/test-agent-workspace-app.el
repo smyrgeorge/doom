@@ -161,6 +161,31 @@ end each time)."
           (let ((window (get-buffer-window (agent-workspace-agent-buffer ken))))
             (should (= (window-point window) (with-current-buffer (agent-workspace-agent-buffer ken) (point-max))))))))))
 
+(ert-deftest agent-workspace-app/c-on-an-issue ()
+  "c on a ready issue: an agent for it (its role, id, title, type); on one
+in progress or done: a plain new agent (doom-pbk.153: given that issue
+too)."
+  (+test-awa "c-issue"
+    (+test-awa--crew '("ada" "builder"))
+    (agent-workspace-open t)
+    (with-current-buffer (agent-workspace--issues-buffer project)
+      (setq agent-workspace--issues-data
+            (agent-workspace--issues-parse
+             project
+             (list :all '(((id . "p-1") (title . "Ready one") (status . "open") (labels "build") (issue_type . "bug"))
+                          ((id . "p-2") (title . "Doing") (status . "in_progress") (assignee . "ada") (labels "build")))
+                   :ready '(((id . "p-1")))
+                   :done '(((id . "p-3") (title . "Done today") (status . "closed") (labels "build"))))))
+      (agent-workspace--issues-redraw project)
+      (let ((made nil))
+        (cl-letf (((symbol-function 'agent-workspace-new) (lambda (&rest args) (push args made) nil)))
+          (dolist (title '("Ready one" "Doing" "Done today"))
+            (goto-char (point-min))
+            (should (search-forward title nil t))
+            (agent-workspace-new-here)))
+        (should (equal (mapcar (lambda (args) (seq-drop args 2)) (reverse made))
+                       '(("p-1" "Ready one" "bug") (nil nil nil) (nil nil nil))))))))
+
 (ert-deftest agent-workspace-app/a-pane-s-header-kept ()
   "An open pane's header line, made at every redisplay of its window: made
 once, then kept (no role read again, under 0.1 ms a time) until its agent

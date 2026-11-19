@@ -469,7 +469,8 @@ panels or a loop turned off it applies.
    left out, naming its file and line. The role offered first (an issue's) is selected, in its group. In a narrower
    minibuffer the columns on the right go first: the role it replaced, the role it hands to, its labels, its mode,
    its model; then what it does is cut. A crew's row loses where it comes from, then its agents; what it would add
-   is cut last. `c` on a ready issue makes an agent for that issue: no crews there.
+   is cut last. `c` on a ready issue makes an agent for that issue, claimed for it at once as `t` does: no crews
+   there. On any other issue it makes a plain agent.
 2. **Its name.** Leave it empty and one is made for it, `ada`, `grace`, `linus`..., each with an initial no other
    agent has. A name is lowercase letters, digits and `-`. One the crew has is refused, an agent
    [saved](#the-saved-crew) but not running included.
