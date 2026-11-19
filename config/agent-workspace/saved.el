@@ -540,9 +540,9 @@ issue); asleep if it was, or if it loops and `agent-workspace-loop' is nil
       (agent-workspace-room-post project :kind 'note :agent name
                                  :text (format "stays asleep: %d %s%s run already, as many as the role allows"
                                                max role (if (= max 1) "" "s"))))
-    (if (and (eq (agent-workspace-agent-state agent) 'waking)
-             (agent-workspace--start agent))
-        (agent-workspace-open-panels agent (plist-get entry :panels))
+    (if (eq (agent-workspace-agent-state agent) 'waking)
+        (agent-workspace--start-then
+         agent (lambda (agent) (agent-workspace-open-panels agent (plist-get entry :panels))))
       ;; Asleep or stuck: opened once it starts.
       (when (plist-get entry :panels)
         (puthash agent (plist-get entry :panels) agent-workspace--crew-panels)))
@@ -584,29 +584,36 @@ any; its layout applied."
       (puthash (agent-workspace--root project) (plist-get crew :left-out) agent-workspace--crew-left-out))
     (when entries
       (let ((agent-workspace--crew-loading t))
-        (dolist (entry entries)
-          (agent-workspace--restore project entry))
-        (when-let* ((layout (plist-get crew :layout))
-                    ((plist-member layout :minimap))
-                    ((fboundp 'agent-workspace--minimap-set)))
-          (agent-workspace--minimap-set project (plist-get layout :minimap)))
-        (when-let* ((layout (plist-get crew :layout))
-                    ((memq (plist-get layout :talk) '(off ask on)))
-                    ((fboundp 'agent-workspace--talk-set)))
-          (agent-workspace--talk-set project (plist-get layout :talk)))
-        (when-let* ((layout (plist-get crew :layout))
-                    (off (plist-get layout :sources-off))
-                    ((and (proper-list-p off)
-                          (seq-every-p (lambda (pair) (and (consp pair) (stringp (car pair)) (stringp (cdr pair))))
-                                       off)))
-                    ((fboundp 'agent-workspace--inbox-set-sources-off)))
-          (agent-workspace--inbox-set-sources-off project off))
+        ;; All in the crew, its layout set (its talk switch), before any
+        ;; starts: each told the whole crew, and how it talks.
+        (agent-workspace--together (lambda () (agent-workspace--crew-start-entries project crew entries)))
         (when-let* ((app (agent-workspace--app project))
                     (layout (plist-get crew :layout))
                     (selected (agent-workspace-agent (plist-get layout :selected) project)))
           (setf (agent-workspace--app-selected app) selected
                 (agent-workspace--app-open app) (and (plist-get layout :open) selected))))
       t)))
+
+(defun agent-workspace--crew-start-entries (project crew entries)
+  "PROJECT's crew.json's ENTRIES (agents of CREW, as read) in its crew
+again, its layout's minimap, talk switch and sources off set."
+  (dolist (entry entries)
+    (agent-workspace--restore project entry))
+  (when-let* ((layout (plist-get crew :layout))
+              ((plist-member layout :minimap))
+              ((fboundp 'agent-workspace--minimap-set)))
+    (agent-workspace--minimap-set project (plist-get layout :minimap)))
+  (when-let* ((layout (plist-get crew :layout))
+              ((memq (plist-get layout :talk) '(off ask on)))
+              ((fboundp 'agent-workspace--talk-set)))
+    (agent-workspace--talk-set project (plist-get layout :talk)))
+  (when-let* ((layout (plist-get crew :layout))
+              (off (plist-get layout :sources-off))
+              ((and (proper-list-p off)
+                    (seq-every-p (lambda (pair) (and (consp pair) (stringp (car pair)) (stringp (cdr pair))))
+                                 off)))
+              ((fboundp 'agent-workspace--inbox-set-sources-off)))
+    (agent-workspace--inbox-set-sources-off project off)))
 
 (add-hook 'agent-workspace-open-functions #'agent-workspace--crew-start)
 

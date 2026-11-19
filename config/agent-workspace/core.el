@@ -729,11 +729,42 @@ nothing is; its session not started, it's stuck saying why, in the crew."
       (when issue
         (agent-workspace-give agent issue issue-title issue-type))
       (agent-workspace--changed agent 'created)
-      (when (and (agent-workspace--start agent)
-                 (or prompt issue))
-        (agent-workspace-send agent (or prompt (agent-workspace-issue-prompt issue issue-title))
-                              :submit t))
+      (agent-workspace--start-then
+       agent (and (or prompt issue)
+                  (lambda (agent)
+                    (agent-workspace-send agent (or prompt (agent-workspace-issue-prompt issue issue-title))
+                                          :submit t))))
       agent)))
+
+(defvar agent-workspace--starts-put-off :no
+  "While a crew's agents are made together (`agent-workspace--together'):
+the sessions' starts put off, the last first ((AGENT . THEN)...); else :no.")
+
+(defun agent-workspace--start-then (agent then)
+  "AGENT's session started, then THEN (a function of AGENT, or nil) called
+if it did. Put off while a crew's agents are made together
+\(`agent-workspace--together')."
+  (if (listp agent-workspace--starts-put-off)
+      (push (cons agent then) agent-workspace--starts-put-off)
+    (when (and (agent-workspace--start agent) then)
+      (funcall then agent))))
+
+(defun agent-workspace--together (function)
+  "Call FUNCTION, the agents it makes or starts again in a crew (a crew
+made at once, crew.json's) started only once it returns, in order: each
+session's context worked out with the whole crew there (its roster, whom
+it hands to), and what FUNCTION sets (crew.json's talk switch) set.
+Return FUNCTION's value."
+  (let (value starts)
+    (let ((agent-workspace--starts-put-off nil))
+      (setq value (funcall function)
+            starts (reverse agent-workspace--starts-put-off)))
+    (pcase-dolist (`(,agent . ,then) starts)
+      ;; Still in its crew, still to start.
+      (when (and (memq agent (agent-workspace-agents (agent-workspace-agent-project agent)))
+                 (eq (agent-workspace-agent-state agent) 'waking))
+        (agent-workspace--start-then agent then)))
+    value))
 
 (defun agent-workspace-issue-prompt (issue &optional title)
   "Your message giving an agent ISSUE (with its TITLE)."

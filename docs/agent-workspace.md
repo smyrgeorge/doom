@@ -230,8 +230,10 @@ see. Either, with nothing to do, says so in the issue and hands it on. Work goin
 it; a reviewer's approval to the merger, or to you without one. A role's `hands-to:` says where its
 finished issues go: roles in order, the first one the crew has an agent of (awake or asleep) taking them, so a crew
 missing a role skips it; with none of them, the agent tells you it's done. `hands-to: any` is for a role that routes
-issues (a triager): it's told every role with labels the crew has, and picks. `returns-to:` says where work goes back
-(changes asked, a test failing): to the one who made it. Every agent is told the project's roles and their labels.
+issues (a triager): it picks among the roles with labels the crew has. `returns-to:` says where work goes back
+(changes asked, a test failing): to the one who made it. Every agent is told the project's roles and their labels. An
+agent checks the crew as it hands an issue on (`cmd/agent-workspace status`), so agents made or forgotten while it
+works count.
 
 Each agent is told how: it changes the issue's labels from its role's (all of them) to the next one's, leaves it open
 and unassigned (or assigned to the one it goes back to), and writes what they need in its notes. It does this with
@@ -267,8 +269,9 @@ In the room, each exchange between two agents is a thread, with the issue the se
 `TAB` folds a thread to its first line, and `x` stops it: its waiting messages are dropped and the agents can't send
 more (the sender is told), until `x` again. `[Answer]` on a message answers its sender yourself, instead of the agent
 it was for. Guards: a thread waits for your OK after 5 messages without you (`agent-workspace-thread-pause`), and an
-agent sends at most 10 messages an hour (`agent-workspace-message-limit`). Each agent is told its crew, how to message,
-which roles it may message without your OK, and never to wait for an answer.
+agent sends at most 10 messages an hour (`agent-workspace-message-limit`). Each agent is told its crew (a crew made at
+once, or started again from `crew.json`, all of it), where to see it as it changes, how to message, which roles it
+may message without your OK, and never to wait for an answer.
 
 With `agent-workspace-agents-talk` set to `nil`, a message is refused, whatever `T` says (`crew.json` keeps it), and
 `T` says so. Agents aren't told of messages, and those queued before wait, not delivered.

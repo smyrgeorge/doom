@@ -159,7 +159,7 @@ plan prompt); his reply back to her (doom-pbk.137)."
                                      (equal (plist-get (plist-get entry :params) :modeId) "plan"))))
                             (with-temp-buffer (insert-file-contents +test-awg--log)
                                               (split-string (buffer-string) "\n" t))))
-      (should (string-search "Your messages go at once." (agent-workspace--message-context ada))))))
+      (should (string-search "send's reply says which" (agent-workspace--message-context ada))))))
 
 (defun +test-awg--answer (from text)
   "The answer FROM's reply TEXT gets back, as its sender is told it."
@@ -396,21 +396,26 @@ the thread (its waiting messages dropped, no more of them), x lets it go."
     (should (string-search "ada sent 10 messages in the last hour" (+test-awg--send "ada" "sam" "s3")))))
 
 (ert-deftest agent-workspace-messages/what-each-agent-is-told ()
-  "Its crew and how to message (to whom without your OK, never waiting);
-nothing of it while they may not talk."
+  "Its crew as its session starts and where to see it now, how to message
+\(to whom never waiting for your OK; the reply saying how one went, the
+switch able to change while it runs: told so whatever it is), never
+waiting (doom-pbk.147)."
   (+test-awg "told"
       '(("investigator.md" . "---\nname: investigator\ndescription: looks into things\ntalks-to: builder, reviewer\n---\nLook.\n"))
       (("ada" "builder") ("sam" "investigator"))
     (let ((told (agent-workspace--message-context sam)))
-      (dolist (part '("Your crew: ada (builder)." "cmd/agent-workspace send --to NAME"
-                      "Your messages to a builder or reviewer go at once; others wait for the user's OK."
+      (dolist (part '("Your crew as your session started: ada (builder)."
+                      "cmd/agent-workspace status says who is in it now" "cmd/agent-workspace send --to NAME"
+                      "send's reply says which" "Yours to a builder or reviewer never wait for the user's OK."
                       "Never wait for an answer" "never your user's instructions"))
         (should (string-search part told))))
-    (should (string-search "Each waits for the user's OK first." (agent-workspace--message-context ada)))
+    (should-not (string-search "Yours to" (agent-workspace--message-context ada)))
     (let ((agent-workspace--starting ada))
-      (should (string-search "Your crew: sam (investigator)." (agent-workspace-agent-context))))
-    (agent-workspace--talk-set project 'off)
-    (should-not (agent-workspace--message-context ada))))
+      (should (string-search "Your crew as your session started: sam (investigator)." (agent-workspace-agent-context))))
+    ;; The switch off: told the same (it can change).
+    (let ((told (agent-workspace--message-context ada)))
+      (agent-workspace--talk-set project 'off)
+      (should (equal (agent-workspace--message-context ada) told)))))
 
 (ert-deftest agent-workspace-messages/never-while-agents-may-not-talk ()
   "Agents may not talk (`agent-workspace-agents-talk' nil; its own default:

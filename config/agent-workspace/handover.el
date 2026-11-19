@@ -67,21 +67,37 @@ project with labels the crew has one of, but ROLE. nil: none."
                                    names)))
         (list first)))))
 
+(defun agent-workspace--handover-roles (project role &optional key)
+  "The roles ROLE's work may go to in PROJECT by its KEY (:hands-to, the
+default, or :returns-to), whatever the crew has: those it names that take
+issues (have labels), in order; `any' (hands-to): every role with labels
+but ROLE. `agent-workspace-hands-to' picks among them by the crew."
+  (let ((roles (agent-workspace-roles project))
+        (names (plist-get (agent-workspace--project-role project role) (or key :hands-to))))
+    (if (and (member "any" names) (not (eq key :returns-to)))
+        (seq-filter (lambda (name) (and (not (equal name role)) (plist-get (cdr (assoc name roles)) :labels)))
+                    (mapcar #'car roles))
+      (seq-filter (lambda (name) (agent-workspace--role-labels project name)) names))))
+
 (defun agent-workspace--handover-context (agent)
   "How AGENT hands an issue on, if its role hands to others: in what it's
-told. Its hands-to's first role the crew has an agent of, or with `any'
-every role with labels it has, each with its bd command; its returns-to
-the same for work going back; a role the crew has none of isn't offered
-\(none at all: it tells you). While agents may not talk
-\(`agent-workspace-agents-talk'), that it hands nothing on. In
-`agent-workspace-context-functions'."
+told. Not the crew as its session starts (it changes while it runs: an
+agent made, forgotten, gone home): the roles its hands-to names, in order,
+each with its bd command, to hand to the first the crew has an agent of
+then (`cmd/agent-workspace status' says), else to tell you; with `any',
+the role it's for of those; its returns-to the same for work going back.
+While agents may not talk (`agent-workspace-agents-talk'), that it hands
+nothing on. In `agent-workspace-context-functions'."
   (let* ((project (agent-workspace-agent-project agent))
+         (name (agent-workspace-agent-role agent))
          (role (agent-workspace-role agent))
          (named (or (plist-get role :hands-to) (plist-get role :returns-to)))
+         (any (member "any" (plist-get role :hands-to)))
          ;; Every one of its role's: one left, its loop takes the issue back.
-         (mine (agent-workspace--role-labels project (agent-workspace-agent-role agent)))
-         (next (agent-workspace-hands-to project (agent-workspace-agent-role agent)))
-         (back (car (agent-workspace-hands-to project (agent-workspace-agent-role agent) :returns-to)))
+         (mine (agent-workspace--role-labels project name))
+         (next (agent-workspace--handover-roles project name))
+         (back (agent-workspace--handover-roles project name :returns-to))
+         (status "cmd/agent-workspace status says who is in it now; asleep counts, gone home doesn't")
          (command (lambda (to assignee)
                     (format "bd update ID %s--add-label %s --status open --assignee %s --append-notes \"...\""
                             (mapconcat (lambda (label) (format "--remove-label %s " label)) mine "")
@@ -89,48 +105,67 @@ the same for work going back; a role the crew has none of isn't offered
                             assignee)))
          (described (lambda (name)
                       (let ((what (plist-get (agent-workspace--project-role project name) :description)))
-                        (if what (format "the %ss (%s)" name what) (format "the %ss" name))))))
+                        (if what (format "the %ss (%s)" name what) (format "the %ss" name)))))
+         (listed (lambda (roles assignee)
+                   (mapconcat (lambda (to) (format "\n- %s: %s" (funcall described to) (funcall command to assignee)))
+                              roles "")))
+         (plural (lambda (roles) (string-join (mapcar (lambda (to) (format "the %ss" to)) roles) ", "))))
     (cond
      ((and named (not agent-workspace-agents-talk))
       (concat
        "You work only with the user, never with the other agents of your crew: hand nothing on to \
 them, whatever your role's instructions say. When your part of an issue is done, leave its labels, \
 status and assignee as they are, tell the user what you did"
-       (pcase next
-         (`(,to) (format " and which role is next (\"next: the %ss\")" to))
-         ('nil "")
-         (_ " and which role it's for next"))
+       (cond
+        ((null next) "")
+        (any " and which role it's for next")
+        ((null (cdr next)) (format " and which role is next (\"next: the %ss\")" (car next)))
+        (t (format " and which role is next: the first of %s the crew has an agent of (%s), as \"next: the %ss\""
+                   (funcall plural next) status (car next))))
        ", and end your turn: the user decides what comes next, and who takes it."))
      ((not named) nil)
      (t
       (concat
        "Work moves between roles through the project's issues."
-       (pcase next
-         ('nil
-          (if (plist-get role :hands-to)
-              (format " Your finished work goes to %s, but the crew has none of them now: when your part \
-of an issue is done, leave its labels, status and assignee as they are, tell the user what you did and \
-that it's ready for them, and end your turn."
-                      (string-join (mapcar (lambda (name) (format "the %ss" name))
-                                           (remove "any" (plist-get role :hands-to)))
-                                   " or "))
-            ""))
-         (`(,to)
-          (format " When your part of an issue is done, hand it to the %ss: its labels changed from \
-yours (all of them) to theirs, the issue open again and unassigned, what they need in its notes: %s. Then \
-tell the user, and end your turn: the first free %s takes it."
-                  to (funcall command to "\"\"") to))
-         (_
-          (concat
-           " When your part of an issue is done, hand it to the role it's for: its labels changed from \
-yours (all of them) to that role's, the issue open again and unassigned, what they need in its notes. Then \
-tell the user, and end your turn: the first free agent of that role takes it. The roles you hand to:"
-           (mapconcat (lambda (to) (format "\n- %s: %s" (funcall described to) (funcall command to "\"\"")))
-                      next ""))))
+       (cond
+        ((null next)
+         (if (plist-get role :hands-to)
+             " When your part of an issue is done, leave its labels, status and assignee as they are, tell \
+the user what you did and that it's ready for them, and end your turn."
+           ""))
+        (t
+         (concat
+          (cond
+           (any (format " When your part of an issue is done, hand it to the role it's for, of those the \
+crew has an agent of (%s): its labels changed from yours (all of them) to that role's first (the \
+project's roles list them), the issue open again and unassigned, what they need in its notes: %s. Then \
+tell the user, and end your turn: the first free agent of that role takes it."
+                        status
+                        (format "bd update ID %s--add-label LABEL --status open --assignee \"\" --append-notes \"...\""
+                                (mapconcat (lambda (label) (format "--remove-label %s " label)) mine ""))))
+           ((null (cdr next))
+            (format " When your part of an issue is done, hand it to the %ss, if the crew has one (%s): \
+its labels changed from yours (all of them) to theirs, the issue open again and unassigned, what they \
+need in its notes: %s. Then tell the user, and end your turn: the first free %s takes it."
+                    (car next) status (funcall command (car next) "\"\"") (car next)))
+           (t (format " When your part of an issue is done, hand it to the first of these roles the crew \
+has an agent of (%s): its labels changed from yours (all of them) to theirs, the issue open again and \
+unassigned, what they need in its notes. Then tell the user, and end your turn: the first free agent of \
+that role takes it." status)))
+          (if (or any (null (cdr next)))
+              " "
+            (concat (funcall listed next "\"\"") "\n"))
+          (format "If the crew has %s, leave its labels, status and assignee as they are, tell the user \
+what you did and that it's ready for them, and end your turn."
+                  (if (or any (cdr next)) "none of them" (format "no %s" (car next)))))))
        (when back
-         (format " When it must go back instead (changes asked, a test failing), give it back to the \
+         (if (null (cdr back))
+             (format " When it must go back instead (changes asked, a test failing), give it back to the \
 %ss, assigned to the one who made it (its notes or bd history ID say who): %s."
-                 back (funcall command back "NAME"))))))))
+                     (car back) (funcall command (car back) "NAME"))
+           (format " When it must go back instead (changes asked, a test failing), give it back to the \
+first of these roles the crew has an agent of, assigned to the one who made it (its notes or bd history \
+ID say who):%s" (funcall listed back "NAME")))))))))
 
 (add-hook 'agent-workspace-context-functions #'agent-workspace--handover-context)
 

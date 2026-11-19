@@ -74,8 +74,11 @@ to the testers else the reviewers, returning to the builders."
 
 (ert-deftest agent-workspace-handover/hands-on-in-order ()
   "hands-to in order: the first role the crew has an agent of (asleep too,
-not gone home) is the one it's told to hand to; none: it tells the user;
-returns-to: the work going back, to the one who made it."
+not gone home) is the one it hands to; none: it tells the user; returns-to:
+the work going back, to the one who made it. What it's told doesn't hang
+on the crew as its session starts (it changes while it runs): its roles in
+order, each with its command, the first the crew has then, else the user
+(doom-pbk.147)."
   (let* ((project (+test-awo--dir "order"))
          (ann (+test-awo--agent project "ann" "chain"))
          (tim (+test-awo--agent project "tim" "tester" 'asleep))
@@ -87,26 +90,26 @@ returns-to: the work going back, to the one who made it."
       (should (equal (agent-workspace-hands-to project "chain") '("reviewer")))
       (should (equal (agent-workspace-hands-to project "chain" :returns-to) '("builder")))
       (let ((told (agent-workspace--handover-context ann)))
-        (should (string-search "hand it to the reviewers" told))
-        (should (string-search "bd update ID --remove-label chain --add-label review --status open --assignee \"\"" told))
-        (should-not (string-search "tester" told))
+        (should (string-search "hand it to the first of these roles the crew has an agent of (cmd/agent-workspace status" told))
+        (should (string-search "\n- the testers (tests it): bd update ID --remove-label chain --add-label test --status open --assignee \"\"" told))
+        (should (string-search "\n- the reviewers (reviews a branch you point it to): bd update ID --remove-label chain --add-label review --status open --assignee \"\"" told))
+        (should (< (string-search "the testers" told) (string-search "the reviewers" told)))
+        (should (string-search "If the crew has none of them, leave its labels" told))
         (should (string-search "give it back to the builders, assigned to the one who made it" told))
-        (should (string-search "bd update ID --remove-label chain --add-label build --status open --assignee NAME" told))))
+        (should (string-search "bd update ID --remove-label chain --add-label build --status open --assignee NAME" told))
+        ;; Whatever the crew.
+        (+test-awo--crew project (list ann)
+          (should (equal (agent-workspace--handover-context ann) told)))))
     ;; A tester in the crew, asleep: it comes first.
     (+test-awo--crew project (list ann tim rex bob)
-      (should (equal (agent-workspace-hands-to project "chain") '("tester")))
-      (should (string-search "hand it to the testers" (agent-workspace--handover-context ann))))
+      (should (equal (agent-workspace-hands-to project "chain") '("tester"))))
     ;; Gone home: not.
     (setf (agent-workspace-agent-state tim) 'home)
     (+test-awo--crew project (list ann tim rex bob)
       (should (equal (agent-workspace-hands-to project "chain") '("reviewer"))))
-    ;; None of them in the crew: it tells the user; nothing goes back.
+    ;; None of them in the crew: nobody.
     (+test-awo--crew project (list ann)
-      (should-not (agent-workspace-hands-to project "chain"))
-      (let ((told (agent-workspace--handover-context ann)))
-        (should (string-search "goes to the testers or the reviewers, but the crew has none of them now" told))
-        (should (string-search "tell the user what you did" told))
-        (should-not (string-search "--add-label" told))))))
+      (should-not (agent-workspace-hands-to project "chain")))))
 
 (ert-deftest agent-workspace-handover/the-starters-chain ()
   "The starters hand work along one chain: builder, tester, documenter,
@@ -141,7 +144,8 @@ left, nobody (the user is told). Back: to the builders (doom-pbk.115)."
 
 (ert-deftest agent-workspace-handover/not-talking-says-who-is-next ()
   "Agents not talking: one hands nothing on, telling the user which role is
-next for them to give it on; none next: only what it did (doom-pbk.115)."
+next for them to give it on: its role's next, or the first of them the
+crew has then; none next: only what it did (doom-pbk.115, doom-pbk.147)."
   (let* ((project (+test-awo--dir "next"))
          (ada (+test-awo--agent project "ada" "builder"))
          (tom (+test-awo--agent project "tom" "tester"))
@@ -150,15 +154,18 @@ next for them to give it on; none next: only what it did (doom-pbk.115)."
     (+test-awo--crew project (list ada tom rex)
       (let ((told (agent-workspace--handover-context ada)))
         (should (string-search "hand nothing on" told))
-        (should (string-search "which role is next (\"next: the testers\")" told)))
-      (should (string-search "\"next: the reviewers\"" (agent-workspace--handover-context tom))))
+        (should (string-search "which role is next: the first of the testers, the documenters, the reviewers the crew has an agent of (cmd/agent-workspace status" told))
+        (should (string-search "as \"next: the testers\"" told)))
+      (should (string-search "the first of the documenters, the reviewers the crew" (agent-workspace--handover-context tom))))
     (+test-awo--crew project (list rex)
-      (should-not (string-search "next:" (agent-workspace--handover-context rex))))))
+      (should (string-search "which role is next (\"next: the mergers\")" (agent-workspace--handover-context rex))))
+    (should-not (string-search "which role" (agent-workspace--handover-context
+                                       (+test-awo--agent project "mo" "merger"))))))
 
 (ert-deftest agent-workspace-handover/hands-to-any ()
   "hands-to any: every role with labels the crew has an agent of, but its
-own, each with its bd command; a role without labels, or none in the
-crew, not offered."
+own; told to hand it to the role it's for, of those the crew has then
+\(whatever it has as its session starts), with its first label."
   (+test-aw-with-four-starters
     (let* ((project (+test-awo--dir "any"))
            (rio (+test-awo--agent project "rio" "router"))
@@ -168,14 +175,12 @@ crew, not offered."
                                      (+test-awo--agent project "bob" "builder") (+test-awo--agent project "liz" "scribe"))
         (should (equal (agent-workspace-hands-to project "router") '("builder" "chain" "tester")))
         (let ((told (agent-workspace--handover-context rio)))
-          (should (string-search "hand it to the role it's for" told))
-          (should (string-search "\n- the builders (builds what you give it): bd update ID --remove-label triage --add-label build --status open --assignee \"\""
-                                 told))
-          (should (string-search "\n- the chains (makes it): bd update ID --remove-label triage --add-label chain" told))
-          (should (string-search "\n- the testers (tests it): bd update ID --remove-label triage --add-label test" told))
-          (should-not (string-search "reviewer" told))
-          (should-not (string-search "scribe" told))
-          (should-not (string-search "add-label triage" told)))))))
+          (should (string-search "hand it to the role it's for, of those the crew has an agent of (cmd/agent-workspace status" told))
+          (should (string-search "bd update ID --remove-label triage --add-label LABEL --status open --assignee \"\"" told))
+          (should (string-search "If the crew has none of them" told))
+          (should-not (string-search "add-label triage" told))
+          (+test-awo--crew project (list rio)
+            (should (equal (agent-workspace--handover-context rio) told))))))))
 
 (ert-deftest agent-workspace-handover/every-agent-told-the-roles ()
   "Every agent is told the project's roles, a line each (name, what it

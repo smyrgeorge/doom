@@ -481,7 +481,8 @@ one whose role is gone stuck, saying why; the selected one's pane open."
 (ert-deftest agent-workspace-saved/its-talk-switch-kept ()
   "A new crew's agents message each other freely (`agent-workspace-talk',
 on), crew.json saying so; a crew whose crew.json says ask keeps asking,
-started again, until T changes it (doom-pbk.137)."
+started again (each agent's session started once the switch is set, the
+whole crew there), until T changes it (doom-pbk.137, doom-pbk.147)."
   (should (eq (default-value 'agent-workspace-talk) 'on))
   (+test-aws2 "talk-new"
     (agent-workspace-create :role "builder" :name "ada")
@@ -490,11 +491,23 @@ started again, until T changes it (doom-pbk.137)."
   (+test-aws2 "talk-ask"
     (+test-aws2--write project "{\"version\": 2,
  \"agents\": [
-  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"}
+  {\"name\": \"ada\", \"role\": \"builder\", \"colour\": \"blue\"},
+  {\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\"}
  ],
  \"layout\": {\"view\": \"stage\", \"room\": \"right\", \"talk\": \"ask\"}}
 ")
-    (agent-workspace-open t)
+    (let ((told nil)
+          (start (symbol-function 'agent-workspace--start)))
+      ;; Each started with the whole crew there, the switch as crew.json
+      ;; says (doom-pbk.147: set after they'd all started).
+      (cl-letf (((symbol-function 'agent-workspace--start)
+                 (lambda (agent)
+                   (push (list (agent-workspace-agent-name agent) (agent-workspace-talk-mode project)
+                               (mapcar #'agent-workspace-agent-name (agent-workspace-agents project)))
+                         told)
+                   (funcall start agent))))
+        (agent-workspace-open t))
+      (should (equal (reverse told) '(("ada" ask ("ada" "ken")) ("ken" ask ("ada" "ken"))))))
     (should (agent-workspace-agent "ada" project))
     (should (eq (agent-workspace-talk-mode project) 'ask))
     (with-current-buffer (agent-workspace--issues-buffer project)

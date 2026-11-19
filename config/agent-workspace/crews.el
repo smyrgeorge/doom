@@ -271,13 +271,16 @@ said)."
          (crew (agent-workspace--crew-spec project name))
          (made nil)
          (failed nil))
-    (pcase-dolist (`(,role . ,count) (agent-workspace-crew-missing project crew))
-      (dotimes (_ count)
-        (condition-case err
-            (push (agent-workspace-create :project project :role role
-                                          :name (agent-workspace-pool-name project role))
-                  made)
-          (error (push (cons role (error-message-string err)) failed)))))
+    ;; All in the crew before any starts: each told the whole crew.
+    (agent-workspace--together
+     (lambda ()
+       (pcase-dolist (`(,role . ,count) (agent-workspace-crew-missing project crew))
+         (dotimes (_ count)
+           (condition-case err
+               (push (agent-workspace-create :project project :role role
+                                             :name (agent-workspace-pool-name project role))
+                     made)
+             (error (push (cons role (error-message-string err)) failed)))))))
     (setq made (nreverse made) failed (nreverse failed))
     (let ((text (and (or made failed)
                      (concat (format "crew %s: " name)

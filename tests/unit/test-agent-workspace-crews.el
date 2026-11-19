@@ -273,6 +273,28 @@ room told who. Again: nothing to add, nothing made, nothing said."
     (should (= (length (agent-workspace-agents project)) 4))
     (should (= (length said) 1))))
 
+(ert-deftest agent-workspace-crews/each-told-the-whole-crew ()
+  "A crew made at once: every agent in the crew before any session starts,
+so each is told the whole crew, the first made too (doom-pbk.147: told
+\"nobody else yet\", a builder made before its reviewer handing to
+nobody)."
+  (+test-awc "told"
+    (let ((told nil)
+          (start (symbol-function 'agent-workspace--start)))
+      (cl-letf (((symbol-function 'agent-workspace--start)
+                 (lambda (agent)
+                   (push (cons (agent-workspace-agent-name agent)
+                               (mapcar #'agent-workspace-agent-name (agent-workspace-agents project)))
+                         told)
+                   (funcall start agent))))
+        (agent-workspace-crew-make project "review"))
+      (should (equal (reverse started) '("ada" "grace" "linus" "ken")))
+      (dolist (name '("ada" "grace" "linus" "ken"))
+        (should (equal (cdr (assoc name told)) '("ada" "grace" "linus" "ken"))))
+      (let ((agent-workspace-agents-talk t))
+        (should (string-search "Your crew as your session started: grace (builder), linus (builder), ken (reviewer)."
+                               (agent-workspace--message-context (agent-workspace-agent "ada" project))))))))
+
 (ert-deftest agent-workspace-crews/only-adds ()
   "It adds what's missing and leaves the crew's agents as they are: a
 builder beyond its count, an investigator it doesn't list, one asleep."
