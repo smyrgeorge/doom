@@ -406,6 +406,44 @@ the thread (its waiting messages dropped, no more of them), x lets it go."
       (+test-sleep 0.3)
       (should-not (+test-awg--prompts "ken")))))
 
+(ert-deftest agent-workspace-messages/kept-from-one-emacs-to-the-next ()
+  "A thread you stopped stays stopped once Emacs starts again (its next
+message refused) until x again; a message waiting for your OK waits
+again, its [Send] there; x on a line of a thread this Emacs doesn't know
+stops its two's (doom-pbk.151: it ran again, x did nothing, the message
+was gone)."
+  (+test-awg "kept" nil (("ada" "builder") ("ken" "builder") ("sam" "investigator"))
+    (cl-flet ((restart ()
+                ;; This Emacs's threads and messages forgotten, as a new one's.
+                (dolist (table (list agent-workspace--threads agent-workspace--messages-waiting
+                                     agent-workspace--messages-read))
+                  (remhash project table))))
+      (+test-awg--send "ada" "ken" "first?")
+      (let ((thread (plist-get (car (gethash project agent-workspace--messages-waiting)) :thread)))
+        (agent-workspace-thread-stop project thread)
+        (restart)
+        (should (string-search "The user stopped the thread between ada ↔ ken" (+test-awg--send "ada" "ken" "again?")))
+        (agent-workspace-thread-stop project thread)
+        (should (equal (plist-get (car (+test-awg--send "ada" "ken" "and now?")) :state) "waiting")))
+      ;; Waiting for your OK: again, its buttons there; sent.
+      (let ((id (plist-get (car (gethash project agent-workspace--messages-waiting)) :id)))
+        (restart)
+        (should (agent-workspace--message-waiting project id))
+        (agent-workspace--room-redraw project)
+        (should (string-search "[Send] [Edit] [Answer] [Drop]" (+test-awg--feed project)))
+        (agent-workspace-message-ok project id)
+        (should (+test-wait-for (lambda () (member (+test-awg--asked "ada" "builder" "and now?") (+test-awg--prompts "ken")))
+                                20)))
+      ;; x on a line of a thread unknown here (nothing kept of it): its two's.
+      (+test-awg--send "sam" "ken" "a question?")
+      (restart)
+      (delete-file (agent-workspace--messages-path project))
+      (with-current-buffer (agent-workspace--room-buffer project)
+        (goto-char (point-min))
+        (search-forward "a question?")
+        (agent-workspace-room-stop))
+      (should (string-search "The user stopped the thread between ken ↔ sam" (+test-awg--send "sam" "ken" "more?"))))))
+
 (ert-deftest agent-workspace-messages/the-guards ()
   "Free to talk, a thread waits for your OK after 5 messages without you
 (your OK: counted from 1 again); an agent's hour: at most 10 messages."

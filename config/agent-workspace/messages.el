@@ -102,7 +102,10 @@ says without `agent-workspace-agents-talk')."
 ;; answers. It waits for your OK after `agent-workspace-thread-pause'
 ;; messages without you; x in the room stops it (its messages waiting
 ;; dropped, no more of them) or lets it go again; you can answer a message
-;; instead of the agent it's for.
+;; instead of the agent it's for. The threads you stopped and the messages
+;; waiting for your OK are kept from one Emacs to the next
+;; (`agent-workspace-messages-file'), as the inbox's events are; x on a line
+;; of a thread this Emacs doesn't know stops its two's.
 
 (cl-defstruct (agent-workspace--thread (:constructor agent-workspace--make-thread) (:copier nil))
   "A thread between two agents."
@@ -114,9 +117,78 @@ says without `agent-workspace-agents-talk')."
 (defvar agent-workspace--messages-sent (make-hash-table :test #'equal)
   "When each agent sent its messages lately: (PROJECT . NAME) to times.")
 
+(defcustom agent-workspace-messages-file ".agent-shell/agent-workspace/messages.json"
+  "Where a project's threads you stopped and its messages waiting for your
+OK are kept (from one Emacs to the next), relative to its folder."
+  :type 'string
+  :group 'agent-workspace)
+
+(defvar agent-workspace--messages-read (make-hash-table :test #'equal)
+  "The projects whose threads stopped and messages waiting were read from
+their file (`agent-workspace--messages-load').")
+
+(defun agent-workspace--messages-path (project)
+  "PROJECT's file of threads stopped and messages waiting."
+  (expand-file-name agent-workspace-messages-file (agent-workspace--root project)))
+
+(defun agent-workspace--messages-load (project)
+  "PROJECT's threads stopped and messages waiting for your OK, as an Emacs
+before kept them, read from its file the first time (a wrong one left
+out)."
+  (let ((key (agent-workspace--root project)))
+    (unless (gethash key agent-workspace--messages-read)
+      (puthash key t agent-workspace--messages-read)
+      (when-let* ((file (agent-workspace--messages-path key))
+                  ((file-readable-p file))
+                  (data (ignore-errors
+                          (with-temp-buffer
+                            (let ((coding-system-for-read 'utf-8)) (insert-file-contents file))
+                            (json-parse-buffer :object-type 'plist :array-type 'list
+                                               :null-object nil :false-object nil)))))
+        (dolist (thread (plist-get data :threads))
+          (let ((id (plist-get thread :id))
+                (pair (plist-get thread :pair)))
+            (when (and (stringp id) (proper-list-p pair) (= (length pair) 2) (seq-every-p #'stringp pair)
+                       (not (seq-find (lambda (known) (equal (agent-workspace--thread-id known) id))
+                                      (gethash key agent-workspace--threads))))
+              (push (agent-workspace--make-thread :id id :pair (sort (copy-sequence pair) #'string<) :stopped t)
+                    (gethash key agent-workspace--threads)))))
+        (dolist (message (plist-get data :waiting))
+          (when (and (integerp (plist-get message :id))
+                     (seq-every-p (lambda (field) (stringp (plist-get message field))) '(:from :to :text))
+                     (not (seq-find (lambda (known) (eql (plist-get known :id) (plist-get message :id)))
+                                    (gethash key agent-workspace--messages-waiting))))
+            (puthash key (append (gethash key agent-workspace--messages-waiting) (list message))
+                     agent-workspace--messages-waiting)
+            (setq agent-workspace--message-next-id (max agent-workspace--message-next-id (plist-get message :id)))))))))
+
+(defun agent-workspace--messages-save (project)
+  "PROJECT's threads stopped and messages waiting for your OK, kept in its
+file (gone when there are none)."
+  (let* ((key (agent-workspace--root project))
+         (stopped (seq-filter #'agent-workspace--thread-stopped (gethash key agent-workspace--threads)))
+         (waiting (gethash key agent-workspace--messages-waiting))
+         (file (agent-workspace--messages-path key)))
+    (if (not (or stopped waiting))
+        (when (file-exists-p file) (delete-file file))
+      (make-directory (file-name-directory file) t)
+      (let ((coding-system-for-write 'utf-8-unix))
+        (write-region
+         (json-serialize
+          (list :threads (vconcat (mapcar (lambda (thread)
+                                            (list :id (agent-workspace--thread-id thread)
+                                                  :pair (vconcat (agent-workspace--thread-pair thread))))
+                                          stopped))
+                :waiting (vconcat (mapcar (lambda (message)
+                                            (cl-loop for (field value) on message by #'cddr
+                                                     when value append (list field value)))
+                                          waiting))))
+         nil file nil 'silent)))))
+
 (defun agent-workspace--thread-between (project a b)
   "The thread between A and B (names, or \"#ROLE\") in PROJECT, made the
 first time."
+  (agent-workspace--messages-load project)
   (let* ((key (agent-workspace--root project))
          (pair (sort (list a b) #'string<)))
     (or (seq-find (lambda (thread) (equal (agent-workspace--thread-pair thread) pair))
@@ -130,6 +202,7 @@ first time."
   "AGENT renamed from WAS: its threads, its messages waiting for your OK
 and those being answered (the answer goes to its new name), its new
 name's. In `agent-workspace-renamed-functions'."
+  (agent-workspace--messages-load (agent-workspace-agent-project agent))
   (let* ((key (agent-workspace--root (agent-workspace-agent-project agent)))
          (name (agent-workspace-agent-name agent))
          (rename (lambda (who) (if (equal who was) name who))))
@@ -145,12 +218,14 @@ name's. In `agent-workspace-renamed-functions'."
       (dolist (entry (gethash other agent-workspace--awaiting-answer))
         (let ((message (plist-get entry :message)))
           (plist-put message :from (funcall rename (plist-get message :from)))
-          (plist-put message :to (funcall rename (plist-get message :to))))))))
+          (plist-put message :to (funcall rename (plist-get message :to))))))
+    (agent-workspace--messages-save key)))
 
 (add-hook 'agent-workspace-renamed-functions #'agent-workspace--messages-renamed-h)
 
 (defun agent-workspace--thread-by-id (project id)
   "PROJECT's thread ID, or nil."
+  (agent-workspace--messages-load project)
   (seq-find (lambda (thread) (equal (agent-workspace--thread-id thread) id))
             (gethash (agent-workspace--root project) agent-workspace--threads)))
 
@@ -158,10 +233,15 @@ name's. In `agent-workspace-renamed-functions'."
   "THREAD's two, \"ada ↔ ken\"."
   (string-join (agent-workspace--thread-pair thread) " ↔ "))
 
-(defun agent-workspace-thread-stop (project id)
+(defun agent-workspace-thread-stop (project id &optional pair)
   "PROJECT's thread ID stopped (its messages waiting or queued dropped, no
-more of them), or let go again."
-  (when-let* ((thread (agent-workspace--thread-by-id project id)))
+more of them, kept so from one Emacs to the next), or let go again. One
+this Emacs doesn't know (an Emacs before's): PAIR's (its two's names), else
+a user error."
+  (when-let* ((thread (or (agent-workspace--thread-by-id project id)
+                          (and pair (agent-workspace--thread-between project (car pair) (cadr pair)))
+                          (user-error "No thread %s here now: its two unknown" id))))
+    (setq id (agent-workspace--thread-id thread))
     (setf (agent-workspace--thread-stopped thread) (not (agent-workspace--thread-stopped thread))
           (agent-workspace--thread-count thread) 0)
     (when (agent-workspace--thread-stopped thread)
@@ -172,6 +252,7 @@ more of them), or let go again."
       (dolist (event (agent-workspace-inbox project))
         (when (equal (plist-get event :thread) id)
           (agent-workspace--inbox-take project event))))
+    (agent-workspace--messages-save project)
     (agent-workspace-room-post project :kind 'note :thread id
                                :text (format (if (agent-workspace--thread-stopped thread)
                                                  "%s stopped (you): x lets it go again"
@@ -183,9 +264,12 @@ more of them), or let go again."
 (defun agent-workspace-room-stop ()
   "The thread of the line here stopped, or let go again (x)."
   (interactive)
-  (let ((thread (plist-get (get-text-property (line-beginning-position) 'agent-workspace-entry) :thread)))
+  (let* ((entry (get-text-property (line-beginning-position) 'agent-workspace-entry))
+         (thread (plist-get entry :thread)))
     (unless thread (user-error "Not a thread between agents"))
-    (agent-workspace-thread-stop agent-workspace--room-project thread)))
+    (agent-workspace-thread-stop agent-workspace--room-project thread
+                                 (and (stringp (plist-get entry :agent)) (stringp (plist-get entry :to))
+                                      (list (plist-get entry :agent) (plist-get entry :to))))))
 
 ;; ====== SENDING ======
 
@@ -269,6 +353,7 @@ message waiting (:state \"waiting\")."
           (progn (cl-incf (agent-workspace--thread-count thread))
                  (agent-workspace--message-queue project message))
         (push message (gethash (agent-workspace--root project) agent-workspace--messages-waiting))
+        (agent-workspace--messages-save project)
         (when paused
           (agent-workspace-room-post project :kind 'note :thread (plist-get message :thread)
                                      :text (format "%s: %d messages without you, this one waits for your OK"
@@ -292,6 +377,7 @@ own)."
 
 (defun agent-workspace--message-waiting (project id)
   "PROJECT's message ID waiting for your OK, or nil."
+  (agent-workspace--messages-load project)
   (seq-find (lambda (message) (eql (plist-get message :id) id))
             (gethash (agent-workspace--root project) agent-workspace--messages-waiting)))
 
@@ -300,6 +386,7 @@ own)."
   (let ((key (agent-workspace--root project)))
     (puthash key (delq message (gethash key agent-workspace--messages-waiting))
              agent-workspace--messages-waiting)
+    (agent-workspace--messages-save project)
     (agent-workspace--room-redraw-soon project)))
 
 (defun agent-workspace--thread-you (project message count)

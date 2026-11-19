@@ -267,7 +267,8 @@ same way, as an answer, and an answer gets none.
 
 In the room, each exchange between two agents is a thread, with the issue the sender is on (`ada → ken … · demo-1`).
 `TAB` folds a thread to its first line, and `x` stops it: its waiting messages are dropped and the agents can't send
-more (the sender is told), until `x` again. `[Answer]` on a message answers its sender yourself, instead of the agent
+more (the sender is told), until `x` again. A thread you stopped stays stopped, and a message waiting for your OK
+waits, when Emacs starts again. `[Answer]` on a message answers its sender yourself, instead of the agent
 it was for. Guards: a thread waits for your OK after 5 messages without you (`agent-workspace-thread-pause`), and an
 agent sends at most 10 messages an hour (`agent-workspace-message-limit`). Each agent is told its crew (a crew made at
 once, or started again from `crew.json`, all of it), where to see it as it changes, how to message, which roles it
