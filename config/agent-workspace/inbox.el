@@ -42,7 +42,9 @@
 ;; ====== VARIABLES ======
 
 (defcustom agent-workspace-inbox-file ".agent-shell/agent-workspace/inbox.jsonl"
-  "Where a project's queued events are kept, relative to its folder."
+  "Where a project's queued events are kept, relative to its folder: its
+default crew's; a named crew's has its name before the file's
+\(test.inbox.jsonl)."
   :type 'string
   :group 'agent-workspace)
 
@@ -108,7 +110,7 @@ the event's turn ends), :sent (its prompt sent: out of the queue), :started
 
 (defun agent-workspace--inbox-path (project)
   "PROJECT's inbox file."
-  (expand-file-name agent-workspace-inbox-file (agent-workspace--root project)))
+  (agent-workspace-crew-file project agent-workspace-inbox-file))
 
 (defun agent-workspace-inbox (project)
   "PROJECT's queued events, the oldest first (read from its file the first
@@ -660,10 +662,10 @@ waits for their end (a timer, while events wait)."
     (or (seq-find (lambda (buffer) (equal (buffer-local-value 'agent-workspace--inbox-view-project buffer) root))
                   (agent-workspace--app-buffers project))
         (with-current-buffer (generate-new-buffer
-                              (format "*inbox · %s*" (file-name-nondirectory (directory-file-name root))))
+                              (format "*inbox · %s*" (agent-workspace-crew-label root)))
           (agent-workspace-inbox-mode)
           (setq agent-workspace--inbox-view-project root
-                default-directory root)
+                default-directory (agent-workspace-dir root))
           (agent-workspace--app-buffer-add project (current-buffer))
           (current-buffer)))))
 

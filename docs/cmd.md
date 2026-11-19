@@ -57,7 +57,12 @@ cmd/agent-workspace give doom-a1b --to grace            # as t: claimed as grace
 cmd/agent-workspace sleep linus                         # as Z
 cmd/agent-workspace wake linus
 cmd/agent-workspace loop linus on                       # as L; off turns it off
+cmd/agent-workspace status --crew test                  # the project's crew test (default: its default crew)
 ```
+
+Each acts on the project's default crew, or on the one `--crew NAME` names (anywhere among its arguments); from an
+agent's session, on its own crew (another `--crew` is refused). See [Several
+crews](agent-workspace.md#several-crews).
 
 `give`, `wake`, `sleep` and `loop` are said in the room with who did them (`shell gave doom-a1b to grace`). From an
 agent's session they're refused unless its role leads (the [lead](agent-workspace.md#the-lead)), `new` and `crew`
@@ -68,7 +73,7 @@ An event is queued and delivered when its agent is free, as data from its source
 (`{"ok":true,"name":"ada","role":"builder","worktree":...,"branch":"agent/ada",...}` for new,
 `{"ok":true,"made":[{"name":"ken","role":"reviewer",...}]}` for crew, `"made":[]` when it lacks nothing, those not
 made in `"failed":[{"role":"reviewer","error":...}]`, an unknown crew naming the crews there are,
-`{"ok":true,"events":[{"id":1,"to":"ada","state":"queued"}]}` for send, `{"ok":true,"agents":[...],"conflicts":[...],
-"offers":[...],"talk":"ask"}` for status, the agent as new has it for give, wake, sleep and loop, with `"prompt":"sent"`
+`{"ok":true,"events":[{"id":1,"to":"ada","state":"queued"}]}` for send, `{"ok":true,"project":...,"crew":null,
+"agents":[...],"conflicts":[...],"offers":[...],"talk":"ask"}` for status (`"crew":"test"` for the crew test), the agent as new has it for give, wake, sleep and loop, with `"prompt":"sent"`
 or `"queued"` for give and `"loop":true` for loop); it exits with 0 when done, 1 when not (the reply says why), 2 for a
 wrong use, 3 without an Emacs server.

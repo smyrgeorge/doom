@@ -26,7 +26,7 @@
 (defun agent-workspace--branch-counts (project main branch)
   "PROJECT's BRANCH against MAIN: (AHEAD . BEHIND), the commits BRANCH has
 that MAIN hasn't and MAIN's it hasn't; nil if git can't say."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (when-let* ((line (agent-workspace--git-line "rev-list" "--left-right" "--count" (concat main "..." branch)))
                 (counts (split-string line)))
       (cons (string-to-number (nth 1 counts)) (string-to-number (nth 0 counts))))))
@@ -35,7 +35,7 @@ that MAIN hasn't and MAIN's it hasn't; nil if git can't say."
   "How PROJECT's BRANCH would merge into MAIN: `cleanly' or `conflicts' (git
 merge-tree --write-tree: merged in git's objects, no checkout touched); nil
 if git can't say (one older than 2.38: no --write-tree)."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (pcase (process-file "git" nil nil nil "merge-tree" "--write-tree" main branch)
       (0 'cleanly)
       (1 'conflicts))))
@@ -46,7 +46,7 @@ MAIN-COMMIT) to (AHEAD BEHIND MERGES), only those it had then.")
 
 (defun agent-workspace--branch-tips (project)
   "PROJECT's branches and the commit each is at: ((NAME . COMMIT)...)."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (delq nil (mapcar (lambda (line)
                         (and (string-match "\\`\\([0-9a-f]+\\) refs/heads/\\(.+\\)\\'" line)
                              (cons (match-string 2 line) (match-string 1 line))))
@@ -76,7 +76,7 @@ in this one."
 branch): each crew agent's with commits MAIN hasn't, in the stage's order,
 the one it's on first (`agent-workspace-agent-branches'); then those noted
 as the work of agents no longer in the crew (forgotten, their branches
-kept), by name. Rows, as `agent-workspace--branch-to-merge' has them. git
+kept; another crew's agents' are its), by name. Rows, as `agent-workspace--branch-to-merge' has them. git
 asked once for the branches, worktrees and notes; a branch's counts and
 merge only if it or MAIN moved since it was last worked out."
   (let* ((main (or main (agent-workspace-main-branch project)))
@@ -97,10 +97,13 @@ merge only if it or MAIN moved since it was last worked out."
         (when-let* ((row (agent-workspace--branch-to-merge project main branch agent
                                                            (agent-workspace-agent-name agent) tips known)))
           (push row rows))))
-    (pcase-dolist (`(,branch . ,name) (seq-sort-by #'cdr #'string< notes))
-      (unless (or (member name names) (member branch theirs))
-        (when-let* ((row (agent-workspace--branch-to-merge project main branch nil name tips known)))
-          (push row rows))))
+    ;; A note's handle (`agent-workspace-handle'): a forgotten agent of this
+    ;; crew's; another crew's are its.
+    (pcase-dolist (`(,branch . ,handle) (seq-sort-by #'cdr #'string< notes))
+      (pcase-let ((`(,crew . ,name) (agent-workspace-handle-parts handle project)))
+        (unless (or (not (equal crew key)) (member name names) (member branch theirs))
+          (when-let* ((row (agent-workspace--branch-to-merge project main branch nil name tips known)))
+            (push row rows)))))
     (puthash key (cdr known) agent-workspace--branch-known)
     (nreverse rows)))
 
@@ -143,10 +146,10 @@ view b came from, the buffer the cursor was in.")
   (or (agent-workspace--branches-find project)
       (let ((root (agent-workspace--root project)))
         (with-current-buffer (generate-new-buffer
-                              (format "*branches · %s*" (file-name-nondirectory (directory-file-name root))))
+                              (format "*branches · %s*" (agent-workspace-crew-label root)))
           (agent-workspace-branches-mode)
           (setq agent-workspace--branches-project root
-                default-directory root)
+                default-directory (agent-workspace-dir root))
           (agent-workspace--app-buffer-add project (current-buffer))
           (current-buffer)))))
 
@@ -157,7 +160,7 @@ many branches wait."
     (agent-workspace--percent-escaped
      (agent-workspace--at-right
       (concat " " (propertize "BRANCHES TO MERGE" 'face 'bold) "   "
-              (propertize (concat (file-name-nondirectory (directory-file-name agent-workspace--branches-project))
+              (propertize (concat (agent-workspace-crew-label agent-workspace--branches-project)
                                   " → " (or agent-workspace--branches-main ""))
                           'face 'shadow))
       (concat (number-to-string (length agent-workspace--branches-rows)) " ")
@@ -442,7 +445,7 @@ agent on it: said). The view worked out again."
     (when-let* ((holder (agent-workspace--branch-holder project branch)))
       (user-error "%s is checked out in %s: not deleted" branch (agent-workspace--holder-text project holder)))
     (unwind-protect
-        (let* ((default-directory project)
+        (let* ((default-directory (agent-workspace-dir project))
                (commits (agent-workspace--git-lines "log" "--oneline" (concat main ".." branch)))
                (shown (seq-take commits 10)))
           (when (y-or-n-p (format "%s has %d commit%s %s hasn't:\n%s%s\nDelete it, and them? "

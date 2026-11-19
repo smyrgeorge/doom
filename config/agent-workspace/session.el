@@ -134,11 +134,11 @@ ROLE, FILLED IN.")
 (defun agent-workspace--placeholder (agent word)
   "AGENT's value of the placeholder WORD (\"main\"...), not quoted; nil if
 it has none."
-  (let ((project (directory-file-name (agent-workspace-agent-project agent))))
+  (let ((project (directory-file-name (agent-workspace-dir (agent-workspace-agent-project agent)))))
     (pcase word
       ("main" project)
       ("main-branch" (agent-workspace-main-branch project))
-      ("name" (agent-workspace-agent-name agent))
+      ("name" (agent-workspace-agent-handle agent))
       ("project" (file-name-nondirectory project)))))
 
 (defun agent-workspace-role-filled (agent)
@@ -216,12 +216,13 @@ options (allowedTools, disallowedTools). Its model goes through agent-shell
     meta))
 
 (defun agent-workspace--environment (agent)
-  "AGENT's environment variables (\"NAME=VALUE\"): its name for Beads
+  "AGENT's environment variables (\"NAME=VALUE\"): its handle (its name, a
+named crew's agent's NAME@CREW: `agent-workspace-handle') for Beads
 \(BEADS_ACTOR: who it is in the issues' history, the assignee of an issue it
 claims) and for us (AGENT_WORKSPACE_AGENT); the project's issues (BEADS_DIR:
 it works in a worktree)."
-  (let ((name (agent-workspace-agent-name agent))
-        (beads (expand-file-name ".beads" (agent-workspace-agent-project agent))))
+  (let ((name (agent-workspace-agent-handle agent))
+        (beads (expand-file-name ".beads" (agent-workspace-dir (agent-workspace-agent-project agent)))))
     (append (list (concat "BEADS_ACTOR=" name)
                   (concat "AGENT_WORKSPACE_AGENT=" name))
             (when (file-directory-p beads)
@@ -254,7 +255,10 @@ merges it (or the crew's reviewer does). Your bd commands run as %s (BEADS_ACTOR
 the project's issues: an issue the user gives you, claim it as yourself. Your \
 notifications carry your name already."
                name (agent-workspace-agent-role agent)
-               (file-name-nondirectory (directory-file-name project))
+               (let ((folder (file-name-nondirectory (directory-file-name (agent-workspace-dir project)))))
+                 (if-let* ((crew (agent-workspace-crew-name project)))
+                     (format "%s (its crew %s: the project has others, each with its own agents)" folder crew)
+                   folder))
                (if (plist-get role :leads)
                    "You run the crew for the user, on their word: you see it from your \
 shell (cmd/agent-workspace status) and act on it (give an issue to an agent, wake one or \
@@ -264,8 +268,8 @@ session or from the crew's room, and you answer them. Never start work by yourse
 the crew's room, an issue they give you), and you answer them. Don't hand work to other \
 agents or wait for them.")
                (directory-file-name (agent-workspace-agent-worktree agent))
-               (directory-file-name project)
-               name)
+               (directory-file-name (agent-workspace-dir project))
+               (agent-workspace-agent-handle agent))
        (mapconcat (lambda (more) (concat "\n\n" more))
                   (delq nil (mapcar (lambda (function) (funcall function agent))
                                     agent-workspace-context-functions))

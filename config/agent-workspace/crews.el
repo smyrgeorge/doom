@@ -162,8 +162,8 @@ earlier one's of the same name): ((ORIGIN . FOLDER)...), ORIGIN starter,
 project or local."
   (cons (cons 'starter agent-workspace-starter-crews-directory)
         (when project
-          (list (cons 'project (expand-file-name agent-workspace-crews-directory project))
-                (cons 'local (expand-file-name agent-workspace-local-crews-directory project))))))
+          (list (cons 'project (expand-file-name agent-workspace-crews-directory (agent-workspace-dir project)))
+                (cons 'local (expand-file-name agent-workspace-local-crews-directory (agent-workspace-dir project)))))))
 
 (defun agent-workspace--crew-files (project)
   "PROJECT's crew files, in order: the starters, its own, then your local
@@ -181,8 +181,10 @@ smallest first, whatever their origin (those of a size as they're read: the
 starters, the project's, your local ones; c's menu groups them by origin),
 each crew's :origin where its file is (starter, project, local), its
 :replaces the origin of the one of its name it replaced. New
-problems are shown as warnings."
-  (let* ((files (agent-workspace--crew-files project))
+problems are shown as warnings. A project's, whichever of its crews asks
+\(PROJECT a crew's key or its folder)."
+  (let* ((project (and project (agent-workspace-dir project)))
+         (files (agent-workspace--crew-files project))
          (roles (agent-workspace--roles-read project))
          (times (mapcar (lambda (file)
                           (cons (cdr file) (file-attribute-modification-time (file-attributes (cdr file)))))
@@ -228,7 +230,7 @@ own and your local ones, the smallest first."
 project's), as `agent-workspace-roles-left-out' gives role files."
   (let ((project (or project (agent-workspace-project))))
     (agent-workspace--crew-specs-read project)
-    (nth 2 (gethash (or project "") agent-workspace--crew-specs-cache))))
+    (nth 2 (gethash (if project (agent-workspace-dir project) "") agent-workspace--crew-specs-cache))))
 
 (defun agent-workspace-crew-spec-problems (&optional project)
   "What's wrong with PROJECT's crew files: (error|warning MESSAGE) each."

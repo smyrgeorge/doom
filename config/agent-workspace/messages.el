@@ -119,7 +119,9 @@ says without `agent-workspace-agents-talk')."
 
 (defcustom agent-workspace-messages-file ".agent-shell/agent-workspace/messages.json"
   "Where a project's threads you stopped and its messages waiting for your
-OK are kept (from one Emacs to the next), relative to its folder."
+OK are kept (from one Emacs to the next), relative to its folder: its
+default crew's; a named crew's has its name before the file's
+\(test.messages.json)."
   :type 'string
   :group 'agent-workspace)
 
@@ -129,7 +131,7 @@ their file (`agent-workspace--messages-load').")
 
 (defun agent-workspace--messages-path (project)
   "PROJECT's file of threads stopped and messages waiting."
-  (expand-file-name agent-workspace-messages-file (agent-workspace--root project)))
+  (agent-workspace-crew-file project agent-workspace-messages-file))
 
 (defun agent-workspace--messages-load (project)
   "PROJECT's threads stopped and messages waiting for your OK, as an Emacs

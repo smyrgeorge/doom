@@ -41,6 +41,9 @@
 ;;   loop {"name": "linus", "on": true} -> {"ok": true, "name", ..., "loop"}:
 ;;        as L does (`agent-workspace-loop-set')
 ;;
+;; Each comes with "crew" when --crew NAME was given: which crew of the
+;; project (default: its default crew). WHICH CREW below.
+;;
 ;; give, wake, sleep and loop come with "agent" too: from an agent's shell
 ;; (AGENT_WORKSPACE_AGENT), its name, and they're refused unless its role
 ;; leads (leads: true, roles.el); from yours or a script's, none, and they
@@ -81,6 +84,18 @@
 (declare-function agent-workspace--session-process "agent-workspace/session")
 
 ;; ====== WHO ASKS ======
+;; WHICH CREW: the crew of the agent whose session sent it, always (another
+;; --crew is refused: the lead runs its own); else the one --crew names;
+;; else that of the agent its shell names (AGENT_WORKSPACE_AGENT: its
+;; handle, ada or ada@test); else the project's default crew.
+
+(defun agent-workspace--request-shell-agent (payload project)
+  "The agent PAYLOAD's :agent (its shell's word: a handle,
+`agent-workspace-handle') names in PROJECT's folder, or nil."
+  (let ((handle (plist-get payload :agent)))
+    (when (and (stringp handle) (not (string-empty-p handle)))
+      (pcase-let ((`(,key . ,name) (agent-workspace-handle-parts handle project)))
+        (agent-workspace-agent name key)))))
 
 (defvar agent-workspace--request-from nil
   "While a request is answered: the agent whose session sent it
@@ -111,9 +126,7 @@ PID (the script's); nil if none."
 (defun agent-workspace--request-new (directory payload)
   "Make an agent in DIRECTORY's project, as PAYLOAD (a plist) says: the
 reply, a plist."
-  (let* ((default-directory (file-name-as-directory directory))
-         (project (or (agent-workspace-project)
-                      (user-error "No crew here: %s" (agent-workspace-no-crew-reason))))
+  (let* ((project (agent-workspace--request-project directory payload))
          (role (plist-get payload :role))
          (name (plist-get payload :name))
          (prompt (plist-get payload :prompt)))
@@ -139,9 +152,7 @@ reply, a plist."
 (defun agent-workspace--request-crew (directory payload)
   "Make what DIRECTORY's project's crew lacks of the crew file PAYLOAD (a
 plist) names: the reply, a plist."
-  (let* ((default-directory (file-name-as-directory directory))
-         (project (or (agent-workspace-project)
-                      (user-error "No crew here: %s" (agent-workspace-no-crew-reason))))
+  (let* ((project (agent-workspace--request-project directory payload))
          (name (plist-get payload :name)))
     (agent-workspace--request-actor project payload)
     (unless (and (stringp name) (not (string-empty-p name)))
@@ -155,15 +166,13 @@ plist) names: the reply, a plist."
 (defun agent-workspace--request-send (directory payload)
   "Queue an event in DIRECTORY's project, as PAYLOAD (a plist) says: the
 reply, a plist."
-  (let* ((default-directory (file-name-as-directory directory))
-         (project (or (agent-workspace-project)
-                      (user-error "No crew here: %s" (agent-workspace-no-crew-reason))))
+  (let* ((project (agent-workspace--request-project directory payload))
          (to (plist-get payload :to))
          (from (plist-get payload :from))
          ;; Its session's agent, whatever its shell says; else as it says.
          (sender (or agent-workspace--request-from
-                     (and (stringp (plist-get payload :agent))
-                          (agent-workspace-agent (plist-get payload :agent) project)))))
+                     (let ((agent (agent-workspace--request-shell-agent payload project)))
+                       (and agent (equal (agent-workspace-agent-project agent) project) agent)))))
     (unless (and (stringp to) (not (string-empty-p to)))
       (user-error "send: to whom? --to NAME, --to #ROLE or --to #all"))
     (when (and agent-workspace--request-from (stringp from) (not (string-empty-p from)))
@@ -184,11 +193,32 @@ reply, a plist."
 
 ;; ====== THE CREW SEEN ======
 
-(defun agent-workspace--request-project (directory)
-  "DIRECTORY's project, its crew's: a user error if it has none."
-  (let ((default-directory (file-name-as-directory directory)))
-    (or (agent-workspace-project)
-        (user-error "No crew here: %s" (agent-workspace-no-crew-reason)))))
+(defun agent-workspace--request-project (directory &optional payload)
+  "The crew a request from DIRECTORY is for, its key (see WHICH CREW):
+PAYLOAD's :crew (--crew), :agent (its shell's word). A user error if
+DIRECTORY's project can have no crew, --crew isn't a crew's name, or an
+agent's request names another crew than its own."
+  (let* ((directory (file-name-as-directory directory))
+         (root (or (agent-workspace-project directory)
+                   (user-error "No crew here: %s" (agent-workspace-no-crew-reason directory))))
+         (crew (let ((crew (plist-get payload :crew)))
+                 (and (stringp crew) (not (string-empty-p crew)) crew)))
+         (named (and (not crew) (not agent-workspace--request-from)
+                     (agent-workspace--request-shell-agent payload root))))
+    (when (and crew (not (equal crew "default")) (not (agent-workspace-name-valid-p crew)))
+      (user-error "%s" (format "Not a crew's name: %s (a lowercase letter, then lowercase letters, digits or -)" crew)))
+    (let ((asked (and crew (agent-workspace-crew-key root (unless (equal crew "default") crew)))))
+      (cond
+       (agent-workspace--request-from
+        (let ((own (agent-workspace-agent-project agent-workspace--request-from)))
+          (when (and asked (not (equal asked own)))
+            (user-error "%s" (format "%s's commands run on its own crew (%s): no --crew %s"
+                                     (agent-workspace-agent-name agent-workspace--request-from)
+                                     (agent-workspace-crew-label own) crew)))
+          own))
+       (asked)
+       (named (agent-workspace-agent-project named))
+       (t root)))))
 
 (defun agent-workspace--request-or-null (value)
   "VALUE as JSON has it: nil, null."
@@ -235,11 +265,13 @@ oldest first: plists."
               offers)))
     offers))
 
-(defun agent-workspace--request-status (directory)
-  "DIRECTORY's project's crew as it is: the reply, a plist."
-  (let ((project (agent-workspace--request-project directory)))
+(defun agent-workspace--request-status (directory &optional payload)
+  "DIRECTORY's project's crew as it is (PAYLOAD's: see WHICH CREW): the
+reply, a plist; :crew its name, null for the default crew."
+  (let ((project (agent-workspace--request-project directory payload)))
     (list :ok t
-          :project (directory-file-name project)
+          :project (directory-file-name (agent-workspace-dir project))
+          :crew (agent-workspace--request-or-null (agent-workspace-crew-name project))
           :agents (vconcat (mapcar #'agent-workspace--request-agent-status
                                    (if (fboundp 'agent-workspace--ordered)
                                        (agent-workspace--ordered project)
@@ -256,21 +288,23 @@ oldest first: plists."
 (defun agent-workspace--request-actor (project payload)
   "Who runs PROJECT's crew: the agent whose session sent the request
 \(`agent-workspace--request-from'), else the one PAYLOAD's :agent names
-\(its shell's word), its name, a user error unless its role leads; else
-\"shell\"."
+\(its shell's word, its handle), its name, a user error unless its role
+leads (or it isn't in PROJECT's crew); else \"shell\"."
   (let ((name (if agent-workspace--request-from
                   (agent-workspace-agent-name agent-workspace--request-from)
                 (plist-get payload :agent))))
     (if (not (and (stringp name) (not (string-empty-p name))))
         "shell"
-      (let ((agent (agent-workspace-agent name project)))
+      (let ((agent (or agent-workspace--request-from
+                       (let ((agent (agent-workspace--request-shell-agent payload project)))
+                         (and agent (equal (agent-workspace-agent-project agent) project) agent)))))
         (cond
          ;; "%s": its apostrophes kept straight, for scripts.
          ((not agent) (user-error "%s" (format "only a lead runs the crew: %s isn't in it" name)))
          ((not (plist-get (agent-workspace-role agent) :leads))
           (user-error "%s" (format "only a lead runs the crew: %s's role, %s, doesn't lead"
                                    name (agent-workspace-agent-role agent))))
-         (t name))))))
+         (t (agent-workspace-agent-name agent)))))))
 
 (defun agent-workspace--request-target (project payload key what)
   "The agent of PROJECT's crew PAYLOAD's KEY names: a user error if none
@@ -298,7 +332,7 @@ or there's no bd or Beads there."
   (let ((result (agent-workspace--bd-now project actor (list "show" id "--json"))))
     (pcase result
       ('nil (user-error "%s" (format "%s doesn't track its issues with Beads: no issue to give"
-                                     (file-name-nondirectory (directory-file-name project)))))
+                                     (file-name-nondirectory (directory-file-name (agent-workspace-dir project))))))
       (`(timeout . ,_) (user-error "%s not given: bd didn't answer" id))
       (`(0 . ,output)
        (let* ((data (ignore-errors
@@ -327,7 +361,7 @@ or there's no bd or Beads there."
 (defun agent-workspace--request-give (directory payload)
   "Give an issue to an agent of DIRECTORY's project, as PAYLOAD (a plist)
 says, as t does: the reply, a plist."
-  (let* ((project (agent-workspace--request-project directory))
+  (let* ((project (agent-workspace--request-project directory payload))
          (actor (agent-workspace--request-actor project payload))
          (id (plist-get payload :issue))
          (agent (agent-workspace--request-target project payload :to "give: to whom? give ISSUE --to NAME"))
@@ -341,7 +375,7 @@ says, as t does: the reply, a plist."
       ;; Its until the issues are fetched again: its offer's button gone.
       (when-let* ((ready (seq-find (lambda (ready) (equal (plist-get ready :id) id))
                                    (plist-get (agent-workspace--issues-data project) :ready))))
-        (plist-put ready :assignee name)
+        (plist-put ready :assignee (agent-workspace-agent-handle agent))
         (plist-put ready :given name)
         (agent-workspace--room-redraw-soon project))
       (agent-workspace--request-said project actor 'issue agent (format "gave %s to %s" id name))
@@ -351,7 +385,7 @@ says, as t does: the reply, a plist."
 (defun agent-workspace--request-wake (directory payload)
   "Wake an agent of DIRECTORY's project (asleep or gone home), as PAYLOAD
 \(a plist) says, as Z does: the reply, a plist."
-  (let* ((project (agent-workspace--request-project directory))
+  (let* ((project (agent-workspace--request-project directory payload))
          (actor (agent-workspace--request-actor project payload))
          (agent (agent-workspace--request-target project payload :name "wake: whom? wake NAME")))
     (agent-workspace-wake agent)
@@ -362,7 +396,7 @@ says, as t does: the reply, a plist."
   "Put an agent of DIRECTORY's project to sleep, as PAYLOAD (a plist) says,
 as Z does: the reply, a plist. Not one that doesn't run, nor the lead
 asking (its own session would end with its command)."
-  (let* ((project (agent-workspace--request-project directory))
+  (let* ((project (agent-workspace--request-project directory payload))
          (actor (agent-workspace--request-actor project payload))
          (agent (agent-workspace--request-target project payload :name "sleep: whom? sleep NAME"))
          (name (agent-workspace-agent-name agent)))
@@ -378,7 +412,7 @@ asking (its own session would end with its command)."
   "Turn the loop of an agent of DIRECTORY's project on or off, as PAYLOAD
 \(a plist, :on) says, as L does: the reply, a plist. Said in the room only
 if it changed."
-  (let* ((project (agent-workspace--request-project directory))
+  (let* ((project (agent-workspace--request-project directory payload))
          (actor (agent-workspace--request-actor project payload))
          (agent (agent-workspace--request-target project payload :name "loop: whose? loop NAME on|off"))
          (name (agent-workspace-agent-name agent))
@@ -416,7 +450,7 @@ its reply written to DIR/reply. Return t."
                   ("new" (agent-workspace--request-new directory payload))
                   ("crew" (agent-workspace--request-crew directory payload))
                   ("send" (agent-workspace--request-send directory payload))
-                  ("status" (agent-workspace--request-status directory))
+                  ("status" (agent-workspace--request-status directory payload))
                   ("give" (agent-workspace--request-give directory payload))
                   ("wake" (agent-workspace--request-wake directory payload))
                   ("sleep" (agent-workspace--request-sleep directory payload))

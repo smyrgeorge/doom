@@ -72,7 +72,7 @@
     (agent-workspace--percent-escaped
      (agent-workspace--at-right
       (concat " " (propertize "CREW" 'face 'bold) (propertize " · " 'face 'shadow)
-              (file-name-nondirectory (directory-file-name agent-workspace--sidebar-project)))
+              (agent-workspace-crew-label agent-workspace--sidebar-project))
       (concat (or (agent-workspace-tally (agent-workspace-agents agent-workspace--sidebar-project)) "") " ")
       (window-total-width)))))
 
@@ -80,14 +80,14 @@
 
 (defun agent-workspace--sidebar-buffer (project)
   "PROJECT's lanes under treemacs (made the first time)."
-  (let ((name (format " *crew · %s*" (file-name-nondirectory (directory-file-name project)))))
+  (let ((name (format " *crew · %s*" (agent-workspace-crew-label project))))
     (or (seq-find (lambda (buffer)
                     (equal (buffer-local-value 'agent-workspace--sidebar-project buffer) project))
                   (buffer-list))
         (with-current-buffer (generate-new-buffer name)
           (agent-workspace-sidebar-mode)
           (setq agent-workspace--sidebar-project project
-                default-directory project)
+                default-directory (agent-workspace-dir project))
           (current-buffer)))))
 
 (defun agent-workspace--sidebar-window (frame)
@@ -103,7 +103,7 @@ crew's project holds it: git init since, its crew opened)."
   (let ((known (gethash path agent-workspace--sidebar-projects)))
     (when (and (eq known :none)
                (let ((dir (file-name-as-directory (file-truename path))))
-                 (seq-some (lambda (root) (string-prefix-p root dir))
+                 (seq-some (lambda (key) (string-prefix-p (agent-workspace-dir key) dir))
                            (hash-table-keys agent-workspace--apps))))
       (setq known nil))
     (unless known
@@ -129,9 +129,8 @@ CREW UNDER TREEMACS)."
                           (ignore-errors
                             (treemacs-project->path
                              (car (treemacs-workspace->projects (treemacs-current-workspace)))))))
-                  (project (agent-workspace--sidebar-project-of (file-name-as-directory path)))
-                  ((agent-workspace--app project)))
-        project))))
+                  (project (agent-workspace--sidebar-project-of (file-name-as-directory path))))
+        (agent-workspace--open-crew-of project)))))
 
 (defun agent-workspace--sidebar-fit (window project)
   "WINDOW, PROJECT's lanes' under treemacs, as tall as they are
@@ -264,8 +263,7 @@ otherwise). In `agent-workspace-closing-functions'."
 
 (defun agent-workspace--sidebar-go (project agent)
   "PROJECT's app, AGENT selected (nil: as it was)."
-  (let ((default-directory project))
-    (agent-workspace-open))
+  (agent-workspace-open nil project)
   (when (and agent (memq agent (agent-workspace-agents project)))
     (agent-workspace-select agent t)))
 

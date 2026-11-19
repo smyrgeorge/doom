@@ -67,14 +67,14 @@ its name.")
 
 (defun agent-workspace--issues-buffer (project)
   "PROJECT's issue list (made the first time)."
-  (let ((name (format "*issues · %s*" (file-name-nondirectory (directory-file-name project)))))
+  (let ((name (format "*issues · %s*" (agent-workspace-crew-label project))))
     (or (seq-find (lambda (buffer) (equal (buffer-local-value 'agent-workspace--issues-project buffer)
                                           (agent-workspace--root project)))
                   (agent-workspace--app-buffers project))
         (with-current-buffer (generate-new-buffer name)
           (agent-workspace-issues-mode)
           (setq agent-workspace--issues-project (agent-workspace--root project)
-                default-directory (agent-workspace--root project))
+                default-directory (agent-workspace-dir project))
           (agent-workspace--app-buffer-add project (current-buffer))
           (current-buffer)))))
 
@@ -121,7 +121,7 @@ cancelled, its bd commands running stopped (its app closing)."
 (defun agent-workspace--issues-refresh (project)
   "PROJECT's issues fetched again (bd, in the background), then drawn."
   (when-let* ((buffer (and (agent-workspace--app project) (agent-workspace--issues-buffer project))))
-    (if (not (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project))))
+    (if (not (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" (agent-workspace-dir project)))))
         (with-current-buffer buffer
           (setq agent-workspace--issues-data (list :error "This project doesn't track its issues with Beads."))
           (agent-workspace--issues-redraw project))
@@ -278,12 +278,19 @@ issue knows its role (:role) and its epic (:epic, see
 
 ;; ====== DRAWING ======
 
+(defun agent-workspace--assignee-text (project assignee)
+  "ASSIGNEE, bd's, as PROJECT's issue list shows it: its crew's agent's
+name (bd has its handle: `agent-workspace-handle'), else as bd has it."
+  (if-let* ((agent (agent-workspace-handle-agent assignee project)))
+      (agent-workspace-agent-name agent)
+    (or assignee "")))
+
 (defun agent-workspace--issue-agent (project issue)
   "The agent of PROJECT's crew on ISSUE: its assignee, else the one given it
 \(an agent's issue lags behind bd's: one handed on and claimed by another is
 the other's)."
   (let ((agents (agent-workspace-agents project)))
-    (or (seq-find (lambda (agent) (equal (agent-workspace-agent-name agent) (plist-get issue :assignee))) agents)
+    (or (seq-find (lambda (agent) (equal (agent-workspace-agent-handle agent) (plist-get issue :assignee))) agents)
         (seq-find (lambda (agent) (equal (agent-workspace-agent-issue agent) (plist-get issue :id))) agents))))
 
 (defun agent-workspace--issues-mine-h (project data)
@@ -301,7 +308,7 @@ started before it got the issue (its claim maybe not in yet). In
           (let ((issue (seq-find (lambda (issue) (equal (plist-get issue :id) id)) issues)))
             (when (or (not issue)
                       (eq (plist-get issue :status) 'closed)
-                      (not (equal (plist-get issue :assignee) (agent-workspace-agent-name agent))))
+                      (not (equal (plist-get issue :assignee) (agent-workspace-agent-handle agent))))
               (agent-workspace--note-issue agent nil))))))))
 
 (add-hook 'agent-workspace-issues-fetched-functions #'agent-workspace--issues-mine-h -50)
@@ -339,11 +346,12 @@ heading), its second row too."
          (title-face (if (memq status '(closed blocked)) 'shadow 'default))
          (right (pcase status
                   ('in_progress (if agent (agent-workspace-state-glyph agent)
-                                  (propertize (or (plist-get issue :assignee) "") 'face 'shadow)))
+                                  (propertize (agent-workspace--assignee-text project (plist-get issue :assignee))
+                                              'face 'shadow)))
                   ('blocked (propertize (concat "⊘ " (string-join (plist-get issue :blocked-by) " ")) 'face 'shadow))
                   ('ready (if (eql (plist-get issue :priority) 1) (propertize "P1" 'face 'warning)
                             (if (eql (plist-get issue :priority) 0) (propertize "P0" 'face 'error) "")))
-                  (_ (propertize (concat (or (plist-get issue :assignee) "") " "
+                  (_ (propertize (concat (agent-workspace--assignee-text project (plist-get issue :assignee)) " "
                                          (if (plist-get issue :closed) (agent-workspace--ago (plist-get issue :closed)) ""))
                                  'face 'shadow))))
          (tail (agent-ui-even-glyphs (concat right " ")))
@@ -459,7 +467,7 @@ their headings (each carrying its epic), when it has one."
     (agent-workspace--percent-escaped
      (agent-workspace--at-right
       (concat " " (propertize "ISSUES" 'face 'bold) "  "
-              (propertize (file-name-nondirectory (directory-file-name agent-workspace--issues-project))
+              (propertize (agent-workspace-crew-label agent-workspace--issues-project)
                           'face 'shadow)
               (if agent-workspace--issues-pending (propertize "  ⟳" 'face 'shadow) ""))
       (concat (or (agent-workspace-tally (agent-workspace-agents agent-workspace--issues-project)) "") " ")
@@ -663,14 +671,14 @@ Run again, a moment after, when it fails for a moment
 \(`agent-workspace--bd-for-a-moment-p'), `agent-workspace-bd-tries' times
 at most, within those seconds: ARGS are ones that can be (a claim, an
 assignee, a list)."
-  (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project)))
+  (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" (agent-workspace-dir project))))
     (let ((end (+ (float-time) agent-workspace-claim-timeout))
           (tries agent-workspace-bd-tries)
           result)
       (while (progn
                (setq result
                      (with-temp-buffer
-                       (let* ((default-directory project)
+                       (let* ((default-directory (agent-workspace-dir project))
                               (process-environment (cons (concat "BEADS_ACTOR=" actor) process-environment))
                               ;; Done once its sentinel ran: Emacs reads what
                               ;; it said first. It's not live as soon as it
@@ -702,12 +710,13 @@ assignee, a list)."
     (if (string-match "\\`Error updating [^ ]+: \\(.+\\)" line) (match-string 1 line) line)))
 
 (defun agent-workspace--bd-claim (agent id)
-  "Issue ID claimed in bd for AGENT, as AGENT (BEADS_ACTOR its name), now:
+  "Issue ID claimed in bd for AGENT, as AGENT (BEADS_ACTOR its handle:
+`agent-workspace-handle'), now:
 in progress and AGENT's, so no looping agent takes it while its prompt
 waits for its turn to end. nil once claimed (AGENT's already too), or with
 nothing to claim it in (no bd, its project's issues not tracked by Beads);
 else why not, in bd's words (another agent has it)."
-  (pcase (agent-workspace--bd-now (agent-workspace-agent-project agent) (agent-workspace-agent-name agent)
+  (pcase (agent-workspace--bd-now (agent-workspace-agent-project agent) (agent-workspace-agent-handle agent)
                                   (list "update" id "--claim"))
     (`(timeout . ,_) (format "bd didn't answer in %ss" agent-workspace-claim-timeout))
     (`(0 . ,_) nil)
@@ -716,18 +725,22 @@ else why not, in bd's words (another agent has it)."
 (defun agent-workspace--bd-renamed-h (agent was)
   "AGENT renamed from WAS: the issues in progress assigned to WAS, AGENT's
 now in bd (as WAS, its claims' holder), before its loop looks for its own;
-a failure said in its room. In `agent-workspace-renamed-functions'."
+a failure said in its room. In bd, both by their handles
+\(`agent-workspace-handle'). In `agent-workspace-renamed-functions'."
   (let* ((project (agent-workspace-agent-project agent))
          (name (agent-workspace-agent-name agent))
+         (handle (agent-workspace-agent-handle agent))
+         (was-name was)
+         (was (agent-workspace-handle was project))
          (doing (agent-workspace--bd-now project was (list "list" "--status" "in_progress" "--assignee" was
                                                          "--json" "--limit" "0"))))
     (when (eql (car doing) 0)
       (dolist (issue (ignore-errors (json-parse-string (cdr doing) :object-type 'alist :array-type 'list
                                                        :null-object nil :false-object nil)))
         (let* ((id (alist-get 'id issue))
-               (done (agent-workspace--bd-now project was (list "update" id "--assignee" name))))
+               (done (agent-workspace--bd-now project was (list "update" id "--assignee" handle))))
           (unless (eql (car done) 0)
-            (let ((text (format "couldn't take %s over, still %s's: %s" id was
+            (let ((text (format "couldn't take %s over, still %s's: %s" id was-name
                                 (if (eq (car done) 'timeout) "bd didn't answer"
                                   (agent-workspace--bd-why (cdr done))))))
               (message "%s %s" name text)
@@ -743,14 +756,15 @@ bd or Beads in its project). bd failing is said in the room, in its words;
 not the issue no longer AGENT's (closed, someone else's: bd's 13)."
   (let* ((project (agent-workspace-agent-project agent))
          (name (agent-workspace-agent-name agent))
-         (default-directory project)
-         (process-environment (cons (concat "BEADS_ACTOR=" name) process-environment)))
-    (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project)))
+         (handle (agent-workspace-agent-handle agent))
+         (default-directory (agent-workspace-dir project))
+         (process-environment (cons (concat "BEADS_ACTOR=" handle) process-environment)))
+    (when (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" (agent-workspace-dir project))))
       (let ((output (generate-new-buffer " *agent-workspace give back*")))
         (condition-case err
             (make-process
              :name "agent-workspace-give-back" :buffer output :noquery t :connection-type 'pipe
-             :command (list "bd" "update" id (concat "--if-assignee=" name) "--if-status=in_progress"
+             :command (list "bd" "update" id (concat "--if-assignee=" handle) "--if-status=in_progress"
                             "--status=open" "--assignee=")
              :sentinel (lambda (process _event)
                          (unless (process-live-p process)
@@ -875,7 +889,7 @@ fetches its crew's issues again, noted as AGENT's; its turn's end too
                             (stringp command)
                             (agent-workspace--bd-command-p command))
                    (agent-workspace--issues-refresh-soon (agent-workspace-agent-project agent)
-                                                         (agent-workspace-agent-name agent))))))
+                                                         (agent-workspace-agent-handle agent))))))
   (agent-shell-subscribe-to
    :shell-buffer buffer
    :event 'turn-complete

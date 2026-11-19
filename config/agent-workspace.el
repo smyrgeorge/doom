@@ -313,7 +313,18 @@ does."
 ;; refused unless its role leads (leads: true in its file: the starter
 ;; lead, which answers about the crew and runs it on your word, never
 ;; starting work by itself, its context saying so: session.el); status
-;; answers anyone.
+;; answers anyone. Each on the project's default crew; --crew NAME on
+;; another; from an agent's session, on its own (another --crew refused).
+
+;; SEVERAL CREWS
+;; (config/agent-workspace/core.el, A PROJECT'S CREWS) A project may have
+;; crews beside its default one, each named (test): its own agents, room,
+;; inbox, messages, saved crew and lock (test.crew.json...), its own app and
+;; workspace ("crew · doom · test"), two open at once. An agent's name is its
+;; crew's (two crews may each have an ada); where the project tells them
+;; apart, a named crew's is NAME@CREW: its worktree (scribe-ada@test), its
+;; branch at rest (agent/ada@test), its session (ada · scribe · test), bd's
+;; actor and assignee, AGENT_WORKSPACE_AGENT, {name} in its role.
 
 ;; WORK HANDED ON THROUGH ISSUES
 ;; (config/agent-workspace/handover.el) A role's hands-to: names where its
@@ -330,9 +341,9 @@ does."
 ;; is still offered to its first free agent, for you to give.
 
 ;; THE SAVED CREW
-;; What the crew is, not its state, saved per project on this machine, not
-;; committed: .agent-shell/agent-workspace/crew.json, beside the room and the
-;; inbox (config/agent-workspace/saved.el), JSON, read as data, never
+;; What the crew is, not its state, saved per crew on this machine, not
+;; committed: .agent-shell/agent-workspace/crew.json (a named crew's
+;; NAME.crew.json), beside the room and the inbox (config/agent-workspace/saved.el), JSON, read as data, never
 ;; evaluated. Each agent's name, role, colour (its model and mode when not its
 ;; role's), whether it's asleep, whether it loops, its open panels by name
 ;; (never their data); the layout; never its branch (its worktree keeps the
@@ -348,9 +359,11 @@ does."
 ;; asking before it starts or forgets one, or turns a loop on.
 
 ;; THE APP
-;; SPC o w, from inside a project (outside one, asked which): its crew's own
-;; workspace, "crew · PROJECT" (config/agent-workspace/app.el); SPC o W: in
-;; the window you're in. A project that can't have a crew (not a git
+;; SPC o w, from inside a project (outside one, asked which): which of its
+;; crews asked (none: a new one's name, empty its default crew; else each,
+;; or a new one), then its own workspace, "crew · PROJECT" (a named crew's
+;; "crew · PROJECT · NAME"; config/agent-workspace/app.el); SPC o W: in the
+;; window you're in. A project that can't have a crew (not a git
 ;; repository, no commit yet) says why and offers a terminal with git init
 ;; typed. The first time, the stage is empty: c makes an agent, or a crew
 ;; (see CREWS). Two columns (the room comes on the right, doom-51z.6):

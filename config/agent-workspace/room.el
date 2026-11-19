@@ -146,7 +146,7 @@ burst: once); its text until then as it was, a post appended to it.")
 
 (defun agent-workspace--room-name (project what)
   "The name of PROJECT's room's WHAT buffer."
-  (format "*%s · %s*" what (file-name-nondirectory (directory-file-name project))))
+  (format "*%s · %s*" what (agent-workspace-crew-label project)))
 
 (defun agent-workspace--room-buffer (project)
   "PROJECT's room's feed (made the first time, its kept entries read), drawn
@@ -162,7 +162,7 @@ as it is now (a redraw to come done)."
         (with-current-buffer (generate-new-buffer name)
           (agent-workspace-room-mode)
           (setq agent-workspace--room-project (agent-workspace--root project)
-                default-directory (agent-workspace--root project)
+                default-directory (agent-workspace-dir project)
                 agent-workspace--room-entries (agent-workspace--room-load project))
           (agent-workspace--app-buffer-add project (current-buffer))
           (agent-workspace--room-redraw project)
@@ -178,7 +178,7 @@ as it is now (a redraw to come done)."
         (with-current-buffer (generate-new-buffer name)
           (agent-workspace-compose-mode)
           (setq agent-workspace--room-project (agent-workspace--root project)
-                default-directory (agent-workspace--root project))
+                default-directory (agent-workspace-dir project))
           (agent-workspace--app-buffer-add project (current-buffer))
           (agent-workspace--compose-prompt-draw)
           (current-buffer)))))
@@ -187,7 +187,7 @@ as it is now (a redraw to come done)."
 
 (defun agent-workspace--room-file (project)
   "Where PROJECT's room is kept."
-  (expand-file-name ".agent-shell/agent-workspace/room.jsonl" project))
+  (agent-workspace-crew-file project ".agent-shell/agent-workspace/room.jsonl"))
 
 (defun agent-workspace--room-load (project)
   "PROJECT's room's kept entries (the last `agent-workspace-room-kept'), the
@@ -643,7 +643,7 @@ another role's added (handover.el's way). That role, or nil."
   "What PROJECT's crew did to its issues between two fetches, BEFORE and
 AFTER (issues.el's :issues): (NAME . TEXT) each, NAME an agent of the crew,
 TEXT what the room says, in AFTER's order. ACTOR: the agent whose bd
-command led to AFTER, its name. SINCE: when the first fetch was (an issue
+command led to AFTER, its handle (as bd names it: `agent-workspace-handle'). SINCE: when the first fetch was (an issue
 made before it, new to AFTER, was reopened: not filed). What's no agent's
 \(you, another program) isn't said:
 - filed: an issue new to AFTER, by its creator (created_by): \"filed: TITLE\";
@@ -655,8 +655,12 @@ made before it, new to AFTER, was reopened: not filed). What's no agent's
 - labelled: a label added otherwise, by ACTOR: \"labelled ID build\";
 - closed: by its assignee (no one's, ACTOR): \"closed ID\".
 An issue assigned to someone outside the crew is theirs: not said."
-  (let* ((crew (lambda (name)
-                 (and (stringp name) (not (string-empty-p name)) (agent-workspace-agent name project) name)))
+  (let* ((crew (lambda (handle)
+                 ;; bd's name for an agent: its handle (ada@test); the room's,
+                 ;; its name.
+                 (when-let* ((agent (and (stringp handle) (not (string-empty-p handle))
+                                         (agent-workspace-handle-agent handle project))))
+                   (agent-workspace-agent-name agent))))
          ;; Whose an issue is: its assignee's, if it has one; else ACTOR's.
          (whose (lambda (&rest assignees)
                   (if-let* ((name (seq-find (lambda (name) (and (stringp name) (not (string-empty-p name))))
@@ -685,11 +689,11 @@ An issue assigned to someone outside the crew is theirs: not said."
              (handed
               (push (cons by (let ((to (plist-get issue :assignee)))
                                (if (and to (not (string-empty-p to)))
-                                   (format "handed %s back to %s" id to)
+                                   (format "handed %s back to %s" id (or (funcall crew to) to))
                                  (format "handed %s to the %ss" id handed))))
                     said))
              ((and added (funcall crew actor))
-              (push (cons actor (format "labelled %s %s" id (string-join added ", "))) said)))
+              (push (cons (funcall crew actor) (format "labelled %s %s" id (string-join added ", "))) said)))
             (when (and (eq status 'closed) (not (eq was 'closed)))
               (when-let* ((by (funcall whose (plist-get issue :assignee) (plist-get old :assignee))))
                 (push (cons by (format "closed %s" id)) said)))))))

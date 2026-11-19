@@ -175,7 +175,7 @@ nothing typed at its prompt (you're writing to it: its loop waits)."
 (defun agent-workspace--loop-beads-p (project)
   "Non-nil if PROJECT's issues are tracked with Beads (bd there to take
 them)."
-  (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" project))))
+  (and (executable-find "bd") (file-directory-p (expand-file-name ".beads" (agent-workspace-dir project)))))
 
 (defun agent-workspace--loop-say (agent kind text)
   "TEXT said in AGENT's room, an entry of KIND."
@@ -191,10 +191,11 @@ them)."
       "no output"))
 
 (defun agent-workspace--loop-bd (agent args callback)
-  "Run bd with ARGS as AGENT (BEADS_ACTOR its name), in its project, in the
-background; CALLBACK with (ok . JSON) or (error . WHY)."
-  (let* ((default-directory (agent-workspace-agent-project agent))
-         (process-environment (cons (concat "BEADS_ACTOR=" (agent-workspace-agent-name agent))
+  "Run bd with ARGS as AGENT (BEADS_ACTOR its handle:
+`agent-workspace-handle'), in its project, in the background; CALLBACK
+with (ok . JSON) or (error . WHY)."
+  (let* ((default-directory (agent-workspace-dir (agent-workspace-agent-project agent)))
+         (process-environment (cons (concat "BEADS_ACTOR=" (agent-workspace-agent-handle agent))
                                     process-environment))
          (output (generate-new-buffer " *agent-workspace loop bd*"))
          (errors (make-pipe-process :name "agent-workspace-loop-bd errors" :noquery t
@@ -275,7 +276,7 @@ POLL: its look every few minutes, nothing while its bd command runs."
    (t
     (agent-workspace--loop-put agent :busy t)
     (agent-workspace--loop-bd
-     agent (list "list" "--status" "in_progress" "--assignee" (agent-workspace-agent-name agent)
+     agent (list "list" "--status" "in_progress" "--assignee" (agent-workspace-agent-handle agent)
                  "--json" "--limit" "0")
      (lambda (answer)
        ;; Its answer used even when another look was asked for meanwhile
@@ -341,7 +342,7 @@ thread, for every napping agent at each change)."
                     (agent-workspace--loop-answered agent)))))
           (agent-workspace--loop-put agent :busy t)
           (agent-workspace--loop-bd
-           agent (append (list "ready" "--assignee" (agent-workspace-agent-name agent)) filters)
+           agent (append (list "ready" "--assignee" (agent-workspace-agent-handle agent)) filters)
            (lambda (answer)
              (let ((back (and (eq (car answer) 'ok) (car (cdr answer)))))
                (condition-case err
@@ -391,7 +392,7 @@ said once, then looks again."
        ;; Given back before the failure's counted and its try again timed:
        ;; that try finds it ready (given back in the background, it could
        ;; find nothing and nap, the failures never adding up).
-       (let ((name (agent-workspace-agent-name agent)))
+       (let ((name (agent-workspace-agent-handle agent)))
          (agent-workspace--bd-now (agent-workspace-agent-project agent) name
                                   (list "update" id (concat "--if-assignee=" name) "--if-status=in_progress"
                                         "--status=open" "--assignee=")))
@@ -504,7 +505,7 @@ of changes: once)."
 (defun agent-workspace--loop-notify (project watch)
   "WATCH's file-notify watches of PROJECT's .beads (the folder: files made
 there; its last-touched: what bd changes), added where missing or gone."
-  (let* ((beads (expand-file-name ".beads" project))
+  (let* ((beads (expand-file-name ".beads" (agent-workspace-dir project)))
          (watches (seq-filter (lambda (entry) (file-notify-valid-p (car entry))) (plist-get watch :notify))))
     (dolist (file (list beads (expand-file-name "last-touched" beads)))
       (when (and (file-exists-p file) (not (rassoc file watches)))
@@ -617,7 +618,7 @@ off, it no longer does (a napping one is at the desk). Return ON."
                     (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))
       (unless (agent-workspace--loop-beads-p project)
         (user-error "%s doesn't track its issues with Beads: a loop takes them"
-                    (file-name-nondirectory (directory-file-name project)))))
+                    (file-name-nondirectory (directory-file-name (agent-workspace-dir project))))))
     (unless (eq on (agent-workspace-agent-loop agent))
       (setf (agent-workspace-agent-loop agent) on)
       (agent-workspace--loop-reset agent)

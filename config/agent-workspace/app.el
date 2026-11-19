@@ -4,8 +4,10 @@
 ;; persp-mode's own functions for workspaces (Doom's are persp-mode's), a
 ;; window configuration kept without it.
 ;;
-;; Opening it (`agent-workspace-open') from inside a project switches to its
-;; workspace, "crew · PROJECT" (made the first time); a project that can have
+;; Opening it (`agent-workspace-open') from inside a project, which of its
+;; crews asked (`agent-workspace--read-crew'), switches to its workspace,
+;; "crew · PROJECT", a named crew's "crew · PROJECT · NAME" (made the first
+;; time); a project that can have
 ;; no crew says why (`agent-workspace-no-crew-function' offers git init); a
 ;; crew with no agent opens empty, c making its first (`agent-workspace-new'),
 ;; nothing asked. Leaving it
@@ -96,7 +98,19 @@ pane opened or folded.")
   workspace)         ; its workspace's name, chosen as it's made (`agent-workspace-workspace-name')
 
 (defvar agent-workspace--apps (make-hash-table :test #'equal)
-  "The apps open: a project to its app.")
+  "The apps open: a crew's key to its app.")
+
+(defvar agent-workspace--opened nil
+  "The keys of the crews whose apps were opened, the latest first.")
+
+(defun agent-workspace--open-crew-of (project)
+  "Of the crews of PROJECT's folder (PROJECT a crew's key or a folder) whose
+apps are open, the one opened last, or nil."
+  (let* ((dir (agent-workspace-dir (agent-workspace--root project)))
+         (open (seq-filter (lambda (key) (equal (agent-workspace-dir key) dir))
+                           (hash-table-keys agent-workspace--apps))))
+    (or (seq-find (lambda (key) (member key open)) agent-workspace--opened)
+        (car (seq-sort-by (lambda (key) (or (agent-workspace-crew-name key) "")) #'string< open)))))
 
 (defvar agent-workspace--timer nil
   "The timer ticking turns' times, while an app is shown.")
@@ -128,14 +142,16 @@ tiling leaves it alone (config/tiling.el's frames left alone)."
     (agent-workspace--persp-add project buffer)))
 
 (defun agent-workspace-workspace-name (project)
-  "The name of PROJECT's crew's workspace: \"crew · doom\"; another crew's
-open of the same folder name, its parent's too, \"crew · b/doom\". Chosen
-as its app is made, kept while it's open."
+  "The name of PROJECT's crew's workspace: \"crew · doom\", a named crew's
+\"crew · doom · test\"; another project's crew open of the same folder
+name, its parent's too, \"crew · b/doom\". Chosen as its app is made,
+kept while it's open."
   (let ((key (agent-workspace--root project)))
     (or (when-let* ((app (gethash key agent-workspace--apps)))
           (agent-workspace--app-workspace app))
-        (let* ((folder (directory-file-name key))
-               (name (concat "crew · " (file-name-nondirectory folder)))
+        (let* ((folder (directory-file-name (agent-workspace-dir key)))
+               (crew (if-let* ((name (agent-workspace-crew-name key))) (concat " · " name) ""))
+               (name (concat "crew · " (file-name-nondirectory folder) crew))
                (taken (delq nil (mapcar (lambda (app)
                                           (and (not (equal (agent-workspace--app-project app) key))
                                                (agent-workspace--app-workspace app)))
@@ -143,7 +159,7 @@ as its app is made, kept while it's open."
           (if (not (member name taken))
               name
             (concat "crew · " (file-name-nondirectory (directory-file-name (file-name-directory folder)))
-                    "/" (file-name-nondirectory folder)))))))
+                    "/" (file-name-nondirectory folder) crew))))))
 
 (defun agent-workspace--ordered (project)
   "PROJECT's agents in role order (the roles' order), then as they were
@@ -235,15 +251,77 @@ switches."
                                 (ignore-errors (project-known-project-roots)))))))
     (expand-file-name (completing-read "The crew of: " projects nil t))))
 
-(defun agent-workspace-open (&optional here)
-  "Open the crew of the project you're in, in its own workspace (\"crew ·
-PROJECT\"); outside a project, asked which (one not a git repository, or
-without a commit, says why it has no crew). HERE (SPC o W): in the window
-you're in, the workspace kept (q gives its windows back). A saved crew
-\(crew.json) is started again; a new one opens empty: c makes its first
-agent, nothing asked."
-  (interactive "P")
-  (let* ((dir (or (agent-workspace-project)
+(defun agent-workspace--crew-choice (key)
+  "KEY's crew as the crew prompt names it: \"default\", or its name."
+  (or (agent-workspace-crew-name key) "default"))
+
+(defun agent-workspace--read-crew-name (root &optional taken)
+  "A new crew's name for ROOT's project, read in the minibuffer: empty, its
+default crew; else a name as an agent's (`agent-workspace-name-valid-p'),
+not \"default\" nor one of TAKEN (keys), asked again until it is. Its key."
+  (let (key)
+    (while (not key)
+      (let ((name (string-trim (read-string "New crew's name (empty: the default crew): "))))
+        (cond ((string-empty-p name)
+               (setq key (agent-workspace-crew-key root)))
+              ((or (equal name "default") (not (agent-workspace-name-valid-p name)))
+               (message "Not a crew's name: a lowercase letter, then lowercase letters, digits or -, not default")
+               (sit-for 1.5))
+              ((member (agent-workspace-crew-key root name) taken)
+               (message "%s has a crew %s already" (file-name-nondirectory (directory-file-name root)) name)
+               (sit-for 1.5))
+              (t (setq key (agent-workspace-crew-key root name))))))
+    key))
+
+(defun agent-workspace--read-crew (root)
+  "Which crew of ROOT's project to open, read in the minibuffer (as SPC o w
+asks): one with none saved or running, a new crew's name
+\(`agent-workspace--read-crew-name'); else one of them (the default named
+\"default\", an open one marked, the one opened last offered first), or a
+new crew, whose name is then asked. Its key."
+  (let* ((root (agent-workspace-dir root))
+         (crews (delete-dups (append (agent-workspace-saved-crews root) (agent-workspace-crews-of root)
+                                     (seq-filter (lambda (key) (equal (agent-workspace-dir key) root))
+                                                 (hash-table-keys agent-workspace--apps)))))
+         (new "+ a new crew"))
+    (if (not crews)
+        (agent-workspace--read-crew-name root)
+      (let* ((first (or (seq-find (lambda (key) (member key crews)) agent-workspace--opened) (car crews)))
+             (crews (cons first (remove first crews)))
+             (choices (mapcar (lambda (key) (cons (agent-workspace--crew-choice key) key)) crews))
+             (completion-extra-properties
+              (list :annotation-function
+                    (lambda (choice)
+                      (when-let* ((key (cdr (assoc choice choices))))
+                        (propertize (cond ((gethash key agent-workspace--apps) "  open")
+                                          ((agent-workspace-agents key) "  running")
+                                          (t "  saved"))
+                                    'face 'shadow)))))
+             (choice (completing-read
+                      (format "Crew of %s: " (file-name-nondirectory (directory-file-name root)))
+                      (lambda (string pred action)
+                        (if (eq action 'metadata)
+                            '(metadata (display-sort-function . identity) (cycle-sort-function . identity))
+                          (complete-with-action action (append (mapcar #'car choices) (list new)) string pred)))
+                      nil t nil nil (caar choices))))
+        (or (cdr (assoc choice choices))
+            (agent-workspace--read-crew-name root crews))))))
+
+(defun agent-workspace-open (&optional here crew)
+  "Open a crew of the project you're in, in its own workspace (\"crew ·
+PROJECT\", a named crew's \"crew · PROJECT · NAME\"); outside a project,
+asked which (one not a git repository, or without a commit, says why it
+has no crew). Which crew: asked (`agent-workspace--read-crew'): a project
+with none, a new one's name (empty: its default crew); else one of them,
+or a new one. HERE (SPC o W): in the window you're in, the workspace kept
+\(q gives its windows back). A saved crew (crew.json, NAME.crew.json) is
+started again; a new one opens empty: c makes its first agent. From Lisp,
+CREW is the crew's key (`agent-workspace-crew-key') or a folder (its
+default crew), nothing asked; nil, the default crew of the project you're
+in."
+  (interactive (list current-prefix-arg 'ask))
+  (let* ((dir (or (and (stringp crew) (agent-workspace-dir crew))
+                  (let ((current (agent-workspace-project))) (and current (agent-workspace-dir current)))
                   (and (fboundp 'project-current) (ignore-errors (project-root (project-current))))
                   (and (fboundp 'projectile-project-root) (ignore-errors (projectile-project-root)))
                   (agent-workspace--read-project)))
@@ -252,7 +330,11 @@ agent, nothing asked."
         (if agent-workspace-no-crew-function
             (funcall agent-workspace-no-crew-function dir reason)
           (user-error "No crew in %s: %s" (abbreviate-file-name dir) reason))
-      (let* ((project (agent-workspace-project dir))
+      (let* ((root (agent-workspace-project dir))
+             (project (cond ((eq crew 'ask) (agent-workspace--read-crew root))
+                            ((stringp crew)
+                             (agent-workspace-crew-key root (agent-workspace-crew-name crew)))
+                            (t root)))
              (app (agent-workspace--app project))
              (new (not app)))
         ;; Its crew running in another Emacs: refused, saying where.
@@ -261,6 +343,8 @@ agent, nothing asked."
         (unless app
           (setq app (agent-workspace--app-make project))
           (puthash (agent-workspace--root project) app agent-workspace--apps))
+        (setq agent-workspace--opened (cons (agent-workspace--root project)
+                                            (delete (agent-workspace--root project) agent-workspace--opened)))
         ;; Where q goes back to: this frame's (another frame showing it is
         ;; given its own back as it's laid out here).
         (let ((from (agent-workspace--workspace)))
@@ -281,10 +365,10 @@ agent, nothing asked."
         app))))
 
 (defun agent-workspace-open-here ()
-  "Open the crew of the project you're in, in the window you're in (see
-`agent-workspace-open')."
+  "Open a crew of the project you're in, in the window you're in (see
+`agent-workspace-open'): which, asked."
   (interactive)
-  (agent-workspace-open t))
+  (agent-workspace-open t 'ask))
 
 (defun agent-workspace--unmark (app)
   "APP no longer laid out in its frame."
@@ -405,7 +489,7 @@ back where you came from. Its worktrees and its saved crew stay."
              (when (equal (agent-workspace--workspace) name)
                (agent-workspace--switch (or from (bound-and-true-p +workspaces-main) "main")))
              (ignore-errors (persp-kill name)))))
-    (message "The crew of %s is closed" (file-name-nondirectory (directory-file-name project)))))
+    (message "The crew of %s is closed" (agent-workspace-crew-label project))))
 
 (defun agent-workspace--workspace-killed-h (persp &rest _)
   "A crew's workspace killed however (SPC TAB d, C-u SPC TAB d, SPC TAB x):
@@ -898,7 +982,7 @@ name) doubled, as itself: the mode line's text."
       (agent-workspace--percent-escaped
        (mapconcat (pcase-lambda (`(,project . ,tally))
                     (propertize (concat " " (if several
-                                                (concat (file-name-nondirectory (directory-file-name project)) " ")
+                                                (concat (agent-workspace-crew-label project) " ")
                                               "")
                                         tally " ")
                                 'agent-workspace-project project
@@ -915,8 +999,7 @@ name) doubled, as itself: the mode line's text."
          (text (posn-string posn))
          (project (and text (get-text-property (cdr text) 'agent-workspace-project (car text)))))
     (when project
-      (let ((default-directory project))
-        (agent-workspace-open)))))
+      (agent-workspace-open nil project))))
 
 ;; ====== SELECTING ======
 
@@ -941,8 +1024,7 @@ cursor on its issue; done, it's seen. GO: the cursor in its pane."
 (defun agent-workspace--select-from-anywhere (agent)
   "Select AGENT (a click on its name in a file's mode line): its crew's app
 opened, its pane open, the cursor in it."
-  (let ((default-directory (agent-workspace-agent-project agent)))
-    (agent-workspace-open))
+  (agent-workspace-open nil (agent-workspace-agent-project agent))
   (agent-workspace-select agent t))
 
 (setq agent-workspace-select-function #'agent-workspace--select-from-anywhere)
@@ -1132,8 +1214,7 @@ its holding work you choose (`agent-workspace-read-branch')."
   (let ((app (agent-workspace--app (agent-workspace-agent-project agent))))
     (if (and app (agent-workspace--shown-p app))
         app
-      (let ((default-directory (agent-workspace-agent-project agent)))
-        (agent-workspace-open)))))
+      (agent-workspace-open nil (agent-workspace-agent-project agent)))))
 
 (defun agent-workspace--side-show (agent &optional tab)
   "AGENT's side area showing TAB (else the one it shows), its pane open (its
@@ -1198,14 +1279,15 @@ for it, its role offered first, the issue claimed for it and its first
 message (no crews); on any other (in progress, blocked, done): a plain one."
   (interactive "P")
   (let* ((app (agent-workspace--here-or-error))
-         (default-directory (agent-workspace--app-project app))
+         (default-directory (agent-workspace-dir (agent-workspace--app-project app)))
          (issue (and (derived-mode-p 'agent-workspace-issues-mode)
                      (let ((issue (get-text-property (point) 'agent-workspace-issue)))
                        (and (eq (plist-get issue :status) 'ready) issue)))))
     (agent-workspace-new more
                          (or (plist-get issue :role)
                              (get-text-property (point) 'agent-workspace-role))
-                         (plist-get issue :id) (plist-get issue :title) (plist-get issue :type))))
+                         (plist-get issue :id) (plist-get issue :title) (plist-get issue :type)
+                         (agent-workspace--app-project app))))
 
 (defun agent-workspace-edit ()
   "Change the agent: its name, colour, role, permission mode or model."

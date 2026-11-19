@@ -80,7 +80,7 @@ config/agent-workspace.el).")
 (defun agent-workspace--bar-buffer (agent)
   "AGENT's bar's buffer (made the first time)."
   (let ((name (format " *bar · %s · %s*" (agent-workspace-agent-name agent)
-                      (file-name-nondirectory (directory-file-name (agent-workspace-agent-project agent))))))
+                      (agent-workspace-crew-label (agent-workspace-agent-project agent)))))
     (or (seq-find (lambda (buffer) (eq (buffer-local-value 'agent-workspace--bar-of buffer) agent))
                   (agent-workspace--app-buffers (agent-workspace-agent-project agent)))
         (with-current-buffer (generate-new-buffer name)
@@ -208,13 +208,13 @@ evil's (a change, a macro recorded, the last one run)."
 (defun agent-workspace--hint-buffer (project)
   "What's below the bars when every pane is folded (or there's no agent):
 how to open one, or make one."
-  (let ((name (format "*stage · %s*" (file-name-nondirectory (directory-file-name project)))))
+  (let ((name (format "*stage · %s*" (agent-workspace-crew-label project))))
     ;; Its project's: another of the same folder name has its own.
     (or (seq-find (lambda (buffer) (eq (buffer-local-value 'major-mode buffer) 'agent-workspace-hint-mode))
                   (agent-workspace--app-buffers project))
         (with-current-buffer (generate-new-buffer name)
           (agent-workspace-hint-mode)
-          (setq default-directory (agent-workspace--root project))
+          (setq default-directory (agent-workspace-dir project))
           (agent-workspace--app-buffer-add project (current-buffer))
           (current-buffer)))))
 

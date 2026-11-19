@@ -145,7 +145,7 @@ git's answer.")
 run), or nil (a commit checked out, a .git file)."
   (ignore-errors
     (with-temp-buffer
-      (insert-file-contents (expand-file-name ".git/HEAD" project))
+      (insert-file-contents (expand-file-name ".git/HEAD" (agent-workspace-dir project)))
       (and (looking-at "ref: refs/heads/\\(.+\\)") (match-string 1)))))
 
 (defun agent-workspace--branch-changes-later (agent)

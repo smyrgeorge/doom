@@ -367,8 +367,8 @@ earlier one's of the same name): ((ORIGIN . FOLDER)...), ORIGIN starter,
 project or local."
   (cons (cons 'starter agent-workspace-starter-roles-directory)
         (when project
-          (list (cons 'project (expand-file-name agent-workspace-roles-directory project))
-                (cons 'local (expand-file-name agent-workspace-local-roles-directory project))))))
+          (list (cons 'project (expand-file-name agent-workspace-roles-directory (agent-workspace-dir project)))
+                (cons 'local (expand-file-name agent-workspace-local-roles-directory (agent-workspace-dir project)))))))
 
 (defun agent-workspace--role-files (project)
   "The role files for PROJECT, in order: the starters, its own, then your
@@ -386,8 +386,10 @@ FILE)...)."
 starters first), each role's :origin where its file is (starter, project,
 local), its :replaces the origin of the one of its name it replaced. New
 problems are shown as warnings. Checked once while
-`agent-workspace--roles-checked' is bound."
-  (let* ((key (or project ""))
+`agent-workspace--roles-checked' is bound. A project's, whichever of its
+crews asks (PROJECT a crew's key or its folder)."
+  (let* ((project (and project (agent-workspace-dir project)))
+         (key (or project ""))
          (cached (and agent-workspace--roles-checked
                       (gethash key agent-workspace--roles-checked)
                       (gethash key agent-workspace--roles-cache))))
@@ -445,7 +447,7 @@ project's), in the order they're read: ((NAME :file FILE :origin ORIGIN
 \(\"FILE:LINE: what\"), TEXT the same without its file (\"line 4: what\")."
   (let ((project (or project (agent-workspace-project))))
     (agent-workspace--roles-read project)
-    (nth 2 (gethash (or project "") agent-workspace--roles-cache))))
+    (nth 2 (gethash (if project (agent-workspace-dir project) "") agent-workspace--roles-cache))))
 
 (defun agent-workspace-role-problems (&optional project)
   "What's wrong with PROJECT's role files: (error|warning MESSAGE) each."
@@ -471,17 +473,17 @@ problems."
         (with-current-buffer buffer
           (let ((inhibit-read-only t))
             (erase-buffer)
-            (setq default-directory (or project default-directory))
+            (setq default-directory (if project (agent-workspace-dir project) default-directory))
             (insert (format "The roles and crews of %s: %d error%s, %d warning%s\n\n"
-                            (if project (abbreviate-file-name (directory-file-name project)) "no project")
+                            (if project (abbreviate-file-name (directory-file-name (agent-workspace-dir project))) "no project")
                             (seq-count (lambda (p) (eq (car p) 'error)) problems)
                             (if (= 1 (seq-count (lambda (p) (eq (car p) 'error)) problems)) "" "s")
                             (seq-count (lambda (p) (eq (car p) 'warning)) problems)
                             (if (= 1 (seq-count (lambda (p) (eq (car p) 'warning)) problems)) "" "s")))
             (pcase-dolist (`(,level ,_ ,file ,n ,what) problems)
               (insert (format "%s:%d: %s: %s\n"
-                              (if (and project (file-in-directory-p file project))
-                                  (file-relative-name file project)
+                              (if (and project (file-in-directory-p file (agent-workspace-dir project)))
+                                  (file-relative-name file (agent-workspace-dir project))
                                 (abbreviate-file-name file))
                               n level what))))
           (require 'compile)
@@ -562,7 +564,7 @@ the project's own copied. Interactively, both asked, then visited."
     (unless from
       (user-error (if (eq where 'local) "No starter or project role %s" "No starter role %s") name))
     (when (file-exists-p to)
-      (user-error "%s has %s %s already" (file-name-nondirectory (directory-file-name project))
+      (user-error "%s has %s %s already" (file-name-nondirectory (directory-file-name (agent-workspace-dir project)))
                   (if (eq where 'local) "a local" "its own") name))
     (make-directory dir t)
     (copy-file from to)

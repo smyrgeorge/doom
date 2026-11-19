@@ -90,18 +90,83 @@ agent's system prompt), :model, :mode (Claude Code's permission mode),
 :tools (allowed), :deny (disallowed), :mcp-servers. Roles (doom-51z.3) set it.")
 
 (defvar agent-workspace--crews (make-hash-table :test #'equal)
-  "The crews: a project's root (the main checkout's) to its agents, in the
-order they were made.")
+  "The crews: a crew's key (`agent-workspace-crew-key') to its agents, in
+the order they were made.")
+
+;; ====== A PROJECT'S CREWS ======
+;; A project has a crew, its default one, and may have others, each named
+;; as an agent is (test). Each has its own agents, room, inbox, messages,
+;; saved state and lock, in .agent-shell/agent-workspace/: the default
+;; crew's crew.json, room.jsonl..., a named one's prefixed with its name
+;; (test.crew.json, test.room.jsonl...). A crew's key, what the code calls
+;; PROJECT: the default crew's is the project's root (the main checkout's
+;; folder, with a slash), as before there were others; a named one's that
+;; root with #NAME after it (/src/doom/#test), not a folder. What a crew
+;; does in its project's folder (git, bd, worktrees, its files) goes
+;; through `agent-workspace-dir'. An agent's name is its crew's: two crews
+;; may each have an ada. Where its project tells them apart (its worktree's
+;; folder, its branch at rest, its session's buffer, bd's actor and
+;; assignee, its shell's AGENT_WORKSPACE_AGENT, {name} in its role), a
+;; named crew's agent is NAME@CREW (ada@test), its handle; a default
+;; crew's, NAME.
+
+(defun agent-workspace-crew-key (root &optional name)
+  "The key of ROOT's crew NAME (nil or \"\": its default crew)."
+  (let ((root (file-name-as-directory root)))
+    (if (or (null name) (string-empty-p name)) root (concat root "#" name))))
+
+(defun agent-workspace--crew-key-parts (project)
+  "PROJECT, a crew's key: (ROOT . NAME), NAME nil for the default crew."
+  (if (and (stringp project) (string-match "\\`\\(.*/\\)#\\([a-z][a-z0-9-]*\\)\\'" project))
+      (cons (match-string 1 project) (match-string 2 project))
+    (cons project nil)))
+
+(defun agent-workspace-dir (project)
+  "The folder of PROJECT, a crew's key or a project's folder: its project's
+main checkout, with a slash."
+  (car (agent-workspace--crew-key-parts project)))
+
+(defun agent-workspace-crew-name (project)
+  "The name of PROJECT's crew (a crew's key), or nil: its default crew."
+  (cdr (agent-workspace--crew-key-parts project)))
+
+(defun agent-workspace-handle (name project)
+  "The agent NAME of PROJECT's crew as its project tells its agents apart:
+NAME, a named crew's NAME@CREW (see A PROJECT'S CREWS)."
+  (if-let* ((crew (agent-workspace-crew-name project))) (concat name "@" crew) name))
+
+(defun agent-workspace-handle-parts (handle project)
+  "HANDLE (NAME, or NAME@CREW: `agent-workspace-handle') in PROJECT's
+folder: (KEY . NAME), KEY its crew's key."
+  (let ((root (agent-workspace-dir (agent-workspace--root project))))
+    (if (and (stringp handle) (string-match "\\`\\([^@]+\\)@\\([a-z][a-z0-9-]*\\)\\'" handle))
+        (cons (agent-workspace-crew-key root (match-string 2 handle)) (match-string 1 handle))
+      (cons root handle))))
+
+(defun agent-workspace-crew-file (project file)
+  "PROJECT's crew's FILE, a path relative to its project's folder
+\(.agent-shell/agent-workspace/crew.json): a named crew's has its name
+before the file's (test.crew.json)."
+  (expand-file-name (if-let* ((name (agent-workspace-crew-name project)))
+                        (concat (file-name-directory file) name "." (file-name-nondirectory file))
+                      file)
+                    (agent-workspace-dir project)))
+
+(defun agent-workspace-crew-label (project)
+  "PROJECT's crew as it's named to you: its project's folder name, a named
+crew's name after it (\"doom · test\")."
+  (let ((folder (file-name-nondirectory (directory-file-name (agent-workspace-dir project)))))
+    (if-let* ((name (agent-workspace-crew-name project))) (concat folder " · " name) folder)))
 
 ;; ====== ONE EMACS A CREW ======
-;; A project's crew runs in one Emacs: .agent-shell/agent-workspace/crew.lock
-;; names it (its pid) while it does. Another Emacs opening the project (its
-;; app, an agent made) is refused, saying where it runs; a lock whose Emacs
-;; is gone is taken over.
+;; A crew runs in one Emacs: its lock (.agent-shell/agent-workspace/
+;; crew.lock, a named crew's NAME.crew.lock) names it (its pid) while it
+;; does. Another Emacs opening that crew (its app, an agent made) is
+;; refused, saying where it runs; a lock whose Emacs is gone is taken over.
 
 (defun agent-workspace--crew-lock-file (project)
   "PROJECT's crew lock."
-  (expand-file-name ".agent-shell/agent-workspace/crew.lock" project))
+  (agent-workspace-crew-file project ".agent-shell/agent-workspace/crew.lock"))
 
 (defun agent-workspace--crew-lock-holder (project)
   "The pid of another Emacs running PROJECT's crew (its lock's, alive, an
@@ -121,7 +186,7 @@ Emacs), or nil: none, this one, or a lock left by an Emacs gone."
   "A user error if PROJECT's crew runs in another Emacs, saying where."
   (when-let* ((pid (agent-workspace--crew-lock-holder project)))
     (user-error "The crew of %s runs in another Emacs (pid %d): open it there"
-                (file-name-nondirectory (directory-file-name project)) pid)))
+                (agent-workspace-crew-label project) pid)))
 
 (defun agent-workspace--crew-lock-take (project)
   "PROJECT's crew noted as running in this Emacs (after
@@ -171,8 +236,16 @@ this Emacs's."
   (intern (concat "ansi-color-" (or (agent-workspace-agent-colour agent) "blue"))))
 
 (defun agent-workspace-buffer-name (agent)
-  "The name of AGENT's session buffer: \"ada · builder\"."
-  (format "%s · %s" (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))
+  "The name of AGENT's session buffer: \"ada · builder\", a named crew's
+agent's \"ada · builder · test\"."
+  (concat (format "%s · %s" (agent-workspace-agent-name agent) (agent-workspace-agent-role agent))
+          (if-let* ((crew (agent-workspace-crew-name (agent-workspace-agent-project agent))))
+              (concat " · " crew)
+            "")))
+
+(defun agent-workspace-agent-handle (agent)
+  "AGENT as its project tells its agents apart (`agent-workspace-handle')."
+  (agent-workspace-handle (agent-workspace-agent-name agent) (agent-workspace-agent-project agent)))
 
 (defun agent-workspace-role (agent)
   "AGENT's role, a plist (see `agent-workspace-role-function')."
@@ -188,8 +261,9 @@ this Emacs's."
 
 (defun agent-workspace-project (&optional directory)
   "The project of DIRECTORY (default: `default-directory'): its git
-repository's main checkout (from one of its worktrees too), or nil. In an
-agent's buffer, its crew's project."
+repository's main checkout (from one of its worktrees too), its default
+crew's key, or nil. Without DIRECTORY, in an agent's buffer, its crew's
+key (a named crew's too). A command of a crew's app passes its crew."
   (if-let* ((agent (and (not directory) (agent-workspace-buffer-agent))))
       (agent-workspace-agent-project agent)
     (let ((default-directory (file-name-as-directory
@@ -212,11 +286,13 @@ fails."
         (unless (string-empty-p line) line)))))
 
 (defun agent-workspace--root (project)
-  "PROJECT as the crews' key: its folder's true name, with a slash. A
-crew's key is its own, no file looked at: this is called a few times for
-each line drawn, and `file-truename' reads each of its folders (in a
-tick, every second of a turn, most of its time)."
-  (if (not (eq (gethash project agent-workspace--crews :none) :none))
+  "PROJECT as the crews' key: a crew's key as it is (a named crew's too);
+a folder, its true name, with a slash: its default crew's. No file is
+looked at for a crew's key: this is called a few times for each line
+drawn, and `file-truename' reads each of its folders (in a tick, every
+second of a turn, most of its time)."
+  (if (or (not (eq (gethash project agent-workspace--crews :none) :none))
+          (agent-workspace-crew-name project))
       project
     (file-name-as-directory (file-truename (expand-file-name project)))))
 
@@ -231,13 +307,37 @@ they were made."
   (seq-find (lambda (agent) (equal (agent-workspace-agent-name agent) name))
             (agent-workspace-agents project)))
 
+(defun agent-workspace-handle-agent (handle project)
+  "The agent of PROJECT's crew whose handle is HANDLE
+\(`agent-workspace-agent-handle': bd's assignee, a worktree's), or nil."
+  (and (stringp handle)
+       (seq-find (lambda (agent) (equal (agent-workspace-agent-handle agent) handle))
+                 (agent-workspace-agents project))))
+
+(defun agent-workspace-crews-of (project)
+  "The keys of the crews running in PROJECT's folder (PROJECT a crew's key
+or a folder): its default crew's first, then its named ones'."
+  (let ((dir (agent-workspace-dir (agent-workspace--root project)))
+        keys)
+    (maphash (lambda (key agents)
+               (when (and agents (equal (agent-workspace-dir key) dir))
+                 (push key keys)))
+             agent-workspace--crews)
+    (seq-sort-by (lambda (key) (or (agent-workspace-crew-name key) "")) #'string< keys)))
+
+(defun agent-workspace-folder-agents (project)
+  "The agents of every crew running in PROJECT's folder (PROJECT a crew's
+key or a folder)."
+  (seq-mapcat #'agent-workspace-agents (agent-workspace-crews-of project)))
+
 (defun agent-workspace-read-agent (prompt &optional project)
-  "An agent of PROJECT's crew (default: the current project's), read in the
-minibuffer with PROMPT; the buffer's own agent (its session's, its
-worktree's) offered first."
-  (let* ((agents (or (agent-workspace-agents project) (user-error "No crew here")))
-         (own (or (agent-workspace-buffer-agent)
+  "An agent of PROJECT's crew (default: the buffer's own agent's, its
+session's or its worktree's, else the current project's), read in the
+minibuffer with PROMPT; the buffer's own agent offered first."
+  (let* ((own (or (agent-workspace-buffer-agent)
                   (and (fboundp 'agent-workspace-file-agent) (agent-workspace-file-agent))))
+         (agents (or (agent-workspace-agents (or project (and own (agent-workspace-agent-project own))))
+                     (user-error "No crew here")))
          (name (completing-read prompt (mapcar #'agent-workspace-agent-name agents) nil t nil nil
                                 (and (memq own agents) (agent-workspace-agent-name own)))))
     (seq-find (lambda (agent) (equal (agent-workspace-agent-name agent) name)) agents)))
@@ -664,7 +764,8 @@ its branch and folder too)."
 (defun agent-workspace--check-name (name project &optional except)
   "Signal a user error if NAME can't be an agent's in PROJECT's crew (but
 EXCEPT's, an agent being renamed): taken by one running or one its saved
-crew keeps while it doesn't run (`agent-workspace-crew-members')."
+crew keeps while it doesn't run (`agent-workspace-crew-members'). Another
+crew of the project may have an agent of that name too."
   (unless (agent-workspace-name-valid-p name)
     (user-error "Not a name for an agent: %S (a lowercase letter, then lowercase letters, digits or -)" name))
   (when-let* ((other (car (seq-find (lambda (member) (string-equal-ignore-case (car member) name))

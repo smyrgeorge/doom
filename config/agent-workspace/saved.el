@@ -58,7 +58,9 @@
 (defvar agent-workspace-loop)
 
 (defcustom agent-workspace-crew-file ".agent-shell/agent-workspace/crew.json"
-  "The crew's configuration, in its project (per machine, not committed)."
+  "The crew's configuration, in its project (per machine, not committed):
+its default crew's; a named crew's has its name before the file's
+\(test.crew.json)."
   :type 'string
   :group 'agent-workspace)
 
@@ -97,12 +99,28 @@ there and opened once its session starts.")
 ;; ====== JSON ======
 
 (defun agent-workspace--crew-path (project)
-  "PROJECT's crew.json."
-  (expand-file-name agent-workspace-crew-file project))
+  "PROJECT's crew.json (a named crew's NAME.crew.json)."
+  (agent-workspace-crew-file project agent-workspace-crew-file))
 
-(defun agent-workspace--crew-file-name ()
-  "The crew's file as its problems and questions name it: crew.json."
-  (file-name-nondirectory agent-workspace-crew-file))
+(defun agent-workspace-saved-crews (project)
+  "The keys of the crews PROJECT's folder (PROJECT a crew's key or a folder)
+keeps a crew.json of: its default crew's (crew.json) first, then its named
+ones' (NAME.crew.json), by name."
+  (let* ((root (agent-workspace-dir (agent-workspace--root project)))
+         (default (expand-file-name agent-workspace-crew-file root))
+         (pattern (concat "\\`\\([a-z][a-z0-9-]\\{0,19\\}\\)\\."
+                          (regexp-quote (file-name-nondirectory agent-workspace-crew-file)) "\\'")))
+    (append (and (file-exists-p default) (list root))
+            (mapcar (lambda (file)
+                      (string-match pattern file)
+                      (agent-workspace-crew-key root (match-string 1 file)))
+                    (and (file-directory-p (file-name-directory default))
+                         (sort (directory-files (file-name-directory default) nil pattern) #'string<))))))
+
+(defun agent-workspace--crew-file-name (&optional project)
+  "The crew's file as its problems and questions name it: crew.json, a
+named crew's (PROJECT's) test.crew.json."
+  (file-name-nondirectory (if project (agent-workspace--crew-path project) agent-workspace-crew-file)))
 
 (defun agent-workspace--crew-json-pretty (value &optional indent)
   "VALUE as JSON text as jq . prints it, INDENT spaces in (0): a plist an
@@ -173,7 +191,7 @@ place and name. PEEK: only looked at, not as this Emacs reading it
                                             :null-object nil :false-object nil)
                        (json-error (setq not-json (if (integerp (cadr err)) (cadr err) t)) nil)))))
         (cl-flet ((problem (format &rest args)
-                    (push (concat (agent-workspace--crew-file-name) ": " (apply #'format format args)) problems)))
+                    (push (concat (agent-workspace--crew-file-name project) ": " (apply #'format format args)) problems)))
           (cond
            (not-json
             (problem "not a crew: not JSON%s" (if (integerp not-json) (format " (line %d)" not-json) ""))
@@ -422,7 +440,7 @@ is made there again): crew.json keeps it as it was."
       (unless (gethash key agent-workspace--crew-stale-said)
         (puthash key t agent-workspace--crew-stale-said)
         (let ((said (format "%s was changed outside this Emacs: gR reads it (not written until then)"
-                            (agent-workspace--crew-file-name))))
+                            (agent-workspace--crew-file-name project))))
           (message "%s" said)
           (when (fboundp 'agent-workspace-room-post)
             (agent-workspace-room-post project :kind 'note :text said)))))
@@ -636,7 +654,7 @@ wakes), its loop turned off, or on (asked first)."
             (cond
              ((not agent)
               (when (y-or-n-p (format "Start %s (%s), new in %s? " (plist-get entry :name) (plist-get entry :role)
-                                       (agent-workspace--crew-file-name)))
+                                       (agent-workspace--crew-file-name project)))
                 (agent-workspace--restore project entry)))
              (t
               (when (and (plist-get entry :colour)
@@ -647,7 +665,7 @@ wakes), its loop turned off, or on (asked first)."
                   (if (not loop)
                       (agent-workspace-loop-set agent nil)
                     (when (y-or-n-p (format "Turn %s's loop on, as %s says? " (agent-workspace-agent-name agent)
-                                               (agent-workspace--crew-file-name)))
+                                               (agent-workspace--crew-file-name project)))
                       (condition-case err
                           (agent-workspace-loop-set agent t)
                         (user-error (message "%s" (error-message-string err))))))))
@@ -662,6 +680,6 @@ wakes), its loop turned off, or on (asked first)."
         (dolist (agent (agent-workspace-agents project))
           (unless (seq-find (lambda (entry) (equal (plist-get entry :name) (agent-workspace-agent-name agent))) entries)
             (when (y-or-n-p (format "Forget %s, gone from %s (its worktree kept)? " (agent-workspace-agent-name agent)
-                                    (agent-workspace--crew-file-name)))
+                                    (agent-workspace--crew-file-name project)))
               (agent-workspace-forget agent 'keep)))))
       (agent-workspace--crew-save-soon project))))

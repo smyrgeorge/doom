@@ -50,17 +50,19 @@ default."
 ;; ====== A NAME ======
 
 (defun agent-workspace--name-left-p (project name)
-  "Non-nil if a forgotten agent NAME left its worktree or branch in PROJECT."
-  (let ((default-directory project)
-        (worktrees (expand-file-name agent-workspace-worktrees-directory project)))
-    (or (agent-workspace--branch-p (agent-workspace-branch name))
+  "Non-nil if a forgotten agent NAME of PROJECT's crew left its worktree or
+branch there (its handle's: `agent-workspace-handle')."
+  (let ((default-directory (agent-workspace-dir project))
+        (worktrees (expand-file-name agent-workspace-worktrees-directory (agent-workspace-dir project)))
+        (handle (agent-workspace-handle name project)))
+    (or (agent-workspace--branch-p (agent-workspace-branch name project))
         ;; Its folder: NAME, as they were named before, or ROLE-NAME (one
         ;; whose lock or branch says another name isn't its: ROLE-mary-NAME).
         (seq-some (lambda (folder)
-                    (or (equal folder name)
-                        (and (string-suffix-p (concat "-" name) folder)
+                    (or (equal folder handle)
+                        (and (string-suffix-p (concat "-" handle) folder)
                              (member (agent-workspace--worktree-agent-name (expand-file-name folder worktrees))
-                                     (list name nil)))))
+                                     (list handle nil)))))
                   (and (file-directory-p worktrees) (directory-files worktrees nil "\\`[^.]"))))))
 
 (defun agent-workspace-pool-name (project role)
@@ -493,17 +495,18 @@ made for it; one taken or not valid is refused, and asked again."
           :mode mode
           :colour colour)))
 
-(defun agent-workspace-new (&optional more role issue title type)
+(defun agent-workspace-new (&optional more role issue title type project)
   "Make a new agent in this project's crew: you're asked its role (or a
 crew), then its name (left empty, one is made for it); MORE (C-u): its
 model, permission mode and colour too. ROLE is offered first. ISSUE (with
 its TITLE, TYPE): the issue it's for, its first message (no crews offered).
 It gets its worktree, its session starts, then it waits for you. Return
 it. A crew picked: the agents the crew lacks of it made, nothing more
-asked (`agent-workspace-crew-make'): return them."
+asked (`agent-workspace-crew-make'): return them. PROJECT: the crew's key
+\(default: the crew of the project you're in, its default one)."
   (interactive "P")
-  (let ((project (agent-workspace-project)))
-    (when-let* ((reason (agent-workspace-no-crew-reason)))
+  (let ((project (or project (agent-workspace-project))))
+    (when-let* ((reason (agent-workspace-no-crew-reason (and project (agent-workspace-dir project)))))
       (user-error "No crew here: %s" reason))
     (let ((picked (if issue
                       (agent-workspace-read-role project role)

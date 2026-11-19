@@ -61,15 +61,18 @@ tick."
 
 (defun agent-workspace--panel-name (name root)
   "Panel NAME's canvas's name, of ROOT: an agent's worktree's \"NAME ·
-AGENT\", else as Agent UI names it. `agent-ui-panel-name-function'."
+AGENT\" (a named crew's agent's \"NAME · AGENT@CREW\"), else as Agent UI
+names it. `agent-ui-panel-name-function'."
   (if-let* ((where (agent-workspace-worktree-of (file-name-as-directory root))))
-      (format "%s · %s" name (cadr where))
+      (format "%s · %s" name (agent-workspace-handle (cadr where) (car where)))
     (agent-ui-panel-default-canvas-name name root)))
 
 (defun agent-workspace--panel-trust-root (root)
   "The root whose trust ROOT's panels share: an agent's worktree's
 project's. `agent-ui-panel-trust-root-function'."
-  (or (car (agent-workspace-worktree-of (file-name-as-directory root))) root))
+  (or (when-let* ((where (agent-workspace-worktree-of (file-name-as-directory root))))
+        (agent-workspace-dir (car where)))
+      root))
 
 (defun agent-workspace--panel-display (canvas)
   "A panel's CANVAS opened for an agent: an agent's of a crew isn't shown

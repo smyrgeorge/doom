@@ -41,9 +41,11 @@ merge, given an event): the turns they start make no branch.")
 ;; ====== A WORKTREE ======
 
 (defun agent-workspace-worktree-directory (project name role)
-  "The worktree of the agent NAME, of ROLE, of PROJECT's crew: ROLE-NAME."
+  "The worktree of the agent NAME, of ROLE, of PROJECT's crew: ROLE-NAME, a
+named crew's agent's ROLE-NAME@CREW (`agent-workspace-handle')."
   (file-name-as-directory
-   (expand-file-name (concat role "-" name) (expand-file-name agent-workspace-worktrees-directory project))))
+   (expand-file-name (concat role "-" (agent-workspace-handle name project))
+                     (expand-file-name agent-workspace-worktrees-directory (agent-workspace-dir project)))))
 
 (defun agent-workspace--worktree-file (dir file)
   "The text of FILE (HEAD, locked) in the worktree DIR's git folder (its .git
@@ -65,22 +67,25 @@ not a worktree): read from its git files, git not run."
          (match-string 1 head))))
 
 (defun agent-workspace--worktree-branch-name (dir)
-  "The agent's name the worktree DIR's branch says (agent/NAME: at rest), or
-nil: read from its git files, git not run."
+  "The agent's handle the worktree DIR's branch says (agent/NAME: at rest; a
+named crew's agent/NAME@CREW), or nil: read from its git files, git not
+run."
   (when-let* ((branch (agent-workspace--worktree-head dir)))
     (and (string-match "\\`agent/\\(.+\\)" branch) (match-string 1 branch))))
 
 (defun agent-workspace--worktree-agent-name (dir)
-  "The name of the agent whose worktree DIR is, or nil: its lock's reason
-says it (\"agent ada (builder), crew of doom\"), else its branch (agent/NAME,
-at rest). Read from its git files, git not run."
+  "The handle of the agent whose worktree DIR is (its name; a named crew's
+NAME@CREW), or nil: its lock's reason says it (\"agent ada (builder), crew
+of doom\"), else its branch (agent/NAME, at rest). Read from its git
+files, git not run."
   (or (when-let* ((reason (agent-workspace--worktree-file dir "locked")))
         (and (string-match "\\`agent \\([^ \n]+\\) (" reason) (match-string 1 reason)))
       (agent-workspace--worktree-branch-name dir)))
 
-(defun agent-workspace-branch (name)
-  "The branch the agent NAME rests on, between pieces of work: agent/NAME."
-  (concat "agent/" name))
+(defun agent-workspace-branch (name &optional project)
+  "The branch the agent NAME (of PROJECT's crew) rests on, between pieces of
+work: agent/NAME, a named crew's agent/NAME@CREW (`agent-workspace-handle')."
+  (concat "agent/" (if project (agent-workspace-handle name project) name)))
 
 (defun agent-workspace--git (&rest args)
   "Run git with ARGS in `default-directory': its output, or a user error
@@ -101,7 +106,7 @@ with what git said."
   "PROJECT's .agent-shell/ kept out of git, if it isn't: in the repository's
 info/exclude (every worktree shares it), so neither the project nor an
 agent's branch gets a changed .gitignore."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (unless (eql 0 (process-file "git" nil nil nil "check-ignore" "-q" ".agent-shell/worktrees"))
       (let ((exclude (expand-file-name
                       "info/exclude"
@@ -111,26 +116,27 @@ agent's branch gets a changed .gitignore."
                       nil exclude t 'silent)))))
 
 (defun agent-workspace-no-crew-reason (&optional directory)
-  "Why DIRECTORY's project (default: `default-directory''s) can have no
-crew, or nil if it can: every agent needs a worktree, branched from a
-commit."
-  (let ((default-directory (file-name-as-directory (expand-file-name (or directory default-directory)))))
-    (cond ((not (agent-workspace-project))
+  "Why DIRECTORY's project (default: `default-directory''s; DIRECTORY a
+folder or a crew's key) can have no crew, or nil if it can: every agent
+needs a worktree, branched from a commit."
+  (let ((default-directory (file-name-as-directory
+                            (expand-file-name (if directory (agent-workspace-dir directory) default-directory)))))
+    (cond ((not (agent-workspace-project default-directory))
            "not a git repository: every agent works in a git worktree of its own")
           ((not (eql 0 (process-file "git" nil nil nil "rev-parse" "--verify" "--quiet" "HEAD")))
            "no commit yet: an agent's worktree branches from one"))))
 
 (defun agent-workspace-worktree-reason (agent)
   "Why AGENT's worktree is locked, naming it: \"agent ada (builder), crew of
-doom\"."
+doom\" (a named crew's: \"agent ada@test (builder), crew of doom · test\")."
   (format "agent %s (%s), crew of %s"
-          (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)
-          (file-name-nondirectory (directory-file-name (agent-workspace-agent-project agent)))))
+          (agent-workspace-agent-handle agent) (agent-workspace-agent-role agent)
+          (agent-workspace-crew-label (agent-workspace-agent-project agent))))
 
 (defun agent-workspace--worktrees (project)
   "PROJECT's worktrees as git lists them: a plist each (:dir, :branch,
 :locked: its reason, or t)."
-  (let ((default-directory project)
+  (let ((default-directory (agent-workspace-dir project))
         worktrees current)
     (dolist (line (split-string (agent-workspace--git "worktree" "list" "--porcelain") "\n"))
       (cond ((string-prefix-p "worktree " line)
@@ -152,7 +158,7 @@ doom\"."
 (defun agent-workspace--worktree-lock (agent)
   "AGENT's worktree locked with its reason (`agent-workspace-worktree-reason'),
 if it isn't: `git worktree prune' and `remove' leave it alone."
-  (let ((default-directory (agent-workspace-agent-project agent))
+  (let ((default-directory (agent-workspace-dir (agent-workspace-agent-project agent)))
         (dir (agent-workspace-agent-worktree agent)))
     (unless (plist-get (agent-workspace--worktree-entry default-directory dir) :locked)
       (agent-workspace--git "worktree" "lock" "--reason" (agent-workspace-worktree-reason agent)
@@ -161,7 +167,7 @@ if it isn't: `git worktree prune' and `remove' leave it alone."
 (defun agent-workspace--worktree-unlock (project dir)
   "PROJECT's worktree DIR unlocked, if it's locked."
   (when (plist-get (agent-workspace--worktree-entry project dir) :locked)
-    (let ((default-directory project))
+    (let ((default-directory (agent-workspace-dir project)))
       (agent-workspace--git "worktree" "unlock" (directory-file-name dir)))))
 
 (defun agent-workspace--agent-worktrees (project name)
@@ -169,9 +175,9 @@ if it isn't: `git worktree prune' and `remove' leave it alone."
 never its main checkout, nor one of yours elsewhere) that are the agent
 NAME's: on its branch agent/NAME, or locked with its name. Their folders."
   (let ((under (file-name-as-directory
-                (file-truename (expand-file-name agent-workspace-worktrees-directory project))))
-        (branch (agent-workspace-branch name))
-        (reason (concat "agent " name " (")))
+                (file-truename (expand-file-name agent-workspace-worktrees-directory (agent-workspace-dir project)))))
+        (branch (agent-workspace-branch name project))
+        (reason (concat "agent " (agent-workspace-handle name project) " (")))
     (delq nil (mapcar (lambda (worktree)
                         (let ((locked (plist-get worktree :locked)))
                           (and (string-prefix-p under (plist-get worktree :dir))
@@ -188,11 +194,11 @@ with AGENT's name. Its folder and branch are set in AGENT."
   (let* ((project (agent-workspace-agent-project agent))
          (name (agent-workspace-agent-name agent))
          (dir (agent-workspace-worktree-directory project name (agent-workspace-agent-role agent)))
-         (branch (agent-workspace-branch name))
-         (default-directory project))
+         (branch (agent-workspace-branch name project))
+         (default-directory (agent-workspace-dir project)))
     (unless (file-exists-p (expand-file-name ".git" dir))
       (when-let* ((reason (agent-workspace-no-crew-reason project)))
-        (user-error "%s: %s" (file-name-nondirectory (directory-file-name project)) reason))
+        (user-error "%s: %s" (file-name-nondirectory (directory-file-name (agent-workspace-dir project))) reason))
       (agent-workspace--keep-out-of-git project)
       (let* ((here (file-name-as-directory (file-truename dir)))
              (others (remove here (agent-workspace--agent-worktrees project name)))
@@ -230,13 +236,13 @@ branch agent/NAME there already."
   (let* ((project (agent-workspace-agent-project agent))
          (old (agent-workspace-agent-worktree agent))
          (dir (agent-workspace-worktree-directory project name role))
-         (default-directory project))
+         (default-directory (agent-workspace-dir project)))
     (cond ((and (file-exists-p dir)
                 (not (and old (file-exists-p old) (equal (file-truename old) (file-truename dir)))))
-           (format "%s is there already" (file-relative-name (directory-file-name dir) project)))
+           (format "%s is there already" (file-relative-name (directory-file-name dir) (agent-workspace-dir project))))
           ((and (not (equal name (agent-workspace-agent-name agent)))
-                (agent-workspace--branch-p (agent-workspace-branch name)))
-           (format "the branch %s is there already" (agent-workspace-branch name))))))
+                (agent-workspace--branch-p (agent-workspace-branch name project)))
+           (format "the branch %s is there already" (agent-workspace-branch name project))))))
 
 (defun agent-workspace-worktree-move (agent name role)
   "AGENT's worktree moved to the folder of NAME and ROLE, the branch it rests
@@ -249,10 +255,10 @@ signalled."
          (old (agent-workspace-agent-worktree agent))
          (dir (agent-workspace-worktree-directory project name role))
          (old-name (agent-workspace-agent-name agent))
-         (old-rest (agent-workspace-branch old-name))
-         (rest (agent-workspace-branch name))
+         (old-rest (agent-workspace-branch old-name project))
+         (rest (agent-workspace-branch name project))
          (noted (unless (equal old-name name) (agent-workspace--noted-branches project old-name)))
-         (default-directory project)
+         (default-directory (agent-workspace-dir project))
          moved renamed)
     (condition-case err
         (progn
@@ -360,21 +366,23 @@ No title, or none of its words left: TYPE/ID."
 
 (defun agent-workspace--branches (project)
   "PROJECT's branches, their names."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (mapcar (lambda (ref) (string-remove-prefix "refs/heads/" ref))
             (agent-workspace--git-lines "for-each-ref" "--format=%(refname)" "refs/heads/"))))
 
 (defun agent-workspace--branch-note (project branch name)
-  "PROJECT's BRANCH noted as the work of the agent NAME (git config
-branch.BRANCH.agent-workspace-agent): forgetting NAME finds it."
-  (let ((default-directory project))
-    (process-file "git" nil nil nil "config" (concat "branch." branch ".agent-workspace-agent") name)))
+  "PROJECT's BRANCH noted as the work of the agent NAME of its crew (git
+config branch.BRANCH.agent-workspace-agent, its handle:
+`agent-workspace-handle'): forgetting NAME finds it."
+  (let ((default-directory (agent-workspace-dir project)))
+    (process-file "git" nil nil nil "config" (concat "branch." branch ".agent-workspace-agent")
+                  (agent-workspace-handle name project))))
 
 (defun agent-workspace--branch-notes (project &optional there)
   "PROJECT's branches noted as an agent's work, that are there (THERE: its
-branches' names, if known): ((BRANCH . NAME)...), as git's config lists
-them."
-  (let ((default-directory project)
+branches' names, if known): ((BRANCH . HANDLE)...), as git's config lists
+them (a handle: `agent-workspace-handle')."
+  (let ((default-directory (agent-workspace-dir project))
         (there (or there (agent-workspace--branches project))))
     (seq-filter (lambda (note) (member (car note) there))
                 (delq nil (mapcar (lambda (line)
@@ -384,10 +392,11 @@ them."
                                                               "^branch\\..*\\.agent-workspace-agent$"))))))
 
 (defun agent-workspace--noted-branches (project name &optional notes)
-  "PROJECT's branches noted as the agent NAME's work, that are there (NOTES:
-`agent-workspace--branch-notes', if known)."
-  (mapcar #'car (seq-filter (lambda (note) (equal (cdr note) name))
-                            (or notes (agent-workspace--branch-notes project)))))
+  "PROJECT's branches noted as the work of the agent NAME of its crew, that
+are there (NOTES: `agent-workspace--branch-notes', if known)."
+  (let ((handle (agent-workspace-handle name project)))
+    (mapcar #'car (seq-filter (lambda (note) (equal (cdr note) handle))
+                              (or notes (agent-workspace--branch-notes project))))))
 
 (defun agent-workspace--branch-holder (project branch)
   "The folder of PROJECT's worktree BRANCH is checked out in (its main
@@ -413,12 +422,12 @@ known (git not run again for each agent)."
                                       (or worktrees (agent-workspace--worktrees project))))))
     (seq-filter (lambda (branch) (and (member branch there) (not (member branch elsewhere))))
                 (delete-dups (delq nil (append (list (and dir (agent-workspace--worktree-head dir))
-                                                     (agent-workspace-branch name))
+                                                     (agent-workspace-branch name project))
                                                (agent-workspace--noted-branches project name notes)))))))
 
 (defun agent-workspace--ahead-p (project branch main)
   "Non-nil if PROJECT's BRANCH has commits MAIN hasn't."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (not (eql 0 (process-file "git" nil nil nil "merge-base" "--is-ancestor" branch main)))))
 
 (defun agent-workspace--worktree-live (agent)
@@ -444,7 +453,7 @@ on it), or nil: changes it hasn't committed."
 (defun agent-workspace--branch-drop (project branch)
   "PROJECT's BRANCH deleted if it holds nothing the main branch hasn't and
 no worktree has it. Non-nil if it was."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (when (and (agent-workspace--branch-p branch)
                (not (agent-workspace--branch-holder project branch))
                (not (agent-workspace--ahead-p project branch (agent-workspace-main-branch project))))
@@ -458,7 +467,7 @@ the main branch hasn't (never agent/NAME). Its branch slot set, said."
   (let* ((project (agent-workspace-agent-project agent))
          (dir (agent-workspace-agent-worktree agent))
          (name (agent-workspace-agent-name agent))
-         (rest (agent-workspace-branch name))
+         (rest (agent-workspace-branch name project))
          (old (agent-workspace--worktree-head dir)))
     (let ((default-directory dir))
       (cond (reset (agent-workspace--git "switch" "--quiet" "--no-track" "-C" branch start))
@@ -489,8 +498,8 @@ it holds commits that branch hasn't: work from before, kept). Its worktree
 must have nothing uncommitted."
   (let* ((project (agent-workspace-agent-project agent))
          (main (agent-workspace-main-branch project))
-         (rest (agent-workspace-branch (agent-workspace-agent-name agent))))
-    (if (and (let ((default-directory project)) (agent-workspace--branch-p rest))
+         (rest (agent-workspace-branch (agent-workspace-agent-name agent) project)))
+    (if (and (let ((default-directory (agent-workspace-dir project))) (agent-workspace--branch-p rest))
              (agent-workspace--ahead-p project rest main))
         (agent-workspace--branch-switch agent rest)
       (agent-workspace--branch-switch agent rest main t))))
@@ -588,7 +597,7 @@ agent/NAME."
     (cond (branch
            (agent-workspace-branch-open agent branch (agent-workspace-main-branch project)))
           ((not (equal (agent-workspace--worktree-head (agent-workspace-agent-worktree agent))
-                       (agent-workspace-branch (agent-workspace-agent-name agent))))
+                       (agent-workspace-branch (agent-workspace-agent-name agent) project)))
            (agent-workspace-rest agent)))))
 
 (defun agent-workspace-issue-branch-open (agent issue &optional type title)
@@ -688,7 +697,7 @@ branch waits for its next turn), PROMPT's quiet mark taken."
            ((and (not quiet) (stringp prompt)
                  (agent-workspace-edits-p agent)
                  (not (string-prefix-p "/" (string-trim-left prompt)))
-                 (equal head (agent-workspace-branch (agent-workspace-agent-name agent)))
+                 (equal head (agent-workspace-branch (agent-workspace-agent-name agent) project))
                  (not (agent-workspace--ahead-p project head (agent-workspace-main-branch project))))
             (agent-workspace--branch-switch
              agent (agent-workspace--fresh-branch project (agent-workspace-slug prompt))))))
@@ -698,7 +707,7 @@ branch waits for its next turn), PROMPT's quiet mark taken."
 
 (defun agent-workspace-main-branch (project)
   "The branch PROJECT's main checkout is on (\"main\"), or its commit."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (or (agent-workspace--git-line "branch" "--show-current")
         (agent-workspace--git "rev-parse" "HEAD"))))
 
@@ -712,7 +721,7 @@ first: (BRANCH LINE...), a line a commit; see `agent-workspace-agent-branches').
          (main (agent-workspace-main-branch project)))
     (list :changes (when (and dir (file-directory-p dir))
                      (agent-workspace--changes dir))
-          :commits (let ((default-directory project))
+          :commits (let ((default-directory (agent-workspace-dir project)))
                      (delq nil (mapcar (lambda (branch)
                                          (when-let* ((lines (split-string (agent-workspace--git
                                                                            "log" "--oneline" (concat main ".." branch))
@@ -732,7 +741,7 @@ hasn't."
   (let* ((project (agent-workspace-agent-project agent))
          (dir (agent-workspace-agent-worktree agent))
          (branches (agent-workspace-agent-branches agent))
-         (default-directory project))
+         (default-directory (agent-workspace-dir project)))
     (when (and dir (agent-workspace--worktree-entry project dir))
       (agent-workspace--worktree-unlock project dir)
       (agent-workspace--git "worktree" "remove" "--force" (directory-file-name dir)))
@@ -819,7 +828,7 @@ the main checkout's branch (MAIN...BRANCH): in magit, else as a diff."
 needed), changed since it left the main checkout's branch (MAIN...BRANCH):
 in magit, else as a diff."
   (let ((range (concat (agent-workspace-main-branch project) "..." branch))
-        (default-directory project))
+        (default-directory (agent-workspace-dir project)))
     (if (require 'magit nil t)
         (magit-diff-range range)
       (let ((buffer (get-buffer-create (format "*%s's changes*" name))))
@@ -836,7 +845,7 @@ in magit, else as a diff."
   "Show PROJECT's BRANCH's commits (the agent NAME's, forgotten maybe) the
 main checkout's branch hasn't (MAIN..BRANCH): magit's log, else git log's."
   (let ((range (concat (agent-workspace-main-branch project) ".." branch))
-        (default-directory project))
+        (default-directory (agent-workspace-dir project)))
     (if (require 'magit nil t)
         (apply #'magit-log-other (list range) (magit-log-arguments))
       (let ((buffer (get-buffer-create (format "*%s's commits*" name))))
@@ -845,7 +854,7 @@ main checkout's branch hasn't (MAIN..BRANCH): magit's log, else git log's."
             (erase-buffer)
             (process-file "git" nil t nil "log" range))
           (special-mode)
-          (setq default-directory project)
+          (setq default-directory (agent-workspace-dir project))
           (goto-char (point-min)))
         (pop-to-buffer buffer)))))
 
@@ -866,7 +875,7 @@ ISSUE CLOSED)."
 (defun agent-workspace--bd-status (project id)
   "Issue ID of PROJECT's status (\"open\", \"closed\"...), or nil if bd
 doesn't know it."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (with-temp-buffer
       (when (eql 0 (process-file "bd" nil (list t nil) nil "show" id "--json"))
         (let ((data (ignore-errors (json-parse-string (buffer-string) :object-type 'alist :array-type 'list))))
@@ -891,11 +900,11 @@ ITS ISSUE CLOSED), said in the room (as AGENT's, if given). What the
 merge's message adds: \": ID closed\", a failure, or \"\"."
   (or (when-let* (((and agent-workspace-close-on-merge
                         (executable-find "bd")
-                        (file-directory-p (expand-file-name ".beads" project))))
+                        (file-directory-p (expand-file-name ".beads" (agent-workspace-dir project)))))
                   (issue (agent-workspace--branch-issue project branch))
                   ((member (cdr issue) '("open" "in_progress"))))
         (let* ((id (car issue))
-               (default-directory project)
+               (default-directory (agent-workspace-dir project))
                (said (with-temp-buffer
                        ;; --force: the issue its agent holds (claimed, as
                        ;; bd refuses otherwise): you merged it.
@@ -918,7 +927,7 @@ merge's message adds: \": ID closed\", a failure, or \"\"."
 naming it (--no-ff: never a fast-forward, so its commits stay told apart
 from yours). Non-nil if it merged; stopped on conflicts, said, left to you
 in the main checkout."
-  (let ((default-directory project))
+  (let ((default-directory (agent-workspace-dir project)))
     (with-temp-buffer
       (or (eql 0 (process-file "git" nil t nil "merge" "--no-ff" "--no-edit" branch))
           (progn
@@ -943,10 +952,10 @@ checkout. Return non-nil if it merged."
          (name (agent-workspace-agent-name agent))
          (branch (or branch (agent-workspace-agent-branch agent) (user-error "%s is on no branch" name)))
          (main (agent-workspace-main-branch project))
-         (rest (agent-workspace-branch name))
+         (rest (agent-workspace-branch name project))
          (dir (agent-workspace--worktree-live agent))
          (on (and dir (equal (agent-workspace--worktree-head dir) branch)))
-         (default-directory project))
+         (default-directory (agent-workspace-dir project)))
     (when (agent-workspace--merge-in project branch)
       (let ((closed (agent-workspace--merged-close project branch main agent))
             (why (and on (if (memq (agent-workspace-agent-state agent) '(working hand))

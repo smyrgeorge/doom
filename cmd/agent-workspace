@@ -45,6 +45,10 @@
 #                                its loop turned on or off, as L does
 #                                -> {"ok": true, "name", ..., "loop"}
 #
+# --crew NAME, with any of them: the project's crew NAME (default: its
+# default crew), from your shell or a script. From an agent's session, its
+# own crew, always (another --crew is refused).
+#
 # give, wake, sleep and loop are said in the room, with who did them (the
 # agent, or shell). From an agent's session they're refused unless its role
 # leads (leads: true), new and crew too; status works from any. Emacs tells
@@ -88,6 +92,20 @@ fail() {  # fail STATUS MESSAGE: the reply for an error, and exit
   printf '{"ok":false,"error":%s}\n' "$(json_string "$2")"
   exit "$1"
 }
+
+# --crew NAME, anywhere before a --: taken out, for the payload.
+crew="" args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --) args+=("$@"); break ;;
+    --crew)
+      [ $# -lt 2 ] && fail 2 "--crew: give it a value"
+      crew=$2; shift 2 ;;
+    --crew=*) crew=${1#--crew=}; shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+set -- ${args[@]+"${args[@]}"}
 
 [ $# -eq 0 ] && { usage >&2; exit 2; }
 case "$1" in -h|--help|help) usage; exit 0 ;; esac
@@ -144,7 +162,7 @@ case "$op" in
                      "$(json_string "$agent")") ;;
   status)
     [ $# -gt 0 ] && fail 2 "status: unknown argument \"$1\"; agent-workspace status"
-    payload='{}' ;;
+    payload=$(printf '{"agent":%s}' "$(json_string "${AGENT_WORKSPACE_AGENT:-}")") ;;
   give)
     issue="" to=""
     while [ $# -gt 0 ]; do
@@ -185,6 +203,13 @@ case "$op" in
   *)
     fail 2 "unknown operation \"$op\"; operations: new, crew, send, status, give, wake, sleep, loop" ;;
 esac
+if [ -n "$crew" ]; then
+  if [ "$payload" = '{}' ]; then
+    payload=$(printf '{"crew":%s}' "$(json_string "$crew")")
+  else
+    payload=$(printf '{"crew":%s,%s' "$(json_string "$crew")" "${payload#\{}")
+  fi
+fi
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workspace.XXXXXXXXXX") || fail 3 "no temp folder"
 trap 'rm -rf "$dir"' EXIT

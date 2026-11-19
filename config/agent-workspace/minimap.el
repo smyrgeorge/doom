@@ -299,10 +299,10 @@ notch, the axis and legend staying under them."
     (or (seq-find (lambda (buffer) (equal (buffer-local-value 'agent-workspace--minimap-project buffer) root))
                   (agent-workspace--app-buffers project))
         (with-current-buffer (generate-new-buffer
-                              (format "*minimap · %s*" (file-name-nondirectory (directory-file-name root))))
+                              (format "*minimap · %s*" (agent-workspace-crew-label root)))
           (agent-workspace-minimap-mode)
           (setq agent-workspace--minimap-project root
-                default-directory root)
+                default-directory (agent-workspace-dir root))
           (agent-workspace--app-buffer-add project (current-buffer))
           (current-buffer)))))
 

@@ -25,14 +25,17 @@ of it is shown.")
   "When each (AGENT . KIND) was last notified of.")
 
 (defun +my/notify-crew--name (agent)
-  "AGENT as a notification names it: \"ada (builder)\"."
-  (format "%s (%s)" (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))
+  "AGENT as a notification names it: \"ada (builder)\", a named crew's
+agent's \"ada (builder, test)\"."
+  (format "%s (%s%s)" (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)
+          (if-let* ((crew (agent-workspace-crew-name (agent-workspace-agent-project agent))))
+              (concat ", " crew)
+            "")))
 
 (defun +my/notify-crew--select (agent)
   "A click: AGENT's crew's app open, AGENT selected, the cursor in its pane."
   (lambda ()
-    (let ((default-directory (agent-workspace-agent-project agent)))
-      (agent-workspace-open))
+    (agent-workspace-open nil (agent-workspace-agent-project agent))
     (agent-workspace-select agent t)))
 
 (defun +my/notify-crew (kind agent text)

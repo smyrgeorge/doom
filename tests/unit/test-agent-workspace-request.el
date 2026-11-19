@@ -259,7 +259,7 @@ conflicting or offered."
            (agent-workspace-agents-talk t)
            (agent-workspace-talk 'ask))
       (should (equal (+test-awq--request "status")
-                     (list :ok t :project (directory-file-name project) :agents nil :conflicts nil
+                     (list :ok t :project (directory-file-name project) :crew :null :agents nil :conflicts nil
                            :offers nil :talk "ask"))))))
 
 ;; ====== GIVE ======

@@ -7,9 +7,10 @@
 ;; Their mode line shows the agent: its avatar and name in its colour, its
 ;; role ("▌A ada · builder"); a click selects it. Their tab starts with its
 ;; avatar (`agent-workspace-tab-prefix'). A file's agent is found from its
-;; worktree's folder (ROLE-NAME) through the crew, so it's there asleep or
-;; gone home too; a worktree left by a forgotten agent shows its name (its
-;; lock's reason says it; else its branch, agent/NAME, at rest) dimmed.
+;; worktree's folder (ROLE-NAME, a named crew's agent's ROLE-NAME@CREW)
+;; through its crew, so it's there asleep or gone home too; a worktree left
+;; by a forgotten agent shows its name (its lock's reason says it; else its
+;; branch, agent/NAME, at rest) dimmed.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -31,33 +32,34 @@ The app sets it; meanwhile the agent's session is shown.")
 ;; ====== A FILE'S AGENT ======
 
 (defun agent-workspace-worktree-of (file)
-  "If FILE is in an agent's worktree: (PROJECT NAME), the main checkout's
-folder and the agent's name; the outermost, for a worktree's own
-.agent-shell/."
+  "If FILE is in an agent's worktree: (PROJECT NAME), its crew's key (the
+main checkout's folder for its default crew) and the agent's name; the
+outermost, for a worktree's own .agent-shell/."
   (let ((file (expand-file-name file)))
     (when (string-match (concat "\\`\\(.*?/\\)"
                                 (regexp-quote (file-name-as-directory agent-workspace-worktrees-directory))
                                 "\\([^/]+\\)\\(?:/\\|\\'\\)")
                         file)
-      (let ((project (match-string 1 file))
-            (folder (match-string 2 file)))
-        (list project (agent-workspace--worktree-name project folder))))))
+      (let* ((root (match-string 1 file))
+             (folder (match-string 2 file))
+             (parts (agent-workspace-handle-parts (agent-workspace--worktree-name root folder) root)))
+        (list (car parts) (cdr parts))))))
 
 (defun agent-workspace--worktree-name (project folder)
-  "The name of the agent whose worktree is FOLDER (ROLE-NAME) in PROJECT:
-its crew's agent there, else a forgotten agent's (its lock's reason, else
-its branch agent/NAME: `agent-workspace--worktree-agent-name'), else
-FOLDER."
+  "The handle (`agent-workspace-handle') of the agent whose worktree is
+FOLDER (ROLE-NAME, ROLE-NAME@CREW) in PROJECT's folder: a crew's agent
+there, else a forgotten agent's (its lock's reason, else its branch
+agent/NAME: `agent-workspace--worktree-agent-name'), else FOLDER."
   (or (when-let* ((agent (seq-find (lambda (agent)
                                      (equal folder (file-name-nondirectory
                                                     (directory-file-name
                                                      (or (agent-workspace-agent-worktree agent)
                                                          (concat (agent-workspace-agent-role agent) "-"
                                                                  (agent-workspace-agent-name agent)))))))
-                                   (ignore-errors (agent-workspace-agents project)))))
-        (agent-workspace-agent-name agent))
+                                   (ignore-errors (agent-workspace-folder-agents project)))))
+        (agent-workspace-agent-handle agent))
       (agent-workspace--worktree-agent-name
-       (expand-file-name folder (expand-file-name agent-workspace-worktrees-directory project)))
+       (expand-file-name folder (expand-file-name agent-workspace-worktrees-directory (agent-workspace-dir project))))
       folder))
 
 (defun agent-workspace-file-agent (&optional file)
@@ -67,9 +69,10 @@ FOLDER."
     (agent-workspace-agent (cadr where) (car where))))
 
 (defun agent-workspace-project-name (root)
-  "The project name of ROOT if it's an agent's worktree: \"doom · ada\"."
+  "The project name of ROOT if it's an agent's worktree: \"doom · ada\", a
+named crew's agent's \"doom · test · ada\"."
   (when-let* ((where (agent-workspace-worktree-of (file-name-as-directory root))))
-    (format "%s · %s" (file-name-nondirectory (directory-file-name (car where))) (cadr where))))
+    (format "%s · %s" (agent-workspace-crew-label (car where)) (cadr where))))
 
 (defun agent-workspace--projectile-name-a (fn root)
   "projectile's name for ROOT: an agent's worktree's is \"PROJECT · NAME\"."

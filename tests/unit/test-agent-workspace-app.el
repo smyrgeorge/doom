@@ -183,8 +183,9 @@ too)."
             (goto-char (point-min))
             (should (search-forward title nil t))
             (agent-workspace-new-here)))
+        ;; Each in this app's crew.
         (should (equal (mapcar (lambda (args) (seq-drop args 2)) (reverse made))
-                       '(("p-1" "Ready one" "bug") (nil nil nil) (nil nil nil))))))))
+                       `(("p-1" "Ready one" "bug" ,project) (nil nil nil ,project) (nil nil nil ,project))))))))
 
 (ert-deftest agent-workspace-app/a-pane-s-header-kept ()
   "An open pane's header line, made at every redisplay of its window: made

@@ -17,9 +17,12 @@ Try it: `M-x +my/example-agent-workspace`, a crew of three stand-in agents, offl
 
 ## The app
 
-`SPC o w`, from inside a project, opens its crew in a workspace of its own, `crew · doom` (`crew · b/web` when
-another crew open has that name). Outside a project, it asks which one. `SPC o W` opens it in the window you're in. The first time, the stage is empty and says so: `c`, there
-as anywhere in the app, makes an agent, or a whole [crew](#crews).
+`SPC o w`, from inside a project, asks which of its [crews](#several-crews) to open, then opens it in a workspace of
+its own, `crew · doom` (`crew · doom · test` for the crew test, `crew · b/web` when another project's crew open has
+that name). A project with no crew asks the new crew's name: leave it empty for its default crew. One with crews offers
+each (the default one as `default`, the one you opened last first, an open one marked), or a new one, whose name is
+then asked. Outside a project, it asks which one. `SPC o W` opens it in the window you're in. The first time, the stage
+is empty and says so: `c`, there as anywhere in the app, makes an agent, or a whole [crew](#crews).
 
 - **The issues** are on the left. In progress, each with the agent on it. Ready, grouped by the role they're for
   (a role nobody in the crew has is flagged), then by epic: each epic's heading with how many of its issues are
@@ -280,6 +283,24 @@ may message without your OK, and never to wait for an answer.
 With `agent-workspace-agents-talk` set to `nil`, a message is refused, whatever `T` says (`crew.json` keeps it), and
 `T` says so. Agents aren't told of messages, and those queued before wait, not delivered.
 
+## Several crews
+
+A project can have several crews, a test crew beside its default one, say, each with its own agents, room, inbox,
+messages and saved crew. Two of them can be open at once, each in its own workspace: nothing one does shows in the
+other. Their files are in `.agent-shell/agent-workspace/`: the default crew's `crew.json`, `room.jsonl`,
+`inbox.jsonl`, `messages.json` and `crew.lock`, the crew test's `test.crew.json`, `test.room.jsonl` and so on. A
+crew's name is lowercase letters, digits and `-`, starting with a letter, and isn't `default`.
+
+An agent's name is its crew's: both crews can have an `ada`. Where the project tells them apart, the test crew's is
+`ada@test`: its worktree (`.agent-shell/worktrees/scribe-ada@test`), its branch at rest (`agent/ada@test`), its
+session (`ada · scribe · test`), who it is in Beads (it claims issues as `ada@test`, and an issue assigned to
+`ada@test` is hers), its shell's `AGENT_WORKSPACE_AGENT` and `{name}` in its role. Notifications name its crew:
+`ada (scribe, test)`. The default crew's agents are as they always were.
+
+Both crews' looping agents take the project's ready issues; claiming them is atomic, so two never take the same one.
+Under treemacs, the lanes are those of the project's crew you opened last. `gR`, `q` and `Q` act on the crew whose app
+you're in.
+
 ## The crew from the shell
 
 `cmd/agent-workspace` shows the crew and runs it, from your shell, a script, or a lead agent's shell. Each command
@@ -297,6 +318,9 @@ The room says each action and who did it: `shell gave doom-a1b to grace`, `max w
 and the reply says why: an agent not in the crew, an issue `bd` doesn't know, a closed issue or an epic, another
 agent's issue, an issue for an agent asleep or gone home, an agent asleep put to sleep, an awake one woken, a loop for
 a role with no labels.
+
+Each command acts on the project's default crew; `--crew NAME`, anywhere among its arguments, on another. From an
+agent's session, on its own crew, always: another `--crew` is refused.
 
 From an agent's session, `give`, `wake`, `sleep`, `loop`, `new` and `crew` work only if its role leads (`leads:
 true`, see [Roles](#roles)), as [the lead](#the-lead) does; another agent gets `only a lead runs the crew`. Emacs
@@ -384,8 +408,8 @@ opens its crew with it selected. `SPC t N` turns each kind off ([Notifications](
 
 ## The saved crew
 
-The crew is kept per project on this machine, in `.agent-shell/agent-workspace/crew.json`, beside the room and the
-inbox, not committed: each agent's name, role and colour, its model and permission mode when they aren't its role's,
+The crew is kept per project on this machine, in `.agent-shell/agent-workspace/crew.json` (a [named
+crew](#several-crews)'s in `NAME.crew.json`), beside the room and the inbox, not committed: each agent's name, role and colour, its model and permission mode when they aren't its role's,
 whether it's asleep, whether it [loops](#loops), the [panels](#an-agents-panels) it has open (by name, never their
 data), which agent is selected, whether the minimap is shown, whether its agents may message each other, and the event
 sources you turned off. Not its session, state, issue or branch: started again, its worktree is on the branch it was
@@ -437,8 +461,8 @@ saying so, and the others open. A wrong agent is left out, and a warning names i
 colour "pink" isn't one of ...`); it stays in the file as it was, for you to mend. A file that isn't JSON, or isn't a crew, is said, nothing starts, and it's kept as it
 is until you make an agent.
 
-A project's crew runs in one Emacs at a time: opening it in another (`SPC o w`, an agent made there) is refused, saying
-which Emacs runs it.
+A crew runs in one Emacs at a time: opening it in another (`SPC o w`, an agent made there) is refused, saying which
+Emacs runs it.
 
 After you edit it, `gR` reads it again; until then the crew changing doesn't overwrite your edit (the room says so). It asks before it starts an agent, forgets one or turns a loop on; a colour, the
 panels or a loop turned off it applies.
@@ -654,7 +678,7 @@ canvas raising its hand. A hand already raised for a question on its canvas stay
 
 ## Its name on its worktree
 
-- Its worktree is a project of its own, named `doom · ada`.
+- Its worktree is a project of its own, named `doom · ada` (`doom · test · ada` in the crew test).
 - A file of its worktree shows the agent in its mode line, in its colour: `▌A ada · builder`. A click there selects the
   agent.
 - That file's tab starts with the agent's avatar, `▌A`.
@@ -673,7 +697,7 @@ it's on.
   Given while it works, the branch comes as the issue starts its next turn.
 - **A prompt of yours** while it rests (from the room, `#`, or typed in its session) gets a branch named from its first
   words (lowercase, at most 48 characters), `fix-the-parser`, where it is: no file changes.
-- **Between pieces of work** it rests on `agent/ada`, at your branch's tip. Nothing is merged from it, but an agent
+- **Between pieces of work** it rests on `agent/ada` (`agent/ada@test` in the crew test), at your branch's tip. Nothing is merged from it, but an agent
   with work there from before (an older crew's) keeps it, and `M` merges it as before.
 
 An agent that can't edit gets none: one whose role denies it editing (the scribe, the investigator, the reviewer, the

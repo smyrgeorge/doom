@@ -948,6 +948,67 @@ a merge stopped on conflicts closes nothing."
           (+test-awl--run "git" "merge" "--abort"))
         (should (equal (+test-awl--status project two) "in_progress"))))))
 
+;; ====== TWO CREWS, ONE NAME ======
+
+(defun +test-awl--assignee (project id)
+  "Issue ID of PROJECT's assignee in bd, or nil."
+  (let ((default-directory project))
+    (alist-get 'assignee (car (json-parse-string (+test-awl--run "bd" "show" id "--json")
+                                                 :object-type 'alist :array-type 'list)))))
+
+(defun +test-awl--crew-room (project crew name)
+  "What PROJECT's crew CREW's room said of the agent NAME: (KIND . TEXT)
+each, in order."
+  (let ((file (expand-file-name (format ".agent-shell/agent-workspace/%s.room.jsonl" crew) project)))
+    (when (file-exists-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (cl-loop for line in (split-string (buffer-string) "\n" t)
+                 for entry = (json-parse-string line :object-type 'plist)
+                 when (equal (plist-get entry :agent) name)
+                 collect (cons (plist-get entry :kind) (plist-get entry :text)))))))
+
+(ert-deftest agent-workspace-loops/two-crews-each-an-ada ()
+  "Two crews of one project, each with a looping builder ada (doom-pbk.164):
+bd tells them apart (ada, ada@test: who claims, the assignee). An issue
+handed back to the test crew's ada is hers, never the other's (bd ready
+--claim skips it); the other ada takes the one nobody has. Each works on
+its own (both held: neither free to take another); each crew's room says
+its own."
+  (+test-awl--with-crew "two-adas"
+    (let* ((agent-workspace-loop t)
+           (test (agent-workspace-crew-key project "test"))
+           (hers (let ((default-directory project))
+                   (alist-get 'id (json-parse-string
+                                   (+test-awl--run "bd" "create" "--title" "the parser" "--labels" "build"
+                                                   "--priority" "1" "--type" "task" "--assignee" "ada@test"
+                                                   "--json")
+                                   :object-type 'alist))))
+           (his (+test-awl--issue project "the lexer" "build" 2))
+           (ada (agent-workspace-create :role "builder" :name "ada" :kind 'mock))
+           (her (agent-workspace-create :role "builder" :name "ada" :kind 'mock :project test)))
+      (should-not (eq ada her))
+      (should (+test-awl--wait (lambda () (and (equal (agent-workspace-agent-issue ada) his)
+                                               (equal (agent-workspace-agent-issue her) hers)))))
+      (+test-awl--all-in (list ada her) 'working)
+      ;; Each one's, by its handle.
+      (should (equal (+test-awl--status project his) "in_progress"))
+      (should (equal (+test-awl--assignee project his) "ada"))
+      (should (equal (+test-awl--status project hers) "in_progress"))
+      (should (equal (+test-awl--assignee project hers) "ada@test"))
+      (should (equal (length (+test-awl--prompts "ada")) 1))
+      (should (string-search his (car (+test-awl--prompts "ada"))))
+      (should (equal (length (+test-awl--prompts "ada@test")) 1))
+      (should (string-search hers (car (+test-awl--prompts "ada@test"))))
+      ;; Each crew's room: its ada's.
+      (should (seq-find (lambda (said) (string-search (concat "took " his) (cdr said)))
+                        (+test-awl--room project "ada")))
+      (should-not (seq-find (lambda (said) (string-search hers (cdr said))) (+test-awl--room project "ada")))
+      (should (seq-find (lambda (said) (string-search (concat "took " hers) (cdr said)))
+                        (+test-awl--crew-room project "test" "ada")))
+      (should-not (seq-find (lambda (said) (string-search his (cdr said)))
+                            (+test-awl--crew-room project "test" "ada"))))))
+
 ;; ====== THE SAVED CREW ======
 
 (ert-deftest agent-workspace-loops/reopening-never-starts-one ()
