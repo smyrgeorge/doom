@@ -325,18 +325,21 @@ you came from. Doom's popups keep it too (doom.el).")
 its buffers. Its workspace is left to its caller."
   (when-let* ((app (agent-workspace--app project)))
     (let ((agent-workspace--closing t)
-          (buffers (agent-workspace--app-buffers project)))
+          (buffers (agent-workspace--app-buffers project))
+          ;; Laid out in its frame now: not if you left it (q) and that frame
+          ;; shows something else (its workspace killed from another).
+          (here (agent-workspace--shown-p app)))
       (remhash (agent-workspace--root project) agent-workspace--apps)
       (agent-workspace--unmark app)
       ;; Its windows first: a dedicated window's buffer killed errs, and the
       ;; windows freed fill with other buffers. Its frame (the app had it
-      ;; whole) down to one window, showing something else; elsewhere, its
-      ;; buffers' windows deleted.
+      ;; whole), if it still shows it, down to one window, showing something
+      ;; else; elsewhere, its buffers' windows deleted.
       (let ((ignore-window-parameters t)
             (frame (agent-workspace--app-frame app))
             (shown (append buffers (delq nil (mapcar #'agent-workspace-agent-buffer
                                                      (agent-workspace-agents project))))))
-        (when (frame-live-p frame)
+        (when (and here (frame-live-p frame))
           (with-selected-frame frame
             (let ((window (or (seq-find (lambda (window) (not (window-parameter window 'window-side)))
                                         (window-list frame 'nomini))

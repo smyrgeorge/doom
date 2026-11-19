@@ -2006,6 +2006,32 @@ the crew closes, its agents exit, its buffers go."
         (should-not (get-buffer "*issues · persp*"))
         (should-not (persp-get-by-name "crew · persp" *persp-hash* nil))))))
 
+(ert-deftest agent-workspace-app/its-workspace-killed-from-another ()
+  "The crew left (q), main split in two with a side window: its workspace
+killed from main (C-u SPC TAB d) closes the crew, main's windows as they
+were, its side window too (doom-pbk.159: down to one window)."
+  (+test-awa "persp-other"
+    (+test-awa--persp
+      (pcase-let ((`(,ada) (+test-awa--crew '("ada" "builder"))))
+        (agent-workspace-open)
+        (agent-workspace-leave)
+        (should (equal (safe-persp-name (get-current-persp)) "main"))
+        (delete-other-windows)
+        (switch-to-buffer (get-buffer-create "left-file"))
+        (set-window-buffer (split-window-right) (get-buffer-create "right-file"))
+        (display-buffer-in-side-window (get-buffer-create "*side*") '((side . bottom)))
+        (let ((before (mapcar (lambda (window) (buffer-name (window-buffer window))) (window-list nil 'nomini))))
+          (should (equal (sort (copy-sequence before) #'string<) '("*side*" "left-file" "right-file")))
+          ;; This file's stand-in stop kills a session's buffer with
+          ;; persp-mode's questions on (session.el's doesn't).
+          (let ((persp-kill-foreign-buffer-behaviour 'kill))
+            (persp-kill "crew · persp-other"))
+          (should-not (agent-workspace--app project))
+          (should (eq (agent-workspace-agent-state ada) 'home))
+          (should (equal (safe-persp-name (get-current-persp)) "main"))
+          (should (equal (mapcar (lambda (window) (buffer-name (window-buffer window))) (window-list nil 'nomini))
+                         before)))))))
+
 (ert-deftest agent-workspace-app/quit-leaves-no-process ()
   "Q with real (stand-in) agents, one working: no question, every agent
 exits, none of their processes left; back in the workspace you came from."
