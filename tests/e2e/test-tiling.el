@@ -326,6 +326,47 @@ already), the cursor staying in the file; off, its pane closes."
         (should-not (window-live-p preview))
         (should (= (length (+my/tiling--panes)) 2))))))
 
+(ert-deftest e2e-tiling/a-closed-pane-s-rows-reach-the-preview-s-page ()
+  "The preview at the stack's bottom, two sessions above it; one closed: the
+stack laid out again from Emacs's window change functions (which record the
+sizes after), the preview's page as big as its pane, not as it was (the rest
+of its pane blank)."
+  (+test-needs-webkit)
+  (+test-tiling
+    (let* ((left (selected-window))
+           (readme (+test-tiling--file "README.md" "# Title\n\nText.\n"))
+           (sessions (mapcar #'+test-tiling--session '("*one*" "*two*")))
+           (fits (lambda (window)
+                   (with-current-buffer (window-buffer window)
+                     (when-let* ((xwidget (+my/webkit-xwidget window)))
+                       (equal (xwidget-size-request xwidget)
+                              (list (xwidget-window-inside-pixel-width window)
+                                    (xwidget-window-inside-pixel-height window))))))))
+      (switch-to-buffer readme)
+      (markdown-mode)
+      (dolist (session sessions)
+        (select-window left)
+        (agent-shell--display-buffer session))
+      (select-window left)
+      (+md-preview-mode 1)
+      (let ((preview (get-buffer-window (buffer-local-value '+md-preview--buffer readme))))
+        (should (eq (car (last (+my/tiling--panes))) preview))
+        (should (= (length (+my/tiling--panes)) 4))
+        (should (+test-wait-for (lambda () (redisplay t) (funcall fits preview)) 10))
+        (let ((height (window-pixel-height preview)))
+          (kill-buffer (car sessions))
+          (should (= (length (+my/tiling--panes)) 3))
+          (should (+test-wait-for
+                   (lambda ()
+                     (redisplay t)
+                     (/= (window-pixel-height preview) height))
+                   3))
+          (+test-sleep 0.3)
+          (redisplay t)
+          (should (funcall fits preview)))
+        (with-current-buffer readme (+md-preview-mode -1))
+        (kill-buffer (cadr sessions))))))
+
 (ert-deftest e2e-tiling/markdown-preview-closed-by-its-tab-opens-again ()
   "The preview's pane closed by its tab's ✕ (the pane goes with its last tab,
 the preview stays on): the notice's Open preview shows it again, in a new

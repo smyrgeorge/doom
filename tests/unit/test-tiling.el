@@ -447,6 +447,46 @@ width as it was."
         (should (+test-tiling--even-p (+test-tiling--stack-heights)))
         (should (= (window-total-width main) width))))))
 
+(ert-deftest tiling/a-closed-pane-s-layout-told-to-size-hooks ()
+  "The stack laid out again once a pane closed, from Emacs's window change
+functions (whose sizes it records after them): the panes resized are told,
+as Emacs tells them: their buffer's `window-size-change-functions' with the
+window, at its new size; the default ones with the frame. The main pane, as
+it was, isn't; an error in one is said, the others still told."
+  (+test-tiling
+    (let* ((main (selected-window))
+           (told nil)
+           (frames nil)
+           (global (lambda (frame) (push frame frames))))
+      (dolist (name '("B" "C" "D"))
+        (select-window main)
+        (pop-to-buffer name '(+my/tiling-display-buffer)))
+      (+my/tiling--closed-h (selected-frame)) ; seen: 4 panes
+      (dolist (name '("A" "B" "D"))
+        (with-current-buffer name
+          (add-hook 'window-size-change-functions (lambda (_window) (error "Broken")) nil t)
+          (add-hook 'window-size-change-functions
+                    (lambda (window)
+                      (push (cons (buffer-name (window-buffer window)) (window-pixel-height window))
+                            told))
+                    nil t)))
+      (add-hook 'window-size-change-functions global)
+      (unwind-protect
+          (progn
+            (delete-window (get-buffer-window "C"))
+            (+my/tiling--closed-h (selected-frame))
+            (should (+test-tiling--even-p (+test-tiling--stack-heights)))
+            (should (equal (sort (mapcar #'car told) #'string<) '("B" "D")))
+            (dolist (pair told)
+              (should (= (cdr pair) (window-pixel-height (get-buffer-window (car pair))))))
+            (should (equal frames (list (selected-frame))))
+            ;; Nothing closed: nothing told.
+            (setq told nil frames nil)
+            (+my/tiling--closed-h (selected-frame))
+            (should-not told)
+            (should-not frames))
+        (remove-hook 'window-size-change-functions global)))))
+
 ;; A frame left alone (the agent workspace's crew lays it out itself): no
 ;; pane laid out when one closes, nothing shown redirected, no pane closed
 ;; with its last tab.

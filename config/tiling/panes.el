@@ -116,6 +116,42 @@ kept whole (the panes beside it as they are)."
       (when (and before (< count before) (> count 1))
         (when-let* ((closed (plist-get (+my/tiling--strategy) :closed)))
           (with-selected-frame frame
-            (funcall closed (+my/tiling--ordered-panes))))))))
+            (let ((sizes (+my/tiling--sizes frame)))
+              (funcall closed (+my/tiling--ordered-panes))
+              (+my/tiling--tell-sizes frame sizes))))))))
 
 (add-hook 'window-state-change-functions #'+my/tiling--closed-h)
+
+;; THE SIZES TOLD
+;; Emacs records each window's size once its window change functions have
+;; run, `+my/tiling--closed-h' among them: the panes it lays out again are
+;; never seen resized by `window-size-change-functions' (a Markdown preview's
+;; page kept its height from before, the rest of its pane blank). So they're
+;; told here, as Emacs tells them: the functions of the buffer a resized (or
+;; new) window shows, with that window; then the default ones, with the frame.
+(defun +my/tiling--sizes (frame)
+  "FRAME's windows, each with its sizes in pixels: total and text area."
+  (mapcar (lambda (window)
+            (list window (window-pixel-width window) (window-pixel-height window)
+                  (window-body-width window t) (window-body-height window t)))
+          (window-list frame 'nomini)))
+
+(defun +my/tiling--tell-sizes (frame before)
+  "Run `window-size-change-functions' for FRAME's windows whose sizes differ
+from BEFORE (`+my/tiling--sizes'), see above. A function's error is said,
+not raised (as Emacs's are)."
+  (when-let* ((resized (seq-remove (lambda (size) (member size before))
+                                   (+my/tiling--sizes frame))))
+    (dolist (size resized)
+      (let ((window (car size)))
+        (when (window-live-p window)
+          (with-current-buffer (window-buffer window)
+            (when (local-variable-p 'window-size-change-functions)
+              (dolist (fn window-size-change-functions)
+                (when (and (not (eq fn t)) (window-live-p window))
+                  (with-demoted-errors "Tiling, a size told: %S"
+                    (funcall fn window)))))))))
+    (dolist (fn (default-value 'window-size-change-functions))
+      (when (frame-live-p frame)
+        (with-demoted-errors "Tiling, a size told: %S"
+          (funcall fn frame))))))
