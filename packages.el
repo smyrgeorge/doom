@@ -60,9 +60,9 @@
 ;; Pinned: the agent workspace advises agent-shell's internals (its queue, its
 ;; steering: config/agent-workspace/session.el), checked with these commits
 ;; (tests/unit/test-agent-workspace-*.el); the tests on GitHub build the same.
-(package! shell-maker :pin "b28ee61a2533e408ed180662f83bb84fc8f84ba6")
-(package! acp :pin "2959da5fa8657da17a78ac6ceef303a50e3e69de")
-(package! agent-shell :pin "26365eb6f2fc3a635eb10bfccc97b3f4264d64be")
+(package! shell-maker :pin "cba42efd503bbdf19a7244b9119efd8764e99ecb")
+(package! acp :pin "3fa3b58ecef062293095b046d4873b5bf4c99de3")
+(package! agent-shell :pin "7473e5eb2f3a7da01e1762ac20ac3a4c577b1cb8")
 
 ;; Git: TODOs in magit status.
 (package! magit-todos)
@@ -78,7 +78,7 @@
 ;; commit it was checked with (tests/unit/test-beads.el); vui, its UI library,
 ;; the one it was checked with too.
 (package! vui :recipe (:host github :repo "d12frosted/vui.el")
-  :pin "9e9ffa2f631cf5f99ef28bccc1a667922ddd71c5")
+  :pin "004dd852746d8af838107dd7e3f44c5bbea04d79")
 (package! beads :recipe (:host codeberg :repo "ctietze/beads.el" :files ("lisp/*.el"))
   :pin "f7ab243c3bd8c175a5bd9e68847d0d9b1b678735")
 
