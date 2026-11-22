@@ -29,6 +29,11 @@ with a line saying so."
   "The most rows (a table's) or values (a chart's) an element draws."
   :type 'natnum)
 
+(defcustom agent-ui-max-cell-lines 20
+  "The most lines a table's cell is wrapped onto; past them, its last line
+ends with …"
+  :type 'natnum)
+
 (defface agent-ui-title '((t :inherit bold))
   "An element's title, the line above it.")
 

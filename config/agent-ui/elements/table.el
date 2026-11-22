@@ -1,12 +1,14 @@
 ;;; $DOOMDIR/config/agent-ui/elements/table.el -*- lexical-binding: t; -*-
-;; Agent UI's table: columns and rows, fitting the width. With a key column,
-;; an appended row whose key is there replaces that row: a test's row goes from
-;; running to failed. Loaded from
-;; config/agent-ui/elements.el.
+;; Agent UI's table: columns and rows, fitting the width, a cell too long for
+;; its column wrapped onto more lines in it. With a key column, an appended
+;; row whose key is there replaces that row: a test's row goes from running
+;; to failed. Loaded from config/agent-ui/elements.el.
 ;;
-;;    Test    │ Result │ Time
-;;   ─────────┼────────┼──────
-;;    lexer   │ passed │ 0.4s
+;;    Test    │ Result │ Error
+;;   ─────────┼────────┼─────────────────
+;;    lexer   │ passed │
+;;    parser  │ failed │ expected ) after
+;;            │        │ the arguments
 ;;
 ;; Sorted by a column (sort; s on it in the canvas, again the other way), its
 ;; name marked ↑ or ↓. Row actions: buttons at each row's end, their prompts
@@ -123,9 +125,10 @@ measured once): a list per column, its header's first."
   "The longest cell coloured by its state: longer ones aren't looked up.")
 
 (defun agent-ui-table--narrowest (width)
-  "The narrowest a column is cut to in a table WIDTH columns wide: 8, less
-when narrow (6 at 24), 3 at least. Narrower, every cell read \"do…\":
-columns are left out instead (said under it)."
+  "The narrowest a column is made in a table WIDTH columns wide: 8, less
+when narrow (6 at 24), 3 at least. Narrower, every cell read a few
+characters a line (\"doo\", \"m-h\"): columns are left out instead (said
+under it)."
   (max 3 (min 8 (/ width 4))))
 
 (defun agent-ui-table--narrowests (columns key max-width)
@@ -257,6 +260,21 @@ collecting garbage)."
       (replace-regexp-in-string
        "\t" " " (replace-regexp-in-string "\r?\n" "⏎" text)))))
 
+(defun agent-ui-table--wrap (cell width)
+  "CELL, wider than WIDTH, as its lines in a column WIDTH wide, each (TEXT
+. ITS-WIDTH): broken at spaces (`agent-ui-wrap'), at most
+`agent-ui-max-cell-lines' of them, the last ending with … if there's more.
+Only its start is wrapped, enough for those lines: a cell of megabytes as
+quickly as a sentence."
+  (let* ((most (max 1 agent-ui-max-cell-lines))
+         (room (* 2 (1+ most) (max 1 width)))
+         (part (if (> (length cell) room) (substring cell 0 room) cell))
+         (lines (split-string (agent-ui-wrap part width) "\n")))
+    (when (or (> (length lines) most) (< (length part) (length cell)))
+      (setq lines (seq-take lines most))
+      (setcar (last lines) (agent-ui-truncate (concat (car (last lines)) "…") width)))
+    (mapcar (lambda (line) (cons line (string-width line))) lines)))
+
 (defvar agent-ui-table--layouts (make-hash-table :test #'eq :weakness 'key)
   "The layouts tables were drawn in (`agent-ui-table--layout-key'), by their
 rows (the list): an append draws only its rows if the layout stays.")
@@ -295,7 +313,8 @@ widths, alignments, buttons beside or under)."
          (room (max 4 (- (plist-get ctx :width) (if beside actions-width 0))))
          ;; The columns that fit, each at its narrowest (the key column
          ;; whole, the others 8 wide, less when narrow): the others left
-         ;; out, said under it (cut to 3, every cell read "do…").
+         ;; out, said under it (squeezed to 3, every cell a few characters
+         ;; a line).
          (narrowests (agent-ui-table--narrowests cell-widths (agent-ui-table--answer-index props) room))
          (shown (agent-ui-table--fitting narrowests room))
          (widths (agent-ui-table--widths (seq-take cell-widths shown) room (seq-take narrowests shown)))
@@ -306,13 +325,7 @@ widths, alignments, buttons beside or under)."
                                                               (mapcar (lambda (r) (nth i r)) rows))))
                                        (if (and cells (cl-every #'agent-ui-table--right-p cells))
                                            'right
-                                         'left)))))
-         ;; The sorted column's name cut, its arrow kept (cut, it went first).
-         (header (cl-loop for c in header for name in columns for w in widths for i from 0
-                          collect (if (and (eql i sort) (> (string-width c) w))
-                                      (concat (agent-ui-truncate name (max 1 (- w 2)))
-                                              (if descending " ↓" " ↑"))
-                                    c))))
+                                         'left))))))
     (list :columns columns :n n :all all :rows rows :measured measured :header header
           :actions actions :beside beside :shown shown :widths widths :align align
           ;; Asking: each row's answer, by the row (sorted, it's the same
@@ -375,42 +388,61 @@ the whole table, its header, \"no rows yet\" and what's left out too."
         (let ((inhibit-modification-hooks t))
           (erase-buffer)
           (cl-flet ((line (cells &optional face trim measured)
-                      ;; Each cell its column's (`s' there sorts by it); MEASURED
-                      ;; its cells' widths (else measured here); TRIM: the line's
-                      ;; trailing spaces left out, its marks cut there.
-                      (let ((start (point)))
-                        (cl-loop for cell in cells
-                                 for cell-width in (or measured (mapcar #'string-width cells))
-                                 for width in widths
-                                 for a in align
-                                 for i from 0
-                                 do (let* ((cut (> cell-width width))
-                                           (text (if cut (agent-ui-truncate cell width) cell))
-                                           (space (- width (if cut (string-width text) cell-width)))
-                                           (left (pcase a ('right space) ('center (/ space 2)) (_ 0)))
-                                           ;; Its colour by its whole text ("passed" cut).
-                                           (state (and (<= (length cell) agent-ui-table--longest-state)
-                                                       (cdr (assoc-string cell agent-ui-table--states t)))))
-                                      (unless (= i 0)
-                                        (push (list (point) (1+ (point)) 'face 'agent-ui-muted) marks)
-                                        (insert "│"))
-                                      (let ((from (point)))
-                                        (insert " " (make-string left ?\s) text (make-string (- space left) ?\s) " ")
-                                        (push (list from (point) 'agent-ui-table-column i) marks)
-                                        (when (or face state)
-                                          (push (list (1+ from) (1- (point)) 'face (or face state)) marks)))))
-                        (when trim
-                          (let ((end (point)))
-                            (skip-chars-backward " \t\n\r" start)
-                            (delete-region (point) end))
-                          ;; This line's marks (the latest) cut at its end.
-                          (let ((cut (point)) (kept nil))
-                            (while (and marks (>= (caar marks) start))
-                              (let ((m (pop marks)))
-                                (cond ((>= (car m) cut))
-                                      ((> (cadr m) cut) (push (list (car m) cut (nth 2 m) (nth 3 m)) kept))
-                                      (t (push m kept)))))
-                            (setq marks (nconc (nreverse kept) marks)))))))
+                      ;; Each cell its column's (`s' there sorts by it), one too
+                      ;; wide for it wrapped there: the row as many lines as its
+                      ;; tallest cell's, the others blank under theirs, a line
+                      ;; after the first under its start (asking: under its
+                      ;; mark). MEASURED its cells' widths (else measured here);
+                      ;; TRIM: each line's trailing spaces left out, its marks
+                      ;; cut there.
+                      (let* ((cell-widths (or measured (mapcar #'string-width cells)))
+                             ;; Its cells too wide, as their lines; the others
+                             ;; nil. Most rows have none: nil, a line.
+                             (pieces (and (cl-loop for w in cell-widths for width in widths
+                                                   thereis (> w width))
+                                          (cl-loop for cell in cells for w in cell-widths for width in widths
+                                                   collect (and (> w width) (agent-ui-table--wrap cell width)))))
+                             (height (if pieces (apply #'max (mapcar #'length pieces)) 1)))
+                        (dotimes (k height)
+                          (unless (= k 0)
+                            (insert "\n" (if select "    " "")))
+                          (let ((start (point)))
+                            (cl-loop for cell in cells
+                                     for cell-width in cell-widths
+                                     for tail = pieces then (cdr tail)
+                                     for width in widths
+                                     for a in align
+                                     for i from 0
+                                     do (let* ((lines (car tail))
+                                               (piece (and lines (nth k lines)))
+                                               (text (cond (lines (or (car piece) "")) ((= k 0) cell) (t "")))
+                                               (space (max 0 (- width (cond (lines (or (cdr piece) 0))
+                                                                            ((= k 0) cell-width)
+                                                                            (t 0)))))
+                                               (left (pcase a ('right space) ('center (/ space 2)) (_ 0)))
+                                               ;; Its colour by its whole text.
+                                               (state (and (<= (length cell) agent-ui-table--longest-state)
+                                                           (cdr (assoc-string cell agent-ui-table--states t)))))
+                                          (unless (= i 0)
+                                            (push (list (point) (1+ (point)) 'face 'agent-ui-muted) marks)
+                                            (insert "│"))
+                                          (let ((from (point)))
+                                            (insert " " (make-string left ?\s) text (make-string (- space left) ?\s) " ")
+                                            (push (list from (point) 'agent-ui-table-column i) marks)
+                                            (when (and (or face state) (not (string-empty-p text)))
+                                              (push (list (1+ from) (1- (point)) 'face (or face state)) marks)))))
+                            (when trim
+                              (let ((end (point)))
+                                (skip-chars-backward " \t\n\r" start)
+                                (delete-region (point) end))
+                              ;; This line's marks (the latest) cut at its end.
+                              (let ((cut (point)) (kept nil))
+                                (while (and marks (>= (caar marks) start))
+                                  (let ((m (pop marks)))
+                                    (cond ((>= (car m) cut))
+                                          ((> (cadr m) cut) (push (list (car m) cut (nth 2 m) (nth 3 m)) kept))
+                                          (t (push m kept)))))
+                                (setq marks (nconc (nreverse kept) marks)))))))))
             ;; No column named: no header, the rows alone.
             (when (and full (not (cl-every #'string-empty-p columns)))
               (when select (insert "    "))
@@ -558,8 +590,9 @@ replaces that row; the others after."
 
 (agent-ui-define table
   "A table: COLUMNS (their names) and ROWS (arrays of cells: text, numbers,
-true, false, null), fitting the width; cells reading passed, failed,
-running, pending... are coloured. With KEY (a column's index or name),
+true, false, null), fitting the width, a cell too long for its column
+wrapped onto more lines in it; cells reading passed, failed, running,
+pending... are coloured. With KEY (a column's index or name),
 appending a row whose key is there replaces that row: append
 {\"rows\": [[\"parser\", \"failed\", \"1.2s\"]]}. SORT orders its rows by a
 column (DESCENDING the other way); ROW-ACTIONS are buttons on each row

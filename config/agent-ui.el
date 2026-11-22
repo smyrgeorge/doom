@@ -13,7 +13,7 @@
 ;; the error in its place. Limits keep drawing quick (Emacs has one thread):
 ;; `agent-ui-max-chars' (cut at a line's end; a panel's children each, the
 ;; panel's frame whole, its lines within `agent-ui-panel-max-chars'),
-;; `agent-ui-max-rows'.
+;; `agent-ui-max-rows', `agent-ui-max-cell-lines'.
 
 ;; THE CANVAS
 ;; A buffer per agent session, "Agent UI: NAME" (config/agent-ui/canvas.el):

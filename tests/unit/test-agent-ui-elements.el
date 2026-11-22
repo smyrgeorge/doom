@@ -625,27 +625,29 @@ fit, the others said under it (it stayed wider than its width)."
 (ert-deftest agent-ui-elements/table-columns-left-out-not-squeezed ()
   "In a narrow canvas, columns are left out rather than every one squeezed
 to 3 (\"do… │ Ta… │ 202…\"): the key column (else the first) whole, the
-others 6 wide at least at 24, those left out named, the note wrapped."
+others 6 wide at least at 24, their cells wrapped, those left out named,
+the note wrapped."
   (let ((issues '(:type "table" :columns ("ID" "Title" "Status" "Created at")
                   :rows (("doom-ht6.13" "Tabs squeeze columns" "open" "2026-11-14")
                          ("doom-ht6.14" "Sort dates" "closed" "2026-11-13")))))
     (let ((text (+test-aue-draw issues :width 30)))
-      (should (string-match-p "^ doom-ht6.13 │ Tabs squeeze c…$" text))
+      (should (string-match-p "^ doom-ht6.13 │ Tabs squeeze\n +│ columns$" text))
       (should (string-match-p "… 2 more columns: Status,\n   Created at\\'" text)))
     (dolist (width '(24 30 40))
-      (let ((lines (split-string (+test-aue-draw issues :width width) "\n")))
+      (let* ((text (+test-aue-draw issues :width width))
+             (lines (split-string text "\n")))
         (dolist (line lines)
           (should (<= (string-width line) width)))
-        ;; Each cell shown: whole, or 6 wide at least.
-        (dolist (line (seq-take lines 4))
-          (dolist (cell (split-string line "│" t " +"))
-            (when (string-suffix-p "…" cell)
-              (should (>= (string-width cell) 6)))))))
-    ;; A key column not the first: whole, the first one cut.
-    (should (string-match-p "^ Tabs squ… │ doom-ht6.13$"
-                            (+test-aue-draw '(:type "table" :columns ("Title" "ID") :key "ID"
-                                              :rows (("Tabs squeeze columns" "doom-ht6.13")))
-                                            :width 24)))))
+        ;; Each cell shown whole, its words on its lines; the columns 6
+        ;; wide at least.
+        (dolist (word '("doom-ht6.13" "Tabs" "squeeze" "columns" "doom-ht6.14" "Sort" "dates"))
+          (should (string-search word text)))
+        (should (>= (string-width (cadr (split-string (cadr lines) "┼"))) 6)))))
+  ;; A key column not the first: whole, the first one wrapped.
+  (should (string-match-p "^ Tabs +│ doom-ht6.13\n squeeze +│\n columns +│$"
+                          (+test-aue-draw '(:type "table" :columns ("Title" "ID") :key "ID"
+                                            :rows (("Tabs squeeze columns" "doom-ht6.13")))
+                                          :width 24))))
 
 (ert-deftest agent-ui-elements/table-sorted-by-durations ()
   "Durations sorted by their length, units and all (the leading numbers
@@ -697,7 +699,8 @@ numbers: right)."
     (should-not (agent-ui-table--right-p cell))))
 
 (ert-deftest agent-ui-elements/table-sort-arrow-kept ()
-  "A sorted column's name cut to fit: its arrow kept (it was cut first)."
+  "A sorted column's name with its arrow, in a narrow canvas too (it was cut
+first)."
   (let ((text (+test-aue-draw '(:type "table" :columns ("Name" "Status" "Duration" "Owner" "Branch" "Commit")
                                 :sort "Duration" :descending t
                                 :rows (("lexer" "passed" "0.4s" "me" "main" "abc123def") ("parser" "failed" "1.2s" "you" "dev" "def456abc")))
@@ -719,8 +722,7 @@ right, center and null are taken."
   "A cell's line breaks and tabs: on its line (they broke the table's lines,
 and a panel's border around it)."
   (let ((text (+test-aue-draw '(:type "table" :columns ("Test" "Error")
-                                :rows (("lexer" "AssertionError: x\n  at foo.js:3") ("parser" "got\tvalue")))
-                              :width 40)))
+                                :rows (("lexer" "AssertionError: x\n  at foo.js:3") ("parser" "got\tvalue"))))))
     (should (= (length (split-string text "\n")) 4))
     (should (string-match-p "AssertionError: x⏎  at foo" text))
     (should (string-match-p "got value" text))
@@ -749,15 +751,70 @@ and a panel's border around it)."
                  " A │ B\n───┼──\n no rows yet")))
 
 (ert-deftest agent-ui-elements/table-fits-the-width ()
+  "Its lines within the width, a cell too long for its column wrapped in it
+\(cut with …, the rest of it was nowhere to be read)."
   (let ((text (+test-aue-draw '(:type "table" :columns ("Name" "Description")
                                 :rows (("a long name, longer than that" "a description much too long for the width it's given"))))))
     (dolist (line (split-string text "\n"))
       (should (<= (string-width line) 60)))
-    (should (string-match-p "…" text)))
+    (should-not (string-search "…" text))
+    (should (string-match-p "a description much too long\n +│ for the width it's given\\'" text)))
   ;; Too many rows: what's left out said.
   (let ((agent-ui-max-rows 2))
     (should (string-suffix-p "… 1 rows more"
                              (+test-aue-draw '(:type "table" :columns ("A") :rows (("1") ("2") ("3"))))))))
+
+;; doom-s84
+(ert-deftest agent-ui-elements/table-long-cells-wrapped ()
+  "A cell too long for its column wrapped onto more lines in it: the row as
+tall as its tallest cell, the others blank under theirs, the bars in line,
+every word shown (cut with …, most of a table of options and their costs
+was nowhere to be read)."
+  (should (equal (+test-aue-draw '(:type "table" :columns ("Option" "Costs")
+                                   :rows (("Files" "a format to write and keep in step") ("DB" "more records")))
+                                 :width 24)
+                 (concat " Option │ Costs\n"
+                         "────────┼───────────────\n"
+                         " Files  │ a format to\n"
+                         "        │ write and keep\n"
+                         "        │ in step\n"
+                         " DB     │ more records")))
+  (let* ((rows '(("Plain files" "one file per kind of work, read by every agent at the start"
+                  "the whole graph seen in one place; easy to review" "a format to write and keep in step with the code")
+                 ("A database" "each record's own child records, linked by their ids"
+                  "queries schedule the work; fan-out and joins come free" "more records to keep; no cycles, so retries need care")))
+         (element `(:type "table" :columns ("Option" "Lives in" "Good at" "Costs") :rows ,rows)))
+    (dolist (width '(60 80 129))
+      (let* ((text (+test-aue-draw element :width width))
+             (lines (split-string text "\n"))
+             (bars (lambda (line) (cl-loop for c across line for i from 0 when (eq c ?│) collect i))))
+        (should-not (string-search "…" text))
+        (dolist (word (split-string (mapconcat (lambda (row) (string-join row " ")) rows " ")))
+          (should (string-search word text)))
+        (dolist (line lines)
+          (should (<= (string-width line) width)))
+        ;; Each row's lines' bars where the header's are.
+        (dolist (line (cddr lines))
+          (should (equal (funcall bars line) (funcall bars (car lines)))))))))
+
+(ert-deftest agent-ui-elements/table-cell-lines-at-most ()
+  "A cell wrapped onto `agent-ui-max-cell-lines' lines at most, the last
+ending with …; a long one (a log's) only as far as that."
+  (let ((agent-ui-max-cell-lines 2))
+    (should (equal (+test-aue-draw '(:type "table" :columns ("Option" "Costs")
+                                     :rows (("Files" "a format to write and keep in step")))
+                                   :width 24)
+                   (concat " Option │ Costs\n"
+                           "────────┼───────────────\n"
+                           " Files  │ a format to\n"
+                           "        │ write and kee…"))))
+  (let ((agent-ui-max-cell-lines 3))
+    (should (equal (nthcdr 2 (split-string
+                              (+test-aue-draw `(:type "table" :columns ("A" "B")
+                                                :rows (("x" ,(mapconcat #'identity (make-list 4000 "word") " "))))
+                                              :width 20)
+                              "\n"))
+                   '(" x │ word word word" "   │ word word word" "   │ word word word…")))))
 
 (ert-deftest agent-ui-elements/table-appended-by-key ()
   (dolist (key '(0 "Test"))
@@ -2974,10 +3031,17 @@ trimmed, its last cell's properties not past it (the next line's own)."
       (should-not (prop (at 2 (length (nth 2 lines))) 'agent-ui-table-column))
       (should (eql (prop (at 3 0) 'agent-ui-table-column) 0))
       (should (eql (prop (at 3 (1- (length (nth 3 lines)))) 'agent-ui-table-column) 2)))
-    ;; A cell cut to its column keeps its state's colour.
+    ;; A cell wrapped in its column: its state's colour and its column on
+    ;; each of its lines.
     (let ((narrow (agent-ui-render '(:type "table" :columns ("N" "S") :rows (("a" "succeeded"))) (agent-ui-context :width 9))))
-      (should (string-search "suc…" narrow))
-      (should (eq (get-text-property (string-search "suc…" narrow) 'face narrow) 'agent-ui-success)))))
+      (should (equal (substring-no-properties narrow) " N │ S\n───┼─────\n a │ succ\n   │ eede\n   │ d"))
+      (dolist (piece '("succ" "eede" "d\\'"))
+        (let ((at (string-match piece narrow)))
+          (should (eq (get-text-property at 'face narrow) 'agent-ui-success))
+          (should (eql (get-text-property at 'agent-ui-table-column narrow) 1))))
+      ;; Under it, the first column's blank cell its column's still.
+      (should-not (get-text-property (string-match "\n   │ eede" narrow) 'agent-ui-table-column narrow))
+      (should (eql (get-text-property (1+ (string-match "\n   │ eede" narrow)) 'agent-ui-table-column narrow) 0)))))
 
 ;; doom-ord.4
 (defconst +test-aue-bugs
@@ -3096,6 +3160,25 @@ sorted too; a unique key cell still answers alone."
                           (+test-aue-error '(:type "table" :columns ("A") :rows (("a")) :select (:question "?") :selected ("z")))))
   (should (string-match-p "one option only"
                           (+test-aue-error '(:type "table" :columns ("A") :rows (("a") ("b")) :select (:question "?") :selected ("a" "b"))))))
+
+;; doom-s84
+(ert-deftest agent-ui-elements/table-select-wrapped-row ()
+  "Asking, a row wrapped onto more lines: those under its cells, past its
+mark, all of it picking the row."
+  (let* ((text (agent-ui-render '(:type "table" :columns ("ID" "Title") :key "ID"
+                                  :select (:question "Which?" :multiple t)
+                                  :rows (("a1" "a rather long title that wraps over lines") ("b2" "short")))
+                                (agent-ui-context :width 30)))
+         (plain (substring-no-properties text)))
+    (should (string-search (concat "     ID │ Title\n"
+                                   "    ────┼─────────────────────\n"
+                                   "[ ]  a1 │ a rather long title\n"
+                                   "        │ that wraps over\n"
+                                   "        │ lines\n"
+                                   "[ ]  b2 │ short\n")
+                           plain))
+    (dolist (word '("a rather" "that wraps" "lines"))
+      (should (get-text-property (string-search word plain) 'agent-ui-action text)))))
 
 ;; doom-ord.5
 (ert-deftest agent-ui-elements/files-select ()
@@ -3600,6 +3683,23 @@ column widens, it's sorted, or its rows are more than drawn."
         (agent-ui--flush)
         (should (equal whole '("s")))
         (should (string-search " a\n b\n c" (substring-no-properties (+test-aue--region "s"))))))))
+
+;; doom-s84
+(ert-deftest agent-ui-elements/table-appended-wrapped-rows ()
+  "Rows appended whose cells wrap: their lines after the others, not drawn
+whole, the same as drawn whole."
+  (+test-aue-canvas
+    (with-current-buffer canvas
+      (agent-ui-show (list :id "t" :type "table" :columns '("Option" "Costs")
+                           :rows (list (list "Files" (mapconcat #'identity (make-list 30 "a format to keep") " ")))))
+      (agent-ui--flush)
+      (+test-aue--counting-whole-draws
+        (agent-ui-append "t" '(:rows (("DB" "more records to keep; no cycles, so retries need care, and every one of those takes a while"))))
+        (agent-ui--flush)
+        (should-not whole)
+        (should (+test-aue--same-drawing-p (+test-aue--region "t") (+test-aue--drawn-whole "t")))
+        (should (string-match-p "\n DB +│ more records to keep.*\n +│ [a-z]"
+                                (substring-no-properties (+test-aue--region "t"))))))))
 
 (ert-deftest agent-ui-elements/log-appended ()
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines "a\nb") '(:lines "c\n")) :lines) '("a" "b" "c")))

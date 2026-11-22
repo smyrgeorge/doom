@@ -126,9 +126,9 @@ agent-ui append plan '{"steps":[{"name":"compile","parent":"Build","status":"run
 
 ### `table`
 
-`columns` (names) and `rows` (arrays of cells: text, numbers, true, false, null), fitted to the pane's width; numbers
-align right; cells reading passed, failed, running, pending, skipped... are coloured. Give a `key` (a column's index
-from 0, or its name) and **an appended row whose key is there replaces that row**. `align` sets each column's
+`columns` (names) and `rows` (arrays of cells: text, numbers, true, false, null), fitted to the pane's width, long
+cells wrapped; numbers align right; cells reading passed, failed, running... are coloured. Give a `key` (a column's
+index from 0, or name) and **an appended row whose key is there replaces that row**. `align` sets each column's
 (`["left","right","center"]`); columns all named `""`: no header. `sort` (a column) orders the rows, `descending` the
 other way (the user sorts with `s`). `row-actions` are buttons on each row, `{Column}` in their prompt that row's cell.
 To have the user pick rows: `select` ([asking.md](references/asking.md)).
