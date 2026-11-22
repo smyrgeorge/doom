@@ -30,8 +30,8 @@ with a line saying so."
   :type 'natnum)
 
 (defcustom agent-ui-max-cell-lines 20
-  "The most lines a table's cell is wrapped onto; past them, its last line
-ends with …"
+  "The most lines a table's cell, or a line of a log, code or a diff, is
+wrapped onto; past them, its last line ends with …"
   :type 'natnum)
 
 (defface agent-ui-title '((t :inherit bold))
@@ -621,6 +621,21 @@ drawn): a line of megabytes is wrapped as quickly as a page."
          (setq left (- left (length line) 1))))
      (split-string string "\n")
      "\n")))
+
+(defun agent-ui-wrap-lines (text width &optional hanging)
+  "TEXT, a line wider than WIDTH, as its lines WIDTH wide: broken at spaces
+\(`agent-ui-wrap'; HANGING: `agent-ui-wrap-hanging', its next lines under its
+indent), at most `agent-ui-max-cell-lines' of them, the last ending with …
+if there's more. Only its start is wrapped, enough for those lines: a line
+of megabytes as quickly as a sentence."
+  (let* ((most (max 1 agent-ui-max-cell-lines))
+         (room (* 2 (1+ most) (max 1 width)))
+         (part (if (> (length text) room) (substring text 0 room) text))
+         (lines (split-string (funcall (if hanging #'agent-ui-wrap-hanging #'agent-ui-wrap) part width) "\n")))
+    (when (or (> (length lines) most) (< (length part) (length text)))
+      (setq lines (seq-take lines most))
+      (setcar (last lines) (agent-ui-truncate (concat (car (last lines)) "…") width)))
+    lines))
 
 (defconst agent-ui--hang-regexp
   (concat "\\`[ \t]*\\(?:\\(?:[-*+•◦▪‣]\\|[0-9]+[.)]\\)[ \t]+\\)?"

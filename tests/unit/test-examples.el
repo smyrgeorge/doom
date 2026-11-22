@@ -471,7 +471,7 @@ once both are closed."
           (should (string-match-p "✓ Build +29s" text))
           (should (string-match-p "– Publish +a test failed" text))
           (should (string-match-p " checker │ failed │ 0.7s" text))
-          (should (string-match-p "12/12  100%  ✓ built" text))
+          (should (string-match-p "12/12  100%  ✓[ \n]built" text))
           (should (string-match-p "● this machine  ● CI" text))
           (should-not (string-match-p "⚠" text))))
       (kill-buffer canvas)

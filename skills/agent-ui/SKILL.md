@@ -90,8 +90,7 @@ Pick the one that fits what you have to tell.
 
 ### `progress`
 
-A bar: `value` of `max`, with a `label` saying what's being done now (too long for the line: under the bar, wrapped),
-and an optional `unit` (files, MB). Without
+A bar: `value` of `max`, with a `label` saying what's being done now, and an optional `unit` (files, MB). Without
 `max`, no end is known: a block goes to and fro. `status`: `running` (default), `done` or `failed` colours it and stops
 it. Its rate and the time left (`3.4 MB/s  19s left`) are worked out from your updates and shown once steady:
 update its `value` as it goes (every second or so) rather than once at the end. `"pie": true` draws it small, on one

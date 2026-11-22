@@ -138,10 +138,21 @@ at 15)."
     (agent-ui-truncate (string-join parts sep) width)))
 
 (defun agent-ui-log--line-text (line width)
-  "LINE, (LEVEL . TEXT), drawn WIDTH wide at most, in its level's face."
-  (let ((face (nth 2 (assq (car line) agent-ui-log--levels)))
-        (text (agent-ui-truncate (agent-ui-untabify (cdr line)) width)))
+  "LINE, (LEVEL . TEXT), drawn WIDTH wide at most, in its level's face: too
+long, wrapped, its next lines indented 2 (it was cut with …, its rest
+nowhere; `agent-ui-max-cell-lines' lines at most)."
+  (let* ((face (nth 2 (assq (car line) agent-ui-log--levels)))
+         (text (agent-ui-untabify (cdr line)))
+         (text (if (<= (string-width text) width)
+                   text
+                 (let ((lines (agent-ui-wrap-lines text (max 1 (- width 2)))))
+                   (concat (car lines) (mapconcat (lambda (l) (concat "\n  " l)) (cdr lines) ""))))))
     (if face (propertize text 'face face) text)))
+
+(defun agent-ui-log--drawn-lines (lines width)
+  "How many lines LINES take drawn WIDTH wide (a wrapped one more than one)."
+  (cl-loop for line in lines
+           sum (1+ (cl-count ?\n (agent-ui-log--line-text line width)))))
 
 (defun agent-ui-log--draw (props ctx)
   (let ((lines (agent-ui-log--lines props))
@@ -170,7 +181,9 @@ lines shown no more dropped from the top, the new ones at the end."
       (let* ((width (plist-get ctx :width))
              (old-lines (agent-ui-log--lines old))
              (new-lines (agent-ui-log--lines new))
-             (drop (- (+ (min show (length old-lines)) added) (min show (length new-lines)))))
+             (drop (- (+ (min show (length old-lines)) added) (min show (length new-lines))))
+             ;; The lines no longer shown, as drawn (a wrapped one several).
+             (drop (agent-ui-log--drawn-lines (seq-take (last old-lines show) drop) width)))
         (delq nil
               (list (list 'replace 0 (agent-ui-log--counts new-lines width))
                     (and (> drop 0) (list 'delete 1 drop))

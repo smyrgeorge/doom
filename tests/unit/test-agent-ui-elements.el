@@ -1508,8 +1508,12 @@ digits: lines from 100000 a column past the width)."
     (should (equal (+test-aue-draw element :width 30)
                    (concat "▾ big.c  +2 −1\n  @@ -99999,2 +99999,3 @@\n"
                            "   99999   a\n"
-                           "         − oooooooooooooooooo…\n"
-                           "  100000 + nnnnnnnnnnnnnnnnnn…\n"
+                           "         − ooooooooooooooooooo\n"
+                           "           ooooooooooooooooooo\n"
+                           "           oo\n"
+                           "  100000 + nnnnnnnnnnnnnnnnnnn\n"
+                           "           nnnnnnnnnnnnnnnnnnn\n"
+                           "           nn\n"
                            "  100001 + b"))))
   ;; Up to 5 digits: as before.
   (should (string-match-p "^     40   a$" (+test-aue-draw '(:type "diff" :diff "@@ -40 +40 @@\n a\n")))))
@@ -4109,6 +4113,78 @@ a box not at a stack's edge, it went straight through the boxes there)."
   (should (string-match-p "status is ok, error" (+test-aue-error '(:type "graph" :nodes ((:id "a" :status "red"))))))
   (should (string-match-p "direction must be" (+test-aue-error '(:type "graph" :direction "up")))))
 
+;; ====== LONG LINES: LOG, CODE, DIFF ======
+
+(ert-deftest agent-ui-elements/long-lines-wrapped ()
+  "A log's, code's or a diff's line too long for the pane is wrapped, every
+word of it read (it was cut with …, its rest nowhere; doom-c2o): a log's
+next lines indented 2, in its level's face; code's and a diff's after the
+gutter, its number blank, under the line's indent; a diff's tint on each in
+the GUI; `agent-ui-max-cell-lines' lines at most, the last ending with …"
+  (let* ((long "the quick brown fox jumps over the lazy dog, again and again, until the very end")
+         (log (list :type "log" :lines (list "12:01:03 INFO  up" (concat "12:01:09 ERROR db: " long) "12:01:10 WARN  slow")))
+         (code (list :type "code" :language "python" :code (concat "def f():\n    x = call(\"" long "\")\n    return x")))
+         (diff (list :type "diff" :diff (concat "--- a/f.py\n+++ b/f.py\n@@ -1,2 +1,2 @@\n def f():\n-    x = 1\n+    x = call(\"" long "\")\n"))))
+    (dolist (width '(30 40 60 98))
+      (dolist (element (list log code diff))
+        (let ((text (+test-aue-draw element :width width)))
+          (should-not (string-search "…" text))
+          (should (string-search "end" text))
+          (dolist (line (split-string text "\n")) (should (<= (string-width line) width))))))
+    (should (equal (+test-aue-draw log)
+                   (concat "1 error · 1 warning · 3 lines\n12:01:03 INFO  up\n"
+                           "12:01:09 ERROR db: the quick brown fox jumps over the lazy\n"
+                           "  dog, again and again, until the very end\n12:01:10 WARN  slow")))
+    (should (eq (+test-aue-face-at log "dog, again") 'agent-ui-error))
+    (should (equal (+test-aue-draw code)
+                   (concat "1 │ def f():\n"
+                           "2 │     x = call(\"the quick brown fox jumps over the lazy\n"
+                           "  │     dog, again and again, until the very end\")\n"
+                           "3 │     return x")))
+    (should (equal (+test-aue-draw diff)
+                   (concat "▾ f.py  +1 −1\n  @@ -1,2 +1,2 @@\n      1   def f():\n        −     x = 1\n"
+                           "      2 +     x = call(\"the quick brown fox jumps over the\n"
+                           "              lazy dog, again and again, until the very\n"
+                           "              end\")")))
+    (should (eq (+test-aue-face-at diff "lazy dog") 'agent-ui-success))
+    ;; RET on a wrapped line's next lines: its file at its line.
+    (let ((text (agent-ui-render (append code '(:file "/tmp/f.py")) (agent-ui-context :width 60))))
+      (should (eq (get-text-property (string-search "dog," text) 'agent-ui-line text) 2)))
+    ;; In the GUI: each of a diff line's lines tinted the pane's width.
+    (let* ((text (agent-ui-render diff (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))
+           (lines (split-string text "\n")))
+      (dolist (line (seq-filter (lambda (l) (string-match-p "lazy\\|end\"" l)) lines))
+        (should (= (string-width line) 60))
+        (should (string-search ":background" (format "%S" (get-text-property (1- (length line)) 'face line))))))
+    ;; A line of megabytes: its lines capped, the last ending with ….
+    (let ((lines (split-string (+test-aue-draw (list :type "log" :lines (list (make-string 100000 ?x)))) "\n")))
+      (should (= (length lines) (1+ agent-ui-max-cell-lines)))
+      (should (string-suffix-p "x…" (car (last lines)))))))
+
+(ert-deftest agent-ui-elements/log-appended-wrapped-lines ()
+  "Lines appended to a log, drawn alone (its extend), its wrapped lines
+counted as drawn: the same as drawn whole, the lines no longer shown gone
+whole (a wrapped one left a piece behind)."
+  (let* ((long (concat "ERROR " (mapconcat #'identity (make-list 30 "word") " ")))
+         (old (list :type "log" :show 3 :lines (list long "two" long)))
+         (new (list :type "log" :show 3 :lines (list long "two" long "four" long)))
+         (ctx (agent-ui-context :width 40))
+         (old-p (agent-ui-check 'log (copy-sequence old)))
+         (new-p (agent-ui-check 'log (copy-sequence new)))
+         (edits (funcall (agent-ui-type-extend (agent-ui-type 'log)) old-p new-p ctx)))
+    (should edits)
+    ;; Applied to the old drawing: the new one.
+    (with-temp-buffer
+      (insert (substring-no-properties (agent-ui-render old ctx)))
+      (dolist (edit edits)
+        (pcase edit
+          (`(replace ,line ,text) (goto-char (point-min)) (forward-line line)
+           (delete-region (point) (line-end-position)) (insert (substring-no-properties text)))
+          (`(delete ,line ,count) (goto-char (point-min)) (forward-line line)
+           (delete-region (point) (progn (forward-line count) (point))))
+          (`(insert ,_ ,text) (goto-char (point-max)) (insert "\n" (substring-no-properties text)))))
+      (should (equal (buffer-string) (substring-no-properties (agent-ui-render new ctx)))))))
+
 ;; ====== CODE ======
 
 (ert-deftest agent-ui-elements/code ()
@@ -4135,8 +4211,10 @@ fit, else under it, wrapped (the line was cut with its note: \"{  ← …\")."
         (dolist (line (split-string text "\n")) (should (<= (string-width line) width)))
         (should (string-search "← precedence unused" text))
         (should (string-search "  return NULL;  ← never NULL" text))))
+    ;; Its line wrapped (it was cut: "int prece…"), its note under it.
     (should (equal (+test-aue-draw element :width 50)
-                   (concat "40 ✗ static Node *parse_expr(Parser *p, int prece…\n"
+                   (concat "40 ✗ static Node *parse_expr(Parser *p, int\n"
+                           "   │ precedence, ParseFlags flags) {\n"
                            "     ← precedence unused\n"
                            "41 !   return NULL;  ← never NULL")))
     (should (eq (+test-aue-face-at element "← precedence" :width 50) 'agent-ui-error))

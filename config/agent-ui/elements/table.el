@@ -266,14 +266,7 @@ collecting garbage)."
 `agent-ui-max-cell-lines' of them, the last ending with … if there's more.
 Only its start is wrapped, enough for those lines: a cell of megabytes as
 quickly as a sentence."
-  (let* ((most (max 1 agent-ui-max-cell-lines))
-         (room (* 2 (1+ most) (max 1 width)))
-         (part (if (> (length cell) room) (substring cell 0 room) cell))
-         (lines (split-string (agent-ui-wrap part width) "\n")))
-    (when (or (> (length lines) most) (< (length part) (length cell)))
-      (setq lines (seq-take lines most))
-      (setcar (last lines) (agent-ui-truncate (concat (car (last lines)) "…") width)))
-    (mapcar (lambda (line) (cons line (string-width line))) lines)))
+  (mapcar (lambda (line) (cons line (string-width line))) (agent-ui-wrap-lines cell width)))
 
 (defvar agent-ui-table--layouts (make-hash-table :test #'eq :weakness 'key)
   "The layouts tables were drawn in (`agent-ui-table--layout-key'), by their

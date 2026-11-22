@@ -122,7 +122,15 @@ FILE's name (\": not found\"), or nil."
                                         #'< :key (lambda (m) (cl-position (plist-get m :kind) agent-ui-code--marks :key #'car))))
                                 (kind (and marks (assq (plist-get (car marks) :kind) agent-ui-code--marks)))
                                 (text (agent-ui-untabify line))
-                                (body (agent-ui-truncate text (- width gutter 3)))
+                                ;; Too long: wrapped under its indent, its next
+                                ;; lines' gutter blank (it was cut with …, its
+                                ;; rest nowhere).
+                                (body (if (<= (string-width text) (- width gutter 3))
+                                          text
+                                        (mapconcat #'identity
+                                                   (agent-ui-wrap-lines text (max 1 (- width gutter 3)) t)
+                                                   (concat "\n" (make-string (1+ gutter) ?\s)
+                                                           (propertize "│" 'face 'agent-ui-muted) " "))))
                                 (notes (cl-loop for m in marks
                                                 when (plist-get m :note)
                                                 collect (propertize (plist-get m :note) 'face
@@ -139,7 +147,8 @@ FILE's name (\": not found\"), or nil."
                                   ;; Its note after it, if both fit.
                                   ((<= (+ gutter 3 (string-width text) 2 (string-width note)) width)
                                    (concat head text "  " note))
-                                  ;; Else under it, wrapped (cut with the line, it went).
+                                  ;; Else under it, wrapped (cut with the line, it went),
+                                  ;; after the line's own lines.
                                   (t (concat head body
                                              (mapconcat (lambda (part)
                                                           (concat "\n" (make-string (+ gutter 3) ?\s) part))

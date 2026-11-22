@@ -382,14 +382,26 @@ sent, saying so. Led by a newline."
                            (gutter (if (and number (not (eq kind 'removed)))
                                        (format (format "%%%dd " digits) number)
                                      (make-string (1+ digits) ?\s)))
-                           (body (agent-ui-truncate (concat mark " " (agent-ui-untabify text))
-                                                    (- width 3 digits)))
-                           (shown (concat "  " (propertize gutter 'face 'agent-ui-muted)
-                                          (if face (propertize body 'face face) body))))
-                (when (and gui (memq kind '(added removed)) (not rejected))
-                  ;; A tint as wide as the pane, as code review tools have.
-                  (setq shown (concat shown (make-string (max 0 (- width (string-width shown))) ?\s)))
-                  (add-face-text-property 0 (length shown) (list :background (funcall tint face)) t shown))
+                           ;; Too long: wrapped under its text, its next lines'
+                           ;; gutter blank (it was cut with …, its rest nowhere).
+                           (text (agent-ui-untabify text))
+                           (parts (if (<= (string-width text) (- width 5 digits))
+                                      (list text)
+                                    (agent-ui-wrap-lines text (max 1 (- width 5 digits)) t)))
+                           (shown
+                            (mapconcat
+                             (lambda (part)
+                               (let* ((first (eq part (car parts)))
+                                      (body (concat (if first mark " ") " " part))
+                                      (one (concat "  " (propertize (if first gutter (make-string (1+ digits) ?\s))
+                                                                    'face 'agent-ui-muted)
+                                                   (if face (propertize body 'face face) body))))
+                                 (when (and gui (memq kind '(added removed)) (not rejected))
+                                   ;; A tint as wide as the pane, as code review tools have.
+                                   (setq one (concat one (make-string (max 0 (- width (string-width one))) ?\s)))
+                                   (add-face-text-property 0 (length one) (list :background (funcall tint face)) t one))
+                                 one))
+                             parts "\n")))
                 ;; Where it is (c comments on it).
                 (push (apply #'propertize (agent-ui-button shown (agent-ui-diff--open dir (plist-get file :file) number)
                                                            (format "RET: %s:%s" (plist-get file :file) (or number "")))
