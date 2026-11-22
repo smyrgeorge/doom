@@ -102,8 +102,10 @@
              (time-width (apply #'max (mapcar #'string-width times)))
              ;; The names' column shrinks first, then the bars, to a column
              ;; each (the bars were 10 at least: lines past narrow widths).
+             ;; A third of the width at most (it was a quarter); a name longer
+             ;; wrapped in it (it was cut with …, its rest nowhere).
              (name-width (max 1 (min (apply #'max (mapcar (lambda (task) (string-width (plist-get task :name))) tasks))
-                                     (/ width 4)
+                                     (/ width 3)
                                      (- width 3 4 time-width))))
              ;; 10 columns kept for the times while the bars keep 10 (a time
              ;; changing, the bars don't move), else only what they take.
@@ -118,13 +120,17 @@
                    (a (min (1- bar-width) (funcall cell (plist-get task :start))))
                    (b (max (1+ a) (funcall cell end)))
                    (status (plist-get task :status))
-                   (face (cadr (assq status agent-ui-timeline--statuses))))
-              (concat (agent-ui-pad (plist-get task :name) name-width) "  "
+                   (face (cadr (assq status agent-ui-timeline--statuses)))
+                   (names (if (<= (string-width (plist-get task :name)) name-width)
+                              (list (plist-get task :name))
+                            (agent-ui-wrap-lines (plist-get task :name) name-width))))
+              (concat (agent-ui-pad (car names) name-width) "  "
                       (make-string a ?\s)
                       (propertize (make-string (- b a) (if (eq status 'queued) ?░ ?█)) 'face face)
                       (make-string (max 0 (- bar-width b)) ?\s) "  "
                       (propertize (nth (cl-position task shown) times)
-                                  'face (if (eq status 'failed) 'agent-ui-error 'agent-ui-muted)))))
+                                  'face (if (eq status 'failed) 'agent-ui-error 'agent-ui-muted))
+                      (mapconcat (lambda (n) (concat "\n" n)) (cdr names) ""))))
           shown "\n")
          "\n"
          ;; The scale: its start, middle and end, within the bars' width; the
@@ -154,7 +160,7 @@
              ;; As in text: the names' column shrinks first, the bars keep a
              ;; column (they went to 0 and below: drawn over the names).
              (name-width (* cw (+ 2 (max 1 (min (apply #'max (mapcar (lambda (task) (string-width (plist-get task :name))) tasks))
-                                                 (/ columns 4)
+                                                 (/ columns 3)
                                                  (- columns 3 10))))))
              (width (* cw columns))
              (bar-left name-width)
@@ -163,17 +169,30 @@
                           (max cw (- width name-width (* 9 cw)))))
              (row (round (* 1.4 lh)))
              (shown (seq-take tasks agent-ui-max-rows))
-             (svg (svg-create width (+ (* row (length shown)) lh)))
+             ;; Each name wrapped in its column (cut, it was read only in
+             ;; part), its row a line taller for each more.
+             (names (mapcar (lambda (task)
+                              (let ((room (max 1 (- (/ name-width cw) 2))))
+                                (if (<= (string-width (plist-get task :name)) room)
+                                    (list (plist-get task :name))
+                                  (agent-ui-wrap-lines (plist-get task :name) room))))
+                            shown))
+             (ys (let ((y 0)) (mapcar (lambda (n) (prog1 y (setq y (+ y row (* lh (1- (length n))))))) names)))
+             (bottom (if shown (+ (car (last ys)) row (* lh (1- (length (car (last names)))))) 0))
+             (svg (svg-create width (+ bottom lh)))
              (fg (agent-ui-chart--color 'default)) (muted (agent-ui-chart--color 'agent-ui-muted))
              (x-of (lambda (time) (+ bar-left (* bar-width (/ (- time from) length))))))
         (cl-loop for task in shown
-                 for i from 0
-                 do (let* ((y (* i row)) (end (agent-ui-timeline--end task span))
+                 for y in ys
+                 for name in names
+                 do (let* ((end (agent-ui-timeline--end task span))
                            (status (plist-get task :status))
                            (x0 (funcall x-of (plist-get task :start))) (x1 (max (+ x0 2) (funcall x-of end))))
-                      ;; Cut to its column (whole, it ran under the bars).
-                      (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (plist-get task :name) (max 1 (- (/ name-width cw) 2)))
-                                                0 (+ y (* 0.7 row)) :fill fg)
+                      ;; In its column, wrapped (whole on one line, it ran
+                      ;; under the bars; cut, it was read only in part).
+                      (cl-loop for part in name
+                               for i from 0
+                               do (agent-ui-chart--svg-text svg ctx part 0 (+ y (* 0.7 row) (* i lh)) :fill fg))
                       (svg-rectangle svg x0 (+ y (* 0.2 row)) (- x1 x0) (* 0.6 row) :rx 2
                                      :fill (agent-ui-chart--color (cadr (assq status agent-ui-timeline--statuses)))
                                      :fill-opacity (if (eq status 'queued) 0.5 1))
@@ -182,7 +201,7 @@
                                     (agent-ui-format-duration (- end (plist-get task :start))))))
                         (when (<= (+ x1 (/ cw 2) (* 0.5 lh (string-width time))) width)
                           (agent-ui-chart--svg-text svg ctx time (+ x1 (/ cw 2)) (+ y (* 0.7 row)) :fill muted)))))
-        (let ((y (+ (* row (length shown)) (* 0.8 lh))))
+        (let ((y (+ bottom (* 0.8 lh))))
           (agent-ui-chart--svg-text svg ctx "0s" bar-left y :fill muted)
           ;; Its end, where it clears \"0s\" (they overlapped, narrow).
           (let ((end (agent-ui-format-duration length)))

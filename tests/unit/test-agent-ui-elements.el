@@ -3792,12 +3792,16 @@ end in text, outside the image in the GUI)."
   (should (string-match-p "3s\\'" (+test-aue-draw '(:type "timeline" :tasks ((:name "a" :start 0) (:name "b" :start 3))) :width 50))))
 
 (ert-deftest agent-ui-elements/timeline-gui-names-cut ()
-  "In the GUI a long task name is cut to its column (it ran under the bars)."
+  "In the GUI a long task name is wrapped in its column, its row taller
+(whole on one line it ran under the bars; cut, its rest was nowhere:
+doom-cbj)."
   (let ((svg (+test-aue-svg '(:type "timeline" :tasks ((:name "integration-tests-shard-1" :start 0 :duration 8)
                                                        (:name "unit" :start 4 :duration 10 :status "failed")))
                             60)))
-    (should-not (string-match-p ">integration-tests-shard-1<" svg))
-    (should (string-match-p ">integration[^<]*&#8230;<" svg))))
+    (should-not (string-match-p "&#8230;" svg))
+    (should (string-match-p ">integration-tests-sh</text>.*>ard-1</text>" svg))
+    ;; The next task a line lower: "unit" under the wrapped name.
+    (should (string-match-p "y=\"53.4\" x=\"0\">unit<" svg))))
 
 (ert-deftest agent-ui-elements/timeline-text-fits-narrow-widths ()
   "Narrow: the names' column shrinks, then the bars, every line within the
@@ -4184,6 +4188,52 @@ whole (a wrapped one left a piece behind)."
            (delete-region (point) (progn (forward-line count) (point))))
           (`(insert ,_ ,text) (goto-char (point-max)) (insert "\n" (substring-no-properties text)))))
       (should (equal (buffer-string) (substring-no-properties (agent-ui-render new ctx)))))))
+
+;; doom-cbj
+(ert-deftest agent-ui-elements/names-in-columns-read-whole ()
+  "A bar chart's labels, a timeline's task names, a heatmap's row labels and
+a graph's node names (and targets) too long for their column are wrapped in
+it, every word read, the row taller (they were cut with …, their rest
+nowhere); a heatmap's column labels that don't fit their cells are numbered,
+their labels in a key under it (cut, only part of each was read)."
+  (let* ((long "agent-workflow pool: sessions with no role or name")
+         (chart (list :type "chart" :kind "bar" :labels (list long "parser") :values '(3 4)))
+         (timeline (list :type "timeline" :tasks (list (list :name long :start 0 :end 8) '(:name "b" :start 8 :end 14))))
+         (heatmap (list :type "heatmap" :rows (list long "beads") :columns '("macos-14-arm64-large-runner" "linux")
+                        :values '((1 2) (3 4))))
+         (graph (list :type "graph" :nodes (list long "beads" "worktree for each issue, locked")
+                      :edges (list (list long "beads") (list long "worktree for each issue, locked")))))
+    (dolist (width '(30 40 60 98))
+      (dolist (element (list chart timeline heatmap graph))
+        (let ((text (+test-aue-draw element :width width)))
+          (should-not (string-search "…" text))
+          (dolist (line (split-string text "\n")) (should (<= (string-width line) width)))
+          ;; Every word, where the column is wider than the longest (narrower,
+          ;; a word is broken in it).
+          (when (>= width 60)
+            (dolist (word (split-string long))
+              (should (string-search word text)))))))
+    (should (equal (+test-aue-draw chart)
+                   (concat "agent-workflow pool:  ██████████████████████████▎          3\n"
+                           "sessions with no\nrole or name\n"
+                           "parser                ███████████████████████████████████  4")))
+    (should (string-prefix-p (concat "agent-workflow pool:  ███████████████             8s\n"
+                                     "sessions with no\nrole or name\n")
+                             (+test-aue-draw timeline)))
+    ;; Numbered heads, their labels in a key.
+    (let ((text (+test-aue-draw heatmap)))
+      (should (string-prefix-p "                      1                  2\n" text))
+      (should (string-search "\n1 macos-14-arm64-large-runner  2 linux\n" text)))
+    (should (string-prefix-p (concat "agent-workflow pool: ─▶ beads, worktree for each issue,\n"
+                                     "sessions with no        locked\n"
+                                     "role or name\n")
+                             (+test-aue-draw graph)))
+    ;; In the GUI: each wrapped, whole.
+    (dolist (element (list chart timeline heatmap))
+      (let ((svg (+test-aue-svg element 60)))
+        (should-not (string-match-p "&#8230;" svg))
+        (should (string-match-p ">agent-workflow pool:" svg))
+        (should (string-match-p ">role or name<" svg))))))
 
 ;; doom-sg6
 (ert-deftest agent-ui-elements/gui-labels-read-whole ()
@@ -4631,7 +4681,9 @@ its lines in the GUI too (only the last was kept)."
   (let* ((element '(:type "heatmap" :rows ("lexer" "parser" "checker") :columns ("linux" "macos" "windows")
                     :values (("passed" "passed" "passed") ("passed" "flaky" "passed") ("failed" "passed" "skipped"))))
          (text (+test-aue-draw element :width 30))
-         (legend (nthcdr 4 (split-string text "\n"))))
+         ;; Its last lines (above them, the columns' key: "windows" doesn't
+         ;; fit its cell, so they're numbered).
+         (legend (last (split-string text "\n") 2)))
     (should (equal legend '("█ passed  █ flaky  █ failed" "█ skipped")))
     (let ((gui (substring-no-properties
                 (agent-ui-render element (agent-ui-context :width 30 :graphic t :char-width 8 :line-height 16)))))
@@ -4684,13 +4736,18 @@ one \"c…\" at 20), text and GUI."
       (should (string-search "\n1 linux\n2 macos-long-name\n3 windows\n" (substring-no-properties text))))))
 
 (ert-deftest agent-ui-elements/heatmap-gui-row-labels-cut ()
-  "In the GUI a long row label is cut to its column (it ran through the cells)."
+  "In the GUI a long row label is wrapped in its column, its cells taller
+(whole on one line it ran through the cells; cut, its rest was nowhere:
+doom-cbj)."
   (let ((svg (+test-aue-svg '(:type "heatmap" :rows ("test_parser_handles_unicode_identifiers" "lexer")
                               :columns ("linux" "macos" "windows")
                               :values (("passed" "failed" "passed") ("passed" "passed" "flaky")))
                             40)))
-    (should-not (string-match-p "test_parser_handles_unicode_identifiers" svg))
-    (should (string-match-p ">test_parser[^<]*&#8230;</text>" svg))))
+    (should-not (string-match-p "&#8230;" svg))
+    (should (string-match-p ">test_parser_h</text>.*>andles_unicod</text>.*>e_identifiers</text>" svg))
+    ;; Its cells as tall as its three lines; the next row's one.
+    (should (string-match-p "<rect width=\"[0-9.]+\" height=\"54\"" svg))
+    (should (string-match-p "<rect width=\"[0-9.]+\" height=\"22\"" svg))))
 
 (ert-deftest agent-ui-elements/heatmap-numbers ()
   (let ((element '(:type "heatmap" :rows ("a" "b") :columns ("mon" "tue") :values ((1 5) (nil 9)))))

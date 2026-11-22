@@ -145,12 +145,29 @@ each layer ordered by its nodes' parents' places."
                                                    (propertize (format " (%s)" (plist-get e :label)) 'face 'agent-ui-muted)
                                                  ""))))
                                    (seq-filter (lambda (e) (equal (plist-get e :from) id)) edges)))
-                  ;; Padded only before its arrows: no spaces at a line's end.
-                  (name (if targets (agent-ui-pad (plist-get node :label) name-width) (plist-get node :label))))
-             (agent-ui-truncate
-              (concat (if face (propertize name 'face face) name)
-                      (if targets (concat (propertize " ─▶ " 'face 'agent-ui-muted) (string-join targets ", ")) ""))
-              width)))
+                  (label (plist-get node :label))
+                  ;; Its name wrapped in its column, its arrows and targets
+                  ;; after its first line, wrapped after the arrow (they were
+                  ;; cut with …, their rest nowhere); without targets, its name
+                  ;; wrapped to the width.
+                  (names (let ((room (if targets name-width width)))
+                           (if (<= (string-width label) room) (list label) (agent-ui-wrap-lines label (max 1 room)))))
+                  (names (mapcar (lambda (n) (if face (propertize n 'face face) n)) names))
+                  (after (max 1 (- width name-width 4)))
+                  (tos (and targets
+                            (let ((all (string-join targets ", ")))
+                              (if (<= (string-width all) after) (list all) (agent-ui-wrap-lines all after))))))
+             (if (not targets)
+                 (string-join names "\n")
+               (string-join
+                (cl-loop for i below (max (length names) (length tos))
+                         collect (let ((name (or (nth i names) "")) (to (nth i tos)))
+                                   (cond ((and to (= i 0))
+                                          ;; Padded only before its arrows: no spaces at a line's end.
+                                          (concat (agent-ui-pad name name-width) (propertize " ─▶ " 'face 'agent-ui-muted) to))
+                                         (to (concat (agent-ui-pad name name-width) "    " to))
+                                         (t name))))
+                "\n"))))
          order "\n")))))
 
 (defconst agent-ui-graph--min-scale 0.6

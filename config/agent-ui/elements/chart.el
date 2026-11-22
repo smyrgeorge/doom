@@ -403,9 +403,15 @@ LABEL-UNIT VALUE-UNIT)."
        "")
      (mapconcat
       (lambda (row)
-        (concat (agent-ui-pad (agent-ui-truncate (car row) label-width) label-width) "  "
-                (agent-ui-chart--bar-cells (nth 1 row) scale bar-width) "  "
-                (agent-ui-pad (nth 2 row) value-width 'right)))
+        ;; Its label wrapped in its column, the bar on its first line (it was
+        ;; cut with …, its rest nowhere).
+        (let ((labels (if (<= (string-width (car row)) label-width)
+                          (list (car row))
+                        (agent-ui-wrap-lines (car row) (max 1 label-width)))))
+          (concat (agent-ui-pad (car labels) label-width) "  "
+                  (agent-ui-chart--bar-cells (nth 1 row) scale bar-width) "  "
+                  (agent-ui-pad (nth 2 row) value-width 'right)
+                  (mapconcat (lambda (l) (concat "\n" l)) (cdr labels) ""))))
       rows "\n")
      (mapconcat (lambda (line) (concat "\n" (make-string (+ label-width 2) ?\s) line)) legend ""))))
 
@@ -745,18 +751,25 @@ labels under them (none on another's), as two lines; nil without times."
          ;; The legend's rows (it was one, past the image's right edge).
          (legend (and (cdr series) (seq-some (lambda (s) (plist-get s :name)) series)
                       (agent-ui-chart--legend-rows series (floor (- width bar-left) cw))))
+         ;; Each label wrapped in its column (it was cut with …, its rest
+         ;; nowhere), its row a line taller for each more.
+         (labels (mapcar (lambda (r)
+                           (let ((room (max 1 (floor label-width cw))))
+                             (if (<= (string-width (car r)) room) (list (car r)) (agent-ui-wrap-lines (car r) room))))
+                         rows))
          (ys (let ((y head))
-               (mapcar (lambda (r)
-                         (when (and grouped (not (string-empty-p (car r))) (> y 0)) (cl-incf y gap))
-                         (prog1 y (cl-incf y row)))
-                       rows)))
-         (height (+ (if rows (+ (car (last ys)) row) head)
+               (cl-mapcar (lambda (r l)
+                            (when (and grouped (not (string-empty-p (car r))) (> y 0)) (cl-incf y gap))
+                            (prog1 y (cl-incf y (+ row (* lh (1- (length l)))))))
+                          rows labels)))
+         (height (+ (if rows (+ (car (last ys)) row (* lh (1- (length (car (last labels)))))) head)
                     (if legend (+ (round (* 1.4 lh)) (* lh (1- (length legend)))) 0)))
          (svg (svg-create width height))
          (fg (agent-ui-chart--color 'default))
          (muted (agent-ui-chart--color 'agent-ui-muted)))
     (cl-loop for r in rows
              for y in ys
+             for l in labels
              for n from 0
              do (let* ((x bar-left)
                        ;; Each part's length, cut at the bar's end.
@@ -777,8 +790,9 @@ labels under them (none on another's), as two lines; nil without times."
                                                 bar-left (+ y (* 0.2 row)) (max 1 total) (* 0.6 row) :rx 2)
                                  (format "url(#%s)" id)))))
                   (unless (string-empty-p (car r))
-                    (agent-ui-chart--svg-text svg ctx (agent-ui-truncate (car r) (/ label-width cw))
-                                              0 (+ y (* 0.7 row)) :fill fg))
+                    (cl-loop for part in l
+                             for i from 0
+                             do (agent-ui-chart--svg-text svg ctx part 0 (+ y (* 0.7 row) (* i lh)) :fill fg)))
                   (cl-loop for segment in (nth 1 r)
                            for length in lengths
                            when (> length 0)

@@ -103,14 +103,13 @@ as text, a swatch was left at a line's end, its word on the next)."
     (mapconcat (lambda (l) (agent-ui-truncate l width)) (nreverse lines) "\n")))
 
 (defun agent-ui-heatmap--heads (columns room)
-  "COLUMNS' labels over their cells, ROOM columns each: cut to it; or, cut
-under 5 columns or read alike, their numbers (all \"c…\"), their labels
-then in a key (`agent-ui-heatmap--key'). (HEADS . NUMBERED)."
-  (let ((cut (mapcar (lambda (c) (agent-ui-truncate c (max 1 room))) columns)))
-    (if (or (equal cut columns)
-            (and (>= room 5) (= (length (delete-dups (copy-sequence cut))) (length cut))))
-        (cons cut nil)
-      (cons (mapcar #'number-to-string (number-sequence 1 (length columns))) t))))
+  "COLUMNS' labels over their cells, ROOM columns each, if they all fit;
+else their numbers, their labels then in a key (`agent-ui-heatmap--key'):
+a label cut, its rest was nowhere (\"macos-14-arm6…\"; only labels cut
+under 5 columns or read alike were numbered). (HEADS . NUMBERED)."
+  (if (cl-every (lambda (c) (<= (string-width c) (max 1 room))) columns)
+      (cons columns nil)
+    (cons (mapcar #'number-to-string (number-sequence 1 (length columns))) t)))
 
 (defun agent-ui-heatmap--key (columns width)
   "The columns' numbers and their labels (\"1 linux  2 macos\"), packed into
@@ -159,10 +158,16 @@ month of days ran 97 columns wide at 60."
      (make-string (+ label-width 2) ?\s)
      (string-trim-right (mapconcat (lambda (c) (agent-ui-pad c cell)) (car heads) ""))
      "\n"
+     ;; A row's label wrapped in its column, its cells on its first line (it
+     ;; was cut with …, its rest nowhere).
      (mapconcat (lambda (row)
-                  (concat (agent-ui-pad (car row) label-width) "  "
-                          (mapconcat (lambda (v) (funcall block (agent-ui-heatmap--color props v range)))
-                                     (cdr row) " ")))
+                  (let ((labels (if (<= (string-width (car row)) label-width)
+                                    (list (car row))
+                                  (agent-ui-wrap-lines (car row) (max 1 label-width)))))
+                    (concat (agent-ui-pad (car labels) label-width) "  "
+                            (mapconcat (lambda (v) (funcall block (agent-ui-heatmap--color props v range)))
+                                       (cdr row) " ")
+                            (mapconcat (lambda (l) (concat "\n" l)) (cdr labels) ""))))
                 (cl-mapcar #'cons rows (plist-get props :values)) "\n")
      (when-let* ((note (agent-ui-heatmap--left-out (cdr latest) (plist-get ctx :width))))
        (concat "\n" note))
@@ -190,28 +195,37 @@ month of days ran 97 columns wide at 60."
          (heads (agent-ui-heatmap--heads columns (floor (+ (/ (- cell-w 4) (* 0.6 size)) 1e-6))))
          (cell-h (round (* 1.5 lh)))
          (top (round (* 1.4 lh)))
-         (svg (svg-create (+ label-w (* cell-w (length columns))) (+ top (* cell-h (length rows)))))
+         ;; A row's label wrapped in its column (it was cut with …, its rest
+         ;; nowhere), its cells a line taller for each more.
+         (labels (mapcar (lambda (r)
+                           (let ((room (max 1 (- (/ label-w cw) 2))))
+                             (if (<= (string-width r) room) (list r) (agent-ui-wrap-lines r room))))
+                         rows))
+         (heights (mapcar (lambda (l) (+ cell-h (* lh (1- (length l))))) labels))
+         (ys (let ((y top)) (mapcar (lambda (h) (prog1 y (setq y (+ y h)))) heights)))
+         (svg (svg-create (+ label-w (* cell-w (length columns))) (+ top (apply #'+ heights))))
          (muted (agent-ui-chart--color 'agent-ui-muted)) (fg (agent-ui-chart--color 'default)))
     (cl-loop for c in (car heads) for j from 0
              do (svg-text svg c :x (+ label-w (* j cell-w) (/ cell-w 2)) :y (* 0.9 lh)
                           :font-size (round size) :font-family (agent-ui--svg-font)
                           :fill muted :text-anchor "middle"))
-    (cl-loop for r in rows for row in (plist-get props :values) for i from 0
-             do (let ((y (+ top (* i cell-h))))
-                  ;; Cut to its column (whole, it ran through the cells).
-                  (agent-ui-chart--svg-text svg ctx (agent-ui-truncate r (max 1 (- (/ label-w cw) 2)))
-                                            0 (+ y (* 0.68 cell-h)) :fill fg)
+    (cl-loop for row in (plist-get props :values) for label in labels for y in ys for h in heights
+             do (progn
+                  ;; In its column, wrapped (whole on one line, it ran through
+                  ;; the cells).
+                  (cl-loop for part in label for i from 0
+                           do (agent-ui-chart--svg-text svg ctx part 0 (+ y (* 0.68 cell-h) (* i lh)) :fill fg))
                   (cl-loop for v in row for j from 0
                            do (let ((color (agent-ui-heatmap--color props v range))
                                     (x (+ label-w (* j cell-w))))
-                                (svg-rectangle svg (+ x 1) (+ y 1) (- cell-w 2) (- cell-h 2) :rx 3
+                                (svg-rectangle svg (+ x 1) (+ y 1) (- cell-w 2) (- h 2) :rx 3
                                                :fill (or color "none") :stroke (if color "none" muted) :stroke-opacity 0.4)
                                 ;; Its number, if it fits the cell (~0.5 of a
                                 ;; line a character): else its colour says it
                                 ;; (numbers overlapped the next cell's).
                                 (when (and v (numberp v)
                                            (<= (* 0.5 lh (string-width (agent-ui-format-number v))) (- cell-w 4)))
-                                  (agent-ui-chart--svg-text svg ctx (agent-ui-format-number v) (+ x (/ cell-w 2)) (+ y (* 0.68 cell-h))
+                                  (agent-ui-chart--svg-text svg ctx (agent-ui-format-number v) (+ x (/ cell-w 2)) (+ y (/ h 2.0) (* 0.18 cell-h))
                                                             :fill (if (> (/ (- v (car range)) (float (max 1e-9 (- (cdr range) (car range))))) 0.55)
                                                                       "#1b1b1b" fg)
                                                             :text-anchor "middle"))))))
