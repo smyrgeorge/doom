@@ -19,7 +19,8 @@
 ;;        "issue", "job", "step", "replaced": [jobs], "lost": [lines]}: the
 ;;        run sent back (runs.el); yours, refused from an agent's session
 ;;   confirm {"issue": "doom-a1b", "choice": "go", "notes": [{"job":
-;;        "review", "note": "..."}...]} (notes: optional) -> {"ok": true,
+;;        "review", "note": "..."}...], "more": {"cost": 5, "tokens": N,
+;;        "time": "1h"}} (notes, more: optional) -> {"ok": true,
 ;;        "issue", "job", "choice"}: the run's question answered (runs.el,
 ;;        LOOPS); yours, refused from an agent's session
 ;;   approve {"issue": "doom-a1b"}, reject {"issue": "doom-a1b", "note":
@@ -170,7 +171,10 @@ reply. Not from an agent's session."
          (job (car (agent-workflow-asking run)))
          (notes (mapcar (lambda (note) (cons (plist-get note :job) (plist-get note :note)))
                         (append (plist-get payload :notes) nil)))
-         (choice (agent-workflow-confirm run (plist-get payload :choice) :notes notes)))
+         (more (let ((more (plist-get payload :more)))
+                 (and more (list :cost (plist-get more :cost) :tokens (plist-get more :tokens)
+                                 :time (and (plist-get more :time) (agent-workflow--duration (plist-get more :time)))))))
+         (choice (agent-workflow-confirm run (plist-get payload :choice) :notes notes :more more)))
     (list :ok t :issue issue :job job :choice choice)))
 
 (defun agent-workflow--request-approval (directory payload pid reject)

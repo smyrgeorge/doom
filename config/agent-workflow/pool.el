@@ -383,6 +383,9 @@ used again starts later)."
                  (not (member (alist-get 'state attributes) '("Z" "X"))))
         (ignore-errors (signal-process (car process) 'SIGKILL))))))
 
+(defvar agent-workflow-agent-stop-functions nil
+  "Called with an agent about to be stopped, its session still there.")
+
 (defun agent-workflow-stop-agent (agent)
   "Stop AGENT's session without asking, its processes killed
 `agent-workflow-exit-timeout' seconds later if they're still running; it
@@ -390,6 +393,8 @@ leaves the pool. Its session's id is kept, to resume it."
   (let ((buffer (agent-workflow-agent-buffer agent))
         processes)
     (agent-workflow-agent-session agent)
+    (when (buffer-live-p buffer)
+      (run-hook-with-args 'agent-workflow-agent-stop-functions agent))
     (setf (agent-workflow-agent-stopping agent) t)
     (unwind-protect
         (when (buffer-live-p buffer)

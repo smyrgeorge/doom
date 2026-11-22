@@ -532,3 +532,50 @@ jobs:
       (should-not (buffer-live-p (agent-workflow-agent-buffer agent)))
       (should (equal (alist-get 'status (+test-awr--shown project issue)) "open"))
       (should-not (agent-workflow-run-of project issue)))))
+
+;; ====== BUDGET ======
+
+(defun +test-awr--spend (agent cost tokens)
+  "AGENT's session as if it spent COST dollars and TOKENS tokens."
+  (with-current-buffer (agent-workflow-agent-buffer agent)
+    (map-put! agent-shell--state :usage (list (cons :cost-amount cost) (cons :total-tokens tokens)))))
+
+(ert-deftest agent-workflow-runs/budget ()
+  "What a run spent: its agents', kept as they stop, and its time not
+waiting for you. Near its budget: said once. At it: its running steps
+stopped, asked; go on with more: continued; kept with the run."
+  (+test-awr "budget"
+    (write-region (concat "budget:\n  cost: 10\n" +test-awr--feature) nil
+                  (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+    (let* ((issue (+test-awr--issue project "Budget"))
+           (run (agent-workflow-start-run project issue))
+           (build (+test-awr--agent run "build")))
+      (should (equal (agent-workflow-run-budget run) '(:cost 10 :tokens nil :time nil)))
+      (+test-awr--spend build 3.0 1000)
+      (should (equal (butlast (agent-workflow-run-spent-now run) 2) '(:cost 3.0 :tokens 1000)))
+      (+test-awr--finish run "build" nil "built")
+      ;; build's agent gone: what it spent kept.
+      (should (equal (butlast (agent-workflow-run-spent-now run) 2) '(:cost 3.0 :tokens 1000)))
+      (let ((review (+test-awr--agent run "review")))
+        (should (+test-awr--wait (lambda () (agent-workflow-agent-session review))))
+        (+test-awr--spend review 5.5 2000)
+        (agent-workflow-check-budget run)
+        (should (agent-workflow-run-warned run))
+        (should (member "budget-near" (+test-awr--journal run)))
+        (+test-awr--spend review 7.5 3000)
+        (agent-workflow-check-budget run)
+        (should (equal (agent-workflow-run-why run)
+                       "review: its run's budget is used up ($10.50 of $10): go on with more, or stop?"))
+        (should-not (buffer-live-p (agent-workflow-agent-buffer review))))
+      ;; More: on again, its session resumed.
+      (agent-workflow-confirm run "go" :more '(:cost 5))
+      (should (equal (agent-workflow-run-budget run) '(:cost 15 :tokens nil :time nil)))
+      (should (equal (agent-workflow-agent-resumed (+test-awr--agent run "review")) "mock-session"))
+      ;; Its time: counted while it ran, not while it waited for you.
+      (should (> (plist-get (agent-workflow-run-spent-now run) :time) 0))
+      ;; Kept with it.
+      (let ((saved (with-temp-buffer
+                     (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
+                     (json-parse-buffer :object-type 'plist))))
+        (should (equal (plist-get (plist-get saved :more) :cost) 5))
+        (should (>= (plist-get (plist-get saved :spent) :cost) 10.5))))))

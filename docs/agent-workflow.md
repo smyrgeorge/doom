@@ -1,7 +1,8 @@
 # Agent workflow
 
 > **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
-> runs, their jobs in parallel, every kind of step, going back, loops, the merge, limits, approval, resuming.
+> runs, their jobs in parallel, every kind of step, going back, loops, the merge, limits, approval, resuming,
+> budgets.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -173,6 +174,7 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 | `agent-workflow-max-rounds` | `10` | How many times a job may send the work back before the run asks you |
 | `agent-workflow-script-timeout` | `1800` | Seconds a script may run, unless its step's `timeout` says |
 | `agent-workflow-continue-on-start` | `nil` | Runs read back as Emacs starts continue by themselves |
+| `agent-workflow-budget` | `nil` | A run's budget when its workflow has none: `(:cost 15 :tokens 2000000 :time 10800)` |
 
 ## Runs
 
@@ -210,6 +212,20 @@ Under the pool's size (`agent-workflow-pool`), a workflow's `concurrency` is how
 runs at once, and a job's how many of it run at once across its workflow's runs (`merge: 1`, so merges never
 overlap), its scripts too. A job held back by one waits, saying why: `build: waiting: feature at its limit, 3 of 3
 agents`, `merge: waiting: merge at its limit, 1 of 1`. Runs of several workflows go side by side, each within its own.
+
+### Budget
+
+A workflow's `budget` (`agent-workflow-budget` for one without) caps each of its runs: its cost in dollars (as
+agent-shell's usage reports have it), its tokens, its time (while it runs or waits for an agent, not while it waits for
+you). What it spent is its agents': those gone are kept with the run, those working read from their sessions.
+
+- At 80% of any, it's said once, in its journal and as a message.
+- At its budget, its running steps are stopped (their work kept, their agents' sessions kept to resume them), and the
+  run asks you: go on with more, or stop.
+
+```sh
+cmd/agent-workflow confirm doom-a1b go --more-cost 5 --more-time 1h
+```
 
 ### Steps that aren't an agent's
 

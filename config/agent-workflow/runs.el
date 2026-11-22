@@ -41,6 +41,8 @@
 (declare-function agent-shell--prompt-queue-enqueue "agent-shell-prompt-queue")
 (declare-function shell-maker-busy "shell-maker")
 (declare-function agent-workflow--fix "agent-workflow/steps")
+(declare-function agent-workflow-run-spent-now "agent-workflow/budget")
+(declare-function agent-workflow--budget-more "agent-workflow/budget")
 (declare-function agent-workflow--continue-job "agent-workflow/resume")
 (declare-function agent-workflow--ensure-restored "agent-workflow/resume")
 (defvar agent-workflow--paused)
@@ -60,7 +62,12 @@
   jobs                   ; each job's state: ((NAME . PLIST)...)
   order                  ; when it was started: the queue's second key
   edges                  ; its loops: ((\"review>build\" . (:count N :notes (...)))...)
-  (total 0))             ; how many times its agents sent it back, since you said go on
+  (total 0)              ; how many times its agents sent it back, since you said go on
+  spent                  ; what its agents gone spent: (:cost N :tokens N)
+  (active 0)             ; seconds it ran, not waiting for you (but this stretch)
+  active-since           ; when this stretch of it running began, or nil
+  more                   ; what you added to its budget: (:cost :tokens :time)
+  warned)                ; non-nil once told it's near its budget
 
 (defvar agent-workflow--runs nil
   "Every run of this Emacs, as they were started.")
@@ -172,6 +179,9 @@ all it needs to come back after Emacs stops (resume.el)."
                       :why (agent-workflow-run-why run)
                       :order (agent-workflow-run-order run)
                       :total (agent-workflow-run-total run)
+                      :spent (agent-workflow--to-json (agent-workflow-run-spent-now run))
+                      :more (agent-workflow--to-json (agent-workflow-run-more run))
+                      :warned (if (agent-workflow-run-warned run) t :false)
                       :info (agent-workflow--to-json (agent-workflow-run-info run))
                       :edges (vconcat (mapcar (lambda (edge) (list :edge (car edge)
                                                                    :count (plist-get (cdr edge) :count)
@@ -203,6 +213,13 @@ all it needs to come back after Emacs stops (resume.el)."
   "RUN now in STATE, waiting for WHY (words) if it waits; journaled when it
 changes."
   (unless (and (eq (agent-workflow-run-state run) state) (equal (agent-workflow-run-why run) why))
+    ;; Its time: counted while it runs or waits for an agent, not for you.
+    (let ((active (memq state '(running queued))))
+      (cond ((and active (not (agent-workflow-run-active-since run)))
+             (setf (agent-workflow-run-active-since run) (float-time)))
+            ((and (not active) (agent-workflow-run-active-since run))
+             (cl-incf (agent-workflow-run-active run) (- (float-time) (agent-workflow-run-active-since run)))
+             (setf (agent-workflow-run-active-since run) nil))))
     (setf (agent-workflow-run-state run) state
           (agent-workflow-run-why run) why)
     (agent-workflow--journal run "state" :state (symbol-name state) :why why)
@@ -1141,21 +1158,22 @@ for it): going back, the work kept. JOB, if it isn't after OTHER, done."
   (seq-some (lambda (job) (and (plist-get (cdr job) :ask) (cons (car job) (plist-get (cdr job) :ask))))
             (agent-workflow-run-jobs run)))
 
-(cl-defun agent-workflow-confirm (run choice &key notes (by "you"))
+(cl-defun agent-workflow-confirm (run choice &key notes more (by "you"))
   "Answer RUN's question with CHOICE. A loop's (see LOOPS): go (on: the
 count starts again; NOTES, ((JOB . NOTE)...), for the job that sends it
 back and the one it's sent to), accept (it as it is: the run goes on as if
 continue), or stop (it waits). A step's whose retries are used up: go (its
 tries start again, the agent fixing it told NOTES' note for its job),
 skip, stop; a step that broke: go (run it again), skip, stop; a merge
-waiting: go (try it again), stop (steps.el). A user error if RUN asks
-nothing, or CHOICE isn't one of its question's."
+waiting: go (try it again), stop (steps.el); its budget used up: go (MORE,
+\(:cost :tokens :time) added to it, its steps continued), stop (budget.el).
+A user error if RUN asks nothing, or CHOICE isn't one of its question's."
   (pcase-let* ((`(,job . ,ask) (or (agent-workflow-asking run)
                                    (user-error "%s asks nothing" (agent-workflow-run-name run))))
                (other (plist-get ask :other))
                (edge (plist-get ask :edge))
                (kind (plist-get ask :kind))
-               (allowed (pcase kind ('nil '("go" "accept" "stop")) ('merge '("go" "stop")) ('approve nil)
+               (allowed (pcase kind ('nil '("go" "accept" "stop")) ((or 'merge 'budget) '("go" "stop")) ('approve nil)
                           (_ '("go" "skip" "stop")))))
     (when (eq kind 'approve)
       (user-error "%s waits for your OK: approve it, or reject it" (agent-workflow-run-name run)))
@@ -1181,9 +1199,16 @@ nothing, or CHOICE isn't one of its question's."
                                     (concat (plist-get ask :output)
                                             (if (and mine (not (string-empty-p mine))) (concat "\n\nThe user adds: " mine) ""))
                                     (plist-get ask :what)))
-           (if (eq kind 'interrupted)
-               (progn (agent-workflow--job-set run job :ask ask)
-                      (agent-workflow--continue-job run job by))
+           (if (memq kind '(interrupted budget))
+               (progn
+                 (when (eq kind 'budget)
+                   (agent-workflow--budget-more run more))
+                 (dolist (other (agent-workflow-run-jobs run))
+                   (when (and (not (equal (car other) job))
+                              (eq (plist-get (plist-get (cdr other) :ask) :kind) 'budget))
+                     (agent-workflow--continue-job run (car other) by)))
+                 (agent-workflow--job-set run job :ask ask)
+                 (agent-workflow--continue-job run job by))
              (agent-workflow--step-start run job index)))))
       ("skip"
        (agent-workflow--journal run "step-skipped" :job job :step (plist-get ask :step))
@@ -1215,7 +1240,7 @@ nothing, or CHOICE isn't one of its question's."
        (agent-workflow--refresh run)))
     choice))
 
-(defun agent-workflow-confirm-command (run choice &optional notes)
+(defun agent-workflow-confirm-command (run choice &optional notes more)
   "Answer RUN's question (M-x agent-workflow-confirm): CHOICE, as the
 question allows (go, accept, skip, stop); going on, your notes (empty:
 none): for the job that sends it back and the one it's sent to, or for
@@ -1231,7 +1256,7 @@ the agent that fixes a step."
           (ask (agent-workflow-asking run))
           (kind (plist-get (cdr ask) :kind))
           (choice (completing-read (format "%s: " (agent-workflow-run-why run))
-                                   (pcase kind ('nil '("go" "accept" "stop")) ('merge '("go" "stop"))
+                                   (pcase kind ('nil '("go" "accept" "stop")) ((or 'merge 'budget) '("go" "stop"))
                                      (_ '("go" "skip" "stop")))
                                    nil t))
           (notes (when (equal choice "go")
@@ -1244,9 +1269,16 @@ the agent that fixes a step."
                                         (and (not (string-empty-p note)) (cons other note))))))
                      ('retries
                       (let ((note (read-string "Your note for the agent that fixes it: ")))
-                        (and (not (string-empty-p note)) (list (cons (car ask) note)))))))))
-     (list run choice notes)))
-  (agent-workflow-confirm run choice :notes notes)
+                        (and (not (string-empty-p note)) (list (cons (car ask) note))))))))
+          (more (when (and (equal choice "go") (eq kind 'budget))
+                  (list :cost (let ((n (read-string "Add to its budget, dollars (empty: none): ")))
+                                (and (not (string-empty-p n)) (string-to-number n)))
+                        :tokens (let ((n (read-string "Tokens (empty: none): ")))
+                                  (and (not (string-empty-p n)) (string-to-number n)))
+                        :time (let ((n (read-string "Time, as 45m or 1h (empty: none): ")))
+                                (and (not (string-empty-p n)) (agent-workflow--duration n)))))))
+     (list run choice notes more)))
+  (agent-workflow-confirm run choice :notes notes :more more)
   (message "%s: %s" (agent-workflow-run-name run) choice))
 
 ;; ====== YOU ======

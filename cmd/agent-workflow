@@ -32,7 +32,9 @@
 #                                retries are used up (go, a note for the job's
 #                                agent fixing it; skip it; stop), one that
 #                                broke (go: again; skip; stop), a merge
-#                                waiting (go: again; stop)
+#                                waiting (go: again; stop), its budget used up
+#                                (go, with --more-cost N, --more-tokens N or
+#                                --more-time 1h; stop)
 #                                -> {"ok": true, "issue", "job", "choice"}
 #   agent-workflow approve ISSUE
 #   agent-workflow reject ISSUE NOTE|-
@@ -160,9 +162,16 @@ case "$op" in
     payload=$(printf '{"issue":%s,"job":%s,"step":%d,"note":%s,"discard":%s}' \
                      "$(json_string "$issue")" "$(json_string "$job")" "$step" "$(json_string "$notes")" "$discard") ;;
   confirm)
-    issue="" choice="" notes=""
+    issue="" choice="" notes="" more=""
     while [ $# -gt 0 ]; do
       case "$1" in
+        --more-cost|--more-tokens)
+          [ $# -lt 2 ] && fail 2 "$1: how much?"
+          case "$2" in ''|*[!0-9.]*) fail 2 "$1: $2 isn't a number" ;; esac
+          more="$more${more:+,}\"${1#--more-}\":$2"; shift 2 ;;
+        --more-time)
+          [ $# -lt 2 ] && fail 2 "--more-time: how long? (45m, 1h)"
+          more="$more${more:+,}\"time\":$(json_string "$2")"; shift 2 ;;
         --note-to)
           [ $# -lt 3 ] && fail 2 "--note-to: a job and its note: --note-to JOB NOTE"
           notes="$notes${notes:+,}$(printf '{"job":%s,"note":%s}' "$(json_string "$2")" "$(json_string "$3")")"
@@ -181,7 +190,7 @@ case "$op" in
       '') fail 2 "confirm: go, accept, skip or stop? agent-workflow confirm ISSUE go|accept|skip|stop" ;;
       *) fail 2 "confirm: \"$choice\" isn't go, accept, skip or stop" ;;
     esac
-    payload=$(printf '{"issue":%s,"choice":%s,"notes":[%s]}' "$(json_string "$issue")" "$(json_string "$choice")" "$notes") ;;
+    payload=$(printf '{"issue":%s,"choice":%s,"notes":[%s],"more":{%s}}' "$(json_string "$issue")" "$(json_string "$choice")" "$notes" "$more") ;;
   approve)
     [ $# -eq 0 ] && fail 2 "approve: which issue? agent-workflow approve ISSUE"
     [ $# -gt 1 ] && fail 2 "approve: unknown argument \"$2\"; agent-workflow approve ISSUE"

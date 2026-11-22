@@ -100,6 +100,15 @@ nil: they wait for M-x agent-workflow-continue."
   :type 'boolean
   :group 'agent-workflow)
 
+;; BUDGETS
+;; A run's budget, when its workflow has none (config/agent-workflow/
+;; budget.el): its cost (dollars), tokens, time (seconds); nil: no cap.
+(defcustom agent-workflow-budget nil
+  "A run's budget when its workflow says none: (:cost DOLLARS :tokens N
+:time SECONDS), any of them; nil: no cap."
+  :type '(choice (const :tag "None" nil) plist)
+  :group 'agent-workflow)
+
 ;; SCRIPTS
 ;; A run: step's script, its suite's for a merge (config/agent-workflow/
 ;; steps.el): stopped once it's run this long, unless its step's timeout says.
@@ -137,6 +146,7 @@ nil: they wait for M-x agent-workflow-continue."
 (load! "agent-workflow/runs")
 (load! "agent-workflow/steps")
 (load! "agent-workflow/resume")
+(load! "agent-workflow/budget")
 (load! "agent-workflow/check")
 (load! "agent-workflow/request")
 
