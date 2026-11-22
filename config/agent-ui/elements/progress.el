@@ -24,6 +24,13 @@
 ;; time elapsed and left after its counts, as room allows:
 ;;
 ;;   ◑ 7/12  58%  linking
+;;
+;; A label too long for its line: the bar narrowed for it, down to 10 cells;
+;; longer still, on lines of its own under the bar, wrapped (a pie's under
+;; its counts):
+;;
+;;   ██▏░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  1/18 tickets  5%
+;;   doom-38o.2: the pool, agent sessions with no role or name, in agent-shell
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -370,8 +377,16 @@ FACE, or BOUNCE's block (AT . BLOCK cells)."
       (when (and (numberp value) (/= value 0))
         (list (concat (agent-ui-format-number value) unit))))))
 
+(defconst agent-ui-progress--least-bar 10
+  "The fewest cells a bar gives way to for its label to fit beside it; a
+label needing more goes on lines of its own under the bar.")
+
 (defun agent-ui-progress--line (props ctx)
-  "Its bar's line: the bar, its counts and figures, its label."
+  "Its bar's line: the bar, its counts and figures, its label. A label too
+long for its share of the line: the bar narrowed for it (down to
+`agent-ui-progress--least-bar' cells); longer still (or of several lines),
+on lines of its own under the bar, wrapped to the width, the bar as without
+one (it was cut with …, the bar keeping its 40 cells: its rest nowhere)."
   (let* ((status (plist-get props :status))
          (max (plist-get props :max))
          (face (agent-ui-progress--fill-face status))
@@ -386,20 +401,27 @@ FACE, or BOUNCE's block (AT . BLOCK cells)."
                          (setq parts (butlast parts)))
                        parts))
          (counts (agent-ui-truncate (string-join parts "  ") (max 0 (- width 5))))
-         (mark (pcase status ('done "✓") ('failed "✗") (_ "")))
+         (mark (propertize (pcase status ('done "✓") ('failed "✗") (_ "")) 'face face))
          (text (or (plist-get props :label) ""))
-         (label (string-join (seq-remove #'string-empty-p
-                                         (list (propertize mark 'face face) text))
-                             " "))
+         (label (string-join (seq-remove #'string-empty-p (list mark text)) " "))
          ;; What's left after the counts: all the bar's without a label (but
          ;; its mark), else shared with it.
          (rest (- width (string-width counts) 4))
+         ;; The most the bar takes: the width beside its counts.
+         (most (- width (if (string-empty-p counts) 0 (+ 2 (string-width counts)))))
          ;; 3 cells at least (it was 10: past narrow widths), no more than
          ;; the width leaves beside the counts.
-         (bar-width (max 1 (min (max 3 (min 40 (if (string-empty-p text)
-                                                    (- rest (string-width label))
-                                                  (floor (* rest 0.6)))))
-                                (- width (if (string-empty-p counts) 0 (+ 2 (string-width counts)))))))
+         (sized (lambda (cells) (max 1 (min (max 3 (min 40 cells)) most))))
+         (shared (funcall sized (floor (* rest 0.6))))
+         ;; Beside the bar: the label, if it fits there, the bar given way for
+         ;; it down to its least; else under it.
+         (beside (- most 2 (string-width label)))
+         (under (and (not (string-empty-p text))
+                     (or (string-search "\n" text)
+                         (< beside (min shared agent-ui-progress--least-bar)))))
+         (bar-width (cond ((or (string-empty-p text) under)
+                           (funcall sized (- rest (string-width mark))))
+                          (t (max 1 (min shared beside)))))
          (fraction (cond (max (/ (float (plist-get props :value)) max))
                          ((not (eq status 'running)) 1.0)))
          (bar (if fraction
@@ -412,12 +434,17 @@ FACE, or BOUNCE's block (AT . BLOCK cells)."
                                                 (agent-ui-progress--bounce-at (plist-get ctx :tick) bar-width)))
                 bar))
          (line (string-join (seq-remove #'string-empty-p (list bar counts)) "  "))
-         (room (- width (string-width line) 2)))
-    ;; A label with room (4 columns, or less if it's only a mark: a done bar
-    ;; without a label lost its ✓, the bar taking all but its column).
-    (if (or (string-empty-p label) (< room (min 4 (string-width label))))
-        line
-      (concat line "  " (agent-ui-truncate label room)))))
+         (room (- width (string-width line) 2))
+         ;; After the bar: its label, or only its mark when the label's under.
+         (after (if under mark label)))
+    (concat
+     ;; Its mark kept with room for it (a done bar without a label lost its
+     ;; ✓, the bar taking all but its column).
+     (if (or (string-empty-p after) (< room (string-width after)))
+         line
+       (concat line "  " after))
+     (when under
+       (concat "\n" (agent-ui-wrap text width))))))
 
 (defun agent-ui-progress--text (props ctx)
   "Its bar's line; its values minutes apart, a second line under it: the
@@ -430,7 +457,7 @@ time elapsed, an item takes, left (`agent-ui-progress--timing')."
 (defun agent-ui-progress--pie (props ctx)
   "PROPS drawn small (pie): a pie (a spinner while running without a max),
 its counts, the time elapsed and left as room allows, its label, on one
-line."
+line; a label too long for it on lines under it, wrapped."
   (let* ((status (plist-get props :status))
          (max (plist-get props :max))
          (face (agent-ui-progress--fill-face status))
@@ -442,19 +469,28 @@ line."
          (label (plist-get props :label))
          (timing (agent-ui-progress--timing props))
          (figures (delq nil (list (plist-get timing :elapsed) (plist-get timing :left))))
-         (head (append (agent-ui-progress--counts props) (and mark (list mark)))))
-    ;; The figures dropped from the right while they leave the label less
-    ;; than 4 columns (all of it if shorter).
-    (while (and figures
-                (> (+ (string-width (string-join (append head figures) "  "))
-                      (if label (+ 2 (min 4 (string-width label))) 0))
-                   width))
-      (setq figures (butlast figures)))
-    (concat pie (agent-ui-truncate
-                 (string-join (append head (mapcar (lambda (f) (propertize f 'face 'agent-ui-muted)) figures)
-                                      (and label (list label)))
-                              "  ")
-                 width))))
+         (head (append (agent-ui-progress--counts props) (and mark (list mark))))
+         ;; Its figures, dropped from the right while they don't fit with
+         ;; TAIL after them.
+         (fit (lambda (tail)
+                (let ((shown figures))
+                  (while (and shown (> (string-width (string-join (append head shown tail) "  ")) width))
+                    (setq shown (butlast shown)))
+                  (mapcar (lambda (f) (propertize f 'face 'agent-ui-muted)) shown))))
+         ;; Its label on its line if it fits there whole (the figures given
+         ;; way for it), else on lines under it, wrapped, under its counts (it
+         ;; was cut with …, its rest nowhere).
+         (beside (and label (not (string-search "\n" label)) (funcall fit (list label))))
+         (on-line (and label (not (string-search "\n" label))
+                       (<= (string-width (string-join (append head beside (list label)) "  ")) width)))
+         (first (string-join (append head (if on-line beside (funcall fit nil))) "  "))
+         (under (and label (not on-line)
+                     (replace-regexp-in-string "\n" "\n  " (agent-ui-wrap label width) t t))))
+    (concat pie
+            (cond (on-line (concat first (if (string-empty-p first) "" "  ") label))
+                  ;; Nothing beside the pie but its label: its first line there.
+                  ((string-empty-p first) (or under ""))
+                  (t (concat (agent-ui-truncate first width) (if under (concat "\n  " under) "")))))))
 
 (defun agent-ui-progress--draw (props ctx _gui)
   (cond ((plist-get props :pie) (agent-ui-progress--pie props ctx))
@@ -471,13 +507,13 @@ first value, or STARTED), the time an item takes, the time left and when
 it should end."
   :props ((value number "Done so far" :default 0)
           (max number "The total; none: no end known")
-          (label string "What's being done now, after the bar")
+          (label string "What's being done now, after the bar (under it, wrapped, if too long)")
           (unit string "What VALUE counts (files, MB, bugs), after it")
           (status (choice running done failed) "running; done or failed colour it and stop it"
                   :default running)
           (started any "When the work began, if before the bar: a timestamp, epoch seconds, or seconds ago")
           (times any "Noted by the canvas from your updates, kept with it (don't give it)")
-          (pie boolean "Drawn small: a pie, its counts and label on one line (a panel's corner)" :default :false))
+          (pie boolean "Drawn small: a pie, its counts and label on one line (a panel's corner; a long label wrapped under it)" :default :false))
   :example (:title "Build" :value 7 :max 12 :label "linking")
   ;; Moving: a block to and fro (no max), or its time elapsed ticking.
   :animated (lambda (props)

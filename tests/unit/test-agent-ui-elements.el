@@ -134,9 +134,13 @@ counts, its mark, its label; in the GUI the pie an SVG."
                  "● 12/12  100%  ✓"))
   (should (equal (+test-aue-draw '(:type "progress" :value 3 :label "indexing" :pie t) :tick 0)
                  "● 3  indexing"))
+  ;; A label too long for its line: under its counts, wrapped (it was cut:
+  ;; "◑ 7/12  58%  a long…"); nothing beside the pie but it: from there.
   (should (equal (+test-aue-draw '(:type "progress" :value 7 :max 12 :label "a long label for a narrow pane" :pie t)
                                  :width 20)
-                 "◑ 7/12  58%  a long…"))
+                 "◑ 7/12  58%\n  a long label for a\n  narrow pane"))
+  (should (equal (+test-aue-draw '(:type "progress" :label "indexing the whole project's files" :pie t) :width 20)
+                 "● indexing the whole\n  project's files"))
   (let ((text (agent-ui-render '(:type "progress" :value 7 :max 12 :pie t)
                                (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16))))
     (should (string-match-p "<path" (plist-get (cdr (get-text-property 0 'display text)) :data)))))
@@ -153,10 +157,55 @@ counts, its mark, its label; in the GUI the pie an SVG."
   ;; Floats, a unit.
   (should (string-match-p "  1.5/3 MB  50%\\'"
                           (+test-aue-draw '(:type "progress" :value 1.5 :max 3 :unit "MB"))))
-  ;; A long label cut to the width.
-  (let ((text (+test-aue-draw (list :type "progress" :value 1 :max 2 :label (make-string 100 ?x)))))
-    (should (= (string-width text) 60))
-    (should (string-suffix-p "x…" text))))
+  ;; A label too long for the line: under the bar, wrapped (a word wider
+  ;; than the width within it), never cut.
+  (let ((lines (split-string (+test-aue-draw (list :type "progress" :value 1 :max 2 :label (make-string 100 ?x))) "\n")))
+    (should (equal (cdr lines) (list (make-string 60 ?x) (make-string 40 ?x))))
+    (should (string-suffix-p "  1/2  50%" (car lines)))))
+
+(ert-deftest agent-ui-elements/progress-a-long-label-read-whole ()
+  "A label too long for its share of the line: the bar narrowed for it (down
+to 10 cells); longer still, or of several lines, on lines of its own under
+the bar, wrapped, the bar as without a label, its mark kept on its line
+(the label was cut with …, the bar keeping its 40 cells: \"... agent
+sessions …\" at 98 columns, its rest nowhere; doom-qh6)."
+  (let ((label "doom-38o.2: the pool, agent sessions with no role or name, in agent-shell"))
+    ;; At 98 columns: the bar of 40 and its counts, the label whole under it.
+    (should (equal (+test-aue-draw (list :type "progress" :value 1 :max 18 :unit "tickets" :label label) :width 98)
+                   (concat "██▏" (make-string 37 ?░) "  1/18 tickets  5%\n" label)))
+    ;; Wide enough: on the line, after the bar.
+    (should (equal (+test-aue-draw (list :type "progress" :value 1 :max 18 :unit "tickets" :label label) :width 160)
+                   (concat "██▏" (make-string 37 ?░) "  1/18 tickets  5%  " label)))
+    ;; Narrow: wrapped under it, every word, every line within the width.
+    (dolist (width '(10 20 30 40 60))
+      (let* ((text (+test-aue-draw (list :type "progress" :value 1 :max 18 :unit "tickets" :label label) :width width))
+             (under (cdr (split-string text "\n"))))
+        (should-not (string-search "…" (string-join under)))
+        (when (>= width 20)
+          (should (equal (split-string label) (split-string (string-join under " ")))))
+        (dolist (line (split-string text "\n")) (should (<= (string-width line) width))))))
+  ;; A little too long for its share: the bar gives way, the label beside it.
+  (let* ((label (concat "doom-38o.2: the pool, " (make-string 38 ?x)))
+         (text (+test-aue-draw (list :type "progress" :value 1 :max 18 :unit "tickets" :label label) :width 98)))
+    (should-not (string-search "\n" text))
+    (should (string-suffix-p (concat "  1/18 tickets  5%  " label) text))
+    (should (= (string-width text) 98))
+    (should (= (length (car (split-string text " "))) 18)))
+  ;; Done: its ✓ on the bar's line, its label under it.
+  (should (equal (+test-aue-draw '(:type "progress" :value 12 :max 12 :status "done"
+                                   :label "built every target of the project in 41 seconds") :width 40)
+                 (concat (make-string 24 ?█) "  12/12  100%  ✓\nbuilt every target of the project in 41\nseconds")))
+  ;; Of several lines: under the bar, as they are.
+  (should (equal (+test-aue-draw '(:type "progress" :value 1 :max 2 :label "linking\nthe final binary"))
+                 (concat (make-string 20 ?█) (make-string 20 ?░) "  1/2  50%\nlinking\nthe final binary")))
+  ;; Too narrow for a label beside the bar: under it (it was left out).
+  (should (equal (+test-aue-draw '(:type "progress" :value 7 :max 12 :label "linking") :width 15)
+                 "█▊░  7/12  58%\nlinking"))
+  ;; In the GUI: the same text, the label's lines under the SVG bar.
+  (let* ((element '(:type "progress" :value 1 :max 4 :label "linking the final binary of the whole project, every target"))
+         (gui (agent-ui-render element (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16))))
+    (should (equal (substring-no-properties gui) (+test-aue-draw element)))
+    (should (string-match-p "\nlinking the final" (substring-no-properties gui)))))
 
 (ert-deftest agent-ui-elements/progress-states ()
   (let ((done '(:type "progress" :value 12 :max 12 :status "done" :label "built"))
@@ -4819,13 +4868,15 @@ the width (the bar was 10 at least and nothing was cut: 44 columns at 40)."
                                width)))
       (at 100.0 10 40) (at 101.0 14 40)
       (dolist (width '(10 20 30 40))
-        (should (<= (string-width (at 102.0 18 width)) width)))
+        (dolist (line (split-string (at 102.0 18 width) "\n"))
+          (should (<= (string-width line) width))))
       ;; Wide: all of it.
       (should (string-match-p "18/100 MB  18%  4 MB/s  [0-9]+s left" (at 102.0 18 100)))))
   (dolist (element '((:type "progress" :value 7 :max 12 :label "linking the final binary")
                      (:type "progress" :value 123456 :max 1000000 :unit "files" :label "indexing")))
     (dolist (width '(10 15 20 30))
-      (should (<= (string-width (+test-aue-draw element :width width)) width)))))
+      (dolist (line (split-string (+test-aue-draw element :width width) "\n"))
+        (should (<= (string-width line) width))))))
 
 (ert-deftest agent-ui-elements/progress-done-shows-its-mark ()
   "A done or failed bar without a label keeps its ✓ or ✗ at any width (under
@@ -5001,9 +5052,10 @@ kept as epoch seconds; a wrong one said."
     (should (equal (cadr (split-string (+test-aue-bar 4800 "m" nil) "\n")) "20m 00s elapsed"))))
 
 (ert-deftest agent-ui-elements/progress-work-items-narrow ()
-  "Narrow panes: the second line's figures dropped from the right, the
-first cut, nothing past the width; a pie keeps one line, the time elapsed
-and left after its counts as room allows."
+  "Narrow panes: the timing line's figures dropped from the right, the
+first cut, nothing past the width; the label under the bar where it doesn't
+fit beside it (it was cut); a pie's time elapsed and left after its counts
+as room allows, its label whole, beside them or under them."
   (+test-aue-clocked
     (+test-aue-bar 0 "bugs" '(:value 0 :max 58 :unit "bugs" :label "tiling: SPC w SPC"))
     (cl-loop for value from 1 to 12
@@ -5012,7 +5064,9 @@ and left after its counts as room allows."
     (dolist (width '(8 12 20 30 40 50 60 70 80 100 120))
       (dolist (line (split-string (+test-aue-bar-draw "bugs" width) "\n"))
         (should (<= (string-width line) width))))
-    (cl-flet ((timing (width) (cadr (split-string (+test-aue-bar-draw "bugs" width) "\n"))))
+    ;; At 40: the label under the bar, the timing line under it.
+    (should (equal (cadr (split-string (+test-aue-bar-draw "bugs" 40) "\n")) "tiling: SPC w SPC"))
+    (cl-flet ((timing (width) (car (last (split-string (+test-aue-bar-draw "bugs" width) "\n")))))
       (should (string-prefix-p "1h 51m elapsed · ~9 min a bug (last 8) · ~6h 50m left, about " (timing 100)))
       ;; Too wide: the items it's taken from left out first.
       (should (string-prefix-p "1h 51m elapsed · ~9 min a bug · ~6h 50m left, about " (timing 60)))
@@ -5020,16 +5074,18 @@ and left after its counts as room allows."
       (should (equal (timing 40) "1h 51m elapsed · ~9 min a bug"))
       (should (equal (timing 20) "1h 51m elapsed"))
       (should (equal (timing 10) "1h 51m el…")))
-    ;; A pie: one line.
+    ;; A pie: its figures giving way to its label, beside them while it
+    ;; fits whole there (it was cut: "tiling: SPC w …"), else under them.
     (cl-flet ((pie (width) (substring-no-properties
                             (agent-ui-render (append (agent-ui-get "bugs") '(:pie t))
                                              (agent-ui-context :width width :id "bugs")))))
       (should (equal (pie 80) "◔ 12/58 bugs  20%  1h 51m elapsed  ~6h 50m left  tiling: SPC w SPC"))
-      (should (equal (pie 50) "◔ 12/58 bugs  20%  1h 51m elapsed  tiling: SPC w …"))
-      (should (equal (pie 30) "◔ 12/58 bugs  20%  tiling: SP…"))
+      (should (equal (pie 50) "◔ 12/58 bugs  20%  tiling: SPC w SPC"))
+      (should (equal (pie 30) "◔ 12/58 bugs  20%\n  tiling: SPC w SPC"))
       (dolist (width '(10 20 40 60))
-        (should-not (string-search "\n" (pie width)))
-        (should (<= (string-width (pie width)) width))))))
+        (should (equal (last (split-string (pie width) "[ \n]+" t) 4) '("tiling:" "SPC" "w" "SPC")))
+        (dolist (line (split-string (pie width) "\n"))
+          (should (<= (string-width line) width)))))))
 
 (ert-deftest agent-ui-elements/table-sorted ()
   (let ((element '(:type "table" :columns ("Test" "Time")
