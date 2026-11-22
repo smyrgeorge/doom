@@ -91,12 +91,19 @@ counted 192.8, its line came out a pixel short); nil if it can't be known."
   (pcase display
     (`((slice ,_ ,_ ,w ,h) . ,_) (cons w h))
     (`(image . ,props)
-     (let ((size (if-let* ((data (plist-get props :data))
-                           ((eq (plist-get props :type) 'svg)))
-                     (agent-ui-snapshot--svg-size data)
-                   (and (display-graphic-p) (ignore-errors (image-size display t)))))
-           (scale (or (plist-get props :scale) 1)))
-       (and size (cons (floor (* (car size) scale)) (floor (* (cdr size) scale))))))))
+     ;; An SVG's data: its own size, times its :scale if that's a number;
+     ;; else the size Emacs shows it at, its :scale counted already (it was
+     ;; counted again: an image element's create-image puts :scale default
+     ;; in it, a symbol, and the panel failed to draw, "(wrong-type-argument
+     ;; number-or-marker-p default)"; a number scaled it twice).
+     (let* ((scale (plist-get props :scale))
+            (svg (and (eq (plist-get props :type) 'svg) (plist-get props :data)))
+            (size (cond ((and svg (or (null scale) (numberp scale)))
+                         (when-let* ((own (agent-ui-snapshot--svg-size svg)))
+                           (cons (* (car own) (or scale 1)) (* (cdr own) (or scale 1)))))
+                        ((display-graphic-p) (ignore-errors (image-size display t)))
+                        (svg (agent-ui-snapshot--svg-size svg)))))
+       (and size (cons (floor (car size)) (floor (cdr size))))))))
 
 (defun agent-ui-panel--pixels (line cw)
   "How wide LINE is shown, in pixels (CW a column's): its images' widths, a

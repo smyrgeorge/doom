@@ -4185,6 +4185,36 @@ whole (a wrapped one left a piece behind)."
           (`(insert ,_ ,text) (goto-char (point-max)) (insert "\n" (substring-no-properties text)))))
       (should (equal (buffer-string) (substring-no-properties (agent-ui-render new ctx)))))))
 
+;; doom-1ck
+(ert-deftest agent-ui-elements/panel-image-sizes-whatever-their-scale ()
+  "An image's size in a panel, whatever its :scale: an image element's
+create-image puts :scale default in it (a symbol), which failed the whole
+panel (\"⚠ Wrong type argument: number-or-marker-p, default\"); a file's
+size, from image-size, counts its scale already (a number scaled it twice);
+an SVG's data size is scaled by a number."
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+            ((symbol-function 'image-size) (lambda (&rest _) '(552.4 . 135))))
+    (should (equal (agent-ui-panel--image-size '(image :type png :file "x.png" :scale default)) '(552 . 135)))
+    (should (equal (agent-ui-panel--image-size '(image :type png :file "x.png" :scale 2)) '(552 . 135)))
+    (should (equal (agent-ui-panel--image-size '(image :type svg :data "<svg width=\"40\" height=\"16\"/>" :scale default))
+                   '(552 . 135))))
+  (should (equal (agent-ui-panel--image-size '(image :type svg :data "<svg width=\"40\" height=\"16\"/>" :scale 2))
+                 '(80 . 32)))
+  ;; Not in a graphic frame: an SVG's own size, a file's unknown.
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) nil)))
+    (should (equal (agent-ui-panel--image-size '(image :type svg :data "<svg width=\"40\" height=\"16\"/>" :scale default))
+                   '(40 . 16)))
+    (should-not (agent-ui-panel--image-size '(image :type png :file "x.png" :scale default))))
+  ;; An image element in a panel, as the canvas has it: drawn, no error.
+  (let* ((file (expand-file-name "examples/agent-ui.png" +test-root))
+         (text (cl-letf (((symbol-function 'image-size) (lambda (&rest _) '(300 . 200))))
+                 (agent-ui-render (list :type "panel" :layout "column"
+                                        :children (list (list :type "image" :id "a" :file file)
+                                                        (list :type "text" :id "b" :text "under it")))
+                                  (agent-ui-context :width 60 :graphic t :char-width 8 :line-height 16)))))
+    (should-not (string-search "⚠" (substring-no-properties text)))
+    (should (string-search "under it" (substring-no-properties text)))))
+
 ;; doom-ny5
 (ert-deftest agent-ui-elements/appended-under-a-title-and-above-actions ()
   "Lines appended to an element drawn alone (its type's :extend) are put in
