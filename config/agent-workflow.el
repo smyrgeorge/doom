@@ -147,6 +147,7 @@ nil: they wait for M-x agent-workflow-continue."
 (load! "agent-workflow/steps")
 (load! "agent-workflow/resume")
 (load! "agent-workflow/budget")
+(load! "agent-workflow/watch")
 (load! "agent-workflow/check")
 (load! "agent-workflow/request")
 

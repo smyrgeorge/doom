@@ -579,3 +579,46 @@ stopped, asked; go on with more: continued; kept with the run."
                      (json-parse-buffer :object-type 'plist))))
         (should (equal (plist-get (plist-get saved :more) :cost) 5))
         (should (>= (plist-get (plist-get saved :spent) :cost) 10.5))))))
+
+;; ====== CHANGED BY HAND ======
+
+(ert-deftest agent-workflow-runs/changed-by-hand ()
+  "Its issue edited: the next steps read it; its type changed: its workflow
+kept, said; blocked anew: nothing new starts; closed: its steps stopped,
+asked, go on: in progress again; a job's commits gone from the branch:
+stopped, asked."
+  (+test-awr "byhand"
+    (let* ((issue (+test-awr--issue project "By hand"))
+           (blocker (+test-awr--issue project "Blocker"))
+           (run (agent-workflow-start-run project issue))
+           (worktree (agent-workflow-worktree-directory project issue)))
+      (+test-awr--agent run "build")
+      ;; Its text, its type.
+      (+test-awr--bd project "update" issue "--description" "Now with escapes." "--type" "bug")
+      (agent-workflow-watch-run run)
+      (should (equal (plist-get (agent-workflow-run-info run) :description) "Now with escapes."))
+      (should (equal (plist-get (agent-workflow-run-workflow run) :name) "feature"))
+      (should (member "issue-changed" (+test-awr--journal run)))
+      ;; Closed by hand: build stopped, asked; go on: in progress, continued.
+      (+test-awr--bd project "close" issue)
+      (agent-workflow-watch-run run)
+      (should (equal (agent-workflow-run-why run)
+                     "build: its issue was closed by hand: go on (it's in progress again), or cancel the run?"))
+      (should-not (plist-get (agent-workflow--job run "build") :agent))
+      (agent-workflow-confirm run "go")
+      (should (equal (alist-get 'status (+test-awr--shown project issue)) "in_progress"))
+      (should (+test-awr--agent run "build"))
+      ;; Its commit, then build done; a new blocker: nothing new starts (docs
+      ;; first: its if holds now that the issue is a bug).
+      (+test-awr--commit worktree "lexer.el" "Lexer")
+      (+test-awr--bd project "dep" "add" issue blocker)
+      (agent-workflow-watch-run run)
+      (+test-awr--finish run "build" nil "built")
+      (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why run)
+                                                 (format "docs: waiting: its issue is blocked by %s" blocker)))))
+      ;; Its branch reset by hand: build's commit gone.
+      (let ((default-directory worktree)) (call-process "git" nil nil nil "reset" "-q" "--hard" "HEAD~1"))
+      (+test-awr--bd project "close" blocker)
+      (agent-workflow-watch-run run)
+      (should (string-match-p "the commits of build aren't on the branch any more"
+                              (or (agent-workflow-run-why run) ""))))))

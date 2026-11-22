@@ -43,6 +43,7 @@
 (declare-function agent-workflow--fix "agent-workflow/steps")
 (declare-function agent-workflow-run-spent-now "agent-workflow/budget")
 (declare-function agent-workflow--budget-more "agent-workflow/budget")
+(declare-function agent-workflow-cancel "agent-workflow/resume")
 (declare-function agent-workflow--continue-job "agent-workflow/resume")
 (declare-function agent-workflow--ensure-restored "agent-workflow/resume")
 (defvar agent-workflow--paused)
@@ -67,7 +68,8 @@
   (active 0)             ; seconds it ran, not waiting for you (but this stretch)
   active-since           ; when this stretch of it running began, or nil
   more                   ; what you added to its budget: (:cost :tokens :time)
-  warned)                ; non-nil once told it's near its budget
+  warned                 ; non-nil once told it's near its budget
+  blocked)               ; its issue's blockers, new since it started (watch.el)
 
 (defvar agent-workflow--runs nil
   "Every run of this Emacs, as they were started.")
@@ -160,8 +162,8 @@ its name, nil null, t true; an alist of numbers ((0 . 2)) an object."
    (t (format "%s" value))))
 
 (defconst agent-workflow--saved-job-keys
-  '(:status :step :round :outcome :notes :session :start-commit :commit :dir :snapshot :approved :ask :why
-    :tries :user-note :back)
+  '(:status :step :round :outcome :notes :session :start-commit :end-commit :commit :dir :snapshot :approved :ask
+    :why :tries :user-note :back)
   "What of a job's state state.json keeps: all it needs to come back.")
 
 (defun agent-workflow--save-state (run)
@@ -431,6 +433,13 @@ runs, it's over once every job is done or skipped."
         (when blockers
           (agent-workflow--set-state run 'queued (concat "blocked by " (string-join blockers ", ")))
           (throw 'wait nil))))
+    ;; Blocked since it started (watch.el): nothing new starts.
+    (when-let* ((blockers (agent-workflow-run-blocked run)))
+      (dolist (job (agent-workflow--startable run))
+        (agent-workflow--job-set run job :why (format "%s: waiting: its issue is blocked by %s" job
+                                                      (string-join blockers ", "))))
+      (agent-workflow--refresh run)
+      (throw 'wait nil))
     ;; Paused: nothing new starts.
     (when agent-workflow--paused
       (dolist (job (agent-workflow--startable run))
@@ -826,7 +835,13 @@ stops."
          (agent-workflow-stop-agent agent))
        (when (plist-get state :snapshot)
          (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) job))
-       (agent-workflow--job-set run job :status 'done :agent nil :why nil :snapshot nil)
+       (agent-workflow--job-set run job :status 'done :agent nil :why nil :snapshot nil
+                                :end-commit (and (agent-workflow--job-edits-p run job)
+                                                 (let ((dir (agent-workflow-worktree-directory
+                                                             (agent-workflow-run-project run) (agent-workflow-run-issue run))))
+                                                   (and (file-directory-p dir)
+                                                        (let ((default-directory dir))
+                                                          (car (agent-workflow--git-lines "rev-parse" "HEAD")))))))
        (agent-workflow--journal run "job-done" :job job :outcome outcome :commit (plist-get state :commit))
        (agent-workflow--issue-summary run)
        (agent-workflow--changed run)
@@ -906,7 +921,10 @@ JOB hasn't run, or STEP isn't one."
               (commit (plist-get state :start-commit)))
           (unless commit (agent-workflow--refuse "%s: the commit it started from isn't known" job))
           (agent-workflow--git "reset" "--hard" commit)
-          (agent-workflow--git "clean" "-fd")))
+          (agent-workflow--git "clean" "-fd")
+          ;; Commits lost as you chose: not missed later (watch.el).
+          (dolist (other (agent-workflow-run-jobs run))
+            (agent-workflow--job-set run (car other) :end-commit nil))))
       (agent-workflow--journal run "went-back" :job job :step step :note note :by by
                                :replaced (vconcat replaced) :discarded (if discard t :false)
                                :lost (and lost (vconcat (append (car lost) (cdr lost)))))
@@ -1173,7 +1191,8 @@ A user error if RUN asks nothing, or CHOICE isn't one of its question's."
                (other (plist-get ask :other))
                (edge (plist-get ask :edge))
                (kind (plist-get ask :kind))
-               (allowed (pcase kind ('nil '("go" "accept" "stop")) ((or 'merge 'budget) '("go" "stop")) ('approve nil)
+               (allowed (pcase kind ('nil '("go" "accept" "stop")) ((or 'merge 'budget 'moved) '("go" "stop"))
+                          ('closed '("go" "cancel")) ('approve nil)
                           (_ '("go" "skip" "stop")))))
     (when (eq kind 'approve)
       (user-error "%s waits for your OK: approve it, or reject it" (agent-workflow-run-name run)))
@@ -1199,17 +1218,24 @@ A user error if RUN asks nothing, or CHOICE isn't one of its question's."
                                     (concat (plist-get ask :output)
                                             (if (and mine (not (string-empty-p mine))) (concat "\n\nThe user adds: " mine) ""))
                                     (plist-get ask :what)))
-           (if (memq kind '(interrupted budget))
+           (if (memq kind '(interrupted budget closed moved))
                (progn
                  (when (eq kind 'budget)
                    (agent-workflow--budget-more run more))
+                 (when (eq kind 'closed)
+                   (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run)
+                                             "--status" "in_progress"))
+                 (when (eq kind 'moved)
+                   (dolist (other (agent-workflow-run-jobs run))
+                     (agent-workflow--job-set run (car other) :end-commit nil)))
                  (dolist (other (agent-workflow-run-jobs run))
                    (when (and (not (equal (car other) job))
-                              (eq (plist-get (plist-get (cdr other) :ask) :kind) 'budget))
-                     (agent-workflow--continue-job run (car other) by)))
+                              (eq (plist-get (plist-get (cdr other) :ask) :kind) kind))
+                     (agent-workflow--go-on run (car other) by)))
                  (agent-workflow--job-set run job :ask ask)
-                 (agent-workflow--continue-job run job by))
+                 (agent-workflow--go-on run job by))
              (agent-workflow--step-start run job index)))))
+      ("cancel" (agent-workflow-cancel run :by by))
       ("skip"
        (agent-workflow--journal run "step-skipped" :job job :step (plist-get ask :step))
        ;; Skipped, it needs no OK of yours.
@@ -1239,6 +1265,16 @@ A user error if RUN asks nothing, or CHOICE isn't one of its question's."
        (agent-workflow--job-set run job :why (format "%s: stopped by you" job))
        (agent-workflow--refresh run)))
     choice))
+
+(defun agent-workflow--go-on (run job by)
+  "JOB of RUN, stopped for a question you answered go: continued; one held
+before it started, pending again, started as the run goes."
+  (if (plist-get (agent-workflow--job run job) :held)
+      (progn
+        (agent-workflow--job-set run job :held nil :ask nil :status 'pending :why nil)
+        (agent-workflow--refresh run)
+        (agent-workflow--tick-soon))
+    (agent-workflow--continue-job run job by)))
 
 (defun agent-workflow-confirm-command (run choice &optional notes more)
   "Answer RUN's question (M-x agent-workflow-confirm): CHOICE, as the

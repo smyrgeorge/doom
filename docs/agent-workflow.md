@@ -2,7 +2,7 @@
 
 > **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
 > runs, their jobs in parallel, every kind of step, going back, loops, the merge, limits, approval, resuming,
-> budgets.
+> budgets, an issue changed by hand.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -318,6 +318,19 @@ cmd/agent-workflow confirm doom-a1b accept
 ```
 
 Your own going back isn't counted, and doesn't start the count again.
+
+### Changed by hand
+
+Each run not over is looked at again every 30 seconds (`agent-workflow-queue-check`), and with `M-x
+agent-workflow-watch`:
+
+- **Its issue closed or deferred:** its running steps stop (their work and their agents' sessions kept), and the run
+  asks: go on (the issue in progress again), or cancel it.
+- **Blocked by a new dependency:** no new job starts until it's unblocked, saying by what; jobs running finish.
+- **Its type, or its `workflow:` label, changed:** the run keeps its workflow; its journal says so.
+- **Its title, description, acceptance or notes edited:** the next steps read them anew.
+- **Its branch:** your commits on it are work like any. A job's commits no longer on it (a reset, a force-push) stop
+  the run, asking: go on as it is now, or stop.
 
 ### Stopped, then on again
 
