@@ -201,6 +201,23 @@ waiting for you (tell the agent in its session). Its outcome must be `done` or o
 over, its agent stops, and the next jobs start. Every job done or skipped, the run is, and its worktree goes (its
 branch stays).
 
+### Going back
+
+`M-x agent-workflow-back` sends a run back to a job that has run (and a step of it), with your note, to refine what it
+did. Nothing is reset: the branch and its commits stay, and changes not committed stay in the worktree. That job and
+the jobs that need it, directly or not, run again, a round more; a step of theirs running is stopped first. The others
+keep their results. The job's agent has its session resumed, told your note and what the branch has now (a fresh
+session is told the same, if the agent can't resume). The journal keeps the earlier rounds.
+
+With `C-u`, the work since the job's round started is discarded: its commits, and the changes not committed. What's
+lost is said, and you're asked first.
+
+```sh
+cmd/agent-workflow back doom-a1b build "handle the empty list too"
+cmd/agent-workflow back doom-a1b build.2 - < note.txt     # its second step; the note from stdin
+cmd/agent-workflow back doom-a1b build --discard          # the work since, gone
+```
+
 In `if`, these say what the issue is: `(issue-id)`, `(issue-type)` (a symbol: `'bug`), `(issue-labels)`,
 `(issue-priority)`, `(issue-title)`, `(job-outcome 'review)`, `(job-status 'build)`.
 

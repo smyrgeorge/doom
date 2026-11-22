@@ -14,6 +14,10 @@
 ;;   done {"outcome": "changes", "notes": "..."} (outcome: optional, done)
 ;;        -> {"ok": true, "issue", "job", "outcome"}: the step of the agent
 ;;        that ran it ended (runs.el); refused from anywhere else
+;;   back {"issue": "doom-a1b", "job": "build", "step": 0, "note": "...",
+;;        "discard": false} (step, note, discard: optional) -> {"ok": true,
+;;        "issue", "job", "step", "replaced": [jobs], "lost": [lines]}: the
+;;        run sent back (runs.el); yours, refused from an agent's session
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
 ;;        "project", "workflows": [names], "profiles": [names], "problems":
@@ -111,6 +115,26 @@ says: the reply."
                  (agent-workflow-done agent (plist-get payload :outcome) (plist-get payload :notes))))
       (list :ok t :issue (agent-workflow-run-issue run) :job job :outcome outcome))))
 
+(defun agent-workflow--request-back (directory payload pid)
+  "Send DIRECTORY's project's run on PAYLOAD's issue back, as it says: the
+reply. Not from an agent's session."
+  (when (agent-workflow--request-caller pid)
+    (agent-workflow--refuse "back: yours to do, not an agent's"))
+  (let* ((default-directory (file-name-as-directory directory))
+         (project (or (agent-workflow-project) (user-error "Not in a git repository")))
+         (issue (plist-get payload :issue))
+         (run (or (car (last (seq-filter (lambda (run) (equal (agent-workflow-run-issue run) issue))
+                                         (agent-workflow-runs project))))
+                  (user-error "back: %s has no run" issue)))
+         (job (plist-get payload :job))
+         (step (or (plist-get payload :step) 0))
+         (discard (plist-get payload :discard))
+         (lost (and discard (agent-workflow-back-lost run job)))
+         (replaced (agent-workflow-back run job :step step :note (plist-get payload :note) :discard discard
+                                        :by "you")))
+    (list :ok t :issue issue :job job :step step :replaced (vconcat replaced)
+          :lost (vconcat (append (car lost) (cdr lost))))))
+
 (defun agent-workflow-request (dir)
   "Answer cmd/agent-workflow's request in DIR (see the top of this file):
 its reply written to DIR/reply. Return t."
@@ -134,7 +158,8 @@ its reply written to DIR/reply. Return t."
                   ("check" (agent-workflow--request-check directory payload))
                   ("run" (agent-workflow--request-run directory payload))
                   ("done" (agent-workflow--request-done payload pid))
-                  (_ (list :ok :false :error (format "unknown operation %S; operations: run, done, check" op)))))
+                  ("back" (agent-workflow--request-back directory payload pid))
+                  (_ (list :ok :false :error (format "unknown operation %S; operations: run, done, back, check" op)))))
             (json-parse-error (list :ok :false :error (format "not JSON: %s" (error-message-string err))))
             (error (list :ok :false :error (error-message-string err))))))
     (let ((coding-system-for-write 'utf-8-unix))

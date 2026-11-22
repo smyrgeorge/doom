@@ -82,9 +82,12 @@
 (defun agent-workflow--job (run job)
   "RUN's state of JOB: a plist (:status pending|running|waiting|done|skipped
 :step :agent :outcome :notes :finished :session :why :dir :commit :snapshot
-:pool), :why what it waits for (for you, or pending: for an agent, the
-branch), :dir where it works, :commit the one it saw there, :snapshot a
-reading job's (DIR BRANCH COMMIT), :pool its step waiting for an agent."
+:pool :round :back :start-commit). :why: what it waits for (for you, or
+pending: for an agent, the branch); :dir: where it works; :commit: the one
+it saw there; :snapshot: a reading job's (DIR BRANCH COMMIT); :pool: its
+step waiting for an agent; :round: how many times it's run; :back: how it
+was sent back (:step :note :by :session); :start-commit: the branch's
+commit as its round started."
   (alist-get job (agent-workflow-run-jobs run) nil nil #'equal))
 
 (defun agent-workflow--job-set (run job &rest pairs)
@@ -145,6 +148,7 @@ to RUN's journal."
                                          (agent-workflow--json-ready
                                           (list :name (car job)
                                                 :status (symbol-name (plist-get state :status))
+                                                :round (or (plist-get state :round) 1)
                                                 :outcome (plist-get state :outcome)
                                                 :notes (plist-get state :notes)
                                                 :session (plist-get state :session)))))
@@ -203,7 +207,7 @@ type. Their names."
         (let ((name (string-remove-prefix "workflow:" label)))
           (if (assoc name workflows)
               (list name)
-            (user-error "%s's label %s: no such workflow (%s)" (plist-get info :id) label
+            (agent-workflow--refuse "%s's label %s: no such workflow (%s)" (plist-get info :id) label
                         (agent-workflow--listed (mapcar #'car workflows)))))
       (mapcar #'car (seq-filter (lambda (workflow) (member (plist-get info :type) (plist-get (cdr workflow) :for)))
                                 workflows)))))
@@ -456,13 +460,21 @@ job's snapshot of its branch), the commit it sees there; its first step."
                             (let ((default-directory (car worktree))) (agent-workflow--git "rev-parse" "HEAD"))))
                   (agent-workflow-snapshot project issue job :type (plist-get info :type)
                                            :title (plist-get info :title)))))
+    ;; The branch where this round of it starts: what discarding goes back to.
+    (agent-workflow--job-set run job :start-commit
+                             (let ((default-directory (car (agent-workflow-worktree project issue
+                                                                                    :type (plist-get info :type)
+                                                                                    :title (plist-get info :title)))))
+                               (agent-workflow--git "rev-parse" "HEAD")))
     (agent-workflow--job-set run job :status 'running :step 0 :why nil :dir (nth 0 where) :commit (nth 2 where)
-                             :snapshot (and (not edits) where))
-    (agent-workflow--journal run "job-started" :job job :commit (nth 2 where) :edits (if edits t :false))
+                             :snapshot (and (not edits) where)
+                             :round (or (plist-get (agent-workflow--job run job) :round) 1))
+    (agent-workflow--journal run "job-started" :job job :commit (nth 2 where) :edits (if edits t :false)
+                             :round (plist-get (agent-workflow--job run job) :round))
     (agent-workflow--refresh run)
     (agent-workflow--issue-summary run)
     (agent-workflow--changed run)
-    (agent-workflow--step-start run job 0)))
+    (agent-workflow--step-start run job (or (plist-get (plist-get (agent-workflow--job run job) :back) :step) 0))))
 
 (defun agent-workflow--step-start (run job index)
   "Step INDEX of JOB of RUN starts."
@@ -490,24 +502,52 @@ said."
                   (cons "issue.description" (plist-get info :description))
                   (cons "issue.acceptance" (plist-get info :acceptance))
                   (cons "issue.notes" (plist-get info :notes))
-                  (cons "round" "1") (cons "try" "1") (cons "note" "") (cons "output" ""))
+                  (cons "try" "1") (cons "output" ""))
             (cl-loop for (job . state) in (agent-workflow-run-jobs run)
                      append (list (cons (format "jobs.%s.outcome" job) (or (plist-get state :outcome) ""))
                                   (cons (format "jobs.%s.notes" job) (or (plist-get state :notes) "")))))))
 
+(defun agent-workflow--job-values (run job)
+  "JOB of RUN's own variables' values: its round, the note it was sent
+back with."
+  (let ((state (agent-workflow--job run job)))
+    (list (cons "round" (number-to-string (or (plist-get state :round) 1)))
+          (cons "note" (or (plist-get (plist-get state :back) :note) "")))))
+
 (defun agent-workflow--prompt (run job step)
   "What the agent of STEP (of JOB of RUN) is told to start with: the step's
-prompt, else its job on the issue."
-  (let ((info (agent-workflow-run-info run)))
-    (or (plist-get step :prompt)
-        (format "Do your job, %s, on %s: %s.\n\n%s" job (agent-workflow-run-issue run) (plist-get info :title)
-                (plist-get info :description)))))
+prompt, else its job on the issue; sent back to it, your note and what its
+branch has now first."
+  (let* ((info (agent-workflow-run-info run))
+         (back (plist-get (agent-workflow--job run job) :back))
+         (prompt (or (plist-get step :prompt)
+                     (format "Do your job, %s, on %s: %s.\n\n%s" job (agent-workflow-run-issue run)
+                             (plist-get info :title) (plist-get info :description)))))
+    (if (not back)
+        prompt
+      (format "%s sent the work back to you, %s (round %d)%s.\n\nWhat the branch has now:\n%s\n\nThen, as before:\n\n%s"
+              (if (equal (plist-get back :by) "you") "The user" (plist-get back :by))
+              job (or (plist-get (agent-workflow--job run job) :round) 1)
+              (if (string-empty-p (or (plist-get back :note) "")) ""
+                (concat ", with this note: " (plist-get back :note)))
+              (agent-workflow--branch-now run job) prompt))))
+
+(defun agent-workflow--branch-now (run job)
+  "What JOB of RUN's place has now, in a few lines: its last commits, its
+changes not committed."
+  (let ((default-directory (or (plist-get (agent-workflow--job run job) :dir)
+                               (agent-workflow-worktree-directory (agent-workflow-run-project run)
+                                                                  (agent-workflow-run-issue run)))))
+    (string-join (delq nil (list (string-join (agent-workflow--git-lines "log" "--oneline" "-5") "\n")
+                                 (let ((changes (agent-workflow--git-lines "status" "--short")))
+                                   (and changes (concat "Not committed:\n" (string-join changes "\n"))))))
+                 "\n")))
 
 (defun agent-workflow--agent-step (run job step index)
   "The agent step STEP (INDEX of JOB of RUN): the job's agent told it, or
 one started for it. The pool full: the run waits, queued, for an agent."
   (let* ((held (plist-get (agent-workflow--job run job) :agent))
-         (values (agent-workflow--run-values run))
+         (values (append (agent-workflow--job-values run job) (agent-workflow--run-values run)))
          (outcomes (mapcar #'car (plist-get (agent-workflow--job-spec run job) :outcomes))))
     (if (and held (buffer-live-p (agent-workflow-agent-buffer held)))
         (let ((buffer (agent-workflow-agent-buffer held))
@@ -534,8 +574,10 @@ one started for it. The pool full: the run waits, queued, for an agent."
                            :type (plist-get info :type) :title (plist-get info :title)
                            :values values :outcomes outcomes
                            :prompt (agent-workflow--prompt run job step)
-                           :snapshot (plist-get (agent-workflow--job run job) :snapshot))))
-              (agent-workflow--job-set run job :agent agent)
+                           :snapshot (plist-get (agent-workflow--job run job) :snapshot)
+                           :resume (plist-get (plist-get (agent-workflow--job run job) :back) :session))))
+              ;; Its note told: a later step of it isn't sent back.
+              (agent-workflow--job-set run job :agent agent :back nil)
               (agent-workflow--journal run "step-started" :job job :step index
                                        :agent (agent-workflow-agent-name agent)
                                        :profile (plist-get step :agent)
@@ -566,7 +608,7 @@ one."
     (unless (member outcome allowed)
       (user-error "Outcome %s: not one of %s" outcome (string-join allowed ", ")))
     (unless (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))
-      (user-error "%s's job %s isn't running" (agent-workflow-run-issue run) job))
+      (agent-workflow--refuse "%s's job %s isn't running" (agent-workflow-run-issue run) job))
     (agent-workflow--job-set run job :outcome outcome :notes (and (not (string-empty-p notes)) notes)
                              :finished t :session (agent-workflow-agent-session agent))
     (agent-workflow--journal run "step-ended" :job job :step (plist-get (agent-workflow--job run job) :step)
@@ -639,6 +681,129 @@ stops."
        (agent-workflow--wait run job (format "%s: %s asks to rerun %s, not done yet" job outcome other))))))
 
 (add-hook 'agent-workflow-agent-event-functions #'agent-workflow--agent-event)
+
+;; ====== GOING BACK ======
+;; You send a run back to a job (and a step of it) that has run, with a
+;; note, to refine what it did. Nothing is reset: the branch and its
+;; commits stay, changes not committed stay in the worktree. The jobs that
+;; need it, directly or not, are replaced: a step of theirs running is
+;; stopped, their results kept in the journal only, and they run again
+;; after it, a round more; the others keep theirs. Its agent's session is
+;; resumed (its id kept), told your note and what the branch has now; a
+;; fresh one, told the same, if its agent can't resume. Discarding the work
+;; since is another thing, asked first: the branch back to the commit the
+;; job started from, saying what's lost. Your going back counts against no
+;; loop's rounds.
+
+(defun agent-workflow--dependents (run job)
+  "The jobs of RUN that need JOB, directly or not."
+  (let ((needs (mapcar (lambda (spec) (cons (car spec) (plist-get (cdr spec) :needs)))
+                       (plist-get (agent-workflow-run-workflow run) :jobs))))
+    (seq-filter (lambda (other) (member job (agent-workflow--before needs other))) (mapcar #'car needs))))
+
+(defun agent-workflow-back-lost (run job)
+  "What discarding the work since JOB of RUN started would lose: (COMMITS
+. CHANGES), the commits since and the changes not committed, a line each."
+  (let* ((commit (plist-get (agent-workflow--job run job) :start-commit))
+         (default-directory (agent-workflow-worktree-directory (agent-workflow-run-project run)
+                                                                (agent-workflow-run-issue run))))
+    (cons (and commit (file-directory-p default-directory)
+               (agent-workflow--git-lines "log" "--oneline" (concat commit "..HEAD")))
+          (and (file-directory-p default-directory) (agent-workflow--git-lines "status" "--short")))))
+
+(cl-defun agent-workflow-back (run job &key (step 0) note discard (by "you"))
+  "Send RUN back to step STEP (from 0) of JOB, with NOTE, BY (you): see
+GOING BACK. DISCARD: the branch back to the commit JOB started from, its
+changes not committed gone (asked before, by its caller). A user error if
+JOB hasn't run, or STEP isn't one."
+  (let* ((state (or (agent-workflow--job run job) (user-error "No job %s in %s" job (agent-workflow-run-name run))))
+         (steps (plist-get (agent-workflow--job-spec run job) :steps))
+         (replaced (cons job (agent-workflow--dependents run job)))
+         (project (agent-workflow-run-project run))
+         (issue (agent-workflow-run-issue run)))
+    (when (memq (plist-get state :status) '(pending skipped))
+      (agent-workflow--refuse "%s hasn't run in %s" job (agent-workflow-run-name run)))
+    (unless (and (natnump step) (< step (length steps)))
+      (user-error "%s has no step %s (%d step%s)" job step (length steps) (if (= (length steps) 1) "" "s")))
+    (when (eq (agent-workflow-run-state run) 'cancelled)
+      (user-error "%s was cancelled" (agent-workflow-run-name run)))
+    (let ((session (or (plist-get state :session)
+                       (when-let* ((agent (plist-get state :agent))) (agent-workflow-agent-session agent))))
+          (lost (and discard (agent-workflow-back-lost run job))))
+      ;; Each job replaced: its agent stopped, its snapshot gone, pending again.
+      (dolist (other replaced)
+        (let ((other-state (agent-workflow--job run other)))
+          (unless (memq (plist-get other-state :status) '(pending skipped))
+            (when-let* ((agent (plist-get other-state :agent)))
+              (agent-workflow-stop-agent agent))
+            (when (plist-get other-state :snapshot)
+              (agent-workflow-snapshot-remove project issue other))
+            (agent-workflow--job-set run other :status 'pending :agent nil :finished nil :why nil :pool nil
+                                     :outcome nil :notes nil :snapshot nil
+                                     :round (1+ (or (plist-get other-state :round) 1))))))
+      (agent-workflow--job-set run job :back (list :step step :note note :by by :session session))
+      (when discard
+        (let ((default-directory (agent-workflow-worktree-directory project issue))
+              (commit (plist-get state :start-commit)))
+          (unless commit (agent-workflow--refuse "%s: the commit it started from isn't known" job))
+          (agent-workflow--git "reset" "--hard" commit)
+          (agent-workflow--git "clean" "-fd")))
+      (agent-workflow--journal run "went-back" :job job :step step :note note :by by
+                               :replaced (vconcat replaced) :discarded (if discard t :false)
+                               :lost (and lost (vconcat (append (car lost) (cdr lost)))))
+      (agent-workflow--bd-write project issue "--append-notes"
+                                (format "Sent back to %s by %s%s%s" job by
+                                        (if (and note (not (string-empty-p note))) (concat ": " note) "")
+                                        (if discard ", the work since discarded" "")))
+      (when (memq (agent-workflow-run-state run) agent-workflow--ended)
+        (setf (agent-workflow-run-state run) 'running))
+      (agent-workflow--refresh run)
+      (agent-workflow--changed run)
+      (agent-workflow--tick-soon)
+      replaced)))
+
+(defun agent-workflow--read-run (project)
+  "A run of PROJECT you pick (the only one, not asked)."
+  (let ((runs (seq-remove (lambda (run) (eq (agent-workflow-run-state run) 'cancelled)) (agent-workflow-runs project))))
+    (pcase runs
+      ('nil (user-error "No run in %s" (file-name-nondirectory (directory-file-name project))))
+      (`(,run) run)
+      (_ (let ((names (mapcar (lambda (run) (cons (format "%s (%s)" (agent-workflow-run-name run)
+                                                            (agent-workflow-run-state run))
+                                                    run))
+                                runs)))
+           (cdr (assoc (completing-read "Run: " names nil t) names)))))))
+
+(defun agent-workflow-back-command (run job step note &optional discard)
+  "Send RUN back to step STEP of JOB with NOTE (M-x agent-workflow-back).
+Interactively the run, the job (one that has run), its step (asked only
+when it has several), your note; with \[universal-argument], the work since
+discarded, what's lost said and asked first."
+  (interactive
+   (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
+          (run (agent-workflow--read-run project))
+          (jobs (mapcar #'car (seq-remove (lambda (job) (memq (plist-get (cdr job) :status) '(pending skipped)))
+                                          (agent-workflow-run-jobs run))))
+          (job (if jobs (completing-read "Back to the job: " jobs nil t)
+                 (user-error "No job of %s has run" (agent-workflow-run-name run))))
+          (steps (plist-get (agent-workflow--job-spec run job) :steps))
+          (step (if (cdr steps)
+                    (let ((names (cl-loop for step in steps for i from 0
+                                          collect (cons (format "%d: %s %s" (1+ i) (plist-get step :kind)
+                                                                (or (plist-get step :agent) (plist-get step :run)
+                                                                    (plist-get step :uses) (plist-get step :elisp)))
+                                                        i))))
+                      (cdr (assoc (completing-read "Its step: " names nil t) names)))
+                  0))
+          (note (read-string "Your note: "))
+          (discard (and current-prefix-arg
+                        (pcase-let ((`(,commits . ,changes) (agent-workflow-back-lost run job)))
+                          (yes-or-no-p (format "Discard the work since %s started (%d commit%s, %d change%s not committed)? "
+                                               job (length commits) (if (= (length commits) 1) "" "s")
+                                               (length changes) (if (= (length changes) 1) "" "s")))))))
+     (list run job step note discard)))
+  (agent-workflow-back run job :step step :note note :discard discard)
+  (message "%s: back to %s%s" (agent-workflow-run-name run) job (if discard ", the work since discarded" "")))
 
 ;; ====== YOU ======
 

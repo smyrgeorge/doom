@@ -55,6 +55,7 @@
   commit                 ; a reading job's: the commit its snapshot is at
   buffer                 ; its agent-shell session
   session-id             ; its session's id, once known: to resume it
+  resumed                ; the session it was asked to resume, if any
   values                 ; its variables' values: an alist
   outcomes               ; the outcomes it may give, besides done
   stopping)              ; non-nil while it's stopped by us
@@ -243,16 +244,17 @@ options (allowedTools, disallowedTools); ending its step
     config))
 
 (cl-defun agent-workflow-start-agent (&key project issue job profile type title values outcomes prompt
-                                           snapshot)
+                                           snapshot resume)
   "Start an agent of the pool for the JOB of ISSUE's run in PROJECT, with
 the PROFILE (a name): its session, fresh, in ISSUE's worktree (made on its
 branch from TYPE and TITLE if it isn't there). VALUES: its variables'
 values (an alist); OUTCOMES: those it may give besides done; PROMPT: its
 first message, its variables filled in, sent once it's ready. SNAPSHOT:
 \(DIR BRANCH COMMIT), a reading job's snapshot it works in instead of the
-issue's worktree (`agent-workflow-snapshot'). Return the agent. A user
-error, nothing started, if PROJECT's crew runs, the pool is full or
-PROFILE isn't one."
+issue's worktree (`agent-workflow-snapshot'). RESUME: a session's id, its
+session resumed (agent-shell's; a fresh one if its agent can't). Return the
+agent. A user error, nothing started, if PROJECT's crew runs, the pool is
+full or PROFILE isn't one."
   (require 'agent-shell)
   (let ((project (file-name-as-directory project)))
     (when (agent-workflow-crew-running-p project)
@@ -269,13 +271,13 @@ PROFILE isn't one."
                                       (agent-workflow-worktree project issue :type type :title title)))
                  (agent (agent-workflow-agent--make :project project :issue issue :job job :profile profile
                                                     :worktree dir :branch branch :commit (nth 2 snapshot)
-                                                    :values values :outcomes outcomes))
+                                                    :values values :outcomes outcomes :resumed resume))
                  (made nil))
       (condition-case err
           (let* ((config (agent-workflow--config agent))
                  (agent-shell-buffer-name-format (lambda (name _project) name))
                  (buffer (setq made (agent-shell--start :config config :no-focus t :new-session t
-                                                        :session-strategy 'new :cwd dir))))
+                                                        :session-strategy 'new :cwd dir :session-id resume))))
             (with-current-buffer buffer
               (setq agent-workflow--agent agent)
               ;; Stopping it asks nothing: not agent-shell's "N prompts

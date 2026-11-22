@@ -16,6 +16,14 @@
 #                                and NOTES (- reads them from stdin): what
 #                                the next jobs and the user need to know ->
 #                                {"ok": true, "issue", "job", "outcome"}
+#   agent-workflow back ISSUE JOB[.STEP] [NOTE|-] [--discard]
+#                                ISSUE's run sent back to JOB (its step STEP,
+#                                from 1), with NOTE: the branch kept, the jobs
+#                                that need JOB run again; --discard: the work
+#                                since JOB started gone (its commits, changes
+#                                not committed) -> {"ok": true, "issue",
+#                                "job", "step", "replaced": [jobs], "lost":
+#                                [lines]}
 #   agent-workflow check [FILE]  this folder's project's workflows and
 #                                profiles read anew and checked, or only FILE
 #                                (a workflow, .yml, or a profile, .md,
@@ -99,8 +107,33 @@ case "$op" in
     [ "$notes" = "-" ] && notes=$(cat)
     case "$outcome" in -*) fail 2 "done: unknown argument \"$outcome\"; agent-workflow done [OUTCOME] [NOTES|-]" ;; esac
     payload=$(printf '{"outcome":%s,"notes":%s}' "$(json_string "$outcome")" "$(json_string "$notes")") ;;
+  back)
+    issue="" target="" notes="" discard=false have_notes=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --discard) discard=true; shift ;;
+        -) notes=$(cat); have_notes=1; shift ;;
+        -*) fail 2 "back: unknown argument \"$1\"; agent-workflow back ISSUE JOB[.STEP] [NOTE|-] [--discard]" ;;
+        *)
+          if [ -z "$issue" ]; then issue=$1
+          elif [ -z "$target" ]; then target=$1
+          elif [ -z "$have_notes" ]; then notes=$1; have_notes=1
+          else fail 2 "back: unknown argument \"$1\"; agent-workflow back ISSUE JOB[.STEP] [NOTE|-] [--discard]"
+          fi
+          shift ;;
+      esac
+    done
+    [ -z "$target" ] && fail 2 "back: to which job? agent-workflow back ISSUE JOB[.STEP] [NOTE]"
+    job=${target%%.*} step=0
+    if [ "$job" != "$target" ]; then
+      step=${target#*.}
+      case "$step" in ''|*[!0-9]*|0) fail 2 "back: $target: a step is a number from 1 (JOB.2)" ;; esac
+      step=$((step - 1))
+    fi
+    payload=$(printf '{"issue":%s,"job":%s,"step":%d,"note":%s,"discard":%s}' \
+                     "$(json_string "$issue")" "$(json_string "$job")" "$step" "$(json_string "$notes")" "$discard") ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: run, done, check" ;;
+    fail 2 "unknown operation \"$op\"; operations: run, done, back, check" ;;
 esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workflow.XXXXXXXXXX") || fail 3 "no temp folder"

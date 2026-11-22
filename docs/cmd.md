@@ -82,6 +82,7 @@ you and your scripts; an agent of a run ends its step with it.
 cmd/agent-workflow run doom-a1b doom-c3d          # runs on these issues, each with its own workflow
 cmd/agent-workflow run doom-epic --workflow quick # an epic's open issues, with quick
 cmd/agent-workflow done changes "notes"           # from an agent of a run: its step is done
+cmd/agent-workflow back doom-a1b build "note"     # a run sent back to a job, the work kept
 cmd/agent-workflow check                          # every workflow and profile of the project
 cmd/agent-workflow check draft.yml                # one file: a workflow (.yml) or a profile (.md), anywhere
 ```

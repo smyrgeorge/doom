@@ -102,6 +102,11 @@ they were."
   "NAMES as a problem lists them: a, b, c; none."
   (if names (string-join names ", ") "none"))
 
+(defun agent-workflow--refuse (format &rest args)
+  "A user error saying FORMAT with ARGS as written: its apostrophes kept
+\(`user-error' would curl them)."
+  (user-error "%s" (apply #'format format args)))
+
 (defun agent-workflow--errors-p (problems)
   "Non-nil if PROBLEMS have an error."
   (assq 'error problems))

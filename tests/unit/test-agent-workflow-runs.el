@@ -370,3 +370,85 @@ jobs:
                           (with-temp-buffer
                             (insert-file-contents (expand-file-name "journal.jsonl" (agent-workflow-run-dir run)))
                             (split-string (buffer-string) "\n" t))))))))
+
+;; ====== GOING BACK ======
+
+(defun +test-awr--commit (dir file message)
+  "A commit in DIR adding FILE, with MESSAGE, as an agent would make."
+  (let ((default-directory dir))
+    (write-region (concat message "\n") nil file)
+    (call-process "git" nil nil nil "add" file)
+    (call-process "git" nil nil nil "-c" "user.name=Agent" "-c" "user.email=agent@example.com"
+                  "commit" "-q" "-m" message)))
+
+(ert-deftest agent-workflow-runs/going-back ()
+  "Back to a job that ran, with a note: the branch kept; it and the jobs
+that need it run again, a round more, the others keep their results; its
+agent's session resumed, told the note and what the branch has; journaled,
+said on the issue. Discarding: the branch back to where the job's round
+started, what's lost said. Refused: a job that hasn't run, a step it
+hasn't, from an agent's session."
+  (+test-awr "back"
+    (write-region "---\ndescription: reads\ndeny: Edit, Write\n---\nRead it.\n" nil
+                  (expand-file-name ".agent-workflow/profiles/reader.md" project))
+    (write-region "description: x
+for: [feature]
+jobs:
+  build:
+    agent: build
+  lint:
+    agent: reader
+  review:
+    needs: build
+    agent: reader
+" nil (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+    (let* ((agent-workflow-pool 4)
+           (issue (+test-awr--issue project "Going back"))
+           (run (agent-workflow-start-run project issue))
+           (worktree (agent-workflow-worktree-directory project issue)))
+      (should (equal (cadr (should-error (agent-workflow-back run "review") :type 'user-error))
+                     (format "review hasn't run in %s · feature" issue)))
+      (+test-awr--agent run "build")
+      (+test-awr--commit worktree "lexer.el" "Lexer: escapes read")
+      (+test-awr--finish run "build" nil "built")
+      (+test-awr--finish run "lint")
+      (+test-awr--agent run "review")
+      (should (equal (cadr (should-error (agent-workflow-back run "build" :step 3) :type 'user-error))
+                     "build has no step 3 (1 step)"))
+      ;; Back to build: build and review replaced, lint kept.
+      (should (equal (agent-workflow-back run "build" :note "handle the empty list too") '("build" "review")))
+      (should (eq (+test-awr--job run "lint") 'done))
+      (should (file-exists-p (expand-file-name "lexer.el" worktree)))
+      (let ((build (+test-awr--agent run "build")))
+        (should (equal (agent-workflow-agent-resumed build) "mock-session"))
+        (should (eql (plist-get (agent-workflow--job run "build") :round) 2))
+        (should (eql (plist-get (agent-workflow--job run "review") :round) 2))
+        (should (eq (+test-awr--job run "review") 'pending))
+        (should (+test-awr--wait
+                 (lambda () (seq-some (lambda (prompt)
+                                        (and (string-match-p "\\`The user sent the work back to you, build (round 2), with this note: handle the empty list too\\." prompt)
+                                             (string-match-p "Lexer: escapes read" prompt)))
+                                      (+test-awr--prompts "back"))))))
+      (should (member "went-back" (+test-awr--journal run)))
+      (should (string-match-p "Sent back to build by you: handle the empty list too"
+                              (alist-get 'notes (+test-awr--shown project issue))))
+      ;; Round 2's work, then back again, discarding it.
+      (+test-awr--commit worktree "empty.el" "Lexer: the empty list")
+      (should (equal (car (agent-workflow-back-lost run "build")) (list (car (process-lines "git" "-C" worktree "log" "--oneline" "-1")))))
+      (agent-workflow-back run "build" :note "start this round over" :discard t)
+      (should-not (file-exists-p (expand-file-name "empty.el" worktree)))
+      (should (file-exists-p (expand-file-name "lexer.el" worktree)))
+      (should (eql (plist-get (agent-workflow--job run "build") :round) 3))
+      ;; Not from an agent's session.
+      (let ((dir (make-temp-file (+test-tmp-file "awr-back-") t))
+            (someone (+test-awr--agent run "build")))
+        (with-temp-file (expand-file-name "request" dir) (insert "back\n" project "\n1\n"))
+        (with-temp-file (expand-file-name "payload" dir)
+          (insert (json-serialize (list :issue issue :job "build"))))
+        (cl-letf (((symbol-function 'agent-workflow--request-caller) (lambda (_pid) someone)))
+          (agent-workflow-request dir))
+        (should (equal (plist-get (with-temp-buffer
+                                    (insert-file-contents (expand-file-name "reply" dir))
+                                    (json-parse-buffer :object-type 'plist))
+                                  :error)
+                       "back: yours to do, not an agent's"))))))

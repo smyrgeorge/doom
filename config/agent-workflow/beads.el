@@ -24,7 +24,7 @@
   "Run bd with ARGS in PROJECT as ACTOR (default: the engine), waiting for
 it: (STATUS . OUTPUT). A user error without bd, or Beads there."
   (unless (executable-find "bd")
-    (user-error "No bd: a run's issues are Beads' (scripts/tools.sh installs it)"))
+    (agent-workflow--refuse "No bd: a run's issues are Beads' (scripts/tools.sh installs it)"))
   (unless (file-directory-p (expand-file-name ".beads" project))
     (user-error "%s tracks no issues with Beads (bd init)" (file-name-nondirectory (directory-file-name project))))
   (with-temp-buffer
