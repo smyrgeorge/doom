@@ -53,6 +53,14 @@
 #   agent-workflow pause [--now] nothing new starts; --now: running steps
 #                                stopped, interrupted -> {"ok": true, "paused"}
 #   agent-workflow unpause       on again -> {"ok": true, "paused": false}
+#   agent-workflow dry-run WORKFLOW [--issue ID] [--outcome JOB=OUT,OUT]...
+#                          [--exit JOB.N=CODE,CODE]...
+#                                WORKFLOW walked, nothing run or changed: its
+#                                agents' outcomes a round each (none: done),
+#                                step N's exit codes a try each (none: 0), its
+#                                if: read from ID (none: one of its first
+#                                type) -> {"ok": true, "waves": [[lines]...],
+#                                "end": {job: status}, "stopped": why|null}
 #   agent-workflow check [FILE]  this folder's project's workflows and
 #                                profiles read anew and checked, or only FILE
 #                                (a workflow, .yml, or a profile, .md,
@@ -222,8 +230,36 @@ case "$op" in
   unpause)
     [ $# -gt 0 ] && fail 2 "unpause: unknown argument \"$1\""
     payload='{}' ;;
+  dry-run)
+    [ $# -eq 0 ] && fail 2 "dry-run: which workflow? agent-workflow dry-run WORKFLOW"
+    workflow=$1; shift
+    issue="" outcomes="" exits=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --issue) [ $# -lt 2 ] && fail 2 "--issue: which?"; issue=$2; shift 2 ;;
+        --outcome|--exit)
+          [ $# -lt 2 ] && fail 2 "$1: JOB=A,B"
+          case "$2" in *=*) ;; *) fail 2 "$1 $2: JOB=A,B" ;; esac
+          key=${2%%=*} values=${2#*=} list=""
+          IFS=, read -r -a parts <<< "$values"
+          for v in "${parts[@]}"; do
+            if [ "$1" = --exit ]; then
+              case "$v" in ''|*[!0-9]*) fail 2 "--exit $2: exit codes are numbers" ;; esac
+              list="$list${list:+,}$v"
+            else
+              list="$list${list:+,}$(json_string "$v")"
+            fi
+          done
+          entry="$(json_string "$key"):[$list]"
+          if [ "$1" = --exit ]; then exits="$exits${exits:+,}$entry"; else outcomes="$outcomes${outcomes:+,}$entry"; fi
+          shift 2 ;;
+        *) fail 2 "dry-run: unknown argument \"$1\"" ;;
+      esac
+    done
+    payload=$(printf '{"workflow":%s,"issue":%s,"outcomes":{%s},"exits":{%s}}' \
+                     "$(json_string "$workflow")" "$(json_string "$issue")" "$outcomes" "$exits") ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, check" ;;
+    fail 2 "unknown operation \"$op\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check" ;;
 esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workflow.XXXXXXXXXX") || fail 3 "no temp folder"

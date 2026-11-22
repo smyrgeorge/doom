@@ -32,6 +32,11 @@
 ;;        [{"issue", "jobs"}...]}; cancel {"issue": "doom-a1b"} -> {"ok":
 ;;        true, "issue"}; pause {"now": false}, unpause {} -> {"ok": true,
 ;;        "paused"} (resume.el); yours, refused from an agent's session
+;;   dry-run {"workflow": "feature", "issue": "doom-a1b", "outcomes":
+;;        {"review": ["changes", "approved"]}, "exits": {"build.2": [1,
+;;        0]}} (issue, outcomes, exits: optional) -> {"ok": true, "waves":
+;;        [[lines]...], "end": {job: status...}, "stopped": why or null}:
+;;        nothing run (dry.el); any shell's, an agent's too
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
 ;;        "project", "workflows": [names], "profiles": [names], "problems":
@@ -44,6 +49,7 @@
 (require 'json)
 
 (declare-function agent-workflow-pause "agent-workflow/resume")
+(declare-function agent-workflow-dry-run "agent-workflow/dry")
 (declare-function agent-workflow-unpause "agent-workflow/resume")
 (declare-function agent-workflow-cancel "agent-workflow/resume")
 (declare-function agent-workflow-continue "agent-workflow/resume")
@@ -219,6 +225,29 @@ DIRECTORY's project): the reply."
                                    :jobs (vconcat (agent-workflow-continue run :current (plist-get payload :current)))))
                            runs)))))
 
+(defun agent-workflow--request-dry-run (directory payload)
+  "A dry run in DIRECTORY's project, as PAYLOAD says: the reply."
+  (let* ((default-directory (file-name-as-directory directory))
+         (project (or (agent-workflow-project) (user-error "Not in a git repository")))
+         (name (plist-get payload :workflow))
+         (spec (or (alist-get name (agent-workflow-workflows project) nil nil #'equal)
+                   (user-error "dry-run: no workflow %s" name)))
+         (issue (plist-get payload :issue))
+         (info (if (and (stringp issue) (not (string-empty-p issue)))
+                   (agent-workflow-issue project issue)
+                 (list :id "(none)" :title "(a dry run)" :type (or (car (plist-get spec :for)) "task"))))
+         (chosen (lambda (object)
+                   (cl-loop for (key value) on object by #'cddr
+                            collect (cons (substring (symbol-name key) 1) (append value nil)))))
+         (result (agent-workflow-dry-run spec :info info :outcomes (funcall chosen (plist-get payload :outcomes))
+                                         :exits (funcall chosen (plist-get payload :exits))
+                                         :profiles (agent-workflow-profiles project))))
+    (list :ok t
+          :waves (vconcat (mapcar #'vconcat (plist-get result :waves)))
+          :end (cl-loop for (job . status) in (plist-get result :end)
+                        append (list (intern (concat ":" job)) (symbol-name status)))
+          :stopped (or (plist-get result :stopped) :null))))
+
 (defun agent-workflow-request (dir)
   "Answer cmd/agent-workflow's request in DIR (see the top of this file):
 its reply written to DIR/reply. Return t."
@@ -240,6 +269,7 @@ its reply written to DIR/reply. Return t."
                                                     :false-object nil)))))
                 (pcase op
                   ("check" (agent-workflow--request-check directory payload))
+                  ("dry-run" (agent-workflow--request-dry-run directory payload))
                   ("run" (agent-workflow--request-run directory payload))
                   ("done" (agent-workflow--request-done payload pid))
                   ("back" (agent-workflow--request-back directory payload pid))
@@ -259,7 +289,7 @@ its reply written to DIR/reply. Return t."
                      (if (equal op "pause") (agent-workflow-pause (plist-get payload :now)) (agent-workflow-unpause)))
                    (list :ok t :paused (if agent-workflow--paused t :false)))
                   (_ (list :ok :false :error (format "unknown operation %S; operations: %s" op
-                                                     "run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, check")))))
+                                                     "run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check")))))
             (json-parse-error (list :ok :false :error (format "not JSON: %s" (error-message-string err))))
             (error (list :ok :false :error (error-message-string err))))))
     (let ((coding-system-for-write 'utf-8-unix))

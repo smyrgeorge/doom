@@ -559,7 +559,7 @@ one file alone; a file not there, an unknown operation: refused."
             (should (equal (plist-get alone :workflows) nil))
             (should (= (length (plist-get alone :problems)) 1))))
         (should (string-match-p "no file" (plist-get (+test-awf--request "check" "{\"file\":\"/no/such.yml\"}") :error)))
-        (should (equal (plist-get (+test-awf--request "launch") :error) "unknown operation \"launch\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, check"))))))
+        (should (equal (plist-get (+test-awf--request "launch") :error) "unknown operation \"launch\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check"))))))
 
 (defmacro +test-awf--with-server (&rest body)
   "BODY with this Emacs a server only the script talks to (EMACS_SOCKET_NAME)."
@@ -601,7 +601,7 @@ with; a file of its folder alone; wrong uses: 2, without Emacs."
         (should (equal (+test-awf--run "check" "a" "b")
                        '(2 . "{\"ok\":false,\"error\":\"check: unknown argument \\\"b\\\"; agent-workflow check [FILE]\"}")))
         (should (equal (+test-awf--run "start")
-                       '(2 . "{\"ok\":false,\"error\":\"unknown operation \\\"start\\\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, check\"}")))
+                       '(2 . "{\"ok\":false,\"error\":\"unknown operation \\\"start\\\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check\"}")))
         (+test-awf--with-server
           (let ((run (+test-awf--run "check")))
             (should (= (car run) 0))
@@ -614,3 +614,70 @@ with; a file of its folder alone; wrong uses: 2, without Emacs."
               (should (equal (plist-get reply :error) "1 error"))
               (should (equal (plist-get (car (plist-get reply :problems)) :file)
                              (expand-file-name "w.yml" project))))))))))
+
+;; ====== A DRY RUN ======
+
+(defconst +test-awf--dry "description: x
+for: [feature]
+jobs:
+  build:
+    steps:
+      - agent: build
+      - run: make test
+        retries: 1
+  docs:
+    needs: build
+    if: (not (eq (issue-type) 'task))
+    agent: build
+  lint:
+    needs: build
+    agent: build
+  review:
+    needs: build
+    agent: reader
+    max-rounds: 1
+    outcomes:
+      approved: continue
+      changes: rerun build
+  merge:
+    needs: [docs, lint, review]
+    uses: merge
+")
+
+(defun +test-awf--dry-run (outcomes exits &optional type)
+  "The dry run of `+test-awf--dry' with OUTCOMES and EXITS, its issue a
+TYPE (default feature): its result."
+  (let* ((workflow (car (+test-awf--workflow +test-awf--dry '("build" "reader") "dry.yml")))
+         (profiles (list (cons "build" (list :name "build"))
+                         (cons "reader" (list :name "reader" :deny '("Edit" "Write"))))))
+    (should workflow)
+    (agent-workflow-dry-run workflow :info (list :id "demo-1" :type (or type "feature"))
+                            :outcomes outcomes :exits exits :profiles profiles :pool 3)))
+
+(defun +test-awf--dry-lines (result)
+  "All RESULT's lines."
+  (apply #'append (plist-get result :waves)))
+
+(ert-deftest agent-workflow-files/a-dry-run ()
+  "Waves: what runs at once, what waits for the branch, a script fixed and
+run again, a review's changes sending build back, the merge; nothing run."
+  (let* ((result (+test-awf--dry-run '(("review" "changes" "approved")) '(("build.2" 1 0))))
+         (lines (+test-awf--dry-lines result)))
+    (should-not (plist-get result :stopped))
+    (should (equal (car (plist-get result :waves))
+                   '("build: its agent (build) works" "build: its step 2 returns 1: its agent fixes it, run again"
+                     "build: its run step 2 passes (try 2)" "build: done (done)")))
+    (should (member "at once: docs, review" lines))
+    (should (member "lint: waits for docs, which edits the branch" lines))
+    (should (member "review: changes: build and every job after it again" lines))
+    (should (member "build: its agent (build) works, round 2" lines))
+    (should (member "merge: merged, the issue closed" lines))
+    (should (equal (cdr (assoc "merge" (plist-get result :end))) 'done))))
+
+(ert-deftest agent-workflow-files/a-dry-run-stopping ()
+  "Where it stops: the loop guard, retries used up; a job its if skips."
+  (should (equal (plist-get (+test-awf--dry-run '(("review" "changes")) nil) :stopped)
+                 "review: it sent build back 1 times: it asks you"))
+  (should (equal (plist-get (+test-awf--dry-run nil '(("build.2" 1))) :stopped)
+                 "build: its step 2 returns 1, its retries used up: it asks you"))
+  (should (member "docs: skipped (its if)" (+test-awf--dry-lines (+test-awf--dry-run nil nil "task")))))

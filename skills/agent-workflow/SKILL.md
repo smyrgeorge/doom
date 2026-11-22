@@ -35,6 +35,7 @@ done, 1 not (the reply says why), 2 a wrong use, 3 no Emacs.
 ```sh
 agent-workflow check                    # every workflow and profile of the project, their problems
 agent-workflow check draft.yml          # one file, anywhere: check what you write before saving it in place
+agent-workflow dry-run feature --outcome review=changes,approved   # walked, nothing run: what would happen
 agent-workflow run doom-a1b doom-c3d    # runs started, each with its own workflow (--workflow NAME)
 agent-workflow back doom-a1b build "handle the empty list too"   # sent back to a job, the work kept
 agent-workflow confirm doom-a1b go      # a run's question answered: go, accept, skip, stop, cancel

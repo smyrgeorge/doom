@@ -2,7 +2,7 @@
 
 > **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
 > runs, their jobs in parallel, every kind of step, going back, loops, the merge, limits, approval, resuming,
-> budgets, an issue changed by hand.
+> budgets, an issue changed by hand, the starters, the skills, a dry run. Not yet: the progress pane.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -385,6 +385,19 @@ In `if`, these say what the issue is: `(issue-id)`, `(issue-type)` (a symbol: `'
 | `state.json` beside it | the run as it stands |
 | `workflow.yml` beside it | the workflow as the run started |
 | The issue | in progress; its metadata (`workflow`, `workflow_run`, `workflow_state`, `workflow_jobs`), the job running as a label (`job:review`), what each job said in its notes. Written as `agent-workflow` |
+
+## A dry run
+
+`M-x agent-workflow-dry-run` tries a workflow before it spends tokens: nothing runs and nothing changes (no worktree,
+branch, issue or session). It walks the workflow as the engine would, wave by wave: what would run, what at once, what
+would wait and why, what its `if` skips, what an outcome sends back (counted against `max-rounds`), a script fixed and
+run again, and where the run would stop and ask you. You choose the agents' outcomes, a round each
+(`review=changes,approved`), and the scripts' exit codes, a try each (`build.2=1,0`); none chosen: done, and 0. Its
+`if` reads the issue you give, or one of the first type the workflow is for.
+
+```sh
+cmd/agent-workflow dry-run feature --outcome review=changes,approved --exit build.2=1,0
+```
 
 ## Trust
 
