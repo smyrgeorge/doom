@@ -148,6 +148,27 @@ Build it with its tests, commit on {branch}.
 
 What's after the front matter is the agent's instructions.
 
+## The starters
+
+These ship with this config; a project's or yours of the same name replaces one.
+
+| Workflow | For | Jobs |
+|---|---|---|
+| feature | feature, task | build; docs; security (labelled `security`); review (changes: build again); merge |
+| bugfix | bug | reproduce (a failing test); fix; review (changes: fix again); merge |
+| quick | chore | build; review (changes: build again); merge |
+
+Their merges run no suite: a project's own copy adds its tests with `with: {suite: make test}`.
+
+| Profile | May |
+|---|---|
+| build | edit, commit; never push |
+| test | edit `tests/`, commit; never push |
+| docs | edit `docs/` and Markdown, commit; never push |
+| review | read; no edits, no commits |
+| investigate | read, search the web; no edits |
+| security | read, search the web; no edits |
+
 ## The pool
 
 Agents run in agent-shell, as many at once as `agent-workflow-pool` says (3), in every project. An agent has no role and

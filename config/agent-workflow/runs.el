@@ -767,6 +767,15 @@ session's id kept once it's known. In `agent-workflow-agent-event-functions'."
        (agent-workflow--job-set (car found) (cdr found) :session session)
        (agent-workflow--save-state (car found))))
     ('turn-complete (agent-workflow--turn-over agent))
+    ;; Its turn failed: as one ended without done, saying why.
+    ('error
+     (when-let* ((found (agent-workflow--agent-run agent)))
+       (pcase-let ((`(,run . ,job) found))
+         (when (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))
+           (if (plist-get (agent-workflow--job run job) :finished)
+               (agent-workflow--step-finished run job)
+             (agent-workflow--wait run job (format "%s: its agent's turn failed: %s" job
+                                                   (or (map-elt (map-elt event :data) :message) "an error"))))))))
     ('clean-up
      (when-let* ((found (agent-workflow--agent-run agent)))
        (unless (plist-get (agent-workflow--job (car found) (cdr found)) :finished)

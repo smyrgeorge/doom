@@ -45,7 +45,7 @@ fails."
 ;; ====== WHERE THEY COME FROM ======
 
 (defvar agent-workflow-starters-directory
-  (expand-file-name "agent-workflow/" (file-name-directory (or load-file-name buffer-file-name)))
+  (file-name-directory (or load-file-name buffer-file-name))
   "Where the starters are: its workflows/ and profiles/, shipped with
 this config.")
 

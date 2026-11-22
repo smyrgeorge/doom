@@ -297,3 +297,48 @@ merged, whatever approve says; agents are denied editing it."
       (agent-workflow-confirm run "go")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should (file-exists-p (expand-file-name ".agent-workflow/scripts/check.sh" project))))))
+
+;; ====== THE STARTERS ======
+
+(defmacro +test-aws--with-starters (&rest body)
+  "BODY with the starters as they ship, the project's own workflows and
+profiles gone."
+  (declare (indent 0))
+  `(progn
+     (delete-directory (expand-file-name ".agent-workflow" project) t)
+     (let ((agent-workflow-starters-directory (expand-file-name "config/agent-workflow/" +test-root))
+           (agent-workflow--profiles-cache (make-hash-table :test #'equal))
+           (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
+       ,@body)))
+
+(defun +test-aws--through (run jobs)
+  "RUN's JOBS, in order, each one's agent saying done (review: approved)."
+  (dolist (job jobs)
+    (let ((agent (+test-awr--agent run job)))
+      (should agent)
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run job) 'waiting))))
+      (agent-workflow-done agent (and (equal job "review") "approved") (format "%s done" job))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run job) 'done)))))))
+
+(ert-deftest agent-workflow-steps/the-starters ()
+  "The starters check with no problem; feature and bugfix run through, to
+the merge, the issue closed."
+  (+test-awr "starters"
+    (+test-aws--with-starters
+      (should-not (agent-workflow-check-problems project))
+      (should (equal (mapcar #'car (agent-workflow-workflows project)) '("bugfix" "feature" "quick")))
+      (should (equal (mapcar #'car (agent-workflow-profiles project))
+                     '("build" "docs" "investigate" "review" "security" "test")))
+      (let* ((feature (+test-awr--issue project "A feature"))
+             (run (agent-workflow-start-run project feature)))
+        (should (equal (plist-get (agent-workflow-run-workflow run) :name) "feature"))
+        (+test-aws--through run '("build" "docs" "review"))
+        (should (eq (+test-awr--job run "security") 'skipped))
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should (equal (alist-get 'status (+test-awr--shown project feature)) "closed")))
+      (let* ((bug (+test-awr--issue project "A bug" "--type" "bug"))
+             (run (agent-workflow-start-run project bug)))
+        (should (equal (plist-get (agent-workflow-run-workflow run) :name) "bugfix"))
+        (+test-aws--through run '("reproduce" "fix" "review"))
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should (equal (alist-get 'status (+test-awr--shown project bug)) "closed"))))))
