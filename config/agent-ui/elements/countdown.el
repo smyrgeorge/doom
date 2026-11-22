@@ -92,9 +92,18 @@ whole line was cut: \"Rate limit resets in  4…\")."
   (pcase-let* ((`(,time ,face ,word) (agent-ui-countdown--state props))
                (cw (plist-get ctx :char-width))
                (lh (plist-get ctx :line-height))
-               (w (min (* cw (plist-get ctx :width)) (* 28 cw)))
-               (h (* 3 lh))
+               ;; 28 columns, wider for its label where the pane has room.
+               (w (min (* cw (plist-get ctx :width))
+                       (max (* 28 cw) (ceiling (+ (* 2 cw) (* 0.5 lh (string-width (or (plist-get props :label) ""))))))))
                (room (- w (* 2 cw)))
+               ;; Its label wrapped to the card (its font 0.8 of a line, a
+               ;; character ~0.5 of a line wide): it was cut, its rest nowhere.
+               (labels (when-let* ((label (plist-get props :label)))
+                         (if (<= (string-width label) (floor room (* 0.5 lh)))
+                             (list label)
+                           (agent-ui-wrap-lines label (max 1 (floor room (* 0.5 lh)))))))
+               (extra (max 0 (1- (length labels))))
+               (h (* (+ 3 extra) lh))
                ;; The time big, smaller if it doesn't fit; its word beside it
                ;; where there's room, else left out (they overlapped).
                (size (agent-ui-svg-fit-size time (* (if word 1.4 1.0) lh) room))
@@ -109,14 +118,15 @@ whole line was cut: \"Rate limit resets in  4…\")."
         (agent-ui-countdown--text props ctx)
       (svg-rectangle svg 0 0 w h :rx 6
                      :fill (agent-ui-blend (agent-ui-background) (agent-ui-color 'default) 0.07))
-      (when-let* ((label (plist-get props :label)))
-        (svg-text svg (agent-ui-truncate label (floor room (* 0.5 lh)))
-                  :x cw :y (* 0.95 lh) :font-size (round (* 0.8 lh)) :font-family font
-                  :fill (agent-ui-color 'agent-ui-muted)))
-      (svg-text svg time :x cw :y (* 2.4 lh) :font-size (round size) :font-weight "bold"
+      (cl-loop for label in labels
+               for i from 0
+               do (svg-text svg label
+                            :x cw :y (* (+ 0.95 i) lh) :font-size (round (* 0.8 lh)) :font-family font
+                            :fill (agent-ui-color 'agent-ui-muted)))
+      (svg-text svg time :x cw :y (* (+ 2.4 extra) lh) :font-size (round size) :font-weight "bold"
                 :font-family font :fill (agent-ui-color (if (eq face 'bold) 'default face)))
       (when word
-        (svg-text svg word :x (- w cw) :y (* 2.4 lh) :text-anchor "end" :font-size (round word-size)
+        (svg-text svg word :x (- w cw) :y (* (+ 2.4 extra) lh) :text-anchor "end" :font-size (round word-size)
                   :font-family font :fill (agent-ui-color 'agent-ui-muted)))
       (propertize "countdown" 'display (agent-ui-svg-image svg)))))
 

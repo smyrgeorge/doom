@@ -4185,6 +4185,49 @@ whole (a wrapped one left a piece behind)."
           (`(insert ,_ ,text) (goto-char (point-max)) (insert "\n" (substring-no-properties text)))))
       (should (equal (buffer-string) (substring-no-properties (agent-ui-render new ctx)))))))
 
+;; doom-sg6
+(ert-deftest agent-ui-elements/gui-labels-read-whole ()
+  "In the GUI a stats tile's label, a gauge's and a countdown's are read
+whole (they were cut with … at 20 to 27 characters with room to spare): a
+tile as wide as its label needs within its share of the pane, else its
+label wrapped in it, the tile taller, the row's values in line; a change
+under its value wrapped; a gauge's label wrapped under its arc, taller; a
+countdown's card wider for its label, else wrapped, taller."
+  (let* ((label "Tickets closed in this epic since it started")
+         (texts (lambda (svg) (let (acc (start 0))
+                                (while (string-match ">\\([^<>]+\\)</text>" svg start)
+                                  (push (match-string 1 svg) acc)
+                                  (setq start (match-end 0)))
+                                (nreverse acc))))
+         (height (lambda (svg) (and (string-match "height=\"\\([0-9.]+\\)\"" svg)
+                                    (string-to-number (match-string 1 svg)))))
+         (words-in (lambda (words svg)
+                     (let ((shown (split-string (string-join (funcall texts svg) " "))))
+                       (cl-every (lambda (w) (member w shown)) words)))))
+    ;; Stats at 98 columns, two tiles: the label whole, on one line.
+    (let ((svg (+test-aue-svg (list :type "stats" :figures (list (list :label label :value 7) '(:label "Open" :value 11))) 98)))
+      (should-not (string-match-p "…\\|&#8230;" svg))
+      (should (funcall words-in (split-string label) svg)))
+    ;; Narrow: wrapped in its tile, taller than a tile of one line.
+    (let ((svg (+test-aue-svg (list :type "stats" :figures (list (list :label label :value 7 :change "+3 since this morning"))) 30))
+          (short (+test-aue-svg '(:type "stats" :figures ((:label "Open" :value 11))) 30)))
+      (should-not (string-match-p "…\\|&#8230;" svg))
+      (should (funcall words-in (append (split-string label) '("+3" "since" "this" "morning")) svg))
+      (should (> (funcall height svg) (funcall height short))))
+    ;; A gauge's label under its arc, wrapped, its drawing taller.
+    (let ((svg (+test-aue-svg '(:type "gauge" :label "Coverage of the agent-workflow module's tests" :value 70 :target 80) 98))
+          (short (+test-aue-svg '(:type "gauge" :label "Coverage" :value 70) 98)))
+      (should-not (string-match-p "…\\|&#8230;" svg))
+      (should (funcall words-in '("Coverage" "of" "the" "agent-workflow" "module's" "tests" "target" "80") svg))
+      (should (> (funcall height svg) (funcall height short))))
+    ;; A countdown's label: its card wider, on one line; narrow, wrapped.
+    (let ((label "Waiting for the CI run of the branch agent-workflow"))
+      (let ((svg (+test-aue-svg (list :type "countdown" :label label :since 125) 98)))
+        (should (member label (funcall texts svg))))
+      (let ((svg (+test-aue-svg (list :type "countdown" :label label :since 125) 30)))
+        (should-not (string-match-p "…\\|&#8230;" svg))
+        (should (funcall words-in (split-string label) svg))))))
+
 ;; doom-0ej
 (ert-deftest agent-ui-elements/form-slider-image-texts-read-whole ()
   "A form's labels and values, a slider's label and an image's alt too long

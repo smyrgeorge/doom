@@ -133,8 +133,18 @@ line of its own above (it was left out: \"lines covered\" gone at 24)."
          (w (min (* cw (plist-get ctx :width)) (* 30 cw)))
          (stroke (max 4 (round (* 0.55 lh))))
          (r (- (/ w 2.0) stroke))
-         ;; The arc, its ends' numbers under it, then the label's row.
-         (h (round (+ r stroke (* 2.3 lh))))
+         ;; Under it, its label and target, wrapped to its width (a character
+         ;; of its font, 0.75 of a line, about 0.47 of a line wide): it was
+         ;; cut, its rest nowhere.
+         (under (string-join (delq nil (list (plist-get props :label)
+                                             (and (plist-get props :target)
+                                                  (concat "target " (agent-ui-gauge--shown props (plist-get props :target))))))
+                             " · "))
+         (under (cond ((string-empty-p under) nil)
+                      ((<= (string-width under) (floor w (* 0.47 lh))) (list under))
+                      (t (agent-ui-wrap-lines under (max 1 (floor w (* 0.47 lh)))))))
+         ;; The arc, its ends' numbers under it, then the label's rows.
+         (h (round (+ r stroke (* 2.3 lh) (* 0.9 lh (max 0 (1- (length under)))))))
          (cx (/ w 2.0))
          (cy (+ r (/ stroke 2.0) 2))
          (min (plist-get props :min)) (max (plist-get props :max))
@@ -183,16 +193,11 @@ line of its own above (it was left out: \"lines covered\" gone at 24)."
         (svg-text svg shown :x cx :y (- cy (* 0.15 lh)) :text-anchor "middle"
                   :font-size (round (agent-ui-svg-fit-size shown (* 1.3 lh) (* 1.8 (- r stroke))))
                   :font-weight "bold" :font-family font :fill (agent-ui-color face)))
-      (let ((under (string-join (delq nil (list (plist-get props :label)
-                                                (and (plist-get props :target)
-                                                     (concat "target " (agent-ui-gauge--shown props (plist-get props :target))))))
-                                " · ")))
-        (unless (string-empty-p under)
-          ;; Cut to the width: a character of its font (0.75 of a line)
-          ;; about 0.47 of a line wide.
-          (svg-text svg (agent-ui-truncate under (floor w (* 0.47 lh)))
-                    :x cx :y (+ cy (* 2.0 lh)) :text-anchor "middle"
-                    :font-size (round (* 0.75 lh)) :font-family font :fill (agent-ui-color 'agent-ui-muted))))
+      (cl-loop for line in under
+               for i from 0
+               do (svg-text svg line
+                            :x cx :y (+ cy (* 2.0 lh) (* 0.9 lh i)) :text-anchor "middle"
+                            :font-size (round (* 0.75 lh)) :font-family font :fill (agent-ui-color 'agent-ui-muted)))
       ;; Its range's ends under the arc's: smaller if they'd meet.
       (let* ((ends (concat (agent-ui-format-number min) "  " (agent-ui-format-number max)))
              (size (agent-ui-svg-fit-size ends (* 0.7 lh) (+ (* 2 r) stroke))))
