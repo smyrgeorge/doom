@@ -401,6 +401,12 @@ Agents can't change what runs them:
 - The check warns about a `run:` naming a file elsewhere (`tests/run.sh`): an agent could change it to make it pass. One
   of `.agent-workflow/` runs your checkout's copy.
 
+## For your agent
+
+The [agent-workflow skill](../skills/agent-workflow/SKILL.md) teaches an agent to write, check and run workflows: ask
+yours to "write a bugfix workflow", and it checks its draft with `cmd/agent-workflow check` before telling you where it
+goes. Every agent-shell session is told where the skill is.
+
 ## Checking them
 
 `M-x agent-workflow-check` reads the project's workflows and profiles again and lists every problem, each line

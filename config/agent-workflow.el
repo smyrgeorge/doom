@@ -170,6 +170,11 @@ nil: they wait for M-x agent-workflow-continue."
 ;; (config/agent-workflow/pool.el).
 (add-hook '+my/agent-shell-claude-context-functions #'agent-workflow-agent-context t)
 
+;; WHAT EVERY SESSION IS TOLD
+;; Where the agent-workflow skill is (skills/agent-workflow/SKILL.md): to
+;; write, check or run a project's workflows (config/agent-workflow/core.el).
+(add-hook '+my/agent-shell-claude-context-functions #'agent-workflow-skill-context t)
+
 ;; Its canvas opens no pane of its own: kept, for its ticket's pane.
 (agent-workflow--take-canvases)
 

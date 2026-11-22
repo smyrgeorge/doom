@@ -81,6 +81,18 @@ changed since."
   (expand-file-name "../../cmd/agent-workflow" (file-name-directory (or load-file-name buffer-file-name)))
   "cmd/agent-workflow, its full path: what an agent runs to end its step.")
 
+(defconst agent-workflow-skill
+  (expand-file-name "../../skills/agent-workflow/SKILL.md" (file-name-directory (or load-file-name buffer-file-name)))
+  "The agent-workflow skill: writing, checking and running workflows.")
+
+(defun agent-workflow-skill-context ()
+  "The line every agent-shell session is told of agent workflows (for its
+system prompt): where the skill is; nil while Emacs runs no server (the
+command couldn't reach it). One of `+my/agent-shell-claude-context-functions'."
+  (when (and (fboundp 'server-running-p) (server-running-p))
+    (format "Agent workflows: to write, check or run a project's agent workflows (its .agent-workflow/, \
+%s), read %s first." (abbreviate-file-name agent-workflow-command) (abbreviate-file-name agent-workflow-skill))))
+
 (defconst agent-workflow--name-regexp "\\`[a-z][a-z0-9-]*\\'"
   "A workflow's, a profile's, a job's name: a lowercase letter, then
 lowercase letters, digits or -.")
