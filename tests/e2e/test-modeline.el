@@ -160,3 +160,42 @@ dropped first)."
           (should (string-search "1:0" left)))))))
 
 ;;; test-modeline.el ends here
+
+(ert-deftest e2e-modeline/its-geometry-asked-another-window-selected ()
+  "Lisp asks for a window's geometry, another window selected (the treemacs
+pane: its evil state has no tag, doom-modeline's modals failed there): Emacs
+works out the window's mode line, its segments in its own buffer, none in the
+selected window's (`void-function nil' logged hundreds of times); nothing
+kept on the selected window."
+  (+test-with-reset
+    (+test-e2e-frame-reset)
+    (+test-clear-messages)
+    (let* ((buffer (+test-modeline--visit +test-modeline--path))
+           (window (selected-window))
+           (other (+test-buffer "tagless"))
+           (pane (progn (switch-to-buffer buffer)
+                        (delete-other-windows)
+                        (split-window window 60 'left)))
+           (ran nil))
+      (set-window-buffer pane other)
+      (+test-modeline--drawn)
+      ;; What earlier tests' windows kept.
+      (set-window-parameter pane '+my/modeline-fit nil)
+      (set-window-parameter pane '+my/modeline-narrower nil)
+      (cl-letf* ((modals (symbol-function 'doom-modeline-segment--modals))
+                 ((symbol-function 'doom-modeline-segment--modals)
+                  (lambda ()
+                    (push (buffer-name) ran)
+                    (if (eq (current-buffer) other) (funcall nil) (funcall modals)))))
+        (with-selected-window pane
+          (with-current-buffer buffer
+            (pos-visible-in-window-p (point-max) window)
+            (window-text-pixel-size window nil nil nil nil t))
+          (with-current-buffer buffer
+            (should (string-search "AgreementController.kt"
+                                   (format-mode-line mode-line-format nil nil buffer))))
+          (should-not (window-parameter nil '+my/modeline-fit))
+          (should-not (window-parameter nil '+my/modeline-narrower)))
+        (should (member (buffer-name buffer) ran))
+        (should-not (member (buffer-name other) ran))
+        (should (= (+test-messages "void-function") 0))))))

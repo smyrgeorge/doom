@@ -244,6 +244,37 @@ same (the position's width too); again when one changes."
           (+test-modeline--draw (selected-window))
           (should (= measured 3)))))))
 
+(ert-deftest modeline/worked-out-with-another-window-selected ()
+  "Emacs works out a window's mode line as Lisp asks for its geometry, another
+window selected (the treemacs pane): its format is doom-modeline's as it is,
+nothing measured (the sides were formatted in the selected window's buffer)
+or kept on the selected window. Drawn in its own window: fitted as before.
+Formatted for real (batch Emacs formats no mode line):
+tests/e2e/test-modeline.el."
+  (+test-modeline--deep
+    (let* ((file (current-buffer))
+           (file-window (selected-window))
+           (other (get-buffer-create "*test other*"))
+           (window (split-window nil nil 'right))
+           (measured nil))
+      (set-window-buffer window other)
+      (unwind-protect
+          (cl-letf* ((left (symbol-function '+my/modeline--left))
+                     ((symbol-function '+my/modeline--left)
+                      (lambda (format) (push (buffer-name) measured) (funcall left format))))
+            ;; As `pos-visible-in-window-p' on the file's window has it.
+            (with-selected-window window
+              (with-current-buffer file
+                (let ((format (doom-modeline-format--main)))
+                  (should (equal (car (last (car (last format)))) " "))))
+              (should-not (window-parameter nil '+my/modeline-fit))
+              (should-not (window-parameter nil '+my/modeline-narrower)))
+            (should-not measured)
+            ;; In its own window: fitted, measured there.
+            (+test-modeline--draw file-window)
+            (should (equal measured (list (buffer-name file)))))
+        (kill-buffer other)))))
+
 (ert-deftest modeline/the-narrow-layout-chooses-no-path ()
   "The narrow layout (the buffer's name only): no path chosen, the names
 left as they were."

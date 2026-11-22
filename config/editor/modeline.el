@@ -25,6 +25,13 @@
 ;; rest of the line whole: the path, else its folders cut to their first
 ;; letter (truncate-with-project: app/s/m/k/c/e/a/AgreementController.kt),
 ;; else the file's name.
+;; Not when the selected window doesn't show the buffer: Emacs works out a
+;; window's mode line, to know its height, as Lisp asks for that window's
+;; geometry (`pos-visible-in-window-p', `window-text-pixel-size'), another
+;; window selected. Measured there, the sides were formatted in the selected
+;; window's buffer (the treemacs pane's: doom-modeline's modals segment failed
+;; on its evil state, `void-function nil', hundreds of times) and the choice
+;; kept on the wrong window. doom-modeline's format is used as it is then.
 
 (defvar-local +my/modeline--names nil
   "The names the mode line can show for the buffer, the longest first:
@@ -156,7 +163,15 @@ line is drawn (the selected one then): the narrow layout if it's narrow,
 fitted (see NARROWER STILL); in the wide one, the longest name it has room
 for with the rest of the line \(see above). Measuring each time took 4
 times doom-modeline's own: what was chosen is kept for the window while its
-width, the left side's and the right side's are the same."
+width, the left side's and the right side's are the same. The selected
+window showing another buffer (see above): doom-modeline's format as it is."
+  (if (not (eq (window-buffer) (current-buffer)))
+      (apply fn args)
+    (+my/modeline--fit fn args)))
+
+(defun +my/modeline--fit (fn args)
+  "FN's format with ARGS, fitted to the selected window (see
+`+my/modeline-fit-a')."
   (doom-modeline-window-size-change)
   (unless (or +my/modeline--names doom-modeline--limited-width-p)
     (doom-modeline-update-buffer-file-name))
