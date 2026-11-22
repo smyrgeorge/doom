@@ -915,7 +915,7 @@ lines shorter than that; back at the start unscrolled. Each row its cell."
                        '(frame-live-p frame-root-window window-buffer set-frame-parameter
                          frame-parameter set-frame-size set-frame-position frame-visible-p
                          make-frame-visible make-frame-invisible delete-frame frame-parent
-                         redraw-frame))))
+                         redraw-frame frame-pixel-width frame-pixel-height))))
      (cl-flet ((orig (f &rest args) (apply (alist-get f orig) args))
                (fake-p (x) (+test-stripe--frame-p x)))
        (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
@@ -948,6 +948,17 @@ lines shorter than that; back at the start unscrolled. Each row its cell."
                   (lambda (f w h &optional pixelwise)
                     (if (fake-p f) (setf (+test-stripe--frame-size f) (list w h pixelwise))
                       (orig 'set-frame-size f w h pixelwise))))
+                 ;; Its size once set (pixelwise), else its parent's.
+                 ((symbol-function 'frame-pixel-width)
+                  (lambda (&optional f)
+                    (if (fake-p f)
+                        (or (car (+test-stripe--frame-size f)) (orig 'frame-pixel-width (+test-stripe--frame-parent f)))
+                      (orig 'frame-pixel-width f))))
+                 ((symbol-function 'frame-pixel-height)
+                  (lambda (&optional f)
+                    (if (fake-p f)
+                        (or (cadr (+test-stripe--frame-size f)) (orig 'frame-pixel-height (+test-stripe--frame-parent f)))
+                      (orig 'frame-pixel-height f))))
                  ((symbol-function 'set-frame-position)
                   (lambda (f x y) (if (fake-p f) (setf (+test-stripe--frame-position f) (list x y))
                                     (orig 'set-frame-position f x y))))
@@ -1107,6 +1118,39 @@ moved): a new one, the old one flushed from Emacs's image cache."
         (should (> (funcall tick) before))
         (should (equal +test-stripe--flushed (list image)))
         (should-not (equal (car (+test-stripe--shown-image frame)) image))))))
+
+(ert-deftest stripe/an-image-its-frame-cant-hold-waits-for-the-sync ()
+  "A strip more than 10 times its frame's height (`max-image-size': Emacs
+would refuse it, logging it whole): not drawn, the sync asked for; the frame
+sized by it, drawn. An integer `max-image-size': pixels, whatever the frame."
+  (+test-stripe (+test-stripe--text 400)
+    (+test-stripe--frames
+      (+my/stripe--sync)
+      (let* ((window (selected-window))
+             (frame (+test-stripe--frame-of window))
+             (tick (lambda () (buffer-modified-tick (+test-stripe--frame-buffer frame))))
+             (height (window-body-height window t))
+             (synced 0))
+        (should (+my/stripe--holds-p frame 1 height))
+        ;; Its frame small (sized for a window a tenth as tall).
+        (set-frame-size frame 1 (1- (/ height 10)) t)
+        (should-not (+my/stripe--holds-p frame 1 height))
+        (set-frame-parameter frame '+my/stripe-geometry nil)
+        (cl-letf (((symbol-function '+my/stripe--sync-soon) (lambda (&rest _) (cl-incf synced))))
+          (let ((before (funcall tick)))
+            (set-window-start window (+test-stripe--line-start 300))
+            (+my/stripe--render window)
+            (should (= (funcall tick) before))
+            (should (= synced 1))))
+        ;; The sync: sized, drawn.
+        (let ((before (funcall tick)))
+          (+my/stripe--sync)
+          (should (equal (+test-stripe--frame-size frame) (list 1 height t)))
+          (should (> (funcall tick) before))
+          (should (= (length (+test-stripe--pixels (car (+test-stripe--shown-image frame)))) height)))
+        (let ((max-image-size 50))
+          (should (+my/stripe--holds-p frame 1 50))
+          (should-not (+my/stripe--holds-p frame 1 51)))))))
 
 (ert-deftest stripe/no-frame-yet-one-is-made-after-this-redisplay ()
   (+test-stripe (+test-stripe--text 100)

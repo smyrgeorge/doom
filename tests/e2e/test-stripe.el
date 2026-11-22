@@ -99,6 +99,56 @@ strip took its room, drawn in nothing)."
       (should-not (seq-find (lambda (ov) (overlay-get ov '+my/stripe-row))
                             (overlays-in (point-min) (point-max)))))))
 
+;; Emacs refuses an image more than 10 times its frame's height
+;; (`max-image-size'), logging it whole: "Invalid XPM3 file", a line per
+;; pixel row.
+(ert-deftest e2e-stripe/a-window-grown-10-times-drawn-before-the-sync ()
+  "A window of 3 rows, its strip's frame as small; the window given the
+frame's height: redisplay redraws its strip (`+my/stripe--pre-redisplay')
+before the sync sizes its frame (a timer, after): nothing drawn into the
+small frame (refused, its whole XPM logged), the strip drawn once its frame
+is sized."
+  (+test-stripe
+    (+test-e2e-frame-reset)
+    (+test-stripe--file "grown.el" 400)
+    (let* ((window (selected-window))
+           (below (split-window window 4 'below)))
+      (select-window below)
+      (switch-to-buffer (+test-buffer "other"))
+      (select-window window)
+      (should (+test-wait-for
+               (lambda ()
+                 (redisplay t)
+                 (let ((frame (+test-stripe--frame window)))
+                   (and (frame-live-p frame) (+test-stripe--placed-p frame window)
+                        (not (timerp +my/stripe--sync-timer)))))
+               5))
+      (let ((small (frame-pixel-height (+test-stripe--frame window))))
+        (+test-clear-messages)
+        (delete-window below)
+        (should (> (window-body-height window t) (* 10 small)))
+        ;; No sync pending: `redisplay' runs timers first.
+        (should-not (timerp +my/stripe--sync-timer))
+        (redisplay t)
+        (should (+test-stripe--shown window))
+        (+test-sleep 0.2)
+        (redisplay t)
+        (should (= (+test-messages "Invalid XPM3 file\\|Invalid image size") 0))
+        (should (= (length (+test-stripe--pixels window)) (window-body-height window t)))))))
+
+(ert-deftest e2e-stripe/a-new-strip-for-a-tall-window ()
+  "A tall window's new strip: its frame sized before its image goes in,
+nothing refused."
+  (+test-stripe
+    (+test-e2e-frame-reset)
+    (+test-clear-messages)
+    (+test-stripe--file "tall.el" 400)
+    (redisplay t)
+    (+test-sleep 0.2)
+    (should (= (+test-messages "Invalid XPM3 file\\|Invalid image size") 0))
+    (should (= (length (+test-stripe--pixels (selected-window)))
+               (window-body-height (selected-window) t)))))
+
 (ert-deftest e2e-stripe/made-from-a-file-with-the-stripe ()
   "The strip's frame made while a file with the stripe is the current buffer
 (its window first shows it, with its margin): the image still has the whole

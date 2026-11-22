@@ -197,6 +197,22 @@ closed windows."
 
 (add-hook 'window-state-change-functions #'+my/stripe--window-change-h)
 
+;; TOO TALL
+;; Emacs refuses an image bigger than `max-image-size' allows: by default 10
+;; times the size of the frame it's shown in, the strip's own here, sized to
+;; its window only by the sync (after redisplay). A window grown 10 times or
+;; more since (a pane made small during a layout, then given the height), its
+;; strip drawn before the sync: refused, its whole XPM logged ("Invalid XPM3
+;; file", a line per pixel row: *Messages* wiped by one message), the strip
+;; blank. So a strip its frame can't hold waits for the sync to size it.
+(defun +my/stripe--holds-p (frame width height)
+  "Non-nil if FRAME can show an image WIDTH by HEIGHT pixels (see above)."
+  (pcase max-image-size
+    ((pred integerp) (and (<= width max-image-size) (<= height max-image-size)))
+    ((pred floatp) (and (<= width (* max-image-size (frame-pixel-width frame)))
+                        (<= height (* max-image-size (frame-pixel-height frame)))))
+    (_ t)))
+
 (defun +my/stripe--draw-image (window start lines marks)
   "Draw WINDOW's strip into its frame's image, if the strip changed (a frame
 made first, after this redisplay, if it has none)."
@@ -210,7 +226,10 @@ made first, after this redisplay, if it has none)."
                    (palette (+my/stripe--palette))
                    (content (list pixels width palette)))
         (set-window-parameter window '+my/stripe-geometry (list 'pixels scale lines thumb spans))
-        (unless (equal content (nth 2 entry))
+        (unless (or (equal content (nth 2 entry))
+                    ;; Not into a frame too small for it (see TOO TALL): sized
+                    ;; first (below), drawn then.
+                    (not (+my/stripe--holds-p frame width (length pixels))))
           (let ((old (nth 3 entry))
                 (image (+my/stripe--image pixels width palette)))
             (setf (nth 2 entry) content
