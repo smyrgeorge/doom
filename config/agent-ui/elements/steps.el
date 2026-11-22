@@ -198,9 +198,10 @@ its last line, or on lines of their own (wrapped too) where they don't fit."
   "PROPS' steps drawn at CTX's width: (TEXTS . MORE), TEXTS a text for each
 step shown, in `agent-ui-steps--flat''s order, MORE the line saying how many
 more there are, or nil. Each step on its line, its name, time and detail in
-columns, cut with … where they don't fit; or, with WRAP, wrapped on lines of
-their own instead (see `agent-ui-steps--wrapped'). ASKED: a plan being
-decided on (see `agent-ui-steps--name-face')."
+columns, if they all fit; else cut with … where they don't, or, with WRAP
+\(a checklist, a plan), wrapped on lines of their own instead (see
+`agent-ui-steps--wrapped'). ASKED: a plan being decided on (see
+`agent-ui-steps--name-face')."
   (let* ((all (agent-ui-steps--flat (plist-get props :steps) 0))
          (shown (mapcar (lambda (s)
                           (let ((step (copy-sequence (cdr s))))
@@ -240,11 +241,13 @@ decided on (see `agent-ui-steps--name-face')."
             (propertize (format "… %d steps more" (- (length all) (length shown))) 'face 'agent-ui-muted)))))
 
 (defun agent-ui-steps--text (props ctx)
-  "PROPS' steps, a checklist: a line each (cut with … where too long: what
-changes is glanced at, its times and details in columns)."
+  "PROPS' steps, a checklist: a line each, its times and details in
+columns, if they all fit; else each step wrapped, as a plan to approve is
+\(every name was cut with … to half the width, their rest nowhere:
+doom-1j3, reversing doom-mri's line each)."
   (if (null (plist-get props :steps))
       (propertize "no steps yet" 'face 'agent-ui-muted)
-    (let ((drawn (agent-ui-steps--drawn props ctx)))
+    (let ((drawn (agent-ui-steps--drawn props ctx t)))
       (string-join (append (car drawn) (and (cdr drawn) (list (cdr drawn)))) "\n"))))
 
 ;; ====== APPENDING ======

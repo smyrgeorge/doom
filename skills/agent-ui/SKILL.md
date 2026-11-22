@@ -115,7 +115,7 @@ A checklist. A step is a name (pending), or `{"name", "status", "detail"}`; stat
 `done`, `failed` or `skipped`; detail is a short note after it. **Append a step whose name is there to change it in
 place**, so you only send what changed. A step is timed from `running` to `done` or `failed` (or give its
 `seconds`). Its own `steps` are drawn under it: append one with `"parent"` (its step's name), up to 4 deep. A line
-each, cut with … where too long: keep names short. A plan to approve first (`approve`): see
+each, wrapped where too long. A plan to approve first (`approve`): see
 [asking.md](references/asking.md).
 
 ```sh

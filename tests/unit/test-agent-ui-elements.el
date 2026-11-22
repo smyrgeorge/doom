@@ -512,12 +512,26 @@ the width for it); answered, still whole (doom-mri)."
         (should (equal (plist-get (agent-ui-get "plan") :edits) `((:name ,long :text "Trust: asked once"))))))))
 
 (ert-deftest agent-ui-elements/steps-a-checklist-a-line-each ()
-  "Without approve, a step stays on its line, cut with … where too long (a
-checklist is glanced at, its times and details in columns); a name past
-half the width isn't cut for its detail's sake when the line fits."
+  "Without approve, a step stays on its line, its times and details in
+columns, while they all fit; a name past half the width isn't cut for its
+detail's sake when the line fits. A step too long: wrapped, as a plan's
+(it was cut with …, every name cut to half the width: doom-1j3)."
   (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "Open on demand, the project's panels listed" :status "done") "b"))
                                  :width 30)
-                 "✓ Open on demand, the project…\n○ b"))
+                 "✓ Open on demand, the\n  project's panels listed\n○ b"))
+  ;; One step too long: the others whole too (they were cut to 49 columns
+  ;; of 99), its time after it.
+  (let ((text (+test-aue-draw '(:type "steps" :steps ((:name "with: on a uses step (merge's suite)" :status "running" :seconds 665)
+                                                      "run: a script, async, in the job's place, its environment the job's, its exit code its result"
+                                                      "Exit 0 next; 1 to the job's agent (or on-fail's), with its output"
+                                                      "Tests"))
+                              :width 60)))
+    (should-not (string-search "…" text))
+    (should (string-search "its exit code its result" text))
+    (should (string-search "with its\n  output" text))
+    (should (string-match-p "\\`. with: on a uses step (merge's suite)  11m 05s\n" text))
+    (dolist (line (split-string text "\n")) (should (<= (string-width line) 60))))
+  ;; Columns kept while they all fit.
   (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "Trust: a repo's panel asks once" :status "done" :detail "ok")
                                                          "Lifecycle: polls paused while hidden")))
                  "✓ Trust: a repo's panel asks once       ok\n○ Lifecycle: polls paused while hidden")))
@@ -4429,9 +4443,11 @@ fit, else under it, wrapped (the line was cut with its note: \"{  ← …\")."
     ;; Its lines FROM to TO, its file named above; python-mode's colours (by its name).
     (should (equal (substring-no-properties text)
                    (concat (abbreviate-file-name file) "\n5 │ x5 = 5\n6 │ x6 = 6\n7 │ x7 = 7")))
-    (should (get-text-property (string-search "x6" text) 'face text))
+    ;; Its line found by its text: "x6" alone can be in the temp file's
+    ;; random name, above it (no button there: (funcall nil), now and then).
+    (should (get-text-property (string-search "x6 = 6" text) 'face text))
     ;; RET on a line: its file, there.
-    (funcall (get-text-property (string-search "x6" text) 'agent-ui-action text))
+    (funcall (get-text-property (string-search "x6 = 6" text) 'agent-ui-action text))
     (should (equal (car opened) file))
     (should (= (line-number-at-pos) 6))
     (kill-buffer (current-buffer))
