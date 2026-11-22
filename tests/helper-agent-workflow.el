@@ -148,3 +148,10 @@ not waited to be done (its result may wait for your OK)."
     (should (+test-awr--wait (lambda () (and (eq (+test-awr--job run job) 'waiting)
                                              (not (agent-workflow-asking run))))))
     (agent-workflow-done agent nil (or notes "done"))))
+
+(defun +test-aws--any-log (run pattern)
+  "Non-nil if a log of RUN has PATTERN."
+  (let ((dir (expand-file-name "logs" (agent-workflow-run-dir run))))
+    (and (file-directory-p dir)
+         (seq-some (lambda (file) (with-temp-buffer (insert-file-contents file) (re-search-forward pattern nil t)))
+                   (directory-files dir t "\\.log\\'")))))

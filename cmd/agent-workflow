@@ -40,6 +40,17 @@
 #                                approved (the run goes on), or rejected with
 #                                NOTE (back to its agent, or the run stopped)
 #                                -> {"ok": true, "issue", "job"}
+#   agent-workflow continue [ISSUE] [--current]
+#                                interrupted runs continued (Emacs stopped, or
+#                                paused at once): ISSUE's, or every one of the
+#                                project's; --current: with the workflow as it
+#                                is now -> {"ok": true, "continued": [{"issue",
+#                                "jobs"}...]}
+#   agent-workflow cancel ISSUE  ISSUE's run cancelled: its agents stopped,
+#                                its work kept -> {"ok": true, "issue"}
+#   agent-workflow pause [--now] nothing new starts; --now: running steps
+#                                stopped, interrupted -> {"ok": true, "paused"}
+#   agent-workflow unpause       on again -> {"ok": true, "paused": false}
 #   agent-workflow check [FILE]  this folder's project's workflows and
 #                                profiles read anew and checked, or only FILE
 #                                (a workflow, .yml, or a profile, .md,
@@ -181,8 +192,29 @@ case "$op" in
     note=$2
     [ "$note" = "-" ] && note=$(cat)
     payload=$(printf '{"issue":%s,"note":%s}' "$(json_string "$1")" "$(json_string "$note")") ;;
+  continue)
+    issue="" current=false
+    for arg in "$@"; do
+      case "$arg" in
+        --current) current=true ;;
+        -*) fail 2 "continue: unknown argument \"$arg\"; agent-workflow continue [ISSUE] [--current]" ;;
+        *) [ -n "$issue" ] && fail 2 "continue: unknown argument \"$arg\"; agent-workflow continue [ISSUE] [--current]"
+           issue=$arg ;;
+      esac
+    done
+    payload=$(printf '{"issue":%s,"current":%s}' "$(json_string "$issue")" "$current") ;;
+  cancel)
+    [ $# -ne 1 ] && fail 2 "cancel: which issue's run? agent-workflow cancel ISSUE"
+    payload=$(printf '{"issue":%s}' "$(json_string "$1")") ;;
+  pause)
+    now=false
+    case "${1:-}" in --now) now=true ;; '') ;; *) fail 2 "pause: unknown argument \"$1\"; agent-workflow pause [--now]" ;; esac
+    payload=$(printf '{"now":%s}' "$now") ;;
+  unpause)
+    [ $# -gt 0 ] && fail 2 "unpause: unknown argument \"$1\""
+    payload='{}' ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: run, done, back, confirm, approve, reject, check" ;;
+    fail 2 "unknown operation \"$op\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, check" ;;
 esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workflow.XXXXXXXXXX") || fail 3 "no temp folder"

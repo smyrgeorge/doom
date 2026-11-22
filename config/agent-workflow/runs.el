@@ -41,6 +41,9 @@
 (declare-function agent-shell--prompt-queue-enqueue "agent-shell-prompt-queue")
 (declare-function shell-maker-busy "shell-maker")
 (declare-function agent-workflow--fix "agent-workflow/steps")
+(declare-function agent-workflow--continue-job "agent-workflow/resume")
+(declare-function agent-workflow--ensure-restored "agent-workflow/resume")
+(defvar agent-workflow--paused)
 
 ;; ====== A RUN ======
 
@@ -133,8 +136,30 @@ to RUN's journal."
   (cl-loop for (key value) on plist by #'cddr
            append (list key (if (null value) :null value))))
 
+(defun agent-workflow--to-json (value)
+  "VALUE as JSON takes it: a plist an object, a list an array, a symbol
+its name, nil null, t true; an alist of numbers ((0 . 2)) an object."
+  (cond
+   ((null value) :null)
+   ((eq value t) t)
+   ((or (stringp value) (numberp value)) value)
+   ((keywordp value) (substring (symbol-name value) 1))
+   ((symbolp value) (symbol-name value))
+   ((and (consp value) (keywordp (car value)))
+    (cl-loop for (key val) on value by #'cddr append (list key (agent-workflow--to-json val))))
+   ((and (consp value) (consp (car value)) (numberp (caar value)))
+    (cl-loop for (key . val) in value append (list (intern (format ":%s" key)) (agent-workflow--to-json val))))
+   ((consp value) (vconcat (mapcar #'agent-workflow--to-json value)))
+   (t (format "%s" value))))
+
+(defconst agent-workflow--saved-job-keys
+  '(:status :step :round :outcome :notes :session :start-commit :commit :dir :snapshot :approved :ask :why
+    :tries :user-note :back)
+  "What of a job's state state.json keeps: all it needs to come back.")
+
 (defun agent-workflow--save-state (run)
-  "RUN as it stands written to its state.json (a cache of its journal)."
+  "RUN as it stands written to its state.json: what the views read, and
+all it needs to come back after Emacs stops (resume.el)."
   (let ((coding-system-for-write 'utf-8-unix)
         (create-lockfiles nil))
     (with-temp-file (expand-file-name "state.json" (agent-workflow-run-dir run))
@@ -145,16 +170,27 @@ to RUN's journal."
                       :workflow (plist-get (agent-workflow-run-workflow run) :name)
                       :state (symbol-name (agent-workflow-run-state run))
                       :why (agent-workflow-run-why run)
+                      :order (agent-workflow-run-order run)
+                      :total (agent-workflow-run-total run)
+                      :info (agent-workflow--to-json (agent-workflow-run-info run))
+                      :edges (vconcat (mapcar (lambda (edge) (list :edge (car edge)
+                                                                   :count (plist-get (cdr edge) :count)
+                                                                   :notes (vconcat (plist-get (cdr edge) :notes))))
+                                              (seq-filter #'cdr (agent-workflow-run-edges run))))
                       :jobs (vconcat
                              (mapcar (lambda (job)
                                        (let ((state (cdr job)))
-                                         (agent-workflow--json-ready
+                                         (append
                                           (list :name (car job)
-                                                :status (symbol-name (plist-get state :status))
-                                                :round (or (plist-get state :round) 1)
-                                                :outcome (plist-get state :outcome)
-                                                :notes (plist-get state :notes)
-                                                :session (plist-get state :session)))))
+                                                :agent (if-let* ((agent (plist-get state :agent)))
+                                                           (agent-workflow-agent-name agent)
+                                                         :null))
+                                          (cl-loop for key in agent-workflow--saved-job-keys
+                                                   append (list key (agent-workflow--to-json
+                                                                     (if (and (eq key :session) (plist-get state :agent))
+                                                                         (or (agent-workflow-agent-session (plist-get state :agent))
+                                                                             (plist-get state :session))
+                                                                       (plist-get state key))))))))
                                      (agent-workflow-run-jobs run))))))
               "\n"))))
 
@@ -378,6 +414,12 @@ runs, it's over once every job is done or skipped."
         (when blockers
           (agent-workflow--set-state run 'queued (concat "blocked by " (string-join blockers ", ")))
           (throw 'wait nil))))
+    ;; Paused: nothing new starts.
+    (when agent-workflow--paused
+      (dolist (job (agent-workflow--startable run))
+        (agent-workflow--job-set run job :why (format "%s: waiting: runs are paused" job)))
+      (agent-workflow--refresh run)
+      (throw 'wait nil))
     ;; A running job's step waiting for an agent: started, if there's one.
     (dolist (job (agent-workflow-run-jobs run))
       (when-let* ((index (plist-get (cdr job) :pool)))
@@ -573,14 +615,18 @@ branch has now first."
                              (plist-get info :title) (plist-get info :description)))))
     (when-let* ((yours (plist-get (agent-workflow--job run job) :user-note)))
       (setq prompt (format "The user's note for you: %s\n\n%s" yours prompt)))
-    (if (not back)
-        prompt
+    (cond
+     ((not back) prompt)
+     ((plist-get back :interrupted)
+      (format "Your job, %s, was interrupted (Emacs stopped) and goes on now.\n\nWhat the branch has now:\n%s\n\nThen, as before:\n\n%s"
+              job (agent-workflow--branch-now run job) prompt))
+     (t
       (format "%s sent the work back to you, %s (round %d)%s.\n\nWhat the branch has now:\n%s\n\nThen, as before:\n\n%s"
               (if (equal (plist-get back :by) "you") "The user" (plist-get back :by))
               job (or (plist-get (agent-workflow--job run job) :round) 1)
               (if (string-empty-p (or (plist-get back :note) "")) ""
                 (concat ", with this note: " (plist-get back :note)))
-              (agent-workflow--branch-now run job) prompt))))
+              (agent-workflow--branch-now run job) prompt)))))
 
 (defun agent-workflow--branch-now (run job)
   "What JOB of RUN's place has now, in a few lines: its last commits, its
@@ -670,10 +716,28 @@ one."
       (run-at-time 0 nil #'agent-workflow--step-finished run job))
     (list run job outcome)))
 
+(defun agent-workflow--save-all ()
+  "Every run's state saved, its agents' sessions' ids in it (to resume
+them). In `agent-workflow-quit-hook'."
+  (dolist (run agent-workflow--runs)
+    (unless (memq (agent-workflow-run-state run) agent-workflow--ended)
+      (dolist (job (agent-workflow-run-jobs run))
+        (when-let* ((agent (plist-get (cdr job) :agent))
+                    (session (agent-workflow-agent-session agent)))
+          (agent-workflow--job-set run (car job) :session session)))
+      (ignore-errors (agent-workflow--save-state run)))))
+
+(add-hook 'agent-workflow-quit-hook #'agent-workflow--save-all)
+
 (defun agent-workflow--agent-event (agent event)
-  "An event of AGENT's session: its turn over, its session gone. In
-`agent-workflow-agent-event-functions'."
+  "An event of AGENT's session: its turn over, its session gone; its
+session's id kept once it's known. In `agent-workflow-agent-event-functions'."
   (pcase (map-elt event :event)
+    ('init-finished
+     (when-let* ((found (agent-workflow--agent-run agent))
+                 (session (agent-workflow-agent-session agent)))
+       (agent-workflow--job-set (car found) (cdr found) :session session)
+       (agent-workflow--save-state (car found))))
     ('turn-complete (agent-workflow--turn-over agent))
     ('clean-up
      (when-let* ((found (agent-workflow--agent-run agent)))
@@ -1117,7 +1181,10 @@ nothing, or CHOICE isn't one of its question's."
                                     (concat (plist-get ask :output)
                                             (if (and mine (not (string-empty-p mine))) (concat "\n\nThe user adds: " mine) ""))
                                     (plist-get ask :what)))
-           (agent-workflow--step-start run job index))))
+           (if (eq kind 'interrupted)
+               (progn (agent-workflow--job-set run job :ask ask)
+                      (agent-workflow--continue-job run job by))
+             (agent-workflow--step-start run job index)))))
       ("skip"
        (agent-workflow--journal run "step-skipped" :job job :step (plist-get ask :step))
        ;; Skipped, it needs no OK of yours.
@@ -1222,6 +1289,7 @@ issues), then each one's workflow, asked only when several fit. Return
                  (list (agent-workflow--read-issues project) nil project)))
   (let* ((project (or project (agent-workflow-project) (user-error "Not in a git repository")))
          started refused)
+    (agent-workflow--ensure-restored project)
     (dolist (issue issues)
       (condition-case err
           (push (agent-workflow-start-run project issue

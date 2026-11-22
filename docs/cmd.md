@@ -85,6 +85,7 @@ cmd/agent-workflow done changes "notes"           # from an agent of a run: its 
 cmd/agent-workflow back doom-a1b build "note"     # a run sent back to a job, the work kept
 cmd/agent-workflow confirm doom-a1b go           # a run's question answered: go, accept, skip or stop
 cmd/agent-workflow approve doom-a1b              # the result waiting for your OK: on (reject ISSUE "note": back)
+cmd/agent-workflow continue                       # interrupted runs on again (cancel ISSUE, pause, unpause)
 cmd/agent-workflow check                          # every workflow and profile of the project
 cmd/agent-workflow check draft.yml                # one file: a workflow (.yml) or a profile (.md), anywhere
 ```

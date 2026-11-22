@@ -26,6 +26,11 @@
 ;;        "..."} -> {"ok": true, "issue", "job"}: the result the run waits
 ;;        for your OK on approved, or rejected (runs.el, APPROVAL); yours,
 ;;        refused from an agent's session
+;;   continue {"issue": "doom-a1b", "current": false} (issue: optional,
+;;        every interrupted run of the project) -> {"ok": true, "continued":
+;;        [{"issue", "jobs"}...]}; cancel {"issue": "doom-a1b"} -> {"ok":
+;;        true, "issue"}; pause {"now": false}, unpause {} -> {"ok": true,
+;;        "paused"} (resume.el); yours, refused from an agent's session
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
 ;;        "project", "workflows": [names], "profiles": [names], "problems":
@@ -36,6 +41,14 @@
 (require 'seq)
 (require 'subr-x)
 (require 'json)
+
+(declare-function agent-workflow-pause "agent-workflow/resume")
+(declare-function agent-workflow-unpause "agent-workflow/resume")
+(declare-function agent-workflow-cancel "agent-workflow/resume")
+(declare-function agent-workflow-continue "agent-workflow/resume")
+(declare-function agent-workflow--interrupted "agent-workflow/resume")
+(declare-function agent-workflow--ensure-restored "agent-workflow/resume")
+(defvar agent-workflow--paused)
 
 (defun agent-workflow--request-check (directory payload)
   "Check DIRECTORY's project's workflows and profiles, or PAYLOAD's file:
@@ -131,6 +144,7 @@ reply. Not from an agent's session."
   (let* ((default-directory (file-name-as-directory directory))
          (project (or (agent-workflow-project) (user-error "Not in a git repository")))
          (issue (plist-get payload :issue))
+         (_ (agent-workflow--ensure-restored project))
          (run (or (car (last (seq-filter (lambda (run) (equal (agent-workflow-run-issue run) issue))
                                          (agent-workflow-runs project))))
                   (user-error "back: %s has no run" issue)))
@@ -151,6 +165,7 @@ reply. Not from an agent's session."
   (let* ((default-directory (file-name-as-directory directory))
          (project (or (agent-workflow-project) (user-error "Not in a git repository")))
          (issue (plist-get payload :issue))
+         (_ (agent-workflow--ensure-restored project))
          (run (or (agent-workflow-run-of project issue) (user-error "confirm: %s has no run" issue)))
          (job (car (agent-workflow-asking run)))
          (notes (mapcar (lambda (note) (cons (plist-get note :job) (plist-get note :note)))
@@ -167,11 +182,38 @@ an agent's session."
   (let* ((default-directory (file-name-as-directory directory))
          (project (or (agent-workflow-project) (user-error "Not in a git repository")))
          (issue (plist-get payload :issue))
+         (_ (agent-workflow--ensure-restored project))
          (run (or (agent-workflow-run-of project issue) (user-error "%s has no run" issue)))
          (job (if reject
                   (agent-workflow-reject run (or (plist-get payload :note) ""))
                 (agent-workflow-approve run))))
     (list :ok t :issue issue :job job)))
+
+(defun agent-workflow--request-project (directory pid what)
+  "DIRECTORY's project, its runs read back, for WHAT (an operation): a
+user error from an agent's session, or outside a repository."
+  (when (agent-workflow--request-caller pid)
+    (agent-workflow--refuse "%s: yours to do, not an agent's" what))
+  (let* ((default-directory (file-name-as-directory directory))
+         (project (or (agent-workflow-project) (user-error "Not in a git repository"))))
+    (agent-workflow--ensure-restored project)
+    project))
+
+(defun agent-workflow--request-continue (directory payload pid)
+  "Continue PAYLOAD's issue's run (none: every interrupted run of
+DIRECTORY's project): the reply."
+  (let* ((project (agent-workflow--request-project directory pid "continue"))
+         (issue (plist-get payload :issue))
+         (runs (if (and (stringp issue) (not (string-empty-p issue)))
+                   (list (or (agent-workflow-run-of project issue) (user-error "%s has no run" issue)))
+                 (seq-filter #'agent-workflow--interrupted (agent-workflow-runs project)))))
+    (unless (seq-some #'agent-workflow--interrupted runs)
+      (user-error "continue: no run was interrupted"))
+    (list :ok t :continued
+          (vconcat (mapcar (lambda (run)
+                             (list :issue (agent-workflow-run-issue run)
+                                   :jobs (vconcat (agent-workflow-continue run :current (plist-get payload :current)))))
+                           runs)))))
 
 (defun agent-workflow-request (dir)
   "Answer cmd/agent-workflow's request in DIR (see the top of this file):
@@ -200,7 +242,20 @@ its reply written to DIR/reply. Return t."
                   ("confirm" (agent-workflow--request-confirm directory payload pid))
                   ("approve" (agent-workflow--request-approval directory payload pid nil))
                   ("reject" (agent-workflow--request-approval directory payload pid t))
-                  (_ (list :ok :false :error (format "unknown operation %S; operations: run, done, back, confirm, approve, reject, check" op)))))
+                  ("continue" (agent-workflow--request-continue directory payload pid))
+                  ("cancel"
+                   (let* ((project (agent-workflow--request-project directory pid "cancel"))
+                          (issue (plist-get payload :issue))
+                          (run (or (agent-workflow-run-of project issue) (user-error "%s has no run" issue))))
+                     (agent-workflow-cancel run)
+                     (list :ok t :issue issue)))
+                  ((or "pause" "unpause")
+                   (agent-workflow--request-project directory pid op)
+                   (let ((inhibit-message t))
+                     (if (equal op "pause") (agent-workflow-pause (plist-get payload :now)) (agent-workflow-unpause)))
+                   (list :ok t :paused (if agent-workflow--paused t :false)))
+                  (_ (list :ok :false :error (format "unknown operation %S; operations: %s" op
+                                                     "run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, check")))))
             (json-parse-error (list :ok :false :error (format "not JSON: %s" (error-message-string err))))
             (error (list :ok :false :error (error-message-string err))))))
     (let ((coding-system-for-write 'utf-8-unix))

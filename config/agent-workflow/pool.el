@@ -405,9 +405,13 @@ leaves the pool. Its session's id is kept, to resume it."
       (setq agent-workflow--agents (delq agent agent-workflow--agents)))
     processes))
 
+(defvar agent-workflow-quit-hook nil
+  "Run as Emacs quits, before the pool's agents are stopped.")
+
 (defun agent-workflow--quit-h ()
   "Emacs quits: every agent of the pool stopped, its processes given a
 second to exit, then killed. In `kill-emacs-hook'."
+  (run-hooks 'agent-workflow-quit-hook)
   (let ((processes (apply #'append (mapcar #'agent-workflow-stop-agent agent-workflow--agents)))
         (deadline (+ (float-time) 1.0)))
     (while (and processes (< (float-time) deadline)

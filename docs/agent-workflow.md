@@ -1,7 +1,7 @@
 # Agent workflow
 
 > **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
-> runs, their jobs in parallel, every kind of step, going back, loops, the merge.
+> runs, their jobs in parallel, every kind of step, going back, loops, the merge, limits, approval, resuming.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -172,6 +172,7 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 | `agent-workflow-mode` | `"auto"` | The permission mode of an agent whose profile has none |
 | `agent-workflow-max-rounds` | `10` | How many times a job may send the work back before the run asks you |
 | `agent-workflow-script-timeout` | `1800` | Seconds a script may run, unless its step's `timeout` says |
+| `agent-workflow-continue-on-start` | `nil` | Runs read back as Emacs starts continue by themselves |
 
 ## Runs
 
@@ -301,6 +302,29 @@ cmd/agent-workflow confirm doom-a1b accept
 ```
 
 Your own going back isn't counted, and doesn't start the count again.
+
+### Stopped, then on again
+
+A run's `state.json` holds all it needs to come back. When Emacs starts, the runs not over of the projects that had
+some are read back, each with the workflow it started with; a job that was running is interrupted, and waits for you.
+
+- `M-x agent-workflow-continue` continues every interrupted run of the project: an agent step's session is resumed
+  in the same worktree and told it was interrupted and what the branch has now (a fresh one is told the same, if it
+  can't be); a script runs again from its start. Steps already done never run again. With `C-u`, the run takes its
+  workflow as it is now (its jobs kept by their names). `agent-workflow-continue-on-start` continues them by itself.
+- Or skip the step (`confirm ISSUE skip`), go back to a job, or cancel the run.
+- `M-x agent-workflow-cancel`: its agents stop, its scripts are killed, its issue is open again; its branch and
+  worktree are kept.
+- `M-x agent-workflow-pause`: nothing new starts, running steps finish; with `C-u`, they stop at once, interrupted.
+  `M-x agent-workflow-unpause`: on again.
+
+```sh
+cmd/agent-workflow continue                 # every interrupted run of the project
+cmd/agent-workflow continue doom-a1b --current
+cmd/agent-workflow cancel doom-a1b
+cmd/agent-workflow pause --now
+cmd/agent-workflow unpause
+```
 
 In `if`, these say what the issue is: `(issue-id)`, `(issue-type)` (a symbol: `'bug`), `(issue-labels)`,
 `(issue-priority)`, `(issue-title)`, `(job-outcome 'review)`, `(job-status 'build)`.

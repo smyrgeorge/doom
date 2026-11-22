@@ -81,6 +81,25 @@ issue's blockers closing)."
   :type 'number
   :group 'agent-workflow)
 
+;; RUNS COMING BACK
+;; Emacs starting, the runs not over of the projects that had some (noted
+;; here) are read back, a job that was running interrupted, waiting for
+;; continue (config/agent-workflow/resume.el); continued by themselves if
+;; this says so.
+(defcustom agent-workflow-projects-file
+  (expand-file-name "agent-workflow-projects.eld"
+                    (if (boundp 'doom-data-dir) doom-data-dir user-emacs-directory))
+  "Where the projects that had runs are noted: their runs are read back as
+Emacs starts."
+  :type 'file
+  :group 'agent-workflow)
+
+(defcustom agent-workflow-continue-on-start nil
+  "Non-nil: runs read back as Emacs starts are continued by themselves.
+nil: they wait for M-x agent-workflow-continue."
+  :type 'boolean
+  :group 'agent-workflow)
+
 ;; SCRIPTS
 ;; A run: step's script, its suite's for a merge (config/agent-workflow/
 ;; steps.el): stopped once it's run this long, unless its step's timeout says.
@@ -117,6 +136,7 @@ issue's blockers closing)."
 (load! "agent-workflow/beads")
 (load! "agent-workflow/runs")
 (load! "agent-workflow/steps")
+(load! "agent-workflow/resume")
 (load! "agent-workflow/check")
 (load! "agent-workflow/request")
 
@@ -133,3 +153,7 @@ issue's blockers closing)."
 
 ;; Emacs quits: the pool's sessions end with it, asking nothing.
 (add-hook 'kill-emacs-hook #'agent-workflow--quit-h)
+
+;; Emacs starting: the runs not over read back (and continued, if
+;; `agent-workflow-continue-on-start').
+(add-hook 'emacs-startup-hook #'agent-workflow-restore-all)

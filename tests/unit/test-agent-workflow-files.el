@@ -541,7 +541,7 @@ one file alone; a file not there, an unknown operation: refused."
             (should (equal (plist-get alone :workflows) nil))
             (should (= (length (plist-get alone :problems)) 1))))
         (should (string-match-p "no file" (plist-get (+test-awf--request "check" "{\"file\":\"/no/such.yml\"}") :error)))
-        (should (equal (plist-get (+test-awf--request "launch") :error) "unknown operation \"launch\"; operations: run, done, back, confirm, approve, reject, check"))))))
+        (should (equal (plist-get (+test-awf--request "launch") :error) "unknown operation \"launch\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, check"))))))
 
 (defmacro +test-awf--with-server (&rest body)
   "BODY with this Emacs a server only the script talks to (EMACS_SOCKET_NAME)."
@@ -583,7 +583,7 @@ with; a file of its folder alone; wrong uses: 2, without Emacs."
         (should (equal (+test-awf--run "check" "a" "b")
                        '(2 . "{\"ok\":false,\"error\":\"check: unknown argument \\\"b\\\"; agent-workflow check [FILE]\"}")))
         (should (equal (+test-awf--run "start")
-                       '(2 . "{\"ok\":false,\"error\":\"unknown operation \\\"start\\\"; operations: run, done, back, confirm, approve, reject, check\"}")))
+                       '(2 . "{\"ok\":false,\"error\":\"unknown operation \\\"start\\\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, check\"}")))
         (+test-awf--with-server
           (let ((run (+test-awf--run "check")))
             (should (= (car run) 0))

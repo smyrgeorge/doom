@@ -464,3 +464,71 @@ jobs:
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should (equal (seq-filter (lambda (ev) (member ev '("asked" "answered"))) (+test-awr--journal run))
                      '("asked" "answered" "asked" "answered" "asked" "answered" "answered"))))))
+
+;; ====== RESUMING ======
+
+(ert-deftest agent-workflow-runs/back-after-emacs-stopped ()
+  "Emacs stops mid-run: read back, its running job interrupted, waiting;
+continued, its agent's session resumed and told; its done job never run
+again; its project noted; continued with the workflow as it is now."
+  (+test-awr "restore"
+    (let* ((issue (+test-awr--issue project "Restore"))
+           (run (agent-workflow-start-run project issue)))
+      (+test-awr--finish run "build" nil "built")
+      (let ((review (+test-awr--agent run "review")))
+        (should (+test-awr--wait (lambda () (agent-workflow-agent-session review))))
+        (should (member project (agent-workflow--known-projects)))
+        ;; Emacs stops.
+        (agent-workflow--quit-h)
+        (setq agent-workflow--runs nil)
+        (let ((back (agent-workflow-restore project)))
+          (should (= (length back) 1))
+          (setq run (car back)))
+        (should (eq (+test-awr--job run "build") 'done))
+        (should (equal (agent-workflow-run-why run) "review: interrupted (Emacs stopped): continue it, skip its step, or stop?"))
+        (should (equal (plist-get (agent-workflow-run-info run) :title) "Restore"))
+        ;; The workflow changed meanwhile: continued with it as it is now.
+        (write-region (concat +test-awr--feature "  extra:\n    needs: review\n    agent: build\n") nil
+                      (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+        (agent-workflow-continue run :current t)
+        (should (eq (+test-awr--job run "extra") 'pending))
+        (let ((again (+test-awr--agent run "review")))
+          (should (equal (agent-workflow-agent-resumed again) "mock-session"))
+          (should (+test-awr--wait
+                   (lambda () (seq-some (lambda (prompt) (string-match-p "\\`Your job, review, was interrupted (Emacs stopped) and goes on now" prompt))
+                                        (+test-awr--prompts "restore"))))))
+        (should (= (seq-count (lambda (ev) (equal ev "job-started")) (+test-awr--journal run)) 2))))))
+
+(ert-deftest agent-workflow-runs/pause-and-cancel ()
+  "Paused: nothing new starts, saying so; with now, a running script stopped,
+interrupted, continued after: run again. Cancelled: its agents stopped, the
+run over, its issue open again."
+  (+test-awr "pause"
+    (write-region "description: x
+for: [chore]
+jobs:
+  check:
+    run: sleep 1; echo slept
+" nil (expand-file-name ".agent-workflow/workflows/chores.yml" project))
+    (unwind-protect
+        (progn
+          (agent-workflow-pause)
+          (let ((run (agent-workflow-start-run project (+test-awr--issue project "Paused" "--type" "chore"))))
+            (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why run) "check: waiting: runs are paused"))))
+            (agent-workflow-unpause)
+            (should (+test-awr--wait (lambda () (eq (+test-awr--job run "check") 'running))))
+            (agent-workflow-pause t)
+            (should (equal (agent-workflow-run-why run) "check: interrupted (paused): continue it, skip its step, or stop?"))
+            (agent-workflow-unpause)
+            (agent-workflow-continue run)
+            (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)) 10))
+            (should (+test-aws--any-log run "slept"))))
+      (setq agent-workflow--paused nil))
+    (let* ((issue (+test-awr--issue project "Cancelled"))
+           (run (agent-workflow-start-run project issue))
+           (agent (+test-awr--agent run "build")))
+      (agent-workflow-cancel run)
+      (should (eq (agent-workflow-run-state run) 'cancelled))
+      (should-not (buffer-live-p (agent-workflow-agent-buffer agent)))
+      (should (equal (alist-get 'status (+test-awr--shown project issue)) "open"))
+      (should-not (agent-workflow-run-of project issue)))))

@@ -146,13 +146,13 @@ of its jobs, or nil."
         (dolist (job jobs) (visit (car job) nil))
         nil))))
 
-(cl-defun agent-workflow-workflow-read (file &optional (profiles 'any))
+(cl-defun agent-workflow-workflow-read (file &optional (profiles 'any) as)
   "Read the workflow FILE: (WORKFLOW . PROBLEMS). WORKFLOW is a plist (see
 the top of this file), nil if FILE has errors; PROBLEMS, each
 \(error|warning \"FILE:LINE: what\" FILE LINE \"what\"), in the order of
 their lines. PROFILES: the names its agent: and on-fail: may name (any, the
-default: not checked)."
-  (let* ((name (replace-regexp-in-string "\\.ya?ml\\'" "" (file-name-nondirectory file)))
+default: not checked). AS: its name, if not its file's (a run's copy)."
+  (let* ((name (or as (replace-regexp-in-string "\\.ya?ml\\'" "" (file-name-nondirectory file))))
          (text (with-temp-buffer
                  (let ((coding-system-for-read 'utf-8)) (insert-file-contents file))
                  (buffer-string)))
