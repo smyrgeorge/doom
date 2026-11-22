@@ -274,3 +274,26 @@ edits."
       (should (+test-awr--wait
                (lambda () (seq-some (lambda (prompt) (string-match-p "\\`merge sent the work back to you, build (round 2), with this note: The branch was rebased onto the main branch" prompt))
                                     (+test-awr--prompts "conflict"))))))))
+
+(ert-deftest agent-workflow-steps/merge-changing-what-runs-the-workflows ()
+  "A branch that changes .agent-workflow/ waits for your go before it's
+merged, whatever approve says; agents are denied editing it."
+  (+test-awr "protected"
+    (+test-aws--workflow project +test-aws--merge)
+    (let* ((issue (+test-awr--issue project "Protected"))
+           (run (agent-workflow-start-run project issue))
+           (agent (+test-awr--agent run "build")))
+      (should (member "Edit(.agent-workflow/**)"
+                      (let ((meta (alist-get :session-meta (agent-workflow--config agent))))
+                        (append (alist-get 'disallowedTools (alist-get 'options (alist-get 'claudeCode meta))) nil))))
+      (let ((worktree (agent-workflow-worktree-directory project issue)))
+        (make-directory (expand-file-name ".agent-workflow/scripts" worktree) t)
+        (+test-aws--build run project issue ".agent-workflow/scripts/check.sh" "exit 0\n")
+        (let ((default-directory worktree))
+          (write-region "x" nil "lexer.el")
+          (call-process "git" nil nil nil "add" "lexer.el")
+          (call-process "git" nil nil nil "-c" "user.name=A" "-c" "user.email=a@a" "commit" "-q" "-m" "lexer")))
+      (+test-aws--asks run "merge: its branch changes what runs the workflows (.agent-workflow/scripts/check.sh): merge it anyway (go), or stop?")
+      (agent-workflow-confirm run "go")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should (file-exists-p (expand-file-name ".agent-workflow/scripts/check.sh" project))))))

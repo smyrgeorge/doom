@@ -188,7 +188,10 @@ profile's instructions; its first message sent."
           (should (equal (plist-get options :allowedTools)
                          (list "Read" (format "Bash(git -C %s commit:*)" (shell-quote-argument (directory-file-name worktree)))
                                (format "Bash(%s done:*)" (expand-file-name "cmd/agent-workflow" +test-root)))))
-          (should (equal (plist-get options :disallowedTools) '("Bash(git push:*)"))))
+          ;; What runs it, never changed by it.
+          (should (equal (plist-get options :disallowedTools)
+                         '("Bash(git push:*)" "Edit(.agent-workflow/**)" "Write(.agent-workflow/**)"
+                           "NotebookEdit(.agent-workflow/**)"))))
         ;; Its first message, its variables filled in.
         (should (+test-awp--wait
                  (lambda () (+test-awp--logged (lambda (e) (and (equal (plist-get e :method) "session/prompt")

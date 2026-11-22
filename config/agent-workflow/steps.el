@@ -29,7 +29,8 @@
 ;; uses: merge, safe. It merges the issue's branch into the main branch
 ;; (`agent-workflow-main-branch': origin's HEAD, else main, else master),
 ;; never pushing:
-;; 1. Merged already: done (it's safe to run twice).
+;; 1. Merged already: done (it's safe to run twice). Changing
+;;    .agent-workflow/ (what runs the workflows): it waits for your go.
 ;; 2. Tried first in a worktree of its own, detached at the main branch: a
 ;;    conflict, the branch is rebased onto it, if that goes cleanly, and
 ;;    tried again; else the on-fail agent rebases it, resolving the
@@ -288,9 +289,24 @@ file."
              (branch (let ((default-directory worktree)) (agent-workflow--git "branch" "--show-current")))
              (main (agent-workflow-main-branch project))
              (try (agent-workflow--merge-worktree run)))
-        (if (let ((default-directory project))
-              (eql 0 (process-file "git" nil nil nil "merge-base" "--is-ancestor" branch main)))
-            (agent-workflow--merged run job index branch main t)
+        (cond
+         ((let ((default-directory project))
+            (eql 0 (process-file "git" nil nil nil "merge-base" "--is-ancestor" branch main)))
+          (agent-workflow--merged run job index branch main t))
+         ;; What runs the workflows changed by the branch: merged only once
+         ;; you say so (trust.el).
+         ((and (not (plist-get (agent-workflow--job run job) :protected-ok))
+               (let ((default-directory project))
+                 (seq-filter (lambda (file) (string-prefix-p ".agent-workflow/" file))
+                             (agent-workflow--git-lines "diff" "--name-only" (concat main "..." branch)))))
+          (let ((files (let ((default-directory project))
+                         (seq-filter (lambda (file) (string-prefix-p ".agent-workflow/" file))
+                                     (agent-workflow--git-lines "diff" "--name-only" (concat main "..." branch))))))
+            (agent-workflow--job-set run job :ask (list :kind 'protected :step index))
+            (agent-workflow--journal run "asked" :job job :step index :kind "protected" :files (vconcat files))
+            (agent-workflow--wait run job (format "%s: its branch changes what runs the workflows (%s): merge it \
+anyway (go), or stop?" job (string-join files ", ")))))
+         (t
           (let ((default-directory project))
             (agent-workflow-snapshot-remove project issue "merge-try")
             (agent-workflow--git "worktree" "add" "--detach" (directory-file-name try) main))
@@ -301,7 +317,7 @@ file."
               (agent-workflow--merge-suite run job step index branch main try)
             (let ((default-directory try)) (process-file "git" nil nil nil "merge" "--abort"))
             (agent-workflow-snapshot-remove project issue "merge-try")
-            (agent-workflow--merge-conflict run job index branch main))))
+            (agent-workflow--merge-conflict run job index branch main)))))
     (error (agent-workflow--broke run job index (format "its merge: %s" (error-message-string err))))))
 
 (defun agent-workflow--merge-suite (run job step index branch main try)

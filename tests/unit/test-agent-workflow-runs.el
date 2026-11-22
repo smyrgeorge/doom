@@ -622,3 +622,39 @@ stopped, asked."
       (agent-workflow-watch-run run)
       (should (string-match-p "the commits of build aren't on the branch any more"
                               (or (agent-workflow-run-why run) ""))))))
+
+;; ====== TRUST ======
+
+(ert-deftest agent-workflow-runs/trust ()
+  "A project's workflow runs once you trust it: refused unasked; asked, run
+it (this once), trust it (remembered), or no; a starter's runs without."
+  (+test-awr "trust"
+    (agent-workflow-forget-trust project)
+    (let ((one (+test-awr--issue project "One"))
+          (two (+test-awr--issue project "Two"))
+          (three (+test-awr--issue project "Three")))
+      (should (equal (cadr (should-error (agent-workflow-start-run project one) :type 'user-error))
+                     "trust's workflows run as you, and you don't trust it yet: M-x agent-workflow-trust in it"))
+      (cl-letf (((symbol-function 'read-multiple-choice) (lambda (&rest _) '(?n "no"))))
+        (should-error (agent-workflow-start-run project one :ask t) :type 'user-error))
+      (cl-letf (((symbol-function 'read-multiple-choice) (lambda (&rest _) '(?y "run it"))))
+        (should (agent-workflow-start-run project one :ask t)))
+      (should-not (agent-workflow-trusted-p project))
+      (cl-letf (((symbol-function 'read-multiple-choice) (lambda (&rest _) '(?t "trust the project"))))
+        (should (agent-workflow-start-run project two :ask t)))
+      (should (agent-workflow-trusted-p project))
+      (should (agent-workflow-start-run project three))
+      ;; A starter: trusted.
+      (agent-workflow-forget-trust project)
+      (let ((starters (+test-tmp-file "awr/trust-starters/")))
+        (make-directory (expand-file-name "workflows" starters) t)
+        (copy-file (expand-file-name ".agent-workflow/workflows/feature.yml" project)
+                   (expand-file-name "workflows/chores.yml" starters) t)
+        (with-temp-buffer
+          (insert-file-contents (expand-file-name "workflows/chores.yml" starters))
+          (goto-char (point-min))
+          (while (search-forward "for: [feature]" nil t) (replace-match "for: [chore]"))
+          (write-region nil nil (expand-file-name "workflows/chores.yml" starters)))
+        (let ((agent-workflow-starters-directory starters)
+              (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
+          (should (agent-workflow-start-run project (+test-awr--issue project "A chore" "--type" "chore"))))))))

@@ -276,11 +276,12 @@ type. Their names."
     (1+ (apply #'max 0 (mapcar #'string-to-number
                                (and (file-directory-p dir) (directory-files dir nil "\\`[0-9]+\\'")))))))
 
-(cl-defun agent-workflow-start-run (project issue &key workflow (by "you"))
+(cl-defun agent-workflow-start-run (project issue &key workflow (by "you") ask)
   "Start a run on ISSUE of PROJECT with WORKFLOW (a name; default: its
 label's, else the one for its type), started BY (you, shell): the run. A
 user error, nothing started, if it can't: closed, an epic, a run already,
-no workflow or several, an agent-workspace crew there. A blocked issue's
+no workflow or several, an agent-workspace crew there, a project's
+workflow you don't trust (ASK: you're asked, trust.el). A blocked issue's
 run is queued until its blockers close."
   (let* ((project (file-name-as-directory project))
          (info (agent-workflow-issue project issue))
@@ -306,6 +307,7 @@ run is queued until its blockers close."
                                           (plist-get info :type) (string-join fitting ", ")))
                              (t (car fitting)))))))
            (spec (cdr (assoc name workflows)))
+           (_ (agent-workflow--check-trust project spec ask))
            (n (agent-workflow--next-run-number project issue))
            (dir (file-name-as-directory (expand-file-name (format "%s/%d" issue n) (agent-workflow--runs-directory project))))
            (run (agent-workflow-run--make
@@ -1191,7 +1193,7 @@ A user error if RUN asks nothing, or CHOICE isn't one of its question's."
                (other (plist-get ask :other))
                (edge (plist-get ask :edge))
                (kind (plist-get ask :kind))
-               (allowed (pcase kind ('nil '("go" "accept" "stop")) ((or 'merge 'budget 'moved) '("go" "stop"))
+               (allowed (pcase kind ('nil '("go" "accept" "stop")) ((or 'merge 'budget 'moved 'protected) '("go" "stop"))
                           ('closed '("go" "cancel")) ('approve nil)
                           (_ '("go" "skip" "stop")))))
     (when (eq kind 'approve)
@@ -1234,6 +1236,8 @@ A user error if RUN asks nothing, or CHOICE isn't one of its question's."
                      (agent-workflow--go-on run (car other) by)))
                  (agent-workflow--job-set run job :ask ask)
                  (agent-workflow--go-on run job by))
+             (when (eq kind 'protected)
+               (agent-workflow--job-set run job :protected-ok t))
              (agent-workflow--step-start run job index)))))
       ("cancel" (agent-workflow-cancel run :by by))
       ("skip"
@@ -1292,8 +1296,8 @@ the agent that fixes a step."
           (ask (agent-workflow-asking run))
           (kind (plist-get (cdr ask) :kind))
           (choice (completing-read (format "%s: " (agent-workflow-run-why run))
-                                   (pcase kind ('nil '("go" "accept" "stop")) ((or 'merge 'budget) '("go" "stop"))
-                                     (_ '("go" "skip" "stop")))
+                                   (pcase kind ('nil '("go" "accept" "stop")) ((or 'merge 'budget 'moved 'protected) '("go" "stop"))
+                                     ('closed '("go" "cancel")) (_ '("go" "skip" "stop")))
                                    nil t))
           (notes (when (equal choice "go")
                    (pcase kind
@@ -1364,7 +1368,7 @@ issues), then each one's workflow, asked only when several fit. Return
                                           :workflow (or workflow
                                                         (and (called-interactively-p 'any)
                                                              (agent-workflow--read-workflow project issue)))
-                                          :by "you")
+                                          :by "you" :ask (called-interactively-p 'any))
                 started)
         (user-error (push (cons issue (error-message-string err)) refused))))
     (setq started (nreverse started) refused (nreverse refused))

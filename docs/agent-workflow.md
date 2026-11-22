@@ -365,6 +365,21 @@ In `if`, these say what the issue is: `(issue-id)`, `(issue-type)` (a symbol: `'
 | `workflow.yml` beside it | the workflow as the run started |
 | The issue | in progress; its metadata (`workflow`, `workflow_run`, `workflow_state`, `workflow_jobs`), the job running as a label (`job:review`), what each job said in its notes. Written as `agent-workflow` |
 
+## Trust
+
+A workflow's scripts, `elisp` steps and `if` run as you, with all you may do. So a project's own workflows (its
+`.agent-workflow/`) run only once you trust the project: the first time, you're asked to run it this once, trust the
+project (remembered), or not. From the shell they're refused until you trust it with `M-x agent-workflow-trust`; `M-x
+agent-workflow-forget-trust` stops trusting one. The starters and yours (out of git) are trusted.
+
+Agents can't change what runs them:
+
+- Every agent is denied editing `.agent-workflow/`.
+- A branch that changes `.agent-workflow/` is merged only once you say so (`confirm ISSUE go`), whatever the workflow's
+  `approve` says.
+- The check warns about a `run:` naming a file elsewhere (`tests/run.sh`): an agent could change it to make it pass. One
+  of `.agent-workflow/` runs your checkout's copy.
+
 ## Checking them
 
 `M-x agent-workflow-check` reads the project's workflows and profiles again and lists every problem, each line

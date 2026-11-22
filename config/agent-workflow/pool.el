@@ -205,14 +205,17 @@ project's issues (BEADS_DIR: it works in a worktree)."
 (defun agent-workflow--claude-options (meta profile)
   "META, Claude Code's session meta, with PROFILE's tools in Claude Code's
 options (allowedTools, disallowedTools); ending its step
-\(`agent-workflow-command' done) always allowed."
+\(`agent-workflow-command' done) always allowed, editing .agent-workflow/
+never."
   (let* ((claude (alist-get 'claudeCode meta))
          (options (alist-get 'options claude)))
     (setf (alist-get 'allowedTools options)
           (vconcat (plist-get profile :tools)
                    (list (format "Bash(%s done:*)" agent-workflow-command))))
-    (when-let* ((deny (plist-get profile :deny)))
-      (setf (alist-get 'disallowedTools options) (vconcat deny)))
+    ;; What runs it (.agent-workflow/) never changed by it (trust.el).
+    (setf (alist-get 'disallowedTools options)
+          (vconcat (plist-get profile :deny)
+                   (list "Edit(.agent-workflow/**)" "Write(.agent-workflow/**)" "NotebookEdit(.agent-workflow/**)")))
     (when options
       (setf (alist-get 'options claude) options
             (alist-get 'claudeCode meta) claude))

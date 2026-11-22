@@ -287,6 +287,24 @@ jobs:
                      (warning 8 "on-fail: an agent step has no script to fail: ignored")
                      (warning 9 "unknown key colour: ignored"))))))
 
+(ert-deftest agent-workflow-files/a-check-an-agent-can-change ()
+  "A run: of a file of the branch: warned (its agents can change it); one of
+.agent-workflow/, a command, a script: not."
+  (pcase-let ((`(,_ . ,problems)
+               (+test-awf--workflow "description: x
+jobs:
+  a:
+    steps:
+      - run: tests/run.sh --all
+      - run: .agent-workflow/scripts/check.sh
+      - run: make test
+      - run: |
+          tests/run.sh
+          echo done
+")))
+    (should (equal (+test-awf--said problems)
+                   '((warning 5 "run tests/run.sh: a file of the branch's: its agents can change it (and make it pass); one of .agent-workflow/ runs your checkout's"))))))
+
 (ert-deftest agent-workflow-files/a-job-before-another ()
   "A job's notes in a prompt are fine when it's before it, directly or not."
   (should-not (cdr (+test-awf--workflow "description: x

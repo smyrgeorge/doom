@@ -390,7 +390,16 @@ this file). As `agent-workflow--job-read' for the rest."
              (setq step (plist-put step :prompt value))))
           ("run"
            (if (and (stringp value) (not (string-blank-p value)))
-               (setq step (plist-put step :run value))
+               (progn
+                 ;; A file of the branch's: an agent can change it, and the
+                 ;; check it is (trust.el).
+                 (when (and (not (string-match-p "\n" (string-trim value)))
+                            (string-match "\\`\\(?:\\./\\)?\\([^ \t]+/[^ \t]+\\)" (string-trim value))
+                            (not (string-prefix-p ".agent-workflow/" (match-string 1 (string-trim value))))
+                            (not (string-prefix-p "/" (match-string 1 (string-trim value)))))
+                   (funcall problem 'warning at "run %s: a file of the branch's: its agents can change it (and make it pass); one of .agent-workflow/ runs your checkout's"
+                            (match-string 1 (string-trim value))))
+                 (setq step (plist-put step :run value)))
              (funcall problem 'error at "run: a program, or a script (run: |)")))
           ("shell"
            (cond ((not (assoc "run" spec)) (funcall problem 'error at "shell: only for a run: step"))

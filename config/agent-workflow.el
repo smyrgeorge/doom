@@ -109,6 +109,16 @@ nil: they wait for M-x agent-workflow-continue."
   :type '(choice (const :tag "None" nil) plist)
   :group 'agent-workflow)
 
+;; TRUST
+;; A project's own workflows run as you (their scripts, elisp, if): only once
+;; you trust it, noted here (config/agent-workflow/trust.el).
+(defcustom agent-workflow-trust-file
+  (expand-file-name "agent-workflow-trusted.eld"
+                    (if (boundp 'doom-data-dir) doom-data-dir user-emacs-directory))
+  "Where the projects whose workflows you trust are noted."
+  :type 'file
+  :group 'agent-workflow)
+
 ;; SCRIPTS
 ;; A run: step's script, its suite's for a merge (config/agent-workflow/
 ;; steps.el): stopped once it's run this long, unless its step's timeout says.
@@ -143,6 +153,7 @@ nil: they wait for M-x agent-workflow-continue."
 (load! "agent-workflow/worktree")
 (load! "agent-workflow/pool")
 (load! "agent-workflow/beads")
+(load! "agent-workflow/trust")
 (load! "agent-workflow/runs")
 (load! "agent-workflow/steps")
 (load! "agent-workflow/resume")

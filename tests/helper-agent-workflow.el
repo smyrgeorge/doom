@@ -61,6 +61,8 @@ starters, no runs or agents before or after; skipped without bd."
             (process-environment (cons (concat "MOCK_ACP_LOG=" (expand-file-name (concat "awr/" ,name ".log") +test-tmp))
                                        process-environment)))
        (ignore-errors (delete-file log))
+       ;; Its workflows trusted (trust.el): they're the test's.
+       (agent-workflow-trust project)
        (unwind-protect (progn ,@body)
          (mapc #'agent-workflow-stop-agent agent-workflow--agents)
          (when (timerp agent-workflow--wait-timer) (cancel-timer agent-workflow--wait-timer))
