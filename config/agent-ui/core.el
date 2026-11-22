@@ -35,7 +35,7 @@ wrapped onto; past them, its last line ends with …"
   :type 'natnum)
 
 (defface agent-ui-title '((t :inherit bold))
-  "An element's title, the line above it.")
+  "An element's title, the line (or lines) above it.")
 
 (defface agent-ui-error '((t :inherit error))
   "An element that couldn't be drawn: the error in its place.")
@@ -486,39 +486,52 @@ if there are none (or they're wrong)."
       actions)
      width)))
 
+(defun agent-ui--title-text (element ctx)
+  "ELEMENT's title as drawn above it in CTX, the newline after it; nil if it
+has none (or one that isn't text: the element's error to show). Its
+newlines spaces; too long for the width, wrapped (it was one line cut with
+…, its rest nowhere; `agent-ui-max-cell-lines' lines at most)."
+  (let ((title (plist-get element :title))
+        (width (plist-get ctx :width)))
+    (when (and (stringp title) (not (equal title "")))
+      (let ((title (replace-regexp-in-string "[\n\r]+" " " title)))
+        (concat (propertize (if (and width (> (string-width title) width))
+                                (string-join (agent-ui-wrap-lines title width) "\n")
+                              title)
+                            'face 'agent-ui-title)
+                "\n")))))
+
+(defun agent-ui--actions-text (element ctx)
+  "ELEMENT's actions as drawn under it in CTX, the newline before them; nil
+if it has none, or in a still picture (CTX's :still)."
+  (when-let* (((not (plist-get ctx :still)))
+              (buttons (agent-ui--actions (plist-get element :actions) (plist-get ctx :width))))
+    (concat "\n" buttons)))
+
 (defun agent-ui-render (element ctx)
-  "ELEMENT drawn as text, its title on a line above: by its type's :gui in a
-graphic frame (CTX's :graphic) if it has one, else :text. An error (an
-unknown type, a property wrong, the drawing failing) is drawn in its place,
-so a canvas goes on with its other elements. No newline at its end."
-  (let ((title (plist-get element :title)))
-    ;; Only text: a title of another kind is the element's error to show.
-    (unless (stringp title) (setq title nil))
-    (concat
-     ;; One line, cut to the width (never cut: 56 columns at 20).
-     (when (and title (not (equal title "")))
-       (let ((title (replace-regexp-in-string "[\n\r]+" " " title))
-             (width (plist-get ctx :width)))
-         (concat (propertize (if width (agent-ui-truncate title width) title) 'face 'agent-ui-title) "\n")))
-     (condition-case err
-         (let* ((type (agent-ui-type (plist-get element :type)))
-                (props (agent-ui-check type element))
-                (draw (or (and (plist-get ctx :graphic) (agent-ui-type-gui type))
-                          (agent-ui-type-text type)))
-                (text (funcall draw props ctx)))
-           (unless (stringp text)
-             (agent-ui--fail "%s: its drawing returned %s, not text"
-                             (agent-ui-type-name type) (agent-ui--show-value text)))
-           ;; A type keeping its own size in bounds (`:whole'): as drawn.
-           (if (agent-ui-type-whole type)
-               (string-trim-right text "\n+")
-             (agent-ui--cap (string-trim-right text "\n+"))))
-       (error
-        (propertize (concat "⚠ " (agent-ui-error-message err)) 'face 'agent-ui-error)))
-     ;; Its actions, buttons: not in a still picture (CTX's :still).
-     (when-let* (((not (plist-get ctx :still)))
-                 (buttons (agent-ui--actions (plist-get element :actions) (plist-get ctx :width))))
-       (concat "\n" buttons)))))
+  "ELEMENT drawn as text, its title above (`agent-ui--title-text'), its
+actions under it: by its type's :gui in a graphic frame (CTX's :graphic) if
+it has one, else :text. An error (an unknown type, a property wrong, the
+drawing failing) is drawn in its place, so a canvas goes on with its other
+elements. No newline at its end."
+  (concat
+   (agent-ui--title-text element ctx)
+   (condition-case err
+       (let* ((type (agent-ui-type (plist-get element :type)))
+              (props (agent-ui-check type element))
+              (draw (or (and (plist-get ctx :graphic) (agent-ui-type-gui type))
+                        (agent-ui-type-text type)))
+              (text (funcall draw props ctx)))
+         (unless (stringp text)
+           (agent-ui--fail "%s: its drawing returned %s, not text"
+                           (agent-ui-type-name type) (agent-ui--show-value text)))
+         ;; A type keeping its own size in bounds (`:whole'): as drawn.
+         (if (agent-ui-type-whole type)
+             (string-trim-right text "\n+")
+           (agent-ui--cap (string-trim-right text "\n+"))))
+     (error
+      (propertize (concat "⚠ " (agent-ui-error-message err)) 'face 'agent-ui-error)))
+   (agent-ui--actions-text element ctx)))
 
 ;; ====== HELPERS FOR TYPES ======
 

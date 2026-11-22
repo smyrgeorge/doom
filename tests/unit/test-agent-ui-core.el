@@ -211,28 +211,41 @@
     (should (equal (agent-ui-render '(:type "plain") (agent-ui-context :graphic t))
                    "plain"))))
 
-;; doom-nwj.105
+;; doom-nwj.105, doom-ny5
 (ert-deftest agent-ui-core/a-title-fits ()
-  "An element's title is one line, cut to the width (never cut: 56 columns
-at 20), for every type."
+  "An element's title too long for the width is wrapped onto lines above
+it, every word read, in its face, for every type (it was one line cut with
+…, its rest nowhere; before that, never cut: 56 columns at 20)."
   (+test-aui
     (agent-ui-define plain "Text." :text (lambda (_p _c) "body"))
     (let ((title "A rather long title for what this element is all about"))
       (dolist (width '(10 20 40))
-        (let ((first (car (split-string (substring-no-properties
-                                         (agent-ui-render (list :type "plain" :title title) (agent-ui-context :width width)))
-                                        "\n"))))
-          (should (<= (string-width first) width))
-          (should (string-suffix-p "…" first))))
+        (let* ((text (substring-no-properties
+                      (agent-ui-render (list :type "plain" :title title) (agent-ui-context :width width))))
+               (lines (split-string text "\n")))
+          (should-not (string-search "…" text))
+          (should (equal (car (last lines)) "body"))
+          (should (equal (split-string title) (split-string (string-join (butlast lines) " "))))
+          (dolist (line lines) (should (<= (string-width line) width)))))
       (should (equal (substring-no-properties (agent-ui-render (list :type "plain" :title title) (agent-ui-context :width 20)))
-                     "A rather long title…\nbody"))
-      ;; Its face kept; room for it: whole.
+                     "A rather long title\nfor what this\nelement is all about\nbody"))
+      ;; Its face on each of its lines.
+      (let ((text (agent-ui-render (list :type "plain" :title title) (agent-ui-context :width 20))))
+        (should (eq (get-text-property (string-search "element" text) 'face text) 'agent-ui-title)))
+      ;; Room for it: one line.
       (let ((text (agent-ui-render (list :type "plain" :title title) (agent-ui-context :width 80))))
         (should (equal (substring-no-properties text) (concat title "\nbody")))
         (should (eq (get-text-property 0 'face text) 'agent-ui-title)))
       ;; Its newlines: spaces (it was two lines).
       (should (equal (substring-no-properties (agent-ui-render '(:type "plain" :title "Two\nlines") (agent-ui-context :width 40)))
-                     "Two lines\nbody")))))
+                     "Two lines\nbody"))
+      ;; A title of megabytes: its lines capped, the last ending with ….
+      (let ((lines (split-string (substring-no-properties
+                                  (agent-ui-render (list :type "plain" :title (make-string 100000 ?t))
+                                                   (agent-ui-context :width 40)))
+                                 "\n")))
+        (should (= (length lines) (1+ agent-ui-max-cell-lines)))
+        (should (string-suffix-p "t…" (nth (1- agent-ui-max-cell-lines) lines)))))))
 
 (ert-deftest agent-ui-core/the-context-given ()
   (+test-aui

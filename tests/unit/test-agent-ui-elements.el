@@ -4185,6 +4185,37 @@ whole (a wrapped one left a piece behind)."
           (`(insert ,_ ,text) (goto-char (point-max)) (insert "\n" (substring-no-properties text)))))
       (should (equal (buffer-string) (substring-no-properties (agent-ui-render new ctx)))))))
 
+;; doom-ny5
+(ert-deftest agent-ui-elements/appended-under-a-title-and-above-actions ()
+  "Lines appended to an element drawn alone (its type's :extend) are put in
+its own drawing: under its title, however many lines it takes, above its
+actions (a titled log's counts went over its title, its lines past its
+show kept; appended lines went under its buttons): the same as drawn
+whole."
+  (+test-aue-canvas
+    (dolist (extra '((:title "server.log")
+                     (:title "the server's log, from its start this morning to now, every line of it")
+                     (:actions ((:label "Fix it" :prompt "fix")))
+                     (:title "server.log" :actions ((:label "Fix it" :prompt "fix") (:label "Show more" :prompt "more")))))
+      (agent-ui-clear)
+      (agent-ui-show (append '(:id "l" :type "log" :show 3 :lines ("one" "two")) extra))
+      (agent-ui-show (append '(:id "t" :type "table" :columns ("A") :rows (("1"))) extra))
+      (with-current-buffer canvas (agent-ui--flush))
+      (agent-ui-append "l" '(:lines ("three" "four")))
+      (agent-ui-append "t" '(:rows (("2") ("3"))))
+      (let ((appended (with-current-buffer canvas
+                        (agent-ui--flush)
+                        (buffer-substring-no-properties (point-min) (point-max))))
+            (log (agent-ui-get "l"))
+            (table (agent-ui-get "t")))
+        ;; The same elements shown afresh: drawn whole.
+        (agent-ui-clear)
+        (agent-ui-show log)
+        (agent-ui-show table)
+        (with-current-buffer canvas
+          (agent-ui--flush)
+          (should (equal appended (buffer-substring-no-properties (point-min) (point-max)))))))))
+
 ;; ====== CODE ======
 
 (ert-deftest agent-ui-elements/code ()
@@ -4811,9 +4842,12 @@ title ran across the line between them into the next child)."
     ;; The table's column: 26 of 60 (border and separator out), and the
     ;; snapshot's padding (a column each side).
     (should (<= nested (* 8 (+ 26 2))))
-    ;; The title cut (a word a <text>): its end gone.
-    (should (string-match-p "…\\|&#8230;" svg))
-    (should-not (string-match-p ">week<" svg))))
+    ;; The title wrapped in its column (a word a <text>), every word of it:
+    ;; it was cut, its end gone (doom-ny5).
+    (should-not (string-match-p "…\\|&#8230;" svg))
+    (should (string-match-p ">week<" svg))
+    (should (string-match-p "y=\"20\"[^>]*>Slowest<" svg))
+    (should (string-match-p "y=\"36\"[^>]*>parser<" svg))))
 
 (ert-deftest agent-ui-elements/panel-its-border-beside-an-image ()
   "An image in a bordered panel, in the GUI: both sides kept for a

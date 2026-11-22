@@ -60,7 +60,7 @@ agent-ui check NAME           # a panel's file checked, nothing run
 The same operations are MCP tools too, where your session has the `agent-ui` server: same arguments (an `element`, an
 `id` and a `patch`...), same replies. JSON is the last argument (quote it with single quotes), or comes on stdin (a
 heredoc for anything long). An element is an object with a `type`, an `id` (letters, digits, `-`, `_`, `.`), an
-optional `title` (a line above it) and its type's properties.
+optional `title` (above it) and its type's properties.
 
 Replies: `{"ok":true,"id":"build"}`, or `{"ok":false,"error":"..."}` saying exactly what's wrong (an unknown property
 lists the right ones). Exit status: 0 done, 1 not done, 2 a wrong use, 3 no Emacs (carry on without the canvas). A

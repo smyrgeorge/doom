@@ -372,10 +372,13 @@ their line and column (its text replaced, they went to its start)."
     (setf (agent-ui--entry-drawn entry)
           (list (agent-ui--entry-element entry) (plist-get ctx :width) (plist-get ctx :graphic) (and footer t)))))
 
-(defun agent-ui--edit (entry edits)
+(defun agent-ui--edit (entry edits &optional head tail)
   "EDITS (see `agent-ui-define''s :extend) done on ENTRY's drawing, in its
-place."
-  (let ((inhibit-read-only t)
+place: its lines from its type's drawing's first, under HEAD lines (its
+title's), its end above TAIL lines (its actions')."
+  (let ((head (or head 0))
+        (tail (or tail 0))
+        (inhibit-read-only t)
         (id (agent-ui--entry-id entry))
         (places (agent-ui--places-in (agent-ui--entry-start entry) (agent-ui--entry-end entry))))
     (save-excursion
@@ -385,15 +388,16 @@ place."
           (pcase edit
             (`(replace ,line ,text)
              (goto-char (point-min))
-             (forward-line line)
+             (forward-line (+ head line))
              (delete-region (point) (line-end-position))
              (insert (propertize (agent-ui--even text) 'agent-ui-id id)))
             (`(delete ,line ,count)
              (goto-char (point-min))
-             (forward-line line)
+             (forward-line (+ head line))
              (delete-region (point) (progn (forward-line count) (point))))
             (`(insert ,before-end ,text)
              (goto-char (point-max))
+             (setq before-end (+ before-end tail))
              (if (= before-end 0)
                  (insert (propertize (concat "\n" (agent-ui--even text)) 'agent-ui-id id))
                (forward-line (- 1 before-end))
@@ -416,6 +420,10 @@ was drawn again whole, each line). Non-nil if so; nil if its type can't
          ;; then or now: else drawn whole.
          (type (and old (not (eq old new))
                     (equal (cdr drawn) (list (plist-get ctx :width) (plist-get ctx :graphic) nil))
+                    ;; Its title and actions as they were: the lines around
+                    ;; its drawing the same.
+                    (equal (plist-get old :title) (plist-get new :title))
+                    (equal (plist-get old :actions) (plist-get new :actions))
                     (not (run-hook-with-args-until-success 'agent-ui-footer-functions (agent-ui--entry-id entry)
                                                            (plist-get ctx :width)))
                     (equal (plist-get old :type) (plist-get new :type))
@@ -427,7 +435,12 @@ was drawn again whole, each line). Non-nil if so; nil if its type can't
                        (funcall extend (agent-ui-check type old) (agent-ui-check type new)
                                 (plist-put (copy-sequence ctx) :id (agent-ui--entry-id entry)))))))
     (when edits
-      (agent-ui--edit entry edits)
+      ;; Its drawing's lines counted from its own first, under its title's
+      ;; (they were the entry's: a titled log's counts went over its title),
+      ;; its end before its actions' (lines appended went under them).
+      (agent-ui--edit entry edits
+                      (cl-count ?\n (or (agent-ui--title-text new ctx) ""))
+                      (cl-count ?\n (or (agent-ui--actions-text new ctx) "")))
       (setf (car (agent-ui--entry-drawn entry)) new)
       t)))
 

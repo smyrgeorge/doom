@@ -32,7 +32,7 @@ elements better (charts as SVG) and has elements of its own (images, drawings, w
 |---|---|
 | `id` | A name of the agent's choice (`[a-z0-9_-]+`), unique in its canvas. Omitted: one is made and returned |
 | `type` | An element type of the registry |
-| `title` | Optional, any type: a heading line above the element |
+| `title` | Optional, any type: a heading above the element (wrapped if too long) |
 | `source` | Optional, any type: a command, file or poll it follows ([Sources](#sources)) |
 | `actions` | Optional, any type: buttons putting a prompt into the session's prompt ([Actions](#actions)) |
 | `close` | Optional, `steps`, `todo` and `progress`: seconds it stays once finished well, or `false` to keep it ([The canvas](#the-canvas)) |
