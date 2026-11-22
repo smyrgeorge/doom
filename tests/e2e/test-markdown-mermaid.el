@@ -146,3 +146,45 @@ the page kept, the other block's still drawn from them."
                  5)))
       (should (<= (string-to-number (+test-mdm--js md "mdMermaid.drawn.size")) 2))
       (should (equal (+test-mdm--js md "document.querySelectorAll('div.mermaid-diagram svg').length") "2")))))
+
+;; ====== IN THE BROWSER ======
+
+(defvar +test-mdm--browser-page nil
+  "The page SPC m P wrote, shown by `+test-mdm-browser-mode'.")
+
+(define-derived-mode +test-mdm-browser-mode +my/webkit-mode "Browser"
+  "SPC m P's page in WebKit, as a browser has it: no update script from
+Emacs."
+  (setq-local +my/webkit-url-function
+              (lambda (_window) (+my/webkit-file-url +test-mdm--browser-page))))
+
+(ert-deftest e2e-markdown-mermaid/drawn-in-the-browser-s-page ()
+  "SPC m P's page (markdown/browser.el) loaded as a browser does, with
+nothing from Emacs: its two blocks drawn as it loads, one with an error
+shows Mermaid's message."
+  (+test-mdm
+    (let ((browsed nil))
+      (cl-letf (((symbol-function 'browse-url-of-file) (lambda (file) (push file browsed))))
+        (with-current-buffer (find-file (+test-file "mdm/browser.md"
+                                                    (concat "# In the browser\n\n"
+                                                            "```mermaid\nflowchart TD\n    A --> B\n```\n\n"
+                                                            "```mermaid\nsequenceDiagram\n    A->>B: hi\n```\n\n"
+                                                            "```mermaid\nflowchart TD\n    A --> \n```\n")))
+          (markdown-mode)
+          (+my/markdown-preview-browser)))
+      (should (= (length browsed) 1))
+      (setq +test-mdm--browser-page (car browsed))
+      (let ((buffer (get-buffer-create "*test browser page*")))
+        (switch-to-buffer buffer)
+        (+test-mdm-browser-mode)
+        (let ((count (lambda (selector)
+                       (+test-js (+my/webkit-xwidget (selected-window))
+                                 (format "String(document.querySelectorAll('%s').length)" selector)))))
+          (should (+test-wait-for
+                   (lambda ()
+                     (and (+my/webkit-xwidget (selected-window))
+                          (equal (funcall count "div.mermaid-diagram svg") "2")
+                          (equal (funcall count "div.mermaid-diagram .mermaid-error") "1")))
+                   20))
+          (should (equal (funcall count "pre.mermaid") "0")))
+        (kill-buffer buffer)))))

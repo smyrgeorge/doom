@@ -91,8 +91,10 @@ GitHub's alerts get GitHub's markup (`+md-preview--alerts-filter')."
                      (list "-L" +md-preview--alerts-filter)))
       (buffer-string))))
 
-(defun +md-preview--page (fragment)
-  "Wrap FRAGMENT in a page styled like Doom's markdown preview (GitHub look)."
+(defun +md-preview--page (fragment &optional browser)
+  "Wrap FRAGMENT in a page styled like Doom's markdown preview (GitHub look).
+BROWSER non-nil: for the browser (SPC m P, markdown/browser.el), its diagrams
+drawn as it loads (in Emacs, the update script draws them)."
   (concat
    "<!doctype html><html><head><meta charset='utf-8'>"
    ;; Dark or light as the theme is (not the OS: `+md-preview--mode'). The
@@ -129,7 +131,7 @@ GitHub's alerts get GitHub's markup (`+md-preview--alerts-filter')."
    "document.addEventListener('DOMContentLoaded',function(){"
    +md-preview--highlight-js "});</script>"
    ;; ```mermaid blocks as diagrams (markdown/mermaid.el).
-   (+md-preview--mermaid-head)
+   (+md-preview--mermaid-head browser)
    "</head><body class='markdown-body'>" fragment "</body></html>"))
 
 (defun +md-preview--live-p ()

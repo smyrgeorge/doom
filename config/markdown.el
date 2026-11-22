@@ -24,6 +24,10 @@
 ;; works (GUI, xwidgets, pandoc), and for files.
 ;; SPC m p closes the preview when it's on screen, else shows it (as the
 ;; notice's button).
+;; IN THE BROWSER
+;; SPC m P opens the live preview's page in the browser: the same look,
+;; diagrams, alerts, math and code; needs pandoc only (not WebKit). Written to
+;; a file of its own for each Markdown buffer, deleted as Emacs exits.
 (defvar +my/markdown-preview-notice t
   "Offer the live preview in a notice when a Markdown file opens.")
 
@@ -56,13 +60,13 @@
       :map markdown-mode-map
       :localleader
       :desc "Live preview (in Emacs)" "p" #'+my/markdown-preview-toggle
-      :desc "Preview in browser"      "P" #'markdown-preview)
+      :desc "Preview in browser"      "P" #'+my/markdown-preview-browser)
 
 (map! :after markdown-ts-mode
       :map markdown-ts-mode-map
       :localleader
       :desc "Live preview (in Emacs)" "p" #'+my/markdown-preview-toggle
-      :desc "Preview in browser"      "P" #'markdown-preview)
+      :desc "Preview in browser"      "P" #'+my/markdown-preview-browser)
 
 ;; The preview's pane (see above): keys of a WebKit page (config/webkit.el).
 (defvar +md-preview-page-mode-map (make-sparse-keymap)
@@ -106,6 +110,7 @@
 (load! "markdown/page")
 (load! "markdown/mermaid")
 (load! "markdown/preview")
+(load! "markdown/browser")
 (load! "markdown/notice")
 (load! "markdown/marksman")
 (load! "markdown/reflow")

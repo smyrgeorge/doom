@@ -1049,10 +1049,10 @@ toggled off by a second click."
 
 (ert-deftest markdown/keys ()
   (should (eq (+test-md--key markdown-mode-map 'normal "SPC m p") #'+my/markdown-preview-toggle))
-  (should (eq (+test-md--key markdown-mode-map 'normal "SPC m P") #'markdown-preview))
+  (should (eq (+test-md--key markdown-mode-map 'normal "SPC m P") #'+my/markdown-preview-browser))
   (when (require 'markdown-ts-mode nil t)
     (should (eq (+test-md--key markdown-ts-mode-map 'normal "SPC m p") #'+my/markdown-preview-toggle))
-    (should (eq (+test-md--key markdown-ts-mode-map 'normal "SPC m P") #'markdown-preview)))
+    (should (eq (+test-md--key markdown-ts-mode-map 'normal "SPC m P") #'+my/markdown-preview-browser)))
   ;; The preview's pane: a WebKit page's keys.
   (pcase-dolist (`(,key . ,command)
                  '(("j" . +my/webkit-scroll-down) ("k" . +my/webkit-scroll-up)

@@ -100,9 +100,11 @@
   "Mermaid's config for the page: the theme's, on the page's background."
   (+my/mermaid-page-json (+my/mermaid-config-json (+md-preview--page-color))))
 
-(defun +md-preview--mermaid-head ()
+(defun +md-preview--mermaid-head (&optional browser)
   "The page's head for diagrams: their script, set up (mermaid.js loaded
-when a block shows up), their look; empty without config/mermaid.el."
+when a block shows up), their look; empty without config/mermaid.el.
+BROWSER non-nil: for the browser (`+md-preview--page'), drawn as the page
+loads, mermaid.js the downloaded copy, else jsdelivr's."
   (if (not (+md-preview--mermaid-p))
       ""
     (concat "<style>.mermaid-diagram{text-align:center;margin:0 0 16px;overflow-x:auto}"
@@ -112,7 +114,12 @@ when a block shows up), their look; empty without config/mermaid.el."
             "</style>"
             "<script>" +my/mermaid-page-js "\n" +md-preview--mermaid-js "\n"
             (format "mdMermaid.setup(%s, %s);" (+md-preview--mermaid-config)
-                    (json-encode (+my/mermaid-js-url)))
+                    (json-encode (if (and browser (not (+my/mermaid-js-installed-p)))
+                                     (nth 1 (car (+my/mermaid--js-files)))
+                                   (+my/mermaid-js-url))))
+            (if browser
+                "document.addEventListener('DOMContentLoaded',function(){mdMermaid.draw();});"
+              "")
             "</script>")))
 
 (defun +md-preview--mermaid-draw-script ()
