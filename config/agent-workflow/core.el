@@ -85,6 +85,10 @@ changed since."
   (expand-file-name "../../skills/agent-workflow/SKILL.md" (file-name-directory (or load-file-name buffer-file-name)))
   "The agent-workflow skill: writing, checking and running workflows.")
 
+(defconst agent-workflow-step-skill
+  (expand-file-name "../../skills/agent-workflow-step/SKILL.md" (file-name-directory (or load-file-name buffer-file-name)))
+  "The agent-workflow-step skill: doing a job of a run, as its agent.")
+
 (defun agent-workflow-skill-context ()
   "The line every agent-shell session is told of agent workflows (for its
 system prompt): where the skill is; nil while Emacs runs no server (the

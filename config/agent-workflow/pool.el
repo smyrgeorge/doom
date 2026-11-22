@@ -166,7 +166,8 @@ workflow does that. Your bd commands run as %s (BEADS_ACTOR).
 
 When your job is done, end it with %s done %s \"notes\": the outcome (%s), and what the \
 next jobs and the user need to know, in a few lines. Then end your turn. Without it, the run \
-waits for the user."
+waits for the user. How to do a job of a run (reading the issue, your canvas, being sent back, \
+outcomes): read %s first."
                (agent-workflow-agent-job agent) (agent-workflow-agent-issue agent)
                (file-name-nondirectory (directory-file-name (agent-workflow-agent-project agent)))
                (agent-workflow-agent-name agent)
@@ -185,7 +186,8 @@ commits there, never in the project's main checkout (%s), which is the user's. C
                (if (cdr outcomes) "OUTCOME" "done")
                (if (cdr outcomes)
                    (concat "one of " (string-join outcomes ", "))
-                 "done"))
+                 "done")
+               (abbreviate-file-name agent-workflow-step-skill))
        (when (and instructions (not (string-empty-p (string-trim instructions))))
          (concat "\n\n" (string-trim instructions)))))))
 

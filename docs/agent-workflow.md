@@ -407,6 +407,10 @@ The [agent-workflow skill](../skills/agent-workflow/SKILL.md) teaches an agent t
 yours to "write a bugfix workflow", and it checks its draft with `cmd/agent-workflow check` before telling you where it
 goes. Every agent-shell session is told where the skill is.
 
+The agent doing a job of a run is told its job, where it works and how it ends its step, then pointed to the
+[agent-workflow-step skill](../skills/agent-workflow-step/SKILL.md): reading the issue and what came before, its
+canvas, being sent back, what its outcomes do.
+
 ## Checking them
 
 `M-x agent-workflow-check` reads the project's workflows and profiles again and lists every problem, each line

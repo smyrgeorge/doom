@@ -37,7 +37,8 @@ The [agent-workflow skill](../skills/agent-workflow/SKILL.md) teaches an agent t
 [agent workflows](agent-workflow.md): a project's `.agent-workflow/` workflows and profiles, and `cmd/agent-workflow`.
 As `agent-ui`'s, its `SKILL.md` is what it reads first, its references only when it needs them. Claude Code in
 agent-shell is told where it is: no need to install it. Install it as above (`agent-workflow` for `emacs-profiling`) for
-other agents.
+other agents. The [agent-workflow-step skill](../skills/agent-workflow-step/SKILL.md) is for the agent doing a job of a
+run, which its system prompt points to.
 
 ## A crew of agents
 

@@ -75,3 +75,22 @@ server."
   (cl-letf (((symbol-function 'server-running-p) (lambda (&rest _) nil)))
     (should-not (agent-workflow-skill-context)))
   (should (file-exists-p agent-workflow-skill)))
+
+;; ====== THE STEP'S ======
+
+(ert-deftest agent-workflow-skill/the-step-s ()
+  "skills/agent-workflow-step: its front matter, under 12 KB, its
+reference there; a job's agent told where it is."
+  (let* ((dir (expand-file-name "skills/agent-workflow-step/" +test-root))
+         (text (with-temp-buffer (insert-file-contents (expand-file-name "SKILL.md" dir)) (buffer-string))))
+    (should (string-prefix-p "---\nname: agent-workflow-step\ndescription: >-\n" text))
+    (should (< (string-bytes text) 12000))
+    (should (file-exists-p (expand-file-name "references/outcomes.md" dir)))
+    (should (string-match-p "cmd/agent-workflow done changes" text)))
+  (let* ((agent (agent-workflow-agent--make :project +test-root :issue "demo-1" :job "review" :profile "review"
+                                            :worktree +test-root :branch "feat/demo-1" :outcomes '("approved" "changes")))
+         (agent-workflow--starting agent)
+         (agent-workflow--profiles-cache (make-hash-table :test #'equal))
+         (told (agent-workflow-agent-context)))
+    (should (string-match-p "skills/agent-workflow-step/SKILL\\.md first\\." told))
+    (should (string-match-p "one of done, approved, changes" told))))
