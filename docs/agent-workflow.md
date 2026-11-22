@@ -1,6 +1,7 @@
 # Agent workflow
 
-> **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked.
+> **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked, and the pool of
+> agents.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -145,6 +146,30 @@ Build it with its tests, commit on {branch}.
 | `icon`, `verb`, `colour` | How its steps are shown |
 
 What's after the front matter is the agent's instructions.
+
+## The pool
+
+Agents run in agent-shell, as many at once as `agent-workflow-pool` says (3), in every project. An agent has no role and
+no name: it does one job of an issue's run, and is known by them, `doom-a1b · review`, its session's buffer named so.
+Its permissions, its questions and its usage are agent-shell's, as in any session.
+
+- **Its profile** is its step's: its tools, deny, model and mode (none: `agent-workflow-mode`, auto). Variables in its
+  tools are filled in as its session starts: `Bash(git -C {worktree} commit:*)`.
+- **It's told** the job it does and where, that it never switches branches, pushes, or changes the issue, and how it
+  ends its job: `cmd/agent-workflow done OUTCOME "notes"`. Then its profile's instructions.
+- **Its `bd` commands** run as `ISSUE/JOB` (`doom-a1b/review`): Beads' history says which job did what.
+- **Its canvas** opens no pane of its own.
+
+Each issue's agents work in its worktree, one after another: `.agent-shell/agent-workflow/worktrees/ISSUE`, on the
+issue's branch (`feat/doom-a1b-lexer-escapes`, `fix/` for a bug), made from your checkout's HEAD the first time a job
+needs it. It's locked with the issue as its reason, and out of git.
+
+A project whose [agent workspace](agent-workspace.md) crew runs has no agents of the pool: they'd take the same issues.
+
+| Setting | Default | What |
+|---|---|---|
+| `agent-workflow-pool` | `3` | How many agents run at once |
+| `agent-workflow-mode` | `"auto"` | The permission mode of an agent whose profile has none |
 
 ## Checking them
 

@@ -2,7 +2,8 @@
 ;; Agent workflows: the work on an issue described as GitHub Actions does,
 ;; jobs and their steps, some steps an LLM in agent-shell (docs/agent-workflow.md).
 ;; Loaded from config.el; its code is in config/agent-workflow/. Being built
-;; (epic doom-38o): for now its files, read and checked.
+;; (epic doom-38o): for now its files, read and checked, and its pool of
+;; agents.
 
 ;; ====== VARIABLES ======
 
@@ -30,6 +31,46 @@ name."
   :type 'string
   :group 'agent-workflow)
 
+;; THE POOL
+;; Agent sessions, as many at once as this says, in every project: an agent
+;; has no role and no name, it's a job's (config/agent-workflow/pool.el),
+;; known by its issue and job ("doom-a1b · review"), started with its step's
+;; profile in the issue's worktree (config/agent-workflow/worktree.el).
+(defcustom agent-workflow-pool 3
+  "How many agent sessions of the pool run at once, in every project."
+  :type 'natnum
+  :group 'agent-workflow)
+
+;; ITS PERMISSION MODE
+;; Claude Code's (`agent-workflow-modes'): the step's profile's (mode:), else
+;; this: auto, Claude deciding what needs your OK.
+(defcustom agent-workflow-mode "auto"
+  "The permission mode an agent starts in (Claude Code's id) when its
+profile has none. auto: Claude decides what needs your OK. nil: Claude
+Code's own default."
+  :type '(choice (const :tag "Claude Code's" nil) string)
+  :group 'agent-workflow)
+
+(defcustom agent-workflow-kinds
+  '((claude-code :config agent-shell-anthropic-make-claude-code-config :claude-code t))
+  "The agents the pool can run: a kind (a symbol) and how its session
+starts. :config, a function returning agent-shell's config for it;
+:claude-code, non-nil if it's Claude Code (a profile's tools go to its
+options)."
+  :type '(alist :key-type symbol :value-type plist)
+  :group 'agent-workflow)
+
+(defcustom agent-workflow-kind 'claude-code
+  "The kind of agent the pool runs: a key of `agent-workflow-kinds'."
+  :type 'symbol
+  :group 'agent-workflow)
+
+(defcustom agent-workflow-exit-timeout 7
+  "Seconds a stopped session's processes have to exit, before any left is
+killed."
+  :type 'number
+  :group 'agent-workflow)
+
 ;; CHECKING THEM
 ;; M-x agent-workflow-check (config/agent-workflow/check.el) reads them all
 ;; anew and lists every problem, each line taking you to its file and line;
@@ -43,5 +84,21 @@ name."
 (load! "agent-workflow/core")
 (load! "agent-workflow/profiles")
 (load! "agent-workflow/workflows")
+(load! "agent-workflow/worktree")
+(load! "agent-workflow/pool")
 (load! "agent-workflow/check")
 (load! "agent-workflow/request")
+
+;; ====== HOOKS ======
+
+;; WHAT AN AGENT IS TOLD
+;; In its system prompt, after what every Claude Code session is: the job it
+;; does, where, how it ends a step, then its profile's instructions
+;; (config/agent-workflow/pool.el).
+(add-hook '+my/agent-shell-claude-context-functions #'agent-workflow-agent-context t)
+
+;; Its canvas opens no pane of its own: kept, for its ticket's pane.
+(agent-workflow--take-canvases)
+
+;; Emacs quits: the pool's sessions end with it, asking nothing.
+(add-hook 'kill-emacs-hook #'agent-workflow--quit-h)
