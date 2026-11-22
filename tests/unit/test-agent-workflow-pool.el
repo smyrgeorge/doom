@@ -184,8 +184,10 @@ profile's instructions; its first message sent."
         (let* ((new (car (+test-awp--wait
                           (lambda () (+test-awp--logged (lambda (e) (equal (plist-get e :method) "session/new")))))))
                (options (plist-get (plist-get (plist-get (plist-get new :params) :_meta) :claudeCode) :options)))
+          ;; Ending its step needs no permission.
           (should (equal (plist-get options :allowedTools)
-                         (list "Read" (format "Bash(git -C %s commit:*)" (shell-quote-argument (directory-file-name worktree))))))
+                         (list "Read" (format "Bash(git -C %s commit:*)" (shell-quote-argument (directory-file-name worktree)))
+                               (format "Bash(%s done:*)" (expand-file-name "cmd/agent-workflow" +test-root)))))
           (should (equal (plist-get options :disallowedTools) '("Bash(git push:*)"))))
         ;; Its first message, its variables filled in.
         (should (+test-awp--wait

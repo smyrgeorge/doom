@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 # Agent workflows from the shell (config/agent-workflow.el): for you, your
-# scripts, and an agent writing a workflow. See docs/agent-workflow.md.
+# scripts, an agent writing a workflow, and an agent of a run ending its
+# step. See docs/agent-workflow.md.
 #
+#   agent-workflow run ISSUE... [--workflow NAME]
+#                                runs started on the issues (an epic's id: its
+#                                open issues), each with NAME, else its own
+#                                workflow -> {"ok": true when one started,
+#                                "started": [{"issue", "workflow", "run",
+#                                "state", "why"}...], "refused": [{"issue",
+#                                "error"}...]}
+#   agent-workflow done [OUTCOME] [NOTES|-]
+#                                from an agent of a run, in its session: its
+#                                step is done, with OUTCOME (default: done)
+#                                and NOTES (- reads them from stdin): what
+#                                the next jobs and the user need to know ->
+#                                {"ok": true, "issue", "job", "outcome"}
 #   agent-workflow check [FILE]  this folder's project's workflows and
 #                                profiles read anew and checked, or only FILE
 #                                (a workflow, .yml, or a profile, .md,
@@ -62,8 +76,31 @@ case "$op" in
       case "$1" in /*) file=$1 ;; *) file=$PWD/$1 ;; esac
     fi
     payload=$(printf '{"file":%s}' "$(json_string "$file")") ;;
+  run)
+    workflow="" issues=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --workflow)
+          [ $# -lt 2 ] && fail 2 "--workflow: give it a value"
+          workflow=$2; shift 2 ;;
+        --workflow=*) workflow=${1#--workflow=}; shift ;;
+        -*) fail 2 "run: unknown argument \"$1\"; agent-workflow run ISSUE... [--workflow NAME]" ;;
+        *) issues="$issues${issues:+,}$(json_string "$1")"; shift ;;
+      esac
+    done
+    [ -z "$issues" ] && fail 2 "run: which issues? agent-workflow run ISSUE... [--workflow NAME]"
+    payload=$(printf '{"issues":[%s],"workflow":%s}' "$issues" "$(json_string "$workflow")") ;;
+  done)
+    outcome="" notes=""
+    [ $# -gt 2 ] && fail 2 "done: unknown argument \"$3\"; agent-workflow done [OUTCOME] [NOTES|-]"
+    if [ $# -eq 2 ]; then outcome=$1; notes=$2
+    elif [ $# -eq 1 ]; then notes=$1
+    fi
+    [ "$notes" = "-" ] && notes=$(cat)
+    case "$outcome" in -*) fail 2 "done: unknown argument \"$outcome\"; agent-workflow done [OUTCOME] [NOTES|-]" ;; esac
+    payload=$(printf '{"outcome":%s,"notes":%s}' "$(json_string "$outcome")" "$(json_string "$notes")") ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: check" ;;
+    fail 2 "unknown operation \"$op\"; operations: run, done, check" ;;
 esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workflow.XXXXXXXXXX") || fail 3 "no temp folder"

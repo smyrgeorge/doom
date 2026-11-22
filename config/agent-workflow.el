@@ -71,6 +71,16 @@ killed."
   :type 'number
   :group 'agent-workflow)
 
+;; RUNS
+;; You start them (M-x agent-workflow-run, cmd/agent-workflow run): their
+;; jobs in order, Emacs the engine (config/agent-workflow/runs.el). A run
+;; whose issue is blocked is queued, looked at again this often.
+(defcustom agent-workflow-queue-check 30
+  "Seconds between looks at runs waiting for something outside Emacs (their
+issue's blockers closing)."
+  :type 'number
+  :group 'agent-workflow)
+
 ;; CHECKING THEM
 ;; M-x agent-workflow-check (config/agent-workflow/check.el) reads them all
 ;; anew and lists every problem, each line taking you to its file and line;
@@ -86,6 +96,8 @@ killed."
 (load! "agent-workflow/workflows")
 (load! "agent-workflow/worktree")
 (load! "agent-workflow/pool")
+(load! "agent-workflow/beads")
+(load! "agent-workflow/runs")
 (load! "agent-workflow/check")
 (load! "agent-workflow/request")
 

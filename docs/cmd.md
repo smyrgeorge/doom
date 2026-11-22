@@ -75,14 +75,17 @@ wrong use, 3 without an Emacs server.
 
 ## cmd/agent-workflow
 
-Checks this folder's project's [agent workflows](agent-workflow.md) and profiles, or one file, for you, your scripts,
-and an agent writing a workflow.
+Starts [agent workflows](agent-workflow.md)' runs, and checks the workflows and profiles of this folder's project, for
+you and your scripts; an agent of a run ends its step with it.
 
 ```sh
-cmd/agent-workflow check                 # every workflow and profile of the project
-cmd/agent-workflow check draft.yml       # one file: a workflow (.yml) or a profile (.md), anywhere
+cmd/agent-workflow run doom-a1b doom-c3d          # runs on these issues, each with its own workflow
+cmd/agent-workflow run doom-epic --workflow quick # an epic's open issues, with quick
+cmd/agent-workflow done changes "notes"           # from an agent of a run: its step is done
+cmd/agent-workflow check                          # every workflow and profile of the project
+cmd/agent-workflow check draft.yml                # one file: a workflow (.yml) or a profile (.md), anywhere
 ```
 
-The reply is JSON on stdout: the project's workflows and profiles, and each problem's level, file, line and message.
-It exits with 0 when there's no error, 1 when there is one (or it isn't done: the reply says why), 2 for a wrong use,
-3 without an Emacs server.
+The reply is JSON on stdout: the runs started and the issues refused; the step done; the project's workflows and
+profiles, and each problem's level, file, line and message. It exits with 0 when done (`check`: no error), 1 when not
+(the reply says why), 2 for a wrong use, 3 without an Emacs server.

@@ -68,6 +68,10 @@
 (defvar-local agent-workflow--agent nil
   "In an agent's session: its agent.")
 
+(defvar agent-workflow-agent-event-functions nil
+  "Called with an agent and an event of its session (agent-shell's: an
+alist, its :event turn-complete, clean-up...), as they come.")
+
 (defun agent-workflow-agents (&optional project)
   "The pool's agents (PROJECT: only its), as they started."
   (seq-filter (lambda (agent)
@@ -107,7 +111,7 @@ or its lock held by an Emacs alive (this one or another)."
 
 ;; ====== ITS PROFILE, FILLED IN ======
 
-(defun agent-workflow--values (agent)
+(defun agent-workflow--agent-values (agent)
   "AGENT's variables' values: where it works, then those it was given."
   (let ((project (directory-file-name (agent-workflow-agent-project agent))))
     (append (list (cons "issue" (agent-workflow-agent-issue agent))
@@ -126,7 +130,7 @@ commit:*)), its instructions with them as they are."
   (let* ((profile (copy-sequence (alist-get (agent-workflow-agent-profile agent)
                                             (agent-workflow-profiles (agent-workflow-agent-project agent))
                                             nil nil #'equal)))
-         (values (agent-workflow--values agent))
+         (values (agent-workflow--agent-values agent))
          (quoted (mapcar (lambda (value) (cons (car value) (and (cdr value) (shell-quote-argument (cdr value)))))
                          values)))
     (dolist (key '(:tools :deny))
@@ -157,9 +161,9 @@ there, never in the project's main checkout (%s), which is the user's. Commit on
 and never switch, make or rename branches, push, or change, relabel or close the issue: the \
 workflow does that. Your bd commands run as %s (BEADS_ACTOR).
 
-When your job is done, end it with cmd/agent-workflow done %s \"notes\": the outcome (%s), \
-and what the next jobs and the user need to know, in a few lines. Then end your turn. Without \
-it, the run waits for the user."
+When your job is done, end it with %s done %s \"notes\": the outcome (%s), and what the \
+next jobs and the user need to know, in a few lines. Then end your turn. Without it, the run \
+waits for the user."
                (agent-workflow-agent-job agent) (agent-workflow-agent-issue agent)
                (file-name-nondirectory (directory-file-name (agent-workflow-agent-project agent)))
                (agent-workflow-agent-name agent)
@@ -167,6 +171,7 @@ it, the run waits for the user."
                (agent-workflow-agent-branch agent)
                (directory-file-name (agent-workflow-agent-project agent))
                (concat (agent-workflow-agent-issue agent) "/" (agent-workflow-agent-job agent))
+               agent-workflow-command
                (if (cdr outcomes) "OUTCOME" "done")
                (if (cdr outcomes)
                    (concat "one of " (string-join outcomes ", "))
@@ -189,11 +194,13 @@ project's issues (BEADS_DIR: it works in a worktree)."
 
 (defun agent-workflow--claude-options (meta profile)
   "META, Claude Code's session meta, with PROFILE's tools in Claude Code's
-options (allowedTools, disallowedTools)."
+options (allowedTools, disallowedTools); ending its step
+\(`agent-workflow-command' done) always allowed."
   (let* ((claude (alist-get 'claudeCode meta))
          (options (alist-get 'options claude)))
-    (when-let* ((tools (plist-get profile :tools)))
-      (setf (alist-get 'allowedTools options) (vconcat tools)))
+    (setf (alist-get 'allowedTools options)
+          (vconcat (plist-get profile :tools)
+                   (list (format "Bash(%s done:*)" agent-workflow-command))))
     (when-let* ((deny (plist-get profile :deny)))
       (setf (alist-get 'disallowedTools options) (vconcat deny)))
     (when options
@@ -269,8 +276,16 @@ full or PROFILE isn't one."
                 (set-process-query-on-exit-flag process nil)))
             (setf (agent-workflow-agent-buffer agent) buffer)
             (push agent agent-workflow--agents)
+            (agent-shell-subscribe-to
+             :shell-buffer buffer
+             :on-event (lambda (event)
+                         ;; An old session's events, once it's been replaced,
+                         ;; aren't its; nor those of one we stop.
+                         (when (and (eq (agent-workflow-agent-buffer agent) buffer)
+                                    (not (agent-workflow-agent-stopping agent)))
+                           (run-hook-with-args 'agent-workflow-agent-event-functions agent event))))
             (when prompt
-              (agent-shell-insert :text (agent-workflow-fill prompt (agent-workflow--values agent))
+              (agent-shell-insert :text (agent-workflow-fill prompt (agent-workflow--agent-values agent))
                                   :submit t :no-focus t :shell-buffer buffer))
             agent)
         (error

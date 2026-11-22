@@ -77,6 +77,10 @@ changed since."
             (cons (cdr file) (file-attribute-modification-time (file-attributes (cdr file)))))
           files))
 
+(defconst agent-workflow-command
+  (expand-file-name "../../cmd/agent-workflow" (file-name-directory (or load-file-name buffer-file-name)))
+  "cmd/agent-workflow, its full path: what an agent runs to end its step.")
+
 (defconst agent-workflow--name-regexp "\\`[a-z][a-z0-9-]*\\'"
   "A workflow's, a profile's, a job's name: a lowercase letter, then
 lowercase letters, digits or -.")

@@ -1,7 +1,7 @@
 # Agent workflow
 
-> **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked, and the pool of
-> agents.
+> **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
+> runs of agent steps, one job at a time.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -170,6 +170,38 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 |---|---|---|
 | `agent-workflow-pool` | `3` | How many agents run at once |
 | `agent-workflow-mode` | `"auto"` | The permission mode of an agent whose profile has none |
+
+## Runs
+
+`M-x agent-workflow-run` starts runs: it asks for the issues (several at once; an epic: its open issues), then each
+one's workflow, asked only when several fit it. From the shell:
+
+```sh
+cmd/agent-workflow run doom-a1b doom-c3d          # each with its own workflow
+cmd/agent-workflow run doom-epic --workflow quick  # an epic's open issues, with quick
+```
+
+An issue's workflow is its `workflow:NAME` label's, else the one whose `for` has its type. An issue is refused, the
+others started, when it's closed, has a run already, or no workflow fits it (or several). One that's blocked is
+queued until its blockers close, saying by what. Runs on different issues go at once, as the pool allows: a free agent
+goes to the highest priority first, then to the run started first.
+
+A run's jobs start once their `needs` are done; one whose `if` doesn't hold then is skipped. One job runs at a time per
+issue. A job's steps run in order, and a job with an agent step keeps its agent to its last step. The agent ends its
+step itself, `cmd/agent-workflow done OUTCOME "notes"`, then its turn; a turn that ends without it leaves the run
+waiting for you (tell the agent in its session). Its outcome must be `done` or one of its job's `outcomes`. Its job
+over, its agent stops, and the next jobs start. Every job done or skipped, the run is, and its worktree goes (its
+branch stays).
+
+In `if`, these say what the issue is: `(issue-id)`, `(issue-type)` (a symbol: `'bug`), `(issue-labels)`,
+`(issue-priority)`, `(issue-title)`, `(job-outcome 'review)`, `(job-status 'build)`.
+
+| Where | What |
+|---|---|
+| `.agent-shell/agent-workflow/runs/ISSUE/N/journal.jsonl` | every event of run N of the issue, a JSON line each, as it happens |
+| `state.json` beside it | the run as it stands |
+| `workflow.yml` beside it | the workflow as the run started |
+| The issue | in progress; its metadata (`workflow`, `workflow_run`, `workflow_state`, `workflow_jobs`), the job running as a label (`job:review`), what each job said in its notes. Written as `agent-workflow` |
 
 ## Checking them
 
