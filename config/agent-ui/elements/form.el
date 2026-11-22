@@ -147,13 +147,24 @@ each field there (yes / no as true / false, an empty one null)."
     (string-join
      (append
       (and question (list (propertize (agent-ui-wrap question width) 'face 'bold)))
+      ;; Each field a row: its label wrapped in its column, its value in the
+      ;; rest, the row as tall as the taller (they were cut with …, their
+      ;; rest nowhere).
       (mapcar (lambda (field)
-                (concat " " (propertize (agent-ui-pad (agent-ui-truncate (agent-ui-form--label field) label-width)
-                                                      label-width)
-                                        'face 'agent-ui-muted)
-                        "  "
-                        (agent-ui-truncate (agent-ui-form--shown field (plist-get values (agent-ui-form--key (plist-get field :name))))
-                                           (max 1 (- width label-width 3)))))
+                (let* ((value-width (max 1 (- width label-width 3)))
+                       (fit (lambda (text room)
+                              (if (<= (string-width text) room) (list text) (agent-ui-wrap-lines text room))))
+                       (labels (funcall fit (agent-ui-form--label field) label-width))
+                       (shown (funcall fit (agent-ui-form--shown field (plist-get values (agent-ui-form--key (plist-get field :name))))
+                                       value-width)))
+                  (string-join
+                   (cl-loop for i below (max (length labels) (length shown))
+                            collect (let ((label (or (nth i labels) "")))
+                                      (if (nth i shown)
+                                          (concat " " (propertize (agent-ui-pad label label-width) 'face 'agent-ui-muted)
+                                                  "  " (nth i shown))
+                                        (concat " " (propertize label 'face 'agent-ui-muted)))))
+                   "\n")))
               fields)
       (cond
        ((agent-ui-ask-answered-p props)

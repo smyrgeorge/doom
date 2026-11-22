@@ -4185,6 +4185,43 @@ whole (a wrapped one left a piece behind)."
           (`(insert ,_ ,text) (goto-char (point-max)) (insert "\n" (substring-no-properties text)))))
       (should (equal (buffer-string) (substring-no-properties (agent-ui-render new ctx)))))))
 
+;; doom-0ej
+(ert-deftest agent-ui-elements/form-slider-image-texts-read-whole ()
+  "A form's labels and values, a slider's label and an image's alt too long
+for their room are wrapped, every word read (they were cut with …, their
+rest nowhere): a form's label in its column and its value in the rest, the
+row as tall as the taller; a slider's label above it; an image's alt under
+its name, unless it fits whole beside it."
+  (let* ((label "Why the pool should keep this many sessions running at once")
+         (value "a prefilled answer long enough to be cut at the right edge of a normal pane, its end lost")
+         (form (list :type "form" :fields (list (list :name "reason" :label label :value value)
+                                                '(:name "n" :label "Sessions" :type "integer" :value 3))))
+         (slider (list :type "slider" :label "How many sessions should the pool keep running at once, at most" :min 1 :max 8 :value 3))
+         (image '(:type "image" :file "/tmp/aui-0ej/missing.png" :alt "The login page after the fix, its button moved under the form")))
+    (dolist (width '(30 40 60 98))
+      (dolist (element (list form slider image))
+        (let ((text (+test-aue-draw element :width width)))
+          (dolist (line (split-string text "\n")) (should (<= (string-width line) width)))
+          (dolist (word (split-string (or (plist-get element :alt) (plist-get element :label)
+                                          (concat label " " value))))
+            (should (string-search word text))))))
+    (should (equal (+test-aue-draw form)
+                   (concat " Why the pool should   a prefilled answer long enough to be\n"
+                           " keep this many        cut at the right edge of a normal\n"
+                           " sessions running at   pane, its end lost\n"
+                           " once\n"
+                           " Sessions              3\n"
+                           " ⏵ Fill in")))
+    (should (eq (+test-aue-face-at form "keep this") 'agent-ui-muted))
+    (should (string-prefix-p "How many sessions should the pool keep running at once, at\nmost\n"
+                             (+test-aue-draw slider)))
+    (should (equal (+test-aue-draw image)
+                   (concat "▣ /tmp/aui-0ej/missing.png  (not found)\n"
+                           "  The login page after the fix, its button moved under the\n  form")))
+    ;; Room for it: the alt beside its name, as before.
+    (should (equal (+test-aue-draw '(:type "image" :file "/tmp/aui-0ej/missing.png" :alt "After the fix"))
+                   "▣ /tmp/aui-0ej/missing.png  After the fix  (not found)"))))
+
 ;; doom-1ck
 (ert-deftest agent-ui-elements/panel-image-sizes-whatever-their-scale ()
   "An image's size in a panel, whatever its :scale: an image element's
@@ -5406,8 +5443,9 @@ middle (cut from the right, the reason went first: \"(not fou…\")."
             (dolist (case (list (cons missing "(not found)")
                                 (cons failed "(couldn't download it: 404)")
                                 (cons downloading "(downloading…)")))
-              (let ((line (+test-aue-draw (car case) :width width :graphic t :char-width 8 :line-height 16)))
-                (should (<= (string-width line) width))
+              (let* ((text (+test-aue-draw (car case) :width width :graphic t :char-width 8 :line-height 16))
+                     (line (car (split-string text "\n"))))
+                (dolist (l (split-string text "\n")) (should (<= (string-width l) width)))
                 (should (string-prefix-p "▣ " line))
                 ;; Whole, beside a name of 8 columns at least; else its end
                 ;; (the error's words) cut, that name kept.
@@ -5415,16 +5453,17 @@ middle (cut from the right, the reason went first: \"(not fou…\")."
                     (should (string-suffix-p (concat "  " (cdr case)) line))
                   (should (string-match-p "\\`▣ .\\{8\\}  (couldn't d[^)]*…\\'" line)))))
             ;; In text too.
-            (should (string-suffix-p "  (not found)" (+test-aue-draw missing :width width))))
+            (should (string-suffix-p "  (not found)" (car (split-string (+test-aue-draw missing :width width) "\n")))))
           ;; The path: its start and its file's name kept.
           (should (equal (+test-aue-draw missing :width 40)
-                         "▣ /tmp/aui-ver…/missing.png  (not found)"))
+                         "▣ /tmp/aui-ver…/missing.png  (not found)\n  the login page after the fix"))
           ;; Room for all: as it was.
           (should (equal (+test-aue-draw missing :width 120)
                          "▣ /tmp/aui-verify/some/deeper/folder/missing.png  the login page after the fix  (not found)"))
-          ;; The alt cut before the path.
+          ;; Not room for the alt beside it: under it, whole (it was cut:
+          ;; "the login page a…"; doom-0ej).
           (should (equal (+test-aue-draw missing :width 80)
-                         "▣ /tmp/aui-verify/some/deeper/folder/missing.png  the login page a…  (not found)")))
+                         "▣ /tmp/aui-verify/some/deeper/folder/missing.png  (not found)\n  the login page after the fix")))
       (delete-directory agent-ui-image-cache-directory t))))
 
 ;; doom-nwj.35
@@ -5479,7 +5518,7 @@ named, not downloaded: text never shows it (it was fetched, and said
     (unwind-protect
         (progn
           (should (equal (+test-aue-draw element) "▣ https://example.com/a.png  a chart"))
-          (should (equal (+test-aue-draw element :width 20) "▣ https://e…om/a.png"))
+          (should (equal (+test-aue-draw element :width 20) "▣ https://e…om/a.png\n  a chart"))
           (should-not fetches)
           (should (= (hash-table-count agent-ui-image--fetches) 0))
           ;; Its button opens the URL.

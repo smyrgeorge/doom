@@ -114,30 +114,36 @@ it: its URL is named, nothing downloaded)."
 
 (defun agent-ui-image--line (props ctx file &optional why)
   "The line naming PROPS' image, FILE (in a terminal; WHY it isn't shown),
-CTX's width at most."
+CTX's width at most; its alt after it if it fits there whole, else on lines
+under it, wrapped (it was cut with …, its rest nowhere)."
   (let* ((url (plist-get props :url))
          (alt (plist-get props :alt))
          (width (plist-get ctx :width))
          (reason (if why (concat "  (" why ")") ""))
          ;; Its reason kept whole (cut from the right, it went first: "(not
          ;; fou…"), then its name, cut in its middle (8 columns at least),
-         ;; then the alt, in what's left (4 columns at least, or all of it).
+         ;; then the alt, after it if it fits whole, else under it.
          (name (if url url (abbreviate-file-name file)))
          (room (- width 2 (string-width reason)))
          (name (agent-ui-truncate-middle name (max room (min 8 (string-width name)))))
-         (left (- room (string-width name) 2)))
-    (agent-ui-truncate
-     (concat (propertize "▣ " 'face 'agent-ui-accent)
-             (agent-ui-button name
-                              (lambda () (agent-ui-image--open file url))
-                              "RET: open the image")
-             (if (and alt (>= left (min 4 (string-width alt))))
-                 (concat "  " (agent-ui-truncate alt left))
-               "")
-             (if why
-                 (propertize reason 'face (if (string-prefix-p "couldn't" why) 'agent-ui-error 'agent-ui-muted))
-               ""))
-     width)))
+         (left (- room (string-width name) 2))
+         (beside (and alt (not (string-search "\n" alt)) (<= (string-width alt) left))))
+    (concat
+     (agent-ui-truncate
+      (concat (propertize "▣ " 'face 'agent-ui-accent)
+              (agent-ui-button name
+                               (lambda () (agent-ui-image--open file url))
+                               "RET: open the image")
+              (if beside (concat "  " alt) "")
+              (if why
+                  (propertize reason 'face (if (string-prefix-p "couldn't" why) 'agent-ui-error 'agent-ui-muted))
+                ""))
+      width)
+     (if (and alt (not (string-empty-p alt)) (not beside))
+         (mapconcat (lambda (line) (concat "\n  " line))
+                    (split-string (agent-ui-wrap alt (max 1 (- width 2))) "\n")
+                    "")
+       ""))))
 
 (defun agent-ui-image--text (props ctx)
   (let ((source (agent-ui-image--source props)))

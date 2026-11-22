@@ -196,7 +196,8 @@ as its step and min have (0.1 six times: 0.6, not 0.6000000000000001)."
                        (if beside (concat "   " shown) ""))))
     (string-join
      (append
-      (and (plist-get props :label) (list (propertize (agent-ui-truncate (plist-get props :label) width) 'face 'bold)))
+      ;; Its label wrapped (it was cut with …, its rest nowhere).
+      (and (plist-get props :label) (list (propertize (agent-ui-wrap (plist-get props :label) width) 'face 'bold)))
       (list (if moving
                 (propertize line
                             'keymap agent-ui-slider-track-map
