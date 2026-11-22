@@ -54,7 +54,9 @@
   state                  ; queued, running, waiting (for you), done, cancelled
   why                    ; what it waits for, in words; nil
   jobs                   ; each job's state: ((NAME . PLIST)...)
-  order)                 ; when it was started: the queue's second key
+  order                  ; when it was started: the queue's second key
+  edges                  ; its loops: ((\"review>build\" . (:count N :notes (...)))...)
+  (total 0))             ; how many times its agents sent it back, since you said go on
 
 (defvar agent-workflow--runs nil
   "Every run of this Emacs, as they were started.")
@@ -523,6 +525,8 @@ branch has now first."
          (prompt (or (plist-get step :prompt)
                      (format "Do your job, %s, on %s: %s.\n\n%s" job (agent-workflow-run-issue run)
                              (plist-get info :title) (plist-get info :description)))))
+    (when-let* ((yours (plist-get (agent-workflow--job run job) :user-note)))
+      (setq prompt (format "The user's note for you: %s\n\n%s" yours prompt)))
     (if (not back)
         prompt
       (format "%s sent the work back to you, %s (round %d)%s.\n\nWhat the branch has now:\n%s\n\nThen, as before:\n\n%s"
@@ -576,8 +580,8 @@ one started for it. The pool full: the run waits, queued, for an agent."
                            :prompt (agent-workflow--prompt run job step)
                            :snapshot (plist-get (agent-workflow--job run job) :snapshot)
                            :resume (plist-get (plist-get (agent-workflow--job run job) :back) :session))))
-              ;; Its note told: a later step of it isn't sent back.
-              (agent-workflow--job-set run job :agent agent :back nil)
+              ;; Its notes told: a later step of it isn't sent back.
+              (agent-workflow--job-set run job :agent agent :back nil :user-note nil)
               (agent-workflow--journal run "step-started" :job job :step index
                                        :agent (agent-workflow-agent-name agent)
                                        :profile (plist-get step :agent)
@@ -678,7 +682,7 @@ stops."
        (agent-workflow--changed run)
        (agent-workflow--tick-soon))
       (`(rerun ,other)
-       (agent-workflow--wait run job (format "%s: %s asks to rerun %s, not done yet" job outcome other))))))
+       (agent-workflow--rerun-or-ask run job other)))))
 
 (add-hook 'agent-workflow-agent-event-functions #'agent-workflow--agent-event)
 
@@ -804,6 +808,150 @@ discarded, what's lost said and asked first."
      (list run job step note discard)))
   (agent-workflow-back run job :step step :note note :discard discard)
   (message "%s: back to %s%s" (agent-workflow-run-name run) job (if discard ", the work since discarded" "")))
+
+;; ====== LOOPS ======
+;; An agent's outcome can send the work back: review's changes: rerun build,
+;; going back to build (as you do, its notes the note), build and every job
+;; after it again. Going back makes cycles, so each back edge's rounds are
+;; counted (review>build), and the run's total: past `max-rounds' (the
+;; job's, else its workflow's, else `agent-workflow-max-rounds': 10), or
+;; past 3 times that in all, or at once when the round sent back changed
+;; nothing on the branch (no commit, no change not committed), the run asks
+;; you instead. You go on (the count starts again), with a note for the job
+;; that sends it back, the one it's sent to, or both; accept it as it is
+;; (the run goes on as if it had said continue); or stop it (it waits).
+;; Your going back counts for nothing.
+
+(defvar agent-workflow-max-rounds)
+
+(defun agent-workflow--max-rounds (run job)
+  "How many times JOB of RUN may send the work back before it asks you."
+  (or (plist-get (agent-workflow--job-spec run job) :max-rounds)
+      (plist-get (agent-workflow-run-workflow run) :max-rounds)
+      agent-workflow-max-rounds))
+
+(defun agent-workflow--changed-nothing-p (run job)
+  "Non-nil if JOB of RUN ran again (a round more than its first) and
+changed nothing on the branch: no commit since its round started, no
+change not committed."
+  (let ((state (agent-workflow--job run job)))
+    (and (> (or (plist-get state :round) 1) 1)
+         (plist-get state :start-commit)
+         (let ((default-directory (agent-workflow-worktree-directory (agent-workflow-run-project run)
+                                                                      (agent-workflow-run-issue run))))
+           (and (file-directory-p default-directory)
+                (equal (agent-workflow--git "rev-parse" "HEAD") (plist-get state :start-commit))
+                (null (agent-workflow--git-lines "status" "--porcelain")))))))
+
+(defun agent-workflow--rerun-or-ask (run job other)
+  "JOB of RUN sends the work back to OTHER (its outcome's rerun): counted,
+then done, or asked of you (see LOOPS)."
+  (let* ((state (agent-workflow--job run job))
+         (edge (format "%s>%s" job other))
+         (entry (cdr (assoc edge (agent-workflow-run-edges run))))
+         (count (1+ (or (plist-get entry :count) 0)))
+         (notes (append (plist-get entry :notes) (list (or (plist-get state :notes) ""))))
+         (max (agent-workflow--max-rounds run job))
+         (total (1+ (agent-workflow-run-total run)))
+         (nothing (agent-workflow--changed-nothing-p run other)))
+    (setf (alist-get edge (agent-workflow-run-edges run) nil nil #'equal) (list :count count :notes notes)
+          (agent-workflow-run-total run) total)
+    (if (or nothing (> count max) (> total (* 3 max)))
+        (let ((why (cond (nothing (format "%s: %s's round %d changed nothing on the branch: go on, accept it as it is, or stop?"
+                                          job other (or (plist-get (agent-workflow--job run other) :round) 1)))
+                         ((> count max) (format "%s: it sent %s back %d times: go on, accept it as it is, or stop?"
+                                                job other (1- count)))
+                         (t (format "%s: the run was sent back %d times: go on, accept it as it is, or stop?"
+                                    job (1- total))))))
+          (when-let* ((agent (plist-get state :agent)))
+            (agent-workflow-stop-agent agent))
+          (agent-workflow--job-set run job :agent nil
+                                   :ask (list :edge edge :other other :count (1- count) :notes notes :nothing nothing))
+          (agent-workflow--journal run "asked" :job job :edge edge :rounds (1- count) :total (1- total)
+                                   :nothing (if nothing t :false) :notes (vconcat notes))
+          (agent-workflow--wait run job why))
+      (agent-workflow--journal run "rerun" :job job :edge edge :round count :total total)
+      (agent-workflow--rerun run job other (plist-get state :notes)))))
+
+(defun agent-workflow--rerun (run job other note &optional yours)
+  "OTHER of RUN run again, sent back by JOB with NOTE (and YOURS, your note
+for it): going back, the work kept. JOB, if it isn't after OTHER, done."
+  (let ((replaced (agent-workflow-back run other :note (if (and yours (not (string-empty-p yours)))
+                                                         (format "%s\n\nThe user adds: %s" (or note "") yours)
+                                                       note)
+                                       :by job)))
+    (unless (member job replaced)
+      (when-let* ((agent (plist-get (agent-workflow--job run job) :agent)))
+        (agent-workflow-stop-agent agent))
+      (agent-workflow--job-set run job :status 'done :agent nil :why nil)
+      (agent-workflow--journal run "job-done" :job job :outcome (plist-get (agent-workflow--job run job) :outcome))
+      (agent-workflow--refresh run)
+      (agent-workflow--tick-soon))))
+
+(defun agent-workflow-asking (run)
+  "RUN's job asking you (see LOOPS), and what it asks: (JOB . ASK), or nil."
+  (seq-some (lambda (job) (and (plist-get (cdr job) :ask) (cons (car job) (plist-get (cdr job) :ask))))
+            (agent-workflow-run-jobs run)))
+
+(cl-defun agent-workflow-confirm (run choice &key notes (by "you"))
+  "Answer RUN's question (see LOOPS) with CHOICE: go (on: the count starts
+again; NOTES, ((JOB . NOTE)...), for the job that sends it back and the one
+it's sent to), accept (it as it is: the run goes on as if continue), or
+stop (it waits). A user error if RUN asks nothing."
+  (pcase-let* ((`(,job . ,ask) (or (agent-workflow-asking run)
+                                   (user-error "%s asks nothing" (agent-workflow-run-name run))))
+               (other (plist-get ask :other))
+               (edge (plist-get ask :edge)))
+    (agent-workflow--journal run "answered" :job job :choice choice :by by
+                             :notes (if notes
+                                        (vconcat (mapcar (lambda (note) (list :job (car note) :note (cdr note))) notes))
+                                      []))
+    (pcase choice
+      ("go"
+       (setf (alist-get edge (agent-workflow-run-edges run) nil nil #'equal) nil
+             (agent-workflow-run-total run) 0)
+       (agent-workflow--job-set run job :ask nil :status 'running :why nil)
+       (when-let* ((mine (cdr (assoc job notes))))
+         (unless (string-empty-p mine)
+           (agent-workflow--job-set run job :user-note mine)))
+       (agent-workflow--rerun run job other (plist-get (agent-workflow--job run job) :notes) (cdr (assoc other notes))))
+      ("accept"
+       (agent-workflow--job-set run job :ask nil :status 'done :why nil)
+       (agent-workflow--journal run "job-done" :job job :outcome (plist-get (agent-workflow--job run job) :outcome)
+                                :accepted t)
+       (agent-workflow--refresh run)
+       (agent-workflow--issue-summary run)
+       (agent-workflow--changed run)
+       (agent-workflow--tick-soon))
+      ("stop"
+       (agent-workflow--job-set run job :why (format "%s: stopped by you" job))
+       (agent-workflow--refresh run))
+      (_ (user-error "%s: go, accept or stop" choice)))
+    choice))
+
+(defun agent-workflow-confirm-command (run choice &optional notes)
+  "Answer RUN's question (M-x agent-workflow-confirm): CHOICE, go, accept
+or stop; going on, your notes (empty: none) for the job that sends it back
+and the one it's sent to."
+  (interactive
+   (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
+          (asking (or (seq-filter #'agent-workflow-asking (agent-workflow-runs project))
+                      (user-error "No run asks you anything")))
+          (run (if (cdr asking)
+                   (let ((names (mapcar (lambda (run) (cons (agent-workflow-run-name run) run)) asking)))
+                     (cdr (assoc (completing-read "Run: " names nil t) names)))
+                 (car asking)))
+          (ask (agent-workflow-asking run))
+          (choice (completing-read (format "%s: " (agent-workflow-run-why run)) '("go" "accept" "stop") nil t))
+          (notes (when (equal choice "go")
+                   (delq nil (list (let ((note (read-string (format "Your note for %s (it sends it back): " (car ask)))))
+                                     (and (not (string-empty-p note)) (cons (car ask) note)))
+                                   (let* ((other (plist-get (cdr ask) :other))
+                                          (note (read-string (format "Your note for %s (it's sent back): " other))))
+                                     (and (not (string-empty-p note)) (cons other note))))))))
+     (list run choice notes)))
+  (agent-workflow-confirm run choice :notes notes)
+  (message "%s: %s" (agent-workflow-run-name run) choice))
 
 ;; ====== YOU ======
 

@@ -452,3 +452,71 @@ jobs:
                                     (json-parse-buffer :object-type 'plist))
                                   :error)
                        "back: yours to do, not an agent's"))))))
+
+;; ====== LOOPS ======
+
+(ert-deftest agent-workflow-runs/loops-and-their-guard ()
+  "review's changes: rerun build, its notes the note: build and review
+again, counted; past max-rounds, the run asks you; stop: it waits; go on:
+the count starts again, each side told your note; a round that changed
+nothing asks at once; accept: the run goes on as if continue."
+  (+test-awr "loops"
+    (write-region "---\ndescription: reads\ndeny: Edit, Write\n---\nRead it.\n" nil
+                  (expand-file-name ".agent-workflow/profiles/reader.md" project))
+    (write-region "description: x
+for: [feature]
+jobs:
+  build:
+    agent: build
+  review:
+    needs: build
+    agent: reader
+    max-rounds: 2
+    outcomes:
+      changes: rerun build
+" nil (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+    (let* ((issue (+test-awr--issue project "Loops"))
+           (run (agent-workflow-start-run project issue))
+           (worktree (agent-workflow-worktree-directory project issue)))
+      (cl-flet ((round (n &optional nothing)
+                  ;; build's round N (a commit unless NOTHING), then review asks changes.
+                  (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :round) n)))
+                  (+test-awr--agent run "build")
+                  (unless nothing (+test-awr--commit worktree (format "r%d.el" n) (format "Round %d" n)))
+                  (+test-awr--finish run "build" nil (format "round %d" n))
+                  (let ((review (+test-awr--agent run "review")))
+                    (should (+test-awr--wait (lambda () (eq (+test-awr--job run "review") 'waiting))))
+                    (agent-workflow-done review "changes" (format "fix %d" n)))))
+        (round 1)
+        (should (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :round) 2))))
+        (should (+test-awr--wait
+                 (lambda () (seq-some (lambda (prompt) (string-match-p "\\`review sent the work back to you, build (round 2), with this note: fix 1\\." prompt))
+                                      (+test-awr--prompts "loops")))))
+        (round 2)
+        (round 3)
+        ;; Sent back a third time, past max-rounds 2: asked.
+        (should (+test-awr--wait (lambda () (agent-workflow-asking run))))
+        (should (equal (agent-workflow-run-why run) "review: it sent build back 2 times: go on, accept it as it is, or stop?"))
+        (should (equal (plist-get (cdr (agent-workflow-asking run)) :notes) '("fix 1" "fix 2" "fix 3")))
+        (should (eq (+test-awr--job run "build") 'done))
+        ;; Stop: it waits.
+        (agent-workflow-confirm run "stop")
+        (should (equal (agent-workflow-run-why run) "review: stopped by you"))
+        ;; Go on, a note for each.
+        (agent-workflow-confirm run "go" :notes '(("review" . "only bugs now") ("build" . "use a table")))
+        (should (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :round) 4))))
+        (should (+test-awr--wait
+                 (lambda () (seq-some (lambda (prompt) (string-match-p "fix 3\n\nThe user adds: use a table" prompt))
+                                      (+test-awr--prompts "loops")))))
+        ;; Round 4 changes nothing: asked at once.
+        (round 4 t)
+        (should (+test-awr--wait (lambda () (agent-workflow-asking run))))
+        (should (equal (agent-workflow-run-why run)
+                       "review: build's round 4 changed nothing on the branch: go on, accept it as it is, or stop?"))
+        (should (seq-some (lambda (prompt) (string-match-p "\\`The user's note for you: only bugs now" prompt))
+                          (+test-awr--prompts "loops")))
+        ;; Accept: the run goes on, done.
+        (agent-workflow-confirm run "accept")
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should (equal (seq-filter (lambda (ev) (member ev '("rerun" "asked" "answered"))) (+test-awr--journal run))
+                       '("rerun" "rerun" "asked" "answered" "answered" "asked" "answered")))))))

@@ -9,6 +9,7 @@
 ;;   for: [feature, task]           the issue types it's offered for
 ;;   concurrency: 3                 agents on its runs at once
 ;;   budget: {cost: 15, tokens: 2000000, time: 3h}
+;;   max-rounds: 10                 a job sending the work back, then asked
 ;;   jobs:
 ;;     build:                       a job: a lowercase letter, then letters,
 ;;       steps:                     digits or -
@@ -30,7 +31,7 @@
 ;;   on-fail: (a profile), approve:.
 ;;
 ;; WORKFLOW, read: a plist (:name :file :description :for :concurrency
-;; :budget (:cost :tokens :time) :jobs ((NAME . JOB)...)), JOB (:name :needs
+;; :budget (:cost :tokens :time) :max-rounds :jobs ((NAME . JOB)...)), JOB (:name :needs
 ;; :if :concurrency :approve :outcomes ((OUTCOME . continue|(rerun JOB))...)
 ;; :max-rounds :steps (STEP...)), STEP (:kind agent|run|elisp|uses :agent
 ;; :prompt :run :shell :elisp :uses :timeout :retries :on-fail :approve),
@@ -65,7 +66,7 @@
 is only warned about).")
 
 (defconst agent-workflow--workflow-keys
-  '("name" "description" "for" "concurrency" "budget" "jobs")
+  '("name" "description" "for" "concurrency" "budget" "max-rounds" "jobs")
   "A workflow's keys.")
 
 (defconst agent-workflow--step-keys
@@ -217,6 +218,8 @@ default: not checked)."
                (problem 'error '("for") "for %s: an issue type, or a list of them" (agent-workflow--shown value))))
             ("concurrency"
              (setq workflow (plist-put workflow :concurrency (count '("concurrency") value 1 "concurrency"))))
+            ("max-rounds"
+             (setq workflow (plist-put workflow :max-rounds (count '("max-rounds") value 1 "max-rounds"))))
             ("budget"
              (if (not (and value (agent-workflow--mapping-p value)))
                  (problem 'error '("budget") "budget: its cost, tokens or time")

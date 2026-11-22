@@ -91,7 +91,7 @@ A job:
 | `steps` | Its steps, in order; or one step's keys on the job itself (`agent: docs`) |
 | `approve` | `true`: its result waits for your OK |
 | `outcomes` | What an agent's outcome does: `continue`, or `rerun JOB` (that job and every job after it again) |
-| `max-rounds` | How many times it may send the work back before it asks you |
+| `max-rounds` | How many times it may send the work back before the run asks you (the workflow's too) |
 | `concurrency` | How many of it run at once, across runs (`merge: 1`) |
 
 A step does one thing:
@@ -170,6 +170,7 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 |---|---|---|
 | `agent-workflow-pool` | `3` | How many agents run at once |
 | `agent-workflow-mode` | `"auto"` | The permission mode of an agent whose profile has none |
+| `agent-workflow-max-rounds` | `10` | How many times a job may send the work back before the run asks you |
 
 ## Runs
 
@@ -217,6 +218,31 @@ cmd/agent-workflow back doom-a1b build "handle the empty list too"
 cmd/agent-workflow back doom-a1b build.2 - < note.txt     # its second step; the note from stdin
 cmd/agent-workflow back doom-a1b build --discard          # the work since, gone
 ```
+
+### Loops
+
+An agent's outcome can send the work back: `changes: rerun build` sends it to build as going back does, the outcome's
+notes its note, and build and every job after it run again. Going back makes loops, so they're counted, per edge
+(review to build) and in all:
+
+- **Past `max-rounds`** (the job's, else the workflow's, else `agent-workflow-max-rounds`: 10), or past 3 times that
+  in all, the run asks you.
+- **A round that changed nothing** on the branch (no commit, no change not committed) asks you at once.
+
+The question shows what each round said. Answer it with `M-x agent-workflow-confirm`, or from the shell:
+
+| Answer | Does |
+|---|---|
+| go | On: the count starts again, with your note for the job that sends it back, the one it's sent to, or both |
+| accept | It as it is: the run goes on as if the outcome had been `continue` |
+| stop | The run waits |
+
+```sh
+cmd/agent-workflow confirm doom-a1b go --note-to review "only bugs from now on" --note-to build "use a table"
+cmd/agent-workflow confirm doom-a1b accept
+```
+
+Your own going back isn't counted, and doesn't start the count again.
 
 In `if`, these say what the issue is: `(issue-id)`, `(issue-type)` (a symbol: `'bug`), `(issue-labels)`,
 `(issue-priority)`, `(issue-title)`, `(job-outcome 'review)`, `(job-status 'build)`.

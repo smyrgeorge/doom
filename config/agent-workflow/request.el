@@ -18,6 +18,10 @@
 ;;        "discard": false} (step, note, discard: optional) -> {"ok": true,
 ;;        "issue", "job", "step", "replaced": [jobs], "lost": [lines]}: the
 ;;        run sent back (runs.el); yours, refused from an agent's session
+;;   confirm {"issue": "doom-a1b", "choice": "go", "notes": [{"job":
+;;        "review", "note": "..."}...]} (notes: optional) -> {"ok": true,
+;;        "issue", "job", "choice"}: the run's question answered (runs.el,
+;;        LOOPS); yours, refused from an agent's session
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
 ;;        "project", "workflows": [names], "profiles": [names], "problems":
@@ -135,6 +139,21 @@ reply. Not from an agent's session."
     (list :ok t :issue issue :job job :step step :replaced (vconcat replaced)
           :lost (vconcat (append (car lost) (cdr lost))))))
 
+(defun agent-workflow--request-confirm (directory payload pid)
+  "Answer the question of DIRECTORY's project's run on PAYLOAD's issue: the
+reply. Not from an agent's session."
+  (when (agent-workflow--request-caller pid)
+    (user-error "confirm: yours to answer, not an agent's"))
+  (let* ((default-directory (file-name-as-directory directory))
+         (project (or (agent-workflow-project) (user-error "Not in a git repository")))
+         (issue (plist-get payload :issue))
+         (run (or (agent-workflow-run-of project issue) (user-error "confirm: %s has no run" issue)))
+         (job (car (agent-workflow-asking run)))
+         (notes (mapcar (lambda (note) (cons (plist-get note :job) (plist-get note :note)))
+                        (append (plist-get payload :notes) nil)))
+         (choice (agent-workflow-confirm run (plist-get payload :choice) :notes notes)))
+    (list :ok t :issue issue :job job :choice choice)))
+
 (defun agent-workflow-request (dir)
   "Answer cmd/agent-workflow's request in DIR (see the top of this file):
 its reply written to DIR/reply. Return t."
@@ -159,7 +178,8 @@ its reply written to DIR/reply. Return t."
                   ("run" (agent-workflow--request-run directory payload))
                   ("done" (agent-workflow--request-done payload pid))
                   ("back" (agent-workflow--request-back directory payload pid))
-                  (_ (list :ok :false :error (format "unknown operation %S; operations: run, done, back, check" op)))))
+                  ("confirm" (agent-workflow--request-confirm directory payload pid))
+                  (_ (list :ok :false :error (format "unknown operation %S; operations: run, done, back, confirm, check" op)))))
             (json-parse-error (list :ok :false :error (format "not JSON: %s" (error-message-string err))))
             (error (list :ok :false :error (error-message-string err))))))
     (let ((coding-system-for-write 'utf-8-unix))

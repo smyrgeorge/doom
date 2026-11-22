@@ -81,6 +81,16 @@ issue's blockers closing)."
   :type 'number
   :group 'agent-workflow)
 
+;; LOOPS
+;; An agent's outcome sending the work back (changes: rerun build) is
+;; counted: past this many rounds (a job's or workflow's max-rounds says
+;; otherwise), or 3 times that in all, the run asks you
+;; (config/agent-workflow/runs.el, LOOPS).
+(defcustom agent-workflow-max-rounds 10
+  "How many times a job may send the work back before the run asks you."
+  :type 'natnum
+  :group 'agent-workflow)
+
 ;; CHECKING THEM
 ;; M-x agent-workflow-check (config/agent-workflow/check.el) reads them all
 ;; anew and lists every problem, each line taking you to its file and line;
