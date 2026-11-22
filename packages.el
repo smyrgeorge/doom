@@ -64,6 +64,11 @@
 (package! acp :pin "3fa3b58ecef062293095b046d4873b5bf4c99de3")
 (package! agent-shell :pin "7473e5eb2f3a7da01e1762ac20ac3a4c577b1cb8")
 
+;; YAML read as Lisp data: the agent workflows' files (config/agent-workflow/
+;; workflows.el). Pinned: the commit they were checked with
+;; (tests/unit/test-agent-workflow-files.el).
+(package! yaml :pin "5546f36bde24a9a8c1934e0f6ce205cd41d72537")
+
 ;; Git: TODOs in magit status.
 (package! magit-todos)
 

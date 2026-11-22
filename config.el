@@ -193,6 +193,10 @@
 ;; worktree, with a name, a role and a state)
 (load! "config/agent-workspace")
 
+;; AGENT WORKFLOW (the work on an issue described as GitHub Actions does: jobs
+;; and their steps, some an LLM in agent-shell; being built)
+(load! "config/agent-workflow")
+
 ;; NOTIFICATIONS (on the desktop while Emacs isn't in front: Claude Code
 ;; finished, or needs your permission; SPC t n)
 (load! "config/notify")

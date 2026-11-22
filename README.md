@@ -169,11 +169,13 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Your agent](docs/claude-code.md): its sessions, drawing for it, profiling Emacs
 - [Agent UI](docs/agent-ui.md): what your agent shows on a canvas beside its session, and `cmd/agent-ui`
 - [Agent workspace](docs/agent-workspace.md): a crew of agents on one project, each in its own worktree (being built)
+- [Agent workflow](docs/agent-workflow.md): the work on an issue as GitHub Actions describes it, some steps an LLM (being
+  built)
 - [Notifications](docs/notifications.md): on the desktop while you're in another app (your agent finished, needs you)
 - [Issues](docs/issues.md): the project's Beads issues
 - [AI agents](docs/ai-agents.md): the `emacs-profiling` skill
 - [Terminal](docs/terminal.md): what differs in `emacs -nw`
 - [Examples](docs/examples.md): each feature on files of its own, with screenshots
-- [Shell commands](docs/cmd.md): `cmd/diff`
+- [Shell commands](docs/cmd.md): `cmd/diff`, `cmd/agent-ui`, `cmd/agent-workspace`, `cmd/agent-workflow`
 - [Tests](docs/tests.md): unit and end-to-end tests, on macOS and Linux, on each push (GitHub Actions)
 - [Repository layout](docs/layout.md): what each file is for

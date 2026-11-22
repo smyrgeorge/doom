@@ -72,3 +72,17 @@ made in `"failed":[{"role":"reviewer","error":...}]`, an unknown crew naming the
 "offers":[...],"talk":"ask"}` for status, the agent as new has it for give, wake, sleep and loop, with `"prompt":"sent"`
 or `"queued"` for give and `"loop":true` for loop); it exits with 0 when done, 1 when not (the reply says why), 2 for a
 wrong use, 3 without an Emacs server.
+
+## cmd/agent-workflow
+
+Checks this folder's project's [agent workflows](agent-workflow.md) and profiles, or one file, for you, your scripts,
+and an agent writing a workflow.
+
+```sh
+cmd/agent-workflow check                 # every workflow and profile of the project
+cmd/agent-workflow check draft.yml       # one file: a workflow (.yml) or a profile (.md), anywhere
+```
+
+The reply is JSON on stdout: the project's workflows and profiles, and each problem's level, file, line and message.
+It exits with 0 when there's no error, 1 when there is one (or it isn't done: the reply says why), 2 for a wrong use,
+3 without an Emacs server.

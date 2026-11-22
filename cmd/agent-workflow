@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Agent workflows from the shell (config/agent-workflow.el): for you, your
+# scripts, and an agent writing a workflow. See docs/agent-workflow.md.
+#
+#   agent-workflow check [FILE]  this folder's project's workflows and
+#                                profiles read anew and checked, or only FILE
+#                                (a workflow, .yml, or a profile, .md,
+#                                anywhere) -> {"ok": true when there's no
+#                                error, "project", "workflows": [names],
+#                                "profiles": [names], "problems": [{"level":
+#                                "error"|"warning", "file", "line",
+#                                "message"}...]}
+#
+# The reply is JSON on stdout: {"ok": false, "error": "what's wrong"} when it
+# isn't done (for check, when it found errors). Exit status: 0 done, 1 not
+# done (the reply says why), 2 a wrong use, 3 no Emacs to talk to (it runs
+# as a server: M-x server-start).
+#
+# EMACSCLIENT (default: emacsclient) is the client, EMACS_SOCKET_NAME its
+# server. Run outside a desktop session (cron: no XDG_RUNTIME_DIR), it finds
+# a desktop Emacs's server in /run/user/UID/emacs/ on Linux, which
+# emacsclient alone wouldn't look in.
+
+set -u
+
+usage() { sed -n '2,/^$/{s/^# \{0,1\}//;p;}' "$0"; }
+
+json_string() {  # json_string TEXT: TEXT as a JSON string
+  local s=$1 i c u
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\t'/\\t}
+  s=${s//$'\r'/\\r}
+  # Every other control character as \u00XX: JSON allows none raw.
+  for ((i = 1; i < 32; i++)); do
+    case $i in 9|10|13) continue ;; esac
+    printf -v c "\\x$(printf %02x "$i")"
+    [[ $s == *"$c"* ]] || continue
+    printf -v u '\\u%04x' "$i"
+    s=${s//"$c"/"$u"}
+  done
+  printf '"%s"' "$s"
+}
+
+fail() {  # fail STATUS MESSAGE: the reply for an error, and exit
+  printf '{"ok":false,"error":%s}\n' "$(json_string "$2")"
+  exit "$1"
+}
+
+[ $# -eq 0 ] && { usage >&2; exit 2; }
+case "$1" in -h|--help|help) usage; exit 0 ;; esac
+
+op=$1; shift
+case "$op" in
+  check)
+    case "${1:-}" in -*) fail 2 "check: unknown argument \"$1\"; agent-workflow check [FILE]" ;; esac
+    [ $# -gt 1 ] && fail 2 "check: unknown argument \"$2\"; agent-workflow check [FILE]"
+    file=""
+    if [ $# -eq 1 ]; then
+      [ -f "$1" ] || fail 1 "check: no file $1"
+      case "$1" in /*) file=$1 ;; *) file=$PWD/$1 ;; esac
+    fi
+    payload=$(printf '{"file":%s}' "$(json_string "$file")") ;;
+  *)
+    fail 2 "unknown operation \"$op\"; operations: check" ;;
+esac
+
+dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workflow.XXXXXXXXXX") || fail 3 "no temp folder"
+trap 'rm -rf "$dir"' EXIT
+printf '%s\n%s\n%s\n' "$op" "$PWD" "$$" >"$dir/request"
+printf '%s' "$payload" >"$dir/payload"
+
+# On Linux emacsclient looks for its server under $XDG_RUNTIME_DIR/emacs/, or,
+# without that variable (cron), in ${TMPDIR:-/tmp}/emacsUID/ only: a desktop
+# Emacs's is in /run/user/UID/emacs/. AGENT_WORKFLOW_RUNTIME_DIR: that folder
+# elsewhere (the tests).
+if [ -z "${EMACS_SOCKET_NAME:-}" ] && [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+  runtime=${AGENT_WORKFLOW_RUNTIME_DIR:-/run/user/$(id -u)}
+  [ -S "$runtime/emacs/server" ] && export EMACS_SOCKET_NAME="$runtime/emacs/server"
+fi
+
+# The folder as a Lisp string.
+lisp_dir=${dir//\\/\\\\}
+lisp_dir=${lisp_dir//\"/\\\"}
+out=$("${EMACSCLIENT:-emacsclient}" --timeout=60 --eval \
+        "(if (fboundp 'agent-workflow-request) (agent-workflow-request \"$lisp_dir\") 'agent-workflow-not-loaded)" 2>&1)
+status=$?
+
+if [ -f "$dir/reply" ]; then
+  cat "$dir/reply"
+  grep -q '^{"ok":true' "$dir/reply" && exit 0
+  exit 1
+fi
+case "$out" in
+  *agent-workflow-not-loaded*) fail 3 "Emacs runs, but without agent workflows (config/agent-workflow.el)" ;;
+esac
+[ $status -ne 0 ] && fail 3 "no Emacs server answered (M-x server-start): ${out//$'\n'/ }"
+fail 3 "Emacs didn't answer: ${out//$'\n'/ }"
