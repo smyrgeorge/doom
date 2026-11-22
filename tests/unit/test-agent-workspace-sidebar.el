@@ -105,32 +105,38 @@ after; agents' sessions plain buffers, at the desk; treemacs stood in for
   "Under treemacs, the minimap's lines as the app shows them (doom-pbk.127):
 a lane each (its minutes, │, its state's glyph, where it is now; a quiet
 agent's all ·, no name), the axis and legend, cut to treemacs's width, never
-past it; the lane's agent for RET and a click (doom-pbk.130)."
+past it; the lane's agent for RET and a click (doom-pbk.130). Now one
+minute throughout: a minute turning between ada's edit and the drawing put
+its ✎ a slot early, rightly (\" ▌A ⚙ ···✎· │\", now and then in a full run:
+doom-pbk.165)."
   (+test-aws "lanes"
-    (let ((ada (agent-workspace-create :role "builder" :name "ada"))
-          (_ken (agent-workspace-create :role "builder" :name "ken")))
-      (setf (agent-workspace-agent-state ada) 'working)
-      (+test-aws--tool ada "edit")
-      (agent-workspace-open t)
-      (agent-workspace-leave)
-      (+test-aws--treemacs-show project)
-      (let* ((window (agent-workspace--sidebar-window (selected-frame)))
-             (text (with-current-buffer (window-buffer window) (buffer-string))))
-        (should (equal (substring-no-properties text)
-                       (concat (mapconcat #'substring-no-properties
-                                          (agent-workspace-minimap-text project (1- (window-body-width window)))
-                                          "\n")
-                               "\n")))
-        (should (string-match-p "\\` ▌A ⚙ ·+✎ │" text))
-        (should (string-match-p (format "\n ▌K ⚙ %s │ ○  ?at th…\n"
-                                        (make-string agent-workspace-activity-minutes ?·))
-                                text))
-        (should-not (string-search "ken" text))
-        (should (string-search "-15m" text))
-        (should (string-search "⌕ read" text))
-        (dolist (line (split-string text "\n"))
-          (should (< (string-width line) (window-body-width window))))
-        (should (eq (get-text-property 1 'agent-workspace-minimap-agent text) ada))))))
+	     (let* ((ada (agent-workspace-create :role "builder" :name "ada"))
+		    (_ken (agent-workspace-create :role "builder" :name "ken"))
+		    (minute (agent-workspace--minute)))
+	       (cl-letf (((symbol-function 'agent-workspace--minute)
+			  (lambda (&optional time) (if time (floor time 60) minute))))
+		 (setf (agent-workspace-agent-state ada) 'working)
+		 (+test-aws--tool ada "edit")
+		 (agent-workspace-open t)
+		 (agent-workspace-leave)
+		 (+test-aws--treemacs-show project)
+		 (let* ((window (agent-workspace--sidebar-window (selected-frame)))
+			(text (with-current-buffer (window-buffer window) (buffer-string))))
+		   (should (equal (substring-no-properties text)
+				  (concat (mapconcat #'substring-no-properties
+						     (agent-workspace-minimap-text project (1- (window-body-width window)))
+						     "\n")
+					  "\n")))
+		   (should (string-match-p "\\` ▌A ⚙ ·+✎ │" text))
+		   (should (string-match-p (format "\n ▌K ⚙ %s │ ○  ?at th…\n"
+						   (make-string agent-workspace-activity-minutes ?·))
+					   text))
+		   (should-not (string-search "ken" text))
+		   (should (string-search "-15m" text))
+		   (should (string-search "⌕ read" text))
+		   (dolist (line (split-string text "\n"))
+		     (should (< (string-width line) (window-body-width window))))
+		   (should (eq (get-text-property 1 'agent-workspace-minimap-agent text) ada)))))))
 
 ;; ====== SHOWN UNDER TREEMACS ======
 
