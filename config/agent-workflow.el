@@ -81,6 +81,14 @@ issue's blockers closing)."
   :type 'number
   :group 'agent-workflow)
 
+;; SCRIPTS
+;; A run: step's script, its suite's for a merge (config/agent-workflow/
+;; steps.el): stopped once it's run this long, unless its step's timeout says.
+(defcustom agent-workflow-script-timeout 1800
+  "Seconds a step's script may run, unless its step's timeout: says."
+  :type 'number
+  :group 'agent-workflow)
+
 ;; LOOPS
 ;; An agent's outcome sending the work back (changes: rerun build) is
 ;; counted: past this many rounds (a job's or workflow's max-rounds says
@@ -108,6 +116,7 @@ issue's blockers closing)."
 (load! "agent-workflow/pool")
 (load! "agent-workflow/beads")
 (load! "agent-workflow/runs")
+(load! "agent-workflow/steps")
 (load! "agent-workflow/check")
 (load! "agent-workflow/request")
 

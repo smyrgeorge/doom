@@ -29,6 +29,9 @@
 (declare-function agent-shell-insert "agent-shell")
 (declare-function agent-shell--prompt-queue-confirm-kill-buffer "agent-shell-prompt-queue")
 (declare-function shell-maker--process "shell-maker")
+(declare-function shell-maker-busy "shell-maker")
+(declare-function agent-shell--prompt-queue-enqueue "agent-shell-prompt-queue")
+(declare-function agent-shell--prompt-input-start "agent-shell-prompt")
 (declare-function agent-workspace-agents "agent-workspace/core")
 (declare-function agent-workspace-agent-state "agent-workspace/core")
 (defvar agent-shell--state)
@@ -56,6 +59,7 @@
   buffer                 ; its agent-shell session
   session-id             ; its session's id, once known: to resume it
   resumed                ; the session it was asked to resume, if any
+  pending                ; its first message, sent once its session is ready
   values                 ; its variables' values: an alist
   outcomes               ; the outcomes it may give, besides done
   stopping)              ; non-nil while it's stopped by us
@@ -120,8 +124,7 @@ or its lock held by an Emacs alive (this one or another)."
                   (cons "branch" (agent-workflow-agent-branch agent))
                   (cons "worktree" (directory-file-name (agent-workflow-agent-worktree agent)))
                   (cons "main" project)
-                  (cons "main-branch" (let ((default-directory (file-name-as-directory project)))
-                                        (car (agent-workflow--git-lines "branch" "--show-current"))))
+                  (cons "main-branch" (agent-workflow-main-branch (file-name-as-directory project)))
                   (cons "project" (file-name-nondirectory project)))
             (agent-workflow-agent-values agent))))
 
@@ -271,7 +274,8 @@ full or PROFILE isn't one."
                                       (agent-workflow-worktree project issue :type type :title title)))
                  (agent (agent-workflow-agent--make :project project :issue issue :job job :profile profile
                                                     :worktree dir :branch branch :commit (nth 2 snapshot)
-                                                    :values values :outcomes outcomes :resumed resume))
+                                                    :values values :outcomes outcomes :resumed resume
+                                                    :pending prompt))
                  (made nil))
       (condition-case err
           (let* ((config (agent-workflow--config agent))
@@ -296,10 +300,15 @@ full or PROFILE isn't one."
                          ;; aren't its; nor those of one we stop.
                          (when (and (eq (agent-workflow-agent-buffer agent) buffer)
                                     (not (agent-workflow-agent-stopping agent)))
+                           ;; Its first message once it's ready: not at
+                           ;; prompt-ready, which comes before its model and
+                           ;; mode are set (a message then races with them).
+                           (when (and (eq (map-elt event :event) 'init-finished)
+                                      (agent-workflow-agent-pending agent))
+                             (let ((first (agent-workflow-agent-pending agent)))
+                               (setf (agent-workflow-agent-pending agent) nil)
+                               (agent-workflow-send agent (agent-workflow-fill first (agent-workflow--agent-values agent)))))
                            (run-hook-with-args 'agent-workflow-agent-event-functions agent event))))
-            (when prompt
-              (agent-shell-insert :text (agent-workflow-fill prompt (agent-workflow--agent-values agent))
-                                  :submit t :no-focus t :shell-buffer buffer))
             agent)
         (error
          (when (buffer-live-p made)
@@ -315,6 +324,28 @@ full or PROFILE isn't one."
                         (and (local-variable-p 'agent-shell--state)
                              (map-elt (map-elt agent-shell--state :session) :id)))))
         (setf (agent-workflow-agent-session-id agent) id))))
+
+(defun agent-workflow-send (agent text &optional tries)
+  "Send TEXT to AGENT's session: once its prompt is live again if it's
+free (a turn just over draws it a moment later: text put in before it is
+lost), looked at every tenth of a second, 100 TRIES at most; after its
+turn if it works (agent-shell's queue). Its point moved to its end first:
+a session no window shows keeps it where it was, and what's submitted is
+read from there."
+  (let ((buffer (agent-workflow-agent-buffer agent))
+        (tries (or tries 0)))
+    (unless (buffer-live-p buffer)
+      (user-error "%s has no session" (agent-workflow-agent-name agent)))
+    (with-current-buffer buffer
+      (cond
+       ((shell-maker-busy)
+        (agent-shell--prompt-queue-enqueue :prompt text))
+       ((or (agent-shell--prompt-input-start) (>= tries 100))
+        (goto-char (point-max))
+        (agent-shell-insert :text text :submit t :no-focus t :shell-buffer buffer))
+       (t (run-at-time 0.1 nil (lambda ()
+                                 (when (buffer-live-p buffer)
+                                   (agent-workflow-send agent text (1+ tries))))))))))
 
 ;; ====== STOPPING ONE ======
 

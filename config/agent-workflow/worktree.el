@@ -91,6 +91,18 @@ isn't known, then 4 of its title's words, small ones left out
     (concat (pcase type ("bug" "fix") ("feature" "feat") ("" "task") (_ type)) "/" issue
             (if (string-empty-p words) "" (concat "-" words)))))
 
+(defun agent-workflow-main-branch (project)
+  "PROJECT's main branch: origin's HEAD's, else main, else master, else
+the branch your checkout is on."
+  (let* ((default-directory project)
+         (branches (agent-workflow--git-lines "for-each-ref" "--format=%(refname:short)" "refs/heads/")))
+    (or (when-let* ((head (car (agent-workflow--git-lines "symbolic-ref" "--short" "refs/remotes/origin/HEAD")))
+                    (name (string-remove-prefix "origin/" head)))
+          (and (member name branches) name))
+        (seq-find (lambda (name) (member name branches)) '("main" "master"))
+        (car (agent-workflow--git-lines "branch" "--show-current"))
+        "main")))
+
 ;; ====== THE WORKTREE ======
 
 (defun agent-workflow-worktree-directory (project issue)

@@ -27,14 +27,15 @@
 ;;       max-rounds: 10
 ;;       concurrency: 1
 ;;   A step is agent: (with prompt:), run: (with shell:), elisp: (Lisp in
-;;   your Emacs) or uses: (a built-in: merge), with timeout:, retries:,
-;;   on-fail: (a profile), approve:.
+;;   your Emacs) or uses: (a built-in: merge, its with: {suite: make
+;;   test}), with timeout:, retries:, on-fail: (a profile), approve:.
 ;;
 ;; WORKFLOW, read: a plist (:name :file :description :for :concurrency
 ;; :budget (:cost :tokens :time) :max-rounds :jobs ((NAME . JOB)...)), JOB (:name :needs
 ;; :if :concurrency :approve :outcomes ((OUTCOME . continue|(rerun JOB))...)
 ;; :max-rounds :steps (STEP...)), STEP (:kind agent|run|elisp|uses :agent
-;; :prompt :run :shell :elisp :uses :timeout :retries :on-fail :approve),
+;; :prompt :run :shell :elisp :uses :with :timeout :retries :on-fail
+;; :approve),
 ;; durations in seconds. Nothing in it is run here: if: and elisp: are only
 ;; read, to check them.
 ;;
@@ -57,8 +58,8 @@
 
 ;; ====== VARIABLES ======
 
-(defconst agent-workflow-builtins '("merge")
-  "The built-in steps (uses:).")
+(defconst agent-workflow-builtins '(("merge" "suite"))
+  "The built-in steps (uses:), each with the keys its with: takes.")
 
 (defconst agent-workflow-issue-types
   '("bug" "feature" "task" "epic" "chore" "decision" "spike" "story" "milestone")
@@ -70,7 +71,7 @@ is only warned about).")
   "A workflow's keys.")
 
 (defconst agent-workflow--step-keys
-  '("agent" "prompt" "run" "shell" "elisp" "uses" "timeout" "retries" "on-fail" "approve")
+  '("agent" "prompt" "run" "shell" "elisp" "uses" "with" "timeout" "retries" "on-fail" "approve")
   "A step's keys.")
 
 (defconst agent-workflow--job-keys
@@ -402,10 +403,24 @@ this file). As `agent-workflow--job-read' for the rest."
              (funcall problem 'error at "elisp %s: Lisp (in YAML, a form with \": \" in it goes under elisp: |)"
                       (agent-workflow--shown value))))
           ("uses"
-           (if (member value agent-workflow-builtins)
+           (if (assoc value agent-workflow-builtins)
                (setq step (plist-put step :uses value))
              (funcall problem 'error at "uses %s: not a built-in (%s)" (agent-workflow--shown value)
-                      (string-join agent-workflow-builtins ", "))))
+                      (string-join (mapcar #'car agent-workflow-builtins) ", "))))
+          ("with"
+           (let ((takes (cdr (assoc (cdr (assoc "uses" spec)) agent-workflow-builtins))))
+             (cond ((not (assoc "uses" spec)) (funcall problem 'error at "with: only for a uses: step"))
+                   ((not (and value (agent-workflow--mapping-p value)))
+                    (funcall problem 'error at "with: its keys and their values (suite: make test)"))
+                   (t (let (with)
+                        (pcase-dolist (`(,k . ,v) value)
+                          (cond ((not (member k takes))
+                                 (funcall problem 'warning (append at (list k)) "unknown key %s: ignored (%s)" k
+                                          (agent-workflow--listed takes)))
+                                ((not (stringp v))
+                                 (funcall problem 'error (append at (list k)) "%s %s: text" k (agent-workflow--shown v)))
+                                (t (setq with (plist-put with (intern (concat ":" k)) v)))))
+                        (setq step (plist-put step :with with)))))))
           ("timeout" (setq step (plist-put step :timeout (funcall duration at value "timeout"))))
           ("retries"
            (when (equal kind "agent")

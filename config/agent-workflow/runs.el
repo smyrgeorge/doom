@@ -40,6 +40,7 @@
 (declare-function agent-shell-insert "agent-shell")
 (declare-function agent-shell--prompt-queue-enqueue "agent-shell-prompt-queue")
 (declare-function shell-maker-busy "shell-maker")
+(declare-function agent-workflow--fix "agent-workflow/steps")
 
 ;; ====== A RUN ======
 
@@ -418,6 +419,25 @@ removed, if it has nothing not committed (its branch stays)."
 
 ;; ====== IF ======
 
+(defmacro agent-workflow--with-helpers (run &rest body)
+  "BODY with RUN's helpers, as if: and elisp: steps have them: (issue-id),
+\(issue-type) (a symbol), (issue-labels), (issue-priority), (issue-title),
+\(job-outcome \='JOB), (job-status \='JOB)."
+  (declare (indent 1))
+  (let ((info (make-symbol "info")) (run-var (make-symbol "run")))
+    `(let* ((,run-var ,run)
+            (,info (agent-workflow-run-info ,run-var)))
+       (cl-letf (((symbol-function 'issue-id) (lambda () (plist-get ,info :id)))
+                 ((symbol-function 'issue-type) (lambda () (intern (plist-get ,info :type))))
+                 ((symbol-function 'issue-labels) (lambda () (plist-get ,info :labels)))
+                 ((symbol-function 'issue-priority) (lambda () (plist-get ,info :priority)))
+                 ((symbol-function 'issue-title) (lambda () (plist-get ,info :title)))
+                 ((symbol-function 'job-outcome)
+                  (lambda (name) (plist-get (agent-workflow--job ,run-var (format "%s" name)) :outcome)))
+                 ((symbol-function 'job-status)
+                  (lambda (name) (plist-get (agent-workflow--job ,run-var (format "%s" name)) :status))))
+         ,@body))))
+
 (defun agent-workflow--if-holds (run job)
   "Non-nil if JOB of RUN has no if:, or its Lisp holds, evaluated now with
 the run's helpers: (issue-id), (issue-type) (a symbol), (issue-labels),
@@ -425,21 +445,12 @@ the run's helpers: (issue-id), (issue-type) (a symbol), (issue-labels),
 An error in it: the run waits for you, saying so."
   (let ((form (plist-get (agent-workflow--job-spec run job) :if)))
     (or (null form)
-        (let ((info (agent-workflow-run-info run)))
-          (condition-case err
-              (cl-letf (((symbol-function 'issue-id) (lambda () (plist-get info :id)))
-                        ((symbol-function 'issue-type) (lambda () (intern (plist-get info :type))))
-                        ((symbol-function 'issue-labels) (lambda () (plist-get info :labels)))
-                        ((symbol-function 'issue-priority) (lambda () (plist-get info :priority)))
-                        ((symbol-function 'issue-title) (lambda () (plist-get info :title)))
-                        ((symbol-function 'job-outcome)
-                         (lambda (name) (plist-get (agent-workflow--job run (format "%s" name)) :outcome)))
-                        ((symbol-function 'job-status)
-                         (lambda (name) (plist-get (agent-workflow--job run (format "%s" name)) :status))))
-                (eval (car (read-from-string form)) t))
-            (error
-             (agent-workflow--wait run job (format "%s: its if failed: %s" job (error-message-string err)))
-             (throw 'wait nil)))))))
+        (condition-case err
+            (agent-workflow--with-helpers run
+              (eval (car (read-from-string form)) t))
+          (error
+           (agent-workflow--wait run job (format "%s: its if failed: %s" job (error-message-string err)))
+           (throw 'wait nil))))))
 
 ;; ====== A JOB ======
 
@@ -554,13 +565,10 @@ one started for it. The pool full: the run waits, queued, for an agent."
          (values (append (agent-workflow--job-values run job) (agent-workflow--run-values run)))
          (outcomes (mapcar #'car (plist-get (agent-workflow--job-spec run job) :outcomes))))
     (if (and held (buffer-live-p (agent-workflow-agent-buffer held)))
-        (let ((buffer (agent-workflow-agent-buffer held))
-              prompt)
+        (progn
           (setf (agent-workflow-agent-values held) values)
-          (setq prompt (agent-workflow-fill (agent-workflow--prompt run job step) (agent-workflow--agent-values held)))
-          (if (with-current-buffer buffer (shell-maker-busy))
-              (with-current-buffer buffer (agent-shell--prompt-queue-enqueue :prompt prompt))
-            (agent-shell-insert :text prompt :submit t :no-focus t :shell-buffer buffer))
+          (agent-workflow-send held (agent-workflow-fill (agent-workflow--prompt run job step)
+                                                         (agent-workflow--agent-values held)))
           (agent-workflow--journal run "step-started" :job job :step index :agent (agent-workflow-agent-name held)))
       (if (>= (agent-workflow-pool-used) agent-workflow-pool)
           ;; A later step's agent, the pool full meanwhile: it waits for one,
@@ -659,10 +667,32 @@ end."
     (when (and (plist-get state :finished) (memq (plist-get state :status) '(running waiting)))
       (agent-workflow--job-set run job :finished nil :status 'running :why nil)
       (agent-workflow--refresh run)
-      (let ((next (1+ (plist-get state :step))))
-        (if (nth next (plist-get (agent-workflow--job-spec run job) :steps))
-            (agent-workflow--step-start run job next)
-          (agent-workflow--job-end run job))))))
+      (cond
+       ;; A conflict its agent resolved: the run goes back to its first job
+       ;; that edits, its checks and its review run again on it.
+       ((and (plist-get state :resolving) (agent-workflow--first-editing run job))
+        (agent-workflow--job-set run job :resolving nil :retry nil)
+        (agent-workflow-back run (agent-workflow--first-editing run job)
+                             :note (format "The branch was rebased onto the main branch, its conflicts resolved by %s's agent: see that your work still holds." job)
+                             :by job))
+       ;; A step its agent fixed: run again.
+       ((plist-get state :retry)
+        (let ((index (plist-get state :retry)))
+          (agent-workflow--job-set run job :retry nil :resolving nil)
+          (agent-workflow--step-start run job index)))
+       (t
+        (let ((next (1+ (plist-get state :step))))
+          (if (nth next (plist-get (agent-workflow--job-spec run job) :steps))
+              (agent-workflow--step-start run job next)
+            (agent-workflow--job-end run job))))))))
+
+(defun agent-workflow--first-editing (run job)
+  "RUN's first job that edits and ran, not JOB: where a resolved conflict
+goes back to."
+  (car (seq-find (lambda (other) (and (not (equal (car other) job))
+                                      (memq (plist-get (cdr other) :status) '(done running waiting))
+                                      (agent-workflow--job-edits-p run (car other))))
+                 (agent-workflow-run-jobs run))))
 
 (defun agent-workflow--job-end (run job)
   "JOB of RUN's last step is over: its outcome says what follows; its agent
@@ -740,10 +770,15 @@ JOB hasn't run, or STEP isn't one."
           (unless (memq (plist-get other-state :status) '(pending skipped))
             (when-let* ((agent (plist-get other-state :agent)))
               (agent-workflow-stop-agent agent))
+            (when-let* ((process (plist-get other-state :process)))
+              (when (process-live-p process)
+                (process-put process 'agent-workflow-stopped t)
+                (delete-process process)))
             (when (plist-get other-state :snapshot)
               (agent-workflow-snapshot-remove project issue other))
             (agent-workflow--job-set run other :status 'pending :agent nil :finished nil :why nil :pool nil
-                                     :outcome nil :notes nil :snapshot nil
+                                     :outcome nil :notes nil :snapshot nil :process nil :retry nil
+                                     :resolving nil :tries nil :ask nil
                                      :round (1+ (or (plist-get other-state :round) 1))))))
       (agent-workflow--job-set run job :back (list :step step :note note :by by :session session))
       (when discard
@@ -894,19 +929,50 @@ for it): going back, the work kept. JOB, if it isn't after OTHER, done."
             (agent-workflow-run-jobs run)))
 
 (cl-defun agent-workflow-confirm (run choice &key notes (by "you"))
-  "Answer RUN's question (see LOOPS) with CHOICE: go (on: the count starts
-again; NOTES, ((JOB . NOTE)...), for the job that sends it back and the one
-it's sent to), accept (it as it is: the run goes on as if continue), or
-stop (it waits). A user error if RUN asks nothing."
+  "Answer RUN's question with CHOICE. A loop's (see LOOPS): go (on: the
+count starts again; NOTES, ((JOB . NOTE)...), for the job that sends it
+back and the one it's sent to), accept (it as it is: the run goes on as if
+continue), or stop (it waits). A step's whose retries are used up: go (its
+tries start again, the agent fixing it told NOTES' note for its job),
+skip, stop; a step that broke: go (run it again), skip, stop; a merge
+waiting: go (try it again), stop (steps.el). A user error if RUN asks
+nothing, or CHOICE isn't one of its question's."
   (pcase-let* ((`(,job . ,ask) (or (agent-workflow-asking run)
                                    (user-error "%s asks nothing" (agent-workflow-run-name run))))
                (other (plist-get ask :other))
-               (edge (plist-get ask :edge)))
+               (edge (plist-get ask :edge))
+               (kind (plist-get ask :kind))
+               (allowed (pcase kind ('nil '("go" "accept" "stop")) ('merge '("go" "stop")) (_ '("go" "skip" "stop")))))
+    (unless (member choice allowed)
+      (user-error "%s: %s, not %s" (agent-workflow-run-name run) (string-join allowed ", ") choice))
     (agent-workflow--journal run "answered" :job job :choice choice :by by
                              :notes (if notes
                                         (vconcat (mapcar (lambda (note) (list :job (car note) :note (cdr note))) notes))
                                       []))
-    (pcase choice
+    (when (and kind (not (equal choice "stop")))
+      (agent-workflow--job-set run job :ask nil :status 'running :why nil)
+      (agent-workflow--refresh run))
+    (pcase (and kind choice)
+      ('nil)
+      ("go"
+       (let ((index (plist-get ask :step)))
+         (if (eq kind 'retries)
+             (let ((tries (plist-get (agent-workflow--job run job) :tries))
+                   (mine (cdr (assoc job notes))))
+               (setf (alist-get index tries) 0)
+               (agent-workflow--job-set run job :tries tries)
+               (agent-workflow--fix run job index
+                                    (concat (plist-get ask :output)
+                                            (if (and mine (not (string-empty-p mine))) (concat "\n\nThe user adds: " mine) ""))
+                                    (plist-get ask :what)))
+           (agent-workflow--step-start run job index))))
+      ("skip"
+       (agent-workflow--journal run "step-skipped" :job job :step (plist-get ask :step))
+       (agent-workflow-step-ended run job))
+      ("stop"
+       (agent-workflow--job-set run job :why (format "%s: stopped by you" job))
+       (agent-workflow--refresh run)))
+    (pcase (and (not kind) choice)
       ("go"
        (setf (alist-get edge (agent-workflow-run-edges run) nil nil #'equal) nil
              (agent-workflow-run-total run) 0)
@@ -925,14 +991,14 @@ stop (it waits). A user error if RUN asks nothing."
        (agent-workflow--tick-soon))
       ("stop"
        (agent-workflow--job-set run job :why (format "%s: stopped by you" job))
-       (agent-workflow--refresh run))
-      (_ (user-error "%s: go, accept or stop" choice)))
+       (agent-workflow--refresh run)))
     choice))
 
 (defun agent-workflow-confirm-command (run choice &optional notes)
-  "Answer RUN's question (M-x agent-workflow-confirm): CHOICE, go, accept
-or stop; going on, your notes (empty: none) for the job that sends it back
-and the one it's sent to."
+  "Answer RUN's question (M-x agent-workflow-confirm): CHOICE, as the
+question allows (go, accept, skip, stop); going on, your notes (empty:
+none): for the job that sends it back and the one it's sent to, or for
+the agent that fixes a step."
   (interactive
    (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
           (asking (or (seq-filter #'agent-workflow-asking (agent-workflow-runs project))
@@ -942,13 +1008,22 @@ and the one it's sent to."
                      (cdr (assoc (completing-read "Run: " names nil t) names)))
                  (car asking)))
           (ask (agent-workflow-asking run))
-          (choice (completing-read (format "%s: " (agent-workflow-run-why run)) '("go" "accept" "stop") nil t))
+          (kind (plist-get (cdr ask) :kind))
+          (choice (completing-read (format "%s: " (agent-workflow-run-why run))
+                                   (pcase kind ('nil '("go" "accept" "stop")) ('merge '("go" "stop"))
+                                     (_ '("go" "skip" "stop")))
+                                   nil t))
           (notes (when (equal choice "go")
-                   (delq nil (list (let ((note (read-string (format "Your note for %s (it sends it back): " (car ask)))))
-                                     (and (not (string-empty-p note)) (cons (car ask) note)))
-                                   (let* ((other (plist-get (cdr ask) :other))
-                                          (note (read-string (format "Your note for %s (it's sent back): " other))))
-                                     (and (not (string-empty-p note)) (cons other note))))))))
+                   (pcase kind
+                     ('nil
+                      (delq nil (list (let ((note (read-string (format "Your note for %s (it sends it back): " (car ask)))))
+                                        (and (not (string-empty-p note)) (cons (car ask) note)))
+                                      (let* ((other (plist-get (cdr ask) :other))
+                                             (note (read-string (format "Your note for %s (it's sent back): " other))))
+                                        (and (not (string-empty-p note)) (cons other note))))))
+                     ('retries
+                      (let ((note (read-string "Your note for the agent that fixes it: ")))
+                        (and (not (string-empty-p note)) (list (cons (car ask) note)))))))))
      (list run choice notes)))
   (agent-workflow-confirm run choice :notes notes)
   (message "%s: %s" (agent-workflow-run-name run) choice))

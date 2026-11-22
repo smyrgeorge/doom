@@ -1,7 +1,7 @@
 # Agent workflow
 
 > **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
-> runs of agent steps, their jobs in parallel.
+> runs, their jobs in parallel, every kind of step, going back, loops, the merge.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -101,7 +101,7 @@ A step does one thing:
 | `agent` | An LLM in agent-shell, with that profile; `prompt`: what it's told |
 | `run` | A program, or a script (`run: \|`); `shell`: its interpreter (bash by default, `python`, `node`...) |
 | `elisp` | Lisp in your Emacs (quick: it blocks it). Lisp with `: ` in it goes under `elisp: \|` |
-| `uses` | A built-in: `merge` |
+| `uses` | A built-in: `merge`, with `with: {suite: make test}` |
 
 With `timeout` (`45s`, `10m`, `1h30m`), `retries` (a script's), `on-fail` (the profile of the agent a failing step
 goes to, in a job with none) and `approve`.
@@ -171,6 +171,7 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 | `agent-workflow-pool` | `3` | How many agents run at once |
 | `agent-workflow-mode` | `"auto"` | The permission mode of an agent whose profile has none |
 | `agent-workflow-max-rounds` | `10` | How many times a job may send the work back before the run asks you |
+| `agent-workflow-script-timeout` | `1800` | Seconds a script may run, unless its step's `timeout` says |
 
 ## Runs
 
@@ -201,6 +202,39 @@ step itself, `cmd/agent-workflow done OUTCOME "notes"`, then its turn; a turn th
 waiting for you (tell the agent in its session). Its outcome must be `done` or one of its job's `outcomes`. Its job
 over, its agent stops, and the next jobs start. Every job done or skipped, the run is, and its worktree goes (its
 branch stays).
+
+### Steps that aren't an agent's
+
+A `run:` step's text is a script, run by its `shell` (bash by default, or `python3`, `node`, any interpreter), in the
+job's place: the issue's worktree, or a reading job's snapshot. One line naming a file of `.agent-workflow/` runs your
+checkout's copy of it, never the branch's: an agent can't change the check it's run against. It gets these in its
+environment: `ISSUE`, `BRANCH`, `MAIN` (your checkout), `MAIN_BRANCH`, `WORKTREE`, `JOB`, `ROUND`, `TRY`. Its output
+is kept in the run's `logs/`.
+
+| It returns | Then |
+|---|---|
+| 0 | The next step |
+| 1 | The work is wrong: its output goes to the job's agent (or, in a job with none, one with the step's `on-fail` profile), which fixes it and says done; the step runs again, up to its `retries` (0 by default) |
+| another code, or runs out of its `timeout` | It broke: no agent is sent |
+
+Retries used up, or a step that broke, the run asks you (`M-x agent-workflow-confirm`, `cmd/agent-workflow confirm`):
+go on (with a note for the agent fixing it; for one that broke, run it again), skip the step, or stop.
+
+An `elisp:` step runs in your Emacs, the same helpers as `if` bound: returning is 0, `(signal 'agent-workflow-fail
+'("why"))` is 1, any other error, it broke. It blocks Emacs while it runs: keep it quick.
+
+`uses: merge` merges the issue's branch into the main branch (origin's HEAD, else `main`, else `master`), never
+pushing:
+
+1. Merged already: done.
+2. Tried first in a worktree of its own. A conflict: the branch is rebased onto the main branch if that goes cleanly,
+   and tried again; else the `on-fail` agent rebases it, resolving the conflicts, and the run goes back to its first
+   job that edits, so its checks and its review run again on what was resolved.
+3. Its suite (`with: {suite: make test}`) runs there, on the merge: 1 is as a script's, to the `on-fail` agent.
+4. Into the main branch: in your checkout, if it's checked out there and none of the files it changes has a change of
+   yours, else it waits for you, naming them (go: try again). Where it isn't checked out, the branch is moved to the
+   merge, and no tree is touched.
+5. The issue is closed.
 
 ### Going back
 
