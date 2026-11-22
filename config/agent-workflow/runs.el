@@ -11,8 +11,12 @@
 ;; started first.
 ;;
 ;; A run's jobs: one starts once its needs are done, its if (Lisp, evaluated
-;; then) holding, else it's skipped. One job at a time per issue, for now
-;; (they share its worktree). A job's steps run in order; a job with an
+;; then) holding, else it's skipped; those that don't need each other run at
+;; once, as the pool allows. They share the issue's branch: a job whose
+;; agents may edit takes its worktree, one at a time, the next one waiting;
+;; one that only reads (its agents can't edit, or scripts) works on a
+;; snapshot of the branch, a worktree of its own (worktree.el), beside them.
+;; Each says which commit it saw. A job's steps run in order; a job with an
 ;; agent step holds its agent to its last step, the next agent step a
 ;; message in its session. An agent step ends when its agent says so
 ;; (cmd/agent-workflow done OUTCOME "notes", its turn ending after); a turn
@@ -77,7 +81,10 @@
 
 (defun agent-workflow--job (run job)
   "RUN's state of JOB: a plist (:status pending|running|waiting|done|skipped
-:step :agent :outcome :notes :finished :session)."
+:step :agent :outcome :notes :finished :session :why :dir :commit :snapshot
+:pool), :why what it waits for (for you, or pending: for an agent, the
+branch), :dir where it works, :commit the one it saw there, :snapshot a
+reading job's (DIR BRANCH COMMIT), :pool its step waiting for an agent."
   (alist-get job (agent-workflow-run-jobs run) nil nil #'equal))
 
 (defun agent-workflow--job-set (run job &rest pairs)
@@ -305,13 +312,54 @@ starts."
     (seq-filter (lambda (job) (memq (plist-get (cdr job) :status) statuses)) (agent-workflow-run-jobs run))))
 
 (defun agent-workflow--startable (run)
-  "RUN's next job that can start: pending, its needs done or skipped."
-  (car (seq-find (lambda (job)
-                   (and (eq (plist-get (cdr job) :status) 'pending)
-                        (seq-every-p (lambda (need)
-                                       (memq (plist-get (agent-workflow--job run need) :status) '(done skipped)))
-                                     (plist-get (agent-workflow--job-spec run (car job)) :needs))))
+  "RUN's jobs that can start, in order: pending, their needs done or
+skipped."
+  (mapcar #'car
+          (seq-filter (lambda (job)
+                        (and (eq (plist-get (cdr job) :status) 'pending)
+                             (seq-every-p (lambda (need)
+                                            (memq (plist-get (agent-workflow--job run need) :status) '(done skipped)))
+                                          (plist-get (agent-workflow--job-spec run (car job)) :needs))))
+                      (agent-workflow-run-jobs run))))
+
+(defun agent-workflow--job-edits-p (run job)
+  "Non-nil if JOB of RUN may change the issue's branch: one of its agents'
+profiles (its agent steps', its steps' on-fail) lets it edit."
+  (let ((profiles (agent-workflow-profiles (agent-workflow-run-project run))))
+    (seq-some (lambda (step)
+                (seq-some (lambda (name)
+                            (and name (agent-workflow-profile-edits-p
+                                       (alist-get name profiles nil nil #'equal))))
+                          (list (plist-get step :agent) (plist-get step :on-fail))))
+              (plist-get (agent-workflow--job-spec run job) :steps))))
+
+(defun agent-workflow--editing (run)
+  "The job of RUN holding the issue's branch (one that edits, running or
+waiting for you), or nil."
+  (car (seq-find (lambda (job) (and (memq (plist-get (cdr job) :status) '(running waiting))
+                                    (agent-workflow--job-edits-p run (car job))))
                  (agent-workflow-run-jobs run))))
+
+(defun agent-workflow--needs-agent-p (run job)
+  "Non-nil if JOB of RUN's first step is an agent's."
+  (eq (plist-get (car (plist-get (agent-workflow--job-spec run job) :steps)) :kind) 'agent))
+
+(defun agent-workflow--refresh (run)
+  "RUN's state worked out from its jobs: waiting (for you) if one waits,
+saying why; else running if one runs (saying what another waits for);
+else queued while none started, waiting for what its first pending job
+does."
+  (let* ((jobs (agent-workflow-run-jobs run))
+         (waiting (seq-find (lambda (job) (eq (plist-get (cdr job) :status) 'waiting)) jobs))
+         (pending (seq-find (lambda (job) (and (memq (plist-get (cdr job) :status) '(pending running))
+                                               (plist-get (cdr job) :why)))
+                            jobs))
+         (started (seq-some (lambda (job) (not (eq (plist-get (cdr job) :status) 'pending))) jobs)))
+    (cond
+     (waiting (agent-workflow--set-state run 'waiting (plist-get (cdr waiting) :why)))
+     ((seq-some (lambda (job) (eq (plist-get (cdr job) :status) 'running)) jobs)
+      (agent-workflow--set-state run 'running (and pending (plist-get (cdr pending) :why))))
+     (pending (agent-workflow--set-state run (if started 'running 'queued) (plist-get (cdr pending) :why))))))
 
 (defun agent-workflow--advance (run)
   "RUN looked at: its blockers (queued), its next job started if none
@@ -323,20 +371,34 @@ runs, it's over once every job is done or skipped."
         (when blockers
           (agent-workflow--set-state run 'queued (concat "blocked by " (string-join blockers ", ")))
           (throw 'wait nil))))
-    (unless (agent-workflow--status-of run '(running waiting))
-      (while (let ((job (agent-workflow--startable run)))
-               (when job
-                 (if (agent-workflow--if-holds run job)
-                     (progn (agent-workflow--job-start run job) nil)
-                   (agent-workflow--job-set run job :status 'skipped)
-                   (agent-workflow--journal run "job-skipped" :job job
-                                            :if (plist-get (agent-workflow--job-spec run job) :if))
-                   (agent-workflow--changed run)
-                   t))))
-      (cond
-       ((agent-workflow--status-of run '(running waiting)))
-       ((seq-every-p (lambda (job) (memq (plist-get (cdr job) :status) '(done skipped))) (agent-workflow-run-jobs run))
-        (agent-workflow--run-done run))))))
+    ;; A running job's step waiting for an agent: started, if there's one.
+    (dolist (job (agent-workflow-run-jobs run))
+      (when-let* ((index (plist-get (cdr job) :pool)))
+        (when (< (agent-workflow-pool-used) agent-workflow-pool)
+          (agent-workflow--job-set run (car job) :pool nil :why nil)
+          (agent-workflow--agent-step run (car job) (nth index (plist-get (agent-workflow--job-spec run (car job)) :steps))
+                                      index))))
+    ;; Every job that can start, starts; one skipped may let others.
+    (let ((again t))
+      (while again
+        (setq again nil)
+        (dolist (job (agent-workflow--startable run))
+          (cond
+           ((not (agent-workflow--if-holds run job))
+            (agent-workflow--job-set run job :status 'skipped :why nil)
+            (agent-workflow--journal run "job-skipped" :job job :if (plist-get (agent-workflow--job-spec run job) :if))
+            (agent-workflow--changed run)
+            (setq again t))
+           ((and (agent-workflow--job-edits-p run job) (agent-workflow--editing run))
+            (agent-workflow--job-set run job :why (format "%s: waiting for %s, which edits the branch" job
+                                                          (agent-workflow--editing run))))
+           ((and (agent-workflow--needs-agent-p run job) (>= (agent-workflow-pool-used) agent-workflow-pool))
+            (agent-workflow--job-set run job :why (format "%s: waiting for an agent: %d of %d work" job
+                                                          (agent-workflow-pool-used) agent-workflow-pool)))
+           (t (agent-workflow--job-start run job))))))
+    (if (seq-every-p (lambda (job) (memq (plist-get (cdr job) :status) '(done skipped))) (agent-workflow-run-jobs run))
+        (agent-workflow--run-done run)
+      (agent-workflow--refresh run))))
 
 (defun agent-workflow--run-done (run)
   "RUN is over, every job done or skipped: said on its issue; its worktree
@@ -344,6 +406,8 @@ removed, if it has nothing not committed (its branch stays)."
   (agent-workflow--set-state run 'done)
   (agent-workflow--journal run "run-done")
   (agent-workflow--issue-summary run)
+  (dolist (job (agent-workflow-run-jobs run))
+    (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) (car job)))
   (ignore-errors (agent-workflow-worktree-remove (agent-workflow-run-project run) (agent-workflow-run-issue run))))
 
 ;; ====== IF ======
@@ -368,8 +432,7 @@ An error in it: the run waits for you, saying so."
                          (lambda (name) (plist-get (agent-workflow--job run (format "%s" name)) :status))))
                 (eval (car (read-from-string form)) t))
             (error
-             (agent-workflow--job-set run job :status 'waiting)
-             (agent-workflow--set-state run 'waiting (format "%s: its if failed: %s" job (error-message-string err)))
+             (agent-workflow--wait run job (format "%s: its if failed: %s" job (error-message-string err)))
              (throw 'wait nil)))))))
 
 ;; ====== A JOB ======
@@ -380,13 +443,26 @@ FUNCTION called with the run, the job's name, the step (a plist) and its
 index, and calling `agent-workflow-step-ended' once it's over.")
 
 (defun agent-workflow--job-start (run job)
-  "JOB of RUN starts: its first step."
-  (agent-workflow--job-set run job :status 'running :step 0)
-  (agent-workflow--journal run "job-started" :job job)
-  (agent-workflow--set-state run 'running)
-  (agent-workflow--issue-summary run)
-  (agent-workflow--changed run)
-  (agent-workflow--step-start run job 0))
+  "JOB of RUN starts: where it works (the issue's worktree, or a reading
+job's snapshot of its branch), the commit it sees there; its first step."
+  (let* ((info (agent-workflow-run-info run))
+         (project (agent-workflow-run-project run))
+         (issue (agent-workflow-run-issue run))
+         (edits (agent-workflow--job-edits-p run job))
+         (where (if edits
+                    (let ((worktree (agent-workflow-worktree project issue :type (plist-get info :type)
+                                                             :title (plist-get info :title))))
+                      (list (car worktree) (cdr worktree)
+                            (let ((default-directory (car worktree))) (agent-workflow--git "rev-parse" "HEAD"))))
+                  (agent-workflow-snapshot project issue job :type (plist-get info :type)
+                                           :title (plist-get info :title)))))
+    (agent-workflow--job-set run job :status 'running :step 0 :why nil :dir (nth 0 where) :commit (nth 2 where)
+                             :snapshot (and (not edits) where))
+    (agent-workflow--journal run "job-started" :job job :commit (nth 2 where) :edits (if edits t :false))
+    (agent-workflow--refresh run)
+    (agent-workflow--issue-summary run)
+    (agent-workflow--changed run)
+    (agent-workflow--step-start run job 0)))
 
 (defun agent-workflow--step-start (run job index)
   "Step INDEX of JOB of RUN starts."
@@ -402,9 +478,9 @@ index, and calling `agent-workflow-step-ended' once it's over.")
 
 (defun agent-workflow--wait (run job why)
   "JOB of RUN waits for you, as does RUN: WHY, in words."
-  (agent-workflow--job-set run job :status 'waiting)
+  (agent-workflow--job-set run job :status 'waiting :why why)
   (agent-workflow--journal run "waiting" :job job :why why)
-  (agent-workflow--set-state run 'waiting why))
+  (agent-workflow--refresh run))
 
 (defun agent-workflow--run-values (run)
   "RUN's variables' values for an agent step: its issue's, what its jobs
@@ -443,13 +519,13 @@ one started for it. The pool full: the run waits, queued, for an agent."
             (agent-shell-insert :text prompt :submit t :no-focus t :shell-buffer buffer))
           (agent-workflow--journal run "step-started" :job job :step index :agent (agent-workflow-agent-name held)))
       (if (>= (agent-workflow-pool-used) agent-workflow-pool)
+          ;; A later step's agent, the pool full meanwhile: it waits for one,
+          ;; looked at again as an agent stops.
           (progn
-            ;; Not started after all: pending again, the run queued for an agent.
-            (agent-workflow--job-set run job :status 'pending :step 0)
-            (agent-workflow--journal run "job-queued" :job job :why "no free agent")
-            (agent-workflow--set-state run (if (agent-workflow--status-of run '(done skipped)) 'running 'queued)
-                                       (format "waiting for an agent: %d of %d work" (agent-workflow-pool-used)
-                                               agent-workflow-pool)))
+            (agent-workflow--job-set run job :pool index
+                                     :why (format "%s: waiting for an agent: %d of %d work" job
+                                                  (agent-workflow-pool-used) agent-workflow-pool))
+            (agent-workflow--refresh run))
         (condition-case err
             (let* ((info (agent-workflow-run-info run))
                    (agent (agent-workflow-start-agent
@@ -457,7 +533,8 @@ one started for it. The pool full: the run waits, queued, for an agent."
                            :job job :profile (plist-get step :agent)
                            :type (plist-get info :type) :title (plist-get info :title)
                            :values values :outcomes outcomes
-                           :prompt (agent-workflow--prompt run job step))))
+                           :prompt (agent-workflow--prompt run job step)
+                           :snapshot (plist-get (agent-workflow--job run job) :snapshot))))
               (agent-workflow--job-set run job :agent agent)
               (agent-workflow--journal run "step-started" :job job :step index
                                        :agent (agent-workflow-agent-name agent)
@@ -534,9 +611,8 @@ end."
   "JOB of RUN's step is over: its next step starts, or the job ends."
   (let ((state (agent-workflow--job run job)))
     (when (and (plist-get state :finished) (memq (plist-get state :status) '(running waiting)))
-      (agent-workflow--job-set run job :finished nil :status 'running)
-      (when (eq (agent-workflow-run-state run) 'waiting)
-        (agent-workflow--set-state run 'running))
+      (agent-workflow--job-set run job :finished nil :status 'running :why nil)
+      (agent-workflow--refresh run)
       (let ((next (1+ (plist-get state :step))))
         (if (nth next (plist-get (agent-workflow--job-spec run job) :steps))
             (agent-workflow--step-start run job next)
@@ -552,8 +628,10 @@ stops."
       ((or 'nil 'continue)
        (when-let* ((agent (plist-get state :agent)))
          (agent-workflow-stop-agent agent))
-       (agent-workflow--job-set run job :status 'done :agent nil)
-       (agent-workflow--journal run "job-done" :job job :outcome outcome)
+       (when (plist-get state :snapshot)
+         (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) job))
+       (agent-workflow--job-set run job :status 'done :agent nil :why nil :snapshot nil)
+       (agent-workflow--journal run "job-done" :job job :outcome outcome :commit (plist-get state :commit))
        (agent-workflow--issue-summary run)
        (agent-workflow--changed run)
        (agent-workflow--tick-soon))

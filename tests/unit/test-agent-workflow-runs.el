@@ -249,17 +249,17 @@ priority first, then the one started first."
         (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why b) (concat "blocked by " first)))))
         (let ((c (agent-workflow-start-run project (+test-awr--issue project "Urgent" "--type" "feature"
                                                                      "--priority" "0"))))
-          (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why c) "waiting for an agent: 1 of 1 work"))))
+          (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why c) "build: waiting for an agent: 1 of 1 work"))))
           ;; first's build done: its review and c's build want the agent; c (P0) gets it.
           (+test-awr--wait (lambda () (eq (agent-workflow-run-state a) 'waiting)))
           (agent-workflow-done build nil "built")
           (should (+test-awr--agent c "build"))
-          (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why a) "waiting for an agent: 1 of 1 work"))))
+          (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why a) "review: waiting for an agent: 1 of 1 work"))))
           (should (eq (+test-awr--job a "review") 'pending))
           ;; Its blocker closed: blocked no more, waiting for the agent.
           (+test-awr--bd project "close" first)
           (agent-workflow-tick)
-          (should (equal (agent-workflow-run-why b) "waiting for an agent: 1 of 1 work")))))))
+          (should (equal (agent-workflow-run-why b) "build: waiting for an agent: 1 of 1 work")))))))
 
 (ert-deftest agent-workflow-runs/a-step-it-cant-run-yet ()
   "A run: step (script steps come later): the run waits for you, saying so."
@@ -294,3 +294,79 @@ agent's session."
                        "done: only an agent of a run ends its step, from its own session"))
         (should (equal (plist-get (request "run" "{\"issues\":[]}") :error)
                        "run: which issues? agent-workflow run ISSUE..."))))))
+
+;; ====== PARALLEL JOBS ======
+
+(defun +test-awr--finish (run job &optional outcome notes)
+  "JOB of RUN's agent, its turn over, says it's done (OUTCOME, NOTES)."
+  (let ((agent (+test-awr--agent run job)))
+    (should (+test-awr--wait (lambda () (eq (+test-awr--job run job) 'waiting))))
+    (agent-workflow-done agent outcome (or notes "done"))
+    (should (+test-awr--wait (lambda () (eq (+test-awr--job run job) 'done))))))
+
+(ert-deftest agent-workflow-runs/parallel-jobs ()
+  "Jobs whose needs are done start at once: those that only read (their
+profile denies Edit and Write) each on a snapshot of the branch, detached at
+the commit it's at, removed after; one that edits in the issue's worktree,
+the next that edits waiting for it, saying why. Each says the commit it
+saw."
+  (+test-awr "parallel"
+    (write-region "---\ndescription: reads\ndeny: Edit, Write\n---\nRead it.\n" nil
+                  (expand-file-name ".agent-workflow/profiles/reader.md" project))
+    (write-region "description: x
+for: [feature]
+jobs:
+  build:
+    agent: build
+  review:
+    needs: build
+    agent: reader
+  security:
+    needs: build
+    agent: reader
+  docs:
+    needs: build
+    agent: build
+  tests:
+    needs: build
+    agent: build
+" nil (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+    (let* ((agent-workflow-pool 5)
+           (issue (+test-awr--issue project "Parallel"))
+           (run (agent-workflow-start-run project issue))
+           (worktree (agent-workflow-worktree-directory project issue)))
+      (should (equal (agent-workflow-agent-worktree (+test-awr--agent run "build")) worktree))
+      (+test-awr--finish run "build")
+      ;; review, security and docs at once; tests waits for docs.
+      (let ((review (+test-awr--agent run "review"))
+            (security (+test-awr--agent run "security"))
+            (docs (+test-awr--agent run "docs"))
+            (head (let ((default-directory worktree)) (string-trim (shell-command-to-string "git rev-parse HEAD")))))
+        (should (equal (agent-workflow-agent-worktree review) (agent-workflow-snapshot-directory project issue "review")))
+        (should (equal (agent-workflow-agent-worktree security) (agent-workflow-snapshot-directory project issue "security")))
+        (should (equal (agent-workflow-agent-commit review) head))
+        (should (equal (agent-workflow-agent-worktree docs) worktree))
+        (should-not (agent-workflow-agent-commit docs))
+        ;; A snapshot: detached at the branch's commit.
+        (let ((default-directory (agent-workflow-agent-worktree review)))
+          (should (equal (string-trim (shell-command-to-string "git rev-parse HEAD")) head))
+          (should (equal (string-trim (shell-command-to-string "git branch --show-current")) "")))
+        (should (eq (+test-awr--job run "tests") 'pending))
+        (should (equal (plist-get (agent-workflow--job run "tests") :why) "tests: waiting for docs, which edits the branch"))
+        ;; What a reading agent's told.
+        (should (string-match-p "change nothing and commit nothing"
+                                (let ((agent-workflow--starting review)) (agent-workflow-agent-context))))
+        (+test-awr--finish run "review")
+        (should-not (file-exists-p (agent-workflow-snapshot-directory project issue "review")))
+        (+test-awr--finish run "docs")
+        (should (equal (agent-workflow-agent-worktree (+test-awr--agent run "tests")) worktree))
+        (+test-awr--finish run "security")
+        (+test-awr--finish run "tests")
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        ;; The commit each saw, in its journal.
+        (should (seq-some (lambda (line) (and (string-match-p "\"ev\":\"job-started\"" line)
+                                              (string-match-p "\"job\":\"review\"" line)
+                                              (string-match-p (concat "\"commit\":\"" head "\"") line)))
+                          (with-temp-buffer
+                            (insert-file-contents (expand-file-name "journal.jsonl" (agent-workflow-run-dir run)))
+                            (split-string (buffer-string) "\n" t))))))))

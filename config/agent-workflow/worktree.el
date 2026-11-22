@@ -174,3 +174,39 @@ user error if it has changes not committed (git refuses)."
       (when (plist-get (agent-workflow--worktree-entry project dir) :locked)
         (agent-workflow--git "worktree" "unlock" (directory-file-name dir)))
       (agent-workflow--git "worktree" "remove" (directory-file-name dir)))))
+
+;; ====== A SNAPSHOT ======
+;; A job that only reads (its agent can't edit, or a script) works on a
+;; snapshot of the issue's branch as it was when it started: a worktree of its
+;; own, detached at that commit, .agent-shell/agent-workflow/worktrees/
+;; ISSUE@JOB, removed once the job's over. Jobs that read run beside each
+;; other and beside one that edits the branch.
+
+(defun agent-workflow-snapshot-directory (project issue job)
+  "Where JOB of ISSUE's snapshot is in PROJECT."
+  (file-name-as-directory
+   (expand-file-name (concat issue "@" job)
+                     (expand-file-name "worktrees" (expand-file-name agent-workflow-local-directory project)))))
+
+(cl-defun agent-workflow-snapshot (project issue job &key type title)
+  "A snapshot for JOB of ISSUE in PROJECT: a worktree detached at the
+issue's branch's commit now (the issue's worktree made if it isn't there,
+on its branch from TYPE and TITLE). One there from before is replaced.
+Return (DIR BRANCH COMMIT)."
+  (pcase-let* ((`(,worktree . ,branch) (agent-workflow-worktree project issue :type type :title title))
+               (dir (agent-workflow-snapshot-directory project issue job))
+               (default-directory project)
+               (commit (let ((default-directory worktree)) (agent-workflow--git "rev-parse" "HEAD"))))
+    (agent-workflow-snapshot-remove project issue job)
+    (agent-workflow--git "worktree" "add" "--detach" (directory-file-name dir) commit)
+    (list dir branch commit)))
+
+(defun agent-workflow-snapshot-remove (project issue job)
+  "JOB of ISSUE's snapshot in PROJECT removed, whatever it has: nothing of
+it is kept."
+  (let ((dir (agent-workflow-snapshot-directory project issue job))
+        (default-directory project))
+    (when (or (file-exists-p dir) (agent-workflow--worktree-entry project dir))
+      (process-file "git" nil nil nil "worktree" "remove" "--force" (directory-file-name dir))
+      (when (file-exists-p dir) (delete-directory dir t))
+      (process-file "git" nil nil nil "worktree" "prune"))))

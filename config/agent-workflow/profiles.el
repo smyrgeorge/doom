@@ -267,6 +267,12 @@ of their lines."
   (concat (mapconcat (lambda (name) (concat "{" name "}")) agent-workflow-variables ", ")
           ", {jobs.JOB.outcome}, {jobs.JOB.notes}"))
 
+(defun agent-workflow-profile-edits-p (profile)
+  "Non-nil if PROFILE (a plist) lets its agent change files: unless its
+deny has both Edit and Write, it does."
+  (let ((deny (plist-get profile :deny)))
+    (not (and (member "Edit" deny) (member "Write" deny)))))
+
 ;; ====== A PROJECT'S PROFILES ======
 
 (defun agent-workflow--profiles-read (project)

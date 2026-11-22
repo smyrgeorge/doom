@@ -52,6 +52,7 @@
   profile                ; its step's profile, a name
   worktree               ; the issue's worktree, where it works
   branch                 ; the issue's branch
+  commit                 ; a reading job's: the commit its snapshot is at
   buffer                 ; its agent-shell session
   session-id             ; its session's id, once known: to resume it
   values                 ; its variables' values: an alist
@@ -156,9 +157,7 @@ then its profile's instructions. nil for any other session. One of
        (format "You are an agent of the user's agent workflow, in Emacs: you do the job %s of the \
 run on the issue %s, in %s, and nothing else. You have no name: you're known as \"%s\".
 
-You work in the issue's git worktree, %s, on its branch %s: make your changes and commits \
-there, never in the project's main checkout (%s), which is the user's. Commit on that branch, \
-and never switch, make or rename branches, push, or change, relabel or close the issue: the \
+%s Never switch, make or rename branches, push, or change, relabel or close the issue: the \
 workflow does that. Your bd commands run as %s (BEADS_ACTOR).
 
 When your job is done, end it with %s done %s \"notes\": the outcome (%s), and what the \
@@ -167,9 +166,16 @@ waits for the user."
                (agent-workflow-agent-job agent) (agent-workflow-agent-issue agent)
                (file-name-nondirectory (directory-file-name (agent-workflow-agent-project agent)))
                (agent-workflow-agent-name agent)
-               (directory-file-name (agent-workflow-agent-worktree agent))
-               (agent-workflow-agent-branch agent)
-               (directory-file-name (agent-workflow-agent-project agent))
+               (if-let* ((commit (agent-workflow-agent-commit agent)))
+                   (format "You work in a snapshot of the issue's branch %s at %s, a git worktree of its own, \
+%s: read it, run what you need there, but change nothing and commit nothing: your job only reads."
+                           (agent-workflow-agent-branch agent) (substring commit 0 (min 12 (length commit)))
+                           (directory-file-name (agent-workflow-agent-worktree agent)))
+                 (format "You work in the issue's git worktree, %s, on its branch %s: make your changes and \
+commits there, never in the project's main checkout (%s), which is the user's. Commit on that branch."
+                         (directory-file-name (agent-workflow-agent-worktree agent))
+                         (agent-workflow-agent-branch agent)
+                         (directory-file-name (agent-workflow-agent-project agent))))
                (concat (agent-workflow-agent-issue agent) "/" (agent-workflow-agent-job agent))
                agent-workflow-command
                (if (cdr outcomes) "OUTCOME" "done")
@@ -236,14 +242,17 @@ options (allowedTools, disallowedTools); ending its step
                 client))))
     config))
 
-(cl-defun agent-workflow-start-agent (&key project issue job profile type title values outcomes prompt)
+(cl-defun agent-workflow-start-agent (&key project issue job profile type title values outcomes prompt
+                                           snapshot)
   "Start an agent of the pool for the JOB of ISSUE's run in PROJECT, with
 the PROFILE (a name): its session, fresh, in ISSUE's worktree (made on its
 branch from TYPE and TITLE if it isn't there). VALUES: its variables'
 values (an alist); OUTCOMES: those it may give besides done; PROMPT: its
-first message, its variables filled in, sent once it's ready. Return the
-agent. A user error, nothing started, if PROJECT's crew runs, the pool is
-full or PROFILE isn't one."
+first message, its variables filled in, sent once it's ready. SNAPSHOT:
+\(DIR BRANCH COMMIT), a reading job's snapshot it works in instead of the
+issue's worktree (`agent-workflow-snapshot'). Return the agent. A user
+error, nothing started, if PROJECT's crew runs, the pool is full or
+PROFILE isn't one."
   (require 'agent-shell)
   (let ((project (file-name-as-directory project)))
     (when (agent-workflow-crew-running-p project)
@@ -255,10 +264,12 @@ full or PROFILE isn't one."
     (unless (alist-get profile (agent-workflow-profiles project) nil nil #'equal)
       (user-error "No profile %s: %s" profile
                   (agent-workflow--listed (mapcar #'car (agent-workflow-profiles project)))))
-    (pcase-let* ((`(,dir . ,branch) (agent-workflow-worktree project issue :type type :title title))
+    (pcase-let* ((`(,dir . ,branch) (if snapshot
+                                        (cons (nth 0 snapshot) (nth 1 snapshot))
+                                      (agent-workflow-worktree project issue :type type :title title)))
                  (agent (agent-workflow-agent--make :project project :issue issue :job job :profile profile
-                                                    :worktree dir :branch branch :values values
-                                                    :outcomes outcomes))
+                                                    :worktree dir :branch branch :commit (nth 2 snapshot)
+                                                    :values values :outcomes outcomes))
                  (made nil))
       (condition-case err
           (let* ((config (agent-workflow--config agent))

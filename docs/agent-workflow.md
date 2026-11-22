@@ -1,7 +1,7 @@
 # Agent workflow
 
 > **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
-> runs of agent steps, one job at a time.
+> runs of agent steps, their jobs in parallel.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -186,8 +186,16 @@ others started, when it's closed, has a run already, or no workflow fits it (or 
 queued until its blockers close, saying by what. Runs on different issues go at once, as the pool allows: a free agent
 goes to the highest priority first, then to the run started first.
 
-A run's jobs start once their `needs` are done; one whose `if` doesn't hold then is skipped. One job runs at a time per
-issue. A job's steps run in order, and a job with an agent step keeps its agent to its last step. The agent ends its
+A run's jobs start once their `needs` are done; one whose `if` doesn't hold then is skipped. Jobs that don't need each
+other run at once, as the pool allows. They share the issue's branch:
+
+- **A job that edits** (one of its agents' profiles lets it) works in the issue's worktree, one at a time: the next one
+  waits for it, saying so (`tests: waiting for docs, which edits the branch`).
+- **A job that only reads** (its profiles deny `Edit` and `Write`, or it runs scripts) works on a snapshot of the
+  branch, a worktree of its own detached at the commit the branch is at when it starts
+  (`.agent-shell/agent-workflow/worktrees/ISSUE@JOB`), removed once it's over. It runs beside the others.
+
+Each job's start in the journal says which commit it saw. A job's steps run in order, and a job with an agent step keeps its agent to its last step. The agent ends its
 step itself, `cmd/agent-workflow done OUTCOME "notes"`, then its turn; a turn that ends without it leaves the run
 waiting for you (tell the agent in its session). Its outcome must be `done` or one of its job's `outcomes`. Its job
 over, its agent stops, and the next jobs start. Every job done or skipped, the run is, and its worktree goes (its

@@ -204,7 +204,7 @@ profile's instructions; its first message sent."
         (should (string-match-p "you do the job build of the run on the issue demo-1" told))
         (should (string-match-p "known as \"demo-1 · build\"" told))
         (should (string-match-p (regexp-quote "cmd/agent-workflow done OUTCOME \"notes\": the outcome (one of done, approved, changes)") told))
-        (should (string-match-p "never switch, make or rename branches, push, or change, relabel or close the issue" told))
+        (should (string-match-p "Never switch, make or rename branches, push, or change, relabel or close the issue" told))
         (should (string-match-p "run as demo-1/build (BEADS_ACTOR)" told))
         (should (string-suffix-p "Build demo-1 on feat/demo-1-pool, in agent." told)))
       (should-not (agent-workflow-agent-context)))))
