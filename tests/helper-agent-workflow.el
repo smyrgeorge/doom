@@ -140,3 +140,11 @@ starters, no runs or agents before or after; skipped without bd."
     (call-process "git" nil nil nil "-c" "user.name=Agent" "-c" "user.email=agent@example.com"
                   "commit" "-q" "-m" message)))
 
+
+(defun +test-awr--finish-step (run job &optional notes)
+  "JOB of RUN's agent, its turn over, says its step is done (NOTES); the job
+not waited to be done (its result may wait for your OK)."
+  (let ((agent (+test-awr--agent run job)))
+    (should (+test-awr--wait (lambda () (and (eq (+test-awr--job run job) 'waiting)
+                                             (not (agent-workflow-asking run))))))
+    (agent-workflow-done agent nil (or notes "done"))))

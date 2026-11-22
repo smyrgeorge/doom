@@ -260,6 +260,23 @@ cmd/agent-workflow back doom-a1b build.2 - < note.txt     # its second step; the
 cmd/agent-workflow back doom-a1b build --discard          # the work since, gone
 ```
 
+### Approval
+
+Every step's result is taken as it is, and the run goes on by itself. A step with `approve: true` (a job's: its last
+step) waits, once it's done, for your OK: the run says so, with what to look at (its outcome and notes, what the branch
+got since the job started, a script's output).
+
+- `M-x agent-workflow-approve`: the run goes on.
+- `M-x agent-workflow-reject`, with a note: an agent step goes back to its agent (in its session, or resumed), and its
+  result waits for your OK again once it's done; a script's stops the run for you (run it again, skip it, or stop).
+
+```sh
+cmd/agent-workflow approve doom-a1b
+cmd/agent-workflow reject doom-a1b "name it lexer-escapes.el"
+```
+
+The journal keeps who decided.
+
 ### Loops
 
 An agent's outcome can send the work back: `changes: rerun build` sends it to build as going back does, the outcome's

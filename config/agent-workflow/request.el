@@ -22,6 +22,10 @@
 ;;        "review", "note": "..."}...]} (notes: optional) -> {"ok": true,
 ;;        "issue", "job", "choice"}: the run's question answered (runs.el,
 ;;        LOOPS); yours, refused from an agent's session
+;;   approve {"issue": "doom-a1b"}, reject {"issue": "doom-a1b", "note":
+;;        "..."} -> {"ok": true, "issue", "job"}: the result the run waits
+;;        for your OK on approved, or rejected (runs.el, APPROVAL); yours,
+;;        refused from an agent's session
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
 ;;        "project", "workflows": [names], "profiles": [names], "problems":
@@ -154,6 +158,21 @@ reply. Not from an agent's session."
          (choice (agent-workflow-confirm run (plist-get payload :choice) :notes notes)))
     (list :ok t :issue issue :job job :choice choice)))
 
+(defun agent-workflow--request-approval (directory payload pid reject)
+  "Approve (REJECT: reject, with PAYLOAD's note) the result DIRECTORY's
+project's run on PAYLOAD's issue waits for your OK on: the reply. Not from
+an agent's session."
+  (when (agent-workflow--request-caller pid)
+    (agent-workflow--refuse "%s: yours to decide, not an agent's" (if reject "reject" "approve")))
+  (let* ((default-directory (file-name-as-directory directory))
+         (project (or (agent-workflow-project) (user-error "Not in a git repository")))
+         (issue (plist-get payload :issue))
+         (run (or (agent-workflow-run-of project issue) (user-error "%s has no run" issue)))
+         (job (if reject
+                  (agent-workflow-reject run (or (plist-get payload :note) ""))
+                (agent-workflow-approve run))))
+    (list :ok t :issue issue :job job)))
+
 (defun agent-workflow-request (dir)
   "Answer cmd/agent-workflow's request in DIR (see the top of this file):
 its reply written to DIR/reply. Return t."
@@ -179,7 +198,9 @@ its reply written to DIR/reply. Return t."
                   ("done" (agent-workflow--request-done payload pid))
                   ("back" (agent-workflow--request-back directory payload pid))
                   ("confirm" (agent-workflow--request-confirm directory payload pid))
-                  (_ (list :ok :false :error (format "unknown operation %S; operations: run, done, back, confirm, check" op)))))
+                  ("approve" (agent-workflow--request-approval directory payload pid nil))
+                  ("reject" (agent-workflow--request-approval directory payload pid t))
+                  (_ (list :ok :false :error (format "unknown operation %S; operations: run, done, back, confirm, approve, reject, check" op)))))
             (json-parse-error (list :ok :false :error (format "not JSON: %s" (error-message-string err))))
             (error (list :ok :false :error (error-message-string err))))))
     (let ((coding-system-for-write 'utf-8-unix))

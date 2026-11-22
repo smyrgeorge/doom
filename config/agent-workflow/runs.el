@@ -715,8 +715,12 @@ end."
         (let ((index (plist-get state :retry)))
           (agent-workflow--job-set run job :retry nil :resolving nil)
           (agent-workflow--step-start run job index)))
+       ;; Its result waits for your OK, if its step or job says so.
+       ((agent-workflow--needs-approval-p run job)
+        (agent-workflow--ask-approval run job))
        (t
         (let ((next (1+ (plist-get state :step))))
+          (agent-workflow--job-set run job :approved nil)
           (if (nth next (plist-get (agent-workflow--job-spec run job) :steps))
               (agent-workflow--step-start run job next)
             (agent-workflow--job-end run job))))))))
@@ -879,6 +883,116 @@ discarded, what's lost said and asked first."
   (agent-workflow-back run job :step step :note note :discard discard)
   (message "%s: back to %s%s" (agent-workflow-run-name run) job (if discard ", the work since discarded" "")))
 
+;; ====== APPROVAL ======
+;; A step with approve: true (a job's: its last step) waits, once it's
+;; done, for your OK: the run says so, with what to look at (its outcome and
+;; notes, what the branch got since the job started, a script's output), and
+;; you're told. Approved, the run goes on. Rejected with a note: an agent
+;; step goes back to its agent (in its session, or resumed), then waits for
+;; you again; a script's stops the run for you (run it again, skip it, stop).
+
+(defun agent-workflow--needs-approval-p (run job)
+  "Non-nil if JOB of RUN's step just done waits for your OK, not given yet."
+  (let* ((state (agent-workflow--job run job))
+         (index (plist-get state :step))
+         (steps (plist-get (agent-workflow--job-spec run job) :steps)))
+    (and (or (plist-get (nth index steps) :approve)
+             (and (= index (1- (length steps))) (plist-get (agent-workflow--job-spec run job) :approve)))
+         (not (eql (plist-get state :approved) index)))))
+
+(defun agent-workflow-to-look-at (run job)
+  "What to look at of JOB of RUN's result: a plist (:outcome :notes :diff
+:log), :diff what the branch got since the job started (its stat), :log its
+last script's output's file."
+  (let* ((state (agent-workflow--job run job))
+         (start (plist-get state :start-commit))
+         (dir (plist-get state :dir))
+         (logs (and (file-directory-p (expand-file-name "logs" (agent-workflow-run-dir run)))
+                    (directory-files (expand-file-name "logs" (agent-workflow-run-dir run)) t
+                                     (concat "\\`" (regexp-quote job) "\\.")))))
+    (list :outcome (plist-get state :outcome) :notes (plist-get state :notes)
+          :diff (and start dir (file-directory-p dir)
+                     (let ((default-directory dir))
+                       (string-join (agent-workflow--git-lines "diff" "--stat" start) "\n")))
+          :log (car (last logs)))))
+
+(defun agent-workflow--ask-approval (run job)
+  "JOB of RUN's result waits for your OK."
+  (let ((index (plist-get (agent-workflow--job run job) :step))
+        (look (agent-workflow-to-look-at run job)))
+    (agent-workflow--job-set run job :ask (list :kind 'approve :step index))
+    (agent-workflow--journal run "asked" :job job :step index :kind "approve"
+                             :outcome (plist-get look :outcome) :notes (plist-get look :notes)
+                             :diff (plist-get look :diff) :log (plist-get look :log))
+    (agent-workflow--wait run job (format "%s: its result waits for your OK: approve it, or reject it with a note" job))))
+
+(defun agent-workflow--approval-asked (run)
+  "RUN's job whose result waits for your OK, and its question: (JOB . ASK),
+or a user error."
+  (let ((asking (agent-workflow-asking run)))
+    (unless (eq (plist-get (cdr asking) :kind) 'approve)
+      (user-error "%s waits for no approval" (agent-workflow-run-name run)))
+    asking))
+
+(cl-defun agent-workflow-approve (run &key (by "you"))
+  "Approve the result RUN waits for your OK on: the run goes on."
+  (pcase-let ((`(,job . ,ask) (agent-workflow--approval-asked run)))
+    (agent-workflow--journal run "answered" :job job :choice "approve" :by by)
+    (agent-workflow--job-set run job :ask nil :status 'running :why nil :approved (plist-get ask :step) :finished t)
+    (agent-workflow--refresh run)
+    (agent-workflow--step-finished run job)
+    job))
+
+(cl-defun agent-workflow-reject (run note &key (by "you"))
+  "Reject the result RUN waits for your OK on, with NOTE: an agent step's
+back to its agent (its session, or resumed), asked again once it's done; a
+script's stops the run."
+  (pcase-let* ((`(,job . ,ask) (agent-workflow--approval-asked run))
+               (index (plist-get ask :step))
+               (step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
+               (agent (plist-get (agent-workflow--job run job) :agent)))
+    (agent-workflow--journal run "answered" :job job :choice "reject" :note note :by by)
+    (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) "--append-notes"
+                              (format "%s's result rejected by %s: %s" job by note))
+    (cond
+     ((not (eq (plist-get step :kind) 'agent))
+      (agent-workflow--job-set run job :ask (list :kind 'broke :step index :what "its result rejected"))
+      (agent-workflow--wait run job (format "%s: its result rejected by you (%s): run it again, skip it, or stop?"
+                                            job note)))
+     ((and agent (buffer-live-p (agent-workflow-agent-buffer agent)))
+      (agent-workflow--job-set run job :ask nil :status 'running :why nil :finished nil :approved nil)
+      (agent-workflow--refresh run)
+      (agent-workflow-send agent (format "The user rejected your result: %s\n\nChange it, then say done again."
+                                         note)))
+     (t
+      (agent-workflow--job-set run job :ask nil :approved nil)
+      (agent-workflow-back run job :step index :note (concat "Your result was rejected: " note) :by by)))
+    job))
+
+(defun agent-workflow--read-approval (prompt)
+  "A run of the current project waiting for your OK, picked with PROMPT
+\(the only one, not asked)."
+  (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
+         (asking (or (seq-filter (lambda (run) (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))
+                                 (agent-workflow-runs project))
+                     (user-error "No run waits for your OK"))))
+    (if (cdr asking)
+        (let ((names (mapcar (lambda (run) (cons (agent-workflow-run-why run) run)) asking)))
+          (cdr (assoc (completing-read prompt names nil t) names)))
+      (car asking))))
+
+(defun agent-workflow-approve-command (run)
+  "Approve the result RUN waits for your OK on (M-x agent-workflow-approve)."
+  (interactive (list (agent-workflow--read-approval "Approve: ")))
+  (message "%s: %s approved" (agent-workflow-run-name run) (agent-workflow-approve run)))
+
+(defun agent-workflow-reject-command (run note)
+  "Reject the result RUN waits for your OK on, with NOTE (M-x
+agent-workflow-reject)."
+  (interactive (let ((run (agent-workflow--read-approval "Reject: ")))
+                 (list run (read-string "Why (the agent's told): "))))
+  (message "%s: %s rejected" (agent-workflow-run-name run) (agent-workflow-reject run note)))
+
 ;; ====== LOOPS ======
 ;; An agent's outcome can send the work back: review's changes: rerun build,
 ;; going back to build (as you do, its notes the note), build and every job
@@ -977,7 +1091,10 @@ nothing, or CHOICE isn't one of its question's."
                (other (plist-get ask :other))
                (edge (plist-get ask :edge))
                (kind (plist-get ask :kind))
-               (allowed (pcase kind ('nil '("go" "accept" "stop")) ('merge '("go" "stop")) (_ '("go" "skip" "stop")))))
+               (allowed (pcase kind ('nil '("go" "accept" "stop")) ('merge '("go" "stop")) ('approve nil)
+                          (_ '("go" "skip" "stop")))))
+    (when (eq kind 'approve)
+      (user-error "%s waits for your OK: approve it, or reject it" (agent-workflow-run-name run)))
     (unless (member choice allowed)
       (user-error "%s: %s, not %s" (agent-workflow-run-name run) (string-join allowed ", ") choice))
     (agent-workflow--journal run "answered" :job job :choice choice :by by
@@ -1003,6 +1120,8 @@ nothing, or CHOICE isn't one of its question's."
            (agent-workflow--step-start run job index))))
       ("skip"
        (agent-workflow--journal run "step-skipped" :job job :step (plist-get ask :step))
+       ;; Skipped, it needs no OK of yours.
+       (agent-workflow--job-set run job :approved (plist-get ask :step))
        (agent-workflow-step-ended run job))
       ("stop"
        (agent-workflow--job-set run job :why (format "%s: stopped by you" job))

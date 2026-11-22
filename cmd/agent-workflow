@@ -34,6 +34,12 @@
 #                                broke (go: again; skip; stop), a merge
 #                                waiting (go: again; stop)
 #                                -> {"ok": true, "issue", "job", "choice"}
+#   agent-workflow approve ISSUE
+#   agent-workflow reject ISSUE NOTE|-
+#                                the result ISSUE's run waits for your OK on
+#                                approved (the run goes on), or rejected with
+#                                NOTE (back to its agent, or the run stopped)
+#                                -> {"ok": true, "issue", "job"}
 #   agent-workflow check [FILE]  this folder's project's workflows and
 #                                profiles read anew and checked, or only FILE
 #                                (a workflow, .yml, or a profile, .md,
@@ -165,8 +171,18 @@ case "$op" in
       *) fail 2 "confirm: \"$choice\" isn't go, accept, skip or stop" ;;
     esac
     payload=$(printf '{"issue":%s,"choice":%s,"notes":[%s]}' "$(json_string "$issue")" "$(json_string "$choice")" "$notes") ;;
+  approve)
+    [ $# -eq 0 ] && fail 2 "approve: which issue? agent-workflow approve ISSUE"
+    [ $# -gt 1 ] && fail 2 "approve: unknown argument \"$2\"; agent-workflow approve ISSUE"
+    payload=$(printf '{"issue":%s}' "$(json_string "$1")") ;;
+  reject)
+    [ $# -lt 2 ] && fail 2 "reject: which issue, and why? agent-workflow reject ISSUE NOTE"
+    [ $# -gt 2 ] && fail 2 "reject: unknown argument \"$3\"; agent-workflow reject ISSUE NOTE"
+    note=$2
+    [ "$note" = "-" ] && note=$(cat)
+    payload=$(printf '{"issue":%s,"note":%s}' "$(json_string "$1")" "$(json_string "$note")") ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: run, done, back, confirm, check" ;;
+    fail 2 "unknown operation \"$op\"; operations: run, done, back, confirm, approve, reject, check" ;;
 esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workflow.XXXXXXXXXX") || fail 3 "no temp folder"

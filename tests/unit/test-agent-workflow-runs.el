@@ -414,3 +414,53 @@ jobs:
       ;; a's agent done: b's build starts.
       (+test-awr--finish a "build")
       (should (+test-awr--agent b "build")))))
+
+;; ====== APPROVAL ======
+
+(ert-deftest agent-workflow-runs/approval ()
+  "A step marked approve waits, once done, for your OK, what to look at
+said; rejected with a note: back to its agent, asked again once it's done;
+approved: on. A script's result rejected: the run stops for you."
+  (+test-awr "approval"
+    (write-region "description: x
+for: [feature]
+jobs:
+  build:
+    agent: build
+    approve: true
+  check:
+    needs: build
+    steps:
+      - run: echo checked
+        approve: true
+      - run: echo after
+" nil (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+    (let* ((issue (+test-awr--issue project "Approval"))
+           (run (agent-workflow-start-run project issue))
+           (agent (+test-awr--agent run "build")))
+      (+test-awr--commit (agent-workflow-worktree-directory project issue) "lexer.el" "Lexer")
+      (+test-awr--finish-step run "build" "first try")
+      (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why run)
+                                                 "build: its result waits for your OK: approve it, or reject it with a note"))))
+      (let ((look (agent-workflow-to-look-at run "build")))
+        (should (equal (plist-get look :notes) "first try"))
+        (should (string-match-p "lexer.el" (plist-get look :diff))))
+      (should-error (agent-workflow-confirm run "go") :type 'user-error)
+      ;; Rejected: its agent told, then asked again.
+      (agent-workflow-reject run "name it lexer-escapes.el")
+      (should (+test-awr--wait
+               (lambda () (seq-some (lambda (prompt) (string-match-p "\\`The user rejected your result: name it lexer-escapes\\.el" prompt))
+                                    (+test-awr--prompts "approval")))))
+      (should (eq (plist-get (agent-workflow--job run "build") :agent) agent))
+      (+test-awr--finish-step run "build" "renamed")
+      (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
+      (agent-workflow-approve run)
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'done))))
+      ;; A script's: rejected, the run stops; skipped, on.
+      (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
+      (agent-workflow-reject run "not like this")
+      (should (equal (agent-workflow-run-why run) "check: its result rejected by you (not like this): run it again, skip it, or stop?"))
+      (agent-workflow-confirm run "skip")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should (equal (seq-filter (lambda (ev) (member ev '("asked" "answered"))) (+test-awr--journal run))
+                     '("asked" "answered" "asked" "answered" "asked" "answered" "answered"))))))
