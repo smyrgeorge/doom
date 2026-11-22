@@ -377,3 +377,40 @@ jobs:
         (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
         (should (equal (seq-filter (lambda (ev) (member ev '("rerun" "asked" "answered"))) (+test-awr--journal run))
                        '("rerun" "rerun" "asked" "answered" "answered" "asked" "answered")))))))
+
+;; ====== LIMITS ======
+
+(ert-deftest agent-workflow-runs/limits ()
+  "A workflow's concurrency: its agents at once; a job's: its runs at
+once across issues, a script's too; waiting, saying why; another
+workflow's runs beside them."
+  (+test-awr "limits"
+    (write-region "description: x
+for: [feature]
+concurrency: 1
+jobs:
+  build:
+    agent: build
+" nil (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+    (write-region "description: x
+for: [chore]
+jobs:
+  check:
+    run: sleep 2
+    concurrency: 1
+" nil (expand-file-name ".agent-workflow/workflows/chores.yml" project))
+    (let* ((agent-workflow-pool 5)
+           (a (agent-workflow-start-run project (+test-awr--issue project "A")))
+           (b (agent-workflow-start-run project (+test-awr--issue project "B")))
+           (c (agent-workflow-start-run project (+test-awr--issue project "C" "--type" "chore")))
+           (d (agent-workflow-start-run project (+test-awr--issue project "D" "--type" "chore"))))
+      (+test-awr--agent a "build")
+      (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why b) "build: waiting: feature at its limit, 1 of 1 agents"))))
+      ;; Another workflow beside it: its check runs, one at a time.
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job c "check") 'running))))
+      (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why d) "check: waiting: check at its limit, 1 of 1"))))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state c) 'done))))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state d) 'done)) 10))
+      ;; a's agent done: b's build starts.
+      (+test-awr--finish a "build")
+      (should (+test-awr--agent b "build")))))

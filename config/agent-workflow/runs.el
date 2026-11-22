@@ -402,6 +402,8 @@ runs, it's over once every job is done or skipped."
            ((and (agent-workflow--needs-agent-p run job) (>= (agent-workflow-pool-used) agent-workflow-pool))
             (agent-workflow--job-set run job :why (format "%s: waiting for an agent: %d of %d work" job
                                                           (agent-workflow-pool-used) agent-workflow-pool)))
+           ((agent-workflow--over-limit run job)
+            (agent-workflow--job-set run job :why (format "%s: waiting: %s" job (agent-workflow--over-limit run job))))
            (t (agent-workflow--job-start run job))))))
     (if (seq-every-p (lambda (job) (memq (plist-get (cdr job) :status) '(done skipped))) (agent-workflow-run-jobs run))
         (agent-workflow--run-done run)
@@ -416,6 +418,39 @@ removed, if it has nothing not committed (its branch stays)."
   (dolist (job (agent-workflow-run-jobs run))
     (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) (car job)))
   (ignore-errors (agent-workflow-worktree-remove (agent-workflow-run-project run) (agent-workflow-run-issue run))))
+
+;; ====== LIMITS ======
+;; Under the pool's size: a workflow's concurrency, how many of the pool's
+;; agents work on its runs at once (every project's); a job's, how many of it
+;; run at once across its workflow's runs (merge: 1), scripts too.
+
+(defun agent-workflow--working-for (workflow)
+  "How many of the pool's agents work on runs of WORKFLOW (a name)."
+  (seq-count (lambda (agent)
+               (when-let* ((found (agent-workflow--agent-run agent)))
+                 (equal (plist-get (agent-workflow-run-workflow (car found)) :name) workflow)))
+             (seq-filter (lambda (agent) (buffer-live-p (agent-workflow-agent-buffer agent))) agent-workflow--agents)))
+
+(defun agent-workflow--running-of (workflow job)
+  "How many runs of WORKFLOW (a name) have their JOB running, or waiting
+for you."
+  (seq-count (lambda (run)
+               (and (equal (plist-get (agent-workflow-run-workflow run) :name) workflow)
+                    (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))))
+             agent-workflow--runs))
+
+(defun agent-workflow--over-limit (run job)
+  "Why JOB of RUN can't start for its limits, in words; nil if it can: its
+job's concurrency reached, or (it needs an agent) its workflow's."
+  (let* ((workflow (agent-workflow-run-workflow run))
+         (name (plist-get workflow :name))
+         (job-limit (plist-get (agent-workflow--job-spec run job) :concurrency))
+         (limit (plist-get workflow :concurrency)))
+    (cond
+     ((and job-limit (>= (agent-workflow--running-of name job) job-limit))
+      (format "%s at its limit, %d of %d" job (agent-workflow--running-of name job) job-limit))
+     ((and limit (agent-workflow--needs-agent-p run job) (>= (agent-workflow--working-for name) limit))
+      (format "%s at its limit, %d of %d agents" name (agent-workflow--working-for name) limit)))))
 
 ;; ====== IF ======
 
