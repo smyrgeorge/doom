@@ -290,8 +290,8 @@ Its pane's git line says so: `⎇ main   your checkout, from 881e46c · 1 commit
 
 ### Following a run
 
-Started from Emacs, a run opens its **pane**, an [Agent UI](agent-ui.md) canvas named `ISSUE · WORKFLOW`, a pane per
-run (tiling lays them out). Under the issue's title, its state in a line, then where its work is (git), then its
+Started from Emacs, a run opens its **pane**, an [Agent UI](agent-ui.md) canvas named `ISSUE · WORKFLOW` (`· run N` after it
+past the issue's first run), a pane per run (tiling lays them out). Under the issue's title, its state in a line, then where its work is (git), then its
 sections, each under its divider:
 
 ```text

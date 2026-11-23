@@ -421,6 +421,24 @@ one ls-files --others."
           (should (= (seq-count (lambda (args) (equal (car args) "ls-files")) calls) 1))))
       (agent-workflow-cancel run))))
 
+(ert-deftest agent-workflow-pane/each-run-its-own-pane ()
+  "Two runs of an issue with one workflow (the first failed, its pane kept):
+each its own pane, the second's named with its number; the first's still
+its own."
+  (+test-awp "two-panes"
+    (let* ((issue (+test-awr--issue project "Twice"))
+           (one (car (car (agent-workflow-run-ticket (list issue) nil project))))
+           (one-pane (agent-workflow-run-pane one)))
+      (agent-workflow-cancel one)
+      (let* ((two (car (car (agent-workflow-run-ticket (list issue) nil project))))
+             (two-pane (agent-workflow-run-pane two)))
+        (should (= (agent-workflow-run-n two) 2))
+        (should-not (eq one-pane two-pane))
+        (should (equal (buffer-name two-pane) (format "Agent UI: %s · feature · run 2" issue)))
+        (should (eq (buffer-local-value 'agent-workflow--pane-run one-pane) one))
+        (should (eq (buffer-local-value 'agent-workflow--pane-run two-pane) two))
+        (agent-workflow-cancel two)))))
+
 (defun +test-awp--ask (pane)
   "The question in PANE's Needs you, if there's one."
   (ignore-errors (agent-ui-get "ask" :canvas pane :section "needs-you")))

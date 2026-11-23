@@ -142,10 +142,19 @@ its window selected too."
         (select-window window)))
     pane))
 
+(defun agent-workflow--pane-name (run)
+  "RUN's pane's name, its own: its name (ISSUE · WORKFLOW), its number
+after it past its issue's first run (ISSUE · WORKFLOW · run 2): two runs of
+an issue never share a pane (one drawing over the other, its buttons
+answering the other)."
+  (if (and (agent-workflow-run-ticket-p run) (> (or (agent-workflow-run-n run) 1) 1))
+      (format "%s · run %d" (agent-workflow-run-name run) (agent-workflow-run-n run))
+    (agent-workflow-run-name run)))
+
 (defun agent-workflow--pane-make (run)
   "RUN's pane made, drawn, in no window yet."
   (let* ((agent-ui-display-function #'ignore)
-         (pane (agent-ui-canvas (agent-workflow-run-name run)))
+         (pane (agent-ui-canvas (agent-workflow--pane-name run)))
          (lines nil))
     (setf (agent-workflow-run-pane run) pane)
     (with-current-buffer pane
