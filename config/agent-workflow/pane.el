@@ -512,10 +512,11 @@ has none yet."
 
 (defun agent-workflow--pane-git (run where)
   "RUN's WHERE (`agent-workflow-run-where') as the elements under its
-header, each nil if it isn't shown: git (its branch, buttons opening its
-worktree, magit; in your checkout, magit alone: its worktree is your
-project), changes (its files changed since it started: RET opens
-one), commits (its latest, a line each: RET shows one), where-note (its base branch's commits its
+header, each nil if it isn't shown, each with a caption (branch, 3
+commits, 12 files changed, as a log's counts), in this order: git (its branch,
+buttons opening its worktree, magit; in your checkout, magit alone: its
+worktree is your project), commits (its latest, a line each: RET shows
+one), changes (its files changed since it started: RET opens one), where-note (its base branch's commits its
 merge takes too)."
   (let* ((line (agent-workflow--pane-git-line where))
          (worktree (plist-get where :worktree))
@@ -523,17 +524,34 @@ merge takes too)."
          (commits (plist-get where :commits))
          (base (plist-get where :base))
          (with (or (plist-get where :with) 0)))
-    (ignore run)
     (list (and line
-               (append (list :id "git" :type "text" :text line)
+               (append (list :id "git" :type "text" :caption "branch" :text line)
                        (when worktree
                          ;; Its own (`agent-workflow--pane-answer'): hovered, what they open.
                          (list :actions (if (plist-get where :checkout)
                                             '((:label "Magit" :prompt "magit" :help "magit on your checkout"))
                                           '((:label "Worktree" :prompt "worktree" :help "open its worktree")
                                             (:label "Magit" :prompt "magit" :help "magit on its worktree")))))))
-          (and worktree files
-               (list :id "changes" :type "files" :dir worktree :tree (if (> (length files) 12) t :false)
+          ;; A line each (its subject cut), RET or a click opening it.
+          (and commits
+               (list :id "commits" :type "table" :columns '("" "") :nowrap t
+                     ;; How many, as a log's counts (its own may be more than shown).
+                     :caption (let ((all (max (or (plist-get where :own) 0) (length commits))))
+                                (if (> all (length commits))
+                                    (format "%d commits, the last %d" all (length commits))
+                                  (format "%d commit%s" all (if (= all 1) "" "s"))))
+                     :rows (mapcar (lambda (commit) (list (nth 0 commit) (or (nth 1 commit) ""))) commits)
+                     ;; Its own (`agent-workflow--pane-answer'): {0} its hash.
+                     :row-open '(:prompt "{0}" :help "show this commit")))
+          ;; Its worktree gone (merged, deleted): its files from its commits,
+          ;; opened in your checkout.
+          (and files
+               (list :id "changes" :type "files"
+                     :caption (let ((uncommitted (cl-count-if (lambda (file) (plist-get file :uncommitted)) files)))
+                                (concat (format "%d file%s changed" (length files) (if (= (length files) 1) "" "s"))
+                                        (if (> uncommitted 0) (format " · %d not committed" uncommitted) "")))
+                     :dir (or worktree (and run (file-name-as-directory (agent-workflow-run-project run))))
+                     :tree (if (> (length files) 12) t :false)
                      :files (mapcar (lambda (file)
                                       (append (list :path (plist-get file :path)
                                                     :status (symbol-name (plist-get file :status)))
@@ -541,12 +559,6 @@ merge takes too)."
                                               (and (plist-get file :removed) (list :removed (plist-get file :removed)))
                                               (and (plist-get file :uncommitted) (list :note "not committed"))))
                                     files)))
-          ;; A line each (its subject cut), RET or a click opening it.
-          (and commits
-               (list :id "commits" :type "table" :columns '("" "") :nowrap t
-                     :rows (mapcar (lambda (commit) (list (nth 0 commit) (or (nth 1 commit) ""))) commits)
-                     ;; Its own (`agent-workflow--pane-answer'): {0} its hash.
-                     :row-open '(:prompt "{0}" :help "show this commit")))
           (and (> with 0) (not (plist-get where :merged))
                (list :id "where-note" :type "text" :face "warning"
                      :text (format "Started from %s, not %s: its %d %s not in %s %s merged too."
@@ -809,15 +821,29 @@ boxes, Needs you, Notes. MADE: just made (not shown while it's drawn)."
 
 (defun agent-workflow--pane-show-where (run pane)
   "RUN's git under its header in PANE (`agent-workflow--pane-git'): each
-element shown, or removed once it isn't."
+element shown, or removed once it isn't, in their order (one coming after
+those after it, its commits after its files: those after it shown again)."
   ;; A pane drawn before: its worktree's row, now git's buttons.
   (when (gethash "where" agent-ui--entries)
     (agent-ui-remove "where" :canvas pane))
-  (cl-loop for id in '("git" "changes" "commits" "where-note")
-           for element in (agent-workflow--pane-git run (agent-workflow-run-where run))
-           do (cond (element (agent-ui-show element :canvas pane))
-                    ;; The canvas's own: its key its id.
-                    ((gethash id agent-ui--entries) (agent-ui-remove id :canvas pane)))))
+  (let* ((ids '("git" "commits" "changes" "where-note"))
+         (elements (agent-workflow--pane-git run (agent-workflow-run-where run)))
+         ;; The canvas's own: its key its id. Shown, in the order they are.
+         (shown (seq-filter (lambda (key) (member key ids)) agent-ui--order))
+         (wanted (cl-loop for id in ids for element in elements when element collect id))
+         ;; As they'd be: those shown staying in their places, new ones
+         ;; after them all.
+         (in-order (equal (append (seq-filter (lambda (key) (member key wanted)) shown)
+                                  (seq-remove (lambda (id) (member id shown)) wanted))
+                          wanted)))
+    (cl-loop for id in ids
+             for element in elements
+             do (cond (element
+                       ;; Out of order: those shown after its place again, after it.
+                       (when (and (not in-order) (gethash id agent-ui--entries))
+                         (agent-ui-remove id :canvas pane))
+                       (agent-ui-show element :canvas pane))
+                      ((gethash id agent-ui--entries) (agent-ui-remove id :canvas pane))))))
 
 (defun agent-workflow--pane-where-tick ()
   "Where the work of each run not over with a pane is looked at again: its

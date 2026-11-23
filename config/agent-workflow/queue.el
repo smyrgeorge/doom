@@ -369,7 +369,8 @@ started); nil if that's unknown."
   "RUN done, its worktree removed: its issue's branch deleted if its
 workflow says so (branch: delete, the default) and its work is in the main
 branch (never a commit lost: your checkout may be on another branch); else
-kept, saying why. Journaled, kept in RUN."
+kept, saying why. Journaled, kept in RUN, its last commit too (:head: its
+files and commits read from it once it's gone)."
   (let* ((project (agent-workflow-run-project run))
          (issue (agent-workflow-run-issue run))
          (default-directory project)
@@ -377,6 +378,7 @@ kept, saying why. Journaled, kept in RUN."
          (into (agent-workflow-main-branch project)))
     (when branch
       (let ((empty nil)
+            (head nil)
             (why (cond ((eq (plist-get (agent-workflow-run-workflow run) :branch) 'keep)
                         "its workflow keeps it (branch: keep)")
                        ((file-exists-p (expand-file-name ".git" (agent-workflow-worktree-directory project issue)))
@@ -384,6 +386,7 @@ kept, saying why. Journaled, kept in RUN."
                        ((not (eql 0 (process-file "git" nil nil nil "merge-base" "--is-ancestor" branch into)))
                         (format "not merged into %s" into)))))
         (setq empty (agent-workflow--branch-empty-p run branch))
+        (setq head (car (agent-workflow--git-lines "rev-parse" "--verify" "--quiet" (concat branch "^{commit}"))))
         (unless why
           (condition-case err
               ;; Merged into the main branch, checked: -D, as git's -d would
@@ -392,10 +395,12 @@ kept, saying why. Journaled, kept in RUN."
             (error (setq why (error-message-string err)))))
         (setf (agent-workflow-run-branch-end run)
               (append (if why (list :branch branch :why why) (list :branch branch :deleted t :into into))
+                      (and head (list :head head))
                       (and empty (list :empty t))))
         (if why
             (agent-workflow--journal run "branch-kept" :branch branch :why why :empty (if empty t :false))
-          (agent-workflow--journal run "branch-deleted" :branch branch :into into :empty (if empty t :false)))))))
+          (agent-workflow--journal run "branch-deleted" :branch branch :into into :head head
+                                   :empty (if empty t :false)))))))
 
 ;; ====== LIMITS ======
 ;; Under the pool's size: a workflow's concurrency, how many of the pool's

@@ -998,6 +998,30 @@ shown before Rounds came (all shown again under it)."
       (kill-buffer pane)
       (kill-buffer session))))
 
+(ert-deftest agent-workflow-pane/its-commits-before-its-files ()
+  "Under its header: git, its commits, its files changed; a commit coming
+after its files were shown (a run's first commit): still above them."
+  (let* ((agent-ui-display-function #'ignore)
+         (pane (agent-ui-canvas (make-temp-name "where-")))
+         (where '(:branch "feature/x" :worktree "/w/" :into "main"
+                  :files ((:path "a.el" :status changed :added 1 :removed 0 :uncommitted t))))
+         (ids (lambda () (with-current-buffer pane
+                           (seq-filter (lambda (key) (member key '("git" "commits" "changes" "where-note")))
+                                       agent-ui--order)))))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-workflow-run-where) (lambda (&rest _) where)))
+          (with-current-buffer pane
+            (agent-workflow--pane-show-where nil pane)
+            (should (equal (funcall ids) '("git" "changes")))
+            ;; Its first commit: above its files.
+            (setq where (append where '(:commits (("abc1234" "A commit")))))
+            (agent-workflow--pane-show-where nil pane)
+            (should (equal (funcall ids) '("git" "commits" "changes")))
+            ;; Shown again as it is: nothing moves.
+            (agent-workflow--pane-show-where nil pane)
+            (should (equal (funcall ids) '("git" "commits" "changes")))))
+      (kill-buffer pane))))
+
 (ert-deftest agent-workflow-pane/what-it-is-at ()
   "Running, its State tile says what it's at: each running job's step and
 its number (its job's name alone if it has one step); near its budget, said
@@ -1109,16 +1133,24 @@ said), its commits; started from another branch than the main one, said."
                  "⎇ feat/demo-1-x   → main\nreview reads its snapshot at 1234567"))
   (should-not (agent-workflow--pane-git-line '(:into "main")))
   (let ((run (agent-workflow-run--make :project "/p/" :issue "demo-1")))
-    (pcase-let ((`(,git ,changes ,commits ,note)
+    (pcase-let ((`(,git ,commits ,changes ,note)
                  (agent-workflow--pane-git
                   run '(:branch "feat/demo-1-x" :into "main" :worktree "/p/w/" :with 0
                         :files ((:path "a.el" :status changed :added 2 :removed 1 :uncommitted t)
                                 (:path "b.el" :status added :added 3))
                         :commits (("abc1234" "A commit"))))))
       (should (equal (+test-awp--labels git) '("Worktree" "Magit")))
-      (should (equal changes '(:id "changes" :type "files" :dir "/p/w/" :tree :false
+      (should (equal changes '(:id "changes" :type "files" :caption "2 files changed · 1 not committed"
+                               :dir "/p/w/" :tree :false
                                :files ((:path "a.el" :status "changed" :added 2 :removed 1 :note "not committed")
                                        (:path "b.el" :status "added" :added 3)))))
+      ;; Each its caption, as a log's counts.
+      (should (equal (plist-get git :caption) "branch"))
+      (should (equal (plist-get commits :caption) "1 commit"))
+      (should (equal (plist-get (nth 1 (agent-workflow--pane-git
+                                       run '(:branch "b" :into "main" :own 9 :commits (("a" "x") ("b" "y")))))
+                                :caption)
+                     "9 commits, the last 2"))
       (should (equal (plist-get commits :rows) '(("abc1234" "A commit"))))
       (should (eq (plist-get commits :nowrap) t))
       (should (equal (plist-get (plist-get commits :row-open) :prompt) "{0}"))

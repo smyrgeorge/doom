@@ -88,6 +88,8 @@ files aren't committed there; :checkout t, nothing merged or deleted."
                    (agent-workflow--run-branch-made run)))
          (end (agent-workflow-run-branch-end run))
          (deleted (and (not made) (plist-get end :deleted) (plist-get end :branch)))
+         ;; Gone: its last commit, its files and commits read up to it.
+         (head (and deleted (agent-workflow--deleted-head end)))
          (branch (or made deleted))
          (base (let ((base (agent-workflow-run-base run))) (and (plist-get base :commit) base)))
          (into (agent-workflow-main-branch project))
@@ -117,9 +119,11 @@ files aren't committed there; :checkout t, nothing merged or deleted."
                                        (seq-some (lambda (step) (equal (plist-get step :uses) "merge"))
                                                  (plist-get (agent-workflow--job-spec run (car job)) :steps))))
                                 (agent-workflow-run-jobs run)))
-          :files (and live (agent-workflow--where-files dir (or (plist-get base :commit) into)))
-          :commits (and made (agent-workflow--where-commits (if live dir project)
-                                                            (or (plist-get base :commit) into) made))
+          :files (cond (live (agent-workflow--where-files dir (or (plist-get base :commit) into)))
+                       ((and head base) (agent-workflow--where-range-files project (plist-get base :commit) head)))
+          :commits (cond (made (agent-workflow--where-commits (if live dir project)
+                                                              (or (plist-get base :commit) into) made))
+                         ((and head base) (agent-workflow--where-commits project (plist-get base :commit) head)))
           :snapshots (delq nil (mapcar (lambda (job)
                                          (when-let* (((memq (plist-get (cdr job) :status) '(running waiting)))
                                                      (snapshot (plist-get (cdr job) :snapshot))
@@ -250,6 +254,39 @@ tracked yet, added."
                        :uncommitted (and (member path uncommitted) t))))
              statuses)
      (mapcar (lambda (path) (list :path path :status 'added :uncommitted t)) untracked))))
+
+(defun agent-workflow--where-range-files (dir base head)
+  "The files changed from BASE to HEAD (commits), read in DIR: as
+`agent-workflow--where-files' says them, none uncommitted."
+  (let* ((default-directory dir)
+         (stats (mapcar (lambda (line) (split-string line "\t"))
+                        (agent-workflow--git-lines "diff" "--numstat" "--no-renames" base head)))
+         (count (lambda (text) (and text (string-match-p "\\`[0-9]+\\'" text) (string-to-number text)))))
+    (mapcar (lambda (status)
+              (let* ((parts (split-string status "\t"))
+                     (path (nth 1 parts))
+                     (stat (seq-find (lambda (stat) (equal (nth 2 stat) path)) stats)))
+                (list :path path
+                      :status (pcase (car parts) ("A" 'added) ("D" 'deleted) (_ 'changed))
+                      :added (funcall count (nth 0 stat))
+                      :removed (funcall count (nth 1 stat)))))
+            (agent-workflow--git-lines "diff" "--name-status" "--no-renames" base head))))
+
+(defun agent-workflow--deleted-head (end)
+  "The last commit of a run's branch, deleted (END its branch-end): kept
+as it was deleted (:head), else (a run before it was kept) the second
+parent of its merge into END's :into (Merge BRANCH ...); nil if neither
+\(merged fast-forward)."
+  (or (plist-get end :head)
+      (when-let* ((branch (plist-get end :branch))
+                  (into (plist-get end :into))
+                  (line (seq-find (lambda (line)
+                                    (let ((subject (nth 1 (split-string line "\t"))))
+                                      (or (equal subject (concat "Merge " branch))
+                                          (string-prefix-p (concat "Merge " branch " ") subject))))
+                                  (agent-workflow--git-lines "log" "--merges" "--first-parent" "-200"
+                                                             "--format=%P%x09%s" into))))
+        (nth 1 (split-string (car (split-string line "\t")) " ")))))
 
 (defun agent-workflow--where-stamp (run)
   "What changes as RUN's place is worked on, read without git: the times

@@ -36,6 +36,12 @@
   (seq-some (lambda (file) (with-temp-buffer (insert-file-contents file) (re-search-forward pattern nil t)))
             (directory-files (expand-file-name "logs" (agent-workflow-run-dir run)) t "\\.log\\'")))
 
+(defun +test-aws--end (run)
+  "RUN's branch's end, its last commit (:head, a commit) checked and left out."
+  (let ((end (agent-workflow-run-branch-end run)))
+    (should (string-match-p "\\`[0-9a-f]\\{40\\}\\'" (plist-get end :head)))
+    (cl-loop for (key value) on end by #'cddr unless (eq key :head) append (list key value))))
+
 (defun +test-aws--asks (run why)
   "Wait for RUN to ask WHY."
   (should (+test-awr--wait (lambda () (and (agent-workflow-asking run) (equal (agent-workflow-run-why run) why))))))
@@ -634,12 +640,21 @@ deleted, its log saying so; its pane's where and status's too."
       (+test-aws--build run project issue "lexer.el" "theirs\n")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should-not (agent-workflow-issue-branch-made project issue))
-      (should (equal (agent-workflow-run-branch-end run) (list :branch branch :deleted t :into main)))
+      (should (equal (+test-aws--end run) (list :branch branch :deleted t :into main)))
       (should (+test-aws--log-line run (format "its branch %s deleted, merged into %s\\'" (regexp-quote branch) main)))
       (let ((where (agent-workflow-run-where run t)))
         (should (equal (plist-get where :branch) branch))
         (should (plist-get where :deleted))
-        (should (equal (agent-workflow--pane-git-line where) (format "⎇ %s   deleted, merged into %s" branch main)))))))
+        (should (equal (agent-workflow--pane-git-line where) (format "⎇ %s   deleted, merged into %s" branch main)))
+        ;; Its files and commits still: read up to its last commit, kept.
+        (should (equal (mapcar (lambda (file) (plist-get file :path)) (plist-get where :files)) '("lexer.el")))
+        (should (plist-get where :commits)))
+      ;; A run before its last commit was kept: found from its merge (Merge
+      ;; BRANCH ...: its second parent); a branch with no such merge, none.
+      (let ((default-directory project)
+            (head (plist-get (agent-workflow-run-branch-end run) :head)))
+        (should (equal (agent-workflow--deleted-head (list :branch branch :into main)) head))
+        (should-not (agent-workflow--deleted-head (list :branch "feat/never-merged" :into main)))))))
 
 (ert-deftest agent-workflow-steps/a-run-without-a-ticket ()
   "A workflow with ticket: false, run on no ticket (M-x agent-workflow-run),
@@ -684,7 +699,7 @@ jobs:
             (+test-awr--finish run "build"))
           (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
           (should (file-exists-p (expand-file-name "solo.txt" project)))
-          (should (equal (agent-workflow-run-branch-end run) (list :branch "run/solo-1" :deleted t :into main)))
+          (should (equal (+test-aws--end run) (list :branch "run/solo-1" :deleted t :into main)))
           (should (member "merged" (+test-awr--journal run)))
           (should-not (plist-get (agent-workflow--pane-header run) :title))
           ;; The next run, from the shell (no issue, --workflow): a branch of
@@ -824,7 +839,7 @@ saying why. branch: keep: kept, merged or not."
       (+test-aws--build run project issue "lexer.el" "theirs\n")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should (equal (agent-workflow-issue-branch-made project issue) branch))
-      (should (equal (agent-workflow-run-branch-end run) (list :branch branch :why (format "not merged into %s" main))))
+      (should (equal (+test-aws--end run) (list :branch branch :why (format "not merged into %s" main))))
       (should (+test-aws--log-line run (format "its branch %s kept: not merged into %s" (regexp-quote branch) main)))))
   (+test-awr "branch-keep"
     (+test-aws--workflow project (concat "branch: keep\n" +test-aws--merge))
@@ -835,7 +850,7 @@ saying why. branch: keep: kept, merged or not."
       (+test-aws--build run project issue "lexer.el" "theirs\n")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should (equal (agent-workflow-issue-branch-made project issue) branch))
-      (should (equal (agent-workflow-run-branch-end run)
+      (should (equal (+test-aws--end run)
                      (list :branch branch :why "its workflow keeps it (branch: keep)"))))))
 
 (ert-deftest agent-workflow-steps/merge-a-conflict ()

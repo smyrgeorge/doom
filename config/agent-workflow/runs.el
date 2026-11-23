@@ -84,7 +84,7 @@
   blocked                ; its issue's blockers, new since it started (watch.el)
   pane                   ; its pane's canvas, a buffer, while it has one (pane.el)
   base                   ; where its branch started: (:branch B :commit C); (:branch nil :commit nil) unknown
-  branch-end)            ; its branch once it's done: (:branch B :deleted t :into MAIN) or (:branch B :why WHY)
+  branch-end)            ; its branch once it's done: (:branch B :deleted t :into MAIN :head C) or (:branch B :why WHY)
 
 (defvar agent-workflow--runs nil
   "Every run of this Emacs, as they were started.")
