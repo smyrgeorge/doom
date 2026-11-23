@@ -38,7 +38,8 @@
 ;;   A step is agent: (with prompt:), run: (with shell:), elisp: (Lisp in
 ;;   your Emacs) or uses: (a built-in: merge, its with: {suite: make
 ;;   test}), with name:, timeout:, retries:, retry-from: (a step, its name
-;;   or number), on-fail: (a profile), approve:.
+;;   or number), on-fail: (a profile, or {run: a script, agent: a profile}:
+;;   the script first), approve:.
 ;;
 ;; WORKFLOW, read: a plist (:name :file :description :ticketless (ticket:
 ;; false) :checkout (runs-in: checkout) :for :concurrency
@@ -47,7 +48,8 @@
 ;; :if :concurrency :approve :outcomes ((OUTCOME . continue|(rerun JOB))...)
 ;; :max-rounds :steps (STEP...)), STEP (:kind agent|run|elisp|uses :agent
 ;; :name :prompt :run :shell :elisp :uses :with :timeout :retries
-;; :retry-from (an index of its job's steps) :on-fail :approve),
+;; :retry-from (an index of its job's steps) :on-fail (a profile)
+;; :on-fail-run (a script) :approve),
 ;; durations in seconds. Nothing in it is run here: if: and elisp: are only
 ;; read, to check them.
 ;;
@@ -560,13 +562,40 @@ this file). As `agent-workflow--job-read' for the rest."
              (funcall problem 'warning at "retries: an agent step isn't retried (its script's are)"))
            (setq step (plist-put step :retries (funcall count at value 0 "retries"))))
           ("on-fail"
-           (cond ((equal kind "agent")
-                  (funcall problem 'warning at "on-fail: an agent step has no script to fail: ignored"))
-                 ((not (stringp value)) (funcall problem 'error at "on-fail %s: a profile" (agent-workflow--shown value)))
-                 ((and (listp profiles) (not (member value profiles)))
-                  (funcall problem 'error at "on-fail %s: no such profile (%s)" value
-                           (agent-workflow--listed profiles)))
-                 (t (setq step (plist-put step :on-fail value)))))
+           ;; A profile (its agent fixes it), or {run: a script, agent: a
+           ;; profile}: the script first, then the agent if it couldn't.
+           (let ((profile-ok (lambda (at name)
+                               (cond ((not (stringp name))
+                                      (funcall problem 'error at "agent %s: a profile" (agent-workflow--shown name))
+                                      nil)
+                                     ((and (listp profiles) (not (member name profiles)))
+                                      (funcall problem 'error at "on-fail %s: no such profile (%s)" name
+                                               (agent-workflow--listed profiles))
+                                      nil)
+                                     (t t)))))
+             (cond ((equal kind "agent")
+                    (funcall problem 'warning at "on-fail: an agent step has no script to fail: ignored"))
+                   ((null value)
+                    (funcall problem 'error at "on-fail: run: (a script), agent: (a profile), or both"))
+                   ((stringp value)
+                    (when (funcall profile-ok at value)
+                      (setq step (plist-put step :on-fail value))))
+                   ((and value (agent-workflow--mapping-p value))
+                    (let ((script (cdr (assoc "run" value)))
+                          (agent (cdr (assoc "agent" value))))
+                      (pcase-dolist (`(,k . ,_) value)
+                        (unless (member k '("run" "agent"))
+                          (funcall problem 'warning (append at (list k)) "unknown key %s: ignored (run, agent)" k)))
+                      (cond ((not (or script agent))
+                             (funcall problem 'error at "on-fail: run: (a script), agent: (a profile), or both"))
+                            ((and script (not (and (stringp script) (not (string-blank-p script)))))
+                             (funcall problem 'error (append at (list "run")) "run %s: a script"
+                                      (agent-workflow--shown script)))
+                            ((and agent (not (funcall profile-ok (append at (list "agent")) agent))))
+                            (t (when script (setq step (plist-put step :on-fail-run script)))
+                               (when agent (setq step (plist-put step :on-fail agent)))))))
+                   (t (funcall problem 'error at "on-fail %s: a profile, or {run: a script, agent: a profile}"
+                               (agent-workflow--shown value))))))
           ("approve" (setq step (plist-put step :approve (funcall bool at value "approve"))))
           ("name"
            (if (and (stringp value) (string-match-p agent-workflow--name-regexp value))

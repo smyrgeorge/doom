@@ -883,6 +883,11 @@ its agent step, it does."
       (agent-workflow--turn-over agent)
       (agent-workflow--agent-event agent '((:event . error) (:data . ((:message . "overloaded")))))
       (should-not waits)
+      ;; Its on-fail script fixing it first, its agent kept: still nothing.
+      (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
+            (list :status 'running :step 1 :retry 1 :fix-script t :agent agent))
+      (agent-workflow--turn-over agent)
+      (should-not waits)
       ;; Fixing it: its turn without done, the run waits.
       (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
             (list :status 'running :step 1 :retry 1 :agent agent))

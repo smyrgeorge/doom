@@ -20,6 +20,13 @@ Its environment: `ISSUE`, `BRANCH`, `MAIN` (the user's checkout), `MAIN_BRANCH`,
 
 Retries used up, the run asks the user: go on (with a note for the agent fixing it), skip the step, or stop.
 
+An `on-fail` script (`on-fail: {run: SCRIPT}`, or `{run: SCRIPT, agent: PROFILE}`) runs first on an exit 1, where
+the step ran, with `FAILED_STEP` (its name, else its number) and `FAILED_OUTPUT` (its output's last 200 lines) in its
+environment: 0, it fixed it (the step runs again, its try counted, no agent); 1, it couldn't (to the job's agent, else
+the `on-fail` one, told the step's output and the script's; none, the run asks the user); another code, or past the
+step's `timeout`, it broke (the run asks). For a fix with no judgement in it: rerunning a flaky CI run, regenerating
+a file, clearing a cache.
+
 `retry-from: STEP` (an earlier step of its job: its `name`, or its number from 1): its fix runs the job again from
 there, those steps too, its retries counted on it. For a check of what an earlier step made: a push, then CI watched.
 

@@ -110,7 +110,34 @@ A step does one thing:
 
 With `name` (a name of its own in its job: its pane, its log say it), `timeout` (`45s`, `10m`, `1h30m`), `retries`
 (a script's), `retry-from` (where its retry starts again: an earlier step of its job, its name or number), `on-fail`
-(the profile of the agent a failing step goes to, in a job with none) and `approve`.
+(the profile of the agent a failing step goes to, in a job with none; or a script tried first: see below) and
+`approve`.
+
+### A script on a failure
+
+`on-fail` takes a profile (an agent fixes the step), or a script, or both:
+
+```yaml
+on-fail: ci                    # an agent with the ci profile
+
+on-fail:                       # a script alone
+  run: .agent-workflow/scripts/rerun-flaky.sh
+
+on-fail:                       # the script first, then the agent if it couldn't
+  run: .agent-workflow/scripts/rerun-flaky.sh
+  agent: ci
+```
+
+The script runs where the step did, its environment a step's with `FAILED_STEP` (the step's name, else its number)
+and `FAILED_OUTPUT` (its output's last 200 lines); its output goes in a log of its own (`….on-fail.log`), its pane
+box shows it as it comes. It returns:
+
+| It returns | Then |
+|---|---|
+| 0 | It fixed it: the step runs again (from its `retry-from` step), its try counted, no agent |
+| 1 | It couldn't: to the job's agent, else the `on-fail` one, told the step's output and the script's; no agent, the run asks you |
+| another code, or past the step's `timeout` | It broke: the run asks you (run the step again, skip it, or stop) |
+
 
 ### Variables
 
@@ -440,7 +467,7 @@ is kept in the run's `logs/`.
 | It returns | Then |
 |---|---|
 | 0 | The next step |
-| 1 | The work is wrong: its output goes to the job's agent (or, in a job with none, one with the step's `on-fail` profile), which fixes it and says done; the step runs again (from its `retry-from` step, those between with it), up to its `retries` (0 by default) |
+| 1 | The work is wrong: its output goes to the job's agent (or, in a job with none, one with the step's `on-fail` profile), which fixes it and says done; the step runs again (from its `retry-from` step, those between with it), up to its `retries` (0 by default). Its `on-fail` script first, if it has one (see A script on a failure) |
 | 3 | It can't go on: the run failed, its last line saying why. Its agents stopped, its issue open again, its branch and worktree kept, as cancelled |
 | another code, or runs out of its `timeout` | It broke: no agent is sent |
 

@@ -1082,13 +1082,16 @@ In `agent-workflow-agent-event-functions'."
          (agent-workflow--wait (car found) (cdr found) (format "%s: its agent's session ended" (cdr found))))))))
 
 (defun agent-workflow--agent-at-work-p (run job)
-  "Whether JOB of RUN has its agent at work: fixing a failed step (or
-resolving a merge's conflicts), or its step is an agent's. Not while a
+  "Whether JOB of RUN has its agent at work: fixing a failed step (not
+while its on-fail script does), resolving a merge's conflicts, or its step
+is an agent's. Not while a
 script step runs, its agent kept for its next fix: a turn of its then (a
 background command of its done, waking it) is none of the run's."
   (let* ((state (agent-workflow--job run job))
          (step (nth (or (plist-get state :step) 0) (plist-get (agent-workflow--job-spec run job) :steps))))
-    (or (plist-get state :retry) (plist-get state :resolving) (eq (plist-get step :kind) 'agent))))
+    ;; Its on-fail script at work first: not its agent.
+    (and (not (plist-get state :fix-script))
+         (or (plist-get state :retry) (plist-get state :resolving) (eq (plist-get step :kind) 'agent)))))
 
 (defun agent-workflow--turn-over (agent)
   "AGENT's turn is over: its step goes on if it said done, else its run
@@ -1394,15 +1397,15 @@ noted, the commits made in between its own. In
 `agent-workflow-journal-functions'."
   (when (agent-workflow-run-checkout-p run)
     (pcase event
-      ((or "step-started" "fixing")
-       ;; An agent at work: where HEAD was (a fix after its step: still
-       ;; from its step's start).
-       (when-let* (((plist-get data :agent))
+      ((or "step-started" "fixing" "fix-script")
+       ;; An agent at work, or an on-fail script: where HEAD was (a fix
+       ;; after its step: still from its step's start).
+       (when-let* (((or (plist-get data :agent) (equal event "fix-script")))
                    (job (plist-get data :job))
                    ((not (plist-get (agent-workflow--job run job) :head)))
                    (head (agent-workflow--checkout-head run)))
          (agent-workflow--job-set run job :head head)))
-      ("step-ended" (agent-workflow--checkout-note run (plist-get data :job)))
+      ((or "step-ended" "fix-script-ended") (agent-workflow--checkout-note run (plist-get data :job)))
       ;; Over: its agents' work too (interrupted, it goes on: not over).
       ((or "cancelled" "failed" "run-done")
        (dolist (job (agent-workflow-run-jobs run))

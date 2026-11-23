@@ -857,7 +857,8 @@ running), none. Show session and Show output pressed: shown."
   (let* ((workflow '(:name "github"
                      :jobs (("green" :name "green"
                              :steps ((:kind run :run "push.sh" :name "push")
-                                     (:kind run :run "watch.sh" :name "watch" :retries 5 :on-fail "ci")))
+                                     (:kind run :run "watch.sh" :name "watch" :retries 5 :on-fail "ci"
+                                      :on-fail-run "rerun.sh")))
                             ("docs" :name "docs" :steps ((:kind agent :agent "docs" :name "write"))))))
          (session (generate-new-buffer " *test agent session*"))
          (agent (agent-workflow-agent--make :issue "github" :job "green" :profile "ci" :buffer session))
@@ -933,7 +934,17 @@ running), none. Show session and Show output pressed: shown."
                   (let (shown)
                     (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) (setq shown buffer))))
                       (agent-workflow--pane-answer "output green" nil "run/now-green"))
-                    (should (eq shown output))))
+                    (should (eq shown output)))
+                  ;; Its on-fail script fixing it (its agent kept): the script's
+                  ;; box, said so, its time from the script's start.
+                  (puthash "green" (list :fix-started (- (float-time) 20)
+                                         :steps (list (cons 1 (list :started (- (float-time) 75)))))
+                           agent-workflow--pane-times)
+                  (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
+                        (list :status 'running :step 1 :retry 1 :fix-script t :agent agent :process process
+                              :tries '((1 . 2))))
+                  (should (equal (plist-get (funcall box "green") :title)
+                                 "green · on-fail script · fixing step 2 (watch) · try 2 of 6 · rerun.sh · 20s")))
               (delete-process process)
               (kill-buffer output)))
           ;; Nothing running: none.

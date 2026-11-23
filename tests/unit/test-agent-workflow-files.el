@@ -191,6 +191,25 @@ jobs:
         (should-not problems)
         (should-not ran)))))
 
+(ert-deftest agent-workflow-files/on-fail-a-script-an-agent-or-both ()
+  "on-fail: a profile (its agent fixes it), {run: a script} (it alone),
+{run, agent} (the script first, then the agent), {agent} (as a profile)."
+  (cl-flet ((step (on-fail)
+              (pcase-let ((`(,workflow . ,problems)
+                           (+test-awf--workflow (concat "description: x\njobs:\n  a:\n    run: x\n    on-fail:" on-fail))))
+                (should-not problems)
+                (car (plist-get (cdr (assoc "a" (plist-get workflow :jobs))) :steps)))))
+    (let ((it (step " build\n")))
+      (should (equal (plist-get it :on-fail) "build"))
+      (should-not (plist-get it :on-fail-run)))
+    (let ((it (step "\n      run: tests/rerun.sh\n")))
+      (should-not (plist-get it :on-fail))
+      (should (equal (plist-get it :on-fail-run) "tests/rerun.sh")))
+    (let ((it (step "\n      run: tests/rerun.sh\n      agent: build\n")))
+      (should (equal (plist-get it :on-fail) "build"))
+      (should (equal (plist-get it :on-fail-run) "tests/rerun.sh")))
+    (should (equal (plist-get (step "\n      agent: review\n") :on-fail) "review"))))
+
 (ert-deftest agent-workflow-files/errors-leave-it-out ()
   "Each error names its line, and leaves the workflow out."
   (dolist (case
@@ -218,6 +237,14 @@ jobs:
               (error 4 "shell: only for a run: step"))
              ("description: x\njobs:\n  a:\n    steps:\n      - run: x\n        on-fail: nobody\n"
               (error 6 "on-fail nobody: no such profile (build, review, docs)"))
+             ("description: x\njobs:\n  a:\n    run: x\n    on-fail:\n      agent: nobody\n"
+              (error 6 "on-fail nobody: no such profile (build, review, docs)"))
+             ("description: x\njobs:\n  a:\n    run: x\n    on-fail: {}\n"
+              (error 5 "on-fail: run: (a script), agent: (a profile), or both"))
+             ("description: x\njobs:\n  a:\n    run: x\n    on-fail:\n      run: 3\n"
+              (error 6 "run 3: a script"))
+             ("description: x\njobs:\n  a:\n    run: x\n    on-fail: [build]\n"
+              (error 5 "on-fail (\"build\"): a profile, or {run: a script, agent: a profile}"))
              ("description: x\njobs:\n  a:\n    run: x\n    outcomes:\n      changes: rerun b\n"
               (error 6 "changes: rerun b: no such job (a)"))
              ("description: x\njobs:\n  a:\n    run: x\n    outcomes:\n      changes: rerun b\n  b:\n    run: y\n"

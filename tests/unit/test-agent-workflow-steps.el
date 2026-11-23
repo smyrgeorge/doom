@@ -254,6 +254,86 @@ jobs:
         (agent-workflow-done agent nil "wrote it"))
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
+(ert-deftest agent-workflow-steps/an-on-fail-script ()
+  "on-fail: {run: ...}: a failed step's script first, FAILED_STEP and
+FAILED_OUTPUT in its environment, its output a log of its own. Exit 0 it
+fixed it: the step runs again, no agent. 1 it couldn't: to its on-fail
+agent, told the step's output and the script's; with no agent, the run
+asks you. Other, it broke: the run asks you."
+  ;; It fixes it: no agent; the step run again, passing.
+  (+test-awr "onfail-run"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    name: check
+    run: test -f ok.txt || { echo missing ok.txt; exit 1; }
+    retries: 2
+    on-fail:
+      run: 'echo \"fixing $FAILED_STEP: $FAILED_OUTPUT\"; touch ok.txt'
+")
+    (let* ((issue (+test-awr--issue project "On fail run"))
+           (run (agent-workflow-start-run project issue)))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should-not (agent-workflow-agents project))
+      (should (member "fix-script" (+test-awr--journal run)))
+      (should (member "fix-script-ended" (+test-awr--journal run)))
+      (should (+test-aws--log run "fixing check: missing ok.txt"))
+      (should (seq-some (lambda (file) (string-suffix-p ".on-fail.log" file))
+                        (directory-files (expand-file-name "logs" (agent-workflow-run-dir run)))))
+      (should (eql (alist-get 0 (plist-get (agent-workflow--job run "check") :tries)) 2))))
+  ;; It can't: its agent, told both.
+  (+test-awr "onfail-both"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    run: test -f ok.txt || { echo missing ok.txt; exit 1; }
+    retries: 1
+    on-fail:
+      run: echo cannot fix it; exit 1
+      agent: build
+")
+    (let* ((issue (+test-awr--issue project "On fail both"))
+           (run (agent-workflow-start-run project issue))
+           (agent (+test-awr--agent run "check")))
+      (should (equal (agent-workflow-agent-profile agent) "build"))
+      (should (+test-awr--wait
+               (lambda () (seq-some (lambda (prompt) (and (string-match-p "missing ok.txt" prompt)
+                                                          (string-match-p "on-fail script ran first and couldn't fix it" prompt)
+                                                          (string-match-p "cannot fix it" prompt)))
+                                    (+test-awr--prompts "onfail-both")))))
+      (write-region "x" nil (expand-file-name "ok.txt" (agent-workflow-worktree-directory project issue)))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "check") 'waiting))))
+      (agent-workflow-done agent nil "wrote it")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))))
+  ;; It can't, no agent: it asks you; it broke: it asks you.
+  (+test-awr "onfail-alone"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    run: echo nope; exit 1
+    retries: 1
+    on-fail:
+      run: exit 1
+  other:
+    run: echo nope; exit 1
+    retries: 1
+    on-fail:
+      run: exit 7
+")
+    (let* ((issue (+test-awr--issue project "On fail alone"))
+           (run (agent-workflow-start-run project issue)))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "check") 'waiting))))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "other") 'waiting))))
+      (should (string-match-p "its on-fail script couldn't fix it"
+                              (plist-get (agent-workflow--job run "check") :why)))
+      (should (string-match-p "its on-fail script broke (it returned 7)"
+                              (plist-get (agent-workflow--job run "other") :why)))
+      (should-not (agent-workflow-agents project))
+      (agent-workflow-cancel run))))
+
 (ert-deftest agent-workflow-steps/sent-back-to-a-step-once ()
   "A job sent back to its step 2: that round starts there; a later round of
 it (its job before rerun, it with it) from its first step again."

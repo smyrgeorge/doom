@@ -280,6 +280,8 @@ steps' times noted."
            (when-let* ((times (gethash name agent-workflow--pane-times)))
              (puthash name (plist-put times :cancelled time) agent-workflow--pane-times))))
         ("step-started" (when (numberp index) (step-set :started)))
+        ;; Its on-fail script's start: its box's time from it.
+        ("fix-script" (setq times (plist-put times :fix-started time)))
         ((or "step-ended" "script-ended" "step-skipped") (when (numberp index) (step-set :ended))))
       (when job
         (puthash job times agent-workflow--pane-times)))))
@@ -754,7 +756,8 @@ of 6: its try that failed, of all it may have)."
   (let* ((index (plist-get state :retry))
          (step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
          (agent (plist-get state :agent))
-         (who (or (and agent (agent-workflow-agent-p agent) (agent-workflow-agent-profile agent))
+         (who (or (and (plist-get state :fix-script) "its on-fail script")
+                  (and agent (agent-workflow-agent-p agent) (agent-workflow-agent-profile agent))
                   (plist-get step :on-fail)
                   "its agent"))
          (tries (or (alist-get index (plist-get state :tries)) 1)))
@@ -1269,7 +1272,8 @@ it was counted as a line of output: 1 line); its ACTIONS."
 job, agent and its profile (agent ci), what on, how long its turn's been (or that it
 asks you) as its title; its last actions, the latest last, each marked by
 its kind; Show session (at its question, if it asks)."
-  (when-let* ((agent (plist-get state :agent))
+  (when-let* (((not (plist-get state :fix-script)))
+              (agent (plist-get state :agent))
               ((agent-workflow-agent-p agent))
               ((not (agent-workflow-agent-stopping agent)))
               ((buffer-live-p (agent-workflow-agent-buffer agent)))
@@ -1320,28 +1324,40 @@ its colours' codes gone, a line redrawn in place (\\r) its last state."
 (defun agent-workflow--pane-script-box (job state)
   "JOB's live box while a script step of its runs (STATE its job's; nil
 else): its job, script (else what its step does), its step, its try, its
-command and how long it's run as its title; its output's last lines as it comes; Show output."
+command and how long it's run as its title; its on-fail script fixing it,
+on-fail script, what it fixes, its command. Its output's last lines as it
+comes; Show output."
   (when-let* ((process (plist-get state :process))
               ((processp process))
               ((process-live-p process)))
     (let* ((run agent-workflow--pane-run)
+           (fixing (plist-get state :fix-script))
            (index (or (plist-get state :step) 0))
            (step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
            (try (alist-get index (plist-get state :tries)))
-           (started (plist-get (alist-get index (plist-get (gethash job agent-workflow--pane-times) :steps)) :started)))
+           (times (gethash job agent-workflow--pane-times))
+           (started (if fixing
+                        (plist-get times :fix-started)
+                      (plist-get (alist-get index (plist-get times :steps)) :started)))
+           (command (lambda (text)
+                      (truncate-string-to-width (car (split-string (string-trim (format "%s" text)) "\n"))
+                                                60 nil nil "…"))))
       (agent-workflow--pane-box-of
             (agent-workflow--pane-box-id job)
             (string-join
-                    (delq nil (list job
+                    (delq nil (if fixing
+                                  (list job "on-fail script"
+                                        (and step (format "fixing step %d (%s)" (1+ index) (agent-workflow--pane-step-name step)))
+                                        (and (numberp try) (format "try %d of %d" try (1+ (or (plist-get step :retries) 0))))
+                                        (funcall command (plist-get step :on-fail-run))
+                                        (and started (agent-workflow--duration-words (round (- (float-time) started)))))
+                                (list job
                                     ;; A script's, said; its command after its step.
                                     (if (eq (plist-get step :kind) 'run) "script" (and step (agent-workflow--pane-step-does step)))
                                     (and step (format "step %d (%s)" (1+ index) (agent-workflow--pane-step-name step)))
                                     (and (numberp try) (> try 1) (format "try %d" try))
-                                    (and (eq (plist-get step :kind) 'run)
-                                         (truncate-string-to-width
-                                          (car (split-string (string-trim (format "%s" (plist-get step :run))) "\n"))
-                                          60 nil nil "…"))
-                                    (and started (agent-workflow--duration-words (round (- (float-time) started))))))
+                                    (and (eq (plist-get step :kind) 'run) (funcall command (plist-get step :run)))
+                                    (and started (agent-workflow--duration-words (round (- (float-time) started)))))))
                     " · ")
             (agent-workflow--pane-output-lines process)
             "No output yet."

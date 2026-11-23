@@ -221,7 +221,7 @@ script killed; interrupted, waiting for you."
     ;; Its step waiting for an agent: it waits for you now, not for one;
     ;; a fix under way (a failed step's, a merge's conflicts) dropped:
     ;; continued, its step runs afresh, once (skipped, it's skipped).
-    (agent-workflow--job-set run job :agent nil :process nil :pool nil :retry nil :resolving nil
+    (agent-workflow--job-set run job :agent nil :process nil :pool nil :retry nil :resolving nil :fix-script nil
                              :ask (list :kind 'interrupted :step (or (plist-get state :step) 0)))
     (agent-workflow--journal run "interrupted" :job job)
     (agent-workflow--wait run job (format "%s: interrupted (paused): continue it, skip its step, or stop?" job))))
@@ -249,7 +249,8 @@ status); every job's question dropped. Return their names."
     (dolist (job (agent-workflow-run-jobs run))
       (when (and (memq (plist-get (cdr job) :status) '(running waiting))
                  (not (equal (car job) except)))
-        (agent-workflow--job-set run (car job) :status 'cancelled :why nil :finished nil :retry nil :resolving nil)
+        (agent-workflow--job-set run (car job) :status 'cancelled :why nil :finished nil :retry nil :resolving nil
+                                 :fix-script nil)
         (push (car job) cancelled)))
     ;; Their questions gone with them: nothing answers them now.
     (dolist (job (agent-workflow-run-jobs run))

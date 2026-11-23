@@ -45,7 +45,8 @@ One of these, and only one:
 And: `name` (a name, its own in its job), `timeout` (a duration: a script's), `retries` (how many times a script
 failing with 1 is fixed and run again; 0 by default), `retry-from` (where its retry starts again: an earlier step of
 its job, its name or number from 1), `on-fail` (the profile of the agent sent to fix a step, in a job with no agent of
-its own), `approve`.
+its own; or `{run: SCRIPT}`, a script tried first, alone, or `{run: SCRIPT, agent: PROFILE}`, the script then the
+agent if it couldn't: scripts.md), `approve`.
 
 ## What the check refuses
 

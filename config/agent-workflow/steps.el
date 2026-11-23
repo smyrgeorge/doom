@@ -19,7 +19,13 @@
 ;;              its retry-from step: those between run again too), up to
 ;;              its retries (0 by default, its own tries counted); used
 ;;              up, the run asks you: go on (with a note for the agent),
-;;              skip the step, or stop
+;;              skip the step, or stop. An on-fail script (on-fail: {run:
+;;              ..., agent: ...}) first, FAILED_OUTPUT (its output's last
+;;              200 lines) and FAILED_STEP in its environment: exit 0 it
+;;              fixed it (the step runs again, as fixed: its tries
+;;              counted); 1 it couldn't: to the agent (its output too),
+;;              none, the run asks you; other, or a timeout, it broke: the
+;;              run asks you (run it again, skip it, or stop)
 ;;   exit 3     it can't go on: the run failed (its agents stopped, its
 ;;              issue open again, its branch and worktree kept; resume.el)
 ;;   other, or a timeout: the script broke; no agent is sent, the run asks
@@ -62,23 +68,73 @@
 
 ;; ====== THE AGENT THAT FIXES ======
 
-(defun agent-workflow--fix (run job index output what)
-  "Step INDEX of JOB of RUN failed (WHAT, in words; OUTPUT its output): the
-job's agent told, else one with the step's on-fail profile started, to fix
-it and say done; the step then runs again. No agent to send: the run
-waits for you. Its pane redrawn either way (who fixes it, or the wait)."
-  (agent-workflow--fix-1 run job index output what)
+(defun agent-workflow--fix (run job index output what &optional scripted also)
+  "Step INDEX of JOB of RUN failed (WHAT, in words; OUTPUT its output): its
+on-fail script first, if it has one (not SCRIPTED yet:
+`agent-workflow--fix-script'); then the job's agent told, else one with
+the step's on-fail profile started, to fix it and say done (ALSO, what its
+script said, told too); the step then runs again. No agent to send: the
+run waits for you. Its pane redrawn either way (who fixes it, or the
+wait)."
+  (if (and (not scripted)
+           (plist-get (nth index (plist-get (agent-workflow--job-spec run job) :steps)) :on-fail-run))
+      (agent-workflow--fix-script run job index output what)
+    (agent-workflow--fix-1 run job index output what also))
   (agent-workflow--changed run))
 
-(defun agent-workflow--fix-1 (run job index output what)
-  "`agent-workflow--fix''s work, its pane not redrawn."
+(defun agent-workflow--fix-script (run job index output what)
+  "Step INDEX of JOB of RUN failed (WHAT; OUTPUT its output): its on-fail
+script run, FAILED_OUTPUT (OUTPUT's last 200 lines) and FAILED_STEP (its
+name, else its number) in its environment, its output in a log of its
+own (the step's .on-fail.log), its timeout the step's; its end
+`agent-workflow--fix-script-ended'."
+  (let* ((step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
+         (log (concat (file-name-sans-extension (agent-workflow--log-file run job index)) ".on-fail.log"))
+         (process-environment (append (list (concat "FAILED_OUTPUT=" (agent-workflow--tail output 200))
+                                            (concat "FAILED_STEP=" (or (plist-get step :name) (number-to-string (1+ index)))))
+                                      process-environment)))
+    (agent-workflow--job-set run job :retry index :finished nil :fix-script t)
+    (agent-workflow--journal run "fix-script" :job job :step index)
+    (agent-workflow--spawn run job index (agent-workflow--script-command run (plist-get step :on-fail-run) nil)
+                           :timeout (or (plist-get step :timeout) agent-workflow-script-timeout)
+                           :log log :event "fix-script-ended"
+                           :on-exit (lambda (status script-output)
+                                      (agent-workflow--fix-script-ended run job index output what status script-output)))))
+
+(defun agent-workflow--fix-script-ended (run job index output what status script-output)
+  "Step INDEX of JOB of RUN's on-fail script ended with STATUS (its exit, or
+timeout), SCRIPT-OUTPUT (OUTPUT, WHAT the step's failure): 0, it fixed it:
+the step runs again (from its retry-from step); 1, it couldn't: to the
+job's agent, else its on-fail one (told what the script said too), none,
+the run asks you; other, it broke: the run asks you."
+  (agent-workflow--job-set run job :fix-script nil)
+  (let ((step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
+        (held (plist-get (agent-workflow--job run job) :agent)))
+    (pcase status
+      (0 (agent-workflow-step-ended run job))
+      (1 (if (or (and held (buffer-live-p (agent-workflow-agent-buffer held))) (plist-get step :on-fail))
+             (agent-workflow--fix run job index output what t
+                                  (format "Its on-fail script ran first and couldn't fix it. Its output:\n\n%s"
+                                          (agent-workflow--tail script-output 40)))
+           (agent-workflow--job-set run job :retry nil)
+           (agent-workflow--wait run job (format "%s: %s, and its on-fail script couldn't fix it" job what))
+           (agent-workflow--changed run)))
+      (_ (agent-workflow--job-set run job :retry nil)
+         (agent-workflow--broke run job index (if (eq status 'timeout)
+                                                  "its on-fail script ran out of time"
+                                                (format "its on-fail script broke (it returned %s)" status)))
+         (agent-workflow--changed run)))))
+
+(defun agent-workflow--fix-1 (run job index output what &optional also)
+  "`agent-workflow--fix''s work, its pane not redrawn (ALSO: see it)."
   (let* ((step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
          (state (agent-workflow--job run job))
          (held (plist-get state :agent))
          (from (agent-workflow--retry-from run job index))
-         (message (format "%s (try %d of %d). Its output:\n\n%s\n\nFix it, commit, then say done again: %s."
+         (message (format "%s (try %d of %d). Its output:\n\n%s\n\n%sFix it, commit, then say done again: %s."
                           what (agent-workflow--tries run job index) (1+ (or (plist-get step :retries) 0))
                           (agent-workflow--tail output 60)
+                          (if also (concat also "\n\n") "")
                           (if (= from index)
                               "the step runs again"
                             (format "its job runs again from its step %d%s, then this one"
@@ -95,7 +151,7 @@ waits for you. Its pane redrawn either way (who fixes it, or the wait)."
      ((agent-workflow--no-agent run job)
       ;; The pool full, its workflow at its limit: it waits for an agent,
       ;; looked at again as one stops (runs.el's --advance).
-      (agent-workflow--job-set run job :retry nil :pool (list :fix index output what)
+      (agent-workflow--job-set run job :retry nil :pool (list :fix index output what t also)
                                :why (agent-workflow--no-agent run job))
       (agent-workflow--refresh run))
      (t
@@ -202,11 +258,13 @@ script written to a file of the run's. One line naming a file of
                               (agent-workflow--tries run job index) (1+ index))
                       (agent-workflow-run-dir run))))
 
-(cl-defun agent-workflow--spawn (run job index command &key on-exit timeout directory)
+(cl-defun agent-workflow--spawn (run job index command &key on-exit timeout directory log (event "script-ended"))
   "Run COMMAND (a list) for step INDEX of JOB of RUN in DIRECTORY (default:
-the job's place), its output logged; ON-EXIT called with its exit status
-\(timeout when it ran out of TIMEOUT seconds) and its output."
-  (let* ((log (agent-workflow--log-file run job index))
+the job's place), its output logged (in LOG, default the step's:
+`agent-workflow--log-file'), its end journaled as EVENT; ON-EXIT called
+with its exit status \(timeout when it ran out of TIMEOUT seconds) and its
+output."
+  (let* ((log (or log (agent-workflow--log-file run job index)))
          (buffer (generate-new-buffer " *agent-workflow script*"))
          (default-directory (file-name-as-directory (or directory (plist-get (agent-workflow--job run job) :dir))))
          (process-environment (append (agent-workflow--script-environment run job) process-environment))
@@ -216,7 +274,7 @@ the job's place), its output logged; ON-EXIT called with its exit status
     (make-directory (file-name-directory log) t)
     (condition-case err
         (setq process (agent-workflow--spawn-process
-                       buffer command log run job index on-exit (lambda () timed-out) (lambda () timer)))
+                       buffer command log run job index on-exit (lambda () timed-out) (lambda () timer) event))
       ;; It can't start (its interpreter missing, its folder gone): its step
       ;; broke, as one that returned other than 0, 1, 3 (never left running).
       (error
@@ -239,10 +297,10 @@ the job's place), its output logged; ON-EXIT called with its exit status
                                                                                  (kill-process process))))))))))
     process))
 
-(defun agent-workflow--spawn-process (buffer command log run job index on-exit timed-out timer)
+(defun agent-workflow--spawn-process (buffer command log run job index on-exit timed-out timer event)
   "`agent-workflow--spawn''s process: COMMAND, its output in BUFFER, then
-LOG; ON-EXIT called once it ends; TIMED-OUT and TIMER functions of no
-argument saying whether it ran out of time, and its timer."
+LOG; ON-EXIT called once it ends, journaled as EVENT; TIMED-OUT and TIMER
+functions of no argument saying whether it ran out of time, and its timer."
   (make-process
            :name "agent-workflow-script" :buffer buffer :command command :connection-type 'pipe :noquery t
            ;; Its errors in its output, without a word of the pipe's own.
@@ -258,7 +316,7 @@ argument saying whether it ran out of time, and its timer."
                              (write-region output nil log nil 'silent))
                            (agent-workflow--job-set run job :process nil)
                            (unless (process-get process 'agent-workflow-stopped)
-                             (agent-workflow--journal run "script-ended" :job job :step index
+                             (agent-workflow--journal run event :job job :step index
                                                       :exit (if (eq status 'timeout) "timeout" status)
                                                       :log (file-relative-name log (agent-workflow-run-dir run))
                                                       :tail (agent-workflow--tail output 20))
