@@ -1,0 +1,41 @@
+# A sample of this config's own: the examples' screenshots taken again
+# (.agent-workflow/scripts/screenshots.sh, macOS, Emacs with the Screen
+# Recording permission: its frames on top of your windows a minute or two),
+# each changed one looked at by an agent (the screenshots profile) and
+# committed, then reviewed, merged. No for: picked by its label
+# (workflow:screenshots), or --workflow screenshots.
+name: screenshots
+description: The examples' screenshots taken again, each changed one looked at and committed, reviewed, merged.
+budget: {cost: 5, time: 1h}
+
+jobs:
+  capture:
+    steps:
+      - run: .agent-workflow/scripts/screenshots.sh
+        timeout: 20m
+      - agent: screenshots
+        prompt: |
+          The examples' screenshots were just taken again, for {issue}: {issue.title}.
+
+          {issue.description}
+
+  review:
+    needs: capture
+    agent: review
+    prompt: |
+      Review {branch}: the examples' screenshots taken again, for {issue}.
+
+      Look at each examples/*.png it changes (Read it; git show {main-branch}:examples/NAME.png for the one
+      before): it shows its example as docs/examples.md says, in the dark theme, nothing left from another
+      example (a frame, a notice, its mode line). Nothing but examples/*.png changed.
+
+      The one who took them said: {jobs.capture.notes}
+    outcomes:
+      approved: continue
+      changes: rerun capture
+
+  merge:
+    needs: review
+    concurrency: 1
+    uses: merge
+    on-fail: screenshots

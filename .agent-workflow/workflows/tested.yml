@@ -1,0 +1,50 @@
+# A sample of this config's own: a change built with its tests, the unit
+# tests of what it touched run (.agent-workflow/scripts/tests.sh: a failure
+# goes back to build's agent, twice at most), documented, reviewed, your OK,
+# merged. No for: picked by its label (workflow:tested), or --workflow tested.
+name: tested
+description: A change to this config built, the tests of what it touched run, documented, reviewed, your OK, merged.
+budget: {cost: 20, time: 3h}
+
+jobs:
+  build:
+    steps:
+      - agent: build
+        prompt: |
+          Build {issue}: {issue.title}.
+
+          {issue.description}
+
+          Acceptance criteria:
+          {issue.acceptance}
+
+          Its tests in tests/unit/ (docs/tests.md: tests/run.sh unit NAME). Its docs are the docs job's.
+      - run: .agent-workflow/scripts/tests.sh
+        timeout: 30m
+        retries: 2
+
+  docs:
+    needs: build
+    agent: docs
+
+  review:
+    needs: [build, docs]
+    agent: review
+    prompt: |
+      Review {branch}, for {issue}: {issue.title}.
+
+      Acceptance criteria:
+      {issue.acceptance}
+
+      The builder said: {jobs.build.notes}
+      The docs: {jobs.docs.notes}
+    approve: true
+    outcomes:
+      approved: continue
+      changes: rerun build
+
+  merge:
+    needs: review
+    concurrency: 1
+    uses: merge
+    on-fail: build
