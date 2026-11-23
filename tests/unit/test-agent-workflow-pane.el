@@ -557,6 +557,50 @@ growing (no end)."
       (setf (cdr (assoc "green" (agent-workflow-run-jobs run))) (list :status 'running :step 0 :tries '((0 . 2))))
       (should (equal (detail) "try 2")))))
 
+(ert-deftest agent-workflow-pane/a-step-being-fixed ()
+  "A step that failed, its agent fixing it (its job's :retry): failed, its
+detail who fixes it (the agent's profile, else its on-fail) and the try that
+failed, of all it may have; its job's line says fixing. A job of one step:
+all on its line. A merge's conflicts: resolving them."
+  (let* ((workflow '(:name "github"
+                     :jobs (("green" :name "green"
+                             :steps ((:kind run :run "push.sh" :name "push")
+                                     (:kind run :run "watch.sh" :name "watch" :retries 5 :on-fail "ci")))
+                            ("lint" :name "lint" :steps ((:kind run :run "lint.sh" :retries 2 :on-fail "build"))))))
+         (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'running :workflow workflow
+                                        :spent '(:cost 0 :tokens 0)
+                                        :jobs (list (cons "green" (list :status 'running :step 1 :retry 1
+                                                                        :tries '((0 . 1) (1 . 1))))
+                                                    (cons "lint" (list :status 'running :step 0 :retry 0
+                                                                       :tries '((0 . 2))))))))
+    (with-temp-buffer
+      (setq-local agent-workflow--pane-times (make-hash-table :test #'equal))
+      (cl-flet ((item (job) (agent-workflow--pane-job run job (cdr (assoc job (agent-workflow-run-jobs run))))))
+        (let* ((green (item "green"))
+               (watch (nth 1 (plist-get green :steps))))
+          (should (equal (plist-get green :status) "running"))
+          (should (equal (plist-get green :detail) "fixing"))
+          (should (equal (plist-get (car (plist-get green :steps)) :status) "done"))
+          (should (equal (plist-get watch :status) "failed"))
+          (should (equal (plist-get watch :detail) "run: watch.sh · ci fixing it · try 1 of 6")))
+        ;; The agent fixing it known: its profile.
+        (setf (plist-get (cdr (assoc "green" (agent-workflow-run-jobs run))) :agent)
+              (agent-workflow-agent--make :issue "github" :job "green" :profile "fixer")
+              (plist-get (cdr (assoc "green" (agent-workflow-run-jobs run))) :tries) '((0 . 1) (1 . 3)))
+        (should (equal (plist-get (nth 1 (plist-get (item "green") :steps)) :detail)
+                       "run: watch.sh · fixer fixing it · try 3 of 6"))
+        ;; One step: all on its job's line, no try said twice.
+        (should (equal (plist-get (item "lint") :detail) "build fixing it · try 2 of 3"))
+        ;; A merge's conflicts.
+        (setf (plist-get (cdr (assoc "lint" (agent-workflow-run-jobs run))) :resolving) t)
+        (should (equal (plist-get (item "lint") :detail) "build resolving its conflicts"))
+        ;; Fixed, the step running again: running, no fixing.
+        (setf (cdr (assoc "green" (agent-workflow-run-jobs run))) (list :status 'running :step 1 :tries '((1 . 4))))
+        (let ((green (item "green")))
+          (should (equal (plist-get green :detail) "try 4"))
+          (should (equal (plist-get (nth 1 (plist-get green :steps)) :status) "running"))
+          (should (equal (plist-get (nth 1 (plist-get green :steps)) :detail) "run: watch.sh")))))))
+
 (ert-deftest agent-workflow-pane/a-failed-run ()
   "A run that failed: its state line says why, red; its job failed (✗, an
 error in the graph), its steps done up to the one that failed, named, what

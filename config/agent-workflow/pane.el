@@ -37,6 +37,8 @@
 (defvar agent-ui--entries)
 (declare-function agent-ui--session-name "agent-ui/agent")
 (declare-function agent-workflow--uses-merge-p "agent-workflow/dry")
+(declare-function agent-workflow-agent-p "agent-workflow/pool")
+(declare-function agent-workflow-agent-profile "agent-workflow/pool")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
 (declare-function agent-shell-elicitation-jump-to-latest-form "agent-shell-elicitation")
 (declare-function agent-shell-elicitation--get "agent-shell-elicitation")
@@ -551,14 +553,20 @@ it does (`agent-workflow--pane-step-does')."
          (agent (seq-find (lambda (step) (eq (plist-get step :kind) 'agent)) steps))
          (tries (alist-get index (plist-get state :tries)))
          (outcome (plist-get state :outcome))
+         ;; A step that failed, its agent fixing it: who, and its try.
+         (fixing (and (memq status '(running waiting)) (plist-get state :retry)
+                      (agent-workflow--pane-fixing run job state)))
          (detail (string-join
                   (delq nil (list (and (eq status 'skipped) (plist-get spec :if)
                                        (format "its if: %s" (string-trim (plist-get spec :if))))
                                   (and agent (not (eq status 'skipped)) (format "agent %s" (plist-get agent :agent)))
                                   (and (numberp (plist-get state :round)) (> (plist-get state :round) 1)
                                        (format "round %d" (plist-get state :round)))
+                                  ;; One step: its fixing said on its job's line; several, fixing
+                                  ;; there, who and its try on its step's.
+                                  (and fixing (if (cdr steps) "fixing" fixing))
                                   ;; Its tries count the one running: a second, said.
-                                  (and (numberp tries) (> tries 1) (memq status '(running waiting))
+                                  (and (not fixing) (numberp tries) (> tries 1) (memq status '(running waiting))
                                        (format "try %d" tries))
                                   (and (eq status 'done) outcome (not (equal outcome "done")) outcome)
                                   ;; What it left on the branch.
@@ -583,18 +591,40 @@ it does (`agent-workflow--pane-step-does')."
       (append item
               (list :steps
                     (cl-loop for step in steps for i from 0
-                             collect (let ((sub (cond ((memq status '(done skipped)) (if (eq status 'done) "done" "skipped"))
-                                                      ((memq status '(running waiting failed))
-                                                       (cond ((< i index) "done")
-                                                             ((= i index) (symbol-name status))
-                                                             (t "pending")))
-                                                      (t "pending"))))
+                             collect (let* ((fixed (and fixing (= i index)))
+                                            (sub (cond ((memq status '(done skipped)) (if (eq status 'done) "done" "skipped"))
+                                                       ;; Being fixed: it failed.
+                                                       (fixed "failed")
+                                                       ((memq status '(running waiting failed))
+                                                        (cond ((< i index) "done")
+                                                              ((= i index) (symbol-name status))
+                                                              (t "pending")))
+                                                       (t "pending")))
+                                            (does (and (plist-get step :name) (agent-workflow--pane-step-does step))))
                                        (agent-workflow--pane-timed
                                         (append (list :name (agent-workflow--pane-step-name step) :status sub)
-                                                ;; Named: what it does after it.
-                                                (and (plist-get step :name)
-                                                     (list :detail (agent-workflow--pane-step-does step))))
+                                                ;; Named: what it does after it; being fixed, who fixes
+                                                ;; it and its try.
+                                                (and (or does fixed)
+                                                     (list :detail (string-join (delq nil (list does (and fixed fixing)))
+                                                                                " · "))))
                                         (alist-get i (plist-get times :steps)) sub))))))))
+
+(defun agent-workflow--pane-fixing (run job state)
+  "JOB of RUN in STATE, its step :retry failed and its agent fixing it: who
+fixes it and its try, as its step's detail says them (ci fixing it · try 1
+of 6: its try that failed, of all it may have)."
+  (let* ((index (plist-get state :retry))
+         (step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
+         (agent (plist-get state :agent))
+         (who (or (and agent (agent-workflow-agent-p agent) (agent-workflow-agent-profile agent))
+                  (plist-get step :on-fail)
+                  "its agent"))
+         (tries (or (alist-get index (plist-get state :tries)) 1)))
+    (if (plist-get state :resolving)
+        ;; A merge's conflicts: its retries not counted.
+        (format "%s resolving its conflicts" who)
+      (format "%s fixing it · try %d of %d" who tries (1+ (or (plist-get step :retries) 0))))))
 
 (defun agent-workflow--pane-graph (run)
   "RUN's jobs as a graph: each a node, marked and coloured by its state (its
