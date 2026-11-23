@@ -617,6 +617,10 @@ runs, it's over once every job is done or skipped."
         (when blockers
           (agent-workflow--set-state run 'queued (concat "blocked by " (string-join blockers ", ")))
           (throw 'wait nil))))
+    ;; A job interrupted (Emacs stopped, paused now): nothing new starts
+    ;; until it's continued (resume.el).
+    (when (agent-workflow--interrupted run)
+      (throw 'wait nil))
     ;; Blocked since it started (watch.el): nothing new starts.
     (when-let* ((blockers (agent-workflow-run-blocked run)))
       (dolist (job (agent-workflow--startable run))

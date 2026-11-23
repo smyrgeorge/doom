@@ -118,7 +118,8 @@ workflow it started with: a run, or nil if it can't be."
 
 (defun agent-workflow-restore (project)
   "PROJECT's runs not over read back, those this Emacs hasn't: their jobs
-that were running interrupted, waiting for you. Return them."
+that were running interrupted, waiting for you; the others looked at
+\(what can start, starts). Return them."
   (let ((dir (agent-workflow--runs-directory project))
         restored)
     (when (file-directory-p dir)
@@ -140,6 +141,9 @@ that were running interrupted, waiting for you. Return them."
                   (agent-workflow--refresh run)
                   (agent-workflow--changed run)
                   (push run restored))))))))
+    ;; Those not interrupted (queued, pending jobs left) go on; the
+    ;; interrupted ones wait for you (`agent-workflow--advance').
+    (when restored (agent-workflow--tick-soon))
     (nreverse restored)))
 
 (defun agent-workflow-restore-all ()

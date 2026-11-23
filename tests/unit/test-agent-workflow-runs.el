@@ -500,6 +500,57 @@ again; its project noted; continued with the workflow as it is now."
                                         (+test-awr--prompts "restore"))))))
         (should (= (seq-count (lambda (ev) (equal ev "job-started")) (+test-awr--journal run)) 2))))))
 
+(ert-deftest agent-workflow-runs/back-after-emacs-stopped-not-interrupted ()
+  "Emacs stops while a run is queued (nothing of it running): read back, it
+goes on by itself, to its end; one interrupted waits for you, nothing new
+of it started."
+  (+test-awr "restore-queued"
+    (write-region "description: x
+for: [chore]
+jobs:
+  a:
+    run: echo a
+  b:
+    run: echo b
+" nil (expand-file-name ".agent-workflow/workflows/chores.yml" project))
+    (unwind-protect
+        (let ((run (progn (agent-workflow-pause)
+                          (agent-workflow-start-run project (+test-awr--issue project "Queued" "--type" "chore")))))
+          (should (+test-awr--wait (lambda () (string-suffix-p "runs are paused" (or (agent-workflow-run-why run) "")))))
+          ;; Emacs stops; started again, not paused.
+          (setq agent-workflow--runs nil agent-workflow--paused nil)
+          (let ((back (car (agent-workflow-restore project))))
+            (should back)
+            (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state back) 'done)) 10))))
+      (setq agent-workflow--paused nil))
+    ;; Interrupted: a's script was running; b, which could start, doesn't.
+    (write-region "description: x
+for: [chore]
+jobs:
+  a:
+    run: sleep 30
+  b:
+    needs: c
+    run: echo b
+  c:
+    run: sleep 30
+" nil (expand-file-name ".agent-workflow/workflows/chores.yml" project))
+    (let ((run (agent-workflow-start-run project (+test-awr--issue project "Interrupted" "--type" "chore"))))
+      (should (+test-awr--wait (lambda () (and (eq (+test-awr--job run "a") 'running) (eq (+test-awr--job run "c") 'running)))))
+      (agent-workflow--stop-all run)
+      (setq agent-workflow--runs nil)
+      ;; c ended meanwhile (as Emacs stopped), a still running: a interrupted.
+      (let* ((dir (agent-workflow-run-dir run))
+             (back (progn (let ((saved (agent-workflow--read-run dir)))
+                            (agent-workflow--job-set saved "c" :status 'done)
+                            (agent-workflow--save-state saved))
+                          (car (agent-workflow-restore project)))))
+        (should (equal (agent-workflow--interrupted back) '("a")))
+        (+test-awr--wait (lambda () nil) 1)
+        (should (eq (agent-workflow-run-state back) 'waiting))
+        (should (eq (+test-awr--job back "b") 'pending))
+        (agent-workflow-cancel back)))))
+
 (ert-deftest agent-workflow-runs/pause-and-cancel ()
   "Paused: nothing new starts, saying so; with now, a running script stopped,
 interrupted, continued after: run again. Cancelled: its agents stopped, the
