@@ -8,6 +8,8 @@
 ;;   description: ...
 ;;   ticket: false                  it runs without a ticket (an issue),
 ;;                                  and only without one; default true
+;;   runs-in: checkout              its jobs work in your checkout, on its
+;;                                  branch; default worktree (its own)
 ;;   for: [feature, task]           the issue types it's offered for
 ;;   concurrency: 3                 agents on its runs at once
 ;;   budget: {cost: 15, tokens: 2000000, time: 3h}
@@ -39,7 +41,7 @@
 ;;   or number), on-fail: (a profile), approve:.
 ;;
 ;; WORKFLOW, read: a plist (:name :file :description :ticketless (ticket:
-;; false) :for :concurrency
+;; false) :checkout (runs-in: checkout) :for :concurrency
 ;; :budget (:cost :tokens :time) :max-rounds :branch (delete|keep; nil:
 ;; delete) :jobs ((NAME . JOB)...)), JOB (:name :needs
 ;; :if :concurrency :approve :outcomes ((OUTCOME . continue|(rerun JOB))...)
@@ -58,10 +60,13 @@
 ;; without run:, a step's name: not a name or another's of its job, a
 ;; retry-from: naming no step of its job or one after it, an if: not one Lisp form, an elisp: not Lisp, a variable not
 ;; one there is, a number, duration or true/false that isn't one, a branch:
-;; neither delete nor keep, a ticket: neither true nor false. Warnings:
+;; neither delete nor keep, a ticket: neither true nor false, a runs-in:
+;; neither worktree nor checkout, uses: merge in one that runs in your
+;; checkout. Warnings:
 ;; an unknown key, a for: type Beads doesn't have, a {jobs.X...} of a job not
 ;; before it, retries:, retry-from: or on-fail: on an agent step, no
-;; description, {issue.title}... in a prompt of a workflow with no ticket.
+;; description, {issue.title}... in a prompt of a workflow with no ticket,
+;; branch: in one that runs in your checkout.
 
 (require 'cl-lib)
 (require 'seq)
@@ -80,7 +85,7 @@
 is only warned about).")
 
 (defconst agent-workflow--workflow-keys
-  '("name" "description" "ticket" "for" "concurrency" "budget" "max-rounds" "branch" "jobs")
+  '("name" "description" "ticket" "runs-in" "for" "concurrency" "budget" "max-rounds" "branch" "jobs")
   "A workflow's keys.")
 
 (defconst agent-workflow--step-keys
@@ -255,6 +260,13 @@ default: not checked). AS: its name, if not its file's (a run's copy)."
                ('t nil)
                (:false (setq workflow (plist-put workflow :ticketless t)))
                (_ (bool '("ticket") value "ticket"))))
+            ("runs-in"
+             ;; checkout: its jobs work in your checkout (runs.el).
+             (pcase value
+               ("worktree" nil)
+               ("checkout" (setq workflow (plist-put workflow :checkout t)))
+               (_ (problem 'error '("runs-in") "runs-in %s: worktree (its own: the default) or checkout (yours)"
+                           (agent-workflow--shown value)))))
             ("branch"
              (if (member value '("delete" "keep"))
                  (setq workflow (plist-put workflow :branch (intern value)))
@@ -287,6 +299,18 @@ default: not checked). AS: its name, if not its file's (a run's copy)."
                 (problem 'error (list "jobs" (car cycle) "needs") "needs go round: %s"
                          (string-join (append cycle (list (car cycle))) " → ")))
               (setq workflow (plist-put workflow :jobs (nreverse read-jobs)))
+              ;; In your checkout: no branch of its own, nothing to merge.
+              (when (plist-get workflow :checkout)
+                (when (assoc "branch" data)
+                  (problem 'warning '("branch") "branch: ignored: it runs in your checkout (runs-in: checkout), on its branch"))
+                (pcase-dolist (`(,job . ,spec) jobs)
+                  (let ((steps (if (assoc "steps" spec)
+                                   (cl-loop for step in (cdr (assoc "steps" spec)) for i from 0
+                                            collect (cons (list "jobs" job "steps" i "uses") step))
+                                 (list (cons (list "jobs" job "uses") spec)))))
+                    (pcase-dolist (`(,path . ,step) steps)
+                      (when (and (agent-workflow--mapping-p step) (equal (cdr (assoc "uses" step)) "merge"))
+                        (problem 'error path "uses merge: it runs in your checkout (runs-in: checkout): nothing to merge"))))))
               ;; No ticket: an issue's title, description... are empty.
               (when (plist-get workflow :ticketless)
                 (pcase-dolist (`(,job . ,spec) jobs)

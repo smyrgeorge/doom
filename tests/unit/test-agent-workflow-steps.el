@@ -428,6 +428,61 @@ jobs:
             (agent-workflow-cancel next)))
         (should-not bd)))))
 
+(ert-deftest agent-workflow-steps/a-run-in-your-checkout ()
+  "runs-in: checkout: its job that edits waits while your checkout has
+changes not committed, then starts; its agent works in your checkout, its
+commit on your branch; no worktree, no branch of its own. Refused: a
+second run there, going back with discard. On a ticket: the issue closed
+once it's done."
+  (+test-awr "checkout"
+    (dolist (name '("here" "there"))
+      (write-region "description: x\nticket: false\nruns-in: checkout\njobs:\n  build:\n    agent: build\n    prompt: Build {issue}.\n"
+                    nil (expand-file-name (format ".agent-workflow/workflows/%s.yml" name) project)))
+    (write-region "description: x\nfor: [task]\nruns-in: checkout\njobs:\n  build:\n    agent: build\n    prompt: Build {issue}.\n"
+                  nil (expand-file-name ".agent-workflow/workflows/fix.yml" project))
+    ;; Its files committed: your checkout clean but for what the test adds.
+    (let ((default-directory project))
+      (call-process "git" nil nil nil "add" "-A")
+      (call-process "git" nil nil nil "commit" "-q" "-m" "workflows"))
+    (let* ((agent-workflow-from-shell t)
+           (branch (agent-workflow--checkout-branch project))
+           (wip (expand-file-name "wip.txt" project)))
+      (write-region "mine\n" nil wip)
+      (let ((run (car (car (agent-workflow-run "here" project)))))
+        (should (equal (agent-workflow-run-name run) "here · run 1"))
+        (should (+test-awr--wait
+                 (lambda () (equal (plist-get (agent-workflow--job run "build") :why)
+                                   "build: waiting: your checkout has changes not committed (commit or stash them)"))))
+        (should (eq (+test-awr--job run "build") 'pending))
+        (should (string-prefix-p "here · run 1 works in your checkout already"
+                                 (cdr (car (cdr (agent-workflow-run "there" project))))))
+        ;; Your changes gone: it starts, its agent in your checkout.
+        (delete-file wip)
+        (agent-workflow-tick)
+        (let ((agent (+test-awr--agent run "build")))
+          (should (equal (agent-workflow-agent-worktree agent) project))
+          (should (equal (agent-workflow-agent-branch agent) branch))
+          (should-error (agent-workflow-back run "build" :discard t) :type 'user-error)
+          (+test-awr--commit project "here.txt" "here")
+          (+test-awr--finish run "build"))
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should-not (file-exists-p (agent-workflow-worktree-directory project "here")))
+        (should-not (let ((default-directory project)) (agent-workflow--git-lines "branch" "--list" "run/*")))
+        (should (equal (agent-workflow--checkout-branch project) branch))
+        (let ((where (agent-workflow-run-where run t)))
+          (should (plist-get where :checkout))
+          (should (equal (plist-get where :own) 1))
+          (should (string-prefix-p (format "⎇ %s   your checkout, from " branch) (agent-workflow--pane-git-line where)))
+          (should (string-suffix-p " · 1 commit since" (agent-workflow--pane-git-line where)))))
+      ;; On a ticket: closed once done.
+      (let* ((issue (+test-awr--issue project "In place" "--type" "task"))
+             (run (agent-workflow-start-run project issue :workflow "fix")))
+        (+test-awr--commit project "fix.txt" "fix")
+        (+test-awr--finish run "build")
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should (equal (alist-get 'status (+test-awr--shown project issue)) "closed"))
+        (should-not (agent-workflow-issue-branch-made project issue))))))
+
 (ert-deftest agent-workflow-steps/its-branch-kept ()
   "A run done, its branch not merged (no merge in its workflow): kept,
 saying why. branch: keep: kept, merged or not."

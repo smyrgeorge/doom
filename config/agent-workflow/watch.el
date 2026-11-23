@@ -40,7 +40,7 @@
 
 (defun agent-workflow--commits-gone (run)
   "RUN's jobs whose commits aren't on its branch any more: their names."
-  (let ((dir (agent-workflow-worktree-directory (agent-workflow-run-project run) (agent-workflow-run-issue run))))
+  (let ((dir (agent-workflow--work-directory run)))
     (when (file-directory-p dir)
       (let ((default-directory dir))
         (mapcar #'car

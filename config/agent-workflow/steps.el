@@ -98,6 +98,7 @@ waits for you."
                          :project (agent-workflow-run-project run) :issue (agent-workflow-run-issue run)
                          :job job :profile profile :type (plist-get info :type) :title (plist-get info :title)
                          :branch (agent-workflow--run-branch run)
+                         :place (and (agent-workflow-run-checkout-p run) (agent-workflow--run-worktree run))
                          :values (append (agent-workflow--job-values run job) (agent-workflow--run-values run))
                          :prompt message :snapshot snapshot)))
             (agent-workflow--job-set run job :agent agent)
@@ -158,8 +159,7 @@ again, while its retries last; used up, the run asks you."
          (beads (expand-file-name ".beads" project)))
     (append (list (concat "ISSUE=" (agent-workflow-run-issue run))
                   (concat "BRANCH=" (or (nth 1 (plist-get state :snapshot))
-                                        (let ((default-directory (agent-workflow-worktree-directory
-                                                                  project (agent-workflow-run-issue run))))
+                                        (let ((default-directory (agent-workflow--work-directory run)))
                                           (or (car (agent-workflow--git-lines "branch" "--show-current")) ""))))
                   (concat "MAIN=" (directory-file-name project))
                   (concat "MAIN_BRANCH=" (agent-workflow-main-branch project))
@@ -408,8 +408,7 @@ commit or stash them, then go" job (string-join both ", "))))
 (defun agent-workflow--merge-conflict (run job index branch main)
   "BRANCH conflicts with MAIN: rebased onto it if that goes cleanly (and
 the merge tried again), else the on-fail agent rebases it, resolving."
-  (let ((default-directory (agent-workflow-worktree-directory (agent-workflow-run-project run)
-                                                               (agent-workflow-run-issue run))))
+  (let ((default-directory (agent-workflow--work-directory run)))
     (if (and (null (agent-workflow--git-lines "status" "--porcelain"))
              (eql 0 (process-file "git" nil nil nil "-c" "user.name=agent workflow"
                                   "-c" "user.email=agent-workflow@localhost" "rebase" main)))

@@ -194,7 +194,11 @@ project's (to tell the jobs that edit; default: the current project's)."
             :stopped stopped
             ;; Its branch, the run done (runs.el's `agent-workflow--branch-end').
             :branch (unless stopped
-                      (cond ((eq (plist-get workflow :branch) 'keep) "kept (branch: keep)")
+                      (cond ((plist-get workflow :checkout)
+                             (if (plist-get workflow :ticketless)
+                                 "none: its commits are on your checkout's branch"
+                               "none: its commits are on your checkout's branch, the issue closed"))
+                            ((eq (plist-get workflow :branch) 'keep) "kept (branch: keep)")
                             ((seq-some (lambda (job) (and (agent-workflow--uses-merge-p (spec (car job)))
                                                           (eq (plist-get (cdr job) :status) 'done)))
                                        state)

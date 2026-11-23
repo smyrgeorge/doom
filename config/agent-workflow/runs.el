@@ -9,7 +9,10 @@
 ;; until its blockers close. A workflow that takes no ticket (ticket: false)
 ;; has its own run (M-x agent-workflow-run, cmd/agent-workflow run
 ;; --workflow NAME): its name where an issue's id goes (its folder,
-;; worktree, log), its branch run/NAME-N, no Beads; one at a time. Runs on different issues go at once, as the
+;; worktree, log), its branch run/NAME-N, no Beads; one at a time. A
+;; workflow with runs-in: checkout works in your checkout instead, on its
+;; branch: no worktree or branch of its own, a job that edits waiting while
+;; it has changes not committed, one such run at a time. Runs on different issues go at once, as the
 ;; pool allows; the first in line is the highest priority, then the one you
 ;; started first.
 ;;
@@ -155,10 +158,35 @@ no ticket: nothing."
   (when (agent-workflow-run-ticket-p run)
     (apply #'agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) args)))
 
+(defun agent-workflow-run-checkout-p (run)
+  "Non-nil if RUN works in your checkout (runs-in: checkout): its jobs that
+edit there, on its current branch; no worktree, no branch of its own."
+  (plist-get (agent-workflow-run-workflow run) :checkout))
+
+(defun agent-workflow--work-directory (run)
+  "Where RUN's jobs that edit work: your checkout (runs-in: checkout), else
+its issue's worktree."
+  (if (agent-workflow-run-checkout-p run)
+      (file-name-as-directory (agent-workflow-run-project run))
+    (agent-workflow-worktree-directory (agent-workflow-run-project run) (agent-workflow-run-issue run))))
+
+(defun agent-workflow--checkout-branch (project)
+  "The branch PROJECT's checkout is on; nil if it's detached."
+  (let ((default-directory (file-name-as-directory project)))
+    (let ((name (car (agent-workflow--git-lines "branch" "--show-current"))))
+      (and name (not (string-empty-p name)) name))))
+
+(defun agent-workflow--checkout-dirty-p (project)
+  "Non-nil if PROJECT's checkout has changes not committed (untracked files
+too; what git ignores not)."
+  (let ((default-directory (file-name-as-directory project)))
+    (and (agent-workflow--git-lines "status" "--porcelain") t)))
+
 (defun agent-workflow--run-branch (run)
   "The branch RUN's worktree is made on, if it's its own: run/NAME-N for a
-run with no ticket; nil for one on a ticket (its issue's)."
-  (unless (agent-workflow-run-ticket-p run)
+run with no ticket; nil for one on a ticket (its issue's), or in your
+checkout (none made)."
+  (unless (or (agent-workflow-run-ticket-p run) (agent-workflow-run-checkout-p run))
     (format "run/%s-%d" (agent-workflow-run-issue run) (agent-workflow-run-n run))))
 
 (defun agent-workflow--run-branch-made (run)
@@ -171,7 +199,13 @@ run with no ticket; nil for one on a ticket (its issue's)."
 
 (defun agent-workflow--run-worktree (run)
   "RUN's worktree, made if it isn't there (`agent-workflow-worktree'):
-\(DIR . BRANCH)."
+\(DIR . BRANCH). In your checkout: it, and the branch it's on."
+  (if (agent-workflow-run-checkout-p run)
+      (cons (agent-workflow--work-directory run) (agent-workflow--checkout-branch (agent-workflow-run-project run)))
+    (agent-workflow--run-worktree-made run)))
+
+(defun agent-workflow--run-worktree-made (run)
+  "RUN's own worktree, made if it isn't there: (DIR . BRANCH)."
   (let ((info (agent-workflow-run-info run)))
     (agent-workflow-worktree (agent-workflow-run-project run) (agent-workflow-run-issue run)
                              :type (plist-get info :type) :title (plist-get info :title)
@@ -370,6 +404,9 @@ run is queued until its blockers close."
      ((equal (plist-get info :type) "epic") (user-error "%s is an epic: its issues are run, not it" issue))
      ((agent-workflow-run-of project issue)
       (user-error "%s has a run already (%s)" issue (agent-workflow-run-name (agent-workflow-run-of project issue))))
+     ((and workflow (plist-get (cdr (assoc workflow workflows)) :checkout) (agent-workflow--checkout-run project))
+      (user-error "%s works in your checkout already: one run there at a time"
+                  (agent-workflow-run-name (agent-workflow--checkout-run project))))
      ((agent-workflow-crew-running-p project)
       (user-error "The agent-workspace crew of %s runs: its agents would take the same issues"
                   (file-name-nondirectory (directory-file-name project)))))
@@ -386,6 +423,9 @@ run is queued until its blockers close."
                                           (plist-get info :type) (string-join fitting ", ")))
                              (t (car fitting)))))))
            (spec (cdr (assoc name workflows))))
+      (when (and (plist-get spec :checkout) (agent-workflow--checkout-run project))
+        (user-error "%s works in your checkout already: one run there at a time"
+                    (agent-workflow-run-name (agent-workflow--checkout-run project))))
       (agent-workflow--check-trust project spec ask)
       (agent-workflow--new-run project issue spec info by))))
 
@@ -400,6 +440,9 @@ journaled, queued. Its issue in progress, if it's on one."
                :jobs (mapcar (lambda (job) (cons (car job) (list :status 'pending :step 0)))
                              (plist-get spec :jobs))
                :order (cl-incf agent-workflow--run-count))))
+    ;; Its folder out of git first: in your checkout, its files aren't
+    ;; changes of yours.
+    (agent-workflow--keep-out-of-git project)
     (make-directory dir t)
     (copy-file (plist-get spec :file) (expand-file-name "workflow.yml" dir) t)
     (agent-workflow--journal run "run-started" :workflow (plist-get spec :name) :by by
@@ -437,12 +480,22 @@ workflow you don't trust (ASK: you're asked, trust.el)."
                   workflow workflow))
      ((agent-workflow-run-of project workflow)
       (user-error "%s has a run already (%s)" workflow (agent-workflow-run-name (agent-workflow-run-of project workflow))))
+     ((and (plist-get spec :checkout) (agent-workflow--checkout-run project))
+      (user-error "%s works in your checkout already: one run there at a time"
+                  (agent-workflow-run-name (agent-workflow--checkout-run project))))
      ((agent-workflow-crew-running-p project)
       (user-error "The agent-workspace crew of %s runs: its agents would take the same issues"
                   (file-name-nondirectory (directory-file-name project)))))
     (agent-workflow--check-trust project spec ask)
-    (agent-workflow--fresh-worktree project workflow)
+    (unless (plist-get spec :checkout)
+      (agent-workflow--fresh-worktree project workflow))
     (agent-workflow--new-run project workflow spec (agent-workflow--workflow-info spec) by)))
+
+(defun agent-workflow--checkout-run (project)
+  "PROJECT's run not over that works in your checkout, or nil."
+  (seq-find (lambda (run) (and (agent-workflow-run-checkout-p run)
+                               (not (memq (agent-workflow-run-state run) agent-workflow--ended))))
+            (agent-workflow-runs-of (file-name-as-directory project))))
 
 (defun agent-workflow--fresh-worktree (project workflow)
   "WORKFLOW's last run's worktree in PROJECT (one cancelled, failed, or
@@ -598,6 +651,11 @@ runs, it's over once every job is done or skipped."
            ((and (agent-workflow--job-edits-p run job) (agent-workflow--editing run))
             (agent-workflow--job-set run job :why (format "%s: waiting for %s, which edits the branch" job
                                                           (agent-workflow--editing run))))
+           ;; In your checkout: never over changes of yours (its agent
+           ;; would commit them).
+           ((and (agent-workflow-run-checkout-p run) (agent-workflow--job-edits-p run job)
+                 (agent-workflow--checkout-dirty-p (agent-workflow-run-project run)))
+            (agent-workflow--job-set run job :why (format "%s: waiting: your checkout has changes not committed (commit or stash them)" job)))
            ((and (agent-workflow--needs-agent-p run job) (>= (agent-workflow-pool-used) agent-workflow-pool))
             (agent-workflow--job-set run job :why (format "%s: waiting for an agent: %d of %d work" job
                                                           (agent-workflow-pool-used) agent-workflow-pool)))
@@ -616,8 +674,16 @@ said on its issue."
   ;; run done is its log's last line.
   (dolist (job (agent-workflow-run-jobs run))
     (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) (car job)))
-  (ignore-errors (agent-workflow-worktree-remove (agent-workflow-run-project run) (agent-workflow-run-issue run)))
-  (agent-workflow--branch-end run)
+  (if (agent-workflow-run-checkout-p run)
+      ;; In your checkout: its work is there; its issue, if it has one, done.
+      (when (agent-workflow-run-ticket-p run)
+        (agent-workflow--bd (agent-workflow-run-project run)
+                            (list "close" (agent-workflow-run-issue run) "--reason"
+                                  (format "Done in your checkout, on %s"
+                                          (or (agent-workflow--checkout-branch (agent-workflow-run-project run))
+                                              "a detached HEAD")))))
+    (ignore-errors (agent-workflow-worktree-remove (agent-workflow-run-project run) (agent-workflow-run-issue run)))
+    (agent-workflow--branch-end run))
   ;; Where it is now (its worktree gone, merged, its branch deleted), said.
   (agent-workflow-run-where run t)
   (agent-workflow--set-state run 'done)
@@ -749,14 +815,19 @@ job's snapshot of its branch), the commit it sees there; its first step."
          ;; branch and commit (unknown: a branch made before).
          (_ (unless (agent-workflow-run-base run)
               (setf (agent-workflow-run-base run)
-                    (or (agent-workflow-worktree-base project issue (agent-workflow--run-branch run))
+                    (or (if (agent-workflow-run-checkout-p run)
+                            (list :branch (agent-workflow--checkout-branch project)
+                                  :commit (let ((default-directory project)) (agent-workflow--git "rev-parse" "HEAD")))
+                          (agent-workflow-worktree-base project issue (agent-workflow--run-branch run)))
                         (list :branch nil :commit nil)))))
          (where (if edits
                     (let ((worktree (agent-workflow--run-worktree run)))
                       (list (car worktree) (cdr worktree)
                             (let ((default-directory (car worktree))) (agent-workflow--git "rev-parse" "HEAD"))))
                   (agent-workflow-snapshot project issue job :type (plist-get info :type)
-                                           :title (plist-get info :title) :branch (agent-workflow--run-branch run)))))
+                                           :title (plist-get info :title) :branch (agent-workflow--run-branch run)
+                                           :from (and (agent-workflow-run-checkout-p run)
+                                                      (agent-workflow--run-worktree run))))))
     ;; The branch where this round of it starts: what discarding goes back to.
     (agent-workflow--job-set run job :start-commit
                              (let ((default-directory (car (agent-workflow--run-worktree run))))
@@ -840,8 +911,7 @@ branch has now first."
   "What JOB of RUN's place has now, in a few lines: its last commits, its
 changes not committed."
   (let ((default-directory (or (plist-get (agent-workflow--job run job) :dir)
-                               (agent-workflow-worktree-directory (agent-workflow-run-project run)
-                                                                  (agent-workflow-run-issue run)))))
+                               (agent-workflow--work-directory run))))
     (string-join (delq nil (list (string-join (agent-workflow--git-lines "log" "--oneline" "-5") "\n")
                                  (let ((changes (agent-workflow--git-lines "status" "--short")))
                                    (and changes (concat "Not committed:\n" (string-join changes "\n"))))))
@@ -874,6 +944,7 @@ one started for it. The pool full: the run waits, queued, for an agent."
                            :job job :profile (plist-get step :agent)
                            :type (plist-get info :type) :title (plist-get info :title)
                            :branch (agent-workflow--run-branch run)
+                           :place (and (agent-workflow-run-checkout-p run) (agent-workflow--run-worktree run))
                            :values values :outcomes outcomes
                            :prompt (agent-workflow--prompt run job step)
                            :snapshot (plist-get (agent-workflow--job run job) :snapshot)
@@ -1051,8 +1122,7 @@ stops."
          (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) job))
        (agent-workflow--job-set run job :status 'done :agent nil :why nil :snapshot nil
                                 :end-commit (and (agent-workflow--job-edits-p run job)
-                                                 (let ((dir (agent-workflow-worktree-directory
-                                                             (agent-workflow-run-project run) (agent-workflow-run-issue run))))
+                                                 (let ((dir (agent-workflow--work-directory run)))
                                                    (and (file-directory-p dir)
                                                         (let ((default-directory dir))
                                                           (car (agent-workflow--git-lines "rev-parse" "HEAD")))))))
@@ -1098,6 +1168,42 @@ since its base (`agent-workflow--where-files'), :commits its latest
 
 (defun agent-workflow--where-read (run)
   "Where RUN's work is, read from git (see `agent-workflow-run-where')."
+  (if (agent-workflow-run-checkout-p run)
+      (agent-workflow--where-checkout run)
+    (agent-workflow--where-worktree run)))
+
+(defun agent-workflow--where-checkout (run)
+  "Where RUN's work is, in your checkout (runs-in: checkout): its branch,
+where it started, its commits since, your changes not committed; :checkout
+t, nothing merged or deleted."
+  (let* ((project (file-name-as-directory (agent-workflow-run-project run)))
+         (default-directory project)
+         (branch (agent-workflow--checkout-branch project))
+         (base (let ((base (agent-workflow-run-base run))) (and (plist-get base :commit) base)))
+         (from (or (plist-get base :commit) "HEAD"))
+         (own (string-to-number (or (car (agent-workflow--git-lines "rev-list" "--count" (concat from "..HEAD"))) "0"))))
+    (list :checkout t
+          :worktree project
+          :branch (or branch "HEAD")
+          :deleted nil
+          :empty (and base (zerop own))
+          :base base
+          :into branch
+          :own own
+          :with 0
+          :uncommitted (length (agent-workflow--git-lines "status" "--porcelain"))
+          :merged nil
+          :files (agent-workflow--where-files project from)
+          :commits (agent-workflow--where-commits project from "HEAD")
+          :snapshots (delq nil (mapcar (lambda (job)
+                                         (when-let* (((memq (plist-get (cdr job) :status) '(running waiting)))
+                                                     (snapshot (plist-get (cdr job) :snapshot))
+                                                     ((file-directory-p (nth 0 snapshot))))
+                                           (list (car job) (nth 0 snapshot) (nth 2 snapshot))))
+                                       (agent-workflow-run-jobs run))))))
+
+(defun agent-workflow--where-worktree (run)
+  "Where RUN's work is, on its own branch (`agent-workflow--where-read')."
   (let* ((project (agent-workflow-run-project run))
          (issue (agent-workflow-run-issue run))
          (default-directory project)
@@ -1268,8 +1374,7 @@ again (its run's state not worked out again). Its run if it asked."
   "What discarding the work since JOB of RUN started would lose: (COMMITS
 . CHANGES), the commits since and the changes not committed, a line each."
   (let* ((commit (plist-get (agent-workflow--job run job) :start-commit))
-         (default-directory (agent-workflow-worktree-directory (agent-workflow-run-project run)
-                                                                (agent-workflow-run-issue run))))
+         (default-directory (agent-workflow--work-directory run)))
     (cons (and commit (file-directory-p default-directory)
                (agent-workflow--git-lines "log" "--oneline" (concat commit "..HEAD")))
           (and (file-directory-p default-directory) (agent-workflow--git-lines "status" "--short")))))
@@ -1291,6 +1396,9 @@ JOB hasn't run, or STEP isn't one."
     (when (memq (agent-workflow-run-state run) '(cancelled failed))
       (user-error "%s %s" (agent-workflow-run-name run)
                   (if (eq (agent-workflow-run-state run) 'failed) "failed" "was cancelled")))
+    (when (and discard (agent-workflow-run-checkout-p run))
+      (agent-workflow--refuse "%s works in your checkout: its work isn't discarded there (git reset it yourself)"
+                              (agent-workflow-run-name run)))
     (let ((session (or (plist-get state :session)
                        (when-let* ((agent (plist-get state :agent))) (agent-workflow-agent-session agent))))
           (lost (and discard (agent-workflow-back-lost run job))))
@@ -1312,7 +1420,7 @@ JOB hasn't run, or STEP isn't one."
                                      :round (1+ (or (plist-get other-state :round) 1))))))
       (agent-workflow--job-set run job :back (list :step step :note note :by by :session session))
       (when discard
-        (let ((default-directory (agent-workflow-worktree-directory project issue))
+        (let ((default-directory (agent-workflow--work-directory run))
               (commit (plist-get state :start-commit)))
           (unless commit (agent-workflow--refuse "%s: the commit it started from isn't known" job))
           (agent-workflow--git "reset" "--hard" commit)
@@ -1515,8 +1623,7 @@ change not committed."
   (let ((state (agent-workflow--job run job)))
     (and (> (or (plist-get state :round) 1) 1)
          (plist-get state :start-commit)
-         (let ((default-directory (agent-workflow-worktree-directory (agent-workflow-run-project run)
-                                                                      (agent-workflow-run-issue run))))
+         (let ((default-directory (agent-workflow--work-directory run)))
            (and (file-directory-p default-directory)
                 (equal (agent-workflow--git "rev-parse" "HEAD") (plist-get state :start-commit))
                 (null (agent-workflow--git-lines "status" "--porcelain")))))))

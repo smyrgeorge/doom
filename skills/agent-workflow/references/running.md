@@ -11,7 +11,8 @@ or several fitting, a workflow that takes no ticket, a project whose workflows t
 
 `agent-workflow run --workflow NAME`, no issue: a workflow that takes no ticket (`ticket: false`), its own run (`NAME ·
 run N`; `NAME` where an issue's id goes: `logs NAME`, `status NAME`). One at a time; no Beads; its branch
-`run/NAME-N`, cut from the user's HEAD. Blocked: queued until its blockers close. The
+`run/NAME-N`, cut from the user's HEAD; one with `runs-in: checkout`, no branch: in the user's checkout, on its branch,
+starting once it has no changes not committed; one run in a checkout at a time. Blocked: queued until its blockers close. The
 queue: priority, then the order started.
 
 From the shell, `run` follows its runs: their logs printed as they go, a line per event (`10:42:07  doom-a1b  review

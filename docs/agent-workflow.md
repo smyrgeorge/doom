@@ -80,6 +80,7 @@ jobs:
 | `name` | Its file's name, if given |
 | `description` | What it's for |
 | `ticket` | `false`: it runs on no ticket, and only so (`M-x agent-workflow-run`; see [Runs](#runs)); `true` by default |
+| `runs-in` | Where its jobs work: `worktree` (the default: a worktree and branch of its own) or `checkout` (yours, on its branch; see [Runs](#runs)) |
 | `for` | The issue types it's offered for |
 | `concurrency` | How many agents work on its runs at once |
 | `budget` | `cost` (dollars), `tokens`, `time` (`3h`) a run may spend |
@@ -182,16 +183,16 @@ shell. They run once you trust this config (see [Trust](#trust)).
 | Workflow | Jobs |
 |---|---|
 | screenshots | capture: its script takes the examples' screenshots again (`.agent-workflow/scripts/screenshots.sh`, macOS: Emacs needs the Screen Recording permission; it broke, the run asks you), then an agent with the `screenshots` profile looks at each changed one and commits the good ones; review (changes: capture again); merge |
-| github | green: check (gh logged in, your checkout on main, `.agent-workflow/scripts/github-check.sh`), push (your main, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, an agent with the `ci` profile reads its logs, fixes the code or its test and commits, and the job runs again from its push (`retry-from`), 5 times at most; sync: your main fast-forwarded to what was pushed, the fixes with it (`github-sync.sh`); merge (merged already: its branch deleted) |
+| github | In your checkout (`runs-in: checkout`). green: check (gh logged in, your checkout on main, `.agent-workflow/scripts/github-check.sh`), push (your main, its HEAD: your commits too, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, an agent with the `ci` profile reads its logs, fixes the code or its test and commits on your main, and the job runs again from its push (`retry-from`), 5 times at most |
 
 The `screenshots` profile (`.agent-workflow/profiles/`) may read, look at images and commit; it never takes them
-again, nor changes anything else. The `ci` profile may read, edit, run the tests and commit; it never pushes (the
-script does) nor runs the Actions again.
+again, nor changes anything else. The `ci` profile may read, edit, run the tests and commit (only the files it
+changed: your checkout may have yours); it never pushes (the script does) nor runs the Actions again.
 
 github needs gh, logged in (`brew install gh`, `gh auth login`): without it the run fails at once (✗ failed, saying
-why), as it does when your checkout isn't on main. Nothing to push (origin has your main already): it watches the Actions of origin's main; done
+why), as it does when your checkout isn't on main. It starts once your checkout has no changes not committed. Nothing to push (origin has your main already): it watches the Actions of origin's main; done
 already, their verdict at once; none at all (5 minutes), it says so and goes on. A run cancelled on GitHub, a push
-refused (origin has commits you haven't), your main moved on while it ran: the run asks you. Its scripts read these
+refused (origin has commits you haven't), your checkout off main at a push: the run asks you. Its scripts read these
 from Emacs's environment (`(setenv "GITHUB_POLL" "60")`):
 
 | Variable | Default | |
@@ -278,6 +279,14 @@ it has changes not committed). Its branch then goes too (`branch: delete`, the d
 branch (merged by the run's merge, or before): never a commit lost. Not merged, or its worktree kept, the branch stays,
 its log saying why (`its branch feat/doom-a1b-lexer kept: not merged into main`). `branch: keep` keeps it, always; a
 cancelled run, or one that failed, keeps both.
+
+A workflow about your branch itself (push it, keep its CI green) runs in your checkout: `runs-in: checkout`. Its jobs
+that edit work there, on the branch it's on, their commits on it; a job that only reads works on a snapshot of its
+HEAD. No worktree, no branch of its own: nothing to merge (the check refuses `uses: merge` there, ignores `branch:`).
+A job that edits starts only while your checkout has no changes not committed (it waits, `build: waiting: your
+checkout has changes not committed`): its agent would commit them. One run in a project's checkout at a time; going
+back with `C-u` is refused there (no reset of your checkout). On a ticket, the issue is closed once the run's done.
+Its pane's git line says so: `⎇ main   your checkout, from 881e46c · 1 commit since`.
 
 ### Following a run
 
@@ -465,7 +474,7 @@ keep their results. The job's agent has its session resumed, told your note and 
 session is told the same, if the agent can't resume). The journal keeps the earlier rounds.
 
 With `C-u`, the work since the job's round started is discarded: its commits, and the changes not committed. What's
-lost is said, and you're asked first.
+lost is said, and you're asked first. Not in a run in your checkout (`runs-in: checkout`): refused.
 
 ```sh
 cmd/agent-workflow back doom-a1b build "handle the empty list too"

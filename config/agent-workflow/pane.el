@@ -398,13 +398,21 @@ has none yet."
     (let ((base (plist-get where :base))
           (into (plist-get where :into)))
       (concat "⎇ " branch "   "
-              (cond ((and (plist-get where :deleted) (plist-get where :empty)) "no commit · deleted")
+              (cond ((plist-get where :checkout)
+                     ;; Your checkout: no branch of its own, nothing merged.
+                     (concat "your checkout"
+                             (if base (format ", from %s" (agent-workflow--pane-short (plist-get base :commit))) "")
+                             (let ((own (or (plist-get where :own) 0)))
+                               (if (> own 0) (format " · %d commit%s since" own (if (= own 1) "" "s")) ""))))
+                    ((and (plist-get where :deleted) (plist-get where :empty)) "no commit · deleted")
                     ((plist-get where :deleted) (format "deleted, merged into %s" into))
                     ((plist-get where :merged) (format "merged into %s" into))
                     (base (format "%s@%s → %s" (or (plist-get base :branch) "HEAD")
                                   (agent-workflow--pane-short (plist-get base :commit)) into))
                     (t (format "→ %s" into)))
-              (if (or (plist-get where :worktree) (plist-get where :deleted)) "" " · its worktree removed")
+              (if (or (plist-get where :worktree) (plist-get where :deleted) (plist-get where :checkout))
+                  ""
+                " · its worktree removed")
               (mapconcat (lambda (snapshot)
                            (format "\n%s reads its snapshot at %s" (nth 0 snapshot)
                                    (agent-workflow--pane-short (or (nth 2 snapshot) ""))))

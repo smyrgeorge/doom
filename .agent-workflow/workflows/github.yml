@@ -3,10 +3,12 @@
 # fails at once (check). Nothing to push: on to the watching (push);
 # finished already, their verdict at once (watch). A failure: its jobs' logs
 # to an agent with the ci profile, which finds why, fixes the code or its
-# test and commits; the job runs again from its push (retry-from): the fix
-# pushed, watched again, 5 times at most (then the run asks you). Green:
-# your main fast-forwarded to what was pushed, the fixes with it (sync). No
-# ticket: M-x agent-workflow-run, or agent-workflow run --workflow github.
+# test and commits on your main; the job runs again from its push
+# (retry-from): your main pushed again (the fix, and anything you committed
+# meanwhile), watched again, 5 times at most (then the run asks you). It
+# works in your checkout (runs-in: checkout): no branch of its own, nothing
+# to merge. No ticket: M-x agent-workflow-run, or agent-workflow run
+# --workflow github.
 
 # The workflow's name: its file's (github.yml), said again.
 name: github
@@ -15,11 +17,16 @@ name: github
 description: Your main pushed to GitHub, its Actions watched until they pass; a failure fixed (the code or its test), pushed, watched again.
 
 # ticket: false: it runs on no ticket (M-x agent-workflow-run). Its run is
-# "github · run N", on a branch of its own (run/github-N); no Beads.
+# "github · run N"; no Beads.
 ticket: false
 
+# runs-in: where its jobs work. checkout: in yours, on its branch (main),
+# their commits there; a job that edits waits while it has changes not
+# committed. worktree (the default): a worktree and branch of its own.
+runs-in: checkout
+
 # How many agents may work on its runs at once: one (a workflow with no
-# ticket has one run at a time anyway).
+# ticket, or in your checkout, has one run at a time anyway).
 concurrency: 1
 
 # What a run may spend: the cost of its agents' tokens (dollars) and its time
@@ -34,8 +41,9 @@ jobs:
   # green: main pushed and its GitHub Actions passing.
   green:
 
-    # Its steps, run one after another in the run's worktree (its branch,
-    # run/github-N: your main, as the run started).
+    # Its steps, run one after another in your checkout, on main. It waits
+    # to start while your checkout has changes not committed (its agent
+    # would commit them).
     steps:
 
       # name: the step's own name in its job: the run's pane and log say it,
@@ -49,8 +57,9 @@ jobs:
         # on main, a remote to push to; else 3.
         run: .agent-workflow/scripts/github-check.sh
 
-      # push: what origin's main hasn't, pushed (nothing: on); refused
-      # (origin has commits you haven't), 2: the run asks you.
+      # push: your main (your HEAD: the fixes, your commits) pushed (nothing
+      # new: on); refused (origin has commits you haven't), or your checkout
+      # not on main any more, 2: the run asks you.
       - name: push
         run: .agent-workflow/scripts/github-push.sh
 
@@ -73,25 +82,6 @@ jobs:
 
         # on-fail: the profile of the agent sent the failure (the script's
         # output) to fix it, in a job with no agent of its own: ci reads the
-        # logs, fixes the code or its test, commits; it never pushes.
+        # logs, fixes the code or its test, commits on your main (only the
+        # files it changed); it never pushes.
         on-fail: ci
-
-  # sync: your main brought to what was pushed (the fixes with it).
-  sync:
-
-    # needs: the jobs it waits for: green done, all passing.
-    needs: green
-
-    # run: one step's keys on the job itself (no steps: list). Fast-forwards
-    # your main; it moved on meanwhile, 2: the run asks you.
-    run: .agent-workflow/scripts/github-sync.sh
-
-  # merge: the run's branch in the main branch. Your main has it now
-  # (sync): merged already, no commit made (none to push again); once the
-  # run's over, the branch deleted.
-  merge:
-    needs: sync
-
-    # uses: a built-in step. merge: the run's branch merged into the main
-    # branch (never pushed); on a ticket, the ticket closed (none here).
-    uses: merge

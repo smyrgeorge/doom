@@ -663,7 +663,7 @@ status has the same; kept in its state.json. Done: its worktree removed
       (should (equal (plist-get (aref (plist-get (agent-workflow--request-status project nil) :runs) 0) :where)
                      (list :worktree dir :branch branch :deleted :false
                            :base (list :branch "side" :commit base) :into main
-                           :own 1 :with 1 :uncommitted 1 :merged :false)))
+                           :own 1 :with 1 :uncommitted 1 :merged :false :checkout :false)))
       (should (equal (plist-get (with-temp-buffer
                                   (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
                                   (json-parse-buffer :object-type 'plist :array-type 'list))

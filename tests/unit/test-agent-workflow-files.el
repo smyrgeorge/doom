@@ -373,6 +373,38 @@ jobs:
     (should-not workflow)
     (should (equal (+test-awf--said problems) '((error 2 "ticket maybe: true or false"))))))
 
+(ert-deftest agent-workflow-files/runs-in ()
+  "runs-in: checkout read (:checkout); worktree, or none: its own; another
+value an error. In your checkout: uses: merge an error, branch: a warning."
+  (should-not (plist-get (car (+test-awf--workflow "description: x\njobs:\n  a:\n    run: x\n")) :checkout))
+  (should-not (plist-get (car (+test-awf--workflow "description: x\nruns-in: worktree\njobs:\n  a:\n    run: x\n"))
+                         :checkout))
+  (should (plist-get (car (+test-awf--workflow "description: x\nruns-in: checkout\njobs:\n  a:\n    run: x\n")) :checkout))
+  (pcase-let ((`(,workflow . ,problems) (+test-awf--workflow "description: x
+runs-in: checkout
+branch: keep
+jobs:
+  a:
+    run: x
+  b:
+    needs: a
+    steps:
+      - run: y
+      - uses: merge
+  c:
+    needs: a
+    uses: merge
+")))
+    (should-not workflow)
+    (should (equal (+test-awf--said problems)
+                   '((warning 3 "branch: ignored: it runs in your checkout (runs-in: checkout), on its branch")
+                     (error 11 "uses merge: it runs in your checkout (runs-in: checkout): nothing to merge")
+                     (error 14 "uses merge: it runs in your checkout (runs-in: checkout): nothing to merge")))))
+  (pcase-let ((`(,workflow . ,problems) (+test-awf--workflow "description: x\nruns-in: here\njobs:\n  a:\n    run: x\n")))
+    (should-not workflow)
+    (should (equal (+test-awf--said problems)
+                   '((error 2 "runs-in here: worktree (its own: the default) or checkout (yours)"))))))
+
 (ert-deftest agent-workflow-files/a-check-an-agent-can-change ()
   "A run: of a file of the branch: warned (its agents can change it); one of
 .agent-workflow/, a command, a script: not."
@@ -602,14 +634,20 @@ end, its branch deleted once merged."
                            (expand-file-name (format ".agent-workflow/workflows/%s.yml" name) +test-root)))
             (should-not (plist-get workflow :for))
             (should-not (plist-get result :stopped))
-            ;; No ticket: its merge merged, nothing to close.
             (should (plist-get workflow :ticketless))
-            (should (member "merge: merged (no ticket to close)" (+test-awf--dry-lines result)))
-            (should (equal (plist-get result :branch) "deleted, merged into the main branch"))))))
+            (pcase name
+              ;; In your checkout: no branch, nothing merged.
+              ("github"
+               (should (plist-get workflow :checkout))
+               (should (equal (plist-get result :branch) "none: its commits are on your checkout's branch")))
+              ;; No ticket: its merge merged, nothing to close.
+              (_
+               (should (member "merge: merged (no ticket to close)" (+test-awf--dry-lines result)))
+               (should (equal (plist-get result :branch) "deleted, merged into the main branch"))))))))
     (should (assoc "screenshots" (agent-workflow-profiles +test-root)))
     (should (assoc "ci" (agent-workflow-profiles +test-root)))))
 
-;; github's scripts (check, push, watch, sync): a stand-in gh (its runs and logs from
+;; github's scripts (check, push, watch): a stand-in gh (its runs and logs from
 ;; GH_RUNS, GH_PENDING, GH_LOGGED_OUT), a bare origin, a clone of it on main
 ;; standing in for your checkout and the issue's worktree.
 
@@ -711,7 +749,8 @@ remote: the run fails (3), its last line why; else 0."
 
 (ert-deftest agent-workflow-files/github-push-sh ()
   "github-push.sh: commits origin hasn't, pushed; none, said (0); origin
-with commits yours hasn't, refused: the run asks (2)."
+with commits yours hasn't, or your checkout off main: refused, the run
+asks (2)."
   (pcase-let ((`(,exit ,out ,clone ,origin) (+test-awf--github "push-ahead" "github-push.sh" :ahead t)))
     (should (eql exit 0))
     (should (string-match-p "pushed 1 commit(s): origin/main now" out))
@@ -722,7 +761,13 @@ with commits yours hasn't, refused: the run asks (2)."
     (should (string-match-p "nothing to push: origin/main has" out)))
   (pcase-let ((`(,exit ,out) (+test-awf--github "push-refused" "github-push.sh" :ahead t :behind t)))
     (should (eql exit 2))
-    (should (string-match-p "refused (origin/main has commits your main hasn't)" out))))
+    (should (string-match-p "refused (origin/main has commits your main hasn't)" out)))
+  ;; Your checkout moved off main meanwhile: not pushed.
+  (pcase-let ((`(,exit ,out ,clone ,origin) (+test-awf--github "push-off" "github-push.sh" :ahead t :off-main t)))
+    (should (eql exit 2))
+    (should (string-match-p "your checkout is on other now, not main" out))
+    (should-not (equal (+test-awf--origin-main origin)
+                       (let ((default-directory clone)) (string-trim (shell-command-to-string "git rev-parse HEAD")))))))
 
 (ert-deftest agent-workflow-files/github-watch-sh ()
   "github-watch.sh: origin's main's runs green: 0; one failed: 1, its
@@ -750,49 +795,6 @@ said; cancelled: 2."
                                                 :runs "11\tcompleted\tcancelled\tTests\n")))
     (should (eql exit 2))
     (should (string-match-p "was cancelled" out))))
-
-(ert-deftest agent-workflow-files/github-sync-sh ()
-  "github-sync.sh: your main is what was pushed: 0; behind it (the fixes on
-the run's branch): fast-forwarded; ahead of it (commits made meanwhile): 2."
-  (pcase-let ((`(,exit ,out) (+test-awf--github "sync-same" "github-sync.sh")))
-    (should (eql exit 0))
-    (should (string-match-p "what was pushed" out)))
-  ;; The run's branch a commit past your main: fast-forwarded.
-  (let* ((dir (+test-awf--dir "sync-ff"))
-         (default-directory dir))
-    (call-process "git" nil nil nil "init" "-q" "-b" "main" "mine")
-    (let ((mine (file-name-as-directory (expand-file-name "mine" dir))))
-      (+test-awf--file mine "a.el" "one\n")
-      (let ((default-directory mine))
-        (call-process "git" nil nil nil "add" "a.el")
-        (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "first")
-        (call-process "git" nil nil nil "worktree" "add" "-q" "-b" "task/demo-1" (expand-file-name "wt" dir)))
-      (let ((wt (file-name-as-directory (expand-file-name "wt" dir))))
-        (+test-awf--file wt "a.el" "fixed\n")
-        (let ((default-directory wt))
-          (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-am" "fix")
-          (with-temp-buffer
-            (let ((process-environment (append (list (concat "MAIN=" mine) "MAIN_BRANCH=main") process-environment)))
-              (should (eql (call-process "bash" nil t nil
-                                         (expand-file-name ".agent-workflow/scripts/github-sync.sh" +test-root))
-                           0))
-              (should (string-match-p "fast-forwarded" (buffer-string))))))
-        (should (equal (with-temp-buffer (insert-file-contents (expand-file-name "a.el" mine)) (buffer-string))
-                       "fixed\n"))
-        ;; Your main moved on meanwhile: you decide.
-        (+test-awf--file mine "b.el" "mine\n")
-        (let ((default-directory mine))
-          (call-process "git" nil nil nil "add" "b.el")
-          (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "mine"))
-        (let ((default-directory wt)
-              (process-environment (append (list (concat "MAIN=" mine) "MAIN_BRANCH=main") process-environment)))
-          (with-temp-buffer
-            (should (eql (call-process "bash" nil t nil
-                                       (expand-file-name ".agent-workflow/scripts/github-sync.sh" +test-root))
-                         2))
-            (should (string-match-p "has commits the pushed one" (buffer-string)))))))))
-
-;; ====== CHECKING THEM ======
 
 (ert-deftest agent-workflow-files/check ()
   "M-x agent-workflow-check: every problem a line FILE:LINE: level: what,

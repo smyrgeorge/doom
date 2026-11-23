@@ -11,6 +11,7 @@ A workflow is `NAME.yml` (or `.yaml`): `NAME` a lowercase letter, then lowercase
 | `name` | its file's name | another name: an error |
 | `description` | what it's for | none: a warning |
 | `ticket` | `false`: it runs on no ticket, and only so (its run named NAME · run N, its branch run/NAME-N, no Beads); `true` by default | neither: an error; `{issue.title}`... in its prompts: a warning (empty) |
+| `runs-in` | where its jobs work: `worktree` (the default: its own, on its own branch) or `checkout` (the user's, on its current branch: no branch made, nothing merged; a job that edits waits while the checkout has changes not committed; one such run at a time) | another value: an error; `uses: merge` in it an error, `branch` a warning |
 | `for` | an issue type, or a list: `[feature, task]` | not one of Beads' types: a warning |
 | `concurrency` | how many of the pool's agents work on its runs at once | a whole number above 0 |
 | `budget` | `cost` (dollars), `tokens`, `time` (`3h`, `90m`, `1h30m`) a run may spend | numbers above 0, a duration |

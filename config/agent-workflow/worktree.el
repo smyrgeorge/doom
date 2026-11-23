@@ -226,12 +226,14 @@ user error if it has changes not committed (git refuses)."
    (expand-file-name (concat issue "@" job)
                      (expand-file-name "worktrees" (expand-file-name agent-workflow-local-directory project)))))
 
-(cl-defun agent-workflow-snapshot (project issue job &key type title branch)
+(cl-defun agent-workflow-snapshot (project issue job &key type title branch from)
   "A snapshot for JOB of ISSUE in PROJECT: a worktree detached at the
 issue's branch's commit now (the issue's worktree made if it isn't there,
-on its branch from TYPE and TITLE, or BRANCH). One there from before is
-replaced. Return (DIR BRANCH COMMIT)."
-  (pcase-let* ((`(,worktree . ,branch) (agent-workflow-worktree project issue :type type :title title :branch branch))
+on its branch from TYPE and TITLE, or BRANCH). FROM: (DIR . BRANCH), where
+its commit is instead (your checkout, for a run there). One there from
+before is replaced. Return (DIR BRANCH COMMIT)."
+  (pcase-let* ((`(,worktree . ,branch) (or from (agent-workflow-worktree project issue :type type :title title
+                                                                          :branch branch)))
                (dir (agent-workflow-snapshot-directory project issue job))
                (default-directory project)
                (commit (let ((default-directory worktree)) (agent-workflow--git "rev-parse" "HEAD"))))

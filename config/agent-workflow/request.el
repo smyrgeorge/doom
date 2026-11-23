@@ -49,7 +49,8 @@
 ;;        agent asks in its session, "question" and "session" too),
 ;;        "where": {"worktree" (null: gone), "branch", "deleted" (its run
 ;;        done), "base": {"branch", "commit"} or null, "into", "own",
-;;        "with", "uncommitted", "merged"} or null, "spent": {"cost", "tokens", "time"},
+;;        "with", "uncommitted", "merged", "checkout" (it works in your
+;;        checkout: worktree is it)} or null, "spent": {"cost", "tokens", "time"},
 ;;        "budget": {...} or null, "log"}...]}; any shell's
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
@@ -171,7 +172,8 @@ a user error if it has none."
               :own (plist-get where :own)
               :with (plist-get where :with)
               :uncommitted (plist-get where :uncommitted)
-              :merged (if (plist-get where :merged) t :false)))
+              :merged (if (plist-get where :merged) t :false)
+              :checkout (if (plist-get where :checkout) t :false)))
     :null))
 
 (defun agent-workflow--request-status (directory payload)

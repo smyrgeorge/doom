@@ -255,10 +255,11 @@ never."
     config))
 
 (cl-defun agent-workflow-start-agent (&key project issue job profile type title branch values outcomes prompt
-                                           snapshot resume)
+                                           snapshot resume place)
   "Start an agent of the pool for the JOB of ISSUE's run in PROJECT, with
 the PROFILE (a name): its session, fresh, in ISSUE's worktree (made on its
-branch from TYPE and TITLE, or BRANCH, if it isn't there). VALUES: its variables'
+branch from TYPE and TITLE, or BRANCH, if it isn't there); PLACE, (DIR .
+BRANCH): there instead (your checkout, for a run there). VALUES: its variables'
 values (an alist); OUTCOMES: those it may give besides done; PROMPT: its
 first message, its variables filled in, sent once it's ready. SNAPSHOT:
 \(DIR BRANCH COMMIT), a reading job's snapshot it works in instead of the
@@ -277,9 +278,10 @@ full or PROFILE isn't one."
     (unless (alist-get profile (agent-workflow-profiles project) nil nil #'equal)
       (user-error "No profile %s: %s" profile
                   (agent-workflow--listed (mapcar #'car (agent-workflow-profiles project)))))
-    (pcase-let* ((`(,dir . ,branch) (if snapshot
-                                        (cons (nth 0 snapshot) (nth 1 snapshot))
-                                      (agent-workflow-worktree project issue :type type :title title :branch branch)))
+    (pcase-let* ((`(,dir . ,branch) (cond (snapshot (cons (nth 0 snapshot) (nth 1 snapshot)))
+                                          (place place)
+                                          (t (agent-workflow-worktree project issue :type type :title title
+                                                                      :branch branch))))
                  (agent (agent-workflow-agent--make :project project :issue issue :job job :profile profile
                                                     :worktree dir :branch branch :commit (nth 2 snapshot)
                                                     :values values :outcomes outcomes :resumed resume
