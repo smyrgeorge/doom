@@ -211,7 +211,7 @@ shell. They run once you trust this config (see [Trust](#trust)).
 | Workflow | Jobs |
 |---|---|
 | screenshots | capture: its script takes the examples' screenshots again (`.agent-workflow/scripts/screenshots.sh`, macOS: Emacs needs the Screen Recording permission; it broke, the run asks you), then an agent with the `screenshots` agent looks at each changed one and commits the good ones; review (changes: capture again); merge |
-| github | In your checkout (`runs-in: checkout`). green: check (gh logged in, your checkout on main, `.agent-workflow/scripts/github-check.sh`), push (your main, its HEAD: your commits too, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, an agent with the `ci` agent reads its logs, fixes the code or its test and commits on your main, and the job runs again from its push (`retry-from`), 5 times at most |
+| github | In your checkout (`runs-in: checkout`), two jobs. check: gh logged in, your checkout on main (`.agent-workflow/scripts/github-check.sh`). all-green, after it: push (your main, its HEAD: your commits too, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, the `ci` agent reads its logs, fixes the code or its test and commits on your main, and all-green runs again from its push (`retry-from`), 5 times at most |
 
 The `screenshots` agent (`.agent-workflow/agents/`) may read, look at images and commit; it never takes them
 again, nor changes anything else. The `ci` agent may read, edit, run the tests and commit (only the files it

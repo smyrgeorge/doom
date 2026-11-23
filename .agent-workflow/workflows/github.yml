@@ -1,14 +1,14 @@
 # A workflow of this config's own: your main pushed to GitHub and its Actions
-# watched until they pass. No gh (or not logged in), not on main: the run
-# fails at once (check). Nothing to push: on to the watching (push);
-# finished already, their verdict at once (watch). A failure: its jobs' logs
-# to the ci agent (.agent-workflow/agents/ci.md), which finds why, fixes the code or its
-# test and commits on your main; the job runs again from its push
-# (retry-from): your main pushed again (the fix, and anything you committed
-# meanwhile), watched again, 5 times at most (then the run asks you). It
-# works in your checkout (runs-in: checkout): no branch of its own, nothing
-# to merge. No ticket: M-x agent-workflow-run, or agent-workflow run
-# --workflow github.
+# watched until they pass, in two jobs. check: no gh (or not logged in), not
+# on main: the run fails at once. all-green: your main pushed (nothing to
+# push: on to the watching), its Actions watched (finished already, their
+# verdict at once). A failure: its jobs' logs to the ci agent
+# (.agent-workflow/agents/ci.md), which finds why, fixes the code or its test
+# and commits on your main; all-green runs again from its push (retry-from):
+# your main pushed again (the fix, and anything you committed meanwhile),
+# watched again, 5 times at most (then the run asks you). It works in your
+# checkout (runs-in: checkout): no branch of its own, nothing to merge. No
+# ticket: M-x agent-workflow-run, or agent-workflow run --workflow github.
 
 # The workflow's name: its file's (github.yml), said again.
 name: github
@@ -38,8 +38,25 @@ budget: {cost: 20, time: 4h}
 # done; one that needs none starts first.
 jobs:
 
-  # green: main pushed and its GitHub Actions passing.
-  green:
+  # check: what pushing needs, there before anything is pushed. A job that
+  # changes nothing (no agent that edits): it works on a snapshot of your
+  # checkout, beside it.
+  check:
+
+    # run: a script, in bash; one naming a file of .agent-workflow/ runs
+    # your checkout's copy, never the branch's. Exit 0: the next step (here,
+    # the job done); 1: fixed by an agent, run again; 3: the run fails;
+    # another code: the run asks you. Here: gh installed and logged in, your
+    # checkout on main, a remote to push to; else 3.
+    run: .agent-workflow/scripts/github-check.sh
+
+  # all-green: main pushed and its GitHub Actions passing. Push and watch in
+  # one job: a fixed failure runs it again from its push (retry-from points
+  # at a step of its own job), the fix pushed before it's watched again.
+  all-green:
+
+    # needs: the jobs it waits for: check done.
+    needs: check
 
     # Its steps, run one after another in your checkout, on main. It waits
     # to start while your checkout has changes not committed (its agent
@@ -48,15 +65,6 @@ jobs:
 
       # name: the step's own name in its job: the run's pane and log say it,
       # retry-from points at it.
-      - name: check
-
-        # run: a script, in bash; one naming a file of .agent-workflow/ runs
-        # your checkout's copy, never the branch's. Exit 0: the next step;
-        # 1: fixed by an agent, run again; 3: the run fails; another code:
-        # the run asks you. Here: gh installed and logged in, your checkout
-        # on main, a remote to push to; else 3.
-        run: .agent-workflow/scripts/github-check.sh
-
       # push: your main (your HEAD: the fixes, your commits) pushed (nothing
       # new: on); refused (origin has commits you haven't), or your checkout
       # not on main any more, 2: the run asks you.
@@ -82,6 +90,7 @@ jobs:
 
         # on-fail: the agent sent the failure (the script's output) to fix
         # it, in a job with no agent of its own (or {run: a script, agent:
-        # ...}: a script tried first): ci reads the logs, fixes the code or its test, commits on your main (only the
-        # files it changed); it never pushes.
+        # ...}: a script tried first): ci reads the logs, fixes the code or
+        # its test, commits on your main (only the files it changed); it
+        # never pushes.
         on-fail: ci
