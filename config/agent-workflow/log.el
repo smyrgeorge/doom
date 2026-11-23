@@ -33,7 +33,8 @@ waiting for you, or for something else.")
 
 (defun agent-workflow--log-hint (issue kind)
   "How to answer, from the shell, a run of ISSUE asking KIND: a job's
-:ask's (a symbol; nil: the loop guard), `none' for a wait with no question."
+:ask's (a symbol; nil: the loop guard), `agent' for its agent asking in its
+session, `none' for a wait with no question."
   (pcase kind
     ('approve (format "agent-workflow approve %s, or reject %s NOTE" issue issue))
     ('nil (format "agent-workflow confirm %s go|accept|stop [--note-to JOB NOTE]" issue))
@@ -42,6 +43,7 @@ waiting for you, or for something else.")
     ((or 'merge 'moved 'protected) (format "agent-workflow confirm %s go|stop" issue))
     ('closed (format "agent-workflow confirm %s go|cancel" issue))
     ('none (format "agent-workflow continue %s, back %s JOB NOTE, or cancel %s" issue issue issue))
+    ('agent "answer it in its agent's session, or in the run's pane")
     (_ (format "agent-workflow confirm %s go|skip|stop" issue))))
 
 (defun agent-workflow--log-value (value)
@@ -176,9 +178,12 @@ lines; a wait's hint from its job's last question."
   (let* ((file (agent-workflow--log-path run))
          (fresh (not (file-exists-p file)))
          (job (plist-get data :job))
-         (ask (and job (plist-get (agent-workflow--job run job) :ask)))
+         (state (and job (agent-workflow--job run job)))
+         (ask (plist-get state :ask))
          (line (agent-workflow--log-line (agent-workflow-run-issue run) event data (current-time)
-                                         (if ask (plist-get ask :kind) 'none))))
+                                         (cond (ask (plist-get ask :kind))
+                                               ((plist-get state :agent-asks) 'agent)
+                                               (t 'none)))))
     (if fresh
         ;; Made from the journal: this event's in it already.
         (agent-workflow-log-file run)

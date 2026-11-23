@@ -43,9 +43,10 @@
 ;;   status {"issue": "doom-a1b"} (issue: optional, every run of the project
 ;;        not over) -> {"ok": true, "runs": [{"issue", "workflow", "run",
 ;;        "state", "why", "jobs": [{"name", "status", "outcome", "round",
-;;        "why"}...], "asking": {"job", "kind"} or null, "spent": {"cost",
-;;        "tokens", "time"}, "budget": {...} or null, "log"}...]}; any
-;;        shell's
+;;        "why"}...], "asking": {"job", "kind"} or null (kind agent: its
+;;        agent asks in its session, "question" and "session" too),
+;;        "spent": {"cost", "tokens", "time"}, "budget": {...} or null,
+;;        "log"}...]}; any shell's
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
 ;;        "project", "workflows": [names], "profiles": [names], "problems":
@@ -161,6 +162,7 @@ project's runs not over."
           :runs (vconcat
                  (mapcar (lambda (run)
                            (let ((asking (agent-workflow-asking run))
+                                 (agent-asking (agent-workflow-agent-asking run))
                                  (spent (agent-workflow-run-spent-now run))
                                  (budget (agent-workflow-run-budget run)))
                              (append (agent-workflow--run-reply run)
@@ -173,11 +175,19 @@ project's runs not over."
                                                                     :round (or (plist-get state :round) 0)
                                                                     :why (or (plist-get state :why) :null))))
                                                           (agent-workflow-run-jobs run)))
-                                           :asking (if asking
-                                                       (list :job (car asking)
-                                                             :kind (let ((kind (plist-get (cdr asking) :kind)))
-                                                                     (if kind (symbol-name kind) "loop")))
-                                                     :null)
+                                           :asking (cond
+                                                    (asking
+                                                     (list :job (car asking)
+                                                           :kind (let ((kind (plist-get (cdr asking) :kind)))
+                                                                   (if kind (symbol-name kind) "loop"))))
+                                                    (agent-asking
+                                                     (let ((agent (plist-get (agent-workflow--job run (car agent-asking))
+                                                                             :agent)))
+                                                       (list :job (car agent-asking) :kind "agent"
+                                                             :question (or (plist-get (cdr agent-asking) :what) :null)
+                                                             :session (or (and agent (agent-workflow-agent-name agent))
+                                                                          :null))))
+                                                    (t :null))
                                            :spent (list :cost (plist-get spent :cost) :tokens (plist-get spent :tokens)
                                                         :time (plist-get spent :time))
                                            :budget (if budget

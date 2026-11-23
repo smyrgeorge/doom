@@ -11,7 +11,9 @@
 ;; - Needs you, only while it waits for you: what on, as a question you
 ;;   answer there (an approval: approve, or reject with a note; the loop
 ;;   guard: go on with notes, accept, stop; retries used up, a step that
-;;   broke, its budget used up...).
+;;   broke, its budget used up...; its agent asking in its session: a
+;;   permission's own buttons, pressed from there, and Go to it, its session
+;;   shown at the question).
 ;; - A section per job's agent: its agent-shell session's canvas, shown
 ;;   there (`agent-ui-host'): its plan, its progress, its questions, with no
 ;;   pane of its own; folded once its job ends (▸ build ✓ 12m). RET on its
@@ -33,6 +35,10 @@
 (defvar agent-ui-closes-with)
 (defvar agent-ui-display-function)
 (declare-function agent-ui--session-name "agent-ui/agent")
+(declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
+(declare-function agent-shell-elicitation-jump-to-latest-form "agent-shell-elicitation")
+(declare-function +my/agent-shell-permission-buttons "config/agent-shell/permissions")
+(declare-function +my/agent-shell-press-permission "config/agent-shell/permissions")
 
 (defvar-local agent-workflow--pane-run nil "In a run's pane: the run.")
 
@@ -313,18 +319,59 @@ at with it."
                                                                                        (abbreviate-file-name (plist-get look :log))))))
                                      "\n")))))))))))
 
+(defconst agent-workflow--pane-go-to-it "Go to it (its session, at the question)"
+  "The option of an agent's question in Needs you showing its session.")
+
+(defun agent-workflow--pane-agent-question (run job asks why)
+  "What JOB of RUN's agent asks you in its session (ASKS, as
+`agent-workflow-agent-asking' has it), WHY in words: a choice, a
+permission's options agent-shell's own buttons, and Go to it."
+  (let* ((agent (plist-get (agent-workflow--job run job) :agent))
+         (buffer (and agent (agent-workflow-agent-buffer agent)))
+         (buttons (and (eq (plist-get asks :kind) 'permission)
+                       (buffer-live-p buffer)
+                       (fboundp '+my/agent-shell-permission-buttons)
+                       (mapcar #'car (+my/agent-shell-permission-buttons buffer)))))
+    (list (list :id "ask" :type "choice" :question why :note :false
+                :options (append buttons (list agent-workflow--pane-go-to-it))))))
+
+(defun agent-workflow--pane-answer-agent (run job kind picked)
+  "JOB of RUN's agent's question (KIND: permission, question) answered in
+its pane with PICKED: a permission's button pressed, or its session shown
+at the question (asked again here: it still is)."
+  (let* ((agent (plist-get (agent-workflow--job run job) :agent))
+         (buffer (and agent (agent-workflow-agent-buffer agent))))
+    (unless (buffer-live-p buffer)
+      (user-error "%s has no agent working now" job))
+    (if (equal picked agent-workflow--pane-go-to-it)
+        (progn
+          (agent-workflow--pane-open-session run job)
+          (with-current-buffer buffer
+            (ignore-errors
+              (if (eq kind 'permission)
+                  (agent-shell-jump-to-latest-permission-button-row)
+                (agent-shell-elicitation-jump-to-latest-form))))
+          (agent-workflow--pane-changed run))
+      (unless (and (fboundp '+my/agent-shell-press-permission)
+                   (+my/agent-shell-press-permission buffer picked))
+        (user-error "%s's agent no longer asks that" job)))))
+
 (defun agent-workflow--pane-needs (run pane)
   "RUN's Needs you, in PANE: shown while it waits for you (its question,
 shown again only when it's another), gone once it doesn't."
   (with-current-buffer pane
     (let* ((waiting (eq (agent-workflow-run-state run) 'waiting))
            (asking (agent-workflow-asking run))
+           (agent-asking (and (not asking) (agent-workflow-agent-asking run)))
            (job (or (car asking)
+                    (car agent-asking)
                     (car (seq-find (lambda (job) (eq (plist-get (cdr job) :status) 'waiting))
                                    (agent-workflow-run-jobs run)))))
            (ask (cdr asking))
            (why (or (and job (plist-get (agent-workflow--job run job) :why)) (agent-workflow-run-why run)))
-           (asked (and waiting job (list job (and ask (or (plist-get ask :kind) 'guard)) why))))
+           (asked (and waiting job (list job (cond (ask (or (plist-get ask :kind) 'guard))
+                                                   (agent-asking 'agent))
+                                         why))))
       (cond
        ((not asked)
         (when (agent-ui--find-section "needs-you")
@@ -336,7 +383,9 @@ shown again only when it's another), gone once it doesn't."
           (agent-ui-section pane "needs-you" :title "Needs you" :state 'needs-you :after "run"))
         (agent-ui-section pane "needs-you" :note job)
         (setq agent-workflow--pane-asked asked)
-        (dolist (element (agent-workflow--pane-question run job ask why))
+        (dolist (element (if agent-asking
+                             (agent-workflow--pane-agent-question run job (cdr agent-asking) why)
+                           (agent-workflow--pane-question run job ask why)))
           (agent-ui-show element :canvas pane :section "needs-you")))))))
 
 (defun agent-workflow--pane-answer (_prompt _submit key)
@@ -366,7 +415,8 @@ given: said, the question left as it was."
 
 (defun agent-workflow--pane-answer-action (run job kind element by)
   "What answering RUN's question on JOB (KIND: its :ask's, `guard' for the
-loop guard's, nil for a wait with no question) with ELEMENT (the question,
+loop guard's, `agent' for its agent's, nil for a wait with no question) with
+ELEMENT (the question,
 answered) does: a function of no argument, BY you. A user error if the
 answer can't be given (nothing chosen, a rejection without a note)."
   (if (equal (plist-get element :type) "form")
@@ -393,6 +443,9 @@ answer can't be given (nothing chosen, a rejection without a note)."
       (unless picked
         (user-error "Choose one first"))
       (pcase kind
+        ('agent
+         (let ((asks (plist-get (agent-workflow--job run job) :agent-asks)))
+           (lambda () (agent-workflow--pane-answer-agent run job (plist-get asks :kind) picked))))
         ('approve
          (if (equal picked "Approve")
              (lambda () (agent-workflow-approve run :by by))

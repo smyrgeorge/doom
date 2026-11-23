@@ -239,6 +239,77 @@ again, approved: the run done."
         (should (member "approve, by you, in its pane"
                         (mapcar (lambda (line) (car (last (split-string line "  ")))) (agent-workflow-log-lines run))))))))
 
+(defun +test-awp--ask (pane)
+  "The question in PANE's Needs you, if there's one."
+  (ignore-errors (agent-ui-get "ask" :canvas pane :section "needs-you")))
+
+(ert-deftest agent-workflow-pane/its-agent-asks ()
+  "Its agent asking for a permission in its session: its run waits for you,
+saying what (its why, status, its log, said once); Needs you shows
+agent-shell's own buttons and Go to it; confirm refused, it's its agent's;
+Allow pressed there: its agent goes on (its turn ending without done, the
+usual wait). A question (agent-shell's form): Go to it shows its session,
+the question asked here again; answered there: running, Needs you gone."
+  (+test-awp "agent-asks"
+    (let* ((issue (+test-awr--issue project "Ask for a permission"))
+           (said nil)
+           (agent-workflow-needs-you-functions (list (lambda (_run why) (push why said))))
+           (run (car (car (agent-workflow-run (list issue) nil project))))
+           (pane (agent-workflow-run-pane run))
+           (agent (+test-awr--agent run "build"))
+           (why "build: its agent asks for your permission: npm install"))
+      ;; It asks: the run waits for you, saying what.
+      (should (+test-awr--wait (lambda () (agent-workflow-agent-asking run))))
+      (should (eq (agent-workflow-run-state run) 'waiting))
+      (should (equal (agent-workflow-run-why run) why))
+      (should (equal (agent-workflow-agent-asking run)
+                     (list "build" :kind 'permission :what "npm install" :why why)))
+      (should (equal said (list why)))
+      (should (equal (plist-get (aref (plist-get (agent-workflow--request-status project nil) :runs) 0) :asking)
+                     (list :job "build" :kind "agent" :question "npm install"
+                           :session (agent-workflow-agent-name agent))))
+      (should (string-suffix-p (concat "waits for you: " why " → answer it in its agent's session, or in the run's pane")
+                               (car (last (agent-workflow-log-lines run)))))
+      (should (string-match-p "asks you in its session"
+                              (cadr (should-error (agent-workflow-confirm run "go") :type 'user-error))))
+      ;; Needs you: agent-shell's buttons, and Go to it.
+      (should (+test-awr--wait (lambda () (+test-awp--ask pane))))
+      (let ((ask (+test-awp--ask pane)))
+        (should (equal (plist-get ask :question) why))
+        (should (string-prefix-p "Allow" (car (plist-get ask :options))))
+        (should (equal (car (last (plist-get ask :options))) agent-workflow--pane-go-to-it))
+        ;; Allow, from the pane: its agent goes on; its turn over without
+        ;; done, the usual wait.
+        (+test-awp--answer pane (car (plist-get ask :options))))
+      (+test-awp--settle)
+      (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why run)
+                                                 "build: its agent ended its turn without saying it's done"))))
+      (should-not (agent-workflow-agent-asking run))
+      (should (+test-awr--wait (lambda () (equal (plist-get (+test-awp--ask pane) :options)
+                                                 '("Run its step again" "Cancel the run")))))
+      (should (member "answered its agent, by you"
+                      (mapcar (lambda (line) (car (last (split-string line "  ")))) (agent-workflow-log-lines run))))
+      (should (equal (seq-filter (lambda (event) (member event '("asked" "answered"))) (+test-awr--journal run))
+                     '("asked" "answered")))
+      ;; A question, its form in its session (its job running again).
+      (agent-workflow--job-set run "build" :status 'running :why nil)
+      (agent-workflow--agent-event agent '((:event . elicitation-request)
+                                           (:data (:message . "Retina or 1x?\nThe screen is 1x."))))
+      (should (equal (agent-workflow-run-why run) "build: its agent asks you: Retina or 1x?"))
+      (should (+test-awr--wait (lambda () (equal (plist-get (+test-awp--ask pane) :options)
+                                                 (list agent-workflow--pane-go-to-it)))))
+      ;; Go to it: its session shown; asked here again, it still is.
+      (+test-awp--answer pane agent-workflow--pane-go-to-it)
+      (+test-awp--settle)
+      (should (get-buffer-window (agent-workflow-agent-buffer agent)))
+      (should (agent-workflow-agent-asking run))
+      (should (+test-awp--ask pane))
+      (should-not (plist-get (+test-awp--ask pane) :selected))
+      ;; Answered there: running, Needs you gone.
+      (agent-workflow--agent-event agent '((:event . elicitation-response)))
+      (should (eq (agent-workflow-run-state run) 'running))
+      (should (+test-awr--wait (lambda () (not (member "needs-you" (+test-awp--sections pane t)))))))))
+
 ;; ====== EVERY RUN ======
 
 (ert-deftest agent-workflow-pane/the-runs-listed ()

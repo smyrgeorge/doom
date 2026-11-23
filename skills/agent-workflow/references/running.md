@@ -40,6 +40,7 @@ States: `queued`, `running`, `waiting` (for the user, saying why), `done`, `canc
 | its budget is used up | `go` (`--more-cost N`, `--more-tokens N`, `--more-time 1h`), `stop` |
 | its issue was closed by hand | `go`, `cancel` |
 | its branch lost a job's commits | `go`, `stop` |
+| its agent asks in its session (a permission, a question) | none: answered in its session, or its pane |
 
 A result waiting for the user's OK (`approve: true`): `agent-workflow approve ISSUE`, or `reject ISSUE "note"` (an agent
 step back to its agent; a script's stops the run).

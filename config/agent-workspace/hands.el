@@ -17,8 +17,9 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'text-property-search)
 
+(declare-function +my/agent-shell-permission-buttons "config/agent-shell/permissions")
+(declare-function +my/agent-shell-press-permission "config/agent-shell/permissions")
 (declare-function agent-ui-get "agent-ui/canvas")
 (declare-function agent-ui-update "agent-ui/canvas")
 (declare-function agent-ui-ask-answer-text "agent-ui/ask")
@@ -29,27 +30,6 @@
 (defvar agent-ui--canvas-name)
 
 ;; ====== A HAND'S OPTIONS ======
-
-(defun agent-workspace--permission-buttons (buffer)
-  "The permission buttons waiting in agent-shell's session BUFFER, its
-latest row: ((LABEL . ACTION)...), ACTION its own command."
-  (with-current-buffer buffer
-    (save-excursion
-      (goto-char (point-max))
-      (when-let* ((last (text-property-search-backward 'button 'permission t)))
-        (let ((start (save-excursion (goto-char (prop-match-beginning last)) (line-beginning-position)))
-              (end (save-excursion (goto-char (prop-match-beginning last)) (line-end-position)))
-              buttons match)
-          (goto-char start)
-          (while (and (setq match (text-property-search-forward 'button 'permission t))
-                      (< (prop-match-beginning match) end))
-            (let* ((from (prop-match-beginning match))
-                   (label (string-trim (buffer-substring-no-properties from (prop-match-end match)) "[[ ]+" "[] ]+"))
-                   (map (get-text-property from 'keymap))
-                   (action (and (keymapp map) (lookup-key map (kbd "RET")))))
-              (when (functionp action)
-                (push (cons label (cons from action)) buttons))))
-          (nreverse buttons))))))
 
 (defun agent-workspace--canvas-choice (agent)
   "AGENT's raised hand's question on its canvas, if it's a choice: (CANVAS
@@ -72,15 +52,11 @@ no argument answering it so; nil if its hand isn't raised."
        ;; A permission: agent-shell's own buttons.
        (and (eq (plist-get (agent-workspace-agent-ask agent) :kind) 'permission)
             (buffer-live-p buffer)
+            (fboundp '+my/agent-shell-permission-buttons)
             (mapcar (lambda (button)
-                      (pcase-let ((`(,label ,pos . ,action) button))
-                        (cons label
-                              (lambda ()
-                                (with-current-buffer buffer
-                                  (save-excursion
-                                    (goto-char pos)
-                                    (funcall-interactively action)))))))
-                    (agent-workspace--permission-buttons buffer)))
+                      (let ((label (car button)))
+                        (cons label (lambda () (+my/agent-shell-press-permission buffer label)))))
+                    (+my/agent-shell-permission-buttons buffer)))
        ;; A choice on its canvas: its options.
        (when-let* ((choice (agent-workspace--canvas-choice agent)))
          (pcase-let ((`(,canvas ,id ,element) choice))

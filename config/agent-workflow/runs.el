@@ -773,9 +773,20 @@ them). In `agent-workflow-quit-hook'."
 (add-hook 'agent-workflow-quit-hook #'agent-workflow--save-all)
 
 (defun agent-workflow--agent-event (agent event)
-  "An event of AGENT's session: its turn over, its session gone; its
-session's id kept once it's known. In `agent-workflow-agent-event-functions'."
+  "An event of AGENT's session: its turn over, its session gone; it asks
+you, answered (see ITS AGENT ASKS); its session's id kept once it's known.
+In `agent-workflow-agent-event-functions'."
+  ;; Its turn over, or its session: nothing it asked waits any more.
+  (when-let* (((memq (map-elt event :event) '(turn-complete error clean-up)))
+              (run (agent-workflow--agent-asks-over agent)))
+    (agent-workflow--refresh run))
   (pcase (map-elt event :event)
+    ('permission-request
+     (agent-workflow--agent-asks agent 'permission (map-elt (map-elt (map-elt event :data) :tool-call) :title)))
+    ('elicitation-request
+     (agent-workflow--agent-asks agent 'question (map-elt (map-elt event :data) :message)))
+    ((or 'permission-response 'elicitation-response)
+     (agent-workflow--agent-answered agent))
     ('init-finished
      (when-let* ((found (agent-workflow--agent-run agent))
                  (session (agent-workflow-agent-session agent)))
@@ -876,6 +887,65 @@ stops."
        (agent-workflow--rerun-or-ask run job other)))))
 
 (add-hook 'agent-workflow-agent-event-functions #'agent-workflow--agent-event)
+
+;; ====== ITS AGENT ASKS ======
+;; An agent asking you in its session (agent-shell's permission-request: a
+;; tool its profile doesn't allow without asking; its elicitation-request: a
+;; question, AskUserQuestion's form) holds its turn until you answer: its
+;; job waits for you, saying what it asks, as any wait does (the run's
+;; state, status, its pane's Needs you, a notification). Answered, wherever
+;; (its session, its pane), the job runs again. Its turn ending, or its
+;; session, nothing it asked waits any more.
+
+(defun agent-workflow-agent-asking (run)
+  "RUN's job whose agent asks you in its session, and what: (JOB . ASKS),
+ASKS (:kind permission|question :what WORDS :why WHY), or nil."
+  (seq-some (lambda (job)
+              (let* ((state (cdr job))
+                     (asks (plist-get state :agent-asks)))
+                (and asks (eq (plist-get state :status) 'waiting)
+                     (equal (plist-get asks :why) (plist-get state :why))
+                     (cons (car job) asks))))
+            (agent-workflow-run-jobs run)))
+
+(defun agent-workflow--agent-asks (agent kind what)
+  "AGENT asks you KIND (permission, question) of WHAT (its tool call's
+title, the question; nil): its job, running, waits for you."
+  (when-let* ((found (agent-workflow--agent-run agent)))
+    (pcase-let ((`(,run . ,job) found))
+      (when (eq (plist-get (agent-workflow--job run job) :status) 'running)
+        (let* ((what (and (stringp what)
+                          (let ((line (string-trim (car (split-string (string-trim what) "\n")))))
+                            (and (not (string-empty-p line)) line))))
+               (why (format "%s: its agent asks %s%s" job
+                            (if (eq kind 'permission) "for your permission" "you")
+                            (if what (concat ": " what) ""))))
+          (agent-workflow--job-set run job :agent-asks (list :kind kind :what what :why why))
+          (agent-workflow--journal run "asked" :job job :kind "agent" :what what)
+          (agent-workflow--wait run job why))))))
+
+(defun agent-workflow--agent-answered (agent)
+  "What AGENT asked answered, in its session or its pane: its job runs
+again."
+  (when-let* ((found (agent-workflow--agent-run agent))
+              ((agent-workflow--agent-asks-over agent)))
+    (pcase-let ((`(,run . ,job) found))
+      (agent-workflow--journal run "answered" :job job :choice "answered its agent" :by "you")
+      (agent-workflow--refresh run))))
+
+(defun agent-workflow--agent-asks-over (agent)
+  "Nothing AGENT asked waits any more: its job, waiting for it, running
+again (its run's state not worked out again). Its run if it asked."
+  (when-let* ((found (agent-workflow--agent-run agent)))
+    (pcase-let* ((`(,run . ,job) found)
+                 (state (agent-workflow--job run job))
+                 (asks (plist-get state :agent-asks)))
+      (when asks
+        (agent-workflow--job-set run job :agent-asks nil)
+        (when (and (eq (plist-get state :status) 'waiting)
+                   (equal (plist-get state :why) (plist-get asks :why)))
+          (agent-workflow--job-set run job :status 'running :why nil))
+        run))))
 
 ;; ====== GOING BACK ======
 ;; You send a run back to a job (and a step of it) that has run, with a
@@ -1213,6 +1283,9 @@ waiting: go (try it again), stop (steps.el); its budget used up: go (MORE,
 \(:cost :tokens :time) added to it, its steps continued), stop (budget.el).
 A user error if RUN asks nothing, or CHOICE isn't one of its question's."
   (pcase-let* ((`(,job . ,ask) (or (agent-workflow-asking run)
+                                   (when-let* ((agent (agent-workflow-agent-asking run)))
+                                     (user-error "%s: %s's agent asks you in its session: answer it there, or in \
+the run's pane" (agent-workflow-run-name run) (car agent)))
                                    (user-error "%s asks nothing" (agent-workflow-run-name run))))
                (other (plist-get ask :other))
                (edge (plist-get ask :edge))

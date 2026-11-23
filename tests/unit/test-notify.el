@@ -244,7 +244,14 @@ while Emacs is away, its name and why; a click opening its pane."
       ;; Emacs in front: nothing.
       (+test-notify t
         (+my/notify-agent-workflow--needs-you "doom-a1b" "x")
-        (should-not +test-notify--shown)))))
+        (should-not +test-notify--shown))))
+  ;; A run's agent's session: its run says what needs you, not Claude
+  ;; Code's kinds.
+  (should (memq #'+my/notify-agent-workflow--own-p (default-value '+my/notify-claude-own-functions)))
+  (with-temp-buffer
+    (should-not (+my/notify-claude--own-p (current-buffer)))
+    (setq-local agent-workflow--agent 'an-agent)
+    (should (+my/notify-claude--own-p (current-buffer)))))
 
 (ert-deftest notify/claude-finished-its-turn ()
   "A session's turn complete: named by its project, why it stopped; a click

@@ -254,7 +254,7 @@ spent $1.24 of $15, 12m 30s of 3h
 - **Needs you**, only while the run waits for you: what on, as a question you answer there: an approval (approve, or
   reject with a note), the loop guard (go on with a note for each agent, accept it as it is, or stop), retries used up,
   a step that broke, a merge waiting, its budget used up (go on with more), a turn that ended without `done` (run its
-  step again, with a note, or cancel the run).
+  step again, with a note, or cancel the run), its agent asking in its session (below).
 - **A section per agent:** its session's canvas, shown there: its plan, its progress, its questions. Its job over, it's
   folded (`▸ build ✓ 4m 12s`). `RET` on its divider opens its session; `TAB` on any divider folds it.
 - **Log:** its last events.
@@ -268,8 +268,14 @@ only after that, when the run needs you (its window closed, the same).
 over too: its issue, workflow, state, time, what it spent, what it waits for. `RET` opens a run's pane, `gr` reads
 them again.
 
+An agent asking you in its session, for a permission (a tool its profile doesn't allow without asking) or with a
+question (its form), holds its turn: its run waits for you, saying what (`build: its agent asks for your permission: npm
+install`). Needs you shows it: a permission's own buttons (Allow, Reject...), pressed from there, and **Go to it**, its
+session shown at the question. Answered, there or in its session, the run goes on.
+
 A run waiting for you is said by a notification while Emacs isn't in front (`agent-workflow-needs-you`, `SPC t N`),
-however it was started; a click opens its pane.
+however it was started; a click opens its pane. Its agents' sessions aren't said on their own (a turn over, a
+permission, a question): their run says what needs you.
 
 From the shell, `run` prints its runs' logs as they go, a line per event (time, issue, job, what happened), until
 they all end: exit 0 when they're done, 1 when one was cancelled. What needs you says how to answer it from there.
