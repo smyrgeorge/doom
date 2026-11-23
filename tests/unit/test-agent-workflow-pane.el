@@ -204,7 +204,7 @@ closed (q)."
       (should (string-match-p "\\`[0-9:]+ · Built it, with its tests\\.\\'"
                               (plist-get (car (plist-get (agent-ui-get "notes" :canvas pane :section "notes") :steps))
                                          :detail)))
-      (should (equal (plist-get (agent-ui-get "agent-notes" :canvas pane :section "job.build") :markdown)
+      (should (equal (plist-get (car (plist-get (agent-ui-get "notes" :canvas pane :section "notes") :steps)) :body)
                      "Built it, with its tests."))
       (should (string-search "no commit" (plist-get (car (plist-get (agent-ui-get "jobs" :canvas pane :section "run") :steps))
                                                     :detail)))
@@ -215,7 +215,7 @@ closed (q)."
         (should (eq (plist-get build :state) 'done))
         (should-not (plist-get build :hosts)))
       (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "job.build"))
-                     '("plan" "agent-notes")))
+                     '("plan")))
       ;; Review's: after build's.
       (+test-awr--agent run "review")
       (should (+test-awr--wait (lambda () (member "job.review" (+test-awp--sections pane)))))
@@ -630,17 +630,17 @@ section, several rounds' each under its own; none yet, none shown."
                         (list :job "review" :round 1 :outcome "changes" :time (+ time 60) :text "Name it better.")
                         (list :job "review" :round 2 :outcome "approved" :time (+ time 240) :text "Reads well now.")
                         (list :job "review" :round 3 :outcome "approved" :time (+ time 300) :text "Approved: it reads well.")))
-      (should (equal (plist-get (agent-workflow--pane-notes-element) :steps)
-                     '((:name "capture" :status "done" :detail "14:16 · No commit: none changed in look.")
-                       (:name "review" :status "done" :detail "14:17 · changes · Name it better.")
-                       (:name "review · round 2" :status "done" :detail "14:20 · approved · Reads well now.")
-                       (:name "review · round 3" :status "done" :detail "14:21 · Approved: it reads well."))))
-      (should (equal (plist-get (agent-workflow--pane-job-notes-element "capture") :markdown)
-                     "No commit: none changed in look.\n- all 13 taken"))
-      (should (equal (plist-get (agent-workflow--pane-job-notes-element "review") :markdown)
-                     (concat "**Round 1** · changes · 14:17\n\nName it better.\n\n**Round 2** · approved · 14:20\n\n"
-                             "Reads well now.\n\n**Round 3** · approved · 14:21\n\nApproved: it reads well.")))
-      (should-not (agent-workflow--pane-job-notes-element "merge")))))
+      (should (equal (mapcar (lambda (step) (list (plist-get step :name) (plist-get step :detail)))
+                             (plist-get (agent-workflow--pane-notes-element) :steps))
+                     '(("capture" "14:16 · No commit: none changed in look.")
+                       ("review" "14:17 · changes · Name it better.")
+                       ("review · round 2" "14:20 · approved · Reads well now.")
+                       ("review · round 3" "14:21 · Approved: it reads well."))))
+      ;; Each unfolding to its whole; those unfolded given.
+      (should (equal (mapcar (lambda (step) (plist-get step :body)) (plist-get (agent-workflow--pane-notes-element) :steps))
+                     '("No commit: none changed in look.\n- all 13 taken" "Name it better." "Reads well now."
+                       "Approved: it reads well.")))
+      (should (equal (plist-get (agent-workflow--pane-notes-element '("capture")) :open) '("capture"))))))
 
 (ert-deftest agent-workflow-pane/notes-of-fixes ()
   "A failed step's agent's notes, from its journal: each fix said (fixing
@@ -672,20 +672,15 @@ its step's name in its section only."
       (should (equal (mapcar (lambda (step) (plist-get step :name)) (plist-get (agent-workflow--pane-notes-element) :steps))
                      '("green · fixing watch · try 1" "green · fixing watch · try 2"
                        "green · round 2 · fixing watch · try 1" "docs")))
-      (should (equal (plist-get (agent-workflow--pane-job-notes-element "green") :markdown)
-                     (concat "**Round 1 · fixing watch · try 1** · done · 20:47\n\nNot fixed: it logs why.\n\n"
-                             "**Round 1 · fixing watch · try 2** · done · 21:22\n\nFixed: the frame.\n\n"
-                             "**Round 2 · fixing watch · try 1** · done · 21:27\n\nFixed: again.")))
-      ;; One round's two fixes: no round said.
-      (setq agent-workflow--pane-notes (seq-take agent-workflow--pane-notes 2))
-      (should (equal (plist-get (agent-workflow--pane-job-notes-element "green") :markdown)
-                     (concat "**Fixing watch · try 1** · done · 20:47\n\nNot fixed: it logs why.\n\n"
-                             "**Fixing watch · try 2** · done · 21:22\n\nFixed: the frame."))))))
+      (should (equal (mapcar (lambda (step) (plist-get step :detail)) (plist-get (agent-workflow--pane-notes-element) :steps))
+                     '("20:47 · Not fixed: it logs why." "21:22 · Fixed: the frame." "21:27 · Fixed: again."
+                       "20:42 · Wrote it."))))))
 
 (ert-deftest agent-workflow-pane/notes-of-agents-gone ()
   "A pane drawn from its run's journal, its agents gone (Emacs started
-again, its pane closed and opened again): each agent's notes whole in its
-own section, made, folded once its job's done; the feed above them."
+again, its pane closed and opened again): its agents' notes in Notes, each
+unfolding to its whole (no section of its agent's made for them); one
+unfolded stays so as it's drawn again."
   (let* ((dir (file-name-as-directory (make-temp-file "awp-notes-" t)))
          (run (agent-workflow-run--make
                :project dir :issue "demo-9" :n 1 :dir dir :info '(:title "Gone") :state 'done
@@ -706,15 +701,28 @@ own section, made, folded once its job's done; the feed above them."
     (unwind-protect
         (progn
           (setq pane (agent-workflow--pane-make run))
-          (should (equal (+test-awp--sections pane t) '("run" "job.build" "job.review" "notes" "log")))
+          (should (equal (+test-awp--sections pane t) '("run" "notes" "log")))
           (should (equal (mapcar (lambda (step) (plist-get step :name))
                                  (plist-get (agent-ui-get "notes" :canvas pane :section "notes") :steps))
                          '("build" "review")))
-          (should (equal (plist-get (agent-ui-get "agent-notes" :canvas pane :section "job.build") :markdown)
+          (should (equal (plist-get (car (plist-get (agent-ui-get "notes" :canvas pane :section "notes") :steps)) :body)
                          "Built it.\n- a.el:3"))
-          (should (seq-every-p (lambda (section) (plist-get section :folded))
-                               (seq-filter (lambda (section) (string-prefix-p "job." (plist-get section :name)))
-                                           (agent-ui-sections pane)))))
+          ;; Folded: its line, ▸; unfolded (RET on it), its whole under it,
+          ;; kept so as the pane's drawn again.
+          (with-current-buffer pane
+            (agent-ui--flush)
+            (should (string-match-p "▸ [0-9:]+ · Built it\\." (buffer-string)))
+            (should-not (string-search "a.el:3" (buffer-string)))
+            (goto-char (point-min))
+            (search-forward "Built it.")
+            (funcall (get-text-property (match-beginning 0) 'agent-ui-action))
+            (agent-ui--flush)
+            (should (string-match-p "▾ [0-9:]+ · Built it\\." (buffer-string)))
+            (should (string-search "a.el:3" (buffer-string))))
+          (agent-workflow--pane-draw run)
+          (with-current-buffer pane
+            (agent-ui--flush)
+            (should (string-search "a.el:3" (buffer-string)))))
       (when (buffer-live-p pane) (kill-buffer pane))
       (delete-directory dir t))))
 
