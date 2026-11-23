@@ -483,7 +483,7 @@ under its heading (`agent-workflow--pane-note-heading': what its agent
 was at, its round if they're of several), outcome and time. Nil if it has
 none."
   (when-let* ((notes (seq-filter (lambda (note) (equal (plist-get note :job) job)) agent-workflow--pane-notes)))
-    (list :id "agent-notes" :type "markdown" :title "Its notes"
+    (list :id "agent-notes" :type "markdown"
           :markdown (if (cdr notes)
                         (let ((rounds (cdr (delete-dups (mapcar (lambda (note) (or (plist-get note :round) 1)) notes)))))
                           (mapconcat (lambda (note)
@@ -537,7 +537,7 @@ has none yet."
 header, each nil if it isn't shown: git (its branch, buttons opening its
 worktree, magit; in your checkout, magit alone: its worktree is your
 project), changes (its files changed since it started: RET opens
-one), commits (its latest), where-note (its base branch's commits its
+one), commits (its latest, a line each: RET shows one), where-note (its base branch's commits its
 merge takes too)."
   (let* ((line (agent-workflow--pane-git-line where))
          (worktree (plist-get where :worktree))
@@ -563,10 +563,12 @@ merge takes too)."
                                               (and (plist-get file :removed) (list :removed (plist-get file :removed)))
                                               (and (plist-get file :uncommitted) (list :note "not committed"))))
                                     files)))
+          ;; A line each (its subject cut), RET or a click opening it.
           (and commits
-               (list :id "commits" :type "text" :face "muted"
-                     :text (mapconcat (lambda (commit) (format "%s  %s" (nth 0 commit) (nth 1 commit)))
-                                      commits "\n")))
+               (list :id "commits" :type "table" :columns '("" "") :nowrap t
+                     :rows (mapcar (lambda (commit) (list (nth 0 commit) (or (nth 1 commit) ""))) commits)
+                     ;; Its own (`agent-workflow--pane-answer'): {0} its hash.
+                     :row-open '(:prompt "{0}" :help "show this commit")))
           (and (> with 0) (not (plist-get where :merged))
                (list :id "where-note" :type "text" :face "warning"
                      :text (format "Started from %s, not %s: its %d %s not in %s %s merged too."
@@ -1085,11 +1087,35 @@ question left as it was."
          (pane (current-buffer)))
     (cond ((equal key "git") (agent-workflow--pane-open-worktree run prompt))
           ((equal key "run") (agent-workflow--pane-cancel run))
+          ((equal key "commits") (agent-workflow--pane-show-commit run prompt))
           ;; A job's agent's Session (its section's: job.JOB).
           ((and (equal (agent-ui--key-id key) agent-workflow--pane-agent-now-id)
                 (string-prefix-p "job." (or (agent-ui--key-section key) "")))
            (agent-workflow--pane-go-to-agent run (substring (agent-ui--key-section key) 4)))
           (t (agent-workflow--pane-answer-question run pane prompt key)))))
+
+(defun agent-workflow--pane-show-commit (run commit)
+  "COMMIT (a hash) of RUN shown, from its pane's commits: magit's, else
+git show's, read where its work is (its worktree, else its project)."
+  (let* ((where (agent-workflow-run-where run))
+         (worktree (plist-get where :worktree))
+         (default-directory (file-name-as-directory
+                             (if (and worktree (file-directory-p worktree))
+                                 worktree
+                               (agent-workflow-run-project run)))))
+    (unless (and (stringp commit) (string-match-p "\\`[0-9a-f]+\\'" commit))
+      (user-error "Not a commit: %s" commit))
+    (if (fboundp 'magit-show-commit)
+        (magit-show-commit commit)
+      (let ((buffer (get-buffer-create (format "*git show %s*" commit))))
+        (with-current-buffer buffer
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (call-process "git" nil t nil "show" commit))
+          (goto-char (point-min))
+          (diff-mode)
+          (view-mode 1))
+        (pop-to-buffer buffer)))))
 
 (defun agent-workflow--pane-cancel (run)
   "RUN cancelled from its pane's Cancel, asked first; over already: said."

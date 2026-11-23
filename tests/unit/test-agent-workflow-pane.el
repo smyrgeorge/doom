@@ -1044,7 +1044,9 @@ said), its commits; started from another branch than the main one, said."
       (should (equal changes '(:id "changes" :type "files" :dir "/p/w/" :tree :false
                                :files ((:path "a.el" :status "changed" :added 2 :removed 1 :note "not committed")
                                        (:path "b.el" :status "added" :added 3)))))
-      (should (equal (plist-get commits :text) "abc1234  A commit"))
+      (should (equal (plist-get commits :rows) '(("abc1234" "A commit"))))
+      (should (eq (plist-get commits :nowrap) t))
+      (should (equal (plist-get (plist-get commits :row-open) :prompt) "{0}"))
       (should-not note))
     (should (equal (nth 3 (agent-workflow--pane-git run '(:into "main" :with 3 :base (:branch "side" :commit "abc"))))
                    '(:id "where-note" :type "text" :face "warning"
@@ -1098,7 +1100,7 @@ status has the same; kept in its state.json. Done: its worktree removed
       (should (equal (plist-get (agent-ui-get "changes" :canvas pane) :files)
                      '((:path "a.txt" :status "added" :added 1 :removed 0)
                        (:path "b.txt" :status "added" :note "not committed"))))
-      (should (string-suffix-p "  a commit of its own" (plist-get (agent-ui-get "commits" :canvas pane) :text)))
+      (should (equal (cadr (car (plist-get (agent-ui-get "commits" :canvas pane) :rows))) "a commit of its own"))
       (should (equal (plist-get (aref (plist-get (agent-workflow--request-status project nil) :runs) 0) :where)
                      (list :worktree dir :branch branch :deleted :false
                            :base (list :branch "side" :commit base) :into main
