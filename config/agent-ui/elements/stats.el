@@ -176,9 +176,11 @@ a character ~0.5 of a line wide; wrapped if longer (it was cut)."
                                                   row)))
                          rows))
          (heights (cl-mapcar (lambda (extra under) (* lh (+ 3 extra under))) extras unders))
-         ;; A line above the tiles under a title (a run pane's name): they
-         ;; touched it.
-         (top (if (plist-get ctx :titled) lh 0))
+         ;; A line above the tiles under a title: they touched it. PAD
+         ;; without one, half a line (at a canvas's top, its edge).
+         (top (cond ((plist-get ctx :titled) lh)
+                    ((eq (plist-get props :pad) t) (round lh 2))
+                    (t 0)))
          (svg (svg-create width (+ top (- (apply #'+ (mapcar (lambda (h) (+ h gap)) heights)) gap))))
          (fg (agent-ui-chart--color 'default))
          (muted (agent-ui-chart--color 'agent-ui-muted))
@@ -223,7 +225,8 @@ good, green), \"down\" (a rise is bad, red) or \"none\"; FACE the value's
 colour: accent, success, warning, error, muted (a state, a figure past its
 limit).
 Tiles in the GUI; side by side, wrapping, as text."
-  :props ((figures list "The figures: {\"label\", \"value\", \"unit\", \"change\", \"good\", \"face\"}"))
+  :props ((figures list "The figures: {\"label\", \"value\", \"unit\", \"change\", \"good\", \"face\"}")
+          (pad boolean "A little space above the tiles, in the GUI (at a canvas's top: they touch its edge)"))
   :example (:figures ((:label "Coverage" :value 87.1 :unit "%" :change 2.3)
                       (:label "Tests" :value 412 :change "all pass")
                       (:label "Build" :value 29 :unit "s" :change -12 :good "down")))

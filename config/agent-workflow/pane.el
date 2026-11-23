@@ -628,7 +628,8 @@ state, time, spending and jobs as tiles (`agent-workflow--pane-figures');
 while it isn't over, Cancel under them (asked first:
 `agent-workflow-cancel-asked')."
   (append
-   (list :id "run" :type "stats")
+   ;; At the pane's top: a little space above its tiles.
+   (list :id "run" :type "stats" :pad t)
    ;; Its name (ISSUE · WORKFLOW) its tab's, its buffer's: not again. A
    ;; ticket's run, its issue's title, said nowhere else.
    (when-let* (((agent-workflow-run-ticket-p run))
