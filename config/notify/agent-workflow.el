@@ -2,8 +2,7 @@
 ;; Notifications of agent workflows (config/agent-workflow.el): a run waits
 ;; for you (an approval, the loop guard, retries used up, its budget, its
 ;; agent asking in its session...), or failed (a script's exit 3), however
-;; it was started. Loaded from
-;; config/notify.el.
+;; it was started. Loaded from config/notify.el.
 
 ;; THE KIND (see config/notify.el)
 (+my/notify-define 'agent-workflow-needs-you "Agent workflow" "A workflow's run waits for you")

@@ -21,6 +21,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'ucs-normalize)                ; macOS's Emacs has it loaded, Linux's not
 
 ;; ====== GIT ======
 
