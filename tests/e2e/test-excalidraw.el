@@ -1188,9 +1188,13 @@ change back, also after M-p M-p M-n M-n. Nothing changed: no wait."
       (+test-exd--make (expand-file-name "drawings/drawing-2000-01-02-00-00-00.excalidraw.svg" dir)
                        "[{type: 'diamond', x: 0, y: 0, width: 50, height: 50}]")
       (switch-to-buffer shell)
-      (let ((drawing (+my/agent-shell-excalidraw)))
+      (let* ((drawing (+my/agent-shell-excalidraw))
+             (file (buffer-file-name drawing)))
         (should (+test-exd--ready))
-        (should (+test-wait-for (lambda () (not (buffer-modified-p drawing))) 5))
+        ;; Its first export in the buffer, saved: a new file's buffer is
+        ;; unmodified before (M-p then waited for that export, 0.65 s on
+        ;; CI's macOS runner).
+        (should (+test-wait-for (lambda () (and (file-exists-p file) (not (buffer-modified-p drawing)))) 5))
         ;; Nothing changed: M-p at once.
         (let ((start (float-time)))
           (execute-kbd-macro (kbd "M-p"))
