@@ -410,9 +410,19 @@ canvas is in the GUI (its window's frame, else the selected one):
           ((eq frame (selected-frame)) (agent-ui-even-glyphs text))
           (t (with-selected-frame frame (agent-ui-even-glyphs text))))))
 
+(defun agent-ui--drawn-at (ctx)
+  "The current canvas drawn at CTX's width from now: what was drawn at
+another (a new element, a section's divider, drawn at once while the canvas
+was in no window, at the default width) all drawn again soon."
+  (let ((width (plist-get ctx :width)))
+    (when (and agent-ui--width (not (equal width agent-ui--width)))
+      (agent-ui--dirty-all))
+    (setq agent-ui--width width)))
+
 (defun agent-ui--draw (entry ctx)
   "Draw ENTRY again, in its place: point and the windows' inside it kept at
 their line and column (its text replaced, they went to its start)."
+  (agent-ui--drawn-at ctx)
   (let* ((inhibit-read-only t)
          (start (agent-ui--entry-start entry))
          (end (agent-ui--entry-end entry))
@@ -520,9 +530,12 @@ up (`agent-ui-before-press-hook')."
     (cancel-timer agent-ui--redraw-timer))
   (setq agent-ui--redraw-timer nil)
   (when (or agent-ui--dirty agent-ui--dirty-sections)
-    (let ((ctx (agent-ui--context))
-          (dirty agent-ui--dirty)
-          (sections agent-ui--dirty-sections))
+    (let* ((ctx (agent-ui--context))
+           ;; Drawn at another width before (at once, out of a window):
+           ;; all of it drawn now.
+           (all (and agent-ui--width (not (equal agent-ui--width (plist-get ctx :width)))))
+           (dirty (if all agent-ui--order agent-ui--dirty))
+           (sections (if all (mapcar #'agent-ui--section-name agent-ui--sections) agent-ui--dirty-sections)))
       (setq agent-ui--dirty nil
             agent-ui--dirty-sections nil
             agent-ui--width (plist-get ctx :width)
@@ -1256,6 +1269,7 @@ width."
 (defun agent-ui--draw-section (section ctx)
   "Draw SECTION's divider again, in its place (as `agent-ui--draw' an
 element)."
+  (agent-ui--drawn-at ctx)
   (let* ((inhibit-read-only t)
          (start (agent-ui--section-start section))
          (end (agent-ui--section-end section))

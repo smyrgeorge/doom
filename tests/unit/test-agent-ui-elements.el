@@ -3749,7 +3749,8 @@ as many as were appended, or its width changed."
                     (lambda () (plist-put (funcall context) :width 30))))
           (agent-ui-append "log" (list :lines '("e")))
           (agent-ui--flush)
-          (should (equal whole '("log")))
+          ;; It whole, the canvas's others too (drawn at the old width).
+          (should (equal (sort (copy-sequence whole) #'string<) '("first" "log")))
           (should (+test-aue--same-drawing-p (+test-aue--region "log") (+test-aue--drawn-whole "log")))))
       ;; The element after it untouched.
       (agent-ui-show '(:id "after" :type "text" :text "below"))

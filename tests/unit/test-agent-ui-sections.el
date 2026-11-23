@@ -211,6 +211,22 @@ once an element comes in, back once it's gone; folded, not shown."
       (should (string-prefix-p "▾ Next" (nth 2 lines)))
       (should (equal (nth 3 lines) "in t")))))
 
+(ert-deftest agent-ui-sections/drawn-at-another-width-drawn-again ()
+  "A section (or an element) drawn at once at one width (its canvas in no
+window: the default), its canvas then drawn at another (shown in its
+window): all of it drawn again at that one, not its newest alone (a
+divider stayed as short as the default)."
+  (+test-aus
+    (agent-ui-section canvas "a" :title "A")
+    (agent-ui-show '(:id "x" :type "text" :text "x") :canvas canvas :section "a")
+    (with-current-buffer canvas (agent-ui--flush))
+    (let ((agent-ui-default-width 60))
+      (agent-ui-section canvas "b" :title "B")
+      (with-current-buffer canvas (agent-ui--flush))
+      (dolist (line (+test-aus-lines canvas))
+        (when (string-prefix-p "▾" line)
+          (should (= (string-width line) 60)))))))
+
 (ert-deftest agent-ui-sections/folded-and-unfolded ()
   "TAB on its divider folds a section to it (saying how many it hides), the
 cursor in it put on its divider; what comes in meanwhile hidden too; TAB
