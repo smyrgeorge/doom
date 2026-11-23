@@ -613,6 +613,23 @@ jobs:
       (should (+test-awr--agent two "a"))
       (agent-workflow-cancel two))))
 
+(ert-deftest agent-workflow-runs/back-from-m-x ()
+  "M-x agent-workflow-back: the run picked (the only one), the job, the
+note asked; sent back."
+  (+test-awr "back-command"
+    (let* ((issue (+test-awr--issue project "Back from M-x"))
+           (run (agent-workflow-start-run project issue)))
+      (+test-awr--finish run "build" nil "built")
+      (+test-awr--agent run "review")
+      (should (eq (agent-workflow--pick-run project) run))
+      (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "build"))
+                ((symbol-function 'read-string) (lambda (&rest _) "again, please")))
+        (call-interactively #'agent-workflow-back-command))
+      (should (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :round) 2))))
+      (should (+test-awr--wait (lambda () (seq-some (lambda (prompt) (string-search "with this note: again, please" prompt))
+                                                    (+test-awr--prompts "back-command")))))
+      (agent-workflow-cancel run))))
+
 (ert-deftest agent-workflow-runs/pause-and-cancel ()
   "Paused: nothing new starts, saying so; with now, a running script stopped,
 interrupted, continued after: run again. Cancelled: its agents stopped, the

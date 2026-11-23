@@ -1498,8 +1498,9 @@ JOB hasn't run, or STEP isn't one."
       (agent-workflow--tick-soon)
       replaced)))
 
-(defun agent-workflow--read-run (project)
-  "A run of PROJECT you pick (the only one, not asked)."
+(defun agent-workflow--pick-run (project)
+  "A run of PROJECT you pick (the only one, not asked). Not resume.el's
+`agent-workflow--read-run', which reads a run's folder."
   (let ((runs (seq-remove (lambda (run) (memq (agent-workflow-run-state run) '(cancelled failed)))
                           (agent-workflow-runs-of project))))
     (pcase runs
@@ -1518,7 +1519,7 @@ when it has several), your note; with \[universal-argument], the work since
 discarded, what's lost said and asked first."
   (interactive
    (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
-          (run (agent-workflow--read-run project))
+          (run (agent-workflow--pick-run project))
           (jobs (mapcar #'car (seq-remove (lambda (job) (memq (plist-get (cdr job) :status) '(pending skipped)))
                                           (agent-workflow-run-jobs run))))
           (job (if jobs (completing-read "Back to the job: " jobs nil t)
