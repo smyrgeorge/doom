@@ -1,7 +1,7 @@
 ;;; $DOOMDIR/config/agent-workflow/steps.el -*- lexical-binding: t; -*-
 ;; The steps that aren't an agent's: run (a script), elisp (Lisp in your
 ;; Emacs) and uses (a built-in: merge). Loaded from config/agent-workflow.el,
-;; after runs.el. No Doom here.
+;; after answers.el. No Doom here.
 ;;
 ;; A run: step is GitHub Actions' run: its text a script, run by its shell
 ;; (bash by default; python, node, any interpreter), in the job's place (the
@@ -150,7 +150,7 @@ the run asks you; other, it broke: the run asks you."
       (agent-workflow--wait run job (format "%s: %s, and no agent fixes it (on-fail: an agent)" job what)))
      ((agent-workflow--no-agent run job)
       ;; The pool full, its workflow at its limit: it waits for an agent,
-      ;; looked at again as one stops (runs.el's --advance).
+      ;; looked at again as one stops (queue.el's --advance).
       (agent-workflow--job-set run job :retry nil :pool (list :fix index output what t also)
                                :why (agent-workflow--no-agent run job))
       (agent-workflow--refresh run))

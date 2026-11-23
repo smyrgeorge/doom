@@ -130,7 +130,7 @@ nil: they wait for M-x agent-workflow-continue."
 ;; An agent's outcome sending the work back (changes: rerun build) is
 ;; counted: past this many rounds (a job's or workflow's max-rounds says
 ;; otherwise), or 3 times that in all, the run asks you
-;; (config/agent-workflow/runs.el, LOOPS).
+;; (config/agent-workflow/back.el, LOOPS).
 (defcustom agent-workflow-max-rounds 10
   "How many times a job may send the work back before the run asks you."
   :type 'natnum
@@ -166,6 +166,10 @@ last few, scrolling back through these)."
 (load! "agent-workflow/beads")
 (load! "agent-workflow/trust")
 (load! "agent-workflow/runs")
+(load! "agent-workflow/queue")
+(load! "agent-workflow/where")
+(load! "agent-workflow/back")
+(load! "agent-workflow/answers")
 (load! "agent-workflow/steps")
 (load! "agent-workflow/resume")
 (load! "agent-workflow/budget")

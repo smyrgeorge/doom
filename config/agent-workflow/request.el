@@ -18,15 +18,15 @@
 ;;   back {"issue": "doom-a1b", "job": "build", "step": 0, "note": "...",
 ;;        "discard": false} (step, note, discard: optional) -> {"ok": true,
 ;;        "issue", "job", "step", "replaced": [jobs], "lost": [lines]}: the
-;;        run sent back (runs.el); yours, refused from an agent's session
+;;        run sent back (back.el); yours, refused from an agent's session
 ;;   confirm {"issue": "doom-a1b", "choice": "go", "notes": [{"job":
 ;;        "review", "note": "..."}...], "more": {"cost": 5, "tokens": N,
 ;;        "time": "1h"}} (notes, more: optional) -> {"ok": true,
-;;        "issue", "job", "choice"}: the run's question answered (runs.el,
+;;        "issue", "job", "choice"}: the run's question answered (back.el,
 ;;        LOOPS); yours, refused from an agent's session
 ;;   approve {"issue": "doom-a1b"}, reject {"issue": "doom-a1b", "note":
 ;;        "..."} -> {"ok": true, "issue", "job"}: the result the run waits
-;;        for your OK on approved, or rejected (runs.el, APPROVAL); yours,
+;;        for your OK on approved, or rejected (answers.el, APPROVAL); yours,
 ;;        refused from an agent's session
 ;;   continue {"issue": "doom-a1b", "current": false} (issue: optional,
 ;;        every interrupted run of the project) -> {"ok": true, "continued":

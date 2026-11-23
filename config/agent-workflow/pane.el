@@ -46,7 +46,7 @@
 (declare-function agent-workflow--uses-merge-p "agent-workflow/dry")
 (declare-function agent-workflow-agent-p "agent-workflow/pool")
 (declare-function agent-workflow-cancel-asked "agent-workflow/resume")
-(declare-function agent-workflow--where-stamp "agent-workflow/runs")
+(declare-function agent-workflow--where-stamp "agent-workflow/where")
 (declare-function agent-workflow-agent-definition "agent-workflow/pool")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
 (declare-function agent-shell-elicitation-jump-to-latest-form "agent-shell-elicitation")

@@ -196,7 +196,7 @@ project's (to tell the jobs that edit; default: the current project's)."
       (list :waves (nreverse waves)
             :end (mapcar (lambda (job) (cons (car job) (plist-get (cdr job) :status))) state)
             :stopped stopped
-            ;; Its branch, the run done (runs.el's `agent-workflow--branch-end').
+            ;; Its branch, the run done (queue.el's `agent-workflow--branch-end').
             :branch (unless stopped
                       (cond ((plist-get workflow :checkout)
                              (if (plist-get workflow :ticketless)
