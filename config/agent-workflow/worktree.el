@@ -203,15 +203,17 @@ BRANCH), BRANCH the one it's on."
                            (directory-file-name dir)))
     (cons dir (plist-get (agent-workflow--worktree-entry project dir) :branch))))
 
-(defun agent-workflow-worktree-remove (project issue)
+(defun agent-workflow-worktree-remove (project issue &optional force)
   "ISSUE's worktree in PROJECT unlocked and removed, its branch kept; a
-user error if it has changes not committed (git refuses)."
+user error if it has changes not committed (git refuses), unless FORCE
+\(they're lost)."
   (let ((dir (agent-workflow-worktree-directory project issue))
         (default-directory project))
     (when (agent-workflow--worktree-entry project dir)
       (when (plist-get (agent-workflow--worktree-entry project dir) :locked)
         (agent-workflow--git "worktree" "unlock" (directory-file-name dir)))
-      (agent-workflow--git "worktree" "remove" (directory-file-name dir)))))
+      (apply #'agent-workflow--git "worktree" "remove"
+             (append (and force (list "--force")) (list (directory-file-name dir)))))))
 
 ;; ====== A SNAPSHOT ======
 ;; A job that only reads (its agent can't edit, or a script) works on a

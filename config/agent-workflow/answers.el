@@ -176,7 +176,7 @@ script's stops the run."
 
 (defun agent-workflow-reject (run note)
   "Reject the result RUN waits for your OK on, with NOTE (M-x
-agent-workflow--reject)."
+agent-workflow-reject)."
   (interactive (let ((run (agent-workflow--read-approval "Reject: ")))
                  (list run (read-string "Why (the agent's told): "))))
   (message "%s: %s rejected" (agent-workflow-run-name run) (agent-workflow--reject run note)))

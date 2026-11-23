@@ -92,6 +92,8 @@ one the log leaves out. KIND: what a wait asks (`agent-workflow--log-hint')."
       ("rerun" (let ((edge (split-string (or (get :edge) ">") ">")))
                  (format "sent back by %s (round %s)" (car edge) (get :round))))
       ("interrupted" "interrupted")
+      ("worktree-removed" (format "its worktree removed, by %s" (or (get :by) "you")))
+      ("worktree-kept" "its worktree kept")
       ("continued" (format "continued, by %s" (or (get :by) "you")))
       ("cancelled" (format "run cancelled, by %s" (or (get :by) "you")))
       ("failed" (format "run failed: %s" (or (get :why) "a step can't go on")))

@@ -589,7 +589,13 @@ some are read back, each with the workflow it started with; a job that was runni
   workflow as it is now (its jobs kept by their names). `agent-workflow-continue-on-start` continues them by itself.
 - Or skip the step (`confirm ISSUE skip`), go back to a job, or cancel the run.
 - `M-x agent-workflow-cancel` (or Cancel in its pane): its agents stop, its scripts are killed, its jobs running or waiting end `cancelled`
-  (in its pane, `status`, and read back so), its issue is open again; its branch and worktree are kept.
+  (in its pane, `status`, and read back so), its issue is open again; its branch is kept. Its worktree is removed by
+  itself 10 seconds after (`agent-workflow-worktree-removal-delay`; nil: never), its pane counting them down, Keep
+  worktree stopping it; only if nothing in it would be lost (no change not committed), else it stays. Its branch then
+  goes too if it has no commit of its own. A run that fails, the same.
+- `M-x agent-workflow-remove-worktree` (or Remove worktree in its pane): the worktree a run over kept (kept, changes
+  not committed in it, or done with them) removed, asked first, saying what goes: its changes not committed are lost;
+  its branch is deleted if it has no commit of its own, else kept.
 - `M-x agent-workflow-pause`: nothing new starts, running steps finish; with `C-u`, they stop at once, interrupted.
   `M-x agent-workflow-unpause`: on again.
 

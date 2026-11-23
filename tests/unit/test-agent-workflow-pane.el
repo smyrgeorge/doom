@@ -1133,7 +1133,7 @@ said), its commits; started from another branch than the main one, said."
                  "⎇ feat/demo-1-x   → main\nreview reads its snapshot at 1234567"))
   (should-not (agent-workflow--pane-git-line '(:into "main")))
   (let ((run (agent-workflow-run--make :project "/p/" :issue "demo-1")))
-    (pcase-let ((`(,git ,commits ,changes ,note)
+    (pcase-let ((`(,git ,commits ,changes ,_removal ,note)
                  (agent-workflow--pane-git
                   run '(:branch "feat/demo-1-x" :into "main" :worktree "/p/w/" :with 0
                         :files ((:path "a.el" :status changed :added 2 :removed 1 :uncommitted t)
@@ -1155,10 +1155,10 @@ said), its commits; started from another branch than the main one, said."
       (should (eq (plist-get commits :nowrap) t))
       (should (equal (plist-get (plist-get commits :row-open) :prompt) "{0}"))
       (should-not note))
-    (should (equal (nth 3 (agent-workflow--pane-git run '(:into "main" :with 3 :base (:branch "side" :commit "abc"))))
+    (should (equal (nth 4 (agent-workflow--pane-git run '(:into "main" :with 3 :base (:branch "side" :commit "abc"))))
                    '(:id "where-note" :type "text" :face "warning"
                      :text "Started from side, not main: its 3 commits not in main are merged too.")))
-    (should-not (nth 3 (agent-workflow--pane-git run '(:into "main" :with 3 :merged t :base (:branch "side" :commit "abc")))))))
+    (should-not (nth 4 (agent-workflow--pane-git run '(:into "main" :with 3 :merged t :base (:branch "side" :commit "abc")))))))
 
 (ert-deftest agent-workflow-pane/git-s-buttons-say-what-they-do ()
   "Its git line's Worktree and Magit, hovered: what they open (the pane's

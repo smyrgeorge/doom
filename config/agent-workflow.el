@@ -93,6 +93,15 @@ Emacs starts."
   :type 'file
   :group 'agent-workflow)
 
+(defcustom agent-workflow-worktree-removal-delay 10
+  "Seconds after a run is cancelled or fails before its worktree is removed
+by itself (its pane counting them down, Keep worktree stopping it); only
+if nothing in it would be lost (no change not committed): else it stays,
+for M-x agent-workflow-remove-worktree. nil: never by itself. A run done
+removes its own at once."
+  :type '(choice (const :tag "Never by itself" nil) natnum)
+  :group 'agent-workflow)
+
 (defcustom agent-workflow-continue-on-start nil
   "Non-nil: runs read back as Emacs starts are continued by themselves.
 nil: they wait for M-x agent-workflow-continue."

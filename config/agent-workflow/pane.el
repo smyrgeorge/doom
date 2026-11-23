@@ -49,6 +49,7 @@
 (declare-function agent-workflow--uses-merge-p "agent-workflow/dry")
 (declare-function agent-workflow-agent-p "agent-workflow/pool")
 (declare-function agent-workflow-cancel-asked "agent-workflow/resume")
+(declare-function agent-workflow-worktree-removal-time "agent-workflow/resume")
 (declare-function agent-workflow--where-stamp "agent-workflow/where")
 (declare-function agent-workflow-agent-definition "agent-workflow/pool")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
@@ -516,7 +517,8 @@ header, each nil if it isn't shown, each with a caption (branch, 3
 commits, 12 files changed, as a log's counts), in this order: git (its branch,
 buttons opening its worktree, magit; in your checkout, magit alone: its
 worktree is your project), commits (its latest, a line each: RET shows
-one), changes (its files changed since it started: RET opens one), where-note (its base branch's commits its
+one), changes (its files changed since it started: RET opens one),
+removal (its worktree removed by itself soon, counted down: Keep worktree), where-note (its base branch's commits its
 merge takes too)."
   (let* ((line (agent-workflow--pane-git-line where))
          (worktree (plist-get where :worktree))
@@ -530,8 +532,13 @@ merge takes too)."
                          ;; Its own (`agent-workflow--pane-answer'): hovered, what they open.
                          (list :actions (if (plist-get where :checkout)
                                             '((:label "Magit" :prompt "magit" :help "magit on your checkout"))
-                                          '((:label "Worktree" :prompt "worktree" :help "open its worktree")
-                                            (:label "Magit" :prompt "magit" :help "magit on its worktree")))))))
+                                          (append
+                                           '((:label "Worktree" :prompt "worktree" :help "open its worktree")
+                                             (:label "Magit" :prompt "magit" :help "magit on its worktree"))
+                                           ;; Over (cancelled, failed, kept), it left: removed, asked first.
+                                           (and run (memq (agent-workflow-run-state run) agent-workflow--ended)
+                                                '((:label "Remove worktree" :prompt "remove"
+                                                   :help "remove its worktree (asked first: what goes, what's kept)")))))))))
           ;; A line each (its subject cut), RET or a click opening it.
           (and commits
                (list :id "commits" :type "table" :columns '("" "") :nowrap t
@@ -559,6 +566,10 @@ merge takes too)."
                                               (and (plist-get file :removed) (list :removed (plist-get file :removed)))
                                               (and (plist-get file :uncommitted) (list :note "not committed"))))
                                     files)))
+          ;; Its worktree removed by itself soon: counted down, Keep stopping it.
+          (when-let* ((when (and run worktree (agent-workflow-worktree-removal-time run))))
+            (list :id "removal" :type "countdown" :label "Its worktree removed in" :until when :warn 10
+                  :actions '((:label "Keep worktree" :prompt "keep" :help "keep its worktree: not removed by itself"))))
           (and (> with 0) (not (plist-get where :merged))
                (list :id "where-note" :type "text" :face "warning"
                      :text (format "Started from %s, not %s: its %d %s not in %s %s merged too."
@@ -826,7 +837,7 @@ those after it, its commits after its files: those after it shown again)."
   ;; A pane drawn before: its worktree's row, now git's buttons.
   (when (gethash "where" agent-ui--entries)
     (agent-ui-remove "where" :canvas pane))
-  (let* ((ids '("git" "commits" "changes" "where-note"))
+  (let* ((ids '("git" "commits" "changes" "removal" "where-note"))
          (elements (agent-workflow--pane-git run (agent-workflow-run-where run)))
          ;; The canvas's own: its key its id. Shown, in the order they are.
          (shown (seq-filter (lambda (key) (member key ids)) agent-ui--order))

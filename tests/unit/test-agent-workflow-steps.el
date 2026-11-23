@@ -340,6 +340,102 @@ jobs:
       (should-not (agent-workflow-agents project))
       (agent-workflow--cancel run))))
 
+(ert-deftest agent-workflow-steps/a-cancelled-run-s-worktree-removed ()
+  "A run cancelled keeps its worktree; removed (M-x
+agent-workflow-remove-worktree, asked first, saying what goes): its changes
+not committed lost, its branch deleted with no commit of its own, else
+kept; journaled. Not over, or nothing left: refused."
+  (+test-awr "remove-worktree"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  build:
+    run: sleep 30
+")
+    (let* ((one (+test-awr--issue project "No commit"))
+           (run (agent-workflow-start-run project one))
+           (asked nil))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'running))))
+      (should-error (agent-workflow--remove-worktree run) :type 'user-error)
+      (agent-workflow--cancel run)
+      (should (agent-workflow--worktree-left-p run))
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (question) (setq asked question) t)))
+        (should (agent-workflow-remove-worktree run)))
+      (should (string-match-p "deleted (no commit of its own)" asked))
+      (should-not (file-exists-p (agent-workflow-worktree-directory project one)))
+      (should (plist-get (agent-workflow-run-branch-end run) :deleted))
+      (should (member "worktree-removed" (+test-awr--journal run)))
+      (should-not (agent-workflow--worktree-left-p run)))
+    ;; A commit of its own and a file not committed: the file lost, said;
+    ;; its branch kept.
+    (let* ((two (+test-awr--issue project "A commit"))
+           (run (agent-workflow-start-run project two))
+           (worktree (agent-workflow-worktree-directory project two))
+           (asked nil))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'running))))
+      (let ((default-directory worktree))
+        (write-region "a" nil "a.txt")
+        (call-process "git" nil nil nil "add" "a.txt")
+        (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-qm" "a")
+        (write-region "b" nil "b.txt"))
+      (agent-workflow--cancel run)
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (question) (setq asked question) t)))
+        (agent-workflow-remove-worktree run))
+      (should (string-match-p "Its 1 file not committed is lost" asked))
+      (should (string-match-p "is kept (1 commit of its own)" asked))
+      (should-not (file-exists-p worktree))
+      (should (plist-get (agent-workflow-run-branch-end run) :why))
+      (should (agent-workflow-issue-branch-made project two)))))
+
+(ert-deftest agent-workflow-steps/a-cancelled-run-s-worktree-removed-by-itself ()
+  "A run cancelled: its worktree removed by itself after
+`agent-workflow-worktree-removal-delay' seconds, its pane counting down
+(Keep worktree); its branch deleted (no commit of its own); its git line's
+buttons gone with it. Keep worktree: it stays. Changes not committed: never
+by itself."
+  (+test-awr "auto-remove"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  build:
+    run: sleep 30
+")
+    (let* ((agent-workflow-worktree-removal-delay 1)
+           (one (+test-awr--issue project "Removed"))
+           (run (agent-workflow-start-run project one)))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'running))))
+      (agent-workflow--cancel run)
+      (should (agent-workflow-worktree-removal-time run))
+      (let ((removal (nth 3 (agent-workflow--pane-git run (agent-workflow-run-where run t)))))
+        (should (equal (plist-get removal :type) "countdown"))
+        (should (equal (mapcar (lambda (a) (plist-get a :label)) (plist-get removal :actions)) '("Keep worktree"))))
+      (should (+test-awr--wait (lambda () (not (agent-workflow--worktree-left-p run)))))
+      (should (plist-get (agent-workflow-run-branch-end run) :deleted))
+      (should (+test-aws--log-line run "its worktree removed, by itself, 1s after it ended\\'"))
+      (let ((elements (agent-workflow--pane-git run (agent-workflow-run-where run t))))
+        (should-not (plist-get (car elements) :actions))
+        (should-not (nth 3 elements))))
+    ;; Kept: it stays.
+    (let* ((agent-workflow-worktree-removal-delay 1)
+           (two (+test-awr--issue project "Kept"))
+           (run (agent-workflow-start-run project two)))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'running))))
+      (agent-workflow--cancel run)
+      (agent-workflow-keep-worktree run)
+      (should-not (agent-workflow-worktree-removal-time run))
+      (sleep-for 1.5)
+      (should (agent-workflow--worktree-left-p run))
+      (should (member "worktree-kept" (+test-awr--journal run))))
+    ;; A change not committed: never by itself.
+    (let* ((agent-workflow-worktree-removal-delay 1)
+           (three (+test-awr--issue project "Changed"))
+           (run (agent-workflow-start-run project three)))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'running))))
+      (write-region "x" nil (expand-file-name "new.txt" (agent-workflow-worktree-directory project three)))
+      (agent-workflow--cancel run)
+      (should-not (agent-workflow-worktree-removal-time run))
+      (should (agent-workflow--worktree-left-p run)))))
+
 (ert-deftest agent-workflow-steps/sent-back-to-a-step-once ()
   "A job sent back to its step 2: that round starts there; a later round of
 it (its job before rerun, it with it) from its first step again."

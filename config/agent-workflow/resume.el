@@ -257,13 +257,135 @@ status); every job's question dropped. Return their names."
 (cl-defun agent-workflow--cancel (run &key (by "you"))
   "Cancel RUN: its agents stopped, its scripts killed, its snapshots gone,
 its jobs running or waiting cancelled (journaled: :jobs); the run over, its
-issue open again; its branch and worktree kept."
+issue open again; its branch kept, its worktree removed by itself soon
+\(`agent-workflow--worktree-removal-soon')."
   (agent-workflow--stop-all run)
   (agent-workflow--journal run "cancelled" :by by :jobs (vconcat (agent-workflow--cancel-jobs run)))
   (agent-workflow--set-state run 'cancelled)
   (agent-workflow--run-bd-write run "--status" "open")
   (agent-workflow--issue-summary run)
+  (agent-workflow--worktree-removal-soon run)
   run)
+
+;; ====== ITS WORKTREE, ONCE IT'S OVER ======
+;; A run cancelled or failed: its worktree removed by itself
+;; `agent-workflow-worktree-removal-delay' seconds after (its pane counting
+;; them down, Keep worktree stopping it), if nothing in it would be lost (no
+;; change not committed); its branch deleted if it has no commit of its own
+;; (as a run done: `agent-workflow--branch-end'), else kept. One with changes
+;; not committed keeps it, as does one done with them: M-x
+;; agent-workflow-remove-worktree, or its pane's Remove worktree, asked
+;; first, saying what goes (those changes lost, said).
+
+(defvar agent-workflow-worktree-removal-delay)
+
+(defvar agent-workflow--worktree-removals (make-hash-table :test #'eq)
+  "The runs whose worktree is removed by itself soon: run to (TIMER . WHEN),
+WHEN a `float-time'.")
+
+(defun agent-workflow--worktree-clean-p (run)
+  "Whether RUN's worktree has nothing removing it would lose: no change not
+committed."
+  (zerop (or (plist-get (agent-workflow-run-where run t) :uncommitted) 0)))
+
+(defun agent-workflow--worktree-removal-soon (run)
+  "RUN just over (cancelled, failed): its worktree removed by itself in
+`agent-workflow-worktree-removal-delay' seconds, if it has one and nothing
+in it would be lost then; its pane counting down."
+  (when (and agent-workflow-worktree-removal-delay
+             (agent-workflow--worktree-left-p run)
+             (agent-workflow--worktree-clean-p run))
+    (agent-workflow-keep-worktree run t)
+    (puthash run (cons (run-at-time agent-workflow-worktree-removal-delay nil
+                                    #'agent-workflow--worktree-removal-due run)
+                       (+ (float-time) agent-workflow-worktree-removal-delay))
+             agent-workflow--worktree-removals)
+    (agent-workflow--changed run)))
+
+(defun agent-workflow--worktree-removal-due (run)
+  "RUN's worktree's time come: removed, if it's still left and nothing in it
+would be lost now (a change made meanwhile keeps it)."
+  (remhash run agent-workflow--worktree-removals)
+  (if (and (agent-workflow--worktree-left-p run) (agent-workflow--worktree-clean-p run))
+      (with-demoted-errors "agent workflow: %S"
+        (agent-workflow--remove-worktree
+         run :by (format "itself, %ds after it ended" agent-workflow-worktree-removal-delay)))
+    (agent-workflow--changed run)))
+
+(defun agent-workflow-worktree-removal-time (run)
+  "When RUN's worktree is removed by itself (a `float-time'), or nil."
+  (cdr (gethash run agent-workflow--worktree-removals)))
+
+(defun agent-workflow-keep-worktree (run &optional quiet)
+  "RUN's worktree not removed by itself (its pane's Keep worktree): it
+stays, for M-x agent-workflow-remove-worktree. QUIET: nothing said, its
+pane not drawn again."
+  (when-let* ((removal (gethash run agent-workflow--worktree-removals)))
+    (cancel-timer (car removal))
+    (remhash run agent-workflow--worktree-removals)
+    (unless quiet
+      (agent-workflow--journal run "worktree-kept")
+      (agent-workflow--changed run)
+      (message "%s: its worktree kept" (agent-workflow-run-name run)))))
+
+(defun agent-workflow--worktree-left-p (run)
+  "Whether RUN is over and has a worktree of its own still (not one in your
+checkout)."
+  (and (memq (agent-workflow-run-state run) agent-workflow--ended)
+       (not (agent-workflow-run-checkout-p run))
+       (file-exists-p (expand-file-name ".git" (agent-workflow-worktree-directory
+                                                (agent-workflow-run-project run) (agent-workflow-run-issue run))))))
+
+(cl-defun agent-workflow--remove-worktree (run &key (by "you"))
+  "RUN's worktree removed (its changes not committed lost), its snapshots
+too; its branch deleted if it has no commit of its own, else kept
+\(`agent-workflow--branch-end'). Journaled; its pane drawn again."
+  (unless (agent-workflow--worktree-left-p run)
+    (user-error "%s has no worktree left to remove (or isn't over)" (agent-workflow-run-name run)))
+  (agent-workflow-keep-worktree run t)
+  (let ((project (agent-workflow-run-project run))
+        (issue (agent-workflow-run-issue run)))
+    (dolist (job (agent-workflow-run-jobs run))
+      (ignore-errors (agent-workflow-snapshot-remove project issue (car job))))
+    (agent-workflow-worktree-remove project issue t)
+    (agent-workflow--journal run "worktree-removed" :by by)
+    (agent-workflow--branch-end run)
+    (agent-workflow-run-where run t)
+    (agent-workflow--save-state run)
+    (agent-workflow--changed run)
+    run))
+
+(defun agent-workflow--remove-worktree-question (run)
+  "What removing RUN's worktree does, asked: its changes not committed
+lost, its branch deleted (no commit of its own) or kept."
+  (let* ((where (agent-workflow-run-where run t))
+         (uncommitted (or (plist-get where :uncommitted) 0))
+         (own (or (plist-get where :own) 0)))
+    (format "Remove %s's worktree?%s Its branch %s %s. "
+            (agent-workflow-run-name run)
+            (if (> uncommitted 0)
+                (format " Its %d file%s not committed %s lost." uncommitted (if (= uncommitted 1) "" "s")
+                        (if (= uncommitted 1) "is" "are"))
+              "")
+            (plist-get where :branch)
+            (if (> own 0)
+                (format "is kept (%d commit%s of its own)" own (if (= own 1) "" "s"))
+              "is deleted (no commit of its own)"))))
+
+(defun agent-workflow-remove-worktree (run)
+  "Remove the worktree a run over kept (M-x agent-workflow-remove-worktree,
+its pane's Remove worktree), asked first: its changes not committed lost,
+its branch deleted if it has no commit of its own, else kept."
+  (interactive (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
+                      (runs (progn (agent-workflow--ensure-restored project)
+                                   (seq-filter #'agent-workflow--worktree-left-p (agent-workflow-runs-of project))))
+                      (names (mapcar (lambda (run) (cons (agent-workflow-run-name run) run)) runs)))
+                 (unless runs (user-error "No run over has a worktree left"))
+                 (list (cdr (assoc (completing-read "Remove the worktree of: " names nil t) names)))))
+  (when (yes-or-no-p (agent-workflow--remove-worktree-question run))
+    (agent-workflow--remove-worktree run)
+    (message "%s: its worktree removed" (agent-workflow-run-name run))
+    t))
 
 ;; ====== FAILING ======
 
@@ -282,6 +404,7 @@ needing you is (`agent-workflow-needs-you-functions')."
   (agent-workflow--set-state run 'failed why)
   (agent-workflow--run-bd-write run "--status" "open")
   (agent-workflow--issue-summary run)
+  (agent-workflow--worktree-removal-soon run)
   (run-hook-with-args 'agent-workflow-needs-you-functions run (concat "failed: " why))
   run)
 
@@ -310,7 +433,7 @@ needing you is (`agent-workflow-needs-you-functions')."
 
 (defun agent-workflow-continue (&optional current)
   "Continue every interrupted run of the current project (M-x
-agent-workflow--continue); with \\[universal-argument], with its workflow as
+agent-workflow-continue); with \\[universal-argument], with its workflow as
 it is now."
   (interactive "P")
   (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
@@ -333,7 +456,7 @@ it is now."
 
 (cl-defun agent-workflow-cancel-asked (run &key (by "you"))
   "Cancel RUN, BY you, once you said yes to what it stops and keeps (M-x
-agent-workflow--cancel, its pane's Cancel). Non-nil if it was."
+agent-workflow-cancel, its pane's Cancel). Non-nil if it was."
   (when (yes-or-no-p (format "Cancel %s? Its agents and scripts stop, its issue is open again; %s. "
                              (agent-workflow-run-name run)
                              (if (agent-workflow-run-checkout-p run)

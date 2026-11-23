@@ -282,6 +282,7 @@ question left as it was."
     (cond ((equal key "git") (agent-workflow--pane-open-worktree run prompt))
           ((equal key "run") (agent-workflow--pane-cancel run))
           ((equal key "commits") (agent-workflow--pane-show-commit run prompt))
+          ((equal key "removal") (agent-workflow-keep-worktree run))
           ;; A job's live box: Show session, Show output (PROMPT: what, its job).
           ((string-prefix-p "now-" (agent-ui--key-id key))
            (pcase (split-string prompt " ")
@@ -319,13 +320,15 @@ git show's, read where its work is (its worktree, else its project)."
   (agent-workflow-cancel-asked run :by "you, in its pane"))
 
 (defun agent-workflow--pane-open-worktree (run how)
-  "RUN's worktree opened, HOW: worktree (dired), magit (its status)."
+  "RUN's worktree opened, HOW: worktree (dired), magit (its status); or
+removed, remove (a run over: `agent-workflow-remove-worktree', asked
+first)."
   (let ((dir (plist-get (agent-workflow-run-where run) :worktree)))
     (unless (and dir (file-directory-p dir))
       (user-error "%s has no worktree now" (agent-workflow-run-name run)))
-    (if (and (equal how "magit") (fboundp 'magit-status))
-        (magit-status dir)
-      (pop-to-buffer (dired-noselect dir)))))
+    (cond ((equal how "remove") (agent-workflow-remove-worktree run))
+          ((and (equal how "magit") (fboundp 'magit-status)) (magit-status dir))
+          (t (pop-to-buffer (dired-noselect dir))))))
 
 (defun agent-workflow--pane-answer-question (run pane prompt key)
   "RUN's question in PANE answered with PROMPT, its button pressed on KEY's

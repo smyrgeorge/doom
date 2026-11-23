@@ -105,7 +105,8 @@ command (seven of them were functions, their commands NAME-command)."
                           (directory-files (expand-file-name "config/agent-workflow" +test-root) t "\\.el\\'")))
       (with-temp-buffer
         (insert-file-contents file)
-        (while (re-search-forward "M-x \\(agent-workflow-[a-z-]*[a-z]\\)" nil t)
+        ;; Its name on the next line too (a docstring's, a comment's).
+        (while (re-search-forward "M-x[ \\t\n;]+\\(agent-workflow-[a-z-]*[a-z]\\)" nil t)
           (cl-pushnew (match-string 1) named :test #'equal))))
     (should (> (length named) 10))
     (should-not (seq-remove (lambda (name) (commandp (intern name))) named))))
