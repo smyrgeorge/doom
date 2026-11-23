@@ -35,7 +35,8 @@
 ;;   dry-run {"workflow": "feature", "issue": "doom-a1b", "outcomes":
 ;;        {"review": ["changes", "approved"]}, "exits": {"build.2": [1,
 ;;        0]}} (issue, outcomes, exits: optional) -> {"ok": true, "waves":
-;;        [[lines]...], "end": {job: status...}, "stopped": why or null}:
+;;        [[lines]...], "end": {job: status...}, "stopped": why or null,
+;;        "branch": what happens to its branch, or null (it stops)}:
 ;;        nothing run (dry.el); any shell's, an agent's too
 ;;   logs {"issue": "doom-a1b"} -> {"ok": true, "issue", "workflow",
 ;;        "run", "state", "why", "log", "journal", "state_file"}: its latest
@@ -45,9 +46,9 @@
 ;;        "state", "why", "jobs": [{"name", "status", "outcome", "round",
 ;;        "why"}...], "asking": {"job", "kind"} or null (kind agent: its
 ;;        agent asks in its session, "question" and "session" too),
-;;        "where": {"worktree" (null: gone), "branch", "base": {"branch",
-;;        "commit"} or null, "into", "own", "with", "uncommitted",
-;;        "merged"} or null, "spent": {"cost", "tokens", "time"},
+;;        "where": {"worktree" (null: gone), "branch", "deleted" (its run
+;;        done), "base": {"branch", "commit"} or null, "into", "own",
+;;        "with", "uncommitted", "merged"} or null, "spent": {"cost", "tokens", "time"},
 ;;        "budget": {...} or null, "log"}...]}; any shell's
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
@@ -159,6 +160,7 @@ a user error if it has none."
       (let ((base (plist-get where :base)))
         (list :worktree (or (plist-get where :worktree) :null)
               :branch (or (plist-get where :branch) :null)
+              :deleted (if (plist-get where :deleted) t :false)
               :base (if base (list :branch (or (plist-get base :branch) :null) :commit (plist-get base :commit)) :null)
               :into (plist-get where :into)
               :own (plist-get where :own)
@@ -351,7 +353,8 @@ DIRECTORY's project): the reply."
           :waves (vconcat (mapcar #'vconcat (plist-get result :waves)))
           :end (cl-loop for (job . status) in (plist-get result :end)
                         append (list (intern (concat ":" job)) (symbol-name status)))
-          :stopped (or (plist-get result :stopped) :null))))
+          :stopped (or (plist-get result :stopped) :null)
+          :branch (or (plist-get result :branch) :null))))
 
 (defun agent-workflow-request (dir)
   "Answer cmd/agent-workflow's request in DIR (see the top of this file):

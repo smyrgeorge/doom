@@ -14,6 +14,7 @@ A workflow is `NAME.yml` (or `.yaml`): `NAME` a lowercase letter, then lowercase
 | `concurrency` | how many of the pool's agents work on its runs at once | a whole number above 0 |
 | `budget` | `cost` (dollars), `tokens`, `time` (`3h`, `90m`, `1h30m`) a run may spend | numbers above 0, a duration |
 | `max-rounds` | how many times a job may send the work back before the run asks | a whole number above 0 |
+| `branch` | its issue's branch once a run is done: `delete` (the default: once merged into the main branch, else kept, its log saying why) or `keep` | another value: an error |
 | `jobs` | its jobs, each a name, then its keys | none: an error |
 
 ## A job

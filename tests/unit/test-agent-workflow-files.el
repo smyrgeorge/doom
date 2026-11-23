@@ -674,6 +674,35 @@ run again, a review's changes sending build back, the merge; nothing run."
     (should (member "merge: merged, the issue closed" lines))
     (should (equal (cdr (assoc "merge" (plist-get result :end))) 'done))))
 
+(ert-deftest agent-workflow-files/its-branch ()
+  "branch: delete or keep, read (none: delete, nil); another value an
+error. A dry run says what happens to the branch once the run ends:
+deleted once merged, kept with no merge or branch: keep; nothing if it
+stops."
+  (should-not (plist-get (car (+test-awf--workflow +test-awf--dry '("build" "reader") "dry.yml")) :branch))
+  (should (eq (plist-get (car (+test-awf--workflow (concat "branch: keep\n" +test-awf--dry) '("build" "reader") "dry.yml"))
+                         :branch)
+              'keep))
+  (pcase-let ((`(,workflow . ,problems)
+               (+test-awf--workflow (concat "branch: maybe\n" +test-awf--dry) '("build" "reader") "dry.yml")))
+    (should-not workflow)
+    (should (member '(error 1 "branch maybe: delete (once merged: the default) or keep") (+test-awf--said problems))))
+  (should (equal (plist-get (+test-awf--dry-run nil nil) :branch) "deleted, merged into the main branch"))
+  (let ((profiles (list (cons "build" (list :name "build")))))
+    (should (equal (plist-get (agent-workflow-dry-run
+                               (car (+test-awf--workflow (concat "branch: keep\n" +test-awf--dry) '("build" "reader") "dry.yml"))
+                               :info '(:id "demo-1" :type "feature") :profiles profiles :pool 3)
+                              :branch)
+                   "kept (branch: keep)"))
+    (should (equal (plist-get (agent-workflow-dry-run
+                               (car (+test-awf--workflow "description: x\njobs:\n  build:\n    agent: build\n" '("build") "dry.yml"))
+                               :info '(:id "demo-1" :type "feature") :profiles profiles :pool 3)
+                              :branch)
+                   "kept: not merged into the main branch (no merge ran)")))
+  (should-not (plist-get (+test-awf--dry-run '(("review" "changes")) nil) :branch))
+  (should (string-suffix-p "Its branch: deleted, merged into the main branch.\n"
+                           (agent-workflow--dry-text (+test-awf--dry-run nil nil)))))
+
 (ert-deftest agent-workflow-files/a-dry-run-stopping ()
   "Where it stops: the loop guard, retries used up; a job its if skips."
   (should (equal (plist-get (+test-awf--dry-run '(("review" "changes")) nil) :stopped)

@@ -71,7 +71,7 @@ job's label, its metadata, its notes."
       (should (equal (+test-awr--journal run)
                      '("run-started" "job-started" "state" "step-starting" "step-started" "waiting" "state"
                        "step-ended" "state" "job-done" "job-skipped" "job-started" "step-starting" "step-started"
-                       "waiting" "state" "step-ended" "state" "job-done" "state" "run-done")))
+                       "waiting" "state" "step-ended" "state" "job-done" "branch-deleted" "state" "run-done")))
       (let ((state (with-temp-buffer
                      (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
                      (json-parse-buffer :object-type 'plist :array-type 'list))))
@@ -84,10 +84,11 @@ job's label, its metadata, its notes."
         (should (equal (alist-get 'workflow_jobs (alist-get 'metadata shown)) "build:done,docs:skipped,review:done"))
         (should (string-match-p "build (done): Built it, with its tests\\." (alist-get 'notes shown)))
         (should (string-match-p "review (approved): Fine\\." (alist-get 'notes shown))))
-      ;; Its worktree removed, its branch kept.
+      ;; Its worktree removed; its branch deleted (branch: delete, the
+      ;; default): nothing in it the main branch hasn't.
       (should-not (file-exists-p (agent-workflow-worktree-directory project issue)))
-      (should (string-match-p (concat "feat/" (regexp-quote issue) "-lexer-escapes")
-                              (with-output-to-string (call-process "git" nil standard-output nil "branch")))))))
+      (should-not (string-match-p (concat "feat/" (regexp-quote issue) "-lexer-escapes")
+                                  (with-output-to-string (call-process "git" nil standard-output nil "branch")))))))
 
 (ert-deftest agent-workflow-runs/refused ()
   "A closed issue, an epic, one with a run already, one no workflow fits or

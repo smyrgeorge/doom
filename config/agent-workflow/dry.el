@@ -25,8 +25,10 @@
 
 (cl-defun agent-workflow-dry-run (workflow &key info outcomes exits (pool agent-workflow-pool) profiles)
   "WORKFLOW (a plist, as read) walked, nothing run: a plist (:waves :end
-:stopped), :waves a list of waves, each a list of lines (what happened),
-:end the jobs' statuses, :stopped why it would stop, or nil. INFO: the
+:stopped :branch), :waves a list of waves, each a list of lines (what
+happened), :end the jobs' statuses, :stopped why it would stop, or nil,
+:branch what happens to its issue's branch once it ends (words; nil if it
+stops). INFO: the
 issue its if: reads (a plist, as `agent-workflow-issue' gives it).
 OUTCOMES: ((JOB . (OUTCOME...)) ...), an agent job's outcome each round
 \(none: done). EXITS: ((\"JOB.N\" . (CODE...))...), step N's (from 1)
@@ -172,7 +174,15 @@ project's (to tell the jobs that edit; default: the current project's)."
           (push (nreverse (car lines)) waves)))
       (list :waves (nreverse waves)
             :end (mapcar (lambda (job) (cons (car job) (plist-get (cdr job) :status))) state)
-            :stopped stopped))))
+            :stopped stopped
+            ;; Its branch, the run done (runs.el's `agent-workflow--branch-end').
+            :branch (unless stopped
+                      (cond ((eq (plist-get workflow :branch) 'keep) "kept (branch: keep)")
+                            ((seq-some (lambda (job) (and (agent-workflow--uses-merge-p (spec (car job)))
+                                                          (eq (plist-get (cdr job) :status) 'done)))
+                                       state)
+                             "deleted, merged into the main branch")
+                            (t "kept: not merged into the main branch (no merge ran)")))))))
 
 (defun agent-workflow--uses-merge-p (spec)
   "Non-nil if a job SPEC merges."
@@ -188,7 +198,7 @@ project's (to tell the jobs that edit; default: the current project's)."
    "\n\n"
    (if-let* ((why (plist-get result :stopped)))
        (concat "It stops: " why)
-     "It ends: every job done or skipped.")
+     (concat "It ends: every job done or skipped. Its branch: " (plist-get result :branch) "."))
    "\n"))
 
 (defun agent-workflow--parse-chosen (text)

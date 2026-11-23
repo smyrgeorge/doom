@@ -203,7 +203,10 @@ into."
                                  (and (> uncommitted 0)
                                       (format "%d %s not committed" uncommitted (if (= uncommitted 1) "file" "files")))
                                  (and (not (plist-get where :worktree)) "its worktree removed")))))
-      (list (concat "⎇ " branch (if said (concat ": " (string-join said ", ")) ""))
+      (list (concat "⎇ " branch
+                    (cond ((plist-get where :deleted) ": deleted, its run done")
+                          (said (concat ": " (string-join said ", ")))
+                          (t "")))
             (concat (if base
                         (format "from %s at %s · " (or (plist-get base :branch) "a detached HEAD")
                                 (substring (plist-get base :commit) 0 (min 7 (length (plist-get base :commit)))))

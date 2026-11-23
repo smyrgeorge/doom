@@ -89,6 +89,8 @@ one the log leaves out. KIND: what a wait asks (`agent-workflow--log-hint')."
       ("run-done" "run done")
       ("merged" (format "%s merged into %s%s" (get :branch) (get :into) (if (get :already) " (it was)" "")))
       ("rebased" (format "rebased onto %s" (get :onto)))
+      ("branch-deleted" (format "its branch %s deleted, merged into %s" (get :branch) (get :into)))
+      ("branch-kept" (format "its branch %s kept: %s" (get :branch) (get :why)))
       ("issue-changed" (format "its issue's %s changed" (get :what)))
       ("branch-moved" (format "its branch moved: the commits of %s are gone"
                               (string-join (mapcar (lambda (job) (format "%s" job)) (append (get :jobs) nil)) ", ")))

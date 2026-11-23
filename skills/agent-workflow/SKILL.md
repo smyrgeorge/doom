@@ -89,7 +89,7 @@ jobs:
 ```
 
 Its keys, in a line each: `name` (its file's), `description`, `for`, `concurrency`, `budget` (`cost`, `tokens`,
-`time`), `max-rounds`, `jobs`. A job: `needs`, `if`, `steps` (or one step's keys on the job itself), `approve`,
+`time`), `max-rounds`, `branch` (`delete` once merged, the default, or `keep`), `jobs`. A job: `needs`, `if`, `steps` (or one step's keys on the job itself), `approve`,
 `outcomes`, `max-rounds`, `concurrency`. A step: one of `agent` (with `prompt`), `run` (with `shell`), `elisp`, `uses`
 (with `with`); and `timeout`, `retries`, `on-fail`, `approve`.
 

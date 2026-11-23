@@ -10,6 +10,8 @@
 ;;   concurrency: 3                 agents on its runs at once
 ;;   budget: {cost: 15, tokens: 2000000, time: 3h}
 ;;   max-rounds: 10                 a job sending the work back, then asked
+;;   branch: keep                   its issue's branch once its run is done:
+;;                                  delete (the default: once merged) or keep
 ;;   jobs:
 ;;     build:                       a job: a lowercase letter, then letters,
 ;;       steps:                     digits or -
@@ -31,7 +33,8 @@
 ;;   test}), with timeout:, retries:, on-fail: (a profile), approve:.
 ;;
 ;; WORKFLOW, read: a plist (:name :file :description :for :concurrency
-;; :budget (:cost :tokens :time) :max-rounds :jobs ((NAME . JOB)...)), JOB (:name :needs
+;; :budget (:cost :tokens :time) :max-rounds :branch (delete|keep; nil:
+;; delete) :jobs ((NAME . JOB)...)), JOB (:name :needs
 ;; :if :concurrency :approve :outcomes ((OUTCOME . continue|(rerun JOB))...)
 ;; :max-rounds :steps (STEP...)), STEP (:kind agent|run|elisp|uses :agent
 ;; :prompt :run :shell :elisp :uses :with :timeout :retries :on-fail
@@ -46,7 +49,8 @@
 ;; {jobs.X...} naming no job, needs going round, a step with no kind or two,
 ;; an agent: or on-fail: naming no profile, a uses: no built-in, a shell:
 ;; without run:, an if: not one Lisp form, an elisp: not Lisp, a variable not
-;; one there is, a number, duration or true/false that isn't one. Warnings:
+;; one there is, a number, duration or true/false that isn't one, a branch:
+;; neither delete nor keep. Warnings:
 ;; an unknown key, a for: type Beads doesn't have, a {jobs.X...} of a job not
 ;; before it, retries: or on-fail: on an agent step, no description.
 
@@ -67,7 +71,7 @@
 is only warned about).")
 
 (defconst agent-workflow--workflow-keys
-  '("name" "description" "for" "concurrency" "budget" "max-rounds" "jobs")
+  '("name" "description" "for" "concurrency" "budget" "max-rounds" "branch" "jobs")
   "A workflow's keys.")
 
 (defconst agent-workflow--step-keys
@@ -235,6 +239,11 @@ default: not checked). AS: its name, if not its file's (a run's copy)."
                      ("time" (setq budget (plist-put budget :time (duration '("budget" "time") v "time"))))
                      (_ (problem 'warning (list "budget" k) "unknown key %s: ignored (cost, tokens, time)" k))))
                  (setq workflow (plist-put workflow :budget budget)))))
+            ("branch"
+             (if (member value '("delete" "keep"))
+                 (setq workflow (plist-put workflow :branch (intern value)))
+               (problem 'error '("branch") "branch %s: delete (once merged: the default) or keep"
+                        (agent-workflow--shown value))))
             ("jobs")
             (_ (problem 'warning (list key) "unknown key %s: ignored" key))))
         (unless (plist-get workflow :description)

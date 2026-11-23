@@ -373,7 +373,7 @@ state.json. Done: its worktree removed, said."
       (agent-workflow--pane-where-tick)
       (should (string-search ": 1 commit, 1 file not committed" (funcall text)))
       (should (equal (plist-get (aref (plist-get (agent-workflow--request-status project nil) :runs) 0) :where)
-                     (list :worktree dir :branch branch
+                     (list :worktree dir :branch branch :deleted :false
                            :base (list :branch "side" :commit base) :into main
                            :own 1 :with 1 :uncommitted 1 :merged :false)))
       (should (equal (plist-get (with-temp-buffer

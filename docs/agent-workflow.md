@@ -82,6 +82,7 @@ jobs:
 | `for` | The issue types it's offered for |
 | `concurrency` | How many agents work on its runs at once |
 | `budget` | `cost` (dollars), `tokens`, `time` (`3h`) a run may spend |
+| `branch` | Its issue's branch once a run is done: `delete` (the default: once its work is in the main branch) or `keep` |
 | `jobs` | Its jobs, each a name (a lowercase letter, then lowercase letters, digits or `-`) |
 
 A job:
@@ -227,8 +228,11 @@ other run at once, as the pool allows. They share the issue's branch:
 Each job's start in the journal says which commit it saw. A job's steps run in order, and a job with an agent step keeps its agent to its last step. The agent ends its
 step itself, `cmd/agent-workflow done OUTCOME "notes"`, then its turn; a turn that ends without it leaves the run
 waiting for you (tell the agent in its session). Its outcome must be `done` or one of its job's `outcomes`. Its job
-over, its agent stops, and the next jobs start. Every job done or skipped, the run is, and its worktree goes (its
-branch stays).
+over, its agent stops, and the next jobs start. Every job done or skipped, the run is, and its worktree goes (kept if
+it has changes not committed). Its branch then goes too (`branch: delete`, the default), once its work is in the main
+branch (merged by the run's merge, or before): never a commit lost. Not merged, or its worktree kept, the branch stays,
+its log saying why (`its branch feat/doom-a1b-lexer kept: not merged into main`). `branch: keep` keeps it, always; a
+cancelled run keeps both.
 
 ### Following a run
 
@@ -258,7 +262,7 @@ from main at 9bf1963 · merges into main
   commit of your checkout it started from, and what its merge goes into (merged, once it is). Under it, its worktree
   and the snapshots its reading jobs read: `RET` opens one. Started from a branch other than the main one, it says so:
   that branch's commits not in the main one are merged with it. Looked at again every 15 seconds while the pane is open
-  (`agent-workflow-pane-where-every`); its worktree gone once the run is done, its branch kept.
+  (`agent-workflow-pane-where-every`); once the run is done, its worktree gone, its branch deleted or kept (above).
 - **Run:** its jobs, each a step of a checklist, its steps under it: status, agent, round, try, time.
 - **Needs you**, only while the run waits for you: what on, as a question you answer there: an approval (approve, or
   reject with a note), the loop guard (go on with a note for each agent, accept it as it is, or stop), retries used up,
@@ -473,7 +477,7 @@ In `if`, these say what the issue is: `(issue-id)`, `(issue-type)` (a symbol: `'
 `M-x agent-workflow-dry-run` tries a workflow before it spends tokens: nothing runs and nothing changes (no worktree,
 branch, issue or session). It walks the workflow as the engine would, wave by wave: what would run, what at once, what
 would wait and why, what its `if` skips, what an outcome sends back (counted against `max-rounds`), a script fixed and
-run again, and where the run would stop and ask you. You choose the agents' outcomes, a round each
+run again, and where the run would stop and ask you; or, once it ends, what happens to its branch. You choose the agents' outcomes, a round each
 (`review=changes,approved`), and the scripts' exit codes, a try each (`build.2=1,0`); none chosen: done, and 0. Its
 `if` reads the issue you give, or one of the first type the workflow is for.
 
