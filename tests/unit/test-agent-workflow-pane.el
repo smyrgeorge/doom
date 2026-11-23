@@ -101,6 +101,12 @@ read back, the same lines, a wait's hint from its question."
     (should (equal (agent-workflow--log-line "demo-1" "merged" '(:job "merge" :branch "feat/x" :into "main" :already :false)
                                              time)
                    "10:42:07  demo-1  merge  feat/x merged into main"))
+    (should (equal (agent-workflow--log-line "demo-1" "merged" '(:job "merge" :branch "feat/x" :into "main" :already t
+                                                                  :empty t)
+                                             time)
+                   "10:42:07  demo-1  merge  nothing to merge: feat/x has no commit"))
+    (should (equal (agent-workflow--log-line "demo-1" "branch-deleted" '(:branch "feat/x" :into "main" :empty t) time)
+                   "10:42:07  demo-1  ·  its branch feat/x deleted: no commit"))
     (should-not (agent-workflow--log-line "demo-1" "step-starting" '(:job "build") time))
     (should-not (agent-workflow--log-line "demo-1" "state" '(:state "running") time))
     ;; Read back: a wait's hint from its question.
@@ -180,8 +186,14 @@ closed (q)."
                       (mapcar (lambda (line) (substring (if (stringp line) line (plist-get line :text)) 7))
                               (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
       ;; Build done: folded, done; what its agent showed kept there (its
-      ;; session gone, the section's own now).
-      (+test-awr--finish run "build")
+      ;; session gone, the section's own now). Its notes in Notes; no commit
+      ;; of its, said.
+      (+test-awr--finish run "build" nil "Built it, with its tests.")
+      (should (+test-awr--wait (lambda () (member "notes" (+test-awp--sections pane)))))
+      (should (string-match-p "\\`\\*\\*build\\*\\* · done · [0-9:]+\n\nBuilt it, with its tests\\.\\'"
+                              (plist-get (agent-ui-get "notes" :canvas pane :section "notes") :markdown)))
+      (should (string-search "no commit" (plist-get (car (plist-get (agent-ui-get "jobs" :canvas pane :section "run") :steps))
+                                                    :detail)))
       (should (+test-awr--wait (lambda () (plist-get (seq-find (lambda (s) (equal (plist-get s :name) "job.build"))
                                                                (agent-ui-sections pane))
                                                      :folded))))
@@ -193,7 +205,7 @@ closed (q)."
       ;; Review's: after build's.
       (+test-awr--agent run "review")
       (should (+test-awr--wait (lambda () (member "job.review" (+test-awp--sections pane)))))
-      (should (equal (+test-awp--sections pane) '("run" "job.build" "job.review" "log")))
+      (should (equal (+test-awp--sections pane) '("run" "notes" "job.build" "job.review" "log")))
       (+test-awr--finish run "review" "approved")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       ;; Its log: every event a line; the pane's shorter: no issue, a job's
@@ -219,7 +231,7 @@ closed (q)."
         (should-not agent-ui-closes-with)
         (should-not (and agent-ui--closing (gethash "run/jobs" agent-ui--closing)))
         (should-not (string-search "closing in" (buffer-string)))
-        (should (string-match-p "\\`✓ done" (plist-get (agent-ui-get "run" :canvas pane) :text))))
+        (should (string-match-p "\\`✓ done · no commit" (plist-get (agent-ui-get "run" :canvas pane) :text))))
       (kill-buffer pane)
       (should-not (agent-workflow-run-pane run)))))
 
@@ -241,7 +253,7 @@ again, approved: the run done."
         (should-not shown)
         (+test-awr--finish-step run "build" "built it")
         (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
-        (should (equal (+test-awp--sections pane t) '("run" "needs-you" "job.build" "log")))
+        (should (equal (+test-awp--sections pane t) '("run" "needs-you" "notes" "job.build" "log")))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "needs-you"))
                        '("ask" "look")))
         (let ((ask (agent-ui-get "ask" :canvas pane :section "needs-you")))
@@ -435,6 +447,21 @@ on; Go to it, beside."
       (should (eq (car (+test-awp--form-answered agent 44)) 'pending)))))
 
 ;; ====== WHERE ITS WORK IS ======
+
+(ert-deftest agent-workflow-pane/notes ()
+  "Its agents' notes, a feed: each headed by its job, its round past 1, its
+outcome and its time, its text as written, a rule between them; none yet,
+none shown."
+  (with-temp-buffer
+    (should-not (agent-workflow--pane-notes-element))
+    (let ((time (float-time (encode-time '(0 16 14 23 11 2026 nil -1 nil)))))
+      (setq-local agent-workflow--pane-notes
+                  (list (list :job "capture" :round 1 :outcome "done" :time time
+                              :text "No commit: none changed in look.\n- all 13 taken")
+                        (list :job "review" :round 2 :outcome "approved" :time (+ time 240) :text "No commit was right.")))
+      (should (equal (plist-get (agent-workflow--pane-notes-element) :markdown)
+                     (concat "**capture** · done · 14:16\n\nNo commit: none changed in look.\n- all 13 taken\n\n---\n\n"
+                             "**review** · round 2 · approved · 14:20\n\nNo commit was right."))))))
 
 (ert-deftest agent-workflow-pane/rounds ()
   "Its rounds, a bar each: ended, done whatever its outcome (approved,

@@ -35,6 +35,7 @@
 (defvar agent-ui-display-function)
 (defvar agent-ui--entries)
 (declare-function agent-ui--session-name "agent-ui/agent")
+(declare-function agent-workflow--uses-merge-p "agent-workflow/dry")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
 (declare-function agent-shell-elicitation-jump-to-latest-form "agent-shell-elicitation")
 (declare-function agent-shell-elicitation--get "agent-shell-elicitation")
@@ -59,6 +60,10 @@ or you opened it).")
 (defvar-local agent-workflow--pane-rounds nil
   "In a run's pane: its jobs' rounds, from its journal, the first first:
 plists (:job :round :start :end :outcome), END nil while it runs.")
+
+(defvar-local agent-workflow--pane-notes nil
+  "In a run's pane: its agents' notes, from its journal, in order:
+plists (:job :round :outcome :time :text).")
 
 (defvar-local agent-workflow--pane-asked nil
   "In a run's pane: the question its Needs you shows, (JOB KIND WHY).")
@@ -138,6 +143,7 @@ its window selected too."
       (setq agent-workflow--pane-run run
             agent-workflow--pane-times (make-hash-table :test #'equal)
             agent-workflow--pane-rounds nil
+            agent-workflow--pane-notes nil
             agent-workflow--pane-asked nil
             agent-workflow--pane-ended nil)
       (setq-local agent-ui-answer-function #'agent-workflow--pane-answer
@@ -181,6 +187,18 @@ steps' times noted."
                     (setf (alist-get index steps) (plist-put (alist-get index steps) :ended nil)))
                   (setq times (plist-put times :steps steps)))))
       (agent-workflow--pane-round event data time)
+      ;; An agent's notes, as it ended its step.
+      (when-let* (((equal event "step-ended"))
+                  (text (plist-get data :notes))
+                  ((stringp text))
+                  ((not (string-blank-p text))))
+        (setq agent-workflow--pane-notes
+              (append agent-workflow--pane-notes
+                      (list (list :job job :time time :text (string-trim text)
+                                  :outcome (plist-get data :outcome)
+                                  :round (plist-get (car (last (seq-filter (lambda (round) (equal (plist-get round :job) job))
+                                                                           agent-workflow--pane-rounds)))
+                                                    :round))))))
       (pcase event
         ("job-started" (setq times (list :started time)))
         ("job-done" (setq times (plist-put times :ended time)))
@@ -307,6 +325,23 @@ one ended done (its outcome in its name), replaced or cancelled grey."
                                 (and (plist-get round :end) (list :end (stamp (plist-get round :end)))))))
                            agent-workflow--pane-rounds)))))
 
+(defun agent-workflow--pane-notes-element ()
+  "The pane's agents' notes as a feed (nil before the first): each headed
+by its job (bold), its round past 1, its outcome and its time, its text
+as it wrote it (Markdown: its lists, its file:line links), a rule between
+them. Not quoted: a quote was drawn muted, its > on each line."
+  (when agent-workflow--pane-notes
+    (list :id "notes" :type "markdown"
+          :markdown (mapconcat
+                     (lambda (note)
+                       (let ((round (plist-get note :round)))
+                         (concat "**" (plist-get note :job) "**"
+                                 (if (and (numberp round) (> round 1)) (format " · round %d" round) "")
+                                 " · " (or (plist-get note :outcome) "done")
+                                 " · " (format-time-string "%H:%M" (plist-get note :time))
+                                 "\n\n" (plist-get note :text))))
+                     agent-workflow--pane-notes "\n\n---\n\n"))))
+
 ;; ====== WHAT IT SHOWS ======
 
 (defun agent-workflow--pane-short (commit)
@@ -321,7 +356,8 @@ has none yet."
     (let ((base (plist-get where :base))
           (into (plist-get where :into)))
       (concat "⎇ " branch "   "
-              (cond ((plist-get where :deleted) (format "deleted, merged into %s" into))
+              (cond ((and (plist-get where :deleted) (plist-get where :empty)) "no commit · deleted")
+                    ((plist-get where :deleted) (format "deleted, merged into %s" into))
                     ((plist-get where :merged) (format "merged into %s" into))
                     (base (format "%s@%s → %s" (or (plist-get base :branch) "HEAD")
                                   (agent-workflow--pane-short (plist-get base :commit)) into))
@@ -391,7 +427,7 @@ tokens, each against its budget if it has one."
                    ('queued (concat "○ queued" (if (agent-workflow-run-why run)
                                                    (concat ": " (agent-workflow-run-why run))
                                                  "")))
-                   ('done "✓ done")
+                   ('done (if (plist-get (agent-workflow-run-where run) :empty) "✓ done · no commit" "✓ done"))
                    ('cancelled "✗ cancelled")
                    (_ "● running"))
                  (concat (agent-workflow--duration-words (plist-get spent :time))
@@ -462,6 +498,14 @@ tokens, each against its budget if it has one."
                                   (and (numberp tries) (> tries 0) (memq status '(running waiting))
                                        (format "try %d" (1+ tries)))
                                   (and (eq status 'done) outcome (not (equal outcome "done")) outcome)
+                                  ;; What it left on the branch.
+                                  (and (eq status 'done)
+                                       (if (agent-workflow--uses-merge-p spec)
+                                           (if (plist-get (agent-workflow-run-where run) :empty) "nothing to merge" "merged")
+                                         (and (agent-workflow--job-edits-p run job)
+                                              (plist-get state :start-commit)
+                                              (equal (plist-get state :start-commit) (plist-get state :end-commit))
+                                              "no commit")))
                                   (and (eq status 'waiting) "needs you")
                                   (and (eq status 'pending) (plist-get state :why)
                                        (format "waits: %s" (plist-get state :why)))))
@@ -1007,7 +1051,16 @@ events). Stopped once there's none."
                                             ('running 'running) ('waiting 'needs-you) ('queued 'waiting)
                                             ('done 'done) ('cancelled 'failed)))
       (agent-workflow--pane-needs run pane)
+      (agent-workflow--pane-show-notes pane)
       (agent-workflow--pane-agents run pane)))
+
+(defun agent-workflow--pane-show-notes (pane)
+  "PANE's Notes (its agents' notes, a feed): its section once the first
+came, after Run and Needs you, before its agents'."
+  (when-let* ((notes (agent-workflow--pane-notes-element)))
+    (unless (agent-ui--find-section "notes")
+      (agent-ui-section pane "notes" :title "Notes" :after (if (agent-ui--find-section "needs-you") "needs-you" "run")))
+    (agent-ui-show notes :canvas pane :section "notes")))
 
 (defun agent-workflow--pane-changed (run)
   "RUN changed: its pane drawn again, if it has one. In

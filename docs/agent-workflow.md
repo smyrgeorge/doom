@@ -292,17 +292,18 @@ review asks: Should the escape table also cover Unicode escapes?
 13:13  review  waits for you: its agent asks you: Should the escape table …
 ```
 
-- **Its state**, a line coloured by it: ● running, ◆ needs you, ○ queued (why), ✓ done, ✗ cancelled; how long it ran,
-  what it spent and its tokens, each against its budget if it has one.
+- **Its state**, a line coloured by it: ● running, ◆ needs you, ○ queued (why), ✓ done (`no commit`, its branch got
+  none), ✗ cancelled; how long it ran, what it spent and its tokens, each against its budget if it has one.
 - **Where its work is** (git): ⎇ its branch, the branch and commit of your checkout it started from → what its merge
-  goes into (merged, deleted, once it is; its worktree removed, said; a reading job's snapshot); **Worktree** and
+  goes into (merged, deleted, once it is; `no commit · deleted`, nothing to merge; its worktree removed, said; a reading job's snapshot); **Worktree** and
   **Magit** open its worktree. Under it, its files changed since it started (`RET` opens one; those not committed yet,
   said), and its latest commits. Started from a branch other than the main one, it says so: that branch's commits not
   in the main one are merged with it. Looked at again every 15 seconds while the pane is open
   (`agent-workflow-pane-where-every`); once the run is done, its worktree gone, its branch deleted or kept (above).
 - **Run:** a graph of its jobs and their `needs`, each marked and coloured by its state, its round past 1; its
   checklist, each job a step, its steps under it (status, agent, round, try, time; a job waiting for you ◆, timed;
-  one skipped, its `if`); its rounds as a timeline, each job's runs as bars, one sent back said (`review → changes`),
+  one skipped, its `if`; one that edits and committed nothing, `no commit`; the merge, `merged` or `nothing to merge`);
+  its rounds as a timeline, each job's runs as bars, one sent back said (`review → changes`),
   the one running growing.
 - **Needs you**, only while the run waits for you: what on, a line coloured, its answers buttons: an approval
   (Approve, or Reject…, which asks its note), retries used up, a step that broke (go on, skip it, stop; go on with a
@@ -310,6 +311,8 @@ review asks: Should the escape table also cover Unicode escapes?
   loop guard and its budget used up, a form (a note for each agent; more budget). Its agent asking in its session
   (below): a permission, its own buttons; a question (its form), Agent UI's own, answered here as its Submit does (one
   with options a choice, its free answer the note; several a form), **Go to it** beside it opening its session there.
+- **Notes:** each agent's notes as it ended its step (what it did, what it found, why it changed nothing), in order,
+  headed by its job, its round past 1, its outcome and its time, as it wrote them (its lists, its `file:line` links).
 - **A section per agent:** its session's canvas, shown there: its plan, its progress, its questions; finished (its plan
   done), they stay (no countdown here). Its job over, it's folded (`▸ build ✓ 4m 12s`), what its agent showed kept
   there, its session gone. `RET` on its divider opens its session; `TAB` on any divider folds it.

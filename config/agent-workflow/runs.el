@@ -514,6 +514,13 @@ said on its issue."
   (agent-workflow--journal run "run-done")
   (agent-workflow--issue-summary run))
 
+(defun agent-workflow--branch-empty-p (run branch)
+  "Whether BRANCH, RUN's issue's, got no commit since RUN's base (where it
+started); nil if that's unknown."
+  (when-let* ((base (plist-get (agent-workflow-run-base run) :commit)))
+    (let ((default-directory (agent-workflow-run-project run)))
+      (equal (car (agent-workflow--git-lines "rev-list" "--count" (concat base ".." branch))) "0"))))
+
 (defun agent-workflow--branch-end (run)
   "RUN done, its worktree removed: its issue's branch deleted if its
 workflow says so (branch: delete, the default) and its work is in the main
@@ -525,12 +532,14 @@ kept, saying why. Journaled, kept in RUN."
          (branch (agent-workflow-issue-branch-made project issue))
          (into (agent-workflow-main-branch project)))
     (when branch
-      (let ((why (cond ((eq (plist-get (agent-workflow-run-workflow run) :branch) 'keep)
+      (let ((empty nil)
+            (why (cond ((eq (plist-get (agent-workflow-run-workflow run) :branch) 'keep)
                         "its workflow keeps it (branch: keep)")
                        ((file-exists-p (expand-file-name ".git" (agent-workflow-worktree-directory project issue)))
                         "its worktree has changes not committed")
                        ((not (eql 0 (process-file "git" nil nil nil "merge-base" "--is-ancestor" branch into)))
                         (format "not merged into %s" into)))))
+        (setq empty (agent-workflow--branch-empty-p run branch))
         (unless why
           (condition-case err
               ;; Merged into the main branch, checked: -D, as git's -d would
@@ -538,10 +547,11 @@ kept, saying why. Journaled, kept in RUN."
               (agent-workflow--git "branch" "-D" branch)
             (error (setq why (error-message-string err)))))
         (setf (agent-workflow-run-branch-end run)
-              (if why (list :branch branch :why why) (list :branch branch :deleted t :into into)))
+              (append (if why (list :branch branch :why why) (list :branch branch :deleted t :into into))
+                      (and empty (list :empty t))))
         (if why
-            (agent-workflow--journal run "branch-kept" :branch branch :why why)
-          (agent-workflow--journal run "branch-deleted" :branch branch :into into))))))
+            (agent-workflow--journal run "branch-kept" :branch branch :why why :empty (if empty t :false))
+          (agent-workflow--journal run "branch-deleted" :branch branch :into into :empty (if empty t :false)))))))
 
 ;; ====== LIMITS ======
 ;; Under the pool's size: a workflow's concurrency, how many of the pool's
@@ -950,7 +960,7 @@ stops."
 (defun agent-workflow-run-where (run &optional fresh)
   "Where RUN's work is: a plist, :worktree its folder (nil, gone), :branch
 its issue's (nil: none yet), :deleted non-nil once its run deleted it
-\(merged), :base where it started (:branch B :commit C;
+\(merged), :empty non-nil if it got no commit since it started (known), :base where it started (:branch B :commit C;
 nil: unknown), :into what its merge goes into, :own its commits, :with
 its base branch's the merge takes too, :uncommitted the files changed and
 not committed, :merged non-nil once it's merged, :files its files changed
@@ -985,6 +995,8 @@ since its base (`agent-workflow--where-files'), :commits its latest
     (list :worktree (and live dir)
           :branch branch
           :deleted (and deleted t)
+          ;; No commit since it started (where it started known).
+          :empty (if deleted (plist-get end :empty) (and made base (zerop own)))
           :base base
           :into into
           :own own

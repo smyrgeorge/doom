@@ -397,11 +397,16 @@ and commit." branch main main main)
        "its merge conflicts"))))
 
 (defun agent-workflow--merged (run job index branch main already)
-  "BRANCH is merged into MAIN (ALREADY: it was): the issue closed, the step
-over."
-  (agent-workflow--journal run "merged" :job job :step index :branch branch :into main :already (if already t :false))
-  (agent-workflow--bd (agent-workflow-run-project run)
-                      (list "close" (agent-workflow-run-issue run) "--reason" (format "Merged %s into %s" branch main)))
+  "BRANCH is merged into MAIN (ALREADY: it was; with no commit since its run
+started, nothing to merge): the issue closed, the step over."
+  (let ((empty (and already (agent-workflow--branch-empty-p run branch))))
+    (agent-workflow--journal run "merged" :job job :step index :branch branch :into main
+                             :already (if already t :false) :empty (if empty t :false))
+    (agent-workflow--bd (agent-workflow-run-project run)
+                        (list "close" (agent-workflow-run-issue run) "--reason"
+                              (if empty
+                                  (format "Nothing to merge: %s has no commit" branch)
+                                (format "Merged %s into %s" branch main)))))
   (agent-workflow-step-ended run job))
 
 (setq agent-workflow-step-functions
