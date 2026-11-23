@@ -82,9 +82,11 @@ id: its elements, as JSON. Returns the file, or nil."
       (cancel-timer agent-ui--persist-timer))
     (setq agent-ui--persist-timer nil)
     (when-let* ((file (agent-ui-persist-file agent-ui--session-buffer agent-ui--canvas-part)))
+      ;; Its own: not its sections' (another session's canvas shown in
+      ;; one is that one's).
       (let ((elements (append agent-ui--persist-kept
                               (mapcar (lambda (id) (agent-ui--entry-element (gethash id agent-ui--entries)))
-                                      agent-ui--order))))
+                                      (agent-ui--section-keys nil)))))
         (make-directory (file-name-directory file) t)
         (let ((coding-system-for-write 'utf-8))
           (write-region (decode-coding-string

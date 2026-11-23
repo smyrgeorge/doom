@@ -78,12 +78,27 @@ it); else (nil . PAYLOAD)."
 (defun agent-ui--need-id (op id)
   (when (or (null id) (string-empty-p id))
     (agent-ui--fail "%s: which element? give its id" op))
+  (agent-ui--agent-id id))
+
+(defun agent-ui--agent-id (id)
+  "ID, an element's id an agent gave: an error if it has a / (a key, of an
+element in a section of its canvas: see config/agent-ui/canvas.el)."
+  (when (and (stringp id) (string-search "/" id))
+    (agent-ui--fail "an id is letters, digits, -, _ or ., not %s" (agent-ui--show-value id)))
   id)
+
+(defun agent-ui--canvas-label (canvas)
+  "CANVAS as the agent names it: its name as given (its session's, shown in
+another's section: still its own), else its buffer's canvas's."
+  (if (stringp canvas)
+      canvas
+    (buffer-local-value 'agent-ui--canvas-name (agent-ui--buffer canvas))))
 
 (defun agent-ui-do (op id payload canvas)
   "Do OP (one of `agent-ui-operations', a string) on CANVAS, with ID and
 PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
 `agent-ui-to-json'. Signals `agent-ui-error' if it can't."
+  (agent-ui--agent-id id)
   (pcase op
     ("show"
      (let ((element (agent-ui--payload-object payload "show")))
@@ -98,9 +113,7 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
          (append (list :ok t :id id)
                  ;; A link to it, for the agent's reply (config/agent-ui/snapshot.el).
                  (when (fboundp 'agent-ui-link)
-                   (list :link (agent-ui-link (with-current-buffer (agent-ui--buffer canvas)
-                                                agent-ui--canvas-name)
-                                              id)))
+                   (list :link (agent-ui-link (agent-ui--canvas-label canvas) id)))
                  (when log (list :log log))
                  ;; Shown, its source not run (its dir missing): why.
                  (when (plist-get source :error) (list :source source))
@@ -263,7 +276,7 @@ table of an element's id to its hash.")
     (unless fetching
       (dolist (e elements) (puthash (plist-get e :id) (sxhash-equal e) seen))
       (dolist (old gone) (remhash old seen)))
-    (append (list :ok t :canvas (buffer-local-value 'agent-ui--canvas-name buffer))
+    (append (list :ok t :canvas (agent-ui--canvas-label canvas))
             (when panel
               (list :panel (agent-ui-panels--name panel)
                     :root (abbreviate-file-name (agent-ui-panels--root panel))

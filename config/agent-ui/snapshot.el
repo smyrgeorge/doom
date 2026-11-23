@@ -364,11 +364,14 @@ one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
 ;; ====== INTO THE PROMPT ======
 
 (defun agent-ui--element-at-point ()
-  "The id of the element at point, in a canvas."
-  (or (get-text-property (point) 'agent-ui-child)
-      (get-text-property (point) 'agent-ui-id)
-      (and (> (point) (point-min)) (get-text-property (1- (point)) 'agent-ui-id))
-      (user-error "No element here")))
+  "The key of the element at point, in a canvas (its id; in a section,
+SECTION/ID): a panel's child's, if it's in one."
+  (let ((top (or (get-text-property (point) 'agent-ui-id)
+                 (and (> (point) (point-min)) (get-text-property (1- (point)) 'agent-ui-id))))
+        (child (get-text-property (point) 'agent-ui-child)))
+    (cond (child (agent-ui--key child (agent-ui--key-section top)))
+          (top)
+          (t (user-error "No element here")))))
 
 (defun agent-ui-element-as-text (id &optional canvas)
   "Element ID of CANVAS as the agent reads it in a prompt."
@@ -381,8 +384,10 @@ one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
   "Put the element at point into the prompt of the canvas's session, as
 text the agent reads."
   (interactive)
-  (let ((id (agent-ui--element-at-point))
-        (shell (and (boundp 'agent-ui--session-buffer) agent-ui--session-buffer)))
+  (let* ((id (agent-ui--element-at-point))
+         (shell (if (fboundp 'agent-ui--key-session)
+                    (agent-ui--key-session (current-buffer) id)
+                  (and (boundp 'agent-ui--session-buffer) agent-ui--session-buffer))))
     (unless (buffer-live-p shell)
       (user-error "This canvas has no agent-shell session"))
     (unless (fboundp 'agent-shell-insert)
@@ -412,9 +417,14 @@ shown and selected, the cursor on its element. A `browse-url' handler."
          (name (decode-coding-string (url-unhex-string (string-remove-prefix "/" (url-filename parsed))) 'utf-8))
          (id (and (url-target parsed)
                   (decode-coding-string (url-unhex-string (url-target parsed)) 'utf-8)))
-         (canvas (get-buffer (agent-ui-canvas-buffer-name name))))
+         ;; Its own, or the one it's shown in a section of: its element's key.
+         (target (ignore-errors (agent-ui--target name)))
+         (canvas (car target))
+         (id (and id (agent-ui--key id (nth 1 target)))))
     (unless (and (equal (url-host parsed) "canvas") canvas)
       (user-error "Agent UI: no canvas %s (closed?)" name))
+    (when (and id (nth 1 target))
+      (ignore-errors (agent-ui-reveal id canvas)))
     (let ((window (or (get-buffer-window canvas)
                       (progn (funcall agent-ui-display-function canvas)
                              (get-buffer-window canvas)))))
@@ -430,14 +440,20 @@ shown and selected, the cursor on its element. A `browse-url' handler."
       canvas)))
 
 (defun agent-ui--element-start (canvas id)
-  "Where element ID starts in CANVAS, or nil."
+  "Where the element of key ID starts in CANVAS (a panel's child: its
+text's first character), or nil."
   (with-current-buffer canvas
-    (let ((pos (point-min)))
-      ;; Its own, or a panel's child.
-      (while (and pos (not (equal (get-text-property pos 'agent-ui-id) id))
-                  (not (equal (get-text-property pos 'agent-ui-child) id)))
-        (setq pos (next-property-change pos)))
-      pos)))
+    (when-let* ((found (let ((agent-ui--in-section nil))
+                         (ignore-errors (agent-ui--resolve id))))
+                (start (marker-position (agent-ui--entry-start (car found)))))
+      (if (not (cdr found))
+          start
+        (let ((child (plist-get (cdr found) :id))
+              (end (marker-position (agent-ui--entry-end (car found))))
+              (pos start))
+          (while (and (< pos end) (not (equal (get-text-property pos 'agent-ui-child) child)))
+            (setq pos (next-single-property-change pos 'agent-ui-child nil end)))
+          (and (< pos end) pos))))))
 
 (require 'browse-url)
 (add-to-list 'browse-url-handlers '("\\`agent-ui:" . agent-ui-open-link))

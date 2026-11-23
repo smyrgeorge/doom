@@ -139,7 +139,9 @@ one, its words shortened if need be), while it counts down: closing, its
 canvas with it (its last element), or removed, the canvas staying
 \(`agent-ui-footer-functions')."
   (when-let* ((counting (and agent-ui--closing (gethash id agent-ui--closing))))
-    (let* ((verb (if (cl-some (lambda (other) (not (equal other id))) agent-ui--order) "removed" "closing"))
+    (let* ((verb (if (or agent-ui--sections (cl-some (lambda (other) (not (equal other id))) agent-ui--order))
+                     "removed"
+                   "closing"))
            (said (format "All done, %s in %ds" verb (cdr counting))))
       (when (and width (> (+ 2 (string-width said)) width))
         (setq said (format "%s in %ds" (capitalize verb) (cdr counting))))

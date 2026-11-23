@@ -146,10 +146,14 @@ spaces; kept as it is if wider, or its width unknown."
             (split-string text "\n"))))
 
 (defun agent-ui-panel--child (child ctx width)
-  "CHILD drawn at WIDTH, its id in its context (its own buttons); its text
-marked as its (`agent-ui-child'), where a deeper child hasn't marked it."
+  "CHILD drawn at WIDTH, its key in its context (its own buttons: in its
+panel's section, if it's in one); its text marked as its (`agent-ui-child'),
+where a deeper child hasn't marked it."
   (let ((text (agent-ui-render child (plist-put (plist-put (copy-sequence ctx) :width width)
-                                                :id (or (plist-get child :id) (plist-get ctx :id))))))
+                                                :id (if (plist-get child :id)
+                                                        (agent-ui--key (plist-get child :id)
+                                                                       (agent-ui--key-section (plist-get ctx :id)))
+                                                      (plist-get ctx :id))))))
     (when-let* ((id (plist-get child :id)))
       (let ((pos 0))
         (while (< pos (length text))

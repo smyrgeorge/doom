@@ -416,7 +416,10 @@ one; the one it followed before, stopped."
              (agent-ui-source--check-dir state)
              (make-directory agent-ui-source-log-directory t)
              (setf (agent-ui-source--state-log state)
-                   (make-temp-file (expand-file-name (format "%s-" id) agent-ui-source-log-directory) nil ".log"))
+                   ;; A key's / (an element in a section) isn't a folder.
+                   (make-temp-file (expand-file-name (format "%s-" (string-replace "/" "@" id))
+                                                     agent-ui-source-log-directory)
+                                   nil ".log"))
              (agent-ui-source--run canvas id state (agent-ui-source--state-what state)
                                    (lambda (code) (agent-ui-source--exited canvas id code))))
             ('file
@@ -435,7 +438,8 @@ one; the one it followed before, stopped."
   "Element ID's source as it goes, a plist for the agent: :kind, :running,
 :exit, :lines (how many), :log, :error; nil if it has none."
   (when (agent-ui--live-canvas-p canvas)
-    (when-let* ((state (agent-ui-source--state (agent-ui--buffer canvas) id)))
+    (when-let* ((target (agent-ui--target canvas))
+                (state (agent-ui-source--state (car target) (agent-ui--key id (nth 1 target)))))
       (append
        (list :kind (symbol-name (agent-ui-source--state-kind state))
              ;; A command until its end is handled (its last lines, exit code

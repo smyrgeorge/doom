@@ -193,3 +193,42 @@ does: no window size change, the canvas was left drawn for the old cells)."
             (should (> (+test-e2e-aui--borders-in-line canvas) 20)))
         (set-frame-font font nil t)
         (kill-buffer canvas)))))
+
+(ert-deftest e2e-agent-ui/dividers-in-line-whatever-their-marks ()
+  "A canvas's sections' dividers in the GUI: each as wide as the canvas's
+columns in pixels, a line high, whatever its fold's arrow and its state's
+mark (▾ ▸ ● ◆ ○ ‖ ✓ ✗, from fallback fonts some); folded, its section's
+elements hidden, its divider still there."
+  (let ((agent-ui-display-function #'switch-to-buffer)
+        (agent-ui-default-canvas "e2e-sections"))
+    (delete-other-windows)
+    (dolist (state '(running needs-you waiting paused done failed nil))
+      (let ((name (if state (symbol-name state) "none")))
+        (agent-ui-section nil name :title name :state state :note "3m")
+        (agent-ui-show (list :id "x" :type "text" :text (concat "in " name)) :section name)))
+    (agent-ui-section nil "done" :folded t)
+    (let* ((canvas (agent-ui-canvas))
+           (window (get-buffer-window canvas))
+           (cw (frame-char-width))
+           (lh (frame-char-height))
+           (dividers 0))
+      (unwind-protect
+          (with-current-buffer canvas
+            (agent-ui--flush)
+            (set-window-start window (point-min))
+            (redisplay t)
+            (goto-char (point-min))
+            (while (not (eobp))
+              (when (get-text-property (point) 'agent-ui-section)
+                (cl-incf dividers)
+                (let ((bol (line-beginning-position)) (eol (line-end-position)))
+                  (should (equal (list (line-number-at-pos) (window-text-pixel-size window bol eol))
+                                 (list (line-number-at-pos)
+                                       (cons (* cw (string-width (buffer-substring bol eol))) lh))))))
+              (forward-line 1))
+            (should (= dividers 7))
+            (goto-char (point-min))
+            (should (search-forward "▸ done ✓ 3m · 1 hidden" nil t))
+            (should (search-forward "in done" nil t))
+            (should (invisible-p (match-beginning 0))))
+        (kill-buffer canvas)))))

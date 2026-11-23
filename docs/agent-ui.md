@@ -107,8 +107,8 @@ element's, a change's, a batch's operation's), picks the session's other canvas 
 tab of its canvas's pane when first shown; a name is letters, digits, spaces, `_ . -`, up to 40.
 
 **In Lisp,** the same operations: `(agent-ui-show SPEC)`, `(agent-ui-update ID PATCH)`, `(agent-ui-append ID PATCH)`,
-`(agent-ui-remove ID)`, each taking an optional `:canvas`. SPEC and PATCH are plists (`(:type progress :value 3)`), as
-`json-parse-string` makes them with `:object-type 'plist`.
+`(agent-ui-remove ID)`, each taking an optional `:canvas` (and `:section`, [below](#sections)). SPEC and PATCH are
+plists (`(:type progress :value 3)`), as `json-parse-string` makes them with `:object-type 'plist`.
 
 ## The canvas
 
@@ -146,6 +146,46 @@ tab of its canvas's pane when first shown; a name is letters, digits, spaces, `_
   wider or narrower than a column and taller than a line. A canvas draws such a glyph as large as a line holds, and
   makes the space beside it narrower or wider by as much: borders and the `│` between columns stay at their columns'
   pixels, every line the same height.
+
+## Sections
+
+A canvas can be divided in sections, from Lisp (an agent workflow's run: one pane, a section per job). Each starts
+with its divider, a rule across the pane with its title, its state's mark and a few words:
+
+```text
+Run doom-38o.9: feature
+▾ build ● 3m ─────────────────────────────────
+Steps …
+▸ review ◆ · 2 hidden ────────────────────────
+▾ merge ✓ ────────────────────────────────────
+```
+
+The canvas's own elements come first, then each section's, in their order. A section's elements are its own, their
+ids too: `plan` in one section isn't `plan` in another.
+
+| Lisp | What |
+|---|---|
+| `(agent-ui-section CANVAS NAME :title :state :note :folded :after)` | Makes section NAME (letters, digits, `_ . -`), at the end or after section AFTER; again, changes what's given |
+| `(agent-ui-show SPEC :canvas CANVAS :section NAME)` | Shows an element in it; `update`, `append`, `remove`, `get`, `elements`, `clear` take `:section` too |
+| `(agent-ui-remove-section CANVAS NAME)` | Removes it, its elements with it |
+| `(agent-ui-sections CANVAS)` | Its sections: name, title, state, note, folded, the canvas it hosts, how many elements |
+| `(agent-ui-host NAME CANVAS SECTION)` | Shows canvas NAME (a session's) in SECTION from now on |
+| `(agent-ui-unhost NAME)` | Gives NAME its own canvas back, its elements in the section removed |
+
+- **States:** `running` `●` (glowing), `needs-you` `◆`, `waiting` `○`, `paused` `‖`, `done` `✓`, `failed` `✗`, or none.
+  Over the mark, its words.
+- **Folding:** `TAB` (or `RET`, a click) on a divider folds its section to it, saying how many elements it hides; again,
+  unfolds it. What comes in meanwhile stays hidden, but a question: it unfolds its section and comes into view. A
+  search finding something in a folded section unfolds it.
+- **A session's canvas in a section** (`agent-ui-host`): everything the session shows goes there, its other canvases'
+  (`--canvas tests`, `--canvas ask`) too, with no buffer or pane of its own; the canvases it had are emptied into it
+  and closed. Its `list`, `get` and `clear` see that section only; its links open the canvas it's in, on it. Its
+  buttons act in its session, its questions wait for it (the session's mode line, `C-c C-q`); answered, they go as on
+  its own canvas (what it showed on `--canvas ask`, with them). The session killed, its elements there go; the
+  section stays. The section removed (or `agent-ui-unhost`), its next element opens its own canvas again. What it
+  shows there isn't kept with the session.
+- **Clearing** a canvas removes its sections too; clearing a section, its elements only. A canvas with a section isn't
+  empty: it stays open.
 
 ## Defining a type
 
@@ -568,7 +608,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 |---|---|
 | `config/agent-ui.el` | Settings and keys; loads `config/agent-ui/` |
 | `config/agent-ui/core.el` | The registry, `agent-ui-define`, checking specs, containing errors |
-| `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws |
+| `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws; its sections, a canvas shown in one |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
 | `config/agent-ui/workspaces.el` | A session's canvas in its session's workspace (persp-mode), not the current one |

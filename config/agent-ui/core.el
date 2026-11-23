@@ -842,6 +842,10 @@ the last ones."
         (set-text-properties (1- end) end (text-properties-at 0 button) cut)))
     cut))
 
+(defvar agent-ui-pressed nil
+  "While a button's action runs: the key of the element it's on, in its
+canvas (its id; in a section, SECTION/ID), or nil.")
+
 (defvar agent-ui-before-press-hook nil
   "Run in a button's buffer before its action is looked up: a canvas draws
 what changed first (canvas.el), so the action is its current drawing's, not
@@ -859,9 +863,12 @@ its press left (see `agent-ui-button-map') dropped first."
   (let* ((pos (if (mouse-event-p event) (posn-point (event-end event)) (point)))
          (buffer (if (mouse-event-p event) (window-buffer (posn-window (event-end event))) (current-buffer)))
          (action (get-text-property pos 'agent-ui-action buffer)))
-    ;; In the button's buffer: its action may ask it (a canvas: its session).
+    ;; In the button's buffer: its action may ask it (a canvas: its session,
+    ;; or its element's, `agent-ui-pressed').
     (if action
-        (with-current-buffer buffer (funcall action))
+        (with-current-buffer buffer
+          (let ((agent-ui-pressed (get-text-property pos 'agent-ui-id)))
+            (funcall action)))
       (user-error "Nothing to do here"))))
 
 (defun agent-ui-cell (value)
