@@ -22,9 +22,9 @@
 ;;
 ;; Started from Emacs (M-x agent-workflow-run), its pane opens; from the
 ;; shell, it's made when you look (M-x agent-workflow-runs, RET), and opens
-;; by itself only once you did. A run done: its checklist finished, Agent
-;; UI's countdown closes the pane (Keep keeps it); failed, cancelled,
-;; waiting: it stays. Closing it stops nothing.
+;; by itself only once you did. Done, failed, cancelled, waiting: it stays,
+;; until you close it (q); nothing counts down to close it (what it showed
+;; went with it). Closing it stops nothing.
 
 (require 'cl-lib)
 (require 'seq)
@@ -32,7 +32,6 @@
 
 (defvar agent-workflow-pane-log-lines)
 (defvar agent-ui-answer-function)
-(defvar agent-ui-closes-with)
 (defvar agent-ui-display-function)
 (defvar agent-ui--entries)
 (declare-function agent-ui--session-name "agent-ui/agent")
@@ -142,7 +141,6 @@ its window selected too."
             agent-workflow--pane-asked nil
             agent-workflow--pane-ended nil)
       (setq-local agent-ui-answer-function #'agent-workflow--pane-answer
-                  agent-ui-closes-with "run/jobs"
                   ;; An agent's elements finished (its plan done) stay: no
                   ;; countdown closing them (one giving its own :close, it).
                   agent-ui-close-finished nil)
@@ -509,10 +507,9 @@ round past 1 said), an arrow from each job to those needing it."
           :edges (cl-loop for (job . spec) in specs
                           append (mapcar (lambda (need) (list need job)) (plist-get spec :needs))))))
 
-(defun agent-workflow--pane-jobs (run over)
-  "RUN's checklist: its jobs. OVER: the run over already when its pane was
-made (not closed by its countdown: you looked at it)."
-  (list :id "jobs" :type "steps" :close (if over :false t)
+(defun agent-workflow--pane-jobs (run)
+  "RUN's checklist: its jobs. Finished, it stays (its pane with it)."
+  (list :id "jobs" :type "steps" :close :false
         :steps (mapcar (lambda (job) (agent-workflow--pane-job run (car job) (cdr job)))
                        (agent-workflow-run-jobs run))))
 
@@ -951,8 +948,7 @@ session's canvas showed in its run's pane kept there, its section's own
 
 (defun agent-workflow--pane-draw (run &optional made)
   "RUN's pane drawn again from RUN: its header, its jobs, Needs you, its
-agents' sections. MADE: just made (the run over already: not closed by its
-countdown)."
+agents' sections. MADE: just made (not shown while it's drawn)."
   (when-let* ((pane (agent-workflow--pane-live run)))
     (with-current-buffer pane
       (agent-workflow--pane-draw-in run pane made))))
@@ -999,7 +995,7 @@ events). Stopped once there's none."
               (run-at-time agent-workflow-pane-where-every agent-workflow-pane-where-every
                            #'agent-workflow--pane-where-tick)))
       (agent-ui-show (agent-workflow--pane-graph run) :canvas pane :section "run")
-      (agent-ui-show (agent-workflow--pane-jobs run (and made (memq (agent-workflow-run-state run) agent-workflow--ended)))
+      (agent-ui-show (agent-workflow--pane-jobs run)
                      :canvas pane :section "run")
       (if-let* ((rounds (agent-workflow--pane-rounds-element)))
           (agent-ui-show rounds :canvas pane :section "run")

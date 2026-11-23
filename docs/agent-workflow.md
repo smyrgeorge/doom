@@ -316,9 +316,9 @@ review asks: Should the escape table also cover Unicode escapes?
 - **Log:** its last events, shorter than its log.txt: no issue on each line, its job in a column, a job's agent step
   starting and ending left out, a job done how long it took; a wait a warning, what went wrong an error.
 
-Emacs draws the run's sections from its journal, never an agent. A run done: its checklist finished, its pane closes
-after Agent UI's countdown (**Keep** keeps it); a run waiting, failed or cancelled keeps it. Closing it (`q`) stops
-nothing: it's made again when you look. Started from the shell, a run's pane is made when you look, and opens by itself
+Emacs draws the run's sections from its journal, never an agent. A run's pane stays, done or not (✓ done, its agents'
+sections folded), until you close it (`q`): nothing counts down to close it. Closing it stops nothing: it's made
+again when you look. Started from the shell, a run's pane is made when you look, and opens by itself
 only after that, when the run needs you (its window closed, the same).
 
 `M-x agent-workflow-runs` lists every run of the project, those not over first, those started from the shell and those

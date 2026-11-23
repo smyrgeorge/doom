@@ -123,8 +123,9 @@ read back, the same lines, a wait's hint from its question."
   "Started from Emacs: its pane opens, ISSUE · WORKFLOW, the run above its
 sections Run and Log; each agent a section, its session's canvas shown
 there (what it shows goes there; finished, it stays: no countdown); its
-job over, folded, its mark done, what its agent showed kept there. Its log, log.txt and the pane's. Done: its
-checklist's countdown closes it all."
+job over, folded, its mark done, what its agent showed kept there. Its
+log, log.txt and the pane's. Done: it stays, nothing counting down, until
+closed (q)."
   (+test-awp "pane"
     (let* ((issue (+test-awr--issue project "A pane"))
            (run (car (car (agent-workflow-run (list issue) nil project))))
@@ -211,14 +212,15 @@ checklist's countdown closes it all."
         (delete-file (agent-workflow--log-path run))
         (should (equal (mapcar (lambda (line) (substring line 10)) (agent-workflow-log-lines run))
                        (mapcar (lambda (line) (substring line 10)) lines))))
-      ;; Done: its checklist finished, counting down; over, the pane goes.
+      ;; Done: it stays, its checklist finished, nothing counting down; you
+      ;; close it (q).
       (with-current-buffer pane
-        (should (equal agent-ui-closes-with "run/jobs"))
-        (should (gethash "run/jobs" agent-ui--closing))
         (agent-ui--flush)
-        (should (string-search "All done, closing in" (buffer-string))))
-      (agent-ui--close-finished pane '("run/jobs"))
-      (should-not (buffer-live-p pane))
+        (should-not agent-ui-closes-with)
+        (should-not (and agent-ui--closing (gethash "run/jobs" agent-ui--closing)))
+        (should-not (string-search "closing in" (buffer-string)))
+        (should (string-match-p "\\`✓ done" (plist-get (agent-ui-get "run" :canvas pane) :text))))
+      (kill-buffer pane)
       (should-not (agent-workflow-run-pane run)))))
 
 ;; ====== WHAT NEEDS YOU ======
