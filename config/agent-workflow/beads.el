@@ -86,7 +86,8 @@ themselves), their ids, in the order bd lists them."
                                              "--limit" "0"))))
 
 (defun agent-workflow-open-issues (project)
-  "PROJECT's open issues: ((ID TITLE TYPE) ...), as bd lists them."
+  "PROJECT's open issues: ((ID TITLE TYPE ISSUE) ...), as bd lists them,
+ISSUE all bd says of it (an alist: its status, priority, labels...)."
   (mapcar (lambda (issue)
-            (list (alist-get 'id issue) (alist-get 'title issue) (alist-get 'issue_type issue)))
+            (list (alist-get 'id issue) (alist-get 'title issue) (alist-get 'issue_type issue) issue))
           (agent-workflow--bd-json project "list" "--status" "open,in_progress" "--limit" "0")))

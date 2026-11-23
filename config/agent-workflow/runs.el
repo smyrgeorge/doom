@@ -36,6 +36,7 @@
 (require 'subr-x)
 (require 'json)
 (require 'map)
+(require 'crm)                          ; crm-separator, let-bound: special first
 
 (declare-function agent-shell-insert "agent-shell")
 (declare-function agent-shell--prompt-queue-enqueue "agent-shell-prompt-queue")
@@ -1346,22 +1347,101 @@ the agent that fixes a step."
 
 ;; ====== YOU ======
 
+;; The issues offered as the issue list draws them (config/beads/look.el, when
+;; it's loaded): a status icon, a priority badge and a type icon before the id
+;; and title, the labels as tags after. Several picked at once: separated by a
+;; comma, else, a title having one (which would cut it in two: never a match,
+;; RET only filling the prompt), by the first of ; | & no title has.
+(defconst agent-workflow--separators '("," ";" "|" "&")
+  "What may separate several issues picked: the first that's in no title.")
+
+(defvar +my/beads--statuses)
+
+(defun agent-workflow--separator (candidates)
+  "`crm-separator' for CANDIDATES (strings): the first of
+`agent-workflow--separators' none of them has."
+  (let ((separator (or (seq-find (lambda (separator)
+                                   (not (seq-some (lambda (candidate) (string-search separator candidate))
+                                                  candidates)))
+                                 agent-workflow--separators)
+                       "‖")))
+    (propertize (concat "[ \t]*" (regexp-quote separator) "[ \t]*")
+                'separator separator
+                'description (if (equal separator ",") "comma-separated list"
+                               (format "list separated by %s" separator)))))
+
+(defun agent-workflow--issue-affixes (issue statuses)
+  "ISSUE's (PREFIX . SUFFIX) in the picker (see above), ISSUE as
+`agent-workflow-open-issues' has it, STATUSES the open issues' (a table,
+id -> status: those blocking it)."
+  (let* ((info (or (nth 3 issue)
+                   `((id . ,(nth 0 issue)) (title . ,(nth 1 issue)) (issue_type . ,(nth 2 issue)))))
+         (looks (fboundp '+my/beads-format-status))
+         (labels (alist-get 'labels info))
+         (epic (and (equal (nth 2 issue) "epic") (propertize "  (epic: its issues)" 'face 'shadow))))
+    (cons (if looks
+              ;; The statuses' faces: beads.el's, in the theme's colours once
+              ;; loaded (config/beads/theme.el); the list may not have been
+              ;; opened yet.
+              (let ((+my/beads--statuses statuses))
+                (require 'beads-faces nil t)
+                (concat (string-pad (+my/beads-format-status info) 2)
+                        (+my/beads-format-priority info) " "
+                        (+my/beads-format-type info) " "))
+            "")
+          (concat epic
+                  (when labels
+                    (concat "  " (mapconcat (lambda (label)
+                                              (if looks (+my/beads--label-tag label)
+                                                (propertize label 'face 'shadow)))
+                                            labels " ")))))))
+
+(defun agent-workflow--issues-table (candidates affixes)
+  "A completion table of CANDIDATES (an alist) in bd's order, each with its
+AFFIXES (a table, candidate -> (PREFIX . SUFFIX))."
+  (lambda (string predicate action)
+    (if (eq action 'metadata)
+        `(metadata (display-sort-function . identity)
+                   (cycle-sort-function . identity)
+                   (affixation-function
+                    . ,(lambda (names)
+                         (mapcar (lambda (name)
+                                   (let ((affix (gethash name affixes)))
+                                     (list name (or (car affix) "") (or (cdr affix) ""))))
+                                 names))))
+      (complete-with-action action candidates string predicate))))
+
 (defun agent-workflow--read-issues (project)
   "The issues you pick in PROJECT, several at once (an epic: its open
 issues): their ids."
   (let* ((issues (agent-workflow-open-issues project))
+         (width (seq-reduce (lambda (width issue) (max width (string-width (car issue)))) issues 0))
+         (statuses (make-hash-table :test #'equal))
+         (affixes (make-hash-table :test #'equal))
          (candidates (mapcar (lambda (issue)
-                               (cons (format "%s  %s%s" (nth 0 issue) (nth 1 issue)
-                                             (if (equal (nth 2 issue) "epic") "  (epic: its issues)" ""))
-                                     issue))
+                               (cons (concat (string-pad (nth 0 issue) width) "  " (nth 1 issue)) issue))
                              issues))
-         (picked (completing-read-multiple "Run on: " candidates nil t)))
+         (crm-separator (agent-workflow--separator (mapcar #'car candidates))))
+    (dolist (issue issues)
+      (puthash (nth 0 issue) (or (alist-get 'status (nth 3 issue)) "open") statuses))
+    (dolist (candidate candidates)
+      (puthash (car candidate) (agent-workflow--issue-affixes (cdr candidate) statuses) affixes))
+    ;; The prefixes as wide as the widest: the ids in a column (a type is a
+    ;; word in a terminal, an icon in a graphic frame).
+    (let ((widest (seq-max (cons 0 (mapcar (lambda (affix) (string-width (car affix)))
+                                           (hash-table-values affixes))))))
+      (maphash (lambda (name affix)
+                 (puthash name (cons (concat (car affix) (make-string (- widest (string-width (car affix))) ?\s))
+                                     (cdr affix))
+                          affixes))
+               affixes))
     (or (seq-mapcat (lambda (choice)
                       (let ((issue (cdr (assoc choice candidates))))
                         (if (equal (nth 2 issue) "epic")
                             (agent-workflow-epic-issues project (car issue))
                           (list (car issue)))))
-                    picked)
+                    (completing-read-multiple "Run on: " (agent-workflow--issues-table candidates affixes)
+                                              nil t))
         (user-error "No issue picked"))))
 
 (defun agent-workflow--read-workflow (project issue)

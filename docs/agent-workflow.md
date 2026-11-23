@@ -201,7 +201,9 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 ## Runs
 
 `M-x agent-workflow-run` starts runs: it asks for the issues (several at once; an epic: its open issues), then each
-one's workflow, asked only when several fit it. From the shell:
+one's workflow, asked only when several fit it. The issues are shown as in [their list](issues.md): status,
+priority and type before each, its labels after. `RET` picks one; for several, `TAB` adds one and a separator starts
+the next: a comma, or `;` when a title has a comma (the prompt says which). From the shell:
 
 ```sh
 cmd/agent-workflow run doom-a1b doom-c3d          # each with its own workflow
