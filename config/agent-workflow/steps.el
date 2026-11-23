@@ -66,7 +66,12 @@
   "Step INDEX of JOB of RUN failed (WHAT, in words; OUTPUT its output): the
 job's agent told, else one with the step's on-fail profile started, to fix
 it and say done; the step then runs again. No agent to send: the run
-waits for you."
+waits for you. Its pane redrawn either way (who fixes it, or the wait)."
+  (agent-workflow--fix-1 run job index output what)
+  (agent-workflow--changed run))
+
+(defun agent-workflow--fix-1 (run job index output what)
+  "`agent-workflow--fix''s work, its pane not redrawn."
   (let* ((step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
          (state (agent-workflow--job run job))
          (held (plist-get state :agent))

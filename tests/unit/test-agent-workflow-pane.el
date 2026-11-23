@@ -329,6 +329,44 @@ pane, its header saying so, Cancel gone."
           (agent-ui--flush)
           (should-not (string-search "⏵ Cancel" (buffer-string))))))))
 
+(ert-deftest agent-workflow-pane/redrawn-as-its-steps-go ()
+  "Its checklist redrawn as its job goes on, nothing else happening: the
+next step running once the one before ends; a failed step, its agent
+fixing it (failed, who fixes it), at once. Its header's time drawn again
+on its tick."
+  (+test-awp "steps"
+    (write-region "description: x
+for: [chore]
+jobs:
+  check:
+    steps:
+      - name: one
+        run: echo one
+      - name: two
+        run: sleep 1; test -f ok.txt || exit 1
+        retries: 1
+        on-fail: build
+" nil (expand-file-name ".agent-workflow/workflows/chores.yml" project))
+    (let* ((issue (+test-awr--issue project "Steps" "--type" "chore"))
+           (run (agent-workflow-start-run project issue))
+           (pane (agent-workflow-pane run))
+           (agent-workflow-pane-where-every 3600))
+      (cl-flet ((job () (car (plist-get (agent-ui-get "jobs" :canvas pane :section "run") :steps)))
+                (step (name) (seq-find (lambda (step) (equal (plist-get step :name) name))
+                                       (plist-get (car (plist-get (agent-ui-get "jobs" :canvas pane :section "run") :steps))
+                                                  :steps))))
+        (should (+test-awr--wait (lambda () (equal (plist-get (step "two") :status) "running"))))
+        (should (equal (plist-get (step "one") :status) "done"))
+        (should (+test-awr--wait (lambda () (equal (plist-get (step "two") :status) "failed"))))
+        (should (equal (plist-get (job) :detail) "fixing"))
+        (should (string-match-p "build fixing it · try 1 of 2" (plist-get (step "two") :detail)))
+        ;; Its header: drawn again on its tick, nothing else changing.
+        (with-current-buffer pane
+          (agent-ui-show '(:id "run" :type "text" :text "stale") :canvas pane))
+        (agent-workflow--pane-where-tick)
+        (should (string-prefix-p "● running" (plist-get (agent-ui-get "run" :canvas pane) :text)))
+        (agent-workflow-cancel run)))))
+
 (defun +test-awp--ask (pane)
   "The question in PANE's Needs you, if there's one."
   (ignore-errors (agent-ui-get "ask" :canvas pane :section "needs-you")))

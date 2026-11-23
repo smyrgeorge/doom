@@ -1135,14 +1135,18 @@ element shown, or removed once it isn't."
 (defun agent-workflow--pane-where-tick ()
   "Where the work of each run not over with a pane is looked at again: its
 pane drawn again if it changed (a commit, files changed between its run's
-events). Stopped once there's none."
+events), else its header (its time, what it spent). Stopped once there's
+none."
   (let ((any nil))
     (dolist (run agent-workflow--runs)
       (when-let* (((not (memq (agent-workflow-run-state run) agent-workflow--ended)))
                   (pane (agent-workflow--pane-live run)))
         (setq any t)
         (with-demoted-errors "agent workflow's pane: %S"
-          (unless (equal (agent-workflow-run-where run) (buffer-local-value 'agent-workflow--pane-where-shown pane))
+          (if (equal (agent-workflow-run-where run) (buffer-local-value 'agent-workflow--pane-where-shown pane))
+              ;; Its header's time and spending, moving on.
+              (let ((agent-ui-display-function #'ignore))
+                (agent-ui-show (agent-workflow--pane-header run) :canvas pane))
             (agent-workflow--pane-draw run)))))
     (unless any
       (when (timerp agent-workflow--pane-where-timer)

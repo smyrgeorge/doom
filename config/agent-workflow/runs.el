@@ -848,6 +848,8 @@ job's snapshot of its branch), the commit it sees there; its first step."
          (kind (plist-get step :kind)))
     (agent-workflow--job-set run job :step index :finished nil)
     (agent-workflow--journal run "step-starting" :job job :step index :kind (symbol-name kind))
+    ;; Its pane redrawn (the step running now), its state saved.
+    (agent-workflow--changed run)
     (if (eq kind 'agent)
         (agent-workflow--agent-step run job step index)
       (if-let* ((function (alist-get kind agent-workflow-step-functions)))
