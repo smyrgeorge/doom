@@ -17,7 +17,8 @@
 ;; - A section per job's agent: its agent-shell session's canvas, shown
 ;;   there (`agent-ui-host'): its plan, its progress, its questions, with no
 ;;   pane of its own; folded once its job ends (▸ build ✓ 12m). RET on its
-;;   divider opens its session.
+;;   divider opens its session. Its notes there too, whole.
+;; - Notes, once an agent wrote some: every job's, a line each.
 ;; - Log: its last events (log.el).
 ;;
 ;; Started from Emacs (M-x agent-workflow-run-ticket, agent-workflow-run),
@@ -1119,6 +1120,15 @@ rejection without a note)."
   "The section of JOB's agent: job.JOB (a job's name has no dot)."
   (concat "job." job))
 
+(defun agent-workflow--pane-after-jobs ()
+  "The current pane's section after which what comes after its jobs'
+sections goes: its last job's, else Needs you, else Run. A job's new
+section goes there too: after the others, before Notes."
+  (or (car (last (seq-filter (lambda (s) (string-prefix-p "job." s))
+                             (mapcar #'agent-ui--section-name agent-ui--sections))))
+      (and (agent-ui--find-section "needs-you") "needs-you")
+      "run"))
+
 (defun agent-workflow--pane-agents (run pane)
   "RUN's jobs' agents in PANE: a section each, its session's canvas shown
 there (while it shows nothing, said); a job over, its section folded
@@ -1141,10 +1151,7 @@ once, its mark done."
                           ('cancelled 'failed) (_ 'waiting))))
         (when (and agent (not (agent-ui--find-section section)))
           (agent-ui-section pane section :title name :state mark :note note
-                            :after (or (car (last (seq-filter (lambda (s) (string-prefix-p "job." s))
-                                                              (mapcar #'agent-ui--section-name agent-ui--sections))))
-                                       (and (agent-ui--find-section "needs-you") "needs-you")
-                                       "run")
+                            :after (agent-workflow--pane-after-jobs)
                             :open (lambda () (agent-workflow--pane-open-session run name))))
         (when (agent-ui--find-section section)
           ;; Its agent's shown nothing on its canvas: said, not a blank section.
@@ -1269,12 +1276,12 @@ none."
 
 (defun agent-workflow--pane-show-notes (run pane)
   "RUN's PANE's Notes (its agents' verdicts, a feed): its section once the
-first came, after Run and Needs you, before its agents'; each agent's notes
+first came, after its agents' sections, before Log; each agent's notes
 whole in its own section, made (folded) if its agent's gone already (a
 pane drawn again from its journal)."
   (when-let* ((notes (agent-workflow--pane-notes-element)))
     (unless (agent-ui--find-section "notes")
-      (agent-ui-section pane "notes" :title "Notes" :after (if (agent-ui--find-section "needs-you") "needs-you" "run")))
+      (agent-ui-section pane "notes" :title "Notes" :after (agent-workflow--pane-after-jobs)))
     (agent-ui-show notes :canvas pane :section "notes")
     (dolist (job (delete-dups (mapcar (lambda (note) (plist-get note :job)) agent-workflow--pane-notes)))
       (when-let* ((section (agent-workflow--pane-section job))
@@ -1285,9 +1292,7 @@ pane drawn again from its journal)."
                               :state (pcase status ('running 'running) ('waiting 'needs-you) ('done 'done)
                                        ('skipped 'done) ('cancelled 'failed) (_ 'waiting))
                               :folded (memq status '(done skipped cancelled))
-                              :after (or (car (last (seq-filter (lambda (s) (string-prefix-p "job." s))
-                                                                (mapcar #'agent-ui--section-name agent-ui--sections))))
-                                         "notes")
+                              :after (agent-workflow--pane-after-jobs)
                               :open (lambda () (agent-workflow--pane-open-session run job)))
             (when (memq status '(done skipped cancelled))
               (push job agent-workflow--pane-ended))))

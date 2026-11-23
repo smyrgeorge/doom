@@ -218,7 +218,7 @@ closed (q)."
       ;; Review's: after build's.
       (+test-awr--agent run "review")
       (should (+test-awr--wait (lambda () (member "job.review" (+test-awp--sections pane)))))
-      (should (equal (+test-awp--sections pane) '("run" "notes" "job.build" "job.review" "log")))
+      (should (equal (+test-awp--sections pane) '("run" "job.build" "job.review" "notes" "log")))
       (+test-awr--finish run "review" "approved")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       ;; Its log: every event a line; the pane's shorter: no issue, a job's
@@ -266,7 +266,7 @@ again, approved: the run done."
         (should-not shown)
         (+test-awr--finish-step run "build" "built it")
         (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
-        (should (equal (+test-awp--sections pane t) '("run" "needs-you" "notes" "job.build" "log")))
+        (should (equal (+test-awp--sections pane t) '("run" "needs-you" "job.build" "notes" "log")))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "needs-you"))
                        '("ask" "look")))
         (let ((ask (agent-ui-get "ask" :canvas pane :section "needs-you")))
@@ -665,7 +665,7 @@ own section, made, folded once its job's done; the feed above them."
     (unwind-protect
         (progn
           (setq pane (agent-workflow--pane-make run))
-          (should (equal (+test-awp--sections pane t) '("run" "notes" "job.build" "job.review" "log")))
+          (should (equal (+test-awp--sections pane t) '("run" "job.build" "job.review" "notes" "log")))
           (should (equal (mapcar (lambda (step) (plist-get step :name))
                                  (plist-get (agent-ui-get "notes" :canvas pane :section "notes") :steps))
                          '("build" "review")))
