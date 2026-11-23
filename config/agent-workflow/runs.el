@@ -1070,7 +1070,8 @@ In `agent-workflow-agent-event-functions'."
     ('error
      (when-let* ((found (agent-workflow--agent-run agent)))
        (pcase-let ((`(,run . ,job) found))
-         (when (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))
+         (when (and (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))
+                    (agent-workflow--agent-at-work-p run job))
            (if (plist-get (agent-workflow--job run job) :finished)
                (agent-workflow--step-finished run job)
              (agent-workflow--wait run job (format "%s: its agent's turn failed: %s" job
@@ -1080,12 +1081,23 @@ In `agent-workflow-agent-event-functions'."
        (unless (plist-get (agent-workflow--job (car found) (cdr found)) :finished)
          (agent-workflow--wait (car found) (cdr found) (format "%s: its agent's session ended" (cdr found))))))))
 
+(defun agent-workflow--agent-at-work-p (run job)
+  "Whether JOB of RUN has its agent at work: fixing a failed step (or
+resolving a merge's conflicts), or its step is an agent's. Not while a
+script step runs, its agent kept for its next fix: a turn of its then (a
+background command of its done, waking it) is none of the run's."
+  (let* ((state (agent-workflow--job run job))
+         (step (nth (or (plist-get state :step) 0) (plist-get (agent-workflow--job-spec run job) :steps))))
+    (or (plist-get state :retry) (plist-get state :resolving) (eq (plist-get step :kind) 'agent))))
+
 (defun agent-workflow--turn-over (agent)
   "AGENT's turn is over: its step goes on if it said done, else its run
-waits for you."
+waits for you. Its agent not at work (`agent-workflow--agent-at-work-p'):
+nothing."
   (when-let* ((found (agent-workflow--agent-run agent)))
     (pcase-let ((`(,run . ,job) found))
-      (when (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))
+      (when (and (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))
+                 (agent-workflow--agent-at-work-p run job))
         (if (plist-get (agent-workflow--job run job) :finished)
             (agent-workflow--step-finished run job)
           (agent-workflow--wait run job (format "%s: its agent ended its turn without saying it's done" job)))))))

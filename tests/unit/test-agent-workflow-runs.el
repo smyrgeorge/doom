@@ -859,3 +859,35 @@ it (this once), trust it (remembered), or no; a starter's runs without."
         (let ((agent-workflow-starters-directory starters)
               (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
           (should (agent-workflow-start-run project (+test-awr--issue project "A chore" "--type" "chore"))))))))
+
+(ert-deftest agent-workflow-runs/a-kept-agent-s-turn ()
+  "A failed step fixed, its script steps running again, its agent kept for
+its next fix: a turn of its ending (a background command of its done,
+waking it), or failing, is none of the run's: it doesn't wait. Fixing, or
+its agent step, it does."
+  (let* ((workflow '(:name "github"
+                     :jobs (("green" :name "green"
+                             :steps ((:kind run :run "push.sh" :name "push")
+                                     (:kind run :run "watch.sh" :name "watch" :retries 5 :on-fail "ci")))
+                            ("docs" :name "docs" :steps ((:kind agent :agent "docs"))))))
+         (agent (agent-workflow-agent--make :issue "github" :job "green" :profile "ci"))
+         (docs (agent-workflow-agent--make :issue "github" :job "docs" :profile "docs"))
+         (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'running :workflow workflow
+                                        :spent '(:cost 0 :tokens 0)
+                                        :jobs (list (cons "green" (list :status 'running :step 1 :agent agent))
+                                                    (cons "docs" (list :status 'running :step 0 :agent docs)))))
+         (agent-workflow--runs (list run))
+         (waits nil))
+    (cl-letf (((symbol-function 'agent-workflow--wait) (lambda (_run job why) (push (cons job why) waits))))
+      ;; Its script step running: its turn's end, its turn's error, nothing.
+      (agent-workflow--turn-over agent)
+      (agent-workflow--agent-event agent '((:event . error) (:data . ((:message . "overloaded")))))
+      (should-not waits)
+      ;; Fixing it: its turn without done, the run waits.
+      (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
+            (list :status 'running :step 1 :retry 1 :agent agent))
+      (agent-workflow--turn-over agent)
+      (should (equal waits '(("green" . "green: its agent ended its turn without saying it's done"))))
+      ;; An agent step: it waits too.
+      (agent-workflow--turn-over docs)
+      (should (equal (car waits) '("docs" . "docs: its agent ended its turn without saying it's done"))))))
