@@ -220,6 +220,8 @@ jobs:
               (error 6 "on-fail nobody: no such profile (build, review, docs)"))
              ("description: x\njobs:\n  a:\n    run: x\n    outcomes:\n      changes: rerun b\n"
               (error 6 "changes: rerun b: no such job (a)"))
+             ("description: x\njobs:\n  a:\n    run: x\n    outcomes:\n      changes: rerun b\n  b:\n    run: y\n"
+              (error 6 "changes: rerun b: not a job a needs (directly or not): it may not have run yet"))
              ("description: x\njobs:\n  a:\n    run: x\n    outcomes:\n      changes: again\n"
               (error 6 "changes again: continue, or rerun JOB"))
              ("description: x\njobs:\n  a:\n    agent: build\n    prompt: Do {issue.nope}\n"

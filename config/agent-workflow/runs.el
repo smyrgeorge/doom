@@ -1688,7 +1688,23 @@ change not committed."
 
 (defun agent-workflow--rerun-or-ask (run job other)
   "JOB of RUN sends the work back to OTHER (its outcome's rerun): counted,
-then done, or asked of you (see LOOPS)."
+then done, or asked of you (see LOOPS). OTHER that hasn't run (skipped by
+its if:, not yet): nothing to send back to, JOB waits for you, saying so
+\(its step again, or skipped: on as if it said done)."
+  (if (memq (plist-get (agent-workflow--job run other) :status) '(pending skipped))
+      (let ((outcome (plist-get (agent-workflow--job run job) :outcome))
+            (index (plist-get (agent-workflow--job run job) :step)))
+        (when-let* ((agent (plist-get (agent-workflow--job run job) :agent)))
+          (agent-workflow-stop-agent agent))
+        (agent-workflow--job-set run job :agent nil :outcome nil
+                                 :ask (list :kind 'broke :step index :what (format "its outcome %s: rerun %s" outcome other)))
+        (agent-workflow--journal run "asked" :job job :step index :kind "broke")
+        (agent-workflow--wait run job (format "%s: its outcome %s reruns %s, which hasn't run (%s): run its step again, skip it (on as if done), or stop?"
+                                              job outcome other (plist-get (agent-workflow--job run other) :status))))
+    (agent-workflow--rerun-or-ask-1 run job other)))
+
+(defun agent-workflow--rerun-or-ask-1 (run job other)
+  "`agent-workflow--rerun-or-ask''s work, OTHER having run."
   (let* ((state (agent-workflow--job run job))
          (edge (format "%s>%s" job other))
          (entry (cdr (assoc edge (agent-workflow-run-edges run))))

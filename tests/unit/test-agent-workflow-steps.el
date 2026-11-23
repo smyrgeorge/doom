@@ -293,6 +293,35 @@ jobs:
         (waits)
         (should-not (plist-get (plist-get (agent-workflow--job run "check") :back) :step))))))
 
+(ert-deftest agent-workflow-steps/rerun-of-a-job-skipped ()
+  "An outcome rerunning a job its if: skipped: nothing to send back to; the
+job waits for you, saying so (not left running); skipped, on as if done.
+A rerun of a job it needs, directly or not, passes the check."
+  (should (equal (sort (agent-workflow--before '(("review" "security") ("security" "build") ("build")) "review") #'string<)
+                 '("build" "security")))
+  (+test-awr "rerun-skipped"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  security:
+    if: (member \"security\" (issue-labels))
+    run: echo security
+  review:
+    needs: security
+    agent: review
+    outcomes:
+      insecure: rerun security
+")
+    (let* ((issue (+test-awr--issue project "Rerun skipped"))
+           (run (agent-workflow-start-run project issue))
+           (agent (+test-awr--agent run "review")))
+      (should (eq (+test-awr--job run "security") 'skipped))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "review") 'waiting))))
+      (agent-workflow-done agent "insecure" "not safe")
+      (+test-aws--asks run "review: its outcome insecure reruns security, which hasn't run (skipped): run its step again, skip it (on as if done), or stop?")
+      (agent-workflow-confirm run "skip")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
+
 (ert-deftest agent-workflow-steps/environment-shell-and-your-copy ()
   "A script's environment; shell: its interpreter; a script of
 .agent-workflow/ run from your checkout, not the branch."

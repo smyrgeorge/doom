@@ -395,10 +395,15 @@ file). NEEDS: every job's needs (an alist), PROFILES the profiles' names
                       ((equal then "continue") (push (cons outcome 'continue) outcomes))
                       ((and (stringp then) (string-match "\\`rerun[ \t]+\\([^ \t]+\\)\\'" then))
                        (let ((other (match-string 1 then)))
-                         (if (member other jobs)
-                             (push (cons outcome (list 'rerun other)) outcomes)
+                         (cond
+                          ((not (member other jobs))
                            (funcall problem 'error here "%s: rerun %s: no such job (%s)" outcome other
-                                    (string-join jobs ", ")))))
+                                    (string-join jobs ", ")))
+                          ;; Only one it ran after: another may not have run yet.
+                          ((not (or (equal other job) (member other (agent-workflow--before needs job))))
+                           (funcall problem 'error here "%s: rerun %s: not a job %s needs (directly or not): it may not have run yet"
+                                    outcome other job))
+                          (t (push (cons outcome (list 'rerun other)) outcomes)))))
                       (t (funcall problem 'error here "%s %s: continue, or rerun JOB" outcome
                                   (agent-workflow--shown then))))))
                  (setq read (plist-put read :outcomes (nreverse outcomes))))))
