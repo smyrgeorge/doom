@@ -176,6 +176,8 @@ last few, scrolling back through these)."
 (load! "agent-workflow/watch")
 (load! "agent-workflow/log")
 (load! "agent-workflow/pane")
+(load! "agent-workflow/pane-answer")
+(load! "agent-workflow/pane-boxes")
 (load! "agent-workflow/list")
 (load! "agent-workflow/dry")
 (load! "agent-workflow/check")

@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/agent-workflow/list.el -*- lexical-binding: t; -*-
 ;; Every run of a project, a list: M-x agent-workflow-runs. Loaded from
-;; config/agent-workflow.el, after pane.el. No Doom here (its keys are in
+;; config/agent-workflow.el, after pane-boxes.el. No Doom here (its keys are in
 ;; config/agent-workflow.el).
 ;;
 ;; A line per run, those not over first, then the latest: its issue, which
