@@ -38,7 +38,7 @@
 | `tests/` | [Tests](tests.md); `tests/linux/`: the same on Linux, in Docker |
 | `.github/workflows/tests.yml` | The tests on each push, on Linux and macOS ([Tests](tests.md#on-github)) |
 | `.beads/` | This config's own [issues](issues.md); `hooks/post-commit` syncs them with their Dolt remote (`sync.remote` in `config.yaml`) on each commit |
-| `.agent-workflow/` | This config's own [agent workflows](agent-workflow.md#this-configs-own) (`tested`, `screenshots`), a profile and their scripts |
+| `.agent-workflow/` | This config's own [agent workflow](agent-workflow.md#this-configs-own) (`screenshots`), its profile and its script |
 
 A large feature is a file and a folder: `config/NAME.el` holds its settings and keys, and loads its code from
 `config/NAME/`.

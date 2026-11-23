@@ -173,21 +173,19 @@ Their merges run no suite: a project's own copy adds its tests with `with: {suit
 
 ## This config's own
 
-This config has two of its own in `.agent-workflow/`, samples to start a project's from. Neither has a `for`: an issue
-gets one by its label (`workflow:tested`, `workflow:screenshots`), or by `--workflow` (`M-x agent-workflow-run` offers
-it for any issue). They run once you trust this config (see [Trust](#trust)).
+This config has one of its own in `.agent-workflow/`, a sample to start a project's from. It has no `for`: an issue gets
+it by its label (`workflow:screenshots`), or by `--workflow` (`M-x agent-workflow-run` offers it for any issue). It runs
+once you trust this config (see [Trust](#trust)).
 
 | Workflow | Jobs |
 |---|---|
-| tested | build, then its script (`.agent-workflow/scripts/tests.sh`: the unit tests of what the branch changed, a failure back to build's agent, twice at most); docs; review, its result waiting for your OK (changes: build again); merge |
 | screenshots | capture: its script takes the examples' screenshots again (`.agent-workflow/scripts/screenshots.sh`, macOS: Emacs needs the Screen Recording permission; it broke, the run asks you), then an agent with the `screenshots` profile looks at each changed one and commits the good ones; review (changes: capture again); merge |
 
-`tests.sh` runs a part's tests for a file of it (`config/beads/look.el`: `test-beads*`), a test file changed, what
-isn't committed too; none about what changed, none run. The `screenshots` profile (`.agent-workflow/profiles/`) may
-read, look at images and commit; it never takes them again, nor changes anything else.
+The `screenshots` profile (`.agent-workflow/profiles/`) may read, look at images and commit; it never takes them
+again, nor changes anything else.
 
 ```sh
-bd label add doom-a1b workflow:tested
+bd label add doom-a1b workflow:screenshots
 cmd/agent-workflow run doom-a1b
 cmd/agent-workflow dry-run screenshots    # what it would do, nothing run
 ```

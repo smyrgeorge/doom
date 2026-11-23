@@ -498,14 +498,16 @@ too, else kept."
 ;; ====== THIS CONFIG'S OWN ======
 
 (ert-deftest agent-workflow-files/this-config-s-samples ()
-  "The sample workflows of this config (.agent-workflow/: tested,
-screenshots, the screenshots profile) checked, no problem; each walked to
-its end, its branch deleted once merged."
+  "The sample workflow of this config (.agent-workflow/: screenshots, its
+profile) checked, no problem; walked to its end, its branch deleted once
+merged."
   (let ((agent-workflow--profiles-cache (make-hash-table :test #'equal))
         (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
     (should-not (agent-workflow-check-problems +test-root))
     (let ((workflows (agent-workflow-workflows +test-root)))
-      (dolist (name '("tested" "screenshots"))
+      (should (equal (mapcar #'car (seq-filter (lambda (w) (eq (plist-get (cdr w) :origin) 'project)) workflows))
+                     '("screenshots")))
+      (dolist (name '("screenshots"))
         (ert-info (name :prefix "workflow: ")
           (let* ((workflow (cdr (assoc name workflows)))
                  (result (agent-workflow-dry-run workflow :info '(:id "demo-1" :type "task")
@@ -517,48 +519,6 @@ its end, its branch deleted once merged."
             (should (member "merge: merged, the issue closed" (+test-awf--dry-lines result)))
             (should (equal (plist-get result :branch) "deleted, merged into the main branch"))))))
     (should (assoc "screenshots" (agent-workflow-profiles +test-root)))))
-
-(defun +test-awf--tests-sh (dir &optional status)
-  "tested's .agent-workflow/scripts/tests.sh run in DIR, its tests/run.sh a
-stand-in printing its arguments and returning STATUS (default 0): (EXIT .
-OUTPUT)."
-  (make-directory (expand-file-name "tests" dir) t)
-  (write-region (format "#!/bin/sh\necho \"run.sh $*\"\nexit %d\n" (or status 0)) nil
-                (expand-file-name "tests/run.sh" dir))
-  (set-file-modes (expand-file-name "tests/run.sh" dir) #o755)
-  (with-temp-buffer
-    (let* ((default-directory dir)
-           (process-environment (cons "MAIN_BRANCH=main" process-environment))
-           (exit (call-process "bash" nil t nil
-                               (expand-file-name ".agent-workflow/scripts/tests.sh" +test-root))))
-      (cons exit (string-trim (buffer-string))))))
-
-(ert-deftest agent-workflow-files/tested-runs-the-tests-of-what-changed ()
-  "tested's script: the unit tests of what the branch changed, committed or
-not: a part of this config's (config/NAME.el, config/NAME/...: test-NAME,
-test-NAME-*), a test file; none, none run. A test failing: 1; it couldn't
-run them: 2."
-  (let ((dir (+test-awf--dir "tests-sh")))
-    (let ((default-directory dir))
-      (call-process "git" nil nil nil "init" "-q" "-b" "main")
-      (dolist (file '("config/foo.el" "config/foo/bar.el" "config/baz.el" "README.md"
-                      "tests/unit/test-foo.el" "tests/unit/test-foo-parts.el" "tests/unit/test-other.el"))
-        (+test-awf--file dir file "one\n"))
-      (call-process "git" nil nil nil "add" "-A")
-      (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "first")
-      (call-process "git" nil nil nil "checkout" "-q" "-b" "feat/demo-1")
-      ;; Nothing changed yet: none run.
-      (should (equal (+test-awf--tests-sh dir) '(0 . "tests.sh: no unit tests about what changed: none run")))
-      ;; A part's file committed, a test file not committed yet, a file of no part.
-      (+test-awf--file dir "config/foo/bar.el" "two\n")
-      (+test-awf--file dir "README.md" "two\n")
-      (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-am" "bar")
-      (+test-awf--file dir "tests/unit/test-other.el" "two\n")
-      (let ((said (+test-awf--tests-sh dir)))
-        (should (eql (car said) 0))
-        (should (string-suffix-p "run.sh unit foo foo-parts other" (cdr said))))
-      (should (eql (car (+test-awf--tests-sh dir 1)) 1))
-      (should (eql (car (+test-awf--tests-sh dir 3)) 2)))))
 
 ;; ====== CHECKING THEM ======
 
