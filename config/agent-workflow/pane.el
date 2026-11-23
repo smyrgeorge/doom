@@ -7,7 +7,7 @@
 ;; spent of its budget. Then, each under its divider (Agent UI's sections):
 ;;
 ;; - Run: its jobs, a checklist, each job's steps under it (status, agent,
-;;   round, try, time); under it a box for each job running, live: its
+;;   round, try, time); at its bottom a box for each job running, live: its
 ;;   agent at work (what on, its turn's time, its actions as they come,
 ;;   Show session: at its question if it asks), or its script (its command,
 ;;   its output's last lines as it comes, Show output).
@@ -1348,7 +1348,7 @@ for you, or it's over)."
 
 (defun agent-workflow--pane-show-boxes (run pane)
   "RUN's live boxes in PANE's Run section, a box each job running
-\(`agent-workflow--pane-box'), under its jobs (Rounds under them), each
+\(`agent-workflow--pane-box'), at its bottom (under its jobs, Rounds), each
 drawn again only once it changed; a job no longer running, its box gone.
 Its old sections of its jobs' agents (a pane drawn before): gone."
   (with-current-buffer pane
@@ -1367,15 +1367,22 @@ Its old sections of its jobs' agents (a pane drawn before): gone."
         (unless (assoc (car old) now)
           (when (gethash (agent-ui--key (plist-get (cdr old) :id) "run") agent-ui--entries)
             (agent-ui-remove (plist-get (cdr old) :id) :canvas pane :section "run"))))
-      ;; New: under the others, Rounds moved under it.
-      (let ((rounds (and (seq-some (lambda (box) (not (assoc (car box) shown))) now)
-                         (gethash "run/rounds" agent-ui--entries)
-                         (agent-ui-get "rounds" :canvas pane :section "run"))))
-        (when rounds (agent-ui-remove "rounds" :canvas pane :section "run"))
+      ;; At the Run section's bottom, under Rounds: one above it (Rounds
+      ;; came after it), they're all shown again, under it.
+      (when-let* ((at (cl-position "run/rounds" agent-ui--order :test #'equal))
+                  ((seq-some (lambda (box)
+                               (let ((key (agent-ui--key (plist-get (cdr box) :id) "run")))
+                                 (and (gethash key agent-ui--entries)
+                                      (< (cl-position key agent-ui--order :test #'equal) at))))
+                             now)))
         (dolist (box now)
-          (unless (equal (cdr (assoc (car box) shown)) (cdr box))
-            (agent-ui-show (cdr box) :canvas pane :section "run")))
-        (when rounds (agent-ui-show rounds :canvas pane :section "run")))
+          (when (gethash (agent-ui--key (plist-get (cdr box) :id) "run") agent-ui--entries)
+            (agent-ui-remove (plist-get (cdr box) :id) :canvas pane :section "run")))
+        (setq shown nil))
+      ;; New, or changed: drawn (a new one at the bottom).
+      (dolist (box now)
+        (unless (equal (cdr (assoc (car box) shown)) (cdr box))
+          (agent-ui-show (cdr box) :canvas pane :section "run")))
       (setq agent-workflow--pane-boxes now)
       (when (and now (not (timerp agent-workflow--pane-boxes-timer)))
         (setq agent-workflow--pane-boxes-timer (run-at-time 1 1 #'agent-workflow--pane-boxes-tick))))))

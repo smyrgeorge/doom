@@ -149,7 +149,7 @@ counting down, until closed (q)."
       (should (equal (buffer-name pane) (format "Agent UI: %s · feature" issue)))
       (should (equal shown (list pane)))
       (should (equal (+test-awp--sections pane) '("run" "log")))
-      ;; Build's agent: its live box in Run, under its jobs; no section.
+      ;; Build's agent: its live box at Run's bottom, under Rounds; no section.
       (let* ((agent (+test-awr--agent run "build"))
              (name (agent-ui--session-name (agent-workflow-agent-buffer agent))))
         (should (+test-awr--wait (lambda () (ignore-errors (agent-ui-get "now-build" :canvas pane :section "run")))))
@@ -159,7 +159,7 @@ counting down, until closed (q)."
           (should (string-prefix-p "build · " (plist-get box :title)))
           (should (equal (+test-awp--labels box) '("Show session"))))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "run"))
-                       '("graph" "jobs" "now-build" "rounds")))
+                       '("graph" "jobs" "rounds" "now-build")))
         ;; What it shows on its canvas: there, no pane of its own, not in the run's.
         (agent-ui-show '(:id "plan" :type "steps" :steps ("Read" "Write")) :canvas name)
         (should (get-buffer (agent-ui-canvas-buffer-name name)))
@@ -955,6 +955,37 @@ running), none. Show session and Show output pressed: shown."
           (kill-buffer session)
           (should-not (funcall box "docs")))
       (when (buffer-live-p session) (kill-buffer session)))))
+
+(ert-deftest agent-workflow-pane/live-boxes-at-the-bottom ()
+  "The live boxes at the Run section's bottom: under Rounds, even one
+shown before Rounds came (all shown again under it)."
+  (let* ((session (generate-new-buffer " *test agent session*"))
+         (agent (agent-workflow-agent--make :issue "github" :job "docs" :profile "docs" :buffer session))
+         (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'running
+                                        :workflow '(:name "github" :jobs (("docs" :name "docs" :steps ((:kind agent :agent "docs")))))
+                                        :spent '(:cost 0 :tokens 0)
+                                        :jobs (list (cons "docs" (list :status 'running :step 0 :agent agent)))))
+         (agent-ui-display-function #'ignore)
+         (agent-workflow--pane-activity (make-hash-table :test #'eq :weakness 'key))
+         (agent-workflow--pane-boxes-timer nil)
+         (pane (agent-ui-canvas (make-temp-name "boxes-"))))
+    (unwind-protect
+        (with-current-buffer pane
+          (setq-local agent-workflow--pane-run run
+                      agent-workflow--pane-times (make-hash-table :test #'equal))
+          (agent-ui-section pane "run" :title "Run")
+          (agent-ui-show '(:id "jobs" :type "text" :text "jobs") :canvas pane :section "run")
+          (agent-workflow--pane-show-boxes run pane)
+          (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "run"))
+                         '("jobs" "now-docs")))
+          ;; Rounds came after it: it under Rounds.
+          (agent-ui-show '(:id "rounds" :type "text" :text "rounds") :canvas pane :section "run")
+          (agent-workflow--pane-show-boxes run pane)
+          (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "run"))
+                         '("jobs" "rounds" "now-docs"))))
+      (when (timerp agent-workflow--pane-boxes-timer) (cancel-timer agent-workflow--pane-boxes-timer))
+      (kill-buffer pane)
+      (kill-buffer session))))
 
 (ert-deftest agent-workflow-pane/what-it-is-at ()
   "Running, its State tile says what it's at: each running job's step and
