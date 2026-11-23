@@ -73,7 +73,13 @@ plists (:job :round :start :end :outcome), END nil while it runs.")
 
 (defvar-local agent-workflow--pane-notes nil
   "In a run's pane: its agents' notes, from its journal, in order:
-plists (:job :round :outcome :time :text).")
+plists (:job :round :what :outcome :time :text), WHAT what its agent was
+at (fixing watch · try 2, its agent step's name), nil if not known.")
+
+(defvar-local agent-workflow--pane-doing nil
+  "In a run's pane, from its journal: what each job's agent is at, for its
+notes: an alist of a job to WHAT (see `agent-workflow--pane-notes');
+its steps' tries, (JOB . INDEX) to the last one started.")
 
 (defvar-local agent-workflow--pane-asked nil
   "In a run's pane: the question its Needs you shows, (JOB KIND WHY).")
@@ -188,6 +194,7 @@ answering the other)."
             agent-workflow--pane-times (make-hash-table :test #'equal)
             agent-workflow--pane-rounds nil
             agent-workflow--pane-notes nil
+            agent-workflow--pane-doing nil
             agent-workflow--pane-asked nil
             agent-workflow--pane-ended nil)
       (setq-local agent-ui-answer-function #'agent-workflow--pane-answer
@@ -231,6 +238,21 @@ steps' times noted."
                     (setf (alist-get index steps) (plist-put (alist-get index steps) :ended nil)))
                   (setq times (plist-put times :steps steps)))))
       (agent-workflow--pane-round event data time)
+      ;; What its agent's at: a failed step it fixes (its try), its agent step.
+      (pcase event
+        ("step-started"
+         (when (numberp (plist-get data :try))
+           (setf (alist-get (cons job index) agent-workflow--pane-doing nil nil #'equal) (plist-get data :try)))
+         (when (plist-get data :agent)
+           (setf (alist-get job agent-workflow--pane-doing nil nil #'equal)
+                 (or (plist-get data :name) (format "step %d" (1+ (or index 0)))))))
+        ("fixing"
+         (let ((try (alist-get (cons job index) agent-workflow--pane-doing nil nil #'equal)))
+           (setf (alist-get job agent-workflow--pane-doing nil nil #'equal)
+                 (concat "fixing " (or (plist-get data :name) (format "step %s" (1+ (or index 0))))
+                         (if try (format " · try %d" try) "")))))
+        ((or "job-started" "went-back")
+         (setf (alist-get job agent-workflow--pane-doing nil t #'equal) nil)))
       ;; An agent's notes, as it ended its step.
       (when-let* (((equal event "step-ended"))
                   (text (plist-get data :notes))
@@ -239,6 +261,7 @@ steps' times noted."
         (setq agent-workflow--pane-notes
               (append agent-workflow--pane-notes
                       (list (list :job job :time time :text (string-trim text)
+                                  :what (alist-get job agent-workflow--pane-doing nil nil #'equal)
                                   :outcome (plist-get data :outcome)
                                   :round (plist-get (car (last (seq-filter (lambda (round) (equal (plist-get round :job) job))
                                                                            agent-workflow--pane-rounds)))
@@ -411,9 +434,22 @@ most."
     (truncate-string-to-width line 80 nil nil "…")))
 
 (defun agent-workflow--pane-note-name (note)
-  "NOTE's job, its round past 1 said: its name in the feed."
-  (let ((round (plist-get note :round)))
-    (concat (plist-get note :job) (if (and (numberp round) (> round 1)) (format " · round %d" round) ""))))
+  "NOTE's job, its round past 1 said, a fix's what (fixing watch · try 2):
+its name in the feed."
+  (let ((round (plist-get note :round))
+        (what (plist-get note :what)))
+    (concat (plist-get note :job) (if (and (numberp round) (> round 1)) (format " · round %d" round) "")
+            (if (and what (string-prefix-p "fixing " what)) (concat " · " what) ""))))
+
+(defun agent-workflow--pane-note-heading (note rounds)
+  "NOTE's heading among its job's several, in its section: its round (if
+ROUNDS, its job's notes are of several), what its agent was at (fixing
+watch · try 2), else its round alone."
+  (let ((round (format "Round %s" (or (plist-get note :round) 1)))
+        (what (plist-get note :what)))
+    (cond ((not what) round)
+          (rounds (concat round " · " what))
+          (t (concat (upcase (substring what 0 1)) (substring what 1))))))
 
 (defun agent-workflow--pane-notes-element ()
   "The pane's agents' notes as a feed (nil before the first): a line each,
@@ -442,16 +478,20 @@ whole in its agent's section."
                            agent-workflow--pane-notes)))))
 
 (defun agent-workflow--pane-job-notes-element (job)
-  "JOB's notes, whole (Markdown), for its agent's section; several rounds',
-each under its round, outcome and time. Nil if it has none."
+  "JOB's notes, whole (Markdown), for its agent's section; several, each
+under its heading (`agent-workflow--pane-note-heading': what its agent
+was at, its round if they're of several), outcome and time. Nil if it has
+none."
   (when-let* ((notes (seq-filter (lambda (note) (equal (plist-get note :job) job)) agent-workflow--pane-notes)))
     (list :id "agent-notes" :type "markdown" :title "Its notes"
           :markdown (if (cdr notes)
-                        (mapconcat (lambda (note)
-                                     (format "**Round %s** · %s · %s\n\n%s"
-                                             (or (plist-get note :round) 1) (or (plist-get note :outcome) "done")
-                                             (format-time-string "%H:%M" (plist-get note :time)) (plist-get note :text)))
-                                   notes "\n\n")
+                        (let ((rounds (cdr (delete-dups (mapcar (lambda (note) (or (plist-get note :round) 1)) notes)))))
+                          (mapconcat (lambda (note)
+                                       (format "**%s** · %s · %s\n\n%s"
+                                               (agent-workflow--pane-note-heading note rounds)
+                                               (or (plist-get note :outcome) "done")
+                                               (format-time-string "%H:%M" (plist-get note :time)) (plist-get note :text)))
+                                     notes "\n\n"))
                       (plist-get (car notes) :text)))))
 
 ;; ====== WHAT IT SHOWS ======

@@ -642,6 +642,46 @@ section, several rounds' each under its own; none yet, none shown."
                              "Reads well now.\n\n**Round 3** · approved · 14:21\n\nApproved: it reads well.")))
       (should-not (agent-workflow--pane-job-notes-element "merge")))))
 
+(ert-deftest agent-workflow-pane/notes-of-fixes ()
+  "A failed step's agent's notes, from its journal: each fix said (fixing
+its step · the try that failed), in its section's headings (its round too
+once its job's notes are of several) and in the feed; its agent step's,
+its step's name in its section only."
+  (with-temp-buffer
+    (setq-local agent-workflow--pane-times (make-hash-table :test #'equal))
+    (let ((time (float-time (encode-time '(0 41 20 23 11 2026 nil -1 nil)))))
+      (pcase-dolist (`(,event ,at ,data)
+                     `(("job-started" 0 (:job "green" :round 1))
+                       ("step-started" 0 (:job "green" :step 2 :kind "run" :try 1 :name "watch"))
+                       ("fixing" 10 (:job "green" :step 2 :name "watch"))
+                       ("step-ended" 360 (:job "green" :step 2 :outcome "done" :notes "Not fixed: it logs why."))
+                       ("step-started" 370 (:job "green" :step 2 :kind "run" :try 2 :name "watch"))
+                       ("fixing" 2000 (:job "green" :step 2 :name "watch"))
+                       ("step-ended" 2500 (:job "green" :step 2 :outcome "done" :notes "Fixed: the frame."))
+                       ("went-back" 2600 (:job "green" :step 2 :name "watch"))
+                       ("job-started" 2600 (:job "green" :round 2))
+                       ("step-started" 2600 (:job "green" :step 2 :kind "run" :try 1 :name "watch"))
+                       ("fixing" 2700 (:job "green" :step 2 :name "watch"))
+                       ("step-ended" 2800 (:job "green" :step 2 :outcome "done" :notes "Fixed: again."))
+                       ("job-started" 0 (:job "docs" :round 1))
+                       ("step-started" 0 (:job "docs" :step 0 :agent "github · docs" :name "write"))
+                       ("step-ended" 60 (:job "docs" :step 0 :outcome "done" :notes "Wrote it."))))
+        (agent-workflow--pane-time event data (+ time at)))
+      (should (equal (mapcar (lambda (note) (plist-get note :what)) agent-workflow--pane-notes)
+                     '("fixing watch · try 1" "fixing watch · try 2" "fixing watch · try 1" "write")))
+      (should (equal (mapcar (lambda (step) (plist-get step :name)) (plist-get (agent-workflow--pane-notes-element) :steps))
+                     '("green · fixing watch · try 1" "green · fixing watch · try 2"
+                       "green · round 2 · fixing watch · try 1" "docs")))
+      (should (equal (plist-get (agent-workflow--pane-job-notes-element "green") :markdown)
+                     (concat "**Round 1 · fixing watch · try 1** · done · 20:47\n\nNot fixed: it logs why.\n\n"
+                             "**Round 1 · fixing watch · try 2** · done · 21:22\n\nFixed: the frame.\n\n"
+                             "**Round 2 · fixing watch · try 1** · done · 21:27\n\nFixed: again.")))
+      ;; One round's two fixes: no round said.
+      (setq agent-workflow--pane-notes (seq-take agent-workflow--pane-notes 2))
+      (should (equal (plist-get (agent-workflow--pane-job-notes-element "green") :markdown)
+                     (concat "**Fixing watch · try 1** · done · 20:47\n\nNot fixed: it logs why.\n\n"
+                             "**Fixing watch · try 2** · done · 21:22\n\nFixed: the frame."))))))
+
 (ert-deftest agent-workflow-pane/notes-of-agents-gone ()
   "A pane drawn from its run's journal, its agents gone (Emacs started
 again, its pane closed and opened again): each agent's notes whole in its
