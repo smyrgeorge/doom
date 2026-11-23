@@ -112,8 +112,14 @@ true t, false :false, null :null."
                      :null-object :null :false-object :false))
 
 (defun agent-workflow--mapping-p (value)
-  "Non-nil if VALUE is a YAML mapping, as read (an alist, maybe empty)."
-  (and (listp value) (seq-every-p (lambda (pair) (and (consp pair) (stringp (car pair)))) value)))
+  "Non-nil if VALUE is a YAML mapping, as read (an alist, maybe empty; not
+one of its pairs, (KEY . SCALAR), a mapping given where a list goes)."
+  (and (proper-list-p value) (seq-every-p (lambda (pair) (and (consp pair) (stringp (car pair)))) value)))
+
+(defun agent-workflow--list-of (value)
+  "VALUE if it's a YAML sequence as read (a proper list), else nil: its
+problem said where it's read."
+  (and (proper-list-p value) value))
 
 (defun agent-workflow--names (value)
   "VALUE, a name or a list of them, as a list; nil if it isn't."
@@ -170,7 +176,16 @@ of its jobs, or nil."
 the top of this file), nil if FILE has errors; PROBLEMS, each
 \(error|warning \"FILE:LINE: what\" FILE LINE \"what\"), in the order of
 their lines. PROFILES: the names its agent: and on-fail: may name (any, the
-default: not checked). AS: its name, if not its file's (a run's copy)."
+default: not checked). AS: its name, if not its file's (a run's copy). A
+file whose reading signals: a problem of its own (its name, line 1), not
+an error of every command reading the project's workflows."
+  (condition-case err
+      (agent-workflow--workflow-read file profiles as)
+    (error (cons nil (list (agent-workflow--problem 'error file 1 "it can't be read: %s"
+                                                    (error-message-string err)))))))
+
+(defun agent-workflow--workflow-read (file profiles as)
+  "`agent-workflow-workflow-read''s work, for FILE, PROFILES, AS."
   (let* ((name (or as (replace-regexp-in-string "\\.ya?ml\\'" "" (file-name-nondirectory file))))
          (text (with-temp-buffer
                  (let ((coding-system-for-read 'utf-8)) (insert-file-contents file))
@@ -303,9 +318,9 @@ default: not checked). AS: its name, if not its file's (a run's copy)."
               (when (plist-get workflow :checkout)
                 (when (assoc "branch" data)
                   (problem 'warning '("branch") "branch: ignored: it runs in your checkout (runs-in: checkout), on its branch"))
-                (pcase-dolist (`(,job . ,spec) jobs)
+                (pcase-dolist (`(,job . ,spec) (seq-filter (lambda (job) (agent-workflow--mapping-p (cdr job))) jobs))
                   (let ((steps (if (assoc "steps" spec)
-                                   (cl-loop for step in (cdr (assoc "steps" spec)) for i from 0
+                                   (cl-loop for step in (agent-workflow--list-of (cdr (assoc "steps" spec))) for i from 0
                                             collect (cons (list "jobs" job "steps" i "uses") step))
                                  (list (cons (list "jobs" job "uses") spec)))))
                     (pcase-dolist (`(,path . ,step) steps)
@@ -313,9 +328,9 @@ default: not checked). AS: its name, if not its file's (a run's copy)."
                         (problem 'error path "uses merge: it runs in your checkout (runs-in: checkout): nothing to merge"))))))
               ;; No ticket: an issue's title, description... are empty.
               (when (plist-get workflow :ticketless)
-                (pcase-dolist (`(,job . ,spec) jobs)
+                (pcase-dolist (`(,job . ,spec) (seq-filter (lambda (job) (agent-workflow--mapping-p (cdr job))) jobs))
                   (let ((steps (if (assoc "steps" spec)
-                                   (cl-loop for step in (cdr (assoc "steps" spec)) for i from 0
+                                   (cl-loop for step in (agent-workflow--list-of (cdr (assoc "steps" spec))) for i from 0
                                             collect (cons (list "jobs" job "steps" i "prompt") step))
                                  (list (cons (list "jobs" job "prompt") spec)))))
                     (pcase-dolist (`(,path . ,step) steps)

@@ -347,6 +347,36 @@ jobs:
                      (error 15 "retry-from 9: no such step of its job (one, two)")
                      (warning 17 "retry-from: an agent step isn't retried (its script's are): ignored"))))))
 
+(ert-deftest agent-workflow-files/steps-as-a-mapping ()
+  "steps: written as a mapping (the dash forgotten, or in braces): an error
+of its file, at its line, not a signal; an empty job in a ticketless or
+checkout workflow too. A file that signals as it's read: its own problem,
+the project's other workflows still read."
+  (dolist (text '("description: x\njobs:\n  a:\n    steps:\n      run: make\n"
+                  "description: x\njobs:\n  a:\n    steps: {run: make}\n"))
+    (pcase-let ((`(,workflow . ,problems) (+test-awf--workflow text)))
+      (should-not workflow)
+      (should (equal (+test-awf--said problems) '((error 4 "steps: a list, each a step's keys (- run: ...)"))))))
+  (dolist (head '("ticket: false" "runs-in: checkout"))
+    (pcase-let ((`(,workflow . ,problems)
+                 (+test-awf--workflow (format "description: x\n%s\njobs:\n  a:\n  b:\n    steps:\n      run: make\n" head))))
+      (should-not workflow)
+      (should (seq-every-p (lambda (problem) (eq (car problem) 'error)) problems))
+      (should problems)))
+  (let ((starters (+test-awf--dir "mapping-starters"))
+        (project (+test-awf--project "mapping")))
+    (+test-awf--file starters "profiles/build.md" +test-awf--profile-text)
+    (+test-awf--with-starters starters
+      (+test-awf--file project ".agent-workflow/workflows/good.yml" "description: one\njobs:\n  a:\n    agent: build\n")
+      (let ((bad (+test-awf--file project ".agent-workflow/workflows/bad.yml" "description: two\njobs:\n  a:\n    run: x\n")))
+        (cl-letf* ((read (symbol-function 'agent-workflow--workflow-read))
+                   ((symbol-function 'agent-workflow--workflow-read)
+                    (lambda (file profiles as)
+                      (if (equal file bad) (signal 'wrong-type-argument '(listp "make")) (funcall read file profiles as)))))
+          (should (equal (mapcar #'car (agent-workflow-workflows project)) '("good")))
+          (should (equal (+test-awf--said (agent-workflow-workflow-problems project))
+                         '((error 1 "it can't be read: Wrong type argument: listp, \"make\"")))))))))
+
 (ert-deftest agent-workflow-files/ticket-false ()
   "ticket: false read (:ticketless); true, or none: on tickets; another
 value an error. Its prompts' {issue.title}... warned (empty without a
