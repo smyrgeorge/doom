@@ -465,9 +465,11 @@ agent's of the pool.")
 
 (defun agent-workflow--display-canvas (canvas)
   "Agent UI's display function: an agent's of the pool CANVAS opens no pane
-\(kept, shown in its ticket's pane), nor does a run's pane that stays out
-of the windows (pane.el); any other as before."
-  (unless (or (agent-workflow--canvas-agent canvas)
+\(kept with its session: its run's pane's Show session), unless it asks you
+something there; nor does a run's pane that stays out of the windows
+\(pane.el); any other as before."
+  (unless (or (and (agent-workflow--canvas-agent canvas)
+                   (not (and (fboundp 'agent-workflow--pane-asks-p) (agent-workflow--pane-asks-p canvas))))
               (and (fboundp 'agent-workflow--pane-quiet-p) (agent-workflow--pane-quiet-p canvas)))
     (funcall (or agent-workflow--canvas-fallback #'ignore) canvas)))
 

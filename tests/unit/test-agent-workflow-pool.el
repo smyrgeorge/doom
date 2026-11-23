@@ -289,3 +289,21 @@ canvas as before."
             (should (equal shown (list other))))
         (kill-buffer ours)
         (kill-buffer other)))))
+
+(ert-deftest agent-workflow-pool/an-agent-s-canvas-opens-only-asking ()
+  "An agent of the pool's canvas opens no pane (it stays with its session),
+unless it asks you something there; any other canvas as before."
+  (let* ((opened nil)
+         (agent-workflow--canvas-fallback (lambda (canvas) (push canvas opened)))
+         (asks nil))
+    (cl-letf (((symbol-function 'agent-workflow--canvas-agent) (lambda (canvas) (equal canvas "agent's")))
+              ((symbol-function 'agent-workflow--pane-asks-p) (lambda (_canvas) asks))
+              ((symbol-function 'agent-workflow--pane-quiet-p) #'ignore))
+      (agent-workflow--display-canvas "agent's")
+      (should-not opened)
+      (setq asks t)
+      (agent-workflow--display-canvas "agent's")
+      (should (equal opened '("agent's")))
+      (setq asks nil)
+      (agent-workflow--display-canvas "another")
+      (should (equal opened '("another" "agent's"))))))

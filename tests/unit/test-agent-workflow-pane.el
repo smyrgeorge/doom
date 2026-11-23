@@ -50,6 +50,10 @@ window), questions not taking the focus; the workflow gate there too."
        (unwind-protect (progn ,@body)
          (dolist (buffer (agent-ui-canvases)) (kill-buffer buffer))))))
 
+(defun +test-awp--box-lines (box)
+  "BOX's lines' texts (a line text, or {level, text})."
+  (mapcar (lambda (line) (if (stringp line) line (plist-get line :text))) (plist-get box :lines)))
+
 (defun +test-awp--sections (pane &optional all)
   "PANE's sections' names; but Needs you, unless ALL (a stand-in's turn
 ending without its done makes it wait for you, a moment)."
@@ -132,11 +136,11 @@ read back, the same lines, a wait's hint from its question."
 
 (ert-deftest agent-workflow-pane/a-run-in-its-pane ()
   "Started from Emacs: its pane opens, ISSUE · WORKFLOW, the run above its
-sections Run and Log; each agent a section, its session's canvas shown
-there (what it shows goes there; finished, it stays: no countdown); its
-job over, folded, its mark done, what its agent showed kept there. Its
-log, log.txt and the pane's. Done: it stays, nothing counting down, until
-closed (q)."
+sections Run and Log; each job running its live box in Run (its agent at
+work, Show session showing its session); what its agent shows on its
+canvas stays with its session (no pane, nor in the run's); its job over,
+its box gone. Its log, log.txt and the pane's. Done: it stays, nothing
+counting down, until closed (q)."
   (+test-awp "pane"
     (let* ((issue (+test-awr--issue project "A pane"))
            (run (car (car (agent-workflow-run-ticket (list issue) nil project))))
@@ -145,33 +149,26 @@ closed (q)."
       (should (equal (buffer-name pane) (format "Agent UI: %s · feature" issue)))
       (should (equal shown (list pane)))
       (should (equal (+test-awp--sections pane) '("run" "log")))
-      ;; Build's agent: its section, its canvas there.
+      ;; Build's agent: its live box in Run, under its jobs; no section.
       (let* ((agent (+test-awr--agent run "build"))
              (name (agent-ui--session-name (agent-workflow-agent-buffer agent))))
-        (should (+test-awr--wait (lambda () (member "job.build" (+test-awp--sections pane)))))
-        (should (equal (+test-awp--sections pane) '("run" "job.build" "log")))
-        (should (equal (plist-get (seq-find (lambda (s) (equal (plist-get s :name) "job.build")) (agent-ui-sections pane))
-                                  :hosts)
-                       name))
+        (should (+test-awr--wait (lambda () (ignore-errors (agent-ui-get "now-build" :canvas pane :section "run")))))
+        (should (equal (+test-awp--sections pane) '("run" "log")))
+        (let ((box (agent-ui-get "now-build" :canvas pane :section "run")))
+          (should (equal (plist-get box :type) "log"))
+          (should (string-prefix-p "build · " (plist-get box :title)))
+          (should (equal (+test-awp--labels box) '("Show session"))))
+        (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "run"))
+                       '("graph" "jobs" "now-build" "rounds")))
+        ;; What it shows on its canvas: there, no pane of its own, not in the run's.
         (agent-ui-show '(:id "plan" :type "steps" :steps ("Read" "Write")) :canvas name)
-        (should-not (get-buffer (agent-ui-canvas-buffer-name name)))
-        ;; What its agent's at first (shown as it started), then its canvas's.
-        (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "job.build"))
-                       '("agent-now" "plan")))
-        ;; Its plan done: it stays (no countdown closing it in the pane).
-        (agent-ui-show '(:id "plan" :type "steps" :steps ((:name "Read" :status "done") (:name "Write" :status "done")))
-                       :canvas name)
+        (should (get-buffer (agent-ui-canvas-buffer-name name)))
+        (should-not (memq (get-buffer (agent-ui-canvas-buffer-name name)) shown))
+        (should-not (ignore-errors (agent-ui-get "plan" :canvas pane :section "run")))
+        ;; Show session: its session.
         (with-current-buffer pane
-          (agent-ui--flush)
-          (should-not (and agent-ui--closing (gethash "job.build/plan" agent-ui--closing)))
-          (should-not (string-search "closing in" (buffer-string))))
-        ;; RET on its divider: its session.
-        (with-current-buffer pane
-          (agent-ui--flush)
-          (goto-char (point-min))
-          (search-forward "▾ build")
           (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) (push buffer shown))))
-            (agent-ui-section-open))
+            (agent-workflow--pane-answer "session build" nil "run/now-build"))
           (should (eq (car shown) (agent-workflow-agent-buffer agent)))))
       ;; What it shows: its state as tiles; a graph of its jobs, its
       ;; checklist, its rounds; its log without its issue.
@@ -196,9 +193,7 @@ closed (q)."
       (should (member "build   started"
                       (mapcar (lambda (line) (substring (if (stringp line) line (plist-get line :text)) 7))
                               (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
-      ;; Build done: folded, done; what its agent showed kept there (its
-      ;; session gone, the section's own now). Its notes in Notes; no commit
-      ;; of its, said.
+      ;; Build done: its box gone. Its notes in Notes; no commit of its, said.
       (+test-awr--finish run "build" nil "Built it, with its tests.")
       (should (+test-awr--wait (lambda () (member "notes" (+test-awp--sections pane)))))
       (should (string-match-p "\\`[0-9:]+ · Built it, with its tests\\.\\'"
@@ -208,18 +203,12 @@ closed (q)."
                      "Built it, with its tests."))
       (should (string-search "no commit" (plist-get (car (plist-get (agent-ui-get "jobs" :canvas pane :section "run") :steps))
                                                     :detail)))
-      (should (+test-awr--wait (lambda () (plist-get (seq-find (lambda (s) (equal (plist-get s :name) "job.build"))
-                                                               (agent-ui-sections pane))
-                                                     :folded))))
-      (let ((build (seq-find (lambda (s) (equal (plist-get s :name) "job.build")) (agent-ui-sections pane))))
-        (should (eq (plist-get build :state) 'done))
-        (should-not (plist-get build :hosts)))
-      (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "job.build"))
-                     '("plan")))
-      ;; Review's: after build's.
+      (with-current-buffer pane (agent-workflow--pane-show-boxes run pane))
+      (should-not (ignore-errors (agent-ui-get "now-build" :canvas pane :section "run")))
+      ;; Review's: its box.
       (+test-awr--agent run "review")
-      (should (+test-awr--wait (lambda () (member "job.review" (+test-awp--sections pane)))))
-      (should (equal (+test-awp--sections pane) '("run" "job.build" "job.review" "notes" "log")))
+      (should (+test-awr--wait (lambda () (ignore-errors (agent-ui-get "now-review" :canvas pane :section "run")))))
+      (should (equal (+test-awp--sections pane) '("run" "notes" "log")))
       (+test-awr--finish run "review" "approved")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       ;; Its log: every event a line; the pane's shorter: no issue, a job's
@@ -267,7 +256,7 @@ again, approved: the run done."
         (should-not shown)
         (+test-awr--finish-step run "build" "built it")
         (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
-        (should (equal (+test-awp--sections pane t) '("run" "needs-you" "job.build" "notes" "log")))
+        (should (equal (+test-awp--sections pane t) '("run" "needs-you" "notes" "log")))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "needs-you"))
                        '("ask" "look")))
         (let ((ask (agent-ui-get "ask" :canvas pane :section "needs-you")))
@@ -856,13 +845,15 @@ all on its line. A merge's conflicts: resolving them."
           (should (equal (plist-get (nth 1 (plist-get green :steps)) :status) "running"))
           (should (equal (plist-get (nth 1 (plist-get green :steps)) :detail) "run: watch.sh")))))))
 
-(ert-deftest agent-workflow-pane/its-agent-at-work ()
-  "While a job's agent works (fixing a failed step, its agent step), its
-section says what on, its turn's time, its last actions (the latest first,
-3 at most, a tool call's line where it came, its text as it's known
-better), with a button showing its session (at its question if it asks);
-nothing while a script step runs (its agent kept), nor once it stops. Its
-Session pressed: its session shown."
+(ert-deftest agent-workflow-pane/live-boxes ()
+  "A job running, its live box: its agent at work (fixing a failed step,
+its agent step) titled what on and its turn's time, its actions as they
+come (the latest last, the box's lines at most, a tool call's line where
+it came, its text as it's known better), Show session (Go to it while it
+asks); else its script running, titled its step, try, command and time,
+its output's last lines (colour codes gone, a line redrawn in place its
+last state), Show output; neither (its agent kept, stopped; nothing
+running), none. Show session and Show output pressed: shown."
   (let* ((workflow '(:name "github"
                      :jobs (("green" :name "green"
                              :steps ((:kind run :run "push.sh" :name "push")
@@ -876,66 +867,82 @@ Session pressed: its session shown."
                                                                         :tries '((0 . 1) (1 . 1))))
                                                     (cons "docs" (list :status 'pending)))))
          (agent-workflow--pane-activity (make-hash-table :test #'eq :weakness 'key))
+         (agent-workflow-pane-box-lines 3)
          (state (lambda (job) (cdr (assoc job (agent-workflow-run-jobs run)))))
-         (now (lambda (job) (agent-workflow--pane-agent-now run job (funcall state job))))
+         (box (lambda (job) (agent-workflow--pane-box job (funcall state job))))
          (event (lambda (name &optional id kind title)
                   (agent-workflow--pane-agent-event
                    agent (list (cons :event name)
                                (cons :data (and id (list (cons :tool-call-id id)
                                                          (cons :tool-call (list (cons :kind kind) (cons :title title)))))))))))
     (unwind-protect
-        (cl-letf (((symbol-function 'agent-workflow--pane-agents-soon) #'ignore))
-          (let ((element (funcall now "green")))
-            (should (equal (plist-get element :id) "agent-now"))
-            (should (equal (plist-get element :title) "ci · fixing step 2 (watch) · try 1 of 6"))
-            (should (equal (plist-get element :text) "Nothing done yet in this turn."))
-            (should (equal (+test-awp--labels element) '("Session"))))
+        (with-temp-buffer
+          (setq-local agent-workflow--pane-run run
+                      agent-workflow--pane-times (make-hash-table :test #'equal))
+          (let ((element (funcall box "green")))
+            (should (equal (plist-get element :id) "now-green"))
+            (should (equal (plist-get element :type) "log"))
+            (should (equal (plist-get element :title) "green · ci · fixing step 2 (watch) · try 1 of 6"))
+            (should (equal (+test-awp--box-lines element) '("Nothing done yet in this turn.")))
+            (should (equal (+test-awp--labels element) '("Show session"))))
           ;; Its turn, its actions as they come.
           (funcall event 'input-submitted)
           (funcall event 'tool-call-update "t1" "execute" "gh run view 1")
           (funcall event 'tool-call-update "t2" "read" "Read `config/stripe/gui.el`")
           (funcall event 'tool-call-update "t1" "execute" "gh run view 1 --log-failed")
-          (let ((element (funcall now "green")))
-            (should (string-match-p "\\`ci · fixing step 2 (watch) · try 1 of 6 · its turn " (plist-get element :title)))
-            (should (equal (plist-get element :text) "📖 Read config/stripe/gui.el\n⚙ gh run view 1 --log-failed")))
+          (let ((element (funcall box "green")))
+            (should (string-match-p "\\`green · ci · fixing step 2 (watch) · try 1 of 6 · its turn " (plist-get element :title)))
+            (should (equal (+test-awp--box-lines element) '("⚙ gh run view 1 --log-failed" "📖 Read config/stripe/gui.el"))))
           (funcall event 'tool-call-update "t3" "edit" "Edit tests.yml")
           (funcall event 'tool-call-update "t4" "think" "Thinking")
-          (should (equal (plist-get (funcall now "green") :text)
-                         "• Thinking\n✎ Edit tests.yml\n📖 Read config/stripe/gui.el"))
-          ;; Its turn over: no time; a new one: its last actions forgotten.
-          (funcall event 'turn-complete)
-          (should (equal (plist-get (funcall now "green") :title) "ci · fixing step 2 (watch) · try 1 of 6"))
-          (funcall event 'input-submitted)
-          (should (equal (plist-get (funcall now "green") :text) "Nothing done yet in this turn."))
+          (should (equal (+test-awp--box-lines (funcall box "green"))
+                         '("📖 Read config/stripe/gui.el" "✎ Edit tests.yml" "• Thinking")))
+          ;; An action's words no level: no error counted.
+          (should (equal (plist-get (car (plist-get (funcall box "green") :lines)) :level) "info"))
           ;; It asks you: said, its button at the question.
           (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
-                (append (list :status 'waiting :agent-asks '(:kind permission :what "Bash"))
-                        (funcall state "green")))
-          (let ((element (funcall now "green")))
+                (append (list :status 'waiting :agent-asks '(:kind permission :what "Bash")) (funcall state "green")))
+          (let ((element (funcall box "green")))
             (should (string-suffix-p " · asks you" (plist-get element :title)))
             (should (equal (+test-awp--labels element) '("Go to it"))))
-          ;; Fixed, its script step running again, its agent kept: nothing.
+          ;; Fixed, its script running again, its agent kept: its script's box.
+          (let* ((output (generate-new-buffer " *test script*"))
+                 (process (make-process :name "test-script" :buffer output :command '("sleep" "30") :noquery t)))
+            (unwind-protect
+                (progn
+                  (with-current-buffer output
+                    (insert "\e[32mstep one\e[0m\n\nprogress 10%\rprogress 90%\nstep two\nstep three\n"))
+                  (puthash "green" (list :steps (list (cons 1 (list :started (- (float-time) 75))))) agent-workflow--pane-times)
+                  (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
+                        (list :status 'running :step 1 :agent agent :process process :tries '((1 . 2))))
+                  (let ((element (funcall box "green")))
+                    (should (equal (plist-get element :title) "green · step 2 (watch) · try 2 · run: watch.sh · 1m 15s"))
+                    (should (equal (+test-awp--box-lines element) '("progress 90%" "step two" "step three")))
+                    (should (equal (+test-awp--labels element) '("Show output"))))
+                  (let (shown)
+                    (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) (setq shown buffer))))
+                      (agent-workflow--pane-answer "output green" nil "run/now-green"))
+                    (should (eq shown output))))
+              (delete-process process)
+              (kill-buffer output)))
+          ;; Nothing running: none.
           (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
                 (list :status 'running :step 1 :agent agent :tries '((1 . 2))))
-          (should-not (funcall now "green"))
-          ;; An agent step: its name.
+          (should-not (funcall box "green"))
+          ;; An agent step: its name; Show session pressed, its session.
           (setf (alist-get "docs" (agent-workflow-run-jobs run) nil nil #'equal)
                 (list :status 'running :step 0 :agent agent))
-          (should (equal (plist-get (funcall now "docs") :title) "ci · step 1 (write) · its turn 0s"))
-          ;; Its Session pressed: its session shown.
-          (let (shown)
-            (cl-letf (((symbol-function 'agent-workflow--pane-open-session)
-                       (lambda (_run job) (setq shown job))))
-              (with-temp-buffer
-                (setq-local agent-workflow--pane-run run)
-                (agent-workflow--pane-answer "session" nil "job.docs/agent-now")))
-            (should (equal shown "docs")))
-          ;; Stopped: nothing.
+          (should (string-prefix-p "docs · ci · step 1 (write)" (plist-get (funcall box "docs") :title)))
+          (let (opened)
+            (cl-letf (((symbol-function 'agent-workflow--pane-open-session) (lambda (_run job) (setq opened job))))
+              (agent-workflow--pane-answer "session docs" nil "run/now-docs"))
+            (should (equal opened "docs")))
+          ;; Stopped, its session gone: none.
           (setf (agent-workflow-agent-stopping agent) t)
-          (should-not (funcall now "docs"))
+          (should-not (funcall box "docs"))
           (setf (agent-workflow-agent-stopping agent) nil)
           (kill-buffer session)
-          (should-not (funcall now "docs")))
+          (should-not (funcall box "docs")))
       (when (buffer-live-p session) (kill-buffer session)))))
 
 (ert-deftest agent-workflow-pane/what-it-is-at ()
