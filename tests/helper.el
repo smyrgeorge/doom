@@ -831,13 +831,33 @@ hasn't (the config falls back there: DocView, the file, eww)."
 In pixels (1000×700) it was 142×50 with macOS's font (Menlo, 7×14) but
 111×38 with Linux's (DejaVu Sans Mono, 9×18): what fits a pane differed.")
 
+;; A FRAME AS BIG AS THE SCREEN
+;; macOS keeps a window within its screen's work area: a frame asked bigger
+;; is made smaller. GitHub's macOS runner's screen is too small for 700 px
+;; and a title bar (its first reset waited its 5 s in vain). Emacs takes the size it asks for before
+;; macOS answers (nsterm.m, ns_set_window_size), and hears of the window's
+;; size only when it changes: a frame of that clamped size asked to be
+;; 142×50 again stayed as it was, but Emacs believed it 50 lines tall. Its
+;; next scroll copied rows past the end of the window's pixels (-[EmacsView
+;; copyRect:to:]): Emacs crashed, test-stripe's (exit 134), after its tests
+;; that call `+test-e2e-frame-reset'. So no more lines are asked for than
+;; the work area holds. Columns as asked: macOS keeps a window within the
+;; screen only up and down (a frame of 230 columns is wider than that screen:
+;; e2e-agent-workspace/the-room).
+(defun +test-e2e-frame-fit (lines)
+  "LINES, as many as the frame's screen's work area holds at most."
+  (pcase-let ((`(,_ ,_ ,_ ,height) (frame-monitor-workarea))
+              (`(,_ . ,outer-height) (alist-get 'outer-size (frame-geometry))))
+    (min lines (/ (- height (- outer-height (frame-text-height))) (frame-char-height)))))
+
 (defun +test-e2e-frame-reset ()
-  "The frame at `+test-e2e-frame-size', once it is (on X, at the next
-redisplay)."
-  (set-frame-size nil (car +test-e2e-frame-size) (cdr +test-e2e-frame-size))
-  (+test-wait-for (lambda () (and (= (frame-width) (car +test-e2e-frame-size))
-                                  (= (frame-height) (cdr +test-e2e-frame-size))))
-                  5))
+  "The frame at `+test-e2e-frame-size' (or as big as its screen holds: see A
+FRAME AS BIG AS THE SCREEN), once it is (on X, at the next redisplay)."
+  (let ((columns (car +test-e2e-frame-size))
+        (lines (+test-e2e-frame-fit (cdr +test-e2e-frame-size))))
+    (set-frame-size nil columns lines)
+    (+test-wait-for (lambda () (and (= (frame-width) columns) (= (frame-height) lines)))
+                    5)))
 
 (defconst +test-e2e-corner 24
   "Pixels of an end-to-end test frame's top left corner left on the screen,
