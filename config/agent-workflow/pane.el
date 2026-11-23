@@ -142,7 +142,10 @@ its window selected too."
             agent-workflow--pane-asked nil
             agent-workflow--pane-ended nil)
       (setq-local agent-ui-answer-function #'agent-workflow--pane-answer
-                  agent-ui-closes-with "run/jobs")
+                  agent-ui-closes-with "run/jobs"
+                  ;; An agent's elements finished (its plan done) stay: no
+                  ;; countdown closing them (one giving its own :close, it).
+                  agent-ui-close-finished nil)
       (add-hook 'kill-buffer-hook #'agent-workflow--pane-killed nil t)
       ;; Its times, rounds and Log's lines, event by event (a job done: how
       ;; long its round took, its round's start then).
@@ -918,6 +921,23 @@ there; a job over, its section folded once, its mark done."
                 ((and (eq status 'running) (member name agent-workflow--pane-ended))
                  (setq agent-workflow--pane-ended (delete name agent-workflow--pane-ended))
                  (agent-ui-section pane section :folded nil))))))))
+
+(defvar agent-ui--hosts)
+(defvar agent-ui-session)
+
+(defun agent-workflow--pane-agent-stopped (agent)
+  "AGENT stops (its job over, sent back, its run cancelled...): what its
+session's canvas showed in its run's pane kept there, its section's own
+\(folded once its job's done), not gone with its session. In
+`agent-workflow-agent-stop-functions'."
+  (when-let* ((buffer (agent-workflow-agent-buffer agent))
+              ((buffer-live-p buffer))
+              ((fboundp 'agent-ui-unhost))
+              (name (buffer-local-value 'agent-ui-session buffer))
+              ((assoc name agent-ui--hosts)))
+    (agent-ui-unhost name t)))
+
+(add-hook 'agent-workflow-agent-stop-functions #'agent-workflow--pane-agent-stopped)
 
 (defun agent-workflow--pane-open-session (run job)
   "JOB of RUN's agent's session shown (RET on its section's divider)."

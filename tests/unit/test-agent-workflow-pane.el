@@ -122,8 +122,8 @@ read back, the same lines, a wait's hint from its question."
 (ert-deftest agent-workflow-pane/a-run-in-its-pane ()
   "Started from Emacs: its pane opens, ISSUE · WORKFLOW, the run above its
 sections Run and Log; each agent a section, its session's canvas shown
-there (what it shows goes there); its job over, folded, its mark done, the
-agent's elements gone with it. Its log, log.txt and the pane's. Done: its
+there (what it shows goes there; finished, it stays: no countdown); its
+job over, folded, its mark done, what its agent showed kept there. Its log, log.txt and the pane's. Done: its
 checklist's countdown closes it all."
   (+test-awp "pane"
     (let* ((issue (+test-awr--issue project "A pane"))
@@ -145,6 +145,13 @@ checklist's countdown closes it all."
         (should-not (get-buffer (agent-ui-canvas-buffer-name name)))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "job.build"))
                        '("plan")))
+        ;; Its plan done: it stays (no countdown closing it in the pane).
+        (agent-ui-show '(:id "plan" :type "steps" :steps ((:name "Read" :status "done") (:name "Write" :status "done")))
+                       :canvas name)
+        (with-current-buffer pane
+          (agent-ui--flush)
+          (should-not (and agent-ui--closing (gethash "job.build/plan" agent-ui--closing)))
+          (should-not (string-search "closing in" (buffer-string))))
         ;; RET on its divider: its session.
         (with-current-buffer pane
           (agent-ui--flush)
@@ -171,12 +178,17 @@ checklist's countdown closes it all."
       (should (member "build   started"
                       (mapcar (lambda (line) (substring (if (stringp line) line (plist-get line :text)) 7))
                               (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
-      ;; Build done: folded, done; its agent's elements gone with it.
+      ;; Build done: folded, done; what its agent showed kept there (its
+      ;; session gone, the section's own now).
       (+test-awr--finish run "build")
-      (should (+test-awr--wait (lambda () (null (agent-ui-elements :canvas pane :section "job.build")))))
+      (should (+test-awr--wait (lambda () (plist-get (seq-find (lambda (s) (equal (plist-get s :name) "job.build"))
+                                                               (agent-ui-sections pane))
+                                                     :folded))))
       (let ((build (seq-find (lambda (s) (equal (plist-get s :name) "job.build")) (agent-ui-sections pane))))
-        (should (plist-get build :folded))
-        (should (eq (plist-get build :state) 'done)))
+        (should (eq (plist-get build :state) 'done))
+        (should-not (plist-get build :hosts)))
+      (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "job.build"))
+                     '("plan")))
       ;; Review's: after build's.
       (+test-awr--agent run "review")
       (should (+test-awr--wait (lambda () (member "job.review" (+test-awp--sections pane)))))

@@ -170,7 +170,7 @@ ids too: `plan` in one section isn't `plan` in another.
 | `(agent-ui-remove-section CANVAS NAME)` | Removes it, its elements with it |
 | `(agent-ui-sections CANVAS)` | Its sections: name, title, state, note, folded, the canvas it hosts, how many elements |
 | `(agent-ui-host NAME CANVAS SECTION)` | Shows canvas NAME (a session's) in SECTION from now on |
-| `(agent-ui-unhost NAME)` | Gives NAME its own canvas back, its elements in the section removed |
+| `(agent-ui-unhost NAME [KEEP])` | Gives NAME its own canvas back, its elements in the section removed (`KEEP`: kept there, the section's own) |
 
 - **States:** `running` `●` (glowing), `needs-you` `◆`, `waiting` `○`, `paused` `‖`, `done` `✓`, `failed` `✗`, or none.
   Over the mark, its words.

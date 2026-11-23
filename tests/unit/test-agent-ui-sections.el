@@ -340,6 +340,18 @@ canvas again, with its next element."
       (should-not (+test-aus-ids canvas "job2"))
       (should (agent-ui-sections canvas))
       (should-not (plist-get (car (agent-ui-sections canvas)) :hosts))
+      ;; Unhosted, KEEP: its elements there kept, the section's own; its
+      ;; next element on a canvas of its own.
+      (agent-ui-host "agent-k" canvas "job2")
+      (agent-ui-show '(:id "k" :type "text" :text "k's") :canvas "agent-k")
+      (should (equal (agent-ui-unhost "agent-k" t) "agent-k"))
+      (should (equal (+test-aus-ids canvas "job2") '("k")))
+      (should-not (plist-get (car (agent-ui-sections canvas)) :hosts))
+      (agent-ui-show '(:id "k2" :type "text" :text "on its own") :canvas "agent-k")
+      (should (equal (+test-aus-ids "agent-k") '("k2")))
+      (should (equal (+test-aus-ids canvas "job2") '("k")))
+      (kill-buffer (agent-ui-canvas-buffer-name "agent-k"))
+      (agent-ui-remove "k" :canvas canvas :section "job2")
       ;; Not in itself, nor in a section that isn't there.
       (should (string-match-p "can't be shown in its own section"
                               (+test-aus-message #'agent-ui-host name canvas "job2")))

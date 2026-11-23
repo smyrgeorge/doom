@@ -1512,9 +1512,10 @@ Until SECTION's removed, or `agent-ui-unhost'. Returns NAME."
       (run-hook-with-args 'agent-ui-host-functions name host section)
       name)))
 
-(defun agent-ui-unhost (name)
+(defun agent-ui-unhost (name &optional keep)
   "Canvas NAME no longer shown in a section of another (`agent-ui-host'):
-its elements there removed, its next element on a canvas of its own."
+its elements there removed (KEEP: kept, the section's own now, as they
+were), its next element on a canvas of its own."
   (when-let* ((host (assoc name agent-ui--hosts)))
     (setq agent-ui--hosts (delq host agent-ui--hosts))
     (let ((buffer (cadr host)))
@@ -1522,7 +1523,8 @@ its elements there removed, its next element on a canvas of its own."
         (with-current-buffer buffer
           (when-let* ((section (agent-ui--find-section (cddr host))))
             (setf (agent-ui--section-hosts section) nil)
-            (dolist (key (agent-ui--section-keys (cddr host)))
-              (agent-ui--remove key))
+            (unless keep
+              (dolist (key (agent-ui--section-keys (cddr host)))
+                (with-current-buffer buffer (agent-ui--remove key))))
             (run-hooks 'agent-ui-changed-hook)))))
     name))
