@@ -3952,6 +3952,22 @@ later, 22 hours wide); one still running: to now."
     (should (string-match-p "<rect" svg)))
   (should (equal (+test-aue-draw '(:type "timeline")) "no tasks")))
 
+(ert-deftest agent-ui-elements/timeline-coloured-as-the-others ()
+  "Its bars coloured as a checklist's steps and a graph's nodes are: running
+the accent (blue), done success (green), failed error; not running yellow
+\(what needs you) and done blue."
+  (let ((text (agent-ui-render '(:type "timeline" :tasks ((:name "build" :start 0 :end 10 :status "done")
+                                                         (:name "green" :start 10 :end 20 :status "running")
+                                                         (:name "lint" :start 0 :end 5 :status "failed")))
+                               (agent-ui-context :width 60))))
+    (cl-flet ((bar-face (name)
+                (let* ((line (string-search name text))
+                       (bar (string-match "[█▒]" text line)))
+                  (get-text-property bar 'face text))))
+      (should (eq (bar-face "build") 'agent-ui-success))
+      (should (eq (bar-face "green") 'agent-ui-accent))
+      (should (eq (bar-face "lint") 'agent-ui-error)))))
+
 (ert-deftest agent-ui-elements/timeline-wrong ()
   (should (string-match-p "task 1 has no name" (+test-aue-error '(:type "timeline" :tasks ((:start 0))))))
   (should (string-match-p "start must be seconds or a timestamp" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start "soon"))))))

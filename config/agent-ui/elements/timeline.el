@@ -19,8 +19,10 @@
 (require 'svg)
 
 (defconst agent-ui-timeline--statuses
-  '((done agent-ui-accent) (running agent-ui-warning) (failed agent-ui-error) (queued agent-ui-muted))
-  "Each status: its face.")
+  '((done agent-ui-success) (running agent-ui-accent) (failed agent-ui-error) (queued agent-ui-muted))
+  "Each status: its face, as the other elements colour it (a checklist's
+step, a graph's node): running blue, done green (running was yellow, the
+colour of what needs you; done blue).")
 
 (defun agent-ui-timeline--time (value)
   "VALUE, seconds or a timestamp, as seconds (a float); nil if neither."
