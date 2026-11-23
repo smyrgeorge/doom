@@ -36,7 +36,8 @@ done, 1 not (the reply says why), 2 a wrong use, 3 no Emacs.
 agent-workflow check                    # every workflow and profile of the project, their problems
 agent-workflow check draft.yml          # one file, anywhere: check what you write before saving it in place
 agent-workflow dry-run feature --outcome review=changes,approved   # walked, nothing run: what would happen
-agent-workflow run doom-a1b doom-c3d    # runs started, each with its own workflow (--workflow NAME)
+agent-workflow run doom-a1b doom-c3d --detach   # runs started, each with its own workflow (--workflow NAME)
+agent-workflow status doom-a1b          # its run: state, jobs, what it asks (logs ISSUE: its log, as lines)
 agent-workflow back doom-a1b build "handle the empty list too"   # sent back to a job, the work kept
 agent-workflow confirm doom-a1b go      # a run's question answered: go, accept, skip, stop, cancel
 agent-workflow approve doom-a1b         # the result waiting for the user's OK (reject ISSUE "note")
@@ -44,7 +45,8 @@ agent-workflow continue                 # interrupted runs on again (cancel ISSU
 ```
 
 `run`, `back`, `confirm`, `approve`, `reject`, `continue`, `cancel` and `pause` are the user's: refused from an agent of
-a run. Do them when the user asks you to.
+a run. Do them when the user asks you to. Without `--detach`, `run` prints its runs' logs until they end (hours):
+from your shell, detach, then read `status` or `logs`.
 
 ## A workflow
 
@@ -109,7 +111,7 @@ warned about: an agent could change the check to make it pass. Lisp with `: ` in
 - A profile (what an agent step may do): [references/profiles.md](references/profiles.md).
 - Scripts (their environment, exit codes, retries, on-fail) and the built-in merge:
   [references/scripts.md](references/scripts.md).
-- Running them: starting, what a run waits for, its questions, going back, loops, approval, budgets, continuing, its
-  journal and files: [references/running.md](references/running.md).
+- Running them: starting, following (logs, status, the pane), what a run waits for, its questions, going back, loops,
+  approval, budgets, continuing, its journal and files: [references/running.md](references/running.md).
 - Patterns: a feature, a bug, something small, a parallel review, an approval gate, a suite on the merge:
   [references/patterns.md](references/patterns.md).

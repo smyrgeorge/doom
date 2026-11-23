@@ -437,3 +437,78 @@ its elements there gone, the section staying."
       (should-not (+test-aus-ids canvas "job"))
       (should (agent-ui-sections canvas))
       (should-not agent-ui--hosts))))
+
+;; ====== A CANVAS OF ITS OWN ======
+
+(ert-deftest agent-ui-sections/a-canvas-answering-itself ()
+  "A canvas with an answer function (`agent-ui-answer-function'): its
+questions' answers go to it, with their element's key, not to a session;
+but those of a section hosting a session's canvas, to that session."
+  (+test-aus
+    (let* ((session (+test-aus-session "Claude Agent @ own"))
+           (answered nil)
+           (inserted nil)
+           (agent-ui-focus-questions nil))
+      (with-current-buffer canvas
+        (setq-local agent-ui-answer-function (lambda (prompt submit key) (push (list prompt submit key) answered))))
+      (agent-ui-section canvas "needs")
+      (agent-ui-section canvas "agent")
+      (agent-ui-host "Claude Agent @ own" canvas "agent")
+      (agent-ui-show '(:id "ask" :type "confirm" :question "Merge?") :canvas canvas :section "needs")
+      (agent-ui-show '(:id "ask" :type "confirm" :question "The agent's?") :canvas "Claude Agent @ own")
+      (cl-letf (((symbol-function 'agent-shell-insert) (lambda (&rest args) (push args inserted)))
+                ((symbol-function 'agent-ui--session-busy-p) #'ignore))
+        (with-current-buffer canvas
+          (agent-ui--flush)
+          (goto-char (point-min))
+          (search-forward "⏵ Proceed")
+          (goto-char (match-beginning 0))
+          (agent-ui-button-press)
+          ;; The first answered: the other's button the only one left.
+          (agent-ui--flush)
+          (goto-char (point-min))
+          (search-forward "⏵ Proceed")
+          (goto-char (match-beginning 0))
+          (agent-ui-button-press)))
+      ;; Its id in the answer's words, not its key.
+      (should (equal answered '(("Answer to confirm ask (Merge?): proceed" t "needs/ask"))))
+      (should (equal (agent-ui--unkeyed "Answer to steps job.a/plan (x): job.a/plan, ajob.a/no" "job.a")
+                     "Answer to steps plan (x): plan, ajob.a/no"))
+      (should (equal (plist-get (car inserted) :shell-buffer) session))
+      (should (equal (plist-get (car inserted) :text) "Answer to confirm ask (The agent's?): proceed")))))
+
+(ert-deftest agent-ui-sections/ret-on-a-divider ()
+  "RET on a divider: its section's :open, if it has one; else it folds, as
+TAB; its help says so."
+  (+test-aus
+    (let ((opened 0))
+      (agent-ui-section canvas "a" :open (lambda () (cl-incf opened)))
+      (agent-ui-section canvas "b")
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (should (equal (key-binding (kbd "RET")) #'agent-ui-section-open))
+        (should (string-match-p "RET: open what it shows" (get-text-property (point) 'help-echo)))
+        (agent-ui-section-open)
+        (should (= opened 1))
+        (should-not (plist-get (car (agent-ui-sections canvas)) :folded))
+        (search-forward "▾ b")
+        (agent-ui-section-open)
+        (should (plist-get (cadr (agent-ui-sections canvas)) :folded))))))
+
+(ert-deftest agent-ui-sections/closing-with-one-element ()
+  "A canvas closing with one of its elements (`agent-ui-closes-with'): its
+countdown says closing, sections there or not; over, the canvas cleared,
+killed."
+  (+test-aus
+    (agent-ui-section canvas "run")
+    (agent-ui-show '(:id "jobs" :type "steps" :close t :steps ((:name "a" :status "done"))) :canvas canvas :section "run")
+    (agent-ui-show '(:id "done" :type "steps" :close t :steps ((:name "b" :status "done"))) :canvas canvas)
+    (with-current-buffer canvas
+      (setq-local agent-ui-closes-with "run/jobs")
+      (agent-ui--finished-check)
+      (should (equal (agent-ui--closing-footer "run/jobs" 60)
+                     (concat "✓ All done, closing in 10s   ⏵ Keep")))
+      (should (string-prefix-p "✓ All done, removed in" (substring-no-properties (agent-ui--closing-footer "done" 60)))))
+    (agent-ui--close-finished canvas '("run/jobs"))
+    (should-not (buffer-live-p canvas))))

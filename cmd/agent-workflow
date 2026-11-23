@@ -3,13 +3,31 @@
 # scripts, an agent writing a workflow, and an agent of a run ending its
 # step. See docs/agent-workflow.md.
 #
-#   agent-workflow run ISSUE... [--workflow NAME]
+#   agent-workflow run ISSUE... [--workflow NAME] [--detach] [--json]
 #                                runs started on the issues (an epic's id: its
 #                                open issues), each with NAME, else its own
-#                                workflow -> {"ok": true when one started,
-#                                "started": [{"issue", "workflow", "run",
-#                                "state", "why"}...], "refused": [{"issue",
-#                                "error"}...]}
+#                                workflow; their logs printed as they go (a
+#                                line an event: time, issue, job, what
+#                                happened; what needs you says how to answer),
+#                                until they all end. Ctrl-C stops following,
+#                                never the runs. --json: the reply, then their
+#                                journals' lines, each with its "issue".
+#                                --detach: the reply only -> {"ok": true when
+#                                one started, "started": [{"issue",
+#                                "workflow", "run", "state", "why", "log",
+#                                "journal", "state_file"}...], "refused":
+#                                [{"issue", "error"}...]}. Exit 0 all done, 1
+#                                one cancelled (or none started)
+#   agent-workflow logs ISSUE [-f] [--json]
+#                                ISSUE's latest run's log (--json: its
+#                                journal); -f: followed until the run ends
+#   agent-workflow status [ISSUE]
+#                                ISSUE's latest run, or every run of the
+#                                project not over -> {"ok": true, "runs":
+#                                [{"issue", "workflow", "run", "state", "why",
+#                                "jobs": [{"name", "status", "outcome",
+#                                "round", "why"}...], "asking", "spent",
+#                                "budget", "log"...}...]}
 #   agent-workflow done [OUTCOME] [NOTES|-]
 #                                from an agent of a run, in its session: its
 #                                step is done, with OUTCOME (default: done)
@@ -108,6 +126,7 @@ fail() {  # fail STATUS MESSAGE: the reply for an error, and exit
 }
 
 [ $# -eq 0 ] && { usage >&2; exit 2; }
+detach="" json="" follow=""
 case "$1" in -h|--help|help) usage; exit 0 ;; esac
 
 op=$1; shift
@@ -129,12 +148,30 @@ case "$op" in
           [ $# -lt 2 ] && fail 2 "--workflow: give it a value"
           workflow=$2; shift 2 ;;
         --workflow=*) workflow=${1#--workflow=}; shift ;;
-        -*) fail 2 "run: unknown argument \"$1\"; agent-workflow run ISSUE... [--workflow NAME]" ;;
+        --detach) detach=1; shift ;;
+        --json) json=1; shift ;;
+        -*) fail 2 "run: unknown argument \"$1\"; agent-workflow run ISSUE... [--workflow NAME] [--detach] [--json]" ;;
         *) issues="$issues${issues:+,}$(json_string "$1")"; shift ;;
       esac
     done
     [ -z "$issues" ] && fail 2 "run: which issues? agent-workflow run ISSUE... [--workflow NAME]"
     payload=$(printf '{"issues":[%s],"workflow":%s}' "$issues" "$(json_string "$workflow")") ;;
+  logs)
+    issue=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -f|--follow) follow=1; shift ;;
+        --json) json=1; shift ;;
+        -*) fail 2 "logs: unknown argument \"$1\"; agent-workflow logs ISSUE [-f] [--json]" ;;
+        *) [ -n "$issue" ] && fail 2 "logs: one issue, not \"$1\" too"; issue=$1; shift ;;
+      esac
+    done
+    [ -z "$issue" ] && fail 2 "logs: which issue? agent-workflow logs ISSUE [-f] [--json]"
+    payload=$(printf '{"issue":%s}' "$(json_string "$issue")") ;;
+  status)
+    case "${1:-}" in -*) fail 2 "status: unknown argument \"$1\"; agent-workflow status [ISSUE]" ;; esac
+    [ $# -gt 1 ] && fail 2 "status: unknown argument \"$2\"; agent-workflow status [ISSUE]"
+    payload=$(printf '{"issue":%s}' "$(json_string "${1:-}")") ;;
   done)
     outcome="" notes=""
     [ $# -gt 2 ] && fail 2 "done: unknown argument \"$3\"; agent-workflow done [OUTCOME] [NOTES|-]"
@@ -259,7 +296,7 @@ case "$op" in
     payload=$(printf '{"workflow":%s,"issue":%s,"outcomes":{%s},"exits":{%s}}' \
                      "$(json_string "$workflow")" "$(json_string "$issue")" "$outcomes" "$exits") ;;
   *)
-    fail 2 "unknown operation \"$op\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check" ;;
+    fail 2 "unknown operation \"$op\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check, logs, status" ;;
 esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/agent-workflow.XXXXXXXXXX") || fail 3 "no temp folder"
@@ -283,9 +320,86 @@ out=$("${EMACSCLIENT:-emacsclient}" --timeout=60 --eval \
         "(if (fboundp 'agent-workflow-request) (agent-workflow-request \"$lisp_dir\") 'agent-workflow-not-loaded)" 2>&1)
 status=$?
 
+# FOLLOWING RUNS
+# Their logs (journals, --json) printed as they grow, read every second,
+# their complete lines only, until each run's state.json says it's over:
+# then once more, its last lines. No process of its own to leave behind:
+# Ctrl-C stops it, never the runs (Emacs runs them).
+field() {  # field NAME JSON: each string value of NAME in JSON, a line each
+  printf '%s' "$2" | grep -o "\"$1\":\"[^\"]*\"" | sed "s/^\"$1\":\"//; s/\"\$//"
+}
+
+follow() {  # follow ISSUES LOGS STATES: newline-separated, in order; exit 0 all done, 1 one cancelled
+  local issues logs states i n file state all failed last=""
+  IFS=$'\n' read -r -d '' -a issues <<< "$1"
+  IFS=$'\n' read -r -d '' -a logs <<< "$2"
+  IFS=$'\n' read -r -d '' -a states <<< "$3"
+  local seen=()
+  trap 'exit 130' INT TERM
+  while :; do
+    all=1 failed=0
+    for i in "${!issues[@]}"; do
+      file=${logs[$i]}
+      if [ -f "$file" ]; then
+        n=$(wc -l < "$file" | tr -d ' ')
+        if [ "$n" -gt "${seen[$i]:-0}" ]; then
+          if [ -n "$json" ]; then
+            sed -n "$((${seen[$i]:-0} + 1)),${n}p" "$file" |
+              sed "s/^{/{\"issue\":$(json_string "${issues[$i]}" | sed 's/[&/\\]/\\&/g'),/"
+          else
+            sed -n "$((${seen[$i]:-0} + 1)),${n}p" "$file"
+          fi
+          seen[$i]=$n
+        fi
+      fi
+      state=$(grep -o '"state":"[a-z]*"' "${states[$i]}" 2>/dev/null | head -1)
+      case "$state" in
+        *'"done"') ;;
+        *'"cancelled"') failed=1 ;;
+        *) all=0 ;;
+      esac
+    done
+    if [ $all -eq 1 ]; then
+      [ -n "$last" ] && return $failed
+      last=1
+    else
+      sleep 1
+    fi
+  done
+}
+
 if [ -f "$dir/reply" ]; then
-  cat "$dir/reply"
-  grep -q '^{"ok":true' "$dir/reply" && exit 0
+  reply=$(cat "$dir/reply")
+  ok=""; case "$reply" in '{"ok":true'*) ok=1 ;; esac
+  case "$op" in
+    run)
+      if [ -n "$detach" ] || [ -z "$ok" ]; then
+        printf '%s\n' "$reply"
+        [ -n "$ok" ] && exit 0
+        exit 1
+      fi
+      if [ -n "$json" ]; then
+        printf '%s\n' "$reply"
+        logs=$(field journal "$reply")
+      else
+        logs=$(field log "$reply")
+        refused=$(printf '%s' "$reply" | grep -o '"refused":\[.*\]' )
+        case "$refused" in '"refused":[]') ;; *) printf 'refused: %s\n' "${refused#\"refused\":}" >&2 ;; esac
+      fi
+      follow "$(field issue "$(printf '%s' "$reply" | grep -o '"started":\[[^]]*\]')")" "$logs" "$(field state_file "$reply")"
+      exit $? ;;
+    logs)
+      [ -z "$ok" ] && { printf '%s\n' "$reply"; exit 1; }
+      if [ -n "$json" ]; then file=$(field journal "$reply"); else file=$(field log "$reply"); fi
+      if [ -n "$follow" ]; then
+        follow "$(field issue "$reply")" "$file" "$(field state_file "$reply")"
+        exit $?
+      fi
+      cat "$file"
+      exit 0 ;;
+  esac
+  printf '%s\n' "$reply"
+  [ -n "$ok" ] && exit 0
   exit 1
 fi
 case "$out" in

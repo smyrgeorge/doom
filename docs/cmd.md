@@ -79,8 +79,10 @@ Starts [agent workflows](agent-workflow.md)' runs, and checks the workflows and 
 you and your scripts; an agent of a run ends its step with it.
 
 ```sh
-cmd/agent-workflow run doom-a1b doom-c3d          # runs on these issues, each with its own workflow
-cmd/agent-workflow run doom-epic --workflow quick # an epic's open issues, with quick
+cmd/agent-workflow run doom-a1b doom-c3d          # runs on these issues, each with its own workflow, followed
+cmd/agent-workflow run doom-epic --workflow quick --detach  # an epic's open issues, with quick: started only
+cmd/agent-workflow logs doom-a1b -f               # its run's log, followed until it ends (--json: its journal)
+cmd/agent-workflow status                         # every run not over (status ISSUE: its latest)
 cmd/agent-workflow done changes "notes"           # from an agent of a run: its step is done
 cmd/agent-workflow back doom-a1b build "note"     # a run sent back to a job, the work kept
 cmd/agent-workflow confirm doom-a1b go           # a run's question answered: go, accept, skip or stop
@@ -91,6 +93,10 @@ cmd/agent-workflow check                          # every workflow and profile o
 cmd/agent-workflow check draft.yml                # one file: a workflow (.yml) or a profile (.md), anywhere
 ```
 
-The reply is JSON on stdout: the runs started and the issues refused; the step done; the project's workflows and
-profiles, and each problem's level, file, line and message. It exits with 0 when done (`check`: no error), 1 when not
-(the reply says why), 2 for a wrong use, 3 without an Emacs server.
+The reply is JSON on stdout: the runs started and the issues refused; the step done; the runs' state, their jobs; the
+project's workflows and profiles, and each problem's level, file, line and message. It exits with 0 when done
+(`check`: no error), 1 when not (the reply says why), 2 for a wrong use, 3 without an Emacs server.
+
+`run` and `logs -f` print a run's log instead, a line per event (time, issue, job, what happened; what needs you,
+with the command answering it), until the runs end: 0 all done, 1 one cancelled; Ctrl-C stops following, never the
+runs. `--json`: the reply, then the journals' lines, each with its `issue`.

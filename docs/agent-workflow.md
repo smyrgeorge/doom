@@ -2,7 +2,8 @@
 
 > **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
 > runs, their jobs in parallel, every kind of step, going back, loops, the merge, limits, approval, resuming,
-> budgets, an issue changed by hand, the starters, the skills, a dry run. Not yet: the progress pane.
+> budgets, an issue changed by hand, the starters, the skills, a dry run, the progress pane and the logs. Not yet:
+> triggers beyond you.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
 parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
@@ -180,7 +181,7 @@ Its permissions, its questions and its usage are agent-shell's, as in any sessio
 - **It's told** the job it does and where, that it never switches branches, pushes, or changes the issue, and how it
   ends its job: `cmd/agent-workflow done OUTCOME "notes"`. Then its profile's instructions.
 - **Its `bd` commands** run as `ISSUE/JOB` (`doom-a1b/review`): Beads' history says which job did what.
-- **Its canvas** opens no pane of its own.
+- **Its canvas** opens no pane of its own: it's shown in its section of the run's [pane](#following-a-run).
 
 Each issue's agents work in its worktree, one after another: `.agent-shell/agent-workflow/worktrees/ISSUE`, on the
 issue's branch (`feat/doom-a1b-lexer-escapes`, `fix/` for a bug), made from your checkout's HEAD the first time a job
@@ -226,6 +227,68 @@ step itself, `cmd/agent-workflow done OUTCOME "notes"`, then its turn; a turn th
 waiting for you (tell the agent in its session). Its outcome must be `done` or one of its job's `outcomes`. Its job
 over, its agent stops, and the next jobs start. Every job done or skipped, the run is, and its worktree goes (its
 branch stays).
+
+### Following a run
+
+Started from Emacs, a run opens its **pane**, an [Agent UI](agent-ui.md) canvas named `ISSUE · WORKFLOW`, a pane per
+run (tiling lays them out). Under the issue's title, its state, time and budget, its sections, each under its divider:
+
+```text
+doom-a1b: Lexer escapes
+feature · running · 12m 30s
+spent $1.24 of $15, 12m 30s of 3h
+▾ Run ● ──────────────────────────────────────
+✓ build   4m 12s  agent build
+● review  2m 05s  agent review · round 2
+○ merge
+▸ build ✓ 4m 12s · 2 hidden ──────────────────
+▾ review ● 2m ────────────────────────────────
+…the reviewer's plan, its questions
+▾ Log ────────────────────────────────────────
+10:42:07  doom-a1b  review  started
+```
+
+- **Run:** its jobs, each a step of a checklist, its steps under it: status, agent, round, try, time.
+- **Needs you**, only while the run waits for you: what on, as a question you answer there: an approval (approve, or
+  reject with a note), the loop guard (go on with a note for each agent, accept it as it is, or stop), retries used up,
+  a step that broke, a merge waiting, its budget used up (go on with more), a turn that ended without `done` (run its
+  step again, with a note, or cancel the run).
+- **A section per agent:** its session's canvas, shown there: its plan, its progress, its questions. Its job over, it's
+  folded (`▸ build ✓ 4m 12s`). `RET` on its divider opens its session; `TAB` on any divider folds it.
+- **Log:** its last events.
+
+Emacs draws the run's sections from its journal, never an agent. A run done: its checklist finished, its pane closes
+after Agent UI's countdown (**Keep** keeps it); a run waiting, failed or cancelled keeps it. Closing it (`q`) stops
+nothing: it's made again when you look. Started from the shell, a run's pane is made when you look, and opens by itself
+only after that, when the run needs you (its window closed, the same).
+
+`M-x agent-workflow-runs` lists every run of the project, those not over first, those started from the shell and those
+over too: its issue, workflow, state, time, what it spent, what it waits for. `RET` opens a run's pane, `gr` reads
+them again.
+
+A run waiting for you is said by a notification while Emacs isn't in front (`agent-workflow-needs-you`, `SPC t N`),
+however it was started; a click opens its pane.
+
+From the shell, `run` prints its runs' logs as they go, a line per event (time, issue, job, what happened), until
+they all end: exit 0 when they're done, 1 when one was cancelled. What needs you says how to answer it from there.
+Ctrl-C stops following, never the runs.
+
+```sh
+cmd/agent-workflow run doom-a1b            # followed to its end
+cmd/agent-workflow run doom-a1b --detach   # started, the reply only
+cmd/agent-workflow logs doom-a1b -f        # its log, followed until it ends
+cmd/agent-workflow status                  # every run not over, as JSON
+```
+
+```text
+10:42:07  doom-a1b  build  waits for you: build: its result waits for your OK → agent-workflow approve doom-a1b, or reject doom-a1b NOTE
+```
+
+Each run keeps its log in `log.txt` beside its journal (made again from the journal if it's gone).
+
+| Setting | Default | What |
+|---|---|---|
+| `agent-workflow-pane-log-lines` | `200` | How many of a run's last log lines its pane keeps |
 
 ### Limits
 
@@ -303,6 +366,8 @@ cmd/agent-workflow back doom-a1b build --discard          # the work since, gone
 Every step's result is taken as it is, and the run goes on by itself. A step with `approve: true` (a job's: its last
 step) waits, once it's done, for your OK: the run says so, with what to look at (its outcome and notes, what the branch
 got since the job started, a script's output).
+
+In its pane's Needs you: Approve, or Reject with a note. Or:
 
 - `M-x agent-workflow-approve`: the run goes on.
 - `M-x agent-workflow-reject`, with a note: an agent step goes back to its agent (in its session, or resumed), and its

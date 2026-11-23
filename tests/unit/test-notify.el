@@ -41,9 +41,9 @@ none off, what's shown recorded in `+test-notify--shown'."
 (ert-deftest notify/settings ()
   (should (eq (default-value '+my/notify-enabled) t))
   (should-not (default-value '+my/notify-off))
-  ;; Claude Code's, Agent UI's, an agent crew's, so far.
+  ;; Claude Code's, Agent UI's, an agent crew's, agent workflows', so far.
   (should (equal (mapcar #'car +my/notify-kinds)
-                 '(agent-napping agent-message agent-stuck agent-done agent-hand
+                 '(agent-workflow-needs-you agent-napping agent-message agent-stuck agent-done agent-hand
                    agent-ui-question agent-ui-bug claude-question claude-permission claude-turn-done claude))))
 
 (ert-deftest notify/keys ()
@@ -224,6 +224,27 @@ Emacs is away, a new one or added to a similar open one."
   (+test-notify t
     (+my/notify-agent-ui--bug-filed "doom-abc" "x" t "/lib/")
     (should-not +test-notify--shown)))
+
+(ert-deftest notify/agent-workflow-needs-you ()
+  "A workflow's run waiting for you (config/notify/agent-workflow.el): said
+while Emacs is away, its name and why; a click opening its pane."
+  (should (equal (alist-get 'agent-workflow-needs-you +my/notify-kinds)
+                 '("Agent workflow" "A workflow's run waits for you")))
+  (should (memq #'+my/notify-agent-workflow--needs-you (default-value 'agent-workflow-needs-you-functions)))
+  (let ((opened nil))
+    (cl-letf (((symbol-function 'agent-workflow-run-name) (lambda (run) (format "%s · feature" run)))
+              ((symbol-function 'agent-workflow-pane) (lambda (run show) (push (list run show) opened))))
+      (+test-notify nil
+        (run-hook-with-args 'agent-workflow-needs-you-functions "doom-a1b" "review: its result waits for your OK")
+        (should (equal (butlast (car +test-notify--shown))
+                       '("Agent workflow" "doom-a1b · feature: review: its result waits for your OK")))
+        (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
+          (funcall (nth 2 (car +test-notify--shown))))
+        (should (equal opened '(("doom-a1b" select)))))
+      ;; Emacs in front: nothing.
+      (+test-notify t
+        (+my/notify-agent-workflow--needs-you "doom-a1b" "x")
+        (should-not +test-notify--shown)))))
 
 (ert-deftest notify/claude-finished-its-turn ()
   "A session's turn complete: named by its project, why it stopped; a click

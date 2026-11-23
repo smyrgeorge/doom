@@ -10,6 +10,16 @@ one whose `for` has its type, else `--workflow NAME`. Refused (the others starte
 or several fitting, a project whose workflows the user doesn't trust. Blocked: queued until its blockers close. The
 queue: priority, then the order started.
 
+From the shell, `run` follows its runs: their logs printed as they go, a line per event (`10:42:07  doom-a1b  review
+started`), until they all end (exit 0 done, 1 one cancelled); what needs the user says the command answering it. An
+agent running it should start it with `--detach` (the reply only, at once) and read later: `agent-workflow logs ISSUE`
+(its log; `-f`: followed to its end; `--json`: its journal), `agent-workflow status [ISSUE]` (JSON: its state, jobs,
+question, spend; without ISSUE, every run not over).
+
+Started from Emacs (`M-x agent-workflow-run`), each run opens its pane, an Agent UI canvas drawn by Emacs: the run,
+what needs the user (answered there), a section per agent (its own canvas), its log. `M-x agent-workflow-runs` lists
+every run, `RET` opening its pane.
+
 ## A run
 
 Its jobs start once their `needs` are done; those that don't need each other at once, within the pool
@@ -49,5 +59,5 @@ the workflow as it is now). Runs not over are read back as Emacs starts, waiting
 ## Its files
 
 `.agent-shell/agent-workflow/runs/ISSUE/N/`: `journal.jsonl` (every event, a JSON line), `state.json` (the run as it
-stands), `workflow.yml` (as it started), `logs/`. On the issue: in progress, its metadata (`workflow`, `workflow_run`,
+stands), `workflow.yml` (as it started), `log.txt` (the journal as lines you read), `logs/` (scripts' output). On the issue: in progress, its metadata (`workflow`, `workflow_run`,
 `workflow_state`, `workflow_jobs`), the running job as a label (`job:review`), each job's notes.

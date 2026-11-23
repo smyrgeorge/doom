@@ -165,7 +165,7 @@ ids too: `plan` in one section isn't `plan` in another.
 
 | Lisp | What |
 |---|---|
-| `(agent-ui-section CANVAS NAME :title :state :note :folded :after)` | Makes section NAME (letters, digits, `_ . -`), at the end or after section AFTER; again, changes what's given |
+| `(agent-ui-section CANVAS NAME :title :state :note :folded :open :after)` | Makes section NAME (letters, digits, `_ . -`), at the end or after section AFTER; again, changes what's given. OPEN: a function `RET` on its divider calls |
 | `(agent-ui-show SPEC :canvas CANVAS :section NAME)` | Shows an element in it; `update`, `append`, `remove`, `get`, `elements`, `clear` take `:section` too |
 | `(agent-ui-remove-section CANVAS NAME)` | Removes it, its elements with it |
 | `(agent-ui-sections CANVAS)` | Its sections: name, title, state, note, folded, the canvas it hosts, how many elements |
@@ -174,8 +174,8 @@ ids too: `plan` in one section isn't `plan` in another.
 
 - **States:** `running` `●` (glowing), `needs-you` `◆`, `waiting` `○`, `paused` `‖`, `done` `✓`, `failed` `✗`, or none.
   Over the mark, its words.
-- **Folding:** `TAB` (or `RET`, a click) on a divider folds its section to it, saying how many elements it hides; again,
-  unfolds it. What comes in meanwhile stays hidden, but a question: it unfolds its section and comes into view. A
+- **Folding:** `TAB` (or a click; `RET` when its section has no `:open`) on a divider folds its section to it, saying
+  how many elements it hides; again, unfolds it. What comes in meanwhile stays hidden, but a question: it unfolds its section and comes into view. A
   search finding something in a folded section unfolds it.
 - **A session's canvas in a section** (`agent-ui-host`): everything the session shows goes there, its other canvases'
   (`--canvas tests`, `--canvas ask`) too, with no buffer or pane of its own; the canvases it had are emptied into it
@@ -186,6 +186,11 @@ ids too: `plan` in one section isn't `plan` in another.
   shows there isn't kept with the session.
 - **Clearing** a canvas removes its sections too; clearing a section, its elements only. A canvas with a section isn't
   empty: it stays open.
+- **A canvas of no session** (an agent workflow's run's pane) answers its own questions: `agent-ui-answer-function`,
+  set in it, gets each answer (the text an agent would read, and its element's key, `SECTION/ID`) instead of a
+  session's prompt; a section hosting a session's canvas still answers to that session. `agent-ui-closes-with`, the
+  key of one of its elements: that element's countdown, finished, closes the whole canvas, its sections too.
+- An answer from a section names its element by its id, as its agent knows it, never its key.
 
 ## Defining a type
 

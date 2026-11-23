@@ -377,7 +377,7 @@ SECTION/ID): a panel's child's, if it's in one."
   "Element ID of CANVAS as the agent reads it in a prompt."
   (let ((element (agent-ui-get id :canvas canvas)))
     (format "Agent UI element %s (%s), as it's shown:\n```text\n%s\n```\n"
-            id (plist-get element :type)
+            (agent-ui--key-id id) (plist-get element :type)
             (substring-no-properties (agent-ui-render element (agent-ui-context :width agent-ui-snapshot-width))))))
 
 (defun agent-ui-send-element ()

@@ -149,14 +149,19 @@ panes, each a few lines high)."
   "The session's buffer is killed: its canvases too."
   (mapc #'kill-buffer (agent-ui-session-canvases (current-buffer))))
 
+(defun agent-ui--key-hosts (canvas key)
+  "The canvas (its name) the section of the element of key KEY in CANVAS
+hosts (`agent-ui-host'), or nil."
+  (with-current-buffer canvas
+    (when-let* ((section (agent-ui--find-section (agent-ui--key-section key))))
+      (agent-ui--section-hosts section))))
+
 (defun agent-ui--key-session (canvas key)
   "The session the element of key KEY in CANVAS is of: the one whose canvas
 its section hosts (`agent-ui-host'), else CANVAS's (nil: none)."
-  (with-current-buffer canvas
-    (if-let* ((section (agent-ui--find-section (agent-ui--key-section key)))
-              (hosted (agent-ui--section-hosts section)))
-        (car (agent-ui--canvas-session hosted))
-      agent-ui--session-buffer)))
+  (if-let* ((hosted (agent-ui--key-hosts canvas key)))
+      (car (agent-ui--canvas-session hosted))
+    (buffer-local-value 'agent-ui--session-buffer canvas)))
 
 (defun agent-ui--canvas-sessions (canvas)
   "The sessions with elements in CANVAS: its own, those whose canvases its
@@ -285,6 +290,13 @@ their schemas: use whichever you like."
 
 ;; ====== ACTIONS ======
 
+(defvar-local agent-ui-answer-function nil
+  "In a canvas: called, if it's set, with an action's PROMPT and SUBMIT and
+the key of its element (`agent-ui-pressed'), instead of putting it into a
+session's prompt: the canvas answers its questions itself (an agent
+workflow's run's pane). Not for an element of a section hosting a
+session's canvas: that session's.")
+
 ;; While the agent works (its turn kept running by its sub-agents too),
 ;; agent-shell sends nothing ("Busy, try later"), though its prompt may still
 ;; take text (a prompt kept live meanwhile): a button sending its prompt
@@ -309,32 +321,46 @@ The canvas still current after it: agent-shell selects the session's window
 \(its buffer current then), and what the press does next (a question
 answered) is the canvas's. A project's panel (config/agent-ui/panels.el),
 of no session: the session working in its project, the latest."
-  (let ((session (and (derived-mode-p 'agent-ui-canvas-mode)
-                      ;; Its element's: a section's hosted session's.
-                      (or (agent-ui--key-session (current-buffer) agent-ui-pressed)
-                          (and (bound-and-true-p agent-ui-panels--state)
-                               (agent-ui--session-buffer nil default-directory))))))
-    (unless (buffer-live-p session)
-      (user-error "%s" (if (bound-and-true-p agent-ui-panels--state)
-                      "No agent-shell session in this panel's project"
-                    "This canvas has no agent-shell session")))
-    (unless (fboundp 'agent-shell-insert)
-      (user-error "agent-shell isn't loaded"))
-    (cond
-     ((not (and (fboundp 'agent-shell-prompt-queue) (agent-ui--session-busy-p session submit)))
-      (save-current-buffer
-        (agent-shell-insert :text prompt :submit submit :shell-buffer session)))
-     (submit
+  (let* ((canvas (derived-mode-p 'agent-ui-canvas-mode))
+         ;; Its element: the button's, else the one at point (a key's
+         ;; action, a slider's h / l).
+         (key (or agent-ui-pressed (and canvas (get-text-property (point) 'agent-ui-id))))
+         (hosted (and canvas key (agent-ui--key-hosts (current-buffer) key)))
+         (session (and canvas
+                       (not (and agent-ui-answer-function (not hosted)))
+                       ;; Its element's: a section's hosted session's.
+                       (or (agent-ui--key-session (current-buffer) key)
+                           (and (bound-and-true-p agent-ui-panels--state)
+                                (agent-ui--session-buffer nil default-directory))))))
+    ;; What it says of its element, of a section's: its id, not its key.
+    (setq prompt (agent-ui--unkeyed prompt (agent-ui--key-section key)))
+    (if (and canvas agent-ui-answer-function (not hosted))
+        (funcall agent-ui-answer-function prompt submit key)
+      (agent-ui--act-in session prompt submit))))
+
+(defun agent-ui--act-in (session prompt submit)
+  "PROMPT into SESSION's prompt (sent if SUBMIT), as `agent-ui--act' says."
+  (unless (buffer-live-p session)
+    (user-error "%s" (if (bound-and-true-p agent-ui-panels--state)
+                         "No agent-shell session in this panel's project"
+                       "This canvas has no agent-shell session")))
+  (unless (fboundp 'agent-shell-insert)
+    (user-error "agent-shell isn't loaded"))
+  (cond
+   ((not (and (fboundp 'agent-shell-prompt-queue) (agent-ui--session-busy-p session submit)))
+    (save-current-buffer
+      (agent-shell-insert :text prompt :submit submit :shell-buffer session)))
+   (submit
+    (with-current-buffer session
+      (agent-shell-prompt-queue prompt))
+    (message "Queued: sent once the agent's done"))
+   (t
+    (let ((prompt (with-current-buffer session
+                    (if (fboundp 'agent-shell--prompt-queue-read)
+                        (agent-shell--prompt-queue-read :initial prompt)
+                      (read-string "The agent's working; queue: " prompt)))))
       (with-current-buffer session
-        (agent-shell-prompt-queue prompt))
-      (message "Queued: sent once the agent's done"))
-     (t
-      (let ((prompt (with-current-buffer session
-                      (if (fboundp 'agent-shell--prompt-queue-read)
-                          (agent-shell--prompt-queue-read :initial prompt)
-                        (read-string "The agent's working; queue: " prompt)))))
-        (with-current-buffer session
-          (agent-shell-prompt-queue prompt)))))))
+        (agent-shell-prompt-queue prompt))))))
 
 (declare-function agent-shell-insert "agent-shell")
 (declare-function agent-shell-prompt-queue "agent-shell-prompt-queue")

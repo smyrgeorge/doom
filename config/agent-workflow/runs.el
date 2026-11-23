@@ -69,7 +69,8 @@
   active-since           ; when this stretch of it running began, or nil
   more                   ; what you added to its budget: (:cost :tokens :time)
   warned                 ; non-nil once told it's near its budget
-  blocked)               ; its issue's blockers, new since it started (watch.el)
+  blocked                ; its issue's blockers, new since it started (watch.el)
+  pane)                  ; its pane's canvas, a buffer, while it has one (pane.el)
 
 (defvar agent-workflow--runs nil
   "Every run of this Emacs, as they were started.")
@@ -80,10 +81,22 @@
 (defvar agent-workflow-run-functions nil
   "Called with a run whenever it changes (its state, a job's).")
 
+(defvar agent-workflow-journal-functions nil
+  "Called with a run, an event's name and its data (a plist) once the event
+is in the run's journal.")
+
+(defvar agent-workflow-started-functions nil
+  "Called with each run `agent-workflow-run' started, and whether it was
+started from the shell (`agent-workflow-from-shell').")
+
+(defvar agent-workflow-from-shell nil
+  "Non-nil while runs are started from the shell (cmd/agent-workflow run):
+no pane opens for them.")
+
 (defconst agent-workflow--ended '(done cancelled)
   "A run's states once it's over.")
 
-(defun agent-workflow-runs (&optional project)
+(defun agent-workflow-runs-of (&optional project)
   "The runs (PROJECT: only its), as they were started."
   (seq-filter (lambda (run) (or (null project) (equal (agent-workflow-run-project run) project)))
               agent-workflow--runs))
@@ -92,7 +105,7 @@
   "ISSUE's run in PROJECT not over yet, or nil."
   (seq-find (lambda (run) (and (equal (agent-workflow-run-issue run) issue)
                                (not (memq (agent-workflow-run-state run) agent-workflow--ended))))
-            (agent-workflow-runs project)))
+            (agent-workflow-runs-of project)))
 
 (defun agent-workflow--job (run job)
   "RUN's state of JOB: a plist (:status pending|running|waiting|done|skipped
@@ -138,7 +151,8 @@ to RUN's journal."
     (write-region (concat (json-serialize (append (list :t (agent-workflow--now) :ev event)
                                                   (agent-workflow--json-ready data)))
                           "\n")
-                  nil (expand-file-name "journal.jsonl" (agent-workflow-run-dir run)) t 'silent)))
+                  nil (expand-file-name "journal.jsonl" (agent-workflow-run-dir run)) t 'silent))
+  (run-hook-with-args 'agent-workflow-journal-functions run event data))
 
 (defun agent-workflow--json-ready (plist)
   "PLIST with its nil values as JSON's null."
@@ -952,7 +966,7 @@ JOB hasn't run, or STEP isn't one."
 
 (defun agent-workflow--read-run (project)
   "A run of PROJECT you pick (the only one, not asked)."
-  (let ((runs (seq-remove (lambda (run) (eq (agent-workflow-run-state run) 'cancelled)) (agent-workflow-runs project))))
+  (let ((runs (seq-remove (lambda (run) (eq (agent-workflow-run-state run) 'cancelled)) (agent-workflow-runs-of project))))
     (pcase runs
       ('nil (user-error "No run in %s" (file-name-nondirectory (directory-file-name project))))
       (`(,run) run)
@@ -1084,7 +1098,7 @@ script's stops the run."
 \(the only one, not asked)."
   (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
          (asking (or (seq-filter (lambda (run) (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))
-                                 (agent-workflow-runs project))
+                                 (agent-workflow-runs-of project))
                      (user-error "No run waits for your OK"))))
     (if (cdr asking)
         (let ((names (mapcar (lambda (run) (cons (agent-workflow-run-why run) run)) asking)))
@@ -1296,7 +1310,7 @@ none): for the job that sends it back and the one it's sent to, or for
 the agent that fixes a step."
   (interactive
    (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
-          (asking (or (seq-filter #'agent-workflow-asking (agent-workflow-runs project))
+          (asking (or (seq-filter #'agent-workflow-asking (agent-workflow-runs-of project))
                       (user-error "No run asks you anything")))
           (run (if (cdr asking)
                    (let ((names (mapcar (lambda (run) (cons (agent-workflow-run-name run) run)) asking)))
@@ -1381,6 +1395,8 @@ issues), then each one's workflow, asked only when several fit. Return
                 started)
         (user-error (push (cons issue (error-message-string err)) refused))))
     (setq started (nreverse started) refused (nreverse refused))
+    (dolist (run started)
+      (run-hook-with-args 'agent-workflow-started-functions run agent-workflow-from-shell))
     (message "%s" (string-join
                    (delq nil (list (and started (concat "Started: " (mapconcat #'agent-workflow-run-name started ", ")))
                                    (and refused (concat "refused: " (mapconcat (lambda (r) (format "%s (%s)" (car r) (cdr r)))

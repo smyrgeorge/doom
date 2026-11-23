@@ -1,9 +1,7 @@
 ;;; $DOOMDIR/config/agent-workflow.el -*- lexical-binding: t; -*-
 ;; Agent workflows: the work on an issue described as GitHub Actions does,
 ;; jobs and their steps, some steps an LLM in agent-shell (docs/agent-workflow.md).
-;; Loaded from config.el; its code is in config/agent-workflow/. Being built
-;; (epic doom-38o): for now its files, read and checked, and its pool of
-;; agents.
+;; Loaded from config.el; its code is in config/agent-workflow/.
 
 ;; ====== VARIABLES ======
 
@@ -137,6 +135,18 @@ nil: they wait for M-x agent-workflow-continue."
   :type 'natnum
   :group 'agent-workflow)
 
+;; PROGRESS
+;; A run started from Emacs opens its pane, an Agent UI canvas in sections:
+;; the run, what needs you, a section per agent (its own canvas), its log
+;; (config/agent-workflow/pane.el); M-x agent-workflow-runs lists them all
+;; (list.el). From the shell, cmd/agent-workflow run follows its runs' logs
+;; (log.el). The pane's Log shows this many of the last lines.
+(defcustom agent-workflow-pane-log-lines 200
+  "How many of a run's last log lines its pane keeps (its Log shows the
+last few, scrolling back through these)."
+  :type 'natnum
+  :group 'agent-workflow)
+
 ;; CHECKING THEM
 ;; M-x agent-workflow-check (config/agent-workflow/check.el) reads them all
 ;; anew and lists every problem, each line taking you to its file and line;
@@ -159,9 +169,21 @@ nil: they wait for M-x agent-workflow-continue."
 (load! "agent-workflow/resume")
 (load! "agent-workflow/budget")
 (load! "agent-workflow/watch")
+(load! "agent-workflow/log")
+(load! "agent-workflow/pane")
+(load! "agent-workflow/list")
 (load! "agent-workflow/dry")
 (load! "agent-workflow/check")
 (load! "agent-workflow/request")
+
+;; ====== KEYS ======
+
+;; THE RUNS' LIST (M-x agent-workflow-runs, config/agent-workflow/list.el):
+;; RET opens a run's pane; Vim's keys, as Doom's other lists.
+(map! :map agent-workflow-runs-mode-map
+      :n "RET" #'agent-workflow-runs-open
+      :n "gr"  #'revert-buffer
+      :n "q"   #'quit-window)
 
 ;; ====== HOOKS ======
 

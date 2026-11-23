@@ -47,6 +47,9 @@
 ;; - agent-stuck: an error stopped an agent;
 ;; - agent-napping: a looping agent found nothing left to take: it naps;
 ;; - agent-message: an agent's message, in its own words.
+;; And agent workflows' (config/notify/agent-workflow.el):
+;; - agent-workflow-needs-you: a run waits for you (an approval, the loop
+;;   guard, retries used up, its budget...), a click opening its pane.
 (defvar +my/notify-enabled t
   "Desktop notifications on (see above); SPC t n toggles it.")
 
@@ -71,3 +74,4 @@ part that fires it (`+my/notify-define').")
 (load! "notify/claude")
 (load! "notify/agent-ui")
 (load! "notify/crew")
+(load! "notify/agent-workflow")

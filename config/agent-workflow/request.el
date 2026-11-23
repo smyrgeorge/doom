@@ -37,6 +37,15 @@
 ;;        0]}} (issue, outcomes, exits: optional) -> {"ok": true, "waves":
 ;;        [[lines]...], "end": {job: status...}, "stopped": why or null}:
 ;;        nothing run (dry.el); any shell's, an agent's too
+;;   logs {"issue": "doom-a1b"} -> {"ok": true, "issue", "workflow",
+;;        "run", "state", "why", "log", "journal", "state_file"}: its latest
+;;        run, its log.txt made if it's gone (log.el); any shell's
+;;   status {"issue": "doom-a1b"} (issue: optional, every run of the project
+;;        not over) -> {"ok": true, "runs": [{"issue", "workflow", "run",
+;;        "state", "why", "jobs": [{"name", "status", "outcome", "round",
+;;        "why"}...], "asking": {"job", "kind"} or null, "spent": {"cost",
+;;        "tokens", "time"}, "budget": {...} or null, "log"}...]}; any
+;;        shell's
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
 ;;        "project", "workflows": [names], "profiles": [names], "problems":
@@ -97,20 +106,89 @@ the reply, a plist."
                                    (user-error (push (cons issue (error-message-string err)) refused) nil)))
                                issues)))
     (unless issues (user-error "run: which issues? agent-workflow run ISSUE..."))
-    (pcase-let ((`(,started . ,more) (let ((inhibit-message t))
+    (pcase-let ((`(,started . ,more) (let ((inhibit-message t)
+                                           (agent-workflow-from-shell t))
                                        (agent-workflow-run expanded workflow project))))
       (setq refused (append (nreverse refused) more))
       (list :ok (if started t :false)
             :error (if started :null (format "nothing started: %s"
                                              (mapconcat (lambda (r) (format "%s (%s)" (car r) (cdr r))) refused "; ")))
-            :started (vconcat (mapcar (lambda (run)
-                                        (list :issue (agent-workflow-run-issue run)
-                                              :workflow (plist-get (agent-workflow-run-workflow run) :name)
-                                              :run (agent-workflow-run-n run)
-                                              :state (symbol-name (agent-workflow-run-state run))
-                                              :why (or (agent-workflow-run-why run) :null)))
-                                      started))
+            :started (vconcat (mapcar #'agent-workflow--run-reply started))
             :refused (vconcat (mapcar (lambda (r) (list :issue (car r) :error (cdr r))) refused))))))
+
+;; ITS LOG, ITS STATE
+
+(defun agent-workflow--run-reply (run)
+  "RUN as a reply says it: its issue, workflow, number, state, what it waits
+for, its files (log.txt, made if it's gone; its journal; its state.json)."
+  (list :issue (agent-workflow-run-issue run)
+        :workflow (plist-get (agent-workflow-run-workflow run) :name)
+        :run (agent-workflow-run-n run)
+        :state (symbol-name (agent-workflow-run-state run))
+        :why (or (agent-workflow-run-why run) :null)
+        :log (agent-workflow-log-file run)
+        :journal (expand-file-name "journal.jsonl" (agent-workflow-run-dir run))
+        :state_file (expand-file-name "state.json" (agent-workflow-run-dir run))))
+
+(defun agent-workflow--issue-run (project issue)
+  "ISSUE's latest run in PROJECT: this Emacs's, else read from its folder;
+a user error if it has none."
+  (unless (and (stringp issue) (not (string-empty-p issue)))
+    (user-error "which issue?"))
+  (or (car (sort (seq-filter (lambda (run) (equal (agent-workflow-run-issue run) issue))
+                             (agent-workflow-runs-of project))
+                 (lambda (a b) (> (agent-workflow-run-n a) (agent-workflow-run-n b)))))
+      (let* ((root (expand-file-name issue (agent-workflow--runs-directory project)))
+             (numbers (and (file-directory-p root)
+                           (sort (delq nil (mapcar (lambda (dir) (and (string-match-p "\\`[0-9]+\\'" dir)
+                                                                      (string-to-number dir)))
+                                                   (directory-files root)))
+                                 #'>)))
+             (dir (and numbers (file-name-as-directory (expand-file-name (number-to-string (car numbers)) root)))))
+        (and dir (or (gethash dir agent-workflow--read-runs)
+                     (when-let* ((run (agent-workflow--read-run dir)))
+                       (puthash dir run agent-workflow--read-runs)))))
+      (user-error "%s has no run" issue)))
+
+(defun agent-workflow--request-status (directory payload)
+  "The reply to status: PAYLOAD's issue's latest run, else DIRECTORY's
+project's runs not over."
+  (let* ((default-directory (file-name-as-directory directory))
+         (project (or (agent-workflow-project) (user-error "Not in a git repository")))
+         (issue (plist-get payload :issue)))
+    (agent-workflow--ensure-restored project)
+    (list :ok t
+          :runs (vconcat
+                 (mapcar (lambda (run)
+                           (let ((asking (agent-workflow-asking run))
+                                 (spent (agent-workflow-run-spent-now run))
+                                 (budget (agent-workflow-run-budget run)))
+                             (append (agent-workflow--run-reply run)
+                                     (list :jobs (vconcat
+                                                  (mapcar (lambda (job)
+                                                            (let ((state (cdr job)))
+                                                              (list :name (car job)
+                                                                    :status (symbol-name (plist-get state :status))
+                                                                    :outcome (or (plist-get state :outcome) :null)
+                                                                    :round (or (plist-get state :round) 0)
+                                                                    :why (or (plist-get state :why) :null))))
+                                                          (agent-workflow-run-jobs run)))
+                                           :asking (if asking
+                                                       (list :job (car asking)
+                                                             :kind (let ((kind (plist-get (cdr asking) :kind)))
+                                                                     (if kind (symbol-name kind) "loop")))
+                                                     :null)
+                                           :spent (list :cost (plist-get spent :cost) :tokens (plist-get spent :tokens)
+                                                        :time (plist-get spent :time))
+                                           :budget (if budget
+                                                       (list :cost (or (plist-get budget :cost) :null)
+                                                             :tokens (or (plist-get budget :tokens) :null)
+                                                             :time (or (plist-get budget :time) :null))
+                                                     :null)))))
+                         (if (and (stringp issue) (not (string-empty-p issue)))
+                             (list (agent-workflow--issue-run project issue))
+                           (seq-remove (lambda (run) (memq (agent-workflow-run-state run) agent-workflow--ended))
+                                       (agent-workflow-runs-of project))))))))
 
 ;; WHO ASKS
 ;; Not what its shell says (AGENT_WORKFLOW_ISSUE can be unset or changed) but
@@ -153,7 +231,7 @@ reply. Not from an agent's session."
          (issue (plist-get payload :issue))
          (_ (agent-workflow--ensure-restored project))
          (run (or (car (last (seq-filter (lambda (run) (equal (agent-workflow-run-issue run) issue))
-                                         (agent-workflow-runs project))))
+                                         (agent-workflow-runs-of project))))
                   (user-error "back: %s has no run" issue)))
          (job (plist-get payload :job))
          (step (or (plist-get payload :step) 0))
@@ -216,7 +294,7 @@ DIRECTORY's project): the reply."
          (issue (plist-get payload :issue))
          (runs (if (and (stringp issue) (not (string-empty-p issue)))
                    (list (or (agent-workflow-run-of project issue) (user-error "%s has no run" issue)))
-                 (seq-filter #'agent-workflow--interrupted (agent-workflow-runs project)))))
+                 (seq-filter #'agent-workflow--interrupted (agent-workflow-runs-of project)))))
     (unless (seq-some #'agent-workflow--interrupted runs)
       (user-error "continue: no run was interrupted"))
     (list :ok t :continued
@@ -271,6 +349,13 @@ its reply written to DIR/reply. Return t."
                   ("check" (agent-workflow--request-check directory payload))
                   ("dry-run" (agent-workflow--request-dry-run directory payload))
                   ("run" (agent-workflow--request-run directory payload))
+                  ("status" (agent-workflow--request-status directory payload))
+                  ("logs"
+                   (let* ((default-directory (file-name-as-directory directory))
+                          (project (or (agent-workflow-project) (user-error "Not in a git repository"))))
+                     (agent-workflow--ensure-restored project)
+                     (append (list :ok t)
+                             (agent-workflow--run-reply (agent-workflow--issue-run project (plist-get payload :issue))))))
                   ("done" (agent-workflow--request-done payload pid))
                   ("back" (agent-workflow--request-back directory payload pid))
                   ("confirm" (agent-workflow--request-confirm directory payload pid))
@@ -289,7 +374,7 @@ its reply written to DIR/reply. Return t."
                      (if (equal op "pause") (agent-workflow-pause (plist-get payload :now)) (agent-workflow-unpause)))
                    (list :ok t :paused (if agent-workflow--paused t :false)))
                   (_ (list :ok :false :error (format "unknown operation %S; operations: %s" op
-                                                     "run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check")))))
+                                                     "run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check, logs, status")))))
             (json-parse-error (list :ok :false :error (format "not JSON: %s" (error-message-string err))))
             (error (list :ok :false :error (error-message-string err))))))
     (let ((coding-system-for-write 'utf-8-unix))

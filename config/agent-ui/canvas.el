@@ -678,6 +678,15 @@ SECTION/ID; ID itself if it's a key already (it has a /: an id hasn't)."
       (substring key (1+ at))
     key))
 
+(defun agent-ui--unkeyed (text section)
+  "TEXT with the keys of SECTION's elements in it (SECTION/ID: an answer's
+\"Answer to confirm ID\" drawn with its element's key) as their ids: as the
+section's elements' agent knows them."
+  (if (not section)
+      text
+    (replace-regexp-in-string (concat "\\(\\`\\|[^A-Za-z0-9_./-]\\)" (regexp-quote section) "/\\([A-Za-z0-9_.-]\\)")
+                              "\\1\\2" text t)))
+
 (defun agent-ui--section-keys (section)
   "The keys of the current canvas's elements in SECTION (a name; nil: its
 own), in their order."
@@ -1118,8 +1127,9 @@ sections): plists (:id ID :type TYPE); none if it isn't there."
 `agent-ui-section-states': its mark) and NOTE (after it), whether it's
 FOLDED, where its divider is drawn (START and END markers, as an entry's: a
 blank line after it), the OVERLAY hiding it folded, the canvas it HOSTS (a
-name, or nil)."
-  name title state note folded start end overlay hosts)
+name, or nil), what RET on its divider does (OPEN: a function, or nil:
+folds it)."
+  name title state note folded start end overlay hosts open)
 
 (defface agent-ui-section-title '((t :inherit agent-ui-title))
   "A section's title, on its divider."
@@ -1147,7 +1157,7 @@ name, once the first is shown in that section (`agent-ui-host').")
   :doc "Keys of a section's divider."
   "TAB" #'agent-ui-section-toggle
   "<tab>" #'agent-ui-section-toggle
-  "RET" #'agent-ui-section-toggle
+  "RET" #'agent-ui-section-open
   "<mouse-1>" #'agent-ui-section-toggle
   "<mouse-2>" #'agent-ui-section-toggle
   "<follow-link>" 'mouse-face)
@@ -1205,7 +1215,8 @@ width."
          (state (assq (agent-ui--section-state section) agent-ui-section-states))
          (note (agent-ui--section-note section))
          (held (and folded (length (agent-ui--section-keys (agent-ui--section-name section)))))
-         (help (if folded "TAB: unfold this section" "TAB: fold this section"))
+         (help (format "TAB: %s this section%s" (if folded "unfold" "fold")
+                       (if (agent-ui--section-open section) "; RET: open what it shows" "")))
          (one-line (lambda (text) (replace-regexp-in-string "[\n\r]+" " " text)))
          (head (concat (propertize (if folded "▸" "▾") 'face 'agent-ui-muted 'help-echo help)
                        (propertize " " 'help-echo help)
@@ -1318,6 +1329,17 @@ unfold it."
         (agent-ui--fold section (not (agent-ui--section-folded section)))
         (agent-ui--flush)))))
 
+(defun agent-ui-section-open ()
+  "What RET on the section's divider at point does: its :open (its
+session, an agent workflow's agent's), else fold it, or unfold it."
+  (interactive)
+  (let ((section (agent-ui--find-section (get-text-property (point) 'agent-ui-section))))
+    (unless section
+      (user-error "No section's divider here"))
+    (if-let* ((open (agent-ui--section-open section)))
+        (funcall open)
+      (agent-ui-section-toggle))))
+
 (defun agent-ui-reveal (id &optional canvas)
   "Element ID of CANVAS (default: the current buffer, ID a key) in view: its
 section unfolded, drawn, each window showing CANVAS scrolled to it if it
@@ -1335,12 +1357,13 @@ starts out of its view."
 ;; ------ Making, changing, removing ------
 
 (cl-defun agent-ui-section (canvas name &key (title nil title-p) (state nil state-p) (note nil note-p)
-                                   (folded nil folded-p) after)
+                                   (folded nil folded-p) (open nil open-p) after)
   "Make section NAME of CANVAS (a buffer, or a canvas's name: made if it
 isn't there), or change it. TITLE: what its divider says (default: NAME);
 STATE: its mark, one of `agent-ui-section-states' (`running', `needs-you',
 `waiting', `paused', `done', `failed'; nil: none); NOTE: a few words after
-it (3m); FOLDED: folded to its divider. A new one goes AFTER section AFTER
+it (3m); FOLDED: folded to its divider; OPEN: a function RET on its
+divider calls (else RET folds it, as TAB). A new one goes AFTER section AFTER
 \(its elements), else at the end; the canvas shown if it's in no window.
 Given again, only what's given changes. Returns NAME. Signals
 `agent-ui-error' if something's wrong."
@@ -1359,13 +1382,14 @@ Given again, only what's given changes. Returns NAME. Signals
             (when state-p (setf (agent-ui--section-state section) state))
             (when note-p (setf (agent-ui--section-note section) note))
             (when folded-p (agent-ui--fold section folded))
+            (when open-p (setf (agent-ui--section-open section) open))
             (agent-ui--dirty-section section)
             (agent-ui--animate))
         (when (and after (not (agent-ui--find-section after)))
           (agent-ui--fail "canvas %s has no section %s to put %s after" agent-ui--canvas-name
                           (agent-ui--show-value after) name))
         (let* ((room (agent-ui--make-room (if after (agent-ui--section-tail after) (point-max))))
-               (section (agent-ui--make-section :name name :title title :state state :note note
+               (section (agent-ui--make-section :name name :title title :state state :note note :open open
                                                 :folded (and folded t) :start (car room) :end (cdr room)))
                (at (and after (1+ (cl-position after agent-ui--sections
                                                :key #'agent-ui--section-name :test #'equal)))))
