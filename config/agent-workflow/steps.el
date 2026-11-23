@@ -377,7 +377,8 @@ it's merged for real."
   "BRANCH merged into MAIN for real (MERGED: the merge as tried): where
 MAIN is checked out in your checkout, there, if no file it changes has a
 change of yours; where it's checked out elsewhere, it waits for you; where
-it isn't, its ref moved to MERGED."
+it isn't, its ref moved to MERGED, if it's still where the merge was tried
+\(else tried again on it)."
   (condition-case err
       (let* ((project (agent-workflow-run-project run))
              (default-directory project)
@@ -385,10 +386,20 @@ it isn't, its ref moved to MERGED."
                               (agent-workflow--worktrees project))))
         (cond
          ((null where)
-          (let ((old (agent-workflow--git "rev-parse" (concat "refs/heads/" main))))
-            (agent-workflow--git "update-ref" "-m" (format "agent workflow: merge %s" branch)
-                                 (concat "refs/heads/" main) merged old)
-            (agent-workflow--merged run job index branch main nil)))
+          ;; Its ref moved to the merge only from where the merge was tried
+          ;; (its first parent): main moved meanwhile (another run merged
+          ;; while its suite ran), tried again on it, never overwritten.
+          (let ((base (agent-workflow--git "rev-parse" (concat merged "^1")))
+                (now (agent-workflow--git "rev-parse" (concat "refs/heads/" main))))
+            (if (not (equal base now))
+                (progn
+                  (agent-workflow--journal run "main-moved" :job job :step index :into main
+                                           :from base :to now)
+                  (agent-workflow--merge-step run job (nth index (plist-get (agent-workflow--job-spec run job) :steps))
+                                              index))
+              (agent-workflow--git "update-ref" "-m" (format "agent workflow: merge %s" branch)
+                                   (concat "refs/heads/" main) merged base)
+              (agent-workflow--merged run job index branch main nil))))
          ((not (equal (file-truename (plist-get where :dir)) (file-truename project)))
           (agent-workflow--job-set run job :ask (list :kind 'merge :step index))
           (agent-workflow--wait run job (format "%s: its merge waits: %s is checked out in %s, not your checkout: \

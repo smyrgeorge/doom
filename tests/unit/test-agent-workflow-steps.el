@@ -411,6 +411,28 @@ touched."
   "Non-nil if a line of RUN's log has PATTERN."
   (seq-some (lambda (line) (string-match-p pattern line)) (agent-workflow-log-lines run)))
 
+(ert-deftest agent-workflow-steps/main-moved-while-its-suite-ran ()
+  "Main checked out nowhere, moved while the merge's suite ran (another run
+merged): not overwritten, the merge tried again on it; both on main."
+  (+test-awr "main-moved"
+    (+test-aws--workflow project (replace-regexp-in-string "suite: test -f lexer.el" "suite: sleep 2; test -f lexer.el"
+                                                           +test-aws--merge))
+    (let* ((issue (+test-awr--issue project "Moved"))
+           (main (agent-workflow-main-branch project))
+           (run (agent-workflow-start-run project issue))
+           (default-directory project))
+      (call-process "git" nil nil nil "checkout" "-q" "-b" "elsewhere")
+      (+test-aws--build run project issue "lexer.el" "theirs\n")
+      ;; Its suite running: main moves.
+      (should (+test-awr--wait (lambda () (process-live-p (plist-get (agent-workflow--job run "merge") :process)))))
+      (let ((other (agent-workflow--git "commit-tree" "-p" main "-m" "Another run's merge"
+                                        (agent-workflow--git "rev-parse" (concat main "^{tree}")))))
+        (agent-workflow--git "update-ref" (concat "refs/heads/" main) other)
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)) 30))
+        (should (eql 0 (call-process "git" nil nil nil "merge-base" "--is-ancestor" other main)))
+        (should (equal (agent-workflow--git "show" (concat main ":lexer.el")) "theirs"))
+        (should (+test-aws--log-line run "moved while its merge was tried: tried again on it"))))))
+
 (ert-deftest agent-workflow-steps/its-branch-deleted-once-merged ()
   "A run done, merged (your checkout on another branch): its branch
 deleted, its log saying so; its pane's where and status's too."

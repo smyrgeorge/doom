@@ -99,6 +99,7 @@ one the log leaves out. KIND: what a wait asks (`agent-workflow--log-hint')."
                     (format "nothing to merge: %s has no commit" (get :branch))
                   (format "%s merged into %s%s" (get :branch) (get :into) (if (get :already) " (it was)" ""))))
       ("rebased" (format "rebased onto %s" (get :onto)))
+      ("main-moved" (format "%s moved while its merge was tried: tried again on it" (get :into)))
       ("branch-deleted" (if (get :empty)
                             (format "its branch %s deleted: no commit" (get :branch))
                           (format "its branch %s deleted, merged into %s" (get :branch) (get :into))))
