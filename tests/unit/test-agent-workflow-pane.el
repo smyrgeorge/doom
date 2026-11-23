@@ -175,7 +175,7 @@ counting down, until closed (q)."
       (let ((header (agent-ui-get "run" :canvas pane))
             (jobs (agent-ui-get "jobs" :canvas pane :section "run"))
             (graph (agent-ui-get "graph" :canvas pane :section "run")))
-        (should (equal (plist-get header :title) (concat issue ": A pane")))
+        (should (equal (plist-get header :title) "A pane"))
         (should (equal (plist-get header :type) "stats"))
         (should (member (car (+test-awp--figure header "State")) '("● running" "◆ needs you")))
         (should (string-match-p "\\`[0-9]+s\\'" (car (+test-awp--figure header "Time"))))
@@ -1006,7 +1006,14 @@ too."
     (should (equal (cadr (agent-workflow--pane-state run)) "watch, step 3 of 3 · docs"))
     (setf (agent-workflow-run-warned run) t)
     (should (equal (cadr (agent-workflow--pane-state run)) "watch, step 3 of 3 · docs · near its budget"))
-    (should (equal (+test-awp--figure (agent-workflow--pane-header run) "Jobs") '("0 / 2" "done" nil)))))
+    (should (equal (+test-awp--figure (agent-workflow--pane-header run) "Jobs") '("0 / 2" "done" nil)))
+    ;; Its header without its name (its tab's, its buffer's); a ticket's
+    ;; run, its issue's title.
+    (setf (agent-workflow-run-workflow run) (plist-put (copy-sequence workflow) :ticketless t))
+    (should-not (plist-member (agent-workflow--pane-header run) :title))
+    (setf (agent-workflow-run-workflow run) workflow
+          (agent-workflow-run-info run) '(:title "Lexer escapes"))
+    (should (equal (plist-get (agent-workflow--pane-header run) :title) "Lexer escapes"))))
 
 (ert-deftest agent-workflow-pane/a-failed-run ()
   "A run that failed: its State tile says why, red; its job failed (✗, an

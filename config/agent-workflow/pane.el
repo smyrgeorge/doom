@@ -622,17 +622,20 @@ has a budget of them or spent some), its jobs done."
                         :change "done"))))))
 
 (defun agent-workflow--pane-header (run)
-  "The run, above its sections: its issue (no ticket: its name), then its
+  "The run, above its sections: its issue's title (a ticket's run; its
+name, ISSUE · WORKFLOW, not: its tab and buffer say it), then its
 state, time, spending and jobs as tiles (`agent-workflow--pane-figures');
 while it isn't over, Cancel under them (asked first:
 `agent-workflow-cancel-asked')."
   (append
-   (list :id "run" :type "stats"
-         :title (if (agent-workflow-run-ticket-p run)
-                    (format "%s: %s" (agent-workflow-run-issue run)
-                            (or (plist-get (agent-workflow-run-info run) :title) ""))
-                  (agent-workflow-run-name run))
-         :figures (agent-workflow--pane-figures run))
+   (list :id "run" :type "stats")
+   ;; Its name (ISSUE · WORKFLOW) its tab's, its buffer's: not again. A
+   ;; ticket's run, its issue's title, said nowhere else.
+   (when-let* (((agent-workflow-run-ticket-p run))
+               (title (plist-get (agent-workflow-run-info run) :title))
+               ((not (string-blank-p title))))
+     (list :title title))
+   (list :figures (agent-workflow--pane-figures run))
    ;; Its own (`agent-workflow--pane-answer'); over, none.
    (unless (memq (agent-workflow-run-state run) agent-workflow--ended)
      (list :actions '((:label "Cancel" :prompt "cancel" :help "cancel the run (asked first)"))))))

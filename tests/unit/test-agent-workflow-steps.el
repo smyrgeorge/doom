@@ -606,7 +606,7 @@ jobs:
           (should (file-exists-p (expand-file-name "solo.txt" project)))
           (should (equal (agent-workflow-run-branch-end run) (list :branch "run/solo-1" :deleted t :into main)))
           (should (member "merged" (+test-awr--journal run)))
-          (should (equal (plist-get (agent-workflow--pane-header run) :title) "solo · run 1"))
+          (should-not (plist-get (agent-workflow--pane-header run) :title))
           ;; The next run, from the shell (no issue, --workflow): a branch of
           ;; its own.
           (let* ((reply (agent-workflow--request-run project (list :issues [] :workflow "solo")))
