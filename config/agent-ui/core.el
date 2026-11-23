@@ -51,8 +51,9 @@ wrapped onto; past them, its last line ends with …"
 
 (define-error 'agent-ui-error "Agent UI")
 
-(defconst agent-ui--reserved '(:id :type :title :source :actions :close :with)
-  "Keys every element may have; no type's property is named so. :close only
+(defconst agent-ui--reserved '(:id :type :title :caption :source :actions :close :with)
+  "Keys every element may have; no type's property is named so. :caption,
+a muted line above it (under its title), as a log's counts line. :close only
 on a type that finishes (its :finished); :with, the id of the question it's
 shown with (it goes when that's answered: config/agent-ui/agent.el).")
 
@@ -492,19 +493,32 @@ RET: HELP), else the prompt it puts into the session's prompt, or sends."
      width)))
 
 (defun agent-ui--title-text (element ctx)
-  "ELEMENT's title as drawn above it in CTX, the newline after it; nil if it
-has none (or one that isn't text: the element's error to show). Its
-newlines spaces; too long for the width, wrapped (it was one line cut with
-…, its rest nowhere; `agent-ui-max-cell-lines' lines at most)."
+  "ELEMENT's title as drawn above it in CTX, then its caption (a muted line,
+as a log's counts: 12 files changed), each with the newline after it; nil
+if it has neither (or one that isn't text: the element's error to show).
+Their newlines spaces; a title too long for the width wrapped (it was one
+line cut with …, its rest nowhere; `agent-ui-max-cell-lines' lines at
+most), a caption cut with …."
   (let ((title (plist-get element :title))
+        (caption (plist-get element :caption))
         (width (plist-get ctx :width)))
-    (when (and (stringp title) (not (equal title "")))
-      (let ((title (replace-regexp-in-string "[\n\r]+" " " title)))
-        (concat (propertize (if (and width (> (string-width title) width))
-                                (string-join (agent-ui-wrap-lines title width) "\n")
-                              title)
-                            'face 'agent-ui-title)
-                "\n")))))
+    (agent-ui--non-empty
+     (when (and (stringp title) (not (equal title "")))
+       (let ((title (replace-regexp-in-string "[\n\r]+" " " title)))
+         (concat (propertize (if (and width (> (string-width title) width))
+                                 (string-join (agent-ui-wrap-lines title width) "\n")
+                               title)
+                             'face 'agent-ui-title)
+                 "\n")))
+     (when (and (stringp caption) (not (equal caption "")))
+       (let ((caption (replace-regexp-in-string "[\n\r]+" " " caption)))
+         (concat (propertize (if width (agent-ui-truncate caption width) caption) 'face 'agent-ui-muted)
+                 "\n"))))))
+
+(defun agent-ui--non-empty (&rest texts)
+  "TEXTS joined; nil if that's empty."
+  (let ((text (apply #'concat texts)))
+    (and (not (string-empty-p text)) text)))
 
 (defconst agent-ui--answer-row-types '("choice" "compare" "rank")
   "The questions whose actions are drawn beside their Answer button, on its

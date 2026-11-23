@@ -721,6 +721,22 @@ A body not text: refused."
     (should (string-match-p "\n  .*one\n  .*two" open)))
   (should (string-match-p "body" (+test-aue-error '(:type "steps" :steps ((:name "a" :body 3)))))))
 
+(ert-deftest agent-ui-elements/a-caption-above-any-element ()
+  "CAPTION: a muted line above an element (under its title), as a log's
+counts: cut to the width, its newlines spaces. None, nothing more drawn
+(an element drawn as it was). Not text: refused."
+  (let ((text (agent-ui-render '(:type "text" :title "Its files" :caption "12 files changed" :text "a.el")
+                               (agent-ui-context :width 40))))
+    (should (equal (substring-no-properties text) "Its files\n12 files changed\na.el"))
+    (should (eq (get-text-property (string-search "12" text) 'face text) 'agent-ui-muted)))
+  (should (equal (+test-aue-draw '(:type "text" :caption "a\nb" :text "x")) "a b\nx"))
+  (should (equal (+test-aue-draw '(:type "text" :text "x")) "x"))
+  (should (string-suffix-p "…" (car (split-string (+test-aue-draw (list :type "text" :caption (make-string 80 ?c) :text "x"))
+                                                 "\n"))))
+  (should (string-match-p "a caption is text"
+                          (agent-ui-error-message
+                           (should-error (agent-ui--checked '(:type "text" :caption 3 :text "x")) :type 'agent-ui-error)))))
+
 (ert-deftest agent-ui-elements/table-columns-that-fit ()
   "More columns than fit, each cut to its narrowest: those on the left that
 fit, the others said under it (it stayed wider than its width)."

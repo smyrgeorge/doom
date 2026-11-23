@@ -495,6 +495,7 @@ was drawn again whole, each line). Non-nil if so; nil if its type can't
                     ;; Its title and actions as they were: the lines around
                     ;; its drawing the same.
                     (equal (plist-get old :title) (plist-get new :title))
+                    (equal (plist-get old :caption) (plist-get new :caption))
                     (equal (plist-get old :actions) (plist-get new :actions))
                     (not (run-hook-with-args-until-success 'agent-ui-footer-functions (agent-ui--entry-id entry)
                                                            (plist-get ctx :width)))
@@ -824,9 +825,12 @@ the current canvas (but by the element of key EXCEPT, its own place)."
 error saying what's wrong. Its :type a string, as JSON gives it."
   (let ((type (agent-ui-type (plist-get element :type))))
     (agent-ui-check type element)
-    (let ((title (plist-get element :title)))
+    (let ((title (plist-get element :title))
+          (caption (plist-get element :caption)))
       (when (and title (not (stringp title)))
-        (agent-ui--fail "a title is text, not %s" (agent-ui--show-value title))))
+        (agent-ui--fail "a title is text, not %s" (agent-ui--show-value title)))
+      (when (and caption (not (stringp caption)))
+        (agent-ui--fail "a caption is text, not %s" (agent-ui--show-value caption))))
     (when-let* ((source (plist-get element :source)))
       (funcall agent-ui-check-source-function source))
     ;; Its panel's children's too: started once it's in, a wrong one failed

@@ -4,6 +4,9 @@ Part of the agent-ui skill: read [SKILL.md](../SKILL.md) first. A type's every p
 
 What stays in view as it is (notes, code, a change, a picture), and a `panel` to lay elements out together.
 
+Any element, besides its `title`, can have a `caption`: a muted line under the title, above the element, saying how
+much it holds as a log's counts line does (`12 files changed`, `3 commits`).
+
 ### `text`
 
 Plain text, wrapped to the width, newlines kept. `face`: `plain` (default), `muted`, `success`, `warning`, `error`.
