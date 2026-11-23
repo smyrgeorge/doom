@@ -105,7 +105,7 @@ changed.")
 (defvar agent-workflow--pane-showing nil
   "Non-nil while a pane is shown on purpose (`agent-workflow-pane').")
 
-(defvar agent-workflow-pane-box-lines 8
+(defvar agent-workflow-pane-box-lines 5
   "How many lines a job's live box shows: its agent's last actions, its
 script's last lines of output.")
 
