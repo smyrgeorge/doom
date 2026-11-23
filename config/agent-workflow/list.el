@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/agent-workflow/list.el -*- lexical-binding: t; -*-
-;; Every run of a project, a list: M-x agent-workflow-runs. Loaded from
+;; Every run of a project, a list: M-x agent-workflow-list. Loaded from
 ;; config/agent-workflow.el, after pane-boxes.el. No Doom here (its keys are in
 ;; config/agent-workflow.el).
 ;;
@@ -15,26 +15,26 @@
 (require 'subr-x)
 (require 'tabulated-list)
 
-(defvar-keymap agent-workflow-runs-mode-map
+(defvar-keymap agent-workflow-list-mode-map
   :doc "Keys of the runs' list."
   :parent tabulated-list-mode-map
-  "RET" #'agent-workflow-runs-open)
+  "RET" #'agent-workflow-list-open)
 
-(defvar-local agent-workflow--runs-project nil "In the runs' list: its project.")
+(defvar-local agent-workflow--list-project nil "In the runs' list: its project.")
 
 (defvar agent-workflow--read-runs (make-hash-table :test #'equal)
   "Runs over read from their folders, by folder: read once, the pane kept.")
 
-(define-derived-mode agent-workflow-runs-mode tabulated-list-mode "Workflow runs"
+(define-derived-mode agent-workflow-list-mode tabulated-list-mode "Workflow runs"
   "A project's runs of its workflows: RET opens one's pane.
 
-\\{agent-workflow-runs-mode-map}"
+\\{agent-workflow-list-mode-map}"
   (setq tabulated-list-format [("Issue" 14 t) ("#" 3 t :right-align t) ("Workflow" 10 t) ("State" 10 t)
                                ("Time" 8 nil :right-align t) ("Spent" 8 nil :right-align t) ("What" 0 nil)]
         tabulated-list-padding 1
         tabulated-list-sort-key nil)
   (tabulated-list-init-header)
-  (add-hook 'tabulated-list-revert-hook #'agent-workflow--runs-entries nil t))
+  (add-hook 'tabulated-list-revert-hook #'agent-workflow--list-entries nil t))
 
 (defun agent-workflow-project-runs (project)
   "PROJECT's runs: this Emacs's, and those over read from their folders,
@@ -65,7 +65,7 @@ those not over first, then the latest."
        (file-attributes (expand-file-name "journal.jsonl" (agent-workflow-run-dir run))))
       0))
 
-(defun agent-workflow--runs-what (run)
+(defun agent-workflow--list-what (run)
   "What RUN waits for, or which of its jobs work."
   (pcase (agent-workflow-run-state run)
     ((or 'waiting 'queued) (or (agent-workflow-run-why run) ""))
@@ -74,7 +74,7 @@ those not over first, then the latest."
     ('done "every job done")
     (_ "")))
 
-(defun agent-workflow--runs-entries ()
+(defun agent-workflow--list-entries ()
   "The runs' list's lines."
   (setq tabulated-list-entries
         (mapcar (lambda (run)
@@ -92,10 +92,10 @@ those not over first, then the latest."
                                                       ('cancelled 'shadow) ('failed 'error) (_ 'default)))
                                   (agent-workflow--duration-words (plist-get spent :time))
                                   (if (> (plist-get spent :cost) 0) (format "$%.2f" (plist-get spent :cost)) "")
-                                  (agent-workflow--runs-what run)))))
-                (agent-workflow-project-runs agent-workflow--runs-project))))
+                                  (agent-workflow--list-what run)))))
+                (agent-workflow-project-runs agent-workflow--list-project))))
 
-(defun agent-workflow-runs (&optional project)
+(defun agent-workflow-list (&optional project)
   "Every run of PROJECT (default: the current one's), a list: RET opens a
 run's pane."
   (interactive)
@@ -104,34 +104,34 @@ run's pane."
                                             (file-name-nondirectory (directory-file-name project))))))
     (agent-workflow--ensure-restored project)
     (with-current-buffer buffer
-      (unless (derived-mode-p 'agent-workflow-runs-mode)
-        (agent-workflow-runs-mode))
-      (setq agent-workflow--runs-project project
+      (unless (derived-mode-p 'agent-workflow-list-mode)
+        (agent-workflow-list-mode))
+      (setq agent-workflow--list-project project
             default-directory project)
       (revert-buffer))
     (pop-to-buffer buffer)))
 
-(defun agent-workflow-runs-open ()
+(defun agent-workflow-list-open ()
   "Open the pane of the run on this line, selected."
   (interactive)
   (let ((run (or (tabulated-list-get-id) (user-error "No run on this line"))))
     (agent-workflow-pane run 'select)))
 
-(defvar agent-workflow--runs-timer nil "The runs' lists read again, soon.")
+(defvar agent-workflow--list-timer nil "The runs' lists read again, soon.")
 
-(defun agent-workflow--runs-changed (_run)
+(defun agent-workflow--list-changed (_run)
   "A run changed: the runs' lists shown read again, soon. In
 `agent-workflow-run-functions'."
-  (unless (timerp agent-workflow--runs-timer)
-    (setq agent-workflow--runs-timer
+  (unless (timerp agent-workflow--list-timer)
+    (setq agent-workflow--list-timer
           (run-with-timer 0.5 nil
                           (lambda ()
-                            (setq agent-workflow--runs-timer nil)
+                            (setq agent-workflow--list-timer nil)
                             (dolist (buffer (buffer-list))
-                              (when (and (eq (buffer-local-value 'major-mode buffer) 'agent-workflow-runs-mode)
+                              (when (and (eq (buffer-local-value 'major-mode buffer) 'agent-workflow-list-mode)
                                          (get-buffer-window buffer t))
                                 (with-current-buffer buffer
                                   (with-demoted-errors "agent workflow runs: %S"
                                     (revert-buffer))))))))))
 
-(add-hook 'agent-workflow-run-functions #'agent-workflow--runs-changed)
+(add-hook 'agent-workflow-run-functions #'agent-workflow--list-changed)

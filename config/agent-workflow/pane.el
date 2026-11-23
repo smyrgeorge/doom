@@ -30,7 +30,7 @@
 ;;
 ;; Started from Emacs (M-x agent-workflow-run-ticket, agent-workflow-run),
 ;; its pane opens; from the shell, it's made when you look (M-x
-;; agent-workflow-runs, RET), and opens
+;; agent-workflow-list, RET), and opens
 ;; by itself only once you did. Done, failed, cancelled, waiting: it stays,
 ;; until you close it (q); nothing counts down to close it (what it showed
 ;; went with it). Closing it stops nothing.

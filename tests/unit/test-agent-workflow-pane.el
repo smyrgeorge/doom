@@ -1230,7 +1230,7 @@ status has the same; kept in its state.json. Done: its worktree removed
 ;; ====== EVERY RUN ======
 
 (ert-deftest agent-workflow-pane/the-runs-listed ()
-  "M-x agent-workflow-runs: every run of the project, those over read from
+  "M-x agent-workflow-list: every run of the project, those over read from
 their folders; RET opens a run's pane, selected."
   (+test-awp "list"
     (let* ((one (+test-awr--issue project "One"))
@@ -1239,15 +1239,15 @@ their folders; RET opens a run's pane, selected."
       ;; Read from its folder, as after Emacs started again.
       (let ((agent-workflow--runs nil))
         (save-window-excursion
-          (agent-workflow-runs project)
+          (agent-workflow-list project)
           (with-current-buffer (format "*agent-workflow runs: %s*" (file-name-nondirectory (directory-file-name project)))
-            (should (derived-mode-p 'agent-workflow-runs-mode))
+            (should (derived-mode-p 'agent-workflow-list-mode))
             (should (= (length tabulated-list-entries) 1))
             (should (equal (aref (cadr (car tabulated-list-entries)) 0) one))
             (should (equal (substring-no-properties (aref (cadr (car tabulated-list-entries)) 3)) "cancelled"))
             (goto-char (point-min))
             (let ((agent-ui-display-function (lambda (buffer) (set-window-buffer (selected-window) buffer))))
-              (agent-workflow-runs-open))
+              (agent-workflow-list-open))
             (should (equal (buffer-name (window-buffer (selected-window))) (format "Agent UI: %s · feature" one)))))))))
 
 ;; ====== FROM THE SHELL ======

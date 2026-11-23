@@ -23,7 +23,7 @@ question, spend, where its work is: worktree, branch, base, what it merges into;
 
 Started from Emacs (`M-x agent-workflow-run-ticket` on tickets, `M-x agent-workflow-run` a workflow with no ticket),
 each run opens its pane, an Agent UI canvas drawn by Emacs: the run,
-what needs the user (answered there), a section per agent (its own canvas), its log. `M-x agent-workflow-runs` lists
+what needs the user (answered there), a section per agent (its own canvas), its log. `M-x agent-workflow-list` lists
 every run, `RET` opening its pane.
 
 ## A run

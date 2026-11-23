@@ -397,7 +397,7 @@ sections folded), until you close it (`q`): nothing counts down to close it. Clo
 again when you look. Started from the shell, a run's pane is made when you look, and opens by itself
 only after that, when the run needs you (its window closed, the same).
 
-`M-x agent-workflow-runs` lists every run of the project, those not over first, those started from the shell and those
+`M-x agent-workflow-list` lists every run of the project, those not over first, those started from the shell and those
 over too: its issue, workflow, state, time, what it spent, what it waits for. `RET` opens a run's pane, `gr` reads
 them again.
 

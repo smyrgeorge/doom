@@ -139,7 +139,7 @@ nil: they wait for M-x agent-workflow-continue."
 ;; PROGRESS
 ;; A run started from Emacs opens its pane, an Agent UI canvas in sections:
 ;; the run, what needs you, a section per agent (its own canvas), its log
-;; (config/agent-workflow/pane.el); M-x agent-workflow-runs lists them all
+;; (config/agent-workflow/pane.el); M-x agent-workflow-list lists them all
 ;; (list.el). From the shell, cmd/agent-workflow run follows its runs' logs
 ;; (log.el). The pane's Log shows this many of the last lines.
 (defcustom agent-workflow-pane-log-lines 200
@@ -185,10 +185,10 @@ last few, scrolling back through these)."
 
 ;; ====== KEYS ======
 
-;; THE RUNS' LIST (M-x agent-workflow-runs, config/agent-workflow/list.el):
+;; THE RUNS' LIST (M-x agent-workflow-list, config/agent-workflow/list.el):
 ;; RET opens a run's pane; Vim's keys, as Doom's other lists.
-(map! :map agent-workflow-runs-mode-map
-      :n "RET" #'agent-workflow-runs-open
+(map! :map agent-workflow-list-mode-map
+      :n "RET" #'agent-workflow-list-open
       :n "gr"  #'revert-buffer
       :n "q"   #'quit-window)
 
