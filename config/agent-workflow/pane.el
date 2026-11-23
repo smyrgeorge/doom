@@ -38,6 +38,7 @@
 (declare-function agent-ui--session-name "agent-ui/agent")
 (declare-function agent-workflow--uses-merge-p "agent-workflow/dry")
 (declare-function agent-workflow-agent-p "agent-workflow/pool")
+(declare-function agent-workflow-cancel-asked "agent-workflow/resume")
 (declare-function agent-workflow-agent-profile "agent-workflow/pool")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
 (declare-function agent-shell-elicitation-jump-to-latest-form "agent-shell-elicitation")
@@ -508,15 +509,20 @@ tokens, each against its budget if it has one."
 
 (defun agent-workflow--pane-header (run)
   "The run, above its sections: its issue (no ticket: its name), then its
-state in a line."
-  (list :id "run" :type "text"
-        :title (if (agent-workflow-run-ticket-p run)
-                   (format "%s: %s" (agent-workflow-run-issue run)
-                           (or (plist-get (agent-workflow-run-info run) :title) ""))
-                 (agent-workflow-run-name run))
-        :face (pcase (agent-workflow-run-state run)
-                ('waiting "warning") ('cancelled "muted") ('failed "error") ('done "success") (_ "plain"))
-        :text (agent-workflow--pane-state-line run)))
+state in a line; while it isn't over, Cancel under it (asked first:
+`agent-workflow-cancel-asked')."
+  (append
+   (list :id "run" :type "text"
+         :title (if (agent-workflow-run-ticket-p run)
+                    (format "%s: %s" (agent-workflow-run-issue run)
+                            (or (plist-get (agent-workflow-run-info run) :title) ""))
+                  (agent-workflow-run-name run))
+         :face (pcase (agent-workflow-run-state run)
+                 ('waiting "warning") ('cancelled "muted") ('failed "error") ('done "success") (_ "plain"))
+         :text (agent-workflow--pane-state-line run))
+   ;; Its own (`agent-workflow--pane-answer'); over, none.
+   (unless (memq (agent-workflow-run-state run) agent-workflow--ended)
+     (list :actions '((:label "Cancel" :prompt "cancel" :help "cancel the run (asked first)"))))))
 
 (defun agent-workflow--pane-step-name (step)
   "STEP of a job (a plist), as its checklist names it: its name, else what
@@ -925,7 +931,8 @@ shown again only when it's another), gone once it doesn't."
           (agent-ui-show element :canvas pane :section "needs-you")))))))
 
 (defun agent-workflow--pane-answer (prompt _submit key)
-  "A button of a run's pane pressed (`agent-ui-answer-function'): git's
+  "A button of a run's pane pressed (`agent-ui-answer-function'): its
+header's Cancel (asked first), git's
 \(PROMPT worktree, magit: its worktree opened), or a question's answer
 \(PROMPT the button's label; a form's, read from its element, KEY's), given
 to the run (approved, rejected, confirmed, sent back, cancelled) once the
@@ -933,9 +940,15 @@ button's own command is done. An answer that can't be given: said, the
 question left as it was."
   (let* ((run agent-workflow--pane-run)
          (pane (current-buffer)))
-    (if (equal key "git")
-        (agent-workflow--pane-open-worktree run prompt)
-      (agent-workflow--pane-answer-question run pane prompt key))))
+    (cond ((equal key "git") (agent-workflow--pane-open-worktree run prompt))
+          ((equal key "run") (agent-workflow--pane-cancel run))
+          (t (agent-workflow--pane-answer-question run pane prompt key)))))
+
+(defun agent-workflow--pane-cancel (run)
+  "RUN cancelled from its pane's Cancel, asked first; over already: said."
+  (when (memq (agent-workflow-run-state run) agent-workflow--ended)
+    (user-error "%s is over already" (agent-workflow-run-name run)))
+  (agent-workflow-cancel-asked run :by "you, in its pane"))
 
 (defun agent-workflow--pane-open-worktree (run how)
   "RUN's worktree opened, HOW: worktree (dired), magit (its status)."

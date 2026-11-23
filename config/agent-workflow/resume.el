@@ -321,8 +321,18 @@ it is now."
                       (names (mapcar (lambda (run) (cons (agent-workflow-run-name run) run)) runs)))
                  (unless runs (user-error "No run to cancel"))
                  (list (cdr (assoc (completing-read "Cancel the run: " names nil t) names)))))
-  (when (yes-or-no-p (format "Cancel %s (its agents stopped, its work kept)? " (agent-workflow-run-name run)))
-    (agent-workflow-cancel run)
-    (message "%s cancelled" (agent-workflow-run-name run))))
+  (agent-workflow-cancel-asked run))
+
+(cl-defun agent-workflow-cancel-asked (run &key (by "you"))
+  "Cancel RUN, BY you, once you said yes to what it stops and keeps (M-x
+agent-workflow-cancel, its pane's Cancel). Non-nil if it was."
+  (when (yes-or-no-p (format "Cancel %s? Its agents and scripts stop, its issue is open again; %s. "
+                             (agent-workflow-run-name run)
+                             (if (agent-workflow-run-checkout-p run)
+                                 "its commits in your checkout are kept"
+                               "its branch and worktree are kept")))
+    (agent-workflow-cancel run :by by)
+    (message "%s cancelled" (agent-workflow-run-name run))
+    t))
 
 (add-hook 'agent-workflow-run-functions #'agent-workflow--note-project)

@@ -327,6 +327,8 @@ review asks: Should the escape table also cover Unicode escapes?
 
 - **Its state**, a line coloured by it: ● running, ◆ needs you, ○ queued (why), ✓ done (`no commit`, its branch got
   none), ✗ cancelled, ✗ failed (why); how long it ran, what it spent and its tokens, each against its budget if it has one.
+  Under it, while the run isn't over (running, waiting, queued), **Cancel**: asked first (what it stops, what it keeps:
+  its branch and worktree), as `M-x agent-workflow-cancel`.
 - **Where its work is** (git): ⎇ its branch, the branch and commit of your checkout it started from → what its merge
   goes into (merged, deleted, once it is; `no commit · deleted`, nothing to merge; its worktree removed, said; a reading job's snapshot); **Worktree** and
   **Magit** open its worktree. Under it, its files changed since it started (`RET` opens one; those not committed yet,
@@ -551,7 +553,7 @@ some are read back, each with the workflow it started with; a job that was runni
   can't be); a script runs again from its start. Steps already done never run again. With `C-u`, the run takes its
   workflow as it is now (its jobs kept by their names). `agent-workflow-continue-on-start` continues them by itself.
 - Or skip the step (`confirm ISSUE skip`), go back to a job, or cancel the run.
-- `M-x agent-workflow-cancel`: its agents stop, its scripts are killed, its jobs running or waiting end `cancelled`
+- `M-x agent-workflow-cancel` (or Cancel in its pane): its agents stop, its scripts are killed, its jobs running or waiting end `cancelled`
   (in its pane, `status`, and read back so), its issue is open again; its branch and worktree are kept.
 - `M-x agent-workflow-pause`: nothing new starts, running steps finish; with `C-u`, they stop at once, interrupted.
   `M-x agent-workflow-unpause`: on again.

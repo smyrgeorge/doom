@@ -291,6 +291,44 @@ again, approved: the run done."
         (should (member "approve, by you, in its pane"
                         (mapcar (lambda (line) (car (last (split-string line "  ")))) (agent-workflow-log-lines run))))))))
 
+(ert-deftest agent-workflow-pane/cancelled-from-its-pane ()
+  "Its header's Cancel, while the run isn't over: pressed, asked first (what
+it stops, what it keeps); no: nothing; yes: the run cancelled, by you in its
+pane, its header saying so, Cancel gone."
+  (+test-awp "cancel"
+    (let* ((issue (+test-awr--issue project "Cancel me"))
+           (run (car (car (agent-workflow-run-ticket (list issue) nil project))))
+           (pane (agent-workflow-run-pane run))
+           (asked nil)
+           (yes nil))
+      (+test-awr--agent run "build")
+      (should (equal (+test-awp--labels (agent-ui-get "run" :canvas pane)) '("Cancel")))
+      (cl-flet ((press ()
+                  (with-current-buffer pane
+                    (agent-ui--flush)
+                    (goto-char (point-min))
+                    (search-forward "⏵ Cancel")
+                    (should (equal (get-text-property (match-beginning 0) 'help-echo) "RET: cancel the run (asked first)"))
+                    (goto-char (match-beginning 0))
+                    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (prompt) (push prompt asked) yes)))
+                      (agent-ui-button-press)))))
+        (press)
+        (should (string-match-p "\\`Cancel .*· feature\\? Its agents and scripts stop.*its branch and worktree are kept"
+                                (car asked)))
+        (should (eq (agent-workflow-run-state run) 'running))
+        (setq yes t)
+        (press)
+        (should (eq (agent-workflow-run-state run) 'cancelled))
+        (should (eq (+test-awr--job run "build") 'cancelled))
+        (let ((header (agent-ui-get "run" :canvas pane)))
+          (should (string-prefix-p "✗ cancelled" (plist-get header :text)))
+          (should-not (plist-get header :actions)))
+        (should (member "run cancelled, by you, in its pane"
+                        (mapcar (lambda (line) (car (last (split-string line "  ")))) (agent-workflow-log-lines run))))
+        (with-current-buffer pane
+          (agent-ui--flush)
+          (should-not (string-search "⏵ Cancel" (buffer-string))))))))
+
 (defun +test-awp--ask (pane)
   "The question in PANE's Needs you, if there's one."
   (ignore-errors (agent-ui-get "ask" :canvas pane :section "needs-you")))
