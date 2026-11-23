@@ -469,7 +469,8 @@ has none yet."
 (defun agent-workflow--pane-git (run where)
   "RUN's WHERE (`agent-workflow-run-where') as the elements under its
 header, each nil if it isn't shown: git (its branch, buttons opening its
-worktree, magit), changes (its files changed since it started: RET opens
+worktree, magit; in your checkout, magit alone: its worktree is your
+project), changes (its files changed since it started: RET opens
 one), commits (its latest), where-note (its base branch's commits its
 merge takes too)."
   (let* ((line (agent-workflow--pane-git-line where))
@@ -483,8 +484,10 @@ merge takes too)."
                (append (list :id "git" :type "text" :text line)
                        (when worktree
                          ;; Its own (`agent-workflow--pane-answer'): hovered, what they open.
-                         (list :actions '((:label "Worktree" :prompt "worktree" :help "open its worktree")
-                                          (:label "Magit" :prompt "magit" :help "magit on its worktree"))))))
+                         (list :actions (if (plist-get where :checkout)
+                                            '((:label "Magit" :prompt "magit" :help "magit on your checkout"))
+                                          '((:label "Worktree" :prompt "worktree" :help "open its worktree")
+                                            (:label "Magit" :prompt "magit" :help "magit on its worktree")))))))
           (and worktree files
                (list :id "changes" :type "files" :dir worktree :tree (if (> (length files) 12) t :false)
                      :files (mapcar (lambda (file)

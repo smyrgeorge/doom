@@ -936,6 +936,13 @@ own), not a prompt they'd put into a session's."
     (should (equal (get-text-property (string-search "⏵ Worktree" text) 'help-echo text) "RET: open its worktree"))
     (should (equal (get-text-property (string-search "⏵ Magit" text) 'help-echo text) "RET: magit on its worktree"))))
 
+(ert-deftest agent-workflow-pane/a-checkout-run-has-no-worktree-button ()
+  "A run in your checkout (runs-in: checkout): no worktree of its own, so
+no Worktree button (it would open your project); Magit, on your checkout."
+  (let ((element (car (agent-workflow--pane-git nil '(:checkout t :branch "main" :worktree "/p/" :into "main")))))
+    (should (equal (+test-awp--labels element) '("Magit")))
+    (should (equal (plist-get (car (plist-get element :actions)) :help) "magit on your checkout"))))
+
 (ert-deftest agent-workflow-pane/where-its-work-is ()
   "Started from a branch other than the main one: its git line says its
 branch, where it started and what it merges into, the start branch's
