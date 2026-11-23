@@ -847,7 +847,16 @@ said; cancelled: 2."
     (should (string-match-p "== Tests: failure (gh run view 8)" out))
     (should (string-match-p "FAILED lexer/escapes" out))
     (should-not (string-match-p "Lint:" out)))
+  ;; Waiting: where they are said, once each time it changes.
   (pcase-let ((`(,exit ,out) (+test-awf--github "watch-wait" "github-watch.sh" :pending 2
+                                                :runs "10\tcompleted\tsuccess\tTests\n9\tcompleted\tfailure\tLint\n"
+                                                :appear 60)))
+    (should (eql exit 1))
+    (let ((lines (split-string out "\n")))
+      (should (string-match-p "\\`[0-9a-f]\\{7\\}: 0 of 1 done · Tests …\\'" (nth 0 lines)))
+      (should (string-match-p "\\`[0-9a-f]\\{7\\}: 2 of 2 done · Tests ✓ · Lint ✗\\'" (nth 1 lines)))
+      (should (string-prefix-p "GitHub Actions failed on main" (nth 2 lines)))))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "watch-late" "github-watch.sh" :pending 1
                                                 :runs "10\tcompleted\tsuccess\tTests\n")))
     (should (eql exit 0))
     (should (string-match-p "green" out)))

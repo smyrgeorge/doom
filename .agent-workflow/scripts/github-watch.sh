@@ -2,7 +2,9 @@
 # GitHub Actions watched: the github workflow's third step
 # (.agent-workflow/workflows/github.yml). The runs of origin's main (its last
 # commit, as pushed) watched until they're all done: finished already, their
-# verdict at once; none at all (GITHUB_APPEAR seconds), said, on.
+# verdict at once; none at all (GITHUB_APPEAR seconds), said, on. While it
+# waits, a line each time where they are changes (07b23a4: 2 of 4 done ·
+# Tests ✓ · End-to-end tests …): its run's pane shows them as they come.
 #
 # Exit status: 0 all passed (or none ran); 1 one failed: its failed jobs'
 # logs printed (the workflow gives them to its ci agent, which fixes the
@@ -42,12 +44,31 @@ slug=${slug%.git}
 [ -n "$slug" ] && repo=(-R "$slug")
 
 waited=0
+said=
+# Where they are, said once it changed: waiting for them to show up, or
+# each run's state (… running, ✓ passed, ✗ not).
+say() {
+  if [ "$1" != "$said" ]; then
+    echo "$1"
+    said=$1
+  fi
+}
 while :; do
   runs=$(gh run list ${repo[@]+"${repo[@]}"} --commit "$target" --limit 50 --json databaseId,workflowName,status,conclusion \
            --jq '.[] | "\(.databaseId)\t\(.status)\t\(.conclusion)\t\(.workflowName)"' 2>&1) || {
     echo "github-watch.sh: gh run list failed: $runs" >&2
     exit 2
   }
+  if [ -z "$runs" ]; then
+    say "${target:0:7}: waiting for its GitHub Actions runs to show up"
+  else
+    say "${target:0:7}: $(printf '%s\n' "$runs" | awk -F'\t' '
+      { total++
+        if ($2 != "completed") mark = "…"
+        else { finished++; mark = ($3 == "success" || $3 == "skipped" || $3 == "neutral") ? "✓" : "✗" }
+        names = names " · " $4 " " mark }
+      END { printf "%d of %d done%s", finished, total, names }')"
+  fi
   if [ -z "$runs" ]; then
     if [ "$waited" -ge "$appear" ]; then
       echo "github-watch.sh: no GitHub Actions run for ${target:0:7} after ${appear}s: nothing to check"
