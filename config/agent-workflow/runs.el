@@ -643,10 +643,13 @@ runs, it's over once every job is done or skipped."
       (when-let* ((index (plist-get (cdr job) :pool))
                   ;; Still running (not interrupted, cancelled meanwhile).
                   ((eq (plist-get (cdr job) :status) 'running)))
-        (when (< (agent-workflow-pool-used) agent-workflow-pool)
+        (unless (agent-workflow--no-agent run (car job))
           (agent-workflow--job-set run (car job) :pool nil :why nil)
-          (agent-workflow--agent-step run (car job) (nth index (plist-get (agent-workflow--job-spec run (car job)) :steps))
-                                      index))))
+          (if (consp index)
+              ;; An agent to fix its step: (:fix INDEX OUTPUT WHAT).
+              (apply #'agent-workflow--fix run (car job) (cdr index))
+            (agent-workflow--agent-step run (car job) (nth index (plist-get (agent-workflow--job-spec run (car job)) :steps))
+                                        index)))))
     ;; Every job that can start, starts; one skipped may let others.
     (let ((again t))
       (while again
@@ -763,9 +766,23 @@ for you."
                     (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))))
              agent-workflow--runs))
 
+(defun agent-workflow--no-agent (run job)
+  "Why an agent can't start now for JOB of RUN, a step past its first (a
+later agent step, an on-fail agent), in words; nil if it can: the pool
+full, or RUN's workflow at its concurrency (its agents at once)."
+  (let* ((workflow (agent-workflow-run-workflow run))
+         (name (plist-get workflow :name))
+         (limit (plist-get workflow :concurrency)))
+    (cond
+     ((>= (agent-workflow-pool-used) agent-workflow-pool)
+      (format "%s: waiting for an agent: %d of %d work" job (agent-workflow-pool-used) agent-workflow-pool))
+     ((and limit (>= (agent-workflow--working-for name) limit))
+      (format "%s: waiting: %s at its limit, %d of %d agents" job name (agent-workflow--working-for name) limit)))))
+
 (defun agent-workflow--over-limit (run job)
   "Why JOB of RUN can't start for its limits, in words; nil if it can: its
-job's concurrency reached, or (it needs an agent) its workflow's."
+job's concurrency reached, or (it needs an agent) its workflow's. An agent
+started past its first step: `agent-workflow--no-agent'."
   (let* ((workflow (agent-workflow-run-workflow run))
          (name (plist-get workflow :name))
          (job-limit (plist-get (agent-workflow--job-spec run job) :concurrency))
@@ -950,13 +967,11 @@ one started for it. The pool full: the run waits, queued, for an agent."
           (agent-workflow-send held (agent-workflow-fill (agent-workflow--prompt run job step)
                                                          (agent-workflow--agent-values held)))
           (agent-workflow--journal run "step-started" :job job :step index :agent (agent-workflow-agent-name held)))
-      (if (>= (agent-workflow-pool-used) agent-workflow-pool)
-          ;; A later step's agent, the pool full meanwhile: it waits for one,
-          ;; looked at again as an agent stops.
+      (if-let* ((why (agent-workflow--no-agent run job)))
+          ;; A later step's agent, the pool full meanwhile, or its workflow
+          ;; at its limit: it waits for one, looked at again as one stops.
           (progn
-            (agent-workflow--job-set run job :pool index
-                                     :why (format "%s: waiting for an agent: %d of %d work" job
-                                                  (agent-workflow-pool-used) agent-workflow-pool))
+            (agent-workflow--job-set run job :pool index :why why)
             (agent-workflow--refresh run))
         (condition-case err
             (let* ((info (agent-workflow-run-info run))

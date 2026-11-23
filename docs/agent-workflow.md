@@ -400,8 +400,8 @@ Each run keeps its log in `log.txt` beside its journal (made again from the jour
 ### Limits
 
 Under the pool's size (`agent-workflow-pool`), a workflow's `concurrency` is how many of the pool's agents work on its
-runs at once, and a job's how many of it run at once across its workflow's runs (`merge: 1`, so merges never
-overlap), its scripts too. A job held back by one waits, saying why: `build: waiting: feature at its limit, 3 of 3
+runs at once (every agent: a later step's, an on-fail one fixing a step too, which waits for one the same way), and a
+job's how many of it run at once across its workflow's runs (`merge: 1`, so merges never overlap), its scripts too. A job held back by one waits, saying why: `build: waiting: feature at its limit, 3 of 3
 agents`, `merge: waiting: merge at its limit, 1 of 1`. Runs of several workflows go side by side, each within its own.
 
 ### Budget

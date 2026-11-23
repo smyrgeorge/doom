@@ -92,9 +92,12 @@ waits for you. Its pane redrawn either way (who fixes it, or the wait)."
      ((not profile)
       (agent-workflow--job-set run job :retry nil)
       (agent-workflow--wait run job (format "%s: %s, and no agent fixes it (on-fail: a profile)" job what)))
-     ((>= (agent-workflow-pool-used) agent-workflow-pool)
-      (agent-workflow--job-set run job :retry nil)
-      (agent-workflow--wait run job (format "%s: %s, and the pool is full: no agent fixes it" job what)))
+     ((agent-workflow--no-agent run job)
+      ;; The pool full, its workflow at its limit: it waits for an agent,
+      ;; looked at again as one stops (runs.el's --advance).
+      (agent-workflow--job-set run job :retry nil :pool (list :fix index output what)
+                               :why (agent-workflow--no-agent run job))
+      (agent-workflow--refresh run))
      (t
       (condition-case err
           (let* ((info (agent-workflow-run-info run))

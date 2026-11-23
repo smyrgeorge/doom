@@ -582,6 +582,37 @@ jobs:
       (agent-workflow-tick)
       (should-not (agent-workflow-agents project)))))
 
+(ert-deftest agent-workflow-runs/its-concurrency-for-every-agent ()
+  "A workflow's concurrency counts every agent of its runs, an on-fail one
+too: one past it waits for an agent, saying why, and starts once one of its
+workflow stops."
+  (+test-awr "concurrency-fix"
+    (write-region "description: x
+for: [chore]
+concurrency: 1
+jobs:
+  a:
+    run: test -f ok.txt || { echo missing; exit 1; }
+    retries: 1
+    on-fail: build
+" nil (expand-file-name ".agent-workflow/workflows/chores.yml" project))
+    (let* ((agent-workflow-pool 5)
+           (one-issue (+test-awr--issue project "One" "--type" "chore"))
+           (one (agent-workflow-start-run project one-issue))
+           (fixer (+test-awr--agent one "a"))
+           (two (agent-workflow-start-run project (+test-awr--issue project "Two" "--type" "chore"))))
+      (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why two) "a: waiting: chores at its limit, 1 of 1 agents"))))
+      (should (= (length (seq-filter (lambda (agent) (buffer-live-p (agent-workflow-agent-buffer agent)))
+                                     (agent-workflow-agents project)))
+                 1))
+      ;; One's fixed, done: two's agent starts.
+      (write-region "x" nil (expand-file-name "ok.txt" (agent-workflow-worktree-directory project one-issue)))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job one "a") 'waiting))))
+      (agent-workflow-done fixer nil "wrote it")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state one) 'done))))
+      (should (+test-awr--agent two "a"))
+      (agent-workflow-cancel two))))
+
 (ert-deftest agent-workflow-runs/pause-and-cancel ()
   "Paused: nothing new starts, saying so; with now, a running script stopped,
 interrupted, continued after: run again. Cancelled: its agents stopped, the
