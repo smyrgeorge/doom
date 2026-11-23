@@ -3908,6 +3908,19 @@ later, 22 hours wide); one still running: to now."
   (should (string-match-p "status is running, done" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start 0 :status "slow"))))))
   (should (string-match-p "has \"stop\"" (+test-aue-error '(:type "timeline" :tasks ((:name "a" :start 0 :stop 3)))))))
 
+(ert-deftest agent-ui-elements/stats-face ()
+  "A figure's FACE colours its value (a state: running, failed); a face it
+doesn't know is refused."
+  (let ((text (agent-ui-render '(:type "stats" :figures ((:label "State" :value "✗ failed" :face "error")
+                                                        (:label "Time" :value "15m")))
+                               (agent-ui-context :width 60))))
+    (should (equal (get-text-property (string-search "✗ failed" text) 'face text) '(bold agent-ui-error)))
+    (should (eq (get-text-property (string-search "15m" text) 'face text) 'bold)))
+  (let ((svg (+test-aue-svg '(:type "stats" :figures ((:label "State" :value "failed" :face "error"))) 60)))
+    (should (string-search (format "fill=\"%s\"" (agent-ui-chart--color 'agent-ui-error)) svg)))
+  (should (string-match-p "face is plain, success, warning, error or muted"
+                          (+test-aue-error '(:type "stats" :figures ((:label "a" :value 1 :face "loud")))))))
+
 ;; ====== GRAPH ======
 
 (defun +test-aue-crossings (svg)

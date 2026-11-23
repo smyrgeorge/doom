@@ -291,12 +291,14 @@ Its pane's git line says so: `⎇ main   your checkout, from 881e46c · 1 commit
 ### Following a run
 
 Started from Emacs, a run opens its **pane**, an [Agent UI](agent-ui.md) canvas named `ISSUE · WORKFLOW` (`· run N` after it
-past the issue's first run), a pane per run (tiling lays them out). Under the issue's title, its state in a line, then where its work is (git), then its
+past the issue's first run), a pane per run (tiling lays them out). Under the issue's title, its state as tiles, then where its work is (git), then its
 sections, each under its divider:
 
 ```text
 doom-a1b: Lexer escapes
-◆ needs you · 15m of 3h · $1.24 of $15 · 182k tokens
+┌State──────────┐┌Time──────────┐┌Cost───────────┐┌Tokens────┐┌Jobs──────┐
+│◆ needs you    ││15m     of 3h ││$1.24   of $15 ││182k      ││1 / 4 done│   (tiles)
+└───────────────┘└──────────────┘└───────────────┘└──────────┘└──────────┘
 
 ⎇ feat/doom-a1b-lexer-escapes   main@62651d7 → main
 ⏵ Worktree   ⏵ Magit
@@ -325,8 +327,10 @@ review asks: Should the escape table also cover Unicode escapes?
 13:13  review  waits for you: its agent asks you: Should the escape table …
 ```
 
-- **Its state**, a line coloured by it: ● running, ◆ needs you, ○ queued (why), ✓ done (`no commit`, its branch got
-  none), ✗ cancelled, ✗ failed (why); how long it ran, what it spent and its tokens, each against its budget if it has one.
+- **Its state**, as tiles: State, coloured by it: ● running (what it's at: each running job's step, `watch, step 3
+  of 3`), ◆ needs you, ○ queued (why), ✓ done (`no commit`, its branch got none), ✗ cancelled, ✗ failed (why); Time,
+  how long it ran; Cost, what it spent; Tokens (if it has a budget of them, or spent some), each against its budget if
+  it has one; Jobs, how many are done of all. Near its budget, State says it.
   Under it, while the run isn't over (running, waiting, queued), **Cancel**: asked first (what it stops, what it keeps:
   its branch and worktree), as `M-x agent-workflow-cancel`.
 - **Where its work is** (git): ⎇ its branch, the branch and commit of your checkout it started from → what its merge

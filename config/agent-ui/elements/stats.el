@@ -2,10 +2,11 @@
 ;; Agent UI's stats: a row of figures, each with its change. Loaded from
 ;; config/agent-ui/elements.el.
 ;;
-;; A figure: {"label", "value", "unit", "change", "good"}: VALUE (a number or
-;; text) with its UNIT, CHANGE (a number: ▲ or ▼ with it; text: as it is),
-;; GOOD "up" (default), "down" or "none": whether a rise is good (green) or
-;; bad (red). Side by side, as many as fit, then wrapping; in the GUI, tiles
+;; A figure: {"label", "value", "unit", "change", "good", "face"}: VALUE (a
+;; number or text) with its UNIT, CHANGE (a number: ▲ or ▼ with it; text: as
+;; it is), GOOD "up" (default), "down" or "none": whether a rise is good
+;; (green) or bad (red); FACE its value's colour (success, warning, error,
+;; muted: a state, a figure past its limit). Side by side, as many as fit, then wrapping; in the GUI, tiles
 ;; (SVG). The summary at the top of a canvas.
 ;;
 ;;   Coverage          Tests            Build
@@ -20,21 +21,32 @@
     (unless (agent-ui--plist-p entry)
       (bad "must be {\"label\": ..., \"value\": ...}"))
     (cl-loop for (k _) on entry by #'cddr
-             unless (memq k '(:label :value :unit :change :good))
-             do (bad (format "has %s: a figure has label, value, unit, change, good"
+             unless (memq k '(:label :value :unit :change :good :face))
+             do (bad (format "has %s: a figure has label, value, unit, change, good, face"
                              (agent-ui--show-value (substring (symbol-name k) 1)))))
     (unless (stringp (plist-get entry :label)) (bad "has no label"))
     (unless (or (numberp (plist-get entry :value)) (stringp (plist-get entry :value))) (bad "has no value"))
     (unless (or (null (plist-get entry :unit)) (stringp (plist-get entry :unit)))
       (bad (format "has unit %s: a unit is text" (agent-ui--show-value (plist-get entry :unit)))))
-    (let ((good (or (plist-get entry :good) "up")))
+    (let ((good (or (plist-get entry :good) "up"))
+          (face (plist-get entry :face)))
       (unless (member good '("up" "down" "none" up down none))
         (bad "'s good is up, down or none"))
-      (plist-put (copy-sequence entry) :good (if (stringp good) (intern good) good)))))
+      (unless (member face '(nil "plain" "success" "warning" "error" "muted" plain success warning error muted))
+        (bad "'s face is plain, success, warning, error or muted"))
+      (let ((figure (plist-put (copy-sequence entry) :good (if (stringp good) (intern good) good))))
+        (if face (plist-put figure :face (if (stringp face) (intern face) face)) figure)))))
 
 (defun agent-ui-stats--check (props)
   (plist-put props :figures (cl-loop for f in (plist-get props :figures)
                                      for i from 1 collect (agent-ui-stats--figure f i))))
+
+(defun agent-ui-stats--face (figure)
+  "FIGURE's value's face: bold, in its FACE's colour if it has one."
+  (pcase (plist-get figure :face)
+    ('success '(bold agent-ui-success)) ('warning '(bold agent-ui-warning))
+    ('error '(bold agent-ui-error)) ('muted '(bold agent-ui-muted))
+    (_ 'bold)))
 
 (defun agent-ui-stats--value (figure)
   (concat (agent-ui-cell (plist-get figure :value))
@@ -61,7 +73,7 @@
          (cells (mapcar (lambda (f)
                           (let ((change (agent-ui-stats--change f)))
                             (list (propertize (plist-get f :label) 'face 'agent-ui-muted)
-                                  (concat (propertize (agent-ui-stats--value f) 'face 'bold)
+                                  (concat (propertize (agent-ui-stats--value f) 'face (agent-ui-stats--face f))
                                           (if change (concat " " (propertize (car change) 'face (cdr change))) "")))))
                         figures))
          (cell-width (min (max 12 (+ 3 (apply #'max 0 (mapcar (lambda (c) (max (string-width (car c)) (string-width (cadr c)))) cells))))
@@ -177,14 +189,15 @@ a character ~0.5 of a line wide; wrapped if longer (it was cut)."
                              for c from 0
                              do (let ((x (* c (+ tile-width gap)))
                                       (value-y (+ y (* (+ 2.4 extra) lh))))
-                                  (ignore f)
                                   (svg-rectangle svg x y tile-width tile-height :rx 6 :fill fill)
                                   (cl-loop for label in labels
                                            for i from 0
                                            do (agent-ui-chart--svg-text svg ctx label (+ x cw) (+ y (* (+ 0.95 i) lh))
                                                                         :fill muted))
                                   (svg-text svg value :x (+ x cw) :y value-y
-                                            :font-size (round size) :font-weight "bold" :fill fg
+                                            :font-size (round size) :font-weight "bold"
+                                            :fill (let ((face (agent-ui-stats--face f)))
+                                                    (if (consp face) (agent-ui-chart--color (cadr face)) fg))
                                             :font-family (or (face-attribute 'default :family nil t) "monospace"))
                                   (when change
                                     (if under
@@ -202,9 +215,10 @@ a character ~0.5 of a line wide; wrapped if longer (it was cut)."
   "A row of figures, each with its change: the summary at the top of a
 canvas. A figure is {\"label\", \"value\", \"unit\", \"change\", \"good\"}:
 CHANGE a number (▲ or ▼ with it) or text; GOOD \"up\" (default: a rise is
-good, green), \"down\" (a rise is bad, red) or \"none\". Tiles in the GUI;
-side by side, wrapping, as text."
-  :props ((figures list "The figures: {\"label\", \"value\", \"unit\", \"change\", \"good\"}"))
+good, green), \"down\" (a rise is bad, red) or \"none\"; FACE the value's
+colour: success, warning, error, muted (a state, a figure past its limit).
+Tiles in the GUI; side by side, wrapping, as text."
+  :props ((figures list "The figures: {\"label\", \"value\", \"unit\", \"change\", \"good\", \"face\"}"))
   :example (:figures ((:label "Coverage" :value 87.1 :unit "%" :change 2.3)
                       (:label "Tests" :value 412 :change "all pass")
                       (:label "Build" :value 29 :unit "s" :change -12 :good "down")))

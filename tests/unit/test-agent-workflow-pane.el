@@ -69,6 +69,11 @@ ending without its done makes it wait for you, a moment)."
       (let ((agent-ui-pressed "needs-you/ask"))
         (funcall agent-ui-action-function label t)))))
 
+(defun +test-awp--figure (header label)
+  "HEADER's (a run pane's \"run\" element) tile LABEL: (VALUE CHANGE FACE)."
+  (let ((figure (seq-find (lambda (f) (equal (plist-get f :label) label)) (plist-get header :figures))))
+    (and figure (list (plist-get figure :value) (plist-get figure :change) (plist-get figure :face)))))
+
 (defun +test-awp--labels (element)
   "ELEMENT's buttons' labels."
   (mapcar (lambda (action) (plist-get action :label)) (plist-get element :actions)))
@@ -167,13 +172,18 @@ closed (q)."
           (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) (push buffer shown))))
             (agent-ui-section-open))
           (should (eq (car shown) (agent-workflow-agent-buffer agent)))))
-      ;; What it shows: its state in a line; a graph of its jobs, its
+      ;; What it shows: its state as tiles; a graph of its jobs, its
       ;; checklist, its rounds; its log without its issue.
       (let ((header (agent-ui-get "run" :canvas pane))
             (jobs (agent-ui-get "jobs" :canvas pane :section "run"))
             (graph (agent-ui-get "graph" :canvas pane :section "run")))
         (should (equal (plist-get header :title) (concat issue ": A pane")))
-        (should (string-match-p "\\`\\(● running\\|◆ needs you\\) · [0-9]+s\\'" (plist-get header :text)))
+        (should (equal (plist-get header :type) "stats"))
+        (should (member (car (+test-awp--figure header "State")) '("● running" "◆ needs you")))
+        (should (string-match-p "\\`[0-9]+s\\'" (car (+test-awp--figure header "Time"))))
+        (should (equal (+test-awp--figure header "Cost") '("$0" nil nil)))
+        (should (equal (car (+test-awp--figure header "Jobs")) "0 / 3"))
+        (should-not (+test-awp--figure header "Tokens"))
         (should (equal (mapcar (lambda (s) (plist-get s :name)) (plist-get jobs :steps)) '("build" "docs" "review")))
         (should (member (plist-get (car (plist-get jobs :steps)) :status) '("running" "waiting" "pending")))
         (should (equal (mapcar (lambda (node) (plist-get node :id)) (plist-get graph :nodes)) '("build" "docs" "review")))
@@ -234,7 +244,7 @@ closed (q)."
         (should-not agent-ui-closes-with)
         (should-not (and agent-ui--closing (gethash "run/jobs" agent-ui--closing)))
         (should-not (string-search "closing in" (buffer-string)))
-        (should (string-match-p "\\`✓ done · no commit" (plist-get (agent-ui-get "run" :canvas pane) :text))))
+        (should (equal (+test-awp--figure (agent-ui-get "run" :canvas pane) "State") '("✓ done" "no commit" "success"))))
       (kill-buffer pane)
       (should-not (agent-workflow-run-pane run)))))
 
@@ -321,7 +331,7 @@ pane, its header saying so, Cancel gone."
         (should (eq (agent-workflow-run-state run) 'cancelled))
         (should (eq (+test-awr--job run "build") 'cancelled))
         (let ((header (agent-ui-get "run" :canvas pane)))
-          (should (string-prefix-p "✗ cancelled" (plist-get header :text)))
+          (should (equal (car (+test-awp--figure header "State")) "✗ cancelled"))
           (should-not (plist-get header :actions)))
         (should (member "run cancelled, by you, in its pane"
                         (mapcar (lambda (line) (car (last (split-string line "  ")))) (agent-workflow-log-lines run))))
@@ -364,7 +374,7 @@ jobs:
         (with-current-buffer pane
           (agent-ui-show '(:id "run" :type "text" :text "stale") :canvas pane))
         (agent-workflow--pane-where-tick)
-        (should (string-prefix-p "● running" (plist-get (agent-ui-get "run" :canvas pane) :text)))
+        (should (equal (car (+test-awp--figure (agent-ui-get "run" :canvas pane) "State")) "● running"))
         (agent-workflow-cancel run)))))
 
 (ert-deftest agent-workflow-pane/a-cancelled-run-asks-nothing ()
@@ -736,7 +746,7 @@ line too."
       (should (string-match-p "waits: a: waiting for an agent: 3 of 3 work" (plist-get item :detail)))
       (should (equal (mapcar (lambda (step) (plist-get step :status)) (plist-get item :steps)) '("done" "done" "pending")))
       (should-not (plist-get (nth 2 (plist-get item :steps)) :started)))
-    (should (string-prefix-p "● running: a: waiting for an agent: 3 of 3 work · " (agent-workflow--pane-state-line run)))))
+    (should (equal (agent-workflow--pane-state run) '("● running" "a: waiting for an agent: 3 of 3 work" nil)))))
 
 (ert-deftest agent-workflow-pane/a-step-s-try ()
   "A running job's line: its step's first try says no try; its second, try
@@ -797,8 +807,29 @@ all on its line. A merge's conflicts: resolving them."
           (should (equal (plist-get (nth 1 (plist-get green :steps)) :status) "running"))
           (should (equal (plist-get (nth 1 (plist-get green :steps)) :detail) "run: watch.sh")))))))
 
+(ert-deftest agent-workflow-pane/what-it-is-at ()
+  "Running, its State tile says what it's at: each running job's step and
+its number (its job's name alone if it has one step); near its budget, said
+too."
+  (let* ((workflow '(:name "github"
+                     :jobs (("green" :name "green"
+                             :steps ((:kind run :run "check.sh" :name "check")
+                                     (:kind run :run "push.sh" :name "push")
+                                     (:kind run :run "watch.sh" :name "watch")))
+                            ("docs" :name "docs" :steps ((:kind agent :agent "docs"))))))
+         (run (agent-workflow-run--make :project "/p/" :issue "demo-1" :state 'running
+                                        :workflow workflow :spent '(:cost 0 :tokens 0) :active 60
+                                        :jobs (list (cons "green" (list :status 'running :step 2))
+                                                    (cons "docs" (list :status 'pending))))))
+    (should (equal (agent-workflow--pane-state run) '("● running" "watch, step 3 of 3" nil)))
+    (setf (alist-get "docs" (agent-workflow-run-jobs run) nil nil #'equal) (list :status 'running :step 0))
+    (should (equal (cadr (agent-workflow--pane-state run)) "watch, step 3 of 3 · docs"))
+    (setf (agent-workflow-run-warned run) t)
+    (should (equal (cadr (agent-workflow--pane-state run)) "watch, step 3 of 3 · docs · near its budget"))
+    (should (equal (+test-awp--figure (agent-workflow--pane-header run) "Jobs") '("0 / 2" "done" nil)))))
+
 (ert-deftest agent-workflow-pane/a-failed-run ()
-  "A run that failed: its state line says why, red; its job failed (✗, an
+  "A run that failed: its State tile says why, red; its job failed (✗, an
 error in the graph), its steps done up to the one that failed, named, what
 each does after its name."
   (let* ((workflow '(:name "github"
@@ -810,9 +841,8 @@ each does after its name."
                                         :why "green: its step 2, push (push.sh): refused"
                                         :workflow workflow :spent '(:cost 0 :tokens 0) :active 60
                                         :jobs (list (cons "green" (list :status 'failed :step 1))))))
-    (should (string-prefix-p "✗ failed: green: its step 2, push (push.sh): refused"
-                             (agent-workflow--pane-state-line run)))
-    (should (equal (plist-get (agent-workflow--pane-header run) :face) "error"))
+    (should (equal (+test-awp--figure (agent-workflow--pane-header run) "State")
+                   '("✗ failed" "green: its step 2, push (push.sh): refused" "error")))
     (let ((node (car (plist-get (agent-workflow--pane-graph run) :nodes))))
       (should (equal (plist-get node :label) "green ✗"))
       (should (equal (plist-get node :status) "error")))
@@ -846,19 +876,29 @@ on, the rest grey; ⊘ in the graph, not coloured."
       (should (equal (mapcar (lambda (step) (plist-get step :status)) (plist-get item :steps)) '("done" "skipped"))))))
 
 (ert-deftest agent-workflow-pane/where-in-words ()
-  "Its state in a line: its mark, its time, what it spent, its tokens, each
-against its budget. Where its work is: ⎇ its branch, where it started →
+  "Its state as tiles: its mark, its time, what it spent, its tokens (if it
+spent some), each against its budget. Where its work is: ⎇ its branch, where it started →
 what it merges into (merged, deleted once it is; its worktree removed,
 said; its reading jobs' snapshots); its files changed (not committed,
 said), its commits; started from another branch than the main one, said."
   (let ((run (agent-workflow-run--make :project "/p/" :issue "demo-1" :state 'waiting
                                        :workflow '(:name "feature" :budget (:cost 15 :time 10800))
                                        :spent '(:cost 1.24 :tokens 182000) :active 900)))
-    (should (equal (agent-workflow--pane-state-line run) "◆ needs you · 15m of 3h · $1.24 of $15 · 182k tokens"))
+    (let ((header (agent-workflow--pane-header run)))
+      (should (equal (mapcar (lambda (f) (plist-get f :label)) (plist-get header :figures))
+                     '("State" "Time" "Cost" "Tokens" "Jobs")))
+      (should (equal (+test-awp--figure header "State") '("◆ needs you" nil "warning")))
+      (should (equal (+test-awp--figure header "Time") '("15m" "of 3h" nil)))
+      (should (equal (+test-awp--figure header "Cost") '("$1.24" "of $15" nil)))
+      (should (equal (+test-awp--figure header "Tokens") '("182k" nil nil))))
     (setf (agent-workflow-run-state run) 'running
           (agent-workflow-run-workflow run) '(:name "feature")
           (agent-workflow-run-spent run) '(:cost 0 :tokens 0))
-    (should (equal (agent-workflow--pane-state-line run) "● running · 15m")))
+    (let ((header (agent-workflow--pane-header run)))
+      (should (equal (mapcar (lambda (f) (plist-get f :label)) (plist-get header :figures))
+                     '("State" "Time" "Cost" "Jobs")))
+      (should (equal (+test-awp--figure header "State") '("● running" nil nil)))
+      (should (equal (+test-awp--figure header "Time") '("15m" nil nil)))))
   (should (equal (agent-workflow--pane-git-line
                   '(:branch "feat/demo-1-x" :into "main" :worktree "/p/w/" :base (:branch "main" :commit "abcdef1234")))
                  "⎇ feat/demo-1-x   main@abcdef1 → main"))

@@ -32,8 +32,9 @@ agent-ui append req '{"times":["2026-11-10T13:00:00"],"values":[410]}'
 ### `stats`
 
 A row of figures, each with its change: the summary at the top of a canvas. A figure is `{"label", "value", "unit",
-"change", "good"}`: `change` a number (▲ or ▼ with it) or text; `good` `"up"` (default: a rise is good, green),
-`"down"` (a rise is bad, red: time, errors) or `"none"`. Tiles in the GUI; side by side, wrapping, as text.
+"change", "good", "face"}`: `change` a number (▲ or ▼ with it) or text; `good` `"up"` (default: a rise is good, green),
+`"down"` (a rise is bad, red: time, errors) or `"none"`; `face` the value's colour (`success`, `warning`, `error`,
+`muted`: a state, a figure past its limit). Tiles in the GUI; side by side, wrapping, as text.
 
 ```sh
 agent-ui show '{"id":"summary","type":"stats","figures":[{"label":"Coverage","value":87.1,"unit":"%","change":2.3},{"label":"Tests","value":412,"change":"all pass"},{"label":"Build","value":29,"unit":"s","change":-12,"good":"down"}]}'
